@@ -1,5 +1,11 @@
+/** Normalize Windows backslashes to POSIX forward slashes. */
+export function normalizeSlashes(path: string): string {
+  return path.replace(/\\+/g, '/')
+}
+
 /** Get the base name of a file system path e.g. /path/to/file.ts -> file */
 export function baseName(path: string, extension?: string): string {
+  path = normalizeSlashes(path)
   const base = path.slice(path.lastIndexOf('/') + 1)
   if (extension && base.endsWith(extension)) {
     return base.slice(0, -extension.length)
@@ -9,6 +15,7 @@ export function baseName(path: string, extension?: string): string {
 
 /** Get the extension from a file path e.g. readme.md -> .md */
 export function extensionName(path: string): string {
+  path = normalizeSlashes(path)
   const dotIndex = path.lastIndexOf('.')
   const slashIndex = path.lastIndexOf('/')
   if (dotIndex > slashIndex) {
@@ -19,6 +26,7 @@ export function extensionName(path: string): string {
 
 /** Get the directory name from a file path e.g. /path/to/file.ts -> /path/to */
 export function directoryName(path: string): string {
+  path = normalizeSlashes(path)
   const slashIndex = path.lastIndexOf('/')
   if (slashIndex === -1) return '.'
   if (slashIndex === 0) return '/'
@@ -27,11 +35,9 @@ export function directoryName(path: string): string {
 
 /** Remove the extension from a file path e.g. readme.md -> readme */
 export function removeExtension(filePath: string): string {
+  filePath = normalizeSlashes(filePath)
   const lastDotIndex = filePath.lastIndexOf('.')
-  const lastSlashIndex = Math.max(
-    filePath.lastIndexOf('/'),
-    filePath.lastIndexOf('\\')
-  )
+  const lastSlashIndex = filePath.lastIndexOf('/')
 
   if (lastDotIndex > lastSlashIndex) {
     return filePath.slice(0, lastDotIndex)
@@ -42,10 +48,8 @@ export function removeExtension(filePath: string): string {
 
 /** Remove all extensions from a file path e.g. Button.examples.tsx -> Button */
 export function removeAllExtensions(filePath: string): string {
-  const lastSlashIndex = Math.max(
-    filePath.lastIndexOf('/'),
-    filePath.lastIndexOf('\\')
-  )
+  filePath = normalizeSlashes(filePath)
+  const lastSlashIndex = filePath.lastIndexOf('/')
   const filenNameStartOffset = 1
   const fileName = filePath.slice(lastSlashIndex + filenNameStartOffset)
   const firstDotIndex = fileName.lastIndexOf('.')
@@ -62,6 +66,7 @@ export function removeAllExtensions(filePath: string): string {
 
 /** Remove order prefixes from a file path e.g. 01.intro -> intro */
 export function removeOrderPrefixes(filePath: string): string {
+  filePath = normalizeSlashes(filePath)
   return filePath.replace(/(^|\/)\d+\./g, '$1')
 }
 
@@ -71,7 +76,8 @@ export function joinPaths(...paths: (string | undefined)[]): string {
     return '.'
   }
 
-  const isAbsolute = paths.at(0)?.startsWith('/')
+  const firstPath = paths.at(0) ? normalizeSlashes(paths[0]!) : ''
+  const isAbsolute = firstPath.startsWith('/')
   const segments: string[] = []
   const lastSegmentIndex = paths.length - 1
   let hasTrailingSlash = false
@@ -84,10 +90,10 @@ export function joinPaths(...paths: (string | undefined)[]): string {
     }
 
     if (index === lastSegmentIndex) {
-      hasTrailingSlash = path.endsWith('/')
+      hasTrailingSlash = path.endsWith('/') || path.endsWith('\\')
     }
 
-    for (const segment of path.split('/')) {
+    for (const segment of normalizeSlashes(path).split('/')) {
       if (segment === '..') {
         if (isAbsolute || segments.length > 0) {
           segments.pop() // Go up one directory
@@ -110,8 +116,8 @@ export function joinPaths(...paths: (string | undefined)[]): string {
 
 /** Get the relative path from one file to another */
 export function relativePath(from: string, to: string): string {
-  const fromParts = from.split('/').filter(Boolean)
-  const toParts = to.split('/').filter(Boolean)
+  const fromParts = normalizeSlashes(from).split('/').filter(Boolean)
+  const toParts = normalizeSlashes(to).split('/').filter(Boolean)
 
   let commonIndex = 0
   while (

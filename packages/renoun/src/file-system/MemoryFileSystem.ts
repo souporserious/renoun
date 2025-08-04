@@ -4,7 +4,7 @@ import * as tsMorph from 'ts-morph'
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
 import type { ProjectOptions } from '../project/types.js'
 import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.js'
-import { joinPaths } from '../utils/path.js'
+import { joinPaths, normalizeSlashes } from '../utils/path.js'
 import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
@@ -28,7 +28,7 @@ export class MemoryFileSystem extends FileSystem {
     }
     this.#files = new Map(
       Object.entries(files).map(([path, content]) => [
-        path.startsWith('.') ? path : `./${path}`,
+        normalizeSlashes(path.startsWith('.') ? path : `./${path}`),
         content,
       ])
     )
@@ -43,7 +43,9 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   createFile(path: string, content: string): void {
-    const normalizedPath = path.startsWith('.') ? path : `./${path}`
+    const normalizedPath = normalizeSlashes(
+      path.startsWith('.') ? path : `./${path}`
+    )
     this.#files.set(normalizedPath, content)
 
     const extension = normalizedPath.split('.').pop()
@@ -57,10 +59,12 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   transpileFile(path: string) {
+    path = normalizeSlashes(path)
     return transpileSourceFile(path, this.#projectOptions)
   }
 
   getAbsolutePath(path: string) {
+    path = normalizeSlashes(path)
     if (path.startsWith('/')) {
       return path
     }
@@ -71,6 +75,7 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   getRelativePathToWorkspace(path: string) {
+    path = normalizeSlashes(path)
     return path.startsWith('.') ? path : `./${path}`
   }
 
@@ -82,6 +87,7 @@ export class MemoryFileSystem extends FileSystem {
     if (!path.startsWith('.')) {
       path = `./${path}`
     }
+    path = normalizeSlashes(path)
 
     const entries: DirectoryEntry[] = []
     const addedPaths = new Set<string>()

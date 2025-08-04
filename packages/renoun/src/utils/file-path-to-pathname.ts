@@ -1,6 +1,7 @@
 import { posix } from 'node:path'
 
 import { createSlug } from './create-slug.js'
+import { normalizeSlashes } from './path.js'
 
 /** Converts a file system path to a URL-friendly pathname. */
 export function filePathToPathname(
@@ -16,6 +17,11 @@ export function filePathToPathname(
   /** Whether or not to convert the pathname to kebab case. */
   kebabCase = true
 ) {
+  filePath = normalizeSlashes(filePath)
+  if (baseDirectory) {
+    baseDirectory = normalizeSlashes(baseDirectory)
+  }
+
   if (filePath.includes('node_modules')) {
     return ''
   }
