@@ -1,5 +1,31 @@
 # renoun
 
+## 9.1.0
+
+### Minor Changes
+
+- e36c18f: Only a subset of language grammars for `tsx`, `mdx`, `css`, `html`, `shell`, and `json` are now included by default. The default themes have also been removed. This greatly reduces the overall install size and focuses on renoun's core offering. Additional languages and themes are still supported and now require installing the `tm-grammars` or `tm-themes` packages separately.
+
+  For languages with similar grammars, like `js` or `ts` files, these will be mapped to the `tsx` grammar, and `md` mapped to the `mdx` grammar. While these grammars are not exactly the same, it aims to balance install size and good defaults.
+
+  ### Breaking Changes
+
+  If you have configured a language besides `ts(x)`, `md(x)`, `css`, `html`, `shell`, or `json`, you will need to install the `tm-grammars` package. Additionally, if you are using a non-local theme, you will need to install the `tm-themes` package.
+
+- 95f43dc: Adds a `dev` prop to the `PackageInstall` component that will append the package manager's dev dependency flag.
+- 2179ae3: Adds parsing of `tsconfig.json` files with comments to `FileSystem`.
+- 4eb6278: Removes the `PackageInstallScript` component in favor of a hoisted script element. This removes the need to render this component in the layout file manually and will now be automatically be hoisted the first time the `PackageInstall` component is rendered.
+- cdba1f7: Prevents the `FileSystem` utility from silently erroring when attempting to parse a `tsconfig.json` file.
+
+### Patch Changes
+
+- 44c24f8: Improves `Directory#getFile` querying by allowing to pass a path with a modifier and a separate extension e.g. `getFile('button.examples', ['ts', 'tsx'])`.
+- 1c106d4: Fixes `JavaScriptFileExport#getType` resolving prototype methods in `node_modules`.
+- 60326d6: Fixes `MethodSignature` type resolution in `JavaScriptFileExport#getType`. This was previously being treated as a `PropertySignature` which errored when multiple signatures existed.
+- c2e5021: Fixes `JavaScriptFileExport#getType` not resolving instantiated mapped types correctly. The resolver now considers if the mapped type has a string or number index signature defined.
+- 9e2735b: Uses `localhost` instead of hardcoded `127.0.0.1` IP for dev server to improve portability and avoid linter warnings.
+- 71d894e: Unwraps `ParenthesizedType` nodes in `JavaScriptFileExport#getType` to capture better information.
+
 ## 9.0.0
 
 ### Major Changes
