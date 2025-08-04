@@ -95,6 +95,12 @@ describe('filePathToPathname', () => {
     )
   })
 
+  test('handles windows paths', () => {
+    expect(
+      filePathToPathname('src\\components\\Button\\index.tsx', 'src')
+    ).toBe('/components/button/index')
+  })
+
   test('handles camel case file names', () => {
     expect(filePathToPathname('src/hooks/useHover.ts', 'src')).toBe(
       '/hooks/use-hover'

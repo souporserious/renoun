@@ -4,7 +4,7 @@ import * as tsMorph from 'ts-morph'
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
 import type { ProjectOptions } from '../project/types.js'
 import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.js'
-import { joinPaths } from '../utils/path.js'
+import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.js'
 import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
@@ -28,7 +28,7 @@ export class MemoryFileSystem extends FileSystem {
     }
     this.#files = new Map(
       Object.entries(files).map(([path, content]) => [
-        path.startsWith('.') ? path : `./${path}`,
+        normalizePath(path),
         content,
       ])
     )
@@ -43,7 +43,7 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   createFile(path: string, content: string): void {
-    const normalizedPath = path.startsWith('.') ? path : `./${path}`
+    const normalizedPath = normalizePath(path)
     this.#files.set(normalizedPath, content)
 
     const extension = normalizedPath.split('.').pop()
@@ -57,10 +57,12 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   transpileFile(path: string) {
+    path = normalizeSlashes(path)
     return transpileSourceFile(path, this.#projectOptions)
   }
 
   getAbsolutePath(path: string) {
+    path = normalizeSlashes(path)
     if (path.startsWith('/')) {
       return path
     }
@@ -71,7 +73,7 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   getRelativePathToWorkspace(path: string) {
-    return path.startsWith('.') ? path : `./${path}`
+    return normalizePath(path)
   }
 
   getFiles() {
@@ -79,9 +81,7 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   readDirectorySync(path: string = '.'): DirectoryEntry[] {
-    if (!path.startsWith('.')) {
-      path = `./${path}`
-    }
+    path = normalizePath(path)
 
     const entries: DirectoryEntry[] = []
     const addedPaths = new Set<string>()
@@ -139,10 +139,7 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   readFileSync(path: string): string {
-    if (!path.startsWith('.')) {
-      path = `./${path}`
-    }
-    const content = this.#files.get(path)
+    const content = this.#files.get(normalizePath(path))
     if (content === undefined) {
       throw new Error(`File not found: ${path}`)
     }
@@ -154,10 +151,7 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   fileExistsSync(path: string): boolean {
-    if (!path.startsWith('.')) {
-      path = `./${path}`
-    }
-    return this.#files.has(path)
+    return this.#files.has(normalizePath(path))
   }
 
   isFilePathGitIgnored(filePath: string) {

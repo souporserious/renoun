@@ -25,6 +25,7 @@ import {
   ensureRelativePath,
   extensionName,
   joinPaths,
+  normalizeSlashes,
   removeExtension,
   removeAllExtensions,
   removeOrderPrefixes,
@@ -388,7 +389,7 @@ export class File<
     })
 
     if (!includeDirectoryNamedSegment || this.#slugCasing !== 'none') {
-      let parsedPath = path.split('/')
+      let parsedPath = normalizeSlashes(path).split('/')
       const parsedSegments: string[] = []
 
       for (let index = 0; index < parsedPath.length; index++) {
@@ -1661,7 +1662,12 @@ export class Directory<
   >
 
   async getFile(path: string | string[], extension?: string | string[]) {
-    const rawPath = Array.isArray(path) ? path.join('/') : path
+    const normalizedInput = Array.isArray(path)
+      ? path.map(normalizeSlashes)
+      : normalizeSlashes(path)
+    const rawPath = Array.isArray(normalizedInput)
+      ? normalizedInput.join('/')
+      : normalizedInput
     const cachedFile = this.#pathLookup.get(
       rawPath.startsWith('/') ? rawPath : `/${rawPath}`
     )
@@ -1677,16 +1683,14 @@ export class Directory<
     }
 
     // normalize the incoming path
-    if (
-      typeof path === 'string' &&
-      (path.startsWith('./') || path.startsWith('.\\'))
-    ) {
-      path = path.slice(2)
+    let normalizedPath = normalizedInput
+    if (typeof normalizedPath === 'string' && normalizedPath.startsWith('./')) {
+      normalizedPath = normalizedPath.slice(2)
     }
 
-    const rawSegments = Array.isArray(path)
-      ? [...path]
-      : path.split('/').filter(Boolean)
+    const rawSegments = Array.isArray(normalizedPath)
+      ? [...normalizedPath]
+      : normalizedPath.split('/').filter(Boolean)
     const lastSegment = rawSegments.at(-1)
     let parsedExtension: string | undefined
 
@@ -1784,8 +1788,11 @@ export class Directory<
   /** Get a directory at the specified `path`. */
   async getDirectory(path: string | string[]): Promise<Directory<LoaderTypes>> {
     const segments = Array.isArray(path)
-      ? path.slice(0)
-      : path.split('/').filter(Boolean)
+      ? path.map(normalizeSlashes)
+      : normalizeSlashes(path)
+          .replace(/^\.\/?/, '')
+          .split('/')
+          .filter(Boolean)
     let currentDirectory = this as Directory<LoaderTypes>
 
     while (segments.length > 0) {
@@ -2128,7 +2135,7 @@ export class Directory<
       return path
     }
 
-    const segments = path.split('/')
+    const segments = normalizeSlashes(path).split('/')
 
     for (let index = 0; index < segments.length; index++) {
       segments[index] = createSlug(segments[index], this.#slugCasing)
@@ -2327,8 +2334,8 @@ export class Collection<
     path: string | string[]
   ): Promise<FileSystemEntry<Types>> {
     const normalizedPath = Array.isArray(path)
-      ? path
-      : path.split('/').filter(Boolean)
+      ? path.map(normalizeSlashes)
+      : normalizeSlashes(path).split('/').filter(Boolean)
     const rootPath = normalizedPath.at(0)
 
     for (const entry of this.#entries) {
@@ -2379,8 +2386,8 @@ export class Collection<
       : File<Types>
   > {
     const normalizedPath = Array.isArray(path)
-      ? path.slice(0)
-      : path.split('/').filter(Boolean)
+      ? path.map(normalizeSlashes)
+      : normalizeSlashes(path).split('/').filter(Boolean)
     const rootPath = normalizedPath.at(0)
 
     for (const entry of this.#entries) {
@@ -2427,8 +2434,8 @@ export class Collection<
     path: string | string[]
   ): Promise<Directory<Types>> {
     const normalizedPath = Array.isArray(path)
-      ? path.slice(0)
-      : path.split('/').filter(Boolean)
+      ? path.map(normalizeSlashes)
+      : normalizeSlashes(path).split('/').filter(Boolean)
     const rootPath = normalizedPath.at(0)
 
     for (const entry of this.#entries) {
