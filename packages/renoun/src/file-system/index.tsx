@@ -422,9 +422,7 @@ export class File<
 
   /** Get the route path segments for this file. */
   getPathnameSegments(options?: FilePathnameOptions) {
-    return normalizeSlashes(this.getPathname(options))
-      .split('/')
-      .filter(Boolean)
+    return this.getPathname(options).split('/').filter(Boolean)
   }
 
   /** Get the file path relative to the root directory. */
@@ -1791,7 +1789,10 @@ export class Directory<
   async getDirectory(path: string | string[]): Promise<Directory<LoaderTypes>> {
     const segments = Array.isArray(path)
       ? path.map(normalizeSlashes)
-      : normalizeSlashes(path).replace(/^\.\/?/, '').split('/').filter(Boolean)
+      : normalizeSlashes(path)
+          .replace(/^\.\/?/, '')
+          .split('/')
+          .filter(Boolean)
     let currentDirectory = this as Directory<LoaderTypes>
 
     while (segments.length > 0) {
@@ -2145,9 +2146,7 @@ export class Directory<
 
   /** Get the route path segments to this directory. */
   getPathnameSegments(options?: { includeBasePathname?: boolean }) {
-    return normalizeSlashes(this.getPathname(options))
-      .split('/')
-      .filter(Boolean)
+    return this.getPathname(options).split('/').filter(Boolean)
   }
 
   /** Get the relative path of this directory to the root directory. */

@@ -31,7 +31,6 @@ import {
 import { getJsDocMetadata } from './get-js-doc-metadata.js'
 import { getSymbolDescription } from './get-symbol-description.js'
 import { getRootDirectory } from './get-root-directory.js'
-import { normalizeSlashes } from './path.js'
 
 export namespace Kind {
   /** Metadata present in all types. */
@@ -3139,10 +3138,8 @@ function getDeclarationLocation(declaration: Node): {
 /** Calculate a file path of a source file relative to the project root. */
 function getFilePathRelativeToProject(declaration: Node) {
   const sourceFile = declaration.getSourceFile()
-  const rootFilePath = normalizeSlashes(getRootFilePath(sourceFile.getProject()))
-  let trimmedFilePath = normalizeSlashes(
-    sourceFile.getFilePath()
-  ).replace(rootFilePath, '')
+  const rootFilePath = getRootFilePath(sourceFile.getProject())
+  let trimmedFilePath = sourceFile.getFilePath().replace(rootFilePath, '')
 
   if (trimmedFilePath.includes('node_modules')) {
     trimmedFilePath = trimmedFilePath.slice(
@@ -3162,9 +3159,7 @@ function getRootFilePath(project: Project) {
   let rootFilePath: string
 
   if (!rootFilePaths.has(project)) {
-    rootFilePath = normalizeSlashes(
-      project.getFileSystem().getCurrentDirectory()
-    )
+    rootFilePath = project.getFileSystem().getCurrentDirectory()
     rootFilePaths.set(project, rootFilePath)
   } else {
     rootFilePath = rootFilePaths.get(project)!

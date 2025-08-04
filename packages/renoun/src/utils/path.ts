@@ -3,6 +3,14 @@ export function normalizeSlashes(path: string): string {
   return path.replace(/\\+/g, '/')
 }
 
+/** Normalize a path to be relative to the current working directory. */
+export function normalizePath(path: string): string {
+  const normalizedSlashes = normalizeSlashes(path)
+  return normalizedSlashes.startsWith('.')
+    ? normalizedSlashes
+    : `./${normalizedSlashes}`
+}
+
 /** Get the base name of a file system path e.g. /path/to/file.ts -> file */
 export function baseName(path: string, extension?: string): string {
   path = normalizeSlashes(path)
@@ -76,8 +84,7 @@ export function joinPaths(...paths: (string | undefined)[]): string {
     return '.'
   }
 
-  const firstPath = paths.at(0) ? normalizeSlashes(paths[0]!) : ''
-  const isAbsolute = firstPath.startsWith('/')
+  const isAbsolute = normalizeSlashes(paths.at(0)!).startsWith('/')
   const segments: string[] = []
   const lastSegmentIndex = paths.length - 1
   let hasTrailingSlash = false
