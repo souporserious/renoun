@@ -1,7 +1,11 @@
 {
   "$schema": "https://turborepo.org/schema.json",
   "ui": "tui",
-  "globalEnv": ["GITHUB_SPONSORS_TOKEN", "TEMPLATE_CHECKOUT_URL"],
+  "globalEnv": [
+    "RENOUN_DEBUG",
+    "GITHUB_SPONSORS_TOKEN",
+    "TEMPLATE_CHECKOUT_URL"
+  ],
   "tasks": {
     "dev": {
       "dependsOn": ["^build"],

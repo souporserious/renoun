@@ -1,11 +1,12 @@
 import { watch } from 'node:fs'
 import { join } from 'node:path'
-import type { SyntaxKind } from 'ts-morph'
+import { SyntaxKind } from 'ts-morph'
 
 import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
+import { debug } from '../utils/debug.js'
 import {
   getFileExports as baseGetFileExports,
   getFileExportMetadata as baseGetFileExportMetadata,
@@ -116,15 +117,36 @@ export async function createServer(options?: { port?: number }) {
       filter?: string
       projectOptions?: ProjectOptions
     }) {
-      const project = getProject(projectOptions)
+      return debug.trackAsyncOperation(
+        'server.resolveTypeAtLocation',
+        async () => {
+          const project = getProject(projectOptions)
 
-      return baseResolveTypeAtLocation(
-        project,
-        options.filePath,
-        options.position,
-        options.kind,
-        filter ? JSON.parse(filter) : undefined,
-        projectOptions?.useInMemoryFileSystem
+          debug.info('Processing type resolution request', {
+            data: {
+              filePath: options.filePath,
+              position: options.position,
+              kind: SyntaxKind[options.kind],
+              useInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+            },
+          })
+
+          return baseResolveTypeAtLocation(
+            project,
+            options.filePath,
+            options.position,
+            options.kind,
+            filter ? JSON.parse(filter) : undefined,
+            projectOptions?.useInMemoryFileSystem
+          )
+        },
+        {
+          data: {
+            filePath: options.filePath,
+            position: options.position,
+            kind: SyntaxKind[options.kind],
+          },
+        }
       )
     }
   )

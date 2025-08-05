@@ -1,6 +1,7 @@
 import type { Project } from 'ts-morph'
 import { SyntaxKind } from 'ts-morph'
 
+import { debug } from './debug.js'
 import type { Kind, TypeFilter } from './resolve-type.js'
 import { resolveType } from './resolve-type.js'
 
@@ -22,85 +23,125 @@ export async function resolveTypeAtLocation(
   isMemoryFileSystem = false
 ) {
   const typeId = `${filePath}:${position}:${kind}`
-  const sourceFile = project.addSourceFileAtPath(filePath)
+  const startTime = Date.now()
 
-  let declaration = sourceFile.getDescendantAtPos(position)
+  return debug.trackAsyncOperation(
+    'resolveTypeAtLocation',
+    async () => {
+      const sourceFile = project.addSourceFileAtPath(filePath)
 
-  if (!declaration) {
-    throw new Error(
-      `[renoun] Could not resolve type for file path "${filePath}" at position "${position}". Try restarting the server or file an issue if you continue to encounter this error.`
-    )
-  }
+      let declaration = sourceFile.getDescendantAtPos(position)
 
-  const exportDeclaration = declaration.getFirstAncestorByKind(kind)
-
-  if (!exportDeclaration) {
-    throw new Error(
-      `[renoun] Could not resolve type for file path "${filePath}" at position "${position}". No ancestor of kind "${SyntaxKind[kind]}" was found starting from: "${declaration.getParentOrThrow().getText()}".`
-    )
-  }
-
-  const exportDeclarationType = exportDeclaration.getType()
-
-  if (isMemoryFileSystem) {
-    // Skip dependency tracking and caching for memory file systems
-    return resolveType(
-      exportDeclarationType,
-      exportDeclaration,
-      filter,
-      undefined
-    )
-  }
-
-  const { statSync } = await import('node:fs')
-  const cacheEntry = resolvedTypeCache.get(typeId)
-
-  if (cacheEntry) {
-    let dependenciesChanged = false
-
-    for (const [
-      depFilePath,
-      cachedDepLastModified,
-    ] of cacheEntry.dependencies) {
-      let depLastModified: number
-      try {
-        depLastModified = statSync(depFilePath).mtimeMs
-      } catch {
-        // File might have been deleted; invalidate the cache
-        dependenciesChanged = true
-        break
+      if (!declaration) {
+        throw new Error(
+          `[renoun] Could not resolve type for file path "${filePath}" at position "${position}". Try restarting the server or file an issue if you continue to encounter this error.`
+        )
       }
-      if (depLastModified !== cachedDepLastModified) {
-        dependenciesChanged = true
-        break
+
+      const exportDeclaration = declaration.getFirstAncestorByKind(kind)
+
+      if (!exportDeclaration) {
+        throw new Error(
+          `[renoun] Could not resolve type for file path "${filePath}" at position "${position}". No ancestor of kind "${SyntaxKind[kind]}" was found starting from: "${declaration.getParentOrThrow().getText()}".`
+        )
       }
-    }
 
-    if (!dependenciesChanged) {
-      return cacheEntry.resolvedType
-    }
-  }
+      const exportDeclarationType = exportDeclaration.getType()
 
-  const dependencies = new Set<string>([filePath])
-  const resolvedType = resolveType(
-    exportDeclarationType,
-    exportDeclaration,
-    filter,
-    undefined,
-    dependencies
-  )
+      if (isMemoryFileSystem) {
+        // Skip dependency tracking and caching for memory file systems
+        const result = await resolveType(
+          exportDeclarationType,
+          exportDeclaration,
+          filter,
+          undefined
+        )
 
-  resolvedTypeCache.set(typeId, {
-    resolvedType,
-    dependencies: new Map(
-      Array.from(dependencies).map((filePath) => [
+        const duration = Date.now() - startTime
+        debug.logTypeResolution(filePath, position, SyntaxKind[kind], duration)
+
+        return result
+      }
+
+      const { statSync } = await import('node:fs')
+      const cacheEntry = resolvedTypeCache.get(typeId)
+
+      if (cacheEntry) {
+        let dependenciesChanged = false
+
+        for (const [
+          depFilePath,
+          cachedDepLastModified,
+        ] of cacheEntry.dependencies) {
+          let depLastModified: number
+          try {
+            depLastModified = statSync(depFilePath).mtimeMs
+          } catch {
+            // File might have been deleted; invalidate the cache
+            dependenciesChanged = true
+            break
+          }
+          if (depLastModified !== cachedDepLastModified) {
+            dependenciesChanged = true
+            break
+          }
+        }
+
+        if (!dependenciesChanged) {
+          debug.logCacheOperation('hit', typeId, {
+            filePath,
+            position,
+            kind: SyntaxKind[kind],
+          })
+          const duration = Date.now() - startTime
+          debug.logTypeResolution(
+            filePath,
+            position,
+            SyntaxKind[kind],
+            duration
+          )
+          return cacheEntry.resolvedType
+        }
+      }
+
+      debug.logCacheOperation('miss', typeId, {
         filePath,
-        statSync(filePath).mtimeMs,
-      ])
-    ),
-  })
+        position,
+        kind: SyntaxKind[kind],
+      })
 
-  dependencies.clear()
+      const dependencies = new Set<string>([filePath])
+      const resolvedType = await resolveType(
+        exportDeclarationType,
+        exportDeclaration,
+        filter,
+        undefined,
+        dependencies
+      )
 
-  return resolvedType
+      resolvedTypeCache.set(typeId, {
+        resolvedType,
+        dependencies: new Map(
+          Array.from(dependencies).map((filePath) => [
+            filePath,
+            statSync(filePath).mtimeMs,
+          ])
+        ),
+      })
+
+      debug.logCacheOperation('set', typeId, {
+        filePath,
+        position,
+        kind: SyntaxKind[kind],
+      })
+
+      dependencies.clear()
+
+      const duration = Date.now() - startTime
+      debug.logTypeResolution(filePath, position, SyntaxKind[kind], duration)
+
+      return resolvedType
+    },
+    { data: { filePath, position, kind: SyntaxKind[kind], isMemoryFileSystem } }
+  )
 }

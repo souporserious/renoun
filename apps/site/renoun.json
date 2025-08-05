@@ -4,5 +4,10 @@
   "git": {
     "source": "https://github.com/souporserious/renoun"
   },
-  "siteUrl": "https://renoun.dev"
+  "siteUrl": "https://renoun.dev",
+  "debug": {
+    "level": "trace",
+    "includeTimestamp": false,
+    "includePerformance": true
+  }
 }

@@ -1,6 +1,7 @@
 import type WebSocket from 'ws'
 
 import type { WebSocketRequest, WebSocketResponse } from './server.js'
+import { debug } from '../../utils/debug.js'
 
 type Request = {
   resolve: (value?: any) => void
@@ -23,7 +24,7 @@ interface WebSocketClientErrorContext {
   connectionState: ConnectionState
   eventMessage?: string
   method?: string
-  params?: any
+  params?: Record<string, unknown>
   timeout?: number
   maxRetries?: number
 }
@@ -59,7 +60,7 @@ const WEBSOCKET_CLIENT_ERROR_MESSAGES: Record<
     `The server was previously connected but encountered an error.`,
 
   REQUEST_TIMEOUT: ({ timeout, method, params, connectionState }) =>
-    `[renoun] Request timed out after ${timeout! / 1000} seconds\n\n` +
+    `[renoun] Request timed out after ${timeout} seconds\n\n` +
     `Request details:\n` +
     `• Method: ${method}\n` +
     `• Params: ${JSON.stringify(params, null, 2)}\n` +
@@ -126,7 +127,7 @@ export class WebSocketClient {
   #connectionState: ConnectionState = 'connecting'
   #connectionStartTime: number = 0
   #requests: Record<number, Request> = {}
-  #pendingRequests = new Set<string>()
+  #pendingRequests: string[] = []
   #retryInterval: number = 5000
   #maxRetries: number = 5
   #currentRetries: number = 0
@@ -143,6 +144,10 @@ export class WebSocketClient {
   #connect() {
     this.#connectionState = 'connecting'
     this.#connectionStartTime = Date.now()
+
+    debug.logWebSocketClientEvent('connecting', {
+      port: process.env.RENOUN_SERVER_PORT,
+    })
 
     import('ws').then(({ default: WebSocket }) => {
       this.#ws = new WebSocket(
@@ -161,10 +166,15 @@ export class WebSocketClient {
     this.#connectionState = 'connected'
     this.#currentRetries = 0
 
+    debug.logWebSocketClientEvent('connected', {
+      connectionTime: Date.now() - this.#connectionStartTime,
+      pendingRequests: this.#pendingRequests.length,
+    })
+
     this.#pendingRequests.forEach((request) => {
       this.#ws.send(request)
     })
-    this.#pendingRequests.clear()
+    this.#pendingRequests.length = 0
   }
 
   #handleMessage(event: WebSocket.MessageEvent) {
@@ -202,7 +212,7 @@ export class WebSocketClient {
       connectionTime: context.connectionTime,
       port: context.port,
       method: context.method,
-      params: context.params,
+      params: JSON.stringify(context.params),
       timeout: context.timeout,
       retryCount: this.#currentRetries,
     })
@@ -212,6 +222,13 @@ export class WebSocketClient {
     const connectionTime = Date.now() - this.#connectionStartTime
     const port = process.env.RENOUN_SERVER_PORT || 'unknown'
     let error: WebSocketClientError
+
+    debug.logWebSocketClientEvent('error', {
+      connectionTime,
+      port,
+      connectionState: this.#connectionState,
+      eventMessage: event.message,
+    })
 
     if (this.#connectionState === 'connecting') {
       if (connectionTime < 1000) {
@@ -250,6 +267,12 @@ export class WebSocketClient {
   #handleClose() {
     this.#isConnected = false
     this.#connectionState = 'disconnected'
+
+    debug.logWebSocketClientEvent('closed', {
+      connectionTime: Date.now() - this.#connectionStartTime,
+      retryCount: this.#currentRetries,
+    })
+
     this.#ws.removeEventListener('open', this.#handleOpenEvent)
     this.#ws.removeEventListener('message', this.#handleMessageEvent)
     this.#ws.removeEventListener('error', this.#handleErrorEvent)
@@ -261,9 +284,10 @@ export class WebSocketClient {
     if (this.#currentRetries < this.#maxRetries) {
       this.#currentRetries++
       setTimeout(() => {
-        console.log(
-          `[renoun] Attempting to reconnect to WebSocket server... (${this.#currentRetries}/${this.#maxRetries})`
-        )
+        debug.logWebSocketClientEvent('retrying', {
+          retryCount: this.#currentRetries,
+          maxRetries: this.#maxRetries,
+        })
         this.#connect()
       }, this.#retryInterval)
     } else {
@@ -276,16 +300,19 @@ export class WebSocketClient {
     }
   }
 
-  async callMethod<Params, Value>(
+  async callMethod<Params extends Record<string, unknown>, Value>(
     method: string,
     params: Params,
-    timeout = 60000 * 2
+    timeout = 120
   ): Promise<Value> {
     const id = performance.now()
     const request: WebSocketRequest = { method, params, id }
 
+    debug.logWebSocketClientEvent('method_call', request)
+
     return new Promise<Value>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
+        debug.logWebSocketClientEvent('timeout', request)
         const error = this.#createClientError('REQUEST_TIMEOUT', {
           connectionTime: Date.now() - this.#connectionStartTime,
           port: process.env.RENOUN_SERVER_PORT || 'unknown',
@@ -296,15 +323,21 @@ export class WebSocketClient {
         })
         reject(error)
         delete this.#requests[id]
-      }, timeout)
+      }, timeout * 1000)
 
       this.#requests[id] = {
         resolve: (value) => {
           clearTimeout(timeoutId)
+          debug.logWebSocketClientEvent('method_resolved', { method, id })
           resolve(value)
         },
         reject: (reason) => {
           clearTimeout(timeoutId)
+          debug.logWebSocketClientEvent('method_rejected', {
+            method,
+            id,
+            reason: reason?.message,
+          })
           reject(reason)
         },
       } satisfies Request
@@ -312,7 +345,7 @@ export class WebSocketClient {
       if (this.#isConnected) {
         this.#ws.send(JSON.stringify(request))
       } else {
-        this.#pendingRequests.add(JSON.stringify(request))
+        this.#pendingRequests.push(JSON.stringify(request))
       }
     }).catch((error) => {
       if (error instanceof WebSocketClientError) {

@@ -101,6 +101,23 @@ const gitSchema = z.object({
   baseUrl: z.url().describe('The base URL of the Git provider.').optional(),
 })
 
+const debugSchema = z.object({
+  level: z
+    .enum(['error', 'warn', 'info', 'debug', 'trace'])
+    .describe(
+      'The minimum level to log. Defaults to "info" when debug is enabled.'
+    )
+    .optional(),
+  includeTimestamp: z
+    .boolean()
+    .describe('Whether to include timestamps in log messages.')
+    .optional(),
+  includePerformance: z
+    .boolean()
+    .describe('Whether to include performance measurements.')
+    .optional(),
+})
+
 const renounConfigSchema = z.object({
   $schema: z.string().describe('URL to the JSON schema'),
   theme: themeSchema.describe('Theme configuration object').optional(),
@@ -113,6 +130,7 @@ const renounConfigSchema = z.object({
     .url()
     .describe('The production site URL e.g. https://renoun.dev')
     .optional(),
+  debug: debugSchema.describe('Debug configuration object').optional(),
 })
 
 export const dynamic = 'force-static'

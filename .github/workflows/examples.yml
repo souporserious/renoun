@@ -7,6 +7,17 @@ on:
     paths:
       - 'examples/**'
   workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Turn on verbose debug output'
+        type: boolean
+        default: false
+
+env:
+  NODE_ENV: production
+  RENOUN_DEBUG: ${{ inputs.debug }}
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
   examples:
