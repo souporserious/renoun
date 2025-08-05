@@ -14,7 +14,6 @@ env:
 
 jobs:
   release:
-    name: Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
@@ -35,7 +34,7 @@ jobs:
         run: pnpm install
 
       - name: Build
-        run: pnpm build
+        run: pnpm build --filter=!@examples/*
 
       - name: Create Release Pull Request or Publish to npm
         id: changesets

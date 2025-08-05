@@ -1,0 +1,49 @@
+name: Examples
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  push:
+    paths:
+      - 'examples/**'
+  workflow_dispatch:
+
+jobs:
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect example changes in last 24 hours
+        id: detect
+        run: |
+          if git log --since="24 hours ago" --pretty=format: --name-only | grep -qE '^examples/'; then
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: No changes
+        if: steps.detect.outputs.changed == 'false'
+        run: echo "No example changes in the last 24 h — skipping."
+
+      - name: Setup pnpm
+        if: steps.detect.outputs.changed == 'true'
+        uses: pnpm/action-setup@v4.1.0
+
+      - name: Setup Node.js
+        if: steps.detect.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.detect.outputs.changed == 'true'
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build --filter=@examples/*
