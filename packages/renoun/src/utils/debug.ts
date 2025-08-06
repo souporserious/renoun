@@ -42,7 +42,7 @@ function truncateData(
   currentDepth: number = 0
 ): any {
   if (currentDepth >= maxObjectDepth) {
-    return '[Max depth reached]'
+    return '...'
   }
 
   if (data === null || data === undefined) {
@@ -179,17 +179,20 @@ class DebugLogger {
         this.#maxArrayItems
       )
 
+      if (this.#includePerformance && context?.startTime) {
+        const duration = performance.now() - context.startTime
+        truncatedData.duration = Math.round(duration * 1000) / 1000
+      }
+
       // Format data as pretty-printed JSON with proper indentation
       const dataString = JSON.stringify(truncatedData, null, 2)
         .split('\n')
         .map((line, index) => (index === 0 ? line : `  ${line}`))
         .join('\n')
       parts.push(`\n${dataString}`)
-    }
-
-    if (this.#includePerformance && context?.startTime) {
-      const duration = Date.now() - context.startTime
-      parts.push(`(${duration}ms)`)
+    } else if (this.#includePerformance && context?.startTime) {
+      const duration = performance.now() - context.startTime
+      parts.push(`(${Math.round(duration * 1000) / 1000}ms)`)
     }
 
     return parts.join(' ')
@@ -253,7 +256,7 @@ class DebugLogger {
     fn: () => Type | Promise<Type>,
     context?: Omit<DebugContext, 'operation' | 'startTime'>
   ): Type | Promise<Type> {
-    const startTime = Date.now()
+    const startTime = performance.now()
     const operationContext: DebugContext = {
       ...context,
       operation,
@@ -268,30 +271,46 @@ class DebugLogger {
       if (result instanceof Promise) {
         return result
           .then((value) => {
+            const duration = performance.now() - startTime
             this.debug(`Operation completed successfully`, {
               ...operationContext,
-              data: { result: 'success' },
+              data: {
+                result: 'success',
+                duration: Math.round(duration * 1000) / 1000,
+              },
             })
             return value
           })
           .catch((error) => {
+            const duration = performance.now() - startTime
             this.error(`Operation failed`, {
               ...operationContext,
-              data: { error: error.message },
+              data: {
+                error: error.message,
+                duration: Math.round(duration * 1000) / 1000,
+              },
             })
             throw error
           })
       } else {
+        const duration = performance.now() - startTime
         this.debug(`Operation completed successfully`, {
           ...operationContext,
-          data: { result: 'success' },
+          data: {
+            result: 'success',
+            duration: Math.round(duration * 1000) / 1000,
+          },
         })
         return result
       }
     } catch (error) {
+      const duration = performance.now() - startTime
       this.error(`Operation failed`, {
         ...operationContext,
-        data: { error: (error as Error).message },
+        data: {
+          error: (error as Error).message,
+          duration: Math.round(duration * 1000) / 1000,
+        },
       })
       throw error
     }
@@ -303,7 +322,7 @@ class DebugLogger {
     fn: () => Promise<Type>,
     context?: Omit<DebugContext, 'operation' | 'startTime'>
   ): Promise<Type> {
-    const startTime = Date.now()
+    const startTime = performance.now()
     const operationContext: DebugContext = {
       ...context,
       operation,
@@ -314,18 +333,34 @@ class DebugLogger {
 
     try {
       const result = await fn()
+      const duration = performance.now() - startTime
       this.debug(`Async operation completed successfully`, {
         ...operationContext,
-        data: { result: 'success' },
+        data: {
+          result: 'success',
+          duration: Math.round(duration * 1000) / 1000,
+        },
       })
       return result
     } catch (error) {
+      const duration = performance.now() - startTime
       this.error(`Async operation failed`, {
         ...operationContext,
-        data: { error: (error as Error).message },
+        data: {
+          error: (error as Error).message,
+          duration: Math.round(duration * 1000) / 1000,
+        },
       })
       throw error
     }
+  }
+
+  /** Log WebSocket server events for debugging connection issues. */
+  logWebSocketServerEvent(event: string, data?: object): void {
+    this.debug(`WebSocket ${event}`, {
+      operation: 'websocket-server',
+      data: { event, ...data },
+    })
   }
 
   /** Log WebSocket client events for debugging connection issues. */
@@ -359,6 +394,102 @@ class DebugLogger {
       operation: 'cache',
       data: { operation, key, ...data },
     })
+  }
+
+  /** Log token processing performance for debugging get-tokens operations. */
+  logTokenProcessing(
+    language: string,
+    filePath: string | undefined,
+    valueLength: number,
+    tokenLines: number,
+    totalTokens: number,
+    symbolCount: number,
+    diagnosticCount: number,
+    duration?: number
+  ): void {
+    this.debug(`Token processing completed`, {
+      operation: 'token-processing',
+      data: {
+        language,
+        filePath,
+        valueLength,
+        tokenLines,
+        totalTokens,
+        symbolCount,
+        diagnosticCount,
+        duration,
+        tokensPerLine:
+          tokenLines > 0 ? (totalTokens / tokenLines).toFixed(2) : 0,
+        processingRate: duration ? (valueLength / duration).toFixed(2) : 0,
+        charsPerMs: duration ? (valueLength / duration).toFixed(2) : 0,
+        tokensPerMs: duration ? (totalTokens / duration).toFixed(2) : 0,
+      },
+    })
+  }
+
+  /** Track token processing with detailed performance metrics. */
+  trackTokenProcessing<Type>(
+    language: string,
+    filePath: string | undefined,
+    valueLength: number,
+    fn: () => Type | Promise<Type>
+  ): Type | Promise<Type> {
+    const startTime = performance.now()
+
+    this.debug(`Starting token processing`, {
+      operation: 'token-processing',
+      data: { language, filePath, valueLength },
+    })
+
+    try {
+      const result = fn()
+
+      if (result instanceof Promise) {
+        return result
+          .then((value) => {
+            const duration = performance.now() - startTime
+            this.debug(`Token processing completed successfully`, {
+              operation: 'token-processing',
+              data: {
+                duration: Math.round(duration * 1000) / 1000,
+                result: 'success',
+              },
+            })
+            return value
+          })
+          .catch((error) => {
+            const duration = performance.now() - startTime
+            this.error(`Token processing failed`, {
+              operation: 'token-processing',
+              data: {
+                duration: Math.round(duration * 1000) / 1000,
+                error: error.message,
+              },
+            })
+            throw error
+          })
+      } else {
+        const duration = performance.now() - startTime
+        this.debug(`Token processing completed successfully`, {
+          operation: 'token-processing',
+          data: {
+            duration: Math.round(duration * 1000) / 1000,
+            result: 'success',
+          },
+        })
+        return result
+      }
+    } catch (error) {
+      const duration = performance.now() - startTime
+      this.error(`Token processing failed`, {
+        operation: 'token-processing',
+        data: {
+          duration: Math.round(duration * 1000) / 1000,
+          error: (error as Error).message,
+        },
+      })
+      throw error
+    }
   }
 }
 

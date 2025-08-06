@@ -23,7 +23,7 @@ export async function resolveTypeAtLocation(
   isMemoryFileSystem = false
 ) {
   const typeId = `${filePath}:${position}:${kind}`
-  const startTime = Date.now()
+  const startTime = performance.now()
 
   return debug.trackAsyncOperation(
     'resolveTypeAtLocation',
@@ -50,14 +50,15 @@ export async function resolveTypeAtLocation(
 
       if (isMemoryFileSystem) {
         // Skip dependency tracking and caching for memory file systems
-        const result = await resolveType(
+        const result = resolveType(
           exportDeclarationType,
           exportDeclaration,
           filter,
           undefined
         )
 
-        const duration = Date.now() - startTime
+        const duration =
+          Math.round((performance.now() - startTime) * 1000) / 1000
         debug.logTypeResolution(filePath, position, SyntaxKind[kind], duration)
 
         return result
@@ -93,7 +94,8 @@ export async function resolveTypeAtLocation(
             position,
             kind: SyntaxKind[kind],
           })
-          const duration = Date.now() - startTime
+          const duration =
+            Math.round((performance.now() - startTime) * 1000) / 1000
           debug.logTypeResolution(
             filePath,
             position,
@@ -111,37 +113,36 @@ export async function resolveTypeAtLocation(
       })
 
       const dependencies = new Set<string>([filePath])
-      const resolvedType = await resolveType(
+      const resolvedType = resolveType(
         exportDeclarationType,
         exportDeclaration,
         filter,
         undefined,
         dependencies
       )
+      const dependencyTimestamps = new Map<string, number>()
+
+      for (const depFilePath of dependencies) {
+        try {
+          const depLastModified = statSync(depFilePath).mtimeMs
+          dependencyTimestamps.set(depFilePath, depLastModified)
+        } catch {
+          // File might have been deleted; skip it
+        }
+      }
 
       resolvedTypeCache.set(typeId, {
         resolvedType,
-        dependencies: new Map(
-          Array.from(dependencies).map((filePath) => [
-            filePath,
-            statSync(filePath).mtimeMs,
-          ])
-        ),
+        dependencies: dependencyTimestamps,
       })
 
-      debug.logCacheOperation('set', typeId, {
-        filePath,
-        position,
-        kind: SyntaxKind[kind],
-      })
-
-      dependencies.clear()
-
-      const duration = Date.now() - startTime
+      const duration = Math.round((performance.now() - startTime) * 1000) / 1000
       debug.logTypeResolution(filePath, position, SyntaxKind[kind], duration)
 
       return resolvedType
     },
-    { data: { filePath, position, kind: SyntaxKind[kind], isMemoryFileSystem } }
+    {
+      data: { filePath, position, kind: SyntaxKind[kind] },
+    }
   )
 }

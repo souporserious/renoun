@@ -1,8 +1,13 @@
 import type { AddressInfo, Server } from 'ws'
 import WebSocket from 'ws'
 import { randomBytes, createHash } from 'node:crypto'
+import { monitorEventLoopDelay } from 'node:perf_hooks'
 
 import { debug } from '../../utils/debug.js'
+
+const histogram = monitorEventLoopDelay({ resolution: 20 })
+
+histogram.enable()
 
 export interface WebSocketRequest {
   method: string
@@ -134,7 +139,7 @@ process.env.RENOUN_SERVER_ID = SERVER_ID
 const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
 const MAX_BUFFERED = 8 * 1024 * 1024
 const HEARTBEAT_MS = 30_000
-const REQUEST_TIMEOUT_MS = 20_000
+const REQUEST_TIMEOUT_MS = 180_000
 const CLOSE_TEXT: Record<number, string> = {
   1000: 'Normal Closure',
   1001: 'Going Away',
@@ -259,7 +264,17 @@ class Semaphore {
     this.#permits = Math.max(1, permits)
   }
 
+  getQueueLength() {
+    return this.#queue.length
+  }
+
   async acquire(): Promise<() => void> {
+    const queued = this.#queue.length
+    if (queued > 50) {
+      debug.warn('semaphore_queued_exceeds_limit', {
+        data: { queued },
+      })
+    }
     if (this.#permits > 0) {
       this.#permits--
       let released = false
@@ -324,6 +339,8 @@ export class WebSocketServer {
 
   #methodSemaphores = new Map<string, Semaphore>()
 
+  #metricsTimer?: NodeJS.Timeout
+
   constructor(options?: { port?: number }) {
     this.#readyPromise = new Promise<void>((resolve, reject) => {
       this.#resolveReady = resolve
@@ -339,9 +356,8 @@ export class WebSocketServer {
           perMessageDeflate: false,
           verifyClient: (info, callback) => {
             if (info.req.headers['sec-websocket-protocol'] !== SERVER_ID) {
-              debug.warn('Client rejected: bad protocol', {
-                operation: 'ws-auth',
-                data: { reason: 'protocol_mismatch' },
+              debug.logWebSocketServerEvent('client_rejected', {
+                reason: 'protocol_mismatch',
               })
               return callback(false, 401, 'Unauthorized')
             }
@@ -351,16 +367,16 @@ export class WebSocketServer {
               try {
                 hostname = new URL(info.origin).hostname
               } catch {
-                debug.warn('Client rejected: bad origin URL', {
-                  operation: 'ws-auth',
-                  data: { origin: info.origin },
+                debug.logWebSocketServerEvent('client_rejected', {
+                  reason: 'bad_origin_url',
+                  origin: info.origin,
                 })
                 return callback(false, 403, 'Bad Origin')
               }
               if (hostname !== 'localhost') {
-                debug.warn('Client rejected: forbidden origin', {
-                  operation: 'ws-auth',
-                  data: { origin: info.origin },
+                debug.logWebSocketServerEvent('client_rejected', {
+                  reason: 'forbidden_origin',
+                  origin: info.origin,
                 })
                 return callback(false, 403, 'Forbidden')
               }
@@ -372,9 +388,8 @@ export class WebSocketServer {
         this.#init()
       })
       .catch((error) => {
-        debug.error('Failed to create WebSocket server', {
-          operation: 'ws-server',
-          data: { error: (error as Error).message },
+        debug.logWebSocketServerEvent('server_failed', {
+          error: (error as Error).message,
         })
         this.#rejectReady(error)
       })
@@ -403,12 +418,13 @@ export class WebSocketServer {
           port: this.#server.options.port,
           originalError: error,
         })
-        debug.error(serverError.message, { operation: 'ws-server' })
+        debug.logWebSocketServerEvent('server_error', {
+          error: serverError.message,
+        })
         this.#rejectReady(serverError)
       } else {
-        debug.error('WebSocket server error', {
-          operation: 'ws-server',
-          data: { error: error.message },
+        debug.logWebSocketServerEvent('server_error', {
+          error: error.message,
         })
         this.#rejectReady(
           new Error('[renoun] WebSocket server error', { cause: error })
@@ -422,9 +438,9 @@ export class WebSocketServer {
       this.#sockets.add(ws)
       this.#socketData.set(ws, { isAlive: true, connectionId })
 
-      debug.info('WS connection opened', {
-        operation: 'websocket-server',
-        data: { connectionId, remote: req?.socket?.remoteAddress },
+      debug.logWebSocketServerEvent('connection_opened', {
+        connectionId,
+        remote: req?.socket?.remoteAddress,
       })
 
       ws.on('pong', () => {
@@ -440,9 +456,10 @@ export class WebSocketServer {
         this.#socketData.delete(ws)
 
         const reason = reasonBuf?.toString() || CLOSE_TEXT[code] || 'Unknown'
-        debug.info('WebSocket connection closed', {
-          operation: 'websocket-server',
-          data: { connectionId, code, reason },
+        debug.logWebSocketServerEvent('connection_closed', {
+          connectionId,
+          code,
+          reason,
         })
       })
 
@@ -455,9 +472,9 @@ export class WebSocketServer {
             originalError: error,
           }
         )
-        debug.error(serverError.message, {
-          operation: 'websocket-server',
-          data: { connectionId },
+        debug.logWebSocketServerEvent('connection_error', {
+          connectionId,
+          error: serverError.message,
         })
       })
 
@@ -467,15 +484,28 @@ export class WebSocketServer {
     })
 
     this.#server.on('listening', () => {
+      // Start metrics timer
+      this.#metricsTimer = setInterval(() => {
+        debug.info('websocket_server_metrics', {
+          data: {
+            backlog: [...this.#methodSemaphores].map(([k, s]) => [
+              k,
+              s.getQueueLength(),
+            ]),
+            inflight: [...this.#methods].map(([k, d]) => [k, d.inflight.size]),
+            eventLoopLag: Math.round(histogram.mean / 1e6) + ' ms',
+          },
+        })
+      }, 5_000)
+
       // Start heartbeat once server is listening
       this.#heartbeatTimer = setInterval(() => {
         for (const ws of this.#sockets) {
           const data = this.#socketData.get(ws)
 
           if (data?.isAlive === false) {
-            debug.warn('Terminating dead connection', {
-              operation: 'websocket-server',
-              data: { connectionId: data.connectionId },
+            debug.logWebSocketServerEvent('connection_terminated', {
+              connectionId: data.connectionId,
             })
             try {
               ws.terminate()
@@ -498,25 +528,26 @@ export class WebSocketServer {
         address && typeof address !== 'string'
           ? (address as AddressInfo).port
           : this.#server.options.port
-      debug.info('WebSocket server listening', {
-        operation: 'ws-server',
-        data: { port },
+      debug.logWebSocketServerEvent('server_listening', {
+        port,
       })
       this.#resolveReady()
     })
 
     this.#server.on('close', () => {
+      if (this.#metricsTimer) {
+        clearInterval(this.#metricsTimer)
+      }
       if (this.#heartbeatTimer) {
         clearInterval(this.#heartbeatTimer)
       }
-      debug.info('WebSocket server closed', { operation: 'ws-server' })
+      debug.logWebSocketServerEvent('server_closed')
     })
   }
 
   cleanup() {
-    debug.info('Server cleanup initiated', {
-      operation: 'ws-server',
-      data: { activeConnections: this.#sockets.size },
+    debug.logWebSocketServerEvent('cleanup_initiated', {
+      activeConnections: this.#sockets.size,
     })
 
     // Close all active WebSocket connections
@@ -525,12 +556,9 @@ export class WebSocketServer {
       try {
         ws.close(1000)
       } catch (error) {
-        debug.error('Error closing WebSocket connection', {
-          operation: 'ws-server',
-          data: {
-            error: (error as Error).message,
-            connectionId: data?.connectionId,
-          },
+        debug.logWebSocketServerEvent('connection_error', {
+          connectionId: data?.connectionId,
+          error: (error as Error).message,
         })
       }
     })
@@ -538,14 +566,11 @@ export class WebSocketServer {
     // Stop the WebSocket server from accepting new connections
     this.#server.close((error) => {
       if (error) {
-        debug.error('Error while closing WebSocket server', {
-          operation: 'ws-server',
-          data: { error: error.message },
+        debug.logWebSocketServerEvent('server_error', {
+          error: error.message,
         })
       } else {
-        debug.info('WebSocket server closed successfully.', {
-          operation: 'ws-server',
-        })
+        debug.logWebSocketServerEvent('server_closed')
       }
     })
   }
@@ -591,7 +616,7 @@ export class WebSocketServer {
   registerMethod(
     method: string,
     handler: (params: any) => Promise<any> | any,
-    options: RegisterMethodOptions = { memoize: true, concurrency: 5 }
+    options: RegisterMethodOptions = { memoize: true, concurrency: 20 }
   ) {
     const memoizeOptions = options?.memoize
     let fn: (params: any) => Promise<any> | any = handler
@@ -655,9 +680,27 @@ export class WebSocketServer {
       this.#methodSemaphores.set(method, semaphore)
       const base = fn
       fn = async (params: any) => {
+        const id = performance.now()
+        const waitStart = performance.now()
         const release = await semaphore.acquire()
+        debug.info('semaphore-acquire', {
+          data: {
+            id: Math.round(id * 1000) / 1000,
+            method,
+            waitMs: Math.round((performance.now() - waitStart) * 1000) / 1000,
+          },
+        })
         try {
-          return await base(params)
+          const t0 = performance.now()
+          const result = await base(params)
+          debug.info('handler-done', {
+            data: {
+              id: Math.round(id * 1000) / 1000,
+              method,
+              ms: Math.round((performance.now() - t0) * 1000) / 1000,
+            },
+          })
+          return result
         } finally {
           release()
         }
@@ -666,13 +709,10 @@ export class WebSocketServer {
 
     this.#handlers[method] = fn
 
-    debug.debug('Method registered', {
-      operation: 'ws-server',
-      data: {
-        method,
-        memoized: !!memoizeOptions,
-        concurrency: options?.concurrency ?? null,
-      },
+    debug.logWebSocketServerEvent('method_registered', {
+      method,
+      memoized: !!memoizeOptions,
+      concurrency: options?.concurrency ?? null,
     })
   }
 
@@ -683,14 +723,21 @@ export class WebSocketServer {
 
     try {
       request = JSON.parse(message.toString())
+      if (request.method) {
+        debug.logWebSocketServerEvent('method_call_received', {
+          method: request.method,
+          id: request.id,
+          params: request.params,
+        })
+      }
     } catch (error) {
       const serverError = this.#createServerError('PARSE_ERROR', -32700, {
         originalError:
           error instanceof Error ? error : new Error(String(error)),
       })
-      debug.warn('Parse error', {
-        operation: 'websocket-server',
-        data: { connectionId, err: (error as Error).message },
+      debug.logWebSocketServerEvent('parse_error', {
+        connectionId,
+        err: (error as Error).message,
       })
       // Notifications have no id; we use -1 for malformed frames to avoid replying to unknown ids.
       this.#sendError(ws, -1, serverError.code, serverError.message)
@@ -705,9 +752,9 @@ export class WebSocketServer {
         method: request.method,
         availableMethods: Object.keys(this.#handlers),
       })
-      debug.warn('Method not found', {
-        operation: 'websocket-server',
-        data: { connectionId, method: request.method },
+      debug.logWebSocketServerEvent('method_not_found', {
+        connectionId,
+        method: request.method,
       })
       if (!isNotification) {
         this.#sendError(ws, request.id, serverError.code, serverError.message)
@@ -734,14 +781,11 @@ export class WebSocketServer {
         originalError:
           error instanceof Error ? error : new Error(String(error)),
       })
-      debug.error('Handler failed', {
-        operation: 'websocket-server',
-        data: {
-          connectionId,
-          method: request.method,
-          code,
-          err: serverError.originalError?.message,
-        },
+      debug.logWebSocketServerEvent('handler_failed', {
+        connectionId,
+        method: request.method,
+        error: serverError.originalError?.message,
+        code,
       })
       if (!isNotification) {
         this.#sendError(
@@ -764,39 +808,43 @@ export class WebSocketServer {
   #sendJson(ws: WebSocket, payload: WebSocketResponse | WebSocketNotification) {
     if (ws.readyState !== ws.OPEN) {
       const data = this.#socketData.get(ws)
-      debug.warn('Attempted send on non-open socket', {
-        operation: 'websocket-server',
-        data: { readyState: ws.readyState, connectionId: data?.connectionId },
+      debug.logWebSocketServerEvent('send_failed', {
+        connectionId: data?.connectionId,
+        readyState: ws.readyState,
       })
       return
     }
     try {
       const serialized = JSON.stringify(payload)
       const buffered = ws.bufferedAmount ?? 0
+      const data = this.#socketData.get(ws)
+
       if (buffered > MAX_BUFFERED) {
-        const data = this.#socketData.get(ws)
-        debug.warn('Backpressure: bufferedAmount high', {
-          operation: 'websocket-server',
-          data: { bufferedAmount: buffered, connectionId: data?.connectionId },
+        debug.logWebSocketServerEvent('backpressure', {
+          connectionId: data?.connectionId,
+          bufferedAmount: buffered,
         })
       }
+
+      debug.logWebSocketServerEvent('payload_bytes', {
+        connectionId: data?.connectionId,
+        payloadBytes: Buffer.byteLength(serialized),
+      })
+
       ws.send(serialized, (error?: Error) => {
         if (error) {
           const data = this.#socketData.get(ws)
-          debug.error('Send failed', {
-            operation: 'websocket-server',
-            data: { err: error.message, connectionId: data?.connectionId },
+          debug.logWebSocketServerEvent('send_failed', {
+            connectionId: data?.connectionId,
+            error: error.message,
           })
         }
       })
     } catch (error) {
       const data = this.#socketData.get(ws)
-      debug.error('Error serializing payload for send', {
-        operation: 'websocket-server',
-        data: {
-          error: (error as Error).message,
-          connectionId: data?.connectionId,
-        },
+      debug.logWebSocketServerEvent('send_failed', {
+        connectionId: data?.connectionId,
+        error: (error as Error).message,
       })
     }
   }

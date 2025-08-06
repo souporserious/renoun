@@ -143,7 +143,7 @@ export class WebSocketClient {
 
   #connect() {
     this.#connectionState = 'connecting'
-    this.#connectionStartTime = Date.now()
+    this.#connectionStartTime = performance.now()
 
     debug.logWebSocketClientEvent('connecting', {
       port: process.env.RENOUN_SERVER_PORT,
@@ -167,7 +167,9 @@ export class WebSocketClient {
     this.#currentRetries = 0
 
     debug.logWebSocketClientEvent('connected', {
-      connectionTime: Date.now() - this.#connectionStartTime,
+      connectionTime:
+        Math.round((performance.now() - this.#connectionStartTime) * 1000) /
+        1000,
       pendingRequests: this.#pendingRequests.length,
     })
 
@@ -219,7 +221,8 @@ export class WebSocketClient {
   }
 
   #handleError(event: WebSocket.ErrorEvent) {
-    const connectionTime = Date.now() - this.#connectionStartTime
+    const connectionTime =
+      Math.round((performance.now() - this.#connectionStartTime) * 1000) / 1000
     const port = process.env.RENOUN_SERVER_PORT || 'unknown'
     let error: WebSocketClientError
 
@@ -269,7 +272,9 @@ export class WebSocketClient {
     this.#connectionState = 'disconnected'
 
     debug.logWebSocketClientEvent('closed', {
-      connectionTime: Date.now() - this.#connectionStartTime,
+      connectionTime:
+        Math.round((performance.now() - this.#connectionStartTime) * 1000) /
+        1000,
       retryCount: this.#currentRetries,
     })
 
@@ -292,7 +297,9 @@ export class WebSocketClient {
       }, this.#retryInterval)
     } else {
       throw this.#createClientError('MAX_RETRIES_EXCEEDED', {
-        connectionTime: Date.now() - this.#connectionStartTime,
+        connectionTime:
+          Math.round((performance.now() - this.#connectionStartTime) * 1000) /
+          1000,
         port: process.env.RENOUN_SERVER_PORT || 'unknown',
         connectionState: this.#connectionState,
         maxRetries: this.#maxRetries,
@@ -314,7 +321,9 @@ export class WebSocketClient {
       const timeoutId = setTimeout(() => {
         debug.logWebSocketClientEvent('timeout', request)
         const error = this.#createClientError('REQUEST_TIMEOUT', {
-          connectionTime: Date.now() - this.#connectionStartTime,
+          connectionTime:
+            Math.round((performance.now() - this.#connectionStartTime) * 1000) /
+            1000,
           port: process.env.RENOUN_SERVER_PORT || 'unknown',
           connectionState: this.#connectionState,
           method,
@@ -343,6 +352,11 @@ export class WebSocketClient {
       } satisfies Request
 
       if (this.#isConnected) {
+        debug.logWebSocketClientEvent('method_call_sent', {
+          method,
+          id,
+          params,
+        })
         this.#ws.send(JSON.stringify(request))
       } else {
         this.#pendingRequests.push(JSON.stringify(request))

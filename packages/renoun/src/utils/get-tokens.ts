@@ -4,6 +4,7 @@ import tsMorph from 'ts-morph'
 
 import type { Languages as TextMateLanguages } from '../grammars/index.js'
 import type { Highlighter } from './create-highlighter.js'
+import { debug } from './debug.js'
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { getRootDirectory } from './get-root-directory.js'
@@ -91,229 +92,283 @@ export async function getTokens({
   showErrors,
   highlighter = null,
 }: GetTokensOptions): Promise<TokenizedLines> {
-  if (
-    language === 'plaintext' ||
-    language === 'text' ||
-    language === 'txt' ||
-    language === 'diff' // TODO: add support for diff highlighting
-  ) {
-    return [
-      [
+  return debug.trackTokenProcessing(
+    language,
+    filePath,
+    value.length,
+    async () => {
+      if (
+        language === 'plaintext' ||
+        language === 'text' ||
+        language === 'txt' ||
+        language === 'diff' // TODO: add support for diff highlighting
+      ) {
+        return [
+          [
+            {
+              value,
+              start: 0,
+              end: value.length,
+              hasTextStyles: false,
+              isBaseColor: true,
+              isDeprecated: false,
+              isWhiteSpace: false,
+              isSymbol: false,
+              style: {},
+            } satisfies Token,
+          ],
+        ]
+      }
+
+      if (highlighter === null) {
+        throw new Error(
+          '[renoun] Highlighter was not initialized. Ensure that the highlighter is created before calling "getTokens".'
+        )
+      }
+
+      const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
+        language
+      )
+      const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
+      const finalLanguage = getLanguage(language)
+
+      const config = loadConfig()
+      const themeNames =
+        typeof config.theme === 'string'
+          ? [config.theme]
+          : Object.values(config.theme).map((theme) => {
+              if (typeof theme === 'string') {
+                return theme
+              }
+              return theme[0]
+            })
+
+      // Track highlighter performance
+      const tokens = await debug.trackAsyncOperation(
+        'highlighter',
+        async () => {
+          return await highlighter(
+            value,
+            finalLanguage as TextMateLanguages,
+            themeNames
+          )
+        },
         {
-          value,
-          start: 0,
-          end: value.length,
-          hasTextStyles: false,
-          isBaseColor: true,
-          isDeprecated: false,
-          isWhiteSpace: false,
-          isSymbol: false,
-          style: {},
-        } satisfies Token,
-      ],
-    ]
-  }
-
-  if (highlighter === null) {
-    throw new Error(
-      '[renoun] Highlighter was not initialized. Ensure that the highlighter is created before calling "getTokens".'
-    )
-  }
-
-  const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(language)
-  const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
-  const finalLanguage = getLanguage(language)
-  const config = loadConfig()
-  const themeNames =
-    typeof config.theme === 'string'
-      ? [config.theme]
-      : Object.values(config.theme).map((theme) => {
-          if (typeof theme === 'string') {
-            return theme
-          }
-          return theme[0]
-        })
-  const tokens = await highlighter(
-    value,
-    finalLanguage as TextMateLanguages,
-    themeNames
-  )
-  const sourceFile = filePath ? project.getSourceFile(filePath) : undefined
-  const sourceFileDiagnostics = getDiagnostics(
-    sourceFile,
-    allowErrors,
-    showErrors
-  )
-  const importSpecifiers =
-    sourceFile && !jsxOnly
-      ? sourceFile
-          .getImportDeclarations()
-          .map((importDeclaration) => importDeclaration.getModuleSpecifier())
-      : []
-  const identifiers = sourceFile
-    ? sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
-    : []
-  const suggestionDiagnostics = sourceFile
-    ? project
-        .getLanguageService()
-        .compilerObject.getSuggestionDiagnostics(sourceFile.getFilePath())
-    : []
-  const deprecatedRanges = suggestionDiagnostics
-    .filter(
-      (diagnostic) =>
-        (diagnostic.reportsDeprecated || diagnostic.code === 6385) &&
-        diagnostic.start !== undefined
-    )
-    .map((diagnostic) => ({
-      start: diagnostic.start,
-      end: diagnostic.start + (diagnostic.length ?? 0),
-    }))
-  const symbolMetadata = [...importSpecifiers, ...identifiers]
-    .filter((node) => {
-      const parent = node.getParent()
-      const isJsxOnlyImport = jsxOnly
-        ? Node.isImportSpecifier(parent) || Node.isImportClause(parent)
-        : false
-      return (
-        !isJsxOnlyImport && !Node.isJSDocTag(parent) && !Node.isJSDoc(parent)
-      )
-    })
-    .map((node) => {
-      let start = node.getStart()
-      let end = node.getEnd()
-
-      // Offset module specifiers since they contain quotes which are tokenized separately
-      // e.g. import React from 'react' -> ["'", "react", "'"]
-      if (Node.isStringLiteral(node)) {
-        start += 1
-        end -= 1
-      }
-
-      const isDeprecated = deprecatedRanges.some(
-        (range) => range.start === start && range.end === end
+          data: {
+            language: finalLanguage,
+            valueLength: value.length,
+            themeCount: themeNames.length,
+          },
+        }
       )
 
-      return {
-        start: node.getStart(),
-        end: node.getEnd(),
-        isDeprecated,
-      }
-    })
-  const rootDirectory = getRootDirectory()
-  const baseDirectory = process.cwd().replace(rootDirectory, '')
-  let previousTokenStart = 0
-  let parsedTokens: Token[][] = tokens.map((line) => {
-    // increment position for line breaks if the line is empty
-    if (line.length === 0) {
-      previousTokenStart += 1
-    }
+      const sourceFile = filePath ? project.getSourceFile(filePath) : undefined
 
-    return line.flatMap((baseToken, tokenIndex) => {
-      const tokenStart = previousTokenStart
-      const tokenEnd = tokenStart + baseToken.value.length
-      const lastToken = tokenIndex === line.length - 1
+      const sourceFileDiagnostics = getDiagnostics(
+        sourceFile,
+        allowErrors,
+        showErrors
+      )
 
-      // account for newlines
-      previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
-
-      const initialToken: Token = {
-        value: baseToken.value,
-        start: tokenStart,
-        end: tokenEnd,
-        hasTextStyles: baseToken.hasTextStyles,
-        isBaseColor: baseToken.isBaseColor,
-        isWhiteSpace: baseToken.isWhiteSpace,
-        isDeprecated: false,
-        isSymbol: false,
-        style: baseToken.style,
-      }
-
-      // Split this token further if it intersects symbol ranges
-      let processedTokens: Tokens = []
-
-      if (symbolMetadata.length) {
-        const symbol = symbolMetadata.find((range) => {
-          return range.start >= tokenStart && range.end <= tokenEnd
-        })
-        const inFullRange = symbol
-          ? symbol.start === tokenStart && symbol.end === tokenEnd
-          : false
-
-        if (symbol) {
-          initialToken.isDeprecated = symbol.isDeprecated
-        }
-
-        if (symbol && !inFullRange) {
-          processedTokens = splitTokenByRanges(initialToken, symbolMetadata)
-        } else {
-          processedTokens.push({
-            ...initialToken,
-            isSymbol: inFullRange,
-          })
-        }
-      } else {
-        processedTokens.push(initialToken)
-      }
-
-      return processedTokens.map((token) => {
-        if (!token.isSymbol) {
-          return token
-        }
-
-        const diagnostics = sourceFileDiagnostics
-          .filter((diagnostic) => {
-            const start = diagnostic.getStart()
-            const length = diagnostic.getLength()
-            if (!start || !length) {
-              return false
-            }
-            const end = start + length
-            return token.start >= start && token.end <= end
-          })
-          .map((diagnostic) => ({
-            code: diagnostic.getCode(),
-            message: getDiagnosticMessageText(diagnostic.getMessageText()),
-          }))
-        const quickInfo =
-          sourceFile && filePath
-            ? getQuickInfo(
-                sourceFile,
-                filePath,
-                token.start,
-                rootDirectory,
-                baseDirectory
+      const importSpecifiers =
+        sourceFile && !jsxOnly
+          ? sourceFile
+              .getImportDeclarations()
+              .map((importDeclaration) =>
+                importDeclaration.getModuleSpecifier()
               )
-            : undefined
+          : []
+      const identifiers = sourceFile
+        ? sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
+        : []
 
-        return {
-          ...token,
-          quickInfo,
-          diagnostics: diagnostics.length ? diagnostics : undefined,
+      const suggestionDiagnostics = sourceFile
+        ? project
+            .getLanguageService()
+            .compilerObject.getSuggestionDiagnostics(sourceFile.getFilePath())
+        : []
+      const deprecatedRanges = suggestionDiagnostics
+        .filter(
+          (diagnostic) =>
+            (diagnostic.reportsDeprecated || diagnostic.code === 6385) &&
+            diagnostic.start !== undefined
+        )
+        .map((diagnostic) => ({
+          start: diagnostic.start,
+          end: diagnostic.start + (diagnostic.length ?? 0),
+        }))
+
+      const symbolMetadata = [...importSpecifiers, ...identifiers]
+        .filter((node) => {
+          const parent = node.getParent()
+          const isJsxOnlyImport = jsxOnly
+            ? Node.isImportSpecifier(parent) || Node.isImportClause(parent)
+            : false
+          return (
+            !isJsxOnlyImport &&
+            !Node.isJSDocTag(parent) &&
+            !Node.isJSDoc(parent)
+          )
+        })
+        .map((node) => {
+          let start = node.getStart()
+          let end = node.getEnd()
+
+          // Offset module specifiers since they contain quotes which are tokenized separately
+          // e.g. import React from 'react' -> ["'", "react", "'"]
+          if (Node.isStringLiteral(node)) {
+            start += 1
+            end -= 1
+          }
+
+          const isDeprecated = deprecatedRanges.some(
+            (range) => range.start === start && range.end === end
+          )
+
+          return {
+            start: node.getStart(),
+            end: node.getEnd(),
+            isDeprecated,
+          }
+        })
+
+      const rootDirectory = getRootDirectory()
+      const baseDirectory = process.cwd().replace(rootDirectory, '')
+      let previousTokenStart = 0
+      let parsedTokens: Token[][] = tokens.map((line) => {
+        // increment position for line breaks if the line is empty
+        if (line.length === 0) {
+          previousTokenStart += 1
         }
+
+        return line.flatMap((baseToken, tokenIndex) => {
+          const tokenStart = previousTokenStart
+          const tokenEnd = tokenStart + baseToken.value.length
+          const lastToken = tokenIndex === line.length - 1
+
+          // account for newlines
+          previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
+
+          const initialToken: Token = {
+            value: baseToken.value,
+            start: tokenStart,
+            end: tokenEnd,
+            hasTextStyles: baseToken.hasTextStyles,
+            isBaseColor: baseToken.isBaseColor,
+            isWhiteSpace: baseToken.isWhiteSpace,
+            isDeprecated: false,
+            isSymbol: false,
+            style: baseToken.style,
+          }
+
+          // Split this token further if it intersects symbol ranges
+          let processedTokens: Tokens = []
+
+          if (symbolMetadata.length) {
+            const symbol = symbolMetadata.find((range) => {
+              return range.start >= tokenStart && range.end <= tokenEnd
+            })
+            const inFullRange = symbol
+              ? symbol.start === tokenStart && symbol.end === tokenEnd
+              : false
+
+            if (symbol) {
+              initialToken.isDeprecated = symbol.isDeprecated
+            }
+
+            if (symbol && !inFullRange) {
+              processedTokens = splitTokenByRanges(initialToken, symbolMetadata)
+            } else {
+              processedTokens.push({
+                ...initialToken,
+                isSymbol: inFullRange,
+              })
+            }
+          } else {
+            processedTokens.push(initialToken)
+          }
+
+          return processedTokens.map((token) => {
+            if (!token.isSymbol) {
+              return token
+            }
+
+            const diagnostics = sourceFileDiagnostics
+              .filter((diagnostic) => {
+                const start = diagnostic.getStart()
+                const length = diagnostic.getLength()
+                if (!start || !length) {
+                  return false
+                }
+                const end = start + length
+                return token.start >= start && token.end <= end
+              })
+              .map((diagnostic) => ({
+                code: diagnostic.getCode(),
+                message: getDiagnosticMessageText(diagnostic.getMessageText()),
+              }))
+            const quickInfo =
+              sourceFile && filePath
+                ? getQuickInfo(
+                    sourceFile,
+                    filePath,
+                    token.start,
+                    rootDirectory,
+                    baseDirectory
+                  )
+                : undefined
+
+            return {
+              ...token,
+              quickInfo,
+              diagnostics: diagnostics.length ? diagnostics : undefined,
+            }
+          })
+        })
       })
-    })
-  })
 
-  // Remove leading imports and whitespace for jsx only code blocks
-  if (jsxOnly) {
-    const firstJsxLineIndex = parsedTokens.findIndex((line) =>
-      line.find((token) => token.value === '<')
-    )
-    if (firstJsxLineIndex > 0) {
-      parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+      // Remove leading imports and whitespace for jsx only code blocks
+      if (jsxOnly) {
+        const firstJsxLineIndex = parsedTokens.findIndex((line) =>
+          line.find((token) => token.value === '<')
+        )
+        if (firstJsxLineIndex > 0) {
+          parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+        }
+      }
+
+      if (
+        allowErrors === false &&
+        sourceFile &&
+        sourceFileDiagnostics.length > 0
+      ) {
+        throwDiagnosticErrors(
+          filePath,
+          sourceFile,
+          sourceFileDiagnostics,
+          parsedTokens
+        )
+      }
+
+      // Log summary statistics for performance monitoring
+      const totalTokens = parsedTokens.reduce(
+        (sum: number, line: Token[]) => sum + line.length,
+        0
+      )
+
+      debug.logTokenProcessing(
+        finalLanguage,
+        filePath,
+        value.length,
+        parsedTokens.length,
+        totalTokens,
+        symbolMetadata.length,
+        sourceFileDiagnostics.length
+      )
+
+      return parsedTokens
     }
-  }
-
-  if (allowErrors === false && sourceFile && sourceFileDiagnostics.length > 0) {
-    throwDiagnosticErrors(
-      filePath,
-      sourceFile,
-      sourceFileDiagnostics,
-      parsedTokens
-    )
-  }
-
-  return parsedTokens
+  )
 }
 
 /** Retrieves diagnostics from a source file. */

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "renoun next dev",
-    "build": "renoun next build",
+    "build": "RENOUN_DEBUG=true renoun next build",
     "start": "serve out",
     "check-broken-links": "node --experimental-strip-types scripts/check-broken-links.ts"
   },
