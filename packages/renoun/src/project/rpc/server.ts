@@ -229,7 +229,7 @@ function sha1(string: string) {
   return createHash('sha1').update(string).digest('hex')
 }
 
-// keep only relevant bits of params in the cache key, and hash very large strings
+// keep only relevant bits of params in the cache key
 function normalizeForKey(params: any) {
   if (!params || typeof params !== 'object') {
     return params
@@ -238,7 +238,7 @@ function normalizeForKey(params: any) {
   const out: any = Array.isArray(params) ? [] : {}
 
   for (const [key, value] of Object.entries(params)) {
-    if (typeof value === 'string' && value.length > 512) {
+    if (typeof value === 'string') {
       out[key] = `hash:${sha1(value)}`
     } else if (key === 'projectOptions' && value && typeof value === 'object') {
       out[key] = {
