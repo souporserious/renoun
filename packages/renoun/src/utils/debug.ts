@@ -357,7 +357,7 @@ class DebugLogger {
 
   /** Log WebSocket server events for debugging connection issues. */
   logWebSocketServerEvent(event: string, data?: object): void {
-    this.debug(`WebSocket ${event}`, {
+    this.debug(event, {
       operation: 'websocket-server',
       data: { event, ...data },
     })
@@ -365,7 +365,7 @@ class DebugLogger {
 
   /** Log WebSocket client events for debugging connection issues. */
   logWebSocketClientEvent(event: string, data?: object): void {
-    this.debug(`WebSocket ${event}`, {
+    this.debug(event, {
       operation: 'websocket-client',
       data: { event, ...data },
     })

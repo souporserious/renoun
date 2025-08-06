@@ -341,7 +341,7 @@ export class WebSocketClient {
 
     return new Promise<Value>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        debug.logWebSocketClientEvent('timeout', request)
+        debug.logWebSocketClientEvent('method_timeout', { method, id })
         const error = this.#createClientError('REQUEST_TIMEOUT', {
           connectionTime:
             Math.round((performance.now() - this.#connectionStartTime) * 1000) /
@@ -377,7 +377,6 @@ export class WebSocketClient {
         debug.logWebSocketClientEvent('method_call_sent', {
           method,
           id,
-          params,
         })
         this.#ws.send(JSON.stringify(request))
       } else {

@@ -496,11 +496,12 @@ export class WebSocketServer {
       this.#metricsTimer = setInterval(() => {
         debug.info('websocket_server_metrics', {
           data: {
-            backlog: [...this.#methodSemaphores].map(([k, s]) => [
-              k,
-              s.getQueueLength(),
-            ]),
-            inflight: [...this.#methods].map(([k, d]) => [k, d.inflight.size]),
+            backlog: [...this.#methodSemaphores].map(
+              ([k, s]) => k + ':' + s.getQueueLength()
+            ),
+            inflight: [...this.#methods].map(
+              ([k, d]) => k + ':' + d.inflight.size
+            ),
             eventLoopLag: Math.round(histogram.mean / 1e6) + ' ms',
           },
         })
