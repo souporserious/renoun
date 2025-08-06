@@ -77,6 +77,10 @@ export async function createServer(options?: { port?: number }) {
         ...options,
         project,
       })
+    },
+    {
+      memoize: true,
+      concurrency: 10,
     }
   )
 
@@ -101,6 +105,10 @@ export async function createServer(options?: { port?: number }) {
         highlighter: currentHighlighter.current,
         project,
       })
+    },
+    {
+      memoize: true,
+      concurrency: 10,
     }
   )
 
@@ -148,6 +156,10 @@ export async function createServer(options?: { port?: number }) {
           },
         }
       )
+    },
+    {
+      memoize: true,
+      concurrency: 3,
     }
   )
 
@@ -162,6 +174,10 @@ export async function createServer(options?: { port?: number }) {
     }) {
       const project = getProject(projectOptions)
       return baseGetFileExports(filePath, project)
+    },
+    {
+      memoize: true,
+      concurrency: 25,
     }
   )
 
@@ -182,6 +198,10 @@ export async function createServer(options?: { port?: number }) {
     }) {
       const project = getProject(projectOptions)
       return baseGetFileExportMetadata(name, filePath, position, kind, project)
+    },
+    {
+      memoize: true,
+      concurrency: 25,
     }
   )
 
@@ -208,6 +228,10 @@ export async function createServer(options?: { port?: number }) {
         includeDependencies,
         project,
       })
+    },
+    {
+      memoize: true,
+      concurrency: 25,
     }
   )
 

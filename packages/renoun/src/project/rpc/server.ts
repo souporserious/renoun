@@ -138,8 +138,9 @@ process.env.RENOUN_SERVER_ID = SERVER_ID
 
 const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
 const MAX_BUFFERED = 8 * 1024 * 1024
+const MAX_TIMEOUT_MS = 300_000
+const REQUEST_TIMEOUT_MS = 20_000
 const HEARTBEAT_MS = 30_000
-const REQUEST_TIMEOUT_MS = 180_000
 const CLOSE_TEXT: Record<number, string> = {
   1000: 'Normal Closure',
   1001: 'Going Away',
@@ -149,10 +150,15 @@ const CLOSE_TEXT: Record<number, string> = {
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  const timeoutMs = Math.min(ms, MAX_TIMEOUT_MS)
+
   return Promise.race([
     promise,
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Request timed out')), ms)
+      setTimeout(
+        () => reject(new Error(`Request timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      )
     ),
   ])
 }
@@ -764,9 +770,12 @@ export class WebSocketServer {
 
     // Execute handler with timeout
     try {
+      const semaphore = this.#methodSemaphores.get(request.method)
+      const queueLength = semaphore ? semaphore.getQueueLength() : 0
+      const extraTime = queueLength * 1_000
       const result = await withTimeout(
         Promise.resolve(handler(request.params)),
-        REQUEST_TIMEOUT_MS
+        REQUEST_TIMEOUT_MS + extraTime
       )
       if (!isNotification) {
         this.#sendResponse(ws, request.id, result)

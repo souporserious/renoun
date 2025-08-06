@@ -310,7 +310,7 @@ export class WebSocketClient {
   async callMethod<Params extends Record<string, unknown>, Value>(
     method: string,
     params: Params,
-    timeout = 120
+    timeout = 300_000
   ): Promise<Value> {
     const id = performance.now()
     const request: WebSocketRequest = { method, params, id }
