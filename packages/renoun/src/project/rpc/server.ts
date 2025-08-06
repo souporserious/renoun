@@ -1,6 +1,6 @@
 import type { AddressInfo, Server } from 'ws'
 import WebSocket from 'ws'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, createHash } from 'node:crypto'
 
 import { debug } from '../../utils/debug.js'
 
@@ -152,6 +152,108 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ])
 }
 
+type Milliseconds = number
+
+class LRUCache<Value> {
+  #max: number
+  #ttl: Milliseconds
+  #map = new Map<string, { value: Value; expiration: number }>()
+
+  constructor(maxEntries: number, ttlMs: Milliseconds) {
+    this.#max = Math.max(1, maxEntries)
+    this.#ttl = Math.max(0, ttlMs)
+  }
+
+  get(key: string): Value | undefined {
+    const hit = this.#map.get(key)
+    if (!hit) {
+      return
+    }
+    if (this.#ttl && Date.now() > hit.expiration) {
+      this.#map.delete(key)
+      return
+    }
+    // LRU bump
+    this.#map.delete(key)
+    this.#map.set(key, hit)
+    return hit.value
+  }
+
+  set(key: string, value: Value) {
+    const expiration = this.#ttl
+      ? Date.now() + this.#ttl
+      : Number.POSITIVE_INFINITY
+    if (this.#map.has(key)) {
+      this.#map.delete(key)
+    }
+    this.#map.set(key, { value, expiration })
+    if (this.#map.size > this.#max) {
+      const oldest = this.#map.keys().next().value!
+      this.#map.delete(oldest)
+    }
+  }
+
+  clear() {
+    this.#map.clear()
+  }
+
+  size() {
+    return this.#map.size
+  }
+}
+
+function stableStringify(x: unknown): string {
+  if (x === null || typeof x !== 'object') {
+    return JSON.stringify(x)
+  }
+  if (Array.isArray(x)) {
+    return `[${x.map(stableStringify).join(',')}]`
+  }
+  const object = x as Record<string, unknown>
+  const keys = Object.keys(object).sort()
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(object[k])}`).join(',')}}`
+}
+
+function sha1(string: string) {
+  return createHash('sha1').update(string).digest('hex')
+}
+
+// keep only relevant bits of params in the cache key, and hash very large strings
+function normalizeForKey(params: any) {
+  if (!params || typeof params !== 'object') {
+    return params
+  }
+
+  const out: any = Array.isArray(params) ? [] : {}
+
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === 'string' && value.length > 512) {
+      out[key] = `hash:${sha1(value)}`
+    } else if (key === 'projectOptions' && value && typeof value === 'object') {
+      out[key] = {
+        tsConfigFilePath: (value as any).tsConfigFilePath ?? null,
+        useInMemoryFileSystem: (value as any).useInMemoryFileSystem ?? false,
+        theme: (value as any).theme ?? null,
+        siteUrl: (value as any).siteUrl ?? null,
+      }
+    } else if (typeof value === 'object' && value !== null) {
+      out[key] = normalizeForKey(value)
+    } else {
+      out[key] = value
+    }
+  }
+
+  return out
+}
+
+function makeKey(method: string, params: unknown): string {
+  return sha1(`${method}|${stableStringify(normalizeForKey(params))}`)
+}
+
+type RegisterMethodOptions = {
+  memoize?: boolean | { ttlMs?: Milliseconds; maxEntries?: number }
+}
+
 export class WebSocketServer {
   #server!: Server
 
@@ -173,6 +275,11 @@ export class WebSocketServer {
   #heartbeatTimer?: NodeJS.Timeout
 
   #nextConnectionId = 1
+
+  #methods = new Map<
+    string,
+    { inflight: Map<string, Promise<any>>; cache: LRUCache<any> | null }
+  >()
 
   constructor(options?: { port?: number }) {
     this.#readyPromise = new Promise<void>((resolve, reject) => {
@@ -421,11 +528,89 @@ export class WebSocketServer {
     throw new Error('[renoun] Unable to retrieve server port')
   }
 
-  registerMethod(method: string, handler: (params: any) => Promise<any> | any) {
-    this.#handlers[method] = handler
+  /** Manually clear memoized results (all methods or one). */
+  invalidateCache(method?: string) {
+    if (method) {
+      const data = this.#methods.get(method)
+      if (data?.cache) {
+        data.cache.clear()
+        debug.logCacheOperation('clear', method, { reason: 'manual' })
+      }
+      return
+    }
+
+    for (const [name, data] of this.#methods) {
+      if (data.cache) data.cache.clear()
+      debug.logCacheOperation('clear', name, { reason: 'manual-all' })
+    }
+  }
+
+  registerMethod(
+    method: string,
+    handler: (params: any) => Promise<any> | any,
+    options: RegisterMethodOptions = { memoize: true }
+  ) {
+    const memoizeOptions = options?.memoize
+
+    if (memoizeOptions) {
+      const ttlMs =
+        typeof memoizeOptions === 'object' && memoizeOptions.ttlMs != null
+          ? memoizeOptions.ttlMs
+          : 60_000
+      const maxEntries =
+        typeof memoizeOptions === 'object' && memoizeOptions.maxEntries != null
+          ? memoizeOptions.maxEntries
+          : 500
+      const state = {
+        inflight: new Map<string, Promise<any>>(),
+        cache: new LRUCache<any>(maxEntries, ttlMs),
+      }
+      this.#methods.set(method, state)
+
+      const wrapped = async (params: any) => {
+        const key = makeKey(method, params)
+
+        // cache hit
+        const hit = state.cache!.get(key)
+        if (typeof hit !== 'undefined') {
+          debug.logCacheOperation('hit', method)
+          return hit
+        }
+
+        // in-flight de-duplicate
+        const pending = state.inflight.get(key)
+        if (pending) {
+          debug.logCacheOperation('hit', method, { kind: 'in-flight' })
+          return pending
+        }
+
+        // compute once
+        debug.logCacheOperation('miss', method)
+        const promise = (async () => {
+          try {
+            const result = await handler(params)
+            state.cache!.set(key, result)
+            debug.logCacheOperation('set', method, {
+              size: state.cache!.size(),
+            })
+            return result
+          } finally {
+            state.inflight.delete(key)
+          }
+        })()
+
+        state.inflight.set(key, promise)
+        return promise
+      }
+
+      this.#handlers[method] = wrapped
+    } else {
+      this.#handlers[method] = handler
+    }
+
     debug.debug('Method registered', {
       operation: 'ws-server',
-      data: { method },
+      data: { method, memoized: !!memoizeOptions },
     })
   }
 
