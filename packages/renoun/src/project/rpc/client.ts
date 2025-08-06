@@ -152,7 +152,12 @@ export class WebSocketClient {
     import('ws').then(({ default: WebSocket }) => {
       this.#ws = new WebSocket(
         `ws://localhost:${process.env.RENOUN_SERVER_PORT}`,
-        process.env.RENOUN_SERVER_ID
+        process.env.RENOUN_SERVER_ID,
+        {
+          handshakeTimeout: 15_000,
+          perMessageDeflate: false,
+          maxPayload: 16 * 1024 * 1024,
+        }
       )
       this.#ws.addEventListener('open', this.#handleOpenEvent)
       this.#ws.addEventListener('message', this.#handleMessageEvent)
@@ -173,10 +178,27 @@ export class WebSocketClient {
       pendingRequests: this.#pendingRequests.length,
     })
 
-    this.#pendingRequests.forEach((request) => {
-      this.#ws.send(request)
-    })
-    this.#pendingRequests.length = 0
+    void this.#flushPending()
+  }
+
+  #flushing = false
+
+  async #flushPending() {
+    if (this.#flushing) {
+      return
+    }
+    this.#flushing = true
+    try {
+      while (this.#pendingRequests.length) {
+        const request = this.#pendingRequests.shift()!
+        this.#ws.send(request)
+
+        // Yield to the event loop to allow the server to handle the request
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+    } finally {
+      this.#flushing = false
+    }
   }
 
   #handleMessage(event: WebSocket.MessageEvent) {

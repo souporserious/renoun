@@ -358,8 +358,10 @@ export class WebSocketServer {
         this.#server = new ws.WebSocketServer({
           port: options?.port ?? 0,
           host: 'localhost',
+          backlog: 1024,
           maxPayload: MAX_PAYLOAD_BYTES,
           perMessageDeflate: false,
+          clientTracking: false,
           verifyClient: (info, callback) => {
             if (info.req.headers['sec-websocket-protocol'] !== SERVER_ID) {
               debug.logWebSocketServerEvent('client_rejected', {
@@ -772,7 +774,7 @@ export class WebSocketServer {
     try {
       const semaphore = this.#methodSemaphores.get(request.method)
       const queueLength = semaphore ? semaphore.getQueueLength() : 0
-      const extraTime = queueLength * 1_000
+      const extraTime = queueLength * 1_500
       const result = await withTimeout(
         Promise.resolve(handler(request.params)),
         REQUEST_TIMEOUT_MS + extraTime
