@@ -50,24 +50,14 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
     return debug.trackAsyncOperation(
       'cli.runSubProcess',
       async () => {
-        debug.debug('Creating renoun server')
         const server = await createServer()
-
         const port = String(await server.getPort())
         debug.info('renoun server created', {
           data: { port, serverId: process.env['RENOUN_SERVER_ID'] },
         })
 
-        debug.debug('Spawning subprocess', {
-          data: {
-            command: firstArgument,
-            args: [secondArgument, ...restArguments],
-            port,
-          },
-        })
-
         subProcess = spawn(firstArgument, [secondArgument, ...restArguments], {
-          stdio: 'inherit',
+          stdio: ['inherit', 'inherit', 'pipe'],
           shell: true,
           env: {
             ...process.env,
@@ -81,6 +71,27 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
             command: `${firstArgument} ${secondArgument}`,
           },
         })
+
+        const fatalRE = /(FATAL ERROR|Allocation failed|heap limit)/i
+
+        subProcess.stderr?.on('data', (buf) => {
+          const line = buf.toString()
+          debug.error('Subprocess stderr', { data: line })
+
+          if (fatalRE.test(line)) {
+            debug.error('Detected fatal stderr pattern - killing subprocess')
+            subProcess?.kill('SIGKILL')
+          }
+        })
+
+        subProcess.on(
+          'exit',
+          (code: number | null, signal: NodeJS.Signals | null) => {
+            debug.error('Subprocess exit', {
+              data: { pid: subProcess?.pid, exitCode: code, signal },
+            })
+          }
+        )
 
         subProcess.on('close', (code: number) => {
           debug.info('Subprocess closed', {
@@ -106,13 +117,11 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
 
   await runSubProcess()
 
-  // Handle Ctrl+C
   process.on('SIGINT', () => {
     debug.info('Received SIGINT signal')
     cleanupAndExit(0)
   })
 
-  // Handle kill commands
   process.on('SIGTERM', () => {
     debug.info('Received SIGTERM signal')
     cleanupAndExit(0)
@@ -123,6 +132,12 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
       data: { error: error.message, stack: error.stack },
     })
     console.error('Uncaught exception:', error)
+    cleanupAndExit(1)
+  })
+
+  process.on('unhandledRejection', (reason) => {
+    debug.error('Unhandled rejection', { data: { reason: String(reason) } })
+    console.error('Unhandled rejection:', reason)
     cleanupAndExit(1)
   })
 } else if (firstArgument === 'watch') {
