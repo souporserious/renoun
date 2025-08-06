@@ -250,8 +250,49 @@ function makeKey(method: string, params: unknown): string {
   return sha1(`${method}|${stableStringify(normalizeForKey(params))}`)
 }
 
+/** Simple semaphore to gate concurrency. */
+class Semaphore {
+  #permits: number
+  #queue: Array<() => void> = []
+
+  constructor(permits: number) {
+    this.#permits = Math.max(1, permits)
+  }
+
+  async acquire(): Promise<() => void> {
+    if (this.#permits > 0) {
+      this.#permits--
+      let released = false
+      return () => {
+        if (released) return
+        released = true
+        this.#permits++
+        const next = this.#queue.shift()
+        if (next) next()
+      }
+    }
+    return new Promise<() => void>((resolve) => {
+      this.#queue.push(() => {
+        this.#permits--
+        let released = false
+        resolve(() => {
+          if (released) return
+          released = true
+          this.#permits++
+          const next = this.#queue.shift()
+          if (next) next()
+        })
+      })
+    })
+  }
+}
+
 type RegisterMethodOptions = {
+  /** Memoize the method's results. */
   memoize?: boolean | { ttlMs?: Milliseconds; maxEntries?: number }
+
+  /** Max concurrent executions for this method. Omit or 0 = unlimited. */
+  concurrency?: number
 }
 
 export class WebSocketServer {
@@ -280,6 +321,8 @@ export class WebSocketServer {
     string,
     { inflight: Map<string, Promise<any>>; cache: LRUCache<any> | null }
   >()
+
+  #methodSemaphores = new Map<string, Semaphore>()
 
   constructor(options?: { port?: number }) {
     this.#readyPromise = new Promise<void>((resolve, reject) => {
@@ -548,9 +591,10 @@ export class WebSocketServer {
   registerMethod(
     method: string,
     handler: (params: any) => Promise<any> | any,
-    options: RegisterMethodOptions = { memoize: true }
+    options: RegisterMethodOptions = { memoize: true, concurrency: 5 }
   ) {
     const memoizeOptions = options?.memoize
+    let fn: (params: any) => Promise<any> | any = handler
 
     if (memoizeOptions) {
       const ttlMs =
@@ -567,7 +611,7 @@ export class WebSocketServer {
       }
       this.#methods.set(method, state)
 
-      const wrapped = async (params: any) => {
+      const promise = async (params: any) => {
         const key = makeKey(method, params)
 
         // cache hit
@@ -603,14 +647,32 @@ export class WebSocketServer {
         return promise
       }
 
-      this.#handlers[method] = wrapped
-    } else {
-      this.#handlers[method] = handler
+      fn = promise
     }
+
+    if (options?.concurrency && options.concurrency > 0) {
+      const semaphore = new Semaphore(options.concurrency)
+      this.#methodSemaphores.set(method, semaphore)
+      const base = fn
+      fn = async (params: any) => {
+        const release = await semaphore.acquire()
+        try {
+          return await base(params)
+        } finally {
+          release()
+        }
+      }
+    }
+
+    this.#handlers[method] = fn
 
     debug.debug('Method registered', {
       operation: 'ws-server',
-      data: { method, memoized: !!memoizeOptions },
+      data: {
+        method,
+        memoized: !!memoizeOptions,
+        concurrency: options?.concurrency ?? null,
+      },
     })
   }
 
