@@ -131,6 +131,7 @@ export class WebSocketClient {
   #retryInterval: number = 5000
   #maxRetries: number = 5
   #currentRetries: number = 0
+  #handshakeTimer?: NodeJS.Timeout
   #handleOpenEvent = this.#handleOpen.bind(this)
   #handleMessageEvent = this.#handleMessage.bind(this)
   #handleErrorEvent = this.#handleError.bind(this)
@@ -159,6 +160,15 @@ export class WebSocketClient {
           maxPayload: 16 * 1024 * 1024,
         }
       )
+      this.#handshakeTimer = setTimeout(() => {
+        // If 10 seconds pass with no 'open', kill the socket, #handleClose will decide whether to retry
+        if (this.#connectionState === 'connecting') {
+          debug.logWebSocketClientEvent('handshake_timeout', {
+            waitedMs: Math.round(performance.now() - this.#connectionStartTime),
+          })
+          this.#ws.terminate()
+        }
+      }, 10_000)
       this.#ws.addEventListener('open', this.#handleOpenEvent)
       this.#ws.addEventListener('message', this.#handleMessageEvent)
       this.#ws.addEventListener('error', this.#handleErrorEvent)
@@ -167,6 +177,8 @@ export class WebSocketClient {
   }
 
   #handleOpen() {
+    clearTimeout(this.#handshakeTimer)
+
     this.#isConnected = true
     this.#connectionState = 'connected'
     this.#currentRetries = 0
@@ -248,6 +260,15 @@ export class WebSocketClient {
     const port = process.env.RENOUN_SERVER_PORT || 'unknown'
     let error: WebSocketClientError
 
+    // While connecting we only log since #handleClose will decide whether to retry
+    if (this.#connectionState === 'connecting') {
+      debug.logWebSocketClientEvent('connect_error', {
+        connectionTime,
+        eventMessage: event.message,
+      })
+      return
+    }
+
     debug.logWebSocketClientEvent('error', {
       connectionTime,
       port,
@@ -255,21 +276,7 @@ export class WebSocketClient {
       eventMessage: event.message,
     })
 
-    if (this.#connectionState === 'connecting') {
-      if (connectionTime < 1000) {
-        error = this.#createClientError('CONNECTION_REFUSED', {
-          connectionTime,
-          port,
-          connectionState: this.#connectionState,
-        })
-      } else {
-        error = this.#createClientError('CONNECTION_TIMEOUT', {
-          connectionTime,
-          port,
-          connectionState: this.#connectionState,
-        })
-      }
-    } else if (this.#connectionState === 'connected') {
+    if (this.#connectionState === 'connected') {
       error = this.#createClientError('WEBSOCKET_ERROR', {
         connectionTime,
         port,
