@@ -210,6 +210,12 @@ export class GitProviderFileSystem extends MemoryFileSystem {
             response.headers.get('X-RateLimit-Remaining') === '0')
 
         if (isRateLimited) {
+          const retryAfter = Number(response.headers.get('Retry-After'))
+          if (Number.isFinite(retryAfter)) {
+            await sleep((retryAfter + 1) * 1000)
+            continue
+          }
+
           const delay = getResetDelayMs(response, this.#provider)
           if (delay !== undefined) {
             await sleep(delay)
