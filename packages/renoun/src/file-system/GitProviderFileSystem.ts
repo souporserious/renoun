@@ -2,6 +2,7 @@ import { MemoryFileSystem } from './MemoryFileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
 type GitProvider = 'github' | 'gitlab' | 'bitbucket'
+
 interface GitProviderFileSystemOptions {
   /** Repository in the format "owner/repo". */
   repository: string
@@ -29,7 +30,6 @@ const binaryExtensions = Object.freeze(
     'jpeg',
     'gif',
     'webp',
-    'svg',
     'ico',
     'pdf',
     'zip',
@@ -72,8 +72,9 @@ function normalizePath(path: string) {
 
 function decodeBase64(string: string) {
   if (typeof Buffer === 'undefined') {
+    const binary = atob(string)
     return new TextDecoder().decode(
-      Uint8Array.from(atob(string), (character) => character.charCodeAt(0))
+      Uint8Array.from(binary, (character) => character.charCodeAt(0))
     )
   }
   return Buffer.from(string, 'base64').toString('utf-8')
@@ -106,18 +107,15 @@ function getResetDelayMs(
   let reset: number | undefined
 
   switch (provider) {
-    case 'github': {
+    case 'github':
       reset = Number(response.headers.get('X-RateLimit-Reset'))
       break
-    }
-    case 'gitlab': {
+    case 'gitlab':
       reset = Number(response.headers.get('RateLimit-Reset'))
       break
-    }
-    case 'bitbucket': {
+    case 'bitbucket':
       reset = Number(response.headers.get('X-RateLimit-Reset'))
       break
-    }
   }
 
   if (reset) {
@@ -136,7 +134,8 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     string,
     { entries: DirectoryEntry[]; cachedAt: number }
   >()
-  #fileFetches = new Map<string, Promise<void>>() // in-flight dedupe
+  #fileFetches = new Map<string, Promise<void>>()
+  #headers: Record<string, string>
 
   constructor(options: GitProviderFileSystemOptions) {
     if (!repoPattern.test(options.repository)) {
@@ -154,6 +153,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     this.#token = options.token
     this.#timeoutMs = options.timeoutMs ?? 30_000
     this.#cacheTTL = options.cacheTTL
+    this.#headers = this.#getHeaders()
   }
 
   clearCache(path?: string) {
@@ -197,33 +197,31 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     for (let index = 0; index < attempts; index++) {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
-
       try {
         const response = await fetch(url, {
-          headers: this.#getHeaders(),
+          headers: this.#headers,
           signal: controller.signal,
         })
         const isRateLimited =
           response.status === 429 ||
-          (this.#provider === 'github' &&
-            response.status === 403 &&
-            response.headers.get('X-RateLimit-Remaining') === '0')
+          (response.status === 403 &&
+            ((this.#provider === 'github' &&
+              response.headers.get('X-RateLimit-Remaining') === '0') ||
+              (this.#provider === 'gitlab' &&
+                response.headers.get('RateLimit-Remaining') === '0') ||
+              (this.#provider === 'bitbucket' &&
+                response.headers.get('X-RateLimit-Remaining') === '0')))
 
         if (isRateLimited) {
-          const retryAfter = Number(response.headers.get('Retry-After'))
-          if (Number.isFinite(retryAfter)) {
-            await sleep((retryAfter + 1) * 1000)
-            continue
-          }
-
-          const delay = getResetDelayMs(response, this.#provider)
+          const delay =
+            Number(response.headers.get('Retry-After')) * 1_000 ||
+            getResetDelayMs(response, this.#provider)
           if (delay !== undefined) {
-            await sleep(delay)
+            await sleep(delay + 100)
             continue
           }
         }
 
-        // Success or non-retryable client error
         if (
           response.ok ||
           (response.status >= 400 &&
@@ -283,7 +281,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     const { tree, truncated } = await treeResponse.json()
 
     if (truncated) {
-      return this.#fetchDirectory('')
+      return this.#fetchDirectoryContents('')
     }
 
     return tree.map((item: any) => ({
@@ -294,11 +292,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     }))
   }
 
-  async #fetchDirectory(path: string): Promise<DirectoryEntry[]> {
-    if (this.#provider === 'github' && path === '') {
-      return this.#fetchRootTree()
-    }
-
+  async #fetchDirectoryContents(path: string): Promise<DirectoryEntry[]> {
     const entries: DirectoryEntry[] = []
     const pushEntries = (items: any[]) => {
       switch (this.#provider) {
@@ -423,6 +417,13 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     return entries
   }
 
+  async #fetchDirectory(path: string) {
+    if (this.#provider === 'github' && path === '') {
+      return this.#fetchRootTree()
+    }
+    return this.#fetchDirectoryContents(path)
+  }
+
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
     const key = normalizePath(path)
     const cached = this.#directoryCache.get(key)
@@ -443,16 +444,11 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     )
   }
 
+  /* ---------- file helpers ---------- */
+
   async #fetchFile(path: string): Promise<void> {
     const normalizedPath = normalizePath(path)
-    const extension = normalizedPath.split('.').pop()?.toLowerCase()
-
-    if (extension && binaryExtensions.has(extension)) {
-      throw new Error(`[renoun] Binary file support not implemented: ${path}`)
-    }
-
     let url: string
-
     switch (this.#provider) {
       case 'github':
         url = `https://api.github.com/repos/${this.#repository}/contents/${this.#encodePath(
@@ -473,25 +469,38 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     }
 
     const response = await this.#fetchWithRetry(url)
-
     if (!response.ok) {
       throw new Error(
         `[renoun] Failed to fetch file "${path}": ${response.status} ${response.statusText}`
       )
     }
 
+    const contentType = response.headers.get('Content-Type') || ''
+    const extension = normalizedPath.split('.').pop()?.toLowerCase()
+
+    const isText =
+      /^text\//.test(contentType) ||
+      /application\/(json|xml|javascript|typescript)/i.test(contentType) ||
+      /svg\+xml/.test(contentType)
+
+    if (!isText && extension && binaryExtensions.has(extension)) {
+      throw new Error(`[renoun] Binary file support not implemented: ${path}`)
+    }
+
     if (this.#provider === 'github') {
       const data = await response.json()
       if (typeof data.content === 'string' && data.encoding === 'base64') {
         this.createFile(path, decodeBase64(data.content))
-      } else if (typeof data.download_url === 'string') {
+        return
+      }
+      if (typeof data.download_url === 'string') {
         const rawResponse = await this.#fetchWithRetry(data.download_url)
         this.createFile(path, await rawResponse.text())
-      } else {
-        const rawUrl = `https://raw.githubusercontent.com/${this.#repository}/${this.#ref}/${normalizedPath}`
-        const rawResponse = await this.#fetchWithRetry(rawUrl)
-        this.createFile(path, await rawResponse.text())
+        return
       }
+      const rawUrl = `https://raw.githubusercontent.com/${this.#repository}/${this.#ref}/${normalizedPath}`
+      const rawResponse = await this.#fetchWithRetry(rawUrl)
+      this.createFile(path, await rawResponse.text())
     } else {
       this.createFile(path, await response.text())
     }
@@ -502,7 +511,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     if (!this.fileExistsSync(key)) {
       let fetchPromise = this.#fileFetches.get(key)
       if (!fetchPromise) {
-        fetchPromise = this.#fetchFile(path).finally(() =>
+        fetchPromise = this.#fetchFile(key).finally(() =>
           this.#fileFetches.delete(key)
         )
         this.#fileFetches.set(key, fetchPromise)
