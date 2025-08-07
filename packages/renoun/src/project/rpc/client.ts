@@ -127,6 +127,10 @@ export class WebSocketClient {
   #connectionState: ConnectionState = 'connecting'
   #connectionStartTime: number = 0
   #requests: Record<number, Request> = {}
+  #streams: Record<
+    number,
+    { onChunk: (value: any) => void; onDone: () => void }
+  > = {}
   #pendingRequests: string[] = []
   #retryInterval: number = 5000
   #maxRetries: number = 5
@@ -214,25 +218,45 @@ export class WebSocketClient {
   }
 
   #handleMessage(event: WebSocket.MessageEvent) {
-    const message = event.data.toString()
+    const raw = event.data.toString()
 
+    let parsed: any
     try {
-      const response: WebSocketResponse = JSON.parse(message)
-      const { id, result, error } = response
-
-      if (id !== undefined && this.#requests[id]) {
-        if (error) {
-          this.#requests[id].reject(error)
-        } else {
-          this.#requests[id].resolve(result)
-        }
-
-        delete this.#requests[id]
-      }
+      parsed = JSON.parse(raw)
     } catch (error) {
-      throw new Error(`[renoun] WebSocket client error parsing message:`, {
+      throw new Error(`[renoun] WebSocket client error parsing message`, {
         cause: error,
       })
+    }
+
+    if (Array.isArray(parsed)) {
+      parsed.forEach((message) => this.#handleSingleMessage(message))
+    } else {
+      this.#handleSingleMessage(parsed)
+    }
+  }
+
+  #handleSingleMessage(message: any) {
+    if (message && ('chunk' in message || 'done' in message)) {
+      const stream = this.#streams[message.id]
+      if (!stream) return
+      if (message.done) {
+        stream.onDone()
+        delete this.#streams[message.id]
+      } else {
+        stream.onChunk(message.chunk)
+      }
+      return
+    }
+
+    const { id, result, error } = message as WebSocketResponse
+    if (id !== undefined && this.#requests[id]) {
+      if (error) {
+        this.#requests[id].reject(error)
+      } else {
+        this.#requests[id].resolve(result)
+      }
+      delete this.#requests[id]
     }
   }
 
@@ -395,5 +419,76 @@ export class WebSocketClient {
       }
       throw new Error(error.data || error.message)
     })
+  }
+
+  async batch(requests: { method: string; params: any }[]): Promise<any[]> {
+    const idBase = performance.now()
+    const framed = requests.map((request, index) => ({
+      ...request,
+      id: idBase + index,
+    }))
+    const waitAll = framed.map(({ id }) => {
+      return new Promise<any>((resolve, reject) => {
+        this.#requests[id] = { resolve, reject }
+      })
+    })
+    const payload = JSON.stringify(framed)
+    if (this.#isConnected) {
+      this.#ws.send(payload)
+    } else {
+      this.#pendingRequests.push(payload)
+    }
+    return Promise.all(waitAll)
+  }
+
+  callStream<Params extends Record<string, unknown>, Value>(
+    method: string,
+    params: Params
+  ): AsyncGenerator<Value> {
+    const id = performance.now()
+    const payload = JSON.stringify({ method, params, id })
+
+    let push: (value: Value) => void = () => {}
+    let done!: () => void
+    const queue: Value[] = []
+    const onChunk = (value: Value) => {
+      if (push) {
+        push(value)
+      } else {
+        queue.push(value)
+      }
+    }
+    const onDone = () => {
+      done?.()
+    }
+
+    this.#streams[id] = { onChunk, onDone }
+
+    if (this.#isConnected) {
+      this.#ws.send(payload)
+    } else {
+      this.#pendingRequests.push(payload)
+    }
+
+    return {
+      [Symbol.asyncIterator]() {
+        return this
+      },
+      async next(): Promise<IteratorResult<Value>> {
+        if (queue.length) {
+          return { value: queue.shift()!, done: false }
+        }
+        return new Promise<IteratorResult<Value>>((resolve) => {
+          push = (value: Value) => resolve({ value, done: false })
+          done = () => resolve({ value: undefined as any, done: true })
+        })
+      },
+      async return(): Promise<IteratorResult<Value>> {
+        return { value: undefined as any, done: true }
+      },
+      async throw(err: any): Promise<IteratorResult<Value>> {
+        throw err
+      },
+    } as any
   }
 }

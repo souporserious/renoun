@@ -27,6 +27,12 @@ export interface WebSocketNotification {
   data?: any
 }
 
+export interface WebSocketStreamChunk {
+  id: number
+  chunk?: any
+  done?: true
+}
+
 type WebSocketServerErrorType =
   | 'PORT_IN_USE'
   | 'METHOD_NOT_FOUND'
@@ -679,20 +685,102 @@ export class WebSocketServer {
     })
   }
 
+  // Execute a single request and optionally return an RPC response.
+  async #processRequest(
+    ws: WebSocket,
+    request: WebSocketRequest
+  ): Promise<WebSocketResponse | null> {
+    // Log the call once for tracing.
+    if (request.method) {
+      debug.logWebSocketServerEvent('method_call_received', {
+        method: request.method,
+        id: request.id,
+        params: request.params,
+      })
+    }
+
+    const isNotification = typeof request.id === 'undefined'
+    const handler = this.#handlers[request.method]
+
+    if (!handler) {
+      const serverError = this.#createServerError('METHOD_NOT_FOUND', -32601, {
+        method: request.method,
+        availableMethods: Object.keys(this.#handlers),
+      })
+      if (!isNotification) {
+        return {
+          id: request.id,
+          error: { code: serverError.code, message: serverError.message },
+        } satisfies WebSocketResponse
+      }
+      return null
+    }
+
+    try {
+      const semaphore = this.#methodSemaphores.get(request.method)
+      const queueLength = semaphore ? semaphore.getQueueLength() : 0
+      const extraTime = queueLength * 1_500
+      const result = await withTimeout(
+        Promise.resolve(handler(request.params)),
+        REQUEST_TIMEOUT_MS + extraTime
+      )
+
+      // If the handler returned an AsyncIterable, treat it as a stream.
+      if (
+        result &&
+        typeof result === 'object' &&
+        (result as any)[Symbol.asyncIterator]
+      ) {
+        if (!isNotification) {
+          for await (const chunk of result as AsyncIterable<any>) {
+            this.#sendJson(ws, {
+              id: request.id,
+              chunk,
+            } as WebSocketStreamChunk)
+          }
+          this.#sendJson(ws, {
+            id: request.id,
+            done: true,
+          } as WebSocketStreamChunk)
+        }
+        return null
+      }
+
+      if (!isNotification) {
+        return { id: request.id, result } satisfies WebSocketResponse
+      }
+      return null
+    } catch (error) {
+      const timedOut = (error as Error).message === 'Request timed out'
+      const code = timedOut ? -32002 : -32603
+      const serverError = this.#createServerError('INTERNAL_ERROR', code, {
+        method: request.method,
+        params: request.params,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        originalError:
+          error instanceof Error ? error : new Error(String(error)),
+      })
+      if (!isNotification) {
+        return {
+          id: request.id,
+          error: {
+            code: serverError.code,
+            message: serverError.message,
+            data: serverError.originalError?.message,
+          },
+        } satisfies WebSocketResponse
+      }
+      return null
+    }
+  }
+
   async #handleMessage(ws: WebSocket, message: string | Buffer) {
     const data = this.#socketData.get(ws)
     const connectionId = data?.connectionId
-    let request: WebSocketRequest
+    let parsed: unknown
 
     try {
-      request = JSON.parse(message.toString())
-      if (request.method) {
-        debug.logWebSocketServerEvent('method_call_received', {
-          method: request.method,
-          id: request.id,
-          params: request.params,
-        })
-      }
+      parsed = JSON.parse(message.toString())
     } catch (error) {
       const serverError = this.#createServerError('PARSE_ERROR', -32700, {
         originalError:
@@ -707,61 +795,31 @@ export class WebSocketServer {
       return
     }
 
-    const isNotification = typeof request.id === 'undefined'
-    const handler = this.#handlers[request.method]
+    const isBatch =
+      Array.isArray(parsed) &&
+      parsed.every((x) => x && typeof x.method === 'string')
 
-    if (!handler) {
-      const serverError = this.#createServerError('METHOD_NOT_FOUND', -32601, {
-        method: request.method,
-        availableMethods: Object.keys(this.#handlers),
-      })
-      debug.logWebSocketServerEvent('method_not_found', {
-        connectionId,
-        method: request.method,
-      })
-      if (!isNotification) {
-        this.#sendError(ws, request.id, serverError.code, serverError.message)
+    if (isBatch) {
+      const requests = parsed as WebSocketRequest[]
+      debug.logWebSocketServerEvent('batch_received', { size: requests.length })
+
+      const results = await Promise.all(
+        requests.map((req) => this.#processRequest(ws, req))
+      )
+
+      const filtered = results.filter(Boolean) as WebSocketResponse[]
+      if (filtered.length) {
+        this.#sendJson(ws, filtered)
       }
       return
     }
 
-    // Execute handler with timeout
-    try {
-      const semaphore = this.#methodSemaphores.get(request.method)
-      const queueLength = semaphore ? semaphore.getQueueLength() : 0
-      const extraTime = queueLength * 1_500
-      const result = await withTimeout(
-        Promise.resolve(handler(request.params)),
-        REQUEST_TIMEOUT_MS + extraTime
-      )
-      if (!isNotification) {
-        this.#sendResponse(ws, request.id, result)
-      }
-    } catch (error) {
-      const timedOut = (error as Error).message === 'Request timed out'
-      const code = timedOut ? -32002 /* TIMEOUT (custom) */ : -32603
-      const serverError = this.#createServerError('INTERNAL_ERROR', code, {
-        method: request.method,
-        params: request.params,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        originalError:
-          error instanceof Error ? error : new Error(String(error)),
-      })
-      debug.logWebSocketServerEvent('handler_failed', {
-        connectionId,
-        method: request.method,
-        error: serverError.originalError?.message,
-        code,
-      })
-      if (!isNotification) {
-        this.#sendError(
-          ws,
-          request.id,
-          serverError.code,
-          serverError.message,
-          serverError.originalError?.message
-        )
-      }
+    const singleResult = await this.#processRequest(
+      ws,
+      parsed as WebSocketRequest
+    )
+    if (singleResult) {
+      this.#sendJson(ws, singleResult)
     }
   }
 
@@ -771,7 +829,7 @@ export class WebSocketServer {
     }
   }
 
-  #sendJson(ws: WebSocket, payload: WebSocketResponse | WebSocketNotification) {
+  #sendJson(ws: WebSocket, payload: any) {
     if (ws.readyState !== ws.OPEN) {
       const data = this.#socketData.get(ws)
       debug.logWebSocketServerEvent('send_failed', {
@@ -813,10 +871,6 @@ export class WebSocketServer {
         error: (error as Error).message,
       })
     }
-  }
-
-  #sendResponse(ws: WebSocket, id: number | undefined, result: any) {
-    this.#sendJson(ws, { id, result } satisfies WebSocketResponse)
   }
 
   #sendError(
