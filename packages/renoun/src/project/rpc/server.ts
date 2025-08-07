@@ -4,6 +4,7 @@ import { randomBytes, createHash } from 'node:crypto'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 
 import { debug } from '../../utils/debug.js'
+import { Semaphore } from '../../utils/Semaphore.js'
 
 const histogram = monitorEventLoopDelay({ resolution: 20 })
 
@@ -259,53 +260,6 @@ function normalizeForKey(params: any) {
 
 function makeKey(method: string, params: unknown): string {
   return sha1(`${method}|${stableStringify(normalizeForKey(params))}`)
-}
-
-/** Simple semaphore to gate concurrency. */
-class Semaphore {
-  #permits: number
-  #queue: Array<() => void> = []
-
-  constructor(permits: number) {
-    this.#permits = Math.max(1, permits)
-  }
-
-  getQueueLength() {
-    return this.#queue.length
-  }
-
-  async acquire(): Promise<() => void> {
-    const queued = this.#queue.length
-    if (queued > 50) {
-      debug.warn('semaphore_queued_exceeds_limit', {
-        data: { queued },
-      })
-    }
-    if (this.#permits > 0) {
-      this.#permits--
-      let released = false
-      return () => {
-        if (released) return
-        released = true
-        this.#permits++
-        const next = this.#queue.shift()
-        if (next) next()
-      }
-    }
-    return new Promise<() => void>((resolve) => {
-      this.#queue.push(() => {
-        this.#permits--
-        let released = false
-        resolve(() => {
-          if (released) return
-          released = true
-          this.#permits++
-          const next = this.#queue.shift()
-          if (next) next()
-        })
-      })
-    })
-  }
 }
 
 type RegisterMethodOptions = {
