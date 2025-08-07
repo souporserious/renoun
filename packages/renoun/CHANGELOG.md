@@ -1,5 +1,18 @@
 # renoun
 
+## 9.2.0
+
+### Minor Changes
+
+- 35306d2: Adds debug system through a `RENOUN_DEBUG` flag for troubleshooting timeout and performance issues. This includes WebSocket client/server logging for the `renoun` cli, type resolution tracking, cache monitoring, and configurable output formatting through `renoun.json`.
+- 30c5266: Adds a `GitProviderFileSystem` utility that extends `MemoryFileSystem` by fetching a git provider repository using the respective provider's API to allow enumeration of the repository's contents.
+- 446173f: Adds an LRU cache implementation to the `renoun` cli WebSocket server to de-duplicate incoming client requests. This is especially useful during builds that are parallelized and can cause many duplicate client requests.
+
+### Patch Changes
+
+- b2c741e: Fixes Windows file paths by normalizing all incoming file paths.
+- e73993b: Improves the `renoun` WebSocket server and client error handling with better error classification and detailed diagnostics information.
+
 ## 9.1.0
 
 ### Minor Changes
