@@ -53,6 +53,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Fast-forward release branch
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          git fetch origin
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git push origin $GITHUB_SHA:refs/heads/release
+
       - name: Notify Discord
         if: steps.changesets.outputs.published == 'true'
         env:
