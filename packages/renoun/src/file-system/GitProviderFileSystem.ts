@@ -21,10 +21,33 @@ interface GitProviderFileSystemOptions {
   cacheTTL?: number
 }
 
-/**
- * A file system backed by a remote git provider. Files are fetched lazily via
- * provider APIs and cached in-memory.
- */
+const binaryExtensions = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'svg',
+  'ico',
+  'pdf',
+  'zip',
+  'rar',
+  '7z',
+  'gz',
+  'tar',
+  'mp3',
+  'mp4',
+  'mov',
+  'avi',
+  'mkv',
+  'wasm',
+])
+
+function normalizePath(path: string) {
+  if (path === '.' || path === './') return ''
+  return path.replace(/^\.\//, '').replace(/\/$/, '')
+}
+
 export class GitProviderFileSystem extends MemoryFileSystem {
   #repository: string
   #ref: string
@@ -47,42 +70,67 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     this.#cacheTTL = options.cacheTTL
   }
 
+  clearCache(path?: string) {
+    if (path === undefined) {
+      this.#directoryCache.clear()
+    } else {
+      this.#directoryCache.delete(normalizePath(path))
+    }
+  }
+
   #getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {}
 
-    if (this.#provider === 'github') {
+    if (this.#provider === 'github')
       headers['Accept'] = 'application/vnd.github.v3+json'
-    }
+    if (!this.#token) return headers
 
-    if (this.#token) {
-      switch (this.#provider) {
-        case 'github':
-          headers['Authorization'] = `token ${this.#token}`
-          break
-        case 'gitlab':
-          headers['PRIVATE-TOKEN'] = this.#token
-          break
-        case 'bitbucket':
-          headers['Authorization'] = `Bearer ${this.#token}`
-          break
-      }
+    switch (this.#provider) {
+      case 'github':
+        headers['Authorization'] = `token ${this.#token}`
+        break
+      case 'gitlab':
+        headers['PRIVATE-TOKEN'] = this.#token
+        break
+      case 'bitbucket':
+        headers['Authorization'] = `Bearer ${this.#token}`
+        break
     }
 
     return headers
   }
 
-  async #fetchWithTimeout(url: string): Promise<Response> {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
+  async #fetchWithRetry(url: string, attempts = 3): Promise<Response> {
+    for (let index = 0; index < attempts; index++) {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
 
-    try {
-      return await fetch(url, {
-        headers: this.#getHeaders(),
-        signal: controller.signal,
-      })
-    } finally {
-      clearTimeout(timer)
+      try {
+        const response = await fetch(url, {
+          headers: this.#getHeaders(),
+          signal: controller.signal,
+        })
+        if (
+          response.ok ||
+          (response.status < 500 && response.status !== 429) // do not retry 4xx except 429
+        ) {
+          return response
+        }
+        if (index === attempts - 1) {
+          return response
+        }
+      } catch (error) {
+        if (index === attempts - 1) {
+          throw error
+        }
+      } finally {
+        clearTimeout(timer)
+      }
+
+      const backoff = 2 ** index * 200 + Math.random() * 100
+      await new Promise((r) => setTimeout(r, backoff))
     }
+    throw new Error(`[renoun] Failed to fetch after retries`)
   }
 
   #encodePath(path: string) {
@@ -137,7 +185,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
 
       while (true) {
         const url = `https://api.github.com/repos/${this.#repository}/contents${apiPath}?ref=${this.#ref}&per_page=${perPage}&page=${page}`
-        const response = await this.#fetchWithTimeout(url)
+        const response = await this.#fetchWithRetry(url)
 
         if (!response.ok) {
           throw new Error(
@@ -148,11 +196,9 @@ export class GitProviderFileSystem extends MemoryFileSystem {
         const data = (await response.json()) as any[]
         pushEntries(data)
 
-        // Last page reached
         if (data.length < perPage) {
           break
         }
-
         page += 1
       }
     }
@@ -170,7 +216,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
         })
         if (path) params.set('path', path)
         const url = `https://gitlab.com/api/v4/projects/${repo}/repository/tree?${params}`
-        const response = await this.#fetchWithTimeout(url)
+        const response = await this.#fetchWithRetry(url)
 
         if (!response.ok) {
           throw new Error(
@@ -182,26 +228,19 @@ export class GitProviderFileSystem extends MemoryFileSystem {
         pushEntries(data)
 
         const nextPage = response.headers.get('X-Next-Page')
-
-        if (!nextPage) {
-          break
-        }
-
+        if (!nextPage) break
         page = Number(nextPage)
-
-        if (!page) {
-          break
-        }
+        if (!page) break
       }
     }
 
     if (this.#provider === 'bitbucket') {
       let next: string | undefined = path
-        ? `https://api.bitbucket.org/2.0/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(path)}?format=meta`
-        : `https://api.bitbucket.org/2.0/repositories/${this.#repository}/src/${this.#ref}?format=meta`
+        ? `https://api.bitbucket.org/2.0/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(path)}?format=meta&pagelen=100`
+        : `https://api.bitbucket.org/2.0/repositories/${this.#repository}/src/${this.#ref}?format=meta&pagelen=100`
 
       while (next) {
-        const response = await this.#fetchWithTimeout(next)
+        const response = await this.#fetchWithRetry(next)
 
         if (!response.ok) {
           throw new Error(
@@ -220,52 +259,52 @@ export class GitProviderFileSystem extends MemoryFileSystem {
   }
 
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
-    if (!path.startsWith('.')) {
-      path = `./${path}`
+    const key = normalizePath(path)
+    const cached = this.#directoryCache.get(key)
+    if (
+      cached &&
+      (!this.#cacheTTL || Date.now() - cached.cachedAt < this.#cacheTTL)
+    ) {
+      return cached.entries
     }
-
-    const normalized = path === '.' ? '' : path.replace(/^\.\//, '')
-    const cached = this.#directoryCache.get(normalized)
-
-    if (cached) {
-      if (!this.#cacheTTL || Date.now() - cached.cachedAt < this.#cacheTTL) {
-        return cached.entries
-      }
-      // Stale cache -> evict
-      this.#directoryCache.delete(normalized)
-    }
-
-    return this.#fetchDirectory(normalized)
+    this.#directoryCache.delete(key)
+    return this.#fetchDirectory(key)
   }
 
-  readDirectorySync(_path: string = '.'): DirectoryEntry[] {
+  readDirectorySync(): DirectoryEntry[] {
     throw new Error(
       'readDirectorySync is not supported in GitProviderFileSystem'
     )
   }
 
   async #fetchFile(path: string): Promise<void> {
-    const normalized = path.replace(/^\.\//, '')
+    const normalizedPath = normalizePath(path)
+    const extension = normalizedPath.split('.').pop()?.toLowerCase()
+
+    if (extension && binaryExtensions.has(extension)) {
+      throw new Error(`[renoun] Binary file support not implemented: ${path}`)
+    }
+
     let url: string
 
     switch (this.#provider) {
       case 'github':
-        url = `https://api.github.com/repos/${this.#repository}/contents/${this.#encodePath(normalized)}?ref=${this.#ref}`
+        url = `https://api.github.com/repos/${this.#repository}/contents/${this.#encodePath(normalizedPath)}?ref=${this.#ref}`
         break
       case 'gitlab': {
         const repo = encodeURIComponent(this.#repository)
-        const filePath = encodeURIComponent(normalized)
+        const filePath = encodeURIComponent(normalizedPath)
         url = `https://gitlab.com/api/v4/projects/${repo}/repository/files/${filePath}/raw?ref=${this.#ref}`
         break
       }
       case 'bitbucket':
-        url = `https://api.bitbucket.org/2.0/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(normalized)}`
+        url = `https://api.bitbucket.org/2.0/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(normalizedPath)}`
         break
       default:
         throw new Error(`[renoun] Unsupported git provider: ${this.#provider}`)
     }
 
-    const response = await this.#fetchWithTimeout(url)
+    const response = await this.#fetchWithRetry(url)
 
     if (!response.ok) {
       throw new Error(
@@ -280,23 +319,18 @@ export class GitProviderFileSystem extends MemoryFileSystem {
           const content = Buffer.from(data.content, 'base64').toString('utf-8')
           this.createFile(path, content)
         } else if (typeof data.download_url === 'string') {
-          const res = await this.#fetchWithTimeout(data.download_url)
-          const content = await res.text()
+          const response = await this.#fetchWithRetry(data.download_url)
+          const content = await response.text()
           this.createFile(path, content)
         } else {
-          // Fallback to raw URL for large/binary files
-          const rawUrl = `https://raw.githubusercontent.com/${this.#repository}/${this.#ref}/${normalized}`
-          const res = await this.#fetchWithTimeout(rawUrl)
-          const content = await res.text()
+          const rawUrl = `https://raw.githubusercontent.com/${this.#repository}/${this.#ref}/${normalizedPath}`
+          const response = await this.#fetchWithRetry(rawUrl)
+          const content = await response.text()
           this.createFile(path, content)
         }
         break
       }
-      case 'gitlab': {
-        const content = await response.text()
-        this.createFile(path, content)
-        break
-      }
+      case 'gitlab':
       case 'bitbucket': {
         const content = await response.text()
         this.createFile(path, content)
@@ -312,22 +346,19 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     return super.readFile(path)
   }
 
-  readFileSync(_path: string): string {
+  readFileSync(): string {
     throw new Error('readFileSync is not supported in GitProviderFileSystem')
   }
 
   fileExistsSync(path: string): boolean {
-    return super.fileExistsSync(path)
+    return super.fileExistsSync(normalizePath(path))
   }
 
-  isFilePathGitIgnored(_filePath: string): boolean {
+  isFilePathGitIgnored(): boolean {
     return false
   }
 
-  override isFilePathExcludedFromTsConfig(
-    _filePath: string,
-    _isDirectory = false
-  ) {
+  override isFilePathExcludedFromTsConfig(): boolean {
     return false
   }
 }
