@@ -254,7 +254,45 @@ export class GitProviderFileSystem extends MemoryFileSystem {
       .join('/')
   }
 
+  async #fetchRootTree(): Promise<DirectoryEntry[]> {
+    const commitResponse = await this.#fetchWithRetry(
+      `https://api.github.com/repos/${this.#repository}/commits/${this.#ref}`
+    )
+
+    if (!commitResponse.ok) {
+      throw new Error(
+        `[renoun] Failed to resolve ref: ${commitResponse.status}`
+      )
+    }
+
+    const { commit } = await commitResponse.json()
+    const treeSha = commit.tree.sha as string
+
+    const treeResponse = await this.#fetchWithRetry(
+      `https://api.github.com/repos/${this.#repository}/git/trees/${treeSha}?recursive=1`
+    )
+    if (!treeResponse.ok) {
+      throw new Error(`[renoun] Tree fetch failed: ${treeResponse.status}`)
+    }
+    const { tree, truncated } = await treeResponse.json()
+
+    if (truncated) {
+      return this.#fetchDirectory('')
+    }
+
+    return tree.map((item: any) => ({
+      name: item.path.split('/').pop(),
+      path: `./${item.path}`,
+      isDirectory: item.type === 'tree' || item.type === 'commit',
+      isFile: item.type === 'blob',
+    }))
+  }
+
   async #fetchDirectory(path: string): Promise<DirectoryEntry[]> {
+    if (this.#provider === 'github' && path === '') {
+      return this.#fetchRootTree()
+    }
+
     const entries: DirectoryEntry[] = []
     const pushEntries = (items: any[]) => {
       switch (this.#provider) {
