@@ -97,14 +97,27 @@ export interface CodeBlockProps {
 }
 
 /**
- * Renders a code block with tokenized source code, line numbers, and a toolbar.
+ * Displays syntax-highlighted source code with optional line numbers, toolbar,
+ * copy-to-clipboard button, and error diagnostics.
  *
- * When targeting JavaScript or TypeScript languages, the provided source code is
- * type-checked and will throw errors that can be optionally displayed. Additionally,
- * the source code will be formatted using `prettier` if installed and quick info
- * is available when hovering symbols.
+ * Supports both static code strings and custom rendering via `Tokens`, `LineNumbers`,
+ * and `Toolbar` subcomponents. For JavaScript and TypeScript, code can be type-checked,
+ * formatted with Prettier (if available), and augmented with quick-info tooltips on hover.
+ *
+ * In development, the component uses a Suspense fallback to render immediately while
+ * asynchronous syntax highlighting and analysis load in the background. In production,
+ * it renders the fully-resolved code block directly.
  */
-export function CodeBlock(props: CodeBlockProps) {
+export const CodeBlock =
+  process.env.NODE_ENV === 'development'
+    ? CodeBlockWithFallback
+    : CodeBlockAsync
+
+/**
+ * CodeBlock component used during development that wraps the async version in a
+ * Suspense boundary with a fallback so we can render the code block as soon as possible.
+ */
+function CodeBlockWithFallback(props: CodeBlockProps) {
   const {
     shouldAnalyze = true,
     unfocusedLinesOpacity = 0.6,
@@ -114,10 +127,7 @@ export function CodeBlock(props: CodeBlockProps) {
   const baseDirectoryContext = getContext(BaseDirectoryContext)
   const baseDirectory = baseDirectoryProp ?? baseDirectoryContext
 
-  if (
-    process.env.NODE_ENV === 'production' ||
-    typeof restProps.children !== 'string'
-  ) {
+  if (typeof restProps.children !== 'string') {
     return (
       <CodeBlockAsync
         shouldAnalyze={shouldAnalyze}
