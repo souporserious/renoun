@@ -116,7 +116,34 @@ export async function fetchExample(exampleSlug: string, message: string = '') {
 
   writeFileSync(
     join(workingDirectory, '.gitignore'),
-    '.next\nnode_modules\nout',
+    `# dependencies
+node_modules
+
+# testing
+coverage
+
+# next.js
+.next
+out
+
+# production
+build
+dist
+
+# misc
+.DS_Store
+
+# debug
+npm-debug.log*
+
+# local env files
+.env
+.env.local
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+`,
     'utf-8'
   )
 
