@@ -4,7 +4,24 @@ import {
   type ReferenceComponents,
   Markdown,
 } from 'renoun/components'
-import { GeistMono } from 'geist/font/mono'
+
+export function BasicUsage() {
+  return (
+    <div
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '3rem',
+      }}
+    >
+      <Reference
+        source="./examples/Button.tsx"
+        baseDirectory={import.meta.url}
+        components={components}
+      />
+    </div>
+  )
+}
 
 const gapSizes = {
   small: '0.5rem',
@@ -81,7 +98,7 @@ const components = {
     <code
       {...props}
       css={{
-        fontFamily: GeistMono.style.fontFamily,
+        fontFamily: 'var(--font-family-mono)',
         color: 'var(--color-foreground-interactive)',
       }}
     />
@@ -103,7 +120,7 @@ const components = {
           <code
             {...props}
             css={{
-              fontFamily: GeistMono.style.fontFamily,
+              fontFamily: 'var(--font-family-mono)',
               color: 'var(--color-foreground-interactive)',
             }}
           />
@@ -165,21 +182,3 @@ const components = {
     />
   ),
 } satisfies Partial<ReferenceComponents>
-
-export function BasicUsage() {
-  return (
-    <div
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '3rem',
-      }}
-    >
-      <Reference
-        source="./examples/Button.tsx"
-        baseDirectory={import.meta.url}
-        components={components}
-      />
-    </div>
-  )
-}
