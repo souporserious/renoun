@@ -307,6 +307,10 @@ export class WebSocketServer {
 
   #metricsTimer?: NodeJS.Timeout
 
+  #outgoingQueues = new WeakMap<WebSocket, string[]>()
+
+  #flushTimers = new WeakMap<WebSocket, NodeJS.Timeout>()
+
   constructor(options?: { port?: number }) {
     this.#readyPromise = new Promise<void>((resolve, reject) => {
       this.#resolveReady = resolve
@@ -423,6 +427,13 @@ export class WebSocketServer {
         this.#sockets.delete(ws)
         this.#socketData.delete(ws)
 
+        const timer = this.#flushTimers.get(ws)
+        if (timer) {
+          clearTimeout(timer)
+          this.#flushTimers.delete(ws)
+        }
+        this.#outgoingQueues.delete(ws)
+
         const reason = reasonBuf?.toString() || CLOSE_TEXT[code] || 'Unknown'
         debug.logWebSocketServerEvent('connection_closed', {
           connectionId,
@@ -515,6 +526,14 @@ export class WebSocketServer {
   }
 
   cleanup() {
+    for (const ws of this.#sockets) {
+      const timer = this.#flushTimers.get(ws)
+      if (timer) {
+        clearTimeout(timer)
+      }
+    }
+    this.#flushTimers = new WeakMap()
+
     debug.logWebSocketServerEvent('cleanup_initiated', {
       activeConnections: this.#sockets.size,
     })
@@ -829,47 +848,91 @@ export class WebSocketServer {
     }
   }
 
+  /**
+   * Queue outgoing messages and flush them respecting WebSocket back-pressure.
+   * Small messages are batched automatically. If the socket buffer grows beyond
+   * MAX_BUFFERED we stop sending and resume once it drains.
+   */
   #sendJson(ws: WebSocket, payload: any) {
-    if (ws.readyState !== ws.OPEN) {
-      const data = this.#socketData.get(ws)
-      debug.logWebSocketServerEvent('send_failed', {
-        connectionId: data?.connectionId,
-        readyState: ws.readyState,
-      })
-      return
+    // Lazily create a queue for this socket
+    let queue = this.#outgoingQueues.get(ws)
+    if (!queue) {
+      queue = []
+      this.#outgoingQueues.set(ws, queue)
     }
+
     try {
       const serialized = JSON.stringify(payload)
-      const buffered = ws.bufferedAmount ?? 0
-      const data = this.#socketData.get(ws)
-
-      if (buffered > MAX_BUFFERED) {
-        debug.logWebSocketServerEvent('backpressure', {
-          connectionId: data?.connectionId,
-          bufferedAmount: buffered,
-        })
-      }
-
-      debug.logWebSocketServerEvent('payload_bytes', {
-        connectionId: data?.connectionId,
-        payloadBytes: Buffer.byteLength(serialized),
-      })
-
-      ws.send(serialized, (error?: Error) => {
-        if (error) {
-          const data = this.#socketData.get(ws)
-          debug.logWebSocketServerEvent('send_failed', {
-            connectionId: data?.connectionId,
-            error: error.message,
-          })
-        }
-      })
+      queue.push(serialized)
+      this.#flushQueue(ws)
     } catch (error) {
       const data = this.#socketData.get(ws)
       debug.logWebSocketServerEvent('send_failed', {
         connectionId: data?.connectionId,
         error: (error as Error).message,
       })
+    }
+  }
+
+  /** Flush as many queued messages as possible without exceeding MAX_BUFFERED. */
+  #flushQueue(ws: WebSocket) {
+    const queue = this.#outgoingQueues.get(ws)
+    if (!queue || queue.length === 0) {
+      return
+    }
+
+    if (ws.readyState !== ws.OPEN) {
+      // Drop the queue for closed sockets
+      this.#outgoingQueues.delete(ws)
+      return
+    }
+
+    const data = this.#socketData.get(ws)
+
+    while (queue.length && (ws.bufferedAmount ?? 0) < MAX_BUFFERED) {
+      const message = queue[0]!
+      debug.logWebSocketServerEvent('payload_bytes', {
+        connectionId: data?.connectionId,
+        payloadBytes: Buffer.byteLength(message),
+      })
+
+      try {
+        ws.send(message, (error?: Error) => {
+          if (error) {
+            debug.logWebSocketServerEvent('send_failed', {
+              connectionId: data?.connectionId,
+              error: error.message,
+            })
+          }
+        })
+
+        // Successfully queued in the WebSocket buffer, remove from queue
+        queue.shift()
+      } catch (error) {
+        debug.logWebSocketServerEvent('send_failed', {
+          connectionId: data?.connectionId,
+          error: (error as Error).message,
+        })
+        // On fatal error give up flushing for this socket
+        break
+      }
+    }
+
+    // If there are still messages pending schedule another flush attempt.
+    if (queue.length) {
+      if (!this.#flushTimers.has(ws)) {
+        const timer = setTimeout(() => {
+          this.#flushTimers.delete(ws)
+          this.#flushQueue(ws)
+        }, 50)
+        this.#flushTimers.set(ws, timer)
+      }
+    } else {
+      const timer = this.#flushTimers.get(ws)
+      if (timer) {
+        clearTimeout(timer)
+        this.#flushTimers.delete(ws)
+      }
     }
   }
 
