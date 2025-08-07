@@ -1,3 +1,4 @@
+import { Semaphore } from '../utils/Semaphore.js'
 import { MemoryFileSystem } from './MemoryFileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
@@ -13,38 +14,21 @@ interface GitProviderFileSystemOptions {
   /** Git provider host */
   provider: GitProvider
 
-  /** Personal-access / OAuth token for private repositories or higher rate limits. */
+  /** Custom API base URL for self-hosted instances. */
+  baseUrl?: string
+
+  /** Personal access / OAuth token for private repositories or higher rate limits. */
   token?: string
 
   /** Request timeout in milliseconds. Defaults to 30 seconds. */
   timeoutMs?: number
 
-  /** Time-to-live for directory cache in milliseconds. Unlimited when `undefined`. */
+  /** Time-to-live for directory cache entries in milliseconds. Unlimited when `undefined`. */
   cacheTTL?: number
-}
 
-const binaryExtensions = Object.freeze(
-  new Set([
-    'png',
-    'jpg',
-    'jpeg',
-    'gif',
-    'webp',
-    'ico',
-    'pdf',
-    'zip',
-    'rar',
-    '7z',
-    'gz',
-    'tar',
-    'mp3',
-    'mp4',
-    'mov',
-    'avi',
-    'mkv',
-    'wasm',
-  ])
-)
+  /** Maximum number of simultaneous HTTP requests. Defaults to `8`. */
+  concurrency?: number
+}
 
 const repoPattern = /^[^/]+\/[^/]+$/
 
@@ -71,12 +55,13 @@ function normalizePath(path: string) {
 }
 
 function decodeBase64(string: string) {
-  if (typeof Buffer === 'undefined') {
+  if (typeof atob === 'function') {
     const binary = atob(string)
     return new TextDecoder().decode(
       Uint8Array.from(binary, (character) => character.charCodeAt(0))
     )
   }
+
   return Buffer.from(string, 'base64').toString('utf-8')
 }
 
@@ -91,12 +76,10 @@ function getResetDelayMs(
   const retryAfter = response.headers.get('Retry-After')
 
   if (retryAfter) {
-    // Numeric seconds to ms
     const seconds = Number(retryAfter)
     if (!Number.isNaN(seconds)) {
       return seconds * 1_000 + 100
     }
-    // HTTP-date to absolute
     const date = Date.parse(retryAfter)
     if (!Number.isNaN(date)) {
       return Math.max(date - Date.now(), 0) + 100
@@ -130,6 +113,9 @@ export class GitProviderFileSystem extends MemoryFileSystem {
   #token?: string
   #timeoutMs: number
   #cacheTTL?: number
+  #semaphore: Semaphore
+  #apiBaseUrl: string
+
   #directoryCache = new Map<
     string,
     { entries: DirectoryEntry[]; cachedAt: number }
@@ -153,6 +139,8 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     this.#token = options.token
     this.#timeoutMs = options.timeoutMs ?? 30_000
     this.#cacheTTL = options.cacheTTL
+    this.#semaphore = new Semaphore(options.concurrency ?? 8)
+    this.#apiBaseUrl = options.baseUrl ?? this.#getDefaultApiBaseUrl()
     this.#headers = this.#getHeaders()
   }
 
@@ -160,6 +148,17 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     path
       ? this.#directoryCache.delete(normalizePath(path))
       : this.#directoryCache.clear()
+  }
+
+  #getDefaultApiBaseUrl() {
+    switch (this.#provider) {
+      case 'github':
+        return 'https://api.github.com'
+      case 'gitlab':
+        return 'https://gitlab.com/api/v4'
+      case 'bitbucket':
+        return 'https://api.bitbucket.org/2.0'
+    }
   }
 
   #getHeaders(): Record<string, string> {
@@ -190,65 +189,82 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     return headers
   }
 
-  /** Fetch with retry + provider-aware rate-limit handling. */
-  async #fetchWithRetry(url: string, attempts = 3): Promise<Response> {
-    attempts = Math.max(1, attempts)
-
-    for (let index = 0; index < attempts; index++) {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
-      try {
-        const response = await fetch(url, {
-          headers: this.#headers,
-          signal: controller.signal,
-        })
-        const isRateLimited =
-          response.status === 429 ||
-          (response.status === 403 &&
-            ((this.#provider === 'github' &&
-              response.headers.get('X-RateLimit-Remaining') === '0') ||
-              (this.#provider === 'gitlab' &&
-                response.headers.get('RateLimit-Remaining') === '0') ||
-              (this.#provider === 'bitbucket' &&
-                response.headers.get('X-RateLimit-Remaining') === '0')))
-
-        if (isRateLimited) {
-          const delay =
-            Number(response.headers.get('Retry-After')) * 1_000 ||
-            getResetDelayMs(response, this.#provider)
-          if (delay !== undefined) {
-            await sleep(delay + 100)
-            continue
-          }
-        }
-
-        if (
-          response.ok ||
-          (response.status >= 400 &&
-            response.status < 500 &&
-            response.status !== 429)
-        ) {
-          return response
-        }
-
-        // Retryable server error
-        if (index === attempts - 1) {
-          return response
-        }
-      } catch (error) {
-        if (index === attempts - 1) {
-          throw error
-        }
-      } finally {
-        clearTimeout(timer)
-      }
-
-      // Exponential back-off with jitter for generic 5xx / network failures
-      const backoff = 2 ** index * 200 + Math.random() * 100
-      await sleep(backoff)
+  #isRateLimited(response: Response): boolean {
+    // 429 is a universal "Too Many Requests" status
+    if (response.status === 429) {
+      return true
     }
 
-    throw new Error(`[renoun] Failed to fetch after ${attempts} attempts`)
+    // Some providers return 403 when the rate limit is exhausted.
+    if (response.status !== 403) {
+      return false
+    }
+
+    switch (this.#provider) {
+      case 'github':
+      case 'bitbucket': {
+        return response.headers.get('X-RateLimit-Remaining') === '0'
+      }
+      case 'gitlab': {
+        return response.headers.get('RateLimit-Remaining') === '0'
+      }
+      default:
+        return false
+    }
+  }
+
+  /** Fetch with retry and rate-limit handling. */
+  async #fetchWithRetry(url: string, maxAttempts = 3): Promise<Response> {
+    const release = await this.#semaphore.acquire()
+
+    try {
+      for (let attempt = 0; attempt < Math.max(1, maxAttempts); attempt++) {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
+
+        try {
+          const response = await fetch(url, {
+            headers: this.#headers,
+            signal: controller.signal,
+          })
+
+          if (this.#isRateLimited(response)) {
+            const delay =
+              Number(response.headers.get('Retry-After')) * 1_000 ||
+              getResetDelayMs(response, this.#provider)
+
+            if (delay !== undefined) {
+              await sleep(delay + 100)
+              continue
+            }
+          }
+
+          /* Retry on 5xx except 501 (unlikely here) */
+          if (response.status >= 500 && response.status !== 501) {
+            if (attempt === maxAttempts - 1) {
+              return response
+            }
+            /* fall-through to back-off */
+          } else {
+            return response
+          }
+        } catch (error) {
+          if (attempt === maxAttempts - 1) {
+            throw error
+          }
+        } finally {
+          clearTimeout(timer)
+        }
+
+        /* Exponential back-off with jitter for 5xx / network failures */
+        const backoff = 2 ** attempt * 200 + Math.random() * 100
+        await sleep(backoff)
+      }
+    } finally {
+      release()
+    }
+
+    throw new Error(`[renoun] Failed to fetch after ${maxAttempts} attempts`)
   }
 
   #encodePath(path: string) {
@@ -260,9 +276,8 @@ export class GitProviderFileSystem extends MemoryFileSystem {
 
   async #fetchRootTree(): Promise<DirectoryEntry[]> {
     const commitResponse = await this.#fetchWithRetry(
-      `https://api.github.com/repos/${this.#repository}/commits/${this.#ref}`
+      `${this.#apiBaseUrl}/repos/${this.#repository}/commits/${this.#ref}`
     )
-
     if (!commitResponse.ok) {
       throw new Error(
         `[renoun] Failed to resolve ref: ${commitResponse.status}`
@@ -273,11 +288,12 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     const treeSha = commit.tree.sha as string
 
     const treeResponse = await this.#fetchWithRetry(
-      `https://api.github.com/repos/${this.#repository}/git/trees/${treeSha}?recursive=1`
+      `${this.#apiBaseUrl}/repos/${this.#repository}/git/trees/${treeSha}?recursive=1`
     )
     if (!treeResponse.ok) {
       throw new Error(`[renoun] Tree fetch failed: ${treeResponse.status}`)
     }
+
     const { tree, truncated } = await treeResponse.json()
 
     if (truncated) {
@@ -333,8 +349,9 @@ export class GitProviderFileSystem extends MemoryFileSystem {
       const apiPath = path ? `/${this.#encodePath(path)}` : ''
       const perPage = 100
       let page = 1
+
       while (true) {
-        const url = `https://api.github.com/repos/${this.#repository}/contents${apiPath}?ref=${this.#ref}&per_page=${perPage}&page=${page}`
+        const url = `${this.#apiBaseUrl}/repos/${this.#repository}/contents${apiPath}?ref=${this.#ref}&per_page=${perPage}&page=${page}`
         const response = await this.#fetchWithRetry(url)
 
         if (!response.ok) {
@@ -368,7 +385,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
           params.set('path', path)
         }
 
-        const url = `https://gitlab.com/api/v4/projects/${repo}/repository/tree?${params}`
+        const url = `${this.#apiBaseUrl}/projects/${repo}/repository/tree?${params}`
         const response = await this.#fetchWithRetry(url)
 
         if (!response.ok) {
@@ -378,27 +395,24 @@ export class GitProviderFileSystem extends MemoryFileSystem {
         }
 
         const data = (await response.json()) as any[]
-
         pushEntries(data)
 
         const nextPage = response.headers.get('X-Next-Page')
-
         if (!nextPage) {
           break
         }
 
         page = Number(nextPage) || 0
-
         if (!page) {
           break
         }
       }
     } else {
       let next: string | undefined = path
-        ? `https://api.bitbucket.org/2.0/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(
+        ? `${this.#apiBaseUrl}/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(
             path
           )}?format=meta&pagelen=100`
-        : `https://api.bitbucket.org/2.0/repositories/${this.#repository}/src/${this.#ref}?format=meta&pagelen=100`
+        : `${this.#apiBaseUrl}/repositories/${this.#repository}/src/${this.#ref}?format=meta&pagelen=100`
 
       while (next) {
         const response = await this.#fetchWithRetry(next)
@@ -427,6 +441,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
     const key = normalizePath(path)
     const cached = this.#directoryCache.get(key)
+
     if (
       cached &&
       this.#cacheTTL !== 0 &&
@@ -434,6 +449,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     ) {
       return cached.entries
     }
+
     this.#directoryCache.delete(key)
     return this.#fetchDirectory(key)
   }
@@ -444,25 +460,24 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     )
   }
 
-  /* ---------- file helpers ---------- */
-
   async #fetchFile(path: string): Promise<void> {
     const normalizedPath = normalizePath(path)
     let url: string
+
     switch (this.#provider) {
       case 'github':
-        url = `https://api.github.com/repos/${this.#repository}/contents/${this.#encodePath(
+        url = `${this.#apiBaseUrl}/repos/${this.#repository}/contents/${this.#encodePath(
           normalizedPath
         )}?ref=${this.#ref}`
         break
       case 'gitlab': {
         const repo = encodeURIComponent(this.#repository)
         const filePath = encodeURIComponent(normalizedPath)
-        url = `https://gitlab.com/api/v4/projects/${repo}/repository/files/${filePath}/raw?ref=${this.#ref}`
+        url = `${this.#apiBaseUrl}/projects/${repo}/repository/files/${filePath}/raw?ref=${this.#ref}`
         break
       }
       case 'bitbucket':
-        url = `https://api.bitbucket.org/2.0/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(
+        url = `${this.#apiBaseUrl}/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(
           normalizedPath
         )}`
         break
@@ -476,31 +491,55 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     }
 
     const contentType = response.headers.get('Content-Type') || ''
-    const extension = normalizedPath.split('.').pop()?.toLowerCase()
-
     const isText =
       /^text\//.test(contentType) ||
       /application\/(json|xml|javascript|typescript)/i.test(contentType) ||
       /svg\+xml/.test(contentType)
 
-    if (!isText && extension && binaryExtensions.has(extension)) {
-      throw new Error(`[renoun] Binary file support not implemented: ${path}`)
-    }
-
     if (this.#provider === 'github') {
       const data = await response.json()
+
+      /* Small files (≤1 MB) include base64 content outright */
       if (typeof data.content === 'string' && data.encoding === 'base64') {
         this.createFile(path, decodeBase64(data.content))
         return
       }
+
+      /* For private repos download_url is null wo we fall back to blob API */
+      if (typeof data.sha === 'string') {
+        const blobResponse = await this.#fetchWithRetry(
+          `${this.#apiBaseUrl}/repos/${this.#repository}/git/blobs/${data.sha}`
+        )
+        if (!blobResponse.ok) {
+          throw new Error(
+            `[renoun] Failed to fetch blob "${path}": ${blobResponse.status} ${blobResponse.statusText}`
+          )
+        }
+        const { content, encoding } = await blobResponse.json()
+        if (encoding === 'base64') {
+          this.createFile(path, decodeBase64(content))
+        } else {
+          this.createFile(path, content)
+        }
+        return
+      }
+
+      /* Public repos can still fall back to raw. */
       if (typeof data.download_url === 'string') {
         const rawResponse = await this.#fetchWithRetry(data.download_url)
         this.createFile(path, await rawResponse.text())
         return
       }
-      const rawUrl = `https://raw.githubusercontent.com/${this.#repository}/${this.#ref}/${normalizedPath}`
-      const rawResponse = await this.#fetchWithRetry(rawUrl)
-      this.createFile(path, await rawResponse.text())
+
+      throw new Error('[renoun] Unable to resolve GitHub file content')
+    }
+
+    /* GitLab & Bitbucket already return raw text/binary */
+    if (!isText) {
+      /* Buffer the binary as Base64-encoded string */
+      const arrayBuffer = await response.arrayBuffer()
+      const encoded = Buffer.from(arrayBuffer).toString('base64')
+      this.createFile(path, encoded)
     } else {
       this.createFile(path, await response.text())
     }
@@ -508,16 +547,20 @@ export class GitProviderFileSystem extends MemoryFileSystem {
 
   async readFile(path: string): Promise<string> {
     const key = normalizePath(path)
+
     if (!this.fileExistsSync(key)) {
       let fetchPromise = this.#fileFetches.get(key)
+
       if (!fetchPromise) {
         fetchPromise = this.#fetchFile(key).finally(() =>
           this.#fileFetches.delete(key)
         )
         this.#fileFetches.set(key, fetchPromise)
       }
+
       await fetchPromise
     }
+
     return super.readFile(key)
   }
 
