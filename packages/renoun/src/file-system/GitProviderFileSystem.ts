@@ -79,6 +79,52 @@ function decodeBase64(string: string) {
   return Buffer.from(string, 'base64').toString('utf-8')
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function getResetDelayMs(
+  response: Response,
+  provider: GitProvider
+): number | undefined {
+  const retryAfter = response.headers.get('Retry-After')
+
+  if (retryAfter) {
+    // Numeric seconds to ms
+    const seconds = Number(retryAfter)
+    if (!Number.isNaN(seconds)) {
+      return seconds * 1_000 + 100
+    }
+    // HTTP-date to absolute
+    const date = Date.parse(retryAfter)
+    if (!Number.isNaN(date)) {
+      return Math.max(date - Date.now(), 0) + 100
+    }
+  }
+
+  const now = Date.now()
+  let reset: number | undefined
+
+  switch (provider) {
+    case 'github': {
+      reset = Number(response.headers.get('X-RateLimit-Reset'))
+      break
+    }
+    case 'gitlab': {
+      reset = Number(response.headers.get('RateLimit-Reset'))
+      break
+    }
+    case 'bitbucket': {
+      reset = Number(response.headers.get('X-RateLimit-Reset'))
+      break
+    }
+  }
+
+  if (reset) {
+    return Math.max(reset * 1_000 - now, 0) + 100
+  }
+}
+
 export class GitProviderFileSystem extends MemoryFileSystem {
   #repository: string
   #ref: string
@@ -144,10 +190,9 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     return headers
   }
 
+  /** Fetch with retry + provider-aware rate-limit handling. */
   async #fetchWithRetry(url: string, attempts = 3): Promise<Response> {
-    if (attempts < 1) {
-      attempts = 1
-    }
+    attempts = Math.max(1, attempts)
 
     for (let index = 0; index < attempts; index++) {
       const controller = new AbortController()
@@ -158,6 +203,21 @@ export class GitProviderFileSystem extends MemoryFileSystem {
           headers: this.#getHeaders(),
           signal: controller.signal,
         })
+        const isRateLimited =
+          response.status === 429 ||
+          (this.#provider === 'github' &&
+            response.status === 403 &&
+            response.headers.get('X-RateLimit-Remaining') === '0')
+
+        if (isRateLimited) {
+          const delay = getResetDelayMs(response, this.#provider)
+          if (delay !== undefined) {
+            await sleep(delay)
+            continue
+          }
+        }
+
+        // Success or non-retryable client error
         if (
           response.ok ||
           (response.status >= 400 &&
@@ -166,6 +226,8 @@ export class GitProviderFileSystem extends MemoryFileSystem {
         ) {
           return response
         }
+
+        // Retryable server error
         if (index === attempts - 1) {
           return response
         }
@@ -177,8 +239,9 @@ export class GitProviderFileSystem extends MemoryFileSystem {
         clearTimeout(timer)
       }
 
+      // Exponential back-off with jitter for generic 5xx / network failures
       const backoff = 2 ** index * 200 + Math.random() * 100
-      await new Promise((r) => setTimeout(r, backoff))
+      await sleep(backoff)
     }
 
     throw new Error(`[renoun] Failed to fetch after ${attempts} attempts`)
@@ -218,7 +281,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
         case 'bitbucket':
           entries.push(
             ...items.map((item: any) => ({
-              name: item.path.split('/').pop(),
+              name: item.path.substring(item.path.lastIndexOf('/') + 1),
               path: `./${item.path}`,
               isDirectory: item.type === 'commit_directory',
               isFile: item.type === 'commit_file',
