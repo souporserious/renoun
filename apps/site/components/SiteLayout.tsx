@@ -177,7 +177,7 @@ export function SiteLayout({
             gridTemplateColumns: 'subgrid',
             gridColumn: sidebar ? '4 / -2' : '2 / -2',
             gridRow: '2',
-            padding: '6.25rem 0',
+            padding: '4rem 0',
           },
         }}
       >
