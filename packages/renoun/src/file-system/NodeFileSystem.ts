@@ -21,6 +21,23 @@ export class NodeFileSystem extends FileSystem {
     }
   }
 
+  /** Asserts that the provided path is within the workspace root. */
+  #assertWithinWorkspace(path: string) {
+    const rootDirectory = getRootDirectory()
+    const absolutePath = this.getAbsolutePath(path)
+    const relativeToRoot = relativePath(rootDirectory, absolutePath)
+
+    if (relativeToRoot.startsWith('..') || relativeToRoot.startsWith('../')) {
+      throw new Error(
+        `[renoun] Attempted to access a path outside of the workspace root.\n` +
+          `  Workspace root: ${rootDirectory}\n` +
+          `  Provided path:  ${path}\n` +
+          `  Resolved path:  ${absolutePath}\n` +
+          'Accessing files outside of the workspace is not allowed.'
+      )
+    }
+  }
+
   getAbsolutePath(path: string): string {
     return resolve(path)
   }
@@ -51,24 +68,29 @@ export class NodeFileSystem extends FileSystem {
   }
 
   readDirectorySync(path: string = '.'): DirectoryEntry[] {
+    this.#assertWithinWorkspace(path)
     const entries = readdirSync(path, { withFileTypes: true })
     return this.#processDirectoryEntries(entries, path)
   }
 
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
+    this.#assertWithinWorkspace(path)
     const entries = await readdir(path, { withFileTypes: true })
     return this.#processDirectoryEntries(entries, path)
   }
 
   readFileSync(path: string): string {
+    this.#assertWithinWorkspace(path)
     return readFileSync(path, 'utf-8')
   }
 
   async readFile(path: string): Promise<string> {
+    this.#assertWithinWorkspace(path)
     return readFile(path, 'utf-8')
   }
 
   fileExistsSync(path: string): boolean {
+    this.#assertWithinWorkspace(path)
     return existsSync(path)
   }
 

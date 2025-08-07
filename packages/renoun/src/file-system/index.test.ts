@@ -1,6 +1,8 @@
 import type { ComponentType } from 'react'
 import { beforeAll, describe, test, expect, expectTypeOf } from 'vitest'
 import { runInNewContext } from 'node:vm'
+import { resolve, join } from 'node:path'
+import { getRootDirectory } from '../utils/get-root-directory.js'
 import * as v from 'valibot'
 import { z } from 'zod'
 
@@ -79,6 +81,14 @@ describe('file system', () => {
     const entries = await fileSystem.readDirectory('fixtures/utils')
     expect(entries).toHaveLength(1)
     expect(entries[0].name).toBe('path.ts')
+  })
+
+  test('node file system prevents access outside workspace', () => {
+    const fileSystem = new NodeFileSystem()
+    const outsidePath = join(getRootDirectory(), '..', 'outside.txt')
+    expect(() => fileSystem.readFileSync(outsidePath)).toThrowError(
+      /outside of the workspace root/
+    )
   })
 
   test('virtual file system read directory', async () => {
