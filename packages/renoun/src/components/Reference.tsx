@@ -82,11 +82,17 @@ const defaultComponents: InternalReferenceComponents = {
   Signatures: 'div',
   Table: 'table',
   TableHead: 'thead',
-  TableHeader: 'th',
+  TableHeader: ({ style, ...props }) => (
+    <th style={{ textAlign: 'left', ...style }} {...props} />
+  ),
   TableBody: 'tbody',
   TableData: ({ index, hasSubRow, ...props }) => <td {...props} />,
   TableRow: ({ hasSubRow, ...props }) => <tr {...props} />,
-  TableSubRow: 'tr',
+  TableSubRow: ({ children }) => (
+    <tr>
+      <td colSpan={3}>{children}</td>
+    </tr>
+  ),
   TableRowGroup: ({ children }) => children,
 }
 
