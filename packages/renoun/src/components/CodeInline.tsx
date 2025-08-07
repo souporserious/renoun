@@ -43,8 +43,19 @@ export type CodeInlineProps = {
   style?: React.CSSProperties
 }
 
-/** Renders an inline `code` element with optional syntax highlighting and copy button. */
-export function CodeInline({
+/**
+ * Renders an inline `code` element with optional syntax highlighting and copy button.
+ *
+ * In development, the component uses a Suspense fallback to render immediately while
+ * asynchronous syntax highlighting and analysis load in the background. In production,
+ * it renders the fully-resolved code block directly.
+ */
+export const CodeInline =
+  process.env.NODE_ENV === 'development'
+    ? CodeInlineWithFallback
+    : CodeInlineAsync
+
+function CodeInlineWithFallback({
   paddingX = '0.25em',
   paddingY = '0.1em',
   shouldAnalyze = false,
