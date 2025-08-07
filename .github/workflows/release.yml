@@ -52,3 +52,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Notify Discord
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          OWNER_REPO="souporserious/renoun"
+
+          # Build one short line per package: "<name>@<version> — <link>"
+          lines=$(echo "$PUBLISHED_PACKAGES" | jq -r --arg repo "$OWNER_REPO" '
+            try ( .[] | "\(.name)@\(.version) — https://github.com/\($repo)/releases/tag/\(.name)@\(.version)" )[] catch empty
+          ')
+
+          if [ -z "$lines" ]; then
+            echo "No packages parsed from changesets output; skipping Discord notification."
+            exit 0
+          fi
+
+          trimmed=$(printf "%s\n" "$lines" | head -n 30 | head -c 1800)
+
+          jq -n --arg msg "🚀 New packages released:\n$trimmed" '{ content: $msg }' \
+          | curl -sS -X POST -H "Content-Type: application/json" -d @- "$WEBHOOK_URL"
