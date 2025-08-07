@@ -114,7 +114,10 @@ export function CodeBlock(props: CodeBlockProps) {
   const baseDirectoryContext = getContext(BaseDirectoryContext)
   const baseDirectory = baseDirectoryProp ?? baseDirectoryContext
 
-  if (typeof restProps.children !== 'string') {
+  if (
+    process.env.NODE_ENV === 'production' ||
+    typeof restProps.children !== 'string'
+  ) {
     return (
       <CodeBlockAsync
         shouldAnalyze={shouldAnalyze}
