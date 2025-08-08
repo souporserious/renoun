@@ -1,5 +1,19 @@
 # renoun
 
+## 9.3.0
+
+### Minor Changes
+
+- 9f96184: Adds streaming to `renoun` CLI WebSocket server.
+- 9a84d3b: Adds backpressure handling to `renoun` CLI WebSocket server.
+
+### Patch Changes
+
+- a05f7b7: Throws a more helpful error now when trying to target a path outside of the root workspace.
+- f2b1ad6: Fixes the `CodeBlock` and `CodeInline` component's internal `Suspense` fallback triggering in production. This is used to speed up local development so it should never show in production.
+- Updated dependencies [ea9cccc]
+  - @renoun/mdx@3.1.0
+
 ## 9.2.0
 
 ### Minor Changes
