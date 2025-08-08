@@ -156,23 +156,109 @@ export default function addHeadings(this: Processor) {
     }
 
     if (!isMarkdown) {
-      define(tree, file, {
-        headings: hasGetHeadingsExport
-          ? {
-              type: 'CallExpression',
-              callee: { type: 'Identifier', name: 'getHeadings' },
-              optional: false,
-              arguments: [
-                {
-                  type: 'ArrayExpression',
-                  elements: headingsArray,
-                },
-              ],
-            }
-          : {
-              type: 'ArrayExpression',
-              elements: headingsArray,
+      const generatedHeadingsArrayExpression: any = {
+        type: 'ArrayExpression',
+        elements: headingsArray,
+      }
+
+      const headingsExpression = hasGetHeadingsExport
+        ? {
+            // (() => { const validatedHeadingsValue = getHeadings([...]);
+            //   if (!Array.isArray(validatedHeadingsValue)) {
+            //     throw new Error('[renoun/mdx] getHeadings(headings) must return an array')
+            //   }
+            //   return validatedHeadingsValue
+            // })()
+            type: 'CallExpression',
+            callee: {
+              type: 'ArrowFunctionExpression',
+              async: false,
+              expression: false,
+              params: [],
+              body: {
+                type: 'BlockStatement',
+                body: [
+                  {
+                    type: 'VariableDeclaration',
+                    kind: 'const',
+                    declarations: [
+                      {
+                        type: 'VariableDeclarator',
+                        id: {
+                          type: 'Identifier',
+                          name: 'validatedHeadingsValue',
+                        },
+                        init: {
+                          type: 'CallExpression',
+                          callee: { type: 'Identifier', name: 'getHeadings' },
+                          optional: false,
+                          arguments: [generatedHeadingsArrayExpression],
+                        },
+                      },
+                    ],
+                  },
+                  {
+                    type: 'IfStatement',
+                    test: {
+                      type: 'UnaryExpression',
+                      operator: '!',
+                      prefix: true,
+                      argument: {
+                        type: 'CallExpression',
+                        callee: {
+                          type: 'MemberExpression',
+                          object: { type: 'Identifier', name: 'Array' },
+                          property: { type: 'Identifier', name: 'isArray' },
+                          computed: false,
+                          optional: false,
+                        },
+                        optional: false,
+                        arguments: [
+                          {
+                            type: 'Identifier',
+                            name: 'validatedHeadingsValue',
+                          },
+                        ],
+                      },
+                    },
+                    consequent: {
+                      type: 'BlockStatement',
+                      body: [
+                        {
+                          type: 'ThrowStatement',
+                          argument: {
+                            type: 'NewExpression',
+                            callee: { type: 'Identifier', name: 'Error' },
+                            arguments: [
+                              {
+                                type: 'Literal',
+                                value:
+                                  '[renoun/mdx] getHeadings(headings) must return an array',
+                              },
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                    alternate: null,
+                  },
+                  {
+                    type: 'ReturnStatement',
+                    argument: {
+                      type: 'Identifier',
+                      name: 'validatedHeadingsValue',
+                    },
+                  },
+                ],
+              },
             },
+            optional: false,
+            arguments: [],
+          }
+        : generatedHeadingsArrayExpression
+
+      define(tree, file, {
+        headings: headingsExpression as any,
       })
     }
   }

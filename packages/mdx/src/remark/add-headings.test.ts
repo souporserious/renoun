@@ -206,6 +206,30 @@ export function getHeadings(headings) {
     expect(headings[1].id).toBe('extra')
   })
 
+  test('runtime validation that getHeadings must return an array', async () => {
+    const mdxSource = `
+export function getHeadings(headings) {
+  return { pwnd: true }
+}
+
+# Hello
+`
+
+    const jsxRuntime = {
+      Fragment: Symbol.for('react.fragment'),
+      jsx: () => null,
+      jsxs: () => null,
+    }
+
+    await expect(
+      evaluate(mdxSource, {
+        remarkPlugins: [addHeadings],
+        development: false,
+        ...jsxRuntime,
+      })
+    ).rejects.toThrow(/getHeadings\(headings\) must return an array/)
+  })
+
   test('throws when exporting headings directly with guidance', async () => {
     const mdxSource = `
 export const headings = []
