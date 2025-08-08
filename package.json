@@ -28,6 +28,7 @@
   },
   "pnpm": {
     "overrides": {
+      "external-editor>tmp": "^0.2.4",
       "on-headers": "^1.1.0"
     }
   },

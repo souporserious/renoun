@@ -65,6 +65,7 @@ catalogs:
       version: 4.0.9
 
 overrides:
+  external-editor>tmp: ^0.2.4
   on-headers: ^1.1.0
 
 importers:
@@ -3334,10 +3335,6 @@ packages:
     resolution: {integrity: sha512-weP+BZ8MVNnlCm8c0Qdc1WSWq4Qn7I+9CJGm7Qali6g44e/PUzbjNqJX5NJ9ljlNMosfJvg1fKEGILklK9cwnw==}
     engines: {node: '>=18'}
 
-  os-tmpdir@1.0.2:
-    resolution: {integrity: sha512-D2FR03Vir7FIu45XBY20mTb+/ZSWB00sjU9jdQXt83gDrI4Ztz5Fs7/yy74g2N5SVQY4xY1qDr4rNddwYRVX0g==}
-    engines: {node: '>=0.10.0'}
-
   outdent@0.5.0:
     resolution: {integrity: sha512-/jHxFIzoMXdqPzTaCpFzAAWhpkSjZPF4Vsn6jAfNpmbH/ymsmd7Qc6VE9BGn0L6YMj6uwpQLxCECpus4ukKS9Q==}
 
@@ -3945,9 +3942,9 @@ packages:
   tm-themes@1.10.7:
     resolution: {integrity: sha512-/7UiSrze10BQqlyy43LRT4QmQxCYJKMSlyMM6umKwsDIAQZlFqyj5sDe/qoaiVOvAzv22VsoC0GfcEKxI8J0ng==}
 
-  tmp@0.0.33:
-    resolution: {integrity: sha512-jRCJlojKnZ3addtTOjdIqoRuPEKBvNXcGYqzO6zWZX8KfKEpnGY5jfggJQ3EjKuu8D4bJRr0y+cYJFmYbImXGw==}
-    engines: {node: '>=0.6.0'}
+  tmp@0.2.4:
+    resolution: {integrity: sha512-UdiSoX6ypifLmrfQ/XfiawN6hkjSBpCjhKxxZcWlUUmoXLaCKQU0bx4HF/tdDK2uzRuchf1txGvrWBzYREssoQ==}
+    engines: {node: '>=14.14'}
 
   to-regex-range@5.0.1:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
@@ -6891,7 +6888,7 @@ snapshots:
     dependencies:
       chardet: 0.7.0
       iconv-lite: 0.4.24
-      tmp: 0.0.33
+      tmp: 0.2.4
 
   fast-deep-equal@3.1.3: {}
 
@@ -7872,8 +7869,6 @@ snapshots:
       string-width: 7.2.0
       strip-ansi: 7.1.0
 
-  os-tmpdir@1.0.2: {}
-
   outdent@0.5.0: {}
 
   p-filter@2.1.0:
@@ -8709,9 +8704,7 @@ snapshots:
 
   tm-themes@1.10.7: {}
 
-  tmp@0.0.33:
-    dependencies:
-      os-tmpdir: 1.0.2
+  tmp@0.2.4: {}
 
   to-regex-range@5.0.1:
     dependencies:
