@@ -112,6 +112,16 @@ Exporting `headings` directly is not supported. If you need to override headings
 
 </Note>
 
+##### Security considerations
+
+This plugin is designed for trusted MDX sources.
+
+`getHeadings` is executed as JavaScript at build/render time, so only use it with content from trusted authors. It can access your environment and perform arbitrary actions.
+
+All URLs in links and images are restricted to `http` and `https` schemes to prevent injection of `javascript:` or other unsafe protocols.
+
+If you need to support untrusted MDX, run the compiled output through an HTML sanitizer such as [rehype-sanitize](https://www.npmjs.com/package/rehype-sanitize) before rendering.
+
 #### remark `remove-immediate-paragraphs`
 
 Removes paragraph elements added around immediate element and component children.

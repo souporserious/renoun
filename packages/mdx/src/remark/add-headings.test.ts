@@ -12,7 +12,7 @@ describe('addHeadings', () => {
     expect(String(result)).toMatchInlineSnapshot(`
       "import {jsx as _jsx} from "react/jsx-runtime";
       export const headings = [{
-        id: "hello,-world!",
+        id: "hello-world",
         level: 1,
         children: "Hello, world!",
         text: "Hello, world!"
@@ -23,7 +23,7 @@ describe('addHeadings', () => {
           ...props.components
         };
         return _jsx(_components.h1, {
-          id: "hello,-world!",
+          id: "hello-world",
           children: "Hello, world!"
         });
       }
@@ -48,7 +48,7 @@ describe('addHeadings', () => {
     expect(String(result)).toMatchInlineSnapshot(`
       "import {Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs} from "react/jsx-runtime";
       export const headings = [{
-        id: "hello,-world!",
+        id: "hello-world",
         level: 1,
         children: _jsxs(_Fragment, {
           children: ["Hello, ", _jsx("code", {
@@ -64,7 +64,7 @@ describe('addHeadings', () => {
           ...props.components
         };
         return _jsxs(_components.h1, {
-          id: "hello,-world!",
+          id: "hello-world",
           children: ["Hello, ", _jsx(_components.code, {
             children: "world"
           }), "!"]
@@ -91,7 +91,7 @@ describe('addHeadings', () => {
     expect(String(result)).toMatchInlineSnapshot(`
       "import {jsx as _jsx} from "react/jsx-runtime";
       export const headings = [{
-        id: "hello,-world!",
+        id: "hello-world",
         level: 1,
         children: _jsx("a", {
           href: "https://example.com",
@@ -106,7 +106,7 @@ describe('addHeadings', () => {
           ...props.components
         };
         return _jsx(_components.h1, {
-          id: "hello,-world!",
+          id: "hello-world",
           children: _jsx(_components.a, {
             href: "https://example.com",
             children: "Hello, world!"
@@ -137,7 +137,7 @@ describe('addHeadings', () => {
     expect(String(result)).toMatchInlineSnapshot(`
       "import {jsx as _jsx} from "react/jsx-runtime";
       export const headings = [{
-        id: "hello,-world!",
+        id: "hello-world",
         level: 1,
         children: _jsx("img", {
           src: "https://example.com/image.png",
@@ -152,7 +152,7 @@ describe('addHeadings', () => {
           ...props.components
         };
         return _jsx(_components.h1, {
-          id: "hello,-world!",
+          id: "hello-world",
           children: _jsx(_components.img, {
             src: "https://example.com/image.png",
             alt: "Hello, world!"
@@ -192,7 +192,7 @@ export function getHeadings(headings) {
     }
 
     const result = await evaluate(mdxSource, {
-      remarkPlugins: [addHeadings],
+      remarkPlugins: [[addHeadings, { allowGetHeadings: true }]],
       development: false,
       ...jsxRuntime,
     })
@@ -223,7 +223,7 @@ export function getHeadings(headings) {
 
     await expect(
       evaluate(mdxSource, {
-        remarkPlugins: [addHeadings],
+        remarkPlugins: [[addHeadings, { allowGetHeadings: true }]],
         development: false,
         ...jsxRuntime,
       })
@@ -237,7 +237,9 @@ export const headings = []
 # Hello
 `
 
-    const vfile = await compile(mdxSource, { remarkPlugins: [addHeadings] })
+    const vfile = await compile(mdxSource, {
+      remarkPlugins: [[addHeadings, { allowGetHeadings: true }]],
+    })
     const messages = (vfile as any).messages as Array<any>
     const hasFatal = messages.some(
       (message) =>

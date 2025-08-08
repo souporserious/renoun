@@ -20,3 +20,14 @@ This will now include the extra headings when importing them from the file:
 ```tsx allowErrors
 import Content, { headings } from 'hello-world.mdx'
 ```
+
+This feature is disabled by default for security purposes, please import and configure this plugin to enable:
+
+```tsx
+import { remarkAddHeadings } from '@renoun/mdx/add-headings'
+import { evaluate } from '@mdx-js/mdx'
+
+const result = await evaluate('# Hello World', {
+  remarkPlugins: [[addHeadings, { allowGetHeadings: true }]],
+})
+```
