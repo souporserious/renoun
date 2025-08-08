@@ -40,6 +40,8 @@ export default function addHeadings(this: Processor) {
   return function (tree: Root, file: VFile) {
     const headingsArray: any[] = []
     const headingCounts = new Map<string, number>()
+    let hasGetHeadingsExport = false
+    let hasHeadingsExport = false
 
     visit(tree, 'heading', (node: Heading) => {
       const text = toString(node)
@@ -90,12 +92,87 @@ export default function addHeadings(this: Processor) {
       node.data.hProperties.id = slug
     })
 
+    // Detect `export function getHeadings` or `export const getHeadings = ...`
+    // or `export { getHeadings }` within mdx ESM blocks.
+    visit(tree, (node) => {
+      // Only handle mdx ESM nodes
+      if ((node as any).type !== 'mdxjsEsm') return
+      const program = (node as any)?.data?.estree
+      if (!program || !Array.isArray(program.body)) return
+      for (const statement of program.body) {
+        if (statement.type !== 'ExportNamedDeclaration') continue
+        if (statement.declaration) {
+          const declaration = statement.declaration
+          if (
+            declaration.type === 'FunctionDeclaration' &&
+            declaration.id?.name === 'getHeadings'
+          ) {
+            hasGetHeadingsExport = true
+            break
+          }
+          if (declaration.type === 'VariableDeclaration') {
+            for (const declarator of declaration.declarations) {
+              if (
+                declarator.id?.type === 'Identifier' &&
+                declarator.id.name === 'getHeadings'
+              ) {
+                hasGetHeadingsExport = true
+                break
+              }
+              if (
+                declarator.id?.type === 'Identifier' &&
+                declarator.id.name === 'headings'
+              ) {
+                hasHeadingsExport = true
+                break
+              }
+            }
+          }
+        }
+        if (Array.isArray(statement.specifiers)) {
+          for (const specifier of statement.specifiers) {
+            if (specifier.exported?.name === 'getHeadings') {
+              hasGetHeadingsExport = true
+              break
+            }
+            if (specifier.exported?.name === 'headings') {
+              hasHeadingsExport = true
+              break
+            }
+          }
+        }
+      }
+    })
+
+    if (hasHeadingsExport) {
+      const message = file.message(
+        '[renoun/mdx] Exporting "headings" directly is not supported. Use `export function getHeadings(headings) { ... }` to transform or replace the generated headings.',
+        undefined,
+        'renoun-mdx:headings-export'
+      )
+      // Mark as fatal so compilation fails fast with guidance
+      message.fatal = true
+      return
+    }
+
     if (!isMarkdown) {
       define(tree, file, {
-        headings: {
-          type: 'ArrayExpression',
-          elements: headingsArray,
-        },
+        headings: hasGetHeadingsExport
+          ? {
+              type: 'CallExpression',
+              callee: { type: 'Identifier', name: 'getHeadings' },
+              optional: false,
+              arguments: [
+                {
+                  type: 'ArrayExpression',
+                  elements: headingsArray,
+                },
+              ],
+            }
+          : {
+              type: 'ArrayExpression',
+              elements: headingsArray,
+            },
       })
     }
   }
@@ -111,6 +188,10 @@ function mdastNodesToJsxFragment(nodes: any[]) {
     if (child.type === 'JSXText') {
       return { type: 'Literal', value: child.value }
     }
+
+    // If there is a single non-text child (e.g. a link or image), return it
+    // directly rather than wrapping in a Fragment.
+    return child
   }
 
   return {
@@ -198,6 +279,37 @@ function mdastNodeToJsxChild(node: any) {
         },
         closingElement: null,
         children: [],
+      }
+    }
+
+    case 'link': {
+      const attributes = [
+        {
+          type: 'JSXAttribute',
+          name: { type: 'JSXIdentifier', name: 'href' },
+          value: { type: 'Literal', value: node.url },
+        },
+      ]
+      if (node.title) {
+        attributes.push({
+          type: 'JSXAttribute',
+          name: { type: 'JSXIdentifier', name: 'title' },
+          value: { type: 'Literal', value: node.title },
+        })
+      }
+      return {
+        type: 'JSXElement',
+        openingElement: {
+          type: 'JSXOpeningElement',
+          name: { type: 'JSXIdentifier', name: 'a' },
+          attributes,
+          selfClosing: false,
+        },
+        closingElement: {
+          type: 'JSXClosingElement',
+          name: { type: 'JSXIdentifier', name: 'a' },
+        },
+        children: node.children.map(mdastNodeToJsxChild),
       }
     }
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { compile } from '@mdx-js/mdx'
+import { compile, evaluate } from '@mdx-js/mdx'
 
 import addHeadings from './add-headings'
 
@@ -89,15 +89,13 @@ describe('addHeadings', () => {
     })
 
     expect(String(result)).toMatchInlineSnapshot(`
-      "import {Fragment as _Fragment, jsx as _jsx} from "react/jsx-runtime";
+      "import {jsx as _jsx} from "react/jsx-runtime";
       export const headings = [{
         id: "hello,-world!",
         level: 1,
-        children: _jsx(_Fragment, {
-          children: _jsx("a", {
-            href: "https://example.com",
-            children: "Hello, world!"
-          })
+        children: _jsx("a", {
+          href: "https://example.com",
+          children: "Hello, world!"
         }),
         text: "Hello, world!"
       }];
@@ -137,15 +135,13 @@ describe('addHeadings', () => {
     )
 
     expect(String(result)).toMatchInlineSnapshot(`
-      "import {Fragment as _Fragment, jsx as _jsx} from "react/jsx-runtime";
+      "import {jsx as _jsx} from "react/jsx-runtime";
       export const headings = [{
         id: "hello,-world!",
         level: 1,
-        children: _jsx(_Fragment, {
-          children: _jsx("img", {
-            src: "https://example.com/image.png",
-            alt: "Hello, world!"
-          })
+        children: _jsx("img", {
+          src: "https://example.com/image.png",
+          alt: "Hello, world!"
         }),
         text: "Hello, world!"
       }];
@@ -174,5 +170,56 @@ describe('addHeadings', () => {
       }
       "
     `)
+  })
+
+  test('wraps headings with getHeadings when exported', async () => {
+    const mdxSource = `
+export function getHeadings(headings) {
+  return [
+    ...headings,
+    { id: 'extra', level: 2, text: 'Extra', children: 'Extra' }
+  ]
+}
+
+# Hello
+`
+
+    // Minimal jsxRuntime stub to evaluate without React in tests
+    const jsxRuntime = {
+      Fragment: Symbol.for('react.fragment'),
+      jsx: () => null,
+      jsxs: () => null,
+    }
+
+    const result = await evaluate(mdxSource, {
+      remarkPlugins: [addHeadings],
+      development: false,
+      ...jsxRuntime,
+    })
+
+    const headings = (result as any).headings as Array<any>
+
+    // Ensure the compiled module exports headings that are the result of calling getHeadings([...])
+    expect(Array.isArray(headings)).toBe(true)
+    expect(headings.length).toBe(2)
+    expect(headings[0].id).toBe('hello')
+    expect(headings[1].id).toBe('extra')
+  })
+
+  test('throws when exporting headings directly with guidance', async () => {
+    const mdxSource = `
+export const headings = []
+
+# Hello
+`
+
+    const vfile = await compile(mdxSource, { remarkPlugins: [addHeadings] })
+    const messages = (vfile as any).messages as Array<any>
+    const hasFatal = messages.some(
+      (message) =>
+        message.fatal &&
+        /Exporting \"headings\" directly is not supported/i.test(message.reason)
+    )
+    expect(hasFatal).toBe(true)
   })
 })
