@@ -6,7 +6,7 @@ This workflow builds and publishes **preview npm packages** for pull requests, u
 
 1. **Trigger** – Runs on `pull_request` events: opened, synchronized (new commits), reopened, and closed.
 2. **Affected detection** – Uses `pnpm` + Turbo to list publishable workspaces changed since the PR base.
-3. **Packaging** – Runs `pnpm pack` for each affected public workspace into a `previews/` directory.
+3. **Packaging** – Runs `pnpm pack` for each affected public workspace into a `previews/` directory. Tarballs are renamed to include the PR head short SHA (e.g. `pkg-a-1.2.3-<sha7>.tgz`) to make them uniquely cacheable.
 4. **Branch update** – Pushes tarballs into the `package-preview` branch under a per-PR directory (e.g. `123/renoun-1.0.0.tgz`). The branch is force-pushed with a single commit to avoid history bloat.
 5. **Sticky PR comment** – Posts or updates a comment in the PR with `npm install` commands using raw GitHub URLs to the tarballs.
 6. **Cleanup** – On PR close, removes that PR’s directory from the `package-preview` branch and force-pushes to keep a clean history.
@@ -32,7 +32,7 @@ This workflow builds and publishes **preview npm packages** for pull requests, u
 ````
 ### 📦 Preview packages
 
-• **pkg-a-1.2.3.tgz**
+• **pkg-a-1.2.3-<sha7>.tgz**
 ```bash
-npm install "https://raw.githubusercontent.com/owner/repo/package-preview/123/pkg-a-1.2.3.tgz"
+npm install "https://raw.githubusercontent.com/owner/repo/package-preview/123/pkg-a-1.2.3-abc123.tgz"
 ````
