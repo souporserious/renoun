@@ -231,7 +231,7 @@ export default async function Page({
 }) {
   const { slug } = await params
   const component = await components.getFile(slug, 'tsx')
-  const componentExports = component.getExports()
+  const componentExports = await component.getExports()
 
   return componentExports.map((source) => (
     <section>
