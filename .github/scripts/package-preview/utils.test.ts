@@ -1,13 +1,57 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  beforeAll,
+} from 'vitest'
+
+// In-memory filesystem and command capture for tests
+let fs = new Set<string>()
+let gitCommands: string[] = []
+
+vi.mock('node:fs', () => {
+  return {
+    existsSync: (p: any) => fs.has(String(p)),
+    mkdirSync: (p: any) => {
+      fs.add(String(p))
+    },
+    rmSync: (p: any) => {
+      const base = String(p)
+      for (const entry of Array.from(fs)) {
+        if (entry === base || entry.startsWith(base + '/')) fs.delete(entry)
+      }
+    },
+  }
+})
+
+vi.mock('node:child_process', () => {
+  return {
+    execSync: (cmd: any) => {
+      if (typeof cmd === 'string' && cmd.startsWith('git ')) {
+        gitCommands.push(cmd)
+      }
+      return '' as any
+    },
+  }
+})
+
 import { join } from 'node:path'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 
-import * as utils from './utils.js'
+let utils: any
+beforeAll(async () => {
+  utils = await import('./utils.js')
+})
 
 describe('utils', () => {
   let exitSpy: any
 
   beforeEach(() => {
+    fs = new Set<string>()
+    gitCommands = []
     exitSpy = vi
       .spyOn(process, 'exit')
       // Throw to make exit observable without terminating the test run
@@ -49,10 +93,9 @@ describe('utils', () => {
   describe('assertSafeWorkdir', () => {
     it('allows ephemeral .preview-* workdir inside repo', () => {
       const workdir = join(process.cwd(), '.preview-test')
-      // Ensure dir exists for completeness; the function only checks path
-      if (!existsSync(workdir)) mkdirSync(workdir)
+      mkdirSync(workdir)
       expect(() => utils.assertSafeWorkdir(workdir)).not.toThrow()
-      rmSync(workdir, { recursive: true, force: true })
+      rmSync(workdir)
     })
 
     it('exits for directories outside repo root', () => {
@@ -81,15 +124,10 @@ describe('utils', () => {
   describe('safeReinitGitRepo', () => {
     it('removes existing .git and invokes git init/checkout/remote add', () => {
       const workdir = join(process.cwd(), '.preview-safe-reinit')
-      if (!existsSync(workdir)) mkdirSync(workdir)
+      mkdirSync(workdir)
       // Create a fake .git to ensure it gets removed
       const gitDir = join(workdir, '.git')
-      if (!existsSync(gitDir)) mkdirSync(gitDir)
-
-      const commands: string[] = []
-      vi.spyOn(utils, 'runCommands').mockImplementation((command, _opts) => {
-        commands.push(...command)
-      })
+      mkdirSync(gitDir)
 
       utils.safeReinitGitRepo(
         workdir,
@@ -101,14 +139,17 @@ describe('utils', () => {
         }
       )
 
+      // After re-init with mocked exec, .git remains removed
       expect(existsSync(gitDir)).toBe(false)
-      expect(commands).toEqual([
+
+      // Ensure expected git commands were invoked
+      expect(gitCommands).toEqual([
         'git init',
         'git checkout -b package-preview',
         'git remote add origin https://x-access-token:t@github.com/o/r.git',
       ])
 
-      rmSync(workdir, { recursive: true, force: true })
+      rmSync(workdir)
     })
   })
 })

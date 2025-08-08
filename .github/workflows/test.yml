@@ -30,4 +30,4 @@ jobs:
         run: pnpm --filter=@renoun/mdx build
 
       - name: Run tests
-        run: pnpm --filter=renoun test
+        run: pnpm --filter=renoun test && pnpm vitest run .github/**/*.test.ts
