@@ -27,26 +27,27 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
 
-      - uses: pnpm/action-setup@v4
-        with:
-          run_install: true
-          args: --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install
 
       - name: Build
-        run: pnpm build
+        run: pnpm build --filter=packages/*
 
-      - name: Create/Update preview branch assets
+      - name: Create preview branch assets
         run: node .github/scripts/package-preview/create.js
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload manifest for commenter job
+      - name: Upload manifest for comment step
         uses: actions/upload-artifact@v4
         with:
           name: preview-manifest
@@ -84,7 +85,6 @@ jobs:
         run: node .github/scripts/package-preview/comment.js
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   cleanup:
     if: github.event.action == 'closed' && github.event.pull_request.head.repo.fork == false
@@ -108,4 +108,3 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

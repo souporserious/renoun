@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
-import * as utils from '../utils.js'
+
+import * as utils from './utils.js'
 
 describe('utils', () => {
   let exitSpy: any
@@ -85,9 +86,9 @@ describe('utils', () => {
       const gitDir = join(workdir, '.git')
       if (!existsSync(gitDir)) mkdirSync(gitDir)
 
-      const cmds: string[] = []
-      vi.spyOn(utils, 'runCommands').mockImplementation((c, _opts) => {
-        cmds.push(...c)
+      const commands: string[] = []
+      vi.spyOn(utils, 'runCommands').mockImplementation((command, _opts) => {
+        commands.push(...command)
       })
 
       utils.safeReinitGitRepo(
@@ -101,7 +102,7 @@ describe('utils', () => {
       )
 
       expect(existsSync(gitDir)).toBe(false)
-      expect(cmds).toEqual([
+      expect(commands).toEqual([
         'git init',
         'git checkout -b package-preview',
         'git remote add origin https://x-access-token:t@github.com/o/r.git',
