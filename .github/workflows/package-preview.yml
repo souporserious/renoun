@@ -1,0 +1,111 @@
+name: PR Preview Packages (Turbo-only)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.fork == false && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-branch
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: true
+          args: --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Create/Update preview branch assets
+        run: node .github/scripts/package-preview/create.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload manifest for commenter job
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-manifest
+          path: previews/manifest.json
+          if-no-files-found: ignore
+
+  comment:
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.fork == false && github.event.pull_request.draft == false
+    concurrency:
+      group: preview-branch
+      cancel-in-progress: false
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Download manifest
+        id: download
+        uses: actions/download-artifact@v4
+        with:
+          name: preview-manifest
+          path: previews
+        continue-on-error: true
+      - name: Post sticky comment with install commands
+        if: steps.download.outcome == 'success'
+        run: node .github/scripts/package-preview/comment.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-branch
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Remove preview branch assets for this PR
+        run: node .github/scripts/package-preview/cleanup.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

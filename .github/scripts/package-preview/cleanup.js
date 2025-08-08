@@ -1,0 +1,125 @@
+import { execSync } from 'node:child_process'
+import { mkdirSync, rmSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  stickyMarker,
+  runCommands,
+  ensureGitIdentity,
+  getRepoContext,
+  assertSafePreviewBranch,
+  getGithubRemoteUrl,
+  assertSafeWorkdir,
+  safeReinitGitRepo,
+} from './utils.js'
+
+const PR_NUMBER = String(process.env.PR_NUMBER || '')
+const GH_TOKEN = String(process.env.GH_TOKEN || '')
+if (!PR_NUMBER || !GH_TOKEN) {
+  console.error('PR_NUMBER and GH_TOKEN are required')
+  process.exit(1)
+}
+// Validate PR_NUMBER to avoid any possibility of shell/path injection
+if (!/^\d+$/.test(PR_NUMBER)) {
+  console.error('Invalid PR_NUMBER; expected digits only')
+  process.exit(1)
+}
+const { owner, repo } = getRepoContext()
+
+/**
+ * @param {string} cmd
+ * @typedef {Omit<import('node:child_process').ExecSyncOptionsWithStringEncoding, 'encoding'> & { encoding?: 'utf8' }} ExecOpts
+ * @param {ExecOpts} [opts]
+ * @returns {string}
+ */
+const sh = (cmd, opts = {}) => {
+  /** @type {import('node:child_process').ExecSyncOptionsWithStringEncoding} */
+  const options = { stdio: 'pipe', encoding: 'utf8', ...(opts || {}) }
+  return execSync(cmd, options).trim()
+}
+
+const PREVIEW_BRANCH = process.env.PREVIEW_BRANCH || 'package-preview'
+if (!/^[A-Za-z0-9._\/-]+$/.test(PREVIEW_BRANCH)) {
+  console.error(
+    'Invalid PREVIEW_BRANCH; only alphanumerics, . _ - and / are allowed'
+  )
+  process.exit(1)
+}
+assertSafePreviewBranch(PREVIEW_BRANCH, owner, repo)
+
+// Prepare a working dir and fetch current preview branch state
+const workdir = join(process.cwd(), '.preview-cleanup')
+assertSafeWorkdir(workdir)
+if (existsSync(workdir)) rmSync(workdir, { recursive: true, force: true })
+mkdirSync(workdir, { recursive: true })
+const remoteUrl = getGithubRemoteUrl(owner, repo, GH_TOKEN)
+sh('git init', { cwd: workdir })
+sh(`git remote add origin ${remoteUrl}`, { cwd: workdir })
+
+let branchExists = false
+try {
+  const heads = sh(`git ls-remote --heads origin ${PREVIEW_BRANCH}`)
+  branchExists = (heads?.trim().length ?? 0) > 0
+} catch (_) {}
+
+if (!branchExists) {
+  console.log('Preview branch not found — nothing to clean')
+  process.exit(0)
+}
+
+sh(`git fetch --depth=1 origin ${PREVIEW_BRANCH}`, { cwd: workdir })
+sh(`git checkout -b ${PREVIEW_BRANCH} origin/${PREVIEW_BRANCH}`, {
+  cwd: workdir,
+})
+
+// Remove the PR directory and persist as a single commit
+rmSync(join(workdir, PR_NUMBER), { recursive: true, force: true })
+sh(`git add -A`, { cwd: workdir })
+// If nothing changed, exit early
+try {
+  const status = sh('git status --porcelain', { cwd: workdir })
+  if (!status) {
+    console.log('No preview assets to remove for this PR')
+    process.exit(0)
+  }
+} catch (_) {}
+
+// Re-init to keep single-commit history
+safeReinitGitRepo(workdir, PREVIEW_BRANCH, remoteUrl, { owner, repo })
+ensureGitIdentity(workdir)
+runCommands(
+  [
+    'git add -A',
+    `git commit -m "remove #${PR_NUMBER} [skip ci]"`,
+    `git push -f origin ${PREVIEW_BRANCH}`,
+  ],
+  { cwd: workdir }
+)
+
+console.log(
+  `Removed preview assets for PR #${PR_NUMBER} and force-pushed ${PREVIEW_BRANCH}`
+)
+
+// Best-effort: delete the sticky PR comment(s)
+try {
+  const listCmd = `gh api repos/${owner}/${repo}/issues/${PR_NUMBER}/comments?per_page=100`
+  const raw = sh(listCmd)
+  /** @type {{ id: number, body?: string }[]} */
+  const comments = JSON.parse(raw)
+  for (const c of comments) {
+    if (typeof c?.body === 'string' && c.body.includes(stickyMarker)) {
+      try {
+        sh(
+          `gh api repos/${owner}/${repo}/issues/comments/${c.id} --method DELETE`
+        )
+        console.log(`Deleted preview comment ${c.id}`)
+      } catch (err) {
+        console.warn(`Failed to delete comment ${c.id}:`, err?.message || err)
+      }
+    }
+  }
+} catch (err) {
+  console.warn(
+    'Failed to enumerate/delete sticky comments:',
+    err?.message || err
+  )
+}
