@@ -3,17 +3,16 @@ import { join } from 'node:path'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import * as utils from '../utils.js'
 
-describe('package-preview utils safety', () => {
-  const originalCwd = process.cwd()
-  let exitSpy: ReturnType<typeof vi.spyOn>
+describe('utils', () => {
+  let exitSpy: any
 
   beforeEach(() => {
     exitSpy = vi
       .spyOn(process, 'exit')
       // Throw to make exit observable without terminating the test run
-      .mockImplementation(((code?: number) => {
+      .mockImplementation(((code?: string | number | null | undefined) => {
         throw new Error(`exit:${code ?? ''}`)
-      }) as unknown as (code?: number) => never)
+      }) as never)
   })
 
   afterEach(() => {
@@ -110,5 +109,87 @@ describe('package-preview utils safety', () => {
 
       rmSync(workdir, { recursive: true, force: true })
     })
+  })
+})
+
+describe('transforms', () => {
+  it('parsePnpmWorkspaces', () => {
+    const json = JSON.stringify([
+      { name: 'a', path: '/repo/packages/a', private: false },
+      { name: 'b', path: '/repo/packages/b', private: true },
+      { name: '', path: '/repo/packages/empty' },
+    ])
+    const out = utils.parsePnpmWorkspaces(json)
+    expect(out).toEqual([
+      { name: 'a', dir: '/repo/packages/a', private: false },
+      { name: 'b', dir: '/repo/packages/b', private: true },
+    ])
+  })
+
+  it('parseTurboDryRunPackages - array form', () => {
+    const json = JSON.stringify([
+      { package: 'a' },
+      { package: 'b' },
+      { package: 'a' },
+    ])
+    expect(utils.parseTurboDryRunPackages(json)).toEqual(['a', 'b'])
+  })
+
+  it('parseTurboDryRunPackages - tasks form', () => {
+    const json = JSON.stringify({ tasks: [{ package: 'a' }, { package: 'b' }] })
+    expect(utils.parseTurboDryRunPackages(json)).toEqual(['a', 'b'])
+  })
+
+  it('parseTurboDryRunPackages - packages form', () => {
+    const json = JSON.stringify({ packages: ['a', 'b', 'a'] })
+    expect(utils.parseTurboDryRunPackages(json)).toEqual(['a', 'b'])
+  })
+
+  it('computePublishableTargets', () => {
+    const workspaces = [
+      { name: 'a', dir: '/a', private: false },
+      { name: 'b', dir: '/b', private: true },
+      { name: 'c', dir: '/c', private: false },
+    ]
+    expect(
+      utils.computePublishableTargets(workspaces, ['a', 'b', 'x'])
+    ).toEqual(['a'])
+  })
+
+  it('renamePackedFilenames', () => {
+    const files = ['a.tgz', 'b.tgz']
+    expect(utils.renamePackedFilenames(files, 'abc123')).toEqual([
+      'a-abc123.tgz',
+      'b-abc123.tgz',
+    ])
+  })
+
+  it('buildRawBaseUrl + buildAssets + buildManifest', () => {
+    const base = utils.buildRawBaseUrl('o', 'r', 'branch', 42)
+    const assets = utils.buildAssets(base, ['a.tgz'])
+    const manifest = utils.buildManifest({
+      branch: 'branch',
+      short: 'abc123',
+      pr: 42,
+      assets,
+      targets: ['pkg-a'],
+      commentId: 123,
+    })
+    expect(base).toMatch('/o/r/branch/42/')
+    expect(assets[0].url).toMatch('/branch/42/a.tgz')
+    expect(manifest.commentId).toBe(123)
+  })
+
+  it('buildPreviewCommentBody - assets', () => {
+    const body = utils.buildPreviewCommentBody(utils.stickyMarker, [
+      { name: 'a-abc.tgz', url: 'https://raw/a-abc.tgz' },
+    ])
+    expect(body).toContain('Preview packages')
+    expect(body).toContain('npm install "https://raw/a-abc.tgz"')
+  })
+
+  it('buildPreviewCommentBody - empty', () => {
+    const body = utils.buildPreviewCommentBody(utils.stickyMarker, [])
+    expect(body).toContain('No publishable workspaces')
   })
 })

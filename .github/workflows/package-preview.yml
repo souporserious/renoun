@@ -1,4 +1,4 @@
-name: PR Preview Packages (Turbo-only)
+name: Preview Packages
 
 on:
   pull_request:
