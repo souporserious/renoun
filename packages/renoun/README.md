@@ -62,7 +62,7 @@ Built from the ground up for React, renoun gives you the full power of compositi
 
 #### Drop‑In Components
 
-Quickly get started with powerful components like [`Reference`](https://www.renoun.dev/components/api-reference), [`CodeBlock`](https://www.renoun.dev/components/code-block), [`MDX`](https://www.renoun.dev/components/mdx), and more — no extra setup required.
+Quickly get started with powerful components like [`Reference`](https://www.renoun.dev/components/reference), [`CodeBlock`](https://www.renoun.dev/components/code-block), [`MDX`](https://www.renoun.dev/components/mdx), and more — no extra setup required.
 
 [Explore components →](https://www.renoun.dev/components)
 
@@ -82,7 +82,7 @@ Easily query file system entries, generate navigations, and validate JavaScript 
 
 Effortlessly generate accurate, up‑to‑date API references, including type signatures and prop tables directly from your source code.
 
-[Try the `Reference` component →](https://www.renoun.dev/components/api-reference)
+[Try the `Reference` component →](https://www.renoun.dev/components/reference)
 
 #### Customizable Theming
 
@@ -186,7 +186,7 @@ export default function Page() {
 
 #### API References
 
-Quickly document your APIs with renoun’s [`Reference`](https://www.renoun.dev/components/api-reference) component:
+Quickly document your APIs with renoun’s [`Reference`](https://www.renoun.dev/components/reference) component:
 
 ```tsx
 import { Reference } from 'renoun/components'
