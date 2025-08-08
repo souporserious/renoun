@@ -18,6 +18,7 @@
 <br />
 
 - [Features](#features)
+- [Examples](#examples)
 - [Why renoun?](#why-renoun)
 - [Getting Started](#getting-started)
   - [Install](#install)
@@ -44,6 +45,12 @@
 - ✅ Type‑check code blocks
 - 🖼️ Render source code examples
 - 📦 Integrate with your favorite framework
+
+## Examples
+
+- [Blog](/examples/blog) — MDX-powered blog with collections and post organization
+- [Documentation Site](/examples/docs) — Next.js docs site with MDX, custom UI, and Tailwind CSS
+- [Design System](/examples/design-system) — Component library with MDX docs, examples, and hooks
 
 ## Why renoun?
 
