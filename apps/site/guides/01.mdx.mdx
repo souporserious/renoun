@@ -88,6 +88,40 @@ In addition to the community plugins listed above, renoun adds specific custom p
 
 Adds an `id` to all headings and exports a `headings` variable.
 
+You can customize the exported `headings` by exporting a `getHeadings` function from your MDX file. The function receives the auto-generated `headings` and should return the array you want to expose.
+
+```mdx
+export function getHeadings(headings) {
+  return [
+    ...headings,
+    {
+      id: 'custom-section',
+      level: 2,
+      text: 'Custom section',
+      children: 'Custom section',
+    },
+  ]
+}
+
+# Hello World
+```
+
+<Note>
+
+Exporting `headings` directly is not supported. If you need to override headings, export a `getHeadings(headings)` function as shown above.
+
+</Note>
+
+##### Security considerations
+
+This plugin is designed for trusted MDX sources.
+
+`getHeadings` is executed as JavaScript at build/render time, so only use it with content from trusted authors. It can access your environment and perform arbitrary actions.
+
+All URLs in links and images are restricted to `http` and `https` schemes to prevent injection of `javascript:` or other unsafe protocols.
+
+If you need to support untrusted MDX, run the compiled output through an HTML sanitizer such as [rehype-sanitize](https://www.npmjs.com/package/rehype-sanitize) before rendering.
+
 #### remark `remove-immediate-paragraphs`
 
 Removes paragraph elements added around immediate element and component children.
