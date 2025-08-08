@@ -27,14 +27,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4.1.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Install dependencies
         run: pnpm install
@@ -69,10 +63,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
       - name: Download manifest
         id: download
         uses: actions/download-artifact@v4
@@ -100,9 +92,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Setup Node and pnpm
+        uses: ./.github/actions/setup-node-pnpm
       - name: Remove preview branch assets for this PR
         run: node .github/scripts/package-preview/cleanup.js
         env:

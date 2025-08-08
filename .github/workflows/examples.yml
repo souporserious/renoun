@@ -41,16 +41,9 @@ jobs:
         if: steps.detect.outputs.changed == 'false'
         run: echo "No example changes in the last 24 h — skipping."
 
-      - name: Setup pnpm
+      - name: Setup Node and pnpm
         if: steps.detect.outputs.changed == 'true'
-        uses: pnpm/action-setup@v4.1.0
-
-      - name: Setup Node.js
-        if: steps.detect.outputs.changed == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Install dependencies
         if: steps.detect.outputs.changed == 'true'
