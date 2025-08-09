@@ -8,7 +8,7 @@ This workflow builds and publishes **preview npm packages** for pull requests, u
 2. **Affected detection** – Uses `pnpm` + Turbo to list publishable workspaces changed since the PR base.
 3. **Packaging** – Runs `pnpm pack` for each affected public workspace into a `previews/` directory. Tarballs are renamed to include the PR head short SHA (e.g. `pkg-a-1.2.3-<sha7>.tgz`) to make them uniquely cacheable.
 4. **Branch update** – Pushes tarballs into the `package-preview` branch under a per-PR directory (e.g. `123/renoun-1.0.0.tgz`). The branch is force-pushed with a single commit to avoid history bloat.
-5. **Sticky PR comment** – Posts or updates a comment in the PR with `npm install` commands using raw GitHub URLs to the tarballs.
+5. **Sticky PR comment** – Uses `actions/github-script` to post or update a sticky PR comment with `npm install` commands using raw GitHub URLs to the tarballs.
 6. **Cleanup** – On PR close, removes that PR’s directory from the `package-preview` branch and force-pushes to keep a clean history.
 
 ### Requirements
@@ -23,7 +23,6 @@ This workflow builds and publishes **preview npm packages** for pull requests, u
 
 - `.github/workflows/package-preview.yml` – Workflow definition.
 - `.github/scripts/package-preview/create.js` – Detects affected packages, packs them, and force-pushes tarballs to the `package-preview` branch under `<pr-number>/`.
-- `.github/scripts/package-preview/comment.js` – Updates or creates the sticky comment in the PR.
 - `.github/scripts/package-preview/cleanup.js` – Removes `<pr-number>/` from the `package-preview` branch on close and force-pushes.
 - All scripts validate inputs and set a bot git identity before committing.
 

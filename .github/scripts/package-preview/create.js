@@ -175,17 +175,6 @@ if (branchExists) {
   sh(`git checkout -b ${PREVIEW_BRANCH}`, { cwd: workdir })
 }
 
-// Attempt to recover previously persisted comment id for this PR
-let previousCommentId = null
-try {
-  const idPath = join(workdir, '.comments', `pr-${prNumber}.json`)
-  /** @type {{ id?: number }} */
-  const data = JSON.parse(readFileSync(idPath, 'utf8'))
-  if (data?.id) previousCommentId = Number(data.id)
-} catch {
-  // Ignore
-}
-
 // Remove prior PR directory (if exists) and add fresh tarballs
 const prDir = join(workdir, String(prNumber))
 if (existsSync(prDir)) rmSync(prDir, { recursive: true, force: true })
@@ -233,9 +222,6 @@ const manifest = buildManifest({
   assets,
   targets: uniq(targets),
 })
-if (previousCommentId) {
-  manifest.commentId = previousCommentId
-}
 writeFileSync(
   join(previewsDirectory, 'manifest.json'),
   JSON.stringify(manifest, null, 2)
