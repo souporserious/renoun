@@ -26,6 +26,7 @@ import {
   buildRawBaseUrl,
   buildAssets,
   buildManifest,
+  assertSafePackageName,
 } from './utils.js'
 
 ensureEnv(['GITHUB_REPOSITORY', 'GITHUB_SHA', 'GH_TOKEN', 'GITHUB_EVENT_PATH'])
@@ -64,9 +65,12 @@ if (baseSha && !/^[a-fA-F0-9]{7,40}$/.test(String(baseSha))) {
 }
 const { owner, repo } = getRepoContext()
 assertSafePreviewBranch(PREVIEW_BRANCH, owner, repo)
-const short = headSha.slice(0, 7)
-const previewsDir = join(process.cwd(), 'previews')
-if (!existsSync(previewsDir)) mkdirSync(previewsDir, { recursive: true })
+const sha = headSha.slice(0, 7)
+const previewsDirectory = join(process.cwd(), 'previews')
+
+if (!existsSync(previewsDirectory)) {
+  mkdirSync(previewsDirectory, { recursive: true })
+}
 
 /**
  * Read workspace list from pnpm and normalize shape.
@@ -119,9 +123,13 @@ if (targets.length === 0) {
 console.log('Packing targets (Turbo affected):', targets.join(', '))
 
 for (const name of targets) {
+  // Validate package names to conservative charset before shell usage
+  assertSafePackageName(name)
   // Fail on pack errors — we want CI to surface this loudly
   // Quote destination path to avoid issues with spaces or special chars
-  sh(`pnpm -r --filter "${name}" pack --pack-destination "${previewsDir}"`)
+  sh(
+    `pnpm -r --filter "${name}" pack --pack-destination "${previewsDirectory}"`
+  )
 }
 
 // Prepare a working directory for the preview branch content
@@ -171,14 +179,16 @@ if (existsSync(prDir)) rmSync(prDir, { recursive: true, force: true })
 mkdirSync(prDir, { recursive: true })
 
 /** @type {string[]} */
-const builtFiles = readdirSync(previewsDir).filter((f) => f.endsWith('.tgz'))
+const builtFiles = readdirSync(previewsDirectory).filter((file) =>
+  file.endsWith('.tgz')
+)
 /** @type {string[]} */
 const files = []
-const renamed = renamePackedFilenames(builtFiles, short)
+const renamed = renamePackedFilenames(builtFiles, sha)
 for (let i = 0; i < builtFiles.length; i++) {
   const src = builtFiles[i]
   const dest = renamed[i]
-  cpSync(join(previewsDir, src), join(prDir, dest))
+  cpSync(join(previewsDirectory, src), join(prDir, dest))
   files.push(dest)
 }
 
@@ -188,7 +198,7 @@ ensureGitIdentity(workdir)
 runCommands(
   [
     'git add -A',
-    `git commit -m "update #${prNumber} @ ${short} [skip ci]"`,
+    `git commit -m "update #${prNumber} ${sha} [skip ci]"`,
     `git push -f origin ${PREVIEW_BRANCH}`,
   ],
   { cwd: workdir }
@@ -201,7 +211,7 @@ const assets = buildAssets(rawBase, files)
 /** @type {import('./utils.js').PreviewManifest} */
 const manifest = buildManifest({
   branch: PREVIEW_BRANCH,
-  short,
+  short: sha,
   pr: prNumber,
   assets,
   targets: uniq(targets),
@@ -210,7 +220,7 @@ if (previousCommentId) {
   manifest.commentId = previousCommentId
 }
 writeFileSync(
-  join(previewsDir, 'manifest.json'),
+  join(previewsDirectory, 'manifest.json'),
   JSON.stringify(manifest, null, 2)
 )
 console.log(

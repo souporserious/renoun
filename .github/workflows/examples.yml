@@ -16,8 +16,6 @@ on:
 env:
   NODE_ENV: production
   RENOUN_DEBUG: ${{ inputs.debug }}
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
   examples:
@@ -50,4 +48,7 @@ jobs:
         run: pnpm install
 
       - name: Build
+        env:
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: pnpm build --filter=@examples/*

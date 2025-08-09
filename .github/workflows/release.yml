@@ -13,11 +13,13 @@ on:
 
 concurrency: release-main
 
+permissions:
+  contents: write
+  pull-requests: write
+
 env:
   NODE_ENV: production
   RENOUN_DEBUG: ${{ inputs.debug }}
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
   release:
@@ -27,6 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node and pnpm
         uses: ./.github/actions/setup-node-pnpm
@@ -35,45 +38,71 @@ jobs:
         run: pnpm install
 
       - name: Build
+        env:
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: pnpm build --filter=!@examples/*
 
-      - name: Create Release Pull Request or Publish to npm
-        id: changesets
-        uses: changesets/action@v1
+      - name: Create Release Pull Request
+        id: version
+        uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba
         with:
           version: pnpm ci:version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare to publish
+        if: steps.version.outputs.published == 'true'
+        run: pnpm ci:prepare
+
+      - name: Publish to npm
+        if: steps.version.outputs.published == 'true'
+        id: publish
+        uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba
+        with:
           publish: pnpm ci:publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Fast-forward release branch
-        if: steps.changesets.outputs.published == 'true'
+        if: steps.publish.outputs.published == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git fetch origin
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git push origin $GITHUB_SHA:refs/heads/release
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" "$GITHUB_SHA:refs/heads/release"
 
       - name: Notify Discord
-        if: steps.changesets.outputs.published == 'true'
+        if: steps.publish.outputs.published == 'true'
         env:
+          PUBLISHED_PACKAGES: ${{ steps.publish.outputs.publishedPackages }}
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
         run: |
           OWNER_REPO="souporserious/renoun"
 
-          # Build one short line per package: "<name>@<version> — <link>"
-          lines=$(echo "$PUBLISHED_PACKAGES" | jq -r --arg repo "$OWNER_REPO" '
-            try ( .[] | "\(.name)@\(.version) — https://github.com/\($repo)/releases/tag/\(.name)@\(.version)" )[] catch empty
-          ')
+          # Validate JSON structure first
+          if ! jq empty <<< "$PUBLISHED_PACKAGES" 2>/dev/null; then
+            echo "Invalid JSON in PUBLISHED_PACKAGES"
+            exit 1
+          fi
+
+          # Use here-string to avoid echo interpretation
+          lines=$(jq -r --arg repo "$OWNER_REPO" '
+            try ( .[] | "\(.name)@\(.version) — https://github.com/\($repo)/releases/tag/\(.name)@\(.version)" )
+            catch empty
+          ' <<< "$PUBLISHED_PACKAGES")
 
           if [ -z "$lines" ]; then
-            echo "No packages parsed from changesets output; skipping Discord notification."
+            echo "No packages parsed; skipping Discord notification."
             exit 0
           fi
 
+          # Limit output safely
           trimmed=$(printf "%s\n" "$lines" | head -n 30 | head -c 1800)
 
+          # Send to Discord using jq for proper JSON encoding
           jq -n --arg msg "🚀 New packages released:\n$trimmed" '{ content: $msg }' \
           | curl -sS -X POST -H "Content-Type: application/json" -d @- "$WEBHOOK_URL"

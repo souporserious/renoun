@@ -207,9 +207,28 @@ export function ensureGitIdentity(cwd) {
   )
 }
 
-// ---------------------------
-// Pure helpers for transforms
-// ---------------------------
+/**
+ * Validate a package name to a conservative character set that is safe to
+ * pass to shell-wrapped commands. Allows scoped names like @scope/name.
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isSafePackageName(name) {
+  // Letters, digits, @, /, ., _, - only; no spaces or quotes
+  return /^[A-Za-z0-9@/_.-]+$/.test(name)
+}
+
+/**
+ * Assert a safe package name or exit the process.
+ * @param {string} name
+ * @returns {void}
+ */
+export function assertSafePackageName(name) {
+  if (!isSafePackageName(name)) {
+    console.error(`Refusing unsafe package name: ${name}`)
+    process.exit(1)
+  }
+}
 
 /**
  * Parse `pnpm -r list --depth -1 --json` output into Workspace[]

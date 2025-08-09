@@ -10,8 +10,6 @@ concurrency: test-${{ github.ref_name }}
 
 env:
   NODE_ENV: test
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
   build-and-test:
