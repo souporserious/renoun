@@ -1,4 +1,15 @@
 import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  cpSync,
+} from 'node:fs'
+import { join } from 'node:path'
+
+import {
   ensureEnv,
   getRepoContext,
   sh,
@@ -16,27 +27,18 @@ import {
   buildAssets,
   buildManifest,
 } from './utils.js'
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  writeFileSync,
-  readFileSync,
-  rmSync,
-  cpSync,
-} from 'node:fs'
-import { join } from 'node:path'
 
 ensureEnv(['GITHUB_REPOSITORY', 'GITHUB_SHA', 'GH_TOKEN', 'GITHUB_EVENT_PATH'])
+
 const gitSha = String(process.env.GITHUB_SHA || '')
 const eventPath = String(process.env.GITHUB_EVENT_PATH || '')
 const GH_TOKEN = String(process.env.GH_TOKEN || '')
 
 /** @type {any} */
-const evt = JSON.parse(readFileSync(eventPath, 'utf8'))
-const prNumber = evt.pull_request?.number
-let baseSha = evt.pull_request?.base?.sha ?? null
-const headSha = String(evt.pull_request?.head?.sha || gitSha)
+const event = JSON.parse(readFileSync(eventPath, 'utf8'))
+const prNumber = event.pull_request?.number
+let baseSha = event.pull_request?.base?.sha ?? null
+const headSha = String(event.pull_request?.head?.sha || gitSha)
 if (!prNumber) {
   console.error('Could not resolve PR number from event payload')
   process.exit(1)
@@ -137,7 +139,7 @@ let branchExists = false
 try {
   const heads = sh(`git ls-remote --heads origin ${PREVIEW_BRANCH}`)
   branchExists = (heads?.trim().length ?? 0) > 0
-} catch (_) {
+} catch {
   branchExists = false
 }
 
@@ -159,7 +161,9 @@ try {
   /** @type {{ id?: number }} */
   const data = JSON.parse(readFileSync(idPath, 'utf8'))
   if (data?.id) previousCommentId = Number(data.id)
-} catch (_) {}
+} catch {
+  // Ignore
+}
 
 // Remove prior PR directory (if exists) and add fresh tarballs
 const prDir = join(workdir, String(prNumber))

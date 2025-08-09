@@ -1,6 +1,8 @@
 import { execSync } from 'node:child_process'
 import { mkdirSync, rmSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { Octokit } from '@octokit/rest'
+
 import {
   stickyMarker,
   runCommands,
@@ -24,6 +26,7 @@ if (!/^\d+$/.test(PR_NUMBER)) {
   process.exit(1)
 }
 const { owner, repo } = getRepoContext()
+const octokit = new Octokit({ auth: GH_TOKEN })
 
 /**
  * @param {string} cmd
@@ -99,21 +102,31 @@ console.log(
   `Removed preview assets for PR #${PR_NUMBER} and force-pushed ${PREVIEW_BRANCH}`
 )
 
-// Best-effort: delete the sticky PR comment(s)
+// Best-effort: delete the sticky PR comment(s) via Octokit
 try {
-  const listCmd = `gh api repos/${owner}/${repo}/issues/${PR_NUMBER}/comments?per_page=100`
-  const raw = sh(listCmd)
-  /** @type {{ id: number, body?: string }[]} */
-  const comments = JSON.parse(raw)
-  for (const c of comments) {
-    if (typeof c?.body === 'string' && c.body.includes(stickyMarker)) {
+  const { data: comments } = await octokit.rest.issues.listComments({
+    owner,
+    repo,
+    issue_number: Number(PR_NUMBER),
+    per_page: 100,
+  })
+  for (const comment of comments) {
+    if (
+      typeof comment?.body === 'string' &&
+      comment.body.includes(stickyMarker)
+    ) {
       try {
-        sh(
-          `gh api repos/${owner}/${repo}/issues/comments/${c.id} --method DELETE`
-        )
-        console.log(`Deleted preview comment ${c.id}`)
+        await octokit.rest.issues.deleteComment({
+          owner,
+          repo,
+          comment_id: Number(comment.id),
+        })
+        console.log(`Deleted preview comment ${comment.id}`)
       } catch (err) {
-        console.warn(`Failed to delete comment ${c.id}:`, err?.message || err)
+        console.warn(
+          `Failed to delete comment ${comment.id}:`,
+          err?.message || err
+        )
       }
     }
   }
