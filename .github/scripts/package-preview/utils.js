@@ -353,9 +353,7 @@ export function buildPreviewCommentBody(marker, assets) {
   const header = `### 📦 Preview packages`
   const lines = assets.length
     ? assets.map((a) =>
-        [`• **${a.name}**`, '```bash', `npm install "${a.url}"`, '```'].join(
-          '\n'
-        )
+        [`**${a.name}**`, '```bash', `npm install "${a.url}"`, '```'].join('\n')
       )
     : ['_No publishable workspaces affected for this PR._']
   return [marker, header, '', ...lines].join('\n')
