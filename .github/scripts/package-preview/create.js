@@ -106,7 +106,7 @@ function uniq(arr) {
 function getTurboAffectedPackages(baseSha) {
   if (!baseSha) return []
   try {
-    const out = sh(`pnpm turbo run build --filter=...[${baseSha}] --dry=json`)
+    const out = sh(`pnpm turbo run build --filter='...[${baseSha}]' --dry=json`)
     return parseTurboDryRunPackages(out)
   } catch (err) {
     console.warn(
@@ -119,15 +119,19 @@ function getTurboAffectedPackages(baseSha) {
 
 const workspaces = getWorkspaces()
 /** @type {string[]} */
-const targets = computePublishableTargets(
+let targets = computePublishableTargets(
   workspaces,
   getTurboAffectedPackages(baseSha)
 )
 
+// If nothing is affected, then skip entirely — do not pack everything
 if (targets.length === 0) {
   console.log('No publishable workspaces affected — skipping preview creation')
   process.exit(0)
 }
+
+// Ensure uniqueness just in case Turbo output included duplicates
+targets = Array.from(new Set(targets))
 
 console.log('Packing targets (Turbo affected):', targets.join(', '))
 
