@@ -38,8 +38,14 @@ jobs:
           persist-credentials: false
           path: trusted
 
-      - name: Setup Node and pnpm
-        uses: ./trusted/.github/actions/setup-node-pnpm
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
 
       - name: Install dependencies
         working-directory: pr
@@ -48,6 +54,10 @@ jobs:
       - name: Build
         working-directory: pr
         run: pnpm build --filter=packages/*
+
+      - name: Install dependencies for trusted scripts
+        working-directory: trusted
+        run: pnpm install --frozen-lockfile=false
 
       - name: Create preview branch assets
         working-directory: pr
@@ -89,8 +99,13 @@ jobs:
           persist-credentials: false
           path: trusted
 
-      - name: Setup Node and pnpm
-        uses: ./trusted/.github/actions/setup-node-pnpm
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
 
       - name: Download manifest
         id: download
@@ -130,8 +145,17 @@ jobs:
           persist-credentials: false
           path: trusted
 
-      - name: Setup Node and pnpm
-        uses: ./trusted/.github/actions/setup-node-pnpm
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies for trusted scripts
+        working-directory: trusted
+        run: pnpm install --frozen-lockfile=false
 
       - name: Remove preview branch assets for this PR
         working-directory: trusted
