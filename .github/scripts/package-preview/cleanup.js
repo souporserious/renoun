@@ -128,7 +128,9 @@ try {
   for (const comment of comments) {
     if (
       typeof comment?.body === 'string' &&
-      comment.body.includes(stickyMarker)
+      comment.body.includes(stickyMarker) &&
+      comment?.user?.type === 'Bot' &&
+      comment?.user?.login === 'github-actions[bot]'
     ) {
       try {
         await octokit.rest.issues.deleteComment({

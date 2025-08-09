@@ -40,7 +40,7 @@ const GH_TOKEN = String(process.env.GH_TOKEN || '')
 const event = JSON.parse(readFileSync(eventPath, 'utf8'))
 const prNumber = event.pull_request?.number
 let baseSha = event.pull_request?.base?.sha ?? null
-const headSha = String(event.pull_request?.head?.sha || gitSha)
+let headSha = String(event.pull_request?.head?.sha || gitSha)
 if (!prNumber) {
   console.error('Could not resolve PR number from event payload')
   process.exit(1)
@@ -63,6 +63,15 @@ if (baseSha && !/^[a-fA-F0-9]{7,40}$/.test(String(baseSha))) {
     'Invalid base SHA in event payload; ignoring Turbo affected detection'
   )
   baseSha = null
+}
+// Validate head SHA and fall back to GITHUB_SHA if necessary
+if (!/^[a-fA-F0-9]{7,40}$/.test(String(headSha))) {
+  console.warn(
+    'Invalid head SHA in event payload; falling back to GITHUB_SHA if valid'
+  )
+  headSha = /^[a-fA-F0-9]{7,40}$/.test(String(gitSha))
+    ? String(gitSha)
+    : '0000000'
 }
 const { owner, repo } = getRepoContext()
 const octokit = new Octokit({ auth: GH_TOKEN })
