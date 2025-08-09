@@ -65,6 +65,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       issues: write
+      pull-requests: write
       contents: read
     steps:
       - name: Checkout repository
@@ -109,6 +110,7 @@ jobs:
     permissions:
       contents: write
       issues: write
+      pull-requests: write
     steps:
       - name: Checkout repository (base branch)
         uses: actions/checkout@v4
