@@ -1,0 +1,137 @@
+name: Preview Packages
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.fork == false && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-branch
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build --filter=packages/*
+
+      - name: Create preview branch assets
+        run: node .github/scripts/package-preview/create.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload manifest for comment step
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-manifest
+          path: previews/manifest.json
+          if-no-files-found: ignore
+
+  comment:
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.fork == false && github.event.pull_request.draft == false
+    concurrency:
+      group: preview-branch
+      cancel-in-progress: false
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Download manifest
+        id: download
+        uses: actions/download-artifact@v4
+        with:
+          name: preview-manifest
+          path: previews
+        continue-on-error: true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Post sticky comment with install commands
+        if: steps.download.outcome == 'success'
+        run: node .github/scripts/package-preview/comment.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-branch
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository (base branch)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Remove preview branch assets for this PR
+        run: node .github/scripts/package-preview/cleanup.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
