@@ -22,22 +22,36 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout PR code
+        uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
+          path: pr
+
+      - name: Checkout trusted workflow code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          path: trusted
 
       - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
+        uses: ./trusted/.github/actions/setup-node-pnpm
 
       - name: Install dependencies
+        working-directory: pr
         run: pnpm install
 
       - name: Build
+        working-directory: pr
         run: pnpm build --filter=packages/*
 
       - name: Create preview branch assets
-        run: node .github/scripts/package-preview/create.js
+        working-directory: pr
+        run: node ../trusted/.github/scripts/package-preview/create.js
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -45,7 +59,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: preview-manifest
-          path: previews/manifest.json
+          path: pr/previews/manifest.json
           if-no-files-found: ignore
 
   comment:
@@ -59,27 +73,44 @@ jobs:
       issues: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout PR code
+        uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
+          path: pr
+
+      - name: Checkout trusted workflow code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          path: trusted
 
       - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
+        uses: ./trusted/.github/actions/setup-node-pnpm
 
       - name: Download manifest
         id: download
         uses: actions/download-artifact@v4
         with:
           name: preview-manifest
-          path: previews
+          path: pr/previews
         continue-on-error: true
+
+      - name: Install dependencies
+        working-directory: trusted
+        run: pnpm install --frozen-lockfile=false
 
       - name: Post sticky comment with install commands
         if: steps.download.outcome == 'success'
-        run: node .github/scripts/package-preview/comment.js
+        working-directory: pr
+        run: node ../trusted/.github/scripts/package-preview/comment.js
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
 
   cleanup:
     if: github.event.action == 'closed' && github.event.pull_request.head.repo.fork == false
@@ -91,13 +122,19 @@ jobs:
       contents: write
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout trusted workflow code (base branch)
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
           persist-credentials: false
+          path: trusted
+
       - name: Setup Node and pnpm
-        uses: ./.github/actions/setup-node-pnpm
+        uses: ./trusted/.github/actions/setup-node-pnpm
+
       - name: Remove preview branch assets for this PR
+        working-directory: trusted
         run: node .github/scripts/package-preview/cleanup.js
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
