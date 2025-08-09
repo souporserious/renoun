@@ -12,7 +12,7 @@ export const stickyMarker = '<!-- package-preview-sticky -->'
  * A publishable workspace in the monorepo.
  * @typedef {Object} Workspace
  * @property {string} name
- * @property {string} dir
+ * @property {string} path
  * @property {boolean} private
  */
 
@@ -119,6 +119,19 @@ export function assertSafeWorkdir(workdir) {
   const base = basename(resolved)
   if (!base.startsWith('.preview-')) {
     console.error('Unsafe workdir; must start with .preview-')
+    process.exit(1)
+  }
+}
+
+/**
+ * Assert that an absolute or relative path resolves inside the repository root.
+ * @param {string} somePath
+ */
+export function assertPathInsideRepo(somePath) {
+  const root = resolve(process.cwd())
+  const resolved = resolve(somePath)
+  if (!(resolved + '/').startsWith(root + '/')) {
+    console.error('Refusing to operate on a path outside the repository root')
     process.exit(1)
   }
 }
@@ -235,7 +248,7 @@ export function parsePnpmWorkspaces(jsonString) {
     .filter((workspace) => workspace && workspace.name && workspace.path)
     .map((workspace) => ({
       name: String(workspace.name),
-      dir: String(workspace.path),
+      path: String(workspace.path),
       private: !!workspace.private,
     }))
 }

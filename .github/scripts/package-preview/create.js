@@ -28,6 +28,7 @@ import {
   buildAssets,
   buildManifest,
   assertSafePackageName,
+  assertPathInsideRepo,
 } from './utils.js'
 
 ensureEnv(['GITHUB_REPOSITORY', 'GITHUB_SHA', 'GH_TOKEN', 'GITHUB_EVENT_PATH'])
@@ -149,16 +150,43 @@ if (targets.length === 0) {
 // Ensure uniqueness just in case Turbo output included duplicates
 targets = Array.from(new Set(targets))
 
-console.log('Packing targets (Turbo affected):', targets.join(', '))
+console.log('Packing targets with npm --ignore-scripts:', targets.join(', '))
 
-for (const name of targets) {
-  // Validate package names to conservative charset before shell usage
-  assertSafePackageName(name)
-  // Fail on pack errors — we want CI to surface this loudly
-  // Quote destination path to avoid issues with spaces or special chars
-  sh(
-    `pnpm -r --filter "${name}" pack --pack-destination "${previewsDirectory}"`
-  )
+// Map package name to workspace for quick lookup
+/** @type {Map<string, { name: string, path: string, private: boolean }>} */
+const nameToWorkspace = new Map(
+  workspaces.map((workspace) => [workspace.name, workspace])
+)
+
+/** @type {string[]} */
+const builtFiles = []
+for (const packageName of targets) {
+  // Validate package name
+  assertSafePackageName(packageName)
+  const workspace = nameToWorkspace.get(packageName)
+  if (!workspace) {
+    console.warn(`Workspace not found for ${packageName}; skipping`)
+    continue
+  }
+  assertPathInsideRepo(workspace.path)
+  // npm pack will emit a tarball in the workspace directory. Use --ignore-scripts for safety.
+  /** @type {any} */
+  let packInfo
+  try {
+    const out = sh('npm pack --ignore-scripts --json', { cwd: workspace.path })
+    // npm >=9 returns JSON array; older may return object or string
+    const parsed = JSON.parse(out)
+    packInfo = Array.isArray(parsed) ? parsed[0] : parsed
+  } catch (err) {
+    console.error(`npm pack failed for ${packageName}:`, err?.message || err)
+    process.exit(1)
+  }
+  const filename = String(packInfo?.filename || '').trim()
+  if (!filename || !filename.endsWith('.tgz')) {
+    console.error(`Could not determine tarball filename for ${packageName}`)
+    process.exit(1)
+  }
+  builtFiles.push(filename)
 }
 
 // Prepare a working directory for the preview branch content
@@ -197,17 +225,19 @@ if (existsSync(prDir)) rmSync(prDir, { recursive: true, force: true })
 mkdirSync(prDir, { recursive: true })
 
 /** @type {string[]} */
-const builtFiles = readdirSync(previewsDirectory).filter((file) =>
-  file.endsWith('.tgz')
-)
-/** @type {string[]} */
 const files = []
 const renamed = renamePackedFilenames(builtFiles, sha)
-for (let i = 0; i < builtFiles.length; i++) {
-  const src = builtFiles[i]
-  const dest = renamed[i]
-  cpSync(join(previewsDirectory, src), join(prDir, dest))
-  files.push(dest)
+for (let index = 0; index < builtFiles.length; index++) {
+  const srcName = builtFiles[index]
+  const destName = renamed[index]
+  // npm pack wrote the tarball in the workspace directory; locate by package name
+  const workspace = nameToWorkspace.get(targets[index])
+  if (!workspace) {
+    continue
+  }
+  assertPathInsideRepo(workspace.path)
+  cpSync(join(workspace.path, srcName), join(prDir, destName))
+  files.push(destName)
 }
 
 // Re-init to ensure force-pushed single-commit history

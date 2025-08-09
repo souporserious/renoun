@@ -162,8 +162,8 @@ describe('transforms', () => {
     ])
     const out = utils.parsePnpmWorkspaces(json)
     expect(out).toEqual([
-      { name: 'a', dir: '/repo/packages/a', private: false },
-      { name: 'b', dir: '/repo/packages/b', private: true },
+      { name: 'a', path: '/repo/packages/a', private: false },
+      { name: 'b', path: '/repo/packages/b', private: true },
     ])
   })
 
@@ -188,9 +188,9 @@ describe('transforms', () => {
 
   it('computePublishableTargets', () => {
     const workspaces = [
-      { name: 'a', dir: '/a', private: false },
-      { name: 'b', dir: '/b', private: true },
-      { name: 'c', dir: '/c', private: false },
+      { name: 'a', path: '/a', private: false },
+      { name: 'b', path: '/b', private: true },
+      { name: 'c', path: '/c', private: false },
     ]
     expect(
       utils.computePublishableTargets(workspaces, ['a', 'b', 'x'])
