@@ -52,7 +52,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.detect.outputs.changed == 'true'
-        run: pnpm install
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build
         env:
