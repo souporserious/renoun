@@ -17,7 +17,7 @@
     "test:github": "vitest run .github",
     "format": "prettier --write '**/**/*.{js,ts,tsx,json,css}'",
     "ci:version": "pnpm changeset version",
-    "ci:prepare": "pnpm install --no-frozen-lockfile && git add .",
+    "ci:prepare": "pnpm install --frozen-lockfile --ignore-scripts && git add .changeset CHANGELOG.md packages pnpm-lock.yaml",
     "ci:publish": "pnpm publish -r --access public --publish-branch main && pnpm changeset tag",
     "clean": "node -e \"(function rm(directory) { ['.next', '.turbo', 'node_modules', 'dist'].includes(path.basename(directory)) ? fs.rmSync(directory, { recursive: true, force: true }) : fs.existsSync(directory) && fs.statSync(directory).isDirectory() && fs.readdirSync(directory).forEach(filePath => rm(path.join(directory, filePath))); })('.');\""
   },
