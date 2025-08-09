@@ -51,7 +51,7 @@ let defaultBranch = ''
 try {
   const { data } = await octokit.rest.repos.get({ owner, repo })
   defaultBranch = String(data?.default_branch || '')
-} catch (_) {
+} catch {
   defaultBranch = ''
 }
 assertSafePreviewBranch(PREVIEW_BRANCH, defaultBranch)
@@ -69,7 +69,9 @@ let branchExists = false
 try {
   const heads = sh(`git ls-remote --heads origin ${PREVIEW_BRANCH}`)
   branchExists = (heads?.trim().length ?? 0) > 0
-} catch (_) {}
+} catch {
+  // Ignore
+}
 
 if (!branchExists) {
   console.log('Preview branch not found — nothing to clean')
@@ -91,7 +93,9 @@ try {
     console.log('No preview assets to remove for this PR')
     process.exit(0)
   }
-} catch (_) {}
+} catch {
+  // Ignore
+}
 
 // Re-init to keep single-commit history
 safeReinitGitRepo(workdir, PREVIEW_BRANCH, remoteUrl, {
