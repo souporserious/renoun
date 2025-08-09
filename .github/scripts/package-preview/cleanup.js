@@ -47,7 +47,14 @@ if (!/^[A-Za-z0-9._\/-]+$/.test(PREVIEW_BRANCH)) {
   )
   process.exit(1)
 }
-assertSafePreviewBranch(PREVIEW_BRANCH, owner, repo)
+let defaultBranch = ''
+try {
+  const { data } = await octokit.rest.repos.get({ owner, repo })
+  defaultBranch = String(data?.default_branch || '')
+} catch (_) {
+  defaultBranch = ''
+}
+assertSafePreviewBranch(PREVIEW_BRANCH, defaultBranch)
 
 // Prepare a working dir and fetch current preview branch state
 const workdir = join(process.cwd(), '.preview-cleanup')
@@ -87,7 +94,11 @@ try {
 } catch (_) {}
 
 // Re-init to keep single-commit history
-safeReinitGitRepo(workdir, PREVIEW_BRANCH, remoteUrl, { owner, repo })
+safeReinitGitRepo(workdir, PREVIEW_BRANCH, remoteUrl, {
+  owner,
+  repo,
+  defaultBranch,
+})
 ensureGitIdentity(workdir)
 runCommands(
   [

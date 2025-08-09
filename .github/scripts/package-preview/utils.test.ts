@@ -41,7 +41,7 @@ vi.mock('node:child_process', () => {
 import { join } from 'node:path'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 
-let utils: any
+let utils: typeof import('./utils.js')
 beforeAll(async () => {
   utils = await import('./utils.js')
 })
@@ -67,25 +67,23 @@ describe('utils', () => {
 
   describe('assertSafePreviewBranch', () => {
     it('exits for protected branch names', () => {
-      vi.spyOn(utils, 'sh').mockReturnValue('main')
-      expect(() =>
-        utils.assertSafePreviewBranch('main', 'owner', 'repo')
-      ).toThrow(/exit:1/)
-      expect(() =>
-        utils.assertSafePreviewBranch('master', 'owner', 'repo')
-      ).toThrow(/exit:1/)
-      expect(() =>
-        utils.assertSafePreviewBranch('develop', 'owner', 'repo')
-      ).toThrow(/exit:1/)
+      expect(() => utils.assertSafePreviewBranch('main', 'main')).toThrow(
+        /exit:1/
+      )
+      expect(() => utils.assertSafePreviewBranch('master', 'main')).toThrow(
+        /exit:1/
+      )
+      expect(() => utils.assertSafePreviewBranch('develop', 'main')).toThrow(
+        /exit:1/
+      )
     })
 
     it('allows a safe preview branch', () => {
-      vi.spyOn(utils, 'sh').mockReturnValue('main')
       expect(() =>
-        utils.assertSafePreviewBranch('package-preview', 'o', 'r')
+        utils.assertSafePreviewBranch('package-preview', 'main')
       ).not.toThrow()
       expect(() =>
-        utils.assertSafePreviewBranch('previews/feature', 'o', 'r')
+        utils.assertSafePreviewBranch('previews/feature', 'main')
       ).not.toThrow()
     })
   })
@@ -136,6 +134,7 @@ describe('utils', () => {
         {
           owner: 'o',
           repo: 'r',
+          defaultBranch: 'main',
         }
       )
 

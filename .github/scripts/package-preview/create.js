@@ -8,6 +8,7 @@ import {
   cpSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { Octokit } from '@octokit/rest'
 
 import {
   ensureEnv,
@@ -64,7 +65,15 @@ if (baseSha && !/^[a-fA-F0-9]{7,40}$/.test(String(baseSha))) {
   baseSha = null
 }
 const { owner, repo } = getRepoContext()
-assertSafePreviewBranch(PREVIEW_BRANCH, owner, repo)
+const octokit = new Octokit({ auth: GH_TOKEN })
+let repoDefaultBranch = ''
+try {
+  const { data } = await octokit.rest.repos.get({ owner, repo })
+  repoDefaultBranch = String(data?.default_branch || '')
+} catch (_) {
+  repoDefaultBranch = ''
+}
+assertSafePreviewBranch(PREVIEW_BRANCH, repoDefaultBranch)
 const sha = headSha.slice(0, 7)
 const previewsDirectory = join(process.cwd(), 'previews')
 
@@ -193,7 +202,11 @@ for (let i = 0; i < builtFiles.length; i++) {
 }
 
 // Re-init to ensure force-pushed single-commit history
-safeReinitGitRepo(workdir, PREVIEW_BRANCH, remoteUrl, { owner, repo })
+safeReinitGitRepo(workdir, PREVIEW_BRANCH, remoteUrl, {
+  owner,
+  repo,
+  defaultBranch: repoDefaultBranch,
+})
 ensureGitIdentity(workdir)
 runCommands(
   [

@@ -84,10 +84,9 @@ export function getRepoContext() {
  * Assert the preview branch is safe to mutate (not default or protected branches).
  * Exits the process if unsafe.
  * @param {string} branch
- * @param {string} owner
- * @param {string} repo
+ * @param {string} defaultBranch
  */
-export function assertSafePreviewBranch(branch, owner, repo) {
+export function assertSafePreviewBranch(branch, defaultBranch = '') {
   if (!/^[A-Za-z0-9._\/-]+$/.test(branch)) {
     console.error(
       'Invalid PREVIEW_BRANCH; only alphanumerics, . _ - and / are allowed'
@@ -99,12 +98,6 @@ export function assertSafePreviewBranch(branch, owner, repo) {
     process.exit(1)
   }
   const disallowed = new Set(['main', 'master', 'develop', 'release', 'stable'])
-  let defaultBranch = ''
-  try {
-    defaultBranch = sh(`gh api repos/${owner}/${repo} --jq .default_branch`)
-  } catch (_) {
-    // ignore
-  }
   if (disallowed.has(branch) || (defaultBranch && branch === defaultBranch)) {
     console.error(`Refusing to force-push protected branch: ${branch}`)
     process.exit(1)
@@ -160,12 +153,12 @@ export function getGithubRemoteUrl(owner, repo, token) {
  * @param {string} workdir
  * @param {string} branch
  * @param {string} remoteUrl
- * @param {{ owner?: string, repo?: string }} [ctx]
+ * @param {{ owner?: string, repo?: string, defaultBranch?: string }} [ctx]
  */
 export function safeReinitGitRepo(workdir, branch, remoteUrl, ctx = {}) {
-  const { owner = '', repo = '' } = ctx
+  const { owner = '', repo = '', defaultBranch = '' } = ctx
   if (owner && repo) {
-    assertSafePreviewBranch(branch, owner, repo)
+    assertSafePreviewBranch(branch, defaultBranch)
   }
   assertSafeWorkdir(workdir)
   // Remove .git folder directly via fs to avoid shell globs
