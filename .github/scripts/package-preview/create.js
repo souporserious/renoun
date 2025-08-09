@@ -115,6 +115,13 @@ function uniq(arr) {
 function getTurboAffectedPackages(baseSha) {
   if (!baseSha) return []
   try {
+    // Validate base SHA to prevent shell globbing
+    if (baseSha && !/^[a-fA-F0-9]{40}$/.test(baseSha)) {
+      console.warn(
+        'Invalid base SHA in event payload; skipping Turbo affected detection'
+      )
+      return []
+    }
     const out = sh(`pnpm turbo run build --filter='...[${baseSha}]' --dry=json`)
     return parseTurboDryRunPackages(out)
   } catch (err) {
