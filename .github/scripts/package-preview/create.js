@@ -141,9 +141,26 @@ let targets = computePublishableTargets(
   getTurboAffectedPackages(baseSha)
 )
 
-// If nothing is affected, then skip entirely — do not pack everything
+// If nothing is affected, write an empty manifest so the comment step can remove the sticky comment
 if (targets.length === 0) {
-  console.log('No publishable workspaces affected — skipping preview creation')
+  const rawBase = buildRawBaseUrl(owner, repo, PREVIEW_BRANCH, prNumber)
+  /** @type {{ name: string, url: string }[]} */
+  const assets = buildAssets(rawBase, [])
+  /** @type {import('./utils.js').PreviewManifest} */
+  const manifest = buildManifest({
+    branch: PREVIEW_BRANCH,
+    short: sha,
+    pr: prNumber,
+    assets,
+    targets: [],
+  })
+  writeFileSync(
+    join(previewsDirectory, 'manifest.json'),
+    JSON.stringify(manifest, null, 2)
+  )
+  console.log(
+    'No publishable workspaces affected — wrote empty manifest and skipped preview branch update'
+  )
   process.exit(0)
 }
 
@@ -190,15 +207,17 @@ for (const packageName of targets) {
 }
 
 // Prepare a working directory for the preview branch content
-const workdir = join(process.cwd(), '.preview-branch')
-assertSafeWorkdir(workdir)
-if (existsSync(workdir)) rmSync(workdir, { recursive: true, force: true })
-mkdirSync(workdir, { recursive: true })
+const workingDirectory = join(process.cwd(), '.preview-branch')
+assertSafeWorkdir(workingDirectory)
+if (existsSync(workingDirectory)) {
+  rmSync(workingDirectory, { recursive: true, force: true })
+}
+mkdirSync(workingDirectory, { recursive: true })
 
 // Initialize a minimal repo to retrieve existing branch contents (if any)
 const remoteUrl = getGithubRemoteUrl(owner, repo, GH_TOKEN)
-sh(`git init`, { cwd: workdir })
-sh(`git remote add origin ${remoteUrl}`, { cwd: workdir })
+sh(`git init`, { cwd: workingDirectory })
+sh(`git remote add origin ${remoteUrl}`, { cwd: workingDirectory })
 
 let branchExists = false
 try {
@@ -210,18 +229,17 @@ try {
 
 if (branchExists) {
   // Fetch and checkout existing branch content
-  sh(`git fetch --depth=1 origin ${PREVIEW_BRANCH}`, { cwd: workdir })
+  sh(`git fetch --depth=1 origin ${PREVIEW_BRANCH}`, { cwd: workingDirectory })
   sh(`git checkout -b ${PREVIEW_BRANCH} origin/${PREVIEW_BRANCH}`, {
-    cwd: workdir,
+    cwd: workingDirectory,
   })
 } else {
   // Create an empty working tree for the new branch
-  sh(`git checkout -b ${PREVIEW_BRANCH}`, { cwd: workdir })
+  sh(`git checkout -b ${PREVIEW_BRANCH}`, { cwd: workingDirectory })
 }
 
-// Remove prior PR directory (if exists) and add fresh tarballs
-const prDir = join(workdir, String(prNumber))
-if (existsSync(prDir)) rmSync(prDir, { recursive: true, force: true })
+// Ensure PR directory exists; do not delete existing files to preserve prior tarballs
+const prDir = join(workingDirectory, String(prNumber))
 mkdirSync(prDir, { recursive: true })
 
 /** @type {string[]} */
@@ -241,19 +259,19 @@ for (let index = 0; index < builtFiles.length; index++) {
 }
 
 // Re-init to ensure force-pushed single-commit history
-safeReinitGitRepo(workdir, PREVIEW_BRANCH, remoteUrl, {
+safeReinitGitRepo(workingDirectory, PREVIEW_BRANCH, remoteUrl, {
   owner,
   repo,
   defaultBranch: repoDefaultBranch,
 })
-ensureGitIdentity(workdir)
+ensureGitIdentity(workingDirectory)
 runCommands(
   [
     'git add -A',
     `git commit -m "update #${prNumber} ${sha} [skip ci]"`,
     `git push -f origin ${PREVIEW_BRANCH}`,
   ],
-  { cwd: workdir }
+  { cwd: workingDirectory }
 )
 
 // Create manifest for the commenter step
