@@ -21,8 +21,11 @@ import {
   assertSafeWorkdir,
   safeReinitGitRepo,
   parsePnpmWorkspaces,
-  parseTurboDryRunPackages,
   computePublishableTargets,
+  getChangedFiles,
+  selectTouchedWorkspaces,
+  buildReverseWorkspaceDeps,
+  expandWithDependents,
   renamePackedFilenames,
   buildRawBaseUrl,
   buildAssets,
@@ -109,37 +112,19 @@ function uniq(arr) {
   return Array.from(new Set(arr))
 }
 
-/**
- * @param {string | null} baseSha
- * @returns {string[]}
- */
-function getTurboAffectedPackages(baseSha) {
-  if (!baseSha) return []
-  try {
-    // Validate base SHA to prevent shell globbing
-    if (baseSha && !/^[a-fA-F0-9]{40}$/.test(baseSha)) {
-      console.warn(
-        'Invalid base SHA in event payload; skipping Turbo affected detection'
-      )
-      return []
-    }
-    const out = sh(`pnpm turbo run build --filter='...[${baseSha}]' --dry=json`)
-    return parseTurboDryRunPackages(out)
-  } catch (err) {
-    console.warn(
-      'Turbo affected detection failed; treating as no publishable targets:',
-      err?.message || err
-    )
-    return []
-  }
-}
-
 const workspaces = getWorkspaces()
+
+/**
+ * Determine candidate targets by using a conservative git-diff-based detector
+ * plus transitive dependents. This avoids relying on Turbo for detection.
+ */
+const changedFiles = getChangedFiles(baseSha, headSha)
+const directlyTouched = selectTouchedWorkspaces(workspaces, changedFiles)
+const reverseDeps = buildReverseWorkspaceDeps(workspaces)
+const touchedWithDependents = expandWithDependents(directlyTouched, reverseDeps)
+
 /** @type {string[]} */
-let targets = computePublishableTargets(
-  workspaces,
-  getTurboAffectedPackages(baseSha)
-)
+let targets = computePublishableTargets(workspaces, touchedWithDependents)
 
 // If nothing is affected, write an empty manifest so the comment step can remove the sticky comment
 if (targets.length === 0) {

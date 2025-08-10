@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process'
-import { rmSync } from 'node:fs'
+import { rmSync, readFileSync } from 'node:fs'
 import { basename, resolve, join } from 'node:path'
 
 /**
@@ -270,8 +270,6 @@ export function parseTurboDryRunPackages(jsonString) {
     packageNames = parsedValue.tasks
       .map((task) => task?.package)
       .filter(Boolean)
-  } else if (parsedValue?.packages) {
-    packageNames = parsedValue.packages.filter(Boolean)
   }
   return Array.from(new Set(packageNames))
 }
@@ -370,4 +368,113 @@ export function buildPreviewCommentBody(marker, assets) {
       )
     : ['_No publishable workspaces affected for this PR._']
   return [marker, header, '', ...lines].join('\n')
+}
+
+/**
+ * Get a list of changed files between two SHAs using git. Returns empty when
+ * base is invalid or when no differences are found.
+ * @param {string|null} baseSha
+ * @param {string} headSha
+ * @returns {string[]}
+ */
+export function getChangedFiles(baseSha, headSha) {
+  if (!baseSha) return []
+  const hex = /^[a-fA-F0-9]{7,40}$/
+  if (!hex.test(String(baseSha)) || !hex.test(String(headSha))) return []
+  try {
+    const out = sh(`git diff --name-only ${baseSha}..${headSha}`)
+    return out
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Given changed file paths, return the set of workspaces whose directory
+ * contains at least one changed file.
+ * @param {Workspace[]} workspaces
+ * @param {string[]} changedFiles
+ * @returns {string[]}
+ */
+export function selectTouchedWorkspaces(workspaces, changedFiles) {
+  const byPath = workspaces
+    .map((w) => ({ ...w, path: resolve(w.path) }))
+    .sort((a, b) => a.path.length - b.path.length)
+  const touched = new Set()
+  for (const file of changedFiles) {
+    const abs = resolve(file)
+    for (const w of byPath) {
+      if ((abs + '/').startsWith(w.path + '/')) {
+        touched.add(w.name)
+        break
+      }
+    }
+  }
+  return Array.from(touched)
+}
+
+/**
+ * Build a reverse dependency graph between workspaces based on package.json
+ * local dependencies. Edge: dep -> dependent.
+ * @param {Workspace[]} workspaces
+ * @returns {Map<string, Set<string>>}
+ */
+export function buildReverseWorkspaceDeps(workspaces) {
+  const reverse = new Map()
+  const workspaceNames = new Set(workspaces.map((w) => w.name))
+  for (const ws of workspaces) {
+    try {
+      const pkg = JSON.parse(
+        readFileSync(join(ws.path, 'package.json'), 'utf8')
+      )
+      const sections = [
+        'dependencies',
+        'devDependencies',
+        'peerDependencies',
+        'optionalDependencies',
+      ]
+      for (const key of sections) {
+        const deps = pkg?.[key] || {}
+        for (const depName of Object.keys(deps)) {
+          if (workspaceNames.has(depName)) {
+            if (!reverse.has(depName)) reverse.set(depName, new Set())
+            reverse.get(depName).add(ws.name)
+          }
+        }
+      }
+    } catch {
+      // ignore packages without readable package.json
+    }
+  }
+  return reverse
+}
+
+/**
+ * Expand a set of workspaces to include all transitive dependents using a
+ * reverse dependency graph.
+ * @param {Iterable<string>} seeds
+ * @param {Map<string, Set<string>>} reverse
+ * @returns {string[]}
+ */
+export function expandWithDependents(seeds, reverse) {
+  const out = new Set()
+  const queue = [...seeds]
+  while (queue.length) {
+    const name = queue.shift()
+    if (!name) {
+      continue
+    }
+    if (out.has(name)) continue
+    out.add(name)
+    const dependents = reverse.get(name)
+    if (dependents) {
+      for (const d of dependents) {
+        if (!out.has(d)) queue.push(d)
+      }
+    }
+  }
+  return Array.from(out)
 }

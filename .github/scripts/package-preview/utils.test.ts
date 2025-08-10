@@ -183,7 +183,17 @@ describe('transforms', () => {
 
   it('parseTurboDryRunPackages - packages form', () => {
     const json = JSON.stringify({ packages: ['a', 'b', 'a'] })
-    expect(utils.parseTurboDryRunPackages(json)).toEqual(['a', 'b'])
+    // We intentionally ignore the top-level `packages` list because it
+    // can include all workspaces, not just affected ones.
+    expect(utils.parseTurboDryRunPackages(json)).toEqual([])
+  })
+
+  it('parseTurboDryRunPackages - prefer tasks over packages when both present', () => {
+    const json = JSON.stringify({
+      tasks: [{ package: 'x' }, { package: 'y' }],
+      packages: ['a', 'b', 'a'],
+    })
+    expect(utils.parseTurboDryRunPackages(json)).toEqual(['x', 'y'])
   })
 
   it('computePublishableTargets', () => {
@@ -232,5 +242,25 @@ describe('transforms', () => {
   it('buildPreviewCommentBody - empty', () => {
     const body = utils.buildPreviewCommentBody(utils.stickyMarker, [])
     expect(body).toContain('No publishable workspaces')
+  })
+})
+
+describe('git + depgraph selection', () => {
+  it('selectTouchedWorkspaces matches files inside workspace paths', () => {
+    const workspaces = [
+      { name: 'a', path: '/repo/packages/a', private: false },
+      { name: 'b', path: '/repo/packages/b', private: false },
+    ]
+    const files = ['/repo/packages/a/src/index.ts', '/repo/README.md']
+    const out = utils.selectTouchedWorkspaces(workspaces, files)
+    expect(out).toEqual(['a'])
+  })
+
+  it('expandWithDependents walks reverse graph', () => {
+    const reverse = new Map([
+      ['a', new Set(['b'])],
+      ['b', new Set(['c'])],
+    ])
+    expect(utils.expandWithDependents(['a'], reverse)).toEqual(['a', 'b', 'c'])
   })
 })
