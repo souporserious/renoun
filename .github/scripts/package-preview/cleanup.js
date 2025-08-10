@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process'
-import { mkdirSync, rmSync, existsSync } from 'node:fs'
+import { mkdirSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Octokit } from '@octokit/rest'
 
@@ -56,6 +56,19 @@ try {
 }
 assertSafePreviewBranch(PREVIEW_BRANCH, defaultBranch)
 
+// Optional root directory placeholder to keep the branch non-empty when a PR's
+// directory was the only content left. Mirrors logic in create.js.
+const ROOT_DIRECTORY = String(process.env.ROOT_DIRECTORY || '').trim()
+function isSafeRelativeDir(p) {
+  return (
+    p !== '' &&
+    /^[A-Za-z0-9._\/-]+$/.test(p) &&
+    !p.startsWith('/') &&
+    !p.includes('..') &&
+    !p.endsWith('/')
+  )
+}
+
 // Prepare a working dir and fetch current preview branch state
 const workdir = join(process.cwd(), '.preview-cleanup')
 assertSafeWorkdir(workdir)
@@ -104,14 +117,33 @@ safeReinitGitRepo(workdir, PREVIEW_BRANCH, remoteUrl, {
   defaultBranch,
 })
 ensureGitIdentity(workdir)
-runCommands(
-  [
-    'git add -A',
-    `git commit -m "remove ${PR_NUMBER} [skip ci]"`,
-    `git push -f origin ${PREVIEW_BRANCH}`,
-  ],
-  { cwd: workdir }
-)
+// Ensure ROOT_DIRECTORY placeholder exists if configured
+if (ROOT_DIRECTORY && isSafeRelativeDir(ROOT_DIRECTORY)) {
+  const rootDirPath = join(workdir, ROOT_DIRECTORY)
+  if (!existsSync(rootDirPath)) {
+    mkdirSync(rootDirPath, { recursive: true })
+  }
+  const keep = join(rootDirPath, '.gitkeep')
+  if (!existsSync(keep)) {
+    writeFileSync(keep, '')
+  }
+}
+
+// Stage changes and decide whether to allow an empty commit
+sh('git add -A', { cwd: workdir })
+let commitCmd = `git commit -m "remove ${PR_NUMBER} [skip ci]"`
+try {
+  const statusAfterAdd = sh('git status --porcelain', { cwd: workdir })
+  if (!statusAfterAdd) {
+    // No file changes to commit; create an empty commit so the branch history advances
+    commitCmd = `git commit --allow-empty -m "remove ${PR_NUMBER} [skip ci]"`
+  }
+} catch {
+  // Fall through to normal commit
+}
+runCommands([commitCmd, `git push -f origin ${PREVIEW_BRANCH}`], {
+  cwd: workdir,
+})
 
 console.log(
   `Removed preview assets for PR #${PR_NUMBER} and force-pushed ${PREVIEW_BRANCH}`
