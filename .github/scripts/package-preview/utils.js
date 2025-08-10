@@ -292,13 +292,13 @@ export function computePublishableTargets(workspaces, affected) {
 /**
  * Append short SHA to packed filenames.
  * @param {string[]} files
- * @param {string} short
+ * @param {string} sha
  * @returns {string[]}
  */
-export function renamePackedFilenames(files, short) {
+export function renamePackedFilenames(files, sha) {
   return files.map((filename) =>
     filename.endsWith('.tgz')
-      ? filename.replace(/\.tgz$/, `-${short}.tgz`)
+      ? filename.replace(/\.tgz$/, `-${sha}.tgz`)
       : filename
   )
 }
