@@ -1,5 +1,11 @@
 # create-renoun
 
+## 2.0.1
+
+### Patch Changes
+
+- 83dafc2: Improve default `.gitignore` file when downloading examples.
+
 ## 2.0.0
 
 ### Major Changes
