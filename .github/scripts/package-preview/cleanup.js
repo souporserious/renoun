@@ -107,7 +107,7 @@ ensureGitIdentity(workdir)
 runCommands(
   [
     'git add -A',
-    `git commit -m "remove #${PR_NUMBER} [skip ci]"`,
+    `git commit -m "remove ${PR_NUMBER} [skip ci]"`,
     `git push -f origin ${PREVIEW_BRANCH}`,
   ],
   { cwd: workdir }

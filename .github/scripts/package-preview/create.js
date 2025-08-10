@@ -268,7 +268,7 @@ ensureGitIdentity(workingDirectory)
 runCommands(
   [
     'git add -A',
-    `git commit -m "update #${prNumber} ${sha} [skip ci]"`,
+    `git commit -m "update ${prNumber}:${sha} [skip ci]"`,
     `git push -f origin ${PREVIEW_BRANCH}`,
   ],
   { cwd: workingDirectory }
