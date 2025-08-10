@@ -7,7 +7,7 @@ import {
   rmSync,
   cpSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Octokit } from '@octokit/rest'
 
 import {
@@ -113,14 +113,23 @@ function uniq(arr) {
 }
 
 const workspaces = getWorkspaces()
+// Exclude the repo root workspace from detection to avoid name collisions (e.g. root named
+// the same as a publishable package). The root path equals process.cwd().
+const repoRoot = resolve(process.cwd())
+const workspacesForDetection = workspaces.filter(
+  (workspace) => resolve(workspace.path) !== repoRoot
+)
 
 /**
  * Determine candidate targets by using a conservative git-diff-based detector
  * plus transitive dependents. This avoids relying on Turbo for detection.
  */
 const changedFiles = getChangedFiles(baseSha, headSha)
-const directlyTouched = selectTouchedWorkspaces(workspaces, changedFiles)
-const reverseDeps = buildReverseWorkspaceDeps(workspaces)
+const directlyTouched = selectTouchedWorkspaces(
+  workspacesForDetection,
+  changedFiles
+)
+const reverseDeps = buildReverseWorkspaceDeps(workspacesForDetection)
 const touchedWithDependents = expandWithDependents(directlyTouched, reverseDeps)
 
 /** @type {string[]} */
@@ -156,9 +165,20 @@ console.log('Packing targets with npm --ignore-scripts:', targets.join(', '))
 
 // Map package name to workspace for quick lookup
 /** @type {Map<string, { name: string, path: string, private: boolean }>} */
-const nameToWorkspace = new Map(
-  workspaces.map((workspace) => [workspace.name, workspace])
-)
+const nameToWorkspace = new Map()
+for (const ws of workspaces) {
+  const existing = nameToWorkspace.get(ws.name)
+  if (!existing) {
+    nameToWorkspace.set(ws.name, ws)
+  } else {
+    // Prefer non-root workspace when duplicate names exist
+    const existingIsRoot = resolve(existing.path) === repoRoot
+    const currentIsRoot = resolve(ws.path) === repoRoot
+    if (existingIsRoot && !currentIsRoot) {
+      nameToWorkspace.set(ws.name, ws)
+    }
+  }
+}
 
 /** @type {string[]} */
 const builtFiles = []
