@@ -75,31 +75,7 @@ jobs:
       - name: Notify Discord
         if: steps.publish.outputs.published == 'true'
         env:
+          OWNER_REPO: ${{ github.repository }}
           PUBLISHED_PACKAGES: ${{ steps.publish.outputs.publishedPackages }}
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          OWNER_REPO="souporserious/renoun"
-
-          # Validate JSON structure first
-          if ! jq empty <<< "$PUBLISHED_PACKAGES" 2>/dev/null; then
-            echo "Invalid JSON in PUBLISHED_PACKAGES"
-            exit 1
-          fi
-
-          # Use here-string to avoid echo interpretation
-          lines=$(jq -r --arg repo "$OWNER_REPO" '
-            try ( .[] | "\(.name)@\(.version) — https://github.com/\($repo)/releases/tag/\(.name)@\(.version)" )
-            catch empty
-          ' <<< "$PUBLISHED_PACKAGES")
-
-          if [ -z "$lines" ]; then
-            echo "No packages parsed; skipping Discord notification."
-            exit 0
-          fi
-
-          # Limit output safely
-          trimmed=$(printf "%s\n" "$lines" | head -n 30 | head -c 1800)
-
-          # Send to Discord using jq for proper JSON encoding
-          jq -n --arg msg "🚀 New packages released:\n$trimmed" '{ content: $msg }' \
-          | curl -sS -X POST -H "Content-Type: application/json" -d @- "$WEBHOOK_URL"
+        run: node .github/scripts/notify-discord.mjs
