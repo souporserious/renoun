@@ -9,7 +9,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/souporserious/renoun",
+    "url": "git+https://github.com/souporserious/renoun.git",
     "directory": "packages/mdx-plugins"
   },
   "bugs": "https://github.com/souporserious/renoun/issues",
