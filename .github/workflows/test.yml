@@ -10,8 +10,6 @@ concurrency: test-${{ github.ref_name }}
 
 env:
   NODE_ENV: test
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
   build-and-test:
@@ -30,10 +28,10 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build MDX package
         run: pnpm --filter=@renoun/mdx build
 
       - name: Run tests
-        run: pnpm --filter=renoun test
+        run: pnpm --filter=packages/* test && pnpm run test:github

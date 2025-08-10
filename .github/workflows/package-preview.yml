@@ -1,0 +1,176 @@
+name: Preview Packages
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.fork == false && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-branch
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build
+        run: pnpm build --filter=packages/*
+
+      - name: Create preview branch assets
+        run: node .github/scripts/package-preview/create.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ROOT_DIRECTORY: apps/site
+
+      - name: Upload manifest for comment step
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-manifest
+          path: previews/manifest.json
+          if-no-files-found: ignore
+
+  comment:
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.fork == false && github.event.pull_request.draft == false
+    concurrency:
+      group: preview-branch
+      cancel-in-progress: false
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Download manifest
+        id: download
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: preview-manifest
+          path: previews
+        continue-on-error: true
+
+      - name: Post sticky comment with install commands
+        if: steps.download.outcome == 'success'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const manifestPath = path.join(process.cwd(), 'previews', 'manifest.json');
+            if (!fs.existsSync(manifestPath)) {
+              core.info('No manifest.json found — skipping comment creation');
+              return;
+            }
+            const data = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+            const marker = '<!-- package-preview-sticky -->';
+            if (!Number.isInteger(data.pr) || data.pr !== context.payload.pull_request.number) {
+              core.setFailed(`Manifest PR (${data.pr}) does not match event PR (${context.payload.pull_request.number})`);
+              return;
+            }
+            const assets = Array.isArray(data.assets) ? data.assets : [];
+            if (assets.length === 0) {
+              core.info('No preview assets — removing any existing sticky comment');
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              });
+              const existing = comments.find(comment => typeof comment.body === 'string' && comment.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                });
+              }
+              return;
+            }
+            const header = '### 📦 Preview packages';
+            const lines = assets.map(asset => [`**${asset.name}**`, '```bash', `npm install "${asset.url}"`, '```'].join('\n'));
+            const body = [marker, header, '', ...lines].join('\n');
+            // Find existing sticky comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find(comment => typeof comment.body === 'string' && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-branch
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Remove preview branch assets for this PR
+        run: node .github/scripts/package-preview/cleanup.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
