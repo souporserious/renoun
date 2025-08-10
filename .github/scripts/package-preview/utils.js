@@ -382,13 +382,24 @@ export function getChangedFiles(baseSha, headSha) {
   const hex = /^[a-fA-F0-9]{7,40}$/
   if (!hex.test(String(baseSha)) || !hex.test(String(headSha))) return []
   try {
-    const out = sh(`git diff --name-only ${baseSha}..${headSha}`)
+    // Use merge-base to avoid including unrelated changes when the base branch advances
+    const mergeBase = sh(`git merge-base ${baseSha} ${headSha}`)
+    const out = sh(`git diff --name-only ${mergeBase}..${headSha}`)
     return out
       .split('\n')
       .map((s) => s.trim())
       .filter(Boolean)
   } catch {
-    return []
+    // Fallback to a direct two-dot diff if merge-base fails for any reason
+    try {
+      const out = sh(`git diff --name-only ${baseSha}..${headSha}`)
+      return out
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    } catch {
+      return []
+    }
   }
 }
 
