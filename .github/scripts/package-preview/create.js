@@ -223,8 +223,11 @@ if (branchExists) {
   sh(`git checkout -b ${PREVIEW_BRANCH}`, { cwd: workingDirectory })
 }
 
-// Ensure PR directory exists; do not delete existing files to preserve prior tarballs
+// Ensure PR directory is a fresh container for latest commit tarballs only
 const prDir = join(workingDirectory, String(prNumber))
+if (existsSync(prDir)) {
+  rmSync(prDir, { recursive: true, force: true })
+}
 mkdirSync(prDir, { recursive: true })
 
 /** @type {string[]} */
