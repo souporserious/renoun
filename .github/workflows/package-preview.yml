@@ -48,6 +48,7 @@ jobs:
         run: node .github/scripts/package-preview/create.js
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ROOT_DIRECTORY: apps/site
 
       - name: Upload manifest for comment step
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

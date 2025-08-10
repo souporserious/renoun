@@ -90,6 +90,20 @@ assertSafePreviewBranch(PREVIEW_BRANCH, repoDefaultBranch)
 const sha = headSha.slice(0, 7)
 const previewsDirectory = join(process.cwd(), 'previews')
 
+// Optional: ensure a configured Root Directory exists in the preview branch so platforms
+// like Vercel do not fail builds due to missing root path. The directory will include a
+// placeholder file so it is tracked by git. Validation is conservative to avoid traversal.
+const ROOT_DIRECTORY = String(process.env.ROOT_DIRECTORY || '').trim()
+function isSafeRelativeDir(p) {
+  return (
+    p !== '' &&
+    /^[A-Za-z0-9._\/-]+$/.test(p) &&
+    !p.startsWith('/') &&
+    !p.includes('..') &&
+    !p.endsWith('/')
+  )
+}
+
 if (!existsSync(previewsDirectory)) {
   mkdirSync(previewsDirectory, { recursive: true })
 }
@@ -249,6 +263,19 @@ if (existsSync(prDir)) {
   rmSync(prDir, { recursive: true, force: true })
 }
 mkdirSync(prDir, { recursive: true })
+
+// If a preview root dir is requested, ensure it exists in the working tree with a
+// `.gitkeep` file so hosting providers that look for a specific root do not fail.
+if (ROOT_DIRECTORY && isSafeRelativeDir(ROOT_DIRECTORY)) {
+  const rootDirPath = join(workingDirectory, ROOT_DIRECTORY)
+  if (!existsSync(rootDirPath)) {
+    mkdirSync(rootDirPath, { recursive: true })
+  }
+  const keepPath = join(rootDirPath, '.gitkeep')
+  if (!existsSync(keepPath)) {
+    writeFileSync(keepPath, '')
+  }
+}
 
 /** @type {string[]} */
 const files = []

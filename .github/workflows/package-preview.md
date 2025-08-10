@@ -26,6 +26,17 @@ This workflow builds and publishes **preview npm packages** for pull requests, u
 - `.github/scripts/package-preview/cleanup.js` – Removes `<pr-number>/` from the `package-preview` branch on close and force-pushes.
 - All scripts validate inputs and set a bot git identity before committing.
 
+#### Optional: Root Directory placeholder
+
+Some hosting providers expect a specific root directory to exist in every branch. If your preview branch only contains tarballs at the top level, those builds may fail. You can set `ROOT_DIRECTORY` (for example, `apps/site`) to have the workflow ensure that directory exists in the preview branch with a `.gitkeep` file.
+
+Example:
+
+```
+env:
+  ROOT_DIRECTORY: apps/site
+```
+
 ### Example comment
 
 ````
