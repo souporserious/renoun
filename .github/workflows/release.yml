@@ -51,26 +51,14 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: pnpm build --filter=!@examples/*
 
-      - name: Create Release Pull Request
-        id: version
-        uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba
-        with:
-          version: pnpm ci:version
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Prepare to publish
-        run: pnpm ci:prepare
-
       - name: Publish to npm
         id: publish
         uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba
         with:
-          publish: pnpm ci:publish
+          publish: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Fast-forward release branch
         if: steps.publish.outputs.published == 'true'
