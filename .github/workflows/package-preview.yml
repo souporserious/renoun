@@ -69,7 +69,7 @@ jobs:
     steps:
       - name: Download manifest
         id: download
-        uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
           name: preview-manifest
           path: previews
