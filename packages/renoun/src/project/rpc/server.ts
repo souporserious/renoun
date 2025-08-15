@@ -146,7 +146,7 @@ process.env.RENOUN_SERVER_ID = SERVER_ID
 const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
 const MAX_BUFFERED = 8 * 1024 * 1024
 const MAX_TIMEOUT_MS = 300_000
-const REQUEST_TIMEOUT_MS = 20_000
+const REQUEST_TIMEOUT_MS = 30_000
 const HEARTBEAT_MS = 30_000
 const CLOSE_TEXT: Record<number, string> = {
   1000: 'Normal Closure',

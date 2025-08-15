@@ -59,8 +59,8 @@ const WEBSOCKET_CLIENT_ERROR_MESSAGES: Record<
     `This suggests a protocol error or data corruption.\n` +
     `The server was previously connected but encountered an error.`,
 
-  REQUEST_TIMEOUT: ({ timeout, method, params, connectionState }) =>
-    `[renoun] Request timed out after ${timeout} seconds\n\n` +
+  REQUEST_TIMEOUT: ({ timeout = 30_000, method, params, connectionState }) =>
+    `[renoun] Request timed out after ${timeout / 1000} seconds\n\n` +
     `Request details:\n` +
     `• Method: ${method}\n` +
     `• Params: ${JSON.stringify(params, null, 2)}\n` +
@@ -363,7 +363,7 @@ export class WebSocketClient {
   async callMethod<Params extends Record<string, unknown>, Value>(
     method: string,
     params: Params,
-    timeout = 300_000
+    timeout = 30_000
   ): Promise<Value> {
     const id = performance.now()
     const request: WebSocketRequest = { method, params, id }
@@ -385,7 +385,7 @@ export class WebSocketClient {
         })
         reject(error)
         delete this.#requests[id]
-      }, timeout * 1000)
+      }, timeout)
 
       this.#requests[id] = {
         resolve: (value) => {
