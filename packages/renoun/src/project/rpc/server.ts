@@ -140,6 +140,16 @@ class WebSocketServerError extends Error {
   }
 }
 
+export class TimeoutError extends Error {
+  readonly timeoutMs: number
+
+  constructor(timeoutMs: number) {
+    super(`Request timed out after ${timeoutMs}ms`)
+    this.name = 'TimeoutError'
+    this.timeoutMs = timeoutMs
+  }
+}
+
 const SERVER_ID = randomBytes(16).toString('hex')
 process.env.RENOUN_SERVER_ID = SERVER_ID
 
@@ -162,10 +172,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
     new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`Request timed out after ${timeoutMs}ms`)),
-        timeoutMs
-      )
+      setTimeout(() => reject(new TimeoutError(timeoutMs)), timeoutMs)
     ),
   ])
 }
@@ -770,8 +777,7 @@ export class WebSocketServer {
       }
       return null
     } catch (error) {
-      const timedOut = (error as Error).message === 'Request timed out'
-      const code = timedOut ? -32002 : -32603
+      const code = error instanceof TimeoutError ? -32002 : -32603
       const serverError = this.#createServerError('INTERNAL_ERROR', code, {
         method: request.method,
         params: request.params,
