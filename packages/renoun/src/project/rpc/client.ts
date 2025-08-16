@@ -206,26 +206,40 @@ export class WebSocketClient extends EventEmitter {
     if (this.#isConnected && this.#ws?.readyState === WS.OPEN) {
       return Promise.resolve()
     }
+
+    let settled = false
     return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () =>
-          reject(
-            new WebSocketClientError(
-              '[renoun] WebSocket client ready() timed out',
-              'CONNECTION_TIMEOUT',
-              {
-                connectionState: this.#connectionState,
-                connectionTime: formatConnectionTime(this.#connectionStartTime),
-                port: String(process.env.RENOUN_SERVER_PORT || 'unknown'),
-              }
-            )
-          ),
-        timeoutMs
-      )
-      this.#readyWaiters.push(() => {
+      const waiter = () => {
+        if (settled) {
+          return
+        }
+        settled = true
         clearTimeout(timer)
         resolve()
-      })
+      }
+      const timer = setTimeout(() => {
+        if (settled) {
+          return
+        }
+        settled = true
+        const index = this.#readyWaiters.indexOf(waiter)
+        if (index !== -1) {
+          this.#readyWaiters.splice(index, 1)
+        }
+        reject(
+          new WebSocketClientError(
+            '[renoun] WebSocket client ready() timed out',
+            'CONNECTION_TIMEOUT',
+            {
+              connectionState: this.#connectionState,
+              connectionTime: formatConnectionTime(this.#connectionStartTime),
+              port: String(process.env.RENOUN_SERVER_PORT || 'unknown'),
+            }
+          )
+        )
+      }, timeoutMs)
+
+      this.#readyWaiters.push(waiter)
     })
   }
 
