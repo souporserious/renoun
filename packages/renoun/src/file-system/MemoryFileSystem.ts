@@ -37,7 +37,8 @@ export class MemoryFileSystem extends FileSystem {
     for (const [path, content] of this.#files) {
       const extension = path.split('.').at(-1)
       if (extension && isJavaScriptLikeExtension(extension)) {
-        createSourceFile(path, content, this.#projectOptions)
+        const absolutePath = this.getAbsolutePath(path)
+        createSourceFile(absolutePath, content, this.#projectOptions)
       }
     }
   }
@@ -48,7 +49,8 @@ export class MemoryFileSystem extends FileSystem {
 
     const extension = normalizedPath.split('.').pop()
     if (extension && isJavaScriptLikeExtension(extension)) {
-      createSourceFile(normalizedPath, content, this.#projectOptions)
+      const absolutePath = this.getAbsolutePath(normalizedPath)
+      createSourceFile(absolutePath, content, this.#projectOptions)
     }
   }
 
