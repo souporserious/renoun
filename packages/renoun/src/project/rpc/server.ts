@@ -318,7 +318,7 @@ export class WebSocketServer {
 
   #rejectReady!: (error: any) => void
 
-  #handlers: { [key: string]: (params: any) => Promise<any> | any } = {}
+  #handlers = new Map<string, (params: any) => Promise<any> | any>()
 
   #heartbeatTimer?: NodeJS.Timeout
 
@@ -844,7 +844,7 @@ export class WebSocketServer {
       }
     }
 
-    this.#handlers[method] = fn
+    this.#handlers.set(method, fn)
 
     debug.logWebSocketServerEvent('method_registered', {
       method,
@@ -868,7 +868,7 @@ export class WebSocketServer {
     }
 
     const isNotification = typeof request.id === 'undefined'
-    const handler = this.#handlers[request.method]
+    const handler = this.#handlers.get(request.method)
 
     if (!handler) {
       const serverError = this.#createServerError('METHOD_NOT_FOUND', -32601, {
