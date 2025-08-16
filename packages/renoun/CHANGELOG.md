@@ -1,5 +1,11 @@
 # renoun
 
+## 9.3.1
+
+### Patch Changes
+
+- f3b6551: Improves renoun CLI WebSocket client resilience to transient disconnects and CI flakiness.
+
 ## 9.3.0
 
 ### Minor Changes
