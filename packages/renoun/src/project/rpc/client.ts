@@ -932,9 +932,27 @@ export class WebSocketClient extends EventEmitter {
     const payload = JSON.stringify({ method, params, id })
     let nextResolve: ((result: IteratorResult<Value>) => void) | null = null
     let ended = false
+    let idleTimeout: NodeJS.Timeout | undefined
+    const resetIdleTimeout = () => {
+      if (idleTimeout) {
+        clearTimeout(idleTimeout)
+      }
+      idleTimeout = setTimeout(() => {
+        ended = true
+        delete self.#streams[id]
+        if (nextResolve) {
+          const resolve = nextResolve
+          nextResolve = null
+          resolve({ value: undefined, done: true })
+        }
+        self.emit('streamError', { id, error: 'Client idle timeout' })
+      }, 120_000)
+    }
+    resetIdleTimeout()
 
     this.#streams[id] = {
       onChunk: (value: Value) => {
+        resetIdleTimeout()
         if (nextResolve) {
           const resolve = nextResolve
           nextResolve = null
@@ -944,6 +962,9 @@ export class WebSocketClient extends EventEmitter {
         }
       },
       onDone: () => {
+        if (idleTimeout) {
+          clearTimeout(idleTimeout)
+        }
         ended = true
         if (nextResolve) {
           const resolve = nextResolve
