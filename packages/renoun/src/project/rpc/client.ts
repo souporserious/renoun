@@ -34,7 +34,9 @@ type WebSocketClientErrorMessageFn = (
   context: WebSocketClientErrorContext
 ) => string
 
-const REQUEST_TIMEOUT_MS = 60_000
+const REQUEST_TIMEOUT_MS = 120_000 // 120s
+const PENDING_LIMIT = 1000 // 1000 requests
+const PENDING_BYTES_LIMIT = 8 * 1024 * 1024 // 8MB
 
 const WEBSOCKET_CLIENT_ERROR_MESSAGES: Record<
   WebSocketClientErrorType,
@@ -142,6 +144,7 @@ export class WebSocketClient extends EventEmitter {
     { onChunk: (value: any) => void; onDone: () => void }
   > = {}
   #pendingRequests: { id: number; payload: string }[] = []
+  #pendingBytes = 0
   #queue: string[] = []
   #flushTimer?: NodeJS.Timeout
   #MAX_BUFFERED = 8 * 1024 * 1024
@@ -301,6 +304,10 @@ export class WebSocketClient extends EventEmitter {
         }
         this.#send(payload)
         this.#pendingRequests.shift()
+        this.#pendingBytes = Math.max(
+          0,
+          this.#pendingBytes - Buffer.byteLength(payload)
+        )
 
         // Yield to the event loop to allow the server to handle the request
         await new Promise((resolve) => setImmediate(resolve))
@@ -308,6 +315,34 @@ export class WebSocketClient extends EventEmitter {
     } finally {
       this.#flushing = false
     }
+  }
+
+  #sendOrQueue(id: number, payload: string): boolean {
+    if (this.#isConnected && this.#ws.readyState === WS.OPEN) {
+      this.#send(payload)
+      return true
+    }
+    const bytes = Buffer.byteLength(payload)
+    if (
+      this.#pendingRequests.length >= PENDING_LIMIT ||
+      this.#pendingBytes + bytes > PENDING_BYTES_LIMIT
+    ) {
+      const error = new WebSocketClientError(
+        '[renoun] Client offline and pending queue is full',
+        'UNKNOWN_ERROR',
+        {
+          connectionState: this.#connectionState,
+          connectionTime: formatConnectionTime(this.#connectionStartTime),
+          port: process.env.RENOUN_SERVER_PORT || 'unknown',
+        }
+      )
+      this.#requests[id]?.reject(error)
+      delete this.#requests[id]
+      return false
+    }
+    this.#pendingRequests.push({ id, payload })
+    this.#pendingBytes += bytes
+    return true
   }
 
   #handleMessage(data: any) {
@@ -561,6 +596,14 @@ export class WebSocketClient extends EventEmitter {
       delete this.#streams[Number(id)]
     }
 
+    // Reset byte counter if queue is cleared elsewhere later
+    // Note: we don't clear pendingRequests here to allow retry logic to resend
+    // but we ensure the byte counter doesn't grow stale on next enqueue
+    this.#pendingBytes = this.#pendingRequests.reduce(
+      (total, item) => total + Buffer.byteLength(item.payload),
+      0
+    )
+
     // Let consumers react to the close reason
     this.emit('disconnected', { code: code ?? 1006, reason })
 
@@ -641,7 +684,7 @@ export class WebSocketClient extends EventEmitter {
     timeoutMs = REQUEST_TIMEOUT_MS
   ): Promise<Value> {
     const id = this.#nextId++
-    const payload = JSON.stringify({ method, params, id })
+    const payload = JSON.stringify({ method, params, id, timeoutMs })
 
     debug.logWebSocketClientEvent('method_call', {
       method,
@@ -667,7 +710,13 @@ export class WebSocketClient extends EventEmitter {
           (request) => request.id === id
         )
         if (index !== -1) {
-          this.#pendingRequests.splice(index, 1)
+          const removed = this.#pendingRequests.splice(index, 1)[0]
+          if (removed) {
+            this.#pendingBytes = Math.max(
+              0,
+              this.#pendingBytes - Buffer.byteLength(removed.payload)
+            )
+          }
         }
 
         reject(error)
@@ -691,11 +740,10 @@ export class WebSocketClient extends EventEmitter {
         },
       } satisfies Request
 
-      if (this.#isConnected) {
-        debug.logWebSocketClientEvent('method_call_sent', { method, id })
-        this.#send(payload)
-      } else {
-        this.#pendingRequests.push({ id, payload })
+      if (this.#sendOrQueue(id, payload)) {
+        if (this.#isConnected) {
+          debug.logWebSocketClientEvent('method_call_sent', { method, id })
+        }
       }
     }).catch((error) => {
       if (error instanceof WebSocketClientError) {
@@ -724,6 +772,7 @@ export class WebSocketClient extends EventEmitter {
     const framed = requests.map((request) => ({
       ...request,
       id: this.#nextId++,
+      timeoutMs,
     }))
     const payload = JSON.stringify(framed)
     const timers: Record<number, NodeJS.Timeout> = {}
@@ -749,7 +798,13 @@ export class WebSocketClient extends EventEmitter {
         (request) => request.payload === payload
       )
       if (index !== -1) {
-        this.#pendingRequests.splice(index, 1)
+        const removed = this.#pendingRequests.splice(index, 1)[0]
+        if (removed) {
+          this.#pendingBytes = Math.max(
+            0,
+            this.#pendingBytes - Buffer.byteLength(removed.payload)
+          )
+        }
       }
     }
 
@@ -789,11 +844,16 @@ export class WebSocketClient extends EventEmitter {
         })
     )
 
-    if (this.#isConnected) {
-      this.#send(payload)
-    } else {
-      // Queue the whole batch once; use the first id as the queue handle
-      this.#pendingRequests.push({ id: framed[0].id, payload })
+    // Queue or send the batch once; use the first id as the handle
+    if (!this.#sendOrQueue(framed[0].id, payload)) {
+      const error = this.#createClientError('UNKNOWN_ERROR', {
+        connectionTime: formatConnectionTime(this.#connectionStartTime),
+        port: process.env.RENOUN_SERVER_PORT || 'unknown',
+        connectionState: this.#connectionState,
+        eventMessage: 'pending_queue_full',
+      })
+      failEntireBatch(error)
+      throw error
     }
 
     // Fail-fast but ensure all timers cleared on settle

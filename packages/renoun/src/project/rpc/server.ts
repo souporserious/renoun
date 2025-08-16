@@ -10,6 +10,7 @@ export interface WebSocketRequest {
   method: string
   params: any
   id?: number
+  timeoutMs?: number
 }
 
 export interface WebSocketResponse {
@@ -735,17 +736,19 @@ export class WebSocketServer {
   registerMethod(
     method: string,
     handler: (params: any) => Promise<any> | any,
-    options: RegisterMethodOptions = { memoize: true, concurrency: 20 }
+    options: RegisterMethodOptions = {}
   ) {
     const optionsMerged: RegisterMethodOptions = {
-      memoize: true,
+      memoize: process.env.NODE_ENV === 'production',
       concurrency: 20,
       ...options,
     }
     const hasMemoizeProp =
       options != null &&
       Object.prototype.hasOwnProperty.call(options, 'memoize')
-    const memoizeOptions = hasMemoizeProp ? options!.memoize : undefined
+    const memoizeOptions = hasMemoizeProp
+      ? (options as RegisterMethodOptions).memoize
+      : optionsMerged.memoize
     let fn: (params: any) => Promise<any> | any = handler
 
     if (memoizeOptions) {
@@ -887,9 +890,27 @@ export class WebSocketServer {
       const queueLength = semaphore ? semaphore.getQueueLength() : 0
       const avg = Math.min(this.#averageMs.get(request.method) ?? 150, 30_000)
       const extraTime = Math.min(queueLength * avg, 120_000)
+
+      // Client-provided hard cap (if any)
+      const clientCap =
+        typeof request.timeoutMs === 'number' &&
+        isFinite(request.timeoutMs) &&
+        request.timeoutMs > 0
+          ? request.timeoutMs
+          : undefined
+
+      // Server estimate
+      const serverEstimate = REQUEST_TIMEOUT_MS + extraTime
+
+      // Final effective timeout
+      const effectiveTimeoutMs = Math.min(
+        clientCap ?? serverEstimate,
+        MAX_TIMEOUT_MS
+      )
+
       const result = await withTimeout(
         Promise.resolve(handler(request.params)),
-        REQUEST_TIMEOUT_MS + extraTime
+        effectiveTimeoutMs
       )
 
       // If the handler returned an AsyncIterable, treat it as a stream.
@@ -917,7 +938,7 @@ export class WebSocketServer {
             for await (const chunk of this.#withChunkTimeout(
               result as AsyncIterable<any>,
               controller.signal,
-              REQUEST_TIMEOUT_MS
+              effectiveTimeoutMs
             )) {
               this.#sendJson(ws, {
                 id: request.id,
@@ -1052,8 +1073,49 @@ export class WebSocketServer {
       const requests = parsed as WebSocketRequest[]
       debug.logWebSocketServerEvent('batch_received', { size: requests.length })
 
-      const results = await Promise.all(
-        requests.map((req) => this.#processRequest(ws, req))
+      // Process batch with bounded concurrency to avoid stampedes
+      const CONCURRENCY_LIMIT = 32
+      async function processWithConcurrency<Type, Result>(
+        items: Type[],
+        limit: number,
+        worker: (item: Type, index: number) => Promise<Result>
+      ): Promise<Result[]> {
+        const results = new Array<Result>(items.length)
+        let next = 0
+        let running = 0
+
+        return await new Promise<Result[]>((resolve, reject) => {
+          const launch = () => {
+            while (running < limit && next < items.length) {
+              const index = next++
+              running++
+              Promise.resolve(worker(items[index]!, index))
+                .then((result) => {
+                  results[index] = result as Result
+                })
+                .then(() => {
+                  running--
+                  if (next >= items.length && running === 0) {
+                    resolve(results)
+                  } else {
+                    launch()
+                  }
+                })
+                .catch(reject)
+            }
+            if (next >= items.length && running === 0) {
+              resolve(results)
+            }
+          }
+
+          launch()
+        })
+      }
+
+      const results = await processWithConcurrency(
+        requests,
+        CONCURRENCY_LIMIT,
+        (request) => this.#processRequest(ws, request)
       )
 
       const filtered = results.filter(Boolean) as WebSocketResponse[]
