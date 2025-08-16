@@ -146,14 +146,14 @@ describe('project WebSocket RPC', () => {
   })
 
   it('handles batch requests', async () => {
-    const [one, two, three] = await client.batch([
+    const results = await client.batch([
       { method: 'add', params: { a: 1, b: 0 } },
       { method: 'add', params: { a: 1, b: 1 } },
       { method: 'add', params: { a: 1, b: 2 } },
     ])
-    expect(one).toBe(1)
-    expect(two).toBe(2)
-    expect(three).toBe(3)
+    expect(results.map((result) => (result.ok ? result.value : null))).toEqual([
+      1, 2, 3,
+    ])
   })
 
   it('streams results from an async generator', async () => {
@@ -250,40 +250,54 @@ describe('project WebSocket RPC', () => {
   })
 
   it('processes mixed-success batch requests with correct error propagation', async () => {
-    await expect(
-      client.batch([
-        { method: 'add', params: { a: 1, b: 1 } },
-        { method: 'fail', params: {} },
-        { method: 'add', params: { a: 1, b: 2 } },
-      ])
-    ).rejects.toThrow(/Intentional failure/)
+    const results = await client.batch([
+      { method: 'add', params: { a: 1, b: 1 } },
+      { method: 'fail', params: {} },
+      { method: 'add', params: { a: 1, b: 2 } },
+    ])
+    expect(results[0]!.ok).toBe(true)
+    expect(results[0]!.ok && (results[0] as any).value).toBe(2)
+    expect(results[1]!.ok).toBe(false)
+    expect(
+      String((results[1] as any)?.error?.message ?? (results[1] as any)?.error)
+    ).toMatch(/Intentional failure/)
+    expect(results[2]?.ok).toBe(true)
+    expect(results[2]?.ok && (results[2] as any).value).toBe(3)
   })
 
   it('handles large batch sizes efficiently', async () => {
     const SIZE = 1200
-    const batch = Array.from({ length: SIZE }, (_, i) => ({
+    const batch = Array.from({ length: SIZE }, (_, index) => ({
       method: 'add',
-      params: { a: i, b: i },
+      params: { a: index, b: index },
     }))
     const results = await client.batch(batch)
 
     expect(results.length).toBe(SIZE)
-    expect(results[0]).toBe(0)
-    expect(results[SIZE - 1]).toBe(SIZE - 1 + SIZE - 1)
+    expect(results[0]?.ok && results[0].value).toBe(0)
+
+    const last = results.at(-1)!
+    expect(last.ok && last.value).toBe(SIZE - 1 + SIZE - 1)
   })
 
   it('fails an entire batch quickly when any item times out', async () => {
     const start = performance.now()
-    await expect(
-      client.batch(
-        [
-          { method: 'slow', params: { delay: 2000 } },
-          { method: 'slow', params: { delay: 2000 } },
-          { method: 'slow', params: { delay: 2000 } },
-        ],
-        20
+    const results = await client.batch(
+      [
+        { method: 'slow', params: { delay: 2000 } },
+        { method: 'slow', params: { delay: 2000 } },
+        { method: 'slow', params: { delay: 2000 } },
+      ],
+      20
+    )
+    expect(results.every((result) => !result.ok)).toBe(true)
+    expect(
+      results.some((result) =>
+        String(result.ok ? result.value : result.error.message).match(
+          /timed out/i
+        )
       )
-    ).rejects.toThrow(/timed out/i)
+    ).toBe(true)
 
     const elapsed = performance.now() - start
     // Should fail fast well under the per-call 2s delays
