@@ -12,6 +12,19 @@ export interface FileExport {
   kind: tsMorph.SyntaxKind
 }
 
+const exportableKinds = new Set([
+  tsMorph.SyntaxKind.ExportAssignment,
+  tsMorph.SyntaxKind.ExportDeclaration,
+  tsMorph.SyntaxKind.ExportSpecifier,
+  tsMorph.SyntaxKind.ClassDeclaration,
+  tsMorph.SyntaxKind.EnumDeclaration,
+  tsMorph.SyntaxKind.FunctionDeclaration,
+  tsMorph.SyntaxKind.VariableDeclaration,
+  tsMorph.SyntaxKind.VariableStatement,
+  tsMorph.SyntaxKind.InterfaceDeclaration,
+  tsMorph.SyntaxKind.TypeAliasDeclaration,
+])
+
 /** Returns metadata about the exports of a file. */
 export function getFileExports(
   filePath: string,
@@ -25,6 +38,7 @@ export function getFileExports(
       if (!sourceFile) {
         const addStart = performance.now()
         sourceFile = project.addSourceFileAtPath(filePath)
+
         debug.debug('Added source file to project', {
           operation: 'get-file-exports',
           data: {
@@ -53,84 +67,73 @@ export function getFileExports(
 
       for (const [name, declarations] of exportedDeclarations) {
         for (const declaration of declarations) {
-          const isExportable = tsMorph.Node.isExportable(
-            tsMorph.Node.isVariableDeclaration(declaration)
-              ? declaration.getParentOrThrow().getParent()
-              : declaration
-          )
-
-          if (isExportable) {
-            // Skip function overload declarations
-            if (tsMorph.Node.isFunctionDeclaration(declaration)) {
-              const body = declaration.getBody()
-
-              if (body === undefined) {
-                continue
-              }
-            }
-
-            const fileExport: FileExport = {
-              name,
-              path: declaration.getSourceFile().getFilePath(),
-              position: declaration.getPos(),
-              kind: declaration.getKind(),
-            }
-            let insertAt = exportDeclarations.length
-
-            for (let index = 0; index < insertAt; index++) {
-              const existing = exportDeclarations[index]
-              const isPathBefore =
-                fileExport.path.localeCompare(existing.path) < 0
-              const isSamePath = fileExport.path === existing.path
-              const isPositionBefore = fileExport.position < existing.position
-
-              if (isPathBefore || (isSamePath && isPositionBefore)) {
-                insertAt = index
-                break
-              }
-            }
-
-            exportDeclarations.splice(insertAt, 0, fileExport)
+          if (!exportableKinds.has(declaration.getKind())) {
+            continue
           }
+
+          if (tsMorph.Node.isFunctionDeclaration(declaration)) {
+            const body = declaration.getBody()
+
+            if (body === undefined) {
+              continue
+            }
+          }
+
+          let node: Node = declaration
+
+          // export { foo } = bar
+          const exportAssignment = node.getFirstAncestorByKind(
+            tsMorph.SyntaxKind.ExportAssignment
+          )
+          if (exportAssignment && !exportAssignment.isExportEquals()) {
+            node = exportAssignment
+          }
+
+          // const foo = 1; export { foo } / named var exports
+          if (tsMorph.Node.isVariableDeclaration(node)) {
+            node = node.getFirstAncestorByKindOrThrow(
+              tsMorph.SyntaxKind.VariableStatement
+            )
+          }
+
+          // export { x } from './y'
+          if (tsMorph.Node.isExportSpecifier(node)) {
+            const exportDeclaration = node.getFirstAncestorByKind(
+              tsMorph.SyntaxKind.ExportDeclaration
+            )
+            if (exportDeclaration) {
+              node = exportDeclaration
+            }
+          }
+
+          const fileExport: FileExport = {
+            name,
+            path: node.getSourceFile().getFilePath(),
+            position: node.getPos(),
+            kind: node.getKind(),
+          }
+          let insertAt = exportDeclarations.length
+
+          for (let index = 0; index < insertAt; index++) {
+            const existing = exportDeclarations[index]
+            const isPathBefore =
+              fileExport.path.localeCompare(existing.path) < 0
+            const isSamePath = fileExport.path === existing.path
+            const isPositionBefore = fileExport.position < existing.position
+
+            if (isPathBefore || (isSamePath && isPositionBefore)) {
+              insertAt = index
+              break
+            }
+          }
+
+          exportDeclarations.splice(insertAt, 0, fileExport)
         }
       }
 
-      debug.info('File exports processing completed', {
-        operation: 'get-file-exports-summary',
-        data: {
-          filePath,
-          totalExports: exportDeclarations.length,
-          uniqueExportNames: new Set(
-            exportDeclarations.map(
-              (exportDeclaration) => exportDeclaration.name
-            )
-          ).size,
-          uniqueExportKinds: new Set(
-            exportDeclarations.map(
-              (exportDeclaration) => exportDeclaration.kind
-            )
-          ).size,
-          defaultExports: exportDeclarations.filter(
-            (exportDeclaration) => exportDeclaration.name === 'default'
-          ).length,
-          namedExports: exportDeclarations.filter(
-            (exportDeclaration) => exportDeclaration.name !== 'default'
-          ).length,
-          totalDeclarations,
-          processingEfficiency:
-            totalDeclarations > 0
-              ? ((exportDeclarations.length / totalDeclarations) * 100).toFixed(
-                  1
-                )
-              : '0',
-        },
-      })
-
       return exportDeclarations
     },
-    {
-      data: { filePath },
-    }
+    { data: { filePath } }
   ) as FileExport[]
 }
 
