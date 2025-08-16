@@ -141,21 +141,38 @@ export class WebSocketClient extends EventEmitter {
   #isConnected = false
   #connectionState: ConnectionState = 'connecting'
   #connectionStartTime: number = 0
+
+  // per-request resolvers
   #requests: Record<number, Request> = {}
+
+  // streaming request routing
   #streams: Record<
     number,
     { onChunk: (value: any) => void; onDone: () => void }
   > = {}
-  #pendingRequests: { id: number; payload: string }[] = []
+
+  // frames not yet sent (offline or backpressure)
+  #pendingRequests: { ids: number[]; payload: string }[] = []
   #pendingBytes = 0
-  #queue: string[] = []
+
+  // frames queued to send on the live socket
+  #queue: { ids: number[]; payload: string }[] = []
+
+  // frames that have been sent on the current socket and still have unresolved ids
+  #framesInFlight: Array<{ ids: Set<number>; payload: string }> = []
+
   #flushTimer?: NodeJS.Timeout
   #MAX_BUFFERED = 8 * 1024 * 1024
-  #baseRetryMs: number = 1000
-  #maxRetryMs: number = 30000
-  #maxRetries: number = 5
+
+  // reconnect tuning (faster + more tries for CI flaps)
+  #baseRetryMs: number = 300
+  #maxRetryMs: number = 5_000
+  #maxRetries: number = 10
   #currentRetries: number = 0
+
   #nextId: number = 1
+
+  // autobatch buckets keyed by timeout so time budget is aligned
   #autoBatchQueues = new Map<
     number,
     {
@@ -170,20 +187,46 @@ export class WebSocketClient extends EventEmitter {
       timer?: NodeJS.Timeout
     }
   >()
+
+  // readiness barrier (optional to await from callers)
+  #readyWaiters: Array<(v: void) => void> = []
+
   #handleOpenEvent = this.#handleOpen.bind(this)
   #handleMessageEvent = this.#handleMessage.bind(this)
   #handleErrorEvent = this.#handleError.bind(this)
   #handleCloseEvent = this.#handleClose.bind(this)
 
-  #closeSocket(code?: number, reason?: string, where?: string) {
-    try {
-      this.#ws?.close(code, reason)
-    } catch (e) {
-      debug.logWebSocketClientEvent('close_failed', {
-        where,
-        error: (e as Error).message,
-      })
+  constructor() {
+    super()
+    this.#connect()
+  }
+
+  /** Optional: await until connected (good for startup sequencing). */
+  ready(timeoutMs = 15_000): Promise<void> {
+    if (this.#isConnected && this.#ws?.readyState === WS.OPEN) {
+      return Promise.resolve()
     }
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () =>
+          reject(
+            new WebSocketClientError(
+              '[renoun] WebSocket client ready() timed out',
+              'CONNECTION_TIMEOUT',
+              {
+                connectionState: this.#connectionState,
+                connectionTime: formatConnectionTime(this.#connectionStartTime),
+                port: String(process.env.RENOUN_SERVER_PORT || 'unknown'),
+              }
+            )
+          ),
+        timeoutMs
+      )
+      this.#readyWaiters.push(() => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
   }
 
   async #enqueueAutoBatch<Type>(
@@ -289,101 +332,40 @@ export class WebSocketClient extends EventEmitter {
     }
   }
 
-  async #callMethodUnbatched<Params extends Record<string, unknown>, Value>(
-    method: string,
-    params: Params,
-    timeoutMs = REQUEST_TIMEOUT_MS
-  ): Promise<Value> {
-    const id = this.#nextId++
-    const payload = JSON.stringify({ method, params, id, timeoutMs })
+  #sendFrame(ids: number[], payload: string) {
+    this.#queue.push({ ids, payload })
+    this.#flush()
+  }
 
-    debug.logWebSocketClientEvent('method_call', {
-      method,
-      params,
-      id,
-    })
-
-    return new Promise<Value>((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        debug.logWebSocketClientEvent('method_timeout', { method, id })
-
-        const error = this.#createClientError('REQUEST_TIMEOUT', {
+  #sendOrQueueFrame(ids: number[], payload: string): boolean {
+    if (this.#isConnected && this.#ws.readyState === WS.OPEN) {
+      this.#sendFrame(ids, payload)
+      return true
+    }
+    const bytes = Buffer.byteLength(payload)
+    if (
+      this.#pendingRequests.length >= PENDING_LIMIT ||
+      this.#pendingBytes + bytes > PENDING_BYTES_LIMIT
+    ) {
+      const error = new WebSocketClientError(
+        '[renoun] Client offline and pending queue is full',
+        'UNKNOWN_ERROR',
+        {
+          connectionState: this.#connectionState,
           connectionTime: formatConnectionTime(this.#connectionStartTime),
           port: process.env.RENOUN_SERVER_PORT || 'unknown',
-          connectionState: this.#connectionState,
-          method,
-          params,
-          timeout: timeoutMs,
-        })
-
-        // remove from pending queue if not sent yet
-        const index = this.#pendingRequests.findIndex(
-          (request) => request.id === id
-        )
-        if (index !== -1) {
-          const removed = this.#pendingRequests.splice(index, 1)[0]
-          if (removed) {
-            this.#pendingBytes = Math.max(
-              0,
-              this.#pendingBytes - Buffer.byteLength(removed.payload)
-            )
-          }
         }
-
-        reject(error)
+      )
+      // reject all ids that would have been part of this frame
+      for (const id of ids) {
+        this.#requests[id]?.reject(error)
         delete this.#requests[id]
-      }, timeoutMs)
-
-      this.#requests[id] = {
-        resolve: (value) => {
-          clearTimeout(timeoutId)
-          debug.logWebSocketClientEvent('method_resolved', { method, id })
-          resolve(value)
-        },
-        reject: (reason) => {
-          clearTimeout(timeoutId)
-          debug.logWebSocketClientEvent('method_rejected', {
-            method,
-            id,
-            reason: reason?.message,
-          })
-          reject(reason)
-        },
-      } satisfies Request
-
-      if (this.#sendOrQueue(id, payload)) {
-        if (this.#isConnected) {
-          debug.logWebSocketClientEvent('method_call_sent', { method, id })
-        }
       }
-    }).catch((error) => {
-      if (error instanceof WebSocketClientError) {
-        throw error
-      }
-
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        'message' in error
-      ) {
-        const constructedError = new Error((error as any).message)
-        Object.assign(constructedError, error)
-        throw constructedError
-      }
-
-      throw error instanceof Error ? error : new Error(String(error))
-    })
-  }
-
-  constructor() {
-    super()
-    this.#connect()
-  }
-
-  #send(payload: string) {
-    this.#queue.push(payload)
-    this.#flush()
+      return false
+    }
+    this.#pendingRequests.push({ ids, payload })
+    this.#pendingBytes += bytes
+    return true
   }
 
   #flush() {
@@ -392,8 +374,23 @@ export class WebSocketClient extends EventEmitter {
     }
 
     while (this.#queue.length && this.#ws.bufferedAmount < this.#MAX_BUFFERED) {
-      const message = this.#queue.shift()!
-      this.#ws.send(message)
+      const frame = this.#queue.shift()!
+      try {
+        this.#ws.send(frame.payload)
+        // track this frame as in-flight until all its ids settle
+        this.#framesInFlight.push({
+          ids: new Set(frame.ids),
+          payload: frame.payload,
+        })
+      } catch (error) {
+        debug.logWebSocketClientEvent('send_failed', {
+          error: (error as Error).message,
+        })
+        // push back to pending so reconnect can retry
+        this.#pendingRequests.unshift(frame)
+        this.#pendingBytes += Buffer.byteLength(frame.payload)
+        break
+      }
     }
 
     if (this.#queue.length && !this.#flushTimer) {
@@ -401,6 +398,34 @@ export class WebSocketClient extends EventEmitter {
         this.#flushTimer = undefined
         this.#flush()
       }, 50)
+    }
+  }
+
+  #flushing = false
+
+  async #flushPending() {
+    if (this.#flushing) {
+      return
+    }
+    this.#flushing = true
+    try {
+      while (this.#pendingRequests.length) {
+        const frame = this.#pendingRequests[0]!
+        if (!this.#isConnected || this.#ws.readyState !== WS.OPEN) {
+          break
+        }
+        this.#sendFrame(frame.ids, frame.payload)
+        this.#pendingRequests.shift()
+        this.#pendingBytes = Math.max(
+          0,
+          this.#pendingBytes - Buffer.byteLength(frame.payload)
+        )
+
+        // Yield to the event loop to allow the server to handle the request
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+    } finally {
+      this.#flushing = false
     }
   }
 
@@ -479,7 +504,14 @@ export class WebSocketClient extends EventEmitter {
 
     if (!this.#shouldRetry) {
       // We were closed intentionally but a late connect fired so drop it
-      this.#closeSocket(1000, 'opened_after_close', 'handleOpen_guard')
+      try {
+        this.#ws?.close(1000, 'opened_after_close')
+      } catch (e) {
+        debug.logWebSocketClientEvent('close_failed', {
+          where: 'handleOpen_guard',
+          error: (e as Error).message,
+        })
+      }
       return
     }
 
@@ -492,64 +524,459 @@ export class WebSocketClient extends EventEmitter {
       pendingRequests: this.#pendingRequests.length,
     })
 
+    // Allow anyone awaiting ready() to proceed
+    const waiters = this.#readyWaiters.splice(0, this.#readyWaiters.length)
+    waiters.forEach((fn) => fn())
+
     void this.#flushPending()
     this.emit('connected')
   }
 
-  #flushing = false
-
-  async #flushPending() {
-    if (this.#flushing) {
+  #retryConnection() {
+    if (this.#retryTimeout || !this.#shouldRetry) {
       return
     }
-    this.#flushing = true
-    try {
-      while (this.#pendingRequests.length) {
-        const { payload } = this.#pendingRequests[0]!
-        if (!this.#isConnected || this.#ws.readyState !== WS.OPEN) {
-          break
-        }
-        this.#send(payload)
-        this.#pendingRequests.shift()
-        this.#pendingBytes = Math.max(
-          0,
-          this.#pendingBytes - Buffer.byteLength(payload)
-        )
 
-        // Yield to the event loop to allow the server to handle the request
-        await new Promise((resolve) => setImmediate(resolve))
+    if (this.#currentRetries < this.#maxRetries) {
+      this.#currentRetries++
+      const base = Math.min(
+        this.#maxRetryMs,
+        this.#baseRetryMs * 2 ** (this.#currentRetries - 1)
+      )
+      const jitter = Math.random() * 0.3 * base
+      const delay = Math.round(base + jitter)
+
+      this.#retryTimeout = setTimeout(() => {
+        this.#retryTimeout = undefined
+
+        debug.logWebSocketClientEvent('retrying', {
+          retryCount: this.#currentRetries,
+          maxRetries: this.#maxRetries,
+          delay,
+        })
+
+        this.emit('retry', {
+          retryCount: this.#currentRetries,
+          maxRetries: this.#maxRetries,
+          delay,
+        })
+
+        if (!this.#shouldRetry) {
+          return
+        }
+
+        this.#connect()
+      }, delay)
+
+      // let the process exit naturally if nothing else is pending
+      this.#retryTimeout?.unref()
+    } else {
+      const error = this.#createClientError('MAX_RETRIES_EXCEEDED', {
+        connectionTime: formatConnectionTime(this.#connectionStartTime),
+        port: process.env.RENOUN_SERVER_PORT || 'unknown',
+        connectionState: this.#connectionState,
+        maxRetries: this.#maxRetries,
+      })
+
+      // clear any stray timer just in case
+      if (this.#retryTimeout) {
+        clearTimeout(this.#retryTimeout)
+        this.#retryTimeout = undefined
       }
-    } finally {
-      this.#flushing = false
+
+      for (const id of Object.keys(this.#requests)) {
+        const numericId = Number(id)
+        this.#requests[numericId]?.reject(error)
+        delete this.#requests[numericId]
+      }
+
+      this.#connectionState = 'failed'
+      this.emit('maxRetriesExceeded', { maxRetries: this.#maxRetries })
+      this.#emitError(error)
+
+      return
     }
   }
 
-  #sendOrQueue(id: number, payload: string): boolean {
-    if (this.#isConnected && this.#ws.readyState === WS.OPEN) {
-      this.#send(payload)
-      return true
+  #handleError(event: any) {
+    const connectionTime = formatConnectionTime(this.#connectionStartTime)
+    const port = process.env.RENOUN_SERVER_PORT || 'unknown'
+
+    // While connecting we only log; close handler will decide whether to retry
+    if (this.#connectionState === 'connecting') {
+      debug.logWebSocketClientEvent('connect_error', {
+        connectionTime,
+        eventMessage: event?.message,
+      })
+      return
     }
-    const bytes = Buffer.byteLength(payload)
-    if (
-      this.#pendingRequests.length >= PENDING_LIMIT ||
-      this.#pendingBytes + bytes > PENDING_BYTES_LIMIT
-    ) {
-      const error = new WebSocketClientError(
-        '[renoun] Client offline and pending queue is full',
-        'UNKNOWN_ERROR',
-        {
-          connectionState: this.#connectionState,
+
+    debug.logWebSocketClientEvent('error', {
+      connectionTime,
+      port,
+      connectionState: this.#connectionState,
+      eventMessage: event?.message,
+    })
+
+    // IMPORTANT: do not reject in-flight requests here; wait for close+retry.
+    return
+  }
+
+  #handleClose(code?: number, reasonBuf?: Buffer) {
+    this.#isConnected = false
+    this.#connectionState = 'disconnected'
+
+    const reason = (reasonBuf?.toString() || '').trim()
+    const connectionTime = formatConnectionTime(this.#connectionStartTime)
+
+    debug.logWebSocketClientEvent('closed', {
+      code: code ?? 1006,
+      reason,
+      connectionTime,
+      retryCount: this.#currentRetries,
+    })
+
+    // Stop any pending flush loop
+    if (this.#flushTimer) {
+      clearTimeout(this.#flushTimer)
+      this.#flushTimer = undefined
+    }
+
+    try {
+      this.#ws.off('open', this.#handleOpenEvent)
+      this.#ws.off('message', this.#handleMessageEvent)
+      this.#ws.off('error', this.#handleErrorEvent)
+      this.#ws.off('close', this.#handleCloseEvent)
+    } catch (error) {
+      debug.logWebSocketClientEvent('off_failed', {
+        where: 'handleClose',
+        error: (error as Error).message,
+      })
+    }
+
+    // Requeue frames that were in flight on the now-dead socket (only unresolved ids)
+    if (this.#framesInFlight.length) {
+      const requeued: { ids: number[]; payload: string }[] = []
+      for (const frame of this.#framesInFlight) {
+        if (frame.ids.size === 0) continue
+        try {
+          const parsed = JSON.parse(frame.payload)
+          if (Array.isArray(parsed)) {
+            const filtered = parsed.filter((req: any) => frame.ids.has(req?.id))
+            if (filtered.length) {
+              requeued.push({
+                ids: filtered.map((r: any) => r.id),
+                payload: JSON.stringify(filtered),
+              })
+            }
+          } else {
+            const singleId = (parsed && parsed.id) as number | undefined
+            if (singleId != null && frame.ids.has(singleId)) {
+              requeued.push({ ids: [singleId], payload: frame.payload })
+            }
+          }
+        } catch {
+          // if parsing fails, fallback to resending the whole frame
+          requeued.push({ ids: [...frame.ids], payload: frame.payload })
+        }
+      }
+      // Put them at the front so they resend before new work.
+      this.#pendingRequests = [...requeued, ...this.#pendingRequests]
+      // Recompute pending bytes conservatively
+      this.#pendingBytes = this.#pendingRequests.reduce(
+        (total, request) => total + Buffer.byteLength(request.payload),
+        0
+      )
+      this.#framesInFlight = []
+    }
+
+    // Do NOT reject in-flight requests here. Let them either succeed
+    // after we resend on reconnect, or let their per-request timers fire.
+
+    // Keep streams mapped; if callers are consuming, they will resume or end on timeout.
+    this.emit('disconnected', { code: code ?? 1006, reason })
+
+    if (this.#shouldRetry) {
+      this.#retryConnection()
+    }
+  }
+
+  async callMethod<Params extends Record<string, unknown>, Value>(
+    method: string,
+    params: Params,
+    timeoutMs = REQUEST_TIMEOUT_MS,
+    batch: boolean = true
+  ): Promise<Value> {
+    if (batch) {
+      return this.#enqueueAutoBatch<Value>(method, params, timeoutMs)
+    }
+    return this.#callMethodUnbatched<Params, Value>(method, params, timeoutMs)
+  }
+
+  async batch(
+    requests: { method: string; params: any }[],
+    timeoutMs = REQUEST_TIMEOUT_MS
+  ): Promise<Array<{ ok: true; value: any } | { ok: false; error: any }>> {
+    const framed = requests.map((request) => ({
+      ...request,
+      id: this.#nextId++,
+      timeoutMs,
+    }))
+    const ids = framed.map((frame) => frame.id)
+    const payload = JSON.stringify(framed)
+    const timers: Record<number, NodeJS.Timeout> = {}
+
+    type Settled = { ok: true; value: any } | { ok: false; error: any }
+    const settles = framed.map(
+      ({ id, method, params }) =>
+        new Promise<Settled>((resolve) => {
+          timers[id] = setTimeout(() => {
+            resolve({
+              ok: false,
+              error: this.#createClientError('REQUEST_TIMEOUT', {
+                connectionTime:
+                  Math.round(
+                    (performance.now() - this.#connectionStartTime) * 1000
+                  ) / 1000,
+                port: process.env.RENOUN_SERVER_PORT || 'unknown',
+                connectionState: this.#connectionState,
+                method,
+                params,
+                timeout: timeoutMs,
+              }),
+            })
+          }, timeoutMs)
+
+          this.#requests[id] = {
+            resolve: (value) => {
+              clearTimeout(timers[id])
+              delete timers[id]
+              resolve({ ok: true, value })
+              delete this.#requests[id]
+              this.#onRequestSettled(id)
+            },
+            reject: (reason) => {
+              clearTimeout(timers[id])
+              delete timers[id]
+              resolve({ ok: false, error: reason })
+              delete this.#requests[id]
+              this.#onRequestSettled(id)
+            },
+          }
+        })
+    )
+
+    // Queue or send the batch once with all ids
+    if (!this.#sendOrQueueFrame(ids, payload)) {
+      const error = this.#createClientError('UNKNOWN_ERROR', {
+        connectionTime: formatConnectionTime(this.#connectionStartTime),
+        port: process.env.RENOUN_SERVER_PORT || 'unknown',
+        connectionState: this.#connectionState,
+        eventMessage: 'pending_queue_full',
+      })
+      // Settle all entries with the same error and clean up resolvers/timers
+      for (const id of ids) {
+        if (this.#requests[id]) {
+          try {
+            this.#requests[id].reject(error)
+          } catch {}
+          delete this.#requests[id]
+        }
+        if (timers[id]) {
+          clearTimeout(timers[id])
+          delete timers[id]
+        }
+      }
+      return framed.map(() => ({ ok: false, error }))
+    }
+
+    try {
+      const results = await Promise.all(settles)
+      return results
+    } finally {
+      for (const id of Object.keys(timers)) {
+        clearTimeout(timers[Number(id)])
+      }
+    }
+  }
+
+  async #callMethodUnbatched<Params extends Record<string, unknown>, Value>(
+    method: string,
+    params: Params,
+    timeoutMs = REQUEST_TIMEOUT_MS
+  ): Promise<Value> {
+    const id = this.#nextId++
+    const payload = JSON.stringify({ method, params, id, timeoutMs })
+
+    debug.logWebSocketClientEvent('method_call', {
+      method,
+      params,
+      id,
+    })
+
+    return new Promise<Value>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        debug.logWebSocketClientEvent('method_timeout', { method, id })
+
+        const error = this.#createClientError('REQUEST_TIMEOUT', {
           connectionTime: formatConnectionTime(this.#connectionStartTime),
           port: process.env.RENOUN_SERVER_PORT || 'unknown',
+          connectionState: this.#connectionState,
+          method,
+          params,
+          timeout: timeoutMs,
+        })
+
+        // If still pending (unsent), try to surgically remove this id from its frame.
+        const index = this.#pendingRequests.findIndex((frame) =>
+          frame.ids.includes(id)
+        )
+        if (index !== -1) {
+          const frame = this.#pendingRequests[index]!
+          try {
+            const parsed = JSON.parse(frame.payload)
+            if (Array.isArray(parsed)) {
+              const filtered = parsed.filter((r: any) => r?.id !== id)
+              if (filtered.length !== parsed.length) {
+                const oldBytes = Buffer.byteLength(frame.payload)
+                frame.payload = JSON.stringify(filtered)
+                frame.ids = frame.ids.filter((n) => n !== id)
+                const newBytes = Buffer.byteLength(frame.payload)
+                this.#pendingBytes = Math.max(
+                  0,
+                  this.#pendingBytes - (oldBytes - newBytes)
+                )
+                if (frame.ids.length === 0) {
+                  this.#pendingBytes = Math.max(
+                    0,
+                    this.#pendingBytes - newBytes
+                  )
+                  this.#pendingRequests.splice(index, 1)
+                }
+              }
+            } else if ((parsed && parsed.id) === id) {
+              const bytes = Buffer.byteLength(frame.payload)
+              this.#pendingBytes = Math.max(0, this.#pendingBytes - bytes)
+              this.#pendingRequests.splice(index, 1)
+            }
+          } catch {
+            // best-effort: leave pending frame as-is
+          }
         }
-      )
-      this.#requests[id]?.reject(error)
-      delete this.#requests[id]
-      return false
+
+        reject(error)
+        delete this.#requests[id]
+        this.#onRequestSettled(id)
+      }, timeoutMs)
+
+      this.#requests[id] = {
+        resolve: (value) => {
+          clearTimeout(timeoutId)
+          debug.logWebSocketClientEvent('method_resolved', { method, id })
+          resolve(value)
+          this.#onRequestSettled(id)
+        },
+        reject: (reason) => {
+          clearTimeout(timeoutId)
+          debug.logWebSocketClientEvent('method_rejected', {
+            method,
+            id,
+            reason: reason?.message,
+          })
+          reject(reason)
+          this.#onRequestSettled(id)
+        },
+      } satisfies Request
+
+      this.#sendOrQueueFrame([id], payload)
+    }).catch((error) => {
+      if (error instanceof WebSocketClientError) {
+        throw error
+      }
+
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        'message' in error
+      ) {
+        const constructedError = new Error((error as any).message)
+        Object.assign(constructedError, error)
+        throw constructedError
+      }
+
+      throw error instanceof Error ? error : new Error(String(error))
+    })
+  }
+
+  callStream<Params extends Record<string, unknown>, Value>(
+    method: string,
+    params: Params
+  ) {
+    const queue: Value[] = []
+    const id = this.#nextId++
+    const payload = JSON.stringify({ method, params, id })
+    let nextResolve: ((result: IteratorResult<Value>) => void) | null = null
+    let ended = false
+
+    this.#streams[id] = {
+      onChunk: (value: Value) => {
+        if (nextResolve) {
+          const resolve = nextResolve
+          nextResolve = null
+          resolve({ value, done: false })
+        } else {
+          queue.push(value)
+        }
+      },
+      onDone: () => {
+        ended = true
+        if (nextResolve) {
+          const resolve = nextResolve
+          nextResolve = null
+          resolve({ value: undefined, done: true })
+        }
+      },
     }
-    this.#pendingRequests.push({ id, payload })
-    this.#pendingBytes += bytes
-    return true
+
+    this.#sendOrQueueFrame([id], payload)
+
+    const self = this
+    return {
+      [Symbol.asyncIterator]() {
+        return this
+      },
+      async next(): Promise<IteratorResult<Value>> {
+        if (queue.length) {
+          return { value: queue.shift()!, done: false }
+        }
+        if (ended) {
+          return { value: undefined, done: true }
+        }
+        return new Promise<IteratorResult<Value>>((res) => {
+          nextResolve = res
+        })
+      },
+      async return() {
+        ended = true
+        try {
+          if (self.#isConnected && self.#ws.readyState === WS.OPEN) {
+            self.#sendFrame([id], JSON.stringify({ type: 'cancel', id }))
+          }
+        } catch {
+          debug.logWebSocketClientEvent('cancel_failed', { id })
+        }
+
+        delete self.#streams[id]
+
+        if (nextResolve) {
+          const resolve = nextResolve
+          nextResolve = null
+          resolve({ value: undefined, done: true })
+        }
+        return { value: undefined, done: true }
+      },
+    }
   }
 
   #handleMessage(data: any) {
@@ -619,6 +1046,7 @@ export class WebSocketClient extends EventEmitter {
       if (request) {
         request.reject(message.error)
         delete this.#requests[message.id]
+        this.#onRequestSettled(message.id)
       }
       return
     }
@@ -633,9 +1061,11 @@ export class WebSocketClient extends EventEmitter {
         stream.onDone()
         delete this.#streams[message.id]
         this.emit('streamError', { id: message.id, error: message.error })
+        this.#onRequestSettled(message.id)
       } else if (message.done) {
         stream.onDone()
         delete this.#streams[message.id]
+        this.#onRequestSettled(message.id)
       } else {
         stream.onChunk(message.chunk)
       }
@@ -650,6 +1080,17 @@ export class WebSocketClient extends EventEmitter {
         this.#requests[id].resolve(result)
       }
       delete this.#requests[id]
+      this.#onRequestSettled(id)
+    }
+  }
+
+  #onRequestSettled(id: number) {
+    // Remove the id from any in-flight frames; drop empty frames.
+    for (let index = this.#framesInFlight.length - 1; index >= 0; index--) {
+      const frame = this.#framesInFlight[index]
+      if (frame.ids.delete(id) && frame.ids.size === 0) {
+        this.#framesInFlight.splice(index, 1)
+      }
     }
   }
 
@@ -669,390 +1110,6 @@ export class WebSocketClient extends EventEmitter {
       timeout: context.timeout,
       retryCount: this.#currentRetries,
     })
-  }
-
-  #handleError(event: any) {
-    const connectionTime = formatConnectionTime(this.#connectionStartTime)
-    const port = process.env.RENOUN_SERVER_PORT || 'unknown'
-    let error: WebSocketClientError
-
-    // While connecting we only log since #handleClose will decide whether to retry
-    if (this.#connectionState === 'connecting') {
-      debug.logWebSocketClientEvent('connect_error', {
-        connectionTime,
-        eventMessage: event.message,
-      })
-      return
-    }
-
-    debug.logWebSocketClientEvent('error', {
-      connectionTime,
-      port,
-      connectionState: this.#connectionState,
-      eventMessage: event.message,
-    })
-
-    if (this.#connectionState === 'connected') {
-      error = this.#createClientError('WEBSOCKET_ERROR', {
-        connectionTime,
-        port,
-        connectionState: this.#connectionState,
-        eventMessage: event.message,
-      })
-    } else {
-      error = this.#createClientError('UNKNOWN_ERROR', {
-        connectionTime,
-        port,
-        connectionState: this.#connectionState,
-        eventMessage: event.message,
-      })
-    }
-
-    this.#connectionState = 'failed'
-
-    for (const id of Object.keys(this.#requests)) {
-      const numericId = Number(id)
-      this.#requests[numericId]?.reject(error)
-      delete this.#requests[numericId]
-    }
-
-    // finish all active streams
-    for (const id of Object.keys(this.#streams)) {
-      try {
-        this.#streams[Number(id)]?.onDone()
-      } catch (e) {
-        debug.logWebSocketClientEvent('stream_done_failed', {
-          where: 'handleError',
-          id: Number(id),
-          error: (e as Error).message,
-        })
-      }
-      delete this.#streams[Number(id)]
-    }
-
-    this.#emitError(error)
-
-    return
-  }
-
-  #handleClose(code?: number, reasonBuf?: Buffer) {
-    this.#isConnected = false
-    this.#connectionState = 'disconnected'
-
-    const reason = (reasonBuf?.toString() || '').trim()
-    const connectionTime = formatConnectionTime(this.#connectionStartTime)
-
-    debug.logWebSocketClientEvent('closed', {
-      code: code ?? 1006,
-      reason,
-      connectionTime,
-      retryCount: this.#currentRetries,
-    })
-
-    // Stop any pending flush loop
-    if (this.#flushTimer) {
-      clearTimeout(this.#flushTimer)
-      this.#flushTimer = undefined
-    }
-
-    try {
-      this.#ws.off('open', this.#handleOpenEvent)
-      this.#ws.off('message', this.#handleMessageEvent)
-      this.#ws.off('error', this.#handleErrorEvent)
-      this.#ws.off('close', this.#handleCloseEvent)
-    } catch (error) {
-      debug.logWebSocketClientEvent('off_failed', {
-        where: 'handleClose',
-        error: (error as Error).message,
-      })
-    }
-
-    // Fail-fast: reject all in-flight requests so callers can retry now
-    const err = new WebSocketClientError(
-      `[renoun] Connection closed (${code ?? 1006})${reason ? ` ${reason}` : ''}`,
-      'UNKNOWN_ERROR',
-      {
-        connectionState: this.#connectionState,
-        connectionTime,
-        port: process.env.RENOUN_SERVER_PORT || 'unknown',
-      }
-    )
-    for (const id of Object.keys(this.#requests)) {
-      try {
-        this.#requests[Number(id)]?.reject(err)
-      } catch {
-        debug.logWebSocketClientEvent('request_reject_failed', {
-          where: 'handleClose',
-          id: Number(id),
-        })
-      }
-      delete this.#requests[Number(id)]
-    }
-
-    // Finish all active streams
-    for (const id of Object.keys(this.#streams)) {
-      try {
-        this.#streams[Number(id)]?.onDone()
-      } catch (e) {
-        debug.logWebSocketClientEvent('stream_done_failed', {
-          where: 'handleClose',
-          id: Number(id),
-          error: (e as Error).message,
-        })
-      }
-      delete this.#streams[Number(id)]
-    }
-
-    // Reset byte counter if queue is cleared elsewhere later
-    // Note: we don't clear pendingRequests here to allow retry logic to resend
-    // but we ensure the byte counter doesn't grow stale on next enqueue
-    this.#pendingBytes = this.#pendingRequests.reduce(
-      (total, item) => total + Buffer.byteLength(item.payload),
-      0
-    )
-
-    // Let consumers react to the close reason
-    this.emit('disconnected', { code: code ?? 1006, reason })
-
-    if (this.#shouldRetry) {
-      this.#retryConnection()
-    }
-  }
-
-  #retryConnection() {
-    if (this.#retryTimeout || !this.#shouldRetry) {
-      return
-    }
-
-    if (this.#currentRetries < this.#maxRetries) {
-      this.#currentRetries++
-      const base = Math.min(
-        this.#maxRetryMs,
-        this.#baseRetryMs * 2 ** (this.#currentRetries - 1)
-      )
-      const jitter = Math.random() * 0.3 * base
-      const delay = Math.round(base + jitter)
-
-      this.#retryTimeout = setTimeout(() => {
-        this.#retryTimeout = undefined
-
-        debug.logWebSocketClientEvent('retrying', {
-          retryCount: this.#currentRetries,
-          maxRetries: this.#maxRetries,
-          delay,
-        })
-
-        this.emit('retry', {
-          retryCount: this.#currentRetries,
-          maxRetries: this.#maxRetries,
-          delay,
-        })
-
-        if (!this.#shouldRetry) {
-          return
-        }
-
-        this.#connect()
-      }, delay)
-
-      // let the process exit naturally if nothing else is pending
-      this.#retryTimeout?.unref()
-    } else {
-      const error = this.#createClientError('MAX_RETRIES_EXCEEDED', {
-        connectionTime: formatConnectionTime(this.#connectionStartTime),
-        port: process.env.RENOUN_SERVER_PORT || 'unknown',
-        connectionState: this.#connectionState,
-        maxRetries: this.#maxRetries,
-      })
-
-      // clear any stray timer just in case
-      if (this.#retryTimeout) {
-        clearTimeout(this.#retryTimeout)
-        this.#retryTimeout = undefined
-      }
-
-      for (const id of Object.keys(this.#requests)) {
-        const numericId = Number(id)
-        this.#requests[numericId]?.reject(error)
-        delete this.#requests[numericId]
-      }
-
-      this.#connectionState = 'failed'
-      this.emit('maxRetriesExceeded', { maxRetries: this.#maxRetries })
-      this.#emitError(error)
-
-      return
-    }
-  }
-
-  async callMethod<Params extends Record<string, unknown>, Value>(
-    method: string,
-    params: Params,
-    timeoutMs = REQUEST_TIMEOUT_MS,
-    batch: boolean = true
-  ): Promise<Value> {
-    if (batch) {
-      return this.#enqueueAutoBatch<Value>(method, params, timeoutMs)
-    }
-    return this.#callMethodUnbatched<Params, Value>(method, params, timeoutMs)
-  }
-
-  async batch(
-    requests: { method: string; params: any }[],
-    timeoutMs = REQUEST_TIMEOUT_MS
-  ): Promise<Array<{ ok: true; value: any } | { ok: false; error: any }>> {
-    const framed = requests.map((request) => ({
-      ...request,
-      id: this.#nextId++,
-      timeoutMs,
-    }))
-    const payload = JSON.stringify(framed)
-    const timers: Record<number, NodeJS.Timeout> = {}
-
-    type Settled = { ok: true; value: any } | { ok: false; error: any }
-    const settles = framed.map(
-      ({ id, method, params }) =>
-        new Promise<Settled>((resolve) => {
-          timers[id] = setTimeout(() => {
-            resolve({
-              ok: false,
-              error: this.#createClientError('REQUEST_TIMEOUT', {
-                connectionTime:
-                  Math.round(
-                    (performance.now() - this.#connectionStartTime) * 1000
-                  ) / 1000,
-                port: process.env.RENOUN_SERVER_PORT || 'unknown',
-                connectionState: this.#connectionState,
-                method,
-                params,
-                timeout: timeoutMs,
-              }),
-            })
-          }, timeoutMs)
-
-          this.#requests[id] = {
-            resolve: (value) => {
-              clearTimeout(timers[id])
-              delete timers[id]
-              resolve({ ok: true, value })
-              delete this.#requests[id]
-            },
-            reject: (reason) => {
-              clearTimeout(timers[id])
-              delete timers[id]
-              resolve({ ok: false, error: reason })
-              delete this.#requests[id]
-            },
-          }
-        })
-    )
-
-    // Queue or send the batch once; use the first id as the handle
-    if (!this.#sendOrQueue(framed[0].id, payload)) {
-      const error = this.#createClientError('UNKNOWN_ERROR', {
-        connectionTime: formatConnectionTime(this.#connectionStartTime),
-        port: process.env.RENOUN_SERVER_PORT || 'unknown',
-        connectionState: this.#connectionState,
-        eventMessage: 'pending_queue_full',
-      })
-      // Settle all entries with the same error and clean up resolvers/timers
-      for (const { id } of framed) {
-        if (this.#requests[id]) {
-          try {
-            this.#requests[id].reject(error)
-          } catch {}
-          delete this.#requests[id]
-        }
-        if (timers[id]) {
-          clearTimeout(timers[id])
-          delete timers[id]
-        }
-      }
-      return framed.map(() => ({ ok: false, error }))
-    }
-
-    try {
-      const results = await Promise.all(settles)
-      return results
-    } finally {
-      for (const id of Object.keys(timers)) {
-        clearTimeout(timers[Number(id)])
-      }
-    }
-  }
-
-  callStream<Params extends Record<string, unknown>, Value>(
-    method: string,
-    params: Params
-  ) {
-    const queue: Value[] = []
-    const id = this.#nextId++
-    const payload = JSON.stringify({ method, params, id })
-    let nextResolve: ((result: IteratorResult<Value>) => void) | null = null
-    let ended = false
-
-    this.#streams[id] = {
-      onChunk: (value: Value) => {
-        if (nextResolve) {
-          const resolve = nextResolve
-          nextResolve = null
-          resolve({ value, done: false })
-        } else {
-          queue.push(value)
-        }
-      },
-      onDone: () => {
-        ended = true
-        if (nextResolve) {
-          const resolve = nextResolve
-          nextResolve = null
-          resolve({ value: undefined, done: true })
-        }
-      },
-    }
-
-    if (this.#isConnected) {
-      this.#send(payload)
-    } else {
-      this.#pendingRequests.push({ id, payload })
-    }
-
-    const self = this
-    return {
-      [Symbol.asyncIterator]() {
-        return this
-      },
-      async next(): Promise<IteratorResult<Value>> {
-        if (queue.length) {
-          return { value: queue.shift()!, done: false }
-        }
-        if (ended) {
-          return { value: undefined, done: true }
-        }
-        return new Promise<IteratorResult<Value>>((res) => {
-          nextResolve = res
-        })
-      },
-      async return() {
-        ended = true
-        try {
-          if (self.#isConnected && self.#ws.readyState === WS.OPEN) {
-            self.#send(JSON.stringify({ type: 'cancel', id }))
-          }
-        } catch {
-          debug.logWebSocketClientEvent('cancel_failed', { id })
-        }
-
-        delete self.#streams[id]
-
-        if (nextResolve) {
-          const resolve = nextResolve
-          nextResolve = null
-          resolve({ value: undefined, done: true })
-        }
-        return { value: undefined, done: true }
-      },
-    }
   }
 
   #emitError(error: Error) {
@@ -1075,7 +1132,14 @@ export class WebSocketClient extends EventEmitter {
     }
 
     this.#isConnected = false
-    this.#closeSocket(1000, undefined, 'client_close')
+    try {
+      this.#ws?.close(1000)
+    } catch (e) {
+      debug.logWebSocketClientEvent('close_failed', {
+        where: 'client_close',
+        error: (e as Error).message,
+      })
+    }
     try {
       this.#ws?.off('open', this.#handleOpenEvent)
       this.#ws?.off('message', this.#handleMessageEvent)
@@ -1088,7 +1152,7 @@ export class WebSocketClient extends EventEmitter {
       })
     }
 
-    // Reject in-flight and clear queue
+    // Reject in-flight and clear all queues (explicit close)
     const error = new WebSocketClientError(
       '[renoun] Client closed',
       'UNKNOWN_ERROR',
@@ -1106,6 +1170,10 @@ export class WebSocketClient extends EventEmitter {
     }
 
     this.#pendingRequests.length = 0
+    this.#queue.length = 0
+    this.#framesInFlight.length = 0
+    this.#pendingBytes = 0
+
     this.#connectionState = 'disconnected'
     this.emit('disconnected')
   }
