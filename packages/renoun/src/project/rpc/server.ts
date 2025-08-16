@@ -874,7 +874,7 @@ export class WebSocketServer {
       const serverError = this.#createServerError('METHOD_NOT_FOUND', -32601, {
         method: request.method,
         requestId: request.id,
-        availableMethods: Object.keys(this.#handlers),
+        availableMethods: Array.from(this.#handlers.keys()),
       })
       if (!isNotification) {
         return {
