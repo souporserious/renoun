@@ -1,7 +1,8 @@
-import type WebSocket from 'ws'
+import WS from 'ws'
+import { EventEmitter } from 'node:events'
 
-import type { WebSocketRequest, WebSocketResponse } from './server.js'
 import { debug } from '../../utils/debug.js'
+import type { WebSocketResponse } from './server.js'
 
 type Request = {
   resolve: (value?: any) => void
@@ -33,6 +34,8 @@ type WebSocketClientErrorMessageFn = (
   context: WebSocketClientErrorContext
 ) => string
 
+const REQUEST_TIMEOUT_MS = 60_000
+
 const WEBSOCKET_CLIENT_ERROR_MESSAGES: Record<
   WebSocketClientErrorType,
   WebSocketClientErrorMessageFn
@@ -59,8 +62,13 @@ const WEBSOCKET_CLIENT_ERROR_MESSAGES: Record<
     `This suggests a protocol error or data corruption.\n` +
     `The server was previously connected but encountered an error.`,
 
-  REQUEST_TIMEOUT: ({ timeout = 30_000, method, params, connectionState }) =>
-    `[renoun] Request timed out after ${timeout / 1000} seconds\n\n` +
+  REQUEST_TIMEOUT: ({
+    timeout = REQUEST_TIMEOUT_MS,
+    method,
+    params,
+    connectionState,
+  }) =>
+    `[renoun] Request timed out after ${timeout}ms\n\n` +
     `Request details:\n` +
     `• Method: ${method}\n` +
     `• Params: ${JSON.stringify(params, null, 2)}\n` +
@@ -121,8 +129,10 @@ class WebSocketClientError extends Error {
   }
 }
 
-export class WebSocketClient {
-  #ws!: WebSocket
+export class WebSocketClient extends EventEmitter {
+  #ws!: WS
+  #shouldRetry = true
+  #retryTimeout?: NodeJS.Timeout
   #isConnected = false
   #connectionState: ConnectionState = 'connecting'
   #connectionStartTime: number = 0
@@ -131,22 +141,74 @@ export class WebSocketClient {
     number,
     { onChunk: (value: any) => void; onDone: () => void }
   > = {}
-  #pendingRequests: string[] = []
-  #retryInterval: number = 5000
+  #pendingRequests: { id: number; payload: string }[] = []
+  #queue: string[] = []
+  #flushTimer?: NodeJS.Timeout
+  #MAX_BUFFERED = 8 * 1024 * 1024
+  #baseRetryMs: number = 1000
+  #maxRetryMs: number = 30000
   #maxRetries: number = 5
   #currentRetries: number = 0
-  #handshakeTimer?: NodeJS.Timeout
+  #nextId: number = 1
   #handleOpenEvent = this.#handleOpen.bind(this)
   #handleMessageEvent = this.#handleMessage.bind(this)
   #handleErrorEvent = this.#handleError.bind(this)
   #handleCloseEvent = this.#handleClose.bind(this)
 
+  #closeSocket(code?: number, reason?: string, where?: string) {
+    try {
+      this.#ws?.close(code, reason)
+    } catch (e) {
+      debug.logWebSocketClientEvent('close_failed', {
+        where,
+        error: (e as Error).message,
+      })
+    }
+  }
+
   constructor() {
-    process.env.WS_NO_BUFFER_UTIL = 'true'
+    super()
     this.#connect()
   }
 
+  #send(payload: string) {
+    this.#queue.push(payload)
+    this.#flush()
+  }
+
+  #flush() {
+    if (!this.#isConnected || this.#ws.readyState !== WS.OPEN) {
+      return
+    }
+
+    while (this.#queue.length && this.#ws.bufferedAmount < this.#MAX_BUFFERED) {
+      const message = this.#queue.shift()!
+      this.#ws.send(message)
+    }
+
+    if (this.#queue.length && !this.#flushTimer) {
+      this.#flushTimer = setTimeout(() => {
+        this.#flushTimer = undefined
+        this.#flush()
+      }, 50)
+    }
+  }
+
   #connect() {
+    try {
+      if (this.#ws) {
+        this.#ws.off('open', this.#handleOpenEvent)
+        this.#ws.off('message', this.#handleMessageEvent)
+        this.#ws.off('error', this.#handleErrorEvent)
+        this.#ws.off('close', this.#handleCloseEvent)
+      }
+    } catch (error) {
+      debug.logWebSocketClientEvent('off_failed', {
+        where: 'pre_connect_cleanup',
+        error: (error as Error).message,
+      })
+    }
+
     this.#connectionState = 'connecting'
     this.#connectionStartTime = performance.now()
 
@@ -154,47 +216,74 @@ export class WebSocketClient {
       port: process.env.RENOUN_SERVER_PORT,
     })
 
-    import('ws').then(({ default: WebSocket }) => {
-      this.#ws = new WebSocket(
-        `ws://localhost:${process.env.RENOUN_SERVER_PORT}`,
-        process.env.RENOUN_SERVER_ID,
+    const port = process.env.RENOUN_SERVER_PORT
+    if (!port) {
+      const err = new WebSocketClientError(
+        '[renoun] Missing RENOUN_SERVER_PORT',
+        'UNKNOWN_ERROR',
         {
-          handshakeTimeout: 15_000,
-          perMessageDeflate: false,
-          maxPayload: 16 * 1024 * 1024,
+          connectionState: this.#connectionState,
+          connectionTime: 0,
+          port: 'unknown',
         }
       )
-      this.#handshakeTimer = setTimeout(() => {
-        // If 10 seconds pass with no 'open', kill the socket, #handleClose will decide whether to retry
-        if (this.#connectionState === 'connecting') {
-          debug.logWebSocketClientEvent('handshake_timeout', {
-            waitedMs: Math.round(performance.now() - this.#connectionStartTime),
-          })
-          this.#ws.terminate()
+      this.#connectionState = 'failed'
+      this.#emitError(err)
+      return
+    }
+
+    const serverId = process.env.RENOUN_SERVER_ID
+    if (!serverId) {
+      const error = new WebSocketClientError(
+        '[renoun] Missing RENOUN_SERVER_ID',
+        'UNKNOWN_ERROR',
+        {
+          connectionState: this.#connectionState,
+          connectionTime: 0,
+          port: String(process.env.RENOUN_SERVER_PORT || 'unknown'),
         }
-      }, 10_000)
-      this.#ws.addEventListener('open', this.#handleOpenEvent)
-      this.#ws.addEventListener('message', this.#handleMessageEvent)
-      this.#ws.addEventListener('error', this.#handleErrorEvent)
-      this.#ws.addEventListener('close', this.#handleCloseEvent)
+      )
+      this.#connectionState = 'failed'
+      this.#emitError(error)
+      return
+    }
+
+    this.#ws = new WS(`ws://localhost:${port}`, serverId, {
+      handshakeTimeout: 15_000,
+      perMessageDeflate: false,
+      maxPayload: 16 * 1024 * 1024,
     })
+
+    this.#ws.on('open', this.#handleOpenEvent)
+    this.#ws.on('message', this.#handleMessageEvent)
+    this.#ws.on('error', this.#handleErrorEvent)
+    this.#ws.on('close', this.#handleCloseEvent)
   }
 
   #handleOpen() {
-    clearTimeout(this.#handshakeTimer)
+    // if a retry timer was still pending, clear it
+    if (this.#retryTimeout) {
+      clearTimeout(this.#retryTimeout)
+      this.#retryTimeout = undefined
+    }
+
+    if (!this.#shouldRetry) {
+      // We were closed intentionally but a late connect fired so drop it
+      this.#closeSocket(1000, 'opened_after_close', 'handleOpen_guard')
+      return
+    }
 
     this.#isConnected = true
     this.#connectionState = 'connected'
     this.#currentRetries = 0
 
     debug.logWebSocketClientEvent('connected', {
-      connectionTime:
-        Math.round((performance.now() - this.#connectionStartTime) * 1000) /
-        1000,
+      connectionTime: formatConnectionTime(this.#connectionStartTime),
       pendingRequests: this.#pendingRequests.length,
     })
 
     void this.#flushPending()
+    this.emit('connected')
   }
 
   #flushing = false
@@ -206,8 +295,12 @@ export class WebSocketClient {
     this.#flushing = true
     try {
       while (this.#pendingRequests.length) {
-        const request = this.#pendingRequests.shift()!
-        this.#ws.send(request)
+        const { payload } = this.#pendingRequests[0]!
+        if (!this.#isConnected || this.#ws.readyState !== WS.OPEN) {
+          break
+        }
+        this.#send(payload)
+        this.#pendingRequests.shift()
 
         // Yield to the event loop to allow the server to handle the request
         await new Promise((resolve) => setImmediate(resolve))
@@ -217,16 +310,31 @@ export class WebSocketClient {
     }
   }
 
-  #handleMessage(event: WebSocket.MessageEvent) {
-    const raw = event.data.toString()
+  #handleMessage(data: any) {
+    let raw: string
+    if (typeof data === 'string') {
+      raw = data
+    } else if (Buffer.isBuffer(data)) {
+      raw = data.toString()
+    } else if (Array.isArray(data)) {
+      raw = Buffer.concat(data as Buffer[]).toString()
+    } else {
+      raw = Buffer.from(data as ArrayBuffer).toString()
+    }
 
     let parsed: any
     try {
       parsed = JSON.parse(raw)
     } catch (error) {
-      throw new Error(`[renoun] WebSocket client error parsing message`, {
-        cause: error,
+      debug.logWebSocketClientEvent('parse_error', {
+        error: (error as Error).message,
       })
+      this.emit(
+        'messageParseError',
+        new Error('[renoun] Malformed message from server'),
+        raw.slice(0, 512)
+      )
+      return
     }
 
     if (Array.isArray(parsed)) {
@@ -237,10 +345,53 @@ export class WebSocketClient {
   }
 
   #handleSingleMessage(message: any) {
+    // Surface protocol-level errors that have id: null or undefined
+    if (
+      (message?.id === null || typeof message?.id === 'undefined') &&
+      message?.error
+    ) {
+      this.emit('protocolError', message.error)
+      return
+    }
+
+    // treat as server notification: { type, data }
+    if (
+      message &&
+      !('id' in message) &&
+      !('result' in message) &&
+      !('error' in message)
+    ) {
+      this.emit('notification', message)
+      return
+    }
+
+    // Handle non-stream RPC errors immediately (avoid waiting on timeout)
+    if (
+      message &&
+      typeof message.id === 'number' &&
+      message.error &&
+      !('chunk' in message) &&
+      !('done' in message)
+    ) {
+      const request = this.#requests[message.id]
+      if (request) {
+        request.reject(message.error)
+        delete this.#requests[message.id]
+      }
+      return
+    }
+
+    // Route streaming messages, including error finalization
     if (message && ('chunk' in message || 'done' in message)) {
       const stream = this.#streams[message.id]
-      if (!stream) return
-      if (message.done) {
+      if (!stream) {
+        return
+      }
+      if (message.error) {
+        stream.onDone()
+        delete this.#streams[message.id]
+        this.emit('streamError', { id: message.id, error: message.error })
+      } else if (message.done) {
         stream.onDone()
         delete this.#streams[message.id]
       } else {
@@ -250,7 +401,7 @@ export class WebSocketClient {
     }
 
     const { id, result, error } = message as WebSocketResponse
-    if (id !== undefined && this.#requests[id]) {
+    if (typeof id === 'number' && this.#requests[id]) {
       if (error) {
         this.#requests[id].reject(error)
       } else {
@@ -272,15 +423,14 @@ export class WebSocketClient {
       connectionTime: context.connectionTime,
       port: context.port,
       method: context.method,
-      params: JSON.stringify(context.params),
+      params: context.params,
       timeout: context.timeout,
       retryCount: this.#currentRetries,
     })
   }
 
-  #handleError(event: WebSocket.ErrorEvent) {
-    const connectionTime =
-      Math.round((performance.now() - this.#connectionStartTime) * 1000) / 1000
+  #handleError(event: any) {
+    const connectionTime = formatConnectionTime(this.#connectionStartTime)
     const port = process.env.RENOUN_SERVER_PORT || 'unknown'
     let error: WebSocketClientError
 
@@ -317,75 +467,212 @@ export class WebSocketClient {
     }
 
     this.#connectionState = 'failed'
-    throw error
+
+    for (const id of Object.keys(this.#requests)) {
+      const numericId = Number(id)
+      this.#requests[numericId]?.reject(error)
+      delete this.#requests[numericId]
+    }
+
+    // finish all active streams
+    for (const id of Object.keys(this.#streams)) {
+      try {
+        this.#streams[Number(id)]?.onDone()
+      } catch (e) {
+        debug.logWebSocketClientEvent('stream_done_failed', {
+          where: 'handleError',
+          id: Number(id),
+          error: (e as Error).message,
+        })
+      }
+      delete this.#streams[Number(id)]
+    }
+
+    this.#emitError(error)
+
+    return
   }
 
-  #handleClose() {
+  #handleClose(code?: number, reasonBuf?: Buffer) {
     this.#isConnected = false
     this.#connectionState = 'disconnected'
 
+    const reason = (reasonBuf?.toString() || '').trim()
+    const connectionTime = formatConnectionTime(this.#connectionStartTime)
+
     debug.logWebSocketClientEvent('closed', {
-      connectionTime:
-        Math.round((performance.now() - this.#connectionStartTime) * 1000) /
-        1000,
+      code: code ?? 1006,
+      reason,
+      connectionTime,
       retryCount: this.#currentRetries,
     })
 
-    this.#ws.removeEventListener('open', this.#handleOpenEvent)
-    this.#ws.removeEventListener('message', this.#handleMessageEvent)
-    this.#ws.removeEventListener('error', this.#handleErrorEvent)
-    this.#ws.removeEventListener('close', this.#handleCloseEvent)
-    this.#retryConnection()
+    // Stop any pending flush loop
+    if (this.#flushTimer) {
+      clearTimeout(this.#flushTimer)
+      this.#flushTimer = undefined
+    }
+
+    try {
+      this.#ws.off('open', this.#handleOpenEvent)
+      this.#ws.off('message', this.#handleMessageEvent)
+      this.#ws.off('error', this.#handleErrorEvent)
+      this.#ws.off('close', this.#handleCloseEvent)
+    } catch (error) {
+      debug.logWebSocketClientEvent('off_failed', {
+        where: 'handleClose',
+        error: (error as Error).message,
+      })
+    }
+
+    // Fail-fast: reject all in-flight requests so callers can retry now
+    const err = new WebSocketClientError(
+      `[renoun] Connection closed (${code ?? 1006})${reason ? ` ${reason}` : ''}`,
+      'UNKNOWN_ERROR',
+      {
+        connectionState: this.#connectionState,
+        connectionTime,
+        port: process.env.RENOUN_SERVER_PORT || 'unknown',
+      }
+    )
+    for (const id of Object.keys(this.#requests)) {
+      try {
+        this.#requests[Number(id)]?.reject(err)
+      } catch {
+        debug.logWebSocketClientEvent('request_reject_failed', {
+          where: 'handleClose',
+          id: Number(id),
+        })
+      }
+      delete this.#requests[Number(id)]
+    }
+
+    // Finish all active streams
+    for (const id of Object.keys(this.#streams)) {
+      try {
+        this.#streams[Number(id)]?.onDone()
+      } catch (e) {
+        debug.logWebSocketClientEvent('stream_done_failed', {
+          where: 'handleClose',
+          id: Number(id),
+          error: (e as Error).message,
+        })
+      }
+      delete this.#streams[Number(id)]
+    }
+
+    // Let consumers react to the close reason
+    this.emit('disconnected', { code: code ?? 1006, reason })
+
+    if (this.#shouldRetry) {
+      this.#retryConnection()
+    }
   }
 
   #retryConnection() {
+    if (this.#retryTimeout || !this.#shouldRetry) {
+      return
+    }
+
     if (this.#currentRetries < this.#maxRetries) {
       this.#currentRetries++
-      setTimeout(() => {
+      const base = Math.min(
+        this.#maxRetryMs,
+        this.#baseRetryMs * 2 ** (this.#currentRetries - 1)
+      )
+      const jitter = Math.random() * 0.3 * base
+      const delay = Math.round(base + jitter)
+
+      this.#retryTimeout = setTimeout(() => {
+        this.#retryTimeout = undefined
+
         debug.logWebSocketClientEvent('retrying', {
           retryCount: this.#currentRetries,
           maxRetries: this.#maxRetries,
+          delay,
         })
+
+        this.emit('retry', {
+          retryCount: this.#currentRetries,
+          maxRetries: this.#maxRetries,
+          delay,
+        })
+
+        if (!this.#shouldRetry) {
+          return
+        }
+
         this.#connect()
-      }, this.#retryInterval)
+      }, delay)
+
+      // let the process exit naturally if nothing else is pending
+      this.#retryTimeout?.unref()
     } else {
-      throw this.#createClientError('MAX_RETRIES_EXCEEDED', {
-        connectionTime:
-          Math.round((performance.now() - this.#connectionStartTime) * 1000) /
-          1000,
+      const error = this.#createClientError('MAX_RETRIES_EXCEEDED', {
+        connectionTime: formatConnectionTime(this.#connectionStartTime),
         port: process.env.RENOUN_SERVER_PORT || 'unknown',
         connectionState: this.#connectionState,
         maxRetries: this.#maxRetries,
       })
+
+      // clear any stray timer just in case
+      if (this.#retryTimeout) {
+        clearTimeout(this.#retryTimeout)
+        this.#retryTimeout = undefined
+      }
+
+      for (const id of Object.keys(this.#requests)) {
+        const numericId = Number(id)
+        this.#requests[numericId]?.reject(error)
+        delete this.#requests[numericId]
+      }
+
+      this.#connectionState = 'failed'
+      this.emit('maxRetriesExceeded', { maxRetries: this.#maxRetries })
+      this.#emitError(error)
+
+      return
     }
   }
 
   async callMethod<Params extends Record<string, unknown>, Value>(
     method: string,
     params: Params,
-    timeout = 30_000
+    timeoutMs = REQUEST_TIMEOUT_MS
   ): Promise<Value> {
-    const id = performance.now()
-    const request: WebSocketRequest = { method, params, id }
+    const id = this.#nextId++
+    const payload = JSON.stringify({ method, params, id })
 
-    debug.logWebSocketClientEvent('method_call', request)
+    debug.logWebSocketClientEvent('method_call', {
+      method,
+      params,
+      id,
+    })
 
     return new Promise<Value>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         debug.logWebSocketClientEvent('method_timeout', { method, id })
+
         const error = this.#createClientError('REQUEST_TIMEOUT', {
-          connectionTime:
-            Math.round((performance.now() - this.#connectionStartTime) * 1000) /
-            1000,
+          connectionTime: formatConnectionTime(this.#connectionStartTime),
           port: process.env.RENOUN_SERVER_PORT || 'unknown',
           connectionState: this.#connectionState,
           method,
           params,
-          timeout,
+          timeout: timeoutMs,
         })
+
+        // remove from pending queue if not sent yet
+        const index = this.#pendingRequests.findIndex(
+          (request) => request.id === id
+        )
+        if (index !== -1) {
+          this.#pendingRequests.splice(index, 1)
+        }
+
         reject(error)
         delete this.#requests[id]
-      }, timeout)
+      }, timeoutMs)
 
       this.#requests[id] = {
         resolve: (value) => {
@@ -405,71 +692,157 @@ export class WebSocketClient {
       } satisfies Request
 
       if (this.#isConnected) {
-        debug.logWebSocketClientEvent('method_call_sent', {
-          method,
-          id,
-        })
-        this.#ws.send(JSON.stringify(request))
+        debug.logWebSocketClientEvent('method_call_sent', { method, id })
+        this.#send(payload)
       } else {
-        this.#pendingRequests.push(JSON.stringify(request))
+        this.#pendingRequests.push({ id, payload })
       }
     }).catch((error) => {
       if (error instanceof WebSocketClientError) {
         throw error
       }
-      throw new Error(error.data || error.message)
+
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        'message' in error
+      ) {
+        const constructedError = new Error(error.message)
+        Object.assign(constructedError, error)
+        throw constructedError
+      }
+
+      throw error instanceof Error ? error : new Error(String(error))
     })
   }
 
-  async batch(requests: { method: string; params: any }[]): Promise<any[]> {
-    const idBase = performance.now()
-    const framed = requests.map((request, index) => ({
+  async batch(
+    requests: { method: string; params: any }[],
+    timeoutMs = REQUEST_TIMEOUT_MS
+  ): Promise<any[]> {
+    const framed = requests.map((request) => ({
       ...request,
-      id: idBase + index,
+      id: this.#nextId++,
     }))
-    const waitAll = framed.map(({ id }) => {
-      return new Promise<any>((resolve, reject) => {
-        this.#requests[id] = { resolve, reject }
-      })
-    })
     const payload = JSON.stringify(framed)
-    if (this.#isConnected) {
-      this.#ws.send(payload)
-    } else {
-      this.#pendingRequests.push(payload)
+    const timers: Record<number, NodeJS.Timeout> = {}
+    const failEntireBatch = (reason: Error) => {
+      for (const { id } of framed) {
+        if (this.#requests[id]) {
+          try {
+            this.#requests[id].reject(reason)
+          } catch {
+            debug.logWebSocketClientEvent('request_reject_failed', {
+              where: 'failEntireBatch',
+              id,
+            })
+          }
+          delete this.#requests[id]
+        }
+        if (timers[id]) {
+          clearTimeout(timers[id])
+          delete timers[id]
+        }
+      }
+      const index = this.#pendingRequests.findIndex(
+        (request) => request.payload === payload
+      )
+      if (index !== -1) {
+        this.#pendingRequests.splice(index, 1)
+      }
     }
-    return Promise.all(waitAll)
+
+    const waits = framed.map(
+      ({ id, method, params }) =>
+        new Promise<any>((resolve, reject) => {
+          timers[id] = setTimeout(() => {
+            const error = this.#createClientError('REQUEST_TIMEOUT', {
+              connectionTime:
+                Math.round(
+                  (performance.now() - this.#connectionStartTime) * 1000
+                ) / 1000,
+              port: process.env.RENOUN_SERVER_PORT || 'unknown',
+              connectionState: this.#connectionState,
+              method,
+              params,
+              timeout: timeoutMs,
+            })
+            failEntireBatch(error)
+            reject(error)
+          }, timeoutMs)
+
+          this.#requests[id] = {
+            resolve: (value) => {
+              clearTimeout(timers[id])
+              delete timers[id]
+              resolve(value)
+              delete this.#requests[id]
+            },
+            reject: (reason) => {
+              clearTimeout(timers[id])
+              delete timers[id]
+              reject(reason)
+              delete this.#requests[id]
+            },
+          }
+        })
+    )
+
+    if (this.#isConnected) {
+      this.#send(payload)
+    } else {
+      // Queue the whole batch once; use the first id as the queue handle
+      this.#pendingRequests.push({ id: framed[0].id, payload })
+    }
+
+    // Fail-fast but ensure all timers cleared on settle
+    try {
+      return await Promise.all(waits)
+    } finally {
+      for (const id of Object.keys(timers)) {
+        clearTimeout(timers[Number(id)])
+      }
+    }
   }
 
   callStream<Params extends Record<string, unknown>, Value>(
     method: string,
     params: Params
-  ): AsyncGenerator<Value> {
-    const id = performance.now()
-    const payload = JSON.stringify({ method, params, id })
-
-    let push: (value: Value) => void = () => {}
-    let done!: () => void
+  ) {
     const queue: Value[] = []
-    const onChunk = (value: Value) => {
-      if (push) {
-        push(value)
-      } else {
-        queue.push(value)
-      }
-    }
-    const onDone = () => {
-      done?.()
-    }
+    const id = this.#nextId++
+    const payload = JSON.stringify({ method, params, id })
+    let nextResolve: ((result: IteratorResult<Value>) => void) | null = null
+    let ended = false
 
-    this.#streams[id] = { onChunk, onDone }
+    this.#streams[id] = {
+      onChunk: (value: Value) => {
+        if (nextResolve) {
+          const resolve = nextResolve
+          nextResolve = null
+          resolve({ value, done: false })
+        } else {
+          queue.push(value)
+        }
+      },
+      onDone: () => {
+        ended = true
+        if (nextResolve) {
+          const resolve = nextResolve
+          nextResolve = null
+          resolve({ value: undefined, done: true })
+        }
+      },
+    }
 
     if (this.#isConnected) {
-      this.#ws.send(payload)
+      this.#send(payload)
     } else {
-      this.#pendingRequests.push(payload)
+      this.#pendingRequests.push({ id, payload })
     }
 
+    const self = this
     return {
       [Symbol.asyncIterator]() {
         return this
@@ -478,17 +851,92 @@ export class WebSocketClient {
         if (queue.length) {
           return { value: queue.shift()!, done: false }
         }
-        return new Promise<IteratorResult<Value>>((resolve) => {
-          push = (value: Value) => resolve({ value, done: false })
-          done = () => resolve({ value: undefined as any, done: true })
+        if (ended) {
+          return { value: undefined, done: true }
+        }
+        return new Promise<IteratorResult<Value>>((res) => {
+          nextResolve = res
         })
       },
-      async return(): Promise<IteratorResult<Value>> {
-        return { value: undefined as any, done: true }
+      async return() {
+        ended = true
+        try {
+          if (self.#isConnected && self.#ws.readyState === WS.OPEN) {
+            self.#send(JSON.stringify({ type: 'cancel', id }))
+          }
+        } catch {
+          debug.logWebSocketClientEvent('cancel_failed', { id })
+        }
+
+        delete self.#streams[id]
+
+        if (nextResolve) {
+          const resolve = nextResolve
+          nextResolve = null
+          resolve({ value: undefined, done: true })
+        }
+        return { value: undefined, done: true }
       },
-      async throw(err: any): Promise<IteratorResult<Value>> {
-        throw err
-      },
-    } as any
+    }
   }
+
+  #emitError(error: Error) {
+    if (this.listenerCount('error') > 0) {
+      this.emit('error', error)
+    } else {
+      debug.logWebSocketClientEvent('unhandled_error', {
+        message: error.message,
+      })
+    }
+  }
+
+  close() {
+    this.#shouldRetry = false
+
+    // kill any scheduled retry
+    if (this.#retryTimeout) {
+      clearTimeout(this.#retryTimeout)
+      this.#retryTimeout = undefined
+    }
+
+    this.#isConnected = false
+    this.#closeSocket(1000, undefined, 'client_close')
+    try {
+      this.#ws?.off('open', this.#handleOpenEvent)
+      this.#ws?.off('message', this.#handleMessageEvent)
+      this.#ws?.off('error', this.#handleErrorEvent)
+      this.#ws?.off('close', this.#handleCloseEvent)
+    } catch (error) {
+      debug.logWebSocketClientEvent('off_failed', {
+        where: 'client_close',
+        error: (error as Error).message,
+      })
+    }
+
+    // Reject in-flight and clear queue
+    const error = new WebSocketClientError(
+      '[renoun] Client closed',
+      'UNKNOWN_ERROR',
+      {
+        connectionState: this.#connectionState,
+        connectionTime: formatConnectionTime(this.#connectionStartTime),
+        port: process.env.RENOUN_SERVER_PORT || 'unknown',
+      }
+    )
+
+    for (const id of Object.keys(this.#requests)) {
+      const numericId = Number(id)
+      this.#requests[numericId]?.reject(error)
+      delete this.#requests[numericId]
+    }
+
+    this.#pendingRequests.length = 0
+    this.#connectionState = 'disconnected'
+    this.emit('disconnected')
+  }
+}
+
+/** Format connection time in milliseconds */
+function formatConnectionTime(time: number) {
+  return Math.round((performance.now() - time) * 1000) / 1000
 }

@@ -46,6 +46,26 @@ describe('project WebSocket RPC', () => {
       }
     })
 
+    // Stream that throws after a few chunks (for stream error delivery)
+    server.registerMethod(
+      'countThenThrow',
+      async function* ({
+        number,
+        throwAt,
+      }: {
+        number: number
+        throwAt: number
+      }) {
+        for (let index = 0; index < number; index++) {
+          if (index === throwAt) {
+            throw new Error('boom: stream failed intentionally')
+          }
+          yield index
+          await new Promise((resolve) => setTimeout(resolve, 1))
+        }
+      }
+    )
+
     // Method that deliberately fails to test error propagation
     server.registerMethod('fail', () => {
       throw new Error('Intentional failure')
@@ -58,7 +78,7 @@ describe('project WebSocket RPC', () => {
       async ({ delay }: { delay: number }) => {
         currentConcurrent++
         if (currentConcurrent > maxConcurrent) maxConcurrent = currentConcurrent
-        await new Promise((r) => setTimeout(r, delay))
+        await new Promise((resolve) => setTimeout(resolve, delay))
         currentConcurrent--
         return delay
       },
@@ -148,6 +168,32 @@ describe('project WebSocket RPC', () => {
     expect(collected).toEqual([0, 1, 2, 3, 4])
   })
 
+  it('delivers stream errors to the client and ends the stream', async () => {
+    const n = 5
+    const throwAt = 2
+    const stream = client.callStream<
+      { number: number; throwAt: number },
+      number
+    >('countThenThrow', { number: n, throwAt })
+
+    const collected: number[] = []
+    let streamError: any = null
+    const once = new Promise<void>((resolve) => {
+      client.once('streamError', (error) => {
+        streamError = error
+        resolve()
+      })
+    })
+
+    for await (const value of stream) {
+      collected.push(value)
+    }
+    await once
+
+    expect(collected).toEqual([0, 1])
+    expect(streamError?.error).toMatch(/boom: stream failed intentionally/)
+  })
+
   it('handles thousands of small messages without stalling', async () => {
     const COUNT = 5000
     const calls = Array.from({ length: COUNT }, (_, i) =>
@@ -226,6 +272,24 @@ describe('project WebSocket RPC', () => {
     expect(results[SIZE - 1]).toBe(SIZE - 1 + SIZE - 1)
   })
 
+  it('fails an entire batch quickly when any item times out', async () => {
+    const start = performance.now()
+    await expect(
+      client.batch(
+        [
+          { method: 'slow', params: { delay: 2000 } },
+          { method: 'slow', params: { delay: 2000 } },
+          { method: 'slow', params: { delay: 2000 } },
+        ],
+        20
+      )
+    ).rejects.toThrow(/timed out/i)
+
+    const elapsed = performance.now() - start
+    // Should fail fast well under the per-call 2s delays
+    expect(elapsed).toBeLessThan(500)
+  })
+
   let serialDuration: number
   it('serialises execution when concurrency = 1', async () => {
     const start = performance.now()
@@ -260,7 +324,7 @@ describe('project WebSocket RPC', () => {
     const reusePort = parseInt(process.env.RENOUN_SERVER_PORT!)
 
     // Give the socket a moment to free the port entirely
-    await new Promise((r) => setTimeout(r, 300))
+    await new Promise((resolve) => setTimeout(resolve, 300))
 
     server = new WebSocketServer({ port: reusePort })
 
@@ -270,7 +334,7 @@ describe('project WebSocket RPC', () => {
     server.registerMethod('add2', ({ x }: { x: number }) => x + 1)
 
     // Wait for client to auto-reconnect (retry interval 5s by default)
-    await new Promise((r) => setTimeout(r, 5500))
+    await new Promise((resolve) => setTimeout(resolve, 5500))
 
     const result = await client.callMethod<{ x: number }, number>('add2', {
       x: 5,

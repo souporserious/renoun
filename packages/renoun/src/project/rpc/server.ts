@@ -1,14 +1,10 @@
-import type { AddressInfo, Server } from 'ws'
-import WebSocket from 'ws'
+import { WebSocketServer as WSS, default as WS } from 'ws'
+import type { RawData } from 'ws'
+import type { AddressInfo } from 'node:net'
 import { randomBytes, createHash } from 'node:crypto'
-import { monitorEventLoopDelay } from 'node:perf_hooks'
 
 import { debug } from '../../utils/debug.js'
 import { Semaphore } from '../../utils/Semaphore.js'
-
-const histogram = monitorEventLoopDelay({ resolution: 20 })
-
-histogram.enable()
 
 export interface WebSocketRequest {
   method: string
@@ -19,7 +15,7 @@ export interface WebSocketRequest {
 export interface WebSocketResponse {
   result?: any
   error?: { code: number; message: string; data?: any }
-  id?: number
+  id?: number | null
 }
 
 export interface WebSocketNotification {
@@ -31,6 +27,7 @@ export interface WebSocketStreamChunk {
   id: number
   chunk?: any
   done?: true
+  error?: string
 }
 
 type WebSocketServerErrorType =
@@ -141,12 +138,9 @@ class WebSocketServerError extends Error {
 }
 
 export class TimeoutError extends Error {
-  readonly timeoutMs: number
-
-  constructor(timeoutMs: number) {
-    super(`Request timed out after ${timeoutMs}ms`)
+  constructor(ms: number) {
+    super(`Request timed out after ${ms}ms`)
     this.name = 'TimeoutError'
-    this.timeoutMs = timeoutMs
   }
 }
 
@@ -156,7 +150,7 @@ process.env.RENOUN_SERVER_ID = SERVER_ID
 const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
 const MAX_BUFFERED = 8 * 1024 * 1024
 const MAX_TIMEOUT_MS = 300_000
-const REQUEST_TIMEOUT_MS = 30_000
+const REQUEST_TIMEOUT_MS = 60_000
 const HEARTBEAT_MS = 30_000
 const CLOSE_TEXT: Record<number, string> = {
   1000: 'Normal Closure',
@@ -164,41 +158,53 @@ const CLOSE_TEXT: Record<number, string> = {
   1006: 'Abnormal Closure',
   1009: 'Message Too Big',
   1011: 'Internal Error',
+  1013: 'Try Again Later',
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   const timeoutMs = Math.min(ms, MAX_TIMEOUT_MS)
+  let timer: NodeJS.Timeout
 
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new TimeoutError(timeoutMs)), timeoutMs)
-    ),
-  ])
+  return new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => reject(new TimeoutError(timeoutMs)), timeoutMs)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }
 
 type Milliseconds = number
 
 class LRUCache<Value> {
+  static readonly UNSET = Symbol('unset')
   #max: number
   #ttl: Milliseconds
-  #map = new Map<string, { value: Value; expiration: number }>()
+  #map = new Map<
+    string,
+    { value: Value | typeof LRUCache.UNSET; expiration: number }
+  >()
 
   constructor(maxEntries: number, ttlMs: Milliseconds) {
     this.#max = Math.max(1, maxEntries)
     this.#ttl = Math.max(0, ttlMs)
   }
 
-  get(key: string): Value | undefined {
+  get(key: string): Value | typeof LRUCache.UNSET {
     const hit = this.#map.get(key)
     if (!hit) {
-      return
+      return LRUCache.UNSET
     }
     if (this.#ttl && Date.now() > hit.expiration) {
       this.#map.delete(key)
-      return
+      return LRUCache.UNSET
     }
-    // LRU bump
     this.#map.delete(key)
     this.#map.set(key, hit)
     return hit.value
@@ -227,16 +233,19 @@ class LRUCache<Value> {
   }
 }
 
-function stableStringify(x: unknown): string {
-  if (x === null || typeof x !== 'object') {
-    return JSON.stringify(x)
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value)
   }
-  if (Array.isArray(x)) {
-    return `[${x.map(stableStringify).join(',')}]`
+
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`
   }
-  const object = x as Record<string, unknown>
+
+  const object = value as Record<string, unknown>
   const keys = Object.keys(object).sort()
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(object[k])}`).join(',')}}`
+
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(object[key])}`).join(',')}}`
 }
 
 function sha1(string: string) {
@@ -275,6 +284,18 @@ function makeKey(method: string, params: unknown): string {
   return sha1(`${method}|${stableStringify(normalizeForKey(params))}`)
 }
 
+function isCriticalMessage(message: any): boolean {
+  return (
+    message &&
+    typeof message === 'object' &&
+    'id' in message &&
+    ('result' in message ||
+      'error' in message ||
+      'chunk' in message ||
+      'done' in message)
+  )
+}
+
 type RegisterMethodOptions = {
   /** Memoize the method's results. */
   memoize?: boolean | { ttlMs?: Milliseconds; maxEntries?: number }
@@ -284,14 +305,11 @@ type RegisterMethodOptions = {
 }
 
 export class WebSocketServer {
-  #server!: Server
+  #server!: WSS
 
-  #sockets: Set<WebSocket> = new Set()
+  #sockets: Set<WS> = new Set()
 
-  #socketData = new WeakMap<
-    WebSocket,
-    { isAlive: boolean; connectionId: number }
-  >()
+  #socketData = new WeakMap<WS, { isAlive: boolean; connectionId: number }>()
 
   #readyPromise!: Promise<void>
 
@@ -314,9 +332,84 @@ export class WebSocketServer {
 
   #metricsTimer?: NodeJS.Timeout
 
-  #outgoingQueues = new WeakMap<WebSocket, string[]>()
+  #outgoingQueues = new WeakMap<
+    WS,
+    {
+      critical: Array<{ data: string; bytes: number }>
+      normal: Array<{ data: string; bytes: number }>
+    }
+  >()
 
-  #flushTimers = new WeakMap<WebSocket, NodeJS.Timeout>()
+  #flushTimers = new WeakMap<WS, NodeJS.Timeout>()
+
+  #activeStreams = new WeakMap<WS, Map<number, AbortController>>()
+
+  #pendingCancels = new WeakMap<WS, Set<number>>()
+
+  #averageMs = new Map<string, number>()
+
+  #MAX_QUEUE_BYTES = 4 * 1024 * 1024
+
+  #estimatedQueueBytes = new WeakMap<WS, number>()
+
+  #isCriticalPayload(payload: any): boolean {
+    if (Array.isArray(payload)) {
+      return payload.some(isCriticalMessage)
+    }
+
+    return isCriticalMessage(payload)
+  }
+
+  #closeWith(
+    ws: WS,
+    code: number,
+    reason: string,
+    extra: Record<string, any> = {}
+  ) {
+    debug.logWebSocketServerEvent('closing_due_to_backpressure', {
+      connectionId: this.#socketData.get(ws)?.connectionId,
+      code,
+      reason,
+      ...extra,
+    })
+    try {
+      ws.close(code, reason)
+    } catch {
+      this.#terminate(ws, { where: 'closeWith_fallback' })
+    }
+  }
+
+  #ping(ws: WS, context: Record<string, any> = {}) {
+    if (ws.readyState !== WS.OPEN) {
+      return false
+    }
+
+    try {
+      ws.ping()
+      return true
+    } catch (e) {
+      debug.logWebSocketServerEvent('ping_failed', {
+        connectionId: this.#socketData.get(ws)?.connectionId,
+        ...context,
+        error: (e as Error).message,
+      })
+      return false
+    }
+  }
+
+  #terminate(ws: WS, context: Record<string, any> = {}) {
+    try {
+      ws.terminate()
+      return true
+    } catch (error) {
+      debug.logWebSocketServerEvent('terminate_failed', {
+        connectionId: this.#socketData.get(ws)?.connectionId,
+        ...context,
+        error: (error as Error).message,
+      })
+      return false
+    }
+  }
 
   constructor(options?: { port?: number }) {
     this.#readyPromise = new Promise<void>((resolve, reject) => {
@@ -324,54 +417,25 @@ export class WebSocketServer {
       this.#rejectReady = reject
     })
 
-    import('ws')
-      .then((ws) => {
-        this.#server = new ws.WebSocketServer({
-          port: options?.port ?? 0,
-          host: 'localhost',
-          backlog: 1024,
-          maxPayload: MAX_PAYLOAD_BYTES,
-          perMessageDeflate: false,
-          clientTracking: false,
-          verifyClient: (info, callback) => {
-            if (info.req.headers['sec-websocket-protocol'] !== SERVER_ID) {
-              debug.logWebSocketServerEvent('client_rejected', {
-                reason: 'protocol_mismatch',
-              })
-              return callback(false, 401, 'Unauthorized')
-            }
-
-            if (info.origin) {
-              let hostname: string
-              try {
-                hostname = new URL(info.origin).hostname
-              } catch {
-                debug.logWebSocketServerEvent('client_rejected', {
-                  reason: 'bad_origin_url',
-                  origin: info.origin,
-                })
-                return callback(false, 403, 'Bad Origin')
-              }
-              if (hostname !== 'localhost') {
-                debug.logWebSocketServerEvent('client_rejected', {
-                  reason: 'forbidden_origin',
-                  origin: info.origin,
-                })
-                return callback(false, 403, 'Forbidden')
-              }
-            }
-
-            callback(true, 200, 'OK')
-          },
+    this.#server = new WSS({
+      port: options?.port ?? 0,
+      host: 'localhost',
+      backlog: 1024,
+      maxPayload: MAX_PAYLOAD_BYTES,
+      perMessageDeflate: false,
+      clientTracking: false,
+      handleProtocols: (protocols) => {
+        if (protocols.has(SERVER_ID)) {
+          return SERVER_ID
+        }
+        debug.logWebSocketServerEvent('client_rejected', {
+          reason: 'protocol_mismatch',
         })
-        this.#init()
-      })
-      .catch((error) => {
-        debug.logWebSocketServerEvent('server_failed', {
-          error: (error as Error).message,
-        })
-        this.#rejectReady(error)
-      })
+        return false
+      },
+    })
+
+    this.#init()
   }
 
   #createServerError(
@@ -411,7 +475,29 @@ export class WebSocketServer {
       }
     })
 
-    this.#server.on('connection', (ws: WebSocket, req: any) => {
+    this.#server.on('connection', (ws: WS, req: any) => {
+      // Strict origin allowlist for browsers; node clients typically omit Origin
+      try {
+        const origin = req?.headers?.origin
+        if (origin) {
+          const hostname = new URL(origin).hostname
+          if (!['localhost', '127.0.0.1', '::1'].includes(hostname)) {
+            debug.logWebSocketServerEvent('client_rejected', {
+              reason: 'forbidden_origin',
+              origin,
+            })
+            ws.close(1008, 'Forbidden origin')
+            return
+          }
+        }
+      } catch {
+        debug.logWebSocketServerEvent('client_rejected', {
+          reason: 'bad_origin_url',
+          origin: req?.headers?.origin,
+        })
+        ws.close(1008, 'Bad Origin')
+        return
+      }
       const connectionId = this.#nextConnectionId++
 
       this.#sockets.add(ws)
@@ -441,6 +527,16 @@ export class WebSocketServer {
         }
         this.#outgoingQueues.delete(ws)
 
+        // Abort any per-socket active streams and clear pending cancels
+        const perSocketStreams = this.#activeStreams.get(ws)
+        if (perSocketStreams) {
+          for (const controller of perSocketStreams.values()) {
+            controller.abort()
+          }
+          this.#activeStreams.delete(ws)
+        }
+        this.#pendingCancels.delete(ws)
+
         const reason = reasonBuf?.toString() || CLOSE_TEXT[code] || 'Unknown'
         debug.logWebSocketServerEvent('connection_closed', {
           connectionId,
@@ -464,7 +560,7 @@ export class WebSocketServer {
         })
       })
 
-      ws.on('message', (message: string | Buffer) => {
+      ws.on('message', (message: RawData) => {
         this.#handleMessage(ws, message)
       })
     })
@@ -480,10 +576,11 @@ export class WebSocketServer {
             inflight: [...this.#methods].map(
               ([k, d]) => k + ':' + d.inflight.size
             ),
-            eventLoopLag: Math.round(histogram.mean / 1e6) + ' ms',
           },
         })
       }, 5_000)
+
+      this.#metricsTimer.unref()
 
       // Start heartbeat once server is listening
       this.#heartbeatTimer = setInterval(() => {
@@ -494,9 +591,7 @@ export class WebSocketServer {
             debug.logWebSocketServerEvent('connection_terminated', {
               connectionId: data.connectionId,
             })
-            try {
-              ws.terminate()
-            } catch {}
+            this.#terminate(ws, { where: 'heartbeat_terminate' })
             continue
           }
 
@@ -504,11 +599,10 @@ export class WebSocketServer {
             data.isAlive = false
           }
 
-          try {
-            ws.ping()
-          } catch {}
+          this.#ping(ws, { where: 'heartbeat_ping' })
         }
       }, HEARTBEAT_MS)
+      ;(this.#heartbeatTimer as any)?.unref?.()
 
       const address = this.#server.address()
       const port =
@@ -533,6 +627,26 @@ export class WebSocketServer {
   }
 
   cleanup() {
+    // Abort all active streams per connection to avoid leaking upstream producers
+    for (const ws of this.#sockets) {
+      const perSocketStreams = this.#activeStreams.get(ws)
+      if (!perSocketStreams) {
+        continue
+      }
+      for (const controller of perSocketStreams.values()) {
+        try {
+          controller.abort()
+        } catch {
+          debug.logWebSocketServerEvent('stream_abort_failed', {
+            where: 'cleanup',
+            connectionId: this.#socketData.get(ws)?.connectionId,
+          })
+        }
+      }
+      this.#activeStreams.delete(ws)
+      this.#pendingCancels.delete(ws)
+    }
+
     for (const ws of this.#sockets) {
       const timer = this.#flushTimers.get(ws)
       if (timer) {
@@ -571,12 +685,22 @@ export class WebSocketServer {
   }
 
   async isReady(timeoutMs = 10_000) {
-    return Promise.race([
-      this.#readyPromise,
-      new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error('Server start timed out')), timeoutMs)
-      ),
-    ])
+    return new Promise<void>((resolve, reject) => {
+      const t = setTimeout(
+        () => reject(new Error('Server start timed out')),
+        timeoutMs
+      )
+      this.#readyPromise.then(
+        () => {
+          clearTimeout(t)
+          resolve()
+        },
+        (err) => {
+          clearTimeout(t)
+          reject(err)
+        }
+      )
+    })
   }
 
   async getPort() {
@@ -613,7 +737,15 @@ export class WebSocketServer {
     handler: (params: any) => Promise<any> | any,
     options: RegisterMethodOptions = { memoize: true, concurrency: 20 }
   ) {
-    const memoizeOptions = options?.memoize
+    const optionsMerged: RegisterMethodOptions = {
+      memoize: true,
+      concurrency: 20,
+      ...options,
+    }
+    const hasMemoizeProp =
+      options != null &&
+      Object.prototype.hasOwnProperty.call(options, 'memoize')
+    const memoizeOptions = hasMemoizeProp ? options!.memoize : undefined
     let fn: (params: any) => Promise<any> | any = handler
 
     if (memoizeOptions) {
@@ -636,7 +768,7 @@ export class WebSocketServer {
 
         // cache hit
         const hit = state.cache!.get(key)
-        if (typeof hit !== 'undefined') {
+        if (hit !== LRUCache.UNSET) {
           debug.logCacheOperation('hit', method)
           return hit
         }
@@ -670,8 +802,8 @@ export class WebSocketServer {
       fn = promise
     }
 
-    if (options?.concurrency && options.concurrency > 0) {
-      const semaphore = new Semaphore(options.concurrency)
+    if (optionsMerged?.concurrency && optionsMerged.concurrency > 0) {
+      const semaphore = new Semaphore(optionsMerged.concurrency)
       this.#methodSemaphores.set(method, semaphore)
       const base = fn
       fn = async (params: any) => {
@@ -688,13 +820,20 @@ export class WebSocketServer {
         try {
           const t0 = performance.now()
           const result = await base(params)
+          const elapsed = Math.round((performance.now() - t0) * 1000) / 1000
+
           debug.info('handler-done', {
             data: {
               id: Math.round(id * 1000) / 1000,
               method,
-              ms: Math.round((performance.now() - t0) * 1000) / 1000,
+              ms: elapsed,
             },
           })
+          const previous = this.#averageMs.get(method) ?? 0
+          this.#averageMs.set(
+            method,
+            previous ? previous * 0.8 + elapsed * 0.2 : elapsed
+          )
           return result
         } finally {
           release()
@@ -707,13 +846,13 @@ export class WebSocketServer {
     debug.logWebSocketServerEvent('method_registered', {
       method,
       memoized: !!memoizeOptions,
-      concurrency: options?.concurrency ?? null,
+      concurrency: optionsMerged?.concurrency ?? null,
     })
   }
 
   // Execute a single request and optionally return an RPC response.
   async #processRequest(
-    ws: WebSocket,
+    ws: WS,
     request: WebSocketRequest
   ): Promise<WebSocketResponse | null> {
     // Log the call once for tracing.
@@ -731,6 +870,7 @@ export class WebSocketServer {
     if (!handler) {
       const serverError = this.#createServerError('METHOD_NOT_FOUND', -32601, {
         method: request.method,
+        requestId: request.id,
         availableMethods: Object.keys(this.#handlers),
       })
       if (!isNotification) {
@@ -745,7 +885,8 @@ export class WebSocketServer {
     try {
       const semaphore = this.#methodSemaphores.get(request.method)
       const queueLength = semaphore ? semaphore.getQueueLength() : 0
-      const extraTime = queueLength * 1_500
+      const avg = Math.min(this.#averageMs.get(request.method) ?? 150, 30_000)
+      const extraTime = Math.min(queueLength * avg, 120_000)
       const result = await withTimeout(
         Promise.resolve(handler(request.params)),
         REQUEST_TIMEOUT_MS + extraTime
@@ -755,19 +896,55 @@ export class WebSocketServer {
       if (
         result &&
         typeof result === 'object' &&
-        (result as any)[Symbol.asyncIterator]
+        typeof result[Symbol.asyncIterator] === 'function'
       ) {
         if (!isNotification) {
-          for await (const chunk of result as AsyncIterable<any>) {
+          const controller = new AbortController()
+
+          let streamMap = this.#activeStreams.get(ws)
+          if (!streamMap) {
+            streamMap = new Map<number, AbortController>()
+            this.#activeStreams.set(ws, streamMap)
+          }
+          streamMap.set(request.id!, controller)
+
+          const pendingForSocket = this.#pendingCancels.get(ws)
+          if (pendingForSocket?.delete(request.id!)) {
+            controller.abort()
+          }
+
+          try {
+            for await (const chunk of this.#withChunkTimeout(
+              result as AsyncIterable<any>,
+              controller.signal,
+              REQUEST_TIMEOUT_MS
+            )) {
+              this.#sendJson(ws, {
+                id: request.id,
+                chunk,
+              } as WebSocketStreamChunk)
+            }
             this.#sendJson(ws, {
               id: request.id,
-              chunk,
+              done: true,
             } as WebSocketStreamChunk)
+          } catch (error) {
+            // Ensure the upstream producer is actually stopped on timeout.
+            if (error instanceof TimeoutError) {
+              controller.abort()
+            }
+            this.#sendJson(ws, {
+              id: request.id,
+              done: true,
+              error: String((error as Error).message ?? error),
+            } as WebSocketStreamChunk)
+          } finally {
+            // Per-connection cleanup
+            streamMap.delete(request.id!)
+            if (streamMap.size === 0) {
+              this.#activeStreams.delete(ws)
+            }
           }
-          this.#sendJson(ws, {
-            id: request.id,
-            done: true,
-          } as WebSocketStreamChunk)
         }
         return null
       }
@@ -777,7 +954,10 @@ export class WebSocketServer {
       }
       return null
     } catch (error) {
-      const code = error instanceof TimeoutError ? -32002 : -32603
+      const timedOut =
+        error instanceof TimeoutError ||
+        String((error as Error)?.message).startsWith('Request timed out')
+      const code = timedOut ? -32002 : -32603
       const serverError = this.#createServerError('INTERNAL_ERROR', code, {
         method: request.method,
         params: request.params,
@@ -799,13 +979,25 @@ export class WebSocketServer {
     }
   }
 
-  async #handleMessage(ws: WebSocket, message: string | Buffer) {
+  async #handleMessage(ws: WS, message: RawData) {
     const data = this.#socketData.get(ws)
     const connectionId = data?.connectionId
     let parsed: unknown
 
+    // Normalize RawData to string
+    let raw: string
+    if (typeof message === 'string') {
+      raw = message
+    } else if (Buffer.isBuffer(message)) {
+      raw = message.toString()
+    } else if (Array.isArray(message)) {
+      raw = Buffer.concat(message as Buffer[]).toString()
+    } else {
+      raw = Buffer.from(message as ArrayBuffer).toString()
+    }
+
     try {
-      parsed = JSON.parse(message.toString())
+      parsed = JSON.parse(raw)
     } catch (error) {
       const serverError = this.#createServerError('PARSE_ERROR', -32700, {
         originalError:
@@ -815,14 +1007,46 @@ export class WebSocketServer {
         connectionId,
         err: (error as Error).message,
       })
-      // Notifications have no id; we use -1 for malformed frames to avoid replying to unknown ids.
-      this.#sendError(ws, -1, serverError.code, serverError.message)
+      // Reply with JSON-RPC-ish null id for parse errors
+      this.#sendError(ws, null, serverError.code, serverError.message)
       return
+    }
+
+    // support client-driven stream cancel: { type: 'cancel', id: number }
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const object = parsed as any
+      if (object.type === 'cancel' && typeof object.id === 'number') {
+        const mapForSocket = this.#activeStreams.get(ws)
+        const controller = mapForSocket?.get(object.id)
+        if (controller) {
+          controller.abort()
+          mapForSocket!.delete(object.id)
+        } else {
+          let pendingForSocket = this.#pendingCancels.get(ws)
+          if (!pendingForSocket) {
+            pendingForSocket = new Set<number>()
+            this.#pendingCancels.set(ws, pendingForSocket)
+          }
+          pendingForSocket.add(object.id)
+        }
+        return
+      }
     }
 
     const isBatch =
       Array.isArray(parsed) &&
-      parsed.every((x) => x && typeof x.method === 'string')
+      parsed.every(
+        (request) =>
+          request &&
+          typeof request === 'object' &&
+          typeof request.method === 'string'
+      )
+
+    if (Array.isArray(parsed) && parsed.length === 0) {
+      // JSON-RPC: empty batch is invalid request
+      this.#sendError(ws, null, -32600, '[renoun] Invalid Request: empty batch')
+      return
+    }
 
     if (isBatch) {
       const requests = parsed as WebSocketRequest[]
@@ -837,6 +1061,19 @@ export class WebSocketServer {
         this.#sendJson(ws, filtered)
       }
       return
+    }
+
+    // If not a batch, validate the single request shape
+    if (!isBatch) {
+      const object = parsed as any
+      if (
+        !object ||
+        typeof object !== 'object' ||
+        typeof object.method !== 'string'
+      ) {
+        this.#sendError(ws, null, -32600, '[renoun] Invalid Request')
+        return
+      }
     }
 
     const singleResult = await this.#processRequest(
@@ -859,17 +1096,79 @@ export class WebSocketServer {
    * Small messages are batched automatically. If the socket buffer grows beyond
    * MAX_BUFFERED we stop sending and resume once it drains.
    */
-  #sendJson(ws: WebSocket, payload: any) {
-    // Lazily create a queue for this socket
-    let queue = this.#outgoingQueues.get(ws)
-    if (!queue) {
-      queue = []
-      this.#outgoingQueues.set(ws, queue)
+  #sendJson(ws: WS, payload: any) {
+    // Lazily create a dual-queue (critical / normal)
+    let queues = this.#outgoingQueues.get(ws)
+    if (!queues) {
+      queues = { critical: [], normal: [] }
+      this.#outgoingQueues.set(ws, queues)
     }
 
     try {
       const serialized = JSON.stringify(payload)
-      queue.push(serialized)
+      const bytes = Buffer.byteLength(serialized)
+      const critical = this.#isCriticalPayload(payload)
+
+      // If this single message is too large for our configured payload cap, close with 1009
+      if (bytes > MAX_PAYLOAD_BYTES) {
+        this.#closeWith(ws, 1009, 'Message too big', {
+          bytes,
+          max: MAX_PAYLOAD_BYTES,
+          critical,
+        })
+        return
+      }
+
+      let estimated = this.#estimatedQueueBytes.get(ws) || 0
+
+      // Drop from normal first; if we'd have to drop critical, prefer closing with 1013
+      while (
+        estimated + bytes > this.#MAX_QUEUE_BYTES &&
+        (queues.normal.length || queues.critical.length)
+      ) {
+        const fromCritical = queues.normal.length === 0
+        const dropped = fromCritical
+          ? queues.critical.shift()!
+          : queues.normal.shift()!
+        estimated -= dropped.bytes
+        if (fromCritical) {
+          this.#closeWith(ws, 1013, 'Backpressure: would drop RPC reply', {
+            incomingBytes: bytes,
+          })
+          return
+        }
+        debug.logWebSocketServerEvent('queue_drop', {
+          reason: 'max_queue_bytes',
+          droppedBytes: dropped.bytes,
+        })
+      }
+
+      // Still can’t fit
+      if (estimated + bytes > this.#MAX_QUEUE_BYTES) {
+        if (critical) {
+          this.#closeWith(ws, 1013, 'Backpressure: would drop RPC reply', {
+            incomingBytes: bytes,
+          })
+        } else {
+          debug.logWebSocketServerEvent('queue_drop', {
+            reason: 'single_message_too_large',
+            bytes,
+          })
+        }
+        return
+      }
+
+      this.#estimatedQueueBytes.set(ws, estimated + bytes)
+
+      const queueItem = {
+        data: serialized,
+        bytes,
+      }
+      if (critical) {
+        queues.critical.push(queueItem)
+      } else {
+        queues.normal.push(queueItem)
+      }
       this.#flushQueue(ws)
     } catch (error) {
       const data = this.#socketData.get(ws)
@@ -881,25 +1180,45 @@ export class WebSocketServer {
   }
 
   /** Flush as many queued messages as possible without exceeding MAX_BUFFERED. */
-  #flushQueue(ws: WebSocket) {
-    const queue = this.#outgoingQueues.get(ws)
-    if (!queue || queue.length === 0) {
+  #flushQueue(ws: WS) {
+    const queues = this.#outgoingQueues.get(ws)
+    if (
+      !queues ||
+      (queues.critical.length === 0 && queues.normal.length === 0)
+    ) {
       return
     }
 
-    if (ws.readyState !== ws.OPEN) {
+    if (ws.readyState !== WS.OPEN) {
       // Drop the queue for closed sockets
       this.#outgoingQueues.delete(ws)
+      this.#estimatedQueueBytes.delete(ws)
       return
     }
 
     const data = this.#socketData.get(ws)
 
-    while (queue.length && (ws.bufferedAmount ?? 0) < MAX_BUFFERED) {
-      const message = queue[0]!
+    let credit = 0
+    const takeNext = () => {
+      // 3:1 critical:normal scheduling
+      if (credit++ % 4 === 3) {
+        return queues.normal.shift()
+      }
+      return queues.critical.shift() ?? queues.normal.shift()
+    }
+
+    while (
+      (queues.critical.length || queues.normal.length) &&
+      (ws.bufferedAmount ?? 0) < MAX_BUFFERED
+    ) {
+      const item = takeNext()
+      if (!item) {
+        break
+      }
+      const { data: message, bytes } = item
       debug.logWebSocketServerEvent('payload_bytes', {
         connectionId: data?.connectionId,
-        payloadBytes: Buffer.byteLength(message),
+        payloadBytes: bytes,
       })
 
       try {
@@ -909,28 +1228,31 @@ export class WebSocketServer {
               connectionId: data?.connectionId,
               error: error.message,
             })
+            // fail fast on send error
+            this.#closeWith(ws, 1011, 'Send callback error')
           }
         })
-
-        // Successfully queued in the WebSocket buffer, remove from queue
-        queue.shift()
+        const previous = this.#estimatedQueueBytes.get(ws) || 0
+        this.#estimatedQueueBytes.set(ws, Math.max(0, previous - bytes))
       } catch (error) {
         debug.logWebSocketServerEvent('send_failed', {
           connectionId: data?.connectionId,
           error: (error as Error).message,
         })
-        // On fatal error give up flushing for this socket
+        // fail fast on synchronous send error
+        this.#closeWith(ws, 1011, 'Send threw')
         break
       }
     }
 
     // If there are still messages pending schedule another flush attempt.
-    if (queue.length) {
+    if (queues.critical.length || queues.normal.length) {
       if (!this.#flushTimers.has(ws)) {
         const timer = setTimeout(() => {
           this.#flushTimers.delete(ws)
           this.#flushQueue(ws)
         }, 50)
+        timer.unref?.()
         this.#flushTimers.set(ws, timer)
       }
     } else {
@@ -943,8 +1265,8 @@ export class WebSocketServer {
   }
 
   #sendError(
-    ws: WebSocket,
-    id: number | undefined,
+    ws: WS,
+    id: number | null | undefined,
     code: number,
     message: string,
     data: any = null
@@ -953,5 +1275,43 @@ export class WebSocketServer {
       id,
       error: { code, message, data },
     } satisfies WebSocketResponse)
+  }
+
+  async *#withChunkTimeout<T>(
+    iterable: AsyncIterable<T>,
+    signal: AbortSignal,
+    ms: number
+  ) {
+    const iterator = iterable[Symbol.asyncIterator]()
+    while (true) {
+      let timeout: NodeJS.Timeout | undefined
+      let onAbort: () => void = () => {}
+      const next = iterator.next()
+      const gate = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new TimeoutError(ms)), ms)
+        onAbort = () => {
+          if (timeout) {
+            clearTimeout(timeout)
+          }
+          reject(new Error('Stream aborted'))
+        }
+        signal.addEventListener('abort', onAbort, { once: true })
+      })
+
+      let result: IteratorResult<T>
+      try {
+        result = (await Promise.race([next, gate])) as IteratorResult<T>
+      } finally {
+        if (timeout) {
+          clearTimeout(timeout)
+        }
+        signal.removeEventListener?.('abort', onAbort)
+      }
+
+      if (result.done) {
+        return
+      }
+      yield result.value
+    }
   }
 }
