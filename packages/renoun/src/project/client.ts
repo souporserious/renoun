@@ -244,6 +244,41 @@ export async function getFileExportMetadata(
 }
 
 /**
+ * Attempt to get a statically analyzable literal value for a file export.
+ * @internal
+ */
+export async function getFileExportStaticValue(
+  filePath: string,
+  position: number,
+  kind: SyntaxKind,
+  projectOptions?: ProjectOptions
+) {
+  if (client) {
+    return client.callMethod<
+      {
+        filePath: string
+        position: number
+        kind: SyntaxKind
+        projectOptions?: ProjectOptions
+      },
+      unknown
+    >('getFileExportStaticValue', {
+      filePath,
+      position,
+      kind,
+      projectOptions,
+    })
+  }
+
+  return import('../utils/get-file-export-static-value.js').then(
+    ({ getFileExportStaticValue }) => {
+      const project = getProject(projectOptions)
+      return getFileExportStaticValue(filePath, position, kind, project)
+    }
+  )
+}
+
+/**
  * Get a specific file export's text by identifier, optionally including its dependencies.
  * @internal
  */

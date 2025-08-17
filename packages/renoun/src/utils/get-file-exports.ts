@@ -85,7 +85,18 @@ export function getFileExports(
             node = exportAssignment
           }
 
-          // const foo = 1; export { foo } / named var exports
+          // export const foo = 'bar'
+          if (tsMorph.Node.isVariableStatement(node)) {
+            const declarations = node.getDeclarationList().getDeclarations()
+
+            if (declarations.length > 1) {
+              throw new Error(
+                `[renoun] Multiple variable declarations found in variable statement which is not currently supported: ${node.getText()}`
+              )
+            }
+
+            node = declarations.at(0)!
+          }
           if (tsMorph.Node.isVariableDeclaration(node)) {
             node = node.getFirstAncestorByKindOrThrow(
               tsMorph.SyntaxKind.VariableStatement
@@ -159,6 +170,12 @@ export function getFileExportDeclaration(
         )
       }
 
+      // If the node at this position already matches the requested kind, use it directly.
+      if (declaration.getKind() === kind) {
+        return declaration
+      }
+
+      // Otherwise, find the nearest ancestor of the requested kind.
       const exportDeclaration = declaration.getFirstAncestorByKind(kind)
       if (!exportDeclaration) {
         throw new Error(
@@ -179,7 +196,11 @@ export function getFileExportDeclaration(
       return exportDeclaration
     },
     {
-      data: { filePath, position, kind: tsMorph.SyntaxKind[kind] },
+      data: {
+        filePath,
+        position,
+        kind: tsMorph.SyntaxKind[kind],
+      },
     }
   ) as tsMorph.Node
 }

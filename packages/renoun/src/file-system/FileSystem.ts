@@ -5,6 +5,7 @@ import {
   getFileExports,
   getFileExportMetadata,
   getFileExportText,
+  getFileExportStaticValue,
   resolveTypeAtLocation,
 } from '../project/client.js'
 import type { ProjectOptions } from '../project/types.js'
@@ -168,6 +169,19 @@ export abstract class FileSystem {
       position,
       kind,
       includeDependencies,
+      this.getProjectOptions()
+    )
+  }
+
+  async getFileExportStaticValue(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind
+  ) {
+    return getFileExportStaticValue(
+      filePath,
+      position,
+      kind,
       this.getProjectOptions()
     )
   }

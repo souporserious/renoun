@@ -236,6 +236,27 @@ export async function createServer(options?: { port?: number }) {
   )
 
   server.registerMethod(
+    'getFileExportStaticValue',
+    async function getFileExportStaticValue({
+      filePath,
+      position,
+      kind,
+      projectOptions,
+    }: {
+      filePath: string
+      position: number
+      kind: SyntaxKind
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      const { getFileExportStaticValue } = await import(
+        '../utils/get-file-export-static-value.js'
+      )
+      return getFileExportStaticValue(filePath, position, kind, project)
+    }
+  )
+
+  server.registerMethod(
     'createSourceFile',
     async function createSourceFile({
       filePath,

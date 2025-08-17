@@ -772,6 +772,25 @@ export class JavaScriptFileExport<Value> {
     )
   }
 
+  /** Attempt to return a literal value for this export if it can be determined statically. */
+  async getStaticValue(): Promise<unknown> {
+    const location = await this.#getLocation()
+
+    if (location === undefined) {
+      throw new Error(
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
+      )
+    }
+
+    const fileSystem = this.#file.getParent().getFileSystem()
+
+    return fileSystem.getFileExportStaticValue(
+      location.path,
+      location.position,
+      location.kind
+    )
+  }
+
   #getModule() {
     if (this.#loader === undefined) {
       const parentPath = this.#file.getParent().getRelativePathToWorkspace()

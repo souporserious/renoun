@@ -1015,6 +1015,49 @@ describe('file system', () => {
     )
   })
 
+  test('javascript file export static literal value', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.ts': [
+        'export const number = 42',
+        "export const string = 'hello world'",
+        'export const booleanTrue = true',
+        'export const booleanFalse = false',
+        'export const nullValue = null',
+        'export const reference = 123',
+        'export const array = [1, "a", true]',
+        "export const object = { a: 1, b: 'x' }",
+        'export default 123',
+      ].join('\n'),
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+
+    expect(await (await file.getExport('number')).getStaticValue()).toBe(42)
+    expect(await (await file.getExport('string')).getStaticValue()).toBe(
+      'hello world'
+    )
+    expect(await (await file.getExport('booleanTrue')).getStaticValue()).toBe(
+      true
+    )
+    expect(await (await file.getExport('booleanFalse')).getStaticValue()).toBe(
+      false
+    )
+    expect(
+      await (await file.getExport('nullValue')).getStaticValue()
+    ).toBeNull()
+    expect(await (await file.getExport('reference')).getStaticValue()).toBe(123)
+    expect(await (await file.getExport('array')).getStaticValue()).toEqual([
+      1,
+      'a',
+      true,
+    ])
+    expect(await (await file.getExport('object')).getStaticValue()).toEqual({
+      a: 1,
+      b: 'x',
+    })
+    expect(await (await file.getExport('default')).getStaticValue()).toBe(123)
+  })
+
   test('schema transforms export value', async () => {
     const fileSystem = new MemoryFileSystem({
       'hello-world.ts': `export const metadata = { title: 'Hello, World!', date: '2022-01-01' }`,
@@ -1683,7 +1726,7 @@ describe('file system', () => {
                 id: z.string(),
                 level: z.number(),
                 text: z.string(),
-                children: z.custom<React.ReactNode>(),
+                children: z.custom<React.ReactNode>().optional(),
               })
             ),
             metadata: z.object({
@@ -2213,5 +2256,23 @@ describe('file system', () => {
     expect(useHoverExamples.getBaseName()).toBe('useHover')
     expect(useHoverExamples.getModifierName()).toBe('examples')
     expect(useHoverExamples.getExtension()).toBe('ts')
+  })
+
+  test('default export runtime value', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.ts': `export default 123`,
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        ts: withSchema<{ default: number }>(() =>
+          Promise.resolve({ default: 123 })
+        ),
+      },
+    })
+    const file = await directory.getFile('index', 'ts')
+    const defaultExport = await file.getExport('default')
+
+    expect(await defaultExport.getRuntimeValue()).toBe(123)
   })
 })
