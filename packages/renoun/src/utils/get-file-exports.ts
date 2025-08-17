@@ -67,10 +67,6 @@ export function getFileExports(
 
       for (const [name, declarations] of exportedDeclarations) {
         for (const declaration of declarations) {
-          if (!exportableKinds.has(declaration.getKind())) {
-            continue
-          }
-
           if (tsMorph.Node.isFunctionDeclaration(declaration)) {
             const body = declaration.getBody()
 
@@ -104,6 +100,10 @@ export function getFileExports(
             if (exportDeclaration) {
               node = exportDeclaration
             }
+          }
+
+          if (!exportableKinds.has(node.getKind())) {
+            continue
           }
 
           const fileExport: FileExport = {
