@@ -588,6 +588,8 @@ export class JavaScriptFileExport<Value> {
   #slugCasing: SlugCasings
   #location: Omit<FileExport, 'name'> | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
+  #staticPromise?: Promise<Value>
+  #runtimePromise?: Promise<Value>
 
   constructor(
     name: string,
@@ -775,6 +777,16 @@ export class JavaScriptFileExport<Value> {
 
   /** Attempt to return a literal value for this export if it can be determined statically. */
   async getStaticValue(): Promise<Value> {
+    if (process.env.NODE_ENV === 'production') {
+      if (!this.#staticPromise) {
+        this.#staticPromise = this.#getStaticValue()
+      }
+      return this.#staticPromise
+    }
+    return this.#getStaticValue()
+  }
+
+  async #getStaticValue(): Promise<Value> {
     const location = await this.#getLocation()
 
     if (location === undefined) {
@@ -830,6 +842,16 @@ export class JavaScriptFileExport<Value> {
    * is not found or the configured schema validation for this file extension fails.
    */
   async getRuntimeValue(): Promise<Value> {
+    if (process.env.NODE_ENV === 'production') {
+      if (!this.#runtimePromise) {
+        this.#runtimePromise = this.#getRuntimeValue()
+      }
+      return this.#runtimePromise
+    }
+    return this.#getRuntimeValue()
+  }
+
+  async #getRuntimeValue(): Promise<Value> {
     const fileModule = await this.#getModule()
 
     if (this.#name in fileModule === false) {
@@ -890,6 +912,7 @@ export class JavaScriptFile<
   #exports = new Map<string, JavaScriptFileExport<any>>()
   #loader?: ModuleLoader<Types>
   #slugCasing?: SlugCasings
+  #modulePromise?: Promise<any>
 
   constructor({
     loader,
@@ -920,26 +943,35 @@ export class JavaScriptFile<
     }
 
     const path = removeExtension(this.getRelativePathToRoot())
+    const loader = this.#loader
+    let executeModuleLoader: () => Promise<any>
 
-    if (isLoader(this.#loader)) {
-      return this.#loader(path, this as any)
-    }
-
-    if (isLoaderWithSchema(this.#loader) && 'runtime' in this.#loader) {
-      if (this.#loader.runtime === undefined) {
+    if (isLoader(loader)) {
+      executeModuleLoader = () => loader(path, this)
+    } else if (isLoaderWithSchema(loader)) {
+      if (!loader.runtime) {
         const parentPath = this.getParent().getRelativePathToWorkspace()
 
         throw new Error(
           `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
         )
       }
-
-      return this.#loader.runtime(path, this as any)
+      executeModuleLoader = () => (loader.runtime as any)(path, this)
+    } else {
+      throw new Error(
+        `[renoun] This loader is missing a runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
+      )
     }
 
-    throw new Error(
-      `[renoun] This loader is missing a runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
-    )
+    if (process.env.NODE_ENV === 'production') {
+      if (this.#modulePromise) {
+        return this.#modulePromise
+      }
+      this.#modulePromise = executeModuleLoader()
+      return this.#modulePromise
+    }
+
+    return executeModuleLoader()
   }
 
   /** Parse and validate an export value using the configured schema if available. */
@@ -1116,6 +1148,8 @@ export class MDXFileExport<Value> {
   #file: MDXFile<any>
   #loader?: ModuleLoader<any>
   #slugCasing: SlugCasings
+  #staticPromise?: Promise<Value>
+  #runtimePromise?: Promise<Value>
 
   constructor(
     name: string,
@@ -1206,6 +1240,16 @@ export class MDXFileExport<Value> {
 
   /** Attempt to return a literal value for this export if it can be determined statically. */
   async getStaticValue(): Promise<Value> {
+    if (process.env.NODE_ENV === 'production') {
+      if (!this.#staticPromise) {
+        this.#staticPromise = this.#getStaticValue()
+      }
+      return this.#staticPromise
+    }
+    return this.#getStaticValue()
+  }
+
+  async #getStaticValue(): Promise<Value> {
     const value = await this.#file.getStaticExportValue(this.#name)
 
     if (value === undefined) {
@@ -1222,6 +1266,16 @@ export class MDXFileExport<Value> {
    * is not found or the configured schema validation for the MDX file fails.
    */
   async getRuntimeValue(): Promise<Value> {
+    if (process.env.NODE_ENV === 'production') {
+      if (!this.#runtimePromise) {
+        this.#runtimePromise = this.#getRuntimeValue()
+      }
+      return this.#runtimePromise
+    }
+    return this.#getRuntimeValue()
+  }
+
+  async #getRuntimeValue(): Promise<Value> {
     const fileModule = await this.#getModule()
 
     if (this.#name in fileModule === false) {
@@ -1303,6 +1357,7 @@ export class MDXFile<
   #loader?: ModuleLoader<{ default: MDXContent } & Types>
   #slugCasing?: SlugCasings
   #staticExportValues?: Map<string, unknown>
+  #modulePromise?: Promise<any>
 
   constructor({
     loader,
@@ -1415,13 +1470,13 @@ export class MDXFile<
     }
 
     const path = removeExtension(this.getRelativePathToRoot())
+    const loader = this.#loader
+    let executeModuleLoader: () => Promise<any>
 
-    if (isLoader(this.#loader)) {
-      return this.#loader(path, this as any)
-    }
-
-    if (isLoaderWithSchema(this.#loader) && 'runtime' in this.#loader) {
-      if (this.#loader.runtime === undefined) {
+    if (isLoader(loader)) {
+      executeModuleLoader = () => loader(path, this)
+    } else if (isLoaderWithSchema(loader)) {
+      if (!loader.runtime) {
         const parentPath = this.getParent().getRelativePathToWorkspace()
 
         throw new Error(
@@ -1429,12 +1484,22 @@ export class MDXFile<
         )
       }
 
-      return this.#loader.runtime(path, this as any)
+      executeModuleLoader = () => (loader.runtime as any)(path, this)
+    } else {
+      throw new Error(
+        `[renoun] This loader is missing an mdx runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
+      )
     }
 
-    throw new Error(
-      `[renoun] This loader is missing an mdx runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
-    )
+    if (process.env.NODE_ENV === 'production') {
+      if (this.#modulePromise) {
+        return this.#modulePromise
+      }
+      this.#modulePromise = executeModuleLoader()
+      return this.#modulePromise
+    }
+
+    return executeModuleLoader()
   }
 }
 
@@ -1553,7 +1618,7 @@ export class Directory<
       } else {
         this.#include = options.include
       }
-      this.#sort = options.sort as any
+      this.#sort = options.sort
     }
   }
 
@@ -1590,7 +1655,7 @@ export class Directory<
       slugCasing: this.#slugCasing,
       loader: this.#loader,
       include: this.#include as any,
-      sort: this.#sort as any,
+      sort: this.#sort,
       ...options,
     })
 
@@ -1771,7 +1836,7 @@ export class Directory<
           ? extension.includes(cachedFile.getExtension())
           : extension === cachedFile.getExtension()))
     ) {
-      return cachedFile as any
+      return cachedFile
     }
 
     // normalize the incoming path
@@ -2518,7 +2583,7 @@ export class Collection<
           const directoryFile = await entry
             .getFile(
               isRootDirectory ? normalizedPath : normalizedPath.slice(1),
-              extension as any
+              extension
             )
             .catch((error) => {
               if (error instanceof FileNotFoundError) {
@@ -2780,13 +2845,13 @@ function exportKeyFactory(pathSegments: string[]) {
 
     if (isJavaScriptFile(file)) {
       try {
-        const namedExport = await file.getNamedExport(exportName as any)
+        const namedExport = await file.getNamedExport(exportName)
         value = await namedExport.getStaticValue()
       } catch {
-        value = await file.getExportValue(exportName as any)
+        value = await file.getExportValue(exportName)
       }
     } else if (isMDXFile(file)) {
-      value = await file.getExportValue(exportName as any)
+      value = await file.getExportValue(exportName)
     }
 
     if (value === null) {
