@@ -20,7 +20,6 @@ const exportableKinds = new Set([
   tsMorph.SyntaxKind.EnumDeclaration,
   tsMorph.SyntaxKind.FunctionDeclaration,
   tsMorph.SyntaxKind.VariableDeclaration,
-  tsMorph.SyntaxKind.VariableStatement,
   tsMorph.SyntaxKind.InterfaceDeclaration,
   tsMorph.SyntaxKind.TypeAliasDeclaration,
 ])
@@ -96,11 +95,6 @@ export function getFileExports(
             }
 
             node = declarations.at(0)!
-          }
-          if (tsMorph.Node.isVariableDeclaration(node)) {
-            node = node.getFirstAncestorByKindOrThrow(
-              tsMorph.SyntaxKind.VariableStatement
-            )
           }
 
           // export { x } from './y'
