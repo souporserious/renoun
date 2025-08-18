@@ -11,7 +11,9 @@ on:
         type: boolean
         default: false
 
-concurrency: release-main
+concurrency:
+  group: release-main
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -63,14 +65,41 @@ jobs:
 
       - name: Fast-forward release branch
         if: steps.publish.outputs.published == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git fetch origin main
-          MAIN_SHA=$(git rev-parse origin/main)
-          git push --force-with-lease \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" \
-            "$MAIN_SHA:refs/heads/release"
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+
+            // Get the tip of main
+            const mainRef = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
+            const mainSha = mainRef.data.object.sha;
+
+            // Try to read release; if missing, create it at mainSha
+            let releaseRef;
+            try {
+              releaseRef = await github.rest.git.getRef({ owner, repo, ref: 'heads/release' });
+            } catch (error) {
+              if (error.status === 404) {
+                await github.rest.git.createRef({ owner, repo, ref: 'refs/heads/release', sha: mainSha });
+                core.info(`Created release at ${mainSha.slice(0,7)}`);
+                return;
+              }
+              throw error;
+            }
+
+            // Skip if already up-to-date
+            if (releaseRef.data.object.sha === mainSha) {
+              return;
+            }
+
+            // Fast-forward release to main
+            await github.rest.git.updateRef({
+              owner, repo,
+              ref: 'heads/release',
+              sha: mainSha,
+              force: false,
+            });
+            core.info(`Fast-forwarded release -> ${mainSha.slice(0,7)}`);
 
       - name: Notify Discord
         if: steps.publish.outputs.published == 'true'
