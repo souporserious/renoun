@@ -2772,10 +2772,21 @@ function exportKeyFactory(pathSegments: string[]) {
 
   return async (entry: FileSystemEntry) => {
     const file = await resolveFileFromEntry(entry)
-    let value = null
+    let value: any = null
 
-    if (isJavaScriptFile(file) || isMDXFile(file)) {
-      value = await file.getExportValue(exportName)
+    if (file === undefined) {
+      return null
+    }
+
+    if (isJavaScriptFile(file)) {
+      try {
+        const namedExport = await file.getNamedExport(exportName as any)
+        value = await namedExport.getStaticValue()
+      } catch {
+        value = await file.getExportValue(exportName as any)
+      }
+    } else if (isMDXFile(file)) {
+      value = await file.getExportValue(exportName as any)
     }
 
     if (value === null) {
