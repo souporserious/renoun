@@ -24,6 +24,7 @@
   "exclude": [
     "**/*.examples.tsx",
     "**/examples/**",
+    "**/*.bench.ts",
     "**/*.test.ts",
     "**/tests/**",
     "dist",
