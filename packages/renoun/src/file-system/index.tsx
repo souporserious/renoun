@@ -13,6 +13,7 @@ import { getClosestFile } from '../utils/get-closest-file.js'
 import { getEditorUri } from '../utils/get-editor-uri.js'
 import type { FileExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
+import { getMDXExportStaticValues } from '../utils/get-mdx-export-static-values.js'
 import { getMDXRuntimeValue } from '../utils/get-mdx-runtime-value.js'
 import {
   isJavaScriptLikeExtension,
@@ -1175,6 +1176,12 @@ export class MDXFileExport<Value> {
     return value
   }
 
+  /** Attempt to return a literal value for this export if it can be determined statically. */
+  async getStaticValue(): Promise<Value> {
+    const value = await this.#file.getStaticExportValue(this.#name)
+    return this.parseExportValue(this.#name, value)
+  }
+
   /**
    * Get the runtime value of the export. An error will be thrown if the export
    * is not found or the configured schema validation for the MDX file fails.
@@ -1245,6 +1252,7 @@ export class MDXFile<
   #exports = new Map<string, MDXFileExport<any>>()
   #loader?: ModuleLoader<{ default: MDXContent } & Types>
   #slugCasing?: SlugCasings
+  #staticExportValues?: Map<string, unknown>
 
   constructor({
     loader,
@@ -1331,6 +1339,20 @@ export class MDXFile<
     return this.getExport(name).then((fileExport) =>
       fileExport.getRuntimeValue()
     )
+  }
+
+  async #getStaticExportValues() {
+    if (!this.#staticExportValues) {
+      const source = await this.getText()
+      this.#staticExportValues = getMDXExportStaticValues(source)
+    }
+    return this.#staticExportValues
+  }
+
+  /** Attempt to return a literal value for a named export if it can be determined statically. */
+  async getStaticExportValue(name: string) {
+    const values = await this.#getStaticExportValues()
+    return values.get(name)
   }
 
   #getModule() {

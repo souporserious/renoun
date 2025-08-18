@@ -151,6 +151,7 @@
   },
   "devDependencies": {
     "@mdx-js/rollup": "^3.1.0",
+    "@types/estree": "^1.0.8",
     "@types/hast": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

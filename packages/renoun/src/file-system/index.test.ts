@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
-import { beforeAll, describe, test, expect, expectTypeOf } from 'vitest'
+import { beforeAll, describe, test, expect, expectTypeOf, vi } from 'vitest'
 import { runInNewContext } from 'node:vm'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import * as v from 'valibot'
 import { z } from 'zod'
@@ -1032,30 +1032,71 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('index', 'ts')
 
-    expect(await (await file.getExport('number')).getStaticValue()).toBe(42)
-    expect(await (await file.getExport('string')).getStaticValue()).toBe(
-      'hello world'
-    )
-    expect(await (await file.getExport('booleanTrue')).getStaticValue()).toBe(
-      true
-    )
-    expect(await (await file.getExport('booleanFalse')).getStaticValue()).toBe(
-      false
-    )
-    expect(
-      await (await file.getExport('nullValue')).getStaticValue()
-    ).toBeNull()
-    expect(await (await file.getExport('reference')).getStaticValue()).toBe(123)
-    expect(await (await file.getExport('array')).getStaticValue()).toEqual([
+    const numberExport = await file.getExport('number')
+    const stringExport = await file.getExport('string')
+    const booleanTrueExport = await file.getExport('booleanTrue')
+    const booleanFalseExport = await file.getExport('booleanFalse')
+    const nullExport = await file.getExport('nullValue')
+    const referenceExport = await file.getExport('reference')
+    const arrayExport = await file.getExport('array')
+    const objectExport = await file.getExport('object')
+    const defaultExport = await file.getExport('default')
+
+    expect(await numberExport.getStaticValue()).toBe(42)
+    expect(await stringExport.getStaticValue()).toBe('hello world')
+    expect(await booleanTrueExport.getStaticValue()).toBe(true)
+    expect(await booleanFalseExport.getStaticValue()).toBe(false)
+    expect(await nullExport.getStaticValue()).toBeNull()
+    expect(await referenceExport.getStaticValue()).toBe(123)
+    expect(await arrayExport.getStaticValue()).toEqual([1, 'a', true])
+    expect(await objectExport.getStaticValue()).toEqual({ a: 1, b: 'x' })
+    expect(await defaultExport.getStaticValue()).toBe(123)
+  })
+
+  test('mdx file export static literal value', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.mdx': [
+        'export const number = 42',
+        "export const string = 'hello world'",
+        'export const booleanTrue = true',
+        'export const booleanFalse = false',
+        'export const nullValue = null',
+        'export const reference = 123',
+        "export const array = [1, 'a', true, new Date('04/20/20')]",
+        "export const object = { a: 1, b: 'x' }",
+      ].join('\n'),
+    })
+    const directory = new Directory({ fileSystem })
+    const file = (await directory.getFile('index', 'mdx')) as MDXFile<
+      any,
+      any,
+      any
+    >
+
+    const numberExport = await file.getExport('number')
+    const stringExport = await file.getExport('string')
+    const booleanTrueExport = await file.getExport('booleanTrue')
+    const booleanFalseExport = await file.getExport('booleanFalse')
+    const nullExport = await file.getExport('nullValue')
+    const referenceExport = await file.getExport('reference')
+    const arrayExport = await file.getExport('array')
+    const objectExport = await file.getExport('object')
+    const getTextSpy = vi.spyOn(file, 'getText')
+
+    expect(await numberExport.getStaticValue()).toBe(42)
+    expect(await stringExport.getStaticValue()).toBe('hello world')
+    expect(await booleanTrueExport.getStaticValue()).toBe(true)
+    expect(await booleanFalseExport.getStaticValue()).toBe(false)
+    expect(await nullExport.getStaticValue()).toBeNull()
+    expect(await referenceExport.getStaticValue()).toBe(123)
+    expect(await arrayExport.getStaticValue()).toEqual([
       1,
       'a',
       true,
+      new Date('04/20/20'),
     ])
-    expect(await (await file.getExport('object')).getStaticValue()).toEqual({
-      a: 1,
-      b: 'x',
-    })
-    expect(await (await file.getExport('default')).getStaticValue()).toBe(123)
+    expect(await objectExport.getStaticValue()).toEqual({ a: 1, b: 'x' })
+    expect(getTextSpy).toHaveBeenCalledTimes(1)
   })
 
   test('schema transforms export value', async () => {

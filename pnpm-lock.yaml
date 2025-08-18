@@ -435,6 +435,9 @@ importers:
       '@mdx-js/rollup':
         specifier: ^3.1.0
         version: 3.1.0(acorn@8.15.0)(rollup@4.45.1)
+      '@types/estree':
+        specifier: ^1.0.8
+        version: 1.0.8
       '@types/hast':
         specifier: 'catalog:'
         version: 3.0.4
