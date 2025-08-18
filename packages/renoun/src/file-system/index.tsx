@@ -2104,44 +2104,71 @@ export class Directory<
       }
     }
 
-    const result: FileSystemEntry<LoaderTypes>[] = []
+    const entriesResult: FileSystemEntry<LoaderTypes>[] = []
+    const directories: Directory<LoaderTypes>[] = []
 
-    for (const entry of immediateEntries) {
+    for (let index = 0; index < immediateEntries.length; index++) {
+      const entry = immediateEntries[index]
       if (entry instanceof Directory) {
-        const includeSelf = this.#include
-          ? await this.#shouldInclude(entry)
-          : true
-        const children = options?.recursive
-          ? await entry.getEntries(options)
-          : []
+        directories.push(entry)
+      }
+    }
 
-        if (includeSelf && (children.length > 0 || !options?.recursive)) {
-          result.push(entry)
+    let childrenEntriesLists: FileSystemEntry<LoaderTypes>[][] = []
+
+    if (options?.recursive) {
+      const pendingEntries: Promise<FileSystemEntry<LoaderTypes>[]>[] = []
+      for (let index = 0; index < directories.length; index++) {
+        const directory = directories[index]
+        pendingEntries.push(directory.getEntries(options))
+      }
+      childrenEntriesLists = await Promise.all(pendingEntries)
+    }
+
+    let childIndex = 0
+    for (let index = 0; index < immediateEntries.length; index++) {
+      const entry = immediateEntries[index]
+
+      if (!(entry instanceof Directory)) {
+        entriesResult.push(entry)
+        continue
+      }
+
+      const includeSelf = this.#include
+        ? await this.#shouldInclude(entry)
+        : true
+      const childrenEntries = options?.recursive
+        ? childrenEntriesLists[childIndex++]
+        : []
+
+      if (includeSelf && (childrenEntries.length > 0 || !options?.recursive)) {
+        entriesResult.push(entry)
+      }
+
+      const directoryBaseName = entry.getBaseName()
+      for (
+        let childIndex = 0;
+        childIndex < childrenEntries.length;
+        childIndex++
+      ) {
+        const childEntry = childrenEntries[childIndex]
+        const isDirectoryNamedFile =
+          childEntry instanceof File &&
+          childEntry.getParent() === entry &&
+          childEntry.getBaseName() === directoryBaseName &&
+          !options?.includeDirectoryNamedFiles
+
+        if (!isDirectoryNamedFile) {
+          entriesResult.push(childEntry)
         }
-
-        const directoryBaseName = entry.getBaseName()
-
-        for (const child of children) {
-          const isDirectoryNamedFile =
-            child instanceof File &&
-            child.getParent() === entry &&
-            child.getBaseName() === directoryBaseName &&
-            !options?.includeDirectoryNamedFiles
-
-          if (!isDirectoryNamedFile) {
-            result.push(child)
-          }
-        }
-      } else {
-        result.push(entry)
       }
     }
 
     if (process.env.NODE_ENV === 'production') {
-      this.#entriesCache.set(cacheKey, result)
+      this.#entriesCache.set(cacheKey, entriesResult)
     }
 
-    return result as any
+    return entriesResult as any
   }
 
   /** Get the root directory path. */
