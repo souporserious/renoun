@@ -774,7 +774,7 @@ export class JavaScriptFileExport<Value> {
   }
 
   /** Attempt to return a literal value for this export if it can be determined statically. */
-  async getStaticValue(): Promise<unknown> {
+  async getStaticValue(): Promise<Value> {
     const location = await this.#getLocation()
 
     if (location === undefined) {
@@ -784,12 +784,19 @@ export class JavaScriptFileExport<Value> {
     }
 
     const fileSystem = this.#file.getParent().getFileSystem()
-
-    return fileSystem.getFileExportStaticValue(
+    const staticValue = fileSystem.getFileExportStaticValue(
       location.path,
       location.position,
       location.kind
     )
+
+    if (staticValue === undefined) {
+      throw new Error(
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
+      )
+    }
+
+    return this.#file.parseExportValue(this.#name, staticValue)
   }
 
   #getModule() {
@@ -840,6 +847,27 @@ export class JavaScriptFileExport<Value> {
     }
 
     return this.#file.parseExportValue(this.#name, fileModuleExport)
+  }
+
+  /** Get the value of this export, preferring a static value and falling back to runtime if available. */
+  async getValue(): Promise<Value> {
+    try {
+      const staticValue = await this.getStaticValue()
+
+      if (staticValue !== undefined) {
+        return staticValue as Value
+      }
+    } catch {
+      // ignore and fall back to runtime if possible
+    }
+
+    if (this.#loader !== undefined) {
+      return this.getRuntimeValue()
+    }
+
+    throw new Error(
+      `[renoun] JavaScript file export "${this.#name}" could not be determined statically or at runtime for path "${this.#file.getAbsolutePath()}". Ensure the directory has a loader defined for resolving "${this.#file.getExtension()}" files.`
+    )
   }
 }
 
@@ -1179,6 +1207,13 @@ export class MDXFileExport<Value> {
   /** Attempt to return a literal value for this export if it can be determined statically. */
   async getStaticValue(): Promise<Value> {
     const value = await this.#file.getStaticExportValue(this.#name)
+
+    if (value === undefined) {
+      throw new Error(
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
+      )
+    }
+
     return this.parseExportValue(this.#name, value)
   }
 
@@ -1204,6 +1239,21 @@ export class MDXFileExport<Value> {
     }
 
     return this.parseExportValue(this.#name, fileModuleExport)
+  }
+
+  /** Get the value of this export, preferring a static value and falling back to runtime if available. */
+  async getValue(): Promise<Value> {
+    try {
+      const staticValue = await this.getStaticValue()
+
+      if (staticValue !== undefined) {
+        return staticValue as Value
+      }
+    } catch {
+      // ignore and fall back to runtime if possible
+    }
+
+    return this.getRuntimeValue()
   }
 
   #getModule() {
