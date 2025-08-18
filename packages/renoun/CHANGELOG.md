@@ -1,5 +1,22 @@
 # renoun
 
+## 9.4.0
+
+### Minor Changes
+
+- fe6a1e0: Adds caching in production builds when resolving file export values.
+- 124afd1: Adds `MDXFileExport#getStaticValue` method that will attempt to get a statically analyzable literal value for an MDX file export.
+- 3b3e865: Adds `JavaScriptFileExport#getValue` and `MDXFileExport#getValue` methods that will attempt to get a statically analyzed literal value and fall back to a runtime value if a loader is defined.
+- c960bea: When sorting file system entries by an export value the built-in sort function will attempt to use the static value first before trying to resolve the runtime value.
+- 9b8345e: Adds `JavaScriptFileExport#getStaticValue` method that will attempt to get a statically analyzable literal value for a file export.
+
+### Patch Changes
+
+- f3b6551: Improves renoun CLI WebSocket client resilience to transient disconnects and CI flakiness.
+- a9f8bfc: Fixes default export not being indexed correctly during static analysis.
+- 19ac8e1: Improves `Directory#getEntries` performance by parallelizing recursive entries.
+- b72f6e6: Fixes source files not being created correctly for `MemoryFileSystem`.
+
 ## 9.3.0
 
 ### Minor Changes
