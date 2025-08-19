@@ -1614,10 +1614,29 @@ export class Directory<
       this.#fileSystem = options.fileSystem
       if (typeof options.include === 'string') {
         this.#includePattern = options.include
-        this.#include = new Minimatch(options.include, { dot: true })
+
+        // Fast-path common extension-only patterns e.g. *.tsx, **/*.mdx, etc.
+        const pattern = parseSimpleGlobPattern(options.include)
+        if (pattern) {
+          const extensions = new Set(pattern.extensions)
+
+          // Build a cheap predicate and skip Minimatch entirely
+          this.#include = (entry: FileSystemEntry<any>) => {
+            if (entry instanceof Directory) {
+              return pattern.recursive
+            }
+            if (entry instanceof File) {
+              return extensions.has(entry.getExtension())
+            }
+            return true
+          }
+        } else {
+          this.#include = new Minimatch(options.include, { dot: true })
+        }
       } else {
         this.#include = options.include
       }
+
       this.#sort = options.sort
     }
   }
@@ -2963,4 +2982,41 @@ export function createSort<
   compare?: (a: ExtractComparable<Key>, b: ExtractComparable<Key>) => number
 ): SortDescriptorObject<any, Entry, Key> {
   return { key, compare }
+}
+
+/** Parses a simple extension glob pattern into a recursive flag and a list of extensions. */
+function parseSimpleGlobPattern(
+  pattern: string
+): { recursive: boolean; extensions: string[] } | null {
+  const trimmedPattern = pattern.trim()
+
+  // *.tsx or **/*.tsx
+  let matches = trimmedPattern.match(
+    /^(\*\*\/)?\*\.(?<extensions>[A-Za-z0-9]+)$/
+  )
+  if (matches?.groups?.['extensions']) {
+    return {
+      recursive: Boolean(matches[1]),
+      extensions: [matches.groups['extensions'].toLowerCase()],
+    }
+  }
+
+  // *.{a,b,c} or **/*.{a,b,c}
+  matches = trimmedPattern.match(
+    /^(\*\*\/)?\*\.{(?<extensions>[A-Za-z0-9,\s]+)}$/
+  )
+  if (matches?.groups?.['extensions']) {
+    const extensions = matches.groups['extensions']
+      .split(',')
+      .map((extension) => extension.trim().toLowerCase())
+      .filter(Boolean)
+    if (extensions.length) {
+      return {
+        recursive: Boolean(matches[1]),
+        extensions: extensions,
+      }
+    }
+  }
+
+  return null
 }
