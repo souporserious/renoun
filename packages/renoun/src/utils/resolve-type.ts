@@ -1186,11 +1186,17 @@ function resolveTypeExpression(
         }
       }
 
+      moduleSpecifier = getModuleSpecifierFromImports(
+        enclosingNode,
+        aliasSymbol || symbol
+      )
+
       resolvedType = {
         kind: 'TypeReference',
         name,
         text: typeText,
         typeArguments: resolvedTypeArguments,
+        moduleSpecifier,
         ...(locationNode ? getDeclarationLocation(locationNode) : {}),
       } satisfies Kind.TypeReference
     }
@@ -4320,6 +4326,99 @@ function getModuleFromSymbol(symbol: tsMorph.Symbol | undefined) {
         if (tsMorph.Node.isStringLiteral(expression)) {
           return expression.getLiteralText()
         }
+      }
+    }
+  }
+}
+
+/** Check imports within a single source file to resolve the module specifier. */
+function matchImportInSourceFile(
+  sourceFile: tsMorph.SourceFile,
+  symbol: tsMorph.Symbol,
+  declarationFilePaths: Set<string>
+): string | undefined {
+  for (const importDeclaration of sourceFile.getImportDeclarations()) {
+    const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
+    const namespaceImport = importDeclaration.getNamespaceImport()
+    if (namespaceImport) {
+      const namespaceTypeSymbol = namespaceImport.getType().getSymbol()
+      const namespaceExports = namespaceTypeSymbol?.getExports() ?? []
+
+      if (
+        namespaceExports.some(
+          (exportedSymbol) => exportedSymbol.getName() === symbol.getName()
+        )
+      ) {
+        return moduleSpecifier
+      }
+    }
+
+    for (const namedImport of importDeclaration.getNamedImports()) {
+      const importedSymbol = namedImport.getNameNode().getSymbol()
+      if (importedSymbol && importedSymbol === symbol) {
+        return moduleSpecifier
+      }
+    }
+
+    const moduleSourceFile = importDeclaration.getModuleSpecifierSourceFile()
+    if (
+      moduleSourceFile &&
+      declarationFilePaths.has(moduleSourceFile.getFilePath())
+    ) {
+      return moduleSpecifier
+    }
+  }
+
+  return undefined
+}
+
+/** Resolve module specifier by matching the symbol against the current file's imports. */
+function getModuleSpecifierFromImports(
+  enclosingNode: Node | undefined,
+  symbol?: tsMorph.Symbol
+) {
+  if (!enclosingNode || !symbol) {
+    return undefined
+  }
+
+  const sourceFile = enclosingNode.getSourceFile()
+  const declarationSourceFiles = new Set(
+    symbol.getDeclarations().map((declaration) => declaration.getSourceFile())
+  )
+  const declarationFilePaths = new Set(
+    Array.from(declarationSourceFiles).map((sourceFile) =>
+      sourceFile.getFilePath()
+    )
+  )
+
+  const localMatch = matchImportInSourceFile(
+    sourceFile,
+    symbol,
+    declarationFilePaths
+  )
+  if (localMatch) {
+    return localMatch
+  }
+
+  const seenFilePaths = new Set<string>()
+  for (const declarationSourceFile of declarationSourceFiles) {
+    for (const referencingSourceFile of declarationSourceFile.getReferencingSourceFiles()) {
+      const filePath = referencingSourceFile.getFilePath()
+      if (
+        referencingSourceFile.isInNodeModules() ||
+        seenFilePaths.has(filePath)
+      ) {
+        continue
+      }
+      seenFilePaths.add(filePath)
+
+      const match = matchImportInSourceFile(
+        referencingSourceFile,
+        symbol,
+        declarationFilePaths
+      )
+      if (match) {
+        return match
       }
     }
   }

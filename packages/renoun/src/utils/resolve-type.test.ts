@@ -525,6 +525,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "name": "Promise",
                 "position": {
                   "end": {
@@ -2494,6 +2495,7 @@ describe('resolveType', () => {
             {
               "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "name": "Promise",
               "position": {
                 "end": {
@@ -2591,6 +2593,7 @@ describe('resolveType', () => {
                 {
                   "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "name": "Promise",
                   "position": {
                     "end": {
@@ -3325,6 +3328,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "name": "Promise",
                 "position": {
                   "end": {
@@ -3886,6 +3890,7 @@ describe('resolveType', () => {
                         "types": [
                           {
                             "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
                             "name": "FunctionMetadata",
                             "text": "FunctionMetadata",
                             "typeArguments": [],
@@ -3938,6 +3943,7 @@ describe('resolveType', () => {
                         "types": [
                           {
                             "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
                             "name": "TypeMetadata",
                             "text": "TypeMetadata",
                             "typeArguments": [],
@@ -6114,6 +6120,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "name": "TextView",
                 "position": {
                   "end": {
@@ -6673,6 +6680,7 @@ describe('resolveType', () => {
               "type": {
                 "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "name": "Promise",
                 "position": {
                   "end": {
@@ -10579,6 +10587,7 @@ describe('resolveType', () => {
               "returnType": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "name": "Counter",
                 "position": {
                   "end": {
@@ -12031,6 +12040,7 @@ describe('resolveType', () => {
                     "type": {
                       "filePath": "node_modules/@types/react/index.d.ts",
                       "kind": "TypeReference",
+                      "moduleSpecifier": "react",
                       "name": "MouseEvent",
                       "position": {
                         "end": {
@@ -12047,6 +12057,7 @@ describe('resolveType', () => {
                         {
                           "filePath": "node_modules/@types/react/index.d.ts",
                           "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
                           "name": "HTMLButtonElement",
                           "position": {
                             "end": {
@@ -12064,6 +12075,7 @@ describe('resolveType', () => {
                         {
                           "filePath": "node_modules/@types/react/index.d.ts",
                           "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
                           "name": "MouseEvent",
                           "position": {
                             "end": {
@@ -12172,100 +12184,159 @@ describe('resolveType', () => {
               },
               "text": "props: ButtonProps",
               "type": {
-                "kind": "IntersectionType",
-                "text": "{ isDisabled?: boolean; } & ButtonHTMLAttributes<HTMLButtonElement>",
-                "types": [
+                "kind": "TypeLiteral",
+                "members": [
                   {
-                    "kind": "TypeLiteral",
-                    "members": [
-                      {
-                        "filePath": "test.tsx",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "isDisabled",
-                        "position": {
-                          "end": {
-                            "column": 24,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 4,
-                          },
+                    "filePath": "test.tsx",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "isDisabled",
+                    "position": {
+                      "end": {
+                        "column": 24,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 3,
+                        "line": 4,
+                      },
+                    },
+                    "text": "isDisabled?: boolean;",
+                    "type": {
+                      "filePath": "test.tsx",
+                      "kind": "Boolean",
+                      "position": {
+                        "end": {
+                          "column": 23,
+                          "line": 4,
                         },
-                        "text": "isDisabled?: boolean;",
-                        "type": {
-                          "filePath": "test.tsx",
-                          "kind": "Boolean",
-                          "position": {
-                            "end": {
-                              "column": 23,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 16,
-                              "line": 4,
-                            },
-                          },
-                          "text": "boolean",
+                        "start": {
+                          "column": 16,
+                          "line": 4,
                         },
                       },
-                    ],
-                    "text": "{ isDisabled?: boolean; }",
+                      "text": "boolean",
+                    },
                   },
                   {
                     "filePath": "node_modules/@types/react/index.d.ts",
-                    "kind": "TypeReference",
-                    "name": "ButtonHTMLAttributes",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "onClick",
                     "position": {
                       "end": {
-                        "column": 6,
-                        "line": 2975,
+                        "column": 52,
+                        "line": 2281,
                       },
                       "start": {
-                        "column": 5,
-                        "line": 2958,
+                        "column": 9,
+                        "line": 2281,
                       },
                     },
-                    "text": "ButtonHTMLAttributes<HTMLButtonElement>",
-                    "typeArguments": [
-                      {
+                    "text": "MouseEventHandler<HTMLButtonElement>",
+                    "type": {
+                      "isAsync": false,
+                      "kind": "FunctionType",
+                      "parameters": [
+                        {
+                          "description": undefined,
+                          "filePath": "node_modules/@types/react/index.d.ts",
+                          "initializer": undefined,
+                          "isOptional": false,
+                          "isRest": false,
+                          "kind": "Parameter",
+                          "name": "event",
+                          "position": {
+                            "end": {
+                              "column": 81,
+                              "line": 2136,
+                            },
+                            "start": {
+                              "column": 73,
+                              "line": 2136,
+                            },
+                          },
+                          "text": "event: E",
+                          "type": {
+                            "filePath": "node_modules/@types/react/index.d.ts",
+                            "kind": "TypeReference",
+                            "moduleSpecifier": "react",
+                            "name": "MouseEvent",
+                            "position": {
+                              "end": {
+                                "column": 52,
+                                "line": 2281,
+                              },
+                              "start": {
+                                "column": 9,
+                                "line": 2281,
+                              },
+                            },
+                            "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
+                            "typeArguments": [
+                              {
+                                "filePath": "node_modules/@types/react/index.d.ts",
+                                "kind": "TypeReference",
+                                "moduleSpecifier": undefined,
+                                "name": "HTMLButtonElement",
+                                "position": {
+                                  "end": {
+                                    "column": 52,
+                                    "line": 2281,
+                                  },
+                                  "start": {
+                                    "column": 9,
+                                    "line": 2281,
+                                  },
+                                },
+                                "text": "HTMLButtonElement",
+                                "typeArguments": [],
+                              },
+                              {
+                                "filePath": "node_modules/@types/react/index.d.ts",
+                                "kind": "TypeReference",
+                                "moduleSpecifier": undefined,
+                                "name": "MouseEvent",
+                                "position": {
+                                  "end": {
+                                    "column": 52,
+                                    "line": 2281,
+                                  },
+                                  "start": {
+                                    "column": 9,
+                                    "line": 2281,
+                                  },
+                                },
+                                "text": "MouseEvent",
+                                "typeArguments": [],
+                              },
+                            ],
+                          },
+                        },
+                      ],
+                      "returnType": {
                         "filePath": "node_modules/@types/react/index.d.ts",
-                        "kind": "TypeReference",
-                        "name": "HTMLButtonElement",
+                        "kind": "Void",
                         "position": {
                           "end": {
-                            "column": 6,
-                            "line": 2975,
+                            "column": 88,
+                            "line": 2136,
                           },
                           "start": {
-                            "column": 5,
-                            "line": 2958,
+                            "column": 84,
+                            "line": 2136,
                           },
                         },
-                        "text": "HTMLButtonElement",
-                        "typeArguments": [],
+                        "text": "void",
                       },
-                      {
-                        "filePath": "test.tsx",
-                        "kind": "TypeReference",
-                        "name": "ButtonProps",
-                        "position": {
-                          "end": {
-                            "column": 50,
-                            "line": 5,
-                          },
-                          "start": {
-                            "column": 1,
-                            "line": 3,
-                          },
-                        },
-                        "text": "ButtonProps",
-                      },
-                    ],
+                      "text": "MouseEventHandler<HTMLButtonElement>",
+                      "thisType": undefined,
+                    },
                   },
                 ],
+                "text": "{ isDisabled?: boolean; } & ButtonHTMLAttributes<HTMLButtonElement>",
               },
             },
             "position": {
@@ -12281,6 +12352,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "test.tsx",
               "kind": "TypeReference",
+              "moduleSpecifier": "react",
               "name": "Element",
               "position": {
                 "end": {
@@ -13351,6 +13423,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "name": "Counter",
             "position": {
               "end": {
@@ -13384,6 +13457,7 @@ describe('resolveType', () => {
           "type": {
             "filePath": "test.ts",
             "kind": "TypeReference",
+            "moduleSpecifier": undefined,
             "name": "Promise",
             "position": {
               "end": {
@@ -14889,6 +14963,7 @@ describe('resolveType', () => {
                       {
                         "filePath": "node_modules/@types/react/index.d.ts",
                         "kind": "TypeReference",
+                        "moduleSpecifier": "react",
                         "name": "ComponentClass",
                         "position": {
                           "end": {
@@ -14964,6 +15039,7 @@ describe('resolveType', () => {
                       {
                         "filePath": "node_modules/@types/react/index.d.ts",
                         "kind": "TypeReference",
+                        "moduleSpecifier": "react",
                         "name": "FunctionComponent",
                         "position": {
                           "end": {
@@ -17614,6 +17690,7 @@ describe('resolveType', () => {
                           "type": {
                             "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                             "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
                             "name": "Types",
                             "position": {
                               "end": {
@@ -18722,6 +18799,7 @@ describe('resolveType', () => {
               "returnType": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "name": "Foo",
                 "position": {
                   "end": {
@@ -18738,6 +18816,7 @@ describe('resolveType', () => {
                   {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "name": "Type",
                     "position": {
                       "end": {
@@ -18866,6 +18945,7 @@ describe('resolveType', () => {
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
                     "name": "Types",
                     "position": {
                       "end": {
@@ -18930,6 +19010,7 @@ describe('resolveType', () => {
                       "text": "keyof Types",
                       "type": {
                         "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
                         "name": "Types",
                         "text": "Types",
                         "typeArguments": [],
@@ -18942,6 +19023,7 @@ describe('resolveType', () => {
               "objectType": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
+                "moduleSpecifier": undefined,
                 "name": "Types",
                 "position": {
                   "end": {
@@ -19021,6 +19103,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "test.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "name": "UnionType",
               "position": {
                 "end": {
@@ -19037,6 +19120,7 @@ describe('resolveType', () => {
                 {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "name": "TypeExpression",
                   "position": {
                     "end": {
@@ -19536,6 +19620,7 @@ describe('resolveType', () => {
                 "returnType": {
                   "filePath": "index.ts",
                   "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
                   "name": "Date",
                   "position": {
                     "end": {
@@ -19622,6 +19707,7 @@ describe('resolveType', () => {
             "returnType": {
               "filePath": "index.ts",
               "kind": "TypeReference",
+              "moduleSpecifier": undefined,
               "name": "Date",
               "position": {
                 "end": {
