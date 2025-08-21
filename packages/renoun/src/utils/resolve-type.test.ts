@@ -2444,6 +2444,195 @@ describe('resolveType', () => {
     `)
   })
 
+  test('self referenced union type', () => {
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      dedent`
+      type Sponsor = string | Promise<Sponsor>;
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getTypeAliasOrThrow('Sponsor')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "index.ts",
+        "kind": "TypeAlias",
+        "name": "Sponsor",
+        "position": {
+          "end": {
+            "column": 42,
+            "line": 1,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "Sponsor",
+        "type": {
+          "kind": "UnionType",
+          "text": "string | Promise<Sponsor>",
+          "types": [
+            {
+              "filePath": "index.ts",
+              "kind": "String",
+              "position": {
+                "end": {
+                  "column": 22,
+                  "line": 1,
+                },
+                "start": {
+                  "column": 16,
+                  "line": 1,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+            {
+              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+              "kind": "TypeReference",
+              "name": "Promise",
+              "position": {
+                "end": {
+                  "column": 15356,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 15015,
+                  "line": 4,
+                },
+              },
+              "text": "Promise<Sponsor>",
+              "typeArguments": [
+                {
+                  "filePath": "index.ts",
+                  "kind": "TypeReference",
+                  "name": "Sponsor",
+                  "position": {
+                    "end": {
+                      "column": 42,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 1,
+                    },
+                  },
+                  "text": "Sponsor",
+                },
+              ],
+            },
+          ],
+        },
+        "typeParameters": [],
+      }
+    `)
+  })
+
+  test('self referenced union return type', () => {
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      dedent`
+      type Sponsor = string | Promise<Sponsor>;
+
+      function getSponsor(): Sponsor {
+        return ''
+      }
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getFunctionOrThrow('getSponsor')
+    const types = resolveType(declaration.getType(), declaration)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "index.ts",
+        "kind": "Function",
+        "name": "getSponsor",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "index.ts",
+            "isAsync": true,
+            "isGenerator": false,
+            "kind": "CallSignature",
+            "parameters": [],
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 5,
+              },
+              "start": {
+                "column": 1,
+                "line": 3,
+              },
+            },
+            "returnType": {
+              "kind": "UnionType",
+              "text": "string | Promise<Sponsor>",
+              "types": [
+                {
+                  "kind": "String",
+                  "text": "string",
+                  "value": undefined,
+                },
+                {
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "kind": "TypeReference",
+                  "name": "Promise",
+                  "position": {
+                    "end": {
+                      "column": 15356,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 15015,
+                      "line": 4,
+                    },
+                  },
+                  "text": "Promise<Sponsor>",
+                  "typeArguments": [
+                    {
+                      "filePath": "index.ts",
+                      "kind": "TypeReference",
+                      "name": "Sponsor",
+                      "position": {
+                        "end": {
+                          "column": 42,
+                          "line": 1,
+                        },
+                        "start": {
+                          "column": 1,
+                          "line": 1,
+                        },
+                      },
+                      "text": "Sponsor",
+                    },
+                  ],
+                },
+              ],
+            },
+            "text": "function getSponsor(): string | Promise<Sponsor>",
+            "thisType": undefined,
+          },
+        ],
+        "text": "() => Sponsor",
+      }
+    `)
+  })
+
   test('mutually referenced types', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
@@ -12059,155 +12248,19 @@ describe('resolveType', () => {
                         "typeArguments": [],
                       },
                       {
-                        "kind": "TypeLiteral",
-                        "members": [
-                          {
-                            "filePath": "test.tsx",
-                            "isOptional": true,
-                            "isReadonly": false,
-                            "kind": "PropertySignature",
-                            "name": "isDisabled",
-                            "position": {
-                              "end": {
-                                "column": 24,
-                                "line": 4,
-                              },
-                              "start": {
-                                "column": 3,
-                                "line": 4,
-                              },
-                            },
-                            "text": "isDisabled?: boolean;",
-                            "type": {
-                              "filePath": "test.tsx",
-                              "kind": "Boolean",
-                              "position": {
-                                "end": {
-                                  "column": 23,
-                                  "line": 4,
-                                },
-                                "start": {
-                                  "column": 16,
-                                  "line": 4,
-                                },
-                              },
-                              "text": "boolean",
-                            },
+                        "filePath": "test.tsx",
+                        "kind": "TypeReference",
+                        "name": "ButtonProps",
+                        "position": {
+                          "end": {
+                            "column": 50,
+                            "line": 5,
                           },
-                          {
-                            "filePath": "node_modules/@types/react/index.d.ts",
-                            "isOptional": true,
-                            "isReadonly": false,
-                            "kind": "PropertySignature",
-                            "name": "onClick",
-                            "position": {
-                              "end": {
-                                "column": 52,
-                                "line": 2281,
-                              },
-                              "start": {
-                                "column": 9,
-                                "line": 2281,
-                              },
-                            },
-                            "text": "MouseEventHandler<HTMLButtonElement>",
-                            "type": {
-                              "isAsync": false,
-                              "kind": "FunctionType",
-                              "parameters": [
-                                {
-                                  "description": undefined,
-                                  "filePath": "node_modules/@types/react/index.d.ts",
-                                  "initializer": undefined,
-                                  "isOptional": false,
-                                  "isRest": false,
-                                  "kind": "Parameter",
-                                  "name": "event",
-                                  "position": {
-                                    "end": {
-                                      "column": 81,
-                                      "line": 2136,
-                                    },
-                                    "start": {
-                                      "column": 73,
-                                      "line": 2136,
-                                    },
-                                  },
-                                  "text": "event: E",
-                                  "type": {
-                                    "filePath": "node_modules/@types/react/index.d.ts",
-                                    "kind": "TypeReference",
-                                    "name": "MouseEvent",
-                                    "position": {
-                                      "end": {
-                                        "column": 52,
-                                        "line": 2281,
-                                      },
-                                      "start": {
-                                        "column": 9,
-                                        "line": 2281,
-                                      },
-                                    },
-                                    "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
-                                    "typeArguments": [
-                                      {
-                                        "filePath": "node_modules/@types/react/index.d.ts",
-                                        "kind": "TypeReference",
-                                        "name": "HTMLButtonElement",
-                                        "position": {
-                                          "end": {
-                                            "column": 52,
-                                            "line": 2281,
-                                          },
-                                          "start": {
-                                            "column": 9,
-                                            "line": 2281,
-                                          },
-                                        },
-                                        "text": "HTMLButtonElement",
-                                        "typeArguments": [],
-                                      },
-                                      {
-                                        "filePath": "node_modules/@types/react/index.d.ts",
-                                        "kind": "TypeReference",
-                                        "name": "MouseEvent",
-                                        "position": {
-                                          "end": {
-                                            "column": 52,
-                                            "line": 2281,
-                                          },
-                                          "start": {
-                                            "column": 9,
-                                            "line": 2281,
-                                          },
-                                        },
-                                        "text": "MouseEvent",
-                                        "typeArguments": [],
-                                      },
-                                    ],
-                                  },
-                                },
-                              ],
-                              "returnType": {
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "Void",
-                                "position": {
-                                  "end": {
-                                    "column": 88,
-                                    "line": 2136,
-                                  },
-                                  "start": {
-                                    "column": 84,
-                                    "line": 2136,
-                                  },
-                                },
-                                "text": "void",
-                              },
-                              "text": "MouseEventHandler<HTMLButtonElement>",
-                              "thisType": undefined,
-                            },
+                          "start": {
+                            "column": 1,
+                            "line": 3,
                           },
-                        ],
+                        },
                         "text": "ButtonProps",
                       },
                     ],

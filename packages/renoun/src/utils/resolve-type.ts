@@ -1022,8 +1022,6 @@ export function resolveType(
   }
 }
 
-const resolvingReferences = new Set<Type>()
-
 /** Resolves a type expression. */
 function resolveTypeExpression(
   type: Type,
@@ -1042,7 +1040,7 @@ function resolveTypeExpression(
 
   if (isTypeReference(type, enclosingNode)) {
     if (shouldResolveTypeReference(type, enclosingNode)) {
-      resolvingReferences.add(type)
+      rootReferences.add(type)
 
       resolvedType = resolveTypeExpression(
         type.getApparentType(),
@@ -1052,7 +1050,7 @@ function resolveTypeExpression(
         dependencies
       )
 
-      resolvingReferences.delete(type)
+      rootReferences.delete(type)
     } else if (tsMorph.Node.isTypeReference(enclosingNode)) {
       const resolvedTypeArguments: Kind.TypeExpression[] = []
 
@@ -1136,6 +1134,31 @@ function resolveTypeExpression(
       const resolvedTypeArguments: Kind.TypeExpression[] = []
 
       for (const typeArgument of typeArguments) {
+        if (rootReferences.has(typeArgument)) {
+          let argumentSymbol = typeArgument.getAliasSymbol()
+
+          if (!argumentSymbol) {
+            argumentSymbol = typeArgument.getSymbol()
+          }
+
+          if (!argumentSymbol) {
+            throw new Error(
+              '[renoun] No symbol found for type argument. If you are seeing this, please report an issue.'
+            )
+          }
+
+          const declaration = getPrimaryDeclaration(argumentSymbol)
+
+          resolvedTypeArguments.push({
+            kind: 'TypeReference',
+            name: argumentSymbol.getName(),
+            text: typeArgument.getText(declaration, TYPE_FORMAT_FLAGS),
+            ...(declaration ? getDeclarationLocation(declaration) : {}),
+          } satisfies Kind.TypeReference)
+
+          continue
+        }
+
         const resolvedTypeArgument = resolveTypeExpression(
           typeArgument,
           enclosingNode,
@@ -4153,11 +4176,7 @@ function isTrivialType(type: Type): boolean {
  *   - an alias from node-modules and at least one of its type-arguments comes from the local project (exported or internal) and that argument is non-trivial
  */
 function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
-  if (
-    rootReferences.has(type) ||
-    resolvingReferences.has(type) ||
-    containsFreeTypeParameter(type)
-  ) {
+  if (rootReferences.has(type) || containsFreeTypeParameter(type)) {
     return false
   }
 
@@ -4188,7 +4207,6 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
     }
 
     let hasLocalInternalArgument = false
-    let hasLocalExportedArgument = false
     let hasTrivialArgument = true
 
     for (const typeArgument of typeArguments) {
@@ -4199,8 +4217,6 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
 
       if (typeArgumentVisibility === 'local-internal') {
         hasLocalInternalArgument = true
-      } else if (typeArgumentVisibility === 'local-exported') {
-        hasLocalExportedArgument = true
       }
 
       if (!isTrivialType(typeArgument)) {
@@ -4210,16 +4226,6 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
 
     if (hasTrivialArgument) {
       return false
-    }
-
-    const declarations = symbol.getDeclarations()
-    const isTypeAlias =
-      declarations.length > 0
-        ? declarations.every(tsMorph.Node.isTypeAliasDeclaration)
-        : false
-
-    if (isTypeAlias) {
-      return hasLocalInternalArgument || hasLocalExportedArgument
     }
 
     return hasLocalInternalArgument
