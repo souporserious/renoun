@@ -1209,11 +1209,16 @@ function resolveTypeExpression(
           }
 
           if (members.length) {
+            const body = members
+              .map((member) =>
+                member.kind === 'PropertySignature'
+                  ? `${member.name}${member.isOptional ? '?:' : ': '} ${member.type.text}`
+                  : member.text.replace(/\s*;\s*$/, '')
+              )
+              .join('; ')
             resolvedType = {
               kind: 'TypeLiteral',
-              text: members
-                .map((member) => member.text.replace(/\s*;\s*$/, ''))
-                .join('; '),
+              text: `{ ${body} }`,
               members,
             } satisfies Kind.TypeLiteral
           }
