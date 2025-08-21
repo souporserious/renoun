@@ -1,5 +1,13 @@
 # renoun
 
+## 9.4.1
+
+### Patch Changes
+
+- 403e979: Fixes infinite recursion in `JavaScriptFileExport#getType` when resolving a union type that references itself.
+- b688b1e: Fixes missing `moduleSpecifier` metadata in `JavaScriptFileExport#getType` when resolving a union type reference without a concrete `TypeReferenceNode`.
+- a2f2f78: Improves performance for simple glob patterns (e.g. `*.<extension>` and `**/*.<extension>`) by building a predicate filter instead of using Minimatch.
+
 ## 9.4.0
 
 ### Minor Changes
