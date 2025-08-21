@@ -1863,19 +1863,21 @@ function resolveTypeExpression(
 
         const signatureDeclaration = callSignature.getDeclaration()
         const returnTypeNode = signatureDeclaration.getReturnTypeNode()
-        let returnType: Kind.TypeExpression | undefined
+        let resolvedReturnType: Kind.TypeExpression | undefined
 
         if (returnTypeNode) {
-          returnType = resolveTypeExpression(
-            returnTypeNode.getType(),
+          const returnType = returnTypeNode.getType()
+          resolvedReturnType = resolveTypeExpression(
+            returnType,
             returnTypeNode,
             filter,
             undefined,
             dependencies
           )
         } else {
-          returnType = resolveTypeExpression(
-            callSignature.getReturnType(),
+          const returnType = callSignature.getReturnType()
+          resolvedReturnType = resolveTypeExpression(
+            returnType,
             signatureDeclaration,
             filter,
             undefined,
@@ -1890,8 +1892,10 @@ function resolveTypeExpression(
           ...(resolvedTypeParameters.length
             ? { typeParameters: resolvedTypeParameters }
             : {}),
-          ...(returnType ? { returnType } : {}),
-          isAsync: returnType ? isPromiseLike(returnType) : false,
+          ...(resolvedReturnType ? { returnType: resolvedReturnType } : {}),
+          isAsync: resolvedReturnType
+            ? isPromiseLike(resolvedReturnType)
+            : false,
         } satisfies Kind.FunctionType
       } else if (isMappedType(type)) {
         let mappedNode: tsMorph.MappedTypeNode | undefined
@@ -2390,17 +2394,17 @@ function resolveCallSignatures(
 
 /** Process a single function signature including its parameters and return type. */
 function resolveCallSignature(
-  signature: Signature,
+  callSignature: Signature,
   enclosingNode: Node | undefined,
   filter?: TypeFilter,
   dependencies?: Set<string>
 ): Kind.CallSignature | undefined {
-  if (!shouldResolveCallSignature(signature)) {
+  if (!shouldResolveCallSignature(callSignature)) {
     return
   }
 
-  const signatureDeclaration = signature.getDeclaration()
-  const resolvedTypeParameters = signature
+  const signatureDeclaration = callSignature.getDeclaration()
+  const resolvedTypeParameters = callSignature
     .getTypeParameters()
     .map((parameter) => resolveTypeParameter(parameter, filter, dependencies))
     .filter((type): type is Kind.TypeParameter => Boolean(type))
@@ -2415,7 +2419,7 @@ function resolveCallSignature(
         .join(', ')}>`
     : ''
   const resolvedParameters = resolveParameters(
-    signature,
+    callSignature,
     enclosingNode,
     filter,
     dependencies
@@ -2424,19 +2428,21 @@ function resolveCallSignature(
     .map((parameter) => parameter.text)
     .join(', ')
   const returnTypeNode = signatureDeclaration.getReturnTypeNode()
-  let returnType: Kind.TypeExpression | undefined
+  let resolvedReturnType: Kind.TypeExpression | undefined
 
   if (returnTypeNode) {
-    returnType = resolveTypeExpression(
-      returnTypeNode.getType(),
+    const returnType = returnTypeNode.getType()
+    resolvedReturnType = resolveTypeExpression(
+      returnType,
       returnTypeNode,
       filter,
       undefined,
       dependencies
     )
   } else {
-    returnType = resolveTypeExpression(
-      signature.getReturnType(),
+    const returnType = callSignature.getReturnType()
+    resolvedReturnType = resolveTypeExpression(
+      returnType,
       signatureDeclaration,
       filter,
       undefined,
@@ -2444,7 +2450,7 @@ function resolveCallSignature(
     )
   }
 
-  if (!returnType) {
+  if (!resolvedReturnType) {
     throw new Error(
       `[renoun:resolveCallSignature]: No return type found for "${signatureDeclaration.getText()}". Please file an issue if you encounter this error.`
     )
@@ -2453,16 +2459,16 @@ function resolveCallSignature(
   let typeText: string
 
   if (tsMorph.Node.isFunctionDeclaration(signatureDeclaration)) {
-    typeText = `function ${signatureDeclaration.getName()}${typeParametersText}(${parametersText}): ${returnType.text}`
+    typeText = `function ${signatureDeclaration.getName()}${typeParametersText}(${parametersText}): ${resolvedReturnType.text}`
   } else {
-    typeText = `${typeParametersText}(${parametersText}) => ${returnType.text}`
+    typeText = `${typeParametersText}(${parametersText}) => ${resolvedReturnType.text}`
   }
 
   const resolvedType: Kind.CallSignature = {
     kind: 'CallSignature',
     text: typeText,
     ...resolvedParameters,
-    returnType,
+    returnType: resolvedReturnType,
     ...getJsDocMetadata(signatureDeclaration),
     ...getDeclarationLocation(signatureDeclaration),
   }
@@ -2475,7 +2481,7 @@ function resolveCallSignature(
     resolvedType.isGenerator = signatureDeclaration.isGenerator()
   }
 
-  if (isPromiseLike(returnType)) {
+  if (isPromiseLike(resolvedReturnType)) {
     resolvedType.isAsync = true
   }
 
@@ -3803,10 +3809,12 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
   if (tsMorph.Node.isTypeReference(enclosingNode) || isReferenceType(type)) {
     return true
   }
+
   // If the type is a callable alias, then we want to expand it to get the function type.
   if (isCallableAlias(type)) {
     return false
   }
+
   // If the type is a type parameter and the enclosing node is not an infer type node, then treat it as a type reference.
   if (type.isTypeParameter() && !tsMorph.Node.isInferTypeNode(enclosingNode)) {
     return true
