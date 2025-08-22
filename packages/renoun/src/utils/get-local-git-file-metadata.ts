@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -38,17 +38,21 @@ export async function getLocalGitFileMetadata(
   if (isGitRepository && !hasCheckedIfShallow) {
     try {
       const isShallow = await new Promise<string>((resolve, reject) => {
-        exec('git rev-parse --is-shallow-repository', (error, stdout) => {
-          if (error) {
-            reject(error)
-          } else {
-            resolve(stdout.toString().trim())
+        execFile(
+          'git',
+          ['rev-parse', '--is-shallow-repository'],
+          (error, stdout) => {
+            if (error) {
+              reject(error)
+            } else {
+              resolve(stdout.toString().trim())
+            }
           }
-        })
+        )
       })
 
       if (isShallow === 'true') {
-        const message = `[renoun] This repository is shallow cloned so the createdAt and updatedAt dates cannot be calculated correctly.`
+        const message = `[renoun] This repository is shallow cloned so the firstCommitDate and lastCommitDate dates cannot be calculated correctly.`
         if ('VERCEL' in process.env) {
           throw new Error(
             `${message} Set the VERCEL_DEEP_CLONE=true environment variable to enable deep cloning.`
@@ -70,9 +74,9 @@ export async function getLocalGitFileMetadata(
   if (!isGitRepository || hadGitError) {
     const result = {
       authors: [],
-      createdAt: undefined,
-      updatedAt: undefined,
-    }
+      firstCommitDate: undefined,
+      lastCommitDate: undefined,
+    } satisfies GitMetadata
     cache.set(filePath, result)
     return result
   }
@@ -90,8 +94,9 @@ export async function getLocalGitFileMetadata(
   let lastCommitDate: Date | undefined = undefined
 
   const stdout = await new Promise<string>((resolve, reject) => {
-    exec(
-      `git log --all --follow --format="%aN|%aE|%cD" -- "${filePath}"`,
+    execFile(
+      'git',
+      ['log', '--all', '--follow', '--format="%aN|%aE|%cD"', '--', filePath],
       (error, stdout) => {
         if (error) {
           reject(error)
