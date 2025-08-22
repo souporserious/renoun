@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { createServer } from '../project/server.js'
 import { debug } from '../utils/debug.js'
@@ -15,7 +18,41 @@ if (firstArgument === 'help') {
 /* Disable the buffer util for WebSocket. */
 process.env['WS_NO_BUFFER_UTIL'] = 'true'
 
-if (firstArgument === 'next' || firstArgument === 'waku') {
+type Framework = 'next' | 'vite' | 'waku'
+
+const projectRequire = createRequire(join(process.cwd(), 'package.json'))
+
+function resolveFrameworkBinFile(framework: Framework): string {
+  const packageJsonPath = projectRequire.resolve(`${framework}/package.json`)
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+  let binRelativePath: string | undefined
+
+  if (typeof packageJson.bin === 'string') {
+    binRelativePath = packageJson.bin
+  } else if (typeof packageJson.bin === 'object') {
+    if (packageJson.bin[framework]) {
+      binRelativePath = packageJson.bin[framework]
+    } else {
+      binRelativePath = Object.values(packageJson.bin).at(0) as
+        | string
+        | undefined
+    }
+  }
+
+  if (!binRelativePath) {
+    throw new Error(`Could not find "bin" for ${framework}`)
+  }
+
+  return projectRequire.resolve(
+    `${framework}/${binRelativePath.replace(/^\.\//, '')}`
+  )
+}
+
+if (
+  firstArgument === 'next' ||
+  firstArgument === 'vite' ||
+  firstArgument === 'waku'
+) {
   let subProcess: ReturnType<typeof spawn> | undefined
 
   function cleanupAndExit(code: number) {
@@ -52,18 +89,27 @@ if (firstArgument === 'next' || firstArgument === 'waku') {
       async () => {
         const server = await createServer()
         const port = String(await server.getPort())
+
         debug.info('renoun server created', {
           data: { port, serverId: process.env['RENOUN_SERVER_ID'] },
         })
 
-        subProcess = spawn(firstArgument, [secondArgument, ...restArguments], {
-          stdio: ['inherit', 'inherit', 'pipe'],
-          shell: true,
-          env: {
-            ...process.env,
-            RENOUN_SERVER_PORT: port,
-          },
-        })
+        subProcess = spawn(
+          process.execPath,
+          [
+            resolveFrameworkBinFile(firstArgument as Framework),
+            secondArgument,
+            ...restArguments,
+          ],
+          {
+            stdio: ['inherit', 'inherit', 'pipe'],
+            shell: false,
+            env: {
+              ...process.env,
+              RENOUN_SERVER_PORT: port,
+            },
+          }
+        )
 
         debug.info('Subprocess spawned', {
           data: {
