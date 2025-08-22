@@ -73,7 +73,7 @@ export class Repository {
         )
       }
 
-      this.#baseUrl = baseUrl.replace(/\/+$/, '') // Remove trailing slashes
+      this.#baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
 
       if (provider === undefined) {
         throw new Error(
