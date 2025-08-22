@@ -13,6 +13,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 env:
   NODE_ENV: production
   RENOUN_DEBUG: ${{ inputs.debug }}
