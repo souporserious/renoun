@@ -66,7 +66,7 @@ export function SponsorTiers() {
                       <p>
                         Become the first <strong>{tier.title}</strong> sponsor
                       </p>
-                      <SponsorLink tier={tier.title} />
+                      <SponsorLink tier={tier.title} href={tier.href} />
                     </div>
                   </section>
                 )
@@ -93,7 +93,11 @@ export function SponsorTiers() {
                     <h3 css={{ margin: '0 !important' }}>
                       {tier.icon} {tier.title}
                     </h3>
-                    <SponsorLink tier={tier.title} variant="small" />
+                    <SponsorLink
+                      tier={tier.title}
+                      href={tier.href}
+                      variant="small"
+                    />
                   </div>
                   <ul
                     css={{
@@ -132,14 +136,16 @@ export function SponsorTiers() {
 
 function SponsorLink({
   tier,
+  href,
   variant = 'medium',
 }: {
   tier: string
+  href: string
   variant?: 'small' | 'medium'
 }) {
   return (
     <a
-      href="https://github.com/sponsors/souporserious"
+      href={href}
       css={{
         fontSize:
           variant === 'small'
