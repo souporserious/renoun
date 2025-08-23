@@ -94,6 +94,9 @@ type TierResolved<Data extends object> = {
   /** A direct link to the GitHub checkout page for this tier. */
   href: string
 
+  /** The description for this tier as markdown. */
+  description?: string
+
   /** The sponsors for this tier. */
   sponsors: PublicSponsor[]
 } & Data
@@ -111,6 +114,7 @@ async function fetchSponsorsAndTierLinks(
   hrefByTitle: Map<string, string>
   sponsors: MaintainerSponsor[]
   defaultHref: string
+  descriptionByTitle: Map<string, string>
 }> {
   const token = process.env['GITHUB_SPONSORS_TOKEN']
 
@@ -126,6 +130,7 @@ async function fetchSponsorsAndTierLinks(
         hrefByTitle: new Map(),
         sponsors: [],
         defaultHref: 'https://github.com/sponsors',
+        descriptionByTitle: new Map(),
       }
     }
 
@@ -219,6 +224,7 @@ async function fetchSponsorsAndTierLinks(
         nodes: Array<{
           id: string
           name: string
+          description: string
           descriptionHTML: string
           isOneTime: boolean
           monthlyPriceInCents: number
@@ -269,6 +275,16 @@ async function fetchSponsorsAndTierLinks(
     return isPublished && !isRetired && !tierNode.isOneTime
   })
 
+  const descriptionsByTitle = new Map<string, string>()
+  const descriptionsByAmount = new Map<number, string>()
+  for (const tierNode of relevantTierNodes) {
+    const description = tierNode.description
+    if (description) {
+      descriptionsByTitle.set(tierNode.name.toLowerCase(), description)
+      descriptionsByAmount.set(tierNode.monthlyPriceInCents, description)
+    }
+  }
+
   let manualMappedCount = 0
 
   if (options.manualTierIds && options.manualTierIds.size > 0) {
@@ -295,8 +311,17 @@ async function fetchSponsorsAndTierLinks(
       for (const [amountCents, value] of hrefByAmount) {
         resolver.set(`$${amountCents}`, value)
       }
+
+      const descriptionResolver = new Map<string, string>()
+      for (const [key, value] of descriptionsByTitle) {
+        descriptionResolver.set(key, value)
+      }
+      for (const [amountCents, value] of descriptionsByAmount) {
+        descriptionResolver.set(`$${amountCents}`, value)
+      }
       return {
         hrefByTitle: resolver,
+        descriptionByTitle: descriptionResolver,
         sponsors: publicSponsors,
         defaultHref: `https://github.com/sponsors/${viewer.login}`,
       }
@@ -373,8 +398,17 @@ async function fetchSponsorsAndTierLinks(
     resolver.set(`$${amountCents}`, value)
   }
 
+  const descriptionResolver = new Map<string, string>()
+  for (const [key, value] of descriptionsByTitle) {
+    descriptionResolver.set(key, value)
+  }
+  for (const [amountCents, value] of descriptionsByAmount) {
+    descriptionResolver.set(`$${amountCents}`, value)
+  }
+
   return {
     hrefByTitle: resolver,
+    descriptionByTitle: descriptionResolver,
     sponsors: publicSponsors,
     defaultHref: `https://github.com/sponsors/${viewer.login}`,
   }
@@ -412,7 +446,7 @@ async function fetchSponsorTiers<const Data extends object>(
     }
   }
 
-  const { sponsors, hrefByTitle, defaultHref } =
+  const { sponsors, hrefByTitle, defaultHref, descriptionByTitle } =
     await fetchSponsorsAndTierLinks({
       ...options,
       avatarSizes,
@@ -483,6 +517,9 @@ async function fetchSponsorTiers<const Data extends object>(
       hrefByTitle.get(title.toLowerCase()) ??
       hrefByTitle.get(`$${Math.round(minAmount * 100)}`) ??
       defaultHref
+    const description =
+      descriptionByTitle.get(title.toLowerCase()) ??
+      descriptionByTitle.get(`$${Math.round(minAmount * 100)}`)
     const {
       avatarSize: _omitSize,
       tierId: _omitTierId,
@@ -492,6 +529,7 @@ async function fetchSponsorTiers<const Data extends object>(
     return {
       ...(rest as Data & { title: string }),
       sponsors: sanitizedSponsors,
+      description,
       href,
     } as TierResolved<Data>
   })

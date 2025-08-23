@@ -1,4 +1,5 @@
 import { Sponsors } from 'renoun/components'
+import { Markdown } from '@/components/Markdown'
 
 export const tiers = [
   {
@@ -52,6 +53,9 @@ export function SponsorTiers() {
                     <h3>
                       {tier.icon} {tier.title}
                     </h3>
+                    {tier.description && (
+                      <Markdown>{tier.description}</Markdown>
+                    )}
                     <div
                       css={{
                         display: 'flex',
@@ -99,6 +103,11 @@ export function SponsorTiers() {
                       variant="small"
                     />
                   </div>
+                  {tier.description && (
+                    <div css={{ color: 'var(--color-text-secondary)' }}>
+                      <Markdown>{tier.description}</Markdown>
+                    </div>
+                  )}
                   <ul
                     css={{
                       listStyle: 'none',
