@@ -258,7 +258,9 @@ export class WebSocketClient extends EventEmitter {
         if (result && result.ok) {
           return result.value as Type
         }
-        throw result ? result.error : new Error('Unknown batch error')
+        throw result
+          ? parseServerError(result.error)
+          : new Error('Unknown batch error')
       })
     }
 
@@ -327,7 +329,9 @@ export class WebSocketClient extends EventEmitter {
             item.resolve(result.value)
           } else {
             item.reject(
-              result ? result.error : new Error('Unknown batch error')
+              result
+                ? parseServerError(result.error)
+                : new Error('Unknown batch error')
             )
           }
         }
@@ -740,7 +744,7 @@ export class WebSocketClient extends EventEmitter {
     const payload = JSON.stringify(framed)
     const timers: Record<number, NodeJS.Timeout> = {}
 
-    type Settled = { ok: true; value: any } | { ok: false; error: any }
+    type Settled = { ok: true; value: any } | { ok: false; error: Error }
     const settles = framed.map(
       ({ id, method, params }) =>
         new Promise<Settled>((resolve) => {
@@ -772,7 +776,7 @@ export class WebSocketClient extends EventEmitter {
             reject: (reason) => {
               clearTimeout(timers[id])
               delete timers[id]
-              resolve({ ok: false, error: reason })
+              resolve({ ok: false, error: parseServerError(reason) })
               delete this.#requests[id]
               this.#onRequestSettled(id)
             },
@@ -1217,4 +1221,24 @@ export class WebSocketClient extends EventEmitter {
 /** Format connection time in milliseconds */
 function formatConnectionTime(time: number) {
   return Math.round((performance.now() - time) * 1000) / 1000
+}
+
+/** Parses errors from the RPC server. */
+function parseServerError(error: any): Error {
+  if (error instanceof Error) {
+    return error
+  }
+
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as any).message === 'string'
+  ) {
+    const constructed = new Error((error as any).message)
+    Object.assign(constructed, error)
+    return constructed
+  }
+
+  return new Error(String(error))
 }

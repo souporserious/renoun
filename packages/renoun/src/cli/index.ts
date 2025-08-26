@@ -120,14 +120,16 @@ if (
 
         const fatalRE = /(FATAL ERROR|Allocation failed|heap limit)/i
 
-        subProcess.stderr?.on('data', (buf) => {
-          const line = buf.toString()
+        subProcess.stderr?.on('data', (buffer) => {
+          const line = buffer.toString()
           debug.error('Subprocess stderr', { data: line })
 
           if (fatalRE.test(line)) {
             debug.error('Detected fatal stderr pattern - killing subprocess')
             subProcess?.kill('SIGKILL')
           }
+
+          process.stderr.write(buffer)
         })
 
         subProcess.on(
