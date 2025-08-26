@@ -5,7 +5,7 @@ This workflow builds and publishes **preview npm packages** for pull requests, u
 ### How it works
 
 1. **Trigger** – Runs on `pull_request` events: opened, synchronized (new commits), reopened, and closed.
-2. **Affected detection** – Uses `pnpm` + Turbo to list publishable workspaces changed since the PR base.
+2. **Affected detection** – Uses `git diff` between the PR base and head plus the workspace graph to select publishable workspaces and their internal dependencies.
 3. **Packaging** – Runs `pnpm pack` for each affected public workspace into a `previews/` directory. Tarballs are renamed to include the PR head short SHA (e.g. `pkg-a-1.2.3-<sha7>.tgz`) to make them uniquely cacheable.
 4. **Branch update** – Pushes tarballs into the `package-preview` branch under a per-PR directory (e.g. `123/renoun-1.0.0.tgz`). The branch is force-pushed with a single commit to avoid history bloat.
 5. **Sticky PR comment** – Uses `actions/github-script` to post or update a sticky PR comment with `npm install` commands using raw GitHub URLs to the tarballs. If no packages are affected, any existing sticky comment is removed.

@@ -1,7 +1,6 @@
 import {
   existsSync,
   mkdirSync,
-  readdirSync,
   writeFileSync,
   readFileSync,
   rmSync,
@@ -38,19 +37,19 @@ ensureEnv(['GITHUB_REPOSITORY', 'GITHUB_SHA', 'GH_TOKEN', 'GITHUB_EVENT_PATH'])
 
 const gitSha = String(process.env.GITHUB_SHA || '')
 const eventPath = String(process.env.GITHUB_EVENT_PATH || '')
-const GH_TOKEN = String(process.env.GH_TOKEN || '')
+const githubToken = String(process.env.GH_TOKEN || '')
 
-/** @type {any} */
-const event = JSON.parse(readFileSync(eventPath, 'utf8'))
-const prNumber = event.pull_request?.number
-let baseSha = event.pull_request?.base?.sha ?? null
-let headSha = String(event.pull_request?.head?.sha || gitSha)
-if (!prNumber) {
+/** @type {{ pull_request?: { number?: number, base?: { sha?: string }, head?: { sha?: string } } }} */
+const githubEventPayload = JSON.parse(readFileSync(eventPath, 'utf8'))
+const pullRequestNumber = githubEventPayload.pull_request?.number
+let baseSha = githubEventPayload.pull_request?.base?.sha ?? null
+let headSha = String(githubEventPayload.pull_request?.head?.sha || gitSha)
+if (!pullRequestNumber) {
   console.error('Could not resolve PR number from event payload')
   process.exit(1)
 }
 // Validate PR number to be strictly numeric
-if (!/^\d+$/.test(String(prNumber))) {
+if (!/^\d+$/.test(String(pullRequestNumber))) {
   console.error('Invalid PR number in event payload; expected digits only')
   process.exit(1)
 }
@@ -77,30 +76,38 @@ if (!/^[a-fA-F0-9]{7,40}$/.test(String(headSha))) {
     ? String(gitSha)
     : '0000000'
 }
-const { owner, repo } = getRepoContext()
-const octokit = new Octokit({ auth: GH_TOKEN })
+const { owner: repositoryOwner, repo: repositoryName } = getRepoContext()
+const octokit = new Octokit({ auth: githubToken })
 let repoDefaultBranch = ''
 try {
-  const { data } = await octokit.rest.repos.get({ owner, repo })
+  const { data } = await octokit.rest.repos.get({
+    owner: repositoryOwner,
+    repo: repositoryName,
+  })
   repoDefaultBranch = String(data?.default_branch || '')
 } catch (_) {
   repoDefaultBranch = ''
 }
 assertSafePreviewBranch(PREVIEW_BRANCH, repoDefaultBranch)
-const sha = headSha.slice(0, 7)
+const shortSha = headSha.slice(0, 7)
 const previewsDirectory = join(process.cwd(), 'previews')
 
 // Optional: ensure a configured Root Directory exists in the preview branch so platforms
 // like Vercel do not fail builds due to missing root path. The directory will include a
 // placeholder file so it is tracked by git. Validation is conservative to avoid traversal.
 const ROOT_DIRECTORY = String(process.env.ROOT_DIRECTORY || '').trim()
-function isSafeRelativeDir(p) {
+/**
+ * Validate a relative directory path for safety.
+ * @param {string} pathInput
+ * @returns {boolean}
+ */
+function isSafeRelativeDirectory(pathInput) {
   return (
-    p !== '' &&
-    /^[A-Za-z0-9._\/-]+$/.test(p) &&
-    !p.startsWith('/') &&
-    !p.includes('..') &&
-    !p.endsWith('/')
+    pathInput !== '' &&
+    /^[A-Za-z0-9._\/-]+$/.test(pathInput) &&
+    !pathInput.startsWith('/') &&
+    !pathInput.includes('..') &&
+    !pathInput.endsWith('/')
   )
 }
 
@@ -117,21 +124,12 @@ function getWorkspaces() {
   return parsePnpmWorkspaces(json)
 }
 
-/**
- * @template T
- * @param {T[]} arr
- * @returns {T[]}
- */
-function uniq(arr) {
-  return Array.from(new Set(arr))
-}
-
 const workspaces = getWorkspaces()
 // Exclude the repo root workspace from detection to avoid name collisions (e.g. root named
 // the same as a publishable package). The root path equals process.cwd().
-const repoRoot = resolve(process.cwd())
+const repositoryRoot = resolve(process.cwd())
 const workspacesForDetection = workspaces.filter(
-  (workspace) => resolve(workspace.path) !== repoRoot
+  (workspace) => resolve(workspace.path) !== repositoryRoot
 )
 
 /**
@@ -151,20 +149,25 @@ let targets = computePublishableTargets(workspaces, touchedWithDependents)
 
 // If nothing is affected, write an empty manifest so the comment step can remove the sticky comment
 if (targets.length === 0) {
-  const rawBase = buildRawBaseUrl(owner, repo, PREVIEW_BRANCH, prNumber)
-  /** @type {{ name: string, url: string }[]} */
-  const assets = buildAssets(rawBase, [])
   /** @type {import('./utils.js').PreviewManifest} */
-  const manifest = buildManifest({
+  const emptyManifest = buildManifest({
     branch: PREVIEW_BRANCH,
-    short: sha,
-    pr: prNumber,
-    assets,
+    short: shortSha,
+    pr: pullRequestNumber,
+    assets: buildAssets(
+      buildRawBaseUrl(
+        repositoryOwner,
+        repositoryName,
+        PREVIEW_BRANCH,
+        pullRequestNumber
+      ),
+      []
+    ),
     targets: [],
   })
   writeFileSync(
     join(previewsDirectory, 'manifest.json'),
-    JSON.stringify(manifest, null, 2)
+    JSON.stringify(emptyManifest, null, 2)
   )
   console.log(
     'No publishable workspaces affected — wrote empty manifest and skipped preview branch update'
@@ -175,54 +178,121 @@ if (targets.length === 0) {
 // Ensure uniqueness just in case Turbo output included duplicates
 targets = Array.from(new Set(targets))
 
-console.log('Packing targets with npm --ignore-scripts:', targets.join(', '))
-
 // Map package name to workspace for quick lookup
 /** @type {Map<string, { name: string, path: string, private: boolean }>} */
 const nameToWorkspace = new Map()
-for (const ws of workspaces) {
-  const existing = nameToWorkspace.get(ws.name)
+for (const workspaceEntry of workspaces) {
+  const existing = nameToWorkspace.get(workspaceEntry.name)
   if (!existing) {
-    nameToWorkspace.set(ws.name, ws)
+    nameToWorkspace.set(workspaceEntry.name, workspaceEntry)
   } else {
     // Prefer non-root workspace when duplicate names exist
-    const existingIsRoot = resolve(existing.path) === repoRoot
-    const currentIsRoot = resolve(ws.path) === repoRoot
+    const existingIsRoot = resolve(existing.path) === repositoryRoot
+    const currentIsRoot = resolve(workspaceEntry.path) === repositoryRoot
     if (existingIsRoot && !currentIsRoot) {
-      nameToWorkspace.set(ws.name, ws)
+      nameToWorkspace.set(workspaceEntry.name, workspaceEntry)
     }
   }
 }
 
-/** @type {string[]} */
-const builtFiles = []
-for (const packageName of targets) {
-  // Validate package name
-  assertSafePackageName(packageName)
-  const workspace = nameToWorkspace.get(packageName)
-  if (!workspace) {
-    console.warn(`Workspace not found for ${packageName}; skipping`)
-    continue
+/**
+ * Helper: tarball file name that pnpm/npm will emit for a workspace package.
+ * @param {{ name: string, version: string }} packageJson
+ * @returns {string}
+ */
+function tarballNameFromPkgJson(packageJson) {
+  // Scoped packages: @scope/name -> scope-name
+  const base = packageJson.name.replace(/^@/, '').replace('/', '-')
+  return `${base}-${packageJson.version}.tgz`
+}
+
+/**
+ * Build forward dependency map: workspace name -> Set(internal workspace dependencies)
+ * @param {Array<{ name: string, path: string }>} workspacesList
+ * @returns {Map<string, Set<string>>}
+ */
+function buildWorkspaceDependencies(workspacesList) {
+  const nameToWorkspaceMap = new Map(
+    workspacesList.map((workspaceEntry) => [
+      workspaceEntry.name,
+      workspaceEntry,
+    ])
+  )
+  const dependenciesMap = new Map()
+  for (const workspaceEntry of workspacesList) {
+    const packageJson = JSON.parse(
+      readFileSync(join(workspaceEntry.path, 'package.json'), 'utf8')
+    )
+    const dependencySet = new Set()
+    for (const field of [
+      'dependencies',
+      'optionalDependencies',
+      'peerDependencies',
+    ]) {
+      const dependenciesRecord = packageJson[field] || {}
+      for (const dependencyName of Object.keys(dependenciesRecord)) {
+        if (nameToWorkspaceMap.has(dependencyName))
+          dependencySet.add(dependencyName)
+      }
+    }
+    dependenciesMap.set(workspaceEntry.name, dependencySet)
   }
-  assertPathInsideRepo(workspace.path)
-  // npm pack will emit a tarball in the workspace directory. Use --ignore-scripts for safety.
-  /** @type {any} */
-  let packInfo
+  return dependenciesMap
+}
+
+/**
+ * DFS include all internal dependencies (down-graph).
+ * @param {string[]} seedNames
+ * @param {Map<string, Set<string>>} dependenciesMap
+ * @returns {string[]}
+ */
+function expandWithDependencies(seedNames, dependenciesMap) {
+  const resultSet = new Set()
+  const visitDependency = (name) => {
+    if (resultSet.has(name)) return
+    resultSet.add(name)
+    for (const dependencyName of dependenciesMap.get(name) || [])
+      visitDependency(dependencyName)
+  }
+  for (const seedName of seedNames) visitDependency(seedName)
+  return Array.from(resultSet)
+}
+
+/**
+ * Temporarily rewrite internal dependencies to tarball URLs, run callback(), then restore.
+ * If PREVIEW_EMBED_PEERS=1, internal peerDependencies are also rewritten.
+ * @param {string} workspacePath
+ * @param {Set<string>} internalPackageNamesSet
+ * @param {Map<string, string>} packageNameToUrl
+ * @param {() => unknown} callback
+ */
+function withRewrittenDependenciesToUrls(
+  workspacePath,
+  internalPackageNamesSet,
+  packageNameToUrl,
+  callback
+) {
+  const packageJsonPath = join(workspacePath, 'package.json')
+  const originalJson = readFileSync(packageJsonPath, 'utf8')
+  const packageJson = JSON.parse(originalJson)
+  const fields = ['dependencies', 'optionalDependencies']
+
+  for (const field of fields) {
+    const record = packageJson[field]
+    if (!record) continue
+    for (const dependencyName of Object.keys(record)) {
+      if (internalPackageNamesSet.has(dependencyName)) {
+        record[dependencyName] = packageNameToUrl.get(dependencyName) // e.g. https://raw.github.../dep-1.2.3-<sha>.tgz
+      }
+    }
+  }
+
+  writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))
   try {
-    const out = sh('npm pack --ignore-scripts --json', { cwd: workspace.path })
-    // npm >=9 returns JSON array; older may return object or string
-    const parsed = JSON.parse(out)
-    packInfo = Array.isArray(parsed) ? parsed[0] : parsed
-  } catch (err) {
-    console.error(`npm pack failed for ${packageName}:`, err?.message || err)
-    process.exit(1)
+    return callback()
+  } finally {
+    writeFileSync(packageJsonPath, originalJson)
   }
-  const filename = String(packInfo?.filename || '').trim()
-  if (!filename || !filename.endsWith('.tgz')) {
-    console.error(`Could not determine tarball filename for ${packageName}`)
-    process.exit(1)
-  }
-  builtFiles.push(filename)
 }
 
 // Prepare a working directory for the preview branch content
@@ -234,7 +304,11 @@ if (existsSync(workingDirectory)) {
 mkdirSync(workingDirectory, { recursive: true })
 
 // Initialize a minimal repo to retrieve existing branch contents (if any)
-const remoteUrl = getGithubRemoteUrl(owner, repo, GH_TOKEN)
+const remoteUrl = getGithubRemoteUrl(
+  repositoryOwner,
+  repositoryName,
+  githubToken
+)
 sh(`git init`, { cwd: workingDirectory })
 sh(`git remote add origin ${remoteUrl}`, { cwd: workingDirectory })
 
@@ -258,68 +332,154 @@ if (branchExists) {
 }
 
 // Ensure PR directory is a fresh container for latest commit tarballs only
-const prDir = join(workingDirectory, String(prNumber))
-if (existsSync(prDir)) {
-  rmSync(prDir, { recursive: true, force: true })
+const pullRequestDirectory = join(workingDirectory, String(pullRequestNumber))
+if (existsSync(pullRequestDirectory)) {
+  rmSync(pullRequestDirectory, { recursive: true, force: true })
 }
-mkdirSync(prDir, { recursive: true })
+mkdirSync(pullRequestDirectory, { recursive: true })
 
 // If a preview root dir is requested, ensure it exists in the working tree with a
 // `.gitkeep` file so hosting providers that look for a specific root do not fail.
-if (ROOT_DIRECTORY && isSafeRelativeDir(ROOT_DIRECTORY)) {
+if (ROOT_DIRECTORY && isSafeRelativeDirectory(ROOT_DIRECTORY)) {
   const rootDirPath = join(workingDirectory, ROOT_DIRECTORY)
   if (!existsSync(rootDirPath)) {
     mkdirSync(rootDirPath, { recursive: true })
   }
-  const keepPath = join(rootDirPath, '.gitkeep')
-  if (!existsSync(keepPath)) {
-    writeFileSync(keepPath, '')
+  const gitkeepPath = join(rootDirPath, '.gitkeep')
+  if (!existsSync(gitkeepPath)) {
+    writeFileSync(gitkeepPath, '')
   }
 }
 
+// Build internal dependencies graph and include transitive internal dependencies for all targets
+const dependenciesMap = buildWorkspaceDependencies(workspaces)
+let targetsWithDependencies = expandWithDependencies(targets, dependenciesMap)
+// Ensure uniqueness and stable order
+targetsWithDependencies = Array.from(new Set(targetsWithDependencies))
+
+// Precompute expected tarball names and the final renamed names (with short sha)
+const expectedTarballFilenames = targetsWithDependencies.map((name) => {
+  const workspaceEntry = nameToWorkspace.get(name)
+  if (!workspaceEntry) {
+    throw new Error(`Workspace not found for ${name}`)
+  }
+  const packageJson = JSON.parse(
+    readFileSync(join(workspaceEntry.path, 'package.json'), 'utf8')
+  )
+  return tarballNameFromPkgJson(packageJson) // e.g. scope-name-1.2.3.tgz
+})
+const renamedTarballFilenames = renamePackedFilenames(
+  expectedTarballFilenames,
+  shortSha
+) // append -<sha> etc.
+
+// Build URL map to embed into package.json before packing
+const rawBaseUrl = buildRawBaseUrl(
+  repositoryOwner,
+  repositoryName,
+  PREVIEW_BRANCH,
+  pullRequestNumber
+)
+const packageNameToRenamedFilename = new Map(
+  targetsWithDependencies.map((packageName, index) => [
+    packageName,
+    renamedTarballFilenames[index],
+  ])
+)
+const packageNameToUrl = new Map(
+  targetsWithDependencies.map((packageName) => [
+    packageName,
+    `${rawBaseUrl}/${packageNameToRenamedFilename.get(packageName)}`,
+  ])
+)
+
+// Pack each package using pnpm, with internal deps rewritten to PR tarball URLs
+console.log(
+  'Packing targets with internal deps rewritten to tarball URLs using pnpm pack:',
+  targetsWithDependencies.join(', ')
+)
+
 /** @type {string[]} */
-const files = []
-const renamed = renamePackedFilenames(builtFiles, sha)
-for (let index = 0; index < builtFiles.length; index++) {
-  const srcName = builtFiles[index]
-  const destName = renamed[index]
-  // npm pack wrote the tarball in the workspace directory; locate by package name
-  const workspace = nameToWorkspace.get(targets[index])
+const tarballFilenames = []
+const internalWorkspacePackageNamesSet = new Set(targetsWithDependencies)
+
+for (const packageName of targetsWithDependencies) {
+  // Validate package name
+  assertSafePackageName(packageName)
+  const workspace = nameToWorkspace.get(packageName)
   if (!workspace) {
+    console.warn(`Workspace not found for ${packageName}; skipping`)
     continue
   }
   assertPathInsideRepo(workspace.path)
-  cpSync(join(workspace.path, srcName), join(prDir, destName))
-  files.push(destName)
+
+  // Determine the expected on-disk pack filename
+  const packageJson = JSON.parse(
+    readFileSync(join(workspace.path, 'package.json'), 'utf8')
+  )
+  const expectedTarballFilename = tarballNameFromPkgJson(packageJson)
+  const destinationFilename = packageNameToRenamedFilename.get(packageName)
+  if (!destinationFilename) {
+    console.error(`Could not find renamed file for ${packageName}`)
+    process.exit(1)
+  }
+
+  console.log(
+    `→ ${packageName}: embedding internal tarball URLs, then pnpm pack`
+  )
+  withRewrittenDependenciesToUrls(
+    workspace.path,
+    internalWorkspacePackageNamesSet,
+    packageNameToUrl,
+    () => {
+      // pnpm pack writes <scope-name>-<version>.tgz in the workspace directory
+      sh(`npm_config_ignore_scripts=1 pnpm pack --pack-destination .`, {
+        cwd: workspace.path,
+      })
+    }
+  )
+
+  if (!existsSync(join(workspace.path, expectedTarballFilename))) {
+    console.error(
+      `pnpm pack did not create expected tarball for ${packageName}: ${expectedTarballFilename}`
+    )
+    process.exit(1)
+  }
+
+  // Copy into PR folder with the *renamed* file name that matches embedded URLs
+  cpSync(
+    join(workspace.path, expectedTarballFilename),
+    join(pullRequestDirectory, destinationFilename)
+  )
+  tarballFilenames.push(destinationFilename)
 }
 
 // Re-init to ensure force-pushed single-commit history
 safeReinitGitRepo(workingDirectory, PREVIEW_BRANCH, remoteUrl, {
-  owner,
-  repo,
+  owner: repositoryOwner,
+  repo: repositoryName,
   defaultBranch: repoDefaultBranch,
 })
 ensureGitIdentity(workingDirectory)
 runCommands(
   [
     'git add -A',
-    `git commit -m "update ${prNumber}:${sha} [skip ci]"`,
+    `git commit -m "update ${pullRequestNumber}:${shortSha} [skip ci]"`,
     `git push -f origin ${PREVIEW_BRANCH}`,
   ],
   { cwd: workingDirectory }
 )
 
 // Create manifest for the commenter step
-const rawBase = buildRawBaseUrl(owner, repo, PREVIEW_BRANCH, prNumber)
 /** @type {{ name: string, url: string }[]} */
-const assets = buildAssets(rawBase, files)
+const assets = buildAssets(rawBaseUrl, tarballFilenames)
 /** @type {import('./utils.js').PreviewManifest} */
 const manifest = buildManifest({
   branch: PREVIEW_BRANCH,
-  short: sha,
-  pr: prNumber,
+  short: shortSha,
+  pr: pullRequestNumber,
   assets,
-  targets: uniq(targets),
+  targets: Array.from(new Set(targets)),
 })
 writeFileSync(
   join(previewsDirectory, 'manifest.json'),
