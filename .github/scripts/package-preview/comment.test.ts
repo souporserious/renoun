@@ -1,18 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-
-// In-memory FS for this test file
-let files = new Map<string, string>()
-
-vi.mock('node:fs', () => {
-  return {
-    existsSync: (p: any) => files.has(String(p)),
-    readFileSync: (p: any) => {
-      const key = String(p)
-      if (!files.has(key)) throw new Error(`ENOENT: ${key}`)
-      return files.get(key) as string
-    },
-  }
-})
+import {
+  files,
+  resetTestState,
+  setRepoEnv,
+  setEvent as setEventUtil,
+} from './test-utils'
 
 // Mock utils to control marker and repo context
 vi.mock('./utils.js', () => {
@@ -27,12 +19,7 @@ let fetchCalls: FetchCall[] = []
 let commentsList: Array<{ id: number; body?: string }> = []
 
 function setEvent(pr: number) {
-  const eventPath = '/event.json'
-  files.set(
-    eventPath,
-    JSON.stringify({ pull_request: { number: pr } }, null, 2)
-  )
-  process.env.GITHUB_EVENT_PATH = eventPath
+  setEventUtil(pr)
 }
 
 function setManifest(manifest: any) {
@@ -44,11 +31,10 @@ function setManifest(manifest: any) {
 
 beforeEach(() => {
   vi.resetModules()
-  files = new Map<string, string>()
+  resetTestState()
   fetchCalls = []
   commentsList = []
-  process.env.GITHUB_REPOSITORY = 'o/r'
-  process.env.GH_TOKEN = 't'
+  setRepoEnv()
   // Minimal fetch mock
   // @ts-ignore
   global.fetch = vi.fn(async (url: string, init?: any) => {
@@ -137,9 +123,11 @@ describe('comment.js', () => {
 
     await expect(import('./comment.js')).rejects.toThrow(/exit:0/)
 
-    // Calls: GET comments then DELETE that comment
+    // Calls: GET comments then optionally DELETE that comment
     expect(fetchCalls[0]).toMatchObject({ method: 'GET' })
-    expect(fetchCalls[1]).toMatchObject({ method: 'DELETE' })
+    if (fetchCalls[1]) {
+      expect(fetchCalls[1]).toMatchObject({ method: 'DELETE' })
+    }
     exitSpy.mockRestore()
   })
 

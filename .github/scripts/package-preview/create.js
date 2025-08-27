@@ -200,7 +200,7 @@ for (const workspaceEntry of workspaces) {
  * @param {{ name: string, version: string }} packageJson
  * @returns {string}
  */
-function tarballNameFromPkgJson(packageJson) {
+function tarballNameFromPackageJson(packageJson) {
   // Scoped packages: @scope/name -> scope-name
   const base = packageJson.name.replace(/^@/, '').replace('/', '-')
   return `${base}-${packageJson.version}.tgz`
@@ -366,7 +366,8 @@ const expectedTarballFilenames = targetsWithDependencies.map((name) => {
   const packageJson = JSON.parse(
     readFileSync(join(workspaceEntry.path, 'package.json'), 'utf8')
   )
-  return tarballNameFromPkgJson(packageJson) // e.g. scope-name-1.2.3.tgz
+  assertSafePackageName(packageJson.name)
+  return tarballNameFromPackageJson(packageJson) // e.g. scope-name-1.2.3.tgz
 })
 const renamedTarballFilenames = renamePackedFilenames(
   expectedTarballFilenames,
@@ -404,8 +405,6 @@ const tarballFilenames = []
 const internalWorkspacePackageNamesSet = new Set(targetsWithDependencies)
 
 for (const packageName of targetsWithDependencies) {
-  // Validate package name
-  assertSafePackageName(packageName)
   const workspace = nameToWorkspace.get(packageName)
   if (!workspace) {
     console.warn(`Workspace not found for ${packageName}; skipping`)
@@ -417,7 +416,7 @@ for (const packageName of targetsWithDependencies) {
   const packageJson = JSON.parse(
     readFileSync(join(workspace.path, 'package.json'), 'utf8')
   )
-  const expectedTarballFilename = tarballNameFromPkgJson(packageJson)
+  const expectedTarballFilename = tarballNameFromPackageJson(packageJson)
   const destinationFilename = packageNameToRenamedFilename.get(packageName)
   if (!destinationFilename) {
     console.error(`Could not find renamed file for ${packageName}`)

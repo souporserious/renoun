@@ -68,6 +68,13 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Download manifest
         id: download
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
