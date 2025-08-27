@@ -42,7 +42,7 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build
-        run: pnpm build --filter=packages/*
+        run: pnpm build --filter='./packages/*'
 
       - name: Create preview branch assets
         run: node .github/scripts/package-preview/create.js
@@ -76,69 +76,11 @@ jobs:
           path: previews
         continue-on-error: true
 
-      - name: Post sticky comment with install commands
+      - name: Update comment with install commands
         if: steps.download.outcome == 'success'
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const manifestPath = path.join(process.cwd(), 'previews', 'manifest.json');
-            if (!fs.existsSync(manifestPath)) {
-              core.info('No manifest.json found — skipping comment creation');
-              return;
-            }
-            const data = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-            const marker = '<!-- package-preview-sticky -->';
-            if (!Number.isInteger(data.pr) || data.pr !== context.payload.pull_request.number) {
-              core.setFailed(`Manifest PR (${data.pr}) does not match event PR (${context.payload.pull_request.number})`);
-              return;
-            }
-            const assets = Array.isArray(data.assets) ? data.assets : [];
-            if (assets.length === 0) {
-              core.info('No preview assets — removing any existing sticky comment');
-              const { data: comments } = await github.rest.issues.listComments({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                per_page: 100,
-              });
-              const existing = comments.find(comment => typeof comment.body === 'string' && comment.body.includes(marker));
-              if (existing) {
-                await github.rest.issues.deleteComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: existing.id,
-                });
-              }
-              return;
-            }
-            const header = '### 📦 Preview packages';
-            const lines = assets.map(asset => [`**${asset.name}**`, '```bash', `npm install "${asset.url}"`, '```'].join('\n'));
-            const body = [marker, header, '', ...lines].join('\n');
-            // Find existing sticky comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-            const existing = comments.find(comment => typeof comment.body === 'string' && comment.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+        run: node .github/scripts/package-preview/comment.js
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   cleanup:
     if: github.event.action == 'closed' && github.event.pull_request.head.repo.fork == false
