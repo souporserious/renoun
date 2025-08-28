@@ -1,8 +1,9 @@
+import type { MDXHeadings } from 'renoun/mdx'
 import { TableOfContents } from '@/components/TableOfContents'
 import Sponsors, { headings } from './sponsors.mdx'
 import { tiers, SponsorTiers } from './SponsorTiers'
 
-const sponsorHeadings = tiers.map((tier) => ({
+const sponsorHeadings: MDXHeadings = tiers.map((tier) => ({
   id: tier.title.toLowerCase(),
   text: tier.title,
   level: 3,
