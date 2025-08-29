@@ -119,12 +119,19 @@ async function fetchSponsorsAndTierLinks(
   const token = process.env['GITHUB_SPONSORS_TOKEN']
 
   if (!token) {
-    // Skip erroring in Vercel/Netlify previews
-    if (
+    // Skip erroring in Vercel/Netlify previews and CI environments
+    const isPreviewEnv =
       process.env['VERCEL_ENV'] === 'preview' ||
       process.env['CONTEXT'] === 'deploy-preview' ||
       process.env['CONTEXT'] === 'branch-deploy'
-    ) {
+
+    const isCIEnv =
+      process.env['CI'] === 'true' ||
+      process.env['GITHUB_ACTIONS'] === 'true' ||
+      process.env['GITLAB_CI'] === 'true' ||
+      process.env['CIRCLECI'] === 'true'
+
+    if (isPreviewEnv || isCIEnv) {
       // Without a token, we don't know the login. Default to generic sponsors page.
       return {
         hrefByTitle: new Map(),
