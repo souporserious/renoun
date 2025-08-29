@@ -11,7 +11,7 @@ import { createSlug, type SlugCasings } from '../utils/create-slug.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import { getClosestFile } from '../utils/get-closest-file.js'
 import { getEditorUri } from '../utils/get-editor-uri.js'
-import type { FileExport } from '../utils/get-file-exports.js'
+import type { ModuleExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
 import { getMDXExportStaticValues } from '../utils/get-mdx-export-static-values.js'
 import { getMDXRuntimeValue } from '../utils/get-mdx-runtime-value.js'
@@ -568,15 +568,13 @@ export class File<
   }
 }
 
-/** Error for when a file export is not found. */
-export class FileExportNotFoundError extends Error {
-  constructor(
-    path: string,
-    name: string,
-    className: string = 'JavaScriptFile'
-  ) {
-    super(`[renoun] ${className} export "${name}" not found in path "${path}"`)
-    this.name = 'FileExportNotFoundError'
+/** Error for when a module export cannot be found. */
+export class ModuleExportNotFoundError extends Error {
+  constructor(path: string, name: string, className: string) {
+    super(
+      `[renoun] ${className} module export "${name}" not found in path "${path}"`
+    )
+    this.name = 'ModuleExportNotFoundError'
   }
 }
 
@@ -586,7 +584,7 @@ export class JavaScriptModuleExport<Value> {
   #file: JavaScriptFile<any>
   #loader?: ModuleLoader<any>
   #slugCasing: SlugCasings
-  #location: Omit<FileExport, 'name'> | undefined
+  #location: Omit<ModuleExport, 'name'> | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
   #staticPromise?: Promise<Value>
   #runtimePromise?: Promise<Value>
@@ -1069,7 +1067,11 @@ export class JavaScriptFile<
       )
     }
 
-    throw new FileExportNotFoundError(this.getAbsolutePath(), name)
+    throw new ModuleExportNotFoundError(
+      this.getAbsolutePath(),
+      name,
+      'JavaScript'
+    )
   }
 
   /** Get a named export from the JavaScript file. */
@@ -1403,11 +1405,7 @@ export class MDXFile<
     const fileModule = await this.#getModule()
 
     if (!(name in fileModule)) {
-      throw new FileExportNotFoundError(
-        this.getAbsolutePath(),
-        name,
-        MDXFile.name
-      )
+      throw new ModuleExportNotFoundError(this.getAbsolutePath(), name, 'MDX')
     }
 
     const fileExport = new MDXModuleExport<

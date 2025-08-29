@@ -1,5 +1,5 @@
 import {
-  FileExportNotFoundError,
+  ModuleExportNotFoundError,
   isFile,
   isJavaScriptFile,
   isMDXFile,
@@ -22,7 +22,7 @@ async function ListNavigation({
   const metadata =
     variant === 'title' && (isJavaScriptFile(entry) || isMDXFile(entry))
       ? await entry.getExportValue('metadata').catch((error) => {
-          if (error instanceof FileExportNotFoundError) {
+          if (error instanceof ModuleExportNotFoundError) {
             return undefined
           }
           throw error

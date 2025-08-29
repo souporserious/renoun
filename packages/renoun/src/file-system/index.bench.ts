@@ -5,7 +5,7 @@ import {
   MemoryFileSystem,
   withSchema,
   isFile,
-  FileExportNotFoundError,
+  ModuleExportNotFoundError,
 } from './index'
 
 const mdxLoader = withSchema<{ frontmatter: { title: string } }>(
@@ -303,7 +303,7 @@ describe('Module resolution on fixtures (real MDX)', () => {
           try {
             await entry.getExportValue('frontmatter')
           } catch (e) {
-            if (!(e instanceof FileExportNotFoundError)) throw e
+            if (!(e instanceof ModuleExportNotFoundError)) throw e
           }
         }
       }
@@ -320,7 +320,7 @@ describe('Module resolution on fixtures (real MDX)', () => {
           try {
             await entry.getExportValue('default')
           } catch (e) {
-            if (!(e instanceof FileExportNotFoundError)) throw e
+            if (!(e instanceof ModuleExportNotFoundError)) throw e
           }
         }
       }

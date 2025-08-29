@@ -5,7 +5,7 @@ import { debug } from './debug.js'
 import { getDeclarationLocation } from './get-declaration-location.js'
 import { getJsDocMetadata } from './get-js-doc-metadata.js'
 
-export interface FileExport {
+export interface ModuleExport {
   name: string
   path: string
   position: number
@@ -28,7 +28,7 @@ const exportableKinds = new Set([
 export function getFileExports(
   filePath: string,
   project: Project
-): FileExport[] {
+): ModuleExport[] {
   return debug.trackOperation(
     'get-file-exports',
     () => {
@@ -50,7 +50,7 @@ export function getFileExports(
       }
 
       const processStart = performance.now()
-      const exportDeclarations: FileExport[] = []
+      const exportDeclarations: ModuleExport[] = []
       const exportedDeclarations = sourceFile.getExportedDeclarations()
       const totalDeclarations = exportedDeclarations.size
 
@@ -111,7 +111,7 @@ export function getFileExports(
             continue
           }
 
-          const fileExport: FileExport = {
+          const fileExport: ModuleExport = {
             name,
             path: node.getSourceFile().getFilePath(),
             position: node.getPos(),
@@ -139,7 +139,7 @@ export function getFileExports(
       return exportDeclarations
     },
     { data: { filePath } }
-  ) as FileExport[]
+  ) as ModuleExport[]
 }
 
 /** Returns a specific export declaration of a file at a given position and kind. */

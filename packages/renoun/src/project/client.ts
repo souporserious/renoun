@@ -5,7 +5,7 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.js'
 import type {
-  FileExport,
+  ModuleExport,
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.js'
 import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.js'
@@ -155,7 +155,7 @@ export async function resolveTypeAtLocation(
   )
 }
 
-const fileExportsCache = new Map<string, FileExport[]>()
+const fileExportsCache = new Map<string, ModuleExport[]>()
 
 /**
  * Get the exports of a file.
@@ -180,7 +180,7 @@ export async function getFileExports(
         filePath: string
         projectOptions?: ProjectOptions
       },
-      FileExport[]
+      ModuleExport[]
     >('getFileExports', {
       filePath,
       projectOptions,

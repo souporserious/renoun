@@ -2,7 +2,7 @@ import {
   isFile,
   isDirectory,
   FileNotFoundError,
-  FileExportNotFoundError,
+  ModuleExportNotFoundError,
   type JavaScriptFile,
   type JavaScriptModuleExport,
 } from 'renoun/file-system'
@@ -42,7 +42,7 @@ export default async function Component({
   const mdxHeadings = await mdxFile
     ?.getExportValue('headings')
     .catch((error) => {
-      if (error instanceof FileExportNotFoundError) {
+      if (error instanceof ModuleExportNotFoundError) {
         return undefined
       }
       throw error
@@ -51,7 +51,7 @@ export default async function Component({
   const mainExport = await componentEntry
     .getExport<any>(componentEntry.getBaseName())
     .catch((error) => {
-      if (error instanceof FileExportNotFoundError) {
+      if (error instanceof ModuleExportNotFoundError) {
         return undefined
       }
       throw error

@@ -26,7 +26,7 @@ import {
   createSort,
   withSchema,
   FileNotFoundError,
-  FileExportNotFoundError,
+  ModuleExportNotFoundError,
 } from './index'
 import type { Expect, Is, IsNotAny } from './types'
 import type { Kind } from '../utils/resolve-type'
@@ -217,7 +217,7 @@ describe('file system', () => {
           const value = await entry
             .getExportValue('frontmatter')
             .catch((error) => {
-              if (error instanceof FileExportNotFoundError) {
+              if (error instanceof ModuleExportNotFoundError) {
                 return undefined
               }
               throw error
