@@ -55,7 +55,8 @@ jobs:
         with:
           name: preview-manifest
           path: previews/manifest.json
-          if-no-files-found: ignore
+          if-no-files-found: error
+          retention-days: 1
 
   comment:
     needs: build-and-publish
