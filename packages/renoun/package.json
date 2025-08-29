@@ -179,6 +179,7 @@
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
     "restyle": "catalog:",
+    "server-only": "0.0.1",
     "ts-morph": "catalog:",
     "unified": "catalog:",
     "unist-util-visit": "^5.0.0",

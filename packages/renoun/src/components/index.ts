@@ -32,4 +32,5 @@ export {
   type ReferenceComponents,
 } from './Reference.js'
 export { Refresh } from './Refresh/index.js'
+export { Sponsors } from './Sponsors.js'
 export { ThemeProvider, ThemeStyles } from './Theme/index.js'

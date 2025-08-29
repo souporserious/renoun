@@ -1,0 +1,16 @@
+## Rendering GitHub Sponsors
+
+This component **requires a GitHub Personal Access Token** to fetch your sponsors from the GitHub GraphQL API. It runs only on the server and the token is never exposed to the client.
+
+### 1. Create a token
+
+Use a **Personal Access Token (classic)** with the required scope of `read:user`. You can create a token here: https://github.com/settings/tokens/new.
+
+### 2. Add the environment variable
+
+Configure the **`GITHUB_SPONSORS_TOKEN`** environment variable in your hosting provider:
+
+- **Vercel:** Project → Settings → Environment Variables
+- **Netlify:** Site configuration → Environment variables
+- **Amplify:** App settings → Environment variables
+- **Other:** See the documentation for your hosting provider.
