@@ -1,9 +1,9 @@
-import { execSync } from 'node:child_process'
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Octokit } from '@octokit/rest'
 
 import {
+  sh,
   stickyMarker,
   runCommands,
   ensureGitIdentity,
@@ -28,16 +28,43 @@ if (!/^\d+$/.test(PR_NUMBER)) {
 const { owner, repo } = getRepoContext()
 const octokit = new Octokit({ auth: GH_TOKEN })
 
-/**
- * @param {string} cmd
- * @typedef {Omit<import('node:child_process').ExecSyncOptionsWithStringEncoding, 'encoding'> & { encoding?: 'utf8' }} ExecOpts
- * @param {ExecOpts} [opts]
- * @returns {string}
- */
-const sh = (cmd, opts = {}) => {
-  /** @type {import('node:child_process').ExecSyncOptionsWithStringEncoding} */
-  const options = { stdio: 'pipe', encoding: 'utf8', ...(opts || {}) }
-  return execSync(cmd, options).trim()
+/** Best-effort deletion of sticky preview comments in the PR. */
+async function deleteStickyComments() {
+  try {
+    const { data: comments } = await octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: Number(PR_NUMBER),
+      per_page: 100,
+    })
+    for (const comment of comments) {
+      if (
+        typeof comment?.body === 'string' &&
+        comment.body.includes(stickyMarker) &&
+        comment?.user?.type === 'Bot' &&
+        comment?.user?.login === 'github-actions[bot]'
+      ) {
+        try {
+          await octokit.rest.issues.deleteComment({
+            owner,
+            repo,
+            comment_id: Number(comment.id),
+          })
+          console.log(`Deleted preview comment ${comment.id}`)
+        } catch (error) {
+          console.warn(
+            `Failed to delete comment ${comment.id}:`,
+            error?.message || error
+          )
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(
+      'Failed to enumerate/delete sticky comments:',
+      error?.message || error
+    )
+  }
 }
 
 const PREVIEW_BRANCH = process.env.PREVIEW_BRANCH || 'package-preview'
@@ -88,6 +115,7 @@ try {
 
 if (!branchExists) {
   console.log('Preview branch not found — nothing to clean')
+  await deleteStickyComments()
   process.exit(0)
 }
 
@@ -104,6 +132,7 @@ try {
   const status = sh('git status --porcelain', { cwd: workdir })
   if (!status) {
     console.log('No preview assets to remove for this PR')
+    await deleteStickyComments()
     process.exit(0)
   }
 } catch {
@@ -149,39 +178,4 @@ console.log(
   `Removed preview assets for PR #${PR_NUMBER} and force-pushed ${PREVIEW_BRANCH}`
 )
 
-// Best-effort: delete the sticky PR comment(s) via Octokit
-try {
-  const { data: comments } = await octokit.rest.issues.listComments({
-    owner,
-    repo,
-    issue_number: Number(PR_NUMBER),
-    per_page: 100,
-  })
-  for (const comment of comments) {
-    if (
-      typeof comment?.body === 'string' &&
-      comment.body.includes(stickyMarker) &&
-      comment?.user?.type === 'Bot' &&
-      comment?.user?.login === 'github-actions[bot]'
-    ) {
-      try {
-        await octokit.rest.issues.deleteComment({
-          owner,
-          repo,
-          comment_id: Number(comment.id),
-        })
-        console.log(`Deleted preview comment ${comment.id}`)
-      } catch (err) {
-        console.warn(
-          `Failed to delete comment ${comment.id}:`,
-          err?.message || err
-        )
-      }
-    }
-  }
-} catch (err) {
-  console.warn(
-    'Failed to enumerate/delete sticky comments:',
-    err?.message || err
-  )
-}
+await deleteStickyComments()
