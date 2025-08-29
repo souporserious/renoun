@@ -353,7 +353,13 @@ if (ROOT_DIRECTORY && isSafeRelativeDirectory(ROOT_DIRECTORY)) {
 
 // Build internal dependencies graph and include transitive internal dependencies for all targets
 const dependenciesMap = buildWorkspaceDependencies(workspaces)
-let targetsWithDependencies = expandWithDependencies(targets, dependenciesMap)
+let targetsWithDependencies = expandWithDependencies(
+  targets,
+  dependenciesMap
+).filter((name) => {
+  const workspace = nameToWorkspace.get(name)
+  return workspace?.private !== true
+})
 // Ensure uniqueness and stable order
 targetsWithDependencies = Array.from(new Set(targetsWithDependencies))
 
