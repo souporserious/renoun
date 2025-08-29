@@ -1,4 +1,4 @@
-import type { JavaScriptFileExport } from 'renoun/file-system'
+import type { JavaScriptModuleExport } from 'renoun/file-system'
 import {
   Reference as DefaultReference,
   type ReferenceProps,
@@ -13,7 +13,7 @@ import { Markdown } from './Markdown'
 export function References({
   fileExports,
 }: {
-  fileExports: JavaScriptFileExport<any>[]
+  fileExports: JavaScriptModuleExport<any>[]
 }) {
   return (
     <div

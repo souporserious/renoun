@@ -4,7 +4,7 @@ import {
   isDirectory,
   FileNotFoundError,
   type FileSystemEntry,
-  type JavaScriptFileExport,
+  type JavaScriptModuleExport,
 } from 'renoun/file-system'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -190,7 +190,7 @@ export default async function Component({
 async function Preview({
   fileExport,
 }: {
-  fileExport: JavaScriptFileExport<any>
+  fileExport: JavaScriptModuleExport<any>
 }) {
   const name = fileExport.getName()
   const description = fileExport.getDescription()

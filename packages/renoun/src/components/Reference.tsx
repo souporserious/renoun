@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path'
 
 import {
   JavaScriptFile,
-  type JavaScriptFileExport,
+  type JavaScriptModuleExport,
 } from '../file-system/index.js'
 import {
   type Kind,
@@ -97,8 +97,8 @@ const defaultComponents: InternalReferenceComponents = {
 }
 
 export interface ReferenceProps {
-  /** The file path, `JavaScriptFile`, or `JavaScriptFileExport` type reference to resolve. */
-  source: string | JavaScriptFile<any> | JavaScriptFileExport<any>
+  /** The file path, `JavaScriptFile`, or `JavaScriptModuleExport` type reference to resolve. */
+  source: string | JavaScriptFile<any> | JavaScriptModuleExport<any>
 
   /** Optional filter for including additional properties from referenced types. */
   filter?: TypeFilter

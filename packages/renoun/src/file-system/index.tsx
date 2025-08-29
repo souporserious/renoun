@@ -581,7 +581,7 @@ export class FileExportNotFoundError extends Error {
 }
 
 /** A JavaScript file export. */
-export class JavaScriptFileExport<Value> {
+export class JavaScriptModuleExport<Value> {
   #name: string
   #file: JavaScriptFile<any>
   #loader?: ModuleLoader<any>
@@ -608,8 +608,8 @@ export class JavaScriptFileExport<Value> {
     file: JavaScriptFile<any>,
     loader?: ModuleLoader<any>,
     slugCasing?: SlugCasings
-  ): Promise<JavaScriptFileExport<Value>> {
-    const fileExport = new JavaScriptFileExport<Value>(
+  ): Promise<JavaScriptModuleExport<Value>> {
+    const fileExport = new JavaScriptModuleExport<Value>(
       name,
       file,
       loader,
@@ -909,7 +909,7 @@ export class JavaScriptFile<
   const Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
 > extends File<DirectoryTypes, Path, Extension> {
-  #exports = new Map<string, JavaScriptFileExport<any>>()
+  #exports = new Map<string, JavaScriptModuleExport<any>>()
   #loader?: ModuleLoader<Types>
   #slugCasing?: SlugCasings
   #modulePromise?: Promise<any>
@@ -1045,13 +1045,13 @@ export class JavaScriptFile<
   /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Types[ExportName]>> {
+  ): Promise<JavaScriptModuleExport<Types[ExportName]>> {
     if (await this.hasExport(name)) {
       if (this.#exports.has(name)) {
         return this.#exports.get(name)!
       }
 
-      const fileExport = await JavaScriptFileExport.init<Types[ExportName]>(
+      const fileExport = await JavaScriptModuleExport.init<Types[ExportName]>(
         name,
         this as any,
         this.#loader,
@@ -1075,7 +1075,7 @@ export class JavaScriptFile<
   /** Get a named export from the JavaScript file. */
   async getNamedExport<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<JavaScriptFileExport<Types[ExportName]>> {
+  ): Promise<JavaScriptModuleExport<Types[ExportName]>> {
     return this.getExport(name)
   }
 
@@ -1085,7 +1085,7 @@ export class JavaScriptFile<
       ? JavaScriptFile<Types, DirectoryTypes, Path, Extension>
       : never
   ): Promise<
-    JavaScriptFileExport<
+    JavaScriptModuleExport<
       Types extends { default: infer DefaultType } ? DefaultType : never
     >
   > {
@@ -1143,7 +1143,7 @@ export class JavaScriptFile<
 }
 
 /** An MDX file export. */
-export class MDXFileExport<Value> {
+export class MDXModuleExport<Value> {
   #name: string
   #file: MDXFile<any>
   #loader?: ModuleLoader<any>
@@ -1353,7 +1353,7 @@ export class MDXFile<
   const Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
 > extends File<DirectoryTypes, Path, Extension> {
-  #exports = new Map<string, MDXFileExport<any>>()
+  #exports = new Map<string, MDXModuleExport<any>>()
   #loader?: ModuleLoader<{ default: MDXContent } & Types>
   #slugCasing?: SlugCasings
   #staticExportValues?: Map<string, unknown>
@@ -1380,7 +1380,7 @@ export class MDXFile<
 
     for (const name of exportNames) {
       if (!this.#exports.has(name)) {
-        const mdxExport = new MDXFileExport(
+        const mdxExport = new MDXModuleExport(
           name,
           this as MDXFile<any>,
           this.#loader,
@@ -1395,7 +1395,7 @@ export class MDXFile<
 
   async getExport<ExportName extends 'default' | Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<MDXFileExport<({ default: MDXContent } & Types)[ExportName]>> {
+  ): Promise<MDXModuleExport<({ default: MDXContent } & Types)[ExportName]>> {
     if (this.#exports.has(name)) {
       return this.#exports.get(name)!
     }
@@ -1410,7 +1410,7 @@ export class MDXFile<
       )
     }
 
-    const fileExport = new MDXFileExport<
+    const fileExport = new MDXModuleExport<
       ({ default: MDXContent } & Types)[ExportName]
     >(name, this as MDXFile<any>, this.#loader, this.#slugCasing)
 
@@ -1422,7 +1422,7 @@ export class MDXFile<
   /** Get a named export from the MDX file. */
   async getNamedExport<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<MDXFileExport<Types[ExportName]>> {
+  ): Promise<MDXModuleExport<Types[ExportName]>> {
     return this.getExport(name)
   }
 

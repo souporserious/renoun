@@ -4,7 +4,7 @@ import {
   FileNotFoundError,
   FileExportNotFoundError,
   type JavaScriptFile,
-  type JavaScriptFileExport,
+  type JavaScriptModuleExport,
 } from 'renoun/file-system'
 import { CodeBlock, Tokens } from 'renoun/components'
 import type { MDXHeadings } from 'renoun/mdx'
@@ -255,7 +255,7 @@ export default async function Component({
 async function Preview({
   fileExport,
 }: {
-  fileExport: JavaScriptFileExport<React.ComponentType>
+  fileExport: JavaScriptModuleExport<React.ComponentType>
 }) {
   const name = fileExport.getName()
   const title = fileExport.getTitle()

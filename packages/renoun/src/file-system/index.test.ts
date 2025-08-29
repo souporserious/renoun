@@ -16,7 +16,7 @@ import {
   File,
   Directory,
   JavaScriptFile,
-  JavaScriptFileExport,
+  JavaScriptModuleExport,
   MDXFile,
   Collection,
   isDirectory,
@@ -1147,7 +1147,7 @@ describe('file system', () => {
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('default')
 
-    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
+    expect(fileExport).toBeInstanceOf(JavaScriptModuleExport)
     expect(fileExport.getName()).toBe('hello')
     expect(fileExport.getDescription()).toBe('Say hello.')
     expect(fileExport.getTags()).toMatchObject([
@@ -1177,7 +1177,7 @@ describe('file system', () => {
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('Button')
 
-    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
+    expect(fileExport).toBeInstanceOf(JavaScriptModuleExport)
     expect(fileExport.getName()).toBe('Button')
   })
 
@@ -1210,7 +1210,7 @@ describe('file system', () => {
     const fileExport = await file.getExport('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
-    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
+    expect(fileExport).toBeInstanceOf(JavaScriptModuleExport)
 
     const basename = await fileExport.getRuntimeValue()
 
@@ -1233,7 +1233,7 @@ describe('file system', () => {
     const fileExport = await file.getExport('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
-    expect(fileExport).toBeInstanceOf(JavaScriptFileExport)
+    expect(fileExport).toBeInstanceOf(JavaScriptModuleExport)
 
     const basename = await fileExport.getRuntimeValue()
 
