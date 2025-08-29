@@ -1105,7 +1105,7 @@ export class JavaScriptFile<
     name: ExportName
   ): Promise<Types[ExportName]> {
     const fileExport = await this.getExport(name)
-    return fileExport.getRuntimeValue()
+    return fileExport.getValue()
   }
 
   /** Check if an export exists statically in the JavaScript file. */
@@ -1428,9 +1428,7 @@ export class MDXFile<
 
   /** Get the default export from the MDX file. */
   async getDefaultExport(): Promise<MDXContent> {
-    return this.getExport('default').then((fileExport) =>
-      fileExport.getRuntimeValue()
-    )
+    return this.getExport('default').then((fileExport) => fileExport.getValue())
   }
 
   async hasExport(name: string): Promise<boolean> {
@@ -1441,9 +1439,7 @@ export class MDXFile<
   async getExportValue<
     ExportName extends 'default' | Extract<keyof Types, string>,
   >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]> {
-    return this.getExport(name).then((fileExport) =>
-      fileExport.getRuntimeValue()
-    )
+    return this.getExport(name).then((fileExport) => fileExport.getValue())
   }
 
   async #getStaticExportValues() {
