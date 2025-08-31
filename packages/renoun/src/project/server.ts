@@ -125,19 +125,19 @@ export async function createServer(options?: { port?: number }) {
       filter?: string
       projectOptions?: ProjectOptions
     }) {
-      return debug.trackAsyncOperation(
+      return debug.trackOperation(
         'server.resolveTypeAtLocation',
         async () => {
           const project = getProject(projectOptions)
 
-          debug.info('Processing type resolution request', {
+          debug.info('Processing type resolution request', () => ({
             data: {
               filePath: options.filePath,
               position: options.position,
               kind: SyntaxKind[options.kind],
               useInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
             },
-          })
+          }))
 
           return baseResolveTypeAtLocation(
             project,

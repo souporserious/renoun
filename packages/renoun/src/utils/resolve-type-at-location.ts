@@ -25,7 +25,7 @@ export async function resolveTypeAtLocation(
   const typeId = `${filePath}:${position}:${kind}`
   const startTime = performance.now()
 
-  return debug.trackAsyncOperation(
+  return debug.trackOperation(
     'resolveTypeAtLocation',
     async () => {
       const sourceFile = project.addSourceFileAtPath(filePath)

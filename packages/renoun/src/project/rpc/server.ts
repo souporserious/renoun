@@ -567,21 +567,22 @@ export class WebSocketServer {
     })
 
     this.#server.on('listening', () => {
-      // Start metrics timer
-      this.#metricsTimer = setInterval(() => {
-        debug.info('websocket_server_metrics', {
-          data: {
-            backlog: [...this.#methodSemaphores].map(
-              ([k, s]) => k + ':' + s.getQueueLength()
-            ),
-            inflight: [...this.#methods].map(
-              ([k, d]) => k + ':' + d.inflight.size
-            ),
-          },
-        })
-      }, 5_000)
-
-      this.#metricsTimer.unref()
+      // Start metrics timer only when info-level logging is enabled
+      if (debug.isEnabled('info')) {
+        this.#metricsTimer = setInterval(() => {
+          debug.info('websocket_server_metrics', () => ({
+            data: {
+              backlog: [...this.#methodSemaphores].map(
+                ([k, s]) => k + ':' + s.getQueueLength()
+              ),
+              inflight: [...this.#methods].map(
+                ([k, d]) => k + ':' + d.inflight.size
+              ),
+            },
+          }))
+        }, 5_000)
+        this.#metricsTimer.unref()
+      }
 
       // Start heartbeat once server is listening
       this.#heartbeatTimer = setInterval(() => {
@@ -813,25 +814,25 @@ export class WebSocketServer {
         const id = performance.now()
         const waitStart = performance.now()
         const release = await semaphore.acquire()
-        debug.info('semaphore-acquire', {
+        debug.info('semaphore-acquire', () => ({
           data: {
             id: Math.round(id * 1000) / 1000,
             method,
             waitMs: Math.round((performance.now() - waitStart) * 1000) / 1000,
           },
-        })
+        }))
         try {
           const t0 = performance.now()
           const result = await base(params)
           const elapsed = Math.round((performance.now() - t0) * 1000) / 1000
 
-          debug.info('handler-done', {
+          debug.info('handler-done', () => ({
             data: {
               id: Math.round(id * 1000) / 1000,
               method,
               ms: elapsed,
             },
-          })
+          }))
           const previous = this.#averageMs.get(method) ?? 0
           this.#averageMs.set(
             method,

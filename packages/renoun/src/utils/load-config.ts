@@ -3,7 +3,6 @@ import { resolve } from 'node:path'
 import { cwd } from 'node:process'
 
 import type { Languages, Themes } from '../grammars/index.js'
-import type { DebugOptions } from './debug.js'
 
 type ThemeValue = Themes | (string & {})
 
@@ -37,9 +36,6 @@ export interface ConfigurationOptions {
 
   /** The URL of the production site. This is used for generating sitemap and RSS feed URLs. */
   siteUrl?: string
-
-  /** Debug configuration options. */
-  debug?: DebugOptions
 }
 
 const configPath = resolve(cwd(), 'renoun.json')

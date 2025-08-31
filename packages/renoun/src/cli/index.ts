@@ -56,12 +56,15 @@ if (
   let subProcess: ReturnType<typeof spawn> | undefined
 
   function cleanupAndExit(code: number) {
-    debug.info('CLI cleanup initiated', {
+    debug.info('CLI cleanup initiated', () => ({
       data: { exitCode: code, hasSubProcess: !!subProcess },
-    })
+    }))
 
     if (subProcess) {
-      debug.debug('Terminating subprocess', { data: { pid: subProcess.pid } })
+      const pid = subProcess?.pid ?? null
+      debug.debug('Terminating subprocess', () => ({
+        data: { pid },
+      }))
       subProcess.kill('SIGTERM')
     }
     process.exit(code)
@@ -73,26 +76,28 @@ if (
     process.env['NODE_ENV'] = isProduction ? 'production' : 'development'
   }
 
-  debug.info('Starting renoun CLI', {
+  debug.info('Starting renoun CLI', () => ({
     data: {
       framework: firstArgument,
       command: secondArgument,
       isProduction,
       nodeEnv: process.env['NODE_ENV'],
-      debugEnabled: process.env['RENOUN_DEBUG'] === 'true',
+      debugEnabled:
+        process.env['RENOUN_DEBUG'] !== undefined &&
+        process.env['RENOUN_DEBUG'].toLowerCase() !== 'false',
     },
-  })
+  }))
 
   async function runSubProcess() {
-    return debug.trackAsyncOperation(
+    return debug.trackOperation(
       'cli.runSubProcess',
       async () => {
         const server = await createServer()
         const port = String(await server.getPort())
 
-        debug.info('renoun server created', {
+        debug.info('renoun server created', () => ({
           data: { port, serverId: process.env['RENOUN_SERVER_ID'] },
-        })
+        }))
 
         subProcess = spawn(
           process.execPath,
@@ -111,18 +116,21 @@ if (
           }
         )
 
-        debug.info('Subprocess spawned', {
-          data: {
-            pid: subProcess.pid,
-            command: `${firstArgument} ${secondArgument}`,
-          },
-        })
+        {
+          const pid = subProcess?.pid ?? null
+          debug.info('Subprocess spawned', () => ({
+            data: {
+              pid,
+              command: `${firstArgument} ${secondArgument}`,
+            },
+          }))
+        }
 
         const fatalRE = /(FATAL ERROR|Allocation failed|heap limit)/i
 
         subProcess.stderr?.on('data', (buffer) => {
           const line = buffer.toString()
-          debug.error('Subprocess stderr', { data: line })
+          debug.error('Subprocess stderr', () => ({ data: line }))
 
           if (fatalRE.test(line)) {
             debug.error('Detected fatal stderr pattern - killing subprocess')
@@ -135,24 +143,29 @@ if (
         subProcess.on(
           'exit',
           (code: number | null, signal: NodeJS.Signals | null) => {
-            debug.error('Subprocess exit', {
-              data: { pid: subProcess?.pid, exitCode: code, signal },
-            })
+            {
+              const pid = subProcess?.pid ?? null
+              debug.error('Subprocess exit', () => ({
+                data: { pid, exitCode: code, signal },
+              }))
+            }
           }
         )
 
         subProcess.on('close', (code: number) => {
-          debug.info('Subprocess closed', {
-            data: { pid: subProcess?.pid, exitCode: code },
-          })
+          const pid = subProcess?.pid ?? null
+          debug.info('Subprocess closed', () => ({
+            data: { pid, exitCode: code },
+          }))
           server.cleanup()
           cleanupAndExit(code)
         })
 
         subProcess.on('error', (error: Error) => {
-          debug.error('Subprocess error', {
-            data: { pid: subProcess?.pid, error: error.message },
-          })
+          const pid = subProcess?.pid ?? null
+          debug.error('Subprocess error', () => ({
+            data: { pid, error: error.message },
+          }))
           server.cleanup()
           cleanupAndExit(1)
         })
@@ -176,15 +189,17 @@ if (
   })
 
   process.on('uncaughtException', (error) => {
-    debug.error('Uncaught exception', {
+    debug.error('Uncaught exception', () => ({
       data: { error: error.message, stack: error.stack },
-    })
+    }))
     console.error('Uncaught exception:', error)
     cleanupAndExit(1)
   })
 
   process.on('unhandledRejection', (reason) => {
-    debug.error('Unhandled rejection', { data: { reason: String(reason) } })
+    debug.error('Unhandled rejection', () => ({
+      data: { reason: String(reason) },
+    }))
     console.error('Unhandled rejection:', reason)
     cleanupAndExit(1)
   })
@@ -193,20 +208,26 @@ if (
     process.env['NODE_ENV'] = 'development'
   }
 
-  debug.info('Starting renoun watch mode', {
+  debug.info('Starting renoun watch mode', () => ({
     data: {
       nodeEnv: process.env['NODE_ENV'],
-      debugEnabled: process.env['RENOUN_DEBUG'] === 'true',
+      debugEnabled:
+        process.env['RENOUN_DEBUG'] !== undefined &&
+        process.env['RENOUN_DEBUG'].toLowerCase() !== 'false',
     },
-  })
+  }))
 
-  debug.trackAsyncOperation(
+  debug.trackOperation(
     'cli.watch',
     async () => {
       const server = await createServer()
-      debug.info('Watch server created', {
-        data: { port: await server.getPort() },
-      })
+
+      if (debug.isEnabled('info')) {
+        const port = await server.getPort()
+        debug.info('Watch server created', () => ({
+          data: { port },
+        }))
+      }
       return server
     },
     { data: { mode: 'watch' } }

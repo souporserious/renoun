@@ -524,10 +524,10 @@ export class WebSocketClient extends EventEmitter {
       // We were closed intentionally but a late connect fired so drop it
       try {
         this.#ws?.close(1000, 'opened_after_close')
-      } catch (e) {
+      } catch (error) {
         debug.logWebSocketClientEvent('close_failed', {
           where: 'handleOpen_guard',
-          error: (e as Error).message,
+          error: (error as Error).message,
         })
       }
       return
@@ -640,11 +640,11 @@ export class WebSocketClient extends EventEmitter {
     return
   }
 
-  #handleClose(code?: number, reasonBuf?: Buffer) {
+  #handleClose(code?: number, reasonBuffer?: Buffer) {
     this.#isConnected = false
     this.#connectionState = 'disconnected'
 
-    const reason = (reasonBuf?.toString() || '').trim()
+    const reason = (reasonBuffer?.toString() || '').trim()
     const connectionTime = formatConnectionTime(this.#connectionStartTime)
 
     debug.logWebSocketClientEvent('closed', {
@@ -1173,10 +1173,10 @@ export class WebSocketClient extends EventEmitter {
     this.#isConnected = false
     try {
       this.#ws?.close(1000)
-    } catch (e) {
+    } catch (error) {
       debug.logWebSocketClientEvent('close_failed', {
         where: 'client_close',
-        error: (e as Error).message,
+        error: (error as Error).message,
       })
     }
     try {

@@ -38,7 +38,7 @@ export function getFileExports(
         const addStart = performance.now()
         sourceFile = project.addSourceFileAtPath(filePath)
 
-        debug.debug('Added source file to project', {
+        debug.debug('Added source file to project', () => ({
           operation: 'get-file-exports',
           data: {
             filePath,
@@ -46,7 +46,7 @@ export function getFileExports(
             duration: (performance.now() - addStart).toFixed(1),
             projectFiles: project.getSourceFiles().length,
           },
-        })
+        }))
       }
 
       const processStart = performance.now()
@@ -54,7 +54,7 @@ export function getFileExports(
       const exportedDeclarations = sourceFile.getExportedDeclarations()
       const totalDeclarations = exportedDeclarations.size
 
-      debug.debug('Processing exported declarations', {
+      debug.debug('Processing exported declarations', () => ({
         operation: 'get-file-exports',
         data: {
           filePath,
@@ -62,7 +62,7 @@ export function getFileExports(
           hasSourceFile: Boolean(sourceFile),
           duration: (performance.now() - processStart).toFixed(1),
         },
-      })
+      }))
 
       for (const [name, declarations] of exportedDeclarations) {
         for (const declaration of declarations) {
@@ -177,7 +177,7 @@ export function getFileExportDeclaration(
         )
       }
 
-      debug.debug('Found export declaration', {
+      debug.debug('Found export declaration', () => ({
         operation: 'get-file-export-declaration',
         data: {
           filePath,
@@ -185,7 +185,7 @@ export function getFileExportDeclaration(
           kind: tsMorph.SyntaxKind[kind],
           declarationText: declaration.getText().substring(0, 100),
         },
-      })
+      }))
 
       return exportDeclaration
     },
@@ -207,7 +207,7 @@ export async function getFileExportMetadata(
   kind: tsMorph.SyntaxKind,
   project: Project
 ) {
-  return debug.trackAsyncOperation(
+  return debug.trackOperation(
     'get-file-export-metadata',
     async () => {
       const sourceFile = project.getSourceFile(filePath)
@@ -234,7 +234,7 @@ export async function getFileExportMetadata(
         location: getDeclarationLocation(exportDeclaration),
       }
 
-      debug.info('Export metadata retrieved', {
+      debug.info('Export metadata retrieved', () => ({
         operation: 'get-file-export-metadata',
         data: {
           filePath,
@@ -244,7 +244,7 @@ export async function getFileExportMetadata(
           hasJsDoc: !!metadata.jsDocMetadata,
           hasLocation: !!metadata.location,
         },
-      })
+      }))
 
       return metadata
     },

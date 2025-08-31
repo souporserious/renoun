@@ -45,23 +45,31 @@ Contributions are welcome, to submit a pull request:
 1. **Fork the Repository**: Click the "Fork" button at the top right of the [renoun repository](https://github.com/souporserious/renoun) to create your own fork.
 
 2. **Clone Your Fork**:
-   ```bash
-   git clone https://github.com/souporserious/renoun.git
-   ```
+
+```bash
+git clone https://github.com/souporserious/renoun.git
+```
+
 3. **Create a Branch**:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+
+```bash
+git checkout -b feature/your-feature-name
+```
+
 4. **Make Your Changes**: Implement your feature or bug fix.
 
 5. **Commit Your Changes**:
-   ```bash
-   git commit -m "your feature description"
-   ```
+
+```bash
+git commit -m "your feature description"
+```
+
 6. **Push to Your Fork**:
-   ```bash
-   git push origin your-feature-name
-   ```
+
+```bash
+git push origin your-feature-name
+```
+
 7. **Open a Pull Request**: Navigate to the original [renoun repository](https://github.com/souporserious/renoun) and click the "Compare & pull request" button. Provide a clear description of your changes and submit the PR.
 
 ---
@@ -90,3 +98,29 @@ If you need any assistance or have questions about contributing, feel free to re
 - **GitHub Discussions**: [Join the discussion](https://github.com/souporserious/renoun/discussions)
 
 Thank you for your interest in contributing to renoun! Your support is greatly appreciated 🙏
+
+---
+
+## Debugging
+
+You can enable internal debug logs to help diagnose issues while developing or testing renoun.
+
+Set the `RENOUN_DEBUG` environment variable before running commands:
+
+- Allowed values:
+  - `true` or `1`: enable logging at the most verbose level
+  - `error`, `warn`, `info`, `debug`, `trace`: set a specific minimum level
+  - `false` or `0`: logging disabled (default)
+
+Examples:
+
+```bash
+# Most verbose logging
+RENOUN_DEBUG=true pnpm dev
+
+# Info and above
+RENOUN_DEBUG=info pnpm dev
+
+# CLI example
+RENOUN_DEBUG=debug renoun next dev
+```

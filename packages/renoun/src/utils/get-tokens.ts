@@ -144,7 +144,7 @@ export async function getTokens({
             })
 
       // Track highlighter performance
-      const tokens = await debug.trackAsyncOperation(
+      const tokens = await debug.trackOperation(
         'highlighter',
         async () => {
           return await highlighter(

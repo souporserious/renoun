@@ -239,3 +239,22 @@ The `siteUrl` property is used to define the URL of your documentation site. Thi
   "siteUrl": "https://renoun.dev"
 }
 ```
+
+## Debug Logs
+
+You can enable internal debug logging by setting the `RENOUN_DEBUG` environment variable. This is helpful when investigating issues related to the renoun CLI, the WebSocker server, and other internal utilities.
+
+- Allowed values:
+  - `true` or `1`: enable the most verbose logging
+  - `error`, `warn`, `info`, `debug`, `trace`: set a specific minimum level
+  - `false` or `0`: logging disabled (default)
+
+Examples:
+
+```bash
+# Most verbose logging
+RENOUN_DEBUG=true renoun next dev
+
+# Only info and above
+RENOUN_DEBUG=info renoun next dev
+```
