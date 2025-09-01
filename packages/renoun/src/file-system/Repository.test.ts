@@ -712,4 +712,9 @@ describe('Repository', () => {
       )
     })
   })
+
+  test('repository string representation', () => {
+    const repo = new Repository('owner/repo@develop')
+    expect(repo.toString()).toBe('github:owner/repo@develop')
+  })
 })

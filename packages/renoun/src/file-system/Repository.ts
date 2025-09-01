@@ -177,6 +177,7 @@ export class Repository {
   #repo?: string
   #defaultRef: string = 'main'
   #defaultPath?: string
+  #isDefaultRefExplicit: boolean = false
 
   constructor(repository: RepositoryConfig | string) {
     if (typeof repository === 'string') {
@@ -187,6 +188,7 @@ export class Repository {
       this.#repo = specifier.repo
       if (specifier.ref) {
         this.#defaultRef = specifier.ref
+        this.#isDefaultRefExplicit = true
       }
       this.#defaultPath = specifier.path
       this.#baseUrl = `https://${HOSTS[this.#provider]}/${this.#owner}/${this.#repo}`
@@ -246,6 +248,11 @@ export class Repository {
     if (!['github', 'gitlab', 'bitbucket', 'pierre'].includes(this.#provider)) {
       throw new Error(`Unsupported provider: ${this.#provider}`)
     }
+  }
+
+  /** Returns the string representation of the repository. */
+  toString(): string {
+    return `${this.#provider}:${this.#owner}/${this.#repo}${this.#isDefaultRefExplicit ? `@${this.#defaultRef}` : ''}${this.#defaultPath ? `/${this.#defaultPath}` : ''}`
   }
 
   /** Constructs a new issue URL for the repository. */
