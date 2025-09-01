@@ -1,11 +1,11 @@
-import { Reference } from 'renoun/components'
 import {
+  Reference,
   isFile,
   isDirectory,
   FileNotFoundError,
   type FileSystemEntry,
   type JavaScriptModuleExport,
-} from 'renoun/file-system'
+} from 'renoun'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 

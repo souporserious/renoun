@@ -1,8 +1,7 @@
 'use client'
 import { useId } from 'react'
 import type { CSSObject } from 'restyle'
-import type { MDXHeadings } from 'renoun/mdx'
-import { useSectionObserver } from 'renoun/hooks'
+import { useSectionObserver, type MDXHeadings } from 'renoun'
 
 import { ViewSource } from './ViewSource'
 

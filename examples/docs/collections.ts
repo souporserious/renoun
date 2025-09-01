@@ -1,4 +1,4 @@
-import { Directory, resolveFileFromEntry, withSchema } from 'renoun/file-system'
+import { Directory, resolveFileFromEntry, withSchema } from 'renoun'
 import { z } from 'zod'
 
 export const docs = new Directory({

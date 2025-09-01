@@ -4,7 +4,7 @@ import {
   isJavaScriptFile,
   ModuleExportNotFoundError,
   type FileSystemEntry,
-} from 'renoun/file-system'
+} from 'renoun'
 import { styled } from 'restyle'
 
 export async function SiblingLink({

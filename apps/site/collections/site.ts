@@ -1,4 +1,4 @@
-import { Directory, isFile, withSchema } from 'renoun/file-system'
+import { Directory, isFile, withSchema } from 'renoun'
 import { z } from 'zod'
 
 const mdxSchema = {

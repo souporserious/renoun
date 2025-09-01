@@ -1,13 +1,14 @@
 import {
+  CodeBlock,
+  Tokens,
   isFile,
   isDirectory,
   FileNotFoundError,
   ModuleExportNotFoundError,
   type JavaScriptFile,
   type JavaScriptModuleExport,
-} from 'renoun/file-system'
-import { CodeBlock, Tokens } from 'renoun/components'
-import type { MDXHeadings } from 'renoun/mdx'
+  type MDXHeadings,
+} from 'renoun'
 import { GeistMono } from 'geist/font/mono'
 import { References } from '@/components/Reference'
 

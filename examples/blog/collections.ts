@@ -1,4 +1,4 @@
-import { Directory, withSchema } from 'renoun/file-system'
+import { Directory, withSchema } from 'renoun'
 import { z } from 'zod'
 
 export const posts = new Directory({

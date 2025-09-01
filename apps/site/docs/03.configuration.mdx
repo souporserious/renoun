@@ -76,7 +76,7 @@ You can also specify multiple themes to be used, the first theme will be used as
 This requires using the `ThemeProvider` component that will inject the proper CSS Variables in the head of the document:
 
 ```tsx
-import { ThemeProvider } from 'renoun/components'
+import { ThemeProvider } from 'renoun'
 
 export default function RootLayout({
   children,
@@ -107,7 +107,7 @@ The `useThemePicker` hook can be used to build a select menu or toggle for choos
 
 ```tsx
 'use client'
-import { useThemePicker } from 'renoun/hooks'
+import { useThemePicker } from 'renoun'
 
 export function ThemePicker() {
   const [theme, setTheme] = useThemePicker()
@@ -126,7 +126,7 @@ export function ThemePicker() {
 If you are using another theming solution, you can use the `ThemeStyles` component directly to only load the CSS Variables for the theme:
 
 ```tsx
-import { ThemeStyles } from 'renoun/components'
+import { ThemeStyles } from 'renoun'
 
 export default function RootLayout({
   children,

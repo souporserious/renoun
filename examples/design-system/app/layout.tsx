@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { Refresh, ThemeProvider } from 'renoun/components'
 import Link from 'next/link'
+import { Refresh, ThemeProvider } from 'renoun'
 
 import './layout.css'
 

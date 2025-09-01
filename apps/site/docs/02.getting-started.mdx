@@ -1,4 +1,4 @@
-import { Reference } from 'renoun/components'
+import { Reference } from 'renoun'
 
 export const metadata = {
   title: 'Getting Started',
@@ -42,7 +42,7 @@ Prepending the renoun CLI ensures that the renoun process starts before your fra
 
 ## MDX Content
 
-The renoun toolkit helps with authoring MDX using the `renoun/mdx` package, allowing you to write content with a mix of Markdown and React components. The `renoun/mdx` package is not required to use, but provides a set of [useful plugins](/guides/mdx#pre-configured-plugins) to enhance your content.
+The renoun toolkit helps with authoring MDX using the `@renoun/mdx` package which is automatically installed with renoun, allowing you to write content with a mix of Markdown and React components. The `@renoun/mdx` package is not required to use, but provides a set of [useful plugins](/guides/mdx#pre-configured-plugins) to enhance your content.
 
 To start, create a new directory in your project called `posts` and add a new file called `build-a-button-component-in-react.mdx`:
 
@@ -86,7 +86,7 @@ We are using [YAML front matter](https://jekyllrb.com/docs/front-matter/) to def
 The `Directory` class is a core utility in renoun. This allows you to easily query and render files and directories within a file system. To create a list of blog posts, query all of the MDX files in the `posts` directory we created in the previous step:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
@@ -99,7 +99,7 @@ Now we can use the configured directory to render the contents of our MDX files 
 Create a new file in the `app/posts` directory called `[slug].tsx` and add the following:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
@@ -128,7 +128,7 @@ By default, the `Directory` class will load files using the MDX compiler. Howeve
 Use the `loader` option in the `Directory` constructor to assign a specific loader for each file type. In the `posts` directory, for instance, you can use a dynamic import as the loader to ensure that the MDX files are processed by the bundler:
 
 ```tsx highlightedLines="6-8"
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
@@ -150,7 +150,7 @@ Ensure that your bundler is configured to handle the file extension you are targ
 A [File System](/utilities/file-system) entry's `getPath` method is used to generate a route path for each entry in the directory. To generate a link to each post, map over the directory's entries using `getEntries` and then use the entry's `getPath` method to generate a list of links:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 import Link from 'next/link'
 
 const posts = new Directory({
@@ -196,7 +196,7 @@ Alongside file loading, renoun can validate module exports to ensure that source
 Below is an example demonstrating how to validate a `metadata` object exported from a module using [Zod](https://zod.dev/):
 
 ```tsx path="posts.ts"
-import { Directory, withSchema } from 'renoun/file-system'
+import { Directory, withSchema } from 'renoun'
 import { z } from 'zod'
 
 export const posts = new Directory({
@@ -233,7 +233,7 @@ const { title, date, summary, tags } = metadata
 Now that we have a schema for the metadata, we can access it from the MDX file using the `getExportValue` method:
 
 ```tsx highlightedLines="29-30"
-import { Directory, withSchema } from 'renoun/file-system'
+import { Directory, withSchema } from 'renoun'
 import { z } from 'zod'
 
 export const posts = new Directory({
@@ -281,7 +281,7 @@ If you are using front matter, you can use the [remark-frontmatter](https://www.
 The renoun toolkit provides several built-in components to enhance your documentation like [`Reference`](/components/reference) and [`CodeBlock`](/components/code-block). For example, you can use the `Reference` component to document all exports from a module:
 
 ```mdx
-import { Reference } from 'renoun/components'
+import { Reference } from 'renoun'
 
 <Reference source="components/Card.tsx" />
 ```

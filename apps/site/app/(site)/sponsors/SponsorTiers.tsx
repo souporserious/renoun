@@ -1,4 +1,4 @@
-import { Sponsors } from 'renoun/components'
+import { Sponsors } from 'renoun'
 
 export const tiers = [
   {

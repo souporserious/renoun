@@ -1,4 +1,3 @@
-import 'server-only'
 import React from 'react'
 
 interface SponsorEntity {

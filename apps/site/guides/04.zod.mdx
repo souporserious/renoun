@@ -6,7 +6,7 @@ export const metadata = {
 }
 
 ```ts
-import { Directory, withSchema } from 'renoun/file-system'
+import { Directory, withSchema } from 'renoun'
 import { z } from 'zod'
 
 const frontmatterSchema = z.object({
@@ -30,7 +30,7 @@ const posts = new Directory({
 
 ## Introduction
 
-In this guide, we'll walk through how to use [Zod](https://zod.dev/) to add schema validation to your file system. Using Valibot ensures that your targeted files conform to an expected structure, providing type safety and validation.
+In this guide, we'll walk through how to use [Zod](https://zod.dev/) to add schema validation to your file system. Using Zod ensures that your targeted files conform to an expected structure, providing type safety and validation.
 
 ### Before You Begin
 
@@ -66,7 +66,7 @@ const frontmatterSchema = z.object({
 We can now apply the Zod `frontmatterSchema` to your `Directory` using the `withSchema` helper:
 
 ```ts highlightedLines="1,11-20"
-import { Directory, withSchema } from 'renoun/file-system'
+import { Directory, withSchema } from 'renoun'
 import { z } from 'zod'
 
 const frontmatterSchema = z.object({

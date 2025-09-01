@@ -1,5 +1,5 @@
 import React from 'react'
-import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun/components'
+import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun'
 
 export function Basic() {
   return <CodeBlock language="ts">const beep = 'boop'</CodeBlock>

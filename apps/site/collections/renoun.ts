@@ -4,8 +4,8 @@ import {
   isFile,
   withSchema,
   type FileSystemEntry,
-} from 'renoun/file-system'
-import type { MDXHeadings } from 'renoun/mdx'
+  type MDXHeadings,
+} from 'renoun'
 import { z } from 'zod'
 
 async function filterInternalExports(entry: FileSystemEntry<any>) {

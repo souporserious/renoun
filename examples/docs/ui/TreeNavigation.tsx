@@ -5,7 +5,7 @@ import {
   isMDXFile,
   type Directory,
   type FileSystemEntry,
-} from 'renoun/file-system'
+} from 'renoun'
 
 import { SidebarLink } from './SidebarLink'
 import * as SidebarCollapse from './SidebarCollapse'

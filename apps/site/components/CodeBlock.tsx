@@ -1,7 +1,4 @@
-import {
-  CodeBlock as DefaultCodeBlock,
-  type CodeBlockProps,
-} from 'renoun/components'
+import { CodeBlock as DefaultCodeBlock, type CodeBlockProps } from 'renoun'
 import { GeistMono } from 'geist/font/mono'
 
 export function CodeBlock(props: CodeBlockProps) {

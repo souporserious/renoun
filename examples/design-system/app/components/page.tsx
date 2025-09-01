@@ -1,4 +1,4 @@
-import type { FileSystemEntry } from 'renoun/file-system'
+import type { FileSystemEntry } from 'renoun'
 import { styled } from 'restyle'
 import Link from 'next/link'
 

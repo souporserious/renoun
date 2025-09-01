@@ -1,5 +1,4 @@
-import type { Collection, MDXFile } from 'renoun/file-system'
-import type { MDXHeadings } from 'renoun/mdx'
+import type { Collection, MDXFile, MDXHeadings } from 'renoun'
 
 import { SiblingLink } from './SiblingLink'
 import { TableOfContents } from './TableOfContents'
