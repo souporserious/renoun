@@ -44,6 +44,33 @@ export function sh(cmd, opts = {}) {
 }
 
 /**
+ * REST helper
+ * @param {string} githubToken
+ * @param {string} method
+ * @param {string} url
+ * @param {any} [body]
+ */
+export async function gh(githubToken, method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `token ${githubToken}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(
+      `${method} ${url} -> ${res.status} ${res.statusText} ${text}`
+    )
+  }
+  if (res.status === 204) return null
+  return res.json()
+}
+
+/**
  * Ensure required environment variables are present; exits the process otherwise.
  * @param {string[]} varNames
  * @returns {void}
@@ -214,6 +241,79 @@ export function ensureGitIdentity(cwd) {
 }
 
 /**
+ * Get existing sticky comment, if any.
+ * @param {string} githubToken
+ * @param {string} owner
+ * @param {string} repo
+ * @param {number} prNumber
+ */
+export async function getExistingComment(githubToken, owner, repo, prNumber) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments?per_page=100`
+  /** @type {{ id: number, body?: string, user?: { type: string, login: string } }[]} */
+  const comments = await gh(githubToken, 'GET', url)
+  return (
+    comments.find(
+      (comment) =>
+        typeof comment?.body === 'string' &&
+        comment.body.includes(stickyMarker) &&
+        comment?.user?.type === 'Bot' &&
+        comment?.user?.login === 'github-actions[bot]'
+    ) || null
+  )
+}
+
+/**
+ * Delete our sticky preview comment from the PR conversation (issue comments).
+ * Paginates over all comments and deletes those matching our hidden marker,
+ * authored by github-actions[bot].
+ * @param {string} githubToken
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string | number} prNumber
+ */
+export async function deleteStickyComments(githubToken, owner, repo, prNumber) {
+  try {
+    const allComments = []
+    let page = 1
+    while (true) {
+      const url = `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments?per_page=100&page=${page}`
+      const batch = await gh(githubToken, 'GET', url)
+      if (!Array.isArray(batch) || batch.length === 0) {
+        break
+      }
+      allComments.push(...batch)
+      if (batch.length < 100) {
+        break
+      }
+      page++
+    }
+
+    let deleted = 0
+    for (const comment of allComments) {
+      if (
+        typeof comment?.body === 'string' &&
+        comment.body.includes(stickyMarker) &&
+        comment?.user?.type === 'Bot' &&
+        comment?.user?.login === 'github-actions[bot]'
+      ) {
+        const deleteUrl = `https://api.github.com/repos/${owner}/${repo}/issues/comments/${comment.id}`
+        await gh(githubToken, 'DELETE', deleteUrl)
+        deleted++
+        console.log(`Deleted sticky preview comment ${comment.id}`)
+      }
+    }
+    if (deleted === 0) {
+      console.log('No sticky preview comment found to delete')
+    }
+  } catch (error) {
+    console.warn(
+      'Failed to enumerate/delete sticky comments:',
+      error?.message || error
+    )
+  }
+}
+
+/**
  * Validate a package name to a conservative character set that is safe to
  * pass to shell-wrapped commands. Allows scoped names like @scope/name.
  * @param {string} name
@@ -251,27 +351,6 @@ export function parsePnpmWorkspaces(jsonString) {
       path: String(workspace.path),
       private: !!workspace.private,
     }))
-}
-
-/**
- * Parse Turbo dry-run JSON output and return unique package names.
- * Handles both array and object shapes seen in practice.
- * @param {string} jsonString
- * @returns {string[]}
- */
-export function parseTurboDryRunPackages(jsonString) {
-  /** @type {any} */
-  const parsedValue = JSON.parse(jsonString)
-  /** @type {string[]} */
-  let packageNames = []
-  if (Array.isArray(parsedValue)) {
-    packageNames = parsedValue.map((task) => task?.package).filter(Boolean)
-  } else if (parsedValue?.tasks) {
-    packageNames = parsedValue.tasks
-      .map((task) => task?.package)
-      .filter(Boolean)
-  }
-  return Array.from(new Set(packageNames))
 }
 
 /**

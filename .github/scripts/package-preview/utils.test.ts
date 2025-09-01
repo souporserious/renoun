@@ -167,35 +167,6 @@ describe('transforms', () => {
     ])
   })
 
-  it('parseTurboDryRunPackages - array form', () => {
-    const json = JSON.stringify([
-      { package: 'a' },
-      { package: 'b' },
-      { package: 'a' },
-    ])
-    expect(utils.parseTurboDryRunPackages(json)).toEqual(['a', 'b'])
-  })
-
-  it('parseTurboDryRunPackages - tasks form', () => {
-    const json = JSON.stringify({ tasks: [{ package: 'a' }, { package: 'b' }] })
-    expect(utils.parseTurboDryRunPackages(json)).toEqual(['a', 'b'])
-  })
-
-  it('parseTurboDryRunPackages - packages form', () => {
-    const json = JSON.stringify({ packages: ['a', 'b', 'a'] })
-    // We intentionally ignore the top-level `packages` list because it
-    // can include all workspaces, not just affected ones.
-    expect(utils.parseTurboDryRunPackages(json)).toEqual([])
-  })
-
-  it('parseTurboDryRunPackages - prefer tasks over packages when both present', () => {
-    const json = JSON.stringify({
-      tasks: [{ package: 'x' }, { package: 'y' }],
-      packages: ['a', 'b', 'a'],
-    })
-    expect(utils.parseTurboDryRunPackages(json)).toEqual(['x', 'y'])
-  })
-
   it('computePublishableTargets', () => {
     const workspaces = [
       { name: 'a', path: '/a', private: false },

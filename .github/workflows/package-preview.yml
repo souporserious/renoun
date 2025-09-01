@@ -94,8 +94,8 @@ jobs:
     if: github.event.action == 'closed' && github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     concurrency:
-      group: preview-branch
-      cancel-in-progress: false
+      group: preview-cleanup-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       contents: write
       issues: write

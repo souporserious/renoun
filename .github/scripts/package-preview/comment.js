@@ -1,7 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { stickyMarker, getRepoContext } from './utils.js'
+import {
+  stickyMarker,
+  getRepoContext,
+  getExistingComment,
+  gh,
+} from './utils.js'
 
 /**
  * @typedef {{ name: string, url: string }} PreviewAsset
@@ -54,57 +59,18 @@ if (!Number.isInteger(manifest?.pr) || Number(manifest.pr) !== prNumber) {
 /** @type {PreviewAsset[]} */
 const assets = Array.isArray(manifest.assets) ? manifest.assets : []
 
-/**
- * REST helper
- * @param {string} method
- * @param {string} url
- * @param {any} [body]
- */
-async function gh(method, url, body) {
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `token ${githubToken}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(
-      `${method} ${url} -> ${res.status} ${res.statusText} ${text}`
-    )
-  }
-  if (res.status === 204) return null
-  return res.json()
-}
-
-/**
- * Get existing sticky comment, if any.
- */
-async function getExistingComment() {
-  const url = `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments?per_page=100`
-  /** @type {{ id: number, body?: string, user?: { type: string, login: string } }[]} */
-  const comments = await gh('GET', url)
-  return (
-    comments.find(
-      (comment) =>
-        typeof comment?.body === 'string' &&
-        comment.body.includes(stickyMarker) &&
-        comment?.user?.type === 'Bot' &&
-        comment?.user?.login === 'github-actions[bot]'
-    ) || null
-  )
-}
-
 if (assets.length === 0) {
   // No preview assets — remove any sticky comment and exit
   try {
-    const existing = await getExistingComment()
+    const existing = await getExistingComment(
+      githubToken,
+      owner,
+      repo,
+      prNumber
+    )
     if (existing) {
       const delUrl = `https://api.github.com/repos/${owner}/${repo}/issues/comments/${existing.id}`
-      await gh('DELETE', delUrl)
+      await gh(githubToken, 'DELETE', delUrl)
     }
   } catch (err) {
     console.warn(
@@ -139,13 +105,13 @@ const command = `npm install ${urls.map((url) => `"${url}"`).join(' ')}`
 const body = [stickyMarker, header, '', '```bash', command, '```'].join('\n')
 
 // Create or update the sticky comment
-const existing = await getExistingComment()
+const existing = await getExistingComment(githubToken, owner, repo, prNumber)
 if (existing) {
   const url = `https://api.github.com/repos/${owner}/${repo}/issues/comments/${existing.id}`
-  await gh('PATCH', url, { body })
+  await gh(githubToken, 'PATCH', url, { body })
 } else {
   const url = `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`
-  await gh('POST', url, { body })
+  await gh(githubToken, 'POST', url, { body })
 }
 
 console.log('Updated sticky preview comment')

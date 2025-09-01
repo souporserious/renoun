@@ -1,10 +1,8 @@
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { Octokit } from '@octokit/rest'
 
 import {
   sh,
-  stickyMarker,
   runCommands,
   ensureGitIdentity,
   getRepoContext,
@@ -12,6 +10,8 @@ import {
   getGithubRemoteUrl,
   assertSafeWorkdir,
   safeReinitGitRepo,
+  deleteStickyComments,
+  gh,
 } from './utils.js'
 
 const PR_NUMBER = String(process.env.PR_NUMBER || '')
@@ -26,46 +26,6 @@ if (!/^\d+$/.test(PR_NUMBER)) {
   process.exit(1)
 }
 const { owner, repo } = getRepoContext()
-const octokit = new Octokit({ auth: GH_TOKEN })
-
-/** Best-effort deletion of sticky preview comments in the PR. */
-async function deleteStickyComments() {
-  try {
-    const { data: comments } = await octokit.rest.issues.listComments({
-      owner,
-      repo,
-      issue_number: Number(PR_NUMBER),
-      per_page: 100,
-    })
-    for (const comment of comments) {
-      if (
-        typeof comment?.body === 'string' &&
-        comment.body.includes(stickyMarker) &&
-        comment?.user?.type === 'Bot' &&
-        comment?.user?.login === 'github-actions[bot]'
-      ) {
-        try {
-          await octokit.rest.issues.deleteComment({
-            owner,
-            repo,
-            comment_id: Number(comment.id),
-          })
-          console.log(`Deleted preview comment ${comment.id}`)
-        } catch (error) {
-          console.warn(
-            `Failed to delete comment ${comment.id}:`,
-            error?.message || error
-          )
-        }
-      }
-    }
-  } catch (error) {
-    console.warn(
-      'Failed to enumerate/delete sticky comments:',
-      error?.message || error
-    )
-  }
-}
 
 const PREVIEW_BRANCH = process.env.PREVIEW_BRANCH || 'package-preview'
 if (!/^[A-Za-z0-9._\/-]+$/.test(PREVIEW_BRANCH)) {
@@ -76,7 +36,11 @@ if (!/^[A-Za-z0-9._\/-]+$/.test(PREVIEW_BRANCH)) {
 }
 let defaultBranch = ''
 try {
-  const { data } = await octokit.rest.repos.get({ owner, repo })
+  const data = await gh(
+    GH_TOKEN,
+    'GET',
+    `https://api.github.com/repos/${owner}/${repo}`
+  )
   defaultBranch = String(data?.default_branch || '')
 } catch {
   defaultBranch = ''
@@ -97,17 +61,21 @@ function isSafeRelativeDir(p) {
 }
 
 // Prepare a working dir and fetch current preview branch state
-const workdir = join(process.cwd(), '.preview-cleanup')
-assertSafeWorkdir(workdir)
-if (existsSync(workdir)) rmSync(workdir, { recursive: true, force: true })
-mkdirSync(workdir, { recursive: true })
+const workingDirectory = join(process.cwd(), '.preview-cleanup')
+assertSafeWorkdir(workingDirectory)
+if (existsSync(workingDirectory)) {
+  rmSync(workingDirectory, { recursive: true, force: true })
+}
+mkdirSync(workingDirectory, { recursive: true })
 const remoteUrl = getGithubRemoteUrl(owner, repo, GH_TOKEN)
-sh('git init', { cwd: workdir })
-sh(`git remote add origin ${remoteUrl}`, { cwd: workdir })
+sh('git init', { cwd: workingDirectory })
+sh(`git remote add origin ${remoteUrl}`, { cwd: workingDirectory })
 
 let branchExists = false
 try {
-  const heads = sh(`git ls-remote --heads origin ${PREVIEW_BRANCH}`)
+  const heads = sh(`git ls-remote --heads origin ${PREVIEW_BRANCH}`, {
+    cwd: workingDirectory,
+  })
   branchExists = (heads?.trim().length ?? 0) > 0
 } catch {
   // Ignore
@@ -115,24 +83,24 @@ try {
 
 if (!branchExists) {
   console.log('Preview branch not found — nothing to clean')
-  await deleteStickyComments()
+  await deleteStickyComments(GH_TOKEN, owner, repo, PR_NUMBER)
   process.exit(0)
 }
 
-sh(`git fetch --depth=1 origin ${PREVIEW_BRANCH}`, { cwd: workdir })
+sh(`git fetch --depth=1 origin ${PREVIEW_BRANCH}`, { cwd: workingDirectory })
 sh(`git checkout -b ${PREVIEW_BRANCH} origin/${PREVIEW_BRANCH}`, {
-  cwd: workdir,
+  cwd: workingDirectory,
 })
 
 // Remove the PR directory and persist as a single commit
-rmSync(join(workdir, PR_NUMBER), { recursive: true, force: true })
-sh(`git add -A`, { cwd: workdir })
+rmSync(join(workingDirectory, PR_NUMBER), { recursive: true, force: true })
+sh(`git add -A`, { cwd: workingDirectory })
 // If nothing changed, exit early
 try {
-  const status = sh('git status --porcelain', { cwd: workdir })
+  const status = sh('git status --porcelain', { cwd: workingDirectory })
   if (!status) {
     console.log('No preview assets to remove for this PR')
-    await deleteStickyComments()
+    await deleteStickyComments(GH_TOKEN, owner, repo, PR_NUMBER)
     process.exit(0)
   }
 } catch {
@@ -140,15 +108,15 @@ try {
 }
 
 // Re-init to keep single-commit history
-safeReinitGitRepo(workdir, PREVIEW_BRANCH, remoteUrl, {
+safeReinitGitRepo(workingDirectory, PREVIEW_BRANCH, remoteUrl, {
   owner,
   repo,
   defaultBranch,
 })
-ensureGitIdentity(workdir)
+ensureGitIdentity(workingDirectory)
 // Ensure ROOT_DIRECTORY placeholder exists if configured
 if (ROOT_DIRECTORY && isSafeRelativeDir(ROOT_DIRECTORY)) {
-  const rootDirPath = join(workdir, ROOT_DIRECTORY)
+  const rootDirPath = join(workingDirectory, ROOT_DIRECTORY)
   if (!existsSync(rootDirPath)) {
     mkdirSync(rootDirPath, { recursive: true })
   }
@@ -159,10 +127,10 @@ if (ROOT_DIRECTORY && isSafeRelativeDir(ROOT_DIRECTORY)) {
 }
 
 // Stage changes and decide whether to allow an empty commit
-sh('git add -A', { cwd: workdir })
+sh('git add -A', { cwd: workingDirectory })
 let commitCmd = `git commit -m "remove ${PR_NUMBER} [skip ci]"`
 try {
-  const statusAfterAdd = sh('git status --porcelain', { cwd: workdir })
+  const statusAfterAdd = sh('git status --porcelain', { cwd: workingDirectory })
   if (!statusAfterAdd) {
     // No file changes to commit; create an empty commit so the branch history advances
     commitCmd = `git commit --allow-empty -m "remove ${PR_NUMBER} [skip ci]"`
@@ -171,11 +139,11 @@ try {
   // Fall through to normal commit
 }
 runCommands([commitCmd, `git push -f origin ${PREVIEW_BRANCH}`], {
-  cwd: workdir,
+  cwd: workingDirectory,
 })
 
 console.log(
   `Removed preview assets for PR #${PR_NUMBER} and force-pushed ${PREVIEW_BRANCH}`
 )
 
-await deleteStickyComments()
+await deleteStickyComments(GH_TOKEN, owner, repo, PR_NUMBER)
