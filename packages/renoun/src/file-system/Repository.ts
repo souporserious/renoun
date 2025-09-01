@@ -44,26 +44,152 @@ export interface GetIssueUrlOptions {
   labels?: string[]
 }
 
+/** Mapping of providers to their canonical hosts. */
+const HOSTS: Record<GitProviderType, string> = {
+  github: 'github.com',
+  gitlab: 'gitlab.com',
+  bitbucket: 'bitbucket.org',
+  pierre: 'pierre.co',
+} as const
+
+/** Parsed git specifier. */
+export interface ParsedGitSpecifier {
+  /** The provider of the repository. */
+  provider: GitProviderType
+
+  /** The owner of the repository. */
+  owner: string
+
+  /** The repository name. */
+  repo: string
+
+  /** Optional ref (branch/tag/sha). */
+  ref?: string
+
+  /** Optional default path after the ref (e.g. "@main/docs"). */
+  path?: string
+}
+
+/** Join two path segments without producing duplicate slashes. */
+function joinPaths(a?: string, b?: string): string {
+  if (!a && !b) {
+    return ''
+  }
+  if (!a) {
+    return b as string
+  }
+  if (!b) {
+    return a
+  }
+
+  // Simple manual approach: handle the four cases
+  const aEndsWithSlash = a.endsWith('/')
+  const bStartsWithSlash = b.startsWith('/')
+
+  if (aEndsWithSlash && bStartsWithSlash) {
+    return a + b.slice(1) // remove duplicate slash
+  }
+  if (!aEndsWithSlash && !bStartsWithSlash) {
+    return a + '/' + b // add missing slash
+  }
+  return a + b // already correct
+}
+
+/**
+ * Parse strings like:
+ *   - "owner/repo"
+ *   - "github:owner/repo"
+ *   - "owner/repo@ref"
+ *   - "owner/repo#ref"
+ *   - "gitlab:group/subgroup/repo@ref/docs"
+ *
+ * Notes:
+ * - If both '@' and '#' appear, the earliest is used as the ref separator.
+ * - A trailing path is only allowed AFTER a ref (i.e. "@ref/path").
+ * - Default provider for bare "owner/repo" is "github".
+ */
+export function parseGitSpecifier(input: string): ParsedGitSpecifier {
+  let provider: GitProviderType = 'github'
+  let rest = input.trim()
+
+  // Optional "<provider>:"
+  const colonIndex = rest.indexOf(':')
+  if (colonIndex >= 0) {
+    const potentialProvider = rest.slice(0, colonIndex)
+    const prefix = rest.match(/^(github|gitlab|bitbucket|pierre):/)
+    if (prefix) {
+      // Valid provider prefix
+      const matchedProvider = prefix[1]!
+      provider = matchedProvider as GitProviderType
+      rest = rest.slice(prefix[0].length)
+    } else {
+      // Invalid provider prefix
+      throw new Error(
+        `Invalid provider "${potentialProvider}". Must be one of: github, gitlab, bitbucket, pierre`
+      )
+    }
+  }
+
+  // Prefer the earliest of '@' or '#'
+  const atIdx = rest.indexOf('@')
+  const hashIdx = rest.indexOf('#')
+  const sepIdx =
+    atIdx >= 0 && hashIdx >= 0
+      ? Math.min(atIdx, hashIdx)
+      : Math.max(atIdx, hashIdx)
+
+  let ref: string | undefined
+  let afterRef: string | undefined
+
+  if (sepIdx >= 0) {
+    const refAndMaybePath = rest.slice(sepIdx + 1)
+    rest = rest.slice(0, sepIdx)
+
+    const slashAfterRef = refAndMaybePath.indexOf('/')
+    if (slashAfterRef >= 0) {
+      ref = refAndMaybePath.slice(0, slashAfterRef)
+      afterRef = refAndMaybePath.slice(slashAfterRef + 1)
+    } else {
+      ref = refAndMaybePath
+    }
+  }
+
+  // Strip optional .git suffix
+  rest = rest.replace(/\.git$/i, '')
+
+  const parts = rest.split('/').filter(Boolean)
+  if (parts.length < 2) {
+    throw new Error(
+      `Invalid git specifier "${input}". Must be in the form "owner/repo" (optionally with provider and ref).`
+    )
+  }
+
+  const repo = parts.pop()!
+  const owner = parts.join('/')
+
+  return { provider, owner, repo, ref, path: afterRef }
+}
+
 export class Repository {
   #baseUrl: string
   #provider: GitProviderType
   #owner?: string
   #repo?: string
+  #defaultRef: string = 'main'
+  #defaultPath?: string
 
   constructor(repository: RepositoryConfig | string) {
     if (typeof repository === 'string') {
-      const [owner, repo] = repository.split('/')
+      const specifier = parseGitSpecifier(repository)
 
-      if (!owner || !repo) {
-        throw new Error(
-          'Invalid repository string. Must be in format "owner/repo"'
-        )
+      this.#provider = specifier.provider
+      this.#owner = specifier.owner
+      this.#repo = specifier.repo
+      if (specifier.ref) {
+        this.#defaultRef = specifier.ref
       }
-
-      this.#baseUrl = `https://github.com/${owner}/${repo}`
-      this.#provider = 'github'
-      this.#owner = owner
-      this.#repo = repo
+      this.#defaultPath = specifier.path
+      this.#baseUrl = `https://${HOSTS[this.#provider]}/${this.#owner}/${this.#repo}`
     } else {
       const { baseUrl, provider } = repository
 
@@ -81,7 +207,13 @@ export class Repository {
         )
       }
 
-      this.#provider = provider.toLowerCase() as GitProviderType
+      if (!['github', 'gitlab', 'bitbucket', 'pierre'].includes(provider)) {
+        throw new Error(
+          `Invalid provider "${provider}". Must be one of: github, gitlab, bitbucket, pierre`
+        )
+      }
+
+      this.#provider = provider as GitProviderType
 
       if (this.#provider === 'github') {
         const match = this.#baseUrl.match(/github\.com\/([^/]+)\/([^/]+)$/)
@@ -90,7 +222,8 @@ export class Repository {
           this.#repo = match.at(2)
         }
       } else if (this.#provider === 'gitlab') {
-        const match = this.#baseUrl.match(/gitlab\.com\/([^/]+)\/([^/]+)$/)
+        // GitLab supports nested groups; best effort extraction of the last two segments
+        const match = this.#baseUrl.match(/gitlab\.com\/(.+?)\/([^/]+)$/)
         if (match) {
           this.#owner = match.at(1)
           this.#repo = match.at(2)
@@ -167,17 +300,21 @@ export class Repository {
 
   /** Constructs a URL for a file in the repository. */
   getFileUrl(options: GetFileUrlOptions): string {
-    const { type = 'source', path, line, ref: ref = 'main' } = options
+    const { type = 'source', path, line } = options
+    const ref = options.ref ?? this.#defaultRef
+    const fullPath = this.#defaultPath
+      ? joinPaths(this.#defaultPath, path)
+      : path
 
     switch (this.#provider) {
       case 'github':
-        return this.#getGitHubUrl(type, ref, path, line)
+        return this.#getGitHubUrl(type, ref, fullPath, line)
       case 'gitlab':
-        return this.#getGitLabUrl(type, ref, path, line)
+        return this.#getGitLabUrl(type, ref, fullPath, line)
       case 'bitbucket':
-        return this.#getBitbucketUrl(type, ref, path, line)
+        return this.#getBitbucketUrl(type, ref, fullPath, line)
       case 'pierre':
-        return this.#getPierreUrl(type, ref, path)
+        return this.#getPierreUrl(type, ref, fullPath)
       default:
         throw new Error(`Unsupported provider: ${this.#provider}`)
     }
@@ -185,17 +322,21 @@ export class Repository {
 
   /** Constructs a URL for a directory in the repository. */
   getDirectoryUrl(options: GetDirectoryUrlOptions): string {
-    const { type = 'source', path, ref: ref = 'main' } = options
+    const { type = 'source', path } = options
+    const ref = options.ref ?? this.#defaultRef ?? 'main'
+    const fullPath = this.#defaultPath
+      ? joinPaths(this.#defaultPath, path)
+      : path
 
     switch (this.#provider) {
       case 'github':
-        return this.#getGitHubDirectoryUrl(type, ref, path)
+        return this.#getGitHubDirectoryUrl(type, ref, fullPath)
       case 'gitlab':
-        return this.#getGitLabDirectoryUrl(type, ref, path)
+        return this.#getGitLabDirectoryUrl(type, ref, fullPath)
       case 'bitbucket':
-        return this.#getBitbucketDirectoryUrl(type, ref, path)
+        return this.#getBitbucketDirectoryUrl(type, ref, fullPath)
       case 'pierre':
-        return this.#getPierreDirectoryUrl(type, ref, path)
+        return this.#getPierreDirectoryUrl(type, ref, fullPath)
       default:
         throw new Error(`Unsupported provider: ${this.#provider}`)
     }
@@ -327,12 +468,11 @@ export class Repository {
         throw new Error(
           `[renoun] getFileUrl "${type}" type is not supported for Pierre repositories. Use "history" or "source" type instead.`
         )
-      case 'history':
-        return `${this.#baseUrl}/history?commit=${ref}`
-      case 'source':
-      default:
-        return `${this.#baseUrl}/files?path=${encodeURIComponent(path)}`
     }
+    if (type === 'history') {
+      return `${this.#baseUrl}/history?commit=${ref}`
+    }
+    return `${this.#baseUrl}/files?path=${encodeURIComponent(path)}`
   }
 
   #getPierreDirectoryUrl(

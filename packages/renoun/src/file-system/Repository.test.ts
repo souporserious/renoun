@@ -17,7 +17,7 @@ describe('Repository', () => {
 
     test('throws an error for invalid repository string without "/"', () => {
       expect(() => new Repository('invalidRepoString')).toThrow(
-        'Invalid repository string. Must be in format "owner/repo"'
+        'Invalid git specifier "invalidRepoString". Must be in the form "owner/repo" (optionally with provider and ref).'
       )
     })
 
@@ -47,7 +47,17 @@ describe('Repository', () => {
         provider: 'unsupported' as any,
       }
       expect(() => new Repository(config)).toThrow(
-        'Unsupported provider: unsupported'
+        'Invalid provider "unsupported". Must be one of: github, gitlab, bitbucket, pierre'
+      )
+    })
+
+    test('throws an error for incorrect provider casing in config', () => {
+      const config: RepositoryConfig = {
+        baseUrl: 'https://github.com/owner/repo',
+        provider: 'GitHub' as any,
+      }
+      expect(() => new Repository(config)).toThrow(
+        'Invalid provider "GitHub". Must be one of: github, gitlab, bitbucket, pierre'
       )
     })
   })
@@ -549,6 +559,157 @@ describe('Repository', () => {
         })
         expect(url).toBe('https://bitbucket.org/owner/repo/history/main/src')
       })
+    })
+  })
+
+  describe('constructor shorthand parsing', () => {
+    test('supports "github:owner/repo" prefix', () => {
+      const repo = new Repository('github:owner/repo')
+      expect(
+        repo.getFileUrl({ type: 'source', path: 'README.md', ref: 'main' })
+      ).toBe('https://github.com/owner/repo/blob/main/README.md')
+    })
+
+    test('throws error for incorrect provider casing', () => {
+      expect(() => new Repository('GitHub:owner/repo')).toThrow(
+        'Invalid provider "GitHub". Must be one of: github, gitlab, bitbucket, pierre'
+      )
+    })
+
+    test('supports GitLab groups with provider prefix', () => {
+      const repo = new Repository('gitlab:group/subgroup/repo')
+      expect(
+        repo.getFileUrl({ type: 'source', path: 'README.md', ref: 'main' })
+      ).toBe('https://gitlab.com/group/subgroup/repo/-/blob/main/README.md')
+    })
+
+    test('strips optional .git suffix', () => {
+      const repo = new Repository('owner/repo.git@main')
+      expect(repo.getFileUrl({ type: 'source', path: 'README.md' })).toBe(
+        'https://github.com/owner/repo/blob/main/README.md'
+      )
+    })
+  })
+
+  describe('default ref and default path from shorthand', () => {
+    test('uses defaultRef when omitted in getFileUrl', () => {
+      const repo = new Repository('owner/repo@v1')
+      // no ref passed here; should use @v1 from constructor
+      expect(repo.getFileUrl({ type: 'source', path: 'CHANGELOG.md' })).toBe(
+        'https://github.com/owner/repo/blob/v1/CHANGELOG.md'
+      )
+    })
+
+    test('supports "#ref/path" and merges with provided path', () => {
+      const repo = new Repository('owner/repo#deadbeef/docs')
+      expect(
+        repo.getFileUrl({ type: 'source', path: 'guide/getting-started.md' })
+      ).toBe(
+        'https://github.com/owner/repo/blob/deadbeef/docs/guide/getting-started.md'
+      )
+    })
+
+    test('deduplicates slashes when joining defaultPath and path', () => {
+      const repo = new Repository('github:owner/repo@main/docs/')
+      expect(repo.getFileUrl({ type: 'source', path: '/README.md' })).toBe(
+        'https://github.com/owner/repo/blob/main/docs/README.md'
+      )
+    })
+
+    test('defaultPath also applies to directory URLs', () => {
+      const repo = new Repository('github:owner/repo@main/docs')
+      expect(repo.getDirectoryUrl({ path: 'api' })).toBe(
+        'https://github.com/owner/repo/tree/main/docs/api'
+      )
+    })
+  })
+
+  describe('Pierre provider', () => {
+    const repo = new Repository({
+      baseUrl: 'https://pierre.co/team/app',
+      provider: 'pierre',
+    })
+
+    test('supports "source" (files endpoint) and encodes path', () => {
+      const url = repo.getFileUrl({
+        type: 'source',
+        path: 'docs/Hello World.md',
+        ref: 'abc123',
+      })
+      expect(url).toBe(
+        'https://pierre.co/team/app/files?path=docs%2FHello%20World.md'
+      )
+    })
+
+    test('supports "history" (commit query)', () => {
+      const url = repo.getFileUrl({
+        type: 'history',
+        path: 'docs/README.md',
+        ref: 'abc123',
+      })
+      expect(url).toBe('https://pierre.co/team/app/history?commit=abc123')
+    })
+
+    test('throws for unsupported file URL types', () => {
+      expect(() =>
+        repo.getFileUrl({ type: 'edit', path: 'x', ref: 'main' })
+      ).toThrow(/not supported/i)
+      expect(() =>
+        repo.getFileUrl({ type: 'raw', path: 'x', ref: 'main' })
+      ).toThrow(/not supported/i)
+      expect(() =>
+        repo.getFileUrl({ type: 'blame', path: 'x', ref: 'main' })
+      ).toThrow(/not supported/i)
+    })
+
+    test('directory URLs: source and history', () => {
+      const src = repo.getDirectoryUrl({ path: 'docs', ref: 'main' })
+      const hist = repo.getDirectoryUrl({
+        type: 'history',
+        path: 'docs',
+        ref: 'c0ffee',
+      })
+      expect(src).toBe('https://pierre.co/team/app/files?path=docs')
+      expect(hist).toBe('https://pierre.co/team/app/history?commit=c0ffee')
+    })
+  })
+
+  describe('Bitbucket + defaultPath from shorthand', () => {
+    const repo = new Repository('bitbucket:owner/repo@main/docs')
+
+    test('file URL includes defaultPath', () => {
+      const url = repo.getFileUrl({ type: 'source', path: 'guide.md' })
+      expect(url).toBe(
+        'https://bitbucket.org/owner/repo/src/main/docs/guide.md'
+      )
+    })
+
+    test('directory URL includes defaultPath', () => {
+      const url = repo.getDirectoryUrl({ path: 'api' })
+      expect(url).toBe('https://bitbucket.org/owner/repo/src/main/docs/api')
+    })
+  })
+
+  describe('GitHub raw URL when constructed from shorthand', () => {
+    const repo = new Repository('owner/repo@abcdef')
+
+    test('raw points to raw.githubusercontent.com with defaultRef', () => {
+      const url = repo.getFileUrl({ type: 'raw', path: 'src/index.ts' })
+      expect(url).toBe(
+        'https://raw.githubusercontent.com/owner/repo/abcdef/src/index.ts'
+      )
+    })
+  })
+
+  describe('getIssueUrl guardrails', () => {
+    test('Pierre issues are unsupported', () => {
+      const pierre = new Repository({
+        baseUrl: 'https://pierre.co/team/app',
+        provider: 'pierre',
+      })
+      expect(() => pierre.getIssueUrl({ title: 'Bug' })).toThrow(
+        /Unsupported provider: pierre/
+      )
     })
   })
 })
