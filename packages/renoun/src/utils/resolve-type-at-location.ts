@@ -1,7 +1,7 @@
 import type { Project } from 'ts-morph'
 import { SyntaxKind } from 'ts-morph'
 
-import { debug } from './debug.js'
+import { getDebugLogger } from './debug.js'
 import type { Kind, TypeFilter } from './resolve-type.js'
 import { resolveType } from './resolve-type.js'
 
@@ -25,7 +25,7 @@ export async function resolveTypeAtLocation(
   const typeId = `${filePath}:${position}:${kind}`
   const startTime = performance.now()
 
-  return debug.trackOperation(
+  return getDebugLogger().trackOperation(
     'resolveTypeAtLocation',
     async () => {
       const sourceFile = project.addSourceFileAtPath(filePath)
@@ -59,7 +59,12 @@ export async function resolveTypeAtLocation(
 
         const duration =
           Math.round((performance.now() - startTime) * 1000) / 1000
-        debug.logTypeResolution(filePath, position, SyntaxKind[kind], duration)
+        getDebugLogger().logTypeResolution(
+          filePath,
+          position,
+          SyntaxKind[kind],
+          duration
+        )
 
         return result
       }
@@ -89,14 +94,14 @@ export async function resolveTypeAtLocation(
         }
 
         if (!dependenciesChanged) {
-          debug.logCacheOperation('hit', typeId, {
+          getDebugLogger().logCacheOperation('hit', typeId, {
             filePath,
             position,
             kind: SyntaxKind[kind],
           })
           const duration =
             Math.round((performance.now() - startTime) * 1000) / 1000
-          debug.logTypeResolution(
+          getDebugLogger().logTypeResolution(
             filePath,
             position,
             SyntaxKind[kind],
@@ -106,7 +111,7 @@ export async function resolveTypeAtLocation(
         }
       }
 
-      debug.logCacheOperation('miss', typeId, {
+      getDebugLogger().logCacheOperation('miss', typeId, {
         filePath,
         position,
         kind: SyntaxKind[kind],
@@ -137,7 +142,12 @@ export async function resolveTypeAtLocation(
       })
 
       const duration = Math.round((performance.now() - startTime) * 1000) / 1000
-      debug.logTypeResolution(filePath, position, SyntaxKind[kind], duration)
+      getDebugLogger().logTypeResolution(
+        filePath,
+        position,
+        SyntaxKind[kind],
+        duration
+      )
 
       return resolvedType
     },

@@ -117,9 +117,9 @@ describe('project WebSocket RPC', () => {
     )
 
     // Start client
-    client = new WebSocketClient()
+    client = new WebSocketClient(server.getId())
     // Give the client a moment to connect
-    await new Promise((r) => setTimeout(r, 300))
+    await new Promise((resolve) => setTimeout(resolve, 300))
   }, 10_000)
 
   afterAll(() => {

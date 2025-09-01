@@ -3,7 +3,7 @@ import type { RawData } from 'ws'
 import type { AddressInfo } from 'node:net'
 import { randomBytes, createHash } from 'node:crypto'
 
-import { debug } from '../../utils/debug.js'
+import { getDebugLogger } from '../../utils/debug.js'
 import { Semaphore } from '../../utils/Semaphore.js'
 
 export interface WebSocketRequest {
@@ -144,9 +144,6 @@ export class TimeoutError extends Error {
     this.name = 'TimeoutError'
   }
 }
-
-const SERVER_ID = randomBytes(16).toString('hex')
-process.env.RENOUN_SERVER_ID = SERVER_ID
 
 const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024
 const MAX_BUFFERED = 8 * 1024 * 1024
@@ -353,6 +350,8 @@ export class WebSocketServer {
 
   #estimatedQueueBytes = new WeakMap<WS, number>()
 
+  #id: string
+
   #isCriticalPayload(payload: any): boolean {
     if (Array.isArray(payload)) {
       return payload.some(isCriticalMessage)
@@ -367,7 +366,7 @@ export class WebSocketServer {
     reason: string,
     extra: Record<string, any> = {}
   ) {
-    debug.logWebSocketServerEvent('closing_due_to_backpressure', {
+    getDebugLogger().logWebSocketServerEvent('closing_due_to_backpressure', {
       connectionId: this.#socketData.get(ws)?.connectionId,
       code,
       reason,
@@ -389,7 +388,7 @@ export class WebSocketServer {
       ws.ping()
       return true
     } catch (e) {
-      debug.logWebSocketServerEvent('ping_failed', {
+      getDebugLogger().logWebSocketServerEvent('ping_failed', {
         connectionId: this.#socketData.get(ws)?.connectionId,
         ...context,
         error: (e as Error).message,
@@ -403,7 +402,7 @@ export class WebSocketServer {
       ws.terminate()
       return true
     } catch (error) {
-      debug.logWebSocketServerEvent('terminate_failed', {
+      getDebugLogger().logWebSocketServerEvent('terminate_failed', {
         connectionId: this.#socketData.get(ws)?.connectionId,
         ...context,
         error: (error as Error).message,
@@ -413,6 +412,9 @@ export class WebSocketServer {
   }
 
   constructor(options?: { port?: number }) {
+    this.#id = randomBytes(16).toString('hex')
+    process.env.RENOUN_SERVER_ID = this.#id
+
     this.#readyPromise = new Promise<void>((resolve, reject) => {
       this.#resolveReady = resolve
       this.#rejectReady = reject
@@ -426,10 +428,10 @@ export class WebSocketServer {
       perMessageDeflate: false,
       clientTracking: false,
       handleProtocols: (protocols) => {
-        if (protocols.has(SERVER_ID)) {
-          return SERVER_ID
+        if (protocols.has(this.#id)) {
+          return this.#id
         }
-        debug.logWebSocketServerEvent('client_rejected', {
+        getDebugLogger().logWebSocketServerEvent('client_rejected', {
           reason: 'protocol_mismatch',
         })
         return false
@@ -462,12 +464,12 @@ export class WebSocketServer {
           port: this.#server.options.port,
           originalError: error,
         })
-        debug.logWebSocketServerEvent('server_error', {
+        getDebugLogger().logWebSocketServerEvent('server_error', {
           error: serverError.message,
         })
         this.#rejectReady(serverError)
       } else {
-        debug.logWebSocketServerEvent('server_error', {
+        getDebugLogger().logWebSocketServerEvent('server_error', {
           error: error.message,
         })
         this.#rejectReady(
@@ -483,7 +485,7 @@ export class WebSocketServer {
         if (origin) {
           const hostname = new URL(origin).hostname
           if (!['localhost', '127.0.0.1', '::1'].includes(hostname)) {
-            debug.logWebSocketServerEvent('client_rejected', {
+            getDebugLogger().logWebSocketServerEvent('client_rejected', {
               reason: 'forbidden_origin',
               origin,
             })
@@ -492,7 +494,7 @@ export class WebSocketServer {
           }
         }
       } catch {
-        debug.logWebSocketServerEvent('client_rejected', {
+        getDebugLogger().logWebSocketServerEvent('client_rejected', {
           reason: 'bad_origin_url',
           origin: req?.headers?.origin,
         })
@@ -504,7 +506,7 @@ export class WebSocketServer {
       this.#sockets.add(ws)
       this.#socketData.set(ws, { isAlive: true, connectionId })
 
-      debug.logWebSocketServerEvent('connection_opened', {
+      getDebugLogger().logWebSocketServerEvent('connection_opened', {
         connectionId,
         remote: req?.socket?.remoteAddress,
       })
@@ -539,7 +541,7 @@ export class WebSocketServer {
         this.#pendingCancels.delete(ws)
 
         const reason = reasonBuf?.toString() || CLOSE_TEXT[code] || 'Unknown'
-        debug.logWebSocketServerEvent('connection_closed', {
+        getDebugLogger().logWebSocketServerEvent('connection_closed', {
           connectionId,
           code,
           reason,
@@ -555,7 +557,7 @@ export class WebSocketServer {
             originalError: error,
           }
         )
-        debug.logWebSocketServerEvent('connection_error', {
+        getDebugLogger().logWebSocketServerEvent('connection_error', {
           connectionId,
           error: serverError.message,
         })
@@ -568,9 +570,9 @@ export class WebSocketServer {
 
     this.#server.on('listening', () => {
       // Start metrics timer only when info-level logging is enabled
-      if (debug.isEnabled('info')) {
+      if (getDebugLogger().isEnabled('info')) {
         this.#metricsTimer = setInterval(() => {
-          debug.info('websocket_server_metrics', () => ({
+          getDebugLogger().info('websocket_server_metrics', () => ({
             data: {
               backlog: [...this.#methodSemaphores].map(
                 ([k, s]) => k + ':' + s.getQueueLength()
@@ -590,7 +592,7 @@ export class WebSocketServer {
           const data = this.#socketData.get(ws)
 
           if (data?.isAlive === false) {
-            debug.logWebSocketServerEvent('connection_terminated', {
+            getDebugLogger().logWebSocketServerEvent('connection_terminated', {
               connectionId: data.connectionId,
             })
             this.#terminate(ws, { where: 'heartbeat_terminate' })
@@ -611,7 +613,7 @@ export class WebSocketServer {
         address && typeof address !== 'string'
           ? (address as AddressInfo).port
           : this.#server.options.port
-      debug.logWebSocketServerEvent('server_listening', {
+      getDebugLogger().logWebSocketServerEvent('server_listening', {
         port,
       })
       this.#resolveReady()
@@ -624,7 +626,7 @@ export class WebSocketServer {
       if (this.#heartbeatTimer) {
         clearInterval(this.#heartbeatTimer)
       }
-      debug.logWebSocketServerEvent('server_closed')
+      getDebugLogger().logWebSocketServerEvent('server_closed')
     })
   }
 
@@ -639,7 +641,7 @@ export class WebSocketServer {
         try {
           controller.abort()
         } catch {
-          debug.logWebSocketServerEvent('stream_abort_failed', {
+          getDebugLogger().logWebSocketServerEvent('stream_abort_failed', {
             where: 'cleanup',
             connectionId: this.#socketData.get(ws)?.connectionId,
           })
@@ -657,7 +659,7 @@ export class WebSocketServer {
     }
     this.#flushTimers = new WeakMap()
 
-    debug.logWebSocketServerEvent('cleanup_initiated', {
+    getDebugLogger().logWebSocketServerEvent('cleanup_initiated', {
       activeConnections: this.#sockets.size,
     })
 
@@ -667,7 +669,7 @@ export class WebSocketServer {
       try {
         ws.close(1000)
       } catch (error) {
-        debug.logWebSocketServerEvent('connection_error', {
+        getDebugLogger().logWebSocketServerEvent('connection_error', {
           connectionId: data?.connectionId,
           error: (error as Error).message,
         })
@@ -677,11 +679,11 @@ export class WebSocketServer {
     // Stop the WebSocket server from accepting new connections
     this.#server.close((error) => {
       if (error) {
-        debug.logWebSocketServerEvent('server_error', {
+        getDebugLogger().logWebSocketServerEvent('server_error', {
           error: error.message,
         })
       } else {
-        debug.logWebSocketServerEvent('server_closed')
+        getDebugLogger().logWebSocketServerEvent('server_closed')
       }
     })
   }
@@ -717,20 +719,28 @@ export class WebSocketServer {
     throw new Error('[renoun] Unable to retrieve server port')
   }
 
+  getId() {
+    return this.#id
+  }
+
   /** Manually clear memoized results (all methods or one). */
   invalidateCache(method?: string) {
     if (method) {
       const data = this.#methods.get(method)
       if (data?.cache) {
         data.cache.clear()
-        debug.logCacheOperation('clear', method, { reason: 'manual' })
+        getDebugLogger().logCacheOperation('clear', method, {
+          reason: 'manual',
+        })
       }
       return
     }
 
     for (const [name, data] of this.#methods) {
       if (data.cache) data.cache.clear()
-      debug.logCacheOperation('clear', name, { reason: 'manual-all' })
+      getDebugLogger().logCacheOperation('clear', name, {
+        reason: 'manual-all',
+      })
     }
   }
 
@@ -773,24 +783,26 @@ export class WebSocketServer {
         // cache hit
         const hit = state.cache!.get(key)
         if (hit !== LRUCache.UNSET) {
-          debug.logCacheOperation('hit', method)
+          getDebugLogger().logCacheOperation('hit', method)
           return hit
         }
 
         // in-flight de-duplicate
         const pending = state.inflight.get(key)
         if (pending) {
-          debug.logCacheOperation('hit', method, { kind: 'in-flight' })
+          getDebugLogger().logCacheOperation('hit', method, {
+            kind: 'in-flight',
+          })
           return pending
         }
 
         // compute once
-        debug.logCacheOperation('miss', method)
+        getDebugLogger().logCacheOperation('miss', method)
         const promise = (async () => {
           try {
             const result = await handler(params)
             state.cache!.set(key, result)
-            debug.logCacheOperation('set', method, {
+            getDebugLogger().logCacheOperation('set', method, {
               size: state.cache!.size(),
             })
             return result
@@ -814,7 +826,7 @@ export class WebSocketServer {
         const id = performance.now()
         const waitStart = performance.now()
         const release = await semaphore.acquire()
-        debug.info('semaphore-acquire', () => ({
+        getDebugLogger().info('semaphore-acquire', () => ({
           data: {
             id: Math.round(id * 1000) / 1000,
             method,
@@ -826,7 +838,7 @@ export class WebSocketServer {
           const result = await base(params)
           const elapsed = Math.round((performance.now() - t0) * 1000) / 1000
 
-          debug.info('handler-done', () => ({
+          getDebugLogger().info('handler-done', () => ({
             data: {
               id: Math.round(id * 1000) / 1000,
               method,
@@ -847,7 +859,7 @@ export class WebSocketServer {
 
     this.#handlers.set(method, fn)
 
-    debug.logWebSocketServerEvent('method_registered', {
+    getDebugLogger().logWebSocketServerEvent('method_registered', {
       method,
       memoized: !!memoizeOptions,
       concurrency: optionsMerged?.concurrency ?? null,
@@ -861,7 +873,7 @@ export class WebSocketServer {
   ): Promise<WebSocketResponse | null> {
     // Log the call once for tracing.
     if (request.method) {
-      debug.logWebSocketServerEvent('method_call_received', {
+      getDebugLogger().logWebSocketServerEvent('method_call_received', {
         method: request.method,
         id: request.id,
         params: request.params,
@@ -1025,7 +1037,7 @@ export class WebSocketServer {
         originalError:
           error instanceof Error ? error : new Error(String(error)),
       })
-      debug.logWebSocketServerEvent('parse_error', {
+      getDebugLogger().logWebSocketServerEvent('parse_error', {
         connectionId,
         err: (error as Error).message,
       })
@@ -1072,7 +1084,9 @@ export class WebSocketServer {
 
     if (isBatch) {
       const requests = parsed as WebSocketRequest[]
-      debug.logWebSocketServerEvent('batch_received', { size: requests.length })
+      getDebugLogger().logWebSocketServerEvent('batch_received', {
+        size: requests.length,
+      })
 
       // Process batch with bounded concurrency to avoid stampedes
       const CONCURRENCY_LIMIT = 32
@@ -1200,7 +1214,7 @@ export class WebSocketServer {
           })
           return
         }
-        debug.logWebSocketServerEvent('queue_drop', {
+        getDebugLogger().logWebSocketServerEvent('queue_drop', {
           reason: 'max_queue_bytes',
           droppedBytes: dropped.bytes,
         })
@@ -1213,7 +1227,7 @@ export class WebSocketServer {
             incomingBytes: bytes,
           })
         } else {
-          debug.logWebSocketServerEvent('queue_drop', {
+          getDebugLogger().logWebSocketServerEvent('queue_drop', {
             reason: 'single_message_too_large',
             bytes,
           })
@@ -1235,7 +1249,7 @@ export class WebSocketServer {
       this.#flushQueue(ws)
     } catch (error) {
       const data = this.#socketData.get(ws)
-      debug.logWebSocketServerEvent('send_failed', {
+      getDebugLogger().logWebSocketServerEvent('send_failed', {
         connectionId: data?.connectionId,
         error: (error as Error).message,
       })
@@ -1279,7 +1293,7 @@ export class WebSocketServer {
         break
       }
       const { data: message, bytes } = item
-      debug.logWebSocketServerEvent('payload_bytes', {
+      getDebugLogger().logWebSocketServerEvent('payload_bytes', {
         connectionId: data?.connectionId,
         payloadBytes: bytes,
       })
@@ -1287,7 +1301,7 @@ export class WebSocketServer {
       try {
         ws.send(message, (error?: Error) => {
           if (error) {
-            debug.logWebSocketServerEvent('send_failed', {
+            getDebugLogger().logWebSocketServerEvent('send_failed', {
               connectionId: data?.connectionId,
               error: error.message,
             })
@@ -1298,7 +1312,7 @@ export class WebSocketServer {
         const previous = this.#estimatedQueueBytes.get(ws) || 0
         this.#estimatedQueueBytes.set(ws, Math.max(0, previous - bytes))
       } catch (error) {
-        debug.logWebSocketServerEvent('send_failed', {
+        getDebugLogger().logWebSocketServerEvent('send_failed', {
           connectionId: data?.connectionId,
           error: (error as Error).message,
         })

@@ -800,4 +800,11 @@ class DebugLogger {
   }
 }
 
-export const debug = new DebugLogger()
+let debugLogger: DebugLogger | undefined
+
+export function getDebugLogger(): DebugLogger {
+  if (!debugLogger) {
+    debugLogger = new DebugLogger()
+  }
+  return debugLogger
+}

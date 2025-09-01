@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { createServer } from '../project/server.js'
-import { debug } from '../utils/debug.js'
+import { getDebugLogger } from '../utils/debug.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
@@ -56,13 +56,13 @@ if (
   let subProcess: ReturnType<typeof spawn> | undefined
 
   function cleanupAndExit(code: number) {
-    debug.info('CLI cleanup initiated', () => ({
+    getDebugLogger().info('CLI cleanup initiated', () => ({
       data: { exitCode: code, hasSubProcess: !!subProcess },
     }))
 
     if (subProcess) {
       const pid = subProcess?.pid ?? null
-      debug.debug('Terminating subprocess', () => ({
+      getDebugLogger().debug('Terminating subprocess', () => ({
         data: { pid },
       }))
       subProcess.kill('SIGTERM')
@@ -76,7 +76,7 @@ if (
     process.env['NODE_ENV'] = isProduction ? 'production' : 'development'
   }
 
-  debug.info('Starting renoun CLI', () => ({
+  getDebugLogger().info('Starting renoun CLI', () => ({
     data: {
       framework: firstArgument,
       command: secondArgument,
@@ -89,14 +89,15 @@ if (
   }))
 
   async function runSubProcess() {
-    return debug.trackOperation(
+    return getDebugLogger().trackOperation(
       'cli.runSubProcess',
       async () => {
         const server = await createServer()
         const port = String(await server.getPort())
+        const id = server.getId()
 
-        debug.info('renoun server created', () => ({
-          data: { port, serverId: process.env['RENOUN_SERVER_ID'] },
+        getDebugLogger().info('renoun server created', () => ({
+          data: { port, serverId: id },
         }))
 
         subProcess = spawn(
@@ -112,13 +113,14 @@ if (
             env: {
               ...process.env,
               RENOUN_SERVER_PORT: port,
+              RENOUN_SERVER_ID: id,
             },
           }
         )
 
         {
           const pid = subProcess?.pid ?? null
-          debug.info('Subprocess spawned', () => ({
+          getDebugLogger().info('Subprocess spawned', () => ({
             data: {
               pid,
               command: `${firstArgument} ${secondArgument}`,
@@ -130,10 +132,12 @@ if (
 
         subProcess.stderr?.on('data', (buffer) => {
           const line = buffer.toString()
-          debug.error('Subprocess stderr', () => ({ data: line }))
+          getDebugLogger().error('Subprocess stderr', () => ({ data: line }))
 
           if (fatalRE.test(line)) {
-            debug.error('Detected fatal stderr pattern - killing subprocess')
+            getDebugLogger().error(
+              'Detected fatal stderr pattern - killing subprocess'
+            )
             subProcess?.kill('SIGKILL')
           }
 
@@ -145,7 +149,7 @@ if (
           (code: number | null, signal: NodeJS.Signals | null) => {
             {
               const pid = subProcess?.pid ?? null
-              debug.error('Subprocess exit', () => ({
+              getDebugLogger().error('Subprocess exit', () => ({
                 data: { pid, exitCode: code, signal },
               }))
             }
@@ -154,7 +158,7 @@ if (
 
         subProcess.on('close', (code: number) => {
           const pid = subProcess?.pid ?? null
-          debug.info('Subprocess closed', () => ({
+          getDebugLogger().info('Subprocess closed', () => ({
             data: { pid, exitCode: code },
           }))
           server.cleanup()
@@ -163,7 +167,7 @@ if (
 
         subProcess.on('error', (error: Error) => {
           const pid = subProcess?.pid ?? null
-          debug.error('Subprocess error', () => ({
+          getDebugLogger().error('Subprocess error', () => ({
             data: { pid, error: error.message },
           }))
           server.cleanup()
@@ -179,17 +183,17 @@ if (
   await runSubProcess()
 
   process.on('SIGINT', () => {
-    debug.info('Received SIGINT signal')
+    getDebugLogger().info('Received SIGINT signal')
     cleanupAndExit(0)
   })
 
   process.on('SIGTERM', () => {
-    debug.info('Received SIGTERM signal')
+    getDebugLogger().info('Received SIGTERM signal')
     cleanupAndExit(0)
   })
 
   process.on('uncaughtException', (error) => {
-    debug.error('Uncaught exception', () => ({
+    getDebugLogger().error('Uncaught exception', () => ({
       data: { error: error.message, stack: error.stack },
     }))
     console.error('Uncaught exception:', error)
@@ -197,7 +201,7 @@ if (
   })
 
   process.on('unhandledRejection', (reason) => {
-    debug.error('Unhandled rejection', () => ({
+    getDebugLogger().error('Unhandled rejection', () => ({
       data: { reason: String(reason) },
     }))
     console.error('Unhandled rejection:', reason)
@@ -208,7 +212,7 @@ if (
     process.env['NODE_ENV'] = 'development'
   }
 
-  debug.info('Starting renoun watch mode', () => ({
+  getDebugLogger().info('Starting renoun watch mode', () => ({
     data: {
       nodeEnv: process.env['NODE_ENV'],
       debugEnabled:
@@ -217,14 +221,14 @@ if (
     },
   }))
 
-  debug.trackOperation(
+  getDebugLogger().trackOperation(
     'cli.watch',
     async () => {
       const server = await createServer()
 
-      if (debug.isEnabled('info')) {
+      if (getDebugLogger().isEnabled('info')) {
         const port = await server.getPort()
-        debug.info('Watch server created', () => ({
+        getDebugLogger().info('Watch server created', () => ({
           data: { port },
         }))
       }

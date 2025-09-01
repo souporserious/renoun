@@ -1,7 +1,7 @@
 import WS from 'ws'
 import { EventEmitter } from 'node:events'
 
-import { debug } from '../../utils/debug.js'
+import { getDebugLogger } from '../../utils/debug.js'
 import type { WebSocketResponse } from './server.js'
 
 type Request = {
@@ -136,6 +136,7 @@ class WebSocketClientError extends Error {
 
 export class WebSocketClient extends EventEmitter {
   #ws!: WS
+  #serverId: string
   #shouldRetry = true
   #retryTimeout?: NodeJS.Timeout
   #isConnected = false
@@ -196,8 +197,9 @@ export class WebSocketClient extends EventEmitter {
   #handleErrorEvent = this.#handleError.bind(this)
   #handleCloseEvent = this.#handleClose.bind(this)
 
-  constructor() {
+  constructor(serverId: string) {
     super()
+    this.#serverId = serverId
     this.#connect()
   }
 
@@ -401,7 +403,7 @@ export class WebSocketClient extends EventEmitter {
           payload: frame.payload,
         })
       } catch (error) {
-        debug.logWebSocketClientEvent('send_failed', {
+        getDebugLogger().logWebSocketClientEvent('send_failed', {
           error: (error as Error).message,
         })
         // push back to pending so reconnect can retry
@@ -456,7 +458,7 @@ export class WebSocketClient extends EventEmitter {
         this.#ws.off('close', this.#handleCloseEvent)
       }
     } catch (error) {
-      debug.logWebSocketClientEvent('off_failed', {
+      getDebugLogger().logWebSocketClientEvent('off_failed', {
         where: 'pre_connect_cleanup',
         error: (error as Error).message,
       })
@@ -465,7 +467,7 @@ export class WebSocketClient extends EventEmitter {
     this.#connectionState = 'connecting'
     this.#connectionStartTime = performance.now()
 
-    debug.logWebSocketClientEvent('connecting', {
+    getDebugLogger().logWebSocketClientEvent('connecting', {
       port: process.env.RENOUN_SERVER_PORT,
     })
 
@@ -484,11 +486,10 @@ export class WebSocketClient extends EventEmitter {
       this.#emitError(err)
       return
     }
-
-    const serverId = process.env.RENOUN_SERVER_ID
+    const serverId = this.#serverId
     if (!serverId) {
       const error = new WebSocketClientError(
-        '[renoun] Missing RENOUN_SERVER_ID',
+        '[renoun] Missing server ID',
         'UNKNOWN_ERROR',
         {
           connectionState: this.#connectionState,
@@ -525,7 +526,7 @@ export class WebSocketClient extends EventEmitter {
       try {
         this.#ws?.close(1000, 'opened_after_close')
       } catch (error) {
-        debug.logWebSocketClientEvent('close_failed', {
+        getDebugLogger().logWebSocketClientEvent('close_failed', {
           where: 'handleOpen_guard',
           error: (error as Error).message,
         })
@@ -537,7 +538,7 @@ export class WebSocketClient extends EventEmitter {
     this.#connectionState = 'connected'
     this.#currentRetries = 0
 
-    debug.logWebSocketClientEvent('connected', {
+    getDebugLogger().logWebSocketClientEvent('connected', {
       connectionTime: formatConnectionTime(this.#connectionStartTime),
       pendingRequests: this.#pendingRequests.length,
     })
@@ -567,7 +568,7 @@ export class WebSocketClient extends EventEmitter {
       this.#retryTimeout = setTimeout(() => {
         this.#retryTimeout = undefined
 
-        debug.logWebSocketClientEvent('retrying', {
+        getDebugLogger().logWebSocketClientEvent('retrying', {
           retryCount: this.#currentRetries,
           maxRetries: this.#maxRetries,
           delay,
@@ -622,14 +623,14 @@ export class WebSocketClient extends EventEmitter {
 
     // While connecting we only log; close handler will decide whether to retry
     if (this.#connectionState === 'connecting') {
-      debug.logWebSocketClientEvent('connect_error', {
+      getDebugLogger().logWebSocketClientEvent('connect_error', {
         connectionTime,
         eventMessage: event?.message,
       })
       return
     }
 
-    debug.logWebSocketClientEvent('error', {
+    getDebugLogger().logWebSocketClientEvent('error', {
       connectionTime,
       port,
       connectionState: this.#connectionState,
@@ -647,7 +648,7 @@ export class WebSocketClient extends EventEmitter {
     const reason = (reasonBuffer?.toString() || '').trim()
     const connectionTime = formatConnectionTime(this.#connectionStartTime)
 
-    debug.logWebSocketClientEvent('closed', {
+    getDebugLogger().logWebSocketClientEvent('closed', {
       code: code ?? 1006,
       reason,
       connectionTime,
@@ -666,7 +667,7 @@ export class WebSocketClient extends EventEmitter {
       this.#ws.off('error', this.#handleErrorEvent)
       this.#ws.off('close', this.#handleCloseEvent)
     } catch (error) {
-      debug.logWebSocketClientEvent('off_failed', {
+      getDebugLogger().logWebSocketClientEvent('off_failed', {
         where: 'handleClose',
         error: (error as Error).message,
       })
@@ -826,7 +827,7 @@ export class WebSocketClient extends EventEmitter {
     const id = this.#nextId++
     const payload = JSON.stringify({ method, params, id, timeoutMs })
 
-    debug.logWebSocketClientEvent('method_call', {
+    getDebugLogger().logWebSocketClientEvent('method_call', {
       method,
       params,
       id,
@@ -834,7 +835,10 @@ export class WebSocketClient extends EventEmitter {
 
     return new Promise<Value>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        debug.logWebSocketClientEvent('method_timeout', { method, id })
+        getDebugLogger().logWebSocketClientEvent('method_timeout', {
+          method,
+          id,
+        })
 
         const error = this.#createClientError('REQUEST_TIMEOUT', {
           connectionTime: formatConnectionTime(this.#connectionStartTime),
@@ -890,13 +894,16 @@ export class WebSocketClient extends EventEmitter {
       this.#requests[id] = {
         resolve: (value) => {
           clearTimeout(timeoutId)
-          debug.logWebSocketClientEvent('method_resolved', { method, id })
+          getDebugLogger().logWebSocketClientEvent('method_resolved', {
+            method,
+            id,
+          })
           resolve(value)
           this.#onRequestSettled(id)
         },
         reject: (reason) => {
           clearTimeout(timeoutId)
-          debug.logWebSocketClientEvent('method_rejected', {
+          getDebugLogger().logWebSocketClientEvent('method_rejected', {
             method,
             id,
             reason: reason?.message,
@@ -1003,7 +1010,7 @@ export class WebSocketClient extends EventEmitter {
             self.#sendFrame([id], JSON.stringify({ type: 'cancel', id }))
           }
         } catch {
-          debug.logWebSocketClientEvent('cancel_failed', { id })
+          getDebugLogger().logWebSocketClientEvent('cancel_failed', { id })
         }
 
         delete self.#streams[id]
@@ -1034,7 +1041,7 @@ export class WebSocketClient extends EventEmitter {
     try {
       parsed = JSON.parse(raw)
     } catch (error) {
-      debug.logWebSocketClientEvent('parse_error', {
+      getDebugLogger().logWebSocketClientEvent('parse_error', {
         error: (error as Error).message,
       })
       this.emit(
@@ -1155,7 +1162,7 @@ export class WebSocketClient extends EventEmitter {
     if (this.listenerCount('error') > 0) {
       this.emit('error', error)
     } else {
-      debug.logWebSocketClientEvent('unhandled_error', {
+      getDebugLogger().logWebSocketClientEvent('unhandled_error', {
         message: error.message,
       })
     }
@@ -1174,7 +1181,7 @@ export class WebSocketClient extends EventEmitter {
     try {
       this.#ws?.close(1000)
     } catch (error) {
-      debug.logWebSocketClientEvent('close_failed', {
+      getDebugLogger().logWebSocketClientEvent('close_failed', {
         where: 'client_close',
         error: (error as Error).message,
       })
@@ -1185,7 +1192,7 @@ export class WebSocketClient extends EventEmitter {
       this.#ws?.off('error', this.#handleErrorEvent)
       this.#ws?.off('close', this.#handleCloseEvent)
     } catch (error) {
-      debug.logWebSocketClientEvent('off_failed', {
+      getDebugLogger().logWebSocketClientEvent('off_failed', {
         where: 'client_close',
         error: (error as Error).message,
       })

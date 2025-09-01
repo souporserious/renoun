@@ -4,7 +4,7 @@ import tsMorph from 'ts-morph'
 
 import type { Languages as TextMateLanguages } from '../grammars/index.js'
 import type { Highlighter } from './create-highlighter.js'
-import { debug } from './debug.js'
+import { getDebugLogger } from './debug.js'
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { getRootDirectory } from './get-root-directory.js'
@@ -92,7 +92,7 @@ export async function getTokens({
   showErrors,
   highlighter = null,
 }: GetTokensOptions): Promise<TokenizedLines> {
-  return debug.trackTokenProcessing(
+  return getDebugLogger().trackTokenProcessing(
     language,
     filePath,
     value.length,
@@ -144,7 +144,7 @@ export async function getTokens({
             })
 
       // Track highlighter performance
-      const tokens = await debug.trackOperation(
+      const tokens = await getDebugLogger().trackOperation(
         'highlighter',
         async () => {
           return await highlighter(
@@ -356,7 +356,7 @@ export async function getTokens({
         0
       )
 
-      debug.logTokenProcessing(
+      getDebugLogger().logTokenProcessing(
         finalLanguage,
         filePath,
         value.length,

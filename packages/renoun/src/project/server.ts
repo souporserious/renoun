@@ -6,7 +6,7 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
-import { debug } from '../utils/debug.js'
+import { getDebugLogger } from '../utils/debug.js'
 import {
   getFileExports as baseGetFileExports,
   getFileExportMetadata as baseGetFileExportMetadata,
@@ -28,19 +28,17 @@ import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import type { ProjectOptions } from './types.js'
 
-let currentHighlighter: { current: Highlighter | null } = { current: null }
-
-if (currentHighlighter.current === null) {
-  createHighlighter().then((highlighter) => {
-    currentHighlighter.current = highlighter
-  })
-}
+let currentHighlighter: Promise<Highlighter> | null = null
 
 /**
  * Create a WebSocket server that improves the performance of renoun components and
  * utilities by processing type analysis and syntax highlighting in a separate process.
  */
 export async function createServer(options?: { port?: number }) {
+  if (currentHighlighter === null) {
+    currentHighlighter = createHighlighter()
+  }
+
   const server = new WebSocketServer({ port: options?.port })
   const port = await server.getPort()
 
@@ -93,16 +91,17 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-
-      if (currentHighlighter.current === null) {
+      if (currentHighlighter === null) {
         throw new Error(
           '[renoun] Highlighter is not initialized in web socket "getTokens"'
         )
       }
 
+      const highlighter = await currentHighlighter
+
       return baseGetTokens({
         ...options,
-        highlighter: currentHighlighter.current,
+        highlighter,
         project,
       })
     },
@@ -125,12 +124,12 @@ export async function createServer(options?: { port?: number }) {
       filter?: string
       projectOptions?: ProjectOptions
     }) {
-      return debug.trackOperation(
+      return getDebugLogger().trackOperation(
         'server.resolveTypeAtLocation',
         async () => {
           const project = getProject(projectOptions)
 
-          debug.info('Processing type resolution request', () => ({
+          getDebugLogger().info('Processing type resolution request', () => ({
             data: {
               filePath: options.filePath,
               position: options.position,

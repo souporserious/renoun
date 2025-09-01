@@ -1,7 +1,7 @@
 import type { Node, Project } from 'ts-morph'
 import * as tsMorph from 'ts-morph'
 
-import { debug } from './debug.js'
+import { getDebugLogger } from './debug.js'
 import { getDeclarationLocation } from './get-declaration-location.js'
 import { getJsDocMetadata } from './get-js-doc-metadata.js'
 
@@ -29,7 +29,7 @@ export function getFileExports(
   filePath: string,
   project: Project
 ): ModuleExport[] {
-  return debug.trackOperation(
+  return getDebugLogger().trackOperation(
     'get-file-exports',
     () => {
       let sourceFile = project.getSourceFile(filePath)
@@ -38,7 +38,7 @@ export function getFileExports(
         const addStart = performance.now()
         sourceFile = project.addSourceFileAtPath(filePath)
 
-        debug.debug('Added source file to project', () => ({
+        getDebugLogger().debug('Added source file to project', () => ({
           operation: 'get-file-exports',
           data: {
             filePath,
@@ -54,7 +54,7 @@ export function getFileExports(
       const exportedDeclarations = sourceFile.getExportedDeclarations()
       const totalDeclarations = exportedDeclarations.size
 
-      debug.debug('Processing exported declarations', () => ({
+      getDebugLogger().debug('Processing exported declarations', () => ({
         operation: 'get-file-exports',
         data: {
           filePath,
@@ -149,7 +149,7 @@ export function getFileExportDeclaration(
   kind: tsMorph.SyntaxKind,
   project: Project
 ) {
-  return debug.trackOperation(
+  return getDebugLogger().trackOperation(
     'get-file-export-declaration',
     () => {
       const sourceFile = project.getSourceFile(filePath)
@@ -177,7 +177,7 @@ export function getFileExportDeclaration(
         )
       }
 
-      debug.debug('Found export declaration', () => ({
+      getDebugLogger().debug('Found export declaration', () => ({
         operation: 'get-file-export-declaration',
         data: {
           filePath,
@@ -207,7 +207,7 @@ export async function getFileExportMetadata(
   kind: tsMorph.SyntaxKind,
   project: Project
 ) {
-  return debug.trackOperation(
+  return getDebugLogger().trackOperation(
     'get-file-export-metadata',
     async () => {
       const sourceFile = project.getSourceFile(filePath)
@@ -234,7 +234,7 @@ export async function getFileExportMetadata(
         location: getDeclarationLocation(exportDeclaration),
       }
 
-      debug.info('Export metadata retrieved', () => ({
+      getDebugLogger().info('Export metadata retrieved', () => ({
         operation: 'get-file-export-metadata',
         data: {
           filePath,

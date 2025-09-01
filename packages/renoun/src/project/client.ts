@@ -22,8 +22,11 @@ import type { ProjectOptions } from './types.js'
 
 let client: WebSocketClient | undefined
 
-if (process.env.RENOUN_SERVER_PORT !== undefined) {
-  client = new WebSocketClient()
+function getClient(): WebSocketClient | undefined {
+  if (!client && process.env.RENOUN_SERVER_PORT) {
+    client = new WebSocketClient(process.env.RENOUN_SERVER_ID!)
+  }
+  return client
 }
 
 /**
@@ -36,6 +39,7 @@ export async function getSourceTextMetadata(
     projectOptions?: ProjectOptions
   }
 ): Promise<SourceTextMetadata> {
+  const client = getClient()
   if (client) {
     return client.callMethod<
       DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
@@ -82,6 +86,7 @@ export async function getTokens(
     projectOptions?: ProjectOptions
   }
 ): Promise<TokenizedLines> {
+  const client = getClient()
   if (client) {
     return client.callMethod<
       Omit<GetTokensOptions, 'highlighter' | 'project'> & {
@@ -120,6 +125,7 @@ export async function resolveTypeAtLocation(
   filter?: TypeFilter,
   projectOptions?: ProjectOptions
 ): Promise<Kind | undefined> {
+  const client = getClient()
   if (client) {
     return client.callMethod<
       {
@@ -174,6 +180,7 @@ export async function getFileExports(
     }
   }
 
+  const client = getClient()
   if (client) {
     const fileExports = await client.callMethod<
       {
@@ -216,6 +223,7 @@ export async function getFileExportMetadata(
   kind: SyntaxKind,
   projectOptions?: ProjectOptions
 ) {
+  const client = getClient()
   if (client) {
     return client.callMethod<
       {
@@ -253,6 +261,7 @@ export async function getFileExportStaticValue(
   kind: SyntaxKind,
   projectOptions?: ProjectOptions
 ) {
+  const client = getClient()
   if (client) {
     return client.callMethod<
       {
@@ -289,6 +298,7 @@ export async function getFileExportText(
   includeDependencies?: boolean,
   projectOptions?: ProjectOptions
 ) {
+  const client = getClient()
   if (client) {
     return client.callMethod<
       {
@@ -331,6 +341,7 @@ export async function createSourceFile(
   sourceText: string,
   projectOptions?: ProjectOptions
 ) {
+  const client = getClient()
   if (client) {
     return client.callMethod<
       {
@@ -358,6 +369,7 @@ export async function transpileSourceFile(
   filePath: string,
   projectOptions?: ProjectOptions
 ) {
+  const client = getClient()
   if (client) {
     return client.callMethod<
       {
