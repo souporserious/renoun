@@ -1,9 +1,9 @@
-import type { JavaScriptModuleExport } from 'renoun/file-system'
 import {
   Reference as DefaultReference,
   type ReferenceProps,
   type ReferenceComponents,
-} from 'renoun/components'
+  type JavaScriptModuleExport,
+} from 'renoun'
 import { GeistMono } from 'geist/font/mono'
 import type { CSSObject } from 'restyle'
 

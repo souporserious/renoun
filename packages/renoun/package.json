@@ -34,10 +34,19 @@
     "renoun": "./dist/cli/index.js"
   },
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "imports": {
     "#fixtures/*": "./fixtures/*"
   },
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "react-server": "./dist/index.server.js",
+      "browser": "./dist/index.client.js",
+      "node": "./dist/index.client.js",
+      "default": "./dist/index.js"
+    },
     "./assets": {
       "types": "./dist/assets/index.d.ts",
       "import": "./dist/assets/index.js",
@@ -99,46 +108,6 @@
       "default": "./dist/utils/index.js"
     }
   },
-  "typesVersions": {
-    "*": {
-      "assets": [
-        "./dist/assets/index.d.ts"
-      ],
-      "components": [
-        "./dist/components/index.d.ts"
-      ],
-      "components/*": [
-        "./dist/components/*.d.ts"
-      ],
-      "file-system": [
-        "./dist/file-system/index.d.ts"
-      ],
-      "grammars": [
-        "./dist/grammars/index.d.ts"
-      ],
-      "hooks": [
-        "./dist/hooks/index.d.ts"
-      ],
-      "hooks/*": [
-        "./dist/hooks/*.d.ts"
-      ],
-      "mdx": [
-        "./dist/mdx/index.d.ts"
-      ],
-      "mdx/*": [
-        "./dist/mdx/*.d.ts"
-      ],
-      "project": [
-        "./dist/project/client.d.ts"
-      ],
-      "server": [
-        "./dist/project/server.d.ts"
-      ],
-      "utils": [
-        "./dist/utils/index.d.ts"
-      ]
-    }
-  },
   "scripts": {
     "build": "tsc && chmod +x dist/cli/index.js",
     "dev": "tsc -w",
@@ -179,7 +148,6 @@
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
     "restyle": "catalog:",
-    "server-only": "0.0.1",
     "ts-morph": "catalog:",
     "unified": "catalog:",
     "unist-util-visit": "^5.0.0",

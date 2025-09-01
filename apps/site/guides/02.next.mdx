@@ -82,13 +82,12 @@ export default {
 
 ## MDX (Optional)
 
-To enable writing MDX content in your Next.js application, we will use the [`@next/mdx`](https://github.com/vercel/next.js/tree/canary/packages/next-mdx) package. This package allows you to author MDX content in your Next.js project. Additionally, you can use the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`.
+To enable writing MDX content in your Next.js application, we will use the [`@next/mdx`](https://github.com/vercel/next.js/tree/canary/packages/next-mdx) package. This package allows you to author MDX content in your Next.js project. Additionally, you can use the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun`.
 
 <Note>
 
 This step is optional and only necessary if you plan to use MDX in your
-project. Additionaly, you can skip adding the `renoun/mdx` package if you
-want to configure your own MDX plugins.
+project. Additionaly, you can skip adding the plugins from the `renoun` package if you want to configure your own MDX plugins.
 
 </Note>
 
@@ -96,11 +95,11 @@ First, install the Next.js MDX plugin:
 
 <PackageInstall packages={['@next/mdx']} />
 
-Now, add the plugin to your `next.config` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from `renoun/mdx`:
+Now, add the plugin to your `next.config` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from the `renoun` package:
 
 ```js path="03.next.config.mjs"
 import createMDXPlugin from '@next/mdx'
-import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
+import { remarkPlugins, rehypePlugins } from 'renoun'
 
 const withMDX = createMDXPlugin({
   extension: /\.mdx?$/,
@@ -120,14 +119,14 @@ export default withMDX({
 Use the `CodeBlock` component to override the code fences in your project's `mdx-components.tsx` file:
 
 ```tsx path="02.mdx-components.tsx"
-import { CodeBlock } from 'renoun/components'
+import { CodeBlock } from 'renoun'
 
 export function useMDXComponents() {
   return { CodeBlock }
 }
 ```
 
-The `addCodeBlock` rehype plugin from `@renoun/mdx` replaces the code fence `pre` element with a `CodeBlock` component that will receive the code fence meta as props.
+The [`addCodeBlock` rehype plugin](/guides/mdx#rehype-add-code-block) from `@renoun/mdx` replaces the code fence `pre` element with a `CodeBlock` component that will receive the code fence meta as props.
 
 For example, the following code fence with meta props defined:
 
@@ -148,10 +147,10 @@ Roughly yields the following:
 
 ## Querying the File System
 
-The `Directory` utility in renoun lets you query and load files from your project’s file system. For example, to create a list of blog posts or documentation pages we can query all MDX files in a directory:
+The `Directory` utility in renoun lets you query and load files from your project's file system. For example, to create a list of blog posts or documentation pages we can query all MDX files in a directory:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
@@ -165,7 +164,7 @@ const posts = new Directory({
 Next, we can use the `Directory` instance to render the contents of our MDX files:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
@@ -192,10 +191,10 @@ This will create a collection of all MDX files in the `posts` directory and rend
 
 ### Generating Links
 
-A directory entry’s `getPath` method can generate a route path for each entry. For example, to generate a link to each post, you can iterate over the entries and use the entry’s `getPath` method:
+A directory entry's `getPath` method can generate a route path for each entry. For example, to generate a link to each post, you can iterate over the entries and use the entry's `getPath` method:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 import Link from 'next/link'
 
 const posts = new Directory({
@@ -228,7 +227,7 @@ export default async function Page() {
 }
 ```
 
-Collections are not limited to MDX files and can be used with _any file type_.
+Directories are not limited to MDX files and can be used with _any file type_.
 
 ## Start
 

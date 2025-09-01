@@ -1,4 +1,4 @@
-import { Collection } from 'renoun/file-system'
+import { Collection } from 'renoun'
 
 import { ComponentsDirectory } from './renoun'
 import { DocsDirectory, GuidesDirectory } from './site'

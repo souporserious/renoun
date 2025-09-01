@@ -1,5 +1,5 @@
 import type { CSSObject } from 'restyle'
-import { GitProviderLink } from 'renoun/components'
+import { GitProviderLink } from 'renoun'
 
 import {
   DocsDirectory,

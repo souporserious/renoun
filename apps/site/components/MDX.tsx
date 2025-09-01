@@ -1,5 +1,4 @@
-import { MDX as DefaultMDX } from 'renoun/components'
-import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
+import { MDX as DefaultMDX, remarkPlugins, rehypePlugins } from 'renoun'
 
 import { MDXComponents } from '@/components/MDXComponents'
 

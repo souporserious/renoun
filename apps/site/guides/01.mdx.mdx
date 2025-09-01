@@ -14,7 +14,7 @@ This guide will help you understand how to use MDX with renoun.
 The easiest way to get started using MDX with renoun is with the `MDX` component:
 
 ```tsx
-import { MDX } from 'renoun/components'
+import { MDX } from 'renoun'
 
 const content = `
 # Hello, world!
@@ -37,15 +37,15 @@ To learn how to configure MDX with Next.js, check out the [Next.js Guide](/guide
 
 ## Pre-configured Plugins
 
-The `renoun/mdx` import includes pre-configured plugins for both [remark](https://remark.js.org/) and [rehype](https://unifiedjs.com/), which are part the MDX process that parses and transforms MDX content.
+The `@renoun/mdx` package includes pre-configured plugins for both [remark](https://remark.js.org/) and [rehype](https://unifiedjs.com/), which are part the MDX process that parses and transforms MDX content.
 
-You can import these respective plugins and add them to your MDX configuration to extend the functionality of your MDX content.
+This package is automatically installed with renoun and can be imported directly from the `renoun` package. You can import the respective plugins and add them to your MDX configuration to extend the functionality of your MDX content:
 
 ```ts
-import { remarkPlugins, rehypePlugins } from 'renoun/mdx'
+import { remarkPlugins, rehypePlugins } from 'renoun'
 ```
 
-Here's a list of the plugins and their effects:
+The following is a list of the plugins and their effects:
 
 ### Community Plugins
 
@@ -176,7 +176,7 @@ const withMDX = createMDXPlugin({
 Or import and pass `CodeBlock` as a component to the MDX component:
 
 ```tsx
-import { CodeBlock } from 'renoun/components'
+import { CodeBlock } from 'renoun'
 import GettingStarted from './docs/getting-started.mdx'
 
 export default function Page() {
@@ -190,12 +190,12 @@ Exports the reading time metadata added by `rehype-infer-reading-time-meta` as a
 
 ## Applying plugins
 
-By default, the `MDX` component configures both the remark and rehype plugins from `renoun/mdx`. You can import and apply individual plugins to the `MDX` component or any other MDX configuration in your application.
+By default, the `MDX` component configures both the remark and rehype plugins from `@renoun/mdx`. You can import and apply individual plugins to the `MDX` component or any other MDX configuration in your application.
 
-We'll use the example from before and add the `renoun/mdx/rehype/add-code-block` plugin to the `MDX` component:
+We'll use the example from before and add the `@renoun/mdx/rehype/add-code-block` plugin to the `MDX` component:
 
 ```tsx
-import { MDX } from 'renoun/components'
+import { MDX } from 'renoun'
 import addCodeBlock from '@renoun/mdx/rehype/add-code-block'
 
 const content = `
@@ -209,11 +209,10 @@ export default function Page() {
 }
 ```
 
-Note, by overriding the `rehypePlugins` it will remove the default `renoun/mdx` rehype plugins. If you want to keep the default plugins, you can import and apply them to the `MDX` component and add your own plugins:
+Note, by overriding the `rehypePlugins` it will remove the default `@renoun/mdx` rehype plugins. If you want to keep the default plugins, you can import and apply them to the `MDX` component and add your own additional plugins:
 
 ```tsx
-import { MDX } from 'renoun/components'
-import { rehypePlugins, remarkPlugins } from 'renoun/mdx'
+import { MDX, rehypePlugins, remarkPlugins } from 'renoun'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
 

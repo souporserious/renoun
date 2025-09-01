@@ -1,4 +1,4 @@
-import { GitProviderLink } from 'renoun/components'
+import { GitProviderLink } from 'renoun'
 import { RenounLogo } from 'renoun/assets'
 
 import { NavigationLink } from './NavigationLink'

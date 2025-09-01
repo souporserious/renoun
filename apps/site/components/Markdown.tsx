@@ -3,9 +3,10 @@ import {
   Markdown as DefaultMarkdown,
   parseCodeProps,
   parsePreProps,
+  rehypePlugins,
+  remarkPlugins,
   type MarkdownProps,
-} from 'renoun/components'
-import { rehypePlugins, remarkPlugins } from 'renoun/mdx'
+} from 'renoun'
 import { GeistMono } from 'geist/font/mono'
 
 import { CodeBlock } from './CodeBlock'

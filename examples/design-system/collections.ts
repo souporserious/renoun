@@ -1,4 +1,4 @@
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 export const ComponentsCollection = new Directory({
   path: 'components',

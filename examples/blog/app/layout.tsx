@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Refresh } from 'renoun/components'
+import { Refresh } from 'renoun'
 import './layout.css'
 
 export const metadata: Metadata = {

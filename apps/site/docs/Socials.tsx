@@ -1,5 +1,6 @@
 import { styled } from 'restyle'
-import { GitProviderLogo } from 'renoun/components'
+import { GitProviderLogo } from 'renoun'
+
 import { Row } from '@/components/Row'
 
 const SocialLink = styled('a', {

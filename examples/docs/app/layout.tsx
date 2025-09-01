@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { Refresh } from 'renoun/components'
+import { Refresh } from 'renoun'
 import { routes } from '@/collections'
 import { SiblingLinks } from '@/ui/SiblingLinks'
 import { Sidebar } from '@/ui/Sidebar'

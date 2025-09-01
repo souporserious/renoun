@@ -1,5 +1,8 @@
-import { CodeInline, PackageInstall } from 'renoun/components'
-import type { MDXComponents as MDXComponentsType } from 'renoun/mdx'
+import {
+  CodeInline,
+  PackageInstall,
+  type MDXComponents as MDXComponentsType,
+} from 'renoun'
 import { GeistMono } from 'geist/font/mono'
 
 import { Card } from './Card'

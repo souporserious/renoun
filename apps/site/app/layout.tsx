@@ -1,7 +1,7 @@
 import { Analytics } from '@vercel/analytics/react'
 import type { Metadata } from 'next'
 import { GeistSans } from 'geist/font/sans'
-import { Refresh } from 'renoun/components'
+import { Refresh } from 'renoun'
 
 export const metadata = {
   title: 'renoun - Elevate Your Design System Docs',

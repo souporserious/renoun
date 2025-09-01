@@ -1,4 +1,4 @@
-import type { CodeBlockProps } from 'renoun/components'
+import type { CodeBlockProps } from 'renoun'
 
 import { ButtonLink } from '@/components/ButtonLink'
 import { CodeBlock } from '@/components/CodeBlock'
@@ -8,7 +8,7 @@ const steps = [
   {
     title: 'Collect',
     content: `Collect, organize, and validate structured data using powerful file system utilities.`,
-    code: `import { Directory, withSchema } from 'renoun/file-system'
+    code: `import { Directory, withSchema } from 'renoun'
 import { z } from 'zod'
 
 export const posts = new Directory({
@@ -37,7 +37,7 @@ export const posts = new Directory({
   {
     title: 'Render',
     content: `Query and render your file system entries programmatically in your favorite framework.`,
-    code: `import { Directory } from 'renoun/file-system'
+    code: `import { Directory } from 'renoun'
 
 const posts = new Directory({ path: 'posts' })
 
@@ -58,7 +58,7 @@ async function Page({ slug }: { slug: string }) {
   {
     title: 'Personalize',
     content: `Select from a growing list of pre-built components to tailor your content and documentation to fit your unique needs and brand identity.`,
-    code: `import { CodeBlock, Tokens } from 'renoun/components'
+    code: `import { CodeBlock, Tokens } from 'renoun'
 
 function Page() {
   return (

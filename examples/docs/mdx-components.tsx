@@ -1,5 +1,4 @@
-import { CodeBlock } from 'renoun/components'
-import type { MDXComponents } from 'renoun/mdx'
+import { CodeBlock, type MDXComponents } from 'renoun'
 
 import { Accordion } from '@/ui/Accordion'
 import { Card } from '@/ui/Card'
