@@ -133,7 +133,7 @@ Quickly build interactive and engaging documentation with renoun’s powerful se
 Use the [`CodeBlock`](https://www.renoun.dev/components/code-block) component to render syntax-highlighted code blocks:
 
 ```tsx
-import { CodeBlock } from 'renoun/components'
+import { CodeBlock } from 'renoun'
 
 export default function Page() {
   return <CodeBlock language="jsx">{`<div>Hello, world!</div>`}</CodeBlock>
@@ -143,7 +143,7 @@ export default function Page() {
 Or take full control of the highlighting process by using the [`Tokens`](https://www.renoun.dev/components/code-block/tokens) component and related components like [`LineNumbers`](https://www.renoun.dev/components/code-block/line-numbers) and [`Toolbar`](https://www.renoun.dev/components/code-block/toolbar):
 
 ```tsx
-import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun/components'
+import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun'
 
 export default function Page() {
   return (
@@ -189,7 +189,7 @@ export default function Page() {
 Quickly document your APIs with renoun’s [`Reference`](https://www.renoun.dev/components/reference) component:
 
 ```tsx
-import { Reference } from 'renoun/components'
+import { Reference } from 'renoun'
 
 export default function Page() {
   return <Reference source="src/components/Button.tsx" />
@@ -199,8 +199,7 @@ export default function Page() {
 API references can also be resolved from a `File` that will include references for all exports:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
-import { Reference } from 'renoun/components'
+import { Directory, Reference } from 'renoun'
 
 const components = new Directory({ path: 'components' })
 
@@ -219,8 +218,7 @@ export default async function Page({
 Or from a specific exports within a `File`:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
-import { Reference } from 'renoun/components'
+import { Directory, Reference } from 'renoun'
 
 const components = new Directory({ path: 'components' })
 
@@ -253,7 +251,7 @@ The File System utilities offer a way to organize and query file-system data in 
 To get started with the File System API, instantiate the `Directory` class to target a set of files and directories relative to the working directory:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 const posts = new Directory({ path: 'posts' })
 ```
@@ -263,7 +261,7 @@ const posts = new Directory({ path: 'posts' })
 The directory class provides a set of methods to query file system entries. For example, to get a specific file, you can use the `getFile` method:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 const posts = new Directory({ path: 'posts' })
 
@@ -278,7 +276,7 @@ async function Page({ slug }: { slug: string }) {
 The File System utilities work with [MDX](https://www.renoun.dev/guides/mdx) out-of-the-box. However, we can also specify a loader for how to resolve the `mdx` file extension's runtime that loads the module using your bundler:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
@@ -298,7 +296,7 @@ Using your bundler to resolve the module ensures a consistent runtime environmen
 You can also query all of the entries within the directory to help with generating navigations and index pages. For example, we can include only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
 
 ```tsx
-import { Directory } from 'renoun/file-system'
+import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
@@ -335,7 +333,7 @@ The `include` filter will affect the results of the `getEntries` method, returni
 To improve type safety, you can utilize the `withSchema` helper to specify a schema for the file’s expected exports:
 
 ```tsx
-import { Directory, withSchema } from 'renoun/file-system'
+import { Directory, withSchema } from 'renoun'
 
 interface PostType {
   frontmatter: {
@@ -369,7 +367,7 @@ Note, this does not affect the runtime behavior of the application and is purely
 You can also apply schema validation using libraries that follow the [Standard Schema Spec](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec) like [Zod](https://zod.dev/), [Valibot](https://valibot.dev/), or [Arktype](https://github.com/arktypeio/arktype) to ensure file exports conform to a specific schema:
 
 ```tsx
-import { Directory, withSchema } from 'renoun/file-system'
+import { Directory, withSchema } from 'renoun'
 import { z } from 'zod'
 
 const posts = new Directory({
@@ -391,7 +389,7 @@ const posts = new Directory({
 Alternatively, you can define a schema yourself using both TypeScript types and custom validation functions:
 
 ```tsx
-import { Directory, withSchema } from 'renoun/file-system'
+import { Directory, withSchema } from 'renoun'
 
 interface PostType {
   frontmatter: {
