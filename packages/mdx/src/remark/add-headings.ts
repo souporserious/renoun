@@ -278,7 +278,7 @@ export default function addHeadings(
 }
 
 /** Convert an array of mdast nodes into a text node or JSX fragment. */
-function mdastNodesToJsxFragment(nodes: any[]) {
+function mdastNodesToJsxFragment(nodes: any[]): any {
   const jsxChildren = nodes.map((node) => mdastNodeToJsxChild(node))
 
   if (jsxChildren.length === 1) {
@@ -315,7 +315,7 @@ function mdastNodesToJsxFragment(nodes: any[]) {
  * - break (line break)
  * - link, image
  */
-function mdastNodeToJsxChild(node: any) {
+function mdastNodeToJsxChild(node: any): any {
   switch (node.type) {
     case 'text':
       return { type: 'JSXText', value: node.value }
@@ -342,7 +342,7 @@ function mdastNodeToJsxChild(node: any) {
     case 'image':
       return makeSafeImage(node)
     case 'link':
-      return makeSafeLink(node)
+      return mdastNodesToJsxFragment(node.children)
     default:
       return { type: 'JSXText', value: toString(node) }
   }
@@ -397,45 +397,6 @@ function makeSafeImage(node: any) {
     },
     closingElement: null,
     children: [],
-  }
-}
-
-/**
- * Convert an mdast link node into its corresponding ESTree JSX AST node.
- * It builds an element like <a href={url} title={title}>{children}</a>.
- */
-function makeSafeLink(node: any) {
-  const attributes = []
-
-  if (isSafeUrl(node.url)) {
-    attributes.push({
-      type: 'JSXAttribute',
-      name: { type: 'JSXIdentifier', name: 'href' },
-      value: { type: 'Literal', value: node.url },
-    })
-  }
-
-  if (node.title) {
-    attributes.push({
-      type: 'JSXAttribute',
-      name: { type: 'JSXIdentifier', name: 'title' },
-      value: { type: 'Literal', value: node.title },
-    })
-  }
-
-  return {
-    type: 'JSXElement',
-    openingElement: {
-      type: 'JSXOpeningElement',
-      name: { type: 'JSXIdentifier', name: 'a' },
-      attributes,
-      selfClosing: false,
-    },
-    closingElement: {
-      type: 'JSXClosingElement',
-      name: { type: 'JSXIdentifier', name: 'a' },
-    },
-    children: node.children.map((child: any) => mdastNodeToJsxChild(child)),
   }
 }
 
