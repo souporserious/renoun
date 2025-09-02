@@ -3,9 +3,7 @@ import { themes, grammars } from 'renoun/grammars'
 import { z } from 'zod'
 
 const themeValueSchema = z.union([
-  z
-    .enum(Object.keys(themes) as [string, ...string[]])
-    .describe('A bundled textmate theme.'),
+  z.enum(themes).describe('A bundled textmate theme.'),
   z
     .string()
     .describe(
