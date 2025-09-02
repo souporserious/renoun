@@ -13,7 +13,7 @@ interface Theme {
   }
   tokenColors?: any
   semanticTokenColors?: Record<string, any>
-  settings: any[]
+  settings?: any[]
   type?: 'light' | 'dark'
   [key: string]: any
 }
@@ -73,7 +73,9 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
     : undefined
   let theme: Theme
 
-  if (themePath.endsWith('.json')) {
+  if (themePath === '__default_theme__') {
+    theme = (await import('./default-theme.js')).defaultTheme as Theme
+  } else if (themePath.endsWith('.json')) {
     theme = JSON.parse(readFileSync(themePath, 'utf-8')) as Theme
   } else if (themes.includes(themePath)) {
     const tmTheme = await loadTmTheme(themePath)
@@ -457,6 +459,9 @@ function applyForegroundBackground(theme: Theme) {
   }
 
   if (!globalSetting) {
+    if (!theme.settings) {
+      theme.settings = []
+    }
     theme.settings.unshift({
       settings: {
         foreground: theme.colors.foreground,

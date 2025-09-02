@@ -40,7 +40,7 @@ export interface ConfigurationOptions {
 
 const configPath = resolve(cwd(), 'renoun.json')
 const defaultConfig = {
-  theme: 'nord',
+  theme: '__default_theme__',
   languages: [
     'css',
     'js',
