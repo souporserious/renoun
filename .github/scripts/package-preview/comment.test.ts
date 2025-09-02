@@ -11,8 +11,13 @@ vi.mock('./utils.js', () => {
   return {
     stickyMarker: '<!-- MARK -->',
     getRepoContext: () => ({ owner: 'o', repo: 'r', repoFlag: '--repo o/r' }),
+    getExistingComment: vi.fn(),
+    gh: vi.fn(),
   }
 })
+
+// Import mocked functions after mock is defined
+const { getExistingComment, gh } = vi.mocked(await import('./utils.js'))
 
 type FetchCall = { method: string; url: string; body?: any }
 let fetchCalls: FetchCall[] = []
@@ -35,59 +40,44 @@ beforeEach(() => {
   fetchCalls = []
   commentsList = []
   setRepoEnv()
-  // Minimal fetch mock
-  // @ts-ignore
-  global.fetch = vi.fn(async (url: string, init?: any) => {
-    const method = (init?.method || 'GET').toUpperCase()
-    const body = init?.body ? JSON.parse(init.body) : undefined
-    fetchCalls.push({ method, url, body })
+
+  // Mock getExistingComment to simulate fetching comments and return the first comment with sticky marker
+  getExistingComment.mockImplementation(
+    async (token, owner, repo, prNumber) => {
+      // Simulate the GET call that getExistingComment makes internally
+      const url = `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments?per_page=100`
+      fetchCalls.push({ method: 'GET', url, body: undefined })
+
+      const result =
+        commentsList.find(
+          (comment) => comment.body && comment.body.includes('<!-- MARK -->')
+        ) || null
+      return result
+    }
+  )
+
+  // Mock gh function
+  gh.mockImplementation(async (token, method, url, body) => {
+    const methodUpper = method.toUpperCase()
+    fetchCalls.push({ method: methodUpper, url, body })
 
     if (url.includes('/issues/') && url.endsWith('/comments?per_page=100')) {
-      return {
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: async () => commentsList,
-        text: async () => JSON.stringify(commentsList),
-      }
+      return commentsList
     }
     if (
-      method === 'POST' &&
+      methodUpper === 'POST' &&
       url.includes('/issues/') &&
       url.endsWith('/comments')
     ) {
-      return {
-        ok: true,
-        status: 201,
-        statusText: 'Created',
-        json: async () => ({ id: 999 }),
-        text: async () => '{}',
-      }
+      return { id: 999 }
     }
-    if (method === 'PATCH' && url.includes('/issues/comments/')) {
-      return {
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: async () => ({ id: 1 }),
-        text: async () => '{}',
-      }
+    if (methodUpper === 'PATCH' && url.includes('/issues/comments/')) {
+      return { id: 1 }
     }
-    if (method === 'DELETE' && url.includes('/issues/comments/')) {
-      return {
-        ok: true,
-        status: 204,
-        statusText: 'No Content',
-        text: async () => '',
-      }
+    if (methodUpper === 'DELETE' && url.includes('/issues/comments/')) {
+      return null
     }
-    return {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      json: async () => ({}),
-      text: async () => '{}',
-    }
+    return {}
   })
 })
 
