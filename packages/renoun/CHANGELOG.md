@@ -1,5 +1,28 @@
 # renoun
 
+## 9.5.0
+
+### Minor Changes
+
+- f059b18: Switches the `renoun` CLI to spawn framework CLIs from Node directly, removing command-injection risk. This also adds `vite` support so `renoun vite <args>` works now.
+- 3fea115: Moves `JavaScriptFile#getExportValue` and `MDXFile#getExportValue` to utilize the export's `getValue` method so static analysis will be preferred.
+- 061548a: Adds a `Sponsors` component for rendering GitHub sponsors related to a specific user account.
+- 75f4edc: Renames `JavaScriptFileExport` to `JavaScriptModuleExport`, `MDXFileExport` to `MDXModuleExport`, and `FileExportNotFoundError` to `ModuleExportNotFoundError` for improved clarity and to better reflect the functionality of the utilities.
+
+  ### Breaking Changes
+
+  Rename all call sites for `JavaScriptFileExport`, `MDXFileExport`, and `FileExportNotFoundError` to use `Module` instead of `File`.
+
+- 6e257de: Adds root exports for the `renoun` package e.g. `import { CodeBlock } from 'renoun'`.
+- 2187b3b: Adds a default theme based on renoun's theme.
+- 8de2d2a: Allows initializing the `Repository` class using a shorthand git specifier e.g. `new Repository('souporserious/renoun')`.
+
+### Patch Changes
+
+- d760dde: Fixes `JavaScriptModuleExport#getType` causing maximum call stack exceeded errors when resolving recursive array types (e.g. `type A = A[]`).
+- dd141f9: Fixes renoun CLI not forwarding error messages.
+- 79a208c: Improves `getLocalGitFileMetadata` security by preventing injection from the provided `filePath` by switching to `execFile` and passing explicit arguments when parsing git history.
+
 ## 9.4.1
 
 ### Patch Changes
