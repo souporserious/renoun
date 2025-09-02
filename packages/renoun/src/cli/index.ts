@@ -100,23 +100,30 @@ if (
           data: { port, serverId: id },
         }))
 
-        subProcess = spawn(
-          process.execPath,
-          [
-            resolveFrameworkBinFile(firstArgument as Framework),
-            secondArgument,
-            ...restArguments,
-          ],
-          {
-            stdio: ['inherit', 'inherit', 'pipe'],
-            shell: false,
-            env: {
-              ...process.env,
-              RENOUN_SERVER_PORT: port,
-              RENOUN_SERVER_ID: id,
-            },
-          }
+        const frameworkBinPath = resolveFrameworkBinFile(
+          firstArgument as Framework
         )
+        const args = [frameworkBinPath]
+        let command = secondArgument
+
+        if (!command && firstArgument === 'next') {
+          command = 'dev'
+        }
+        if (command) {
+          args.push(command)
+        }
+
+        args.push(...restArguments)
+
+        subProcess = spawn(process.execPath, args, {
+          stdio: ['inherit', 'inherit', 'pipe'],
+          shell: false,
+          env: {
+            ...process.env,
+            RENOUN_SERVER_PORT: port,
+            RENOUN_SERVER_ID: id,
+          },
+        })
 
         {
           const pid = subProcess?.pid ?? null
