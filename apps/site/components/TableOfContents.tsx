@@ -136,11 +136,7 @@ function Link({
       {...linkProps}
     >
       {children}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `window.isSectionLinkActive('${id}')`,
-        }}
-      />
+      <script>{`window.isSectionLinkActive('${id}')`}</script>
     </a>
   )
 }
