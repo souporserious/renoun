@@ -4,6 +4,7 @@ import { GitProviderLink } from 'renoun'
 import {
   DocsDirectory,
   ComponentsDirectory,
+  HooksDirectory,
   GuidesDirectory,
 } from '@/collections'
 import { NavigationBoundary } from './NavigationBoundary'
@@ -68,6 +69,17 @@ export function Sidebar() {
           >
             <h3 className="title">Components</h3>
             <TreeNavigation collection={ComponentsDirectory} variant="name" />
+          </li>
+
+          <li
+            css={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem',
+            }}
+          >
+            <h3 className="title">Hooks</h3>
+            <TreeNavigation collection={HooksDirectory} variant="name" />
           </li>
 
           <li

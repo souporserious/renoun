@@ -36,9 +36,14 @@ export async function SiblingLink({
       })
     : undefined
   let baseName = entry.getBaseName()
+  let javaScriptFile = isJavaScriptFile(file)
+    ? file
+    : isJavaScriptFile(entry)
+      ? entry
+      : undefined
 
-  if (isJavaScriptFile(file)) {
-    const firstExport = await file
+  if (javaScriptFile) {
+    const firstExport = await javaScriptFile
       .getExports()
       .then((fileExports) => fileExports[0])
 

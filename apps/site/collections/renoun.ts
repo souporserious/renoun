@@ -73,3 +73,35 @@ export const ComponentsDirectory = new Directory({
   },
   include: filterInternalExports,
 })
+
+type HookSchema = Record<string, unknown>
+
+export const HooksDirectory = new Directory({
+  path: '../../packages/renoun/src/hooks',
+  loader: {
+    ts: withSchema<HookSchema>(
+      (path) => import(`../../../packages/renoun/src/hooks/${path}.ts`)
+    ),
+    tsx: withSchema<HookSchema>(
+      (path) => import(`../../../packages/renoun/src/hooks/${path}.tsx`)
+    ),
+    mdx: withSchema(
+      {
+        headings: z.array(
+          z.object({
+            id: z.string(),
+            level: z.number(),
+            children: z.custom<NonNullable<React.ReactNode>>(),
+            text: z.string(),
+          })
+        ),
+        metadata: z.object({
+          title: z.string(),
+          description: z.string(),
+        }),
+      },
+      (path) => import(`../../../packages/renoun/src/hooks/${path}.mdx`)
+    ),
+  },
+  include: filterInternalExports,
+})
