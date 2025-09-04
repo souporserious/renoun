@@ -13,6 +13,7 @@ import { GeistMono } from 'geist/font/mono'
 import { References } from '@/components/Reference'
 
 import { RootCollection, ComponentsDirectory } from '@/collections'
+import { CodePreview } from '@/components/CodePreview'
 import { MDX } from '@/components/MDX'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
@@ -80,11 +81,12 @@ export default async function Component({
     exampleFiles = [examplesEntry]
   }
 
-  const examplesExports = exampleFiles
+  const allExamplesExports = exampleFiles
     ? (
         await Promise.all(exampleFiles.map(async (file) => file.getExports()))
       ).flat()
     : []
+  const [heroExport, ...examplesExports] = allExamplesExports
   const isExamplesPage = slug.at(-1) === 'examples'
   const componentExports = isExamplesPage
     ? undefined
@@ -155,12 +157,16 @@ export default async function Component({
                 {title} {isExamplesPage ? 'Examples' : ''}
               </h1>
               {description ? <MDX>{description}</MDX> : null}
+              {heroExport ? <CodePreview fileExport={heroExport} /> : null}
               {Content ? <Content /> : null}
             </div>
           ) : (
-            <h1 css={{ fontSize: '3rem', margin: 0 }}>
-              {title} {isExamplesPage ? 'Examples' : ''}
-            </h1>
+            <>
+              <h1 css={{ fontSize: '3rem', margin: 0 }}>
+                {title} {isExamplesPage ? 'Examples' : ''}
+              </h1>
+              {heroExport ? <CodePreview fileExport={heroExport} /> : null}
+            </>
           )}
         </div>
 
