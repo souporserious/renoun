@@ -52,6 +52,19 @@ const HOSTS: Record<GitProviderType, string> = {
   pierre: 'pierre.co',
 } as const
 
+/** GitLab path stop-tokens that indicate content views after owner/repo. */
+const GITLAB_STOP_TOKENS: ReadonlySet<string> = new Set<string>([
+  '-',
+  'tree',
+  'blob',
+  'raw',
+  'commit',
+  'commits',
+  'issues',
+  'merge_requests',
+  'w',
+])
+
 /** Parsed git specifier. */
 export interface ParsedGitSpecifier {
   /** The provider of the repository. */
@@ -82,7 +95,6 @@ function joinPaths(a?: string, b?: string): string {
     return a
   }
 
-  // Simple manual approach: handle the four cases
   const aEndsWithSlash = a.endsWith('/')
   const bStartsWithSlash = b.startsWith('/')
 
@@ -95,18 +107,149 @@ function joinPaths(a?: string, b?: string): string {
   return a + b // already correct
 }
 
+/** Trim leading and trailing slashes. */
+function trimEdgeSlashes(value: string): string {
+  let startIndex = 0
+  let endIndex = value.length - 1
+
+  while (startIndex <= endIndex && value.charCodeAt(startIndex) === 47) {
+    startIndex++
+  }
+  while (endIndex >= startIndex && value.charCodeAt(endIndex) === 47) {
+    endIndex--
+  }
+
+  if (endIndex < startIndex) {
+    return ''
+  }
+  if (startIndex === 0 && endIndex === value.length - 1) {
+    return value
+  }
+  return value.slice(startIndex, endIndex + 1)
+}
+
+/** Remove a trailing ".git" suffix. */
+function stripGitSuffix(value: string): string {
+  const lower = value.toLowerCase()
+  if (lower.endsWith('.git')) {
+    return value.slice(0, value.length - 4)
+  }
+  return value
+}
+
+/** Try to parse a string as a URL, adding "https://" if no scheme is present. */
+function tryGetUrl(input: string): URL | null {
+  let value = input.trim()
+
+  const schemeMarkerIndex = value.indexOf('://')
+  if (schemeMarkerIndex <= 0) {
+    value = 'https://' + value
+  }
+
+  try {
+    return new URL(value)
+  } catch {
+    return null
+  }
+}
+
+/** Normalize and return a hostname from a possibly scheme-less URL string. */
+function getNormalizedHostnameFromUrlString(value: string): string | null {
+  let candidate = value.trim()
+  const schemeMarkerIndex = candidate.indexOf('://')
+  if (schemeMarkerIndex <= 0) {
+    candidate = 'https://' + candidate
+  }
+
+  try {
+    let hostname = new URL(candidate).hostname.toLowerCase()
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.slice(4)
+    }
+    return hostname
+  } catch {
+    return null
+  }
+}
+
+/** Split a URL pathname into clean segments. */
+function getCleanPathSegments(urlObject: URL): string[] {
+  let pathname = urlObject.pathname
+  pathname = trimEdgeSlashes(pathname)
+  pathname = stripGitSuffix(pathname)
+
+  if (pathname.length === 0) {
+    return []
+  }
+
+  const segments = pathname.split('/')
+  return segments
+}
+
 /**
- * Parse strings like:
+ * Extract owner and repo from a repository base URL, per provider.
+ * - GitHub/Bitbucket/Pierre: first two segments are owner/repo.
+ * - GitLab: supports nested groups; owner is everything before the last segment.
+ */
+function extractOwnerAndRepositoryFromBaseUrl(
+  provider: GitProviderType,
+  baseUrl: string
+): { owner: string; repo: string } | null {
+  const urlObject = tryGetUrl(baseUrl)
+  if (urlObject === null) {
+    return null
+  }
+
+  let hostname = urlObject.hostname.toLowerCase()
+  if (hostname.startsWith('www.')) {
+    hostname = hostname.slice(4)
+  }
+
+  let segments = getCleanPathSegments(urlObject)
+
+  if (provider === 'gitlab') {
+    let stopIndex = -1
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i]
+      if (GITLAB_STOP_TOKENS.has(segment)) {
+        stopIndex = i
+        break
+      }
+    }
+    if (stopIndex >= 0) {
+      segments = segments.slice(0, stopIndex)
+    }
+
+    if (segments.length >= 2) {
+      const repositoryName = segments[segments.length - 1]
+      const ownerPath = segments.slice(0, segments.length - 1).join('/')
+      return { owner: ownerPath, repo: repositoryName }
+    } else {
+      return null
+    }
+  } else {
+    if (segments.length >= 2) {
+      const [owner, repo] = segments
+      return { owner, repo }
+    } else {
+      return null
+    }
+  }
+}
+
+/**
+ * Parse a git specifier string into a `ParsedGitSpecifier` object.
+ *
+ * - If both '@' and '#' appear, the earliest is used as the ref separator.
+ * - A trailing path is only allowed AFTER a ref (i.e. "@ref/path").
+ * - Default provider for bare "owner/repo" is "github".
+ *
+ * Examples:
  *   - "owner/repo"
  *   - "github:owner/repo"
  *   - "owner/repo@ref"
  *   - "owner/repo#ref"
  *   - "gitlab:group/subgroup/repo@ref/docs"
- *
- * Notes:
- * - If both '@' and '#' appear, the earliest is used as the ref separator.
- * - A trailing path is only allowed AFTER a ref (i.e. "@ref/path").
- * - Default provider for bare "owner/repo" is "github".
  */
 export function parseGitSpecifier(input: string): ParsedGitSpecifier {
   let provider: GitProviderType = 'github'
@@ -116,14 +259,15 @@ export function parseGitSpecifier(input: string): ParsedGitSpecifier {
   const colonIndex = rest.indexOf(':')
   if (colonIndex >= 0) {
     const potentialProvider = rest.slice(0, colonIndex)
-    const prefix = rest.match(/^(github|gitlab|bitbucket|pierre):/)
-    if (prefix) {
-      // Valid provider prefix
-      const matchedProvider = prefix[1]!
-      provider = matchedProvider as GitProviderType
-      rest = rest.slice(prefix[0].length)
+    if (
+      potentialProvider === 'github' ||
+      potentialProvider === 'gitlab' ||
+      potentialProvider === 'bitbucket' ||
+      potentialProvider === 'pierre'
+    ) {
+      provider = potentialProvider as GitProviderType
+      rest = rest.slice(colonIndex + 1)
     } else {
-      // Invalid provider prefix
       throw new Error(
         `Invalid provider "${potentialProvider}". Must be one of: github, gitlab, bitbucket, pierre`
       )
@@ -131,19 +275,19 @@ export function parseGitSpecifier(input: string): ParsedGitSpecifier {
   }
 
   // Prefer the earliest of '@' or '#'
-  const atIdx = rest.indexOf('@')
-  const hashIdx = rest.indexOf('#')
-  const sepIdx =
-    atIdx >= 0 && hashIdx >= 0
-      ? Math.min(atIdx, hashIdx)
-      : Math.max(atIdx, hashIdx)
+  const atIndex = rest.indexOf('@')
+  const hashIndex = rest.indexOf('#')
+  const separatorIndex =
+    atIndex >= 0 && hashIndex >= 0
+      ? Math.min(atIndex, hashIndex)
+      : Math.max(atIndex, hashIndex)
 
   let ref: string | undefined
   let afterRef: string | undefined
 
-  if (sepIdx >= 0) {
-    const refAndMaybePath = rest.slice(sepIdx + 1)
-    rest = rest.slice(0, sepIdx)
+  if (separatorIndex >= 0) {
+    const refAndMaybePath = rest.slice(separatorIndex + 1)
+    rest = rest.slice(0, separatorIndex)
 
     const slashAfterRef = refAndMaybePath.indexOf('/')
     if (slashAfterRef >= 0) {
@@ -155,7 +299,7 @@ export function parseGitSpecifier(input: string): ParsedGitSpecifier {
   }
 
   // Strip optional .git suffix
-  rest = rest.replace(/\.git$/i, '')
+  rest = stripGitSuffix(rest)
 
   const parts = rest.split('/').filter(Boolean)
   if (parts.length < 2) {
@@ -217,31 +361,13 @@ export class Repository {
 
       this.#provider = provider as GitProviderType
 
-      if (this.#provider === 'github') {
-        const match = this.#baseUrl.match(/github\.com\/([^/]+)\/([^/]+)$/)
-        if (match) {
-          this.#owner = match.at(1)
-          this.#repo = match.at(2)
-        }
-      } else if (this.#provider === 'gitlab') {
-        // GitLab supports nested groups; best effort extraction of the last two segments
-        const match = this.#baseUrl.match(/gitlab\.com\/(.+?)\/([^/]+)$/)
-        if (match) {
-          this.#owner = match.at(1)
-          this.#repo = match.at(2)
-        }
-      } else if (this.#provider === 'bitbucket') {
-        const match = this.#baseUrl.match(/bitbucket\.org\/([^/]+)\/([^/]+)$/)
-        if (match) {
-          this.#owner = match.at(1)
-          this.#repo = match.at(2)
-        }
-      } else if (this.#provider === 'pierre') {
-        const match = this.#baseUrl.match(/pierre\.co\/([^/]+)\/([^/]+)$/)
-        if (match) {
-          this.#owner = match.at(1)
-          this.#repo = match.at(2)
-        }
+      const extracted = extractOwnerAndRepositoryFromBaseUrl(
+        this.#provider,
+        this.#baseUrl
+      )
+      if (extracted) {
+        this.#owner = extracted.owner
+        this.#repo = extracted.repo
       }
     }
 
@@ -252,7 +378,9 @@ export class Repository {
 
   /** Returns the string representation of the repository. */
   toString(): string {
-    return `${this.#provider}:${this.#owner}/${this.#repo}${this.#isDefaultRefExplicit ? `@${this.#defaultRef}` : ''}${this.#defaultPath ? `/${this.#defaultPath}` : ''}`
+    const ref = this.#isDefaultRefExplicit ? `@${this.#defaultRef}` : ''
+    const path = this.#defaultPath ? `/${this.#defaultPath}` : ''
+    return `${this.#provider}:${this.#owner}/${this.#repo}${ref}${path}`
   }
 
   /** Constructs a new issue URL for the repository. */
@@ -271,23 +399,19 @@ export class Repository {
           title,
           body: description,
         })
-
         if (labels.length > 0) {
           params.set('labels', labels.join(','))
         }
-
         return `https://github.com/${this.#owner}/${this.#repo}/issues/new?${params.toString()}`
       }
 
       case 'gitlab': {
         const params = new URLSearchParams()
-
         params.set('issue[title]', title)
         params.set('issue[description]', description)
-        labels.forEach((label) => {
+        for (const label of labels) {
           params.append('issue[label_names][]', label)
-        })
-
+        }
         return `https://gitlab.com/${this.#owner}/${this.#repo}/-/issues/new?${params.toString()}`
       }
 
@@ -362,11 +486,20 @@ export class Repository {
     switch (type) {
       case 'edit':
         return `${this.#baseUrl}/edit/${ref}/${path}`
-      case 'raw':
-        if (this.#owner && this.#repo) {
-          return `https://raw.githubusercontent.com/${this.#owner}/${this.#repo}/${ref}/${path}`
+      case 'raw': {
+        const host = getNormalizedHostnameFromUrlString(this.#baseUrl)
+
+        // Public GitHub: use raw.githubusercontent.com
+        if (host === HOSTS.github) {
+          if (this.#owner && this.#repo) {
+            return `https://raw.githubusercontent.com/${this.#owner}/${this.#repo}/${ref}/${path}`
+          }
+          throw new Error('Cannot generate raw URL without owner/repo')
         }
-        throw new Error('Cannot generate raw URL without owner/repo')
+
+        // GitHub Enterprise: the instance serves raw at "/raw/<ref>/<path>"
+        return `${this.#baseUrl}/raw/${ref}/${path}`
+      }
       case 'blame':
         return `${this.#baseUrl}/blame/${ref}/${path}${lineFragment}`
       case 'history':
@@ -500,7 +633,9 @@ export class Repository {
     line: number | [number, number] | undefined,
     { rangeDelimiter = '-' }: { rangeDelimiter?: string } = {}
   ): string {
-    if (!line) return ''
+    if (!line) {
+      return ''
+    }
 
     if (this.#provider === 'bitbucket') {
       if (Array.isArray(line) && line.length === 2) {
