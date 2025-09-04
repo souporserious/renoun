@@ -1,4 +1,9 @@
+import { createRequire } from 'node:module'
+import { readFileSync } from 'node:fs'
+
 import { findPackageDependency } from './find-package-dependency.js'
+
+const require = createRequire(import.meta.url)
 
 /** Attempts to load a package if it is installed. */
 async function loadPackage<Value>(name: string, getImport: () => any) {
@@ -37,21 +42,15 @@ export function loadTmGrammars() {
 /** Attempts to load a grammar from the tm-grammars package if it is installed. */
 export function loadTmGrammar(name: string) {
   return loadPackage<Record<string, any>>('tm-grammars', async () => {
-    const module = await import(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-grammars/grammars/${name}.json`,
-      { with: { type: 'json' } }
-    )
-    return module.default
+    const resolved = require.resolve(`tm-grammars/grammars/${name}.json`)
+    return JSON.parse(readFileSync(resolved, 'utf8'))
   })
 }
 
 /** Attempts to load a theme from the tm-themes package if it is installed. */
 export function loadTmTheme(name: string) {
   return loadPackage<Record<string, any>>('tm-themes', async () => {
-    const module = await import(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-themes/themes/${name}.json`,
-      { with: { type: 'json' } }
-    )
-    return module.default
+    const resolved = require.resolve(`tm-themes/themes/${name}.json`)
+    return JSON.parse(readFileSync(resolved, 'utf8'))
   })
 }
