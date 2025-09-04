@@ -1,9 +1,7 @@
-import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 import { findPackageDependency } from './find-package-dependency.js'
-
-const require = createRequire(import.meta.url)
 
 /** Attempts to load a package if it is installed. */
 async function loadPackage<Value>(name: string, getImport: () => any) {
@@ -16,13 +14,11 @@ export function loadPrettier() {
   return loadPackage<{
     format: (sourceText: string, options?: Record<string, unknown>) => string
     resolveConfig: (fileName: string) => Promise<Record<string, unknown> | null>
-  }>(
-    'prettier',
-    () =>
-      import(
-        /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ 'prettier'
-      )
-  )
+  }>('prettier', () => {
+    return import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ 'prettier'
+    )
+  })
 }
 
 /** Attempts to load the tm-grammars package if it is installed. */
@@ -42,19 +38,35 @@ export function loadTmGrammars() {
 /** Attempts to load a grammar from the tm-grammars package if it is installed. */
 export function loadTmGrammar(name: string) {
   return loadPackage<Record<string, any>>('tm-grammars', async () => {
-    const resolved = require.resolve(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-grammars/grammars/${name}.json`
+    const { resolve } = import.meta
+    if (resolve) {
+      const filePath = fileURLToPath(
+        resolve(`tm-grammars/grammars/${name}.json`)
+      )
+      return JSON.parse(readFileSync(filePath, 'utf-8'))
+    }
+
+    const module = await import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-grammars/grammars/${name}.json`,
+      { with: { type: 'json' } }
     )
-    return JSON.parse(readFileSync(resolved, 'utf8'))
+    return module.default
   })
 }
 
 /** Attempts to load a theme from the tm-themes package if it is installed. */
 export function loadTmTheme(name: string) {
   return loadPackage<Record<string, any>>('tm-themes', async () => {
-    const resolved = require.resolve(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-themes/themes/${name}.json`
+    const { resolve } = import.meta
+    if (resolve) {
+      const filePath = fileURLToPath(resolve(`tm-themes/themes/${name}.json`))
+      return JSON.parse(readFileSync(filePath, 'utf-8'))
+    }
+
+    const module = await import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-themes/themes/${name}.json`,
+      { with: { type: 'json' } }
     )
-    return JSON.parse(readFileSync(resolved, 'utf8'))
+    return module.default
   })
 }

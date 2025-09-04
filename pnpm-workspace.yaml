@@ -13,6 +13,7 @@ catalog:
   '@types/react-dom': 19.1.6
   geist: 1.4.2
   next: 15.4.7
+  prettier: 3.6.2
   react: 19.1.0
   react-dom: 19.1.0
   restyle: 3.4.2

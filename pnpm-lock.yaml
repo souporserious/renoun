@@ -33,6 +33,9 @@ catalogs:
     next:
       specifier: 15.4.7
       version: 15.4.7
+    prettier:
+      specifier: 3.6.2
+      version: 3.6.2
     react:
       specifier: 19.1.0
       version: 19.1.0
@@ -82,7 +85,7 @@ importers:
         specifier: ^24.1.0
         version: 24.1.0
       prettier:
-        specifier: 3.6.2
+        specifier: 'catalog:'
         version: 3.6.2
       turbo:
         specifier: ^2.5.5
@@ -456,6 +459,9 @@ importers:
       geist:
         specifier: 'catalog:'
         version: 1.4.2(next@15.4.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
+      prettier:
+        specifier: 'catalog:'
+        version: 3.6.2
       react:
         specifier: 'catalog:'
         version: 19.1.0
