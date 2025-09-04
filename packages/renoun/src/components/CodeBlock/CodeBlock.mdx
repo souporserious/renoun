@@ -1,3 +1,7 @@
+Supports both static code strings and custom rendering via `Tokens`, `LineNumbers`, and `Toolbar` subcomponents. For JavaScript and TypeScript, code can be type-checked, formatted with Prettier (if available), and augmented with quick-info tooltips on hover.
+
+In development, the component uses a Suspense fallback to render immediately while asynchronous syntax highlighting and analysis load in the background. In production, it renders the fully-resolved code block directly.
+
 ## Style Overrides
 
 The `CodeBlock` component can be styled using the, `css`, `className`, and `style` props to target specific descendant components. In most cases, its a good idea to create your own component that wraps the `CodeBlock` component and applies the style overrides you need:

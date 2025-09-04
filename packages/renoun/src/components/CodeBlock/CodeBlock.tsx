@@ -99,14 +99,6 @@ export interface CodeBlockProps {
 /**
  * Displays syntax-highlighted source code with optional line numbers, toolbar,
  * copy-to-clipboard button, and error diagnostics.
- *
- * Supports both static code strings and custom rendering via `Tokens`, `LineNumbers`,
- * and `Toolbar` subcomponents. For JavaScript and TypeScript, code can be type-checked,
- * formatted with Prettier (if available), and augmented with quick-info tooltips on hover.
- *
- * In development, the component uses a Suspense fallback to render immediately while
- * asynchronous syntax highlighting and analysis load in the background. In production,
- * it renders the fully-resolved code block directly.
  */
 export const CodeBlock =
   process.env.NODE_ENV === 'development'
