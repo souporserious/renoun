@@ -116,8 +116,22 @@
     "bench": "vitest bench"
   },
   "peerDependencies": {
+    "prettier": ">=3.0.0",
     "react": ">=18.0.0",
-    "react-dom": ">=18.0.0"
+    "react-dom": ">=18.0.0",
+    "tm-grammars": ">=1.0.0",
+    "tm-themes": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "prettier": {
+      "optional": true
+    },
+    "tm-grammars": {
+      "optional": true
+    },
+    "tm-themes": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@mdx-js/rollup": "^3.1.0",
@@ -130,6 +144,7 @@
     "geist": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "prettier": "catalog:",
     "styled-components": "^6.1.19",
     "tm-grammars": "catalog:",
     "tm-themes": "catalog:",
