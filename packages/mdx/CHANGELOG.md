@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 3.1.1
+
+### Patch Changes
+
+- e664e81: Fixes hydration errors caused when rendering headings that include links. These are now unwrapped since the link will be created for the section specifically when rendered.
+
 ## 3.1.0
 
 ### Minor Changes

@@ -1,5 +1,14 @@
 # renoun
 
+## 9.5.1
+
+### Patch Changes
+
+- e151303: Fixes vite being unable to load textmate grammars and themes.
+- 98482a0: Fixes error when locating the vite bin file when using the renoun cli.
+- Updated dependencies [e664e81]
+  - @renoun/mdx@3.1.1
+
 ## 9.5.0
 
 ### Minor Changes
