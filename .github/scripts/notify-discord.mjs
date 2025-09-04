@@ -70,6 +70,7 @@ async function main() {
       content: message,
       // Prevent accidental pings like @everyone or @here
       allowed_mentions: { parse: [] },
+      flags: 4,
     }),
   })
 
