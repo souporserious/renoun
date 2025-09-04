@@ -53,7 +53,7 @@ async function main() {
     const version = String(pkg.version)
     const tag = `${name}@${version}`
     const url = `https://github.com/${OWNER_REPO}/releases/tag/${tag}`
-    return `${tag} — ${url}`
+    return `[${tag}](${url})`
   })
 
   // Respect Discord's 2000 character limit; keep headroom
