@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { createServer } from '../project/server.js'
 import { getDebugLogger } from '../utils/debug.js'
@@ -43,9 +43,8 @@ function resolveFrameworkBinFile(framework: Framework): string {
     throw new Error(`Could not find "bin" for ${framework}`)
   }
 
-  return projectRequire.resolve(
-    `${framework}/${binRelativePath.replace(/^\.\//, '')}`
-  )
+  const packageJsonDirectory = dirname(packageJsonPath)
+  return join(packageJsonDirectory, binRelativePath.replace(/^\.\//, ''))
 }
 
 if (
