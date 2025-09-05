@@ -227,12 +227,12 @@ export function PackageInstall({
 
 declare global {
   interface Window {
-    setPackageManager: (packageManager?: string) => void
+    setPackageManager: undefined | ((packageManager?: string) => void)
   }
 }
 
 if (typeof window !== 'undefined') {
-  window.setPackageManager()
+  window.setPackageManager?.()
 }
 
 const packageScript = `
