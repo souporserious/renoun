@@ -6,6 +6,7 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
+import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
 import { getDebugLogger } from '../utils/debug.js'
 import {
   getFileExports as baseGetFileExports,
@@ -35,10 +36,6 @@ let currentHighlighter: Promise<Highlighter> | null = null
  * utilities by processing type analysis and syntax highlighting in a separate process.
  */
 export async function createServer(options?: { port?: number }) {
-  if (currentHighlighter === null) {
-    currentHighlighter = createHighlighter()
-  }
-
   const server = new WebSocketServer({ port: options?.port })
   const port = await server.getPort()
 
@@ -89,12 +86,15 @@ export async function createServer(options?: { port?: number }) {
       ...options
     }: GetTokensOptions & {
       projectOptions?: ProjectOptions
+      languages?: ConfigurationOptions['languages']
     }) {
       const project = getProject(projectOptions)
+
       if (currentHighlighter === null) {
-        throw new Error(
-          '[renoun] Highlighter is not initialized in web socket "getTokens"'
-        )
+        currentHighlighter = createHighlighter({
+          theme: options.theme,
+          languages: options.languages,
+        })
       }
 
       const highlighter = await currentHighlighter

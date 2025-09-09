@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
 import type { TextMateThemeRaw } from './create-tokenizer.js'
-import { loadConfig } from './load-config.js'
 import { loadTmTheme } from './load-package.js'
 
 interface Theme {
@@ -18,36 +18,40 @@ interface Theme {
   [key: string]: any
 }
 
-/** Resolves the theme config name from the `renoun.json` config. */
-function getThemeConfigName(themeName?: string) {
-  const config = loadConfig()
-
-  if (typeof config.theme === 'object') {
+/** Resolves the theme config name from the `RootProvider` config. */
+function getThemeConfigName(
+  themeName?: string,
+  themeConfig?: ConfigurationOptions['theme']
+) {
+  if (typeof themeConfig === 'object') {
     // Default to the first theme if no theme name is provided.
     if (themeName === undefined) {
-      return Object.values(config.theme)[0]
+      return Object.values(themeConfig)[0]
     }
 
     // Try matching theme config name
     if (
-      Object.values(config.theme)
+      Object.values(themeConfig)
         .map((theme) => (typeof theme === 'string' ? theme : theme[0]))
         .includes(themeName)
     ) {
       return themeName
     }
 
-    return config.theme[themeName]
+    return (themeConfig as Record<string, any>)[themeName]
   }
 
-  return config.theme
+  return themeConfig
 }
 
 const cachedThemes = new Map<string, Record<string, any>>()
 
 /** Gets a normalized VS Code theme. */
-export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
-  const themeConfigName = getThemeConfigName(themeName)
+export async function getTheme(
+  themeName?: string,
+  themeConfig?: ConfigurationOptions['theme']
+): Promise<TextMateThemeRaw> {
+  const themeConfigName = getThemeConfigName(themeName, themeConfig)
 
   if (themeConfigName === undefined) {
     throw new Error(
@@ -73,7 +77,7 @@ export async function getTheme(themeName?: string): Promise<TextMateThemeRaw> {
     : undefined
   let theme: Theme
 
-  if (themePath === '__default_theme__') {
+  if (themePath === undefined) {
     theme = (await import('./default-theme.js')).defaultTheme as Theme
   } else if (themePath.endsWith('.json')) {
     theme = JSON.parse(readFileSync(themePath, 'utf-8')) as Theme
@@ -123,19 +127,23 @@ function toCssVariableName(key: string): string {
 }
 
 /** Generates CSS variables for all theme colors. */
-export async function getThemeColorVariables() {
-  const { theme } = loadConfig()
-
+export async function getThemeColorVariables(
+  theme: ConfigurationOptions['theme']
+) {
   if (typeof theme === 'string') {
     throw new Error(
       `[renoun] The \`theme\` property in the \`renoun.json\` at the root of your project must be an object when using the ThemeProvider component. For more information, visit: https://renoun.dev/docs/configuration`
     )
   }
 
+  if (theme === undefined) {
+    return {}
+  }
+
   const themeVariables: Record<string, any> = {}
 
   for (const themeName of Object.keys(theme)) {
-    const currentTheme = await getTheme(themeName)
+    const currentTheme = await getTheme(themeName, theme)
     const variables: Record<string, any> = {}
 
     if (currentTheme.colors) {
@@ -245,22 +253,23 @@ let cachedThemeColors: Record<string, any> | null = null
  * Missing keys in any particular theme will result in an undefined CSS variable,
  * allowing for a graceful fallback.
  */
-export async function getThemeColors(): Promise<ThemeColors> {
+export async function getThemeColors(
+  themeConfig: ConfigurationOptions['theme']
+): Promise<ThemeColors> {
   if (cachedThemeColors !== null) {
     return cachedThemeColors as ThemeColors
   }
 
-  const config = loadConfig()
   let flatColors: Record<string, any> = {}
   let useVariables = false
 
-  if (typeof config.theme === 'string') {
-    const { colors } = await getTheme()
+  if (typeof themeConfig === 'string') {
+    const { colors } = await getTheme(undefined, themeConfig)
     if (colors) {
       flatColors = colors
     }
   } else {
-    const themeNames = Object.keys(config.theme)
+    const themeNames = themeConfig ? Object.keys(themeConfig) : []
 
     // Merge keys from all themes
     if (themeNames.length > 1) {
@@ -268,7 +277,7 @@ export async function getThemeColors(): Promise<ThemeColors> {
       const unionKeys = new Set<string>()
 
       for (const themeName of themeNames) {
-        const currentTheme = await getTheme(themeName)
+        const currentTheme = await getTheme(themeName, themeConfig)
         for (const key in currentTheme.colors) {
           unionKeys.add(key)
         }
@@ -280,7 +289,7 @@ export async function getThemeColors(): Promise<ThemeColors> {
     }
     // Only one theme defined
     else {
-      const { colors } = await getTheme(themeNames[0])
+      const { colors } = await getTheme(themeNames[0], themeConfig)
       if (colors) {
         flatColors = colors
       }
@@ -330,15 +339,15 @@ function buildNestedObject(
  * }
  * ```
  */
-export function getThemeTokenVariables() {
-  const config = loadConfig()
-
-  if (typeof config.theme === 'string') {
+export function getThemeTokenVariables(
+  themeConfig: ConfigurationOptions['theme']
+) {
+  if (typeof themeConfig === 'string') {
     return {}
   }
 
   const themeVariables: Record<string, any> = {}
-  const themeNames = Object.keys(config.theme)
+  const themeNames = themeConfig ? Object.keys(themeConfig) : []
 
   for (let index = 0; index < themeNames.length; index++) {
     themeVariables[`[data-theme="${themeNames[index]}"] & span`] = {

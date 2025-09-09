@@ -1,10 +1,10 @@
+import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
 import type { Languages, ScopeName } from '../grammars/index.js'
 import {
   grammars,
   grammarLoaders,
   grammarRedirects,
 } from '../grammars/index.js'
-import { loadConfig } from './load-config.js'
 import { loadTmGrammars, loadTmGrammar } from './load-package.js'
 
 /**
@@ -13,11 +13,14 @@ import { loadTmGrammars, loadTmGrammar } from './load-package.js'
  * If the default loader is not found, but the language is configured,
  * the grammar will be loaded from the `tm-grammars` package.
  */
-export async function getGrammar(scopeName: ScopeName): Promise<any> {
-  const config = loadConfig()
+export async function getGrammar(
+  scopeName: ScopeName,
+  languagesConfig?: ConfigurationOptions['languages']
+): Promise<any> {
   const aliases = grammars[scopeName] as readonly Languages[] | undefined
+  const languages = languagesConfig ?? []
   const isLanguageConfigured = aliases
-    ? config.languages.some((language) => aliases.includes(language))
+    ? languages.some((language) => aliases.includes(language))
     : false
   const defaultLoader = grammarLoaders[scopeName]
 

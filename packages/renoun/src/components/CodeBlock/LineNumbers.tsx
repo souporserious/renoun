@@ -1,7 +1,9 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
+import { getContext } from '../../utils/context.js'
 import { getThemeColors } from '../../utils/get-theme.js'
+import { ServerConfigContext } from '../Config/ServerConfigContext.js'
 import { getResolvedContext } from './Context.js'
 
 export interface LineNumbersProps {
@@ -26,7 +28,8 @@ export async function LineNumbers({
   style,
 }: LineNumbersProps) {
   const context = await getResolvedContext()
-  const theme = await getThemeColors()
+  const serverConfig = getContext(ServerConfigContext)
+  const theme = await getThemeColors(serverConfig.theme)
   const highlightRanges = highlightRangesProp || context?.highlightedLines
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 

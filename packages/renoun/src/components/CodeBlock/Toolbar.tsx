@@ -1,7 +1,9 @@
 import React from 'react'
 import { styled, type CSSObject } from 'restyle'
 
+import { getContext } from '../../utils/context.js'
 import { getThemeColors } from '../../utils/get-theme.js'
+import { ServerConfigContext } from '../Config/ServerConfigContext.js'
 import { getResolvedContext } from './Context.js'
 import { CopyButton } from './CopyButton.js'
 
@@ -31,7 +33,8 @@ export async function Toolbar({
   children,
 }: ToolbarProps) {
   const context = await getResolvedContext()
-  const theme = await getThemeColors()
+  const serverConfig = getContext(ServerConfigContext)
+  const theme = await getThemeColors(serverConfig.theme)
   let childrenToRender = children
 
   if (childrenToRender === undefined) {

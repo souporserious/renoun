@@ -1,6 +1,9 @@
 import React from 'react'
 
-/** Refreshes the development server when a source file changes. */
+/**
+ * Refreshes the development server when a source file changes.
+ * @internal
+ */
 export async function Refresh() {
   if (process.env.NODE_ENV === 'development') {
     const { RefreshClient } = await import('./RefreshClient.js')
@@ -8,9 +11,7 @@ export async function Refresh() {
     const id = process.env.RENOUN_SERVER_ID
 
     if (!port || !id) {
-      throw new Error(
-        '[renoun] The Refresh component requires the renoun development server to be running.'
-      )
+      return null
     }
 
     return <RefreshClient port={port} id={id} />

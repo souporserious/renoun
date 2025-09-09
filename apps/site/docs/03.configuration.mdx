@@ -3,80 +3,21 @@ export const metadata = {
   description: 'Configure renoun in your project.',
 }
 
-This guide will help you configure renoun in your project.
+This guide will help you configure renoun and better understand all of the configuration options. We'll cover:
 
-## renoun.json
+- Setting up the `RootProvider`
+- Selecting themes (bundled or custom)
+- Configuring color modes (light/dark) with optional overrides
+- Loading languages for syntax highlighting
+- Configuring git links and the canonical site URL
+- Enabling debug logs
 
-The `renoun.json` file is used to globally configure components and utilities and override defaults for the entire workspace.
+## RootProvider
 
-This file should be placed in the root of your workspace. Here is an example configuration:
-
-```json path="renoun.json"
-{
-  // Provide a schema for the configuration file to enable intellisense
-  "$schema": "https://renoun.dev/schema.json",
-
-  // Specify the theme to use for code highlighting
-  "theme": "theme.json",
-
-  // Specify the languages to load for code highlighting
-  "languages": ["mdx", "typescript", "tsx"],
-
-  // Specify the git information for edit links
-  "git": {
-    "source": "https://github.com/souporserious/renoun"
-  },
-
-  // Specify the site URL for the canonical URL
-  "siteUrl": "https://renoun.dev"
-}
-```
-
-## Themes
-
-Themes are powered by <a href="https://github.com/shikijs/textmate-grammars-themes" target="_blank" rel="noopener">Shiki</a> and specify how source code is highlighted in the `CodeBlock` and `CodeInline` components. To keep the install size small, renoun does not bundle any themes by default. You can either provide your own local theme JSON file or install the optional `tm-themes` package to load a bundled theme by name.
-
-### TextMate Themes
-
-To use a bundled theme, first install the `tm-themes` package and then reference a <a href="https://shiki.matsu.io/themes" target="_blank" rel="noopener">valid theme by name</a>:
-
-<PackageInstall packages={['tm-themes']} dev />
-
-Now you can reference a theme by name in your `renoun.json` file:
-
-```json
-{
-  "theme": "nord"
-}
-```
-
-### Custom Themes
-
-To use a custom theme, you can reference a JSON file that defines a <a href="https://code.visualstudio.com/api/extension-guides/color-theme" target="_blank" rel="noopener">VS Code compatible theme</a>:
-
-```json
-{
-  "theme": "theme.json"
-}
-```
-
-### Multiple Themes
-
-You can also specify multiple themes to be used, the first theme will be used as the default theme:
-
-```json
-{
-  "theme": {
-    "light": "vitesse-light",
-    "dark": "vitesse-dark"
-  }
-}
-```
-
-This requires using the `ThemeProvider` component that will inject the proper CSS Variables in the head of the document:
+Configure renoun at the root of your application using the `RootProvider` component. This component must wrap the `html` element and will provide renoun's configuration to the entire application.
 
 ```tsx
-import { ThemeProvider } from 'renoun'
+import { RootProvider } from 'renoun'
 
 export default function RootLayout({
   children,
@@ -84,21 +25,110 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html suppressHydrationWarning>
-      <body>
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
-    </html>
+    <RootProvider
+      git="souporserious/renoun"
+      siteUrl="https://renoun.dev"
+      theme="theme.json"
+    >
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
   )
 }
 ```
 
-A `data-theme` attribute on the `html` element will be set immediately on page load before the first render based on local storage. This is why we need to suppress hydration warnings since the theme is not known until the React tree is hydrated which could have changed.
+<Note>
+
+The `RootProvider` component clones the `html` element and adds the [`suppressHydrationWarning`](https://react.dev/reference/react-dom/client/hydrateRoot#suppressing-unavoidable-hydration-mismatch-errors) property. This property is required to suppress the hydration warning that is thrown when the [theme script](#disabling-the-theme-script) sets the `data-theme` attribute on the `html` element. The `suppressHydrationWarning` property only applies one level deep, so it will not block hydration warnings on other elements.
+
+</Note>
+
+## Themes
+
+renoun provides accurate syntax highlighting using TextMate grammars and VS Code–compatible color themes. To keep install size small, renoun does not bundle any themes by default. You can either reference a local theme JSON file or install the optional `tm-themes` package to load a bundled theme by name.
+
+For more information on TextMate grammars and themes, see the <a href="https://code.visualstudio.com/api/language-extensions/syntax-highlight-guide" target="_blank" rel="noopener">VS Code syntax highlighting guide</a> and the <a href="https://macromates.com/manual/en/language_grammars" target="_blank" rel="noopener">TextMate grammar reference</a>.
+
+### Predefined Themes
+
+To use a predefined theme, first install the `tm-themes` package:
+
+<PackageInstall packages={['tm-themes']} dev />
+
+Now you can define a supported theme by name through `RootProvider`:
+
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider theme="nord">
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}
+```
+
+### Custom Themes
+
+To use a custom theme, reference a JSON file that defines a <a href="https://code.visualstudio.com/api/extension-guides/color-theme" target="_blank" rel="noopener">VS Code compatible theme</a>:
+
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider theme="theme.json">
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}
+```
+
+### Multiple Themes
+
+You can also specify multiple themes, the first theme defined in the object will be the default:
+
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider
+      theme={{
+        light: 'vitesse-light',
+        dark: 'vitesse-dark',
+      }}
+    >
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}
+```
 
 To use a specific default theme, append a `data-theme` attribute to the `html` element:
 
 ```html
-<html data-theme="dark" suppressHydrationWarning>
+<html data-theme="dark">
   ...
 </html>
 ```
@@ -121,12 +151,13 @@ export function ThemePicker() {
 }
 ```
 
-### Only Loading Styles
+### Integrating with Other Theme Providers
 
-If you are using another theming solution, you can use the `ThemeStyles` component directly to only load the CSS Variables for the theme:
+By default, a small script that manages the theme is included in the head of the document. This script sets the `data-theme` attribute on the `html` element based on local storage. If you are using another theming provider that already manages the theme, you can disable renoun's theme script by setting the `includeThemeScript` prop to `false` to avoid conflicts:
 
 ```tsx
-import { ThemeStyles } from 'renoun'
+import { RootProvider } from 'renoun'
+import { ThemeProvider } from 'next-themes'
 
 export default function RootLayout({
   children,
@@ -134,36 +165,47 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html>
-      <body>
-        <ThemeStyles />
-        {children}
-      </body>
-    </html>
+    <RootProvider includeThemeScript={false}>
+      <html>
+        <body>
+          <ThemeProvider>{children}</ThemeProvider>
+        </body>
+      </html>
+    </RootProvider>
   )
 }
 ```
-
-This is not required if you are using the `ThemeProvider` component.
 
 ### Overriding Themes
 
 To override a theme, you can provide a tuple that specifies the theme values to override:
 
-```json
-{
-  "theme": {
-    "light": "vitesse-light",
-    "dark": [
-      "vitesse-dark",
-      {
-        "colors": {
-          "editor.background": "#000000",
-          "panel.border": "#666666"
-        }
-      }
-    ]
-  }
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider
+      theme={{
+        light: 'vitesse-light',
+        dark: [
+          'vitesse-dark',
+          {
+            colors: {
+              'editor.background': '#000000',
+              'panel.border': '#666666',
+            },
+          },
+        ],
+      }}
+    >
+      {children}
+    </RootProvider>
+  )
 }
 ```
 
@@ -171,26 +213,40 @@ This accepts a subset of a VS Code theme to override, specifically the `colors`,
 
 ## Languages
 
-The `languages` property is used to define the languages that are supported by the `CodeBlock` and `CodeInline` components. This is used to determine which language to load when highlighting code.
+Use the `languages` prop to define which grammars are available to `CodeBlock` and `CodeInline`.
 
 ### Default Languages
 
 The following languages are loaded by default:
 
-```json
-{
-  "languages": [
-    "css",
-    "javascript",
-    "jsx",
-    "typescript",
-    "tsx",
-    "markdown",
-    "mdx",
-    "shellscript",
-    "json",
-    "html"
-  ]
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider
+      languages={[
+        'css',
+        'js',
+        'jsx',
+        'ts',
+        'tsx',
+        'md',
+        'mdx',
+        'shell',
+        'json',
+        'html',
+      ]}
+    >
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
 }
 ```
 
@@ -208,35 +264,131 @@ To add support for additional languages, install the optional `tm-grammars` pack
 
 <PackageInstall packages={['tm-grammars']} dev />
 
-Now you can reference a language by name in your `renoun.json` file:
+Now you can reference languages by name via `RootProvider`:
 
-```json
-{
-  "languages": ["python", "rust", "go"]
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider languages={['python', 'rust', 'go']}>
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
 }
 ```
 
 ## Git Information
 
-Git can be used to set the `source`, `branch`, and `provider` of your documentation site. This is used to generate the canonical URL for each page:
+Set `git` on `RootProvider` to enable edit/source links and canonical URLs:
+
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider
+      git={{
+        source: 'https://github.com/souporserious/renoun',
+        branch: 'main',
+        provider: 'github',
+        owner: 'souporserious',
+        repository: 'renoun',
+        baseUrl: 'https://github.com',
+      }}
+    >
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}
+```
+
+### Shorthand Syntax
+
+You can also use a shorthand syntax to specify the git information:
+
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider git="souporserious/renoun">
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}
+```
+
+This will be parsed into the following object:
 
 ```json
 {
-  "git": {
-    "source": "https://github.com/souporserious/renoun",
-    "branch": "main",
-    "provider": "github"
-  }
+  "source": "https://github.com/souporserious/renoun",
+  "branch": "main",
+  "provider": "github",
+  "owner": "souporserious",
+  "repository": "renoun",
+  "baseUrl": "https://github.com"
+}
+```
+
+A specifier can also include a branch, provider, owner, repository, and base URL:
+
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider git="pierre:souporserious/renoun@docs">
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
 }
 ```
 
 ## Site URL
 
-The `siteUrl` property is used to define the URL of your documentation site. This is used to generate the canonical URL for each page:
+Provide a `siteUrl` so sitemaps and other absolute URLs are generated correctly:
 
-```json
-{
-  "siteUrl": "https://renoun.dev"
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider siteUrl="https://renoun.dev">
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
 }
 ```
 

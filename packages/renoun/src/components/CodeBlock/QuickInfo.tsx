@@ -3,14 +3,16 @@ import { styled, type CSSObject } from 'restyle'
 
 import { rehypePlugins, remarkPlugins } from '../../mdx/index.js'
 import { getTokens } from '../../project/client.js'
+import { getContext } from '../../utils/context.js'
 import {
   getThemeColors,
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
+import { CodeInline } from '../CodeInline.js'
+import { ServerConfigContext } from '../Config/ServerConfigContext.js'
 import { Markdown, type MarkdownProps } from '../Markdown.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
-import { CodeInline } from '../CodeInline.js'
 import { CodeBlock, parsePreProps } from './CodeBlock.js'
 
 const Paragraph = styled('p', {
@@ -72,13 +74,16 @@ export async function QuickInfo({
   className?: string
   style?: React.CSSProperties
 }) {
-  const theme = await getThemeColors()
+  const serverConfig = getContext(ServerConfigContext)
+  const theme = await getThemeColors(serverConfig.theme)
   let displayTextTokens: Token[][] = []
 
   if (quickInfo?.displayText) {
     const tokens = await getTokens({
       value: quickInfo.displayText,
       language: 'typescript',
+      languages: serverConfig.languages,
+      theme: serverConfig.theme,
     })
     displayTextTokens = tokens
   }
@@ -93,7 +98,7 @@ export async function QuickInfo({
             : undefined,
           backgroundColor: theme.editorHoverWidget.background,
           color: theme.editorHoverWidget.foreground,
-          ...getThemeTokenVariables(),
+          ...getThemeTokenVariables(serverConfig.theme),
           ...css,
         }}
         className={className}

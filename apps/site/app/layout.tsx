@@ -1,7 +1,7 @@
 import { Analytics } from '@vercel/analytics/react'
 import type { Metadata } from 'next'
+import { RootProvider } from 'renoun'
 import { GeistSans } from 'geist/font/sans'
-import { Refresh } from 'renoun'
 
 export const metadata = {
   title: 'renoun - Elevate Your Design System Docs',
@@ -14,27 +14,32 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <link
-        rel="icon"
-        href="/favicon-light.svg"
-        media="(prefers-color-scheme: light)"
-      />
-      <link
-        rel="icon"
-        href="/favicon-dark.svg"
-        media="(prefers-color-scheme: dark)"
-      />
-      <link rel="stylesheet" href="/layout.css" precedence="medium" />
-      <body className={GeistSans.className}>
-        <script
-          dangerouslySetInnerHTML={{ __html: tableOfContentsActiveState }}
+    <RootProvider
+      git="souporserious/renoun"
+      siteUrl="https://renoun.dev"
+      theme="theme.json"
+    >
+      <html lang="en">
+        <link
+          rel="icon"
+          href="/favicon-light.svg"
+          media="(prefers-color-scheme: light)"
         />
-        {children}
-        <Analytics />
-        <Refresh />
-      </body>
-    </html>
+        <link
+          rel="icon"
+          href="/favicon-dark.svg"
+          media="(prefers-color-scheme: dark)"
+        />
+        <link rel="stylesheet" href="/layout.css" precedence="medium" />
+        <body className={GeistSans.className}>
+          <script
+            dangerouslySetInnerHTML={{ __html: tableOfContentsActiveState }}
+          />
+          {children}
+          <Analytics />
+        </body>
+      </html>
+    </RootProvider>
   )
 }
 

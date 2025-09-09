@@ -22,7 +22,7 @@ export function useThemePicker(): [
     )
   }
 
-  const themeModes = Object.keys(theme)
+  const themeModes = theme ? Object.keys(theme) : []
   const [colorMode, setColorMode] = useState<string | undefined>()
 
   useEffect(() => {

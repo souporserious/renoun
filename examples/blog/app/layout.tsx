@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Refresh } from 'renoun'
+import { RootProvider } from 'renoun'
 import './layout.css'
 
 export const metadata: Metadata = {
@@ -17,11 +17,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>
-        {children}
-        <Refresh />
-      </body>
-    </html>
+    <RootProvider theme="nord" languages={['css', 'tsx', 'typescript']}>
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    </RootProvider>
   )
 }

@@ -20,7 +20,6 @@ import {
   type IsJavaScriptLikeExtension,
   type HasJavaScriptLikeExtensions,
 } from '../utils/is-javascript-like-extension.js'
-import { loadConfig } from '../utils/load-config.js'
 import {
   baseName,
   ensureRelativePath,
@@ -37,6 +36,7 @@ import type { FileSystem } from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
 import {
   Repository,
+  type RepositoryConfig,
   type GetFileUrlOptions,
   type GetDirectoryUrlOptions,
 } from './Repository.js'
@@ -1554,6 +1554,9 @@ export interface DirectoryOptions<
 
   /** Sort callback applied at *each* directory depth. */
   sort?: SortDescriptor<ResolveDirectoryIncludeEntries<Include, LoaderTypes>>
+
+  /** The repository used to generate source URLs. */
+  repository?: Repository | RepositoryConfig | string
 }
 
 /** A directory containing files and subdirectories in the file system. */
@@ -1575,6 +1578,7 @@ export class Directory<
   #directory?: Directory<any, any, any>
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
+  #repositoryOption?: Repository | RepositoryConfig | string
   #includePattern?: string
   #include?:
     | ((
@@ -1606,6 +1610,7 @@ export class Directory<
         'tsconfig.json'
       this.#slugCasing = options.slugCasing ?? 'kebab'
       this.#fileSystem = options.fileSystem
+      this.#repositoryOption = options.repository
       if (typeof options.include === 'string') {
         this.#includePattern = options.include
 
@@ -1674,6 +1679,7 @@ export class Directory<
 
     directory.#directory = this
     directory.#includePattern = this.#includePattern
+    directory.#repositoryOption = this.#repositoryOption
     directory.#repository = this.#repository
     directory.#rootPath = this.getRootPath()
     directory.#pathLookup = this.#pathLookup
@@ -1698,19 +1704,21 @@ export class Directory<
       return this.#repository
     }
 
-    const config = loadConfig()
+    if (this.#repositoryOption instanceof Repository) {
+      this.#repository = this.#repositoryOption
+      return this.#repository
+    }
 
-    if (config.git) {
-      this.#repository = new Repository({
-        baseUrl: config.git.source,
-        provider: config.git.provider,
-      })
-
+    if (
+      typeof this.#repositoryOption === 'string' ||
+      typeof this.#repositoryOption === 'object'
+    ) {
+      this.#repository = new Repository(this.#repositoryOption)
       return this.#repository
     }
 
     throw new Error(
-      `[renoun] Git provider is not configured for directory "${this.#path}". Please provide a git provider to enable source links.`
+      `[renoun] Git repository is not configured for directory "${this.#path}". Please provide a repository or repository configuration to enable source links.`
     )
   }
 
@@ -2228,12 +2236,12 @@ export class Directory<
         entry instanceof Directory && includeMap
           ? (includeMap.get(entry) ?? true)
           : this.#include
-        ? await this.#shouldInclude(entry)
-        : true
+            ? await this.#shouldInclude(entry)
+            : true
       const childrenEntries =
         options?.recursive && includeSelf
-        ? childrenEntriesLists[childIndex++]
-        : []
+          ? childrenEntriesLists[childIndex++]
+          : []
 
       if (includeSelf && (childrenEntries.length > 0 || !options?.recursive)) {
         entriesResult.push(entry)

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Refresh, ThemeProvider } from 'renoun'
+import { RootProvider } from 'renoun'
 
 import './layout.css'
 
@@ -19,17 +19,31 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body>
-        <ThemeProvider>
+    <RootProvider
+      git="souporserious/renoun"
+      siteUrl="https://renoun.dev"
+      theme={{
+        light: 'everforest-light',
+        dark: [
+          'dracula-soft',
+          {
+            colors: {
+              'panel.border': '#666',
+            },
+          },
+        ],
+      }}
+      languages={['tsx', 'typescript']}
+    >
+      <html lang="en">
+        <body>
           <nav css={{ display: 'flex', gap: '1rem' }}>
             <Link href="/">Home</Link>
             <Link href="/components">Components</Link>
           </nav>
           {children}
-        </ThemeProvider>
-        <Refresh />
-      </body>
-    </html>
+        </body>
+      </html>
+    </RootProvider>
   )
 }
