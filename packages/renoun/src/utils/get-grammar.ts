@@ -15,10 +15,9 @@ import { loadTmGrammars, loadTmGrammar } from './load-package.js'
  */
 export async function getGrammar(
   scopeName: ScopeName,
-  languagesConfig?: ConfigurationOptions['languages']
+  languages: ConfigurationOptions['languages'] = []
 ): Promise<any> {
   const aliases = grammars[scopeName] as readonly Languages[] | undefined
-  const languages = languagesConfig ?? []
   const isLanguageConfigured = aliases
     ? languages.some((language) => aliases.includes(language))
     : false
