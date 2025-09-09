@@ -2193,14 +2193,26 @@ export class Directory<
     }
 
     let childrenEntriesLists: FileSystemEntry<LoaderTypes>[][] = []
+    let includeMap: Map<Directory<LoaderTypes>, boolean> | undefined
 
     if (options?.recursive) {
+      const includeChecks = this.#include
+        ? directories.map((directory) => this.#shouldInclude(directory))
+        : []
+      const includeMask = await Promise.all(includeChecks)
       const pendingEntries: Promise<FileSystemEntry<LoaderTypes>[]>[] = []
       for (let index = 0; index < directories.length; index++) {
-        const directory = directories[index]
-        pendingEntries.push(directory.getEntries(options))
+        if (includeMask[index]) {
+          pendingEntries.push(directories[index].getEntries(options))
+        }
       }
       childrenEntriesLists = await Promise.all(pendingEntries)
+
+      // Cache include decisions for reuse below
+      includeMap = new Map<Directory<LoaderTypes>, boolean>()
+      for (let index = 0; index < directories.length; index++) {
+        includeMap.set(directories[index], includeMask[index])
+      }
     }
 
     let childIndex = 0
@@ -2212,10 +2224,14 @@ export class Directory<
         continue
       }
 
-      const includeSelf = this.#include
+      const includeSelf =
+        entry instanceof Directory && includeMap
+          ? (includeMap.get(entry) ?? true)
+          : this.#include
         ? await this.#shouldInclude(entry)
         : true
-      const childrenEntries = options?.recursive
+      const childrenEntries =
+        options?.recursive && includeSelf
         ? childrenEntriesLists[childIndex++]
         : []
 

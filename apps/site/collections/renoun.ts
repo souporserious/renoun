@@ -26,7 +26,29 @@ async function filterInternalExports(entry: FileSystemEntry<any>) {
     return true
   }
 
-  return isDirectory(entry) || isFile(entry, 'mdx')
+  // Only include directories that have a representative TS/TSX file
+  if (isDirectory(entry)) {
+    const children = await entry.getEntries({
+      includeDirectoryNamedFiles: true,
+      includeIndexAndReadmeFiles: true,
+    })
+    const baseName = entry.getBaseName().toLowerCase()
+    for (const child of children) {
+      if (isFile(child, ['ts', 'tsx'])) {
+        const childBaseName = child.getBaseName().toLowerCase()
+        if (
+          childBaseName === baseName ||
+          childBaseName === 'index' ||
+          childBaseName === 'readme'
+        ) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+
+  return isFile(entry, 'mdx')
 }
 
 export const FileSystemDirectory = new Directory({
