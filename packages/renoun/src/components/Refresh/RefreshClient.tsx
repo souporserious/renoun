@@ -3,6 +3,10 @@ import { useEffect } from 'react'
 
 import type { WebSocketNotification } from '../../project/rpc/server.js'
 
+declare global {
+  var __WAKU_RSC_RELOAD_LISTENERS__: (() => void)[] | undefined
+}
+
 /**
  * Subscribes to the development server and refreshes the page when a source file changes.
  * @internal
@@ -24,6 +28,10 @@ export function RefreshClient({ port, id }: { port: string; id: string }) {
           router.hmrRefresh()
         } else if ('fastRefresh' in router) {
           router.fastRefresh()
+        } else if ('__WAKU_RSC_RELOAD_LISTENERS__' in globalThis) {
+          globalThis.__WAKU_RSC_RELOAD_LISTENERS__?.forEach((callback) =>
+            callback()
+          )
         }
       }
     }
