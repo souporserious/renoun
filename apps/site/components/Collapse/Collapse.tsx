@@ -66,6 +66,16 @@ export function Trigger({
     childrenToRender = <TriggerIcon />
   }
 
+  if (
+    childrenToRender &&
+    typeof childrenToRender === 'object' &&
+    ('initial' in childrenToRender || 'open' in childrenToRender)
+  ) {
+    childrenToRender = (childrenToRender as CollapseVariants)[
+      isOpen ? 'open' : 'initial'
+    ]
+  }
+
   return (
     <button
       id={triggerId}
@@ -82,9 +92,7 @@ export function Trigger({
       }}
       {...props}
     >
-      {typeof childrenToRender === 'object'
-        ? (childrenToRender as CollapseVariants)[isOpen ? 'open' : 'initial']
-        : childrenToRender}
+      {childrenToRender}
     </button>
   )
 }
