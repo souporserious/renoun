@@ -89,29 +89,27 @@ function HeroExample({
         <ChipFadeIn />
         <ChipFadeOut />
         <Collapse.Content height={{ initial: 200, open: 'auto' }}>
-          <CodeBlock language="tsx">
-            <pre
-              css={{
-                position: 'relative',
-                whiteSpace: 'pre',
-                wordWrap: 'break-word',
-                fontSize: 'var(--font-size-code-2)',
-                lineHeight: 'var(--line-height-code-2)',
-                padding: '0.75rem 1rem',
-                // Reserve space at the bottom for the footer/label
-                paddingBottom: 'calc(0.75rem + 2.5rem + 0.5rem)',
-                backgroundColor: 'var(--color-surface-secondary)',
-                overflow: 'auto',
+          <pre
+            css={{
+              position: 'relative',
+              whiteSpace: 'pre',
+              wordWrap: 'break-word',
+              fontSize: 'var(--font-size-code-2)',
+              lineHeight: 'var(--line-height-code-2)',
+              padding: '0.75rem 1rem',
+              // Reserve space at the bottom for the footer/label
+              paddingBottom: 'calc(0.75rem + 2.5rem + 0.5rem)',
+              backgroundColor: 'var(--color-surface-secondary)',
+              overflow: 'auto',
 
-                '[data-state="closed"] &': {
-                  overflow: 'hidden',
-                },
-              }}
-              className={GeistMono.className}
-            >
-              <Tokens>{code}</Tokens>
-            </pre>
-          </CodeBlock>
+              '[data-state="closed"] &': {
+                overflow: 'hidden',
+              },
+            }}
+            className={GeistMono.className}
+          >
+            <Tokens language="tsx">{code}</Tokens>
+          </pre>
         </Collapse.Content>
 
         {/* Gradient overlay: visible only when collapsed; covers code and button area */}
