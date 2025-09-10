@@ -79,6 +79,7 @@ export function RootProvider({
     ...overrides,
   }
 
+  // Normalize string theme to an object for downstream utilities
   if (typeof merged.theme === 'string') {
     merged = {
       ...merged,
@@ -102,7 +103,11 @@ export function RootProvider({
   return (
     <ServerConfigContext value={merged}>
       <ClientConfigProvider value={merged}>
-        <ThemeProvider includeScript={includeThemeScript} nonce={nonce}>
+        <ThemeProvider
+          theme={merged.theme}
+          includeScript={includeThemeScript}
+          nonce={nonce}
+        >
           {childrenToRender}
         </ThemeProvider>
         <Refresh />

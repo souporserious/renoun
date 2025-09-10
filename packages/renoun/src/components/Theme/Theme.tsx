@@ -1,7 +1,6 @@
 import React from 'react'
 
-import { getContext } from '../../utils/context.js'
-import { ServerConfigContext } from '../Config/ServerConfigContext.js'
+import type { ConfigurationOptions } from '../Config/ConfigTypes.js'
 import { ThemeContextProvider } from './ThemeContext.js'
 import { ThemeScript } from './ThemeScript.js'
 import { ThemeStyles } from './ThemeStyles.js'
@@ -12,22 +11,20 @@ import { ThemeStyles } from './ThemeStyles.js'
  */
 export function ThemeProvider({
   children,
+  theme,
   includeScript = true,
   nonce,
 }: {
   children: React.ReactNode
+  theme: ConfigurationOptions['theme']
   includeScript?: boolean
   nonce?: string
 }) {
-  const config = getContext(ServerConfigContext)
-
   return (
     <>
       {includeScript ? <ThemeScript nonce={nonce} /> : null}
-      <ThemeStyles />
-      <ThemeContextProvider value={config.theme}>
-        {children}
-      </ThemeContextProvider>
+      <ThemeStyles theme={theme} />
+      <ThemeContextProvider value={theme}>{children}</ThemeContextProvider>
     </>
   )
 }

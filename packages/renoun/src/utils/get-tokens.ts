@@ -134,7 +134,7 @@ export async function getTokens({
       const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
       const finalLanguage = getLanguage(language)
 
-      const themeNames =
+      const themeNames: string[] =
         typeof themeConfig === 'string'
           ? [themeConfig]
           : themeConfig
@@ -145,6 +145,12 @@ export async function getTokens({
                     : themeVariant[0]
               )
             : []
+
+      if (themeNames.length === 0) {
+        throw new Error(
+          '[renoun] No theme configured. Ensure `theme` is set on RootProvider or in renoun.json.'
+        )
+      }
 
       // Track highlighter performance
       const tokens = await getDebugLogger().trackOperation(

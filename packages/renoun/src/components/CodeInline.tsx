@@ -3,9 +3,8 @@ import { css, styled, type CSSObject } from 'restyle'
 
 import type { Languages } from '../grammars/index.js'
 import { grammars } from '../grammars/index.js'
-import { getContext } from '../utils/context.js'
 import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
-import { ServerConfigContext } from './Config/ServerConfigContext.js'
+import { getConfig } from './Config/ServerConfigContext.js'
 import { CopyButton } from './CodeBlock/CopyButton.js'
 import { Tokens } from './CodeBlock/Tokens.js'
 import { getScrollContainerStyles } from './CodeBlock/utils.js'
@@ -106,7 +105,7 @@ async function CodeInlineAsync({
   showErrors,
   shouldAnalyze,
 }: CodeInlineProps) {
-  const serverConfig = getContext(ServerConfigContext)
+  const serverConfig = getConfig()
   const theme = await getThemeColors(serverConfig.theme)
   const [classNames, Styles] = css({
     display: allowCopy ? 'inline-grid' : 'inline',

@@ -9,7 +9,7 @@ import {
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
 import type { Languages } from '../../utils/get-language.js'
-import { ServerConfigContext } from '../Config/ServerConfigContext.js'
+import { getConfig } from '../Config/ServerConfigContext.js'
 import type { ContextValue } from './Context.js'
 import { Context } from './Context.js'
 import { CopyButton } from './CopyButton.js'
@@ -299,7 +299,7 @@ async function CodeBlockAsync({
     return <Context value={contextValue}>{children}</Context>
   }
 
-  const serverConfig = getContext(ServerConfigContext)
+  const serverConfig = getConfig()
   const theme = await getThemeColors(serverConfig.theme)
   const shouldRenderToolbar = Boolean(
     showToolbar === undefined ? path || allowCopy : showToolbar

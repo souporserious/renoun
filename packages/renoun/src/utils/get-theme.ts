@@ -53,21 +53,22 @@ export async function getTheme(
 ): Promise<TextMateThemeRaw> {
   const themeConfigName = getThemeConfigName(themeName, themeConfig)
 
+  let themePath: string | undefined
   if (themeConfigName === undefined) {
     throw new Error(
       `[renoun] No valid theme found. Ensure the \`theme\` property in the \`renoun.json\` at the root of your project is configured correctly. For more information, visit: https://renoun.dev/docs/configuration`
     )
+  } else if (Array.isArray(themeConfigName)) {
+    themePath = themeConfigName[0]
+  } else {
+    themePath = themeConfigName
   }
 
-  let themePath = Array.isArray(themeConfigName)
-    ? themeConfigName[0]
-    : themeConfigName
-
-  if (themePath.endsWith('.json')) {
+  if (themePath && themePath.endsWith('.json')) {
     themePath = resolve(process.cwd(), themePath)
   }
 
-  if (cachedThemes.has(themePath)) {
+  if (themePath && cachedThemes.has(themePath)) {
     return cachedThemes.get(themePath)! as TextMateThemeRaw
   }
 
@@ -81,8 +82,8 @@ export async function getTheme(
     theme = (await import('./default-theme.js')).defaultTheme as Theme
   } else if (themePath.endsWith('.json')) {
     theme = JSON.parse(readFileSync(themePath, 'utf-8')) as Theme
-  } else if (themes.includes(themePath)) {
-    const tmTheme = await loadTmTheme(themePath)
+  } else if (themes.includes(themePath as any)) {
+    const tmTheme = await loadTmTheme(themePath as any)
     if (tmTheme) {
       theme = tmTheme as Theme
     } else {
@@ -106,7 +107,7 @@ export async function getTheme(
     themeOverrides
   )
 
-  cachedThemes.set(themePath, finalTheme)
+  cachedThemes.set(themePath!, finalTheme)
 
   return finalTheme
 }

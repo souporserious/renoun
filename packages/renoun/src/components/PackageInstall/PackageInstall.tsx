@@ -2,8 +2,7 @@ import React from 'react'
 import { styled, type CSSObject } from 'restyle'
 
 import { getThemeColors } from '../../utils/get-theme.js'
-import { getContext } from '../../utils/context.js'
-import { ServerConfigContext } from '../Config/ServerConfigContext.js'
+import { getConfig } from '../Config/ServerConfigContext.js'
 import { Tokens } from '../CodeBlock/Tokens.js'
 import { CopyCommand } from './CopyCommand.js'
 import { PackageInstallClient } from './PackageInstallClient.js'
@@ -113,7 +112,7 @@ async function PackageInstallAsync({
   className,
   dev = false,
 }: PackageInstallProps) {
-  const serverConfig = getContext(ServerConfigContext)
+  const serverConfig = getConfig()
   const theme = await getThemeColors(serverConfig.theme)
 
   const tabs = (

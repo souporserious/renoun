@@ -1,17 +1,19 @@
 import React from 'react'
 import { GlobalStyles } from 'restyle'
 
-import { getContext } from '../../utils/context.js'
 import { getThemeColorVariables } from '../../utils/get-theme.js'
-import { ServerConfigContext } from '../Config/ServerConfigContext.js'
+import type { ConfigurationOptions } from '../Config/ConfigTypes.js'
 
 /**
  * Injects the global CSS theme color variables used throughout `renoun/components`.
  * @internal
  */
-export async function ThemeStyles() {
-  const config = getContext(ServerConfigContext)
-  const colorVariables = await getThemeColorVariables(config.theme)
+export async function ThemeStyles({
+  theme,
+}: {
+  theme: ConfigurationOptions['theme']
+}) {
+  const colorVariables = await getThemeColorVariables(theme)
 
   return (
     <GlobalStyles>

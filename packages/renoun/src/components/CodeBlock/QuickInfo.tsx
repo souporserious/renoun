@@ -3,14 +3,13 @@ import { styled, type CSSObject } from 'restyle'
 
 import { rehypePlugins, remarkPlugins } from '../../mdx/index.js'
 import { getTokens } from '../../project/client.js'
-import { getContext } from '../../utils/context.js'
 import {
   getThemeColors,
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
 import { CodeInline } from '../CodeInline.js'
-import { ServerConfigContext } from '../Config/ServerConfigContext.js'
+import { getConfig } from '../Config/ServerConfigContext.js'
 import { Markdown, type MarkdownProps } from '../Markdown.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
 import { CodeBlock, parsePreProps } from './CodeBlock.js'
@@ -74,7 +73,7 @@ export async function QuickInfo({
   className?: string
   style?: React.CSSProperties
 }) {
-  const serverConfig = getContext(ServerConfigContext)
+  const serverConfig = getConfig()
   const theme = await getThemeColors(serverConfig.theme)
   let displayTextTokens: Token[][] = []
 

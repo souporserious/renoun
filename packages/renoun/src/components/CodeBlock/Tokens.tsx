@@ -3,15 +3,15 @@ import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
 import { getSourceTextMetadata, getTokens } from '../../project/client.js'
-import { getContext } from '../../utils/context.js'
 import type { Languages } from '../../utils/get-language.js'
 import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
+import { getContext } from '../../utils/context.js'
 import {
   getThemeColors,
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
 import type { ConfigurationOptions } from '../Config/ConfigTypes.js'
-import { ServerConfigContext } from '../Config/ServerConfigContext.js'
+import { getConfig } from '../Config/ServerConfigContext.js'
 import { QuickInfo } from './QuickInfo.js'
 import { QuickInfoProvider } from './QuickInfoProvider.js'
 import { Context } from './Context.js'
@@ -80,8 +80,8 @@ export async function Tokens({
   theme: themeProp,
 }: TokensProps) {
   const context = getContext(Context)
-  const serverConfig = getContext(ServerConfigContext)
-  const theme = await getThemeColors(serverConfig.theme)
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
   const language = languageProp || context?.language
   let value
 
@@ -137,14 +137,13 @@ export async function Tokens({
     filePath: metadata.filePath,
     allowErrors: allowErrors || context?.allowErrors,
     showErrors: showErrors || context?.showErrors,
-    theme: themeProp ?? serverConfig.theme,
-    languages: serverConfig.languages,
+    theme: themeProp ?? config.theme,
+    languages: config.languages,
   })
-  const lastLineIndex = tokens.length - 1
-
   const [themeClassName, ThemeStyles] = css(
-    getThemeTokenVariables(serverConfig.theme)
+    getThemeTokenVariables(config.theme)
   )
+  const lastLineIndex = tokens.length - 1
 
   return (
     <QuickInfoProvider>
