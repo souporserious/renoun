@@ -112,8 +112,8 @@ async function PackageInstallAsync({
   className,
   dev = false,
 }: PackageInstallProps) {
-  const serverConfig = getConfig()
-  const theme = await getThemeColors(serverConfig.theme)
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
 
   const tabs = (
     <Tabs

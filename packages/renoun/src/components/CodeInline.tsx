@@ -105,8 +105,8 @@ async function CodeInlineAsync({
   showErrors,
   shouldAnalyze,
 }: CodeInlineProps) {
-  const serverConfig = getConfig()
-  const theme = await getThemeColors(serverConfig.theme)
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
   const [classNames, Styles] = css({
     display: allowCopy ? 'inline-grid' : 'inline',
     alignItems: allowCopy ? 'center' : undefined,
@@ -124,7 +124,7 @@ async function CodeInlineAsync({
       color: theme.scrollbarSlider.hoverBackground,
     }),
     ...cssProp,
-    ...getThemeTokenVariables(serverConfig.theme),
+    ...getThemeTokenVariables(config.theme),
   })
   const childrenToRender = language ? (
     <Tokens

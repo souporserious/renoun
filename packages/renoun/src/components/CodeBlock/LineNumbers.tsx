@@ -27,8 +27,8 @@ export async function LineNumbers({
   style,
 }: LineNumbersProps) {
   const context = await getResolvedContext()
-  const serverConfig = getConfig()
-  const theme = await getThemeColors(serverConfig.theme)
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
   const highlightRanges = highlightRangesProp || context?.highlightedLines
   const shouldHighlightLine = calculateLinesToHighlight(highlightRanges)
 

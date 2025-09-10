@@ -32,8 +32,8 @@ export async function Toolbar({
   children,
 }: ToolbarProps) {
   const context = await getResolvedContext()
-  const serverConfig = getConfig()
-  const theme = await getThemeColors(serverConfig.theme)
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
   let childrenToRender = children
 
   if (childrenToRender === undefined) {

@@ -299,8 +299,8 @@ async function CodeBlockAsync({
     return <Context value={contextValue}>{children}</Context>
   }
 
-  const serverConfig = getConfig()
-  const theme = await getThemeColors(serverConfig.theme)
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
   const shouldRenderToolbar = Boolean(
     showToolbar === undefined ? path || allowCopy : showToolbar
   )
@@ -375,7 +375,7 @@ async function CodeBlockAsync({
                 }
               : {}),
             ...(shouldRenderToolbar ? {} : css?.container),
-            ...getThemeTokenVariables(serverConfig.theme),
+            ...getThemeTokenVariables(config.theme),
             padding: 0,
           }}
           className={shouldRenderToolbar ? undefined : className?.container}

@@ -73,16 +73,16 @@ export async function QuickInfo({
   className?: string
   style?: React.CSSProperties
 }) {
-  const serverConfig = getConfig()
-  const theme = await getThemeColors(serverConfig.theme)
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
   let displayTextTokens: Token[][] = []
 
   if (quickInfo?.displayText) {
     const tokens = await getTokens({
       value: quickInfo.displayText,
       language: 'typescript',
-      languages: serverConfig.languages,
-      theme: serverConfig.theme,
+      languages: config.languages,
+      theme: config.theme,
     })
     displayTextTokens = tokens
   }
@@ -97,7 +97,7 @@ export async function QuickInfo({
             : undefined,
           backgroundColor: theme.editorHoverWidget.background,
           color: theme.editorHoverWidget.foreground,
-          ...getThemeTokenVariables(serverConfig.theme),
+          ...getThemeTokenVariables(config.theme),
           ...css,
         }}
         className={className}
