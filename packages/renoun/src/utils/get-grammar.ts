@@ -43,7 +43,7 @@ export async function getGrammar(
 
         if (!tmGrammars) {
           throw new Error(
-            `[renoun] The "tm-grammars" package is not installed. Please install it to use this language and ensure it is configured in renoun.json correctly.`
+            `[renoun] The "tm-grammars" package is not installed. Please install it to use this language and ensure it is included via the \`languages\` prop on \`RootProvider\` if needed.`
           )
         }
 
@@ -53,7 +53,7 @@ export async function getGrammar(
 
         if (!tmGrammar) {
           throw new Error(
-            `[renoun] No grammar found for scope name "${scopeName}" in the "tm-grammars" package. Ensure this grammar is configured in renoun.json correctly.`
+            `[renoun] No grammar found for scope name "${scopeName}" in the "tm-grammars" package. Ensure this grammar is supported and that the language is included in \`RootProvider\`.`
           )
         }
 
@@ -61,7 +61,7 @@ export async function getGrammar(
 
         if (!tmGrammarJson) {
           throw new Error(
-            `[renoun] Grammar could not be loaded for scope name "${scopeName}" in the "tm-grammars" package. Ensure this grammar is configured in renoun.json correctly.`
+            `[renoun] Grammar could not be loaded for scope name "${scopeName}" in the "tm-grammars" package. Ensure the language is included in \`RootProvider\` and grammar assets are accessible.`
           )
         }
 

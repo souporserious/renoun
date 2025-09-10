@@ -56,7 +56,7 @@ export async function getTheme(
   let themePath: string | undefined
   if (themeConfigName === undefined) {
     throw new Error(
-      `[renoun] No valid theme found. Ensure the \`theme\` property in the \`renoun.json\` at the root of your project is configured correctly. For more information, visit: https://renoun.dev/docs/configuration`
+      `[renoun] No valid theme found. Ensure the \`theme\` property is configured on the \`RootProvider\` component. For more information, visit: https://renoun.dev/docs/configuration`
     )
   } else if (Array.isArray(themeConfigName)) {
     themePath = themeConfigName[0]
@@ -133,7 +133,7 @@ export async function getThemeColorVariables(
 ) {
   if (typeof theme === 'string') {
     throw new Error(
-      `[renoun] The \`theme\` property in the \`renoun.json\` at the root of your project must be an object when using the ThemeProvider component. For more information, visit: https://renoun.dev/docs/configuration`
+      `[renoun] The \`theme\` property on \`RootProvider\` must be an object when using the ThemeProvider component. For more information, visit: https://renoun.dev/docs/configuration`
     )
   }
 

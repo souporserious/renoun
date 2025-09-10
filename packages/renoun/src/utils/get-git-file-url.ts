@@ -11,7 +11,7 @@ export function getGitFileUrl(
 ): string {
   if (gitSource.length === 0) {
     throw new Error(
-      `[renoun] A git source is required to construct a source file URL. Received an empty string. Ensure the \`gitSource\` property in the \`renoun.json\` at the root of your project is configured correctly. For more information, visit: https://renoun.dev/docs/configuration`
+      `[renoun] A git source is required to construct a source file URL. Received an empty string. Ensure the \`git.source\` property is configured on the \`RootProvider\` component. For more information, visit: https://renoun.dev/docs/configuration`
     )
   }
 

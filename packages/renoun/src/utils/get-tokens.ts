@@ -148,7 +148,7 @@ export async function getTokens({
 
       if (themeNames.length === 0) {
         throw new Error(
-          '[renoun] No theme configured. Ensure `theme` is set on RootProvider or in renoun.json.'
+          '[renoun] No theme configured. Ensure `theme` is set on the RootProvider component.'
         )
       }
 
