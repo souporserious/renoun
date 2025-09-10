@@ -19865,4 +19865,313 @@ describe('resolveType', () => {
       }
     `)
   })
+
+  test('conditional extends with imported type keeps reference and resolves', () => {
+    project.createSourceFile(
+      'config.ts',
+      dedent`
+        export type ThemeValue = string | [string, Record<string, unknown>?]
+        export interface GitConfig { source: string }
+        export interface ConfigurationOptions {
+          theme?: ThemeValue | Record<string, ThemeValue>
+          languages: string[]
+          git?: GitConfig
+          siteUrl?: string
+        }
+      `
+    )
+
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+        import type { ConfigurationOptions, ThemeValue } from './config'
+        import type React from 'react'
+
+        type ThemeMap = Record<string, ThemeValue>
+
+        interface BaseProps extends Omit<Partial<ConfigurationOptions>, 'git' | 'theme'> {
+          nonce?: string
+          /** Configuration options for git linking. Accepts a string shorthand or an object. */
+          git?: ConfigurationOptions['git'] | string
+          children: React.ReactNode
+        }
+
+        export type RootProviderProps<Theme extends ThemeValue | ThemeMap | undefined> =
+          BaseProps & (
+            Theme extends ThemeMap
+              ? {
+                  theme: ThemeMap
+                  includeThemeScript?: boolean
+                }
+              : {
+                  theme?: ThemeValue
+                  includeThemeScript?: never
+                }
+          )
+
+        export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>(
+          props: RootProviderProps<Theme>
+        ) { return undefined as any }
+      `,
+      { overwrite: true }
+    )
+    const propsAlias = sourceFile.getTypeAliasOrThrow('RootProviderProps')
+    const types = resolveType(propsAlias.getType(), propsAlias)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "TypeAlias",
+        "name": "RootProviderProps",
+        "position": {
+          "end": {
+            "column": 4,
+            "line": 24,
+          },
+          "start": {
+            "column": 1,
+            "line": 13,
+          },
+        },
+        "text": "RootProviderProps<Theme>",
+        "type": {
+          "kind": "IntersectionType",
+          "text": "RootProviderProps<Theme>",
+          "types": [
+            {
+              "filePath": "test.ts",
+              "kind": "TypeReference",
+              "moduleSpecifier": undefined,
+              "name": "BaseProps",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 11,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 6,
+                },
+              },
+              "text": "BaseProps",
+              "typeArguments": [],
+            },
+            {
+              "checkType": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
+                "name": "Theme",
+                "position": {
+                  "end": {
+                    "column": 10,
+                    "line": 15,
+                  },
+                  "start": {
+                    "column": 5,
+                    "line": 15,
+                  },
+                },
+                "text": "Theme",
+                "typeArguments": [],
+              },
+              "extendsType": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
+                "name": "ThemeMap",
+                "position": {
+                  "end": {
+                    "column": 27,
+                    "line": 15,
+                  },
+                  "start": {
+                    "column": 19,
+                    "line": 15,
+                  },
+                },
+                "text": "ThemeMap",
+                "typeArguments": [],
+              },
+              "falseType": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "theme",
+                    "position": {
+                      "end": {
+                        "column": 29,
+                        "line": 21,
+                      },
+                      "start": {
+                        "column": 11,
+                        "line": 21,
+                      },
+                    },
+                    "text": "theme?: ThemeValue",
+                    "type": {
+                      "filePath": "test.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": "./config",
+                      "name": "ThemeValue",
+                      "position": {
+                        "end": {
+                          "column": 29,
+                          "line": 21,
+                        },
+                        "start": {
+                          "column": 19,
+                          "line": 21,
+                        },
+                      },
+                      "text": "ThemeValue",
+                      "typeArguments": [],
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "includeThemeScript",
+                    "position": {
+                      "end": {
+                        "column": 37,
+                        "line": 22,
+                      },
+                      "start": {
+                        "column": 11,
+                        "line": 22,
+                      },
+                    },
+                    "text": "includeThemeScript?: never",
+                    "type": {
+                      "filePath": "test.ts",
+                      "kind": "Never",
+                      "position": {
+                        "end": {
+                          "column": 37,
+                          "line": 22,
+                        },
+                        "start": {
+                          "column": 32,
+                          "line": 22,
+                        },
+                      },
+                      "text": "never",
+                    },
+                  },
+                ],
+                "text": "{ theme?: ThemeValue; includeThemeScript?: never; }",
+              },
+              "isDistributive": true,
+              "kind": "ConditionalType",
+              "text": "Theme extends ThemeMap ? { theme: ThemeMap; includeThemeScript?: boolean; } : { theme?: ThemeValue; includeThemeScript?: never; }",
+              "trueType": {
+                "kind": "TypeLiteral",
+                "members": [
+                  {
+                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "includeThemeScript",
+                    "position": {
+                      "end": {
+                        "column": 39,
+                        "line": 18,
+                      },
+                      "start": {
+                        "column": 11,
+                        "line": 18,
+                      },
+                    },
+                    "text": "includeThemeScript?: boolean",
+                    "type": {
+                      "filePath": "test.ts",
+                      "kind": "Boolean",
+                      "position": {
+                        "end": {
+                          "column": 39,
+                          "line": 18,
+                        },
+                        "start": {
+                          "column": 32,
+                          "line": 18,
+                        },
+                      },
+                      "text": "boolean",
+                    },
+                  },
+                ],
+                "text": "{ theme: ThemeMap; includeThemeScript?: boolean; }",
+              },
+            },
+          ],
+        },
+        "typeParameters": [
+          {
+            "constraintType": {
+              "kind": "UnionType",
+              "text": "ThemeValue | undefined",
+              "types": [
+                {
+                  "filePath": "test.ts",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": "./config",
+                  "name": "ThemeValue",
+                  "position": {
+                    "end": {
+                      "column": 55,
+                      "line": 13,
+                    },
+                    "start": {
+                      "column": 45,
+                      "line": 13,
+                    },
+                  },
+                  "text": "ThemeValue",
+                  "typeArguments": [],
+                },
+                {
+                  "filePath": "test.ts",
+                  "kind": "Undefined",
+                  "position": {
+                    "end": {
+                      "column": 78,
+                      "line": 13,
+                    },
+                    "start": {
+                      "column": 69,
+                      "line": 13,
+                    },
+                  },
+                  "text": "undefined",
+                },
+              ],
+            },
+            "defaultType": undefined,
+            "filePath": "test.ts",
+            "kind": "TypeParameter",
+            "name": "Theme",
+            "position": {
+              "end": {
+                "column": 78,
+                "line": 13,
+              },
+              "start": {
+                "column": 31,
+                "line": 13,
+              },
+            },
+            "text": "Theme extends ThemeValue | ThemeMap | undefined",
+          },
+        ],
+      }
+    `)
+  })
 })

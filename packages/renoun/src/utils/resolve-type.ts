@@ -4319,6 +4319,15 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
     return false
   }
 
+  // In conditional types, prefer keeping the extends operand as a reference to avoid flattening which can lose intent
+  // TODO: this can create references that won't ever be resolved if they are not exported
+  if (
+    tsMorph.Node.isTypeReference(enclosingNode) &&
+    tsMorph.Node.isConditionalTypeNode(enclosingNode.getParent())
+  ) {
+    return false
+  }
+
   const symbol = type.getAliasSymbol() || type.getSymbol()
 
   if (!symbol) {
