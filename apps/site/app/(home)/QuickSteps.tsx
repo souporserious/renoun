@@ -58,15 +58,13 @@ async function Page({ slug }: { slug: string }) {
   {
     title: 'Personalize',
     content: `Select from a growing list of pre-built components to tailor your content and documentation to fit your unique needs and brand identity.`,
-    code: `import { CodeBlock, Tokens } from 'renoun'
+    code: `import { Tokens } from 'renoun'
 
-function Page() {
+function CodeBlock() {
   return (
-    <CodeBlock language="tsx">
-      <pre>
-        <Tokens>const a = 1; const b = 2; a + b;</Tokens>
-      </pre>
-    </CodeBlock>
+    <pre>
+      <Tokens language="tsx">const a = 1; const b = 2; a + b;</Tokens>
+    </pre>
   )
 }`,
     cta: {
