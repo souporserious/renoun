@@ -6,30 +6,53 @@ import { ServerConfigContext } from './Config/ServerConfigContext.js'
 import {
   defaultConfig,
   type ConfigurationOptions,
+  type ThemeValue,
 } from './Config/ConfigTypes.js'
 import { Refresh } from './Refresh'
 import { ThemeProvider } from './Theme'
 
+type ThemeMap = Record<string, ThemeValue>
+
+interface BaseProps
+  extends Omit<Partial<ConfigurationOptions>, 'git' | 'theme'> {
+  /** The nonce to use for the provider scripts. */
+  nonce?: string
+
+  /** Configuration options for git linking. Accepts a string shorthand or an object. */
+  git?: ConfigurationOptions['git'] | string
+
+  /** The `html` element tree to render. */
+  children: React.ReactNode
+}
+
+export type RootProviderProps<Theme extends ThemeValue | ThemeMap | undefined> =
+  BaseProps &
+    (Theme extends ThemeMap
+      ? {
+          /** Object map of theme names to theme values e.g. `{ light: 'vitesse-light', dark: 'vitesse-dark' }`. */
+          theme: ThemeMap
+
+          /** Control whether to include the theme script that manages the local storage theme state in the head of the document. */
+          includeThemeScript?: boolean
+        }
+      : {
+          /** Single theme name or [name, override]. If omitted, defaults apply. */
+          theme?: ThemeValue
+
+          /** The `includeThemeScript` prop is only considered when the `theme` prop is an object map e.g. `theme={{ light: 'vitesse-light', dark: 'vitesse-dark' }}`. */
+          includeThemeScript?: never
+        })
+
 /** A provider that configures and wraps the root of the application. */
-export function RootProvider({
+export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   children,
   theme,
   languages,
   git,
   siteUrl,
-  includeThemeScript = true,
   nonce,
-}: {
-  children: React.ReactNode
-} & Omit<Partial<ConfigurationOptions>, 'git'> & {
-    git?: ConfigurationOptions['git'] | string
-
-    /** Whether to include the theme script in the head of the document. */
-    includeThemeScript?: boolean
-
-    /** The nonce to use for the provider scripts. */
-    nonce?: string
-  }) {
+  ...restProps
+}: RootProviderProps<Theme>) {
   const overrides: Partial<ConfigurationOptions> = {}
   if (theme !== undefined) {
     overrides.theme = theme
@@ -79,14 +102,6 @@ export function RootProvider({
     ...overrides,
   }
 
-  // Normalize string theme to an object for downstream utilities
-  if (typeof merged.theme === 'string') {
-    merged = {
-      ...merged,
-      theme: { light: merged.theme, dark: merged.theme },
-    }
-  }
-
   let childrenToRender: React.ReactElement
 
   if (isValidElement(children)) {
@@ -103,13 +118,21 @@ export function RootProvider({
   return (
     <ServerConfigContext value={merged}>
       <ClientConfigProvider value={merged}>
-        <ThemeProvider
-          theme={merged.theme}
-          includeScript={includeThemeScript}
-          nonce={nonce}
-        >
-          {childrenToRender}
-        </ThemeProvider>
+        {typeof merged.theme === 'object' ? (
+          <ThemeProvider
+            theme={merged.theme}
+            includeScript={
+              typeof restProps.includeThemeScript === 'boolean'
+                ? restProps.includeThemeScript
+                : true
+            }
+            nonce={nonce}
+          >
+            {childrenToRender}
+          </ThemeProvider>
+        ) : (
+          childrenToRender
+        )}
         <Refresh />
       </ClientConfigProvider>
     </ServerConfigContext>
