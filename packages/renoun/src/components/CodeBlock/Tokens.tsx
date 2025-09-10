@@ -6,10 +6,7 @@ import { getSourceTextMetadata, getTokens } from '../../project/client.js'
 import type { Languages } from '../../utils/get-language.js'
 import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
 import { getContext } from '../../utils/context.js'
-import {
-  getThemeColors,
-  getThemeTokenVariables,
-} from '../../utils/get-theme.js'
+import { getThemeColors } from '../../utils/get-theme.js'
 import type { ConfigurationOptions } from '../Config/ConfigTypes.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import { QuickInfo } from './QuickInfo.js'
@@ -140,106 +137,100 @@ export async function Tokens({
     theme: themeProp ?? config.theme,
     languages: config.languages,
   })
-  const [themeClassName, ThemeStyles] = css(
-    getThemeTokenVariables(config.theme)
-  )
   const lastLineIndex = tokens.length - 1
 
   return (
     <QuickInfoProvider>
-      <span className={themeClassName}>
-        {tokens.map((line, lineIndex) => {
-          const lineChildren = line.map((token, tokenIndex) => {
-            const hasSymbolMeta = token.diagnostics || token.quickInfo
+      {tokens.map((line, lineIndex) => {
+        const lineChildren = line.map((token, tokenIndex) => {
+          const hasSymbolMeta = token.diagnostics || token.quickInfo
 
-            if (
-              token.isWhiteSpace ||
-              (!hasSymbolMeta && !token.hasTextStyles && token.isBaseColor)
-            ) {
-              return token.value
+          if (
+            token.isWhiteSpace ||
+            (!hasSymbolMeta && !token.hasTextStyles && token.isBaseColor)
+          ) {
+            return token.value
+          }
+
+          if (hasSymbolMeta) {
+            const deprecatedStyles = {
+              textDecoration: 'line-through',
             }
-
-            if (hasSymbolMeta) {
-              const deprecatedStyles = {
-                textDecoration: 'line-through',
-              }
-              const diagnosticStyles = {
-                backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
-                backgroundRepeat: 'repeat-x',
-                backgroundPosition: 'bottom left',
-              }
-              const [symbolClassName, Styles] = css({
-                ...token.style,
-                ...(token.isDeprecated && deprecatedStyles),
-                ...(token.diagnostics && diagnosticStyles),
-                ...cssProp.token,
-              })
-
-              return (
-                <Symbol
-                  key={tokenIndex}
-                  highlightColor={theme.editor.hoverHighlightBackground}
-                  popover={
-                    <QuickInfo
-                      diagnostics={token.diagnostics}
-                      quickInfo={token.quickInfo}
-                      css={cssProp.popover}
-                      className={className.token}
-                      style={style.popover}
-                    />
-                  }
-                  className={
-                    className.token
-                      ? `${symbolClassName} ${className.token}`
-                      : symbolClassName
-                  }
-                  style={style.token}
-                >
-                  {token.value}
-                  <Styles />
-                </Symbol>
-              )
+            const diagnosticStyles = {
+              backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
+              backgroundRepeat: 'repeat-x',
+              backgroundPosition: 'bottom left',
             }
-
-            const [classNames, Styles] = css(token.style)
+            const [symbolClassName, Styles] = css({
+              ...token.style,
+              ...(token.isDeprecated && deprecatedStyles),
+              ...(token.diagnostics && diagnosticStyles),
+              ...cssProp.token,
+            })
 
             return (
-              <span
+              <Symbol
                 key={tokenIndex}
+                highlightColor={theme.editor.hoverHighlightBackground}
+                popover={
+                  <QuickInfo
+                    diagnostics={token.diagnostics}
+                    quickInfo={token.quickInfo}
+                    css={cssProp.popover}
+                    className={className.token}
+                    style={style.popover}
+                  />
+                }
                 className={
                   className.token
-                    ? `${classNames} ${className.token}`
-                    : classNames
+                    ? `${symbolClassName} ${className.token}`
+                    : symbolClassName
                 }
                 style={style.token}
               >
                 {token.value}
                 <Styles />
-              </span>
+              </Symbol>
             )
-          })
-          const isLastLine = lineIndex === lastLineIndex
-          let lineToRender = renderLine
-            ? renderLine({
-                children: lineChildren,
-                index: lineIndex,
-                isLast: isLastLine,
-              })
-            : lineChildren
-
-          if (renderLine && lineToRender) {
-            return lineToRender
           }
 
+          const [classNames, Styles] = css(token.style)
+
           return (
-            <Fragment key={lineIndex}>
-              {lineChildren}
-              {isLastLine ? null : '\n'}
-            </Fragment>
+            <span
+              key={tokenIndex}
+              className={
+                className.token
+                  ? `${classNames} ${className.token}`
+                  : classNames
+              }
+              style={style.token}
+            >
+              {token.value}
+              <Styles />
+            </span>
           )
-        })}
-        <ThemeStyles />
-      </span>
+        })
+        const isLastLine = lineIndex === lastLineIndex
+        let lineToRender = renderLine
+          ? renderLine({
+              children: lineChildren,
+              index: lineIndex,
+              isLast: isLastLine,
+            })
+          : lineChildren
+
+        if (renderLine && lineToRender) {
+          return lineToRender
+        }
+
+        return (
+          <Fragment key={lineIndex}>
+            {lineChildren}
+            {isLastLine ? null : '\n'}
+          </Fragment>
+        )
+      })}
     </QuickInfoProvider>
   )
 }

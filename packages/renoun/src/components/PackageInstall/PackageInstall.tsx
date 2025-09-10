@@ -1,7 +1,10 @@
 import React from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme.js'
+import {
+  getThemeColors,
+  getThemeTokenVariables,
+} from '../../utils/get-theme.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import { Tokens } from '../CodeBlock/Tokens.js'
 import { CopyCommand } from './CopyCommand.js'
@@ -189,6 +192,7 @@ async function PackageInstallAsync({
         color: theme.foreground,
         boxShadow: `0 0 0 1px ${theme.panel.border}`,
         ...css?.container,
+        ...getThemeTokenVariables(config.theme),
       }}
       className={className?.container}
     >
