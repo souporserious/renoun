@@ -9,6 +9,7 @@ import {
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
 import type { Languages } from '../../utils/get-language.js'
+import { getConfig } from '../Config/ServerConfigContext.js'
 import type { ContextValue } from './Context.js'
 import { Context } from './Context.js'
 import { CopyButton } from './CopyButton.js'
@@ -298,7 +299,8 @@ async function CodeBlockAsync({
     return <Context value={contextValue}>{children}</Context>
   }
 
-  const theme = await getThemeColors()
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
   const shouldRenderToolbar = Boolean(
     showToolbar === undefined ? path || allowCopy : showToolbar
   )
@@ -373,7 +375,7 @@ async function CodeBlockAsync({
                 }
               : {}),
             ...(shouldRenderToolbar ? {} : css?.container),
-            ...getThemeTokenVariables(),
+            ...getThemeTokenVariables(config.theme),
             padding: 0,
           }}
           className={shouldRenderToolbar ? undefined : className?.container}

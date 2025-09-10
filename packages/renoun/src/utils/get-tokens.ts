@@ -2,6 +2,7 @@ import { join, posix } from 'node:path'
 import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
+import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
 import type { Languages as TextMateLanguages } from '../grammars/index.js'
 import type { Highlighter } from './create-highlighter.js'
 import { getDebugLogger } from './debug.js'
@@ -9,7 +10,6 @@ import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 import { getLanguage, type Languages } from './get-language.js'
 import { getRootDirectory } from './get-root-directory.js'
 import { isJsxOnly } from './is-jsx-only.js'
-import { loadConfig } from './load-config.js'
 import { generatedFilenames } from './get-source-text-metadata.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 
@@ -80,6 +80,7 @@ export interface GetTokensOptions {
   showErrors?: boolean
   highlighter: Highlighter | null
   sourcePath?: string | false
+  theme: ConfigurationOptions['theme']
 }
 
 /** Converts a string of code to an array of highlighted tokens. */
@@ -91,6 +92,7 @@ export async function getTokens({
   allowErrors,
   showErrors,
   highlighter = null,
+  theme: themeConfig,
 }: GetTokensOptions): Promise<TokenizedLines> {
   return getDebugLogger().trackTokenProcessing(
     language,
@@ -132,16 +134,23 @@ export async function getTokens({
       const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
       const finalLanguage = getLanguage(language)
 
-      const config = loadConfig()
-      const themeNames =
-        typeof config.theme === 'string'
-          ? [config.theme]
-          : Object.values(config.theme).map((theme) => {
-              if (typeof theme === 'string') {
-                return theme
-              }
-              return theme[0]
-            })
+      const themeNames: string[] =
+        typeof themeConfig === 'string'
+          ? [themeConfig]
+          : themeConfig
+            ? (Object.values(themeConfig) as Array<string | [string, any]>).map(
+                (themeVariant) =>
+                  typeof themeVariant === 'string'
+                    ? themeVariant
+                    : themeVariant[0]
+              )
+            : []
+
+      if (themeNames.length === 0) {
+        throw new Error(
+          '[renoun] No theme configured. Ensure `theme` is set on the RootProvider component.'
+        )
+      }
 
       // Track highlighter performance
       const tokens = await getDebugLogger().trackOperation(

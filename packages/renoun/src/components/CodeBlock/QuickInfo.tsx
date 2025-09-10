@@ -8,9 +8,10 @@ import {
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
+import { CodeInline } from '../CodeInline.js'
+import { getConfig } from '../Config/ServerConfigContext.js'
 import { Markdown, type MarkdownProps } from '../Markdown.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
-import { CodeInline } from '../CodeInline.js'
 import { CodeBlock, parsePreProps } from './CodeBlock.js'
 
 const Paragraph = styled('p', {
@@ -72,13 +73,16 @@ export async function QuickInfo({
   className?: string
   style?: React.CSSProperties
 }) {
-  const theme = await getThemeColors()
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
   let displayTextTokens: Token[][] = []
 
   if (quickInfo?.displayText) {
     const tokens = await getTokens({
       value: quickInfo.displayText,
       language: 'typescript',
+      languages: config.languages,
+      theme: config.theme,
     })
     displayTextTokens = tokens
   }
@@ -93,7 +97,7 @@ export async function QuickInfo({
             : undefined,
           backgroundColor: theme.editorHoverWidget.background,
           color: theme.editorHoverWidget.foreground,
-          ...getThemeTokenVariables(),
+          ...getThemeTokenVariables(config.theme),
           ...css,
         }}
         className={className}

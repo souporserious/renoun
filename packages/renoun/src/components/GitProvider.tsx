@@ -1,7 +1,7 @@
+'use client'
 import React from 'react'
 import { css, type CSSObject } from 'restyle'
-
-import { loadConfig } from '../utils/load-config.js'
+import { useConfig } from './Config/ClientConfigContext.js'
 
 function getGitProviderFromUrl(gitSource: string) {
   const url = new URL(gitSource)
@@ -10,19 +10,27 @@ function getGitProviderFromUrl(gitSource: string) {
 
 function throwGitSourceError(name: string) {
   throw new Error(
-    `[renoun] \`gitSource\` configuration is required for <${name} />. Ensure the \`gitSource\` property in the \`renoun.json\` at the root of your project is configured correctly. For more information, visit: https://renoun.dev/docs/configuration`
+    `[renoun] \`git.source\` is required for <${name} />. Pass it via <RootProvider config={{ git: { source: 'https://github.com/owner/repo' } }} />. See https://renoun.dev/docs/configuration`
   )
 }
 
 /** Renders a logo for the configured Git provider. */
 export function GitProviderLogo({
   fill = 'currentColor',
+  source,
   ...props
-}: React.SVGProps<SVGSVGElement>) {
-  const config = loadConfig()
-  const gitSource = config.git?.source
+}: React.SVGProps<SVGSVGElement> & { source?: string }) {
+  const config = useConfig()
+  const gitSource = source ?? config.git?.source
 
   if (!gitSource) {
+    // Helpful diagnostics in dev
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(
+        '[renoun] GitProviderLogo missing git.source. Context git:',
+        config.git
+      )
+    }
     throwGitSourceError('GitProviderLogo')
   }
 
@@ -109,16 +117,24 @@ export function GitProviderLink({
   className,
   style,
   children,
+  source,
 }: {
   css?: CSSObject
   className?: string
   style?: React.CSSProperties
   children?: React.ReactNode
+  source?: string
 }) {
-  const config = loadConfig()
-  const gitSource = config.git?.source
+  const config = useConfig()
+  const gitSource = source ?? config.git?.source
 
   if (!gitSource) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(
+        '[renoun] GitProviderLink missing git.source. Context git:',
+        config.git
+      )
+    }
     throwGitSourceError('GitProviderLink')
   }
 
@@ -127,7 +143,9 @@ export function GitProviderLink({
 
   if (childrenToRender === undefined) {
     styles = { width: '1.5rem', height: '1.5rem', ...styles }
-    childrenToRender = <GitProviderLogo width="100%" height="100%" />
+    childrenToRender = (
+      <GitProviderLogo source={gitSource} width="100%" height="100%" />
+    )
   }
 
   const [classNames, Styles] = css(styles)

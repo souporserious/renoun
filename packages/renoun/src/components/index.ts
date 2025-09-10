@@ -31,6 +31,5 @@ export {
   type ReferenceProps,
   type ReferenceComponents,
 } from './Reference.js'
-export { Refresh } from './Refresh/index.js'
+export { RootProvider } from './RootProvider.js'
 export { Sponsors } from './Sponsors.js'
-export { ThemeProvider, ThemeStyles } from './Theme/index.js'

@@ -2,15 +2,18 @@ import React from 'react'
 import { GlobalStyles } from 'restyle'
 
 import { getThemeColorVariables } from '../../utils/get-theme.js'
+import type { ConfigurationOptions } from '../Config/ConfigTypes.js'
 
 /**
  * Injects the global CSS theme color variables used throughout `renoun/components`.
- *
- * This component is automatically included in the `ThemeProvider` component.
- * Only use this component if you are managing the theme yourself.
+ * @internal
  */
-export async function ThemeStyles() {
-  const colorVariables = await getThemeColorVariables()
+export async function ThemeStyles({
+  theme,
+}: {
+  theme: ConfigurationOptions['theme']
+}) {
+  const colorVariables = await getThemeColorVariables(theme)
 
   return (
     <GlobalStyles>

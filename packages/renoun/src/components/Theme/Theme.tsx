@@ -1,41 +1,30 @@
 import React from 'react'
 
-import { loadConfig } from '../../utils/load-config.js'
+import type { ConfigurationOptions } from '../Config/ConfigTypes.js'
 import { ThemeContextProvider } from './ThemeContext.js'
+import { ThemeScript } from './ThemeScript.js'
 import { ThemeStyles } from './ThemeStyles.js'
 
-/** A provider that sets the theme colors for the entire application. */
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const config = loadConfig()
+/**
+ * A provider that sets the theme colors for the entire application.
+ * @internal
+ */
+export function ThemeProvider({
+  children,
+  theme,
+  includeScript = true,
+  nonce,
+}: {
+  children: React.ReactNode
+  theme: ConfigurationOptions['theme']
+  includeScript?: boolean
+  nonce?: string
+}) {
   return (
     <>
-      <ThemeScripts />
-      <ThemeStyles />
-      <ThemeContextProvider value={config.theme}>
-        {children}
-      </ThemeContextProvider>
+      {includeScript ? <ThemeScript nonce={nonce} /> : null}
+      <ThemeStyles theme={theme} />
+      <ThemeContextProvider value={theme}>{children}</ThemeContextProvider>
     </>
   )
-}
-
-const themeScriptSource = `
-(function() {
-    try {
-        var storedColorMode = localStorage.getItem('colorMode');
-        if (storedColorMode === 'light' || storedColorMode === 'dark') {
-            document.documentElement.dataset.theme = storedColorMode;
-        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.documentElement.dataset.theme = 'dark';
-        } else {
-            document.documentElement.dataset.theme = 'light';
-        }
-    } catch {
-        // no-op
-    }
-})();
-`
-
-/** A script that sets the theme based on local storage immediately before the page renders. */
-function ThemeScripts() {
-  return <script dangerouslySetInnerHTML={{ __html: themeScriptSource }} />
 }

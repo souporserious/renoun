@@ -1,0 +1,29 @@
+The `RootProvider` component configures renoun at the root of your application. It must wrap the `html` element and provides configuration for themes, languages, git info, and the site URL.
+
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider
+      theme={{
+        light: 'vitesse-light',
+        dark: 'vitesse-dark',
+      }}
+      languages={['ts', 'tsx', 'mdx']}
+      git="souporserious/renoun"
+      siteUrl="https://renoun.dev"
+    >
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}
+```
+
+See the [Configuration guide](/docs/configuration) for more information on the available configuration options.

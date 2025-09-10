@@ -341,7 +341,7 @@ export class Repository {
 
       if (baseUrl === undefined) {
         throw new Error(
-          `Missing 'baseUrl' in 'git' repository config in 'renoun.json' file.`
+          `Missing 'baseUrl' in 'git' repository config. Provide this on the \`RootProvider\` via the \`git\` option.`
         )
       }
 
@@ -349,7 +349,7 @@ export class Repository {
 
       if (provider === undefined) {
         throw new Error(
-          `Missing 'provider' in 'git' repository config in 'renoun.json' file.`
+          `Missing 'provider' in 'git' repository config. Provide this on the \`RootProvider\` via the \`git\` option.`
         )
       }
 

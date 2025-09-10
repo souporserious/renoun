@@ -221,7 +221,7 @@ export class Registry<Theme extends string> {
 
     if (!scopeName) {
       throw new Error(
-        `[renoun] The grammar for language "${language}" could not be found. Ensure this language is configured in renoun.json correctly.`
+        `[renoun] The grammar for language "${language}" could not be found. Ensure this language is included in the \`languages\` prop on \`RootProvider\`.`
       )
     }
 
@@ -233,7 +233,7 @@ export class Registry<Theme extends string> {
 
     if (!source) {
       throw new Error(
-        `[renoun] Missing "${name}" theme in Registry. Ensure this theme is configured in renoun.json correctly and the \`tm-themes\` package is installed.`
+        `[renoun] Missing "${name}" theme in Registry. Ensure this theme is configured on \`RootProvider\` and the \`tm-themes\` package is installed.`
       )
     }
 
@@ -297,7 +297,7 @@ export class Tokenizer<Theme extends string> {
         .loadGrammar(language)
         .catch((error) => {
           throw new Error(
-            `[renoun] Grammar could not be loaded for language "${language}". Ensure this language is configured in renoun.json correctly.`,
+            `[renoun] Grammar could not be loaded for language "${language}". Ensure this language is included in the \`languages\` prop on \`RootProvider\`.`,
             { cause: error }
           )
         })

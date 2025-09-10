@@ -3,10 +3,12 @@ import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
 import { getSourceTextMetadata, getTokens } from '../../project/client.js'
-import { getContext } from '../../utils/context.js'
 import type { Languages } from '../../utils/get-language.js'
 import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
+import { getContext } from '../../utils/context.js'
 import { getThemeColors } from '../../utils/get-theme.js'
+import type { ConfigurationOptions } from '../Config/ConfigTypes.js'
+import { getConfig } from '../Config/ServerConfigContext.js'
 import { QuickInfo } from './QuickInfo.js'
 import { QuickInfoProvider } from './QuickInfoProvider.js'
 import { Context } from './Context.js'
@@ -49,6 +51,9 @@ export interface TokensProps {
     popover?: React.CSSProperties
   }
 
+  /** Optional theme configuration to drive highlighting explicitly. */
+  theme?: ConfigurationOptions['theme']
+
   /** Custom render function for each line of tokens. */
   renderLine?: (line: {
     children: React.ReactNode
@@ -69,9 +74,11 @@ export async function Tokens({
   css: cssProp = {},
   className = {},
   style = {},
+  theme: themeProp,
 }: TokensProps) {
   const context = getContext(Context)
-  const theme = await getThemeColors()
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
   const language = languageProp || context?.language
   let value
 
@@ -127,6 +134,8 @@ export async function Tokens({
     filePath: metadata.filePath,
     allowErrors: allowErrors || context?.allowErrors,
     showErrors: showErrors || context?.showErrors,
+    theme: themeProp ?? config.theme,
+    languages: config.languages,
   })
   const lastLineIndex = tokens.length - 1
 

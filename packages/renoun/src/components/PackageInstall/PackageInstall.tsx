@@ -1,8 +1,11 @@
 import React from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme.js'
-import { CodeBlock } from '../CodeBlock/CodeBlock.js'
+import {
+  getThemeColors,
+  getThemeTokenVariables,
+} from '../../utils/get-theme.js'
+import { getConfig } from '../Config/ServerConfigContext.js'
 import { Tokens } from '../CodeBlock/Tokens.js'
 import { CopyCommand } from './CopyCommand.js'
 import { PackageInstallClient } from './PackageInstallClient.js'
@@ -112,7 +115,8 @@ async function PackageInstallAsync({
   className,
   dev = false,
 }: PackageInstallProps) {
-  const theme = await getThemeColors()
+  const config = getConfig()
+  const theme = await getThemeColors(config.theme)
 
   const tabs = (
     <Tabs
@@ -173,9 +177,7 @@ async function PackageInstallAsync({
           suppressHydrationWarning
         >
           <Code css={css?.code} className={className?.code}>
-            <CodeBlock language="sh">
-              <Tokens>{installCommand}</Tokens>
-            </CodeBlock>
+            <Tokens language="sh">{installCommand}</Tokens>
           </Code>
         </TabPanel>
       )
@@ -190,6 +192,7 @@ async function PackageInstallAsync({
         color: theme.foreground,
         boxShadow: `0 0 0 1px ${theme.panel.border}`,
         ...css?.container,
+        ...getThemeTokenVariables(config.theme),
       }}
       className={className?.container}
     >

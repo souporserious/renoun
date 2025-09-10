@@ -1,5 +1,6 @@
 import type { SyntaxKind } from 'ts-morph'
 
+import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
 import {
   createHighlighter,
   type Highlighter,
@@ -67,10 +68,17 @@ let currentHighlighter: { current: Highlighter | null } = { current: null }
 let highlighterPromise: Promise<void> | null = null
 
 /** Wait for the highlighter to be loaded. */
-function untilHighlighterLoaded(): Promise<void> {
-  if (highlighterPromise) return highlighterPromise
+function untilHighlighterLoaded(
+  options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
+): Promise<void> {
+  if (highlighterPromise) {
+    return highlighterPromise
+  }
 
-  highlighterPromise = createHighlighter().then((highlighter) => {
+  highlighterPromise = createHighlighter({
+    theme: options.theme,
+    languages: options.languages,
+  }).then((highlighter) => {
     currentHighlighter.current = highlighter
   })
 
@@ -83,6 +91,7 @@ function untilHighlighterLoaded(): Promise<void> {
  */
 export async function getTokens(
   options: Omit<GetTokensOptions, 'highlighter' | 'project'> & {
+    languages?: ConfigurationOptions['languages']
     projectOptions?: ProjectOptions
   }
 ): Promise<TokenizedLines> {
@@ -96,10 +105,12 @@ export async function getTokens(
     >('getTokens', options)
   }
 
-  const { projectOptions, ...getTokensOptions } = options
+  const { projectOptions, languages, ...getTokensOptions } = options
   const project = getProject(projectOptions)
-
-  await untilHighlighterLoaded()
+  await untilHighlighterLoaded({
+    theme: getTokensOptions.theme,
+    languages,
+  })
 
   return import('../utils/get-tokens.js').then(({ getTokens }) => {
     if (currentHighlighter.current === null) {

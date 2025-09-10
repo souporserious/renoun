@@ -13,6 +13,80 @@ export const MDXComponents = {
   Card,
   CodeBlock,
   Row,
+  ul: (props) => {
+    return (
+      <ul
+        {...props}
+        css={{
+          display: 'grid',
+          gap: '0.375rem',
+          margin: '1rem 0',
+          paddingInlineStart: '1.25rem',
+          listStyleType: 'disc',
+
+          // Nested unordered list styles
+          '& ul': {
+            marginTop: '0.375rem',
+            listStyleType: 'circle',
+            paddingInlineStart: '1.25rem',
+          },
+          '& ul ul': {
+            listStyleType: 'square',
+          },
+
+          // Marker styling
+          '& li::marker': {
+            color: 'var(--color-foreground)',
+          },
+        }}
+      />
+    )
+  },
+  ol: (props) => {
+    return (
+      <ol
+        {...props}
+        css={{
+          display: 'grid',
+          gap: '0.375rem',
+          margin: '1rem 0',
+          paddingInlineStart: '1.25rem',
+          listStyleType: 'decimal',
+
+          // Nested ordered list styles
+          '& ol': {
+            marginTop: '0.375rem',
+            listStyleType: 'lower-alpha',
+            paddingInlineStart: '1.25rem',
+          },
+          '& ol ol': {
+            listStyleType: 'lower-roman',
+          },
+
+          // Marker styling
+          '& li::marker': {
+            color: 'var(--color-foreground)',
+            fontVariantNumeric: 'tabular-nums',
+          },
+        }}
+      />
+    )
+  },
+  li: (props) => {
+    return (
+      <li
+        {...props}
+        css={{
+          // Tighten default spacing and keep nested lists readable
+          paddingInlineStart: '0.125rem',
+          '& > p': { margin: 0 },
+          '& > ul, & > ol': {
+            marginTop: '0.375rem',
+          },
+        }}
+      />
+    )
+  },
   Preview: ({ children }: { children: React.ReactNode }) => {
     return (
       <div
