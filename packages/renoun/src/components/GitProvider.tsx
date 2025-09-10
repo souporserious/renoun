@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 import { css, type CSSObject } from 'restyle'
-import { useClientConfig } from './Config/ClientConfigContext.js'
+import { useConfig } from './Config/ClientConfigContext.js'
 
 function getGitProviderFromUrl(gitSource: string) {
   const url = new URL(gitSource)
@@ -20,7 +20,7 @@ export function GitProviderLogo({
   source,
   ...props
 }: React.SVGProps<SVGSVGElement> & { source?: string }) {
-  const config = useClientConfig()
+  const config = useConfig()
   const gitSource = source ?? config.git?.source
 
   if (!gitSource) {
@@ -125,7 +125,7 @@ export function GitProviderLink({
   children?: React.ReactNode
   source?: string
 }) {
-  const config = useClientConfig()
+  const config = useConfig()
   const gitSource = source ?? config.git?.source
 
   if (!gitSource) {

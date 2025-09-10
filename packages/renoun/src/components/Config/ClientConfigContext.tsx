@@ -2,7 +2,7 @@
 import React from 'react'
 import type { ConfigurationOptions } from './ConfigTypes.js'
 
-export const ClientConfigReactContext =
+export const ClientConfigContext =
   React.createContext<ConfigurationOptions | null>(null)
 
 export function ClientConfigProvider({
@@ -13,17 +13,17 @@ export function ClientConfigProvider({
   children: React.ReactNode
 }) {
   return (
-    <ClientConfigReactContext.Provider value={value}>
+    <ClientConfigContext.Provider value={value}>
       {children}
-    </ClientConfigReactContext.Provider>
+    </ClientConfigContext.Provider>
   )
 }
 
-export function useClientConfig(): ConfigurationOptions {
-  const config = React.useContext(ClientConfigReactContext)
+export function useConfig(): ConfigurationOptions {
+  const config = React.useContext(ClientConfigContext)
   if (!config) {
     throw new Error(
-      '[renoun] The `RootProvider` component must be used to provide a configuration to the `useClientConfig` hook.'
+      '[renoun] The `RootProvider` component must be used to provide a configuration to the `useConfig` hook.'
     )
   }
   return config
