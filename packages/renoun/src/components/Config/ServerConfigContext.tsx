@@ -20,13 +20,10 @@ export function ServerConfigContext({
   value: ConfigurationOptions
   children: React.ReactNode
 }) {
-  const nextValue: ConfigurationOptions =
-    typeof value.theme === 'string'
-      ? { ...value, theme: { light: value.theme, dark: value.theme } }
-      : value
   if (process.env.NODE_ENV === 'development') {
-    ;(globalThis as any)[CACHE_KEY] = nextValue
+    ;(globalThis as any)[CACHE_KEY] = value
+  } else {
+    configCache().current = value
   }
-  configCache().current = nextValue
   return children
 }
