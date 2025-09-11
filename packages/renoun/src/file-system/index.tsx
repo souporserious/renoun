@@ -1934,6 +1934,7 @@ export class Directory<
       // Find a representative file in the directory
       let sameName: File<LoaderTypes> | undefined
       let fallback: File<LoaderTypes> | undefined
+      let anyMatchingFile: File<LoaderTypes> | undefined
 
       for (const directoryEntry of directoryEntries) {
         if (!(directoryEntry instanceof File)) {
@@ -1965,12 +1966,20 @@ export class Directory<
           fallback = directoryEntry
           // Don't break here as we might find a better match later
         }
+
+        // Track the first file that matches the requested extension(s) as a
+        // last-resort fallback if no better representative is found.
+        if (!anyMatchingFile && hasValidExtension) {
+          anyMatchingFile = directoryEntry
+        }
       }
 
       if (sameName) {
         entry = sameName
       } else if (fallback) {
         entry = fallback
+      } else if (anyMatchingFile) {
+        entry = anyMatchingFile
       } else {
         throw new FileNotFoundError(rawPath, allExtensions)
       }
