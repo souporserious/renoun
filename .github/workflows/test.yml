@@ -35,8 +35,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Build MDX package
-        run: pnpm --filter=@renoun/mdx build
-
       - name: Run tests
-        run: pnpm --filter=packages/* test && pnpm run test:github
+        run: pnpm test --filter="./packages/*" && pnpm run test:github
