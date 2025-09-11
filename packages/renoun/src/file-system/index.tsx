@@ -1586,6 +1586,8 @@ export class Directory<
       ) => entry is FileSystemEntry<LoaderTypes>)
     | ((entry: FileSystemEntry<LoaderTypes>) => Promise<boolean> | boolean)
     | Minimatch
+  #includeCache?: WeakMap<FileSystemEntry<LoaderTypes>, boolean>
+  #simpleInclude?: { recursive: boolean; extensions: Set<string> }
   #sort?: any
 
   constructor(
@@ -1618,6 +1620,10 @@ export class Directory<
         const pattern = parseSimpleGlobPattern(options.include)
         if (pattern) {
           const extensions = new Set(pattern.extensions)
+          this.#simpleInclude = {
+            recursive: pattern.recursive,
+            extensions,
+          }
 
           // Build a cheap predicate and skip Minimatch entirely
           this.#include = (entry: FileSystemEntry<any>) => {
@@ -1655,7 +1661,19 @@ export class Directory<
       return this.#include.match(entry.getRelativePathToRoot())
     }
 
-    return this.#include(entry)
+    // Cache decisions for non-Minimatch predicates (can be async/expensive)
+    if (!this.#includeCache) {
+      this.#includeCache = new WeakMap()
+    }
+
+    const cached = this.#includeCache.get(entry)
+    if (cached !== undefined) {
+      return cached
+    }
+
+    const shouldInclude = await this.#include(entry)
+    this.#includeCache.set(entry, shouldInclude)
+    return shouldInclude
   }
 
   /** Duplicate the directory with the same initial options. */
@@ -1679,6 +1697,8 @@ export class Directory<
 
     directory.#directory = this
     directory.#includePattern = this.#includePattern
+    directory.#includeCache = this.#includeCache
+    directory.#simpleInclude = this.#simpleInclude
     directory.#repositoryOption = this.#repositoryOption
     directory.#repository = this.#repository
     directory.#rootPath = this.getRootPath()
@@ -2204,22 +2224,31 @@ export class Directory<
     let includeMap: Map<Directory<LoaderTypes>, boolean> | undefined
 
     if (options?.recursive) {
-      const includeChecks = this.#include
-        ? directories.map((directory) => this.#shouldInclude(directory))
-        : []
-      const includeMask = await Promise.all(includeChecks)
-      const pendingEntries: Promise<FileSystemEntry<LoaderTypes>[]>[] = []
-      for (let index = 0; index < directories.length; index++) {
-        if (includeMask[index]) {
-          pendingEntries.push(directories[index].getEntries(options))
-        }
+      // Compute include decisions for directories (only used to decide whether
+      // to include the directory entry itself in the result set). We still
+      // recurse into all subdirectories to allow discovering matching
+      // descendants even when the directory itself is excluded by the include
+      // predicate. Skip this work for simple extension-only recursive patterns,
+      // where directories are always included (decision is trivial).
+      let includeMask: boolean[] | undefined
+      if (this.#include && this.#simpleInclude?.recursive !== true) {
+        includeMask = await Promise.all(
+          directories.map((directory) => this.#shouldInclude(directory))
+        )
       }
+
+      // Always recurse into all subdirectories when recursive is true so that
+      // child entries can be discovered and filtered independently.
+      const pendingEntries: Promise<FileSystemEntry<LoaderTypes>[]>[] =
+        directories.map((directory) => directory.getEntries(options))
       childrenEntriesLists = await Promise.all(pendingEntries)
 
       // Cache include decisions for reuse below
-      includeMap = new Map<Directory<LoaderTypes>, boolean>()
-      for (let index = 0; index < directories.length; index++) {
-        includeMap.set(directories[index], includeMask[index])
+      if (includeMask) {
+        includeMap = new Map<Directory<LoaderTypes>, boolean>()
+        for (let index = 0; index < directories.length; index++) {
+          includeMap.set(directories[index], includeMask[index])
+        }
       }
     }
 
@@ -2233,15 +2262,18 @@ export class Directory<
       }
 
       const includeSelf =
-        entry instanceof Directory && includeMap
-          ? (includeMap.get(entry) ?? true)
-          : this.#include
-            ? await this.#shouldInclude(entry)
-            : true
-      const childrenEntries =
-        options?.recursive && includeSelf
-          ? childrenEntriesLists[childIndex++]
-          : []
+        entry instanceof Directory
+          ? this.#simpleInclude?.recursive === true
+            ? true
+            : includeMap
+              ? (includeMap.get(entry) ?? false)
+              : this.#include
+                ? await this.#shouldInclude(entry)
+                : true
+          : true
+      const childrenEntries = options?.recursive
+        ? (childrenEntriesLists[childIndex++] ?? [])
+        : []
 
       if (includeSelf && (childrenEntries.length > 0 || !options?.recursive)) {
         entriesResult.push(entry)
