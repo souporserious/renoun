@@ -116,10 +116,9 @@ describe('project WebSocket RPC', () => {
       { concurrency: 0 }
     )
 
-    // Start client
+    // Start client and wait until connected
     client = new WebSocketClient(server.getId())
-    // Give the client a moment to connect
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    await client.ready(2_000)
   }, 10_000)
 
   afterAll(() => {
@@ -347,8 +346,8 @@ describe('project WebSocket RPC', () => {
     // Re-register simple method on the fresh server
     server.registerMethod('add2', ({ x }: { x: number }) => x + 1)
 
-    // Wait for client to auto-reconnect (retry interval 5s by default)
-    await new Promise((resolve) => setTimeout(resolve, 5500))
+    // Wait for client to reconnect deterministically
+    await client.ready(3_000)
 
     const result = await client.callMethod<{ x: number }, number>('add2', {
       x: 5,

@@ -412,8 +412,15 @@ export class WebSocketServer {
   }
 
   constructor(options?: { port?: number }) {
-    this.#id = randomBytes(16).toString('hex')
-    process.env.RENOUN_SERVER_ID = this.#id
+    // Reuse a stable server ID within the same process so clients can
+    // reconnect after an in-process server restart.
+    const serverId = process.env.RENOUN_SERVER_ID
+    if (serverId) {
+      this.#id = serverId
+    } else {
+      this.#id = randomBytes(16).toString('hex')
+      process.env.RENOUN_SERVER_ID = this.#id
+    }
 
     this.#readyPromise = new Promise<void>((resolve, reject) => {
       this.#resolveReady = resolve
