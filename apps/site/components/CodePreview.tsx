@@ -129,19 +129,7 @@ function HeroExample({
                 willChange: 'opacity',
                 ['--hero-button-height']: '2.5rem',
                 ['--hero-depth']: '14rem',
-                backgroundImage: `linear-gradient(
-                  to top,
-                  color-mix(in srgb, var(--color-surface-secondary) 62%, black) 0,
-                  color-mix(in srgb, var(--color-surface-secondary) 58%, black) var(--hero-button-height),
-                  color-mix(in srgb, var(--color-surface-secondary) 50%, transparent) calc(var(--hero-button-height) + calc(var(--hero-depth) * 0.15)),
-                  color-mix(in srgb, var(--color-surface-secondary) 42%, transparent) calc(var(--hero-button-height) + calc(var(--hero-depth) * 0.30)),
-                  color-mix(in srgb, var(--color-surface-secondary) 34%, transparent) calc(var(--hero-button-height) + calc(var(--hero-depth) * 0.45)),
-                  color-mix(in srgb, var(--color-surface-secondary) 26%, transparent) calc(var(--hero-button-height) + calc(var(--hero-depth) * 0.60)),
-                  color-mix(in srgb, var(--color-surface-secondary) 18%, transparent) calc(var(--hero-button-height) + calc(var(--hero-depth) * 0.75)),
-                  color-mix(in srgb, var(--color-surface-secondary) 10%, transparent) calc(var(--hero-button-height) + calc(var(--hero-depth) * 0.90)),
-                  color-mix(in srgb, var(--color-surface-secondary) 6%, transparent) calc(var(--hero-button-height) + calc(var(--hero-depth) * 0.97)),
-                  transparent calc(var(--hero-button-height) + var(--hero-depth))
-                )`,
+                backgroundImage: `linear-gradient(0deg, rgb(20 29 43), rgb(20 29 43 / 0%))`,
                 '[data-state="open"] + &': {
                   opacity: 0,
                 },
