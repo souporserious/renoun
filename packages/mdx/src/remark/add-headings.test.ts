@@ -93,10 +93,7 @@ describe('addHeadings', () => {
       export const headings = [{
         id: "hello-world",
         level: 1,
-        children: _jsx("a", {
-          href: "https://example.com",
-          children: "Hello, world!"
-        }),
+        children: "Hello, world!",
         text: "Hello, world!"
       }];
       function _createMdxContent(props) {
