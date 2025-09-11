@@ -31,6 +31,7 @@ async function filterInternalExports(entry: FileSystemEntry<any>) {
     const children = await entry.getEntries({
       includeDirectoryNamedFiles: true,
       includeIndexAndReadmeFiles: true,
+      includeTsConfigExcludedFiles: true,
     })
     const baseName = entry.getBaseName().toLowerCase()
     for (const child of children) {
