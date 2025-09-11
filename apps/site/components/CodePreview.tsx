@@ -1,4 +1,4 @@
-import { CodeBlock, Tokens, type JavaScriptModuleExport } from 'renoun'
+import { Tokens, type JavaScriptModuleExport } from 'renoun'
 import { keyframes } from 'restyle'
 import { GeistMono } from 'geist/font/mono'
 
@@ -61,7 +61,6 @@ export async function CodePreview({
                   padding: '4rem',
                   margin: 'auto',
                   overflow: 'auto',
-                  width: '100%',
                 }}
               >
                 <Value />
