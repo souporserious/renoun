@@ -94,7 +94,10 @@ function HeroExample({
           <Collapse.Provider>
             <ChipFadeIn />
             <ChipFadeOut />
-            <Collapse.Content height={{ initial: 200, open: 'auto' }}>
+            <Collapse.Content
+              height={{ initial: 200, open: 'auto' }}
+              maxHeight={{ open: '28rem' }}
+            >
               <pre
                 css={{
                   position: 'relative',
@@ -162,7 +165,7 @@ function HeroExample({
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderTop: '1px solid var(--color-separator)',
-                  background: 'none',
+                  backgroundColor: 'var(--color-surface-interactive)',
                 },
                 ':hover': {
                   color: 'var(--color-foreground-interactive-highlighted)',

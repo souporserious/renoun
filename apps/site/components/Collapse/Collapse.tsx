@@ -1,6 +1,13 @@
 /** @jsxImportSource restyle */
 'use client'
-import React, { createContext, use, useId, useState } from 'react'
+import React, {
+  createContext,
+  use,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react'
 import type { CSSObject } from 'restyle'
 
 const CollapseContext = createContext<
@@ -131,6 +138,17 @@ interface CollapseHeightVariants {
 
 type CollapseHeightProp = CSSLength | CollapseHeightVariants
 
+/** Max-height variants mirror height API for consistency. */
+interface CollapseMaxHeightVariants {
+  /** Max-height when initially closed. */
+  initial?: CSSLength
+
+  /** Max-height when opened. */
+  open?: CSSLength
+}
+
+type CollapseMaxHeightProp = CSSLength | CollapseMaxHeightVariants
+
 /** Normalizes a length to a CSS string (numbers → px). */
 function toCssSize(value: CSSLength | undefined): CSSLength | undefined {
   if (value === undefined) {
@@ -157,6 +175,7 @@ export function Content<As extends React.ElementType = 'div'>({
   as,
   display = 'block',
   height,
+  maxHeight,
   children,
   css,
   ...props
@@ -170,13 +189,20 @@ export function Content<As extends React.ElementType = 'div'>({
   /** Control closed/opened heights. */
   height?: CollapseHeightProp
 
+  /** Control closed/opened max-heights. */
+  maxHeight?: CollapseMaxHeightProp
+
   /** CSS styles to apply to the content. */
   css?: CSSObject
 } & React.HTMLAttributes<HTMLDivElement>) {
   const Component = as || 'div'
   const { isOpen, triggerId, contentId } = useCollapse()
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const [isOverflowing, setIsOverflowing] = useState(false)
   let initialHeight: CSSLength | undefined = undefined
   let openedHeight: CSSLength | undefined = undefined
+  let initialMaxHeight: CSSLength | undefined = undefined
+  let openedMaxHeight: CSSLength | undefined = undefined
 
   if (typeof height === 'number' || typeof height === 'string') {
     initialHeight = toCssSize(height)
@@ -189,15 +215,64 @@ export function Content<As extends React.ElementType = 'div'>({
     openedHeight = 'auto'
   }
 
+  if (typeof maxHeight === 'number' || typeof maxHeight === 'string') {
+    initialMaxHeight = toCssSize(maxHeight)
+    openedMaxHeight = toCssSize(maxHeight)
+  } else if (maxHeight && typeof maxHeight === 'object') {
+    initialMaxHeight = toCssSize(maxHeight.initial)
+    openedMaxHeight = toCssSize(maxHeight.open)
+  }
+
   const initialIsZero = isZeroSize(initialHeight)
+  const currentMaxHeight = isOpen ? openedMaxHeight : initialMaxHeight
+  const currentHeight: CSSLength | string | undefined = isOpen
+    ? openedMaxHeight !== undefined && isOverflowing
+      ? 'var(--collapse-max-height)'
+      : openedHeight
+    : initialHeight
   const vars: CSSObject = {
     // @ts-expect-error
-    ['--collapse-height']: isOpen ? openedHeight : initialHeight,
-    ['--collapse-overflow']: isOpen ? 'visible' : 'hidden',
+    ['--collapse-height']: currentHeight,
+    ['--collapse-overflow']: isOpen
+      ? currentMaxHeight !== undefined
+        ? 'auto'
+        : 'visible'
+      : 'hidden',
   }
+
+  if (currentMaxHeight !== undefined) {
+    vars['--collapse-max-height'] = currentMaxHeight
+  }
+
+  useEffect(() => {
+    const element = contentRef.current
+    if (!element) {
+      return
+    }
+    if (!isOpen || openedMaxHeight === undefined) {
+      setIsOverflowing(false)
+      return
+    }
+
+    const update = () => {
+      // If content height exceeds the element's current box (constrained by max-height), it's overflowing
+      const overflowing = element.scrollHeight > element.clientHeight + 1
+      setIsOverflowing(overflowing)
+    }
+
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(element)
+    window.addEventListener('resize', update)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [children, isOpen, openedMaxHeight])
 
   return (
     <Component
+      ref={contentRef}
       id={contentId}
       aria-labelledby={triggerId}
       hidden={initialIsZero ? !isOpen : undefined}
@@ -207,6 +282,9 @@ export function Content<As extends React.ElementType = 'div'>({
       css={{
         display,
         height: 'var(--collapse-height)',
+        ...(currentMaxHeight !== undefined
+          ? { maxHeight: 'var(--collapse-max-height)' }
+          : {}),
         overflow: 'var(--collapse-overflow)',
         ...vars,
         ...css,
@@ -220,7 +298,6 @@ export function Content<As extends React.ElementType = 'div'>({
         min-height: 0;
         opacity: 1;
         interpolate-size: allow-keywords;
-        overflow: hidden;
       }
 
       /* Classic closed state driven by the hidden attribute when initial is 0. */
@@ -239,6 +316,7 @@ export function Content<As extends React.ElementType = 'div'>({
           transition:
             display 400ms allow-discrete,
             height 400ms,
+            max-height 400ms,
             opacity 400ms;
         }
 
