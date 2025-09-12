@@ -292,7 +292,7 @@ export interface FileOptions<
     Types,
     WithDefaultTypes<Types>,
     ModuleLoaders,
-    DirectoryInclude<FileSystemEntry<Types>, Types>
+    DirectoryFilter<FileSystemEntry<Types>, Types>
   >
 }
 
@@ -1497,24 +1497,23 @@ export class MDXFile<
   }
 }
 
-type Narrowed<Include> = Include extends (
+type Narrowed<Filter> = Filter extends (
   entry: any
 ) => entry is infer ReturnType
   ? ReturnType
   : never
-
-type ResolveDirectoryIncludeEntries<
-  Include,
+type ResolveDirectoryFilterEntries<
+  Filter,
   Types extends Record<string, any> = Record<string, any>,
-> = Include extends string
-  ? Include extends `**${string}`
-    ? Directory<Types> | FileWithExtension<Types, ExtractFileExtension<Include>>
-    : FileWithExtension<Types, ExtractFileExtension<Include>>
-  : [Narrowed<Include>] extends [never]
+> = Filter extends string
+  ? Filter extends `**${string}`
+    ? Directory<Types> | FileWithExtension<Types, ExtractFileExtension<Filter>>
+    : FileWithExtension<Types, ExtractFileExtension<Filter>>
+  : [Narrowed<Filter>] extends [never]
     ? FileSystemEntry<Types>
-    : Narrowed<Include>
+    : Narrowed<Filter>
 
-export type DirectoryInclude<
+export type DirectoryFilter<
   Entry extends FileSystemEntry<any>,
   Types extends Record<string, any>,
 > =
@@ -1526,16 +1525,16 @@ export interface DirectoryOptions<
   Types extends InferModuleLoadersTypes<Loaders> = any,
   LoaderTypes extends Types = any,
   Loaders extends ModuleLoaders = ModuleLoaders,
-  Include extends DirectoryInclude<
+  Filter extends DirectoryFilter<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
-  > = DirectoryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  > = DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
   /** Directory path in the workspace. */
   path?: string
 
   /** Filter entries with a minimatch pattern or predicate. */
-  include?: Include
+  filter?: Filter
 
   /** Extension loaders with or without `withSchema`. */
   loader?: Loaders
@@ -1553,7 +1552,7 @@ export interface DirectoryOptions<
   fileSystem?: FileSystem
 
   /** Sort callback applied at *each* directory depth. */
-  sort?: SortDescriptor<ResolveDirectoryIncludeEntries<Include, LoaderTypes>>
+  sort?: SortDescriptor<ResolveDirectoryFilterEntries<Filter, LoaderTypes>>
 
   /** The repository used to generate source URLs. */
   repository?: Repository | RepositoryConfig | string
@@ -1564,10 +1563,10 @@ export class Directory<
   Types extends InferModuleLoadersTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends ModuleLoaders = ModuleLoaders,
-  Include extends DirectoryInclude<
+  Filter extends DirectoryFilter<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
-  > = DirectoryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  > = DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
   #path: string
   #rootPath?: string
@@ -1579,19 +1578,19 @@ export class Directory<
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
   #repositoryOption?: Repository | RepositoryConfig | string
-  #includePattern?: string
-  #include?:
+  #filterPattern?: string
+  #filter?:
     | ((
         entry: FileSystemEntry<LoaderTypes>
       ) => entry is FileSystemEntry<LoaderTypes>)
     | ((entry: FileSystemEntry<LoaderTypes>) => Promise<boolean> | boolean)
     | Minimatch
-  #includeCache?: WeakMap<FileSystemEntry<LoaderTypes>, boolean>
-  #simpleInclude?: { recursive: boolean; extensions: Set<string> }
+  #filterCache?: WeakMap<FileSystemEntry<LoaderTypes>, boolean>
+  #simpleFilter?: { recursive: boolean; extensions: Set<string> }
   #sort?: any
 
   constructor(
-    options?: DirectoryOptions<Types, LoaderTypes, Loaders, Include>
+    options?: DirectoryOptions<Types, LoaderTypes, Loaders, Filter>
   ) {
     if (options === undefined) {
       this.#path = '.'
@@ -1613,20 +1612,20 @@ export class Directory<
       this.#slugCasing = options.slugCasing ?? 'kebab'
       this.#fileSystem = options.fileSystem
       this.#repositoryOption = options.repository
-      if (typeof options.include === 'string') {
-        this.#includePattern = options.include
+      if (typeof options.filter === 'string') {
+        this.#filterPattern = options.filter
 
         // Fast-path common extension-only patterns e.g. *.tsx, **/*.mdx, etc.
-        const pattern = parseSimpleGlobPattern(options.include)
+        const pattern = parseSimpleGlobPattern(options.filter)
         if (pattern) {
           const extensions = new Set(pattern.extensions)
-          this.#simpleInclude = {
+          this.#simpleFilter = {
             recursive: pattern.recursive,
             extensions,
           }
 
           // Build a cheap predicate and skip Minimatch entirely
-          this.#include = (entry: FileSystemEntry<any>) => {
+          this.#filter = (entry: FileSystemEntry<any>) => {
             if (entry instanceof Directory) {
               return pattern.recursive
             }
@@ -1636,44 +1635,44 @@ export class Directory<
             return true
           }
         } else {
-          this.#include = new Minimatch(options.include, { dot: true })
+          this.#filter = new Minimatch(options.filter, { dot: true })
         }
       } else {
-        this.#include = options.include
+        this.#filter = options.filter
       }
 
       this.#sort = options.sort
     }
   }
 
-  async #shouldInclude(entry: FileSystemEntry<LoaderTypes>): Promise<boolean> {
-    if (!this.#include) {
+  async #passesFilter(entry: FileSystemEntry<LoaderTypes>): Promise<boolean> {
+    if (!this.#filter) {
       return true
     }
 
-    if (this.#include instanceof Minimatch) {
-      const isRecursivePattern = this.#includePattern!.includes('**')
+    if (this.#filter instanceof Minimatch) {
+      const isRecursivePattern = this.#filterPattern!.includes('**')
 
       if (isRecursivePattern && entry instanceof Directory) {
         return true
       }
 
-      return this.#include.match(entry.getRelativePathToRoot())
+      return this.#filter.match(entry.getRelativePathToRoot())
     }
 
     // Cache decisions for non-Minimatch predicates (can be async/expensive)
-    if (!this.#includeCache) {
-      this.#includeCache = new WeakMap()
+    if (!this.#filterCache) {
+      this.#filterCache = new WeakMap()
     }
 
-    const cached = this.#includeCache.get(entry)
+    const cached = this.#filterCache.get(entry)
     if (cached !== undefined) {
       return cached
     }
 
-    const shouldInclude = await this.#include(entry)
-    this.#includeCache.set(entry, shouldInclude)
-    return shouldInclude
+    const passes = await this.#filter(entry)
+    this.#filterCache.set(entry, passes)
+    return passes
   }
 
   /** Duplicate the directory with the same initial options. */
@@ -1682,7 +1681,7 @@ export class Directory<
       LoaderTypes,
       LoaderTypes,
       Loaders,
-      DirectoryInclude<FileSystemEntry<LoaderTypes>, LoaderTypes>
+      DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>
     >({
       path: this.#path,
       fileSystem: this.#fileSystem,
@@ -1690,15 +1689,15 @@ export class Directory<
       tsConfigPath: this.#tsConfigPath,
       slugCasing: this.#slugCasing,
       loader: this.#loader,
-      include: this.#include as any,
+      filter: this.#filter as any,
       sort: this.#sort,
       ...options,
     })
 
     directory.#directory = this
-    directory.#includePattern = this.#includePattern
-    directory.#includeCache = this.#includeCache
-    directory.#simpleInclude = this.#simpleInclude
+    directory.#filterPattern = this.#filterPattern
+    directory.#filterCache = this.#filterCache
+    directory.#simpleFilter = this.#simpleFilter
     directory.#repositoryOption = this.#repositoryOption
     directory.#repository = this.#repository
     directory.#rootPath = this.getRootPath()
@@ -1926,10 +1925,10 @@ export class Directory<
 
     // If we ended on a directory, try to find a representative file within it
     if (entry instanceof Directory) {
-      // Bypass the directory include filters when selecting a representative file directly.
+      // Bypass the directory filter when selecting a representative file directly.
       const directoryEntries = await entry
         .#duplicate({
-          include: undefined,
+          filter: undefined,
         })
         .getEntries({
           includeDirectoryNamedFiles: true,
@@ -2127,8 +2126,8 @@ export class Directory<
    */
   async getEntries(options?: {
     /** Recursively walk every subdirectory. */
-    recursive?: Include extends string
-      ? Include extends `**${string}`
+    recursive?: Filter extends string
+      ? Filter extends `**${string}`
         ? boolean
         : undefined
       : boolean
@@ -2146,21 +2145,21 @@ export class Directory<
     includeTsConfigExcludedFiles?: boolean
   }): Promise<
     Array<
-      Include extends string
-        ? Include extends `**${string}`
+      Filter extends string
+        ? Filter extends `**${string}`
           ?
               | Directory<LoaderTypes>
-              | FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>
-          : FileWithExtension<LoaderTypes, ExtractFileExtension<Include>>
-        : Include extends DirectoryInclude<infer FilteredEntry, LoaderTypes>
+              | FileWithExtension<LoaderTypes, ExtractFileExtension<Filter>>
+          : FileWithExtension<LoaderTypes, ExtractFileExtension<Filter>>
+        : Filter extends DirectoryFilter<infer FilteredEntry, LoaderTypes>
           ? FilteredEntry
           : FileSystemEntry<LoaderTypes>
     >
   > {
-    if (options?.recursive && this.#includePattern) {
-      if (!this.#includePattern.includes('**')) {
+    if (options?.recursive && this.#filterPattern) {
+      if (!this.#filterPattern.includes('**')) {
         throw new Error(
-          '[renoun] Cannot use recursive option with a single-level include filter. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
+          '[renoun] Cannot use recursive option with a single-level filter pattern. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
         )
       }
     }
@@ -2247,7 +2246,7 @@ export class Directory<
               ? new JavaScriptFile({ ...sharedOptions, loader })
               : new File(sharedOptions)
 
-        if (this.#include && !(await this.#shouldInclude(file))) {
+        if (this.#filter && !(await this.#passesFilter(file))) {
           continue
         }
 
@@ -2287,19 +2286,19 @@ export class Directory<
     }
 
     let childrenEntriesLists: FileSystemEntry<LoaderTypes>[][] = []
-    let includeMap: Map<Directory<LoaderTypes>, boolean> | undefined
+    let filterMap: Map<Directory<LoaderTypes>, boolean> | undefined
 
     if (options?.recursive) {
-      // Compute include decisions for directories (only used to decide whether
+      // Compute filter decisions for directories (only used to decide whether
       // to include the directory entry itself in the result set). We still
       // recurse into all subdirectories to allow discovering matching
-      // descendants even when the directory itself is excluded by the include
+      // descendants even when the directory itself is excluded by the filter
       // predicate. Skip this work for simple extension-only recursive patterns,
       // where directories are always included (decision is trivial).
-      let includeMask: boolean[] | undefined
-      if (this.#include && this.#simpleInclude?.recursive !== true) {
-        includeMask = await Promise.all(
-          directories.map((directory) => this.#shouldInclude(directory))
+      let filterMask: boolean[] | undefined
+      if (this.#filter && this.#simpleFilter?.recursive !== true) {
+        filterMask = await Promise.all(
+          directories.map((directory) => this.#passesFilter(directory))
         )
       }
 
@@ -2309,11 +2308,11 @@ export class Directory<
         directories.map((directory) => directory.getEntries(options))
       childrenEntriesLists = await Promise.all(pendingEntries)
 
-      // Cache include decisions for reuse below
-      if (includeMask) {
-        includeMap = new Map<Directory<LoaderTypes>, boolean>()
+      // Cache filter decisions for reuse below
+      if (filterMask) {
+        filterMap = new Map<Directory<LoaderTypes>, boolean>()
         for (let index = 0; index < directories.length; index++) {
-          includeMap.set(directories[index], includeMask[index])
+          filterMap.set(directories[index], filterMask[index])
         }
       }
     }
@@ -2327,21 +2326,24 @@ export class Directory<
         continue
       }
 
-      const includeSelf =
+      const passesFilterSelf =
         entry instanceof Directory
-          ? this.#simpleInclude?.recursive === true
+          ? this.#simpleFilter?.recursive === true
             ? true
-            : includeMap
-              ? (includeMap.get(entry) ?? false)
-              : this.#include
-                ? await this.#shouldInclude(entry)
+            : filterMap
+              ? (filterMap.get(entry) ?? false)
+              : this.#filter
+                ? await this.#passesFilter(entry)
                 : true
           : true
       const childrenEntries = options?.recursive
         ? (childrenEntriesLists[childIndex++] ?? [])
         : []
 
-      if (includeSelf && (childrenEntries.length > 0 || !options?.recursive)) {
+      if (
+        passesFilterSelf &&
+        (childrenEntries.length > 0 || !options?.recursive)
+      ) {
         entriesResult.push(entry)
       }
 

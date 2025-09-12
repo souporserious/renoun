@@ -60,7 +60,7 @@ export const FileSystemDirectory = new Directory({
       (path) => import(`../../../packages/renoun/src/file-system/${path}.mdx`)
     ),
   },
-  include: filterInternalExports,
+  filter: filterInternalExports,
 })
 
 type ComponentSchema = Record<string, React.ComponentType>
@@ -96,7 +96,7 @@ export const ComponentsDirectory = new Directory({
       (path) => import(`../../../packages/renoun/src/components/${path}.mdx`)
     ),
   },
-  include: filterInternalExports,
+  filter: filterInternalExports,
 })
 
 type HookSchema = Record<string, unknown>
@@ -132,5 +132,5 @@ export const HooksDirectory = new Directory({
       (path) => import(`../../../packages/renoun/src/hooks/${path}.mdx`)
     ),
   },
-  include: filterInternalExports,
+  filter: filterInternalExports,
 })

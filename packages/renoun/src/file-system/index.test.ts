@@ -212,7 +212,7 @@ describe('file system', () => {
           (path) => import(`#fixtures/posts/${path}.mdx`)
         ),
       },
-      include: async (entry) => {
+      filter: async (entry) => {
         if (isFile(entry, 'mdx')) {
           const value = await entry
             .getExportValue('frontmatter')
@@ -415,7 +415,7 @@ describe('file system', () => {
           (path) => import(`#fixtures/posts/${path}.mdx`)
         ),
       },
-      include: (entry) => isFile(entry, 'mdx'),
+      filter: (entry) => isFile(entry, 'mdx'),
     })
     const files = await posts.getEntries()
 
@@ -437,7 +437,7 @@ describe('file system', () => {
       loader: {
         mdx: withSchema<PostType>(),
       },
-      include: (entry) => isFile(entry, 'mdx'),
+      filter: (entry) => isFile(entry, 'mdx'),
     })
     const files = await posts.getEntries()
 
@@ -454,7 +454,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      include: async (entry) => {
+      filter: async (entry) => {
         if (isFile(entry, 'tsx')) {
           const fileExports = await entry.getExports()
 
@@ -485,7 +485,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      include: '*.mdx',
+      filter: '*.mdx',
     })
     const entries = await directory.getEntries()
 
@@ -530,7 +530,7 @@ describe('file system', () => {
           return imports[importPath]()
         }),
       },
-      include: '*.ts',
+      filter: '*.ts',
       sort: 'order',
     })
     const entries = await directory.getEntries()
@@ -546,7 +546,7 @@ describe('file system', () => {
   test('filter and recursive entries', async () => {
     const docs = new Directory({
       path: 'fixtures/docs',
-      include(entry) {
+      filter(entry) {
         return isFile(entry, 'mdx')
       },
     })
@@ -1780,7 +1780,7 @@ describe('file system', () => {
           (path) => Promise.resolve<any>({})
         ),
       },
-      include: (entry) => isFile(entry, 'mdx'),
+      filter: (entry) => isFile(entry, 'mdx'),
     })
     const collection = new Collection({
       entries: [directory],
@@ -1829,10 +1829,10 @@ describe('file system', () => {
     }
   })
 
-  test('errors when trying recursively get entries with a single-level include filter', async () => {
+  test('errors when trying to recursively get entries with a single-level filter pattern', async () => {
     const directory = new Directory({
       path: 'fixtures',
-      include: '*.mdx',
+      filter: '*.mdx',
     })
 
     await expect(
@@ -1841,14 +1841,14 @@ describe('file system', () => {
         recursive: true,
       })
     ).rejects.toThrow(
-      '[renoun] Cannot use recursive option with a single-level include filter. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
+      '[renoun] Cannot use recursive option with a single-level filter pattern. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
     )
   })
 
-  test('allows recursive option with multi-level include filter', async () => {
+  test('allows recursive option with multi-level filter pattern', async () => {
     const directory = new Directory({
       path: 'fixtures',
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
     })
 
     await expect(
@@ -1868,7 +1868,7 @@ describe('file system', () => {
     })
     const directory = new Directory({
       path: 'docs',
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
       fileSystem,
     })
     const entries = await directory.getEntries({ recursive: true })
@@ -1901,7 +1901,7 @@ describe('file system', () => {
     expect(basicFile?.getPathname()).toBe('/docs/advanced/examples/basic')
   })
 
-  test('gets all files from recursive include file pattern', async () => {
+  test('gets all files from recursive filter pattern', async () => {
     const fileSystem = new MemoryFileSystem({
       'components/Box/Box.mdx': '# Box Component',
       'components/Box/examples/Basic.mdx': '# Basic Example',
@@ -1910,7 +1910,7 @@ describe('file system', () => {
     const directory = new Directory({
       fileSystem,
       path: 'components',
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
     })
     const entries = await directory.getEntries({ recursive: true })
     const paths = entries.map((entry) => entry.getPathname())
@@ -1931,10 +1931,10 @@ describe('file system', () => {
     expect(basicFile.getPathname()).toBe('/components/box/examples/basic')
   })
 
-  test('nested directories with recursive include file pattern', async () => {
+  test('nested directories with recursive filter pattern', async () => {
     const directory = new Directory({
       path: 'fixtures/docs',
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
     })
     const entries = await directory.getEntries({ recursive: true })
     const paths = entries.map((entry) => entry.getPathname())
@@ -1949,10 +1949,10 @@ describe('file system', () => {
     ])
   })
 
-  test('include recursive file pattern includes directory type in sort callback and entries', async () => {
+  test('filter recursive pattern includes directory type in sort callback and entries', async () => {
     const directory = new Directory({
       fileSystem: new MemoryFileSystem({}),
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
     })
 
     const entries = await directory.getEntries()
@@ -1977,7 +1977,7 @@ describe('file system', () => {
           }
         }>((path) => import(`#fixtures/posts/${path}.mdx`)),
       },
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
       // @ts-expect-error
       sort: 'non-existent',
     })
@@ -2007,7 +2007,7 @@ describe('file system', () => {
       'welcome.mdx': 'export const order = 1',
     })
     const directory = new Directory<{ mdx: { order: number } }>({
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
       sort: 'order',
       fileSystem,
     })
@@ -2055,7 +2055,7 @@ describe('file system', () => {
         order: number
       }
     }>({
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
       sort: { key: 'order', direction: 'descending' },
       fileSystem,
     })
@@ -2095,7 +2095,7 @@ describe('file system', () => {
       ts: { metadata: { order: number } }
     }>({
       fileSystem,
-      include: '**/*.ts',
+      filter: '**/*.ts',
       sort: createSort(
         (entry) => entry.getBaseName(),
         (a, b) => a.localeCompare(b)
@@ -2107,9 +2107,9 @@ describe('file system', () => {
     expect(names).toEqual(['alpha', 'beta', 'zebra'])
   })
 
-  test('sort descriptor with recursive include', async () => {
+  test('sort descriptor with recursive filter', async () => {
     new Directory({
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
       loader: {
         mdx: withSchema(
           { metadata: z.object({ order: z.number() }) },
@@ -2120,7 +2120,7 @@ describe('file system', () => {
     })
 
     new Directory({
-      include: '**/*.mdx',
+      filter: '**/*.mdx',
       loader: {
         mdx: withSchema(
           { metadata: z.object({ order: z.number() }) },
@@ -2173,7 +2173,7 @@ describe('file system', () => {
     const directory = new Directory<{
       mdx: { frontmatter: { date: Date } }
     }>({
-      include: '*.mdx',
+      filter: '*.mdx',
       sort: 'frontmatter.date',
       fileSystem: new MemoryFileSystem({
         'older.mdx': `export const frontmatter = { date: new Date("2022-01-01") }`,

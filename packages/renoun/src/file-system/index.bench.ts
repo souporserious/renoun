@@ -88,7 +88,7 @@ beforeAll(async () => {
   docsMdxSortedByName = new Directory({
     path: 'fixtures/docs',
     fileSystem: fs,
-    include: '**/*.mdx',
+    filter: '**/*.mdx',
     loader: { mdx: mdxLoader },
     sort: 'name', // primitive
   })
@@ -98,7 +98,7 @@ beforeAll(async () => {
   }>({
     path: 'fixtures/docs',
     fileSystem: fs,
-    include: '**/*.mdx',
+    filter: '**/*.mdx',
     loader: { mdx: mdxLoader },
     sort: 'frontmatter.title',
   })
@@ -108,7 +108,7 @@ beforeAll(async () => {
   }>({
     path: 'fixtures/docs',
     fileSystem: fs,
-    include: '**/*.ts',
+    filter: '**/*.ts',
     loader: { ts: tsDocsLoader },
     sort: 'metadata.title',
   })
@@ -123,7 +123,7 @@ beforeAll(async () => {
   docsMdxUnsorted = new Directory({
     path: 'fixtures/docs',
     fileSystem: fs,
-    include: '**/*.mdx',
+    filter: '**/*.mdx',
     loader: { mdx: mdxLoader },
   })
 
@@ -131,7 +131,7 @@ beforeAll(async () => {
   cachedDocs = new Directory({
     path: 'fixtures/docs',
     fileSystem: fs,
-    include: '**/*',
+    filter: '**/*',
     loader: { mdx: mdxLoader, ts: tsAnyLoader, tsx: tsxLoader },
   })
   // warm caches so the bench measures hot path
@@ -146,7 +146,7 @@ beforeAll(async () => {
   docsDevCached = new Directory({
     path: 'fixtures/docs',
     fileSystem: fs,
-    include: '**/*',
+    filter: '**/*',
     loader: { mdx: mdxLoader, ts: tsAnyLoader, tsx: tsxLoader },
   })
   await docsDevCached.getEntries()
@@ -201,7 +201,7 @@ describe('Directory.getEntries on fixtures', () => {
   )
 
   bench(
-    'docs mdx (recursive include **/*.mdx)',
+    'docs mdx (recursive filter **/*.mdx)',
     async () => {
       await docsMdxSortedByName.getEntries({ recursive: true })
     },
@@ -391,7 +391,7 @@ describe('Cached path (development)', () => {
       const coldDocs = new Directory({
         path: 'fixtures/docs',
         fileSystem: new NodeFileSystem(),
-        include: '**/*',
+        filter: '**/*',
         loader: { mdx: mdxLoader, ts: tsAnyLoader, tsx: tsxLoader },
       })
       await coldDocs.getEntries({
@@ -423,7 +423,7 @@ describe('Cached path (NODE_ENV=production)', () => {
         const coldDocs = new Directory({
           path: 'fixtures/docs',
           fileSystem: new NodeFileSystem(),
-          include: '**/*',
+          filter: '**/*',
           loader: { mdx: mdxLoader, ts: tsAnyLoader, tsx: tsxLoader },
         })
         await coldDocs.getEntries({
@@ -586,12 +586,12 @@ describe('Static vs Runtime value resolution (MDX)', () => {
 
 describe('Include filter performance', () => {
   bench(
-    'docs: include pattern (**/*.mdx)',
+    'docs: filter pattern (**/*.mdx)',
     async () => {
       const dir = new Directory({
         path: 'fixtures/docs',
         fileSystem: new NodeFileSystem(),
-        include: '**/*.mdx',
+        filter: '**/*.mdx',
         loader: { mdx: mdxLoader },
       })
       await dir.getEntries({ recursive: true })
@@ -600,13 +600,13 @@ describe('Include filter performance', () => {
   )
 
   bench(
-    'docs: include predicate (mdx files)',
+    'docs: filter predicate (mdx files)',
     async () => {
       const dir = new Directory({
         path: 'fixtures/docs',
         fileSystem: new NodeFileSystem(),
         loader: { mdx: mdxLoader, ts: tsAnyLoader },
-        include: (entry) => isFile(entry, 'mdx'),
+        filter: (entry) => isFile(entry, 'mdx'),
       })
       await dir.getEntries({ recursive: true })
     },

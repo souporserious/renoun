@@ -4,7 +4,7 @@ import { z } from 'zod'
 export const docs = new Directory({
   path: 'docs',
   basePathname: null,
-  include: '**/*.mdx',
+  filter: '**/*.mdx',
   loader: {
     mdx: withSchema(
       {

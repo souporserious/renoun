@@ -18,7 +18,7 @@ const frontmatterSchema = v.object({
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: withSchema(
       { frontmatter: frontmatterSchema },
@@ -78,7 +78,7 @@ const frontmatterSchema = v.object({
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: withSchema(
       { frontmatter: frontmatterSchema },

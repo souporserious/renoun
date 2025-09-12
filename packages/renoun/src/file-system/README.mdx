@@ -37,7 +37,7 @@ export default async function Page({ slug }: { slug: string }) {
 }
 ```
 
-You can query the entries within the directory to help with generating navigations and index pages. For example, we can include only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
+You can query the entries within the directory to help with generating navigations and index pages. For example, we can filter to only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
 
 ```tsx
 import { Directory, withSchema } from 'renoun/file-system'
@@ -51,7 +51,7 @@ interface PostType {
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: withSchema<PostType>((path) => import(`./posts/${path}.mdx`)),
   },

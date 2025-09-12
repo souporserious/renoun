@@ -293,14 +293,14 @@ Using your bundler to resolve the module ensures a consistent runtime environmen
 
 #### Generating Navigations
 
-You can also query all of the entries within the directory to help with generating navigations and index pages. For example, we can include only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
+You can also query all of the entries within the directory to help with generating navigations and index pages. For example, we can filter to only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
 
 ```tsx
 import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
 })
 
 export default async function Page() {
@@ -326,7 +326,7 @@ export default async function Page() {
 }
 ```
 
-The `include` filter will affect the results of the `getEntries` method, returning only entries that match the specified pattern. Specific files or directories are still accessible using the `getFile` and `getDirectory` methods.
+The `filter` option will affect the results of the `getEntries` method, returning only entries that match the specified pattern. Specific files or directories are still accessible using the `getFile` and `getDirectory` methods.
 
 #### Type Checking File Exports
 

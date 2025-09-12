@@ -90,7 +90,7 @@ import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
 })
 ```
 
@@ -103,7 +103,7 @@ import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
 })
 
 export default async function Page({
@@ -132,7 +132,7 @@ import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: (path) => import(`./posts/${path}.mdx`),
   },
@@ -155,7 +155,7 @@ import Link from 'next/link'
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: (path) => import(`@/posts/${path}.mdx`),
   },
@@ -185,7 +185,7 @@ export default async function Page() {
 
 <Note>
 
-The `getEntries` method is filtered by the `include` option provided to the `Directory` constructor. This will only return entries that match the provided glob pattern. Alternatively, you can pass a function to `include` to filter entries based on custom logic.
+The `getEntries` method is filtered by the `filter` option provided to the `Directory` constructor. This will only return entries that match the provided glob pattern. Alternatively, you can pass a function to `filter` to filter entries based on custom logic.
 
 </Note>
 
@@ -201,7 +201,7 @@ import { z } from 'zod'
 
 export const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: withSchema(
       {
@@ -238,7 +238,7 @@ import { z } from 'zod'
 
 export const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: withSchema(
       {

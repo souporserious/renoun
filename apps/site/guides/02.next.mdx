@@ -154,7 +154,7 @@ import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: (path) => import(`@/posts/${path}.mdx`),
   },
@@ -168,7 +168,7 @@ import { Directory } from 'renoun'
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: (path) => import(`@/posts/${path}.mdx`),
   },
@@ -199,7 +199,7 @@ import Link from 'next/link'
 
 const posts = new Directory({
   path: 'posts',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: (path) => import(`@/posts/${path}.mdx`),
   },
