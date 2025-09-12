@@ -1924,12 +1924,18 @@ export class Directory<
 
     let entry = await this.#findEntry(this, segments, allExtensions)
 
-    // If we ended on a directory, try to find a matching within it
+    // If we ended on a directory, try to find a representative file within it
     if (entry instanceof Directory) {
-      const directoryEntries = await entry.getEntries({
-        includeDirectoryNamedFiles: true,
-        includeIndexAndReadmeFiles: true,
-      })
+      // Bypass the directory include filters when selecting a representative file directly.
+      const directoryEntries = await entry
+        .#duplicate({
+          include: undefined,
+        })
+        .getEntries({
+          includeDirectoryNamedFiles: true,
+          includeIndexAndReadmeFiles: true,
+          includeTsConfigExcludedFiles: true,
+        })
 
       // Find a representative file in the directory
       let sameName: File<LoaderTypes> | undefined
