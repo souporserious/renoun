@@ -2035,16 +2035,67 @@ export class Directory<
     return currentDirectory
   }
 
-  /** Get a file or directory at the specified `path`. Files will be prioritized over directories. */
+  /**
+   * Get a directory or file at the specified `path`.
+   *
+   * - If a directory exists at the `path` and it contains a file with the same
+   *   base name as the directory (e.g. `Button/Button.tsx`), that file is returned.
+   * - Otherwise, the directory itself is returned when it exists.
+   * - If no directory exists, a file at the `path` is resolved.
+   *
+   * ```ts
+   * // Same‑named file inside directory
+   * // components/Button/Button.tsx
+   * await new Directory({ path: 'components' }).getEntry('button') // JavaScriptFile
+   *
+   * // Directory has only index/readme (no same‑named file)
+   * // components/CodeBlock/index.tsx
+   * await new Directory({ path: 'components' }).getEntry('code-block') // JavaScriptFile
+   *
+   * // No directory at path, only a file
+   * // components/Card.tsx
+   * await new Directory({ path: 'components' }).getEntry('card') // JavaScriptFile
+   *
+   * // Nested lookup within an existing directory
+   * // src/project/server.ts
+   * const project = await new Directory({ path: 'src' }).getDirectory('project')
+   * await project.getEntry('server') // JavaScriptFile
+   *
+   * // Finally, if no file is found, the directory is returned
+   * // src/project/index.tsx
+   * await new Directory({ path: 'src' }).getEntry('project') // Directory
+   * ```
+   */
   async getEntry(
     path: string | string[]
   ): Promise<FileSystemEntry<LoaderTypes>> {
-    return this.getFile(path).catch((error) => {
+    try {
+      const directory = await this.getDirectory(path)
+      const directoryBaseName = directory.getBaseName()
+      const entries = await directory.getEntries({
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      for (const entry of entries) {
+        const entryBaseName = entry.getBaseName()
+        if (
+          entry instanceof File &&
+          (entryBaseName === directoryBaseName ||
+            entryBaseName === 'index' ||
+            directoryBaseName === 'readme')
+        ) {
+          return entry
+        }
+      }
+
+      return directory
+    } catch (error) {
       if (error instanceof FileNotFoundError) {
-        return this.getDirectory(path)
+        return this.getFile(path)
       }
       throw error
-    })
+    }
   }
 
   #entriesCache = new Map<string, FileSystemEntry<LoaderTypes>[]>()
