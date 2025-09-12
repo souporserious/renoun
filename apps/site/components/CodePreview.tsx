@@ -58,6 +58,7 @@ export async function CodePreview({
                   fontSize: '1rem',
                   lineHeight: '1.35',
                   maxWidth: '-webkit-fill-available',
+                  maxHeight: '20rem',
                   padding: '4rem',
                   margin: 'auto',
                   overflow: 'auto',
