@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
+import type { ConfigurationOptions } from '../components/Config/types.js'
 import type { TextMateThemeRaw } from './create-tokenizer.js'
 import { loadTmTheme } from './load-package.js'
 

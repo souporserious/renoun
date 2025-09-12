@@ -1,4 +1,4 @@
-import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
+import type { ConfigurationOptions } from '../components/Config/types.js'
 import { createTokenizer } from './create-tokenizer.js'
 import { getGrammar } from './get-grammar.js'
 import { getTheme } from './get-theme.js'

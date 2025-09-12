@@ -3,11 +3,8 @@ import React, { cloneElement, isValidElement } from 'react'
 import { parseGitSpecifier } from '../file-system/Repository.js'
 import { ClientConfigProvider } from './Config/ClientConfigContext.js'
 import { ServerConfigContext } from './Config/ServerConfigContext.js'
-import {
-  defaultConfig,
-  type ConfigurationOptions,
-  type ThemeValue,
-} from './Config/ConfigTypes.js'
+import { defaultConfig } from './Config/default-config.js'
+import type { ConfigurationOptions, ThemeValue } from './Config/types.js'
 import { Refresh } from './Refresh'
 import { ThemeProvider } from './Theme'
 

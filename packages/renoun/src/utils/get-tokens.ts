@@ -2,7 +2,7 @@ import { join, posix } from 'node:path'
 import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
 import tsMorph from 'ts-morph'
 
-import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
+import type { ConfigurationOptions } from '../components/Config/types.js'
 import type { Languages as TextMateLanguages } from '../grammars/index.js'
 import type { Highlighter } from './create-highlighter.js'
 import { getDebugLogger } from './debug.js'

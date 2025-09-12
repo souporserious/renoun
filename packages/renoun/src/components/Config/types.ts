@@ -1,7 +1,15 @@
 import type { Languages, Themes } from '../../grammars/index.js'
 
+/**
+ * The theme name.
+ * @internal
+ */
 export type ThemeName = Themes | (string & {})
 
+/**
+ * The theme override.
+ * @internal
+ */
 export type ThemeOverride = {
   colors?: Record<string, string>
   tokenColors?: any[]
@@ -11,10 +19,22 @@ export type ThemeOverride = {
   [key: string]: any
 }
 
+/**
+ * The theme value.
+ * @internal
+ */
 export type ThemeValue = ThemeName | [ThemeName, ThemeOverride]
 
+/**
+ * The git provider.
+ * @internal
+ */
 export type GitProvider = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 
+/**
+ * The configuration options for git linking.
+ * @internal
+ */
 export type GitConfig = {
   /** The git source to use for linking to the repository and source files. */
   source: string
@@ -35,6 +55,10 @@ export type GitConfig = {
   baseUrl: string
 }
 
+/**
+ * The configuration options.
+ * @internal
+ */
 export interface ConfigurationOptions {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
   theme?: ThemeValue | Record<string, ThemeValue>
@@ -47,19 +71,4 @@ export interface ConfigurationOptions {
 
   /** The URL of the production site. This is used for generating sitemap and RSS feed URLs. */
   siteUrl?: string
-}
-
-export const defaultConfig: ConfigurationOptions = {
-  languages: [
-    'css',
-    'js',
-    'jsx',
-    'ts',
-    'tsx',
-    'md',
-    'mdx',
-    'shell',
-    'json',
-    'html',
-  ],
 }

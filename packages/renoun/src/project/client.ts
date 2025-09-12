@@ -1,6 +1,6 @@
 import type { SyntaxKind } from 'ts-morph'
 
-import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
+import type { ConfigurationOptions } from '../components/Config/types.js'
 import {
   createHighlighter,
   type Highlighter,

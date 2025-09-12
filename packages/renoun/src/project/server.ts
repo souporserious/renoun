@@ -6,7 +6,7 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.js'
-import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
+import type { ConfigurationOptions } from '../components/Config/types.js'
 import { getDebugLogger } from '../utils/debug.js'
 import {
   getFileExports as baseGetFileExports,

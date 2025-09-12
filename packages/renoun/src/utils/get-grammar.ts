@@ -1,4 +1,4 @@
-import type { ConfigurationOptions } from '../components/Config/ConfigTypes.js'
+import type { ConfigurationOptions } from '../components/Config/types.js'
 import type { Languages, ScopeName } from '../grammars/index.js'
 import {
   grammars,

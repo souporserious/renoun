@@ -1,6 +1,6 @@
 import React from 'react'
 
-import type { ConfigurationOptions } from '../Config/ConfigTypes.js'
+import type { ConfigurationOptions } from '../Config/types.js'
 import { ThemeContextProvider } from './ThemeContext.js'
 import { ThemeScript } from './ThemeScript.js'
 import { ThemeStyles } from './ThemeStyles.js'

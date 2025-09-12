@@ -1,8 +1,8 @@
 import React from 'react'
 import { GlobalStyles } from 'restyle'
 
+import type { ConfigurationOptions } from '../Config/types.js'
 import { getThemeColorVariables } from '../../utils/get-theme.js'
-import type { ConfigurationOptions } from '../Config/ConfigTypes.js'
 
 /**
  * Injects the global CSS theme color variables used throughout `renoun/components`.

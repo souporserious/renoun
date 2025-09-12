@@ -1,10 +1,19 @@
 'use client'
 import React from 'react'
-import type { ConfigurationOptions } from './ConfigTypes.js'
 
+import type { ConfigurationOptions } from './types.js'
+
+/**
+ * A context that provides the current configured client configuration.
+ * @internal
+ */
 export const ClientConfigContext =
   React.createContext<ConfigurationOptions | null>(null)
 
+/**
+ * A provider that captures the client configuration and provides it to the client.
+ * @internal
+ */
 export function ClientConfigProvider({
   value,
   children,
@@ -19,6 +28,10 @@ export function ClientConfigProvider({
   )
 }
 
+/**
+ * Get the current configured client configuration.
+ * @internal
+ */
 export function useConfig(): ConfigurationOptions {
   const config = React.useContext(ClientConfigContext)
   if (!config) {
