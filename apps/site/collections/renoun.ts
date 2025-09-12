@@ -18,32 +18,26 @@ async function filterInternalExports(entry: FileSystemEntry<any>) {
       const tags = allTags[index]
       return tags?.every((tag) => tag.name === 'internal')
     })
-
-    if (allInternal) {
-      return false
-    }
-
-    return true
+    return !allInternal
   }
 
-  // Only include directories that have a representative TS/TSX file
   if (isDirectory(entry)) {
     const children = await entry.getEntries({
       includeDirectoryNamedFiles: true,
       includeIndexAndReadmeFiles: true,
       includeTsConfigExcludedFiles: true,
     })
-    const baseName = entry.getBaseName().toLowerCase()
     for (const child of children) {
       if (isFile(child, ['ts', 'tsx'])) {
-        const childBaseName = child.getBaseName().toLowerCase()
-        if (
-          childBaseName === baseName ||
-          childBaseName === 'index' ||
-          childBaseName === 'readme'
-        ) {
-          return true
-        }
+        const fileExports = await child.getExports()
+        const allTags = await Promise.all(
+          fileExports.map((exportSource) => exportSource.getTags())
+        )
+        const allInternal = fileExports.every((_, index) => {
+          const tags = allTags[index]
+          return tags?.every((tag) => tag.name === 'internal')
+        })
+        if (!allInternal) return true
       }
     }
     return false
