@@ -446,27 +446,38 @@ export class File<
   }
 
   /** Get a URL to the file for the configured remote git repository. */
-  #getRepositoryUrl(options?: Omit<GetFileUrlOptions, 'path'>) {
-    const repository = this.#directory.getRepository()
+  #getRepositoryUrl(
+    repository?: RepositoryConfig | string | Repository,
+    options?: Omit<GetFileUrlOptions, 'path'>
+  ) {
+    const repo = this.#directory.getRepository(repository)
     const fileSystem = this.#directory.getFileSystem()
 
-    return repository.getFileUrl({
+    return repo.getFileUrl({
       path: fileSystem.getRelativePathToWorkspace(this.#path),
       ...options,
     })
   }
 
   /** Get the URL to the file git blame for the configured git repository. */
-  getBlameUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
-    return this.#getRepositoryUrl({
+  getBlameUrl(
+    options?: Pick<GetFileUrlOptions, 'ref'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
+    return this.#getRepositoryUrl(options?.repository, {
       type: 'blame',
       ref: options?.ref,
     })
   }
 
   /** Get the edit URL to the file source for the configured git repository. */
-  getEditUrl(options?: Pick<GetFileUrlOptions, 'ref' | 'line'>) {
-    return this.#getRepositoryUrl({
+  getEditUrl(
+    options?: Pick<GetFileUrlOptions, 'ref' | 'line'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
+    return this.#getRepositoryUrl(options?.repository, {
       type: 'edit',
       ref: options?.ref,
       line: options?.line,
@@ -474,24 +485,36 @@ export class File<
   }
 
   /** Get the URL to the file history for the configured git repository. */
-  getHistoryUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
-    return this.#getRepositoryUrl({
+  getHistoryUrl(
+    options?: Pick<GetFileUrlOptions, 'ref'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
+    return this.#getRepositoryUrl(options?.repository, {
       type: 'history',
       ref: options?.ref,
     })
   }
 
   /** Get the URL to the raw file contents for the configured git repository. */
-  getRawUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
-    return this.#getRepositoryUrl({
+  getRawUrl(
+    options?: Pick<GetFileUrlOptions, 'ref'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
+    return this.#getRepositoryUrl(options?.repository, {
       type: 'raw',
       ref: options?.ref,
     })
   }
 
   /** Get the URL to the file source for the configured git repository. */
-  getSourceUrl(options?: Pick<GetFileUrlOptions, 'ref' | 'line'>) {
-    return this.#getRepositoryUrl({
+  getSourceUrl(
+    options?: Pick<GetFileUrlOptions, 'ref' | 'line'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
+    return this.#getRepositoryUrl(options?.repository, {
       type: 'source',
       ref: options?.ref,
       line: options?.line,
@@ -1497,9 +1520,7 @@ export class MDXFile<
   }
 }
 
-type Narrowed<Filter> = Filter extends (
-  entry: any
-) => entry is infer ReturnType
+type Narrowed<Filter> = Filter extends (entry: any) => entry is infer ReturnType
   ? ReturnType
   : never
 type ResolveDirectoryFilterEntries<
@@ -1589,9 +1610,7 @@ export class Directory<
   #simpleFilter?: { recursive: boolean; extensions: Set<string> }
   #sort?: any
 
-  constructor(
-    options?: DirectoryOptions<Types, LoaderTypes, Loaders, Filter>
-  ) {
+  constructor(options?: DirectoryOptions<Types, LoaderTypes, Loaders, Filter>) {
     if (options === undefined) {
       this.#path = '.'
       this.#slugCasing = 'kebab'
@@ -1718,8 +1737,18 @@ export class Directory<
   }
 
   /** Get the `Repository` for this directory. */
-  getRepository() {
+  getRepository(repository?: RepositoryConfig | string | Repository) {
     if (this.#repository) {
+      return this.#repository
+    }
+
+    if (repository instanceof Repository) {
+      this.#repository = repository
+      return this.#repository
+    }
+
+    if (typeof repository === 'string' || typeof repository === 'object') {
+      this.#repository = new Repository(repository)
       return this.#repository
     }
 
@@ -1937,7 +1966,8 @@ export class Directory<
         })
 
       // Find a representative file in the directory
-      let sameName: File<LoaderTypes> | undefined
+      let sameNameNoModifier: File<LoaderTypes> | undefined
+      let sameNameWithModifier: File<LoaderTypes> | undefined
       let fallback: File<LoaderTypes> | undefined
       let anyMatchingFile: File<LoaderTypes> | undefined
 
@@ -1953,13 +1983,14 @@ export class Directory<
           : true
 
         // Check for file that shares the directory name
-        if (
-          !sameName &&
-          baseName === entry.getBaseName() &&
-          hasValidExtension
-        ) {
-          sameName = directoryEntry
-          break // Found the best match, no need to continue
+        if (baseName === entry.getBaseName() && hasValidExtension) {
+          if (!directoryEntry.getModifierName()) {
+            // Prefer file without modifier (e.g. Link.tsx)
+            sameNameNoModifier = directoryEntry
+          } else if (!sameNameWithModifier) {
+            // Track modified file (e.g. Link.examples.tsx) as a secondary choice
+            sameNameWithModifier = directoryEntry
+          }
         }
 
         // Check for index/readme as fallback
@@ -1979,8 +2010,10 @@ export class Directory<
         }
       }
 
-      if (sameName) {
-        entry = sameName
+      if (sameNameNoModifier) {
+        entry = sameNameNoModifier
+      } else if (sameNameWithModifier) {
+        entry = sameNameWithModifier
       } else if (fallback) {
         entry = fallback
       } else if (anyMatchingFile) {
@@ -2487,24 +2520,35 @@ export class Directory<
   }
 
   /** Get a URL to the directory for the configured git repository. */
-  #getRepositoryUrl(options?: Omit<GetDirectoryUrlOptions, 'path'>) {
-    return this.getRepository().getDirectoryUrl({
+  #getRepositoryUrl(
+    repository?: RepositoryConfig | string | Repository,
+    options?: Omit<GetDirectoryUrlOptions, 'path'>
+  ) {
+    return this.getRepository(repository).getDirectoryUrl({
       path: this.getRelativePathToWorkspace(),
       ...options,
     })
   }
 
   /** Get the URL to the directory history for the configured git repository. */
-  getHistoryUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
-    return this.#getRepositoryUrl({
+  getHistoryUrl(
+    options?: Pick<GetFileUrlOptions, 'ref'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
+    return this.#getRepositoryUrl(options?.repository, {
       type: 'history',
       ref: options?.ref,
     })
   }
 
   /** Get the URL to the directory source for the configured git repository. */
-  getSourceUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
-    return this.#getRepositoryUrl({
+  getSourceUrl(
+    options?: Pick<GetFileUrlOptions, 'ref'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
+    return this.#getRepositoryUrl(options?.repository, {
       type: 'source',
       ref: options?.ref,
     })

@@ -75,7 +75,8 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   getRelativePathToWorkspace(path: string) {
-    return normalizePath(path)
+    const normalized = normalizeSlashes(path)
+    return normalized.startsWith('./') ? normalized.slice(2) : normalized
   }
 
   getFiles() {

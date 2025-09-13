@@ -2316,4 +2316,21 @@ describe('file system', () => {
 
     expect(await defaultExport.getRuntimeValue()).toBe(123)
   })
+
+  test('throws when repository is not configured', () => {
+    const directory = new Directory()
+    expect(() => directory.getRepository()).toThrowError(
+      /Git repository is not configured/
+    )
+  })
+
+  test('allows passing repository to link methods', async () => {
+    const fileSystem = new MemoryFileSystem({ 'foo.ts': '' })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('foo', 'ts')
+
+    expect(
+      file.getSourceUrl({ repository: 'github:owner/repo@main' })
+    ).toBe('https://github.com/owner/repo/blob/main/foo.ts')
+  })
 })
