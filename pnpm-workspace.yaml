@@ -30,3 +30,5 @@ onlyBuiltDependencies:
   - '@tailwindcss/oxide'
   - esbuild
   - sharp
+
+minimumReleaseAge: 1440
