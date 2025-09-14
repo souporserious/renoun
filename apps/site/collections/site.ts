@@ -20,10 +20,6 @@ const mdxSchema = {
 
 export const DocsDirectory = new Directory({
   path: 'docs',
-  repository: {
-    baseUrl: 'https://github.com/souporserious/renoun',
-    provider: 'github',
-  },
   loader: {
     mdx: withSchema(mdxSchema, (path) => import(`@/docs/${path}.mdx`)),
   },
@@ -32,10 +28,6 @@ export const DocsDirectory = new Directory({
 
 export const GuidesDirectory = new Directory({
   path: 'guides',
-  repository: {
-    baseUrl: 'https://github.com/souporserious/renoun',
-    provider: 'github',
-  },
   loader: {
     mdx: withSchema(mdxSchema, (path) => import(`@/guides/${path}.mdx`)),
   },

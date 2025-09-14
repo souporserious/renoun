@@ -1,11 +1,15 @@
 import type { CSSObject } from 'restyle'
+import { Link, type FileSystemEntry } from 'renoun'
 
-export function ViewSource({ href, css }: { href: string; css?: CSSObject }) {
+export function ViewSource({
+  source,
+  css,
+}: {
+  source: FileSystemEntry
+  css?: CSSObject
+}) {
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
+    <span
       css={{
         display: 'flex',
         alignItems: 'center',
@@ -20,7 +24,9 @@ export function ViewSource({ href, css }: { href: string; css?: CSSObject }) {
         ...css,
       }}
     >
-      View Source{' '}
+      <Link source={source} variant="source" target="_blank" rel="noreferrer">
+        View Source{' '}
+      </Link>
       <svg
         fill="none"
         width="1em"
@@ -36,6 +42,6 @@ export function ViewSource({ href, css }: { href: string; css?: CSSObject }) {
         <path d="M15 3h6v6" />
         <path d="M10 14L21 3" />
       </svg>
-    </a>
+    </span>
   )
 }

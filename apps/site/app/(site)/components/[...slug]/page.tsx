@@ -8,6 +8,7 @@ import {
   type JavaScriptFile,
   type JavaScriptModuleExport,
   type MDXHeadings,
+  Link,
 } from 'renoun'
 import { GeistMono } from 'geist/font/mono'
 import { References } from '@/components/Reference'
@@ -17,6 +18,7 @@ import { CodePreview } from '@/components/CodePreview'
 import { MDX } from '@/components/MDX'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
+import { ViewSource } from '@/components/ViewSource'
 
 export async function generateStaticParams() {
   const entries = await ComponentsDirectory.getEntries({ recursive: true })
@@ -81,18 +83,50 @@ export default async function Component({
     exampleFiles = [examplesEntry]
   }
 
+  // Fallback look for co-located *.examples.tsx inside the component directory
+  if (!exampleFiles || exampleFiles.length === 0) {
+    try {
+      const componentDir = await ComponentsDirectory.getDirectory(slug)
+      const entries = await componentDir.getEntries({
+        includeIndexAndReadmeFiles: true,
+        includeTsConfigExcludedFiles: true,
+      })
+      exampleFiles = entries.filter(
+        (entry): entry is JavaScriptFile<any> =>
+          isFile(entry, 'tsx') && entry.getModifierName() === 'examples'
+      )
+    } catch {
+      // If no directory exists for this slug, there are no co-located examples
+    }
+  }
+
   const allExamplesExports = exampleFiles
     ? (
         await Promise.all(exampleFiles.map(async (file) => file.getExports()))
       ).flat()
     : []
-  const [heroExport, ...examplesExports] = allExamplesExports
+  // Optionally pick up a co-located layout/default export from a *.examples file
+  const layoutCandidate = exampleFiles?.find(
+    (file) => file.getModifierName() === 'examples'
+  )
+  const layoutExport = layoutCandidate
+    ? await layoutCandidate.getExport('default').catch((error) => {
+        if (error instanceof ModuleExportNotFoundError) {
+          return undefined
+        }
+        throw error
+      })
+    : undefined
+  // Exclude the layout's default export from example rendering
+  const filteredExamples = layoutExport
+    ? allExamplesExports.filter((exp) => exp !== layoutExport)
+    : allExamplesExports
+  const [heroExport, ...examplesExports] = filteredExamples
   const isExamplesPage = slug.at(-1) === 'examples'
   const componentExports = isExamplesPage
     ? undefined
     : await componentEntry.getExports()
   const updatedAt = await componentEntry.getLastCommitDate()
-  const url = componentEntry.getEditUrl()
   const [previousEntry, nextEntry] = await componentEntry.getSiblings({
     collection: RootCollection,
   })
@@ -157,7 +191,12 @@ export default async function Component({
                 {title} {isExamplesPage ? 'Examples' : ''}
               </h1>
               {description ? <MDX>{description}</MDX> : null}
-              {heroExport ? <CodePreview fileExport={heroExport} /> : null}
+              {heroExport ? (
+                <CodePreview
+                  fileExport={heroExport}
+                  layoutExport={layoutExport}
+                />
+              ) : null}
               {Content ? <Content /> : null}
             </div>
           ) : (
@@ -165,7 +204,12 @@ export default async function Component({
               <h1 css={{ fontSize: '3rem', margin: 0 }}>
                 {title} {isExamplesPage ? 'Examples' : ''}
               </h1>
-              {heroExport ? <CodePreview fileExport={heroExport} /> : null}
+              {heroExport ? (
+                <CodePreview
+                  fileExport={heroExport}
+                  layoutExport={layoutExport}
+                />
+              ) : null}
             </>
           )}
         </div>
@@ -186,7 +230,10 @@ export default async function Component({
             >
               {examplesExports.map((fileExport) => (
                 <li key={fileExport.getName()}>
-                  <Preview fileExport={fileExport} />
+                  <Preview
+                    fileExport={fileExport}
+                    layoutExport={layoutExport}
+                  />
                 </li>
               ))}
             </ul>
@@ -254,22 +301,27 @@ export default async function Component({
         </div>
       </div>
 
-      <TableOfContents headings={headings} editPath={url} />
+      <TableOfContents
+        headings={headings}
+        viewSource={<ViewSource source={componentEntry} />}
+      />
     </>
   )
 }
 
 async function Preview({
   fileExport,
+  layoutExport,
 }: {
   fileExport: JavaScriptModuleExport<React.ComponentType>
+  layoutExport?: JavaScriptModuleExport<any>
 }) {
   const name = fileExport.getName()
   const title = fileExport.getTitle()
   const description = fileExport.getDescription()
   const slug = fileExport.getSlug()
-  const url = fileExport.getEditUrl()
   const Value = await fileExport.getRuntimeValue()
+  const Layout = layoutExport ? await layoutExport.getRuntimeValue() : null
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
 
@@ -290,9 +342,9 @@ async function Preview({
           }}
         >
           <h3 css={{ margin: 0 }}>{title}</h3>{' '}
-          <a href={url} css={{ fontSize: 'var(--font-size-body-3)' }}>
-            View Source
-          </a>
+          <Link source={fileExport} variant="edit">
+            {(href) => <a href={href}>View Source</a>}
+          </Link>
         </div>
         {description ? <p>{description}</p> : null}
       </header>
@@ -317,7 +369,11 @@ async function Preview({
               overflow: 'auto',
             }}
           >
-            <Value />
+            {Layout ? (
+              <Layout Component={Value}>{<Value />}</Layout>
+            ) : (
+              <Value />
+            )}
           </div>
         ) : null}
         <CodeBlock language="tsx">

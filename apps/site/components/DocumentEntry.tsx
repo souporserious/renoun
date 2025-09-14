@@ -2,6 +2,7 @@ import type { Collection, MDXFile, MDXHeadings } from 'renoun'
 
 import { SiblingLink } from './SiblingLink'
 import { TableOfContents } from './TableOfContents'
+import { ViewSource } from './ViewSource'
 
 export async function DocumentEntry({
   file,
@@ -28,7 +29,6 @@ export async function DocumentEntry({
   const updatedAt = shouldRenderUpdatedAt
     ? await file.getLastCommitDate()
     : null
-  const editPath = file.getEditUrl()
   let [previousEntry, nextEntry] = await file.getSiblings({ collection })
 
   if (previousEntry?.getBaseName() === 'docs') {
@@ -95,7 +95,10 @@ export async function DocumentEntry({
       </div>
 
       {shouldRenderTableOfContents ? (
-        <TableOfContents headings={headings} editPath={editPath} />
+        <TableOfContents
+          headings={headings}
+          viewSource={<ViewSource source={file} />}
+        />
       ) : null}
     </>
   )

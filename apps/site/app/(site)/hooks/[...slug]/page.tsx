@@ -5,6 +5,7 @@ import {
   isDirectory,
   FileNotFoundError,
   ModuleExportNotFoundError,
+  Link,
   type JavaScriptFile,
   type JavaScriptModuleExport,
   type MDXHeadings,
@@ -86,7 +87,6 @@ export default async function Hook({
   const isExamplesPage = slug.at(-1) === 'examples'
   const hookExports = isExamplesPage ? undefined : await hookEntry.getExports()
   const updatedAt = await hookEntry.getLastCommitDate()
-  const url = hookEntry.getEditUrl()
   const [previousEntry, nextEntry] = await hookEntry.getSiblings({
     collection: RootCollection,
   })
@@ -205,17 +205,19 @@ export default async function Hook({
               <span suppressHydrationWarning>
                 Last updated: {updatedAt.toLocaleDateString()}
               </span>
-              {url ? (
-                <a
-                  href={url}
-                  css={{
-                    color: 'var(--color-foreground-interactive)',
-                    textDecoration: 'none',
-                  }}
-                >
-                  Edit on GitHub
-                </a>
-              ) : null}
+              <Link source={hookEntry} variant="edit">
+                {(href) => (
+                  <a
+                    href={href}
+                    css={{
+                      color: 'var(--color-foreground-interactive)',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Edit on GitHub
+                  </a>
+                )}
+              </Link>
             </div>
           ) : null}
 
@@ -258,7 +260,6 @@ async function Preview({
   const title = fileExport.getTitle()
   const description = fileExport.getDescription()
   const slug = fileExport.getSlug()
-  const url = fileExport.getEditUrl()
   const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
@@ -280,9 +281,13 @@ async function Preview({
           }}
         >
           <h3 css={{ margin: 0 }}>{title}</h3>{' '}
-          <a href={url} css={{ fontSize: 'var(--font-size-body-3)' }}>
-            View Source
-          </a>
+          <Link source={fileExport} variant="edit">
+            {(href) => (
+              <a href={href} css={{ fontSize: 'var(--font-size-body-3)' }}>
+                View Source
+              </a>
+            )}
+          </Link>
         </div>
         {description ? <p>{description}</p> : null}
       </header>

@@ -744,18 +744,28 @@ export class JavaScriptModuleExport<Value> {
   }
 
   /** Get the edit URL to the file export source for the configured git repository. */
-  getEditUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+  getEditUrl(
+    options?: Pick<GetFileUrlOptions, 'ref'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
     return this.#file.getEditUrl({
       ref: options?.ref,
       line: this.#metadata?.location?.position.start.line,
+      repository: options?.repository,
     })
   }
 
   /** Get the URL to the file export source for the configured git repository. */
-  getSourceUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+  getSourceUrl(
+    options?: Pick<GetFileUrlOptions, 'ref'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
     return this.#file.getSourceUrl({
       ref: options?.ref,
       line: this.#metadata?.location?.position.start.line,
+      repository: options?.repository,
     })
   }
 
@@ -1204,11 +1214,19 @@ export class MDXModuleExport<Value> {
     return this.#file.getEditorUri()
   }
 
-  getEditUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+  getEditUrl(
+    options?: Pick<GetFileUrlOptions, 'ref'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
     return this.#file.getEditUrl(options)
   }
 
-  getSourceUrl(options?: Pick<GetFileUrlOptions, 'ref'>) {
+  getSourceUrl(
+    options?: Pick<GetFileUrlOptions, 'ref'> & {
+      repository?: RepositoryConfig | string | Repository
+    }
+  ) {
     return this.#file.getSourceUrl(options)
   }
 
