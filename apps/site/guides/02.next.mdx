@@ -229,6 +229,40 @@ export default async function Page() {
 
 Directories are not limited to MDX files and can be used with _any file type_.
 
+### Ignoring files in dynamic imports
+
+When using dynamic imports inside a `Directory` loader, you can tell Webpack to exclude certain files (e.g. tests or node modules) so they are not included in the bundle. To configure this, add a magic comment to the `import` call:
+
+```tsx
+import { Directory } from 'renoun'
+
+const posts = new Directory({
+  path: 'posts',
+  filter: '*.mdx',
+  loader: {
+    mdx: (path) => {
+      return import(
+        /* webpackExclude: /node_modules/ */
+        `@/posts/${path}.mdx`
+      )
+    },
+  },
+})
+```
+
+<Note>
+
+Adjust the regular expression to match the files you want to ignore. For example, to exclude test files for a TSX component:
+
+```tsx
+import(
+  /* webpackExclude: /\\.test\\.tsx$/ */
+  `@/components/${path}.tsx`
+)
+```
+
+</Note>
+
 ## Start
 
 Now you can start your Next.js server with renoun enabled:
