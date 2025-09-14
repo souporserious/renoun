@@ -8,13 +8,13 @@ Adds a new `Link` component that helps generate links for directories, files, mo
 import { JavaScriptFile, Link } from 'renoun'
 
 const file = new JavaScriptFile({
-  path: 'components',
+  path: 'components/Button.tsx',
 })
 
 function App() {
   return (
-    <Link source={file} variant="edit">
-      Edit Source
+    <Link source={file} variant="source">
+      View Source
     </Link>
   )
 }
