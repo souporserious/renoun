@@ -16,12 +16,13 @@ export {
 } from './CodeInline.js'
 export { Copyright } from './Copyright.js'
 export { GitProviderLogo, GitProviderLink } from './GitProvider.js'
+export { Link } from './Link/index.js'
 export {
   Markdown,
   type MarkdownProps,
   type MarkdownComponents,
 } from './Markdown.js'
-export { MDX as MDX } from './MDX.js'
+export { MDX } from './MDX.js'
 export {
   PackageInstall,
   type PackageInstallProps,

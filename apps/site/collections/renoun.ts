@@ -49,10 +49,6 @@ async function filterInternalExports(entry: FileSystemEntry<any>) {
 export const FileSystemDirectory = new Directory({
   path: '../../packages/renoun/src/file-system',
   basePathname: 'utilities',
-  repository: {
-    baseUrl: 'https://github.com/souporserious/renoun',
-    provider: 'github',
-  },
   loader: {
     mdx: withSchema<{
       headings: MDXHeadings
@@ -67,16 +63,21 @@ type ComponentSchema = Record<string, React.ComponentType>
 
 export const ComponentsDirectory = new Directory({
   path: '../../packages/renoun/src/components',
-  repository: {
-    baseUrl: 'https://github.com/souporserious/renoun',
-    provider: 'github',
-  },
+  repository: 'souporserious/renoun',
   loader: {
     ts: withSchema<ComponentSchema>(
-      (path) => import(`../../../packages/renoun/src/components/${path}.ts`)
+      (path) =>
+        import(
+          /* webpackExclude: /\.test\.ts$/ */
+          `../../../packages/renoun/src/components/${path}.ts`
+        )
     ),
     tsx: withSchema<ComponentSchema>(
-      (path) => import(`../../../packages/renoun/src/components/${path}.tsx`)
+      (path) =>
+        import(
+          /* webpackExclude: /\.test\.tsx$/ */
+          `../../../packages/renoun/src/components/${path}.tsx`
+        )
     ),
     mdx: withSchema(
       {
@@ -103,16 +104,20 @@ type HookSchema = Record<string, unknown>
 
 export const HooksDirectory = new Directory({
   path: '../../packages/renoun/src/hooks',
-  repository: {
-    baseUrl: 'https://github.com/souporserious/renoun',
-    provider: 'github',
-  },
   loader: {
     ts: withSchema<HookSchema>(
-      (path) => import(`../../../packages/renoun/src/hooks/${path}.ts`)
+      (path) =>
+        import(
+          /* webpackExclude: /\.test\.ts$/ */
+          `../../../packages/renoun/src/hooks/${path}.ts`
+        )
     ),
     tsx: withSchema<HookSchema>(
-      (path) => import(`../../../packages/renoun/src/hooks/${path}.tsx`)
+      (path) =>
+        import(
+          /* webpackExclude: /\.test\.tsx$/ */
+          `../../../packages/renoun/src/hooks/${path}.tsx`
+        )
     ),
     mdx: withSchema(
       {

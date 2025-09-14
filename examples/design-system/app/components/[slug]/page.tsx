@@ -3,10 +3,11 @@ import {
   isFile,
   isDirectory,
   FileNotFoundError,
+  Link,
   type FileSystemEntry,
   type JavaScriptModuleExport,
 } from 'renoun'
-import Link from 'next/link'
+import NextLink from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { ComponentsCollection } from '@/collections'
@@ -73,12 +74,6 @@ export default async function Component({
   )
     ? parentDirectory.getBaseName()
     : componentEntry.getBaseName()
-  const editUrl =
-    process.env.NODE_ENV === 'development'
-      ? componentEntry.getEditorUri()
-      : isDirectory(componentEntry)
-        ? componentEntry.getSourceUrl()
-        : componentEntry.getEditUrl()
   const [previousEntry, nextEntry] = await parentDirectory.getSiblings()
 
   return (
@@ -161,11 +156,19 @@ export default async function Component({
             </div>
           ) : null}
 
-          {editUrl ? (
-            <a href={editUrl} style={{ gridColumn: 2, textAlign: 'right' }}>
-              Edit this page
-            </a>
-          ) : null}
+          <Link
+            source={componentEntry}
+            variant={
+              process.env.NODE_ENV === 'development'
+                ? 'editor'
+                : isDirectory(componentEntry)
+                  ? 'source'
+                  : 'edit'
+            }
+            style={{ gridColumn: 2, textAlign: 'right' }}
+          >
+            Edit this page
+          </Link>
         </div>
 
         <nav
@@ -194,7 +197,6 @@ async function Preview({
 }) {
   const name = fileExport.getName()
   const description = fileExport.getDescription()
-  const url = fileExport.getSourceUrl()
   const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
@@ -203,7 +205,10 @@ async function Preview({
     <section key={name}>
       <header>
         <Stack flexDirection="row" alignItems="baseline" gap="0.5rem">
-          <h3 css={{ margin: 0 }}>{name}</h3> <a href={url}>Edit example</a>
+          <h3 css={{ margin: 0 }}>{name}</h3>
+          <Link source={fileExport} variant="source">
+            Edit example
+          </Link>
         </Stack>
         {description ? <p>{description}</p> : null}
       </header>
@@ -241,7 +246,7 @@ async function SiblingLink({
   direction: 'previous' | 'next'
 }) {
   return (
-    <Link
+    <NextLink
       href={entry.getPathname()}
       style={{
         gridColumn: direction === 'previous' ? 1 : 2,
@@ -250,6 +255,6 @@ async function SiblingLink({
     >
       <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
       {entry.getBaseName()}
-    </Link>
+    </NextLink>
   )
 }

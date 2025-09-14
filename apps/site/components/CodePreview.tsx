@@ -6,12 +6,15 @@ import { Collapse } from './Collapse'
 
 export async function CodePreview({
   fileExport,
+  layoutExport,
 }: {
   fileExport: JavaScriptModuleExport<React.ComponentType>
+  layoutExport?: JavaScriptModuleExport<any>
 }) {
   const name = fileExport.getName()
   const slug = fileExport.getSlug()
   const Value = await fileExport.getRuntimeValue()
+  const Layout: any = layoutExport ? await layoutExport.getRuntimeValue() : null
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
   const code = await fileExport.getText({ includeDependencies: true })
@@ -64,7 +67,11 @@ export async function CodePreview({
                   overflow: 'auto',
                 }}
               >
-                <Value />
+                {Layout ? (
+                  <Layout Component={Value}>{<Value />}</Layout>
+                ) : (
+                  <Value />
+                )}
               </div>
             </div>
           ) : null}
@@ -129,11 +136,11 @@ function HeroExample({
                 zIndex: 1,
                 pointerEvents: 'none',
                 opacity: 1,
-                transition: 'opacity 400ms ease',
+                transition: 'opacity 500ms ease-in-out',
                 willChange: 'opacity',
                 ['--hero-button-height']: '2.5rem',
                 ['--hero-depth']: '14rem',
-                backgroundImage: `linear-gradient(0deg, rgb(20 29 43), rgb(20 29 43 / 0%))`,
+                backgroundImage: `linear-gradient(180deg, rgb(20 29 43 / 0%) 0%, rgb(20 29 43 / 0%) 70%, rgb(20 29 43 / 60%) 90%, rgb(20 29 43 / 100%) 100%)`,
                 '[data-state="open"] + &': {
                   opacity: 0,
                 },

@@ -3,14 +3,12 @@ import { useId } from 'react'
 import type { CSSObject } from 'restyle'
 import { useSectionObserver, type MDXHeadings } from 'renoun'
 
-import { ViewSource } from './ViewSource'
-
 export function TableOfContents({
   headings,
-  editPath,
+  viewSource,
 }: {
   headings: MDXHeadings
-  editPath?: string
+  viewSource?: React.ReactNode
 }) {
   const id = useId()
   const sectionObserver = useSectionObserver()
@@ -75,7 +73,7 @@ export function TableOfContents({
               </li>
             ) : null
           )}
-          {editPath ? (
+          {viewSource ? (
             <>
               <li css={{ margin: '0.8rem 0' }}>
                 <hr
@@ -86,9 +84,7 @@ export function TableOfContents({
                   }}
                 />
               </li>
-              <li>
-                <ViewSource href={editPath} />
-              </li>
+              <li>{viewSource}</li>
             </>
           ) : null}
         </ol>

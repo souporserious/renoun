@@ -7,8 +7,4 @@ export const ComponentsCollection = new Directory({
     tsx: (path) => import(`./components/${path}.tsx`),
     mdx: (path) => import(`./components/${path}.mdx`),
   },
-  repository: {
-    baseUrl: 'https://github.com/souporserious/renoun',
-    provider: 'github',
-  },
 })
