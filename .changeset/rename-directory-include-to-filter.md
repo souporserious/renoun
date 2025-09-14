@@ -2,6 +2,8 @@
 'renoun': minor
 ---
 
+Renames `Directory.include` option to `Directory.filter`.
+
 ### Breaking Changes
 
-Rename `Directory.include` option to `Directory.filter`.
+Rename all `Directory.include` call sites to use `Directory.filter`.
