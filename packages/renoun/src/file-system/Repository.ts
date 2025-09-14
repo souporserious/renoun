@@ -1,11 +1,23 @@
 export type GitProviderType = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 
 export interface RepositoryConfig {
-  /** The base URL of the repository. */
+  /** The base URL of the repository provider or full repository URL. */
   baseUrl: string
 
   /** The type of Git provider. */
   provider: GitProviderType
+
+  /** Optional owner and repository, overrides parsing from `baseUrl` when set. */
+  owner?: string
+
+  /** Optional repository name, overrides parsing from `baseUrl` when set. */
+  repository?: string
+
+  /** Optional default branch/ref, used for URLs. */
+  branch?: string
+
+  /** Optional default path prefix inside the repository. */
+  path?: string
 }
 
 export interface GetFileUrlOptions {
@@ -361,13 +373,32 @@ export class Repository {
 
       this.#provider = provider as GitProviderType
 
-      const extracted = extractOwnerAndRepositoryFromBaseUrl(
-        this.#provider,
-        this.#baseUrl
-      )
-      if (extracted) {
-        this.#owner = extracted.owner
-        this.#repo = extracted.repo
+      if (typeof repository === 'object') {
+        // Prefer explicit owner/repository from config when provided
+        if (repository.owner && repository.repository) {
+          this.#owner = repository.owner
+          this.#repo = repository.repository
+        } else {
+          const extracted = extractOwnerAndRepositoryFromBaseUrl(
+            this.#provider,
+            this.#baseUrl
+          )
+          if (extracted) {
+            this.#owner = extracted.owner
+            this.#repo = extracted.repo
+          }
+        }
+
+        // Respect default branch if provided
+        if (repository.branch) {
+          this.#defaultRef = repository.branch
+          this.#isDefaultRefExplicit = true
+        }
+
+        // Optional default path inside repository
+        if (repository.path) {
+          this.#defaultPath = repository.path
+        }
       }
     }
 
@@ -483,9 +514,27 @@ export class Repository {
       rangeDelimiter: '-L',
     })
 
+    // Compute a repository-aware base URL. If owner/repo are known but not
+    // present in `baseUrl` then synthesize "<origin>/<owner>/<repo>"
+    const urlObject = tryGetUrl(this.#baseUrl)
+    const extracted = extractOwnerAndRepositoryFromBaseUrl(
+      this.#provider,
+      this.#baseUrl
+    )
+    const hasOwnerRepoInBase = Boolean(extracted)
+    const repoBaseUrl =
+      this.#owner && this.#repo && urlObject && !hasOwnerRepoInBase
+        ? `${urlObject.origin}/${this.#owner}/${this.#repo}`
+        : this.#baseUrl
+
     switch (type) {
       case 'edit':
-        return `${this.#baseUrl}/edit/${ref}/${path}`
+        if (!hasOwnerRepoInBase && (!this.#owner || !this.#repo)) {
+          throw new Error(
+            '[renoun] Cannot construct GitHub edit URL without owner/repository. Ensure `RootProvider` is configured with a full git config or provide a `repository` on the Directory.'
+          )
+        }
+        return `${repoBaseUrl}/edit/${ref}/${path}`
       case 'raw': {
         const host = getNormalizedHostnameFromUrlString(this.#baseUrl)
 
@@ -498,15 +547,30 @@ export class Repository {
         }
 
         // GitHub Enterprise: the instance serves raw at "/raw/<ref>/<path>"
-        return `${this.#baseUrl}/raw/${ref}/${path}`
+        return `${repoBaseUrl}/raw/${ref}/${path}`
       }
       case 'blame':
-        return `${this.#baseUrl}/blame/${ref}/${path}${lineFragment}`
+        if (!hasOwnerRepoInBase && (!this.#owner || !this.#repo)) {
+          throw new Error(
+            '[renoun] Cannot construct GitHub blame URL without owner/repository. Ensure git configuration includes owner and repository.'
+          )
+        }
+        return `${repoBaseUrl}/blame/${ref}/${path}${lineFragment}`
       case 'history':
-        return `${this.#baseUrl}/commits/${ref}/${path}`
+        if (!hasOwnerRepoInBase && (!this.#owner || !this.#repo)) {
+          throw new Error(
+            '[renoun] Cannot construct GitHub history URL without owner/repository. Ensure git configuration includes owner and repository.'
+          )
+        }
+        return `${repoBaseUrl}/commits/${ref}/${path}`
       case 'source':
       default:
-        return `${this.#baseUrl}/blob/${ref}/${path}${lineFragment}`
+        if (!hasOwnerRepoInBase && (!this.#owner || !this.#repo)) {
+          throw new Error(
+            '[renoun] Cannot construct GitHub source URL without owner/repository. Ensure git configuration includes owner and repository.'
+          )
+        }
+        return `${repoBaseUrl}/blob/${ref}/${path}${lineFragment}`
     }
   }
 
@@ -515,12 +579,33 @@ export class Repository {
     ref: string,
     path: string
   ): string {
+    const urlObject = tryGetUrl(this.#baseUrl)
+    const extracted = extractOwnerAndRepositoryFromBaseUrl(
+      this.#provider,
+      this.#baseUrl
+    )
+    const hasOwnerRepoInBase = Boolean(extracted)
+    const repoBaseUrl =
+      this.#owner && this.#repo && urlObject && !hasOwnerRepoInBase
+        ? `${urlObject.origin}/${this.#owner}/${this.#repo}`
+        : this.#baseUrl
+
     switch (type) {
       case 'history':
-        return `${this.#baseUrl}/commits/${ref}/${path}`
+        if (!hasOwnerRepoInBase && (!this.#owner || !this.#repo)) {
+          throw new Error(
+            '[renoun] Cannot construct GitHub directory history URL without owner/repository. Ensure git configuration includes owner and repository.'
+          )
+        }
+        return `${repoBaseUrl}/commits/${ref}/${path}`
       case 'source':
       default:
-        return `${this.#baseUrl}/tree/${ref}/${path}`
+        if (!hasOwnerRepoInBase && (!this.#owner || !this.#repo)) {
+          throw new Error(
+            '[renoun] Cannot construct GitHub directory source URL without owner/repository. Ensure git configuration includes owner and repository.'
+          )
+        }
+        return `${repoBaseUrl}/tree/${ref}/${path}`
     }
   }
 
