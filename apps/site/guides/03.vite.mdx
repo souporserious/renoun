@@ -64,7 +64,7 @@ import { Directory } from 'renoun'
 
 const docs = new Directory({
   path: 'docs',
-  include: '*.mdx',
+  filter: '*.mdx',
   loader: {
     mdx: (path) => import(`./docs/${path}.mdx`),
   },
