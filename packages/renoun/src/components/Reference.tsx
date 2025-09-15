@@ -216,6 +216,16 @@ function TypeNodeRouter({
           />
         )
       }
+      if (node.type.kind === 'IntersectionType') {
+        return (
+          <IntersectionSection
+            node={node.type}
+            components={components}
+            slug={slug}
+            title={node.name}
+          />
+        )
+      }
       return (
         <TypeAliasSection node={node} components={components} slug={slug} />
       )
@@ -832,66 +842,61 @@ function IntersectionSection({
   node,
   components,
   slug,
+  title,
 }: {
   node: TypeOfKind<'IntersectionType'>
   components: InternalReferenceComponents
   slug: string
+  title?: string
 }) {
-  // Flatten into one table if every member is either a TypeLiteral or a MappedType kind
-  if (
-    node.types.length > 1 &&
-    node.types.every(
-      (type) => type.kind === 'TypeLiteral' || type.kind === 'MappedType'
-    )
-  ) {
-    const rows: {
-      name: string
-      text: string
-      defaultValue?: unknown
-      isOptional?: boolean
-      isReadonly?: boolean
-    }[] = []
+  // Always collect properties from TypeLiteral/Mapped members and render other members alongside.
+  const rows: {
+    name: string
+    text: string
+    defaultValue?: unknown
+    isOptional?: boolean
+    isReadonly?: boolean
+  }[] = []
+  const otherTypes: string[] = []
 
-    for (const type of node.types) {
-      if (type.kind === 'TypeLiteral') {
-        for (const member of type.members) {
-          if (member.kind === 'PropertySignature') {
-            rows.push({
-              name: member.name!,
-              text: member.type.text,
-              isOptional: member.isOptional,
-              isReadonly: member.isReadonly,
-            })
-          } else if (member.kind === 'IndexSignature') {
-            rows.push({
-              name: member.parameter.name,
-              text: member.type.text,
-              isReadonly: member.isReadonly,
-            })
-          } else {
-            console.warn(
-              `[renoun] Unsupported member kind "${member.kind}" in TypeLiteral`
-            )
-          }
+  for (const type of node.types) {
+    if (type.kind === 'TypeLiteral') {
+      for (const member of type.members) {
+        if (member.kind === 'PropertySignature') {
+          rows.push({
+            name: member.name!,
+            text: member.type.text,
+            isOptional: member.isOptional,
+            isReadonly: member.isReadonly,
+          })
+        } else if (member.kind === 'IndexSignature') {
+          rows.push({
+            name: member.parameter.name,
+            text: member.type.text,
+            isReadonly: member.isReadonly,
+          })
         }
-      } else if (type.kind === 'MappedType') {
-        rows.push({
-          name: type.typeParameter.text,
-          text: type.type.text,
-          isOptional: type.isOptional,
-          isReadonly: type.isReadonly,
-        })
       }
+    } else if (type.kind === 'MappedType') {
+      rows.push({
+        name: type.typeParameter.text,
+        text: type.type.text,
+        isOptional: type.isOptional,
+        isReadonly: type.isReadonly,
+      })
+    } else {
+      otherTypes.push(type.text)
     }
+  }
 
-    // TODO: this needs an incoming name prop that will be provided by the enclosing declaration
-    return (
-      <TypeSection
-        label="Type Literal"
-        title="-"
-        id={slug}
-        components={components}
-      >
+  return (
+    <TypeSection
+      label={title ? 'Intersection Type' : 'Intersection'}
+      title={title ?? '-'}
+      id={slug}
+      components={components}
+    >
+      {rows.length > 0 ? (
         <TypeDetail label="Properties" components={components}>
           <TypeTable
             rows={rows}
@@ -914,29 +919,13 @@ function IntersectionSection({
             components={components}
           />
         </TypeDetail>
-      </TypeSection>
-    )
-  }
+      ) : null}
 
-  // TODO: this needs an incoming name prop that will be provided by the enclosing declaration
-  return (
-    <TypeSection
-      label="Intersection"
-      title="-"
-      id={slug}
-      components={components}
-    >
-      <components.Column gap="medium">
-        {node.types.map((type, index) => (
-          <components.Row key={index} gap="small">
-            <TypeNodeRouter
-              node={type}
-              components={components}
-              slug={`${slug}-${index}`}
-            />
-          </components.Row>
-        ))}
-      </components.Column>
+      {otherTypes.length > 0 ? (
+        <TypeDetail label="Intersects" components={components}>
+          <components.Code>{otherTypes.join(' & ')}</components.Code>
+        </TypeDetail>
+      ) : null}
     </TypeSection>
   )
 }
