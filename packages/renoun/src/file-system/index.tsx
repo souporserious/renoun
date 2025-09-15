@@ -44,7 +44,7 @@ import type { StandardSchemaV1 } from './standard-schema.js'
 import type { ExtractFileExtension, IsNever } from './types.js'
 
 export { FileSystem } from './FileSystem.js'
-export { GitProviderFileSystem } from './GitProviderFileSystem.js'
+export { GitHostFileSystem } from './GitHostFileSystem.js'
 export { MemoryFileSystem } from './MemoryFileSystem.js'
 export { NodeFileSystem } from './NodeFileSystem.js'
 export { Repository } from './Repository.js'

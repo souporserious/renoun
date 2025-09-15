@@ -11,12 +11,7 @@ const VARIANT_METHODS = {
   editor: 'getEditorUri',
 } as const
 
-type ConfigVariants =
-  | 'gitProvider'
-  | 'repository'
-  | 'owner'
-  | 'branch'
-  | 'issue'
+type ConfigVariants = 'gitHost' | 'repository' | 'owner' | 'branch' | 'issue'
 
 export type LinkVariant = keyof typeof VARIANT_METHODS | ConfigVariants
 
@@ -114,7 +109,7 @@ function computeHref<Source, Variant extends LinkVariant>({
         'repository',
         'branch',
         'source',
-        'provider',
+        'host',
       ]
       for (const key of required) {
         if (!(key in config.git!) || config.git[key] === undefined) {
@@ -138,7 +133,7 @@ RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
   }
 
   switch (variant as ConfigVariants) {
-    case 'gitProvider':
+    case 'gitHost':
       return config.git!.baseUrl
     case 'repository':
       return config.git!.source

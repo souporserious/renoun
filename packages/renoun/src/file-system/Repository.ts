@@ -1,11 +1,11 @@
-export type GitProviderType = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
+export type GitHostType = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 
 export interface RepositoryConfig {
-  /** The base URL of the repository provider or full repository URL. */
+  /** The base URL of the repository host or full repository URL. */
   baseUrl: string
 
-  /** The type of Git provider. */
-  provider: GitProviderType
+  /** The type of Git host. */
+  host: GitHostType
 
   /** Optional owner and repository, overrides parsing from `baseUrl` when set. */
   owner?: string
@@ -56,8 +56,8 @@ export interface GetIssueUrlOptions {
   labels?: string[]
 }
 
-/** Mapping of providers to their canonical hosts. */
-const HOSTS: Record<GitProviderType, string> = {
+/** Mapping of hosts to their canonical domains. */
+const HOSTS: Record<GitHostType, string> = {
   github: 'github.com',
   gitlab: 'gitlab.com',
   bitbucket: 'bitbucket.org',
@@ -79,8 +79,8 @@ const GITLAB_STOP_TOKENS: ReadonlySet<string> = new Set<string>([
 
 /** Parsed git specifier. */
 export interface ParsedGitSpecifier {
-  /** The provider of the repository. */
-  provider: GitProviderType
+  /** The host of the repository. */
+  host: GitHostType
 
   /** The owner of the repository. */
   owner: string
@@ -199,12 +199,12 @@ function getCleanPathSegments(urlObject: URL): string[] {
 }
 
 /**
- * Extract owner and repo from a repository base URL, per provider.
+ * Extract owner and repo from a repository base URL, per host.
  * - GitHub/Bitbucket/Pierre: first two segments are owner/repo.
  * - GitLab: supports nested groups; owner is everything before the last segment.
  */
 function extractOwnerAndRepositoryFromBaseUrl(
-  provider: GitProviderType,
+  host: GitHostType,
   baseUrl: string
 ): { owner: string; repo: string } | null {
   const urlObject = tryGetUrl(baseUrl)
@@ -219,7 +219,7 @@ function extractOwnerAndRepositoryFromBaseUrl(
 
   let segments = getCleanPathSegments(urlObject)
 
-  if (provider === 'gitlab') {
+  if (host === 'gitlab') {
     let stopIndex = -1
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i]
@@ -254,7 +254,7 @@ function extractOwnerAndRepositoryFromBaseUrl(
  *
  * - If both '@' and '#' appear, the earliest is used as the ref separator.
  * - A trailing path is only allowed AFTER a ref (i.e. "@ref/path").
- * - Default provider for bare "owner/repo" is "github".
+ * - Default host for bare "owner/repo" is "github".
  *
  * Examples:
  *   - "owner/repo"
@@ -264,24 +264,24 @@ function extractOwnerAndRepositoryFromBaseUrl(
  *   - "gitlab:group/subgroup/repo@ref/docs"
  */
 export function parseGitSpecifier(input: string): ParsedGitSpecifier {
-  let provider: GitProviderType = 'github'
+  let host: GitHostType = 'github'
   let rest = input.trim()
 
-  // Optional "<provider>:"
+  // Optional "<host>:"
   const colonIndex = rest.indexOf(':')
   if (colonIndex >= 0) {
-    const potentialProvider = rest.slice(0, colonIndex)
+    const potentialHost = rest.slice(0, colonIndex)
     if (
-      potentialProvider === 'github' ||
-      potentialProvider === 'gitlab' ||
-      potentialProvider === 'bitbucket' ||
-      potentialProvider === 'pierre'
+      potentialHost === 'github' ||
+      potentialHost === 'gitlab' ||
+      potentialHost === 'bitbucket' ||
+      potentialHost === 'pierre'
     ) {
-      provider = potentialProvider as GitProviderType
+      host = potentialHost as GitHostType
       rest = rest.slice(colonIndex + 1)
     } else {
       throw new Error(
-        `Invalid provider "${potentialProvider}". Must be one of: github, gitlab, bitbucket, pierre`
+        `Invalid host "${potentialHost}". Must be one of: github, gitlab, bitbucket, pierre`
       )
     }
   }
@@ -316,19 +316,19 @@ export function parseGitSpecifier(input: string): ParsedGitSpecifier {
   const parts = rest.split('/').filter(Boolean)
   if (parts.length < 2) {
     throw new Error(
-      `Invalid git specifier "${input}". Must be in the form "owner/repo" (optionally with provider and ref).`
+      `Invalid git specifier "${input}". Must be in the form "owner/repo" (optionally with host and ref).`
     )
   }
 
   const repo = parts.pop()!
   const owner = parts.join('/')
 
-  return { provider, owner, repo, ref, path: afterRef }
+  return { host, owner, repo, ref, path: afterRef }
 }
 
 export class Repository {
   #baseUrl: string
-  #provider: GitProviderType
+  #host: GitHostType
   #owner?: string
   #repo?: string
   #defaultRef: string = 'main'
@@ -339,7 +339,7 @@ export class Repository {
     if (typeof repository === 'string') {
       const specifier = parseGitSpecifier(repository)
 
-      this.#provider = specifier.provider
+      this.#host = specifier.host
       this.#owner = specifier.owner
       this.#repo = specifier.repo
       if (specifier.ref) {
@@ -347,9 +347,9 @@ export class Repository {
         this.#isDefaultRefExplicit = true
       }
       this.#defaultPath = specifier.path
-      this.#baseUrl = `https://${HOSTS[this.#provider]}/${this.#owner}/${this.#repo}`
+      this.#baseUrl = `https://${HOSTS[this.#host]}/${this.#owner}/${this.#repo}`
     } else {
-      const { baseUrl, provider } = repository
+      const { baseUrl, host } = repository
 
       if (baseUrl === undefined) {
         throw new Error(
@@ -359,19 +359,19 @@ export class Repository {
 
       this.#baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
 
-      if (provider === undefined) {
+      if (host === undefined) {
         throw new Error(
-          `Missing 'provider' in 'git' repository config. Provide this on the \`RootProvider\` via the \`git\` option.`
+          `Missing 'host' in 'git' repository config. Provide this on the \`RootProvider\` via the \`git\` option.`
         )
       }
 
-      if (!['github', 'gitlab', 'bitbucket', 'pierre'].includes(provider)) {
+      if (!['github', 'gitlab', 'bitbucket', 'pierre'].includes(host)) {
         throw new Error(
-          `Invalid provider "${provider}". Must be one of: github, gitlab, bitbucket, pierre`
+          `Invalid host "${host}". Must be one of: github, gitlab, bitbucket, pierre`
         )
       }
 
-      this.#provider = provider as GitProviderType
+      this.#host = host as GitHostType
 
       if (typeof repository === 'object') {
         // Prefer explicit owner/repository from config when provided
@@ -380,7 +380,7 @@ export class Repository {
           this.#repo = repository.repository
         } else {
           const extracted = extractOwnerAndRepositoryFromBaseUrl(
-            this.#provider,
+            this.#host,
             this.#baseUrl
           )
           if (extracted) {
@@ -402,8 +402,8 @@ export class Repository {
       }
     }
 
-    if (!['github', 'gitlab', 'bitbucket', 'pierre'].includes(this.#provider)) {
-      throw new Error(`Unsupported provider: ${this.#provider}`)
+    if (!['github', 'gitlab', 'bitbucket', 'pierre'].includes(this.#host)) {
+      throw new Error(`Unsupported host: ${this.#host}`)
     }
   }
 
@@ -411,7 +411,7 @@ export class Repository {
   toString(): string {
     const ref = this.#isDefaultRefExplicit ? `@${this.#defaultRef}` : ''
     const path = this.#defaultPath ? `/${this.#defaultPath}` : ''
-    return `${this.#provider}:${this.#owner}/${this.#repo}${ref}${path}`
+    return `${this.#host}:${this.#owner}/${this.#repo}${ref}${path}`
   }
 
   /** Constructs a new issue URL for the repository. */
@@ -424,7 +424,7 @@ export class Repository {
     const description = options.description || ''
     const labels = options.labels || []
 
-    switch (this.#provider) {
+    switch (this.#host) {
       case 'github': {
         const params = new URLSearchParams({
           title,
@@ -456,7 +456,7 @@ export class Repository {
       }
 
       default:
-        throw new Error(`Unsupported provider: ${this.#provider}`)
+        throw new Error(`Unsupported host: ${this.#host}`)
     }
   }
 
@@ -468,7 +468,7 @@ export class Repository {
       ? joinPaths(this.#defaultPath, path)
       : path
 
-    switch (this.#provider) {
+    switch (this.#host) {
       case 'github':
         return this.#getGitHubUrl(type, ref, fullPath, line)
       case 'gitlab':
@@ -478,7 +478,7 @@ export class Repository {
       case 'pierre':
         return this.#getPierreUrl(type, ref, fullPath)
       default:
-        throw new Error(`Unsupported provider: ${this.#provider}`)
+        throw new Error(`Unsupported host: ${this.#host}`)
     }
   }
 
@@ -490,7 +490,7 @@ export class Repository {
       ? joinPaths(this.#defaultPath, path)
       : path
 
-    switch (this.#provider) {
+    switch (this.#host) {
       case 'github':
         return this.#getGitHubDirectoryUrl(type, ref, fullPath)
       case 'gitlab':
@@ -500,7 +500,7 @@ export class Repository {
       case 'pierre':
         return this.#getPierreDirectoryUrl(type, ref, fullPath)
       default:
-        throw new Error(`Unsupported provider: ${this.#provider}`)
+        throw new Error(`Unsupported host: ${this.#host}`)
     }
   }
 
@@ -518,7 +518,7 @@ export class Repository {
     // present in `baseUrl` then synthesize "<origin>/<owner>/<repo>"
     const urlObject = tryGetUrl(this.#baseUrl)
     const extracted = extractOwnerAndRepositoryFromBaseUrl(
-      this.#provider,
+      this.#host,
       this.#baseUrl
     )
     const hasOwnerRepoInBase = Boolean(extracted)
@@ -581,7 +581,7 @@ export class Repository {
   ): string {
     const urlObject = tryGetUrl(this.#baseUrl)
     const extracted = extractOwnerAndRepositoryFromBaseUrl(
-      this.#provider,
+      this.#host,
       this.#baseUrl
     )
     const hasOwnerRepoInBase = Boolean(extracted)
@@ -722,7 +722,7 @@ export class Repository {
       return ''
     }
 
-    if (this.#provider === 'bitbucket') {
+    if (this.#host === 'bitbucket') {
       if (Array.isArray(line) && line.length === 2) {
         const [start, end] = line
         return `#lines-${start}:${end}`

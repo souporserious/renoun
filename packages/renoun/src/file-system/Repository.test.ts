@@ -4,7 +4,7 @@ import { Repository, type RepositoryConfig } from './Repository'
 
 describe('Repository', () => {
   describe('constructor', () => {
-    test('constructs with a string "owner/repo" and defaults to GitHub provider', () => {
+    test('constructs with a string "owner/repo" and defaults to GitHub host', () => {
       const repo = new Repository('owner/repo')
       expect(
         repo.getFileUrl({
@@ -17,14 +17,14 @@ describe('Repository', () => {
 
     test('throws an error for invalid repository string without "/"', () => {
       expect(() => new Repository('invalidRepoString')).toThrow(
-        'Invalid git specifier "invalidRepoString". Must be in the form "owner/repo" (optionally with provider and ref).'
+        'Invalid git specifier "invalidRepoString". Must be in the form "owner/repo" (optionally with host and ref).'
       )
     })
 
     test('constructs with a RepositoryConfig object', () => {
       const config: RepositoryConfig = {
         baseUrl: 'https://github.com/owner/repo',
-        provider: 'github',
+        host: 'github',
       }
       const repo = new Repository(config)
       expect(
@@ -41,29 +41,29 @@ describe('Repository', () => {
       )
     })
 
-    test('throws an error for unsupported providers', () => {
+    test('throws an error for unsupported hosts', () => {
       const config: RepositoryConfig = {
         baseUrl: 'https://example.com/owner/repo',
-        provider: 'unsupported' as any,
+        host: 'unsupported' as any,
       }
       expect(() => new Repository(config)).toThrow(
-        'Invalid provider "unsupported". Must be one of: github, gitlab, bitbucket, pierre'
+        'Invalid host "unsupported". Must be one of: github, gitlab, bitbucket, pierre'
       )
     })
 
-    test('throws an error for incorrect provider casing in config', () => {
+    test('throws an error for incorrect host casing in config', () => {
       const config: RepositoryConfig = {
         baseUrl: 'https://github.com/owner/repo',
-        provider: 'GitHub' as any,
+        host: 'GitHub' as any,
       }
       expect(() => new Repository(config)).toThrow(
-        'Invalid provider "GitHub". Must be one of: github, gitlab, bitbucket, pierre'
+        'Invalid host "GitHub". Must be one of: github, gitlab, bitbucket, pierre'
       )
     })
   })
 
   describe('getFileUrl', () => {
-    describe('GitHub provider', () => {
+    describe('GitHub host', () => {
       const repo = new Repository('owner/repo')
 
       test('source URL with a branch', () => {
@@ -153,10 +153,10 @@ describe('Repository', () => {
       })
     })
 
-    describe('GitLab provider', () => {
+    describe('GitLab host', () => {
       const repo = new Repository({
         baseUrl: 'https://gitlab.com/owner/repo',
-        provider: 'gitlab',
+        host: 'gitlab',
       })
 
       test('source URL', () => {
@@ -250,10 +250,10 @@ describe('Repository', () => {
       })
     })
 
-    describe('Bitbucket provider', () => {
+    describe('Bitbucket host', () => {
       const repo = new Repository({
         baseUrl: 'https://bitbucket.org/owner/repo',
-        provider: 'bitbucket',
+        host: 'bitbucket',
       })
 
       test('source URL', () => {
@@ -387,7 +387,7 @@ describe('Repository', () => {
     describe('GitLab', () => {
       const repo = new Repository({
         baseUrl: 'https://gitlab.com/owner/repo',
-        provider: 'gitlab',
+        host: 'gitlab',
       })
 
       test('URL with just a title', () => {
@@ -423,7 +423,7 @@ describe('Repository', () => {
     describe('Bitbucket', () => {
       const repo = new Repository({
         baseUrl: 'https://bitbucket.org/owner/repo',
-        provider: 'bitbucket',
+        host: 'bitbucket',
       })
 
       test('URL with just a title', () => {
@@ -453,7 +453,7 @@ describe('Repository', () => {
   })
 
   describe('getDirectoryUrl', () => {
-    describe('GitHub provider', () => {
+    describe('GitHub host', () => {
       const repo = new Repository('owner/repo')
 
       test('with a branch', () => {
@@ -487,10 +487,10 @@ describe('Repository', () => {
       })
     })
 
-    describe('GitLab provider', () => {
+    describe('GitLab host', () => {
       const repo = new Repository({
         baseUrl: 'https://gitlab.com/owner/repo',
-        provider: 'gitlab',
+        host: 'gitlab',
       })
 
       test('with a branch', () => {
@@ -523,10 +523,10 @@ describe('Repository', () => {
       })
     })
 
-    describe('Bitbucket provider', () => {
+    describe('Bitbucket host', () => {
       const repo = new Repository({
         baseUrl: 'https://bitbucket.org/owner/repo',
-        provider: 'bitbucket',
+        host: 'bitbucket',
       })
 
       test('with a branch', () => {
@@ -570,13 +570,13 @@ describe('Repository', () => {
       ).toBe('https://github.com/owner/repo/blob/main/README.md')
     })
 
-    test('throws error for incorrect provider casing', () => {
+    test('throws error for incorrect host casing', () => {
       expect(() => new Repository('GitHub:owner/repo')).toThrow(
-        'Invalid provider "GitHub". Must be one of: github, gitlab, bitbucket, pierre'
+        'Invalid host "GitHub". Must be one of: github, gitlab, bitbucket, pierre'
       )
     })
 
-    test('supports GitLab groups with provider prefix', () => {
+    test('supports GitLab groups with host prefix', () => {
       const repo = new Repository('gitlab:group/subgroup/repo')
       expect(
         repo.getFileUrl({ type: 'source', path: 'README.md', ref: 'main' })
@@ -624,10 +624,10 @@ describe('Repository', () => {
     })
   })
 
-  describe('Pierre provider', () => {
+  describe('Pierre host', () => {
     const repo = new Repository({
       baseUrl: 'https://pierre.co/team/app',
-      provider: 'pierre',
+      host: 'pierre',
     })
 
     test('supports "source" (files endpoint) and encodes path', () => {
@@ -705,10 +705,10 @@ describe('Repository', () => {
     test('Pierre issues are unsupported', () => {
       const pierre = new Repository({
         baseUrl: 'https://pierre.co/team/app',
-        provider: 'pierre',
+        host: 'pierre',
       })
       expect(() => pierre.getIssueUrl({ title: 'Bug' })).toThrow(
-        /Unsupported provider: pierre/
+        /Unsupported host: pierre/
       )
     })
   })

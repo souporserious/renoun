@@ -26,10 +26,10 @@ export type ThemeOverride = {
 export type ThemeValue = ThemeName | [ThemeName, ThemeOverride]
 
 /**
- * The git provider.
+ * The git host.
  * @internal
  */
-export type GitProvider = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
+export type GitHost = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 
 /**
  * The configuration options for git linking.
@@ -42,8 +42,8 @@ export type GitConfig = {
   /** The branch to use for linking to the repository and source files. */
   branch: string
 
-  /** The git provider to use. This option disables the provider detection from `git.source` which is helpful for self-hosted instances. */
-  provider: 'github' | 'gitlab' | 'bitbucket' | 'pierre'
+  /** The git host to use. This option disables the host detection from `git.source` which is helpful for self-hosted instances. */
+  host: 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 
   /** The owner of the repository. */
   owner: string
@@ -51,7 +51,7 @@ export type GitConfig = {
   /** The repository name. */
   repository: string
 
-  /** The base URL of the Git provider. */
+  /** The base URL of the Git host. */
   baseUrl: string
 }
 

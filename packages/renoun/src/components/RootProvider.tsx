@@ -67,13 +67,13 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
           bitbucket: 'https://bitbucket.org',
           pierre: 'https://pierre.co',
         } as const
-        const baseUrl = hostMap[specifier.provider]
+        const baseUrl = hostMap[specifier.host]
         const source = `${baseUrl}/${specifier.owner}/${specifier.repo}`
 
         overrides.git = {
           source,
           branch: specifier.ref ?? 'main',
-          provider: specifier.provider,
+          host: specifier.host,
           owner: specifier.owner,
           repository: specifier.repo,
           baseUrl,

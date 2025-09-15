@@ -2,17 +2,17 @@ import { Semaphore } from '../utils/Semaphore.js'
 import { MemoryFileSystem } from './MemoryFileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
-type GitProvider = 'github' | 'gitlab' | 'bitbucket'
+type GitHost = 'github' | 'gitlab' | 'bitbucket'
 
-interface GitProviderFileSystemOptions {
+interface GitHostFileSystemOptions {
   /** Repository in the format "owner/repo". */
   repository: string
 
   /** Branch, tag, or commit reference. Defaults to 'main'. */
   ref?: string
 
-  /** Git provider host */
-  provider: GitProvider
+  /** Git host */
+  host: GitHost
 
   /** Custom API base URL for self-hosted instances. */
   baseUrl?: string
@@ -71,7 +71,7 @@ function sleep(ms: number) {
 
 function getResetDelayMs(
   response: Response,
-  provider: GitProvider
+  host: GitHost
 ): number | undefined {
   const retryAfter = response.headers.get('Retry-After')
 
@@ -89,7 +89,7 @@ function getResetDelayMs(
   const now = Date.now()
   let reset: number | undefined
 
-  switch (provider) {
+  switch (host) {
     case 'github':
       reset = Number(response.headers.get('X-RateLimit-Reset'))
       break
@@ -106,10 +106,10 @@ function getResetDelayMs(
   }
 }
 
-export class GitProviderFileSystem extends MemoryFileSystem {
+export class GitHostFileSystem extends MemoryFileSystem {
   #repository: string
   #ref: string
-  #provider: GitProvider
+  #host: GitHost
   #token?: string
   #timeoutMs: number
   #cacheTTL?: number
@@ -123,19 +123,19 @@ export class GitProviderFileSystem extends MemoryFileSystem {
   #fileFetches = new Map<string, Promise<void>>()
   #headers: Record<string, string>
 
-  constructor(options: GitProviderFileSystemOptions) {
+  constructor(options: GitHostFileSystemOptions) {
     if (!repoPattern.test(options.repository)) {
       throw new Error('[renoun] Repository must be in "owner/repo" format')
     }
-    if (!['github', 'gitlab', 'bitbucket'].includes(options.provider)) {
-      throw new Error('[renoun] Unsupported git provider')
+    if (!['github', 'gitlab', 'bitbucket'].includes(options.host)) {
+      throw new Error('[renoun] Unsupported git host')
     }
 
     super({})
 
     this.#repository = options.repository
     this.#ref = options.ref ?? 'main'
-    this.#provider = options.provider
+    this.#host = options.host
     this.#token = options.token
     this.#timeoutMs = options.timeoutMs ?? 30_000
     this.#cacheTTL = options.cacheTTL
@@ -151,7 +151,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
   }
 
   #getDefaultApiBaseUrl() {
-    switch (this.#provider) {
+    switch (this.#host) {
       case 'github':
         return 'https://api.github.com'
       case 'gitlab':
@@ -164,7 +164,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
   #getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {}
 
-    if (this.#provider === 'github') {
+    if (this.#host === 'github') {
       headers['Accept'] = 'application/vnd.github.v3+json'
     }
 
@@ -172,7 +172,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
       return headers
     }
 
-    switch (this.#provider) {
+    switch (this.#host) {
       case 'github':
         headers['Authorization'] = /^gh[pus]_|^github_pat_/.test(this.#token)
           ? `Bearer ${this.#token}`
@@ -195,12 +195,12 @@ export class GitProviderFileSystem extends MemoryFileSystem {
       return true
     }
 
-    // Some providers return 403 when the rate limit is exhausted.
+    // Some hosts return 403 when the rate limit is exhausted.
     if (response.status !== 403) {
       return false
     }
 
-    switch (this.#provider) {
+    switch (this.#host) {
       case 'github':
       case 'bitbucket': {
         return response.headers.get('X-RateLimit-Remaining') === '0'
@@ -231,7 +231,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
           if (this.#isRateLimited(response)) {
             const delay =
               Number(response.headers.get('Retry-After')) * 1_000 ||
-              getResetDelayMs(response, this.#provider)
+          getResetDelayMs(response, this.#host)
 
             if (delay !== undefined) {
               await sleep(delay + 100)
@@ -311,7 +311,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
   async #fetchDirectoryContents(path: string): Promise<DirectoryEntry[]> {
     const entries: DirectoryEntry[] = []
     const pushEntries = (items: any[]) => {
-      switch (this.#provider) {
+      switch (this.#host) {
         case 'github':
           entries.push(
             ...items.map((item) => ({
@@ -345,7 +345,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
       }
     }
 
-    if (this.#provider === 'github') {
+    if (this.#host === 'github') {
       const apiPath = path ? `/${this.#encodePath(path)}` : ''
       const perPage = 100
       let page = 1
@@ -369,7 +369,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
 
         page++
       }
-    } else if (this.#provider === 'gitlab') {
+    } else if (this.#host === 'gitlab') {
       const repo = encodeURIComponent(this.#repository)
       const perPage = 100
       let page = 1
@@ -432,7 +432,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
   }
 
   async #fetchDirectory(path: string) {
-    if (this.#provider === 'github' && path === '') {
+    if (this.#host === 'github' && path === '') {
       return this.#fetchRootTree()
     }
     return this.#fetchDirectoryContents(path)
@@ -456,7 +456,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
 
   readDirectorySync(): DirectoryEntry[] {
     throw new Error(
-      'readDirectorySync is not supported in GitProviderFileSystem'
+      'readDirectorySync is not supported in GitHostFileSystem'
     )
   }
 
@@ -464,7 +464,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
     const normalizedPath = normalizePath(path)
     let url: string
 
-    switch (this.#provider) {
+    switch (this.#host) {
       case 'github':
         url = `${this.#apiBaseUrl}/repos/${this.#repository}/contents/${this.#encodePath(
           normalizedPath
@@ -496,7 +496,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
       /application\/(json|xml|javascript|typescript)/i.test(contentType) ||
       /svg\+xml/.test(contentType)
 
-    if (this.#provider === 'github') {
+    if (this.#host === 'github') {
       const data = await response.json()
 
       /* Small files (≤1 MB) include base64 content outright */
@@ -565,7 +565,7 @@ export class GitProviderFileSystem extends MemoryFileSystem {
   }
 
   readFileSync(): string {
-    throw new Error('readFileSync is not supported in GitProviderFileSystem')
+    throw new Error('readFileSync is not supported in GitHostFileSystem')
   }
 
   fileExistsSync(path: string): boolean {

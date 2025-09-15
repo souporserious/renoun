@@ -7,7 +7,7 @@ export function getGitFileUrl(
   column: number = 0,
   gitSource: string,
   gitBranch: string = 'main',
-  gitProvider?: string
+  gitHost?: string
 ): string {
   if (gitSource.length === 0) {
     throw new Error(
@@ -18,10 +18,10 @@ export function getGitFileUrl(
   const url = new URL(gitSource)
   let fileUrl: string
 
-  const provider =
-    gitProvider || gitSource.replace(/^https?:\/\/(?:.*\.)?(.*?)\..*/gm, `$1`)
+  const host =
+    gitHost || gitSource.replace(/^https?:\/\/(?:.*\.)?(.*?)\..*/gm, `$1`)
 
-  switch (provider) {
+  switch (host) {
     case 'github':
       fileUrl = join(url.pathname, '/blob/', gitBranch, filePath)
       if (line || column) fileUrl += `?plain=1`
@@ -40,7 +40,7 @@ export function getGitFileUrl(
       break
 
     default:
-      throw new Error(`Git provider not recognized for ${gitSource}`)
+      throw new Error(`Git host not recognized for ${gitSource}`)
   }
 
   return `${url.protocol}//${url.host}${fileUrl}`
