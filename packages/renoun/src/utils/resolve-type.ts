@@ -3946,6 +3946,11 @@ function isTypeOperatorType(
   return (type.compilerType.flags & tsMorph.ts.TypeFlags.Index) !== 0
 }
 
+/** Returns true if the given type is a Substitution type (e.g. generic placeholder `Type<Foo>`). */
+function isSubstitutionType(type: Type): boolean {
+  return (type.getFlags() & tsMorph.ts.TypeFlags.Substitution) !== 0
+}
+
 /** Determines if a type is a symbol type. */
 function isSymbolType(type: Type) {
   return type.getSymbol()?.getName() === 'Symbol'
@@ -3980,7 +3985,10 @@ function isTypeReference(type: Type, enclosingNode?: Node): boolean {
   }
 
   // If the type is a type parameter and the enclosing node is not an infer type node, then treat it as a type reference.
-  if (type.isTypeParameter() && !tsMorph.Node.isInferTypeNode(enclosingNode)) {
+  if (
+    (type.isTypeParameter() || isSubstitutionType(type)) &&
+    !tsMorph.Node.isInferTypeNode(enclosingNode)
+  ) {
     return true
   }
 
