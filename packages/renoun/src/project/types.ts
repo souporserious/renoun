@@ -15,8 +15,8 @@ export type ProjectOptions = {
   /** The branch to use for linking to the repository and source files. */
   gitBranch?: string
 
-  /** The git provider to use. This option disables the provider detection from `gitSource` which is helpful for self-hosted instances. */
-  gitProvider?: 'github' | 'gitlab' | 'bitbucket'
+  /** The git host to use. This option disables the host detection from `gitSource` which is helpful for self-hosted instances. */
+  gitHost?: 'github' | 'gitlab' | 'bitbucket'
 
   /** A unique identifier for the project. This is used to uniquely cache the project and its files. */
   projectId?: string

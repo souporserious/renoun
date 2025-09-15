@@ -140,6 +140,7 @@ export function Reference(props: ReferenceProps) {
           display: 'flex',
           flexDirection: 'column',
           gap: '0.5rem',
+          marginBottom: '1rem',
         }}
       />
     ),

@@ -15,7 +15,7 @@ export {
   type CodeInlineProps,
 } from './CodeInline.js'
 export { Copyright } from './Copyright.js'
-export { GitProviderLogo, GitProviderLink } from './GitProvider.js'
+export { Logo } from './Logo.js'
 export { Link } from './Link/index.js'
 export {
   Markdown,

@@ -1,6 +1,6 @@
 import * as React from 'react'
 
-import { Link, JavaScriptFile } from 'renoun'
+import { Link, Logo, JavaScriptFile } from 'renoun'
 
 const file = new JavaScriptFile({
   path: '../../packages/renoun/src/components/Link/Link.tsx',
@@ -8,8 +8,29 @@ const file = new JavaScriptFile({
 
 export async function BasicUsage() {
   return (
+    <Link
+      variant="repository"
+      css={{ display: 'flex', width: '1.5rem', height: '1.5rem' }}
+    />
+  )
+}
+
+export function ViewSource() {
+  return (
     <Link source={file} variant="source">
       View Source
+    </Link>
+  )
+}
+
+export function GitRepositoryCustom() {
+  return (
+    <Link
+      variant="repository"
+      css={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+    >
+      <Logo variant="gitHost" width="1em" height="1em" />
+      <span>View Repository</span>
     </Link>
   )
 }
@@ -26,7 +47,7 @@ export function ConfigLinks() {
   return (
     <ul>
       <li>
-        <Link variant="gitProvider">Provider</Link>
+        <Link variant="gitHost">Host</Link>
       </li>
       <li>
         <Link variant="repository">Repository</Link>

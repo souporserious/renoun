@@ -1,6 +1,8 @@
 import React from 'react'
+import { css, type CSSObject } from 'restyle'
 
 import { getConfig } from '../Config/ServerConfigContext.js'
+import { Logo } from '../Logo.js'
 
 const VARIANT_METHODS = {
   edit: 'getEditUrl',
@@ -36,7 +38,7 @@ type VariantOptions<
 type AnchorBaseProps = Omit<
   React.ComponentPropsWithRef<'a'>,
   'href' | 'children'
->
+> & { css?: CSSObject }
 
 type ConfigVariantProps<V extends ConfigVariants> = V extends 'branch'
   ? {
@@ -157,16 +159,44 @@ RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
 export function Link<Source, Variant extends LinkVariant = LinkVariant>(
   props: LinkProps<Source, Variant>
 ) {
-  const { source, variant, options, children, ...restProps } = props
+  const {
+    source,
+    variant,
+    options,
+    children,
+    css: cssProp,
+    className,
+    style,
+    ...restProps
+  } = props
   const href = computeHref({ source, variant, options })
 
   if (typeof children === 'function') {
     return children(href)
   }
 
+  let childrenToRender = children
+
+  if (!children && (variant === 'gitHost' || variant === 'repository')) {
+    childrenToRender = <Logo variant="gitHost" width="100%" height="100%" />
+  }
+
+  let classNames: string | undefined
+  let Styles: React.FC | null = null
+  if (cssProp) {
+    ;[classNames, Styles] = css(cssProp)
+  }
+
+  const mergedClassName = className
+    ? classNames
+      ? `${classNames} ${className}`
+      : className
+    : classNames
+
   return (
-    <a {...restProps} href={href}>
-      {children}
+    <a {...restProps} href={href} className={mergedClassName} style={style}>
+      {childrenToRender}
+      {Styles ? <Styles /> : null}
     </a>
   )
 }

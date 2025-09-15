@@ -1,5 +1,4 @@
-import type { CSSObject } from 'restyle'
-import { GitProviderLink } from 'renoun'
+import { Link } from 'renoun'
 
 import {
   DocsDirectory,
@@ -149,8 +148,10 @@ export function Sidebar() {
                 </svg>
               </a>
 
-              <GitProviderLink
+              <Link
+                variant="gitHost"
                 css={{
+                  display: 'flex',
                   width: 'var(--font-size-body-2)',
                   height: 'var(--font-size-body-2)',
                   fill: 'var(--color-foreground-interactive)',

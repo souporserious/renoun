@@ -426,8 +426,8 @@ export function getProjectOptionsCacheKey(options?: ProjectOptions): string {
   if (options.gitBranch) {
     key += `b:${options.gitBranch};`
   }
-  if (options.gitProvider) {
-    key += `p:${options.gitProvider};`
+  if (options.gitHost) {
+    key += `h:${options.gitHost};`
   }
   if (options.projectId) {
     key += `i:${options.projectId};`

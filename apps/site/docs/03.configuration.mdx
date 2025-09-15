@@ -301,7 +301,7 @@ export default function RootLayout({
       git={{
         source: 'https://github.com/souporserious/renoun',
         branch: 'main',
-        provider: 'github',
+        host: 'github',
         owner: 'souporserious',
         repository: 'renoun',
         baseUrl: 'https://github.com',
@@ -343,14 +343,14 @@ This will be parsed into the following object:
 {
   "source": "https://github.com/souporserious/renoun",
   "branch": "main",
-  "provider": "github",
+  "host": "github",
   "owner": "souporserious",
   "repository": "renoun",
   "baseUrl": "https://github.com"
 }
 ```
 
-A specifier can also include a branch, provider, owner, repository, and base URL:
+A specifier can also include a branch, host, owner, repository, and base URL:
 
 ```tsx
 import { RootProvider } from 'renoun'

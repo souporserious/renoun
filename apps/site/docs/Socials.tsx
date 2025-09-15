@@ -1,5 +1,5 @@
 import { styled } from 'restyle'
-import { GitProviderLogo } from 'renoun'
+import { Logo } from 'renoun'
 
 import { Row } from '@/components/Row'
 
@@ -32,7 +32,7 @@ const SocialLink = styled('a', {
   },
 })
 
-const StyledGitProviderLogo = styled(GitProviderLogo, {
+const StyledLogo = styled(Logo, {
   width: '1.6rem',
   height: '1.6rem',
   fill: 'var(--color-foreground-interactive)',
@@ -63,7 +63,8 @@ export function Socials() {
       </SocialLink>
       <SocialLink href="https://github.com/souporserious/renoun">
         <div>
-          <StyledGitProviderLogo
+          <StyledLogo
+            variant="gitHost"
             css={{ fill: 'var(--color-foreground-secondary)' }}
           />
         </div>
