@@ -2,7 +2,7 @@
   "name": "renoun",
   "type": "module",
   "private": true,
-  "license": "AGPL-3.0-or-later",
+  "license": "SEE LICENSE IN LICENSE.md",
   "scripts": {
     "build": "turbo run build",
     "build:site": "pnpm build --filter=@apps/site",
