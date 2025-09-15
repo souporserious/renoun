@@ -1,5 +1,88 @@
 # renoun
 
+## 10.0.0
+
+### Major Changes
+
+- 2a93fde: Removes `GitProviderLink` in favor of `<Link variant="repository">`. This also removes `GitProviderLogo` in favor of a new `Logo` component. Now `<Logo variant="gitHost">` can be used for rendering git host logos.
+- a66d8eb: Renames `gitProvider` configuration and component variants to `gitHost`.
+  This also renames `GitProviderFileSystem` to `GitHostFileSystem`.
+
+### Minor Changes
+
+- b6a5da2: Adds a `Reference` component renderer for a `TypeAlias` that has `IntersectionType`.
+- 6885c72: Adds a new `Link` component that helps generate links for directories, files, module exports, and the configured git provider in `RootProvider`.
+
+  ```tsx
+  import { JavaScriptFile, Link } from 'renoun'
+
+  const file = new JavaScriptFile({
+    path: 'components/Button.tsx',
+  })
+
+  function App() {
+    return (
+      <Link source={file} variant="source">
+        View Source
+      </Link>
+    )
+  }
+  ```
+
+- 11f9692: Renames `Directory.include` option to `Directory.filter`.
+
+  ### Breaking Changes
+
+  Rename all `Directory.include` call sites to use `Directory.filter`.
+
+- 92f0416: Improves `Repository` configuration typing, URL generation, and error handling. `RepositoryConfig` now supports `owner`, `repository`, `branch`, and `path` fields explicitly.
+- 45126b4: Adds support for fast refresh updates in Waku.
+- 138507e: Replaces the `renoun.json` configuration file with a `RootProvider` component. This also removes the need to configure the `Refresh` and `ThemeStyles` components.
+
+  ### Breaking Changes
+
+  The `renoun.json` configuration file is no longer used to configure renoun. Please refactor to the `RootProvider` component:
+
+  ```tsx
+  import { RootProvider } from 'renoun'
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode
+  }) {
+    return (
+      <RootProvider
+        git="souporserious/renoun"
+        siteUrl="https://renoun.dev"
+        theme="theme.json"
+      >
+        <html>
+          <body>{children}</body>
+        </html>
+      </RootProvider>
+    )
+  }
+  ```
+
+### Patch Changes
+
+- ab76c5e: Fixes `Directory#getFile` from filtering out entries when querying a specific entry.
+- 9be5e29: Fixes resolving conditional extends branches to keep imported types as references in `JavaScriptModuleExport#getType`.
+- 5471648: - Prefers base files over modifier files when selecting a directory representative (e.g. `Link.tsx` over `Link.examples.tsx`).
+  - Normalizes `MemoryFileSystem.getRelativePathToWorkspace` to strip leading `./` so repository URLs do not contain `/./`.
+- a4ce50a: Makes sure to consider searching subdirectory entries with matching file extensions in `Directory#getFile`.
+- 989c7e7: Fixes substituted types not resolving in `JavaScriptModuleExport#getType` and causing an error.
+- 2a895c2: The `Directory#getEntry` method now prefers a directory representative file (index/readme/same-name), otherwise it returns the directory. If no directory exists at the path, it returns a matching file in the immediate entries.
+
+  ```ts
+  // components/Button/Button.tsx
+  await new Directory({ path: 'components' }).getEntry('button') // JavaScriptFile
+  ```
+
+- 01dc8e4: Improves performance for `Directory#getEntries` when using a simple `include` filter.
+- ca01d64: Fixes recursive `Directory#getEntries` traversal not respecting the `include` filter when descending. Previously, child entries from excluded directories could leak into results, causing invalid slugs to be generated.
+
 ## 9.5.1
 
 ### Patch Changes
