@@ -21,7 +21,6 @@ permissions:
   id-token: write
 
 env:
-  NODE_ENV: production
   RENOUN_DEBUG: ${{ inputs.debug }}
 
 jobs:
@@ -57,10 +56,10 @@ jobs:
         id: publish
         uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba
         with:
-          publish: pnpm release
+          publish: pnpm publish -r --provenance --access public --publish-branch main && pnpm changeset tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Fast-forward release branch
         if: steps.publish.outputs.published == 'true'
