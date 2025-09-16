@@ -1,5 +1,5 @@
 import React from 'react'
-import { CodeInline } from 'renoun/components'
+import { CodeInline } from 'renoun'
 
 export function Basic() {
   return (

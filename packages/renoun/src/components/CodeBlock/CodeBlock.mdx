@@ -11,7 +11,7 @@ import {
   type CodeBlockProps,
   CodeBlock as DefaultCodeBlock,
   Tokens,
-} from 'renoun/components'
+} from 'renoun'
 import styles from './CodeBlock.module.css'
 
 export function CodeBlock(props: CodeBlockProps) {
@@ -45,14 +45,14 @@ fully customizing the rendering of the `CodeBlock` component.
 
 ## Component Overrides
 
-If you need more customization, the `CodeBlock` component can be fully overridden by importing it from `renoun/components` and extending it as needed:
+If you need more customization, the `CodeBlock` component can be fully overridden by importing it from `renoun` and extending it as needed:
 
 ```tsx path="CodeBlock.tsx"
 import {
   type CodeBlockProps,
   CodeBlock as DefaultCodeBlock,
   Tokens,
-} from 'renoun/components'
+} from 'renoun'
 
 export function CodeBlock({
   children,

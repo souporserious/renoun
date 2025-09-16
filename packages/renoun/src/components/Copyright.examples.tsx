@@ -1,5 +1,5 @@
 import React from 'react'
-import { Copyright } from 'renoun/components'
+import { Copyright } from 'renoun'
 
 export function Basic() {
   return <Copyright />

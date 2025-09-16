@@ -1,9 +1,5 @@
 /** @jsxImportSource restyle */
-import {
-  Reference,
-  type ReferenceComponents,
-  Markdown,
-} from 'renoun/components'
+import { Reference, type ReferenceComponents, Markdown } from 'renoun'
 
 export function BasicUsage() {
   return (
