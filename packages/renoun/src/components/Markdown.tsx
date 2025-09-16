@@ -3,10 +3,11 @@ import { unified } from 'unified'
 import { visit } from 'unist-util-visit'
 import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
-import { urlAttributes } from 'html-url-attributes'
 import type { Root, Properties } from 'hast'
 import { toJsxRuntime } from 'hast-util-to-jsx-runtime'
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
+
+import { urlAttributes } from '../utils/url-attributes.js'
 
 declare module 'unified' {
   interface Data {
