@@ -12255,11 +12255,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 52,
-                  "line": 2281,
+                  "line": 2279,
                 },
                 "start": {
                   "column": 9,
-                  "line": 2281,
+                  "line": 2279,
                 },
               },
               "text": "MouseEventHandler<HTMLButtonElement>",
@@ -12278,11 +12278,11 @@ describe('resolveType', () => {
                     "position": {
                       "end": {
                         "column": 81,
-                        "line": 2136,
+                        "line": 2134,
                       },
                       "start": {
                         "column": 73,
-                        "line": 2136,
+                        "line": 2134,
                       },
                     },
                     "text": "event: E",
@@ -12294,11 +12294,11 @@ describe('resolveType', () => {
                       "position": {
                         "end": {
                           "column": 52,
-                          "line": 2281,
+                          "line": 2279,
                         },
                         "start": {
                           "column": 9,
-                          "line": 2281,
+                          "line": 2279,
                         },
                       },
                       "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
@@ -12311,11 +12311,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 52,
-                              "line": 2281,
+                              "line": 2279,
                             },
                             "start": {
                               "column": 9,
-                              "line": 2281,
+                              "line": 2279,
                             },
                           },
                           "text": "HTMLButtonElement",
@@ -12329,11 +12329,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 52,
-                              "line": 2281,
+                              "line": 2279,
                             },
                             "start": {
                               "column": 9,
-                              "line": 2281,
+                              "line": 2279,
                             },
                           },
                           "text": "MouseEvent",
@@ -12349,11 +12349,11 @@ describe('resolveType', () => {
                   "position": {
                     "end": {
                       "column": 88,
-                      "line": 2136,
+                      "line": 2134,
                     },
                     "start": {
                       "column": 84,
-                      "line": 2136,
+                      "line": 2134,
                     },
                   },
                   "text": "void",
@@ -12477,11 +12477,11 @@ describe('resolveType', () => {
                     "position": {
                       "end": {
                         "column": 52,
-                        "line": 2281,
+                        "line": 2279,
                       },
                       "start": {
                         "column": 9,
-                        "line": 2281,
+                        "line": 2279,
                       },
                     },
                     "text": "MouseEventHandler<HTMLButtonElement>",
@@ -12500,11 +12500,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 81,
-                              "line": 2136,
+                              "line": 2134,
                             },
                             "start": {
                               "column": 73,
-                              "line": 2136,
+                              "line": 2134,
                             },
                           },
                           "text": "event: E",
@@ -12516,11 +12516,11 @@ describe('resolveType', () => {
                             "position": {
                               "end": {
                                 "column": 52,
-                                "line": 2281,
+                                "line": 2279,
                               },
                               "start": {
                                 "column": 9,
-                                "line": 2281,
+                                "line": 2279,
                               },
                             },
                             "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
@@ -12533,11 +12533,11 @@ describe('resolveType', () => {
                                 "position": {
                                   "end": {
                                     "column": 52,
-                                    "line": 2281,
+                                    "line": 2279,
                                   },
                                   "start": {
                                     "column": 9,
-                                    "line": 2281,
+                                    "line": 2279,
                                   },
                                 },
                                 "text": "HTMLButtonElement",
@@ -12551,11 +12551,11 @@ describe('resolveType', () => {
                                 "position": {
                                   "end": {
                                     "column": 52,
-                                    "line": 2281,
+                                    "line": 2279,
                                   },
                                   "start": {
                                     "column": 9,
-                                    "line": 2281,
+                                    "line": 2279,
                                   },
                                 },
                                 "text": "MouseEvent",
@@ -12571,11 +12571,11 @@ describe('resolveType', () => {
                         "position": {
                           "end": {
                             "column": 88,
-                            "line": 2136,
+                            "line": 2134,
                           },
                           "start": {
                             "column": 84,
-                            "line": 2136,
+                            "line": 2134,
                           },
                         },
                         "text": "void",

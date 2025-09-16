@@ -23,12 +23,12 @@
     "dev": "bunchee --watch"
   },
   "devDependencies": {
-    "bunchee": "^6.5.4"
+    "bunchee": "6.6.0"
   },
   "dependencies": {
-    "@antfu/install-pkg": "^1.1.0",
-    "@clack/prompts": "^0.11.0",
-    "picocolors": "^1.1.1",
-    "terminal-link": "^4.0.0"
+    "@antfu/install-pkg": "1.1.0",
+    "@clack/prompts": "0.11.0",
+    "picocolors": "1.1.1",
+    "terminal-link": "5.0.0"
   }
 }

@@ -76,7 +76,7 @@ describe('getFileExportsText', () => {
     expect(getFileExportsText('test.tsx', project)).toMatchInlineSnapshot(`
       [
         {
-          "kind": 262,
+          "kind": 263,
           "name": "useHover",
           "position": 243,
           "text": "export function useHover() {
@@ -84,7 +84,7 @@ describe('getFileExportsText', () => {
       }",
         },
         {
-          "kind": 262,
+          "kind": 263,
           "name": "Avatar",
           "position": 384,
           "text": "import { Image } from "components";
@@ -98,7 +98,7 @@ describe('getFileExportsText', () => {
       }",
         },
         {
-          "kind": 260,
+          "kind": 261,
           "name": "Box",
           "position": 703,
           "text": "type SystemProps = { as: any }
@@ -108,7 +108,7 @@ describe('getFileExportsText', () => {
       export const Box = (props: BoxProps) => <div {...props} />",
         },
         {
-          "kind": 262,
+          "kind": 263,
           "name": "Badge",
           "position": 826,
           "text": "export function Badge(props: { children: any }) {
@@ -116,7 +116,7 @@ describe('getFileExportsText', () => {
       }",
         },
         {
-          "kind": 260,
+          "kind": 261,
           "name": "Button",
           "position": 947,
           "text": "const Stack = (props: { children: any; style?: any }) => <div {...props} />
@@ -126,13 +126,13 @@ describe('getFileExportsText', () => {
       export const Button = (props: ButtonProps) => <Stack>Hello Button</Stack>",
         },
         {
-          "kind": 260,
+          "kind": 261,
           "name": "Stack",
           "position": 756,
           "text": "const Stack = (props: { children: any; style?: any }) => <div {...props} />",
         },
         {
-          "kind": 263,
+          "kind": 264,
           "name": "Car",
           "position": 1036,
           "text": "export class Car {

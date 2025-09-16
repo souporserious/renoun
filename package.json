@@ -18,18 +18,18 @@
     "clean": "node -e \"(function rm(directory) { ['.next', '.turbo', 'node_modules', 'dist'].includes(path.basename(directory)) ? fs.rmSync(directory, { recursive: true, force: true }) : fs.existsSync(directory) && fs.statSync(directory).isDirectory() && fs.readdirSync(directory).forEach(filePath => rm(path.join(directory, filePath))); })('.');\""
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.5",
-    "@octokit/rest": "^22.0.0",
-    "@types/node": "^24.1.0",
+    "@changesets/cli": "2.29.7",
+    "@octokit/rest": "22.0.0",
+    "@types/node": "24.4.0",
     "prettier": "catalog:",
-    "turbo": "^2.5.5",
+    "turbo": "2.5.6",
     "typescript": "catalog:",
-    "vitest": "^3.2.4"
+    "vitest": "3.2.4"
   },
   "pnpm": {
     "overrides": {
-      "external-editor>tmp": "^0.2.4",
-      "on-headers": "^1.1.0"
+      "external-editor>tmp": "0.2.4",
+      "on-headers": "1.1.0"
     }
   },
   "engines": {
