@@ -1,8 +1,12 @@
 import React from 'react'
 
-import { getResolvedContext } from './Context'
-import { CopyButtonClient } from './CopyButtonClient'
+import { getResolvedContext } from '../CodeBlock/Context.js'
+import { CopyButtonClient } from './CopyButtonClient.js'
 
+/**
+ * Resolves a value from a `CodeBlock` ancestor or a `value` prop and renders a
+ * copy button that copies that value to the clipboard.
+ */
 export async function CopyButton(
   props: React.ComponentProps<typeof CopyButtonClient>
 ) {

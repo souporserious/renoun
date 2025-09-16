@@ -1,6 +1,5 @@
 export {
   CodeBlock,
-  CopyButton,
   LineNumbers,
   Tokens,
   Toolbar,
@@ -14,6 +13,7 @@ export {
   parseCodeProps,
   type CodeInlineProps,
 } from './CodeInline.js'
+export { CopyButton } from './CopyButton/index.js'
 export { Copyright } from './Copyright.js'
 export { Logo } from './Logo.js'
 export { Link } from './Link/index.js'

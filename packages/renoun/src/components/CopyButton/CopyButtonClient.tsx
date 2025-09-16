@@ -2,7 +2,7 @@
 import React, { use, useState } from 'react'
 import { css, type CSSObject } from 'restyle'
 
-import { PreActiveContext } from './Pre.js'
+import { PreActiveContext } from '../CodeBlock/Pre.js'
 
 /**
  * Copies a value to the user's clipboard.

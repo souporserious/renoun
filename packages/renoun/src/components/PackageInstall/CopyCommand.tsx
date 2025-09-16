@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 
-import { CopyButtonClient } from '../CodeBlock/CopyButtonClient.js'
+import { CopyButtonClient } from '../CopyButton/CopyButtonClient.js'
 
 /** @internal */
 export function CopyCommand(

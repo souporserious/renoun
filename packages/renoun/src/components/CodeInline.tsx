@@ -5,9 +5,9 @@ import type { Languages } from '../grammars/index.js'
 import { grammars } from '../grammars/index.js'
 import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
 import { getConfig } from './Config/ServerConfigContext.js'
-import { CopyButton } from './CodeBlock/CopyButton.js'
 import { Tokens } from './CodeBlock/Tokens.js'
 import { getScrollContainerStyles } from './CodeBlock/utils.js'
+import { CopyButton } from './CopyButton/index.js'
 
 export type CodeInlineProps = {
   /** Code snippet to be highlighted. */
