@@ -105,6 +105,7 @@ export function SiteLayout({
               Docs
             </NavigationLink>
             <NavigationLink href="/components">Components</NavigationLink>
+            <NavigationLink href="/hooks">Hooks</NavigationLink>
             <NavigationLink href="/utilities/file-system">
               Utilities
             </NavigationLink>
