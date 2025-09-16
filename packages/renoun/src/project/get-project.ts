@@ -100,7 +100,7 @@ export function getProject(options?: ProjectOptions) {
                 if (isDirectory) {
                   currentProject.addDirectoryAtPath(filePath)
                 } else {
-                  currentProject.addSourceFileAtPath(filePath)
+                  refreshOrAddSourceFile(currentProject, filePath)
                 }
               } else if (isDirectory) {
                 const removedDirectory = currentProject.getDirectory(filePath)
@@ -115,26 +115,7 @@ export function getProject(options?: ProjectOptions) {
                 }
               }
             } else if (eventType === 'change') {
-              const previousSourceFile = currentProject.getSourceFile(filePath)
-
-              if (previousSourceFile) {
-                resolvedTypeCache.clear()
-
-                startRefreshingProjects()
-
-                const promise = previousSourceFile
-                  .refreshFromFileSystem()
-                  .finally(() => {
-                    activeRefreshingProjects.delete(promise)
-                    if (activeRefreshingProjects.size === 0) {
-                      completeRefreshingProjects()
-                    }
-                  })
-
-                activeRefreshingProjects.add(promise)
-              } else {
-                currentProject.addSourceFileAtPath(filePath)
-              }
+              refreshOrAddSourceFile(currentProject, filePath)
             }
           }
         } catch (error) {
@@ -154,4 +135,28 @@ export function getProject(options?: ProjectOptions) {
   projects.set(projectId, project)
 
   return project
+}
+
+function refreshOrAddSourceFile(project: Project, filePath: string) {
+  const existingSourceFile = project.getSourceFile(filePath)
+
+  if (!existingSourceFile) {
+    project.addSourceFileAtPath(filePath)
+    return
+  }
+
+  resolvedTypeCache.clear()
+
+  startRefreshingProjects()
+
+  const promise = existingSourceFile
+    .refreshFromFileSystem()
+    .finally(() => {
+      activeRefreshingProjects.delete(promise)
+      if (activeRefreshingProjects.size === 0) {
+        completeRefreshingProjects()
+      }
+    })
+
+  activeRefreshingProjects.add(promise)
 }
