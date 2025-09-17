@@ -1,5 +1,4 @@
 import {
-  Tokens,
   isFile,
   isDirectory,
   FileNotFoundError,
@@ -9,10 +8,10 @@ import {
   type JavaScriptModuleExport,
   type MDXHeadings,
 } from 'renoun'
-import { GeistMono } from 'geist/font/mono'
 import { References } from '@/components/Reference'
 
 import { RootCollection, HooksDirectory } from '@/collections'
+import { CodePreview } from '@/components/CodePreview'
 import { MDX } from '@/components/MDX'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
@@ -255,86 +254,34 @@ async function Preview({
 }: {
   fileExport: JavaScriptModuleExport<React.ComponentType>
 }) {
-  const name = fileExport.getName()
   const title = fileExport.getTitle()
   const description = fileExport.getDescription()
-  const slug = fileExport.getSlug()
-  const Value = await fileExport.getRuntimeValue()
-  const isUppercase = name[0] === name[0].toUpperCase()
-  const isComponent = typeof Value === 'function' && isUppercase
-
   return (
-    <section
-      key={slug}
-      id={slug}
-      css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
-    >
-      <header>
-        <div
-          css={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            gap: '0.5rem',
-          }}
-        >
-          <h3 css={{ margin: 0 }}>{title}</h3>{' '}
-          <Link source={fileExport} variant="edit">
-            {(href) => (
-              <a href={href} css={{ fontSize: 'var(--font-size-body-3)' }}>
-                View Source
-              </a>
-            )}
-          </Link>
-        </div>
-        {description ? <p>{description}</p> : null}
-      </header>
-
-      <div
-        css={{
-          display: 'grid',
-          gridTemplateRows: isComponent ? 'minmax(16rem, 1fr) auto' : undefined,
-          borderRadius: 5,
-          boxShadow: '0 0 0 1px var(--color-separator)',
-          overflow: 'clip',
-        }}
-      >
-        {isComponent ? (
+    <CodePreview
+      fileExport={fileExport}
+      header={
+        <header>
           <div
             css={{
-              fontSize: '1rem',
-              lineHeight: '1.35',
-              maxWidth: '-webkit-fill-available',
-              padding: '4rem',
-              margin: 'auto',
-              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: '0.5rem',
             }}
           >
-            <Value />
+            <h3 css={{ margin: 0 }}>{title}</h3>{' '}
+            <Link source={fileExport} variant="edit">
+              {(href) => (
+                <a href={href} css={{ fontSize: 'var(--font-size-body-3)' }}>
+                  View Source
+                </a>
+              )}
+            </Link>
           </div>
-        ) : null}
-        <pre
-          css={{
-            position: 'relative',
-            whiteSpace: 'pre',
-            wordWrap: 'break-word',
-            fontSize: 'var(--font-size-code-2)',
-            lineHeight: 'var(--line-height-code-2)',
-            padding: '0.75rem 1rem',
-            overflow: 'auto',
-            backgroundColor: 'var(--color-surface-secondary)',
-            borderTop: isComponent
-              ? '1px solid var(--color-separator)'
-              : undefined,
-          }}
-          className={GeistMono.className}
-        >
-          <Tokens language="tsx">
-            {fileExport.getText({ includeDependencies: true })}
-          </Tokens>
-        </pre>
-      </div>
-    </section>
+          {description ? <p>{description}</p> : null}
+        </header>
+      }
+    />
   )
 }

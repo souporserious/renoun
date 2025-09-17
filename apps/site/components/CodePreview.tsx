@@ -7,9 +7,13 @@ import { Collapse } from './Collapse'
 export async function CodePreview({
   fileExport,
   layoutExport,
+  header,
+  fullBleed = false,
 }: {
   fileExport: JavaScriptModuleExport<React.ComponentType>
   layoutExport?: JavaScriptModuleExport<any>
+  header?: React.ReactNode
+  fullBleed?: boolean
 }) {
   const name = fileExport.getName()
   const slug = fileExport.getSlug()
@@ -26,10 +30,11 @@ export async function CodePreview({
         display: 'flex',
         flexDirection: 'column',
         borderRadius: 5,
-        width: 'calc(100% + 2rem)',
-        margin: '0 -1rem',
+        ...(fullBleed ? { width: 'calc(100% + 2rem)', margin: '0 -1rem' } : {}),
+        ...(header ? { gap: '1rem' } : {}),
       }}
     >
+      {header}
       <HeroExample code={code}>
         <div
           css={{
