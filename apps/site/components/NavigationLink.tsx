@@ -6,6 +6,7 @@ import { styled, type CSSObject } from 'restyle'
 const StyledLink = styled(Link, {
   fontSize: 'var(--font-size-body-2)',
   padding: '0.25rem 0.5rem',
+  whiteSpace: 'nowrap',
 })
 
 export function NavigationLink({
@@ -31,8 +32,8 @@ export function NavigationLink({
   }
 
   if (isActive) {
-    styles.fontWeight = 600
     styles.color = activeColor
+    styles.textShadow = '0.01em 0 currentColor,-0.01em 0 currentColor'
   } else {
     styles.color = css?.color ?? 'var(--color-foreground-interactive)'
     styles[':hover'] = {

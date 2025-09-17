@@ -155,7 +155,7 @@ export function QuickSteps() {
                     gridColumn: '1',
                     gridRow: '1',
                     fontSize: 'var(--font-size-body-2)',
-                    fontWeight: 'bold',
+                    fontWeight: 'var(--font-weight-heading)',
                     marginBottom: '0.3rem',
                     color: '#E7C100',
                   }}

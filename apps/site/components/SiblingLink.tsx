@@ -65,7 +65,7 @@ export async function SiblingLink({
           gridColumn: direction === 'previous' ? 2 : 1,
           gridRow: 1,
           fontSize: 'var(--font-size-title)',
-          fontWeight: 600,
+          fontWeight: 'var(--font-weight-strong)',
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
           color: 'var(--color-foreground) !important',

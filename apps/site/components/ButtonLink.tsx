@@ -21,7 +21,7 @@ export const ButtonLink = styled(
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontWeight: 600,
+      fontWeight: 'var(--font-weight-button)',
       borderRadius: '0.25rem',
       backgroundColor: 'var(--color-surface-primary)',
       color: 'var(--color-foreground)',

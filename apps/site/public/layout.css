@@ -39,6 +39,7 @@
   --font-weight-heading: 700;
   --font-weight-body: 400;
   --font-weight-button: 700;
+  --font-weight-strong: 600;
   --letter-spacing-body: 0.01em;
   --header-height: 5rem;
   --body-height: calc(100dvh - var(--header-height));
@@ -221,7 +222,7 @@ a {
 
 .title {
   font-size: var(--font-size-title);
-  font-weight: 600;
+  font-weight: var(--font-weight-strong);
   text-transform: uppercase;
   letter-spacing: 0.1rem;
   color: var(--color-foreground);

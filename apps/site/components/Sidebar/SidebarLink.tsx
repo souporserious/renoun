@@ -26,6 +26,7 @@ export function SidebarLink({
 
   if (isActive) {
     styles.color = 'var(--color-foreground)'
+    styles.textShadow = '0.01em 0 currentColor,-0.01em 0 currentColor'
   } else {
     styles.color = 'var(--color-foreground-interactive)'
     styles[':hover'] = {

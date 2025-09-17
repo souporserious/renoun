@@ -62,7 +62,7 @@ export async function DocumentEntry({
               <time
                 dateTime={updatedAt.toString()}
                 itemProp="dateModified"
-                css={{ fontWeight: 600 }}
+                css={{ fontWeight: 'var(--font-weight-strong)' }}
               >
                 {updatedAt.toLocaleString('en', {
                   year: '2-digit',

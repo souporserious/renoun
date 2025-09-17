@@ -111,7 +111,7 @@ export function SignupForm() {
           disabled={state === 'loading'}
           css={{
             fontSize: 'var(--font-size-body-2)',
-            fontWeight: 600,
+            fontWeight: 'var(--font-weight-button)',
             letterSpacing: '0.02em',
             display: 'flex',
             alignItems: 'center',

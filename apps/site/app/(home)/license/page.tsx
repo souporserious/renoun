@@ -91,7 +91,7 @@ function FeatureCard({
         <h2
           css={{
             fontSize: 'var(--font-size-title)',
-            fontWeight: 600,
+            fontWeight: 'var(--font-weight-strong)',
             textTransform: 'uppercase',
             letterSpacing: '0.1rem',
           }}
