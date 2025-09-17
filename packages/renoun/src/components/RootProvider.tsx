@@ -1,6 +1,7 @@
 import React, { cloneElement, isValidElement } from 'react'
 
 import { parseGitSpecifier } from '../file-system/Repository.js'
+import { CommandScript } from './Command/CommandScript.js'
 import { ClientConfigProvider } from './Config/ClientConfigContext.js'
 import { ServerConfigContext } from './Config/ServerConfigContext.js'
 import { defaultConfig } from './Config/default-config.js'
@@ -17,6 +18,9 @@ interface BaseProps
 
   /** Configuration options for git linking. Accepts a string shorthand or an object. */
   git?: ConfigurationOptions['git'] | string
+
+  /** Control whether to include the script for the `Command` component in the document head. */
+  includeCommandScript?: boolean
 
   /** The `html` element tree to render. */
   children: React.ReactNode
@@ -47,6 +51,8 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   languages,
   git,
   siteUrl,
+  includeCommandScript = true,
+  includeThemeScript = true,
   nonce,
   ...restProps
 }: RootProviderProps<Theme>) {
@@ -93,6 +99,12 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   if (siteUrl !== undefined) {
     overrides.siteUrl = siteUrl
   }
+  if (
+    'defaultPackageManager' in restProps &&
+    restProps.defaultPackageManager !== undefined
+  ) {
+    overrides.defaultPackageManager = restProps.defaultPackageManager
+  }
 
   let merged: ConfigurationOptions = {
     ...defaultConfig,
@@ -115,14 +127,16 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   return (
     <ServerConfigContext value={merged}>
       <ClientConfigProvider value={merged}>
+        {includeCommandScript ? (
+          <CommandScript
+            defaultPackageManager={merged.defaultPackageManager}
+            nonce={nonce}
+          />
+        ) : null}
         {typeof merged.theme === 'object' ? (
           <ThemeProvider
             theme={merged.theme}
-            includeScript={
-              typeof restProps.includeThemeScript === 'boolean'
-                ? restProps.includeThemeScript
-                : true
-            }
+            includeScript={includeThemeScript}
             nonce={nonce}
           >
             {childrenToRender}
