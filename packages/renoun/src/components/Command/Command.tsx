@@ -95,7 +95,7 @@ function buildCommand(
 
 export interface CommandProps {
   /** The type of command to render across package managers. */
-  variant: CommandVariant
+  variant?: CommandVariant
 
   /** Content used as the subject: packages (install), script (run), binary (exec), or template (create). */
   children: React.ReactNode
@@ -309,6 +309,14 @@ export function Command({
   className,
   style,
 }: CommandProps) {
+  if (!variant) {
+    return (
+      <Code css={css?.code} className={className?.code} style={style?.code}>
+        <Tokens language="sh">{String(children)}</Tokens>
+      </Code>
+    )
+  }
+
   const id = useId()
   const command = getChildrenText(children)
 
