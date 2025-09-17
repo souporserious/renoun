@@ -18,14 +18,9 @@ npm create vite@latest
 
 Next, install the required dependencies:
 
-<PackageInstall
-  packages={[
-    'renoun',
-    '@vitejs/plugin-react',
-    '@vitejs/plugin-react-rsc',
-    '@mdx-js/rollup',
-  ]}
-/>
+<Command variant="install">
+  renoun @vitejs/plugin-react @vitejs/plugin-react-rsc @mdx-js/rollup
+</Command>
 
 ## Setup
 
@@ -81,8 +76,6 @@ export default async function Page() {
 
 Now you can start your Vite server with renoun enabled:
 
-```bash
-npm run dev
-```
+<Command variant="run">dev</Command>
 
 Congratulations, you've successfully set up renoun with Vite! Explore more [components](/components) and [utilities](/utilities/file-system) to enhance your documentation.

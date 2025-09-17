@@ -1,6 +1,7 @@
 import {
   CodeInline,
-  PackageInstall,
+  Command,
+  type CommandVariant,
   type MDXComponents as MDXComponentsType,
 } from 'renoun'
 import { GeistMono } from 'geist/font/mono'
@@ -104,10 +105,16 @@ export const MDXComponents = {
       </div>
     )
   },
-  PackageInstall: ({ packages }: { packages: string[] }) => {
+  Command: ({
+    children,
+    variant,
+  }: {
+    children: React.ReactNode
+    variant: CommandVariant
+  }) => {
     return (
-      <PackageInstall
-        packages={packages}
+      <Command
+        variant={variant}
         css={{
           container: {
             fontSize: 'var(--font-size-code-2)',
@@ -122,7 +129,9 @@ export const MDXComponents = {
         className={{
           container: GeistMono.className,
         }}
-      />
+      >
+        {children}
+      </Command>
     )
   },
   Note: ({ children }) => {

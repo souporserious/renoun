@@ -15,18 +15,19 @@ export {
 } from './CodeInline.js'
 export { CopyButton } from './CopyButton/index.js'
 export { Copyright } from './Copyright.js'
-export { Logo } from './Logo.js'
+export {
+  Command,
+  type CommandProps,
+  type CommandVariant,
+} from './Command/index.js'
 export { Link } from './Link/index.js'
+export { Logo } from './Logo.js'
 export {
   Markdown,
   type MarkdownProps,
   type MarkdownComponents,
 } from './Markdown.js'
 export { MDX } from './MDX.js'
-export {
-  PackageInstall,
-  type PackageInstallProps,
-} from './PackageInstall/index.js'
 export {
   Reference,
   type ReferenceProps,

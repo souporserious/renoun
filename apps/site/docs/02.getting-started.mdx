@@ -13,7 +13,7 @@ While this getting-started guide uses [Next.js](https://nextjs.org) as an exampl
 
 First, install renoun and additionally set up a Next.js project if you haven't already:
 
-<PackageInstall packages={['renoun']} />
+<Command variant="install">renoun</Command>
 
 ## Configuration
 
@@ -34,9 +34,7 @@ To use the CLI, prepend `renoun` to your Next.js `dev` and `build` commands in y
 
 Then start the development server:
 
-```bash
-npm run dev
-```
+<Command variant="run">dev</Command>
 
 Prepending the renoun CLI ensures that the renoun process starts before your framework's server. The CLI starts a WebSocket server that will watch for changes to the file system and communicates with renoun components and utilities.
 

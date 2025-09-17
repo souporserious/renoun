@@ -71,4 +71,7 @@ export interface ConfigurationOptions {
 
   /** The URL of the production site. This is used for generating sitemap and RSS feed URLs. */
   siteUrl?: string
+
+  /** The default package manager used by the `Install` component. */
+  defaultPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun'
 }

@@ -18,7 +18,7 @@ npx create-next-app@latest
 
 Next, we need to install the `renoun` package dependencies:
 
-<PackageInstall packages={['renoun', 'ts-morph']} />
+<Command variant="install">renoun ts-morph</Command>
 
 <Note>
 
@@ -93,7 +93,7 @@ project. Additionaly, you can skip adding the plugins from the `renoun` package 
 
 First, install the Next.js MDX plugin:
 
-<PackageInstall packages={['@next/mdx']} />
+<Command variant="install">@next/mdx</Command>
 
 Now, add the plugin to your `next.config` file while optionally including the pre-configured `remarkPlugins` and `rehypePlugins` from the `renoun` package:
 
@@ -267,8 +267,6 @@ import(
 
 Now you can start your Next.js server with renoun enabled:
 
-```bash
-npm run dev
-```
+<Command variant="run">dev</Command>
 
 Congratulations, you've successfully set up renoun with Next.js! You can now query other [file system](/utilities/file-system) entries or use one of the many [components](/components) available to enhance your content and documentation.

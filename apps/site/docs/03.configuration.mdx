@@ -54,7 +54,7 @@ For more information on TextMate grammars and themes, see the <a href="https://c
 
 To use a predefined theme, first install the `tm-themes` package:
 
-<PackageInstall packages={['tm-themes']} dev />
+<Command variant="install-dev">tm-themes</Command>
 
 Now you can define a supported theme by name through `RootProvider`:
 
@@ -262,7 +262,7 @@ File types such as `js` and `ts` are automatically mapped to the `tsx` grammar, 
 
 To add support for additional languages, install the optional `tm-grammars` package and list the languages you want in the `languages` array.
 
-<PackageInstall packages={['tm-grammars']} dev />
+<Command variant="install-dev">tm-grammars</Command>
 
 Now you can reference languages by name via `RootProvider`:
 
