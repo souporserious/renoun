@@ -13,7 +13,6 @@ export {
   parseCodeProps,
   type CodeInlineProps,
 } from './CodeInline.js'
-export { CopyButton } from './CopyButton/index.js'
 export { Copyright } from './Copyright.js'
 export {
   Command,
