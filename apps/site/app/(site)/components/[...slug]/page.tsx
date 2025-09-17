@@ -1,5 +1,4 @@
 import {
-  CodeBlock,
   Tokens,
   isFile,
   isDirectory,
@@ -376,26 +375,26 @@ async function Preview({
             )}
           </div>
         ) : null}
-        <CodeBlock language="tsx">
-          <pre
-            css={{
-              position: 'relative',
-              whiteSpace: 'pre',
-              wordWrap: 'break-word',
-              fontSize: 'var(--font-size-code-2)',
-              lineHeight: 'var(--line-height-code-2)',
-              padding: '0.75rem 1rem',
-              overflow: 'auto',
-              backgroundColor: 'var(--color-surface-secondary)',
-              borderTop: isComponent
-                ? '1px solid var(--color-separator)'
-                : undefined,
-            }}
-            className={GeistMono.className}
-          >
-            <Tokens>{fileExport.getText({ includeDependencies: true })}</Tokens>
-          </pre>
-        </CodeBlock>
+        <pre
+          css={{
+            position: 'relative',
+            whiteSpace: 'pre',
+            wordWrap: 'break-word',
+            fontSize: 'var(--font-size-code-2)',
+            lineHeight: 'var(--line-height-code-2)',
+            padding: '0.75rem 1rem',
+            overflow: 'auto',
+            backgroundColor: 'var(--color-surface-secondary)',
+            borderTop: isComponent
+              ? '1px solid var(--color-separator)'
+              : undefined,
+          }}
+          className={GeistMono.className}
+        >
+          <Tokens language="tsx">
+            {fileExport.getText({ includeDependencies: true })}
+          </Tokens>
+        </pre>
       </div>
     </section>
   )
