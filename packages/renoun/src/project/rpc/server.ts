@@ -1007,12 +1007,22 @@ export class WebSocketServer {
           error instanceof Error ? error : new Error(String(error)),
       })
       if (!isNotification) {
+        // Include detailed error data (name/message/stack) in development to surface
+        // actionable stack traces at the caller. In production, omit the stack.
+        const includeStack = process.env.NODE_ENV !== 'production'
+        const original = serverError.originalError
         return {
           id: request.id,
           error: {
             code: serverError.code,
             message: serverError.message,
-            data: serverError.originalError?.message,
+            data: includeStack
+              ? {
+                  name: original?.name,
+                  message: original?.message,
+                  stack: original?.stack,
+                }
+              : { message: original?.message },
           },
         } satisfies WebSocketResponse
       }

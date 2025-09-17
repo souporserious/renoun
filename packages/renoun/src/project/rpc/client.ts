@@ -1121,7 +1121,7 @@ export class WebSocketClient extends EventEmitter {
     const { id, result, error } = message as WebSocketResponse
     if (typeof id === 'number' && this.#requests[id]) {
       if (error) {
-        this.#requests[id].reject(error)
+        this.#requests[id].reject(parseServerError(error))
       } else {
         this.#requests[id].resolve(result)
       }
@@ -1243,7 +1243,18 @@ function parseServerError(error: any): Error {
     typeof (error as any).message === 'string'
   ) {
     const constructed = new Error((error as any).message)
+    // Preserve server-provided properties like code, data, etc.
     Object.assign(constructed, error)
+    // If server included detailed error info under data, propagate it.
+    const data = (error as any).data
+    if (data && typeof data === 'object') {
+      if (typeof (data as any).name === 'string') {
+        constructed.name = (data as any).name
+      }
+      if (typeof (data as any).stack === 'string') {
+        constructed.stack = (data as any).stack
+      }
+    }
     return constructed
   }
 
