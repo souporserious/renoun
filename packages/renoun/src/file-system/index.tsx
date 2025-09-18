@@ -1136,11 +1136,17 @@ export class JavaScriptFile<
   }
 
   /** Get the runtime value of an export in the JavaScript file. */
-  async getExportValue<ExportName extends Extract<keyof Types, string>>(
+  async getExportValue<
+    Value = never,
+    ExportName extends Extract<keyof Types, string> = Extract<
+      keyof Types,
+      string
+    >,
+  >(
     name: ExportName
-  ): Promise<Types[ExportName]> {
+  ): Promise<[Value] extends [never] ? Types[ExportName] : Value> {
     const fileExport = await this.getExport(name)
-    return fileExport.getValue()
+    return (await fileExport.getValue()) as any
   }
 
   /** Check if an export exists statically in the JavaScript file. */
@@ -1470,15 +1476,27 @@ export class MDXFile<
     return this.getExport('default').then((fileExport) => fileExport.getValue())
   }
 
+  /** Check if an export exists at runtime in the MDX file. */
   async hasExport(name: string): Promise<boolean> {
     const fileModule = await this.#getModule()
     return name in fileModule
   }
 
+  /** Get the runtime value of an export in the MDX file. */
   async getExportValue<
-    ExportName extends 'default' | Extract<keyof Types, string>,
-  >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]> {
-    return this.getExport(name).then((fileExport) => fileExport.getValue())
+    Value = never,
+    ExportName extends 'default' | Extract<keyof Types, string> =
+      | 'default'
+      | Extract<keyof Types, string>,
+  >(
+    name: ExportName
+  ): Promise<
+    [Value] extends [never]
+      ? ({ default: MDXContent } & Types)[ExportName]
+      : Value
+  > {
+    const fileExport = await this.getExport(name as any)
+    return (await fileExport.getValue()) as any
   }
 
   async #getStaticExportValues() {
@@ -2844,7 +2862,7 @@ export class Collection<
 
 /** Determines if a `FileSystemEntry` is a `Directory`. */
 export function isDirectory<Types extends Record<string, any>>(
-  entry: FileSystemEntry<Types> | undefined
+  entry: FileSystemEntry<Types> | Collection<Types> | undefined
 ): entry is Directory<Types> {
   return entry instanceof Directory
 }
