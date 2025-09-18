@@ -56,7 +56,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Docs</h3>
-            <TreeNavigation collection={DocsDirectory} />
+            <TreeNavigation source={DocsDirectory} />
           </li>
 
           <li
@@ -67,7 +67,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Components</h3>
-            <TreeNavigation collection={ComponentsDirectory} variant="name" />
+            <TreeNavigation source={ComponentsDirectory} />
           </li>
 
           <li
@@ -78,7 +78,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Hooks</h3>
-            <TreeNavigation collection={HooksDirectory} variant="name" />
+            <TreeNavigation source={HooksDirectory} />
           </li>
 
           <li
@@ -115,7 +115,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Guides</h3>
-            <TreeNavigation collection={GuidesDirectory} />
+            <TreeNavigation source={GuidesDirectory} />
           </li>
 
           <li css={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

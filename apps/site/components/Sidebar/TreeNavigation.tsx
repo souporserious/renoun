@@ -1,129 +1,19 @@
 import {
-  ModuleExportNotFoundError,
-  isFile,
+  Directory,
+  isDirectory,
   isJavaScriptFile,
   isMDXFile,
-  type Directory,
+  Navigation,
+  ModuleExportNotFoundError,
   type FileSystemEntry,
+  type NavigationComponents,
+  type NavigationProps,
 } from 'renoun'
-import type { CSSObject } from 'restyle'
 
 import { SidebarLink } from './SidebarLink'
 
-async function ListNavigation({
-  entry,
-  variant = 'title',
-}: {
-  entry: FileSystemEntry<any>
-  variant?: 'name' | 'title'
-}) {
-  const pathname = entry.getPathname()
-  const depth = entry.getDepth()
-  const metadata =
-    variant === 'title' && (isJavaScriptFile(entry) || isMDXFile(entry))
-      ? await entry.getExportValue('metadata').catch((error) => {
-          if (error instanceof ModuleExportNotFoundError) {
-            return undefined
-          }
-          throw error
-        })
-      : null
-
-  if (isFile(entry)) {
-    const baseName = entry.getBaseName()
-
-    if (baseName.includes('-') && isJavaScriptFile(entry)) {
-      const firstExport = await entry
-        .getExports()
-        .then((fileExports) => fileExports[0])
-
-      return (
-        <li>
-          <SidebarLink
-            css={{ paddingLeft: `${depth * 0.8}rem` }}
-            pathname={pathname}
-            label={firstExport.getName()}
-          />
-        </li>
-      )
-    }
-
-    return (
-      <li>
-        <SidebarLink
-          css={{ paddingLeft: `${depth * 0.8}rem` }}
-          pathname={pathname}
-          label={
-            variant === 'title'
-              ? metadata?.label || metadata?.title || baseName
-              : baseName
-          }
-        />
-      </li>
-    )
-  }
-
-  const entries = await entry.getEntries()
-
-  if (entries.length === 0) {
-    return (
-      <li>
-        <SidebarLink
-          css={{ paddingLeft: `${depth * 0.8}rem` }}
-          pathname={pathname}
-          label={
-            variant === 'title'
-              ? metadata?.label || metadata?.title || entry.getBaseName()
-              : entry.getBaseName()
-          }
-        />
-      </li>
-    )
-  }
-
-  const listStyles: CSSObject = {
-    fontSize: 'var(--font-size-body-2)',
-    display: 'flex',
-    flexDirection: 'column',
-    listStyle: 'none',
-    paddingLeft: `${depth}rem`,
-    marginLeft: '0.25rem',
-    borderLeft: '1px solid var(--color-separator)',
-  }
-
-  return (
-    <li>
-      <SidebarLink
-        pathname={pathname}
-        label={
-          variant === 'title'
-            ? metadata?.label || metadata?.title || entry.getBaseName()
-            : entry.getBaseName()
-        }
-      />
-      <ul style={listStyles}>
-        {entries.map((childEntry) => (
-          <ListNavigation
-            key={childEntry.getPathname()}
-            entry={childEntry}
-            variant={variant}
-          />
-        ))}
-      </ul>
-    </li>
-  )
-}
-
-export async function TreeNavigation({
-  collection,
-  variant,
-}: {
-  collection: Directory<any>
-  variant?: 'name' | 'title'
-}) {
-  const entries = await collection.getEntries()
-
-  return (
+const components: Partial<NavigationComponents> = {
+  Root: ({ children }) => (
     <ul
       css={{
         fontSize: 'var(--font-size-body-2)',
@@ -133,13 +23,91 @@ export async function TreeNavigation({
         paddingLeft: 0,
       }}
     >
-      {entries.map((entry) => (
-        <ListNavigation
-          key={entry.getPathname()}
-          entry={entry}
-          variant={variant}
-        />
-      ))}
+      {children}
     </ul>
-  )
+  ),
+  List: ({ entry, children }) => {
+    let paddingLeft = '0'
+
+    if (isDirectory(entry)) {
+      const depth = entry.getDepth()
+      if (depth > 0) {
+        paddingLeft = `${depth}rem`
+      }
+    }
+
+    return (
+      <ul
+        css={{
+          fontSize: 'var(--font-size-body-2)',
+          display: 'flex',
+          flexDirection: 'column',
+          listStyle: 'none',
+          marginLeft: '0.25rem',
+          borderLeft: '1px solid var(--color-separator)',
+          paddingLeft,
+        }}
+      >
+        {children}
+      </ul>
+    )
+  },
+  Link: async ({ entry, pathname }) => {
+    const metadata = await getEntryMetadata(entry)
+    let label: string
+
+    if (metadata?.label) {
+      label = metadata.label
+    } else if (metadata?.title) {
+      label = metadata.title
+    } else if (isDirectory(entry)) {
+      label = getDirectoryLabel(entry)
+    } else {
+      label = await getFileLabel(entry)
+    }
+
+    return <SidebarLink pathname={pathname} label={label} />
+  },
+}
+
+export function TreeNavigation(props: Omit<NavigationProps, 'components'>) {
+  return <Navigation {...props} components={components} />
+}
+
+async function getEntryMetadata(entry: FileSystemEntry<any>) {
+  if (!(isJavaScriptFile(entry) || isMDXFile(entry))) {
+    return undefined
+  }
+
+  try {
+    return await entry.getExportValue<{ title?: string; label?: string }>(
+      'metadata'
+    )
+  } catch (error) {
+    if (error instanceof ModuleExportNotFoundError) {
+      return undefined
+    }
+    throw error
+  }
+}
+
+async function getFileLabel(entry: FileSystemEntry<any>) {
+  const name = entry.getBaseName()
+
+  // If the file name is kebab-case, use the first export as the label if possible.
+  if (name.includes('-') && isJavaScriptFile(entry)) {
+    const firstExport = await entry
+      .getExports()
+      .then((fileExports) => fileExports[0])
+
+    if (firstExport) {
+      return firstExport.getName()
+    }
+  }
+
+  return name
+}
+
+function getDirectoryLabel(entry: Directory<any>) {
+  return entry.getBaseName()
 }

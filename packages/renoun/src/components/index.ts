@@ -27,10 +27,15 @@ export {
   type MarkdownComponents,
 } from './Markdown.js'
 export { MDX } from './MDX.js'
+export { RootProvider } from './RootProvider.js'
 export {
   Reference,
   type ReferenceProps,
   type ReferenceComponents,
 } from './Reference.js'
-export { RootProvider } from './RootProvider.js'
+export {
+  Navigation,
+  type NavigationProps,
+  type NavigationComponents,
+} from './Navigation.js'
 export { Sponsors } from './Sponsors.js'
