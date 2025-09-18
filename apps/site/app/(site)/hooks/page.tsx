@@ -1,7 +1,8 @@
+import { isJavaScriptFile } from 'renoun'
+
 import { HooksDirectory } from '@/collections'
 import { Card } from '@/components/Card'
 import { Row } from '@/components/Row'
-import { isJavaScriptFile } from 'renoun'
 
 export default async function Hooks() {
   const entries = await HooksDirectory.getEntries()
@@ -17,12 +18,9 @@ export default async function Hooks() {
       <div className="prose">
         <h1>Hooks</h1>
         <p>
-          Leverage renoun’s collection of React hooks to manage state and
-          behavior in your documentation experiences.
-        </p>
-        <p>
-          These utilities simplify common patterns like section tracking and
-          theme preference, helping you build interactive docs with ease.
+          Leverage renoun’s React hooks to manage state and behavior in your
+          documentation. These hooks simplify common patterns like active
+          section tracking based on scroll and theme preference.
         </p>
       </div>
       <Row>
