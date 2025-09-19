@@ -266,6 +266,77 @@ describe('resolveType', () => {
     `)
   })
 
+  test('resolves empty object literal return types', () => {
+    const emptySource = project.createSourceFile(
+      'index.ts',
+      dedent`
+        export class EmptyObjectReturn {
+          getValue() {
+            return {}
+          }
+        }
+      `,
+      { overwrite: true }
+    )
+    const emptyClass = emptySource.getClassOrThrow('EmptyObjectReturn')
+    const resolved = resolveType(emptyClass.getType(), emptyClass)
+
+    expect(resolved).toMatchInlineSnapshot(`
+      {
+        "constructor": undefined,
+        "filePath": "index.ts",
+        "kind": "Class",
+        "methods": [
+          {
+            "kind": "ClassMethod",
+            "name": "getValue",
+            "scope": undefined,
+            "signatures": [
+              {
+                "filePath": "index.ts",
+                "isAsync": false,
+                "isGenerator": false,
+                "kind": "CallSignature",
+                "parameters": [],
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 2,
+                  },
+                },
+                "returnType": {
+                  "kind": "TypeLiteral",
+                  "members": [],
+                  "text": "{}",
+                },
+                "text": "() => {}",
+                "thisType": undefined,
+              },
+            ],
+            "text": "() => {}",
+            "visibility": undefined,
+          },
+        ],
+        "name": "EmptyObjectReturn",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "EmptyObjectReturn",
+      }
+    `)
+  })
+
   test('complex properties', () => {
     const typeAlias = sourceFile.getTypeAliasOrThrow('ComplexType')
     const type = typeAlias.getType()

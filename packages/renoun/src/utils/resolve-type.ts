@@ -2057,11 +2057,6 @@ function resolveTypeExpression(
             filter
           )
           resolvedMembers = [...propertySignatures, ...indexSignatures]
-
-          // If the literal is truly empty we treat it like `{}` and bail
-          if (propertySignatures.length === 0 && indexSignatures.length === 0) {
-            return
-          }
         } else {
           throw new UnresolvedTypeExpressionError(type, enclosingNode)
         }
