@@ -1,5 +1,90 @@
 # renoun
 
+## 10.1.0
+
+### Minor Changes
+
+- 996e729: Adds a `TableOfContents` component to render a list of headings for a document. This can be used with the [headings MDX plugin](https://www.renoun.dev/guides/mdx#remark-add-headings) to generate a table of contents for a page.
+
+  ```tsx
+  import { TableOfContents } from 'renoun'
+  import Content, { headings } from './content.mdx'
+
+  export default function Page() {
+    return (
+      <main
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 16rem',
+          gap: '2rem',
+        }}
+      >
+        <article>
+          <Content />
+        </article>
+        <aside>
+          <TableOfContents items={headings} />
+        </aside>
+      </main>
+    )
+  }
+  ```
+
+- 6433c37: Renames `PackageInstall` component to `Command` and switches to using `children` prop for providing package commands instead of a `packages` prop. This also adds `defaultPackageManager` and `includeInstallScript` configuration props to `RootProvider`.
+
+  ```diff
+  - <PackageInstall>renoun</PackageInstall>
+  + <Command variant="install">renoun</Command>
+  ```
+
+  This also introduces new variants:
+  - `install` - for install commands
+  - `install-dev` - for install dev commands
+  - `run` - for run commands
+  - `exec` - for exec commands
+  - `create` - for create commands
+
+  ### Breaking Changes
+
+  Rename `PackageInstall` call sites to `Command` with `variant="install"` and remove the `packages` prop and pass as `children` directly.
+
+- 2f63e80: Adds a `Navigation` component that takes a `source` which can be a `FileSystemEntry` or a `Collection` and renders the entries recursively.
+
+  ```tsx
+  import { Navigation } from 'renoun'
+
+  export default function Sidebar({
+    source,
+  }: {
+    source: FileSystemEntry | Collection
+  }) {
+    return (
+      <aside>
+        <Navigation source={source} />
+      </aside>
+    )
+  }
+  ```
+
+- dfd56e2: Adds the ability to override the value type for the `JavaScriptFile#getExportValue` method. This is helpful for building strongly typed utilities.
+
+  ```ts
+  const metadata = await entry.getExportValue<{
+    title: string
+    date: Date
+  }>('metadata')
+
+  metadata.title // string
+  metadata.date // Date
+  ```
+
+- cdda586: Replaces `html-url-attributes` package with hardcoded version.
+
+### Patch Changes
+
+- a59ae29: Fixes project watcher erroring after rename.
+- 557177d: Fixes `No return type found` error in `JavaScriptModuleExport#getType` when resolving empty object literal return types.
+
 ## 10.0.0
 
 ### Major Changes
