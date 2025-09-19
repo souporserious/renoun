@@ -127,16 +127,20 @@ export function useSectionObserver({
         }
       }, [activeId, id])
 
-      return [
-        store.getSnapshot() === null ? null : isActive,
-        {
-          href: `#${id}`,
-          onClick: (e: React.MouseEvent<HTMLAnchorElement>) => {
-            e.preventDefault()
-            scrollToSection(id)
-          },
-        } as const,
-      ] as const
+      const props: React.AnchorHTMLAttributes<HTMLAnchorElement> = {
+        href: `#${id}`,
+        suppressHydrationWarning: true,
+        onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
+          event.preventDefault()
+          scrollToSection(id)
+        },
+      }
+
+      if (store.getSnapshot() === null ? null : isActive) {
+        props['aria-current'] = 'location'
+      }
+
+      return props
     }
 
     return { scrollToSection, useSection, useLink }

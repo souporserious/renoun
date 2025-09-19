@@ -8,11 +8,11 @@ import {
   type JavaScriptModuleExport,
   type MDXHeadings,
 } from 'renoun'
-import { References } from '@/components/Reference'
 
 import { RootCollection, HooksDirectory } from '@/collections'
 import { CodePreview } from '@/components/CodePreview'
 import { MDX } from '@/components/MDX'
+import { References } from '@/components/Reference'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
 

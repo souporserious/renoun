@@ -34,6 +34,11 @@ export {
   type ReferenceComponents,
 } from './Reference.js'
 export {
+  TableOfContents,
+  type TableOfContentsProps,
+  type TableOfContentsComponents,
+} from './TableOfContents/index.js'
+export {
   Navigation,
   type NavigationProps,
   type NavigationComponents,

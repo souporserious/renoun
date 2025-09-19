@@ -1,6 +1,6 @@
 import { FileSystemDirectory } from '@/collections'
-import { TableOfContents } from '@/components/TableOfContents'
 import { References } from '@/components/Reference'
+import { TableOfContents } from '@/components/TableOfContents'
 
 export default async function Page() {
   const sourceFile = await FileSystemDirectory.getFile('index', 'tsx')
