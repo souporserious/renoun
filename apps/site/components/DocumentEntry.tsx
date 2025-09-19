@@ -1,8 +1,7 @@
 import type { Collection, MDXFile, MDXHeadings } from 'renoun'
 
+import { TableOfContents } from '@/components/TableOfContents'
 import { SiblingLink } from './SiblingLink'
-import { TableOfContents } from './TableOfContents'
-import { ViewSource } from './ViewSource'
 
 export async function DocumentEntry({
   file,
@@ -95,10 +94,7 @@ export async function DocumentEntry({
       </div>
 
       {shouldRenderTableOfContents ? (
-        <TableOfContents
-          headings={headings}
-          viewSource={<ViewSource source={file} />}
-        />
+        <TableOfContents headings={headings} entry={file} />
       ) : null}
     </>
   )

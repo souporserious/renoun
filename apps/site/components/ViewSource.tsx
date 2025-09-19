@@ -9,7 +9,11 @@ export function ViewSource({
   css?: CSSObject
 }) {
   return (
-    <span
+    <Link
+      source={source}
+      variant="source"
+      target="_blank"
+      rel="noreferrer"
       css={{
         display: 'flex',
         alignItems: 'center',
@@ -24,9 +28,7 @@ export function ViewSource({
         ...css,
       }}
     >
-      <Link source={source} variant="source" target="_blank" rel="noreferrer">
-        View Source{' '}
-      </Link>
+      View Source
       <svg
         fill="none"
         width="1em"
@@ -42,6 +44,6 @@ export function ViewSource({
         <path d="M15 3h6v6" />
         <path d="M10 14L21 3" />
       </svg>
-    </span>
+    </Link>
   )
 }

@@ -8,14 +8,13 @@ import {
   type MDXHeadings,
   Link,
 } from 'renoun'
-import { References } from '@/components/Reference'
 
 import { RootCollection, ComponentsDirectory } from '@/collections'
 import { CodePreview } from '@/components/CodePreview'
 import { MDX } from '@/components/MDX'
+import { References } from '@/components/Reference'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
-import { ViewSource } from '@/components/ViewSource'
 
 export async function generateStaticParams() {
   const entries = await ComponentsDirectory.getEntries({ recursive: true })
@@ -300,10 +299,7 @@ export default async function Component({
         </div>
       </div>
 
-      <TableOfContents
-        headings={headings}
-        viewSource={<ViewSource source={componentEntry} />}
-      />
+      <TableOfContents headings={headings} entry={componentEntry} />
     </>
   )
 }

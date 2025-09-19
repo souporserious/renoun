@@ -7,6 +7,7 @@ import { ServerConfigContext } from './Config/ServerConfigContext.js'
 import { defaultConfig } from './Config/default-config.js'
 import type { ConfigurationOptions, ThemeValue } from './Config/types.js'
 import { Refresh } from './Refresh'
+import { TableOfContentsScript } from './TableOfContents/TableOfContentsScript.js'
 import { ThemeProvider } from './Theme'
 
 type ThemeMap = Record<string, ThemeValue>
@@ -21,6 +22,9 @@ interface BaseProps
 
   /** Control whether to include the script for the `Command` component in the document head. */
   includeCommandScript?: boolean
+
+  /** Control whether to include the script for the `TableOfContents` component in the document head. */
+  includeTableOfContentsScript?: boolean
 
   /** The `html` element tree to render. */
   children: React.ReactNode
@@ -52,6 +56,7 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   git,
   siteUrl,
   includeCommandScript = true,
+  includeTableOfContentsScript = true,
   includeThemeScript = true,
   nonce,
   ...restProps
@@ -132,6 +137,9 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
             defaultPackageManager={merged.defaultPackageManager}
             nonce={nonce}
           />
+        ) : null}
+        {includeTableOfContentsScript ? (
+          <TableOfContentsScript nonce={nonce} />
         ) : null}
         {typeof merged.theme === 'object' ? (
           <ThemeProvider

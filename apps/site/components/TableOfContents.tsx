@@ -1,37 +1,25 @@
-'use client'
-import { useId } from 'react'
+import {
+  TableOfContents as BaseTableOfContents,
+  type TableOfContentsProps,
+  type TableOfContentsComponents,
+} from 'renoun'
+import type { FileSystemEntry } from 'renoun'
 import type { CSSObject } from 'restyle'
-import { useSectionObserver, type MDXHeadings } from 'renoun'
 
-export function TableOfContents({
-  headings,
-  viewSource,
-}: {
-  headings: MDXHeadings
-  viewSource?: React.ReactNode
-}) {
-  const id = useId()
-  const sectionObserver = useSectionObserver()
+import { ViewSource } from '@/components/ViewSource'
 
-  return (
-    <aside
-      css={{
-        display: 'grid',
-        position: 'fixed',
-        inset: 0,
-        gridTemplateColumns: 'var(--grid-template-columns)',
+type SiteTableOfContentsProps = Omit<
+  TableOfContentsProps,
+  'children' | 'components'
+> & {
+  entry?: FileSystemEntry
+}
 
-        '@media screen and (max-width: calc(60rem - 1px))': {
-          display: 'none !important',
-        },
-
-        '@media screen and (min-width: 60rem)': {
-          pointerEvents: 'none',
-        },
-      }}
-    >
+export function TableOfContents({ headings, entry }: SiteTableOfContentsProps) {
+  const components: Partial<TableOfContentsComponents> = {
+    Root: ({ children, ...rest }) => (
       <nav
-        aria-labelledby={id}
+        {...rest}
         css={{
           gridColumn: 6,
           pointerEvents: 'auto',
@@ -45,94 +33,82 @@ export function TableOfContents({
           overscrollBehavior: 'contain',
         }}
       >
-        <h4 className="title" id={id}>
-          On this page
-        </h4>
-        <ol
-          css={{
-            gridColumn: '1 / 2',
-            gridRow: '1 / -1',
-            listStyle: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            padding: 0,
-            margin: 0,
-          }}
-        >
-          {headings?.map(({ id, level, text, children }) =>
-            level > 1 ? (
-              <li key={id} css={{ display: 'flex' }}>
-                <Link
-                  id={id}
-                  sectionObserver={sectionObserver}
-                  css={{ paddingLeft: (level - 2) * 0.8 + 'rem' }}
-                  title={text}
-                >
-                  {children ?? text}
-                </Link>
-              </li>
-            ) : null
-          )}
-          {viewSource ? (
-            <>
-              <li css={{ margin: '0.8rem 0' }}>
-                <hr
-                  css={{
-                    border: 'none',
-                    height: 1,
-                    backgroundColor: 'var(--color-separator)',
-                  }}
-                />
-              </li>
-              <li>{viewSource}</li>
-            </>
-          ) : null}
-        </ol>
+        {children}
       </nav>
-    </aside>
-  )
-}
+    ),
+    Title: ({ children, className, ...rest }) => (
+      <h4 {...rest} className={[className, 'title'].filter(Boolean).join(' ')}>
+        {children ?? 'On this page'}
+      </h4>
+    ),
+    List: ({ children, ...rest }) => (
+      <ol
+        {...rest}
+        css={{
+          gridColumn: '1 / 2',
+          gridRow: '1 / -1',
+          listStyle: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: 0,
+          margin: 0,
+        }}
+      >
+        {children}
+      </ol>
+    ),
+    Link: ({ children, ...rest }) => {
+      const styles: CSSObject = {
+        fontSize: 'var(--font-size-body-3)',
+        padding: '0.25rem 0',
+        paddingLeft: 'calc(var(--level) * 0.8rem)',
+        scrollMarginBlock: 'var(--font-size-body-3)',
+        whiteSpace: 'nowrap',
+        textOverflow: 'ellipsis',
+        overflow: 'hidden',
+        color: 'var(--color-foreground-interactive)',
+        ':hover': {
+          color: 'var(--color-foreground-interactive-highlighted)',
+        },
+        '&[aria-current]': {
+          color: 'white',
+        },
+      }
 
-function Link({
-  id,
-  title,
-  children,
-  sectionObserver,
-  css,
-}: {
-  id: string
-  title: string
-  children: React.ReactNode
-  sectionObserver: ReturnType<typeof useSectionObserver>
-  css: CSSObject
-}) {
-  const [isActive, linkProps] = sectionObserver.useLink(id)
-  const styles: CSSObject = {
-    fontSize: 'var(--font-size-body-3)',
-    padding: '0.25rem 0',
-    scrollMarginBlock: 'var(--font-size-body-3)',
-    whiteSpace: 'nowrap',
-    textOverflow: 'ellipsis',
-    overflow: 'hidden',
-    color: 'var(--color-foreground-interactive)',
-    ':hover': {
-      color: 'var(--color-foreground-interactive-highlighted)',
-    },
-    '&.active': {
-      color: 'white',
+      return (
+        <a {...rest} css={styles}>
+          {children}
+        </a>
+      )
     },
   }
 
   return (
-    <a
-      title={title}
-      css={{ ...styles, ...css }}
-      className={isActive ? 'active' : ''}
-      suppressHydrationWarning
-      {...linkProps}
+    <aside
+      css={{
+        display: 'grid',
+        position: 'fixed',
+        inset: 0,
+        gridTemplateColumns: 'var(--grid-template-columns)',
+        '@media screen and (max-width: calc(60rem - 1px))': {
+          display: 'none !important',
+        },
+        '@media screen and (min-width: 60rem)': {
+          pointerEvents: 'none',
+        },
+      }}
     >
-      {children}
-      <script>{`window.isSectionLinkActive('${id}')`}</script>
-    </a>
+      <BaseTableOfContents headings={headings} components={components}>
+        {entry ? (
+          <ViewSource
+            source={entry}
+            css={{
+              padding: '1rem 0',
+              borderTop: '1px solid var(--color-separator)',
+            }}
+          />
+        ) : null}
+      </BaseTableOfContents>
+    </aside>
   )
 }

@@ -27,25 +27,19 @@ const components: Partial<NavigationComponents> = {
     </ul>
   ),
   List: ({ entry, children }) => {
-    let paddingLeft = '0'
-
-    if (isDirectory(entry)) {
-      const depth = entry.getDepth()
-      if (depth > 0) {
-        paddingLeft = `${depth}rem`
-      }
-    }
-
     return (
       <ul
+        style={{
+          '--depth': isDirectory(entry) ? entry.getDepth() : 0,
+        }}
         css={{
+          listStyle: 'none',
           fontSize: 'var(--font-size-body-2)',
           display: 'flex',
           flexDirection: 'column',
-          listStyle: 'none',
+          paddingLeft: '0.25rem',
           marginLeft: '0.25rem',
           borderLeft: '1px solid var(--color-separator)',
-          paddingLeft,
         }}
       >
         {children}
@@ -66,7 +60,15 @@ const components: Partial<NavigationComponents> = {
       label = await getFileLabel(entry)
     }
 
-    return <SidebarLink pathname={pathname} label={label} />
+    return (
+      <SidebarLink
+        pathname={pathname}
+        label={label}
+        css={{
+          paddingLeft: `calc(var(--depth) * 0.8rem)`,
+        }}
+      />
+    )
   },
 }
 

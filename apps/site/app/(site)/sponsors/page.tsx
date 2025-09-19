@@ -1,5 +1,4 @@
-import type { MDXHeadings } from 'renoun'
-import { TableOfContents } from '@/components/TableOfContents'
+import { TableOfContents, type MDXHeadings } from 'renoun'
 import Sponsors, { headings } from './sponsors.mdx'
 import { tiers, SponsorTiers } from './SponsorTiers'
 
