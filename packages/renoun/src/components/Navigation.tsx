@@ -29,11 +29,7 @@ export interface NavigationComponents {
   }>
 }
 
-type InternalNavigationComponents = {
-  [Key in keyof NavigationComponents]: NavigationComponents[Key]
-}
-
-const defaultComponents: InternalNavigationComponents = {
+const defaultComponents: NavigationComponents = {
   Root: ({ children }) => <ol>{children}</ol>,
   List: ({ children }) => <ol>{children}</ol>,
   Item: ({ children }) => <li>{children}</li>,
@@ -50,7 +46,7 @@ export async function Navigation({
   components: componentsProp = {},
 }: NavigationProps) {
   const entries = await source.getEntries()
-  const components: InternalNavigationComponents = {
+  const components: NavigationComponents = {
     ...defaultComponents,
     ...componentsProp,
   }
@@ -59,7 +55,7 @@ export async function Navigation({
     <components.Root source={source}>
       <components.List entry={source} depth={0}>
         {entries.map((entry) => (
-          <Entry
+          <Item
             key={entry.getPathname()}
             entry={entry}
             components={components}
@@ -70,12 +66,12 @@ export async function Navigation({
   )
 }
 
-async function Entry({
+async function Item({
   entry,
   components,
 }: {
   entry: FileSystemEntry<any>
-  components: InternalNavigationComponents
+  components: NavigationComponents
 }) {
   const pathname = entry.getPathname()
   const depth = entry.getDepth()
@@ -89,9 +85,8 @@ async function Entry({
   }
 
   const entries = await entry.getEntries()
-  const hasChildren = entries.length > 0
 
-  if (!hasChildren) {
+  if (entries.length === 0) {
     return (
       <components.Item entry={entry} depth={depth}>
         <components.Link entry={entry} depth={depth} pathname={pathname} />
@@ -104,7 +99,7 @@ async function Entry({
       <components.Link entry={entry} depth={depth} pathname={pathname} />
       <components.List entry={entry} depth={depth}>
         {entries.map((childEntry) => (
-          <Entry
+          <Item
             key={childEntry.getPathname()}
             entry={childEntry}
             components={components}
