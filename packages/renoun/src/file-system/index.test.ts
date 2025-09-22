@@ -108,6 +108,59 @@ describe('file system', () => {
     expectTypeOf(Content).toMatchTypeOf<MDXContent>()
   })
 
+  test('uses default MDX compiler when no loader is provided', async () => {
+    const directory = new Directory({ path: 'fixtures/docs' })
+    const file = (await directory.getFile('index', 'mdx')) as MDXFile<
+      any,
+      any,
+      any
+    >
+
+    // The default remark plugins add a generated "headings" export
+    const headings: any = await file.getExportValue('headings')
+    expect(Array.isArray(headings)).toBe(true)
+    expect(headings[0]).toMatchObject({
+      id: 'docs',
+      level: 1,
+      text: 'Docs',
+      children: 'Docs',
+    })
+
+    // Default export is a renderable MDX component
+    const Content = await file.getExportValue('default')
+    expect(typeof Content).toBe('function')
+  })
+
+  test('uses default MDX compiler when no loader is provided for in-memory file', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.mdx': ['export const number = 42', '', '# Hello World'].join('\n'),
+    })
+    const directory = new Directory({ fileSystem })
+    const file = (await directory.getFile('index', 'mdx')) as MDXFile<
+      any,
+      any,
+      any
+    >
+
+    // Named exports come from the default MDX compiler runtime
+    const number = await file.getExportValue('number')
+    expect(number).toBe(42)
+
+    // The default remark plugins add a generated "headings" export
+    const headings: any = await file.getExportValue('headings')
+    expect(Array.isArray(headings)).toBe(true)
+    expect(headings[0]).toMatchObject({
+      id: 'hello-world',
+      level: 1,
+      text: 'Hello World',
+      children: 'Hello World',
+    })
+
+    // Default export is a renderable MDX component
+    const Content = await file.getExportValue('default')
+    expect(typeof Content).toBe('function')
+  })
+
   test('directory with virtual file system', async () => {
     const fileSystem = new MemoryFileSystem({
       'fixtures/project/server.ts': '',
@@ -2329,8 +2382,8 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('foo', 'ts')
 
-    expect(
-      file.getSourceUrl({ repository: 'github:owner/repo@main' })
-    ).toBe('https://github.com/owner/repo/blob/main/foo.ts')
+    expect(file.getSourceUrl({ repository: 'github:owner/repo@main' })).toBe(
+      'https://github.com/owner/repo/blob/main/foo.ts'
+    )
   })
 })
