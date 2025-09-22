@@ -19352,6 +19352,128 @@ describe('resolveType', () => {
     `)
   })
 
+  test('resolves parameters for JSDoc callback types', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @callback Foo
+       * @param {number} value
+       */
+      /** @type {Foo} */
+      export const foo = (value) => value
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getVariableDeclarationOrThrow('foo')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved).toMatchInlineSnapshot(`
+      {
+        "description": undefined,
+        "filePath": "index.js",
+        "kind": "Function",
+        "name": "foo",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 4,
+          },
+          "start": {
+            "column": 4,
+            "line": 2,
+          },
+        },
+        "signatures": [
+          {
+            "filePath": "index.js",
+            "kind": "CallSignature",
+            "parameters": [
+              {
+                "description": undefined,
+                "filePath": "index.js",
+                "initializer": undefined,
+                "isOptional": false,
+                "isRest": false,
+                "kind": "Parameter",
+                "name": "value",
+                "position": {
+                  "end": {
+                    "column": 2,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 4,
+                    "line": 3,
+                  },
+                },
+                "text": "value: number",
+                "type": {
+                  "filePath": "index.js",
+                  "kind": "Number",
+                  "position": {
+                    "end": {
+                      "column": 36,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 14,
+                      "line": 6,
+                    },
+                  },
+                  "text": "number",
+                  "value": undefined,
+                },
+              },
+            ],
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 4,
+              },
+              "start": {
+                "column": 4,
+                "line": 2,
+              },
+            },
+            "returnType": {
+              "filePath": "index.js",
+              "kind": "Any",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 4,
+                  "line": 2,
+                },
+              },
+              "text": "any",
+            },
+            "text": "(value: number) => any",
+            "thisType": undefined,
+          },
+        ],
+        "tags": [
+          {
+            "name": "callback",
+            "text": undefined,
+          },
+          {
+            "name": "type",
+            "text": undefined,
+          },
+        ],
+        "text": "Foo",
+      }
+    `)
+  })
+
   test('synthetic return type union types', () => {
     const project = new Project({
       compilerOptions: { strict: true },
