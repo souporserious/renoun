@@ -56,7 +56,7 @@ jobs:
         id: publish
         uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba
         with:
-          publish: pnpm publish -r --provenance --access public --publish-branch main && pnpm changeset tag
+          publish: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
