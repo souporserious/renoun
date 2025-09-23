@@ -105,7 +105,7 @@ async function CodeInlineAsync({
   showErrors,
   shouldAnalyze,
 }: CodeInlineProps) {
-  const config = getConfig()
+  const config = await getConfig()
   const theme = await getThemeColors(config.theme)
   const [classNames, Styles] = css({
     display: allowCopy ? 'inline-grid' : 'inline',

@@ -21,7 +21,7 @@ export type LogoProps = {
     source?: string
   }
 
-export function Logo(props: LogoProps) {
+export async function Logo(props: LogoProps) {
   switch (props.variant) {
     case 'gitHost': {
       const {
@@ -31,7 +31,7 @@ export function Logo(props: LogoProps) {
         fill = 'currentColor',
         ...rest
       } = props
-      const config = getConfig()
+      const config = await getConfig()
       const gitSource = source ?? config.git?.source
 
       if (!gitSource) {

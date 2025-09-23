@@ -77,7 +77,7 @@ export type LinkProps<
         }
     : never
 
-function computeHref<Source, Variant extends LinkVariant>({
+async function computeHref<Source, Variant extends LinkVariant>({
   source,
   variant,
   options,
@@ -86,7 +86,7 @@ function computeHref<Source, Variant extends LinkVariant>({
   variant: Variant
   options?: VariantOptions<Source, Variant> | undefined
 }) {
-  const config = getConfig()
+  const config = await getConfig()
 
   if (VARIANT_METHODS[variant as keyof typeof VARIANT_METHODS]) {
     const methodName = VARIANT_METHODS[variant as keyof typeof VARIANT_METHODS]
@@ -163,7 +163,7 @@ RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
  * An anchor element that derives its `href` from a directory, file, module export,
  * or from the `RootProvider` config.
  */
-export function Link<Source, Variant extends LinkVariant = LinkVariant>(
+export async function Link<Source, Variant extends LinkVariant = LinkVariant>(
   props: LinkProps<Source, Variant>
 ) {
   const {
@@ -176,7 +176,7 @@ export function Link<Source, Variant extends LinkVariant = LinkVariant>(
     style,
     ...restProps
   } = props
-  const href = computeHref({ source, variant, options })
+  const href = await computeHref({ source, variant, options })
 
   if (typeof children === 'function') {
     return children(href)

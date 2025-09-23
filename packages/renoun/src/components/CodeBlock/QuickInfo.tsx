@@ -73,7 +73,7 @@ export async function QuickInfo({
   className?: string
   style?: React.CSSProperties
 }) {
-  const config = getConfig()
+  const config = await getConfig()
   const theme = await getThemeColors(config.theme)
   let displayTextTokens: Token[][] = []
 

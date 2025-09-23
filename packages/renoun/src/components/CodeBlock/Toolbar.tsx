@@ -32,7 +32,7 @@ export async function Toolbar({
   children,
 }: ToolbarProps) {
   const context = await getResolvedContext()
-  const config = getConfig()
+  const config = await getConfig()
   const theme = await getThemeColors(config.theme)
   let childrenToRender = children
 

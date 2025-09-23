@@ -299,7 +299,7 @@ async function CodeBlockAsync({
     return <Context value={contextValue}>{children}</Context>
   }
 
-  const config = getConfig()
+  const config = await getConfig()
   const theme = await getThemeColors(config.theme)
   const shouldRenderToolbar = Boolean(
     showToolbar === undefined ? path || allowCopy : showToolbar

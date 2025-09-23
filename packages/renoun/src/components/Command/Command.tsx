@@ -209,7 +209,7 @@ async function CommandAsync({
   className,
   style,
 }: CommandAsyncProps) {
-  const config = getConfig()
+  const config = await getConfig()
   const theme = await getThemeColors(config.theme)
 
   const tabs = (

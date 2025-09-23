@@ -77,7 +77,7 @@ export async function Tokens({
   theme: themeProp,
 }: TokensProps) {
   const context = getContext(Context)
-  const config = getConfig()
+  const config = await getConfig()
   const theme = await getThemeColors(config.theme)
   const language = languageProp || context?.language
   let value

@@ -3,35 +3,99 @@ import React, { cache } from 'react'
 import { defaultConfig } from './default-config.js'
 import type { ConfigurationOptions } from './types.js'
 
-const CACHE_KEY = Symbol.for('__RENOUN_CONFIG__')
-const configCache = cache(() => ({ current: defaultConfig }))
+type Deferred<T> = {
+  settled: boolean
+  value?: T
+  promise: Promise<T>
+  resolve: (v: T) => void
+  version?: string
+}
 
-/**
- * Get the current configured server configuration.
- * @internal
- */
-export function getConfig(): ConfigurationOptions {
-  if (process.env.NODE_ENV === 'development') {
-    return (globalThis as any)[CACHE_KEY]!
+function createDeferred<Type>(): Deferred<Type> {
+  let resolve!: (value: Type) => void
+  const promise = new Promise<Type>((r) => (resolve = r))
+  return { settled: false, promise, resolve }
+}
+
+const GLOBAL_KEY = Symbol.for('__RENOUN_CONFIG__')
+
+function getGlobalDeferred(): Deferred<ConfigurationOptions> {
+  if (!(globalThis as any)[GLOBAL_KEY]) {
+    ;(globalThis as any)[GLOBAL_KEY] = createDeferred<ConfigurationOptions>()
   }
-  return configCache().current
+  return (globalThis as any)[GLOBAL_KEY]
+}
+
+const getRequestDeferred = cache(() => createDeferred<ConfigurationOptions>())
+
+function getDeferred(): Deferred<ConfigurationOptions> {
+  if (process.env.NODE_ENV === 'development') {
+    return getGlobalDeferred()
+  }
+  return getRequestDeferred()
 }
 
 /**
- * A context that provides the current configured server configuration.
+ * Get the current configuration set in the `RootProvider` component.
+ * @internal
+ */
+export async function getConfig(options?: {
+  timeoutMs?: number
+}): Promise<ConfigurationOptions> {
+  const deferredValue = getDeferred()
+  if (deferredValue.settled) {
+    return deferredValue.value!
+  }
+  const { timeoutMs = 8000 } = options ?? {}
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => {
+      reject(
+        new Error(
+          '[renoun] getConfig() timed out: ServerConfigContext did not resolve'
+        )
+      )
+    }, timeoutMs)
+  )
+  return Promise.race([deferredValue.promise, timeout])
+}
+
+/** A provider that captures the server configuration and provides it to the server.
  * @internal
  */
 export function ServerConfigContext({
-  value,
+  value = defaultConfig,
+  version,
   children,
 }: {
-  value: ConfigurationOptions
+  /** The configuration options to provide. */
+  value?: ConfigurationOptions
+
+  /** Optional version string to force reset the config cache. */
+  version?: string
+
+  /** The element tree to render. */
   children: React.ReactNode
 }) {
-  if (process.env.NODE_ENV === 'development') {
-    ;(globalThis as any)[CACHE_KEY] = value
-  } else {
-    configCache().current = value
+  let deferredValue = getDeferred()
+
+  // If the version changed, reset the deferred value
+  if (version !== undefined && deferredValue.version !== version) {
+    if (process.env.NODE_ENV === 'development') {
+      ;(globalThis as any)[GLOBAL_KEY] = createDeferred<ConfigurationOptions>()
+      deferredValue = getDeferred()
+    } else {
+      deferredValue = getDeferred()
+    }
+    deferredValue.version = version
   }
+
+  if (!deferredValue.settled) {
+    deferredValue.settled = true
+    deferredValue.value = value
+    deferredValue.resolve(value)
+  } else {
+    deferredValue.value = value
+  }
+
   return children
 }
