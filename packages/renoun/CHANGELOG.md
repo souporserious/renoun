@@ -1,5 +1,12 @@
 # renoun
 
+## 10.1.1
+
+### Patch Changes
+
+- 07e22de: Fixes resolving JSDoc callback signature types in `JavaScriptModuleExport#getType`.
+- 592618d: Improves missing git configuration error handling in `Link` component.
+
 ## 10.1.0
 
 ### Minor Changes
