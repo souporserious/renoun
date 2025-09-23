@@ -2719,7 +2719,13 @@ export class Collection<
         allEntries.push(entry)
 
         if (options?.recursive && entry instanceof Directory) {
-          allEntries.push(...(await entry.getEntries(options)))
+          const nestedEntries = await entry.getEntries(options)
+          const startIndex = allEntries.length
+          const nestedLength = nestedEntries.length
+          allEntries.length = startIndex + nestedLength
+          for (let nestedIndex = 0; nestedIndex < nestedLength; ++nestedIndex) {
+            allEntries[startIndex + nestedIndex] = nestedEntries[nestedIndex]
+          }
         }
       }
     }

@@ -2250,7 +2250,15 @@ function resolveMemberSignatures(
         previousResolvedMember.name === resolved.name
       ) {
         // Same method as the previous entry: append its overload(s)
-        previousResolvedMember.signatures.push(...resolved.signatures)
+        const signatures = previousResolvedMember.signatures
+        const resolvedSignatures = resolved.signatures
+        const startIndex = signatures.length
+        const resolvedLength = resolvedSignatures.length
+        signatures.length = startIndex + resolvedLength
+        for (let signatureIndex = 0; signatureIndex < resolvedLength; ++signatureIndex) {
+          signatures[startIndex + signatureIndex] =
+            resolvedSignatures[signatureIndex]
+        }
         previousResolvedMember.text += `\n${resolved.text}`
         continue
       }

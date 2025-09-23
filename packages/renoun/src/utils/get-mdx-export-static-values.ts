@@ -86,7 +86,16 @@ function evaluate(node: Node, scope: Map<string, any>): any {
         if (element.type === 'SpreadElement') {
           const spread = evaluate(element.argument, scope)
           if (Array.isArray(spread)) {
-            result.push(...spread)
+            const startIndex = result.length
+            const spreadLength = spread.length
+            result.length = startIndex + spreadLength
+            for (
+              let spreadIndex = 0;
+              spreadIndex < spreadLength;
+              ++spreadIndex
+            ) {
+              result[startIndex + spreadIndex] = spread[spreadIndex]
+            }
           } else {
             result.push(spread)
           }
