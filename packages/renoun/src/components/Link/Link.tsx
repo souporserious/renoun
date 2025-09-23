@@ -134,19 +134,26 @@ RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
     return href as string
   }
 
+  const gitConfig = config.git
+  if (!gitConfig) {
+    throw new Error(
+      '[renoun] Git configuration is required to compute this Link variant. Ensure `RootProvider` is configured with a `git` repository.'
+    )
+  }
+
   switch (variant as ConfigVariants) {
     case 'gitHost':
-      return config.git!.baseUrl
+      return gitConfig.baseUrl
     case 'repository':
-      return config.git!.source
+      return gitConfig.source
     case 'owner':
-      return `${config.git!.baseUrl}/${config.git!.owner}`
+      return `${gitConfig.baseUrl}/${gitConfig.owner}`
     case 'branch': {
-      const ref = (options as any)?.ref ?? config.git!.branch
-      return `${config.git!.source}/tree/${ref}`
+      const ref = (options as any)?.ref ?? gitConfig.branch
+      return `${gitConfig.source}/tree/${ref}`
     }
     case 'issue':
-      return `${config.git!.source}/issues/new`
+      return `${gitConfig.source}/issues/new`
     default:
       throw new Error(`[renoun] Unsupported Link variant: ${String(variant)}`)
   }
