@@ -157,7 +157,7 @@ const TabButton = styled('button', {
   borderBottom: '1px solid transparent',
   backgroundColor: 'transparent',
   cursor: 'pointer',
-  '&.selected': {
+  '&[aria-selected="true"]': {
     fontWeight: 600,
     borderBottom: '1px solid #fff',
     color: '#fff',
@@ -176,10 +176,6 @@ const TabPanel = styled('pre', {
   padding: '1ch',
   margin: 0,
   overflow: 'auto',
-  display: 'none',
-  '&.selected': {
-    display: 'block',
-  },
 })
 
 const Code = styled('code', {})
@@ -231,6 +227,7 @@ async function CommandAsync({
             role="tab"
             id={`${id}-${packageManager}-tab`}
             aria-controls={`${id}-${packageManager}-panel`}
+            aria-selected={config.defaultPackageManager === packageManager}
             data-command={packageManager}
             data-command-group={id}
             css={{
@@ -265,6 +262,7 @@ async function CommandAsync({
         key={packageManager}
         role="tabpanel"
         id={`${id}-${packageManager}-panel`}
+        hidden={config.defaultPackageManager !== packageManager}
         aria-labelledby={`${id}-${packageManager}-tab`}
         data-command={packageManager}
         data-command-tab-panel={commandText}

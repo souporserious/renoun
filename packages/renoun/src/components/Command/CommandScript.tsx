@@ -36,7 +36,7 @@ export function CommandScript({
       packageManager = localStorage.getItem('${String(stateKey)}') ?? '${String(defaultPackageManager)}';
     }
 
-    // Apply selection across ALL Command instances
+    // Apply selection across all Command tabs and panels
     const elements = document.querySelectorAll('[data-command][role="tab"], [data-command][role="tabpanel"]');
     elements.forEach((element) => {
       const isSelected = element.dataset.command === packageManager;
@@ -46,8 +46,8 @@ export function CommandScript({
         element.tabIndex = isSelected ? 0 : -1;
         element.setAttribute('aria-selected', String(isSelected));
       }
-      if (isTab || isTabPanel) {
-        element.classList.toggle('selected', isSelected);
+      if (isTabPanel) {
+        element.hidden = !isSelected;
       }
     });
   }
@@ -81,6 +81,7 @@ export function CommandScript({
           }
           if (newIndex === null) return;
           arr[newIndex].click();
+          arr[newIndex].focus();
           event.preventDefault();
         });
       });
@@ -90,12 +91,11 @@ export function CommandScript({
     window.setPackageManager(null);
   });
 
-  const commands = [${packageManagers.map((manager) => `"${manager}"`).join(',')}];
   document.addEventListener('click', event => {
     const target = event.target && event.target.closest ? event.target.closest('[data-command][role="tab"]') : null;
     if (!target) return;
     const command = target.dataset.command;
-    if (!commands.includes(command)) return;
+    if (![${packageManagers.map((manager) => `"${manager}"`).join(',')}].includes(command)) return;
     localStorage.setItem('${String(stateKey)}', command);
     window.setPackageManager(command);
   });
