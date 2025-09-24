@@ -271,7 +271,9 @@ function TypeSection({
 }) {
   return (
     <components.Section id={id}>
-      <components.SectionHeading aria-label={`${title} ${label}`}>
+      <components.SectionHeading
+        aria-label={title ? `${title} ${label}` : label}
+      >
         <span>{label}</span> {title}
       </components.SectionHeading>
       <components.SectionBody hasDescription={Boolean(description)}>
