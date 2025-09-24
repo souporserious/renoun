@@ -13,20 +13,22 @@ import {
 import { SidebarLink } from './SidebarLink'
 
 const components: Partial<NavigationComponents> = {
-  List: ({ entry, children }) => {
+  List: ({ depth, children }) => {
     return (
       <ul
-        style={{
-          '--depth': isDirectory(entry) ? entry.getDepth() : 0,
-        }}
         css={{
           listStyle: 'none',
           fontSize: 'var(--font-size-body-2)',
           display: 'flex',
           flexDirection: 'column',
-          paddingLeft: '0.25rem',
-          marginLeft: '0.25rem',
-          borderLeft: '1px solid var(--color-separator)',
+          paddingLeft: 0,
+          ...(depth > 0
+            ? {
+                '--depth': depth,
+                marginLeft: '0.25rem',
+                borderLeft: '1px solid var(--color-separator)',
+              }
+            : {}),
         }}
       >
         {children}
@@ -52,7 +54,7 @@ const components: Partial<NavigationComponents> = {
         pathname={pathname}
         label={label}
         css={{
-          paddingLeft: `calc(var(--depth) * 0.8rem)`,
+          paddingLeft: `calc(var(--depth) * 0.5rem)`,
         }}
       />
     )
