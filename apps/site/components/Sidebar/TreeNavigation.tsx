@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import {
   Directory,
   isDirectory,
@@ -13,6 +14,7 @@ import {
 import { SidebarLink } from './SidebarLink'
 
 const components: Partial<NavigationComponents> = {
+  Root: Fragment,
   List: ({ depth, children }) => {
     return (
       <ul

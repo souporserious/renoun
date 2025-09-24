@@ -1,5 +1,5 @@
 ---
-'renoun': minor
+'renoun': patch
 ---
 
-Fixes default `Navigation` html elements and removes `Root` component slot for easier composition.
+Fixes default `Navigation` html elements.

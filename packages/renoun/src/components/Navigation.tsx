@@ -8,6 +8,10 @@ import {
 } from '../file-system/index.js'
 
 export interface NavigationComponents {
+  Root: React.ComponentType<{
+    source: Directory<any> | Collection<any>
+    children: React.ReactNode
+  }>
   List: React.ComponentType<{
     entry: Directory<any> | Collection<any>
     depth: number
@@ -26,6 +30,7 @@ export interface NavigationComponents {
 }
 
 const defaultComponents: NavigationComponents = {
+  Root: ({ children }) => <nav>{children}</nav>,
   List: ({ children }) => <ul>{children}</ul>,
   Item: ({ children }) => <li>{children}</li>,
   Link: ({ entry, pathname }) => <a href={pathname}>{entry.getName()}</a>,
@@ -47,11 +52,17 @@ export async function Navigation({
   }
 
   return (
-    <components.List entry={source} depth={0}>
-      {entries.map((entry) => (
-        <Item key={entry.getPathname()} entry={entry} components={components} />
-      ))}
-    </components.List>
+    <components.Root source={source}>
+      <components.List entry={source} depth={0}>
+        {entries.map((entry) => (
+          <Item
+            key={entry.getPathname()}
+            entry={entry}
+            components={components}
+          />
+        ))}
+      </components.List>
+    </components.Root>
   )
 }
 
