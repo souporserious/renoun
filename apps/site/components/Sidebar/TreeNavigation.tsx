@@ -13,19 +13,6 @@ import {
 import { SidebarLink } from './SidebarLink'
 
 const components: Partial<NavigationComponents> = {
-  Root: ({ children }) => (
-    <ul
-      css={{
-        fontSize: 'var(--font-size-body-2)',
-        display: 'flex',
-        flexDirection: 'column',
-        listStyle: 'none',
-        paddingLeft: 0,
-      }}
-    >
-      {children}
-    </ul>
-  ),
   List: ({ entry, children }) => {
     return (
       <ul
