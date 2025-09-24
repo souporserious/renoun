@@ -681,7 +681,7 @@ function TypeAliasSection({
       components={components}
     >
       <TypeDetail label="Type" components={components}>
-        <components.Code>{node.text}</components.Code>
+        <components.Code>{node.type.text}</components.Code>
       </TypeDetail>
     </TypeSection>
   )
