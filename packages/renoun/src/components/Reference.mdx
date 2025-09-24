@@ -1,0 +1,35 @@
+The `Reference` component resolves all module exports and outputs structured, accessible sections for components, functions, classes, interfaces, type aliases, mapped/intersection/union types, variables, and more. It's fully headless meaning every piece of UI can be overridden via the `components` prop.
+
+### Filtering
+
+If your types reference external libraries (like `React`), use `filter` to pull selected properties inline:
+
+```tsx
+<Reference
+  source="components/Button.tsx"
+  filter={{
+    moduleSpecifier: 'react',
+    types: [{ name: 'ButtonHTMLAttributes' }],
+  }}
+/>
+```
+
+### Styling and Layout
+
+Override any element via `components`—from headings to table cells:
+
+```tsx
+<Reference
+  source="hooks/useHover.ts"
+  components={{
+    SectionHeading: (props) => <h3 style={{ fontWeight: 700 }} {...props} />,
+    Code: (props) => <code className="code" {...props} />,
+  }}
+/>
+```
+
+<Note>
+
+When `source` is a file with multiple exports, `Reference` renders them in order in separate sections. Pass a specific `JavaScriptModuleExport` directly if you only want to render a single export.
+
+</Note>

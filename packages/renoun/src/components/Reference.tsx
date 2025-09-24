@@ -110,6 +110,7 @@ export interface ReferenceProps {
   components?: Partial<ReferenceComponents>
 }
 
+/** Resolves TypeScript and JSDoc types from all module exports in a source file. */
 export function Reference(props: ReferenceProps) {
   return (
     <Suspense>
