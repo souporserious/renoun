@@ -55,11 +55,11 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   languages,
   git,
   siteUrl,
+  defaultPackageManager = 'npm',
   includeCommandScript = true,
   includeTableOfContentsScript = true,
   includeThemeScript = true,
   nonce,
-  ...restProps
 }: RootProviderProps<Theme>) {
   const overrides: Partial<ConfigurationOptions> = {}
   if (theme !== undefined) {
@@ -104,11 +104,8 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   if (siteUrl !== undefined) {
     overrides.siteUrl = siteUrl
   }
-  if (
-    'defaultPackageManager' in restProps &&
-    restProps.defaultPackageManager !== undefined
-  ) {
-    overrides.defaultPackageManager = restProps.defaultPackageManager
+  if (defaultPackageManager) {
+    overrides.defaultPackageManager = defaultPackageManager
   }
 
   let merged: ConfigurationOptions = {
