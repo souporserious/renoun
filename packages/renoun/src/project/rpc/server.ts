@@ -1084,90 +1084,24 @@ export class WebSocketServer {
       }
     }
 
-    const isBatch =
-      Array.isArray(parsed) &&
-      parsed.every(
-        (request) =>
-          request &&
-          typeof request === 'object' &&
-          typeof request.method === 'string'
-      )
-
-    if (Array.isArray(parsed) && parsed.length === 0) {
-      // JSON-RPC: empty batch is invalid request
-      this.#sendError(ws, null, -32600, '[renoun] Invalid Request: empty batch')
-      return
-    }
-
-    if (isBatch) {
-      const requests = parsed as WebSocketRequest[]
-      getDebugLogger().logWebSocketServerEvent('batch_received', {
-        size: requests.length,
-      })
-
-      // Process batch with bounded concurrency to avoid stampedes
-      const CONCURRENCY_LIMIT = 32
-      async function processWithConcurrency<Type, Result>(
-        items: Type[],
-        limit: number,
-        worker: (item: Type, index: number) => Promise<Result>
-      ): Promise<Result[]> {
-        const results = new Array<Result>(items.length)
-        let next = 0
-        let running = 0
-
-        return await new Promise<Result[]>((resolve, reject) => {
-          const launch = () => {
-            while (running < limit && next < items.length) {
-              const index = next++
-              running++
-              Promise.resolve(worker(items[index]!, index))
-                .then((result) => {
-                  results[index] = result as Result
-                })
-                .then(() => {
-                  running--
-                  if (next >= items.length && running === 0) {
-                    resolve(results)
-                  } else {
-                    launch()
-                  }
-                })
-                .catch(reject)
-            }
-            if (next >= items.length && running === 0) {
-              resolve(results)
-            }
-          }
-
-          launch()
-        })
-      }
-
-      const results = await processWithConcurrency(
-        requests,
-        CONCURRENCY_LIMIT,
-        (request) => this.#processRequest(ws, request)
-      )
-
-      const filtered = results.filter(Boolean) as WebSocketResponse[]
-      if (filtered.length) {
-        this.#sendJson(ws, filtered)
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0) {
+        this.#sendError(ws, null, -32600, '[renoun] Invalid Request: empty batch')
+      } else {
+        this.#sendError(
+          ws,
+          null,
+          -32600,
+          '[renoun] Invalid Request: batching is not supported'
+        )
       }
       return
     }
 
-    // If not a batch, validate the single request shape
-    if (!isBatch) {
-      const object = parsed as any
-      if (
-        !object ||
-        typeof object !== 'object' ||
-        typeof object.method !== 'string'
-      ) {
-        this.#sendError(ws, null, -32600, '[renoun] Invalid Request')
-        return
-      }
+    const object = parsed as any
+    if (!object || typeof object !== 'object' || typeof object.method !== 'string') {
+      this.#sendError(ws, null, -32600, '[renoun] Invalid Request')
+      return
     }
 
     const singleResult = await this.#processRequest(

@@ -37,10 +37,6 @@ type WebSocketClientErrorMessageFn = (
 const REQUEST_TIMEOUT_MS = 120_000 // 120s
 const PENDING_LIMIT = 1000 // 1000 requests
 const PENDING_BYTES_LIMIT = 8 * 1024 * 1024 // 8MB
-const AUTO_BATCH_MAX_BYTES = 64 * 1024 // ~64KB per batch frame
-const AUTO_BATCH_MAX_ITEMS = 128 // cap for many tiny calls
-const AUTO_BATCH_MAX_DELAY_MS = 2 // tiny coalesce window
-
 const WEBSOCKET_CLIENT_ERROR_MESSAGES: Record<
   WebSocketClientErrorType,
   WebSocketClientErrorMessageFn
@@ -173,22 +169,6 @@ export class WebSocketClient extends EventEmitter {
 
   #nextId: number = 1
 
-  // autobatch buckets keyed by timeout so time budget is aligned
-  #autoBatchQueues = new Map<
-    number,
-    {
-      items: Array<{
-        method: string
-        params: any
-        bytes: number
-        resolve: (value: any) => void
-        reject: (error: any) => void
-      }>
-      size: number
-      timer?: NodeJS.Timeout
-    }
-  >()
-
   // readiness barrier (optional to await from callers)
   #readyWaiters: Array<(v: void) => void> = []
 
@@ -243,113 +223,6 @@ export class WebSocketClient extends EventEmitter {
 
       this.#readyWaiters.push(waiter)
     })
-  }
-
-  async #enqueueAutoBatch<Type>(
-    method: string,
-    params: any,
-    timeoutMs: number
-  ): Promise<Type> {
-    const payload = { method, params }
-    const bytes = Buffer.byteLength(JSON.stringify(payload), 'utf8')
-
-    // Large single call: send as its own tiny batch immediately (settled).
-    if (bytes > AUTO_BATCH_MAX_BYTES) {
-      return this.batch([{ method, params }], timeoutMs).then((array) => {
-        const result = array[0]
-        if (result && result.ok) {
-          return result.value as Type
-        }
-        throw result
-          ? parseServerError(result.error)
-          : new Error('Unknown batch error')
-      })
-    }
-
-    let bucket = this.#autoBatchQueues.get(timeoutMs)
-    if (!bucket) {
-      bucket = { items: [], size: 0, timer: undefined }
-      this.#autoBatchQueues.set(timeoutMs, bucket)
-    }
-
-    return new Promise<Type>((resolve, reject) => {
-      bucket!.items.push({ method, params, resolve, reject, bytes })
-      bucket!.size += bytes
-
-      const shouldFlush =
-        bucket!.size >= AUTO_BATCH_MAX_BYTES ||
-        bucket!.items.length >= AUTO_BATCH_MAX_ITEMS
-
-      if (shouldFlush) {
-        this.#flushAutoBatch(timeoutMs)
-        return
-      }
-
-      if (!bucket!.timer) {
-        bucket!.timer = setTimeout(() => {
-          bucket!.timer = undefined
-          this.#flushAutoBatch(timeoutMs)
-        }, AUTO_BATCH_MAX_DELAY_MS)
-      }
-    })
-  }
-
-  #flushAutoBatch(timeoutMs: number) {
-    const bucket = this.#autoBatchQueues.get(timeoutMs)
-    if (!bucket || bucket.items.length === 0) {
-      return
-    }
-
-    if (bucket.timer) {
-      clearTimeout(bucket.timer)
-      bucket.timer = undefined
-    }
-
-    // Take as many as fit in maxBytes
-    let size = 0
-    const batchItems: typeof bucket.items = []
-    while (bucket.items.length) {
-      const next = bucket.items[0]!
-      if (size && size + next.bytes > AUTO_BATCH_MAX_BYTES) break
-      batchItems.push(next)
-      bucket.items.shift()
-      size += next.bytes
-    }
-    bucket.size -= size
-
-    const requests = batchItems.map(({ method, params }) => ({
-      method,
-      params,
-    }))
-
-    this.batch(requests, timeoutMs)
-      .then((results) => {
-        for (let index = 0; index < results.length; index++) {
-          const result = results[index]!
-          const item = batchItems[index]!
-          if (result && result.ok) {
-            item.resolve(result.value)
-          } else {
-            item.reject(
-              result
-                ? parseServerError(result.error)
-                : new Error('Unknown batch error')
-            )
-          }
-        }
-      })
-      .catch((error) => {
-        for (const item of batchItems) {
-          item.reject(error)
-        }
-      })
-
-    if (bucket.items.length && !bucket.timer) {
-      bucket.timer = setTimeout(() => {
-        bucket!.timer = undefined
-        this.#flushAutoBatch(timeoutMs)
-      }, AUTO_BATCH_MAX_DELAY_MS)
-    }
   }
 
   #sendFrame(ids: number[], payload: string) {
@@ -723,100 +596,9 @@ export class WebSocketClient extends EventEmitter {
   async callMethod<Params extends Record<string, unknown>, Value>(
     method: string,
     params: Params,
-    timeoutMs = REQUEST_TIMEOUT_MS,
-    batch: boolean = true
-  ): Promise<Value> {
-    if (batch) {
-      return this.#enqueueAutoBatch<Value>(method, params, timeoutMs)
-    }
-    return this.#callMethodUnbatched<Params, Value>(method, params, timeoutMs)
-  }
-
-  async batch(
-    requests: { method: string; params: any }[],
     timeoutMs = REQUEST_TIMEOUT_MS
-  ): Promise<Array<{ ok: true; value: any } | { ok: false; error: any }>> {
-    const framed = requests.map((request) => ({
-      ...request,
-      id: this.#nextId++,
-      timeoutMs,
-    }))
-    const ids = framed.map((frame) => frame.id)
-    const payload = JSON.stringify(framed)
-    const timers: Record<number, NodeJS.Timeout> = {}
-
-    type Settled = { ok: true; value: any } | { ok: false; error: Error }
-    const settles = framed.map(
-      ({ id, method, params }) =>
-        new Promise<Settled>((resolve) => {
-          timers[id] = setTimeout(() => {
-            resolve({
-              ok: false,
-              error: this.#createClientError('REQUEST_TIMEOUT', {
-                connectionTime:
-                  Math.round(
-                    (performance.now() - this.#connectionStartTime) * 1000
-                  ) / 1000,
-                port: process.env.RENOUN_SERVER_PORT || 'unknown',
-                connectionState: this.#connectionState,
-                method,
-                params,
-                timeout: timeoutMs,
-              }),
-            })
-          }, timeoutMs)
-
-          this.#requests[id] = {
-            resolve: (value) => {
-              clearTimeout(timers[id])
-              delete timers[id]
-              resolve({ ok: true, value })
-              delete this.#requests[id]
-              this.#onRequestSettled(id)
-            },
-            reject: (reason) => {
-              clearTimeout(timers[id])
-              delete timers[id]
-              resolve({ ok: false, error: parseServerError(reason) })
-              delete this.#requests[id]
-              this.#onRequestSettled(id)
-            },
-          }
-        })
-    )
-
-    // Queue or send the batch once with all ids
-    if (!this.#sendOrQueueFrame(ids, payload)) {
-      const error = this.#createClientError('UNKNOWN_ERROR', {
-        connectionTime: formatConnectionTime(this.#connectionStartTime),
-        port: process.env.RENOUN_SERVER_PORT || 'unknown',
-        connectionState: this.#connectionState,
-        eventMessage: 'pending_queue_full',
-      })
-      // Settle all entries with the same error and clean up resolvers/timers
-      for (const id of ids) {
-        if (this.#requests[id]) {
-          try {
-            this.#requests[id].reject(error)
-          } catch {}
-          delete this.#requests[id]
-        }
-        if (timers[id]) {
-          clearTimeout(timers[id])
-          delete timers[id]
-        }
-      }
-      return framed.map(() => ({ ok: false, error }))
-    }
-
-    try {
-      const results = await Promise.all(settles)
-      return results
-    } finally {
-      for (const id of Object.keys(timers)) {
-        clearTimeout(timers[Number(id)])
-      }
-    }
+  ): Promise<Value> {
+    return this.#callMethodUnbatched<Params, Value>(method, params, timeoutMs)
   }
 
   async #callMethodUnbatched<Params extends Record<string, unknown>, Value>(
