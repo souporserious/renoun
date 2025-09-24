@@ -1,5 +1,16 @@
 # renoun
 
+## 10.1.2
+
+### Patch Changes
+
+- 5aa706e: Prevents `undefined` in `Reference` component section heading aria label.
+- 642ef14: Uses the type alias type text instead of repeating the type alias name in `Reference`.
+- d94a2f8: Fixes default state and keyboard focus for `Command` component.
+- 973ac4e: Fixes default `Navigation` html elements.
+- 4f4fb40: Fixes `depth` calculation for `Navigation` component.
+- 694fe5c: Fixes stale configuration in `RootProvider` when value is async.
+
 ## 10.1.1
 
 ### Patch Changes
