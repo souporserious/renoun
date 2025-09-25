@@ -64,8 +64,14 @@ export function getFileExports(
         },
       }))
 
+      const sourceFilePath = sourceFile.getFilePath()
+
       for (const [name, declarations] of exportedDeclarations) {
         for (const declaration of declarations) {
+          if (declaration.wasForgotten()) {
+            continue
+          }
+
           if (tsMorph.Node.isFunctionDeclaration(declaration)) {
             const body = declaration.getBody()
 
@@ -75,6 +81,18 @@ export function getFileExports(
           }
 
           let node: Node = declaration
+
+          if (node.getSourceFile().getFilePath() !== sourceFilePath) {
+            node = getExportSpecifierForName(sourceFile, name) ?? node
+          }
+
+          if (node.wasForgotten()) {
+            continue
+          }
+
+          if (node.getSourceFile().getFilePath() !== sourceFilePath) {
+            continue
+          }
 
           // export { foo } = bar
           const exportAssignment = node.getFirstAncestorByKind(
@@ -140,6 +158,25 @@ export function getFileExports(
     },
     { data: { filePath } }
   ) as ModuleExport[]
+}
+
+function getExportSpecifierForName(
+  sourceFile: tsMorph.SourceFile,
+  name: string
+) {
+  for (const exportDeclaration of sourceFile.getExportDeclarations()) {
+    for (const namedExport of exportDeclaration.getNamedExports()) {
+      const aliasNode = namedExport.getAliasNode()
+      const exportName =
+        aliasNode?.getText() ?? namedExport.getNameNode()?.getText()
+
+      if (exportName === name) {
+        return namedExport
+      }
+    }
+  }
+
+  return undefined
 }
 
 /** Returns a specific export declaration of a file at a given position and kind. */
