@@ -3,6 +3,8 @@ import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
 
+import { getDebugLogger } from '../utils/debug.js'
+import type { DebugContext } from '../utils/debug.js'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import { resolvedTypeCache } from '../utils/resolve-type-at-location.js'
 import { invalidateProjectFileCache } from './cache.js'
@@ -35,9 +37,24 @@ const defaultCompilerOptions = {
 /** Get the project associated with the provided options. */
 export function getProject(options?: ProjectOptions) {
   const projectId = JSON.stringify(options)
+  const projectDirectory = options?.tsConfigFilePath
+    ? resolve(dirname(options.tsConfigFilePath))
+    : process.cwd()
 
   if (projects.has(projectId)) {
-    return projects.get(projectId)!
+    const existingProject = projects.get(projectId)!
+
+    getDebugLogger().debug('Reusing cached project instance', () =>
+      createProjectDebugContext({
+        project: existingProject,
+        projectId,
+        projectDirectory,
+        projectOptions: options,
+        cacheStatus: 'hit',
+      })
+    )
+
+    return existingProject
   }
 
   const project = new Project(
@@ -54,9 +71,6 @@ export function getProject(options?: ProjectOptions) {
           tsConfigFilePath: options?.tsConfigFilePath || 'tsconfig.json',
         }
   )
-  const projectDirectory = options?.tsConfigFilePath
-    ? resolve(dirname(options.tsConfigFilePath))
-    : process.cwd()
   let associatedProjects = directoryToProjects.get(projectDirectory)
 
   if (!associatedProjects) {
@@ -134,6 +148,16 @@ export function getProject(options?: ProjectOptions) {
 
   projects.set(projectId, project)
 
+  getDebugLogger().info('Created new project instance', () =>
+    createProjectDebugContext({
+      project,
+      projectId,
+      projectDirectory,
+      projectOptions: options,
+      cacheStatus: 'miss',
+    })
+  )
+
   return project
 }
 
@@ -149,14 +173,47 @@ function refreshOrAddSourceFile(project: Project, filePath: string) {
 
   startRefreshingProjects()
 
-  const promise = existingSourceFile
-    .refreshFromFileSystem()
-    .finally(() => {
-      activeRefreshingProjects.delete(promise)
-      if (activeRefreshingProjects.size === 0) {
-        completeRefreshingProjects()
-      }
-    })
+  const promise = existingSourceFile.refreshFromFileSystem().finally(() => {
+    activeRefreshingProjects.delete(promise)
+    if (activeRefreshingProjects.size === 0) {
+      completeRefreshingProjects()
+    }
+  })
 
   activeRefreshingProjects.add(promise)
+}
+
+function createProjectDebugContext({
+  project,
+  projectId,
+  projectDirectory,
+  projectOptions,
+  cacheStatus,
+}: {
+  project: Project
+  projectId: string
+  projectDirectory: string
+  projectOptions?: ProjectOptions
+  cacheStatus: 'hit' | 'miss'
+}): DebugContext {
+  const compilerOptions = project.getCompilerOptions()
+  const tsConfigFilePath =
+    compilerOptions['configFilePath'] ??
+    projectOptions?.tsConfigFilePath ??
+    'tsconfig.json'
+
+  return {
+    operation: 'project.getProject',
+    data: {
+      cacheStatus,
+      projectId,
+      projectDirectory,
+      rootDirectories: project
+        .getRootDirectories()
+        .map((directory) => directory.getPath()),
+      useInMemoryFileSystem: Boolean(projectOptions?.useInMemoryFileSystem),
+      compilerOptions,
+      tsConfigFilePath,
+    },
+  }
 }
