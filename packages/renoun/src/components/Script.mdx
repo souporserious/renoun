@@ -57,8 +57,8 @@ export default () => {
   // your script
 }
 
-// ⚠️ Only a default export is supported
-export const initialize = () => {}
+// ⚠️ No named exports
+export function setup() {}
 ```
 
 ## How it works
@@ -66,6 +66,32 @@ export const initialize = () => {}
 The helper stringifies the incoming module default function `Function.prototype.toString()` and hands the body of the function to a React `<script>` element.
 
 Hoisted scripts are marked `async` and run as soon as possible without blocking HTML parsing. The script is base64-encoded and set as a `data:` URL. This uses [React's special rendering behavior](https://react.dev/reference/react-dom/components/script#special-rendering-behavior) to hoist the script element to the head.
+
+## Passing props
+
+Any extra props you pass to `Script` will be available as function parameters in the script you import.
+
+```tsx allowErrors showErrors={false}
+<Script defaultPackageManager="npm" variant="inline">
+  {import('./script.ts')}
+</Script>
+```
+
+This is useful for passing configuration options.
+
+```ts
+export default function ({
+  defaultPackageManager = 'npm',
+}: {
+  defaultPackageManager?: string
+}) {
+  let packageManager = localStorage.getItem('packageManager')
+
+  if (!packageManager) {
+    packageManager = defaultPackageManager
+  }
+}
+```
 
 ## Variants
 
