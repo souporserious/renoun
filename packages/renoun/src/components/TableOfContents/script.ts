@@ -7,6 +7,10 @@ declare global {
   }
 }
 
+/**
+ * Script to manage active heading state in the table of contents.
+ * @internal
+ */
 export default function (): void {
   if (!window.__TableOfContents__) {
     window.__TableOfContents__ = {
@@ -22,6 +26,7 @@ export default function (): void {
   let rafId = 0
   let lastScrollY = 0
   let activeId: string | null = null
+  const currentIds = new Set<string>()
 
   function cancelFrame(): void {
     if (rafId) cancelAnimationFrame(rafId)
@@ -54,9 +59,11 @@ export default function (): void {
     cancelFrame()
     if (observer) observer.disconnect()
     observer = null
-    links = new Map()
-    visibility = new Map()
     activeId = null
+    isManualScrolling = false
+    currentIds.clear()
+    links.clear()
+    visibility.clear()
   }
 
   function observe(ids: string[]): void {
@@ -81,51 +88,60 @@ export default function (): void {
     }
   }
 
-  function delegate(ids: string[]): void {
+  function delegate(): void {
     document.addEventListener('click', (event) => {
       const targetNode = event.target
       if (!(targetNode instanceof Element)) return
+
       const link = targetNode.closest<HTMLAnchorElement>('a[href^="#"]')
       if (!link) return
+
       const rawId = link.hash ? decodeURIComponent(link.hash.slice(1)) : ''
-      if (!rawId || !ids.includes(rawId)) return
+      if (!rawId || !currentIds.has(rawId)) return
+
+      const sameDocument =
+        (link.origin === location.origin || !link.origin) &&
+        (link.pathname === location.pathname || link.pathname === '')
+      if (!sameDocument) return
+
       const section = document.getElementById(rawId)
       if (!section) return
-      if (location.pathname === link.pathname) {
-        event.preventDefault()
-        history.pushState(null, '', '#' + rawId)
-        setActive(rawId)
-        isManualScrolling = true
-        if ('onscrollend' in window) {
-          window.addEventListener(
-            'scrollend',
-            () => {
+
+      event.preventDefault()
+      history.pushState(null, '', '#' + rawId)
+      setActive(rawId)
+
+      isManualScrolling = true
+      if ('onscrollend' in window) {
+        window.addEventListener(
+          'scrollend',
+          () => {
+            isManualScrolling = false
+          },
+          { passive: true, once: true } as AddEventListenerOptions
+        )
+      } else {
+        cancelFrame()
+        let stillCount = 0
+        const step = (): void => {
+          const y = window.scrollY
+          if (Math.abs(y - lastScrollY) < 1) {
+            stillCount++
+            if (stillCount > 4) {
               isManualScrolling = false
-            },
-            { passive: true, once: true } as AddEventListenerOptions
-          )
-        } else {
-          cancelFrame()
-          let stillCount = 0
-          const step = (): void => {
-            const y = window.scrollY
-            if (Math.abs(y - lastScrollY) < 1) {
-              stillCount++
-              if (stillCount > 4) {
-                isManualScrolling = false
-                cancelFrame()
-                return
-              }
-            } else {
-              stillCount = 0
+              cancelFrame()
+              return
             }
-            lastScrollY = y
-            rafId = requestAnimationFrame(step)
+          } else {
+            stillCount = 0
           }
+          lastScrollY = y
           rafId = requestAnimationFrame(step)
         }
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        rafId = requestAnimationFrame(step)
       }
+
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }
 
@@ -152,6 +168,8 @@ export default function (): void {
 
   function register(ids: string[]): void {
     reset()
+    for (const id of ids) currentIds.add(id)
+
     function select(id: string) {
       return document.querySelector<HTMLAnchorElement>(
         'a[href="#' + CSS.escape(id) + '"]'
@@ -161,10 +179,12 @@ export default function (): void {
       links.set(id, select(id))
     }
     visibility = new Map(ids.map((id) => [id, 0]))
+
     observe(ids)
     bootstrapActive(ids)
+
     if (window.__TableOfContents__?.isDelegated === false) {
-      delegate(ids)
+      delegate()
       window.__TableOfContents__!.isDelegated = true
     }
   }

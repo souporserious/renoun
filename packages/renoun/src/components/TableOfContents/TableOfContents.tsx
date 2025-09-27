@@ -64,7 +64,7 @@ const defaultComponents: TableOfContentsComponents = {
  */
 export function TableOfContentsScript({ nonce }: { nonce?: string }) {
   return (
-    <Script variant="inline" nonce={nonce}>
+    <Script nonce={nonce} variant="inline">
       {import('./script.js')}
     </Script>
   )
