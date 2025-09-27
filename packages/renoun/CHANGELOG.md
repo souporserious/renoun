@@ -1,5 +1,35 @@
 # renoun
 
+## 10.2.0
+
+### Minor Changes
+
+- 0d8a28c: Adds a `Script` component that lets you author a client-side script using a normal source file that is then injected into HTML either inline, deferred, or as a hoisted data URL. This is useful for small scripts like analytics snippets, theme preferences, feature flags, or bootstrapping navigation active states.
+
+  ```tsx path="app/page.tsx"
+  import { Script } from 'renoun'
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode
+  }) {
+    return (
+      <html>
+        <head>
+          <Script>{import('./table-of-contents-script.ts')}</Script>
+        </head>
+        <body>{children}</body>
+      </html>
+    )
+  }
+  ```
+
+### Patch Changes
+
+- a994bfc: Fixes flickering in the `TableOfContents` component on page load.
+- 69aebaa: Adds debug information for the current project context.
+
 ## 10.1.2
 
 ### Patch Changes
