@@ -1,12 +1,12 @@
 'use client'
-import React, { useInsertionEffect } from 'react'
+import React, { useLayoutEffect } from 'react'
 
 /**
  * A component that registers heading ids with the `TableOfContentsScript`.
  * @internal
  */
 export function Register({ ids }: { ids: string[] }) {
-  useInsertionEffect(() => {
+  useLayoutEffect(() => {
     window.__TableOfContents__?.register(ids)
   }, [])
 
