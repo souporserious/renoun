@@ -3,6 +3,8 @@ import { styled, type CSSObject } from 'restyle'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 
+import { Collapse } from '../Collapse'
+
 const StyledLink = styled(Link, {
   display: 'block',
   padding: '0.25rem 0',
@@ -12,10 +14,12 @@ export function SidebarLink({
   pathname,
   label,
   css,
+  collapsible = false,
 }: {
   pathname: string
   label: string
   css?: CSSObject
+  collapsible?: boolean
 }) {
   const activePathname = usePathname()
   const isActive = pathname === activePathname
@@ -32,6 +36,32 @@ export function SidebarLink({
     styles[':hover'] = {
       color: 'var(--color-foreground-interactive-highlighted)',
     }
+  }
+
+  if (collapsible) {
+    return (
+      <div
+        css={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          ...css,
+        }}
+      >
+        <Collapse.Trigger
+          aria-label="Toggle section"
+          css={{
+            width: 16,
+            height: 16,
+            marginLeft: '-1.5rem',
+            color: 'var(--color-foreground-secondary)',
+          }}
+        />
+        <StyledLink href={pathname} css={styles}>
+          {label}
+        </StyledLink>
+      </div>
+    )
   }
 
   return (

@@ -63,7 +63,7 @@ export function Trigger({
   css,
   ...props
 }: {
-  children: CollapseVariants | React.ReactNode
+  children?: CollapseVariants | React.ReactNode
   css?: CSSObject
 } & Omit<React.ComponentPropsWithoutRef<'button'>, 'children'>) {
   const { triggerId, contentId, isOpen, toggle } = useCollapse()

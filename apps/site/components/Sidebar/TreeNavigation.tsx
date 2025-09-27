@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Children, Fragment, cloneElement, isValidElement } from 'react'
 import {
   Directory,
   isDirectory,
@@ -11,6 +11,7 @@ import {
   type NavigationProps,
 } from 'renoun'
 
+import { Collapse } from '../Collapse'
 import { SidebarLink } from './SidebarLink'
 
 const components: Partial<NavigationComponents> = {
@@ -24,6 +25,7 @@ const components: Partial<NavigationComponents> = {
           display: 'flex',
           flexDirection: 'column',
           paddingLeft: 0,
+          margin: 0,
           ...(depth > 0
             ? {
                 '--depth': depth,
@@ -37,7 +39,34 @@ const components: Partial<NavigationComponents> = {
       </ul>
     )
   },
-  Link: async ({ entry, pathname }) => {
+  Item: ({ entry, children }) => {
+    const childArray = Children.toArray(children)
+    const [firstChild, ...restChildren] = childArray
+    const nestedChildren = restChildren.filter(
+      (child) => child !== null && child !== undefined
+    )
+
+    if (!(isDirectory(entry) && nestedChildren.length > 0)) {
+      return <li>{children}</li>
+    }
+
+    const link = isValidElement(firstChild)
+      ? cloneElement<any>(firstChild, { collapsible: true })
+      : firstChild
+
+    return (
+      <li>
+        <Collapse.Provider>
+          {link}
+          <Collapse.Content as="div" css={{ display: 'block' }}>
+            {nestedChildren}
+          </Collapse.Content>
+        </Collapse.Provider>
+      </li>
+    )
+  },
+  Link: async (props) => {
+    const { entry, pathname, collapsible } = props as any
     const metadata = await getEntryMetadata(entry)
     let label: string
 
@@ -55,6 +84,7 @@ const components: Partial<NavigationComponents> = {
       <SidebarLink
         pathname={pathname}
         label={label}
+        collapsible={collapsible}
         css={{
           paddingLeft: `calc(var(--depth) * 0.5rem)`,
         }}
