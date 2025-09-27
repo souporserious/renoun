@@ -33,9 +33,9 @@ export function TableOfContents({ headings, entry }: SiteTableOfContentsProps) {
         }}
       />
     ),
-    Title: ({ children, id }) => (
+    Title: ({ id }) => (
       <h4 id={id} className="title">
-        {children}
+        On this page
       </h4>
     ),
     List: ({ children, depth }) => (
