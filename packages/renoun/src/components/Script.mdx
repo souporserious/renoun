@@ -1,0 +1,135 @@
+A tiny helper that lets you author a client-side script using a normal source file that is then injected into HTML either **inline**, **deferred**, or **as a hoisted data URL**. This is useful for small scripts like analytics snippets, theme preferences, feature flags, or bootstrapping navigation active states.
+
+## Quick start
+
+```tsx path="app/page.tsx"
+import { Script } from 'renoun'
+
+export default function Page() {
+  return (
+    <>
+      {/* Hoist for earliest execution */}
+      <Script variant="hoist">{import('./table-of-contents-script.ts')}</Script>
+
+      {/* Or inline/defer (default) */}
+      <Script>{import('./analytics-script.ts')}</Script>
+    </>
+  )
+}
+```
+
+```ts path="table-of-contents-script.ts"
+// use types if you want
+declare global {
+  interface Window {
+    __TableOfContents__: {
+      register: (headingIds: string[]) => void
+    }
+  }
+}
+
+// default export MUST be a function
+export default function () {
+  // use client APIs
+  const headingIds = document.querySelectorAll('a[href^="#"]').forEach((a) => {
+    // ...
+  })
+  window.__TableOfContents__ = {
+    register: (ids) => {
+      //   ...
+    },
+  }
+}
+```
+
+## Authoring scripts
+
+Export a function. The component stringifies the function and hands it off to a React script element.
+
+```ts
+// ✅ Classic function
+export default function () {
+  // your script
+}
+
+// ✅ Arrow with a block body
+export default () => {
+  // your script
+}
+
+// ⚠️ Only a default export is supported
+export const initialize = () => {}
+```
+
+## How it works
+
+The helper stringifies the incoming module default function `Function.prototype.toString()` and hands the body of the function to a React `<script>` element.
+
+Hoisted scripts are marked `async` and run as soon as possible without blocking HTML parsing. The script is base64-encoded and set as a `data:` URL. This uses [React's special rendering behavior](https://react.dev/reference/react-dom/components/script#special-rendering-behavior) to hoist the script element to the head.
+
+## Variants
+
+### Deferred inline (default)
+
+### Variants
+
+```tsx allowErrors showErrors={false}
+<Script variant="defer">{import('./features/client-snippet.ts')}</Script>
+```
+
+Renders `<script defer>` with your code inline.
+
+### Inline, no defer
+
+```tsx allowErrors showErrors={false}
+<Script variant="inline">{import('./critical-inline.ts')}</Script>
+```
+
+Renders an inline `<script>` that runs as soon as parsed (blocking the parser). Use sparingly.
+
+### Hoisted data URL
+
+```tsx allowErrors showErrors={false}
+<Script variant="hoist">{import('./early.ts')}</Script>
+```
+
+Renders `<script async src="data:text/javascript;base64,…">` so the browser can execute as early as possible without blocking HTML parsing.
+
+## Security
+
+This component avoids `eval` and `dangerouslySetInnerHTML`. The risk is the same as any inline script. The flow looks like this:
+
+1. Await the `import()`.
+2. Take the module's `default` export (must be a function).
+3. `toString()` it, extract the body, place it as the `<script>` text (or base64 in a `data:` URL for `hoist` variant).
+
+<Note>
+
+It has the same risk profile as any inline script. Anything in that function runs with full page privileges.
+
+</Note>
+
+### Trust & origin
+
+Only import code you control. If an attacker can alter the imported module (user-writable path, unchecked generation, etc.) they get arbitrary script execution.
+
+### Variants & CSP
+
+- `defer` / `inline`: literal `<script>` body.
+- `hoist`: `<script async src="data:text/javascript;base64,…">` (needs `data:` in `script-src`).
+
+Provide a nonce (or hash) under CSP:
+
+```tsx allowErrors showErrors={false}
+<Script nonce={nonce}>{import('./snippet.ts')}</Script>
+```
+
+Inline/defer need a nonce or hash; hoist additionally needs `data:` allowed (or use defer). Prefer nonces over `'unsafe-inline'`.
+
+### XSS considerations
+
+HTML inside the function body isn't parsed as markup—it's just JS source—but **any attacker-controlled interpolation into that function becomes code**. Do not template untrusted input into the exported function.
+
+### Keep it small
+
+Hoisted base64 inflates HTML; reserve for tiny early snippets (theme, flags, analytics). Use regular bundling for larger logic.
