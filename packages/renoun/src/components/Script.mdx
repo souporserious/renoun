@@ -11,7 +11,7 @@ export default function Page() {
       {/* Hoist for earliest execution */}
       <Script variant="hoist">{import('./table-of-contents-script.ts')}</Script>
 
-      {/* Or inline/defer (default) */}
+      {/* Or inline blocking (default) */}
       <Script>{import('./analytics-script.ts')}</Script>
     </>
   )
@@ -72,12 +72,10 @@ Hoisted scripts are marked `async` and run as soon as possible without blocking 
 Any extra props you pass to `Script` will be available as function parameters in the script you import.
 
 ```tsx allowErrors showErrors={false}
-<Script defaultPackageManager="npm" variant="inline">
-  {import('./script.ts')}
-</Script>
+<Script defaultPackageManager="npm">{import('./script.ts')}</Script>
 ```
 
-This is useful for passing configuration options.
+This is useful for passing configuration options:
 
 ```ts
 export default function ({
@@ -95,23 +93,21 @@ export default function ({
 
 ## Variants
 
-### Deferred inline (default)
-
-### Variants
-
-```tsx allowErrors showErrors={false}
-<Script variant="defer">{import('./features/client-snippet.ts')}</Script>
-```
-
-Renders `<script defer>` with your code inline.
-
-### Inline, no defer
+### Inline
 
 ```tsx allowErrors showErrors={false}
 <Script variant="inline">{import('./critical-inline.ts')}</Script>
 ```
 
-Renders an inline `<script>` that runs as soon as parsed (blocking the parser). Use sparingly.
+Renders an inline `<script>` that runs as soon as parsed (blocking the parser).
+
+### Deferred inline
+
+```tsx allowErrors showErrors={false}
+<Script variant="defer">{import('./features/client-snippet.ts')}</Script>
+```
+
+Renders `<script defer>` with your code inline so it runs after HTML parsing but before `DOMContentLoaded`.
 
 ### Hoisted data URL
 

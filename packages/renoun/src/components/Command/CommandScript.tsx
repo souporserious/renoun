@@ -30,11 +30,7 @@ export function CommandScript({
   nonce,
 }: CommandScriptProps) {
   return (
-    <Script
-      defaultPackageManager={defaultPackageManager}
-      nonce={nonce}
-      variant="inline"
-    >
+    <Script defaultPackageManager={defaultPackageManager} nonce={nonce}>
       {import('./script.js')}
     </Script>
   )

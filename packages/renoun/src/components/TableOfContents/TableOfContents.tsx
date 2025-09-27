@@ -63,11 +63,7 @@ const defaultComponents: TableOfContentsComponents = {
  * @internal
  */
 export function TableOfContentsScript({ nonce }: { nonce?: string }) {
-  return (
-    <Script nonce={nonce} variant="inline">
-      {import('./script.js')}
-    </Script>
-  )
+  return <Script nonce={nonce}>{import('./script.js')}</Script>
 }
 
 /** A table of contents that displays links to the headings in the current document. */
