@@ -126,48 +126,58 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
     throw new Error('[renoun] RootProvider must wrap the html element.')
   }
 
-  if (includeTableOfContentsScript) {
+  if (includeTableOfContentsScript || includeCommandScript) {
     const childrenArray = Children.toArray(html.props.children)
     const headIndex = childrenArray.findIndex(
       (node) => isValidElement(node) && node.type === 'head'
     )
+    const headInsertions: React.ReactNode[] = []
 
-    if (headIndex !== -1) {
-      const headElement = childrenArray[
-        headIndex
-      ] as React.ReactElement<HeadProps>
-      const nextHead = cloneElement<HeadProps>(headElement, {
-        children: (
-          <>
-            <TableOfContentsScript nonce={nonce} />
-            {headElement.props.children}
-          </>
-        ),
-      })
-      const nextChildren = childrenArray.slice()
-      nextChildren[headIndex] = nextHead
-      html = cloneElement<HtmlProps>(html, { children: nextChildren })
-    } else {
-      html = cloneElement<HtmlProps>(html, {
-        children: [
-          <head key="RootProvider">
-            <TableOfContentsScript nonce={nonce} />
-          </head>,
-          ...childrenArray,
-        ],
-      })
+    if (includeTableOfContentsScript) {
+      headInsertions.push(
+        <TableOfContentsScript key="table-of-contents-script" nonce={nonce} />
+      )
+    }
+    if (includeCommandScript) {
+      headInsertions.push(
+        <CommandScript
+          key="command-script"
+          defaultPackageManager={merged.defaultPackageManager}
+          nonce={nonce}
+        />
+      )
+    }
+
+    if (headInsertions.length) {
+      if (headIndex !== -1) {
+        const headElement = childrenArray[
+          headIndex
+        ] as React.ReactElement<HeadProps>
+        const nextHead = cloneElement<HeadProps>(headElement, {
+          children: (
+            <>
+              {headInsertions}
+              {headElement.props.children}
+            </>
+          ),
+        })
+        const nextChildren = childrenArray.slice()
+        nextChildren[headIndex] = nextHead
+        html = cloneElement<HtmlProps>(html, { children: nextChildren })
+      } else {
+        html = cloneElement<HtmlProps>(html, {
+          children: [
+            <head key="RootProvider">{headInsertions}</head>,
+            ...childrenArray,
+          ],
+        })
+      }
     }
   }
 
   return (
     <ServerConfigContext value={merged}>
       <ClientConfigProvider value={merged}>
-        {includeCommandScript ? (
-          <CommandScript
-            defaultPackageManager={merged.defaultPackageManager}
-            nonce={nonce}
-          />
-        ) : null}
         {typeof merged.theme === 'object' ? (
           <ThemeProvider
             theme={merged.theme}
