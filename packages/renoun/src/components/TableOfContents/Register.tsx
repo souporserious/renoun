@@ -1,12 +1,13 @@
 'use client'
-import React, { useLayoutEffect } from 'react'
+import React, { useEffect } from 'react'
 
 /**
  * A component that registers heading ids with the `TableOfContentsScript`.
  * @internal
  */
 export function Register({ ids }: { ids: string[] }) {
-  useLayoutEffect(() => {
+  useEffect(() => {
+    // TODO: fix navigation flickering from v DOM update
     window.__TableOfContents__?.register(ids)
   }, [])
 
