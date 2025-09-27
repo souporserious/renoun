@@ -1,23 +1,40 @@
 import React, { useId } from 'react'
-import type { CSSObject } from 'restyle'
 
 import type { MDXHeadings } from '../../mdx/index.js'
-import { SectionObserver } from '../SectionObserver/index.js'
-
-type ElementProps<Tag extends keyof React.JSX.IntrinsicElements> =
-  React.JSX.IntrinsicElements[Tag] & { css?: CSSObject }
-
-type TableOfContentsComponent<
-  Tag extends keyof React.JSX.IntrinsicElements,
-  Props = {},
-> = React.ComponentType<ElementProps<Tag> & Props>
+import { Script } from '../Script.js'
+import { Register } from './Register.js'
 
 export interface TableOfContentsComponents {
-  Root: TableOfContentsComponent<'nav'>
-  Title: TableOfContentsComponent<'h4'>
-  List: TableOfContentsComponent<'ol'>
-  Item: TableOfContentsComponent<'li'>
-  Link: TableOfContentsComponent<'a'>
+  /** Root navigation element. */
+  Root: React.ComponentType<{
+    children?: React.ReactNode
+    'aria-labelledby'?: string
+  }>
+
+  /** Title heading. */
+  Title: React.ComponentType<{
+    id?: string
+    children?: React.ReactNode
+  }>
+
+  /** Ordered list of items. */
+  List: React.ComponentType<{
+    depth: number
+    children?: React.ReactNode
+  }>
+
+  /** Individual list item. */
+  Item: React.ComponentType<{
+    children?: React.ReactNode
+  }>
+
+  /** Anchor link to a heading. */
+  Link: React.ComponentType<{
+    children?: React.ReactNode
+    href: string
+    suppressHydrationWarning?: boolean
+    'aria-current'?: React.AriaAttributes['aria-current']
+  }>
 }
 
 export interface TableOfContentsProps {
@@ -32,21 +49,35 @@ export interface TableOfContentsProps {
 }
 
 const defaultComponents: TableOfContentsComponents = {
-  Root: ({ children, ...props }) => <nav {...props}>{children}</nav>,
-  Title: ({ children, ...props }) => (
-    <h4 {...props}>{children ?? 'On this page'}</h4>
+  Root: (props) => <nav {...props} />,
+  Title: ({ children = 'On this page', ...props }) => (
+    <h4 {...props}>{children}</h4>
   ),
-  List: ({ children, ...props }) => <ol {...props}>{children}</ol>,
-  Item: ({ children, ...props }) => <li {...props}>{children}</li>,
-  Link: ({ children, ...props }) => <a {...props}>{children}</a>,
+  List: (props) => <ol {...props} />,
+  Item: (props) => <li {...props} />,
+  Link: (props) => <a {...props} />,
 }
 
+/**
+ * Script to manage active heading state in the table of contents.
+ * @internal
+ */
+export function TableOfContentsScript({ nonce }: { nonce?: string }) {
+  return (
+    <Script variant="inline" nonce={nonce}>
+      {import('./script.js')}
+    </Script>
+  )
+}
+
+/** A table of contents that displays links to the headings in the current document. */
 export function TableOfContents({
   headings,
   components = {},
   children,
 }: TableOfContentsProps) {
-  const id = useId()
+  const rootId = useId()
+  const headingIds = new Set<string>()
   const { Root, Title, List, Item, Link }: TableOfContentsComponents = {
     ...defaultComponents,
     ...components,
@@ -95,23 +126,26 @@ export function TableOfContents({
 
   function renderItems(
     items: TableOfContentsItem[],
-    level = 0
+    depth = 0
   ): React.ReactNode {
     if (items.length === 0) {
       return null
     }
     return (
-      <List style={{ [String('--level')]: level }}>
-        {items.map((item) => (
-          <Item key={item.id}>
-            <SectionObserver.Link id={item.id}>
-              <Link>{item.title}</Link>
-            </SectionObserver.Link>
-            {item.children.length > 0
-              ? renderItems(item.children, level + 1)
-              : null}
-          </Item>
-        ))}
+      <List depth={depth}>
+        {items.map((item) => {
+          headingIds.add(item.id)
+          return (
+            <Item key={item.id}>
+              <Link href={`#${item.id}`} suppressHydrationWarning>
+                {item.title}
+              </Link>
+              {item.children.length > 0
+                ? renderItems(item.children, depth + 1)
+                : null}
+            </Item>
+          )
+        })}
       </List>
     )
   }
@@ -121,12 +155,11 @@ export function TableOfContents({
   }
 
   return (
-    <SectionObserver.Provider>
-      <Root aria-labelledby={id}>
-        <Title id={id} />
-        {renderItems(items)}
-        {children}
-      </Root>
-    </SectionObserver.Provider>
+    <Root aria-labelledby={rootId}>
+      <Title id={rootId} />
+      {renderItems(items)}
+      {children}
+      <Register ids={Array.from(headingIds)} />
+    </Root>
   )
 }

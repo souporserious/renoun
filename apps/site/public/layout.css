@@ -82,6 +82,7 @@
 html {
   color-scheme: dark;
   font-size: 2.5vw;
+  scroll-padding-top: calc(var(--header-height) + 1.6rem);
 }
 
 @media (min-width: 60rem) {
@@ -120,7 +121,6 @@ a {
   :where(h1, h2, h3, h4) {
     letter-spacing: normal;
     text-wrap: balance;
-    scroll-margin-top: calc(var(--header-height) + 1.6rem);
   }
 
   :where(h1, h2, h3)::before,

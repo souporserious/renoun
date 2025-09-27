@@ -1,4 +1,4 @@
-import React, { cloneElement, isValidElement } from 'react'
+import React, { Children, cloneElement, isValidElement } from 'react'
 
 import { parseGitSpecifier } from '../file-system/Repository.js'
 import { CommandScript } from './Command/CommandScript.js'
@@ -7,9 +7,11 @@ import { ServerConfigContext } from './Config/ServerConfigContext.js'
 import { defaultConfig } from './Config/default-config.js'
 import type { ConfigurationOptions, ThemeValue } from './Config/types.js'
 import { Refresh } from './Refresh'
-import { TableOfContentsScript } from './TableOfContents/TableOfContentsScript.js'
+import { TableOfContentsScript } from './TableOfContents/TableOfContents.js'
 import { ThemeProvider } from './Theme'
 
+type HtmlProps = React.ComponentProps<'html'>
+type HeadProps = React.ComponentProps<'head'>
 type ThemeMap = Record<string, ThemeValue>
 
 interface BaseProps
@@ -113,17 +115,48 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
     ...overrides,
   }
 
-  let childrenToRender: React.ReactElement
+  let html: React.ReactElement<HtmlProps>
 
-  if (isValidElement(children)) {
+  if (isValidElement<React.ComponentProps<'html'>>(children)) {
     if (children.type !== 'html') {
       throw new Error('[renoun] RootProvider must wrap the html element.')
     }
-    childrenToRender = cloneElement<any>(children, {
-      suppressHydrationWarning: true,
-    })
+    html = cloneElement(children, { suppressHydrationWarning: true })
   } else {
     throw new Error('[renoun] RootProvider must wrap the html element.')
+  }
+
+  if (includeTableOfContentsScript) {
+    const childrenArray = Children.toArray(html.props.children)
+    const headIndex = childrenArray.findIndex(
+      (node) => isValidElement(node) && node.type === 'head'
+    )
+
+    if (headIndex !== -1) {
+      const headElement = childrenArray[
+        headIndex
+      ] as React.ReactElement<HeadProps>
+      const nextHead = cloneElement<HeadProps>(headElement, {
+        children: (
+          <>
+            <TableOfContentsScript nonce={nonce} />
+            {headElement.props.children}
+          </>
+        ),
+      })
+      const nextChildren = childrenArray.slice()
+      nextChildren[headIndex] = nextHead
+      html = cloneElement<HtmlProps>(html, { children: nextChildren })
+    } else {
+      html = cloneElement<HtmlProps>(html, {
+        children: [
+          <head key="RootProvider">
+            <TableOfContentsScript nonce={nonce} />
+          </head>,
+          ...childrenArray,
+        ],
+      })
+    }
   }
 
   return (
@@ -135,19 +168,16 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
             nonce={nonce}
           />
         ) : null}
-        {includeTableOfContentsScript ? (
-          <TableOfContentsScript nonce={nonce} />
-        ) : null}
         {typeof merged.theme === 'object' ? (
           <ThemeProvider
             theme={merged.theme}
             includeScript={includeThemeScript}
             nonce={nonce}
           >
-            {childrenToRender}
+            {html}
           </ThemeProvider>
         ) : (
-          childrenToRender
+          html
         )}
         <Refresh />
       </ClientConfigProvider>
