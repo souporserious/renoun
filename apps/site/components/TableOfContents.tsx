@@ -4,7 +4,6 @@ import {
   type TableOfContentsComponents,
 } from 'renoun'
 import type { FileSystemEntry } from 'renoun'
-import type { CSSObject } from 'restyle'
 
 import { ViewSource } from '@/components/ViewSource'
 
@@ -17,9 +16,9 @@ type SiteTableOfContentsProps = Omit<
 
 export function TableOfContents({ headings, entry }: SiteTableOfContentsProps) {
   const components: Partial<TableOfContentsComponents> = {
-    Root: ({ children, ...rest }) => (
+    Root: (props) => (
       <nav
-        {...rest}
+        {...props}
         css={{
           gridColumn: 6,
           pointerEvents: 'auto',
@@ -32,19 +31,17 @@ export function TableOfContents({ headings, entry }: SiteTableOfContentsProps) {
           overflowY: 'auto',
           overscrollBehavior: 'contain',
         }}
-      >
-        {children}
-      </nav>
+      />
     ),
-    Title: ({ children, className, ...rest }) => (
-      <h4 {...rest} className={[className, 'title'].filter(Boolean).join(' ')}>
-        {children ?? 'On this page'}
+    Title: ({ children, id }) => (
+      <h4 id={id} className="title">
+        {children}
       </h4>
     ),
-    List: ({ children, ...rest }) => (
+    List: ({ children, depth }) => (
       <ol
-        {...rest}
         css={{
+          '--depth': depth,
           gridColumn: '1 / 2',
           gridRow: '1 / -1',
           listStyle: 'none',
@@ -57,28 +54,28 @@ export function TableOfContents({ headings, entry }: SiteTableOfContentsProps) {
         {children}
       </ol>
     ),
-    Link: ({ children, ...rest }) => {
-      const styles: CSSObject = {
-        fontSize: 'var(--font-size-body-3)',
-        padding: '0.25rem 0',
-        paddingLeft: 'calc(var(--level) * 0.8rem)',
-        scrollMarginBlock: 'var(--font-size-body-3)',
-        whiteSpace: 'nowrap',
-        textOverflow: 'ellipsis',
-        overflow: 'hidden',
-        color: 'var(--color-foreground-interactive)',
-        ':hover': {
-          color: 'var(--color-foreground-interactive-highlighted)',
-        },
-        '&[aria-current]': {
-          color: 'white',
-        },
-      }
-
+    Link: (props) => {
       return (
-        <a {...rest} css={styles}>
-          {children}
-        </a>
+        <a
+          {...props}
+          css={{
+            display: 'block',
+            fontSize: 'var(--font-size-body-3)',
+            padding: '0.25rem 0',
+            paddingLeft: 'calc(var(--depth) * 0.8rem)',
+            scrollMarginBlock: 'var(--font-size-body-3)',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+            overflow: 'hidden',
+            color: 'var(--color-foreground-interactive)',
+            ':hover': {
+              color: 'var(--color-foreground-interactive-highlighted)',
+            },
+            '&[aria-current]': {
+              color: 'white',
+            },
+          }}
+        />
       )
     },
   }

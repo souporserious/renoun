@@ -75,7 +75,7 @@ export default async function Page() {
               level: 2,
             },
             ...fileExports.map((fileExport) => ({
-              id: fileExport.getName(),
+              id: fileExport.getSlug(),
               text: fileExport.getName(),
               level: 3,
             })),
