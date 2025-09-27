@@ -43,4 +43,5 @@ export {
   type NavigationProps,
   type NavigationComponents,
 } from './Navigation.js'
+export { Script } from './Script.js'
 export { Sponsors } from './Sponsors.js'
