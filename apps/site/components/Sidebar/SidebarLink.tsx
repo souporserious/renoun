@@ -45,15 +45,18 @@ export function SidebarLink({
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
+          position: 'relative',
           ...css,
         }}
       >
         <Collapse.Trigger
           aria-label="Toggle section"
           css={{
-            width: 16,
-            height: 16,
-            marginLeft: '-1.5rem',
+            width: '1.5rem',
+            height: '1.5rem',
+            padding: '0.4rem',
+            position: 'absolute',
+            left: '-1.5rem',
             color: 'var(--color-foreground-secondary)',
           }}
         />
