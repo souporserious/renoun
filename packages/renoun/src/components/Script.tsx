@@ -2,12 +2,12 @@ import React from 'react'
 
 /** Determines how the script is included in the HTML */
 type ScriptVariants =
-  /** Renders a script tag with blocking script content inline. */
-  | 'blocking'
-  /** Renders a script tag with the `type="module"` attribute to defer loading until after HTML parsing. */
-  | 'deferred'
-  /** Renders a script tag with an async loaded in the head as soon as possible. */
-  | 'hoisted'
+  /** Renders the script inline blocking HTML parsing until the script loads and executes. */
+  | 'block'
+  /** Adds `type="module"` attribute to defer loading the script until after HTML parsing. */
+  | 'defer'
+  /** Loads the script in the head of the document as soon as possible. */
+  | 'hoist'
 
 interface ScriptProps {
   /** The variant of script to render. Defaults to `defer`. */
@@ -26,7 +26,7 @@ interface ScriptProps {
 
 /** Renders a script tag with the provided script content. */
 export async function Script(props: ScriptProps & Record<string, any>) {
-  const { variant = 'deferred', nonce, children, ...args } = props
+  const { variant = 'block', nonce, children, ...args } = props
   const module = await children
   const fn = module?.default
 
@@ -38,7 +38,7 @@ export async function Script(props: ScriptProps & Record<string, any>) {
   const argLiteral = args === undefined ? 'undefined' : JSON.stringify(args)
   const code = `void (${fnSource})(${argLiteral});\n`
 
-  if (variant === 'hoisted') {
+  if (variant === 'hoist') {
     const base64 = Buffer.from(code, 'utf8').toString('base64')
     return (
       <script
@@ -52,7 +52,7 @@ export async function Script(props: ScriptProps & Record<string, any>) {
   return (
     <script
       nonce={nonce}
-      type={variant === 'deferred' ? 'module' : undefined}
+      type={variant === 'defer' ? 'module' : undefined}
       children={code.replace(/<\/script/gi, '<\\/script>')}
     />
   )
