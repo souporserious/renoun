@@ -1,4 +1,4 @@
-A tiny helper that lets you author a client-side script using a normal source file that is then injected into HTML either **inline**, **deferred**, or **as a hoisted data URL**. This is useful for small scripts like analytics snippets, theme preferences, feature flags, or bootstrapping navigation active states.
+A tiny helper that lets you author a client-side script using an imported source file that is then injected into the HTML. This is useful for small scripts like analytics snippets, theme preferences, feature flags, or bootstrapping navigation active states.
 
 ## Quick start
 
@@ -8,7 +8,7 @@ import { Script } from 'renoun'
 export default function Page() {
   return (
     <>
-      {/* Hoist for earliest execution */}
+      {/* Hoist to the document head for the earliest execution */}
       <Script variant="hoist">{import('./table-of-contents-script.ts')}</Script>
 
       {/* Or inline blocking (default) */}
@@ -137,7 +137,7 @@ Only import code you control. If an attacker can alter the imported module (user
 
 ### Variants & CSP
 
-- `defer` / `inline`: literal `<script>` body.
+- `block` / `defer`: literal `<script>` body.
 - `hoist`: `<script async src="data:text/javascript;base64,…">` (needs `data:` in `script-src`).
 
 Provide a nonce (or hash) under CSP:
@@ -146,12 +146,12 @@ Provide a nonce (or hash) under CSP:
 <Script nonce={nonce}>{import('./snippet.ts')}</Script>
 ```
 
-Inline/defer need a nonce or hash; hoist additionally needs `data:` allowed (or use defer). Prefer nonces over `'unsafe-inline'`.
+Block/defer need a nonce or hash; hoist additionally needs `data:` allowed (or use defer). Prefer nonces over `'unsafe-inline'`.
 
 ### XSS considerations
 
-HTML inside the function body isn't parsed as markup—it's just JS source—but **any attacker-controlled interpolation into that function becomes code**. Do not template untrusted input into the exported function.
+HTML inside the function body isn't parsed as markup, it's just JavaScript source, but **any attacker-controlled interpolation into that function becomes code**. Do not template untrusted input into the exported function.
 
 ### Keep it small
 
-Hoisted base64 inflates HTML; reserve for tiny early snippets (theme, flags, analytics). Use regular bundling for larger logic.
+When using `hoist`, the source is converted to base64 which inflates the HTML. Reserve for tiny early snippets (theme, flags, analytics). Use regular bundling for larger logic.
