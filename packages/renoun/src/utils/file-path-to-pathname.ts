@@ -1,6 +1,6 @@
 import { posix } from 'node:path'
+import { createSlug } from '@renoun/mdx/utils'
 
-import { createSlug } from './create-slug.js'
 import { normalizeSlashes } from './path.js'
 
 /** Converts a file system path to a URL-friendly pathname. */

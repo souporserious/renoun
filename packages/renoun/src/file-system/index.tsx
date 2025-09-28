@@ -1,14 +1,19 @@
 import * as React from 'react'
 import type { MDXContent } from '@renoun/mdx'
-import { rehypePlugins, remarkPlugins } from '@renoun/mdx'
-import { getMDXExportStaticValues, getMDXRuntimeValue } from '@renoun/mdx/utils'
+import { rehypePlugins } from '@renoun/mdx/rehype'
+import { remarkPlugins } from '@renoun/mdx/remark'
+import {
+  createSlug,
+  getMDXExportStaticValues,
+  getMDXRuntimeValue,
+  type SlugCasing,
+} from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
 import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
 import { CodeInline, parseCodeProps } from '../components/CodeInline.js'
 import type { MDXComponents } from '../mdx/index.js'
 import { getFileExportMetadata } from '../project/client.js'
-import { createSlug, type SlugCasings } from '../utils/create-slug.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import { getClosestFile } from '../utils/get-closest-file.js'
 import { getEditorUri } from '../utils/get-editor-uri.js'
@@ -285,7 +290,7 @@ export interface FileOptions<
 > {
   path: Path
   basePathname?: string | null
-  slugCasing?: SlugCasings
+  slugCasing?: SlugCasing
   depth?: number
   directory?: Directory<
     Types,
@@ -308,7 +313,7 @@ export class File<
   #extension?: Extension
   #path: string
   #basePathname?: string | null
-  #slugCasing: SlugCasings
+  #slugCasing: SlugCasing
   #directory: Directory<DirectoryTypes>
 
   constructor(options: FileOptions<DirectoryTypes, Path>) {
@@ -605,7 +610,7 @@ export class JavaScriptModuleExport<Value> {
   #name: string
   #file: JavaScriptFile<any>
   #loader?: ModuleLoader<any>
-  #slugCasing: SlugCasings
+  #slugCasing: SlugCasing
   #location: Omit<ModuleExport, 'name'> | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
   #staticPromise?: Promise<Value>
@@ -615,7 +620,7 @@ export class JavaScriptModuleExport<Value> {
     name: string,
     file: JavaScriptFile<any>,
     loader?: ModuleLoader<any>,
-    slugCasing?: SlugCasings
+    slugCasing?: SlugCasing
   ) {
     this.#name = name
     this.#file = file
@@ -627,7 +632,7 @@ export class JavaScriptModuleExport<Value> {
     name: string,
     file: JavaScriptFile<any>,
     loader?: ModuleLoader<any>,
-    slugCasing?: SlugCasings
+    slugCasing?: SlugCasing
   ): Promise<JavaScriptModuleExport<Value>> {
     const fileExport = new JavaScriptModuleExport<Value>(
       name,
@@ -941,7 +946,7 @@ export class JavaScriptFile<
 > extends File<DirectoryTypes, Path, Extension> {
   #exports = new Map<string, JavaScriptModuleExport<any>>()
   #loader?: ModuleLoader<Types>
-  #slugCasing?: SlugCasings
+  #slugCasing?: SlugCasing
   #modulePromise?: Promise<any>
 
   constructor({
@@ -1187,7 +1192,7 @@ export class MDXModuleExport<Value> {
   #name: string
   #file: MDXFile<any>
   #loader?: ModuleLoader<any>
-  #slugCasing: SlugCasings
+  #slugCasing: SlugCasing
   #staticPromise?: Promise<Value>
   #runtimePromise?: Promise<Value>
 
@@ -1195,7 +1200,7 @@ export class MDXModuleExport<Value> {
     name: string,
     file: MDXFile<any>,
     loader?: ModuleLoader<any>,
-    slugCasing?: SlugCasings
+    slugCasing?: SlugCasing
   ) {
     this.#name = name
     this.#file = file
@@ -1403,7 +1408,7 @@ export class MDXFile<
 > extends File<DirectoryTypes, Path, Extension> {
   #exports = new Map<string, MDXModuleExport<any>>()
   #loader?: ModuleLoader<{ default: MDXContent } & Types>
-  #slugCasing?: SlugCasings
+  #slugCasing?: SlugCasing
   #staticExportValues?: Map<string, unknown>
   #modulePromise?: Promise<any>
 
@@ -1602,7 +1607,7 @@ export interface DirectoryOptions<
   tsConfigPath?: string
 
   /** Slug casing applied to route segments. */
-  slugCasing?: SlugCasings
+  slugCasing?: SlugCasing
 
   /** Custom file‑system adapter. */
   fileSystem?: FileSystem
@@ -1628,7 +1633,7 @@ export class Directory<
   #rootPath?: string
   #basePathname?: string | null
   #tsConfigPath?: string
-  #slugCasing: SlugCasings
+  #slugCasing: SlugCasing
   #loader?: Loaders
   #directory?: Directory<any, any, any>
   #fileSystem: FileSystem | undefined

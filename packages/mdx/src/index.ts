@@ -5,9 +5,11 @@ export type { MDXHeadings } from './remark/add-headings.js'
 export { rehypePlugins } from './rehype/index.js'
 export { remarkPlugins } from './remark/index.js'
 export {
+  createSlug,
   getMarkdownContent,
   getMDXExportStaticValues,
   getMDXRuntimeValue,
+  type SlugCasing,
   type MarkdownComponents,
   type MarkdownContentOptions,
 } from './utils/index.js'

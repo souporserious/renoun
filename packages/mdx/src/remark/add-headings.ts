@@ -7,6 +7,8 @@ import { visit } from 'unist-util-visit'
 import { toString } from 'mdast-util-to-string'
 import 'mdast-util-mdx'
 
+import { createSlug } from '../utils/create-slug.js'
+
 declare module 'unified' {
   interface Data {
     isMarkdown?: boolean
@@ -420,18 +422,4 @@ function makeJsxElement(tagName: string, mdastChildren: any[]): any {
     },
     children: mdastChildren.map((child) => mdastNodeToJsxChild(child)),
   }
-}
-
-/** Create a slug from a string. */
-function createSlug(input: string) {
-  return input
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '') // strip diacritics
-    .replace(/[\u200B-\u200D\uFEFF]/g, '') // strip zero-width
-    .replace(/([a-z\d])([A-Z])/g, '$1-$2') // split camelCase
-    .replace(/[\p{Pd}\s_]+/gu, '-') // spaces/any dash → -
-    .replace(/[^\p{Letter}\p{Number}-]+/gu, '') // drop other punct/symbols
-    .replace(/-+/g, '-') // collapse ---
-    .replace(/^-+|-+$/g, '') // trim -
-    .toLowerCase()
 }
