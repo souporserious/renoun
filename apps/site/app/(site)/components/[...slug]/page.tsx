@@ -162,8 +162,7 @@ export default async function Component({
       },
       ...componentExports.map((componentExport) => ({
         level: 3,
-        id: componentExport.getSlug(),
-        children: componentExport.getName(),
+        id: componentExport.getName(),
         text: componentExport.getName(),
       }))
     )

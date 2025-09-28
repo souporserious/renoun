@@ -161,7 +161,7 @@ async function ReferenceAsync({
     ...defaultComponents,
     ...components,
   }
-  const slug = source.getSlug()
+  const id = source.getName()
 
   return (
     <BaseDirectoryContext value={filePath ? dirname(filePath) : undefined}>
@@ -171,14 +171,14 @@ async function ReferenceAsync({
             key={index}
             node={type}
             components={mergedComponents}
-            slug={slug}
+            id={id}
           />
         ))
       ) : (
         <TypeNodeRouter
           node={resolvedType}
           components={mergedComponents}
-          slug={slug}
+          id={id}
         />
       )}
     </BaseDirectoryContext>
@@ -188,32 +188,30 @@ async function ReferenceAsync({
 function TypeNodeRouter({
   node,
   components,
-  slug,
+  id,
 }: {
   node: Kind
   components: InternalReferenceComponents
-  slug: string
+  id: string
 }) {
   switch (node.kind) {
     case 'Variable':
-      return <VariableSection node={node} components={components} slug={slug} />
+      return <VariableSection node={node} components={components} id={id} />
     case 'Class':
-      return <ClassSection node={node} components={components} slug={slug} />
+      return <ClassSection node={node} components={components} id={id} />
     case 'Component':
-      return (
-        <ComponentSection node={node} components={components} slug={slug} />
-      )
+      return <ComponentSection node={node} components={components} id={id} />
     case 'Function':
-      return <FunctionSection node={node} components={components} slug={slug} />
+      return <FunctionSection node={node} components={components} id={id} />
     case 'Interface':
-      return <MembersSection node={node} components={components} slug={slug} />
+      return <MembersSection node={node} components={components} id={id} />
     case 'TypeAlias':
       if (node.type.kind === 'TypeLiteral') {
         return (
           <MembersSection
             node={node as Kind.TypeAlias<Kind.TypeLiteral>}
             components={components}
-            slug={slug}
+            id={id}
           />
         )
       }
@@ -222,20 +220,16 @@ function TypeNodeRouter({
           <IntersectionSection
             node={node.type}
             components={components}
-            slug={slug}
+            id={id}
             title={node.name}
           />
         )
       }
-      return (
-        <TypeAliasSection node={node} components={components} slug={slug} />
-      )
+      return <TypeAliasSection node={node} components={components} id={id} />
     case 'MappedType':
-      return <MappedSection node={node} components={components} slug={slug} />
+      return <MappedSection node={node} components={components} id={id} />
     case 'IntersectionType':
-      return (
-        <IntersectionSection node={node} components={components} slug={slug} />
-      )
+      return <IntersectionSection node={node} components={components} id={id} />
     case 'UnionType':
     case 'Tuple':
     case 'TypeLiteral':
@@ -360,18 +354,18 @@ function TypeTable<RowType>({
 function VariableSection({
   node,
   components,
-  slug,
+  id,
 }: {
   node: TypeOfKind<'Variable'>
   components: InternalReferenceComponents
-  slug: string
+  id: string
 }) {
   return (
     <TypeSection
       label="Variable"
       title={node.name}
       description={node.description}
-      id={slug}
+      id={id}
       components={components}
     >
       <TypeDetail label="Type" components={components}>
@@ -458,18 +452,18 @@ function renderMethodSubRow(
 function ClassSection({
   node,
   components,
-  slug,
+  id,
 }: {
   node: TypeOfKind<'Class'>
   components: InternalReferenceComponents
-  slug: string
+  id: string
 }) {
   return (
     <TypeSection
       label="Class"
       title={node.name}
       description={node.description}
-      id={slug}
+      id={id}
       components={components}
     >
       {node.properties?.length ? (
@@ -528,18 +522,18 @@ function ClassSection({
 function ComponentSection({
   node,
   components,
-  slug,
+  id,
 }: {
   node: TypeOfKind<'Component'>
   components: InternalReferenceComponents
-  slug: string
+  id: string
 }) {
   return (
     <TypeSection
       label="Component"
       title={node.name}
       description={node.description}
-      id={slug}
+      id={id}
       components={components}
     >
       <components.Signatures>
@@ -624,18 +618,18 @@ function renderParameterRow(
 function FunctionSection({
   node,
   components,
-  slug,
+  id,
 }: {
   node: TypeOfKind<'Function'>
   components: InternalReferenceComponents
-  slug: string
+  id: string
 }) {
   return (
     <TypeSection
       label="Function"
       title={node.name}
       description={node.description}
-      id={slug}
+      id={id}
       components={components}
     >
       <components.Signatures>
@@ -669,18 +663,18 @@ function FunctionSection({
 function TypeAliasSection({
   node,
   components,
-  slug,
+  id,
 }: {
   node: TypeOfKind<'TypeAlias'>
   components: InternalReferenceComponents
-  slug: string
+  id: string
 }) {
   return (
     <TypeSection
       label={kindToLabel(node.type.kind)}
       title={node.name}
       description={node.description}
-      id={slug}
+      id={id}
       components={components}
     >
       <TypeDetail label="Type" components={components}>
@@ -693,11 +687,11 @@ function TypeAliasSection({
 function MembersSection({
   node,
   components,
-  slug,
+  id,
 }: {
   node: Kind.Interface | Kind.TypeAlias<Kind.TypeLiteral>
   components: InternalReferenceComponents
-  slug: string
+  id: string
 }) {
   const members = node.kind === 'Interface' ? node.members : node.type.members
   let propertySignatures: Kind.PropertySignature[] = []
@@ -723,7 +717,7 @@ function MembersSection({
       label={node.kind === 'Interface' ? 'Interface' : 'Type Literal'}
       title={node.name}
       description={node.description}
-      id={slug}
+      id={id}
       components={components}
     >
       {propertySignatures.length > 0 ? (
@@ -807,23 +801,18 @@ function MembersSection({
 function MappedSection({
   node,
   components,
-  slug,
+  id,
 }: {
   node: TypeOfKind<'MappedType'>
   components: InternalReferenceComponents
-  slug: string
+  id: string
 }) {
   const parameterText = `${node.typeParameter.name} in ${node.typeParameter.constraintType?.text ?? '?'}`
   const valueText = node.type.text
 
   // TODO: this needs an incoming name prop that will be provided by the enclosing declaration
   return (
-    <TypeSection
-      label="Mapped Type"
-      title="-"
-      id={slug}
-      components={components}
-    >
+    <TypeSection label="Mapped Type" title="-" id={id} components={components}>
       <TypeDetail label="Parameter" components={components}>
         <components.Code>{parameterText}</components.Code>
       </TypeDetail>
@@ -844,12 +833,12 @@ function MappedSection({
 function IntersectionSection({
   node,
   components,
-  slug,
+  id,
   title,
 }: {
   node: TypeOfKind<'IntersectionType'>
   components: InternalReferenceComponents
-  slug: string
+  id: string
   title?: string
 }) {
   // Always collect properties from TypeLiteral/Mapped members and render other members alongside.
@@ -896,7 +885,7 @@ function IntersectionSection({
     <TypeSection
       label={title ? 'Intersection Type' : 'Intersection'}
       title={title ?? '-'}
-      id={slug}
+      id={id}
       components={components}
     >
       {rows.length > 0 ? (
