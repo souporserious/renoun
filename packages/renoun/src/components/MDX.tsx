@@ -1,9 +1,8 @@
 import * as React from 'react'
-import type { CompileOptions } from '@mdx-js/mdx'
-import type { MDXComponents } from '@renoun/mdx'
+import type { MDXComponents, PluggableList } from '@renoun/mdx'
+import { getMDXRuntimeValue } from '@renoun/mdx/utils'
 
 import { useMDXComponents } from '../mdx/components.js'
-import { getMDXRuntimeValue } from '../utils/get-mdx-runtime-value.js'
 
 export interface MDXProps {
   /** The MDX content to render. */
@@ -19,10 +18,10 @@ export interface MDXProps {
   dependencies?: Record<string, any>
 
   /** Remark plugins to use. See [PluggableList](https://github.com/unifiedjs/unified?tab=readme-ov-file#pluggablelist) for more info. */
-  remarkPlugins?: CompileOptions['remarkPlugins']
+  remarkPlugins?: PluggableList
 
   /** Rehype plugins to use. See [PluggableList](https://github.com/unifiedjs/unified?tab=readme-ov-file#pluggablelist) for more info. */
-  rehypePlugins?: CompileOptions['rehypePlugins']
+  rehypePlugins?: PluggableList
 
   /** Base URL to resolve imports and named exports from (e.g. `import.meta.url`) */
   baseUrl?: string
@@ -36,13 +35,10 @@ export async function MDX({
   children,
   components = useMDXComponents(),
   dependencies,
-  remarkPlugins: remarkPluginsProp,
-  rehypePlugins: rehypePluginsProp,
+  remarkPlugins,
+  rehypePlugins,
   baseUrl,
 }: MDXProps) {
-  let remarkPlugins: CompileOptions['remarkPlugins'] = remarkPluginsProp
-  let rehypePlugins: CompileOptions['rehypePlugins'] = rehypePluginsProp
-
   if (remarkPlugins === undefined && rehypePlugins === undefined) {
     remarkPlugins = (await import('@renoun/mdx/remark')).remarkPlugins
     rehypePlugins = (await import('@renoun/mdx/rehype')).rehypePlugins

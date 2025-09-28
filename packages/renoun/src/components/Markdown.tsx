@@ -1,25 +1,11 @@
-import type { PluggableList } from 'unified'
-import { unified } from 'unified'
-import { visit } from 'unist-util-visit'
-import remarkParse from 'remark-parse'
-import remarkRehype from 'remark-rehype'
-import type { Root, Properties } from 'hast'
-import { toJsxRuntime } from 'hast-util-to-jsx-runtime'
+import {
+  getMarkdownContent,
+  type MarkdownComponents,
+  type PluggableList,
+} from '@renoun/mdx'
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 
-import { urlAttributes } from '../utils/url-attributes.js'
-
-declare module 'unified' {
-  interface Data {
-    isMarkdown?: boolean
-  }
-}
-
-export type MarkdownComponents = {
-  [Key in keyof React.JSX.IntrinsicElements]?:
-    | React.ComponentType<React.JSX.IntrinsicElements[Key]>
-    | keyof React.JSX.IntrinsicElements
-}
+export type { MarkdownComponents }
 
 export interface MarkdownProps {
   /** The markdown content to render. */
@@ -42,76 +28,15 @@ export async function Markdown({
   remarkPlugins = [],
   rehypePlugins = [],
 }: MarkdownProps) {
-  const processor = unified()
-    .data('isMarkdown', true)
-    .use(remarkParse)
-    .use(remarkPlugins)
-    .use(remarkRehype, { allowDangerousHtml: true })
-    .use(rehypeSafe)
-    .use(rehypePlugins)
-  const hast = await processor.run(processor.parse(children))
-
-  return toJsxRuntime(hast, {
-    Fragment,
-    jsx,
-    jsxs,
+  return getMarkdownContent({
+    source: children,
     components,
+    remarkPlugins,
+    rehypePlugins,
+    runtime: {
+      Fragment,
+      jsx,
+      jsxs,
+    },
   })
-}
-
-interface RehypeSafeOptions {
-  urlTransform?: (context: {
-    /** The sanitized URL string. */
-    url: string
-
-    /** The attribute name. */
-    name: keyof Properties
-
-    /** The stringified attribute value. */
-    value: string
-  }) => string
-}
-
-const safeProtocol = /^(https?|ircs?|mailto|xmpp)$/i
-
-/** Rehype plugin to sanitize URLs in HTML attributes and stringify raw HTML. */
-function rehypeSafe({ urlTransform }: RehypeSafeOptions = {}) {
-  return (tree: Root) => {
-    visit(tree, (node, index, parent) => {
-      if (node.type === 'element') {
-        for (const name in urlAttributes) {
-          if (
-            Object.prototype.hasOwnProperty.call(urlAttributes, name) &&
-            node.properties &&
-            Object.prototype.hasOwnProperty.call(node.properties, name)
-          ) {
-            const tags = (urlAttributes as any)[name] as string[] | null
-            if (tags === null || tags.includes(node.tagName)) {
-              const value = String(node.properties[name] ?? '')
-              const schemeMatch = value.match(/^([^:/?#]+):/)
-              let url = schemeMatch
-                ? safeProtocol.test(schemeMatch[1])
-                  ? value
-                  : ''
-                : value
-
-              if (urlTransform) {
-                url = urlTransform({ url, name, value })
-              }
-
-              node.properties[name] = url
-            }
-          }
-        }
-      }
-
-      if (node.type === 'raw' && parent && typeof index === 'number') {
-        parent.children[index] = {
-          type: 'text',
-          value: node.value,
-        }
-        return index
-      }
-    })
-  }
 }

@@ -1,6 +1,7 @@
 import * as React from 'react'
 import type { MDXContent } from '@renoun/mdx'
 import { rehypePlugins, remarkPlugins } from '@renoun/mdx'
+import { getMDXExportStaticValues, getMDXRuntimeValue } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
 import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
@@ -13,8 +14,6 @@ import { getClosestFile } from '../utils/get-closest-file.js'
 import { getEditorUri } from '../utils/get-editor-uri.js'
 import type { ModuleExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
-import { getMDXExportStaticValues } from '../utils/get-mdx-export-static-values.js'
-import { getMDXRuntimeValue } from '../utils/get-mdx-runtime-value.js'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
