@@ -1,7 +1,7 @@
 import * as jsxRuntime from 'react/jsx-runtime'
 import * as jsxDevRuntime from 'react/jsx-dev-runtime'
 import type { CompileOptions } from '@mdx-js/mdx'
-import type { MDXContent } from '@renoun/mdx'
+import type { MDXContent } from 'mdx/types.js'
 import type { VFileMessage } from 'vfile-message'
 
 /** Compiles and executes a string of MDX content. */

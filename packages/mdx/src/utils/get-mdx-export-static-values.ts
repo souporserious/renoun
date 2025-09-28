@@ -220,15 +220,21 @@ function evaluate(node: Node, scope: Map<string, any>): any {
     }
     case 'NewExpression':
       if (node.callee.type === 'Identifier' && node.callee.name === 'Date') {
-        const args = (node.arguments ?? []).map((arg) =>
-          arg?.type === 'SpreadElement'
-            ? evaluate(arg.argument, scope)
-            : evaluate(arg, scope)
-        )
+        const args = (node.arguments ?? []).map((argument): unknown => {
+          if (!argument) {
+            return undefined
+          }
+
+          if (argument.type === 'SpreadElement') {
+            return evaluate(argument.argument as Node, scope)
+          }
+
+          return evaluate(argument as Node, scope)
+        })
 
         // Guard against non-primitive args to avoid evaluating arbitrary objects.
         if (
-          args.some((arg) => {
+          args.some((arg: unknown) => {
             return (
               arg !== null && typeof arg === 'object' && !(arg instanceof Date)
             )

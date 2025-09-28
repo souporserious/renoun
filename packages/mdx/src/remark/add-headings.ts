@@ -1,5 +1,6 @@
 import type { Processor } from 'unified'
 import type { Root, Heading } from 'mdast'
+import type { Properties } from 'hast'
 import type { VFile } from 'vfile'
 import { define } from 'unist-util-mdx-define'
 import { visit } from 'unist-util-visit'
@@ -14,7 +15,7 @@ declare module 'unified' {
 
 declare module 'mdast' {
   interface Data {
-    hProperties?: Record<string, any>
+    hProperties?: Properties
   }
 }
 
