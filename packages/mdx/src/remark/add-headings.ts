@@ -26,7 +26,7 @@ export interface AddHeadingsOptions {
   allowGetHeadings?: boolean
 }
 
-export type MDXHeadings = {
+export type Headings = {
   /** The slugified heading text. */
   id: string
 

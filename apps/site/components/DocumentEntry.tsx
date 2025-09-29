@@ -1,4 +1,4 @@
-import type { Collection, MDXFile, MDXHeadings } from 'renoun'
+import type { Collection, MDXFile, Headings } from 'renoun'
 
 import { TableOfContents } from '@/components/TableOfContents'
 import { SiblingLink } from './SiblingLink'
@@ -10,7 +10,7 @@ export async function DocumentEntry({
   shouldRenderUpdatedAt = true,
 }: {
   file: MDXFile<{
-    headings: MDXHeadings
+    headings: Headings
     metadata: {
       title: string
       description: string

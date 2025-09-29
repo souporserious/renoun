@@ -1,6 +1,6 @@
 import React, { useId } from 'react'
 
-import type { MDXHeadings } from '../../mdx/index.js'
+import type { Headings } from '../../mdx/index.js'
 import { Script } from '../Script.js'
 import { Register } from './Register.js'
 
@@ -39,7 +39,7 @@ export interface TableOfContentsComponents {
 
 export interface TableOfContentsProps {
   /** The headings to display within the table of contents. */
-  headings: MDXHeadings
+  headings: Headings
 
   /** Override the default component renderers. */
   components?: Partial<TableOfContentsComponents>

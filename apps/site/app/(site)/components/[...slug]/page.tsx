@@ -5,7 +5,7 @@ import {
   ModuleExportNotFoundError,
   type JavaScriptFile,
   type JavaScriptModuleExport,
-  type MDXHeadings,
+  type Headings,
   Link,
 } from 'renoun'
 
@@ -127,10 +127,10 @@ export default async function Component({
     collection: RootCollection,
   })
 
-  let headings: MDXHeadings = []
+  let headings: Headings = []
 
   if (mdxHeadings) {
-    headings.push(...(mdxHeadings as MDXHeadings))
+    headings.push(...(mdxHeadings as Headings))
   }
 
   if (examplesExports.length) {

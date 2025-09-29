@@ -4,7 +4,7 @@ import {
   isFile,
   withSchema,
   type FileSystemEntry,
-  type MDXHeadings,
+  type Headings,
 } from 'renoun'
 import { z } from 'zod'
 
@@ -51,7 +51,7 @@ export const FileSystemDirectory = new Directory({
   basePathname: 'utilities',
   loader: {
     mdx: withSchema<{
-      headings: MDXHeadings
+      headings: Headings
     }>(
       (path) => import(`../../../packages/renoun/src/file-system/${path}.mdx`)
     ),

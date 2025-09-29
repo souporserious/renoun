@@ -6,7 +6,7 @@ import {
   Link,
   type JavaScriptFile,
   type JavaScriptModuleExport,
-  type MDXHeadings,
+  type Headings,
 } from 'renoun'
 
 import { RootCollection, HooksDirectory } from '@/collections'
@@ -89,10 +89,10 @@ export default async function Hook({
     collection: RootCollection,
   })
 
-  let headings: MDXHeadings = []
+  let headings: Headings = []
 
   if (mdxHeadings) {
-    headings.push(...(mdxHeadings as MDXHeadings))
+    headings.push(...(mdxHeadings as Headings))
   }
 
   if (examplesExports.length) {

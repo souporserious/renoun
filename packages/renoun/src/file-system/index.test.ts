@@ -7,7 +7,7 @@ import * as v from 'valibot'
 import { z } from 'zod'
 
 import type { basename } from '#fixtures/utils/path.ts'
-import type { MDXContent, MDXHeadings } from '../mdx'
+import type { MDXContent, Headings } from '../mdx'
 import { NodeFileSystem } from './NodeFileSystem'
 import { MemoryFileSystem } from './MemoryFileSystem'
 import {
@@ -1799,7 +1799,7 @@ describe('file system', () => {
     function Document(props: {
       file?: MDXFile<{
         default: MDXContent
-        headings: MDXHeadings
+        headings: Headings
         metadata: {
           title: string
           description: string
