@@ -1,5 +1,4 @@
 import React, { useId } from 'react'
-import { GlobalStyles } from 'restyle'
 
 import type { Headings } from '../../mdx/index.js'
 import { Script } from '../Script.js'
@@ -151,13 +150,6 @@ export function TableOfContents({
 
   return (
     <Root aria-labelledby={rootId}>
-      <GlobalStyles>
-        {{
-          html: {
-            scrollBehavior: 'smooth',
-          },
-        }}
-      </GlobalStyles>
       <Title id={rootId} />
       {renderItems(items)}
       {children}

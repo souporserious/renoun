@@ -58,6 +58,11 @@ export default function ({
     const nextActiveLink = getLink(target.id)
     if (nextActiveLink) {
       nextActiveLink.setAttribute('aria-current', 'location')
+      nextActiveLink.scrollIntoView({
+        behavior: smoothScrollBehavior,
+        block: 'nearest',
+      })
+      history.pushState(null, '', '#' + target.id)
       if (previousActiveLink) {
         previousActiveLink.removeAttribute('aria-current')
       }
@@ -93,19 +98,16 @@ export default function ({
     }
   }
 
-  document.addEventListener(
-    'click',
-    (event) => {
-      if (!(event.target instanceof HTMLAnchorElement)) return
-      const href = event.target.href
-      if (!href?.includes('#')) return
-      const id = href.slice(href.indexOf('#') + 1)
-      const section = document.getElementById(id)
-      if (!section) return
-      setActiveLink(section)
-    },
-    { passive: true }
-  )
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof HTMLAnchorElement)) return
+    const href = event.target.href
+    if (!href?.includes('#')) return
+    const id = href.slice(href.indexOf('#') + 1)
+    const section = document.getElementById(id)
+    if (!section) return
+    event.preventDefault()
+    setActiveLink(section)
+  })
 
   window.__TableOfContents__ = {
     register: (targetIds: string[]) => {
