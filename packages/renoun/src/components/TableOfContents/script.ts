@@ -22,8 +22,6 @@ export default function ({
   const smoothScrollBehavior: ScrollBehavior = prefersReducedMotion
     ? 'auto'
     : 'smooth'
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-  const epsilon = Math.max(1, (window.devicePixelRatio ?? 1) * 0.5)
   let previousActiveLink: HTMLAnchorElement | null = null
   let isScrollingIntoView = false
   let lastScrollY = 0
@@ -46,22 +44,12 @@ export default function ({
       if (current === document.body) return document.body as HTMLElement
       const element = current as HTMLElement
       const { overflow, overflowX, overflowY } = getComputedStyle(element)
-      if (/(auto|scroll|hidden)/.test(overflow + overflowX + overflowY)) {
+      if (/(auto|scroll)/.test(overflow + overflowX + overflowY)) {
         return element
       }
       current = element.parentNode
     }
     return document.body as HTMLElement
-  }
-
-  function isScrolledToEndY(node: Element | Window): boolean {
-    const scroller =
-      node === window
-        ? document.scrollingElement || document.documentElement
-        : (node as Element)
-    const max = scroller.scrollHeight - scroller.clientHeight
-    const top = (scroller as HTMLElement).scrollTop ?? window.scrollY
-    return max - top <= epsilon
   }
 
   function setActiveLink(target: HTMLElement): void {
@@ -105,15 +93,19 @@ export default function ({
     }
   }
 
-  document.addEventListener('click', (event) => {
-    if (!(event.target instanceof HTMLAnchorElement)) return
-    const href = event.target.href
-    if (!href?.includes('#')) return
-    const id = href.slice(href.indexOf('#') + 1)
-    const section = document.getElementById(id)
-    if (!section) return
-    setActiveLink(section)
-  })
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (!(event.target instanceof HTMLAnchorElement)) return
+      const href = event.target.href
+      if (!href?.includes('#')) return
+      const id = href.slice(href.indexOf('#') + 1)
+      const section = document.getElementById(id)
+      if (!section) return
+      setActiveLink(section)
+    },
+    { passive: true }
+  )
 
   window.__TableOfContents__ = {
     register: (targetIds: string[]) => {
@@ -149,51 +141,27 @@ export default function ({
 
         const targetElement = targetElements[bestIndex]
         const nextActiveLink = linkForHeading.get(targetElement)
+        const lastIndex = targetElements.length - 1
 
         if (nextActiveLink !== previousActiveLink) {
           if (previousActiveLink) {
             previousActiveLink.removeAttribute('aria-current')
           }
           if (nextActiveLink) {
-            let viewport!: HTMLElement
             nextActiveLink.setAttribute('aria-current', 'location')
 
             // Keep the active link visible within its scrollable container.
-            const isFirst = bestIndex === 0
-            const isLast = bestIndex === targetElements.length - 1
-            if (isFirst || isLast) {
-              viewport = getClosestViewport(nextActiveLink)
+            const viewport = getClosestViewport(nextActiveLink)
+            if (bestIndex === lastIndex) {
               viewport.scrollTo({
-                top: isLast ? viewport.scrollHeight : 0,
-                behavior: isSafari ? 'auto' : smoothScrollBehavior,
+                top: viewport.scrollHeight,
+                behavior: smoothScrollBehavior,
               })
             } else {
               nextActiveLink.scrollIntoView({
-                behavior: isSafari ? 'auto' : smoothScrollBehavior,
+                behavior: smoothScrollBehavior,
                 block: 'nearest',
               })
-            }
-
-            // If main page is at end, ensure link's immediate viewport is also at end.
-            if (isScrolledToEndY(window)) {
-              if (viewport === undefined) {
-                viewport = getClosestViewport(nextActiveLink)
-              }
-              if (viewport === (document.body as HTMLElement)) {
-                return
-              }
-
-              const distanceFromBottom =
-                viewport.scrollHeight -
-                viewport.clientHeight -
-                viewport.scrollTop
-              const atEnd = distanceFromBottom <= epsilon
-              if (!atEnd) {
-                viewport.scrollTo({
-                  top: viewport.scrollHeight,
-                  behavior: isSafari ? 'auto' : smoothScrollBehavior,
-                })
-              }
             }
           }
           previousActiveLink = nextActiveLink ?? null
