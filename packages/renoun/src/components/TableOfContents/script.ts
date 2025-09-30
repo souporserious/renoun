@@ -23,6 +23,7 @@ export default function ({
     ? 'auto'
     : 'smooth'
   let previousActiveLink: HTMLAnchorElement | null = null
+  let previousLastSectionInView = false
   let isScrollingIntoView = false
   let lastScrollY = 0
   let rafId = 0
@@ -73,18 +74,17 @@ export default function ({
       )
     } else {
       cancelFrame()
-      let stillCount = 0
+      let still = 0
       const step = (): void => {
         const y = window.scrollY
         if (Math.abs(y - lastScrollY) < 1) {
-          stillCount++
-          if (stillCount > 4) {
+          if (++still > 4) {
             isScrollingIntoView = false
             cancelFrame()
             return
           }
         } else {
-          stillCount = 0
+          still = 0
         }
         lastScrollY = y
         rafId = requestAnimationFrame(step)
@@ -115,33 +115,45 @@ export default function ({
 
       if (targetElements.length === 0) return
 
-      const linkForHeading = new Map<HTMLElement, HTMLAnchorElement | null>(
+      const linkFor = new Map<HTMLElement, HTMLAnchorElement | null>(
         targetElements.map((target) => [target, getLink(target.id)])
       )
+
+      const lastIndex = targetElements.length - 1
+      const lastTarget = targetElements[lastIndex]
+      const lastLink = lastTarget ? linkFor.get(lastTarget) : null
 
       function update(): void {
         if (isScrollingIntoView) return
 
-        const offsetTop = window.innerHeight * activationRatio
+        const vh = window.innerHeight || document.documentElement.clientHeight
+        const vw = window.innerWidth || document.documentElement.clientWidth
+        const offsetTop = vh * activationRatio
         let bestIndex = 0
         let bestTop = -Infinity
+        let lastSectionInView = false
 
         for (let index = 0; index < targetElements.length; index++) {
-          const target = targetElements[index]
-          const { top } = target.getBoundingClientRect()
+          const rect = targetElements[index].getBoundingClientRect()
 
-          if (top <= offsetTop) {
-            if (top > bestTop) {
-              bestTop = top
-              bestIndex = index
-            }
-            continue
+          if (rect.top <= offsetTop && rect.top > bestTop) {
+            bestTop = rect.top
+            bestIndex = index
+          }
+
+          if (
+            index === lastIndex &&
+            rect.bottom > 0 &&
+            rect.right > 0 &&
+            rect.top < vh &&
+            rect.left < vw
+          ) {
+            lastSectionInView = true
           }
         }
 
         const targetElement = targetElements[bestIndex]
-        const nextActiveLink = linkForHeading.get(targetElement)
-        const lastIndex = targetElements.length - 1
+        const nextActiveLink = linkFor.get(targetElement) ?? null
 
         if (nextActiveLink !== previousActiveLink) {
           if (previousActiveLink) {
@@ -149,23 +161,30 @@ export default function ({
           }
           if (nextActiveLink) {
             nextActiveLink.setAttribute('aria-current', 'location')
-
-            // Keep the active link visible within its scrollable container.
-            const viewport = getClosestViewport(nextActiveLink)
-            if (bestIndex === lastIndex) {
-              viewport.scrollTo({
-                top: viewport.scrollHeight,
-                behavior: smoothScrollBehavior,
-              })
-            } else {
-              nextActiveLink.scrollIntoView({
-                behavior: smoothScrollBehavior,
-                block: 'nearest',
-              })
-            }
           }
-          previousActiveLink = nextActiveLink ?? null
+          previousActiveLink = nextActiveLink
         }
+
+        // If the last section is visible but not active, scroll the links viewport to the end.
+        if (lastSectionInView) {
+          if (
+            !previousLastSectionInView &&
+            bestIndex !== lastIndex &&
+            lastLink
+          ) {
+            const viewport = getClosestViewport(lastLink)
+            viewport.scrollTo({
+              top: viewport.scrollHeight,
+              behavior: smoothScrollBehavior,
+            })
+          }
+        } else if (previousActiveLink) {
+          previousActiveLink.scrollIntoView({
+            behavior: smoothScrollBehavior,
+            block: 'nearest',
+          })
+        }
+        previousLastSectionInView = lastSectionInView
       }
 
       const intersectionObserver = new IntersectionObserver(update, {
