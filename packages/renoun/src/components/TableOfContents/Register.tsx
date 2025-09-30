@@ -7,7 +7,6 @@ import React, { useEffect } from 'react'
  */
 export function Register({ ids }: { ids: string[] }) {
   useEffect(() => {
-    // TODO: fix navigation flickering from v DOM update
     window.__TableOfContents__?.register(ids)
   }, [])
 

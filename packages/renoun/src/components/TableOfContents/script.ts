@@ -2,192 +2,213 @@ declare global {
   interface Window {
     __TableOfContents__: {
       register: (ids: string[]) => void
-      isDelegated: boolean
     }
   }
 }
 
 /**
- * Script to manage active heading state in the table of contents.
+ * Script to manage active target state in the table of contents.
  * @internal
  */
-export default function (): void {
-  if (!window.__TableOfContents__) {
-    window.__TableOfContents__ = {
-      register: () => {},
-      isDelegated: false,
-    }
-  }
-
-  let observer: IntersectionObserver | null = null
-  let isManualScrolling = false
-  let links: Map<string, HTMLAnchorElement | null> = new Map()
-  let visibility: Map<string, number> = new Map()
-  let rafId = 0
+export default function ({
+  activationRatio = 0.333,
+}: {
+  /** A number between `0` and `1` representing which portion of the viewport height from top the target becomes active. */
+  activationRatio?: number
+}): void {
+  const prefersReducedMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)'
+  ).matches
+  const smoothScrollBehavior: ScrollBehavior = prefersReducedMotion
+    ? 'auto'
+    : 'smooth'
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+  const epsilon = Math.max(1, (window.devicePixelRatio ?? 1) * 0.5)
+  let previousActiveLink: HTMLAnchorElement | null = null
+  let isScrollingIntoView = false
   let lastScrollY = 0
-  let activeId: string | null = null
-  const currentIds = new Set<string>()
+  let rafId = 0
 
   function cancelFrame(): void {
     if (rafId) cancelAnimationFrame(rafId)
     rafId = 0
   }
 
-  function setActive(id: string | null): void {
-    if (!id || id === activeId) return
-    activeId = id
-    for (const [key, element] of links) {
-      if (!element) continue
-      if (key === id) element.setAttribute('aria-current', 'location')
-      else element.removeAttribute('aria-current')
-    }
-  }
-
-  function pickBestVisible(): string | null {
-    let best: string | null = null
-    let bestRatio = 0
-    for (const [id, ratio] of visibility) {
-      if (ratio > bestRatio) {
-        best = id
-        bestRatio = ratio
-      }
-    }
-    return bestRatio > 0 ? best : null
-  }
-
-  function reset(): void {
-    cancelFrame()
-    if (observer) observer.disconnect()
-    observer = null
-    activeId = null
-    isManualScrolling = false
-    currentIds.clear()
-    links.clear()
-    visibility.clear()
-  }
-
-  function observe(ids: string[]): void {
-    observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const id = (entry.target as HTMLElement).id
-          visibility.set(id, entry.isIntersecting ? entry.intersectionRatio : 0)
-        }
-        if (isManualScrolling) return
-        setActive(pickBestVisible())
-      },
-      {
-        root: null,
-        rootMargin: '0px 0px -66.6% 0px',
-        threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
-      }
+  function getLink(id: string): HTMLAnchorElement | null {
+    return document.querySelector<HTMLAnchorElement>(
+      `:is(ol, ul) a[href="#${id}"]`
     )
-    for (const id of ids) {
-      const section = document.getElementById(id)
-      if (section) observer.observe(section)
-    }
   }
 
-  function delegate(): void {
-    document.addEventListener('click', (event) => {
-      const targetNode = event.target
-      if (!(targetNode instanceof Element)) return
+  function getClosestViewport(node: HTMLElement): HTMLElement {
+    let current: ParentNode | null = node.parentNode
+    while (current) {
+      if (current === document.body) return document.body as HTMLElement
+      const element = current as HTMLElement
+      const { overflow, overflowX, overflowY } = getComputedStyle(element)
+      if (/(auto|scroll|hidden)/.test(overflow + overflowX + overflowY)) {
+        return element
+      }
+      current = element.parentNode
+    }
+    return document.body as HTMLElement
+  }
 
-      const link = targetNode.closest<HTMLAnchorElement>('a[href^="#"]')
-      if (!link) return
+  function isScrolledToEndY(node: Element | Window): boolean {
+    const scroller =
+      node === window
+        ? document.scrollingElement || document.documentElement
+        : (node as Element)
+    const max = scroller.scrollHeight - scroller.clientHeight
+    const top = (scroller as HTMLElement).scrollTop ?? window.scrollY
+    return max - top <= epsilon
+  }
 
-      const rawId = link.hash ? decodeURIComponent(link.hash.slice(1)) : ''
-      if (!rawId || !currentIds.has(rawId)) return
+  function setActiveLink(target: HTMLElement): void {
+    isScrollingIntoView = true
+    const nextActiveLink = getLink(target.id)
+    if (nextActiveLink) {
+      nextActiveLink.setAttribute('aria-current', 'location')
+      if (previousActiveLink) {
+        previousActiveLink.removeAttribute('aria-current')
+      }
+      previousActiveLink = nextActiveLink
+    }
 
-      const sameDocument =
-        (link.origin === location.origin || !link.origin) &&
-        (link.pathname === location.pathname || link.pathname === '')
-      if (!sameDocument) return
-
-      const section = document.getElementById(rawId)
-      if (!section) return
-
-      event.preventDefault()
-      history.pushState(null, '', '#' + rawId)
-      setActive(rawId)
-
-      isManualScrolling = true
-      if ('onscrollend' in window) {
-        window.addEventListener(
-          'scrollend',
-          () => {
-            isManualScrolling = false
-          },
-          { passive: true, once: true } as AddEventListenerOptions
-        )
-      } else {
-        cancelFrame()
-        let stillCount = 0
-        const step = (): void => {
-          const y = window.scrollY
-          if (Math.abs(y - lastScrollY) < 1) {
-            stillCount++
-            if (stillCount > 4) {
-              isManualScrolling = false
-              cancelFrame()
-              return
-            }
-          } else {
-            stillCount = 0
+    if ('onscrollend' in window) {
+      window.addEventListener(
+        'scrollend',
+        () => {
+          isScrollingIntoView = false
+        },
+        { passive: true, once: true }
+      )
+    } else {
+      cancelFrame()
+      let stillCount = 0
+      const step = (): void => {
+        const y = window.scrollY
+        if (Math.abs(y - lastScrollY) < 1) {
+          stillCount++
+          if (stillCount > 4) {
+            isScrollingIntoView = false
+            cancelFrame()
+            return
           }
-          lastScrollY = y
-          rafId = requestAnimationFrame(step)
+        } else {
+          stillCount = 0
         }
+        lastScrollY = y
         rafId = requestAnimationFrame(step)
       }
-
-      section.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
+      rafId = requestAnimationFrame(step)
+    }
   }
 
-  function bootstrapActive(ids: string[]): void {
-    const hashId = decodeURIComponent(location.hash.slice(1))
-    if (hashId && ids.includes(hashId)) {
-      setActive(hashId)
-      return
-    }
-    let bestId: string | null = null
-    let bestDistance = 1e12
-    for (const id of ids) {
-      const element = document.getElementById(id)
-      if (!element) continue
-      const top = element.getBoundingClientRect().top
-      const distance = Math.abs(top)
-      if (distance < bestDistance) {
-        bestDistance = distance
-        bestId = id
-      }
-    }
-    if (bestId) setActive(bestId)
-  }
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof HTMLAnchorElement)) return
+    const href = event.target.href
+    if (!href?.includes('#')) return
+    const id = href.slice(href.indexOf('#') + 1)
+    const section = document.getElementById(id)
+    if (!section) return
+    setActiveLink(section)
+  })
 
-  function register(ids: string[]): void {
-    reset()
-    for (const id of ids) currentIds.add(id)
+  window.__TableOfContents__ = {
+    register: (targetIds: string[]) => {
+      const targetElements = targetIds
+        .map((id) => document.getElementById(id))
+        .filter(Boolean) as HTMLElement[]
 
-    function select(id: string) {
-      return document.querySelector<HTMLAnchorElement>(
-        'a[href="#' + CSS.escape(id) + '"]'
+      if (targetElements.length === 0) return
+
+      const linkForHeading = new Map<HTMLElement, HTMLAnchorElement | null>(
+        targetElements.map((target) => [target, getLink(target.id)])
       )
-    }
-    for (const id of ids) {
-      links.set(id, select(id))
-    }
-    visibility = new Map(ids.map((id) => [id, 0]))
 
-    observe(ids)
-    bootstrapActive(ids)
+      function update(): void {
+        if (isScrollingIntoView) return
 
-    if (window.__TableOfContents__?.isDelegated === false) {
-      delegate()
-      window.__TableOfContents__!.isDelegated = true
-    }
+        const offsetTop = window.innerHeight * activationRatio
+        let bestIndex = 0
+        let bestTop = -Infinity
+
+        for (let index = 0; index < targetElements.length; index++) {
+          const target = targetElements[index]
+          const { top } = target.getBoundingClientRect()
+
+          if (top <= offsetTop) {
+            if (top > bestTop) {
+              bestTop = top
+              bestIndex = index
+            }
+            continue
+          }
+        }
+
+        const targetElement = targetElements[bestIndex]
+        const nextActiveLink = linkForHeading.get(targetElement)
+
+        if (nextActiveLink !== previousActiveLink) {
+          if (previousActiveLink) {
+            previousActiveLink.removeAttribute('aria-current')
+          }
+          if (nextActiveLink) {
+            let viewport!: HTMLElement
+            nextActiveLink.setAttribute('aria-current', 'location')
+
+            // Keep the active link visible within its scrollable container.
+            const isFirst = bestIndex === 0
+            const isLast = bestIndex === targetElements.length - 1
+            if (isFirst || isLast) {
+              viewport = getClosestViewport(nextActiveLink)
+              viewport.scrollTo({
+                top: isLast ? viewport.scrollHeight : 0,
+                behavior: isSafari ? 'auto' : smoothScrollBehavior,
+              })
+            } else {
+              nextActiveLink.scrollIntoView({
+                behavior: isSafari ? 'auto' : smoothScrollBehavior,
+                block: 'nearest',
+              })
+            }
+
+            // If main page is at end, ensure link's immediate viewport is also at end.
+            if (isScrolledToEndY(window)) {
+              if (viewport === undefined) {
+                viewport = getClosestViewport(nextActiveLink)
+              }
+              if (viewport === (document.body as HTMLElement)) {
+                return
+              }
+
+              const distanceFromBottom =
+                viewport.scrollHeight -
+                viewport.clientHeight -
+                viewport.scrollTop
+              const atEnd = distanceFromBottom <= epsilon
+              if (!atEnd) {
+                viewport.scrollTo({
+                  top: viewport.scrollHeight,
+                  behavior: isSafari ? 'auto' : smoothScrollBehavior,
+                })
+              }
+            }
+          }
+          previousActiveLink = nextActiveLink ?? null
+        }
+      }
+
+      const intersectionObserver = new IntersectionObserver(update, {
+        root: null,
+        rootMargin: `-${activationRatio * 100}% 0px 0px 0px`,
+        threshold: [0, 1],
+      })
+
+      targetElements.forEach((target) => intersectionObserver.observe(target))
+
+      update()
+    },
   }
-
-  window.__TableOfContents__!.register = register
 }

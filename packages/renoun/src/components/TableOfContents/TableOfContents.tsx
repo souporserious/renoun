@@ -1,4 +1,5 @@
 import React, { useId } from 'react'
+import { GlobalStyles } from 'restyle'
 
 import type { Headings } from '../../mdx/index.js'
 import { Script } from '../Script.js'
@@ -48,6 +49,13 @@ export interface TableOfContentsProps {
   children?: React.ReactNode
 }
 
+interface TableOfContentsItem {
+  id: string
+  level: number
+  label: React.ReactNode
+  children: TableOfContentsItem[]
+}
+
 const defaultComponents: TableOfContentsComponents = {
   Root: (props) => <nav {...props} />,
   Title: ({ children = 'On this page', ...props }) => (
@@ -79,14 +87,6 @@ export function TableOfContents({
     ...components,
   }
   const filteredHeadings = headings.filter((heading) => heading.level > 1)
-
-  interface TableOfContentsItem {
-    id: string
-    level: number
-    title: React.ReactNode
-    children: TableOfContentsItem[]
-  }
-
   const items: TableOfContentsItem[] = []
   if (filteredHeadings.length > 0) {
     const baseLevel = filteredHeadings[0].level
@@ -97,9 +97,11 @@ export function TableOfContents({
       const node: TableOfContentsItem = {
         id: heading.id,
         level: heading.level,
-        title: heading.children ?? heading.text,
+        label: heading.children ?? heading.text,
         children: [],
       }
+
+      headingIds.add(heading.id)
 
       if (depth === 0) {
         items.push(node)
@@ -129,19 +131,16 @@ export function TableOfContents({
     }
     return (
       <List depth={depth}>
-        {items.map((item) => {
-          headingIds.add(item.id)
-          return (
-            <Item key={item.id}>
-              <Link href={`#${item.id}`} suppressHydrationWarning>
-                {item.title}
-              </Link>
-              {item.children.length > 0
-                ? renderItems(item.children, depth + 1)
-                : null}
-            </Item>
-          )
-        })}
+        {items.map((item) => (
+          <Item key={item.id}>
+            <Link href={`#${item.id}`} suppressHydrationWarning>
+              {item.label}
+            </Link>
+            {item.children.length > 0
+              ? renderItems(item.children, depth + 1)
+              : null}
+          </Item>
+        ))}
       </List>
     )
   }
@@ -152,6 +151,13 @@ export function TableOfContents({
 
   return (
     <Root aria-labelledby={rootId}>
+      <GlobalStyles>
+        {{
+          html: {
+            scrollBehavior: 'smooth',
+          },
+        }}
+      </GlobalStyles>
       <Title id={rootId} />
       {renderItems(items)}
       {children}
