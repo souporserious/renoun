@@ -111,7 +111,12 @@ export interface ReferenceProps {
 }
 
 /** Resolves TypeScript and JSDoc types from all module exports in a source file. */
-export function Reference(props: ReferenceProps) {
+export const Reference =
+  process.env.NODE_ENV === 'development'
+    ? ReferenceWithFallback
+    : ReferenceAsync
+
+function ReferenceWithFallback(props: ReferenceProps) {
   return (
     <Suspense>
       <ReferenceAsync {...props} />
