@@ -6,9 +6,9 @@ import { ClientConfigProvider } from './Config/ClientConfigContext.js'
 import { ServerConfigContext } from './Config/ServerConfigContext.js'
 import { defaultConfig } from './Config/default-config.js'
 import type { ConfigurationOptions, ThemeValue } from './Config/types.js'
-import { Refresh } from './Refresh'
+import { Refresh } from './Refresh/index.js'
 import { TableOfContentsScript } from './TableOfContents/TableOfContents.js'
-import { ThemeProvider } from './Theme'
+import { ThemeProvider } from './Theme/index.js'
 
 type HtmlProps = React.ComponentProps<'html'>
 type HeadProps = React.ComponentProps<'head'>
