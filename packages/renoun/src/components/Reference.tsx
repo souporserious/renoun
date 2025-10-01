@@ -254,23 +254,26 @@ function TypeNodeRouter({
 }
 
 function TypeSection({
-  label,
+  kind,
   title,
   description,
   id,
   children,
   components,
 }: {
-  label: string
+  kind: string
   title?: string
   description?: string
   id?: string
   children: React.ReactNode
   components: InternalReferenceComponents
 }) {
+  const headingId = `${kind}_${React.useId()}`
+  const label = kindToLabel(kind)
   return (
-    <components.Section id={id}>
+    <components.Section id={id} aria-labelledby={headingId}>
       <components.SectionHeading
+        id={headingId}
         aria-label={title ? `${title} ${label}` : label}
       >
         <span>{label}</span> {title}
@@ -298,10 +301,14 @@ function TypeDetail({
   children: React.ReactNode
   components: InternalReferenceComponents
 }) {
+  const headingId =
+    typeof label === 'string' ? `${label}_${React.useId()}` : undefined
   return (
-    <components.Detail>
+    <components.Detail aria-labelledby={headingId}>
       {label ? (
-        <components.DetailHeading>{label}</components.DetailHeading>
+        <components.DetailHeading id={headingId}>
+          {label}
+        </components.DetailHeading>
       ) : null}
       {children}
     </components.Detail>
@@ -367,7 +374,7 @@ function VariableSection({
 }) {
   return (
     <TypeSection
-      label="Variable"
+      kind="Variable"
       title={node.name}
       description={node.description}
       id={id}
@@ -392,9 +399,12 @@ function renderClassPropertyRow(
         {property.isOptional ? '?' : ''}
       </components.TableData>
       <components.TableData index={1} hasSubRow={hasSubRow}>
-        <components.Code>{property.text}</components.Code>
+        <components.Code>{property.type.text}</components.Code>
       </components.TableData>
       <components.TableData index={2} hasSubRow={hasSubRow}>
+        {renderClassMemberModifiers(property, components)}
+      </components.TableData>
+      <components.TableData index={3} hasSubRow={hasSubRow}>
         <InitializerValue
           initializer={property.initializer}
           components={components}
@@ -410,14 +420,23 @@ function renderMethodRow(
   hasSubRow: boolean
 ) {
   const signature = method.signatures[0]
+  const overloadCount = method.signatures.length - 1
 
   return (
     <>
       <components.TableData index={0} hasSubRow={hasSubRow}>
         {method.name}
       </components.TableData>
-      <components.TableData index={1} hasSubRow={hasSubRow} colSpan={2}>
-        <components.Code>{signature.text}</components.Code>
+      <components.TableData index={1} hasSubRow={hasSubRow}>
+        <components.Code>
+          {signature.text}
+          {overloadCount > 0
+            ? ` (+${overloadCount} overload${overloadCount > 1 ? 's' : ''})`
+            : ''}
+        </components.Code>
+      </components.TableData>
+      <components.TableData index={2} hasSubRow={hasSubRow}>
+        {renderClassMemberModifiers(method, components)}
       </components.TableData>
     </>
   )
@@ -427,31 +446,281 @@ function renderMethodSubRow(
   method: NonNullable<TypeOfKind<'Class'>['methods']>[number],
   components: InternalReferenceComponents
 ) {
-  // TODO: Handle multiple signatures
-  const signature = method.signatures[0]
+  const documentation = renderDocumentation(method, components)
+  const multipleSignatures = method.signatures.length > 1
+  const signatureDetails: React.ReactNode[] = []
+
+  method.signatures.forEach((signature, index) => {
+    const detail = renderCallSignatureDetails(signature, components, {
+      heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
+      showSignatureText: multipleSignatures,
+    })
+
+    if (detail) {
+      signatureDetails.push(
+        <React.Fragment key={index}>{detail}</React.Fragment>
+      )
+    }
+  })
+
+  if (!documentation && signatureDetails.length === 0) {
+    return null
+  }
+
+  return (
+    <components.Column gap="large">
+      {documentation}
+      {signatureDetails}
+    </components.Column>
+  )
+}
+
+function renderClassPropertySubRow(
+  property: NonNullable<TypeOfKind<'Class'>['properties']>[number],
+  components: InternalReferenceComponents
+) {
+  return renderDocumentation(property, components)
+}
+
+function renderAccessorRow(
+  accessor: NonNullable<TypeOfKind<'Class'>['accessors']>[number],
+  components: InternalReferenceComponents,
+  hasSubRow: boolean
+) {
+  const accessorTypeText =
+    accessor.kind === 'ClassGetAccessor'
+      ? accessor.returnType.text
+      : accessor.parameter.type.text
+
+  return (
+    <>
+      <components.TableData index={0} hasSubRow={hasSubRow}>
+        {accessor.kind === 'ClassGetAccessor' ? 'get' : 'set'} {accessor.name}
+      </components.TableData>
+      <components.TableData index={1} hasSubRow={hasSubRow}>
+        <components.Code>{accessorTypeText}</components.Code>
+      </components.TableData>
+      <components.TableData index={2} hasSubRow={hasSubRow}>
+        {renderClassMemberModifiers(accessor, components)}
+      </components.TableData>
+    </>
+  )
+}
+
+function renderAccessorSubRow(
+  accessor: NonNullable<TypeOfKind<'Class'>['accessors']>[number],
+  components: InternalReferenceComponents
+) {
+  const documentation = renderDocumentation(accessor, components)
+  const parameterDetail =
+    accessor.kind === 'ClassSetAccessor' ? (
+      <TypeDetail label="Parameter" components={components}>
+        <TypeTable
+          rows={[accessor.parameter]}
+          headers={['Parameter', 'Type', 'Default Value']}
+          renderRow={(parameter, hasSubRow) =>
+            renderParameterRow(parameter, components, hasSubRow)
+          }
+          components={components}
+        />
+      </TypeDetail>
+    ) : null
+
+  if (!documentation && !parameterDetail) {
+    return null
+  }
 
   return (
     <components.Column gap="medium">
-      {signature.parameters.length ? (
-        <TypeDetail label="Parameters" components={components}>
-          <TypeTable
-            rows={signature.parameters}
-            headers={['Parameter', 'Type', 'Default Value']}
-            renderRow={(parameter, hasSubRow) =>
-              renderParameterRow(parameter, components, hasSubRow)
-            }
-            components={components}
-          />
-        </TypeDetail>
-      ) : null}
-
-      {signature.returnType ? (
-        <TypeDetail label="Returns" components={components}>
-          <components.Code>{signature.returnType.text}</components.Code>
-        </TypeDetail>
-      ) : null}
+      {documentation}
+      {parameterDetail}
     </components.Column>
   )
+}
+
+function renderClassMemberModifiers(
+  member:
+    | NonNullable<TypeOfKind<'Class'>['accessors']>[number]
+    | NonNullable<TypeOfKind<'Class'>['properties']>[number]
+    | NonNullable<TypeOfKind<'Class'>['methods']>[number],
+  components: InternalReferenceComponents
+) {
+  const modifiers: string[] = []
+
+  if (member.visibility) {
+    modifiers.push(member.visibility)
+  }
+
+  if (member.scope) {
+    modifiers.push(member.scope)
+  }
+
+  if ('isReadonly' in member && member.isReadonly) {
+    modifiers.push('readonly')
+  }
+
+  if ('isOverride' in member && member.isOverride) {
+    modifiers.push('override')
+  }
+
+  if (modifiers.length === 0) {
+    return <components.Code>—</components.Code>
+  }
+
+  return <components.Code>{modifiers.join(' ')}</components.Code>
+}
+
+function renderDocumentation(
+  documentable: Pick<Kind.SharedDocumentable, 'description' | 'tags'>,
+  components: InternalReferenceComponents
+) {
+  const items: React.ReactNode[] = []
+
+  if (documentable.description) {
+    items.push(
+      <components.Description key="description">
+        {documentable.description}
+      </components.Description>
+    )
+  }
+
+  const tagsNode = renderTags(documentable.tags, components)
+
+  if (tagsNode) {
+    items.push(<React.Fragment key="tags">{tagsNode}</React.Fragment>)
+  }
+
+  if (items.length === 0) {
+    return null
+  }
+
+  return <components.Column gap="medium">{items}</components.Column>
+}
+
+function renderTags(
+  tags: Kind.SharedDocumentable['tags'],
+  components: InternalReferenceComponents
+) {
+  if (!tags || tags.length === 0) {
+    return null
+  }
+
+  return (
+    <TypeDetail label="Tags" components={components}>
+      <components.Column gap="small">
+        {tags.map((tag, index) => (
+          <components.Code key={index}>{formatTag(tag)}</components.Code>
+        ))}
+      </components.Column>
+    </TypeDetail>
+  )
+}
+
+function formatTag(tag: { name: string; text?: string }) {
+  return tag.text ? `@${tag.name} ${tag.text}` : `@${tag.name}`
+}
+
+function renderCallSignatureDetails(
+  signature: TypeOfKind<'CallSignature'>,
+  components: InternalReferenceComponents,
+  options: { heading?: string; showSignatureText?: boolean } = {}
+) {
+  const items: React.ReactNode[] = []
+
+  if (options.heading) {
+    items.push(
+      <components.DetailHeading key="heading">
+        {options.heading}
+      </components.DetailHeading>
+    )
+  }
+
+  if (options.showSignatureText) {
+    items.push(
+      <components.Code key="signature-text">{signature.text}</components.Code>
+    )
+  }
+
+  const documentation = renderDocumentation(signature, components)
+
+  if (documentation) {
+    items.push(
+      <React.Fragment key="documentation">{documentation}</React.Fragment>
+    )
+  }
+
+  if (signature.typeParameters?.length) {
+    items.push(
+      <TypeDetail
+        label="Type Parameters"
+        components={components}
+        key="generics"
+      >
+        <components.Column gap="small">
+          {signature.typeParameters.map((typeParameter, index) => (
+            <components.Code key={typeParameter.name ?? index}>
+              {typeParameter.text}
+            </components.Code>
+          ))}
+        </components.Column>
+      </TypeDetail>
+    )
+  }
+
+  if (signature.thisType) {
+    items.push(
+      <TypeDetail label="This Type" components={components} key="this">
+        <components.Code>{signature.thisType.text}</components.Code>
+      </TypeDetail>
+    )
+  }
+
+  if (signature.parameters.length) {
+    items.push(
+      <TypeDetail label="Parameters" components={components} key="parameters">
+        <TypeTable
+          rows={signature.parameters}
+          headers={['Parameter', 'Type', 'Default Value']}
+          renderRow={(parameter, hasSubRow) =>
+            renderParameterRow(parameter, components, hasSubRow)
+          }
+          components={components}
+        />
+      </TypeDetail>
+    )
+  }
+
+  if (signature.returnType) {
+    items.push(
+      <TypeDetail label="Returns" components={components} key="returns">
+        <components.Code>{signature.returnType.text}</components.Code>
+      </TypeDetail>
+    )
+  }
+
+  const signatureModifiers: string[] = []
+
+  if (signature.isAsync) {
+    signatureModifiers.push('async')
+  }
+
+  if (signature.isGenerator) {
+    signatureModifiers.push('generator')
+  }
+
+  if (signatureModifiers.length) {
+    items.push(
+      <TypeDetail label="Modifiers" components={components} key="modifiers">
+        <components.Code>{signatureModifiers.join(', ')}</components.Code>
+      </TypeDetail>
+    )
+  }
+
+  if (items.length === 0) {
+    return null
+  }
+
+  return <components.Column gap="medium">{items}</components.Column>
 }
 
 function ClassSection({
@@ -465,19 +734,53 @@ function ClassSection({
 }) {
   return (
     <TypeSection
-      label="Class"
+      kind="Class"
       title={node.name}
       description={node.description}
       id={id}
       components={components}
     >
+      {node.constructor ? (
+        <TypeDetail label="Constructor" components={components}>
+          {renderDocumentation(node.constructor, components)}
+          <components.Signatures>
+            {node.constructor.signatures.map((signature, index) => (
+              <React.Fragment key={index}>
+                {renderCallSignatureDetails(signature, components, {
+                  showSignatureText: true,
+                })}
+              </React.Fragment>
+            ))}
+          </components.Signatures>
+        </TypeDetail>
+      ) : null}
+
+      {node.accessors?.length ? (
+        <TypeDetail label="Accessors" components={components}>
+          <TypeTable
+            rows={node.accessors}
+            headers={['Accessor', 'Type', 'Modifiers']}
+            renderRow={(accessor, hasSubRow) =>
+              renderAccessorRow(accessor, components, hasSubRow)
+            }
+            renderSubRow={(accessor) =>
+              renderAccessorSubRow(accessor, components)
+            }
+            components={components}
+          />
+        </TypeDetail>
+      ) : null}
+
       {node.properties?.length ? (
         <TypeDetail label="Properties" components={components}>
           <TypeTable
             rows={node.properties}
-            headers={['Property', 'Type', 'Default Value']}
+            headers={['Property', 'Type', 'Modifiers', 'Default Value']}
             renderRow={(property, hasSubRow) =>
               renderClassPropertyRow(property, components, hasSubRow)
+            }
+            renderSubRow={(property) =>
+              renderClassPropertySubRow(property, components)
             }
             components={components}
           />
@@ -488,7 +791,7 @@ function ClassSection({
         <TypeDetail label="Methods" components={components}>
           <TypeTable
             rows={node.methods}
-            headers={['Method', 'Type']}
+            headers={['Method', 'Type', 'Modifiers']}
             renderRow={(method, hasSubRow) =>
               renderMethodRow(method, components, hasSubRow)
             }
@@ -535,7 +838,7 @@ function ComponentSection({
 }) {
   return (
     <TypeSection
-      label="Component"
+      kind="Component"
       title={node.name}
       description={node.description}
       id={id}
@@ -629,37 +932,29 @@ function FunctionSection({
   components: InternalReferenceComponents
   id: string
 }) {
+  const multipleSignatures = node.signatures.length > 1
+
   return (
     <TypeSection
-      label="Function"
+      kind="Function"
       title={node.name}
       description={node.description}
       id={id}
       components={components}
     >
       <components.Signatures>
-        {node.signatures.map((signature, index) => (
-          <components.Column key={index} gap="large">
-            {signature.parameters.length > 0 ? (
-              <TypeDetail label="Parameters" components={components}>
-                <TypeTable
-                  rows={signature.parameters}
-                  headers={['Parameter', 'Type', 'Default Value']}
-                  renderRow={(param, hasSubRow) =>
-                    renderParameterRow(param, components, hasSubRow)
-                  }
-                  components={components}
-                />
-              </TypeDetail>
-            ) : null}
+        {node.signatures.map((signature, index) => {
+          const detail = renderCallSignatureDetails(signature, components, {
+            heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
+            showSignatureText: true,
+          })
 
-            {signature.returnType ? (
-              <TypeDetail label="Returns" components={components}>
-                <components.Code>{signature.returnType.text}</components.Code>
-              </TypeDetail>
-            ) : null}
-          </components.Column>
-        ))}
+          if (!detail) {
+            return null
+          }
+
+          return <React.Fragment key={index}>{detail}</React.Fragment>
+        })}
       </components.Signatures>
     </TypeSection>
   )
@@ -676,7 +971,7 @@ function TypeAliasSection({
 }) {
   return (
     <TypeSection
-      label={kindToLabel(node.type.kind)}
+      kind="TypeAlias"
       title={node.name}
       description={node.description}
       id={id}
@@ -719,7 +1014,7 @@ function MembersSection({
 
   return (
     <TypeSection
-      label={node.kind === 'Interface' ? 'Interface' : 'Type Literal'}
+      kind={node.kind}
       title={node.name}
       description={node.description}
       id={id}
@@ -817,7 +1112,7 @@ function MappedSection({
 
   // TODO: this needs an incoming name prop that will be provided by the enclosing declaration
   return (
-    <TypeSection label="Mapped Type" title="-" id={id} components={components}>
+    <TypeSection kind="MappedType" id={id} components={components}>
       <TypeDetail label="Parameter" components={components}>
         <components.Code>{parameterText}</components.Code>
       </TypeDetail>
@@ -888,8 +1183,8 @@ function IntersectionSection({
 
   return (
     <TypeSection
-      label={title ? 'Intersection Type' : 'Intersection'}
-      title={title ?? '-'}
+      kind="IntersectionType"
+      title={title}
       id={id}
       components={components}
     >
@@ -934,10 +1229,8 @@ function TypeExpressionSection({
   node: Kind.TypeExpression
   components: InternalReferenceComponents
 }) {
-  const label = kindToLabel(node.kind)
-
   return (
-    <TypeSection label={label} title={'-'} components={components}>
+    <TypeSection kind={node.kind} components={components}>
       <TypeDetail label="Type" components={components}>
         <components.Code>{node.text}</components.Code>
       </TypeDetail>
