@@ -1,5 +1,3 @@
-import * as React from 'react'
-
 import { Link, Logo, JavaScriptFile } from 'renoun'
 
 const file = new JavaScriptFile({

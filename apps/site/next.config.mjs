@@ -15,12 +15,6 @@ export default withMDX({
   output: 'export',
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   transpilePackages: ['renoun'],
-  webpack(config) {
-    config.resolve.extensionAlias = {
-      '.js': ['.ts', '.tsx', '.js'],
-    }
-    return config
-  },
   async redirects() {
     const checkoutUrl = process.env.TEMPLATE_CHECKOUT_URL
 

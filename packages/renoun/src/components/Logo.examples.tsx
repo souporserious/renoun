@@ -1,5 +1,3 @@
-import React from 'react'
-
 import { Logo } from 'renoun'
 
 export function GitHost() {

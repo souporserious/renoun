@@ -1,7 +1,7 @@
 /** @jsxImportSource restyle */
 import { Reference, type ReferenceComponents, Markdown } from 'renoun'
 
-export function BasicUsage() {
+export default function () {
   return (
     <div
       css={{
@@ -11,7 +11,7 @@ export function BasicUsage() {
       }}
     >
       <Reference
-        source="./examples/Button.tsx"
+        source="./fixtures/Button.tsx"
         baseDirectory={import.meta.url}
         components={components}
       />

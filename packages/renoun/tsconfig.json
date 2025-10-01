@@ -22,11 +22,11 @@
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": [
-    "**/*.examples.tsx",
     "**/examples/**",
-    "**/*.bench.ts",
-    "**/*.test.ts",
     "**/tests/**",
+    "**/*.examples.*",
+    "**/*.bench.*",
+    "**/*.test.*",
     "dist",
     "node_modules"
   ]

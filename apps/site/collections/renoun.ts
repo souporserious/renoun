@@ -68,14 +68,14 @@ export const ComponentsDirectory = new Directory({
     ts: withSchema<ComponentSchema>(
       (path) =>
         import(
-          /* webpackExclude: /\.test\.ts$/ */
+          /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
           `../../../packages/renoun/src/components/${path}.ts`
         )
     ),
     tsx: withSchema<ComponentSchema>(
       (path) =>
         import(
-          /* webpackExclude: /\.test\.tsx$/ */
+          /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
           `../../../packages/renoun/src/components/${path}.tsx`
         )
     ),
@@ -108,14 +108,14 @@ export const HooksDirectory = new Directory({
     ts: withSchema<HookSchema>(
       (path) =>
         import(
-          /* webpackExclude: /\.test\.ts$/ */
+          /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
           `../../../packages/renoun/src/hooks/${path}.ts`
         )
     ),
     tsx: withSchema<HookSchema>(
       (path) =>
         import(
-          /* webpackExclude: /\.test\.tsx$/ */
+          /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
           `../../../packages/renoun/src/hooks/${path}.tsx`
         )
     ),

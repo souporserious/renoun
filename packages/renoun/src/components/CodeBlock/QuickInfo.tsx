@@ -1,7 +1,8 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
+import { rehypePlugins } from '@renoun/mdx/rehype'
+import { remarkPlugins } from '@renoun/mdx/remark'
 
-import { rehypePlugins, remarkPlugins } from '../../mdx/index.js'
 import { getTokens } from '../../project/client.js'
 import {
   getThemeColors,

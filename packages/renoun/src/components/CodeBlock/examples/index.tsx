@@ -1,4 +1,3 @@
-import React from 'react'
 import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun'
 
 export function Basic() {

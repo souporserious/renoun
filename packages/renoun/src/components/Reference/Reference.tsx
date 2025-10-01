@@ -4,13 +4,13 @@ import { dirname, resolve } from 'node:path'
 import {
   JavaScriptFile,
   type JavaScriptModuleExport,
-} from '../file-system/index.js'
+} from '../../file-system/index.js'
 import {
   type Kind,
   type TypeFilter,
   type TypeOfKind,
-} from '../utils/resolve-type.js'
-import { BaseDirectoryContext } from './Context.js'
+} from '../../utils/resolve-type.js'
+import { BaseDirectoryContext } from '../Context.js'
 
 type GapSize = 'small' | 'medium' | 'large'
 

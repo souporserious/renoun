@@ -1,4 +1,3 @@
-import React from 'react'
 import { Copyright } from 'renoun'
 
 export function Basic() {
@@ -16,7 +15,7 @@ export function HideLabel() {
 export function StartYear() {
   return (
     <div style={{ display: 'flex' }}>
-      <Copyright startYear={2020} /> JSXUI
+      <Copyright startYear={2024} /> renoun
     </div>
   )
 }

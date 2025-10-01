@@ -32,7 +32,7 @@ export {
   Reference,
   type ReferenceProps,
   type ReferenceComponents,
-} from './Reference.js'
+} from './Reference/index.js'
 export {
   TableOfContents,
   type TableOfContentsProps,
