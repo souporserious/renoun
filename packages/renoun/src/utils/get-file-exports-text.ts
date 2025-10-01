@@ -161,11 +161,47 @@ function buildDeclarationMap(
       tsMorph.Node.isEnumDeclaration(statement)
     ) {
       const nameNode = statement.getNameNode()
-      if (!nameNode) continue
-      const symbolId = nameNode.getText()
+      let symbolId: string | undefined = nameNode?.getText()
+
+      if (!symbolId && isAnonymousDefaultExportStatement(statement)) {
+        symbolId = 'default'
+      }
+
+      // For named default function/class exports (e.g. `export default function Page() {}`),
+      // include both the local name (for dependency/reference resolution) and a synthetic 'default' entry (for export semantics).
+      const isNamedDefault =
+        !!nameNode &&
+        hasModifier(statement, tsMorph.SyntaxKind.DefaultKeyword) &&
+        hasModifier(statement, tsMorph.SyntaxKind.ExportKeyword) &&
+        (tsMorph.Node.isFunctionDeclaration(statement) ||
+          tsMorph.Node.isClassDeclaration(statement))
+
+      if (!symbolId) {
+        continue
+      }
 
       map.set(symbolId, {
         symbolId,
+        node: statement,
+        dependsOn: new Set(),
+        importsUsed: new Set(),
+      })
+
+      if (isNamedDefault && symbolId !== 'default' && !map.has('default')) {
+        map.set('default', {
+          symbolId: 'default',
+          node: statement,
+          dependsOn: new Set(),
+          importsUsed: new Set(),
+        })
+      }
+    } else if (
+      tsMorph.Node.isExportAssignment(statement) &&
+      !statement.isExportEquals()
+    ) {
+      // export default <expression>
+      map.set('default', {
+        symbolId: 'default',
         node: statement,
         dependsOn: new Set(),
         importsUsed: new Set(),
@@ -222,11 +258,33 @@ function getExportedSymbols(
         tsMorph.Node.isEnumDeclaration(statement)
       ) {
         const nameNode = statement.getNameNode()
-        if (nameNode) {
-          const symbolId = nameNode.getText()
-          if (declarationMap.has(symbolId)) {
+        let symbolId: string | undefined = nameNode?.getText()
+        const isNamedDefault =
+          !!nameNode &&
+          hasModifier(statement, tsMorph.SyntaxKind.DefaultKeyword) &&
+          hasModifier(statement, tsMorph.SyntaxKind.ExportKeyword) &&
+          (tsMorph.Node.isFunctionDeclaration(statement) ||
+            tsMorph.Node.isClassDeclaration(statement))
+
+        if (isNamedDefault) {
+          // Only export the synthetic 'default' symbol; skip the local name
+          if (declarationMap.has('default')) {
+            exported.add('default')
+          }
+        } else {
+          if (!symbolId && isAnonymousDefaultExportStatement(statement)) {
+            symbolId = 'default'
+          }
+          if (symbolId && declarationMap.has(symbolId)) {
             exported.add(symbolId)
           }
+        }
+      } else if (
+        tsMorph.Node.isExportAssignment(statement) &&
+        !statement.isExportEquals()
+      ) {
+        if (declarationMap.has('default')) {
+          exported.add('default')
         }
       }
       // if it's a variable statement (e.g. `export const Box = ...`)
@@ -241,7 +299,16 @@ function getExportedSymbols(
           }
         }
       }
-      // TODO: handle other cases like `export default function Page() {}`
+    }
+
+    // Handle `export default <expression>` (ExportAssignment) which is not modifierable
+    if (
+      tsMorph.Node.isExportAssignment(statement) &&
+      !statement.isExportEquals()
+    ) {
+      if (declarationMap.has('default')) {
+        exported.add('default')
+      }
     }
 
     // Also handle statements like `export { Button, Card }`
@@ -369,18 +436,30 @@ function buildTextSnippet(
       tsMorph.Node.isEnumDeclaration(statement)
     ) {
       const nameNode = statement.getNameNode()
-
-      if (!nameNode) {
-        continue
+      let symbolId: string | undefined = nameNode?.getText()
+      if (!symbolId && isAnonymousDefaultExportStatement(statement)) {
+        symbolId = 'default'
       }
-
-      const symbolId = nameNode.getText()
-
-      if (usedLocals.has(symbolId)) {
+      // If this is a named default export, we stored an additional 'default' entry; prefer retaining default id for snippet inclusion
+      if (
+        symbolId &&
+        hasModifier(statement, tsMorph.SyntaxKind.DefaultKeyword) &&
+        hasModifier(statement, tsMorph.SyntaxKind.ExportKeyword) &&
+        usedLocals.has('default')
+      ) {
+        symbolId = 'default'
+      }
+      if (symbolId && usedLocals.has(symbolId)) {
         lines.push(
           statement.getFullText().replace(/\/\*\*[\s\S]*?\*\/\s*/g, '')
         )
       }
+    } else if (
+      tsMorph.Node.isExportAssignment(statement) &&
+      !statement.isExportEquals() &&
+      usedLocals.has('default')
+    ) {
+      lines.push(statement.getFullText().replace(/\/\*\*[\s\S]*?\*\/\s*/g, ''))
     } else if (tsMorph.Node.isVariableStatement(statement)) {
       const declarations = statement.getDeclarationList().getDeclarations()
       const matched = declarations.some((declaration) => {
@@ -460,5 +539,37 @@ function printFilteredImportStatement(
     ts.EmitHint.Unspecified,
     importDeclaration,
     declaration.getSourceFile().compilerNode
+  )
+}
+
+/** Determine if a node has a specific modifier kind. */
+function hasModifier(
+  node: tsMorph.Node & { getModifiers?: () => tsMorph.Node[] },
+  kind: tsMorph.SyntaxKind
+) {
+  return node.getModifiers?.()?.some((modifier) => modifier.getKind() === kind)
+}
+
+/** Returns true if this is an anonymous default export (no name, export + default modifiers). */
+function isAnonymousDefaultExportStatement(
+  statement: tsMorph.Node & {
+    getModifiers?: () => tsMorph.Node[]
+    getNameNode?: () => tsMorph.Node | undefined
+  }
+) {
+  // Must be function or class declarations for our current anonymous support.
+  if (
+    !(
+      tsMorph.Node.isFunctionDeclaration(statement) ||
+      tsMorph.Node.isClassDeclaration(statement)
+    )
+  ) {
+    return false
+  }
+  const hasName = Boolean(statement.getNameNode?.())
+  if (hasName) return false
+  return (
+    hasModifier(statement, tsMorph.SyntaxKind.DefaultKeyword) &&
+    hasModifier(statement, tsMorph.SyntaxKind.ExportKeyword)
   )
 }

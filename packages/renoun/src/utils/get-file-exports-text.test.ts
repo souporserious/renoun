@@ -142,4 +142,109 @@ describe('getFileExportsText', () => {
       ]
     `)
   })
+
+  test('supports anonymous default function export', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    project.createSourceFile(
+      'anon.ts',
+      `export default function () { return 'hi' }
+       export const named = 1`
+    )
+    const exports = getFileExportsText('anon.ts', project)
+    expect(exports.map((namedExport) => namedExport.name).sort()).toEqual([
+      'default',
+      'named',
+    ])
+    const defaultExport = exports.find(
+      (namedExport) => namedExport.name === 'default'
+    )!
+    expect(defaultExport.text).toContain('export default function')
+  })
+
+  test('supports anonymous default class export', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    project.createSourceFile(
+      'anon-class.ts',
+      `export default class { value = 1 }
+       export class Named {}`
+    )
+    const exports = getFileExportsText('anon-class.ts', project)
+    expect(exports.map((namedExport) => namedExport.name).sort()).toEqual([
+      'Named',
+      'default',
+    ])
+    const defaultExport = exports.find(
+      (namedExport) => namedExport.name === 'default'
+    )!
+    expect(defaultExport.text).toContain('export default class')
+  })
+
+  test('supports default arrow function export', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    project.createSourceFile(
+      'anon-arrow.ts',
+      `export default () => 42;\nexport const other = true;`
+    )
+    const exports = getFileExportsText('anon-arrow.ts', project)
+    expect(exports.map((namedExport) => namedExport.name).sort()).toEqual([
+      'default',
+      'other',
+    ])
+    const defaultExport = exports.find(
+      (namedExport) => namedExport.name === 'default'
+    )!
+    expect(defaultExport.text).toContain('export default () => 42')
+  })
+
+  test('supports default exported object literal expression', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    project.createSourceFile(
+      'anon-object.ts',
+      `const value = 10;\nexport default { value };\nexport const another = 5;`
+    )
+    const exports = getFileExportsText('anon-object.ts', project)
+    expect(exports.map((namedExport) => namedExport.name).sort()).toEqual([
+      'another',
+      'default',
+    ])
+    const defaultExport = exports.find(
+      (namedExport) => namedExport.name === 'default'
+    )!
+    // The snippet should include the export assignment line
+    expect(defaultExport.text).toContain('export default { value }')
+  })
+
+  test('supports named default function export', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    project.createSourceFile(
+      'named-default-fn.ts',
+      `export default function Page(){ return null }\nexport const x = 1`
+    )
+    const exports = getFileExportsText('named-default-fn.ts', project)
+    expect(exports.map((namedExport) => namedExport.name).sort()).toEqual([
+      'default',
+      'x',
+    ])
+    const defaultExport = exports.find(
+      (namedExport) => namedExport.name === 'default'
+    )!
+    expect(defaultExport.text).toContain('export default function Page()')
+  })
+
+  test('supports named default class export', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    project.createSourceFile(
+      'named-default-class.ts',
+      `export default class Component {}\nexport const y = 2`
+    )
+    const exports = getFileExportsText('named-default-class.ts', project)
+    expect(exports.map((namedExport) => namedExport.name).sort()).toEqual([
+      'default',
+      'y',
+    ])
+    const defaultExport = exports.find(
+      (namedExport) => namedExport.name === 'default'
+    )!
+    expect(defaultExport.text).toContain('export default class Component')
+  })
 })
