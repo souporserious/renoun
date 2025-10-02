@@ -35,7 +35,7 @@ export function References({
 
 export function Reference(props: ReferenceProps) {
   const components = {
-    Section: (props) => (
+    Section: ({ kind, ...props }) => (
       <Collapse.Provider>
         <section
           {...props}
@@ -133,7 +133,7 @@ export function Reference(props: ReferenceProps) {
         }}
       />
     ),
-    Detail: (props) => (
+    Detail: ({ kind, ...props }) => (
       <div
         {...props}
         css={{

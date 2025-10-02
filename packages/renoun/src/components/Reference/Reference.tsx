@@ -20,14 +20,14 @@ export type ReferenceComponent<
 > = React.ComponentType<React.JSX.IntrinsicElements[Tag] & Props>
 
 export interface ReferenceComponents {
-  Section: ReferenceComponent<'section'>
+  Section: ReferenceComponent<'section', { kind: Kind['kind'] }>
   SectionHeading: ReferenceComponent<'h3'>
   SectionBody: ReferenceComponent<'div', { hasDescription: boolean }>
   Column: ReferenceComponent<'div', { gap?: GapSize }>
   Row: ReferenceComponent<'div', { gap?: GapSize }>
   Code: ReferenceComponent<'code'>
   Description: ReferenceComponent<'p', { children: string }>
-  Detail: ReferenceComponent<'div'>
+  Detail: ReferenceComponent<'div', { kind: Kind['kind'] }>
   Signatures: ReferenceComponent<'div'>
   DetailHeading: ReferenceComponent<'h4'>
   Table: ReferenceComponent<'table'>
@@ -52,7 +52,7 @@ const defaultGaps: Record<GapSize, string> = {
 
 /** Default implementations for every slot. */
 const defaultComponents: InternalReferenceComponents = {
-  Section: 'section',
+  Section: ({ kind: _, children }) => <section children={children} />,
   SectionHeading: 'h3',
   SectionBody: ({ children }) => children,
   Column: ({ gap, children }) => (
@@ -261,19 +261,18 @@ function TypeSection({
   children,
   components,
 }: {
-  kind: string
+  kind: Kind['kind']
   title?: string
   description?: string
   id?: string
   children: React.ReactNode
   components: InternalReferenceComponents
 }) {
-  const headingId = `${kind}_${React.useId()}`
   const label = kindToLabel(kind)
+
   return (
-    <components.Section id={id} aria-labelledby={headingId}>
+    <components.Section id={id} kind={kind}>
       <components.SectionHeading
-        id={headingId}
         aria-label={title ? `${title} ${label}` : label}
       >
         <span>{label}</span> {title}
@@ -296,19 +295,17 @@ function TypeDetail({
   label,
   children,
   components,
+  kind,
 }: {
   label?: React.ReactNode
   children: React.ReactNode
   components: InternalReferenceComponents
+  kind: Kind['kind']
 }) {
-  const headingId =
-    typeof label === 'string' ? `${label}_${React.useId()}` : undefined
   return (
-    <components.Detail aria-labelledby={headingId}>
+    <components.Detail kind={kind}>
       {label ? (
-        <components.DetailHeading id={headingId}>
-          {label}
-        </components.DetailHeading>
+        <components.DetailHeading>{label}</components.DetailHeading>
       ) : null}
       {children}
     </components.Detail>
@@ -380,7 +377,7 @@ function VariableSection({
       id={id}
       components={components}
     >
-      <TypeDetail label="Type" components={components}>
+      <TypeDetail label="Type" components={components} kind={node.kind}>
         <components.Code>{node.text}</components.Code>
       </TypeDetail>
     </TypeSection>
@@ -421,6 +418,10 @@ function renderMethodRow(
 ) {
   const signature = method.signatures[0]
   const overloadCount = method.signatures.length - 1
+
+  if (!signature) {
+    return null
+  }
 
   return (
     <>
@@ -514,7 +515,11 @@ function renderAccessorSubRow(
   const documentation = renderDocumentation(accessor, components)
   const parameterDetail =
     accessor.kind === 'ClassSetAccessor' ? (
-      <TypeDetail label="Parameter" components={components}>
+      <TypeDetail
+        label="Parameter"
+        components={components}
+        kind={accessor.kind}
+      >
         <TypeTable
           rows={[accessor.parameter]}
           headers={['Parameter', 'Type', 'Default Value']}
@@ -606,7 +611,7 @@ function renderTags(
   }
 
   return (
-    <TypeDetail label="Tags" components={components}>
+    <TypeDetail label="Tags" components={components} kind="Any">
       <components.Column gap="small">
         {tags.map((tag, index) => (
           <components.Code key={index}>{formatTag(tag)}</components.Code>
@@ -652,9 +657,10 @@ function renderCallSignatureDetails(
   if (signature.typeParameters?.length) {
     items.push(
       <TypeDetail
+        key="generics"
         label="Type Parameters"
         components={components}
-        key="generics"
+        kind={signature.kind}
       >
         <components.Column gap="small">
           {signature.typeParameters.map((typeParameter, index) => (
@@ -669,7 +675,12 @@ function renderCallSignatureDetails(
 
   if (signature.thisType) {
     items.push(
-      <TypeDetail label="This Type" components={components} key="this">
+      <TypeDetail
+        key="this"
+        label="This Type"
+        components={components}
+        kind={signature.kind}
+      >
         <components.Code>{signature.thisType.text}</components.Code>
       </TypeDetail>
     )
@@ -677,7 +688,12 @@ function renderCallSignatureDetails(
 
   if (signature.parameters.length) {
     items.push(
-      <TypeDetail label="Parameters" components={components} key="parameters">
+      <TypeDetail
+        key="parameters"
+        label="Parameters"
+        components={components}
+        kind={signature.kind}
+      >
         <TypeTable
           rows={signature.parameters}
           headers={['Parameter', 'Type', 'Default Value']}
@@ -692,7 +708,12 @@ function renderCallSignatureDetails(
 
   if (signature.returnType) {
     items.push(
-      <TypeDetail label="Returns" components={components} key="returns">
+      <TypeDetail
+        key="returns"
+        label="Returns"
+        components={components}
+        kind={signature.kind}
+      >
         <components.Code>{signature.returnType.text}</components.Code>
       </TypeDetail>
     )
@@ -710,7 +731,12 @@ function renderCallSignatureDetails(
 
   if (signatureModifiers.length) {
     items.push(
-      <TypeDetail label="Modifiers" components={components} key="modifiers">
+      <TypeDetail
+        key="modifiers"
+        label="Modifiers"
+        components={components}
+        kind={signature.kind}
+      >
         <components.Code>{signatureModifiers.join(', ')}</components.Code>
       </TypeDetail>
     )
@@ -788,7 +814,11 @@ function ClassSection({
       components={components}
     >
       {node.constructor ? (
-        <TypeDetail label="Constructor" components={components}>
+        <TypeDetail
+          label="Constructor"
+          components={components}
+          kind="ClassConstructor"
+        >
           {renderDocumentation(node.constructor, components)}
           <components.Signatures>
             {node.constructor.signatures.map((signature, index) => (
@@ -801,7 +831,7 @@ function ClassSection({
       ) : null}
 
       {node.accessors?.length ? (
-        <TypeDetail label="Accessors" components={components}>
+        <TypeDetail label="Accessors" components={components} kind={node.kind}>
           <TypeTable
             rows={node.accessors}
             headers={['Accessor', 'Type', 'Modifiers']}
@@ -817,7 +847,7 @@ function ClassSection({
       ) : null}
 
       {node.properties?.length ? (
-        <TypeDetail label="Properties" components={components}>
+        <TypeDetail label="Properties" components={components} kind={node.kind}>
           <TypeTable
             rows={node.properties}
             headers={['Property', 'Type', 'Modifiers', 'Default Value']}
@@ -833,7 +863,7 @@ function ClassSection({
       ) : null}
 
       {node.methods?.length ? (
-        <TypeDetail label="Methods" components={components}>
+        <TypeDetail label="Methods" components={components} kind={node.kind}>
           <TypeTable
             rows={node.methods}
             headers={['Method', 'Type', 'Modifiers']}
@@ -847,7 +877,7 @@ function ClassSection({
       ) : null}
 
       {node.extends || node.implements?.length ? (
-        <TypeDetail components={components}>
+        <TypeDetail components={components} kind={node.kind}>
           {node.extends ? (
             <components.Column gap="small">
               <components.DetailHeading>Extends</components.DetailHeading>
@@ -893,7 +923,11 @@ function ComponentSection({
         {node.signatures.map((signature, index) => {
           return (
             <components.Column gap="large" key={index}>
-              <TypeDetail label="Properties" components={components}>
+              <TypeDetail
+                label="Properties"
+                components={components}
+                kind={node.kind}
+              >
                 {signature.parameter?.type.kind === 'TypeLiteral' ? (
                   <TypeTable
                     rows={signature.parameter.type.members}
@@ -1022,7 +1056,7 @@ function TypeAliasSection({
       id={id}
       components={components}
     >
-      <TypeDetail label="Type" components={components}>
+      <TypeDetail label="Type" components={components} kind={node.kind}>
         <components.Code>{node.type.text}</components.Code>
       </TypeDetail>
     </TypeSection>
@@ -1066,7 +1100,7 @@ function MembersSection({
       components={components}
     >
       {propertySignatures.length > 0 ? (
-        <TypeDetail label="Properties" components={components}>
+        <TypeDetail label="Properties" components={components} kind={node.kind}>
           <TypeTable
             rows={propertySignatures}
             headers={['Property', 'Type']}
@@ -1091,7 +1125,7 @@ function MembersSection({
       ) : null}
 
       {methodSignatures.length > 0 ? (
-        <TypeDetail label="Methods" components={components}>
+        <TypeDetail label="Methods" components={components} kind={node.kind}>
           <TypeTable
             rows={methodSignatures}
             headers={['Method', 'Type']}
@@ -1115,7 +1149,11 @@ function MembersSection({
       ) : null}
 
       {indexSignatures.length > 0 ? (
-        <TypeDetail label="Index Signatures" components={components}>
+        <TypeDetail
+          label="Index Signatures"
+          components={components}
+          kind={node.kind}
+        >
           <TypeTable
             rows={indexSignatures}
             headers={['Key', 'Type']}
@@ -1158,13 +1196,13 @@ function MappedSection({
   // TODO: this needs an incoming name prop that will be provided by the enclosing declaration
   return (
     <TypeSection kind="MappedType" id={id} components={components}>
-      <TypeDetail label="Parameter" components={components}>
+      <TypeDetail label="Parameter" components={components} kind={node.kind}>
         <components.Code>{parameterText}</components.Code>
       </TypeDetail>
-      <TypeDetail label="Type" components={components}>
+      <TypeDetail label="Type" components={components} kind={node.kind}>
         <components.Code>{valueText}</components.Code>
       </TypeDetail>
-      <TypeDetail label="Modifiers" components={components}>
+      <TypeDetail label="Modifiers" components={components} kind={node.kind}>
         <components.Code>
           {node.isReadonly ? 'readonly ' : null}
           {node.isOptional ? 'optional' : null}
@@ -1234,7 +1272,7 @@ function IntersectionSection({
       components={components}
     >
       {rows.length > 0 ? (
-        <TypeDetail label="Properties" components={components}>
+        <TypeDetail label="Properties" components={components} kind={node.kind}>
           <TypeTable
             rows={rows}
             headers={['Property', 'Type']}
@@ -1259,7 +1297,7 @@ function IntersectionSection({
       ) : null}
 
       {otherTypes.length > 0 ? (
-        <TypeDetail label="Intersects" components={components}>
+        <TypeDetail label="Intersects" components={components} kind={node.kind}>
           <components.Code>{otherTypes.join(' & ')}</components.Code>
         </TypeDetail>
       ) : null}
@@ -1276,7 +1314,7 @@ function TypeExpressionSection({
 }) {
   return (
     <TypeSection kind={node.kind} components={components}>
-      <TypeDetail label="Type" components={components}>
+      <TypeDetail label="Type" components={components} kind={node.kind}>
         <components.Code>{node.text}</components.Code>
       </TypeDetail>
     </TypeSection>
