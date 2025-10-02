@@ -4,7 +4,7 @@ import { RootProvider } from 'renoun'
 import { GeistSans } from 'geist/font/sans'
 
 export const metadata = {
-  title: 'renoun - Elevate Your Design System Docs',
+  title: 'renoun - The Documentation Toolkit for React',
   description: `The renoun toolkit uses your React framework to keep documentation polished, in sync, and on brand.`,
 } satisfies Metadata
 
