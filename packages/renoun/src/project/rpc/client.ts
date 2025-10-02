@@ -1,4 +1,3 @@
-import WS from 'ws'
 import { EventEmitter } from 'node:events'
 
 import { getDebugLogger } from '../../utils/debug.js'
@@ -131,7 +130,7 @@ class WebSocketClientError extends Error {
 }
 
 export class WebSocketClient extends EventEmitter {
-  #ws!: WS
+  #ws!: WebSocket
   #serverId: string
   #shouldRetry = true
   #retryTimeout?: NodeJS.Timeout
@@ -172,10 +171,15 @@ export class WebSocketClient extends EventEmitter {
   // readiness barrier (optional to await from callers)
   #readyWaiters: Array<(v: void) => void> = []
 
-  #handleOpenEvent = this.#handleOpen.bind(this)
-  #handleMessageEvent = this.#handleMessage.bind(this)
-  #handleErrorEvent = this.#handleError.bind(this)
-  #handleCloseEvent = this.#handleClose.bind(this)
+  #handleOpenEvent = () => this.#handleOpen()
+  #handleMessageEvent = (event: MessageEvent<any>) =>
+    this.#handleMessage(event.data)
+  #handleErrorEvent = (event: any) => this.#handleError(event)
+  #handleCloseEvent = (event: CloseEvent) =>
+    this.#handleClose(
+      event.code,
+      event.reason ? Buffer.from(event.reason) : undefined
+    )
 
   constructor(serverId: string) {
     super()
@@ -185,7 +189,7 @@ export class WebSocketClient extends EventEmitter {
 
   /** Optional: await until connected (good for startup sequencing). */
   ready(timeoutMs = 15_000): Promise<void> {
-    if (this.#isConnected && this.#ws?.readyState === WS.OPEN) {
+    if (this.#isConnected && this.#ws?.readyState === WebSocket.OPEN) {
       return Promise.resolve()
     }
 
@@ -231,7 +235,7 @@ export class WebSocketClient extends EventEmitter {
   }
 
   #sendOrQueueFrame(ids: number[], payload: string): boolean {
-    if (this.#isConnected && this.#ws.readyState === WS.OPEN) {
+    if (this.#isConnected && this.#ws.readyState === WebSocket.OPEN) {
       this.#sendFrame(ids, payload)
       return true
     }
@@ -262,7 +266,7 @@ export class WebSocketClient extends EventEmitter {
   }
 
   #flush() {
-    if (!this.#isConnected || this.#ws.readyState !== WS.OPEN) {
+    if (!this.#isConnected || this.#ws.readyState !== WebSocket.OPEN) {
       return
     }
 
@@ -304,7 +308,7 @@ export class WebSocketClient extends EventEmitter {
     try {
       while (this.#pendingRequests.length) {
         const frame = this.#pendingRequests[0]!
-        if (!this.#isConnected || this.#ws.readyState !== WS.OPEN) {
+        if (!this.#isConnected || this.#ws.readyState !== WebSocket.OPEN) {
           break
         }
         this.#sendFrame(frame.ids, frame.payload)
@@ -325,10 +329,10 @@ export class WebSocketClient extends EventEmitter {
   #connect() {
     try {
       if (this.#ws) {
-        this.#ws.off('open', this.#handleOpenEvent)
-        this.#ws.off('message', this.#handleMessageEvent)
-        this.#ws.off('error', this.#handleErrorEvent)
-        this.#ws.off('close', this.#handleCloseEvent)
+        this.#ws.removeEventListener('open', this.#handleOpenEvent)
+        this.#ws.removeEventListener('message', this.#handleMessageEvent)
+        this.#ws.removeEventListener('error', this.#handleErrorEvent)
+        this.#ws.removeEventListener('close', this.#handleCloseEvent)
       }
     } catch (error) {
       getDebugLogger().logWebSocketClientEvent('off_failed', {
@@ -375,16 +379,12 @@ export class WebSocketClient extends EventEmitter {
       return
     }
 
-    this.#ws = new WS(`ws://localhost:${port}`, serverId, {
-      handshakeTimeout: 15_000,
-      perMessageDeflate: false,
-      maxPayload: 16 * 1024 * 1024,
-    })
-
-    this.#ws.on('open', this.#handleOpenEvent)
-    this.#ws.on('message', this.#handleMessageEvent)
-    this.#ws.on('error', this.#handleErrorEvent)
-    this.#ws.on('close', this.#handleCloseEvent)
+    this.#ws = new WebSocket(`ws://localhost:${port}`, serverId)
+    this.#ws.binaryType = 'arraybuffer'
+    this.#ws.addEventListener('open', this.#handleOpenEvent)
+    this.#ws.addEventListener('message', this.#handleMessageEvent)
+    this.#ws.addEventListener('error', this.#handleErrorEvent)
+    this.#ws.addEventListener('close', this.#handleCloseEvent)
   }
 
   #handleOpen() {
@@ -535,10 +535,10 @@ export class WebSocketClient extends EventEmitter {
     }
 
     try {
-      this.#ws.off('open', this.#handleOpenEvent)
-      this.#ws.off('message', this.#handleMessageEvent)
-      this.#ws.off('error', this.#handleErrorEvent)
-      this.#ws.off('close', this.#handleCloseEvent)
+      this.#ws.removeEventListener('open', this.#handleOpenEvent)
+      this.#ws.removeEventListener('message', this.#handleMessageEvent)
+      this.#ws.removeEventListener('error', this.#handleErrorEvent)
+      this.#ws.removeEventListener('close', this.#handleCloseEvent)
     } catch (error) {
       getDebugLogger().logWebSocketClientEvent('off_failed', {
         where: 'handleClose',
@@ -788,7 +788,7 @@ export class WebSocketClient extends EventEmitter {
       async return() {
         ended = true
         try {
-          if (self.#isConnected && self.#ws.readyState === WS.OPEN) {
+          if (self.#isConnected && self.#ws.readyState === WebSocket.OPEN) {
             self.#sendFrame([id], JSON.stringify({ type: 'cancel', id }))
           }
         } catch {
@@ -969,10 +969,10 @@ export class WebSocketClient extends EventEmitter {
       })
     }
     try {
-      this.#ws?.off('open', this.#handleOpenEvent)
-      this.#ws?.off('message', this.#handleMessageEvent)
-      this.#ws?.off('error', this.#handleErrorEvent)
-      this.#ws?.off('close', this.#handleCloseEvent)
+      this.#ws?.removeEventListener('open', this.#handleOpenEvent)
+      this.#ws?.removeEventListener('message', this.#handleMessageEvent)
+      this.#ws?.removeEventListener('error', this.#handleErrorEvent)
+      this.#ws?.removeEventListener('close', this.#handleCloseEvent)
     } catch (error) {
       getDebugLogger().logWebSocketClientEvent('off_failed', {
         where: 'client_close',

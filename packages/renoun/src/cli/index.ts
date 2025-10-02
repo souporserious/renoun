@@ -15,9 +15,6 @@ if (firstArgument === 'help') {
   process.exit(0)
 }
 
-/* Disable the buffer util for WebSocket. */
-process.env['WS_NO_BUFFER_UTIL'] = 'true'
-
 type Framework = 'next' | 'vite' | 'waku'
 
 const projectRequire = createRequire(join(process.cwd(), 'package.json'))
