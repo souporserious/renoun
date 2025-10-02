@@ -1,5 +1,49 @@
 # renoun
 
+## 10.2.0
+
+### Minor Changes
+
+- b1da640: Improves module export analysis support for default exports (e.g. `export default () => {}`).
+- 063d163: The `Reference` component now passes a `kind` prop to its `Section` and `Detail` subcomponents for better context-aware rendering.
+- 696f837: Removes `useSectionObserver` hook in favor of the `TableOfContents` component which ensures there is no flicker on load.
+- 0d8a28c: Adds a `Script` component that lets you author a client-side script using a normal source file that is then injected into HTML either inline, deferred, or as a hoisted data URL. This is useful for small scripts like analytics snippets, theme preferences, feature flags, or bootstrapping navigation active states.
+
+  ```tsx path="app/page.tsx"
+  import { Script } from 'renoun'
+
+  export default function RootLayout({
+    children,
+  }: {
+    children: React.ReactNode
+  }) {
+    return (
+      <html>
+        <head>
+          <Script>{import('./table-of-contents-script.ts')}</Script>
+        </head>
+        <body>{children}</body>
+      </html>
+    )
+  }
+  ```
+
+- 5bb3459: Adds a `MarkdownFile` utility with a default markdown loader plus matching
+  `getContent` and `getHeadings` methods.
+- cfcaaed: Renames `MDXHeadings` type to `Headings` to better reflect that it's not exclusively tied to MDX.
+- c5e14c1: Adds `getContent` and `getHeadings` methods to the `MDXFile` utility.
+- f822446: Consolidates Markdown/MDX utilities and dependencies into `@renoun/mdx` and updates `renoun` to use them.
+
+### Patch Changes
+
+- a994bfc: Fixes flickering in the `TableOfContents` component on page load.
+- 69aebaa: Adds debug information for the current project context.
+- ebfcca2: Improves the `Reference` component by exposing constructors, member modifiers, and call signature metadata.
+- Updated dependencies [5ff7c78]
+- Updated dependencies [cfcaaed]
+- Updated dependencies [f822446]
+  - @renoun/mdx@3.2.0
+
 ## 10.1.2
 
 ### Patch Changes
