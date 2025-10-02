@@ -27,6 +27,7 @@ export default function ({
   let isScrollingIntoView = false
   let lastScrollY = 0
   let rafId = 0
+  let dispose: (() => void) | null = null
 
   function cancelFrame(): void {
     if (rafId) cancelAnimationFrame(rafId)
@@ -45,9 +46,7 @@ export default function ({
       if (current === document.body) return document.body as HTMLElement
       const element = current as HTMLElement
       const { overflow, overflowX, overflowY } = getComputedStyle(element)
-      if (/(auto|scroll)/.test(overflow + overflowX + overflowY)) {
-        return element
-      }
+      if (/(auto|scroll)/.test(overflow + overflowX + overflowY)) return element
       current = element.parentNode
     }
     return document.body as HTMLElement
@@ -55,18 +54,13 @@ export default function ({
 
   function setActiveLink(target: HTMLElement): void {
     isScrollingIntoView = true
-    target.scrollIntoView({
-      behavior: smoothScrollBehavior,
-      block: 'start',
-    })
+    target.scrollIntoView({ behavior: smoothScrollBehavior, block: 'start' })
 
     const nextActiveLink = getLink(target.id)
     if (nextActiveLink) {
       nextActiveLink.setAttribute('aria-current', 'location')
       history.pushState(null, '', '#' + target.id)
-      if (previousActiveLink) {
-        previousActiveLink.removeAttribute('aria-current')
-      }
+      if (previousActiveLink) previousActiveLink.removeAttribute('aria-current')
       previousActiveLink = nextActiveLink
     }
 
@@ -81,7 +75,7 @@ export default function ({
     } else {
       cancelFrame()
       let still = 0
-      const step = (): void => {
+      function step(): void {
         const y = window.scrollY
         if (Math.abs(y - lastScrollY) < 1) {
           if (++still > 4) {
@@ -112,16 +106,14 @@ export default function ({
 
   window.__TableOfContents__ = {
     register: (targetIds: string[]) => {
+      dispose?.()
+
       const targetElements = targetIds
         .map((id) => document.getElementById(id))
         .filter(Boolean) as HTMLElement[]
-
-      if (targetElements.length === 0) return
-
       const linkFor = new Map<HTMLElement, HTMLAnchorElement | null>(
         targetElements.map((target) => [target, getLink(target.id)])
       )
-
       const lastIndex = targetElements.length - 1
       const lastTarget = targetElements[lastIndex]
       const lastLink = lastTarget ? linkFor.get(lastTarget) : null
@@ -168,7 +160,6 @@ export default function ({
           previousActiveLink = nextActiveLink
         }
 
-        // If the last section is visible but not active, scroll the links viewport to the end.
         if (lastSectionInView) {
           if (
             !previousLastSectionInView &&
@@ -199,6 +190,17 @@ export default function ({
       targetElements.forEach((target) => intersectionObserver.observe(target))
 
       update()
+
+      dispose = () => {
+        intersectionObserver.disconnect()
+        cancelFrame()
+        isScrollingIntoView = false
+        previousLastSectionInView = false
+        if (previousActiveLink) {
+          previousActiveLink.removeAttribute('aria-current')
+          previousActiveLink = null
+        }
+      }
     },
   }
 }
