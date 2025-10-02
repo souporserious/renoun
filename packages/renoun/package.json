@@ -138,7 +138,6 @@
     "@types/estree": "1.0.8",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/ws": "8.18.1",
     "dedent": "1.7.0",
     "geist": "catalog:",
     "prettier": "catalog:",
@@ -157,8 +156,7 @@
     "oniguruma-to-es": "4.3.3",
     "restyle": "catalog:",
     "ts-morph": "catalog:",
-    "vscode-textmate": "9.2.0",
-    "ws": "8.18.3"
+    "vscode-textmate": "9.2.0"
   },
   "engines": {
     "node": ">=20.19.0"

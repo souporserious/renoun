@@ -1,5 +1,8 @@
-import { WebSocketServer as WSS, default as WS } from 'ws'
-import type { RawData } from 'ws'
+import {
+  WebSocketServer as WSS,
+  WebSocket as WS,
+  type RawData,
+} from './websocket.js'
 import type { AddressInfo } from 'node:net'
 import { randomBytes, createHash } from 'node:crypto'
 
@@ -432,8 +435,6 @@ export class WebSocketServer {
       host: 'localhost',
       backlog: 1024,
       maxPayload: MAX_PAYLOAD_BYTES,
-      perMessageDeflate: false,
-      clientTracking: false,
       handleProtocols: (protocols) => {
         if (protocols.has(this.#id)) {
           return this.#id
@@ -1086,7 +1087,12 @@ export class WebSocketServer {
 
     if (Array.isArray(parsed)) {
       if (parsed.length === 0) {
-        this.#sendError(ws, null, -32600, '[renoun] Invalid Request: empty batch')
+        this.#sendError(
+          ws,
+          null,
+          -32600,
+          '[renoun] Invalid Request: empty batch'
+        )
       } else {
         this.#sendError(
           ws,
@@ -1099,7 +1105,11 @@ export class WebSocketServer {
     }
 
     const object = parsed as any
-    if (!object || typeof object !== 'object' || typeof object.method !== 'string') {
+    if (
+      !object ||
+      typeof object !== 'object' ||
+      typeof object.method !== 'string'
+    ) {
       this.#sendError(ws, null, -32600, '[renoun] Invalid Request')
       return
     }
@@ -1250,7 +1260,7 @@ export class WebSocketServer {
       })
 
       try {
-        ws.send(message, (error?: Error) => {
+        ws.send(message, (error?: Error | null) => {
           if (error) {
             getDebugLogger().logWebSocketServerEvent('send_failed', {
               connectionId: data?.connectionId,
