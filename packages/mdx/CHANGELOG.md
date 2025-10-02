@@ -1,5 +1,13 @@
 # @renoun/mdx
 
+## 3.2.0
+
+### Minor Changes
+
+- 5ff7c78: Adds `getMarkdownHeadings` and `getMDXHeadings` utilities to extract headings from markdown and MDX content respectively.
+- cfcaaed: Renames `MDXHeadings` type to `Headings` to better reflect that it's not exclusively tied to MDX.
+- f822446: Consolidates Markdown/MDX utilities and dependencies into `@renoun/mdx` and updates `renoun` to use them.
+
 ## 3.1.1
 
 ### Patch Changes
