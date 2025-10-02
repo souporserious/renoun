@@ -10,8 +10,9 @@ export {
   getMarkdownHeadings,
   getMarkdownContent,
   getMDXExportStaticValues,
-  getMDXRuntimeValue,
+  getMDXContent,
   type SlugCasing,
   type MarkdownComponents,
   type MarkdownContentOptions,
+  type MDXContentOptions,
 } from './utils/index.js'

@@ -6,4 +6,7 @@ export type {
   MarkdownContentOptions,
 } from './get-markdown-content.js'
 export { getMDXExportStaticValues } from './get-mdx-export-static-values.js'
-export { getMDXRuntimeValue } from './get-mdx-runtime-value.js'
+export {
+  getMDXContent,
+  type MDXContentOptions,
+} from './get-mdx-content.js'

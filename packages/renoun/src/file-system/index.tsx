@@ -1,11 +1,16 @@
 import * as React from 'react'
-import type { MDXContent, Headings, SlugCasing } from '@renoun/mdx'
+import type {
+  MDXContent,
+  MDXComponents,
+  Headings,
+  SlugCasing,
+} from '@renoun/mdx'
 import { rehypePlugins } from '@renoun/mdx/rehype'
 import { remarkPlugins } from '@renoun/mdx/remark'
 import {
   createSlug,
   getMDXExportStaticValues,
-  getMDXRuntimeValue,
+  getMDXContent,
   getMDXHeadings,
   getMarkdownHeadings,
 } from '@renoun/mdx/utils'
@@ -14,7 +19,6 @@ import { Minimatch } from 'minimatch'
 import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
 import { CodeInline, parseCodeProps } from '../components/CodeInline.js'
 import { Markdown, type MarkdownComponents } from '../components/Markdown.js'
-import type { MDXComponents } from '../mdx/index.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import { getClosestFile } from '../utils/get-closest-file.js'
@@ -74,9 +78,9 @@ const defaultLoaders: {
     }
   },
   mdx: async (_, file) => {
-    const value = await file.getText()
-    const { default: Content, ...mdxExports } = await getMDXRuntimeValue({
-      value,
+    const source = await file.getText()
+    const { default: Content, ...mdxExports } = await getMDXContent({
+      source,
       remarkPlugins,
       rehypePlugins,
     })
@@ -2038,8 +2042,8 @@ export class Directory<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
-          : Extension extends 'mdx'
-            ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+        : Extension extends 'mdx'
+          ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
           : Extension extends 'md'
             ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
             : File<LoaderTypes, Path, Extension>
@@ -2056,8 +2060,8 @@ export class Directory<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
-          : Extension extends 'mdx'
-            ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+        : Extension extends 'mdx'
+          ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
           : Extension extends 'md'
             ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
             : File<LoaderTypes, Extension>
@@ -2930,8 +2934,8 @@ export class Collection<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<Types[Extension]>
-          : Extension extends 'mdx'
-            ? MDXFile<Types['mdx']>
+        : Extension extends 'mdx'
+          ? MDXFile<Types['mdx']>
           : Extension extends 'md'
             ? MarkdownFile<Types['md']>
             : File<Types>
@@ -3025,16 +3029,16 @@ export type FileWithExtension<
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
     ? JavaScriptFile<Types[Extension], Types, any, Extension>
-      : Extension extends 'mdx'
-        ? MDXFile<Types['mdx'], Types, any, Extension>
+    : Extension extends 'mdx'
+      ? MDXFile<Types['mdx'], Types, any, Extension>
       : Extension extends 'md'
         ? MarkdownFile<Types['md'], Types, any, Extension>
         : File<Types>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
       ? JavaScriptFile<Types[Extension[number]], Types, any, Extension[number]>
-        : Extension[number] extends 'mdx'
-          ? MDXFile<Types['mdx'], Types, any, Extension[number]>
+      : Extension[number] extends 'mdx'
+        ? MDXFile<Types['mdx'], Types, any, Extension[number]>
         : Extension[number] extends 'md'
           ? MarkdownFile<Types['md'], Types, any, Extension[number]>
           : File<Types>

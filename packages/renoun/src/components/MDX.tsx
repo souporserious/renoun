@@ -1,6 +1,6 @@
 import * as React from 'react'
 import type { MDXComponents, PluggableList } from '@renoun/mdx'
-import { getMDXRuntimeValue } from '@renoun/mdx/utils'
+import { getMDXContent } from '@renoun/mdx/utils'
 
 import { useMDXComponents } from '../mdx/components.js'
 
@@ -44,8 +44,8 @@ export async function MDX({
     rehypePlugins = (await import('@renoun/mdx/rehype')).rehypePlugins
   }
 
-  const { default: Content } = await getMDXRuntimeValue({
-    value: children,
+  const { default: Content } = await getMDXContent({
+    source: children,
     dependencies,
     remarkPlugins,
     rehypePlugins,
