@@ -1,12 +1,12 @@
 import * as React from 'react'
-import type { MDXContent } from '@renoun/mdx'
+import type { MDXContent, Headings, SlugCasing } from '@renoun/mdx'
 import { rehypePlugins } from '@renoun/mdx/rehype'
 import { remarkPlugins } from '@renoun/mdx/remark'
 import {
   createSlug,
   getMDXExportStaticValues,
   getMDXRuntimeValue,
-  type SlugCasing,
+  getMDXHeadings,
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
@@ -1410,6 +1410,7 @@ export class MDXFile<
   #loader?: ModuleLoader<{ default: MDXContent } & Types>
   #slugCasing?: SlugCasing
   #staticExportValues?: Map<string, unknown>
+  #headings?: Headings
   #modulePromise?: Promise<any>
 
   constructor({
@@ -1478,6 +1479,33 @@ export class MDXFile<
   /** Get the default export from the MDX file. */
   async getDefaultExport(): Promise<MDXContent> {
     return this.getExport('default').then((fileExport) => fileExport.getValue())
+  }
+
+  /** Get the rendered MDX content. */
+  async getContent(): Promise<MDXContent> {
+    return this.getDefaultExport()
+  }
+
+  /** Get headings parsed from the MDX content. */
+  async getHeadings(): Promise<Headings> {
+    if (!this.#headings) {
+      try {
+        this.#headings = await this.getExport('headings' as any).then(
+          (fileExport) => fileExport.getValue()
+        )
+      } catch (error) {
+        if (!(error instanceof ModuleExportNotFoundError)) {
+          throw error
+        }
+      }
+
+      if (!this.#headings) {
+        const source = await this.getText()
+        this.#headings = getMDXHeadings(source)
+      }
+    }
+
+    return this.#headings
   }
 
   /** Check if an export exists at runtime in the MDX file. */
