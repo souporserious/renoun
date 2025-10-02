@@ -455,6 +455,7 @@ function renderMethodSubRow(
     const detail = renderCallSignatureDetails(signature, components, {
       heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
       showSignatureText: multipleSignatures,
+      parentDescription: method.description,
     })
 
     if (detail) {
@@ -576,7 +577,7 @@ function renderClassMemberModifiers(
 }
 
 function renderDocumentation(
-  documentable: Pick<Kind.SharedDocumentable, 'description' | 'tags'>,
+  documentable: Pick<Kind.SharedDocumentable, 'description'>,
   components: InternalReferenceComponents
 ) {
   const items: React.ReactNode[] = []
@@ -589,12 +590,6 @@ function renderDocumentation(
     )
   }
 
-  const tagsNode = renderTags(documentable.tags, components)
-
-  if (tagsNode) {
-    items.push(<React.Fragment key="tags">{tagsNode}</React.Fragment>)
-  }
-
   if (items.length === 0) {
     return null
   }
@@ -602,33 +597,14 @@ function renderDocumentation(
   return <components.Column gap="medium">{items}</components.Column>
 }
 
-function renderTags(
-  tags: Kind.SharedDocumentable['tags'],
-  components: InternalReferenceComponents
-) {
-  if (!tags || tags.length === 0) {
-    return null
-  }
-
-  return (
-    <TypeDetail label="Tags" components={components} kind="Any">
-      <components.Column gap="small">
-        {tags.map((tag, index) => (
-          <components.Code key={index}>{formatTag(tag)}</components.Code>
-        ))}
-      </components.Column>
-    </TypeDetail>
-  )
-}
-
-function formatTag(tag: { name: string; text?: string }) {
-  return tag.text ? `@${tag.name} ${tag.text}` : `@${tag.name}`
-}
-
 function renderCallSignatureDetails(
   signature: TypeOfKind<'CallSignature'>,
   components: InternalReferenceComponents,
-  options: { heading?: string; showSignatureText?: boolean } = {}
+  options: {
+    heading?: string
+    showSignatureText?: boolean
+    parentDescription?: string
+  } = {}
 ) {
   const items: React.ReactNode[] = []
 
@@ -646,7 +622,14 @@ function renderCallSignatureDetails(
     )
   }
 
-  const documentation = renderDocumentation(signature, components)
+  const shouldSkipDocumentation =
+    options.parentDescription && signature.description
+      ? signature.description.trim() === options.parentDescription.trim()
+      : false
+
+  const documentation = shouldSkipDocumentation
+    ? null
+    : renderDocumentation(signature, components)
 
   if (documentation) {
     items.push(
@@ -1026,6 +1009,7 @@ function FunctionSection({
           const detail = renderCallSignatureDetails(signature, components, {
             heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
             showSignatureText: true,
+            parentDescription: node.description,
           })
 
           if (!detail) {
