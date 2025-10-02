@@ -578,6 +578,7 @@ export namespace Kind {
 export type Kind =
   | Kind.TypeExpression
   | Kind.Class
+  | Kind.ClassConstructor
   | Kind.ClassProperty
   | Kind.ClassMethod
   | Kind.ClassAccessor
@@ -2255,7 +2256,11 @@ function resolveMemberSignatures(
         const startIndex = signatures.length
         const resolvedLength = resolvedSignatures.length
         signatures.length = startIndex + resolvedLength
-        for (let signatureIndex = 0; signatureIndex < resolvedLength; ++signatureIndex) {
+        for (
+          let signatureIndex = 0;
+          signatureIndex < resolvedLength;
+          ++signatureIndex
+        ) {
           signatures[startIndex + signatureIndex] =
             resolvedSignatures[signatureIndex]
         }
