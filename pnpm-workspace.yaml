@@ -14,9 +14,9 @@ catalog:
   geist: 1.5.1
   next: 15.5.4
   prettier: 3.6.2
-  react: 19.2.0
+  react: 19.1.1
   react-aria-components: 1.12.2
-  react-dom: 19.2.0
+  react-dom: 19.1.1
   restyle: 3.4.2
   tm-grammars: 1.24.15
   tm-themes: 1.10.9
