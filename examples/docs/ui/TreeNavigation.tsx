@@ -21,12 +21,17 @@ async function ListNavigation({
   const depth = entry.getDepth()
   const metadata =
     variant === 'title' && (isJavaScriptFile(entry) || isMDXFile(entry))
-      ? await entry.getExportValue('metadata').catch((error) => {
-          if (error instanceof ModuleExportNotFoundError) {
-            return undefined
-          }
-          throw error
-        })
+      ? await entry
+          .getExportValue<
+            { title?: string; label?: string },
+            'metadata'
+          >('metadata')
+          .catch((error) => {
+            if (error instanceof ModuleExportNotFoundError) {
+              return undefined
+            }
+            throw error
+          })
       : null
 
   if (isFile(entry)) {

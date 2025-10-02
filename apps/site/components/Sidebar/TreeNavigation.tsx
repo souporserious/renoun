@@ -103,9 +103,10 @@ async function getEntryMetadata(entry: FileSystemEntry<any>) {
   }
 
   try {
-    return await entry.getExportValue<{ title?: string; label?: string }>(
+    return await entry.getExportValue<
+      { title?: string; label?: string },
       'metadata'
-    )
+    >('metadata')
   } catch (error) {
     if (error instanceof ModuleExportNotFoundError) {
       return undefined

@@ -1154,16 +1154,14 @@ export class JavaScriptFile<
   }
 
   /** Get the runtime value of an export in the JavaScript file. */
-  async getExportValue<
-    Value = never,
-    ExportName extends Extract<keyof Types, string> = Extract<
-      keyof Types,
-      string
-    >,
-  >(
+  async getExportValue<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<[Value] extends [never] ? Types[ExportName] : Value> {
-    const fileExport = await this.getExport(name)
+  ): Promise<Types[ExportName]>
+  async getExportValue<Value, ExportName extends string>(
+    name: ExportName
+  ): Promise<Value>
+  async getExportValue(name: string): Promise<any> {
+    const fileExport = await this.getExport(name as any)
     return (await fileExport.getValue()) as any
   }
 
@@ -1530,17 +1528,12 @@ export class MDXFile<
 
   /** Get the runtime value of an export in the MDX file. */
   async getExportValue<
-    Value = never,
-    ExportName extends 'default' | Extract<keyof Types, string> =
-      | 'default'
-      | Extract<keyof Types, string>,
-  >(
+    ExportName extends 'default' | Extract<keyof Types, string>,
+  >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]>
+  async getExportValue<Value, ExportName extends string>(
     name: ExportName
-  ): Promise<
-    [Value] extends [never]
-      ? ({ default: MDXContent } & Types)[ExportName]
-      : Value
-  > {
+  ): Promise<Value>
+  async getExportValue(name: string): Promise<any> {
     const fileExport = await this.getExport(name as any)
     return (await fileExport.getValue()) as any
   }
@@ -1678,6 +1671,25 @@ export class MarkdownFile<
       this.#headings = getMarkdownHeadings(source)
     }
     return this.#headings
+  }
+
+  /** Get the runtime value of an export in the Markdown file. (Permissive signature for union compatibility.) */
+  async getExportValue<
+    ExportName extends 'default' | Extract<keyof Types, string>,
+  >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]>
+  async getExportValue<Value, ExportName extends string>(
+    name: ExportName
+  ): Promise<Value>
+  async getExportValue(name: string): Promise<any> {
+    const fileModule = await this.#getModule()
+    if (!(name in fileModule)) {
+      throw new ModuleExportNotFoundError(
+        this.getAbsolutePath(),
+        name as any,
+        'Markdown'
+      )
+    }
+    return fileModule[name]
   }
 }
 
@@ -2026,10 +2038,10 @@ export class Directory<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
-        : Extension extends 'md'
-          ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
           : Extension extends 'mdx'
             ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+          : Extension extends 'md'
+            ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
             : File<LoaderTypes, Path, Extension>
       : File<LoaderTypes>
   >
@@ -2044,10 +2056,10 @@ export class Directory<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
-        : Extension extends 'md'
-          ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
           : Extension extends 'mdx'
             ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+          : Extension extends 'md'
+            ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
             : File<LoaderTypes, Extension>
       : File<LoaderTypes>
   >
@@ -2918,10 +2930,10 @@ export class Collection<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<Types[Extension]>
-        : Extension extends 'md'
-          ? MarkdownFile<Types['md']>
           : Extension extends 'mdx'
             ? MDXFile<Types['mdx']>
+          : Extension extends 'md'
+            ? MarkdownFile<Types['md']>
             : File<Types>
       : File<Types>
   > {
@@ -3013,18 +3025,18 @@ export type FileWithExtension<
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
     ? JavaScriptFile<Types[Extension], Types, any, Extension>
-    : Extension extends 'md'
-      ? MarkdownFile<Types['md'], Types, any, Extension>
       : Extension extends 'mdx'
         ? MDXFile<Types['mdx'], Types, any, Extension>
+      : Extension extends 'md'
+        ? MarkdownFile<Types['md'], Types, any, Extension>
         : File<Types>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
       ? JavaScriptFile<Types[Extension[number]], Types, any, Extension[number]>
-      : Extension[number] extends 'md'
-        ? MarkdownFile<Types['md'], Types, any, Extension[number]>
         : Extension[number] extends 'mdx'
           ? MDXFile<Types['mdx'], Types, any, Extension[number]>
+        : Extension[number] extends 'md'
+          ? MarkdownFile<Types['md'], Types, any, Extension[number]>
           : File<Types>
     : File<Types>
 

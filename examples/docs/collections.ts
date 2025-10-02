@@ -24,7 +24,7 @@ export const docs = new Directory({
 export const routes = docs.getEntries({ recursive: true }).then((entries) =>
   Promise.all(
     entries.map(async (doc) => {
-      const file = await resolveFileFromEntry(doc)
+      const file = await resolveFileFromEntry(doc, 'mdx')
       const metadata = file ? await file.getExportValue('metadata') : undefined
 
       if (!metadata) {
