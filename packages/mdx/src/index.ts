@@ -6,6 +6,8 @@ export { rehypePlugins } from './rehype/index.js'
 export { remarkPlugins } from './remark/index.js'
 export {
   createSlug,
+  getMDXHeadings,
+  getMarkdownHeadings,
   getMarkdownContent,
   getMDXExportStaticValues,
   getMDXRuntimeValue,

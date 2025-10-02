@@ -1,4 +1,5 @@
 export { createSlug, type SlugCasing } from './create-slug.js'
+export { getMarkdownHeadings, getMDXHeadings } from './get-headings.js'
 export { getMarkdownContent } from './get-markdown-content.js'
 export type {
   MarkdownComponents,
