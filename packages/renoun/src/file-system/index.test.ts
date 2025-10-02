@@ -17,6 +17,7 @@ import {
   Directory,
   JavaScriptFile,
   JavaScriptModuleExport,
+  MarkdownFile,
   MDXFile,
   Collection,
   isDirectory,
@@ -1150,6 +1151,79 @@ describe('file system', () => {
     ])
     expect(await objectExport.getStaticValue()).toEqual({ a: 1, b: 'x' })
     expect(getTextSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test('markdown file default loader provides content and headings', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.md': '# Hello\n\n## World',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'md')
+
+    expect(file).toBeInstanceOf(MarkdownFile)
+
+    const Content = await file.getContent()
+    expectTypeOf(Content).toMatchTypeOf<MDXContent>()
+
+    const headings = await file.getHeadings()
+    expect(headings).toMatchObject([
+      { id: 'hello', level: 1, text: 'Hello' },
+      { id: 'world', level: 2, text: 'World' },
+    ])
+    expectTypeOf(headings).toMatchTypeOf<Headings>()
+  })
+
+  test('markdown file caches parsed headings', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.md': '# Hello',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'md')
+    const getTextSpy = vi.spyOn(file, 'getText')
+
+    await file.getHeadings()
+    await file.getHeadings()
+
+    expect(getTextSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test('mdx file getContent/getHeadings alias exported values', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.mdx': '# Hello\n\n## World',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'mdx')
+
+    expect(file).toBeInstanceOf(MDXFile)
+
+    const Content = await file.getContent()
+    expectTypeOf(Content).toMatchTypeOf<MDXContent>()
+
+    const headings = await file.getHeadings()
+    expect(headings).toMatchObject([
+      { id: 'hello', level: 1, text: 'Hello' },
+      { id: 'world', level: 2, text: 'World' },
+    ])
+    expectTypeOf(headings).toMatchTypeOf<Headings>()
+  })
+
+  test('mdx file getHeadings falls back to parsing when export missing', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.mdx': '# Hello\n\n## World',
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        mdx: async () => ({ default: () => null }),
+      },
+    })
+    const file = await directory.getFile('index', 'mdx')
+    const headings = await file.getHeadings()
+
+    expect(headings).toMatchObject([
+      { id: 'hello', level: 1, text: 'Hello' },
+      { id: 'world', level: 2, text: 'World' },
+    ])
   })
 
   test('schema transforms export value', async () => {

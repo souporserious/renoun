@@ -7,11 +7,13 @@ import {
   getMDXExportStaticValues,
   getMDXRuntimeValue,
   getMDXHeadings,
+  getMarkdownHeadings,
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
 import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
 import { CodeInline, parseCodeProps } from '../components/CodeInline.js'
+import { Markdown, type MarkdownComponents } from '../components/Markdown.js'
 import type { MDXComponents } from '../mdx/index.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
@@ -53,15 +55,24 @@ export { MemoryFileSystem } from './MemoryFileSystem.js'
 export { NodeFileSystem } from './NodeFileSystem.js'
 export { Repository } from './Repository.js'
 
-const mdxComponents = {
+const markdownComponents = {
   pre: (props) => <CodeBlock {...parsePreProps(props)} />,
   code: (props) => <CodeInline {...parseCodeProps(props)} />,
-} satisfies MDXComponents
+} satisfies MDXComponents & MarkdownComponents
 
 const defaultLoaders: {
+  md: ModuleLoader<any>
   mdx: ModuleLoader<any>
   [extension: string]: ModuleLoader<any>
 } = {
+  md: async (_, file) => {
+    const value = await file.getText()
+    return {
+      default: () => (
+        <Markdown components={markdownComponents}>{value}</Markdown>
+      ),
+    }
+  },
   mdx: async (_, file) => {
     const value = await file.getText()
     const { default: Content, ...mdxExports } = await getMDXRuntimeValue({
@@ -70,7 +81,7 @@ const defaultLoaders: {
       rehypePlugins,
     })
     return {
-      default: () => <Content components={mdxComponents} />,
+      default: () => <Content components={markdownComponents} />,
       ...mdxExports,
     }
   },
@@ -79,7 +90,7 @@ const defaultLoaders: {
 /** A function that resolves the module runtime. */
 type ModuleRuntimeLoader<Value> = (
   path: string,
-  file: File<any> | JavaScriptFile<any> | MDXFile<any>
+  file: File<any> | JavaScriptFile<any> | MarkdownFile<any> | MDXFile<any>
 ) => Promise<Value>
 
 /** A record of named exports in a module. */
@@ -208,6 +219,9 @@ type InferModuleLoaderTypes<Loader extends ModuleLoader> =
 
 /** Default module types for common file extensions. */
 export interface DefaultModuleTypes {
+  md: {
+    default: MDXContent
+  }
   mdx: {
     default: MDXContent
   }
@@ -232,7 +246,7 @@ export type InferModuleLoadersTypes<Loaders extends ModuleLoaders> = {
 /** Extract keys from runtime‑capable loaders. */
 export type LoadersWithRuntimeKeys<Loaders> = Extract<
   keyof Loaders,
-  'js' | 'jsx' | 'ts' | 'tsx' | 'mdx'
+  'js' | 'jsx' | 'ts' | 'tsx' | 'md' | 'mdx'
 >
 
 /** Determines if the loader is a resolver. */
@@ -1588,6 +1602,85 @@ export class MDXFile<
   }
 }
 
+/** Options for a Markdown file in the file system. */
+export interface MarkdownFileOptions<
+  Types extends Record<string, any>,
+  DirectoryTypes extends Record<string, any>,
+  Path extends string,
+> extends FileOptions<DirectoryTypes, Path> {
+  loader?: ModuleLoader<{ default: MDXContent } & Types>
+}
+
+/** A Markdown file in the file system. */
+export class MarkdownFile<
+  Types extends Record<string, any> = { default: MDXContent },
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
+  const Path extends string = string,
+  Extension extends string = ExtractFileExtension<Path>,
+> extends File<DirectoryTypes, Path, Extension> {
+  #loader: ModuleLoader<{ default: MDXContent } & Types>
+  #headings?: Headings
+  #modulePromise?: Promise<any>
+
+  constructor({
+    loader,
+    ...fileOptions
+  }: MarkdownFileOptions<
+    { default: MDXContent } & Types,
+    DirectoryTypes,
+    Path
+  >) {
+    super(fileOptions)
+    this.#loader = loader ?? defaultLoaders.md
+  }
+
+  #getModule() {
+    const path = removeExtension(this.getRelativePathToRoot())
+    const loader = this.#loader
+    let executeModuleLoader: () => Promise<any>
+
+    if (isLoader(loader)) {
+      executeModuleLoader = () => loader(path, this)
+    } else if (isLoaderWithSchema(loader)) {
+      if (!loader.runtime) {
+        const parentPath = this.getParent().getRelativePathToWorkspace()
+        throw new Error(
+          `[renoun] A markdown runtime loader for the parent Directory at ${parentPath} is not defined.`
+        )
+      }
+      executeModuleLoader = () => (loader.runtime as any)(path, this)
+    } else {
+      throw new Error(
+        `[renoun] This loader is missing a markdown runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
+      )
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      if (this.#modulePromise) {
+        return this.#modulePromise
+      }
+      this.#modulePromise = executeModuleLoader()
+      return this.#modulePromise
+    }
+
+    return executeModuleLoader()
+  }
+
+  /** Get the rendered markdown content. */
+  async getContent(): Promise<MDXContent> {
+    return this.#getModule().then((module) => module.default)
+  }
+
+  /** Get headings parsed from the markdown content. */
+  async getHeadings(): Promise<Headings> {
+    if (!this.#headings) {
+      const source = await this.getText()
+      this.#headings = getMarkdownHeadings(source)
+    }
+    return this.#headings
+  }
+}
+
 type Narrowed<Filter> = Filter extends (entry: any) => entry is infer ReturnType
   ? ReturnType
   : never
@@ -1933,9 +2026,11 @@ export class Directory<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
-        : Extension extends 'mdx'
-          ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
-          : File<LoaderTypes, Path, Extension>
+        : Extension extends 'md'
+          ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
+          : Extension extends 'mdx'
+            ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+            : File<LoaderTypes, Path, Extension>
       : File<LoaderTypes>
   >
 
@@ -1949,9 +2044,11 @@ export class Directory<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
-        : Extension extends 'mdx'
-          ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
-          : File<LoaderTypes, Extension>
+        : Extension extends 'md'
+          ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
+          : Extension extends 'mdx'
+            ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+            : File<LoaderTypes, Extension>
       : File<LoaderTypes>
   >
 
@@ -2341,11 +2438,13 @@ export class Directory<
         }
 
         const file =
-          extension === 'mdx'
-            ? new MDXFile({ ...sharedOptions, loader })
-            : isJavaScriptLikeExtension(extension)
-              ? new JavaScriptFile({ ...sharedOptions, loader })
-              : new File(sharedOptions)
+          extension === 'md'
+            ? new MarkdownFile({ ...sharedOptions, loader })
+            : extension === 'mdx'
+              ? new MDXFile({ ...sharedOptions, loader })
+              : isJavaScriptLikeExtension(extension)
+                ? new JavaScriptFile({ ...sharedOptions, loader })
+                : new File(sharedOptions)
 
         if (this.#filter && !(await this.#passesFilter(file))) {
           continue
@@ -2819,9 +2918,11 @@ export class Collection<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<Types[Extension]>
-        : Extension extends 'mdx'
-          ? MDXFile<Types['mdx']>
-          : File<Types>
+        : Extension extends 'md'
+          ? MarkdownFile<Types['md']>
+          : Extension extends 'mdx'
+            ? MDXFile<Types['mdx']>
+            : File<Types>
       : File<Types>
   > {
     const normalizedPath = Array.isArray(path)
@@ -2912,15 +3013,19 @@ export type FileWithExtension<
 > = Extension extends string
   ? IsJavaScriptLikeExtension<Extension> extends true
     ? JavaScriptFile<Types[Extension], Types, any, Extension>
-    : Extension extends 'mdx'
-      ? MDXFile<Types['mdx'], Types, any, Extension>
-      : File<Types>
+    : Extension extends 'md'
+      ? MarkdownFile<Types['md'], Types, any, Extension>
+      : Extension extends 'mdx'
+        ? MDXFile<Types['mdx'], Types, any, Extension>
+        : File<Types>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
       ? JavaScriptFile<Types[Extension[number]], Types, any, Extension[number]>
-      : Extension[number] extends 'mdx'
-        ? MDXFile<Types['mdx'], Types, any, Extension[number]>
-        : File<Types>
+      : Extension[number] extends 'md'
+        ? MarkdownFile<Types['md'], Types, any, Extension[number]>
+        : Extension[number] extends 'mdx'
+          ? MDXFile<Types['mdx'], Types, any, Extension[number]>
+          : File<Types>
     : File<Types>
 
 type StringUnion<Type> = Extract<Type, string> | (string & {})
@@ -2970,6 +3075,16 @@ export function isJavaScriptFile<
   entry: FileSystemEntry<DirectoryTypes> | undefined
 ): entry is JavaScriptFile<FileTypes, DirectoryTypes> {
   return entry instanceof JavaScriptFile
+}
+
+/** Determines if a `FileSystemEntry` is a `MarkdownFile`. */
+export function isMarkdownFile<
+  FileTypes extends Record<string, any>,
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
+>(
+  entry: FileSystemEntry<DirectoryTypes> | undefined
+): entry is MarkdownFile<FileTypes, DirectoryTypes> {
+  return entry instanceof MarkdownFile
 }
 
 /** Determines if a `FileSystemEntry` is an `MDXFile`. */
