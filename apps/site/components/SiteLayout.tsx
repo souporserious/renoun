@@ -1,10 +1,13 @@
 import { Link, Logo } from 'renoun'
 import { RenounLogo } from 'renoun/assets'
 
+import { getSearchRoutes } from '@/lib/get-search-routes'
+
 import { NavigationLink } from './NavigationLink'
+import { SearchDialog } from './SearchDialog'
 import { NavigationToggle } from './Sidebar/NavigationToggle'
 
-export function SiteLayout({
+export async function SiteLayout({
   sidebar,
   children,
   variant,
@@ -13,6 +16,8 @@ export function SiteLayout({
   children: React.ReactNode
   variant?: 'home' | 'docs'
 }) {
+  const searchRoutes = await getSearchRoutes()
+
   return (
     <div
       css={{
@@ -127,6 +132,7 @@ export function SiteLayout({
               },
             }}
           >
+            <SearchDialog routes={searchRoutes} />
             <a
               css={{
                 width: 'var(--font-size-body-1)',
