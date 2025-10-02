@@ -723,6 +723,53 @@ function renderCallSignatureDetails(
   return <components.Column gap="medium">{items}</components.Column>
 }
 
+function renderConstructorSignature(
+  signature: TypeOfKind<'CallSignature'>,
+  components: InternalReferenceComponents
+) {
+  const items: React.ReactNode[] = []
+
+  // Signature line
+  items.push(
+    <components.Code key="signature-text">{signature.text}</components.Code>
+  )
+
+  // Parameters table (if any) without enclosing TypeDetail label
+  if (signature.parameters.length) {
+    items.push(
+      <TypeTable
+        key="parameters"
+        rows={signature.parameters}
+        headers={['Parameter', 'Type', 'Default Value']}
+        renderRow={(parameter, hasSubRow) =>
+          renderParameterRow(parameter, components, hasSubRow)
+        }
+        components={components}
+      />
+    )
+  }
+
+  // Any documentation or tags appear beneath.
+  const documentation = renderDocumentation(signature, components)
+  if (documentation) {
+    items.push(
+      <React.Fragment key="documentation">{documentation}</React.Fragment>
+    )
+  }
+
+  // Modifiers (async, generator) shown last
+  const modifiers: string[] = []
+  if (signature.isAsync) modifiers.push('async')
+  if (signature.isGenerator) modifiers.push('generator')
+  if (modifiers.length) {
+    items.push(
+      <components.Code key="modifiers">{modifiers.join(' ')}</components.Code>
+    )
+  }
+
+  return <components.Column gap="medium">{items}</components.Column>
+}
+
 function ClassSection({
   node,
   components,
@@ -746,9 +793,7 @@ function ClassSection({
           <components.Signatures>
             {node.constructor.signatures.map((signature, index) => (
               <React.Fragment key={index}>
-                {renderCallSignatureDetails(signature, components, {
-                  showSignatureText: true,
-                })}
+                {renderConstructorSignature(signature, components)}
               </React.Fragment>
             ))}
           </components.Signatures>
