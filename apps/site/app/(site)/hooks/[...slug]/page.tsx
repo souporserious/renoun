@@ -260,7 +260,7 @@ async function Preview({
     <CodePreview
       fileExport={fileExport}
       header={
-        <header>
+        <header css={{ marginBottom: '1rem' }}>
           <div
             css={{
               display: 'flex',

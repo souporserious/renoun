@@ -31,7 +31,6 @@ export async function CodePreview({
         flexDirection: 'column',
         borderRadius: 5,
         ...(fullBleed ? { width: 'calc(100% + 2rem)', margin: '0 -1rem' } : {}),
-        ...(header ? { gap: '1rem' } : {}),
       }}
     >
       {header}
