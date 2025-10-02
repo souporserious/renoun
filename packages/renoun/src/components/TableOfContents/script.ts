@@ -55,13 +55,14 @@ export default function ({
 
   function setActiveLink(target: HTMLElement): void {
     isScrollingIntoView = true
+    target.scrollIntoView({
+      behavior: smoothScrollBehavior,
+      block: 'start',
+    })
+
     const nextActiveLink = getLink(target.id)
     if (nextActiveLink) {
       nextActiveLink.setAttribute('aria-current', 'location')
-      nextActiveLink.scrollIntoView({
-        behavior: smoothScrollBehavior,
-        block: 'nearest',
-      })
       history.pushState(null, '', '#' + target.id)
       if (previousActiveLink) {
         previousActiveLink.removeAttribute('aria-current')
