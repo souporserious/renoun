@@ -1,4 +1,4 @@
-import { Tokens, type JavaScriptModuleExport } from 'renoun'
+import { Code, type JavaScriptModuleExport } from 'renoun'
 import { keyframes } from 'restyle'
 import { GeistMono } from 'geist/font/mono'
 
@@ -128,7 +128,7 @@ function HeroExample({
                 }}
                 className={GeistMono.className}
               >
-                <Tokens language="tsx">{code}</Tokens>
+                <Code.Tokens language="tsx">{code}</Code.Tokens>
               </pre>
             </Collapse.Content>
 
@@ -264,7 +264,7 @@ function HeroExample({
             }}
             className={GeistMono.className}
           >
-            <Tokens language="tsx">{code}</Tokens>
+            <Code.Tokens language="tsx">{code}</Code.Tokens>
           </pre>
         )}
       </div>
