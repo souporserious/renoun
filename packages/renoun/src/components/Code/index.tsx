@@ -7,6 +7,8 @@ import {
   getThemeColors,
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
+import { getConfig } from '../Config/ServerConfigContext.js'
+import { CopyButton } from '../CopyButton/index.js'
 import {
   CodeBlock as CodeBlockBase,
   type CodeBlockProps,
@@ -14,9 +16,6 @@ import {
   type CodeBlockPreProps,
   type CodeBlockCodeProps,
 } from './CodeBlock.js'
-import { getScrollContainerStyles } from './utils.js'
-import { CopyButton } from '../CopyButton/index.js'
-import { getConfig } from '../Config/ServerConfigContext.js'
 import type { ContextValue } from './Context.js'
 import { Context } from './Context.js'
 import type { LineNumbersProps } from './LineNumbers.js'
@@ -25,6 +24,7 @@ import type { TokensProps } from './Tokens.js'
 import { Tokens } from './Tokens.js'
 import type { ToolbarProps } from './Toolbar.js'
 import { Toolbar } from './Toolbar.js'
+import { getScrollContainerStyles } from './utils.js'
 
 type CopyButtonProps = React.ComponentProps<typeof CopyButton>
 
@@ -471,12 +471,7 @@ function CodeComponent(props: CodeProps) {
   return <CodeBlockBase {...blockProps} />
 }
 
-function CodeBlock(props: CodeBlockProps) {
-  return <CodeComponent {...props} />
-}
-
 type CodeNamespace = typeof CodeComponent & {
-  Block: typeof CodeBlock
   Provider: typeof CodeProvider
   Tokens: typeof Tokens
   LineNumbers: typeof LineNumbers
@@ -485,7 +480,6 @@ type CodeNamespace = typeof CodeComponent & {
 }
 
 export const Code = Object.assign(CodeComponent, {
-  Block: CodeBlock,
   Provider: CodeProvider,
   Tokens,
   LineNumbers,

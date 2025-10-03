@@ -9,29 +9,17 @@ custom styles. For example, the container can be replaced to change layout and
 type ramp:
 
 ```tsx
-import {
-  Code,
-  type CodeComponents,
-} from 'renoun'
+import { Code, type CodeComponents } from 'renoun'
 import styles from './CodeBlock.module.css'
-
-function Container({
-  children,
-  className,
-}: CodeComponents['BlockContainer']) {
-  return (
-    <div className={`${styles.container} ${className ?? ''}`.trim()}>
-      {children}
-    </div>
-  )
-}
 
 export function CodeBlock(props: CodeComponents['Block']) {
   return (
     <Code
       {...props}
       components={{
-        Container,
+        Container: ({ children, className }) => (
+          <div className={`${styles.container} ${className}`}>{children}</div>
+        ),
         ...props.components,
       }}
     />

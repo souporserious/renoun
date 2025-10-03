@@ -2,7 +2,6 @@ import React, { Suspense } from 'react'
 import { css, styled } from 'restyle'
 
 import { BaseDirectoryContext } from '../Context.js'
-import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
 import { getContext } from '../../utils/context.js'
 import {
   getThemeColors,
@@ -26,9 +25,19 @@ import {
   getScrollContainerStyles,
 } from './utils.js'
 
+interface PaddingConfig {
+  top: string
+  right: string
+  bottom: string
+  left: string
+  horizontal: string
+  vertical: string
+  all: string
+}
+
 export interface CodeBlockContainerProps {
   shouldRenderToolbar: boolean
-  padding: ReturnType<typeof computeDirectionalStyles>
+  padding: PaddingConfig
   theme: Awaited<ReturnType<typeof getThemeColors>>
   className?: string
   children: React.ReactNode
@@ -37,7 +46,7 @@ export interface CodeBlockContainerProps {
 export interface CodeBlockPreProps {
   shouldRenderToolbar: boolean
   showLineNumbers: boolean
-  padding: ReturnType<typeof computeDirectionalStyles>
+  padding: PaddingConfig
   theme: Awaited<ReturnType<typeof getThemeColors>>
   highlightedLines?: string
   focusedLines?: string
@@ -47,15 +56,21 @@ export interface CodeBlockPreProps {
 
 export interface CodeBlockCodeProps {
   showLineNumbers: boolean
-  padding: ReturnType<typeof computeDirectionalStyles>
+  padding: PaddingConfig
   className: string
   children: React.ReactNode
 }
 
 export interface CodeBlockComponents {
+  /** Custom renderer for the outer container element. */
   Container?: React.ComponentType<CodeBlockContainerProps>
+
+  /** Custom renderer for the `pre` element. */
   Pre?: React.ComponentType<CodeBlockPreProps>
+
+  /** Custom renderer for the `code` element. */
   Code?: React.ComponentType<CodeBlockCodeProps>
+
   /** Custom renderer for the line numbers column. */
   LineNumbers?: React.ComponentType<LineNumbersProps>
 
@@ -152,7 +167,17 @@ function CodeBlockWithFallback(props: CodeBlockProps) {
     )
   }
 
-  const containerPadding = computeDirectionalStyles('padding', '0.5lh')
+  const PADDING_X = 'var(--padding-x, 0.5lh)'
+  const PADDING_Y = 'var(--padding-y, 0.5lh)'
+  const containerPadding = {
+    top: PADDING_Y,
+    right: PADDING_X,
+    bottom: PADDING_Y,
+    left: PADDING_X,
+    horizontal: PADDING_X,
+    vertical: PADDING_Y,
+    all: `${PADDING_Y} ${PADDING_X}`,
+  }
   const shouldRenderToolbar = Boolean(
     restProps.showToolbar === undefined
       ? restProps.path || restProps.allowCopy
@@ -258,9 +283,19 @@ async function CodeBlockAsync({
   shouldAnalyze,
   shouldFormat,
   children,
-  components,
+  components = {},
 }: CodeBlockProps) {
-  const containerPadding = computeDirectionalStyles('padding', '0.5lh')
+  const PADDING_X = 'var(--padding-x, 0.5lh)'
+  const PADDING_Y = 'var(--padding-y, 0.5lh)'
+  const containerPadding = {
+    top: PADDING_Y,
+    right: PADDING_X,
+    bottom: PADDING_Y,
+    left: PADDING_X,
+    horizontal: PADDING_X,
+    vertical: PADDING_Y,
+    all: `${PADDING_Y} ${PADDING_X}`,
+  }
   const {
     Container: ContainerComponent = DefaultContainer,
     Pre: PreComponent = DefaultPre,
@@ -269,8 +304,12 @@ async function CodeBlockAsync({
     Tokens: TokensComponent = Tokens,
     Toolbar: ToolbarComponent = Toolbar,
     CopyButton: CopyButtonComponent = CopyButton,
-  } = components ?? {}
-  const resolvers: any = {}
+  } = components
+  const resolvers = {} as {
+    promise: Promise<void>
+    resolve: () => void
+    reject: (error: unknown) => void
+  }
   resolvers.promise = new Promise<void>((resolve, reject) => {
     resolvers.resolve = resolve
     resolvers.reject = reject
