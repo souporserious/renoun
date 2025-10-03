@@ -1,23 +1,10 @@
-export {
-  CodeBlock,
-  LineNumbers,
-  Tokens,
-  Toolbar,
-  parsePreProps,
-  type CodeBlockProps,
-  type TokensProps,
-  type ToolbarProps,
-} from './CodeBlock/index.js'
-export {
-  CodeInline,
-  parseCodeProps,
-  type CodeInlineProps,
-} from './CodeInline.js'
+export { Code, type CodeProps, type CodeComponents } from './Code/index.js'
 export { Copyright } from './Copyright.js'
 export {
   Command,
   type CommandProps,
   type CommandVariant,
+  type CommandComponents,
 } from './Command/index.js'
 export { Link } from './Link/index.js'
 export { Logo } from './Logo.js'

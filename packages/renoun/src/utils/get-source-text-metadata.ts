@@ -35,7 +35,7 @@ export async function getSourceTextMetadata({
   project,
   filePath: filePathProp,
   language,
-  shouldFormat = true,
+  shouldFormat,
   value,
   baseDirectory,
 }: GetSourceTextMetadataOptions): Promise<SourceTextMetadata> {
@@ -99,7 +99,7 @@ export async function getSourceTextMetadata({
       finalValue = await formatSourceText(filePath, finalValue, finalLanguage)
     } catch (error) {
       throw new Error(
-        `[renoun] Error formatting CodeBlock source text${filePath ? ` at file path "${filePath}"` : ''} ${error}`
+        `[renoun] Error formatting Code source text${filePath ? ` at file path "${filePath}"` : ''} ${error}`
       )
     }
 

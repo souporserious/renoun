@@ -1,5 +1,5 @@
 import {
-  CodeInline,
+  Code,
   Command,
   type CommandVariant,
   type MDXComponents as MDXComponentsType,
@@ -115,19 +115,54 @@ export const MDXComponents = {
     return (
       <Command
         variant={variant}
-        css={{
-          container: {
-            fontSize: 'var(--font-size-code-2)',
-            lineHeight: 'var(--line-height-code-2)',
-            width: 'calc(100% + 2rem)',
-            margin: '0 -1rem',
+        components={{
+          Container: ({ id, className, children: containerChildren }) => {
+            const classes = [className, GeistMono.className]
+              .filter(Boolean)
+              .join(' ')
+
+            return (
+              <div
+                data-command-group={id}
+                className={classes}
+                css={{
+                  fontSize: 'var(--font-size-code-2)',
+                  lineHeight: 'var(--line-height-code-2)',
+                  width: 'calc(100% + 2rem)',
+                  margin: '0 -1rem',
+                }}
+              >
+                {containerChildren}
+              </div>
+            )
           },
-          tabPanel: {
-            padding: '0.75rem 1rem',
+          TabPanel: ({
+            id,
+            tabId,
+            panelId,
+            packageManager,
+            command,
+            isSelected,
+            className,
+            children: panelChildren,
+          }) => {
+            return (
+              <pre
+                role="tabpanel"
+                id={panelId}
+                hidden={!isSelected}
+                aria-labelledby={tabId}
+                data-command={packageManager}
+                data-command-tab-panel={command}
+                data-command-group={id}
+                className={className}
+                suppressHydrationWarning
+                css={{ padding: '0.75rem 1rem' }}
+              >
+                {panelChildren}
+              </pre>
+            )
           },
-        }}
-        className={{
-          container: GeistMono.className,
         }}
       >
         {children}
@@ -177,15 +212,24 @@ export const MDXComponents = {
   },
   code: (props) => {
     return (
-      <CodeInline
+      <Code
+        variant="inline"
         {...props}
-        paddingY="0"
-        css={{
-          lineHeight: 1.15,
-          overflowX: 'auto',
-          color: '#82AAFF',
+        components={{
+          Root: ({ className, children }) => (
+            <code
+              className={`${className} ${GeistMono.className}`.trim()}
+              css={{
+                lineHeight: 1.15,
+                overflowX: 'auto',
+                color: '#82AAFF',
+                padding: '0 0.25em 0',
+              }}
+            >
+              {children}
+            </code>
+          ),
         }}
-        className={GeistMono.className}
       />
     )
   },

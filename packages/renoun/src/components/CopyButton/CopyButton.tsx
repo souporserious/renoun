@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { getResolvedContext } from '../CodeBlock/Context.js'
+import { getResolvedContext } from '../Code/Context.js'
 import { CopyButtonClient } from './CopyButtonClient.js'
 
 /**

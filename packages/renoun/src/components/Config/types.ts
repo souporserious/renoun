@@ -60,7 +60,7 @@ export type GitConfig = {
  * @internal
  */
 export interface ConfigurationOptions {
-  /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
+  /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, inline `Code`, and `Tokens` components. */
   theme?: ThemeValue | Record<string, ThemeValue>
 
   /** List of languages to load for syntax highlighting. */

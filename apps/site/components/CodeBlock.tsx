@@ -1,27 +1,35 @@
-import { CodeBlock as DefaultCodeBlock, type CodeBlockProps } from 'renoun'
+import { Code, type CodeComponents, type CodeProps } from 'renoun'
 import { GeistMono } from 'geist/font/mono'
 
-export function CodeBlock(props: CodeBlockProps) {
+type SiteCodeBlockProps = Extract<CodeProps, { variant?: 'block' }>
+
+export function CodeBlock(props: SiteCodeBlockProps) {
+  const { components, ...restProps } = props as SiteCodeBlockProps & {
+    components?: CodeComponents['Block']['components']
+  }
+
   return (
-    <DefaultCodeBlock
-      {...props}
-      css={{
-        ...props.css,
-        container: {
-          fontSize: 'var(--font-size-code-2)',
-          lineHeight: 'var(--line-height-code-2)',
-          width: 'calc(100% + 2rem)',
-          padding: '0.75rem 1rem',
-          margin: '0 -1rem',
-          ...props.css?.container,
+    <Code
+      {...restProps}
+      components={{
+        Container: ({ children, className }) => {
+          return (
+            <div
+              className={`${GeistMono.className}${className ? ` ${className}` : ''}`}
+              css={{
+                '--padding-x': '1rem',
+                '--padding-y': '0.75rem',
+                fontSize: 'var(--font-size-code-2)',
+                lineHeight: 'var(--line-height-code-2)',
+                width: 'calc(100% + 2rem)',
+                margin: '0 -1rem',
+              }}
+            >
+              {children}
+            </div>
+          )
         },
-        toolbar: {
-          padding: '0.75rem 1rem',
-          ...props.css?.toolbar,
-        },
-      }}
-      className={{
-        container: GeistMono.className,
+        ...components,
       }}
     />
   )

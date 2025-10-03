@@ -1,7 +1,7 @@
-import { CodeBlock, parsePreProps, type MDXComponents } from 'renoun'
+import { Code, type MDXComponents } from 'renoun'
 
 export function useMDXComponents() {
   return {
-    pre: (props) => <CodeBlock {...parsePreProps(props)} />,
+    pre: (props) => <Code {...props} />,
   } satisfies MDXComponents
 }

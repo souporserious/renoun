@@ -155,7 +155,7 @@ Parses the meta string from code fences as props and replaces the parent `pre` e
 
 <Note>
 
-A `CodeBlock` is required to be passed as a component to the MDX renderer.
+A component named `CodeBlock` is required to be passed to the MDX renderer. The component can simply render the [`Code` block variant](/components/code-block) from `renoun`.
 
 </Note>
 
@@ -173,14 +173,16 @@ const withMDX = createMDXPlugin({
 })
 ```
 
-Or import and pass `CodeBlock` as a component to the MDX component:
+Or import and map the `Code` component to a `CodeBlock` MDX component:
 
 ```tsx
-import { CodeBlock } from 'renoun'
+import { Code } from 'renoun'
 import GettingStarted from './docs/getting-started.mdx'
 
 export default function Page() {
-  return <GettingStarted components={{ CodeBlock }} />
+  return (
+    <GettingStarted components={{ CodeBlock: Code }} />
+  )
 }
 ```
 

@@ -116,13 +116,15 @@ export default withMDX({
 
 ## MDX Code Blocks
 
-Use the `CodeBlock` component to override the code fences in your project's `mdx-components.tsx` file:
+Map the `Code` component to the `CodeBlock` slot in your project's `mdx-components.tsx` file:
 
 ```tsx path="02.mdx-components.tsx"
-import { CodeBlock } from 'renoun'
+import { Code } from 'renoun'
 
 export function useMDXComponents() {
-  return { CodeBlock }
+  return {
+    CodeBlock: Code,
+  }
 }
 ```
 
@@ -137,12 +139,12 @@ const b = a + '2'
 ```
 ````
 
-Roughly yields the following:
+Roughly yields the following after the mapping:
 
 ```tsx
-<CodeBlock allowErrors shouldFormat={false}>
+<Code allowErrors shouldFormat={false}>
   {`const a = 1\nconst b = a + '2'`}
-</CodeBlock>
+</Code>
 ```
 
 ## Querying the File System

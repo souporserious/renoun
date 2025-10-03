@@ -1,5 +1,3 @@
-import type { CSSProperties } from 'react'
-
 import { createContext, getContext } from '../../utils/context.js'
 import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
 
@@ -11,7 +9,6 @@ export type ContextValue =
       shouldAnalyze?: boolean
       shouldFormat?: boolean
       highlightedLines?: string
-      padding?: CSSProperties['padding']
       baseDirectory?: string
       resolved?: Required<SourceTextMetadata>
       resolvers: PromiseWithResolvers<void>

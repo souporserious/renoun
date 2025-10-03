@@ -1,4 +1,4 @@
-import type { CodeBlockProps } from 'renoun'
+import type { CodeComponents } from 'renoun'
 
 import { ButtonLink } from '@/components/ButtonLink'
 import { CodeBlock } from '@/components/CodeBlock'
@@ -58,12 +58,14 @@ async function Page({ slug }: { slug: string }) {
   {
     title: 'Personalize',
     content: `Select from a growing list of pre-built components to tailor your content and documentation to fit your unique needs and brand identity.`,
-    code: `import { Tokens } from 'renoun'
+    code: `import { Code } from 'renoun'
 
 function CodeBlock() {
   return (
     <pre>
-      <Tokens language="tsx">const a = 1; const b = 2; a + b;</Tokens>
+      <Code.Tokens language="tsx">
+        {\`const a = 1; const b = 2; a + b;\`}
+      </Code.Tokens>
     </pre>
   )
 }`,
@@ -76,7 +78,7 @@ function CodeBlock() {
   title: string
   content: string
   code: string
-  codeBlockProps?: Partial<CodeBlockProps>
+  codeBlockProps?: Partial<CodeComponents['Block']>
   cta: { label: string; href: string }
 }[]
 
@@ -179,18 +181,11 @@ export function QuickSteps() {
                   {step.cta.label}
                 </ButtonLink>
               </figcaption>
-              <CodeBlock
-                language="tsx"
-                css={{
-                  container: {
-                    alignSelf: 'start',
-                    marginTop: '2.6rem',
-                  },
-                }}
-                {...step.codeBlockProps}
-              >
-                {step.code}
-              </CodeBlock>
+              <div css={{ alignSelf: 'start', marginTop: '2.6rem' }}>
+                <CodeBlock language="tsx" {...step.codeBlockProps}>
+                  {step.code}
+                </CodeBlock>
+              </div>
             </figure>
           </li>
         ))}
