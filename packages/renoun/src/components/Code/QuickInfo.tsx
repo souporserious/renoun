@@ -9,7 +9,7 @@ import {
   getThemeTokenVariables,
 } from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
-import { Code } from './index.js'
+import { Code } from './Code.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import { Markdown, type MarkdownProps } from '../Markdown.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'

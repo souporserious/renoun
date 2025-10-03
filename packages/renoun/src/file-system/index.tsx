@@ -16,7 +16,7 @@ import {
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
-import { Code } from '../components/Code/index.js'
+import { Code } from '../components/Code/Code.js'
 import { Markdown } from '../components/Markdown.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
