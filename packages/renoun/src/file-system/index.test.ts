@@ -614,9 +614,9 @@ describe('file system', () => {
     const fileSystem = new MemoryFileSystem({
       'Button.tsx': '',
       'Button.mdx': '',
-      'CodeBlock/CodeBlock.tsx': '',
-      'CodeBlock/CodeBlock.mdx': '',
-      'CodeBlock/index.ts': '',
+      'Code/CodeBlock.tsx': '',
+      'Code/CodeBlock.mdx': '',
+      'Code/index.ts': '',
     })
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries()
@@ -630,7 +630,7 @@ describe('file system', () => {
 
     const directoryEntry = entries.at(1) as Directory<any>
 
-    expect(directoryEntry.getBaseName()).toBe('CodeBlock')
+    expect(directoryEntry.getBaseName()).toBe('Code')
   })
 
   test('excludes entries based on tsconfig', async () => {
@@ -668,7 +668,10 @@ describe('file system', () => {
 
   test('directory', async () => {
     const componentsDirectory = new Directory({ path: 'fixtures/components' })
-    const directory = await componentsDirectory.getDirectory('CodeBlock')
+    const directory = await componentsDirectory.getDirectory([
+      'Code',
+      'CodeBlock',
+    ])
 
     expect(directory).toBeInstanceOf(Directory)
   })
@@ -724,14 +727,14 @@ describe('file system', () => {
     const directory = new Directory({
       path: 'components',
       fileSystem: new MemoryFileSystem({
-        'components/CodeBlock/CodeBlock.tsx': '',
-        'components/CodeBlock/CodeBlock.mdx': '',
-        'components/CodeBlock/CopyButton.tsx': '',
+        'components/Code/CodeBlock/CodeBlock.tsx': '',
+        'components/Code/CodeBlock/CodeBlock.mdx': '',
+        'components/Code/CodeBlock/CopyButton.tsx': '',
       }),
     })
 
     await expect(
-      directory.getFile(['CodeBlock', 'CopyButton'], 'mdx')
+      directory.getFile(['Code', 'CodeBlock', 'CopyButton'], 'mdx')
     ).rejects.toThrowError(FileNotFoundError)
   })
 
@@ -980,7 +983,7 @@ describe('file system', () => {
 
   test('deduplicates file exports', async () => {
     const directory = new Directory({ path: 'fixtures' })
-    const file = await directory.getFile('components/CodeBlock', 'tsx')
+    const file = await directory.getFile('components/Code/CodeBlock', 'tsx')
     const fileExports = await file.getExports()
 
     expect(fileExports.map((fileExport) => fileExport.getName())).toStrictEqual(
@@ -1656,17 +1659,17 @@ describe('file system', () => {
 
     expect(components.getPathname()).toBe('/components')
 
-    const file = await components.getFile('CodeBlock', 'tsx')
+    const file = await components.getFile(['Code', 'CodeBlock'], 'tsx')
 
-    expect(file.getPathname()).toBe('/components/code-block')
+    expect(file.getPathname()).toBe('/components/code/code-block')
 
     const example = await components.getFile(
-      'CodeBlock/examples/BasicUsage',
+      'Code/CodeBlock/examples/BasicUsage',
       'tsx'
     )
 
     expect(example.getPathname()).toBe(
-      '/components/code-block/examples/basic-usage'
+      '/components/code/code-block/examples/basic-usage'
     )
 
     const fileSystem = new MemoryFileSystem({
@@ -2315,15 +2318,17 @@ describe('file system', () => {
 
   test('excludes directory-named files by default', async () => {
     const fileSystem = new MemoryFileSystem({
-      'components/CodeBlock/CodeBlock.tsx': '',
-      'components/CodeBlock/Tokens.tsx': '',
+      'components/Code/CodeBlock/CodeBlock.tsx': '',
+      'components/Code/CodeBlock/Tokens.tsx': '',
     })
     const componentsDirectory = new Directory({
       fileSystem,
       path: 'components',
     })
-    const codeBlockDirectory =
-      await componentsDirectory.getDirectory('CodeBlock')
+    const codeBlockDirectory = await componentsDirectory.getDirectory([
+      'Code',
+      'CodeBlock',
+    ])
     const entries = await codeBlockDirectory.getEntries()
 
     expect(entries.map((entry) => entry.getName())).toEqual(['Tokens.tsx'])
@@ -2331,15 +2336,17 @@ describe('file system', () => {
 
   test('includes directory-named files when includeDirectoryNamedFiles is true', async () => {
     const fileSystem = new MemoryFileSystem({
-      'components/CodeBlock/CodeBlock.tsx': '',
-      'components/CodeBlock/Tokens.tsx': '',
+      'components/Code/CodeBlock/CodeBlock.tsx': '',
+      'components/Code/CodeBlock/Tokens.tsx': '',
     })
     const componentsDirectory = new Directory({
       fileSystem,
       path: 'components',
     })
-    const codeBlockDirectory =
-      await componentsDirectory.getDirectory('CodeBlock')
+    const codeBlockDirectory = await componentsDirectory.getDirectory([
+      'Code',
+      'CodeBlock',
+    ])
     const entries = await codeBlockDirectory.getEntries({
       includeDirectoryNamedFiles: true,
     })

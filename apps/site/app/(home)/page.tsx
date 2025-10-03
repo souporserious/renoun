@@ -1,4 +1,4 @@
-import { CodeInline } from 'renoun'
+import { Code } from 'renoun'
 
 import { ButtonLink } from '@/components/ButtonLink'
 import { Text } from '@/components/Text'
@@ -66,15 +66,26 @@ export default function Page() {
           }}
         >
           <ButtonLink href="/docs/getting-started">Start Writing</ButtonLink>
-          <CodeInline
+          <Code
+            variant="inline"
             allowCopy="npx create-renoun@latest"
             language="bash"
-            paddingX="0.8em"
-            paddingY="0.5em"
-            css={{ fontSize: 'var(--font-size-code-1)' }}
+            components={{
+              Root: ({ className, children }) => (
+                <code
+                  className={className}
+                  css={{
+                    fontSize: 'var(--font-size-code-1)',
+                    padding: '0.5em 0.8em',
+                  }}
+                >
+                  {children}
+                </code>
+              ),
+            }}
           >
             npx create-renoun
-          </CodeInline>
+          </Code>
         </div>
       </div>
 

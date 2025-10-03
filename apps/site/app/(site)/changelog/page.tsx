@@ -7,15 +7,23 @@ export default function Page() {
       <Changelog
         components={{
           ...MDXComponents,
-          CodeBlock: (props) => (
+          CodeBlock: ({ components, ...props }) => (
             <MDXComponents.CodeBlock
               allowErrors
               {...props}
-              style={{
-                container: {
-                  fontSize: 'var(--font-size-code-2)',
-                  lineHeight: 'var(--line-height-code-2)',
-                },
+              components={{
+                Container: ({ children, className }) => (
+                  <div
+                    className={className}
+                    style={{
+                      fontSize: 'var(--font-size-code-2)',
+                      lineHeight: 'var(--line-height-code-2)',
+                    }}
+                  >
+                    {children}
+                  </div>
+                ),
+                ...components,
               }}
             />
           ),

@@ -1,8 +1,6 @@
 import {
-  CodeInline,
+  Code,
   Markdown as DefaultMarkdown,
-  parseCodeProps,
-  parsePreProps,
   rehypePlugins,
   remarkPlugins,
   type MarkdownProps,
@@ -16,15 +14,24 @@ export function Markdown(props: MarkdownProps) {
     <DefaultMarkdown
       {...props}
       components={{
-        pre: (preProps) => <CodeBlock {...parsePreProps(preProps)} />,
+        pre: (preProps) => <CodeBlock {...preProps} />,
         code: (codeProps) => (
-          <CodeInline
-            {...parseCodeProps(codeProps)}
-            css={{
-              lineHeight: 'var(--line-height-code-2)',
-              color: 'var(--color-foreground-interactive)',
+          <Code
+            variant="inline"
+            {...codeProps}
+            components={{
+              Root: ({ className, children }) => (
+                <code
+                  className={`${className} ${GeistMono.className}`.trim()}
+                  style={{
+                    lineHeight: 'var(--line-height-code-2)',
+                    color: 'var(--color-foreground-interactive)',
+                  }}
+                >
+                  {children}
+                </code>
+              ),
             }}
-            className={GeistMono.className}
           />
         ),
       }}

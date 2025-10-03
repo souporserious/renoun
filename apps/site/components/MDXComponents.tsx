@@ -1,14 +1,26 @@
 import {
-  CodeInline,
+  Code,
   Command,
   type CommandVariant,
   type MDXComponents as MDXComponentsType,
 } from 'renoun'
 import { GeistMono } from 'geist/font/mono'
+import { css } from 'restyle'
 
 import { Card } from './Card'
 import { CodeBlock } from './CodeBlock'
 import { Row } from './Row'
+
+const [mdxCommandContainerClassName, MDXCommandContainerStyles] = css({
+  fontSize: 'var(--font-size-code-2)',
+  lineHeight: 'var(--line-height-code-2)',
+  width: 'calc(100% + 2rem)',
+  margin: '0 -1rem',
+})
+
+const [mdxCommandPanelClassName, MDXCommandPanelStyles] = css({
+  padding: '0.75rem 1rem',
+})
 
 export const MDXComponents = {
   Card,
@@ -113,25 +125,62 @@ export const MDXComponents = {
     variant: CommandVariant
   }) => {
     return (
-      <Command
-        variant={variant}
-        css={{
-          container: {
-            fontSize: 'var(--font-size-code-2)',
-            lineHeight: 'var(--line-height-code-2)',
-            width: 'calc(100% + 2rem)',
-            margin: '0 -1rem',
-          },
-          tabPanel: {
-            padding: '0.75rem 1rem',
-          },
-        }}
-        className={{
-          container: GeistMono.className,
-        }}
-      >
-        {children}
-      </Command>
+      <>
+        <MDXCommandContainerStyles />
+        <MDXCommandPanelStyles />
+        <Command
+          variant={variant}
+          components={{
+            Container: ({ id, className, children: containerChildren }) => {
+              const classes = [
+                className,
+                mdxCommandContainerClassName,
+                GeistMono.className,
+              ]
+                .filter(Boolean)
+                .join(' ')
+
+              return (
+                <div data-command-group={id} className={classes}>
+                  {containerChildren}
+                </div>
+              )
+            },
+            TabPanel: ({
+              id,
+              tabId,
+              panelId,
+              packageManager,
+              command,
+              isSelected,
+              className,
+              children: panelChildren,
+            }) => {
+              const classes = [className, mdxCommandPanelClassName]
+                .filter(Boolean)
+                .join(' ')
+
+              return (
+                <pre
+                  role="tabpanel"
+                  id={panelId}
+                  hidden={!isSelected}
+                  aria-labelledby={tabId}
+                  data-command={packageManager}
+                  data-command-tab-panel={command}
+                  data-command-group={id}
+                  className={classes}
+                  suppressHydrationWarning
+                >
+                  {panelChildren}
+                </pre>
+              )
+            },
+          }}
+        >
+          {children}
+        </Command>
+      </>
     )
   },
   Note: ({ children }) => {
@@ -177,15 +226,24 @@ export const MDXComponents = {
   },
   code: (props) => {
     return (
-      <CodeInline
+      <Code
+        variant="inline"
         {...props}
-        paddingY="0"
-        css={{
-          lineHeight: 1.15,
-          overflowX: 'auto',
-          color: '#82AAFF',
+        components={{
+          Root: ({ className, children }) => (
+            <code
+              className={`${className} ${GeistMono.className}`.trim()}
+              style={{
+                lineHeight: 1.15,
+                overflowX: 'auto',
+                color: '#82AAFF',
+                padding: '0 0.25em 0',
+              }}
+            >
+              {children}
+            </code>
+          ),
         }}
-        className={GeistMono.className}
       />
     )
   },

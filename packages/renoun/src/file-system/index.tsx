@@ -16,9 +16,8 @@ import {
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
-import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
-import { CodeInline, parseCodeProps } from '../components/CodeInline.js'
-import { Markdown, type MarkdownComponents } from '../components/Markdown.js'
+import { Code } from '../components/Code/index.js'
+import { Markdown } from '../components/Markdown.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import { getClosestFile } from '../utils/get-closest-file.js'
@@ -60,9 +59,9 @@ export { NodeFileSystem } from './NodeFileSystem.js'
 export { Repository } from './Repository.js'
 
 const markdownComponents = {
-  pre: (props) => <CodeBlock {...parsePreProps(props)} />,
-  code: (props) => <CodeInline {...parseCodeProps(props)} />,
-} satisfies MDXComponents & MarkdownComponents
+  pre: (props) => <Code {...props} />,
+  code: (props) => <Code variant="inline" {...props} />,
+} satisfies MDXComponents
 
 const defaultLoaders: {
   md: ModuleLoader<any>
@@ -2268,7 +2267,7 @@ export class Directory<
    * await new Directory({ path: 'components' }).getEntry('button') // JavaScriptFile
    *
    * // Directory has only index/readme (no same‑named file)
-   * // components/CodeBlock/index.tsx
+   * // components/Code/CodeBlock/index.tsx
    * await new Directory({ path: 'components' }).getEntry('code-block') // JavaScriptFile
    *
    * // No directory at path, only a file

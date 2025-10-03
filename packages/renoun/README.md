@@ -62,7 +62,7 @@ Built from the ground up for React, renoun gives you the full power of compositi
 
 #### Drop‑In Components
 
-Quickly get started with powerful components like [`Reference`](https://www.renoun.dev/components/reference), [`CodeBlock`](https://www.renoun.dev/components/code-block), [`MDX`](https://www.renoun.dev/components/mdx), and more — no extra setup required.
+Quickly get started with powerful components like [`Reference`](https://www.renoun.dev/components/reference), the [`Code`](https://www.renoun.dev/components/code-block) block variant, [`MDX`](https://www.renoun.dev/components/mdx), and more — no extra setup required.
 
 [Explore components →](https://www.renoun.dev/components)
 
@@ -130,24 +130,28 @@ Quickly build interactive and engaging documentation with renoun’s powerful se
 
 #### Syntax Highlighting
 
-Use the [`CodeBlock`](https://www.renoun.dev/components/code-block) component to render syntax-highlighted code blocks:
+Use the [`Code`](https://www.renoun.dev/components/code-block) component to render syntax-highlighted code blocks:
 
 ```tsx
-import { CodeBlock } from 'renoun'
-
-export default function Page() {
-  return <CodeBlock language="jsx">{`<div>Hello, world!</div>`}</CodeBlock>
-}
-```
-
-Or take full control of the highlighting process by using the [`Tokens`](https://www.renoun.dev/components/code-block/tokens) component and related components like [`LineNumbers`](https://www.renoun.dev/components/code-block/line-numbers) and [`Toolbar`](https://www.renoun.dev/components/code-block/toolbar):
-
-```tsx
-import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun'
+import { Code } from 'renoun'
 
 export default function Page() {
   return (
-    <CodeBlock language="jsx">
+    <Code language="jsx">
+      {`<div>Hello, world!</div>`}
+    </Code>
+  )
+}
+```
+
+Or take full control of the highlighting process by composing the namespaced helpers like [`Code.Tokens`](https://www.renoun.dev/components/code-block/tokens), [`Code.LineNumbers`](https://www.renoun.dev/components/code-block/line-numbers), and [`Code.Toolbar`](https://www.renoun.dev/components/code-block/toolbar):
+
+```tsx
+import { Code } from 'renoun'
+
+export default function Page() {
+  return (
+    <Code.Provider value={{ language: 'jsx' }}>
       <div
         style={{
           fontSize: '1rem',
@@ -155,13 +159,7 @@ export default function Page() {
           boxShadow: '0 0 0 1px var(--color-separator)',
         }}
       >
-        <Toolbar
-          allowCopy
-          css={{
-            padding: '0.5lh',
-            boxShadow: 'inset 0 -1px 0 0 var(--color-separator)',
-          }}
-        />
+        <Code.Toolbar allowCopy />
         <pre
           style={{
             display: 'grid',
@@ -173,13 +171,13 @@ export default function Page() {
             overflow: 'auto',
           }}
         >
-          <LineNumbers css={{ padding: '0 0.5lh' }} />
+          <Code.LineNumbers />
           <code style={{ paddingRight: '0.5lh' }}>
-            <Tokens>{`<div>Hello, world!</div>`}</Tokens>
+            <Code.Tokens>{`<div>Hello, world!</div>`}</Code.Tokens>
           </code>
         </pre>
       </div>
-    </CodeBlock>
+    </Code.Provider>
   )
 }
 ```

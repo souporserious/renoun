@@ -19,7 +19,8 @@ describe('getSourceFilesOrderMap', () => {
     componentsDirectory.createSourceFile('Button.tsx', '')
     componentsDirectory.createSourceFile('index.ts', '')
 
-    const codeBlockDirectory = componentsDirectory.createDirectory('CodeBlock')
+    const codeDirectory = componentsDirectory.createDirectory('Code')
+    const codeBlockDirectory = codeDirectory.createDirectory('CodeBlock')
     codeBlockDirectory.createSourceFile('CodeBlock.tsx', '')
 
     rootDirectory.createDirectory('utils').createSourceFile('helpers.ts', '')
@@ -31,8 +32,9 @@ describe('getSourceFilesOrderMap', () => {
       ['/src', '00'],
       ['/src/components', '01'],
       ['/src/components/Button.tsx', '01.01'],
-      ['/src/components/CodeBlock', '01.02'],
-      ['/src/components/CodeBlock/CodeBlock.tsx', '01.02.01'],
+      ['/src/components/Code', '01.02'],
+      ['/src/components/Code/CodeBlock', '01.02.01'],
+      ['/src/components/Code/CodeBlock/CodeBlock.tsx', '01.02.01.01'],
       ['/src/components/index.ts', '01.03'],
       ['/src/utils', '02'],
       ['/src/utils/helpers.ts', '02.01'],

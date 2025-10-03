@@ -1,0 +1,100 @@
+Supports both static code strings and custom rendering via `Tokens`, `LineNumbers`, and `Toolbar` subcomponents. For JavaScript and TypeScript, code can be type-checked, formatted with Prettier (if available), and augmented with quick-info tooltips on hover.
+
+In development, the component uses a Suspense fallback to render immediately while asynchronous syntax highlighting and analysis load in the background. In production, it renders the fully-resolved code block directly.
+
+## Style Overrides
+
+Use the `components` prop to wrap parts of the rendered `CodeBlock` and apply
+custom styles. For example, the container can be replaced to change layout and
+type ramp:
+
+```tsx
+import {
+  Code,
+  type CodeComponents,
+} from 'renoun'
+import styles from './CodeBlock.module.css'
+
+function Container({
+  children,
+  className,
+}: CodeComponents['BlockContainer']) {
+  return (
+    <div className={`${styles.container} ${className ?? ''}`.trim()}>
+      {children}
+    </div>
+  )
+}
+
+export function CodeBlock(props: CodeComponents['Block']) {
+  return (
+    <Code
+      {...props}
+      components={{
+        Container,
+        ...props.components,
+      }}
+    />
+  )
+}
+```
+
+## Component Overrides
+
+If you need more customization, the `CodeBlock` component can be fully overridden by importing it from `renoun` and extending it as needed:
+
+```tsx path="CodeBlock.tsx"
+import { Code, type CodeComponents } from 'renoun'
+
+export function CodeBlock({
+  children,
+  ...context
+}: Omit<CodeComponents['Block'], 'children'> & { children: string }) {
+  return (
+    <Code.Provider value={context}>
+      <div
+        style={{
+          fontSize: '1rem',
+          borderRadius: '0.25rem',
+          boxShadow: '0 0 0 1px var(--color-separator)',
+        }}
+      >
+        <Code.Toolbar allowCopy />
+        <pre
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'min-content max-content',
+            padding: '0.5lh 0',
+            lineHeight: 1.4,
+            whiteSpace: 'pre',
+            wordWrap: 'break-word',
+            overflow: 'auto',
+          }}
+        >
+          <Code.LineNumbers />
+          <code style={{ paddingRight: '0.5lh' }}>
+            <Code.Tokens>{children}</Code.Tokens>
+          </code>
+        </pre>
+      </div>
+    </Code.Provider>
+  )
+}
+```
+
+<Note>
+
+This will only render highlighted tokens. Use the other descendant components like `Code.LineNumbers`
+and `Code.Toolbar` to render the rest of the code block.
+
+</Note>
+
+## Formatting
+
+The `CodeBlock` source text is formatted by default using `prettier` if it is installed within the workspace. The `shouldFormat` prop can be used to disable this behavior:
+
+```tsx
+<Code language="ts" shouldFormat={false}>
+  const foo = 'bar'
+</Code>
+```
