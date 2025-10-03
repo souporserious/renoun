@@ -5,22 +5,10 @@ import {
   type MDXComponents as MDXComponentsType,
 } from 'renoun'
 import { GeistMono } from 'geist/font/mono'
-import { css } from 'restyle'
 
 import { Card } from './Card'
 import { CodeBlock } from './CodeBlock'
 import { Row } from './Row'
-
-const [mdxCommandContainerClassName, MDXCommandContainerStyles] = css({
-  fontSize: 'var(--font-size-code-2)',
-  lineHeight: 'var(--line-height-code-2)',
-  width: 'calc(100% + 2rem)',
-  margin: '0 -1rem',
-})
-
-const [mdxCommandPanelClassName, MDXCommandPanelStyles] = css({
-  padding: '0.75rem 1rem',
-})
 
 export const MDXComponents = {
   Card,
@@ -125,62 +113,60 @@ export const MDXComponents = {
     variant: CommandVariant
   }) => {
     return (
-      <>
-        <MDXCommandContainerStyles />
-        <MDXCommandPanelStyles />
-        <Command
-          variant={variant}
-          components={{
-            Container: ({ id, className, children: containerChildren }) => {
-              const classes = [
-                className,
-                mdxCommandContainerClassName,
-                GeistMono.className,
-              ]
-                .filter(Boolean)
-                .join(' ')
+      <Command
+        variant={variant}
+        components={{
+          Container: ({ id, className, children: containerChildren }) => {
+            const classes = [className, GeistMono.className]
+              .filter(Boolean)
+              .join(' ')
 
-              return (
-                <div data-command-group={id} className={classes}>
-                  {containerChildren}
-                </div>
-              )
-            },
-            TabPanel: ({
-              id,
-              tabId,
-              panelId,
-              packageManager,
-              command,
-              isSelected,
-              className,
-              children: panelChildren,
-            }) => {
-              const classes = [className, mdxCommandPanelClassName]
-                .filter(Boolean)
-                .join(' ')
-
-              return (
-                <pre
-                  role="tabpanel"
-                  id={panelId}
-                  hidden={!isSelected}
-                  aria-labelledby={tabId}
-                  data-command={packageManager}
-                  data-command-tab-panel={command}
-                  data-command-group={id}
-                  className={classes}
-                  suppressHydrationWarning
-                >
-                  {panelChildren}
-                </pre>
-              )
-            },
-          }}
-        >
-          {children}
-        </Command>
-      </>
+            return (
+              <div
+                data-command-group={id}
+                className={classes}
+                css={{
+                  fontSize: 'var(--font-size-code-2)',
+                  lineHeight: 'var(--line-height-code-2)',
+                  width: 'calc(100% + 2rem)',
+                  margin: '0 -1rem',
+                }}
+              >
+                {containerChildren}
+              </div>
+            )
+          },
+          TabPanel: ({
+            id,
+            tabId,
+            panelId,
+            packageManager,
+            command,
+            isSelected,
+            className,
+            children: panelChildren,
+          }) => {
+            return (
+              <pre
+                role="tabpanel"
+                id={panelId}
+                hidden={!isSelected}
+                aria-labelledby={tabId}
+                data-command={packageManager}
+                data-command-tab-panel={command}
+                data-command-group={id}
+                className={className}
+                suppressHydrationWarning
+                css={{ padding: '0.75rem 1rem' }}
+              >
+                {panelChildren}
+              </pre>
+            )
+          },
+        }}
+      >
+        {children}
+      </Command>
     )
   },
   Note: ({ children }) => {
@@ -233,7 +219,7 @@ export const MDXComponents = {
           Root: ({ className, children }) => (
             <code
               className={`${className} ${GeistMono.className}`.trim()}
-              style={{
+              css={{
                 lineHeight: 1.15,
                 overflowX: 'auto',
                 color: '#82AAFF',
