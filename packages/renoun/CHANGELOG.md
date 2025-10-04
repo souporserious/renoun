@@ -1,5 +1,20 @@
 # renoun
 
+## 10.3.0
+
+### Minor Changes
+
+- 5b7593a: Strictly requires Node.js 22 now since utilities rely on a `WebSocket` client. This was erroring in version 20 already since the `WebSocket` client was still behind a flag.
+- 6d08669: Removes `gitHost` variant from `Link` component since it doesn't add value and was easy to confuse with the `repository` variant.
+- 19ecf70: Makes the `Link` component `variant` prop optional and defaults it to `source`.
+- 1760984: Replaces the `ws` package with a focused WebSocket implementation for the renoun RPC server.
+
+### Patch Changes
+
+- 0bca712: Fixes `TableOfContents` scroll section into view.
+- a22f83f: Runs dispose function to disconnect observer between registering links in the `TableOfContents` component.
+- 4d14c25: Fixes duplicate descriptions in `Reference` component when a function declaration has multiple overloads.
+
 ## 10.2.0
 
 ### Minor Changes
