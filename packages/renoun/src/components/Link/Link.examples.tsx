@@ -4,20 +4,16 @@ const file = new JavaScriptFile({
   path: '../../packages/renoun/src/components/Link/Link.tsx',
 })
 
-export async function BasicUsage() {
+export async function ViewSource() {
+  return <Link source={file}>View Source</Link>
+}
+
+export function GitRepository() {
   return (
     <Link
       variant="repository"
       css={{ display: 'flex', width: '1.5rem', height: '1.5rem' }}
     />
-  )
-}
-
-export function ViewSource() {
-  return (
-    <Link source={file} variant="source">
-      View Source
-    </Link>
   )
 }
 

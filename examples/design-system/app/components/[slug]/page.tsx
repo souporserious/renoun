@@ -206,9 +206,7 @@ async function Preview({
       <header>
         <Stack flexDirection="row" alignItems="baseline" gap="0.5rem">
           <h3 css={{ margin: 0 }}>{name}</h3>
-          <Link source={fileExport} variant="source">
-            Edit example
-          </Link>
+          <Link source={fileExport}>View source</Link>
         </Stack>
         {description ? <p>{description}</p> : null}
       </header>

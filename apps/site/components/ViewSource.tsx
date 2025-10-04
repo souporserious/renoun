@@ -11,7 +11,6 @@ export function ViewSource({
   return (
     <Link
       source={source}
-      variant="source"
       target="_blank"
       rel="noreferrer"
       css={{

@@ -40,28 +40,29 @@ type AnchorBaseProps = Omit<
   'href' | 'children'
 > & { css?: CSSObject }
 
-type ConfigVariantProps<V extends ConfigVariants> = V extends 'branch'
-  ? {
-      variant: 'branch'
-      source?: never
-      options?: { ref?: string }
-    }
-  : {
-      variant: Exclude<V, 'branch'>
-      source?: never
-      options?: never
-    }
+type ConfigVariantProps<Variant extends ConfigVariants> =
+  Variant extends 'branch'
+    ? {
+        variant?: 'branch'
+        source?: never
+        options?: { ref?: string }
+      }
+    : {
+        variant: Exclude<Variant, 'branch'>
+        source?: never
+        options?: never
+      }
 
 export type LinkProps<
   Source,
-  Variant extends LinkVariant = LinkVariant,
+  Variant extends LinkVariant = 'source',
 > = Variant extends keyof typeof VARIANT_METHODS
   ? AnchorBaseProps & {
       /** Entry to derive the href from. */
       source: Source
 
       /** Which getter to use for the href. */
-      variant: Variant
+      variant?: Variant
 
       /** Options forwarded to the variant getter method. */
       options?: VariantOptions<Source, Variant>
@@ -161,12 +162,12 @@ RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
  * An anchor element that derives its `href` from a directory, file, module export,
  * or from the `RootProvider` config.
  */
-export async function Link<Source, Variant extends LinkVariant = LinkVariant>(
+export async function Link<Source, Variant extends LinkVariant = 'source'>(
   props: LinkProps<Source, Variant>
 ) {
   const {
     source,
-    variant,
+    variant = 'source',
     options,
     children,
     css: cssProp,
