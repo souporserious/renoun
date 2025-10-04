@@ -149,7 +149,7 @@ export function Sidebar() {
               </a>
 
               <Link
-                variant="gitHost"
+                variant="repository"
                 css={{
                   display: 'flex',
                   width: 'var(--font-size-body-2)',

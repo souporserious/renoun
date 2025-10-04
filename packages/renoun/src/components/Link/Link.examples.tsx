@@ -45,9 +45,6 @@ export function ConfigLinks() {
   return (
     <ul>
       <li>
-        <Link variant="gitHost">Host</Link>
-      </li>
-      <li>
         <Link variant="repository">Repository</Link>
       </li>
       <li>

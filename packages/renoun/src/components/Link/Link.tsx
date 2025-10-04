@@ -13,7 +13,7 @@ const VARIANT_METHODS = {
   editor: 'getEditorUri',
 } as const
 
-type ConfigVariants = 'gitHost' | 'repository' | 'owner' | 'branch' | 'issue'
+type ConfigVariants = 'repository' | 'owner' | 'branch' | 'issue'
 
 export type LinkVariant = keyof typeof VARIANT_METHODS | ConfigVariants
 
@@ -142,8 +142,6 @@ RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
   }
 
   switch (variant as ConfigVariants) {
-    case 'gitHost':
-      return gitConfig.baseUrl
     case 'repository':
       return gitConfig.source
     case 'owner':
@@ -184,7 +182,7 @@ export async function Link<Source, Variant extends LinkVariant = LinkVariant>(
 
   let childrenToRender = children
 
-  if (!children && (variant === 'gitHost' || variant === 'repository')) {
+  if (!children && variant === 'repository') {
     childrenToRender = <Logo variant="gitHost" width="100%" height="100%" />
   }
 
