@@ -1,8 +1,12 @@
 import React from 'react'
 import { GlobalStyles } from 'restyle'
 
+import {
+  BASE_TOKEN_CLASS_NAME,
+  getThemeColorVariables,
+  getThemeTokenVariables,
+} from '../../utils/get-theme.js'
 import type { ConfigurationOptions } from '../Config/types.js'
-import { getThemeColorVariables } from '../../utils/get-theme.js'
 
 /**
  * Injects the global CSS theme color variables used throughout `renoun/components`.
@@ -21,6 +25,13 @@ export async function ThemeStyles({
         '[data-theme-disable-transitions] *': {
           transition: 'none !important',
         },
+        [`.${BASE_TOKEN_CLASS_NAME}`]: {
+          color: 'var(--0)',
+          fontStyle: 'var(--00)',
+          fontWeight: 'var(--01)',
+          textDecoration: 'var(--02)',
+        },
+        ...getThemeTokenVariables(theme),
         ...colorVariables,
       }}
     </GlobalStyles>

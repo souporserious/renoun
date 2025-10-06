@@ -3,7 +3,7 @@ import { css, styled, type CSSObject } from 'restyle'
 
 import type { Languages } from '../grammars/index.js'
 import { grammars } from '../grammars/index.js'
-import { getThemeColors, getThemeTokenVariables } from '../utils/get-theme.js'
+import { getThemeColors } from '../utils/get-theme.js'
 import { getConfig } from './Config/ServerConfigContext.js'
 import { Tokens } from './CodeBlock/Tokens.js'
 import { getScrollContainerStyles } from './CodeBlock/utils.js'
@@ -124,7 +124,6 @@ async function CodeInlineAsync({
       color: theme.scrollbarSlider.hoverBackground,
     }),
     ...cssProp,
-    ...getThemeTokenVariables(config.theme),
   })
   const childrenToRender = language ? (
     <Tokens

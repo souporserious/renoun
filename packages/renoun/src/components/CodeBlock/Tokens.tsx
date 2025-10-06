@@ -6,7 +6,7 @@ import { getSourceTextMetadata, getTokens } from '../../project/client.js'
 import type { Languages } from '../../utils/get-language.js'
 import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
 import { getContext } from '../../utils/context.js'
-import { getThemeColors } from '../../utils/get-theme.js'
+import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import type { ConfigurationOptions } from '../Config/types.js'
 import { QuickInfo } from './QuickInfo.js'
@@ -167,6 +167,12 @@ export async function Tokens({
               ...(token.diagnostics && diagnosticStyles),
               ...cssProp.token,
             })
+            const symbolClassNameWithBase = symbolClassName
+              ? `${symbolClassName} ${BASE_TOKEN_CLASS_NAME}`
+              : BASE_TOKEN_CLASS_NAME
+            const tokenClassName = className.token
+              ? `${symbolClassNameWithBase} ${className.token}`
+              : symbolClassNameWithBase
 
             return (
               <Symbol
@@ -177,15 +183,11 @@ export async function Tokens({
                     diagnostics={token.diagnostics}
                     quickInfo={token.quickInfo}
                     css={cssProp.popover}
-                    className={className.token}
+                    className={className.popover}
                     style={style.popover}
                   />
                 }
-                className={
-                  className.token
-                    ? `${symbolClassName} ${className.token}`
-                    : symbolClassName
-                }
+                className={tokenClassName}
                 style={style.token}
               >
                 {token.value}
@@ -194,16 +196,21 @@ export async function Tokens({
             )
           }
 
-          const [classNames, Styles] = css(token.style)
+          const [classNames, Styles] = css({
+            ...token.style,
+            ...cssProp.token,
+          })
+          const classNamesWithBase = classNames
+            ? `${BASE_TOKEN_CLASS_NAME} ${classNames}`
+            : BASE_TOKEN_CLASS_NAME
+          const tokenClassName = className.token
+            ? `${classNamesWithBase} ${className.token}`
+            : classNamesWithBase
 
           return (
             <span
               key={tokenIndex}
-              className={
-                className.token
-                  ? `${classNames} ${className.token}`
-                  : classNames
-              }
+              className={tokenClassName}
               style={style.token}
             >
               {token.value}

@@ -5,6 +5,8 @@ import type { ConfigurationOptions } from '../components/Config/types.js'
 import type { TextMateThemeRaw } from './create-tokenizer.js'
 import { loadTmTheme } from './load-package.js'
 
+export const BASE_TOKEN_CLASS_NAME = '×'
+
 interface Theme {
   colors: {
     foreground?: string
@@ -335,8 +337,8 @@ function buildNestedObject(
  *
  * ```js
  * {
- *   '[data-theme="light"] & span': { color: 'var(--0fg)' },
- *   '[data-theme="dark"] & span': { color: 'var(--1fg)' },
+ *   '[data-theme="light"] .×': { '--0': 'var(--0fg, inherit)' },
+ *   '[data-theme="dark"] .×': { '--0': 'var(--1fg, inherit)' },
  * }
  * ```
  */
@@ -347,16 +349,16 @@ export function getThemeTokenVariables(
     return {}
   }
 
-  const themeVariables: Record<string, any> = {}
+  const themeVariables: Record<string, Record<string, string>> = {}
   const themeNames = themeConfig ? Object.keys(themeConfig) : []
 
   for (let index = 0; index < themeNames.length; index++) {
-    themeVariables[`[data-theme="${themeNames[index]}"] & span`] = {
-      color: `var(--${index}fg)`,
+    themeVariables[`[data-theme="${themeNames[index]}"] .${BASE_TOKEN_CLASS_NAME}`] = {
+      '--0': `var(--${index}fg, inherit)`,
+      '--00': `var(--${index}fs, normal)`,
+      '--01': `var(--${index}fw, normal)`,
+      '--02': `var(--${index}td, none)`,
       backgroundColor: `var(--${index}bg)`,
-      fontStyle: `var(--${index}fs)`,
-      fontWeight: `var(--${index}fw)`,
-      textDecoration: `var(--${index}td)`,
     }
   }
 

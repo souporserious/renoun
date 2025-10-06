@@ -4,10 +4,7 @@ import { type CSSObject, styled } from 'restyle'
 import { BaseDirectoryContext } from '../Context.js'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
 import { getContext } from '../../utils/context.js'
-import {
-  getThemeColors,
-  getThemeTokenVariables,
-} from '../../utils/get-theme.js'
+import { getThemeColors } from '../../utils/get-theme.js'
 import type { Languages } from '../../utils/get-language.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import { CopyButton } from '../CopyButton/index.js'
@@ -375,7 +372,6 @@ async function CodeBlockAsync({
                 }
               : {}),
             ...(shouldRenderToolbar ? {} : css?.container),
-            ...getThemeTokenVariables(config.theme),
             padding: 0,
           }}
           className={shouldRenderToolbar ? undefined : className?.container}

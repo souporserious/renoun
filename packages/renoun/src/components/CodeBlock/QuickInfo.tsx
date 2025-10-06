@@ -4,10 +4,7 @@ import { rehypePlugins } from '@renoun/mdx/rehype'
 import { remarkPlugins } from '@renoun/mdx/remark'
 
 import { getTokens } from '../../project/client.js'
-import {
-  getThemeColors,
-  getThemeTokenVariables,
-} from '../../utils/get-theme.js'
+import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.js'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
 import { CodeInline } from '../CodeInline.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
@@ -98,7 +95,6 @@ export async function QuickInfo({
             : undefined,
           backgroundColor: theme.editorHoverWidget.background,
           color: theme.editorHoverWidget.foreground,
-          ...getThemeTokenVariables(config.theme),
           ...css,
         }}
         className={className}
@@ -124,7 +120,11 @@ export async function QuickInfo({
                   <Fragment key={index}>
                     {index === 0 ? null : '\n'}
                     {line.map((token, index) => (
-                      <TokenSpan key={index} css={token.style}>
+                      <TokenSpan
+                        key={index}
+                        css={token.style}
+                        className={BASE_TOKEN_CLASS_NAME}
+                      >
                         {token.value}
                       </TokenSpan>
                     ))}
