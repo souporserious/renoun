@@ -4,6 +4,7 @@ import {
   isJavaScriptFile,
   ModuleExportNotFoundError,
   type FileSystemEntry,
+  type JavaScriptModuleExport,
 } from 'renoun'
 import { styled } from 'restyle'
 
@@ -43,11 +44,18 @@ export async function SiblingLink({
       : undefined
 
   if (javaScriptFile) {
-    const firstExport = await javaScriptFile
-      .getExports()
-      .then((fileExports) => fileExports[0])
+    const fileExports = await javaScriptFile.getExports()
+    const callableExport = await findCallableExport(fileExports)
 
-    baseName = firstExport.getName()
+    if (callableExport) {
+      baseName = callableExport.getName()
+    } else if (baseName.toLowerCase() === 'index') {
+      const firstExport = fileExports[0]
+
+      if (firstExport) {
+        baseName = firstExport.getName()
+      }
+    }
   }
 
   return (
@@ -126,6 +134,25 @@ export async function SiblingLink({
       </div>
     </StyledLink>
   )
+}
+
+async function findCallableExport(
+  exports: JavaScriptModuleExport<any>[]
+): Promise<JavaScriptModuleExport<any> | undefined> {
+  for (const fileExport of exports) {
+    try {
+      const type = await fileExport.getType()
+      const hasCallSignature =
+        type.getCallSignatures().length > 0 ||
+        type.getConstructSignatures().length > 0
+
+      if (hasCallSignature) {
+        return fileExport
+      }
+    } catch {
+      continue
+    }
+  }
 }
 
 const StyledLink = styled(Link, {
