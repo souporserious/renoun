@@ -11,7 +11,10 @@ import {
   type NavigationProps,
 } from 'renoun'
 
-import { Collapse } from '../Collapse'
+import {
+  SidebarCollapseContent,
+  SidebarCollapseProvider,
+} from './SidebarCollapseProvider'
 import { SidebarLink } from './SidebarLink'
 
 const components: Partial<NavigationComponents> = {
@@ -54,14 +57,16 @@ const components: Partial<NavigationComponents> = {
       ? cloneElement<any>(firstChild, { collapsible: true })
       : firstChild
 
+    const directoryPathname = entry.getPathname()
+
     return (
       <li>
-        <Collapse.Provider>
+        <SidebarCollapseProvider pathname={directoryPathname}>
           {link}
-          <Collapse.Content as="div" css={{ display: 'block' }}>
+          <SidebarCollapseContent css={{ display: 'block' }}>
             {nestedChildren}
-          </Collapse.Content>
-        </Collapse.Provider>
+          </SidebarCollapseContent>
+        </SidebarCollapseProvider>
       </li>
     )
   },
