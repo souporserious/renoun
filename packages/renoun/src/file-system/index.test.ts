@@ -23,11 +23,13 @@ import {
   isDirectory,
   isFile,
   isJavaScriptFile,
+  isJSONFile,
   resolveFileFromEntry,
   createSort,
   withSchema,
   FileNotFoundError,
   ModuleExportNotFoundError,
+  JSONFile,
 } from './index'
 import type { Expect, Is, IsNotAny } from './types'
 import type { Kind } from '../utils/resolve-type'
@@ -1171,6 +1173,60 @@ describe('file system', () => {
       { id: 'world', level: 2, text: 'World' },
     ])
     expectTypeOf(headings).toMatchTypeOf<Headings>()
+  })
+
+  test('json file getAll and get(path) with dot notation', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'config.json': JSON.stringify({
+        a: { b: { c: 123 } },
+        arr: [1, 2, 3],
+        flag: true,
+        nested: { title: 'Hello' },
+      }),
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('config.json')
+
+    expectTypeOf(file).toMatchTypeOf<JSONFile<any, any>>()
+
+    expect(file).toBeInstanceOf(JSONFile)
+
+    const all = await file.get()
+    expect(all).toEqual({
+      a: { b: { c: 123 } },
+      arr: [1, 2, 3],
+      flag: true,
+      nested: { title: 'Hello' },
+    })
+
+    const c = await file.get('a.b.c')
+    expect(c).toBe(123)
+
+    const title = await file.get('nested.title')
+    expect(title).toBe('Hello')
+
+    const missing = await file.get('nested.missing' as never)
+    expect(missing).toBeUndefined()
+  })
+
+  test('isJSONFile type guard and json filter', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'data.json': '{"name":"renoun"}',
+      'other.ts': '',
+    })
+    const directory = new Directory({ fileSystem })
+
+    const entry = await directory.getEntry('data')
+    expect(isJSONFile(entry)).toBe(true)
+    if (isJSONFile(entry)) {
+      const name = await entry.get('name')
+      expect(name).toBe('renoun')
+    }
+
+    const jsonOnly = new Directory({ fileSystem, filter: '*.json' })
+    const entries = await jsonOnly.getEntries()
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toBeInstanceOf(JSONFile)
   })
 
   test('markdown file caches parsed headings', async () => {

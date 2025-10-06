@@ -229,6 +229,7 @@ export interface DefaultModuleTypes {
   mdx: {
     default: MDXContent
   }
+  json: JSONObject
 }
 
 /** Merge default module types with custom types. */
@@ -610,6 +611,200 @@ export class File<
   async getText(): Promise<string> {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.readFile(this.#path)
+  }
+}
+
+export type JSONPrimitive = string | number | boolean | null
+
+export type JSONValue = JSONPrimitive | JSONValue[] | JSONObject
+
+export type JSONObject = {
+  [Key: string]: JSONValue
+}
+
+export interface JSONFileOptions<
+  Data extends Record<string, any> = JSONObject,
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
+  Path extends string = string,
+> extends FileOptions<DirectoryTypes, Path> {
+  schema?: StandardSchemaV1<Data> | ((value: unknown) => Data)
+}
+
+type IsArray<Type> = Type extends readonly any[]
+  ? true
+  : Type extends any[]
+    ? true
+    : false
+
+type Element<Type> = Type extends readonly (infer Item)[]
+  ? Item
+  : Type extends (infer Item)[]
+    ? Item
+    : never
+
+type IsNumericString<String extends string> = String extends `${number}`
+  ? true
+  : false
+
+type JSONPathValueWithSegments<
+  Data,
+  Segments extends string[],
+> = Segments extends []
+  ? Data
+  : // at least one segment
+    Segments extends [infer Head extends string, ...infer Rest extends string[]]
+    ? IsArray<Data> extends true
+      ? // Head must be a number-like segment for arrays
+        IsNumericString<Head> extends true
+        ? JSONPathValueWithSegments<Element<Data>, Rest> | undefined
+        : undefined
+      : // Head must be a key for objects
+        Head extends keyof Data
+        ? Rest['length'] extends 0
+          ? Data[Head]
+          : JSONPathValueWithSegments<Data[Head], Rest>
+        : undefined
+    : never
+
+type JSONPathSegments<Path extends string> =
+  Path extends `${infer Head}.${infer Rest}`
+    ? [Head, ...JSONPathSegments<Rest>]
+    : Path extends ''
+      ? []
+      : [Path]
+
+export type JSONPathValue<
+  Data,
+  Path extends string,
+> = JSONPathValueWithSegments<Data, JSONPathSegments<Path>>
+
+export type JSONPropertyPath<Data> =
+  // allow numeric segments in arrays, and recurse into element type
+  IsArray<Data> extends true
+    ? `${number}` | `${number}.${JSONPropertyPath<Element<Data>>}`
+    : // objects keys or "key.nested"
+      Data extends Record<string, any>
+      ?
+          | Extract<keyof Data, string>
+          | {
+              [Key in Extract<keyof Data, string>]: IsArray<
+                Data[Key]
+              > extends true
+                ?
+                    | `${Key}.${number}`
+                    | `${Key}.${number}.${JSONPropertyPath<Element<Data[Key]>>}`
+                : Data[Key] extends Record<string, any>
+                  ? `${Key}.${JSONPropertyPath<Data[Key]>}`
+                  : never
+            }[Extract<keyof Data, string>]
+      : never
+
+/** A JSON file in the file system. */
+export class JSONFile<
+  Data extends Record<string, any> = JSONObject,
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
+  const Path extends string = string,
+  Extension extends string = ExtractFileExtension<Path>,
+> extends File<DirectoryTypes, Path, Extension> {
+  #dataPromise?: Promise<Data>
+  #schema?: StandardSchemaV1<Data> | ((value: unknown) => Data)
+
+  constructor(fileOptions: JSONFileOptions<Data, DirectoryTypes, Path>) {
+    super(fileOptions)
+    this.#schema = fileOptions.schema
+  }
+
+  async #readData(): Promise<Data> {
+    const source = await this.getText()
+
+    try {
+      let value = JSON.parse(source) as unknown
+
+      // Optionally validate/coerce using provided schema or validator
+      if (this.#schema) {
+        try {
+          const schema = this.#schema as any
+          if (schema && typeof schema === 'object' && '~standard' in schema) {
+            const result = (schema as StandardSchemaV1<Data>)[
+              '~standard'
+            ].validate(value) as StandardSchemaV1.Result<Data>
+
+            if (result.issues) {
+              const issuesMessage = result.issues
+                .map((issue) =>
+                  issue.path
+                    ? `  - ${issue.path.join('.')}: ${issue.message}`
+                    : `  - ${issue.message}`
+                )
+                .join('\n')
+
+              throw new Error(
+                `[renoun] Schema validation failed for JSON file at path: "${this.getAbsolutePath()}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
+              )
+            }
+
+            value = result.value
+          } else if (typeof this.#schema === 'function') {
+            value = this.#schema(value)
+          }
+        } catch (error) {
+          if (error instanceof Error) {
+            throw new Error(
+              `[renoun] Schema validation failed to parse JSON at file path: "${this.getAbsolutePath()}"\n\nThe following error occurred:\n${error.message}`
+            )
+          }
+        }
+      }
+
+      return value as Data
+    } catch (error) {
+      const reason = error instanceof Error ? ` ${error.message}` : ''
+      throw new Error(
+        `[renoun] Failed to parse JSON file at path "${this.getAbsolutePath()}".${reason}`
+      )
+    }
+  }
+
+  async #getData(): Promise<Data> {
+    if (!this.#dataPromise) {
+      this.#dataPromise = this.#readData()
+    }
+
+    return this.#dataPromise
+  }
+
+  /**
+   * Get a value from the JSON data using dot notation.
+   *
+   * Returns `undefined` when the path cannot be resolved.
+   */
+  async get(): Promise<Data>
+  async get<Path extends JSONPropertyPath<Data>>(
+    path: Path
+  ): Promise<JSONPathValue<Data, Path>>
+  async get(path?: any): Promise<any> {
+    if (path === undefined) {
+      return this.#getData() as Promise<Data>
+    }
+
+    const data = await this.#getData()
+    const segments = path.split('.')
+
+    let value: any = data
+
+    for (const segment of segments) {
+      if (value === undefined || value === null) {
+        return undefined as JSONPathValue<Data, Path>
+      }
+
+      if (typeof value !== 'object') {
+        return undefined as JSONPathValue<Data, Path>
+      }
+
+      value = (value as Record<string, any>)[segment]
+    }
+
+    return value
   }
 }
 
@@ -2046,7 +2241,14 @@ export class Directory<
           ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
           : Extension extends 'md'
             ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
-            : File<LoaderTypes, Path, Extension>
+            : Extension extends 'json'
+              ? JSONFile<
+                  JSONExtensionType<LoaderTypes>,
+                  LoaderTypes,
+                  string,
+                  Extension
+                >
+              : File<LoaderTypes, Path, Extension>
       : File<LoaderTypes>
   >
 
@@ -2064,7 +2266,14 @@ export class Directory<
           ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
           : Extension extends 'md'
             ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
-            : File<LoaderTypes, Extension>
+            : Extension extends 'json'
+              ? JSONFile<
+                  JSONExtensionType<LoaderTypes>,
+                  LoaderTypes,
+                  string,
+                  Extension
+                >
+              : File<LoaderTypes, Extension>
       : File<LoaderTypes>
   >
 
@@ -2458,9 +2667,11 @@ export class Directory<
             ? new MarkdownFile({ ...sharedOptions, loader })
             : extension === 'mdx'
               ? new MDXFile({ ...sharedOptions, loader })
-              : isJavaScriptLikeExtension(extension)
-                ? new JavaScriptFile({ ...sharedOptions, loader })
-                : new File(sharedOptions)
+              : extension === 'json'
+                ? new JSONFile(sharedOptions)
+                : isJavaScriptLikeExtension(extension)
+                  ? new JavaScriptFile({ ...sharedOptions, loader })
+                  : new File(sharedOptions)
 
         if (this.#filter && !(await this.#passesFilter(file))) {
           continue
@@ -3022,6 +3233,9 @@ export function isDirectory<Types extends Record<string, any>>(
   return entry instanceof Directory
 }
 
+type JSONExtensionType<Types extends Record<string, any>> =
+  'json' extends keyof Types ? Types['json'] : JSONObject
+
 /** Determines the type of a `FileSystemEntry` based on its extension. */
 export type FileWithExtension<
   Types extends Record<string, any>,
@@ -3033,7 +3247,9 @@ export type FileWithExtension<
       ? MDXFile<Types['mdx'], Types, any, Extension>
       : Extension extends 'md'
         ? MarkdownFile<Types['md'], Types, any, Extension>
-        : File<Types>
+        : Extension extends 'json'
+          ? JSONFile<JSONExtensionType<Types>, Types, any, Extension>
+          : File<Types>
   : Extension extends string[]
     ? HasJavaScriptLikeExtensions<Extension> extends true
       ? JavaScriptFile<Types[Extension[number]], Types, any, Extension[number]>
@@ -3041,7 +3257,9 @@ export type FileWithExtension<
         ? MDXFile<Types['mdx'], Types, any, Extension[number]>
         : Extension[number] extends 'md'
           ? MarkdownFile<Types['md'], Types, any, Extension[number]>
-          : File<Types>
+          : Extension[number] extends 'json'
+            ? JSONFile<JSONExtensionType<Types>, Types, any, Extension[number]>
+            : File<Types>
     : File<Types>
 
 type StringUnion<Type> = Extract<Type, string> | (string & {})
@@ -3101,6 +3319,16 @@ export function isMarkdownFile<
   entry: FileSystemEntry<DirectoryTypes> | undefined
 ): entry is MarkdownFile<FileTypes, DirectoryTypes> {
   return entry instanceof MarkdownFile
+}
+
+/** Determines if a `FileSystemEntry` is a `JSONFile`. */
+export function isJSONFile<
+  FileTypes extends Record<string, any>,
+  DirectoryTypes extends Record<string, any> = Record<string, any>,
+>(
+  entry: FileSystemEntry<DirectoryTypes> | undefined
+): entry is JSONFile<FileTypes, DirectoryTypes> {
+  return entry instanceof JSONFile
 }
 
 /** Determines if a `FileSystemEntry` is an `MDXFile`. */
