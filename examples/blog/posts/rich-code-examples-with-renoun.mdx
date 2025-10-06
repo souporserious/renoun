@@ -1,0 +1,45 @@
+---
+title: Rich Code Examples
+date: 2024-03-28
+summary: Use an MDX pipeline to publish readable code with helpful context.
+tags:
+  - mdx
+  - developer experience
+  - renoun
+---
+
+Tutorial-style posts land better when the code is easy to scan. renoun ships MDX helpers that give
+code fences a consistent toolbar, optional file names, and syntax highlighting without extra
+configuration.
+
+## Syntax highlighting out of the box
+
+Register the languages and theme you need once in the `RootProvider`. Every fenced block picks up the
+same presentation so your readers do not have to adjust to different styles post to post.
+
+```tsx path="app/layout.tsx"
+<RootProvider theme="nord" languages={['css', 'tsx', 'typescript']}>
+  <html lang="en">
+    <body>{children}</body>
+  </html>
+</RootProvider>
+```
+
+Add a `path` hint to your fence when you want to show readers where a snippet lives. renoun renders it
+above the toolbar.
+
+```tsx path="components/Hero.tsx"
+export function Hero() {
+  return (
+    <section className="Hero">
+      <h1>Build content-rich Next.js sites</h1>
+      <p>renoun keeps your markdown organized and your UI expressive.</p>
+    </section>
+  )
+}
+```
+
+## Show multiple files in one post
+
+When you need to explain how several files work together, drop in as many fences as you want. renoun
+keeps track of the metadata for each block so you can mix prose and code without losing your place.

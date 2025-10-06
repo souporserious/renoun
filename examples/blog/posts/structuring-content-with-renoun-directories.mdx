@@ -1,0 +1,46 @@
+---
+title: Structuring Content with Directories
+date: 2025-04-20
+summary: Organize posts with directory-based collections so your publishing workflow stays predictable.
+tags:
+  - renoun
+  - workflow
+  - mdx
+---
+
+Once a blog grows past a handful of articles, keeping everything organized is harder than it looks.
+renoun's directory primitives let you describe how content should be loaded, validated, and sorted in
+one place.
+
+## Start with clear directories
+
+Group related content into directories that mirror the reading experience you want. Posts live in
+`posts`, podcast notes might sit in `podcasts`, and long-form tutorials can have their own folder.
+Each directory can define its own schema, sort order, and loader.
+
+```ts
+const tutorials = new Directory({
+  path: 'tutorials',
+  filter: '*.mdx',
+  loader: {
+    mdx: withSchema(
+      {
+        frontmatter: z.object({
+          title: z.string(),
+          date: z.coerce.date(),
+          duration: z.string(),
+        }),
+      },
+      (path) => import(`./tutorials/${path}.mdx`)
+    ),
+  },
+})
+```
+
+Typed collections make it clear which metadata is available and prevent a pile of defensive checks in
+your UI components.
+
+## Add new content without wiring
+
+When you drop a new file into the directory, renoun picks it up automatically. You can focus on the
+writing while the directory handles validation and sorting.

@@ -1,9 +1,216 @@
-body {
-  font-family: sans-serif;
-  display: grid;
-  grid-template-columns: 1fr minmax(0, 60rem) 1fr;
+* {
+  box-sizing: border-box;
 }
 
-body > * {
-  grid-column: 2;
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f8fafc;
+  color: #0f172a;
+  display: flex;
+  justify-content: center;
+  padding: 4rem 1.5rem 5rem;
+  line-height: 1.65;
+}
+
+a {
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+main {
+  width: min(60rem, 100%);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.page__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.page__hero h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 2.5vw + 1rem, 3rem);
+}
+
+.page__hero p {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #475569;
+  max-width: 58ch;
+}
+
+.post-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.post-list__item article {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.post-list__item h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 1.25vw + 1rem, 2.1rem);
+}
+
+.post-list__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.95rem;
+  color: #475569;
+}
+
+.post-list__meta time {
+  font-weight: 600;
+}
+
+.post-list__tags {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+}
+
+.post-list__tags li {
+  font-size: 0.9rem;
+}
+
+.post-list__tags a {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(29, 78, 216, 0.08);
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.post-list__item p {
+  margin: 0;
+  color: #334155;
+}
+
+.post {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.post__header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.post__title {
+  margin: 0;
+  font-size: clamp(2.1rem, 2.25vw + 1rem, 3rem);
+}
+
+.post__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  font-size: 0.95rem;
+  color: #475569;
+}
+
+.post__meta time {
+  font-weight: 600;
+}
+
+.post__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.post__tag a {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(29, 78, 216, 0.08);
+  color: #1d4ed8;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.post__header p {
+  margin: 0;
+  color: #334155;
+}
+
+.post__back {
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #1e293b;
+}
+
+.post__back::before {
+  content: '←';
+  transition: transform 0.2s ease;
+}
+
+.post__back:hover::before {
+  transform: translateX(-2px);
+}
+
+.post article {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  font-size: 1.05rem;
+  color: #1f2937;
+}
+
+.post article :is(h2, h3, h4) {
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  color: #0f172a;
+}
+
+.post article p {
+  margin: 0;
+}
+
+.post article code {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, SFMono-Regular,
+    Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  background: rgba(15, 23, 42, 0.06);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+}
+
+.post article pre {
+  font-size: 0.95rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
 }

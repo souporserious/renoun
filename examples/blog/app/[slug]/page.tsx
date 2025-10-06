@@ -1,3 +1,5 @@
+import { createSlug } from 'renoun'
+import Link from 'next/link'
 import { posts } from '@/collections'
 
 export async function generateStaticParams() {
@@ -12,19 +14,44 @@ export default async function Page({
 }) {
   const post = await posts.getFile((await params).slug, 'mdx')
   const frontmatter = await post.getExportValue('frontmatter')
-  const formattedDate = new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    timeZone: 'UTC',
-  }).format(frontmatter.date)
   const Content = await post.getExportValue('default')
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'long',
+    timeZone: 'UTC',
+  })
+  const tags = (frontmatter.tags ?? []).map((tag) => ({
+    label: tag,
+    slug: createSlug(tag),
+  }))
 
   return (
-    <>
-      <h1>{frontmatter.title}</h1>
-      <time>{formattedDate}</time>
-      <Content />
-    </>
+    <main className="post">
+      <Link href="/" className="post__back">
+        Back to posts
+      </Link>
+
+      <header className="post__header">
+        <h1 className="post__title">{frontmatter.title}</h1>
+        <div className="post__meta">
+          <time dateTime={frontmatter.date.toISOString().slice(0, 10)}>
+            {formatter.format(frontmatter.date)}
+          </time>
+          {tags.length ? (
+            <ul className="post__tags">
+              {tags.map(({ label, slug }) => (
+                <li key={label} className="post__tag">
+                  <Link href={`/tags/${slug}`}>{label}</Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        {frontmatter.summary ? <p>{frontmatter.summary}</p> : null}
+      </header>
+
+      <article>
+        <Content />
+      </article>
+    </main>
   )
 }

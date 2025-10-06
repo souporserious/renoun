@@ -1,0 +1,53 @@
+---
+title: Why renoun Is a Natural Fit for Blogs
+date: 2025-05-15
+summary: A look at the renoun primitives that turn MDX files into a dependable blog workflow.
+tags:
+  - renoun
+  - content modeling
+  - next.js
+---
+
+renoun treats content as the center of your application. Instead of reaching for an API client or a
+bespoke loader, you work with typed collections that know how to read, validate, and sort the files in
+your publication.
+
+## Typed collections keep things organized
+
+Every post in this example lives in the `posts` directory. The collection definition describes how
+renoun should read those files, what data it should expect from them, and how they are ordered when
+rendered.
+
+```ts path="collections.ts"
+import { Directory, withSchema } from 'renoun'
+import { z } from 'zod'
+
+export const posts = new Directory({
+  path: 'posts',
+  filter: '*.mdx',
+  basePathname: null,
+  loader: {
+    mdx: withSchema(
+      {
+        frontmatter: z.object({
+          title: z.string(),
+          date: z.coerce.date(),
+          summary: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+        }),
+      },
+      (path) => import(`./posts/${path}.mdx`)
+    ),
+  },
+})
+```
+
+## Keep React components close to the content
+
+MDX keeps prose and React in the same file. You can import interactive components next to the copy
+that introduces them, which keeps long-form tutorials readable and maintainable.
+
+## Build new views from the same data
+
+Because the collection tracks metadata, adding a tag page or an archive is mostly a matter of filtering
+the existing entries. You do not have to wire up a new query layer every time you add a feature.
