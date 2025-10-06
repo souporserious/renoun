@@ -31,7 +31,12 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <RootProvider theme="nord">
+    <RootProvider
+      theme={{
+        light: 'dracula',
+        dark: 'nord',
+      }}
+    >
       <html
         lang="en"
         className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"

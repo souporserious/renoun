@@ -10,6 +10,7 @@
     "@mdx-js/loader": "catalog:",
     "@mdx-js/react": "catalog:",
     "@next/mdx": "catalog:",
+    "@renoun/mdx": "workspace:*",
     "@tailwindcss/postcss": "4.1.14",
     "@tailwindcss/typography": "0.5.19",
     "@types/react": "catalog:",

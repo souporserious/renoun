@@ -1,6 +1,17 @@
 import createMDXPlugin from '@next/mdx'
 
-const withMDX = createMDXPlugin()
+const withMDX = createMDXPlugin({
+  options: {
+    rehypePlugins: [
+      '@renoun/mdx/rehype/add-code-block',
+      '@renoun/mdx/rehype/add-reading-time',
+    ],
+    remarkPlugins: [
+      '@renoun/mdx/remark/add-headings',
+      '@renoun/mdx/remark/transform-relative-links',
+    ],
+  },
+})
 
 export default withMDX({
   output: 'export',
