@@ -60,7 +60,9 @@ export default function ({
     if (nextActiveLink) {
       nextActiveLink.setAttribute('aria-current', 'location')
       history.pushState(null, '', '#' + target.id)
-      if (previousActiveLink) previousActiveLink.removeAttribute('aria-current')
+      if (previousActiveLink && previousActiveLink !== nextActiveLink) {
+        previousActiveLink.removeAttribute('aria-current')
+      }
       previousActiveLink = nextActiveLink
     }
 
