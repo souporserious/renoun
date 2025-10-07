@@ -106,7 +106,9 @@ export function JoinButton() {
             </p>
             <p css={{ margin: 0 }}>
               Would you like to learn how to get the most out of how to use
-              renoun? Enter your email below, if not, feel free to press{' '}
+              renoun?
+              <br />
+              If not, feel free to press{' '}
               <kbd
                 css={{
                   display: 'inline-flex',
@@ -122,7 +124,7 @@ export function JoinButton() {
               >
                 enter
               </kbd>{' '}
-              to continue.
+              to continue to the docs.
             </p>
           </div>
           <SignupForm autoFocus />

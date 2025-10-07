@@ -26,7 +26,8 @@ export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
 
     try {
       const formData = new FormData(event.currentTarget)
-      const trimmedEmail = (formData.get('email') as string | null)?.trim() ?? ''
+      const trimmedEmail =
+        (formData.get('email') as string | null)?.trim() ?? ''
 
       if (!trimmedEmail) {
         setState('idle')
@@ -116,7 +117,7 @@ export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
             backgroundColor: 'transparent',
             color: '#f9fafc',
             '::placeholder': {
-              color: '#6d6d6d',
+              color: 'var(--color-foreground-interactive)',
             },
             ':focus': {
               outline: 'none',
