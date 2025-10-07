@@ -1,6 +1,7 @@
 import React, { Children, cloneElement, isValidElement } from 'react'
 
 import { parseGitSpecifier } from '../file-system/Repository.js'
+import { hasMultipleThemes } from '../utils/get-theme.js'
 import { CommandScript } from './Command/CommandScript.js'
 import { ClientConfigProvider } from './Config/ClientConfigContext.js'
 import { ServerConfigContext } from './Config/ServerConfigContext.js'
@@ -116,7 +117,7 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
     ...overrides,
   }
 
-  const isThemeObject = typeof merged.theme === 'object'
+  const hasMultipleThemesConfigured = hasMultipleThemes(merged.theme)
 
   let html: React.ReactElement<HtmlProps>
 
@@ -152,7 +153,7 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
       )
     }
 
-    if (includeThemeScript && isThemeObject) {
+    if (includeThemeScript && hasMultipleThemesConfigured) {
       headInsertions.push(<ThemeScript key="theme-script" nonce={nonce} />)
     }
 
@@ -186,7 +187,7 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   return (
     <ServerConfigContext value={merged}>
       <ClientConfigProvider value={merged}>
-        {isThemeObject ? (
+        {hasMultipleThemesConfigured ? (
           <ThemeProvider theme={merged.theme}>{html}</ThemeProvider>
         ) : (
           html

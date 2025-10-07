@@ -353,7 +353,9 @@ export function getThemeTokenVariables(
   const themeNames = themeConfig ? Object.keys(themeConfig) : []
 
   for (let index = 0; index < themeNames.length; index++) {
-    themeVariables[`[data-theme="${themeNames[index]}"] .${BASE_TOKEN_CLASS_NAME}`] = {
+    themeVariables[
+      `[data-theme="${themeNames[index]}"] .${BASE_TOKEN_CLASS_NAME}`
+    ] = {
       '--0': `var(--${index}fg, inherit)`,
       '--00': `var(--${index}fs, normal)`,
       '--01': `var(--${index}fw, normal)`,
@@ -508,4 +510,12 @@ function applyFallbacks(
       colors[key] = fallbackValue
     }
   }
+}
+
+/** Determines if multiple themes are configured. */
+export function hasMultipleThemes(theme: ConfigurationOptions['theme']) {
+  if (!theme || typeof theme !== 'object' || Array.isArray(theme)) {
+    return false
+  }
+  return true
 }

@@ -6,7 +6,11 @@ import { getSourceTextMetadata, getTokens } from '../../project/client.js'
 import type { Languages } from '../../utils/get-language.js'
 import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
 import { getContext } from '../../utils/context.js'
-import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.js'
+import {
+  BASE_TOKEN_CLASS_NAME,
+  getThemeColors,
+  hasMultipleThemes,
+} from '../../utils/get-theme.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import type { ConfigurationOptions } from '../Config/types.js'
 import { QuickInfo } from './QuickInfo.js'
@@ -80,6 +84,10 @@ export async function Tokens({
   const config = await getConfig()
   const theme = await getThemeColors(config.theme)
   const language = languageProp || context?.language
+  const themeConfiguration = themeProp ?? config.theme
+  const baseTokenClassName = hasMultipleThemes(themeConfiguration)
+    ? BASE_TOKEN_CLASS_NAME
+    : undefined
   let value
 
   if (children) {
@@ -134,7 +142,7 @@ export async function Tokens({
     filePath: metadata.filePath,
     allowErrors: allowErrors || context?.allowErrors,
     showErrors: showErrors || context?.showErrors,
-    theme: themeProp ?? config.theme,
+    theme: themeConfiguration,
     languages: config.languages,
   })
   const lastLineIndex = tokens.length - 1
@@ -167,12 +175,11 @@ export async function Tokens({
               ...(token.diagnostics && diagnosticStyles),
               ...cssProp.token,
             })
-            const symbolClassNameWithBase = symbolClassName
-              ? `${symbolClassName} ${BASE_TOKEN_CLASS_NAME}`
-              : BASE_TOKEN_CLASS_NAME
-            const tokenClassName = className.token
-              ? `${symbolClassNameWithBase} ${className.token}`
-              : symbolClassNameWithBase
+            const tokenClassName = joinClassNames(
+              symbolClassName,
+              baseTokenClassName,
+              className.token
+            )
 
             return (
               <Symbol
@@ -200,12 +207,11 @@ export async function Tokens({
             ...token.style,
             ...cssProp.token,
           })
-          const classNamesWithBase = classNames
-            ? `${BASE_TOKEN_CLASS_NAME} ${classNames}`
-            : BASE_TOKEN_CLASS_NAME
-          const tokenClassName = className.token
-            ? `${classNamesWithBase} ${className.token}`
-            : classNamesWithBase
+          const tokenClassName = joinClassNames(
+            baseTokenClassName,
+            classNames,
+            className.token
+          )
 
           return (
             <span
@@ -240,4 +246,17 @@ export async function Tokens({
       })}
     </QuickInfoProvider>
   )
+}
+
+function joinClassNames(
+  ...classNames: Array<string | undefined>
+): string | undefined {
+  let out: string | undefined
+  for (let index = 0; index < classNames.length; index++) {
+    const value = classNames[index]
+    if (!value) continue
+    if (out === undefined) out = value
+    else out += ' ' + value
+  }
+  return out
 }
