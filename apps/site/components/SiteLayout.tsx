@@ -109,7 +109,6 @@ export async function SiteLayout({
               justifyContent: 'center',
               fontSize: 'var(--font-size-body-2)',
               display: 'flex',
-              gap: '2rem',
               '@media screen and (max-width: calc(60rem - 1px))': {
                 display: 'none',
               },

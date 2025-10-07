@@ -28,7 +28,7 @@ export function NavigationLink({
     : activePathname.startsWith(href)
   const styles: CSSObject = {
     display: 'block',
-    padding: '0.25rem 0',
+    padding: '0.5rem 0.75rem',
   }
 
   if (isActive) {
