@@ -1,13 +1,19 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-export function SignupForm() {
+type SignupFormProps = {
+  autoFocus?: boolean
+}
+
+export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'success' | 'error'>(
     'idle'
   )
   const timeoutId = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const router = useRouter()
   const clearTimeoutId = () => {
     if (timeoutId.current) {
       clearTimeout(timeoutId.current)
@@ -16,13 +22,24 @@ export function SignupForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setState('loading')
     clearTimeoutId()
 
     try {
+      const formData = new FormData(event.currentTarget)
+      const trimmedEmail = (formData.get('email') as string | null)?.trim() ?? ''
+
+      if (!trimmedEmail) {
+        setState('idle')
+        router.push('/docs/getting-started')
+        return
+      }
+
+      formData.set('email', trimmedEmail)
+      setState('loading')
+
       let response = await fetch(
         'https://souporserious.lemonsqueezy.com/email-subscribe/external',
-        { method: 'POST', body: new FormData(event.currentTarget) }
+        { method: 'POST', body: formData }
       )
 
       if (response.ok) {
@@ -58,9 +75,10 @@ export function SignupForm() {
       css={{
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        alignItems: 'stretch',
         width: '100%',
-        gap: '1rem',
+        gap: '1.5rem',
+        maxWidth: '40rem',
       }}
       onSubmit={handleSubmit}
     >
@@ -68,15 +86,15 @@ export function SignupForm() {
         css={{
           display: 'flex',
           flex: 1,
-          borderRadius: '0.25rem',
-          boxShadow: 'inset 0 0 0 1px #415062',
-          backgroundColor: '#0b121a',
+          borderRadius: '999px',
+          background: 'var(--color-surface-interactive)',
+          boxShadow: 'inset 0 0 0 1px var(--color-separator)',
+          transition: 'box-shadow 200ms ease, transform 200ms ease',
+          padding: '0.4rem',
           ...(state === 'loading' && {
-            boxShadow: `inset 0 0 0 1px #415062, 0 0 0 1px #0b121a, 0 0 0 3px #415062a1`,
+            boxShadow:
+              'inset 0 0 0 1px rgba(247, 201, 72, 0.7), 0 0 0 6px rgba(247, 201, 72, 0.12)',
           }),
-          '@media screen and (min-width: 60rem)': {
-            minWidth: '32rem',
-          },
         }}
       >
         <input
@@ -85,21 +103,20 @@ export function SignupForm() {
           id="email"
           aria-label="Email address"
           placeholder="Enter your email address"
-          required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          autoFocus={autoFocus}
           css={{
-            fontSize: 'var(--font-size-body-1)',
+            fontSize: '1.1rem',
             flex: 1,
-            minHeight: '3rem',
-            padding: '0 1rem',
+            minHeight: '3.75rem',
+            padding: '0 1.5rem',
             border: 'none',
-            borderRadius: '0.25rem',
+            borderRadius: '999px',
             backgroundColor: 'transparent',
-            color: 'white',
-            overflow: 'hidden',
+            color: '#f9fafc',
             '::placeholder': {
-              color: '#415062',
+              color: '#6d6d6d',
             },
             ':focus': {
               outline: 'none',
@@ -110,44 +127,39 @@ export function SignupForm() {
           type="submit"
           disabled={state === 'loading'}
           css={{
-            fontSize: 'var(--font-size-body-2)',
-            fontWeight: 'var(--font-weight-button)',
-            letterSpacing: '0.02em',
             display: 'flex',
             alignItems: 'center',
-            padding: '0.5rem 1rem',
-            margin: '0.5rem',
-            gap: '0.5rem',
+            justifyContent: 'center',
+            padding: '0 1.5rem',
+            margin: 0,
             border: 'none',
-            borderRadius: '0.15rem',
-            backgroundColor: '#304554',
-            color: '#cdedff',
+            borderRadius: '999px',
+            backgroundColor: 'var(--color-surface-accent)',
+            color: '#111',
             cursor: 'pointer',
-            ...(state === 'loading' && {
-              animation: 'pulseOpacity 2s ease-in-out infinite',
-            }),
+            transition: 'transform 150ms ease, box-shadow 200ms ease',
+            minWidth: '3.5rem',
+            ':hover': {
+              transform: 'translateX(2px)',
+              boxShadow: '0 12px 24px rgba(247, 201, 72, 0.25)',
+            },
+            ':disabled': {
+              cursor: 'progress',
+              transform: 'none',
+              boxShadow: 'none',
+            },
           }}
         >
-          <span>Subscribe</span>
           <svg
-            width="15"
-            height="15"
+            width="20"
+            height="20"
             viewBox="0 0 15 15"
             fill="none"
-            css={{
-              display: 'none',
-              '@media screen and (min-width: 60rem)': {
-                display: 'block',
-                position: 'relative',
-                top: '-0.1rem',
-              },
-            }}
+            aria-hidden="true"
           >
             <path
-              fillRule="evenodd"
-              clipRule="evenodd"
               d="M9.59388 3.22373L9.0596 2.68945L7.99104 3.75801L8.52532 4.2923L12.5245 8.29154H1.75559H1V9.80271H1.75559H12.5245L8.52532 13.802L7.99104 14.3362L9.0596 15.4048L9.59388 14.8705L14.7049 9.75949C15.0984 9.36606 15.0984 8.72818 14.7049 8.33475L9.59388 3.22373Z"
-              fill="#CDEDFF"
+              fill="#111"
             />
           </svg>
         </button>
@@ -155,16 +167,14 @@ export function SignupForm() {
       {message ? (
         <div
           css={{
-            fontSize: 'var(--font-size-body-3)',
-            position: 'absolute',
-            bottom: 0,
-            translate: '0 120%',
+            fontSize: '1rem',
             color: 'var(--color-foreground-secondary)',
+            textAlign: 'center',
             ...(state === 'success' && {
-              color: '#c5e478',
+              color: '#d6ff8f',
             }),
             ...(state === 'error' && {
-              color: '#f76d6d',
+              color: '#ff9494',
             }),
           }}
         >

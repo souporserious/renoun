@@ -1,108 +1,107 @@
-import { CodeInline } from 'renoun'
-
-import { ButtonLink } from '@/components/ButtonLink'
-import { Text } from '@/components/Text'
-import { SignupForm } from '../SignupForm'
-import { QuickSteps } from './QuickSteps'
+import { JoinButton } from './JoinButton'
 
 export default function Page() {
   return (
     <div
       css={{
-        gridColumn: '1 / -1',
+        gridColumn: '2 / -2',
         display: 'flex',
         flexDirection: 'column',
+        alignItems: 'center',
         gap: '4rem',
+        padding: '5rem 1.75rem 7rem',
+        textAlign: 'center',
 
         '@media (min-width: 60rem)': {
-          padding: '4rem 8rem',
+          gridColumn: '3 / -3',
+          padding: '2rem 0 9rem',
         },
       }}
     >
-      <div
-        className="prose"
-        css={{
-          alignSelf: 'center',
-          textAlign: 'center',
-          gap: '2rem',
-
-          '@media (min-width: 60rem)': {
-            maxWidth: '60ch',
-          },
-        }}
-      >
-        <h1
-          css={{
-            fontSize: 'var(--font-size-heading-0) !important',
-            lineHeight: 'var(--line-height-heading-0) !important',
-            textWrap: 'balance',
-            margin: 0,
-          }}
-        >
-          Elevate Your Design System Documentation
-        </h1>
-        <p
-          css={{
-            fontSize: 'var(--font-size-body)',
-            lineHeight: 'var(--line-height-body)',
-            letterSpacing: '0.01em',
-            textWrap: 'balance',
-            margin: 0,
-          }}
-        >
-          The renoun toolkit uses your React framework to keep documentation
-          polished, in sync, and on brand.
-        </p>
-        <div
-          css={{
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            gap: '1rem',
-
-            '@media (min-width: 60rem)': {
-              flexDirection: 'row',
-            },
-          }}
-        >
-          <ButtonLink href="/docs/getting-started">Start Writing</ButtonLink>
-          <CodeInline
-            allowCopy="npx create-renoun@latest"
-            language="bash"
-            paddingX="0.8em"
-            paddingY="0.5em"
-            css={{ fontSize: 'var(--font-size-code-1)' }}
-          >
-            npx create-renoun
-          </CodeInline>
-        </div>
-      </div>
-
-      <QuickSteps />
-
-      <div
+      <section
         css={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          padding: '4rem 4rem 6rem',
-          gap: '3rem',
-          background: 'var(--color-surface-secondary)',
-          borderRadius: '0.5rem',
+          gap: '2.75rem',
+          maxWidth: '56rem',
         }}
       >
+        <header
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+            maxWidth: '48rem',
+          }}
+        >
+          <h1
+            css={{
+              fontSize: 'clamp(3rem, 6vw, 4.75rem)',
+              lineHeight: 1.05,
+              letterSpacing: '-0.025em',
+              margin: 0,
+            }}
+          >
+            Documentation
+            <br />
+            Done Differently
+          </h1>
+        </header>
+
         <div
           css={{
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            gap: '1rem',
+            gap: '1.75rem',
+            fontSize: 'clamp(1.6rem, 5vw, 2.4rem)',
+            lineHeight: 'clamp(2.2rem, 6.5vw, 3rem)',
+            color: 'hsla(210, 100%, 90%, 0.85)',
+            textAlign: 'left',
+            '@media (min-width: 60rem)': {
+              fontSize: 'var(--font-size-heading-2)',
+              lineHeight: 'var(--line-height-heading-2)',
+            },
           }}
         >
-          <Text variant="heading-2">Stay Updated</Text>
+          <p>
+            You’re in one of two states, your docs are out of sync, or your docs
+            are non-existent.
+          </p>
+          <p>
+            This has been the plight of my software engineering career. It
+            doesn’t matter if it’s a personal project I’m trying to ship or
+            working with my team to release a new design-system site that
+            actually communicates our brand ethos.
+          </p>
+          <p>
+            The problem? You’re forced into tools outside your own code, tools
+            that don’t run at 60 fps or reflect the level of polish you build
+            into your product.
+          </p>
+          <p>
+            Current offerings are too domain-specific and often bolt on a
+            separate build step or have incentives outside of building great
+            docs, which we all know is a problem.
+          </p>
+          <p>
+            I never understood why I had to write the source code and then write
+            the same thing again for documentation. It goes against the first
+            thing you learn as an engineer, don’t repeat yourself.
+          </p>
+          <p>
+            I built renoun to fix this, to let you focus on the quality and
+            craft you pour into your product every day, and showcase that same
+            quality through your documentation.
+          </p>
+          <p>
+            Documentation is the soul of your company, it shouldn’t feel like
+            every other product because you’re not every other product, you’re
+            renoun.
+          </p>
         </div>
-        <SignupForm />
-      </div>
+        <JoinButton />
+      </section>
     </div>
   )
 }

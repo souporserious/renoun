@@ -9,14 +9,17 @@ import { NavigationToggle } from './Sidebar/NavigationToggle'
 
 export async function SiteLayout({
   sidebar,
+  mobileSidebar,
   children,
   variant,
 }: {
   sidebar?: React.ReactNode
+  mobileSidebar?: React.ReactNode
   children: React.ReactNode
   variant?: 'home' | 'docs'
 }) {
   const searchRoutes = await getSearchRoutes()
+  const isHome = variant === 'home'
 
   return (
     <div
@@ -69,18 +72,25 @@ export async function SiteLayout({
           css={{
             gridColumn: '2 / -2',
             gridRow: '1 / 3',
-            display: 'flex',
+            display: 'grid',
+            gridTemplateColumns: '12rem 1fr 12rem',
             alignItems: 'center',
-            justifyContent: 'end',
             padding: '0 2rem',
-            gap: '1.5rem',
+            columnGap: '1.5rem',
+            '@media screen and (max-width: calc(60rem - 1px))': {
+              // On small screens, span full width so header content is not squeezed
+              gridColumn: '1 / -1',
+              // Use flex to avoid grid column artifacts and extra gaps
+              display: 'flex',
+              alignItems: 'center',
+            },
           }}
         >
           <a
             href="/"
             css={{
               display: 'flex',
-              marginRight: 'auto',
+              alignItems: 'center',
             }}
           >
             <RenounLogo
@@ -94,42 +104,37 @@ export async function SiteLayout({
 
           <div
             css={{
+              justifySelf: 'center',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 'var(--font-size-body-2)',
+              display: 'flex',
+              gap: '2rem',
               '@media screen and (max-width: calc(60rem - 1px))': {
                 display: 'none',
               },
-              '@media screen and (min-width: 60rem)': {
-                display: 'flex',
-                gap: '1rem',
-              },
             }}
           >
-            <NavigationLink
-              href="/docs/introduction"
-              activePathnames={['/docs']}
-            >
-              Docs
-            </NavigationLink>
-            <NavigationLink href="/components">Components</NavigationLink>
-            <NavigationLink href="/hooks">Hooks</NavigationLink>
-            <NavigationLink href="/utilities/file-system">
-              Utilities
-            </NavigationLink>
-            <NavigationLink href="/guides">Guides</NavigationLink>
+            <NavigationLink href="/docs/introduction">Docs</NavigationLink>
             <NavigationLink href="/sponsors">Sponsors</NavigationLink>
             <NavigationLink href="/license">License</NavigationLink>
           </div>
 
           <div
             css={{
+              justifySelf: 'end',
               display: 'flex',
-              flexDirection: 'row',
               alignItems: 'center',
+              gap: '1.5rem',
               '@media screen and (max-width: calc(60rem - 1px))': {
-                gap: '1.5rem',
+                marginLeft: 'auto',
               },
-              '@media screen and (min-width: 60rem)': {
-                gap: '1rem',
-              },
+              '@media screen and (min-width: 60rem)':
+                variant === 'docs'
+                  ? {
+                      gap: '1rem',
+                    }
+                  : undefined,
             }}
           >
             <SearchDialog routes={searchRoutes} />
@@ -162,7 +167,7 @@ export async function SiteLayout({
             >
               <Logo variant="gitHost" width="100%" height="100%" />
             </Link>
-            {variant === 'docs' ? (
+            {variant === 'docs' || mobileSidebar ? (
               <NavigationToggle
                 css={{
                   '@media screen and (min-width: 60rem)': {
@@ -176,6 +181,18 @@ export async function SiteLayout({
       </header>
 
       {sidebar}
+      {mobileSidebar ? (
+        <div
+          // render mobile menu overlay only on small screens
+          css={{
+            '@media screen and (min-width: 60rem)': {
+              display: 'none',
+            },
+          }}
+        >
+          {mobileSidebar}
+        </div>
+      ) : null}
 
       <main
         css={{
