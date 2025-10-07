@@ -253,6 +253,21 @@ async function reformatPackageJson(workingDirectory: string) {
   // Remove "@examples/" prefix from package name
   packageJson.name = packageJson.name.replace('@examples/', '')
 
+  const cliPath = '../../packages/renoun/dist/cli/index.js'
+
+  if (packageJson.scripts) {
+    for (const [scriptName, scriptValue] of Object.entries(
+      packageJson.scripts
+    )) {
+      if (typeof scriptValue === 'string') {
+        packageJson.scripts[scriptName] = scriptValue.replaceAll(
+          cliPath,
+          'renoun'
+        )
+      }
+    }
+  }
+
   // Replace "workspace:*" and "catalog:" with the latest versions of the package
   for (const [packageName, version] of Object.entries(
     packageJson.dependencies
