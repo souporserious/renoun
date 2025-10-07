@@ -54,7 +54,6 @@ export function SidebarLink({
           css={{
             width: '1.5rem',
             height: '1.5rem',
-            padding: '0.4rem',
             position: 'absolute',
             left: '-1.5rem',
             color: 'var(--color-foreground-secondary)',
