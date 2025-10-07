@@ -1,6 +1,7 @@
 {
   "private": true,
   "name": "@examples/design-system",
+  "description": "A component design system site that documents UI patterns with live, interactive examples.",
   "scripts": {
     "dev": "../../packages/renoun/dist/cli/index.js next --turbopack",
     "build": "../../packages/renoun/dist/cli/index.js next build",

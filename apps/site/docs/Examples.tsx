@@ -1,4 +1,7 @@
+import { Directory, isDirectory } from 'renoun'
 import { styled } from 'restyle'
+import { z } from 'zod'
+
 import { Row } from '@/components/Row'
 
 const StyledLink = styled('a', {
@@ -34,21 +37,55 @@ const StyledLink = styled('a', {
   },
 })
 
-export function Examples() {
+const ExamplesDirectory = new Directory({
+  path: '../../examples',
+  basePathname: null,
+})
+
+const packageSchema = z.object({
+  name: z.string(),
+  description: z.string().min(1, 'Each example must provide a description.'),
+})
+
+export async function Examples() {
+  const entries = await ExamplesDirectory.getEntries()
+  const directories = entries.filter(isDirectory)
+
+  const examples = (
+    await Promise.all(
+      directories.map(async (entry) => {
+        const packageJson = await entry.getFile('package', 'json')
+        const { name, description } = packageSchema.parse(await packageJson.get())
+        const relativePath = entry.getRelativePathToRoot()
+        const repositoryPath = relativePath.startsWith('examples')
+          ? relativePath
+          : ['examples', relativePath].filter(Boolean).join('/')
+        const title = name
+          .split('/')
+          .at(-1)!
+          .split('-')
+          .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+          .join(' ')
+
+        return {
+          title,
+          description,
+          href: `https://github.com/souporserious/renoun/tree/main/${repositoryPath}`,
+        }
+      })
+    )
+  )
+    .filter((example): example is NonNullable<typeof example> => example !== null)
+    .sort((a, b) => a.title.localeCompare(b.title))
+
   return (
     <Row variant="medium">
-      <StyledLink href="https://github.com/souporserious/renoun/tree/main/examples/blog">
-        <h3>Blog</h3>
-        <p>A list of posts and a detail view for each post.</p>
-      </StyledLink>
-      <StyledLink href="https://github.com/souporserious/renoun/tree/main/examples/docs">
-        <h3>Docs</h3>
-        <p>A collection of documentation pages for a product.</p>
-      </StyledLink>
-      <StyledLink href="https://github.com/souporserious/renoun/tree/main/examples/design-system">
-        <h3>Design System</h3>
-        <p>Automated component documentation with examples.</p>
-      </StyledLink>
+      {examples.map((example) => (
+        <StyledLink key={example.href} href={example.href}>
+          <h3>{example.title}</h3>
+          <p>{example.description}</p>
+        </StyledLink>
+      ))}
     </Row>
   )
 }
