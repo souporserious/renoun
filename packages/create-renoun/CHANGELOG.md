@@ -1,5 +1,11 @@
 # create-renoun
 
+## 2.0.2
+
+### Patch Changes
+
+- cf0147e: Ensures example package scripts use the published `renoun` CLI instead of the monorepo path when rewriting `package.json` files.
+
 ## 2.0.1
 
 ### Patch Changes
