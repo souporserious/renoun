@@ -9,6 +9,7 @@ import type { ConfigurationOptions, ThemeValue } from './Config/types.js'
 import { Refresh } from './Refresh/index.js'
 import { TableOfContentsScript } from './TableOfContents/TableOfContents.js'
 import { ThemeProvider } from './Theme/index.js'
+import { ThemeScript } from './Theme/ThemeScript.js'
 
 type HtmlProps = React.ComponentProps<'html'>
 type HeadProps = React.ComponentProps<'head'>
@@ -115,6 +116,8 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
     ...overrides,
   }
 
+  const isThemeObject = typeof merged.theme === 'object'
+
   let html: React.ReactElement<HtmlProps>
 
   if (isValidElement<React.ComponentProps<'html'>>(children)) {
@@ -138,6 +141,7 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
         <TableOfContentsScript key="table-of-contents-script" nonce={nonce} />
       )
     }
+
     if (includeCommandScript) {
       headInsertions.push(
         <CommandScript
@@ -146,6 +150,10 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
           nonce={nonce}
         />
       )
+    }
+
+    if (includeThemeScript && isThemeObject) {
+      headInsertions.push(<ThemeScript key="theme-script" nonce={nonce} />)
     }
 
     if (headInsertions.length) {
@@ -178,14 +186,8 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   return (
     <ServerConfigContext value={merged}>
       <ClientConfigProvider value={merged}>
-        {typeof merged.theme === 'object' ? (
-          <ThemeProvider
-            theme={merged.theme}
-            includeScript={includeThemeScript}
-            nonce={nonce}
-          >
-            {html}
-          </ThemeProvider>
+        {isThemeObject ? (
+          <ThemeProvider theme={merged.theme}>{html}</ThemeProvider>
         ) : (
           html
         )}

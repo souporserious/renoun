@@ -1,27 +1,12 @@
 import React from 'react'
 
-const themeScriptSource = `
-(function() {
-    try {
-        var storedColorMode = localStorage.getItem('colorMode');
-        if (storedColorMode === 'light' || storedColorMode === 'dark') {
-            document.documentElement.dataset.theme = storedColorMode;
-        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.documentElement.dataset.theme = 'dark';
-        } else {
-            document.documentElement.dataset.theme = 'light';
-        }
-    } catch {
-        // no-op
-    }
-})();
-`
-const source = `data:text/javascript;base64,${btoa(themeScriptSource)}`
+import { Script } from '../Script'
 
 /**
- * A script that sets the theme based on local storage immediately before the page renders.
+ * A script that sets the theme based on local storage before the page renders
+ * and subscribes to system theme changes.
  * @internal
  */
 export function ThemeScript({ nonce }: { nonce?: string }) {
-  return <script async src={source} nonce={nonce} />
+  return <Script nonce={nonce}>{import('./script.js')}</Script>
 }
