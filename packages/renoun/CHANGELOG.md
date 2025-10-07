@@ -1,5 +1,17 @@
 # renoun
 
+## 10.4.0
+
+### Minor Changes
+
+- 4a282e9: Adds `JSONFile` utility to parse and access JSON data files.
+
+### Patch Changes
+
+- dd36fd4: Improves `Tokens` component by applying necessary theme styles through the `RootProvider` component. This avoids the immediate container having to specify anything and decouples the responsibility.
+- f3f6c92: Fixes the `TableOfContents` component clearing the active entry state when the same entry is activated again.
+- 0fd2e28: Fixes system theme preference toggling.
+
 ## 10.3.0
 
 ### Minor Changes
