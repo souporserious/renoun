@@ -52,11 +52,22 @@ export function SidebarLink({
         <Collapse.Trigger
           aria-label="Toggle section"
           css={{
-            width: '1.5rem',
-            height: '1.5rem',
+            width: '0.875rem',
+            height: '0.875rem',
             position: 'absolute',
-            left: '-1.5rem',
+            left: '-1.15rem',
             color: 'var(--color-foreground-secondary)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '0.25rem',
+            ':focus': {
+              outline: 'none',
+            },
+            ':focus-visible': {
+              outline: '2px solid var(--color-foreground-interactive)',
+              outlineOffset: '2px',
+            },
           }}
         />
         <StyledLink href={pathname} css={styles}>
