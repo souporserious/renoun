@@ -45,7 +45,7 @@ export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
 
       if (response.ok) {
         setMessage(
-          `A confirmation email has been sent, please check your inbox.`
+          `A confirmation email has been sent, please check your inbox. Redirecting to the getting started docs...`
         )
       } else {
         setMessage(`Sorry, your subscription could not be processed.`)
@@ -55,6 +55,7 @@ export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
       timeoutId.current = setTimeout(() => {
         setMessage(null)
         setState('idle')
+        router.push('/docs/getting-started')
       }, 5000)
     } catch (error) {
       if (error instanceof Error) {
