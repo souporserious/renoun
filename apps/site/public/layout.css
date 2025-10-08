@@ -106,10 +106,16 @@ body {
 a {
   text-decoration: none;
   color: var(--color-foreground-interactive);
+  -webkit-text-fill-color: var(--color-foreground-interactive);
+}
 
-  :hover {
-    color: var(--color-foreground-interactive-highlighted);
-  }
+a:hover {
+  color: var(--color-foreground-interactive-highlighted);
+}
+
+a:visited {
+  color: var(--color-foreground-interactive);
+  -webkit-text-fill-color: var(--color-foreground-interactive);
 }
 
 .prose,
