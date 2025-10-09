@@ -15,6 +15,12 @@ catalogs:
     '@next/mdx':
       specifier: 15.5.4
       version: 15.5.4
+    '@tailwindcss/postcss':
+      specifier: 4.1.14
+      version: 4.1.14
+    '@tailwindcss/typography':
+      specifier: 0.5.19
+      version: 0.5.19
     '@types/hast':
       specifier: 3.0.4
       version: 3.0.4
@@ -48,6 +54,9 @@ catalogs:
     restyle:
       specifier: 3.4.2
       version: 3.4.2
+    tailwindcss:
+      specifier: 4.1.14
+      version: 4.1.14
     tm-grammars:
       specifier: 1.24.15
       version: 1.24.15
@@ -271,10 +280,10 @@ importers:
         specifier: workspace:*
         version: link:../../packages/mdx
       '@tailwindcss/postcss':
-        specifier: 4.1.14
+        specifier: 'catalog:'
         version: 4.1.14
       '@tailwindcss/typography':
-        specifier: 0.5.19
+        specifier: 'catalog:'
         version: 0.5.19(tailwindcss@4.1.14)
       '@types/react':
         specifier: 'catalog:'
@@ -298,7 +307,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/renoun
       tailwindcss:
-        specifier: 4.1.14
+        specifier: 'catalog:'
         version: 4.1.14
       tailwindcss-react-aria-components:
         specifier: 2.0.1
