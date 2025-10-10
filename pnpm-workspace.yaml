@@ -11,23 +11,23 @@ catalog:
   '@tailwindcss/typography': 0.5.19
   '@types/hast': 3.0.4
   '@types/mdx': 2.0.13
-  '@types/react': 19.1.17
-  '@types/react-dom': 19.1.11
+  '@types/react': 19.2.2
+  '@types/react-dom': 19.2.1
   geist: 1.5.1
   next: 15.5.4
   prettier: 3.6.2
-  react: 19.1.1
-  react-aria-components: 1.12.2
-  react-dom: 19.1.1
+  react: 19.2.0
+  react-aria-components: 1.13.0
+  react-dom: 19.2.0
   restyle: 3.4.2
   tailwindcss: 4.1.14
-  tm-grammars: 1.24.15
+  tm-grammars: 1.24.18
   tm-themes: 1.10.9
   ts-morph: 27.0.0
   typescript: 5.9.3
   unified: 11.0.5
   valibot: 1.1.0
-  zod: 4.1.11
+  zod: 4.1.12
 
 minimumReleaseAge: 1440
 

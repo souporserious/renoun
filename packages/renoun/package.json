@@ -156,7 +156,7 @@
     "oniguruma-to-es": "4.3.3",
     "restyle": "catalog:",
     "ts-morph": "catalog:",
-    "vscode-textmate": "9.2.0"
+    "vscode-textmate": "9.2.1"
   },
   "engines": {
     "node": ">=20.19.0"
