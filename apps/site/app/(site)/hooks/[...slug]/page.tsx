@@ -24,12 +24,8 @@ export async function generateStaticParams() {
   }))
 }
 
-export default async function Hook({
-  params,
-}: {
-  params: Promise<{ slug: string[] }>
-}) {
-  const slug = (await params).slug
+export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
+  const { slug } = await props.params
   const hookEntry = await HooksDirectory.getFile(slug, ['ts', 'tsx'])
   const mdxFile = await HooksDirectory.getFile(slug, 'mdx').catch((error) => {
     if (error instanceof FileNotFoundError) {

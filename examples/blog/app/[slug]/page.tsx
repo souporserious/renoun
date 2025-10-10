@@ -7,12 +7,9 @@ export async function generateStaticParams() {
   return allPosts.map((post) => ({ slug: post.getBaseName() }))
 }
 
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ slug: string }>
-}) {
-  const post = await posts.getFile((await params).slug, 'mdx')
+export default async function Page(props: PageProps<'/[slug]'>) {
+  const { slug } = await props.params
+  const post = await posts.getFile(slug, 'mdx')
   const frontmatter = await post.getExportValue('frontmatter')
   const Content = await post.getExportValue('default')
   const formatter = new Intl.DateTimeFormat('en-US', {

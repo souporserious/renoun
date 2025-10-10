@@ -18,12 +18,10 @@ export async function generateStaticParams() {
   return entries.map((entry) => ({ slug: entry.getSlug() }))
 }
 
-export default async function Component({
-  params,
-}: {
-  params: Promise<{ slug: string }>
-}) {
-  const slug = (await params).slug
+export default async function Component(
+  props: PageProps<'/components/[slug]'>
+) {
+  const { slug } = await props.params
   const componentEntry = await ComponentsCollection.getEntry(slug)
 
   if (!componentEntry) {

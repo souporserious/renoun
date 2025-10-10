@@ -9,12 +9,8 @@ export async function generateStaticParams() {
   }))
 }
 
-export default async function Guide({
-  params,
-}: {
-  params: Promise<{ slug: string[] }>
-}) {
-  const { slug } = await params
+export default async function Guide(props: PageProps<'/guides/[...slug]'>) {
+  const { slug } = await props.params
   const file = await GuidesDirectory.getFile(slug, 'mdx')
 
   return <DocumentEntry file={file} collection={RootCollection} />

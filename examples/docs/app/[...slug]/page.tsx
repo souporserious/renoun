@@ -4,12 +4,8 @@ export async function generateStaticParams() {
   return (await routes).map((entry) => ({ slug: entry.segments }))
 }
 
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ slug: string[] }>
-}) {
-  const { slug } = await params
+export default async function Page(props: PageProps<'/[...slug]'>) {
+  const { slug } = await props.params
   const doc = await docs.getFile(slug, 'mdx')
   const [Content, metadata, updatedAt] = await Promise.all([
     doc.getExportValue('default'),

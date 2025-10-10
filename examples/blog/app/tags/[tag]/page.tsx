@@ -42,15 +42,11 @@ export async function generateStaticParams() {
   return Array.from(uniqueTags.keys()).map((tag) => ({ tag }))
 }
 
-export default async function TagPage({
-  params,
-}: {
-  params: Promise<{ tag: string }>
-}) {
-  const tagParam = (await params).tag
+export default async function TagPage(props: PageProps<'/tags/[tag]'>) {
+  const { tag } = await props.params
   const postsByTag = await getPostsGroupedByTag()
   const matchingPosts = postsByTag
-    .filter(({ tags }) => tags.some(({ slug }) => slug === tagParam))
+    .filter(({ tags }) => tags.some(({ slug }) => slug === tag))
     .sort((a, b) => b.frontmatter.date.getTime() - a.frontmatter.date.getTime())
 
   if (matchingPosts.length === 0) {
@@ -58,8 +54,7 @@ export default async function TagPage({
   }
 
   const displayTag =
-    matchingPosts[0].tags.find(({ slug }) => slug === tagParam)?.label ??
-    tagParam
+    matchingPosts[0].tags.find(({ slug }) => slug === tag)?.label ?? tag
 
   return (
     <main className="page">

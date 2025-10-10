@@ -24,12 +24,10 @@ export async function generateStaticParams() {
   }))
 }
 
-export default async function Component({
-  params,
-}: {
-  params: Promise<{ slug: string[] }>
-}) {
-  const slug = (await params).slug
+export default async function Component(
+  props: PageProps<'/components/[...slug]'>
+) {
+  const { slug } = await props.params
   const componentEntry = await ComponentsDirectory.getFile(slug, ['ts', 'tsx'])
   const mdxFile = await ComponentsDirectory.getFile(slug, 'mdx').catch(
     (error) => {

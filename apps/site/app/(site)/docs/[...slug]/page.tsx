@@ -9,12 +9,8 @@ export async function generateStaticParams() {
   }))
 }
 
-export default async function Doc({
-  params,
-}: {
-  params: Promise<{ slug: string[] }>
-}) {
-  const { slug } = await params
+export default async function Doc(props: PageProps<'/docs/[...slug]'>) {
+  const { slug } = await props.params
   const file = await DocsDirectory.getFile(slug, 'mdx')
 
   return <DocumentEntry file={file} collection={RootCollection} />
