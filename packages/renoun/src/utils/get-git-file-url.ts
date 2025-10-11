@@ -1,6 +1,6 @@
 import { join } from 'path'
 
-/** Constructs a URL for a specific file in a Git repository. Supports GitHub, GitLab, and Bitbucket. */
+/** Constructs a URL for a file in a Git host repository. Supports GitHub, GitLab, and Bitbucket. */
 export function getGitFileUrl(
   filePath: string,
   line: number = 0,
@@ -9,35 +9,55 @@ export function getGitFileUrl(
   gitBranch: string = 'main',
   gitHost?: string
 ): string {
-  if (gitSource.length === 0) {
+  if (!gitSource) {
     throw new Error(
-      `[renoun] A git source is required to construct a source file URL. Received an empty string. Ensure the \`git.source\` property is configured on the \`RootProvider\` component. For more information, visit: https://renoun.dev/docs/configuration`
+      `[renoun] A git source is required to construct a source file URL. Received an empty string. Ensure the \`git.source\` property is configured on the \`RootProvider\` component. For more information, visit: https://www.renoun.dev/docs/configuration#git-information`
     )
   }
 
   const url = new URL(gitSource)
   let fileUrl: string
+  let host = gitHost
 
-  const host =
-    gitHost || gitSource.replace(/^https?:\/\/(?:.*\.)?(.*?)\..*/gm, `$1`)
+  if (!host) {
+    host = gitSource.replace(/^https?:\/\/(?:.*\.)?(.*?)\..*/gm, `$1`)
+  }
 
   switch (host) {
-    case 'github':
+    case 'github': {
       fileUrl = join(url.pathname, '/blob/', gitBranch, filePath)
-      if (line || column) fileUrl += `?plain=1`
-      if (line) fileUrl += `#L${line}`
-      if (column) fileUrl += `:${column}`
-      break
 
-    case 'gitlab':
+      const hasLine = typeof line === 'number' && line > 0
+      const hasColumn = typeof column === 'number' && column > 0
+
+      if (hasLine || hasColumn) {
+        fileUrl += `?plain=1`
+      }
+      if (hasLine) {
+        fileUrl += `#L${line}`
+      }
+      if (hasColumn) {
+        fileUrl += `:${column}`
+      }
+
+      break
+    }
+
+    case 'gitlab': {
       fileUrl = join(url.pathname, '/-/blob/', gitBranch, filePath)
-      if (line) fileUrl += `#L${line}`
+      if (typeof line === 'number' && line > 0) {
+        fileUrl += `#L${line}`
+      }
       break
+    }
 
-    case 'bitbucket':
+    case 'bitbucket': {
       fileUrl = join(url.pathname, '/src/', gitBranch, filePath)
-      if (line) fileUrl += `#lines-${line}`
+      if (typeof line === 'number' && line > 0) {
+        fileUrl += `#lines-${line}`
+      }
       break
+    }
 
     default:
       throw new Error(`Git host not recognized for ${gitSource}`)
