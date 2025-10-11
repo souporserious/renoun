@@ -120,6 +120,9 @@ export default async function Component(
   const componentExports = isExamplesPage
     ? undefined
     : await componentEntry.getExports()
+  const componentHeadings = isExamplesPage
+    ? []
+    : await componentEntry.getHeadings()
   const updatedAt = await componentEntry.getLastCommitDate()
   const [previousEntry, nextEntry] = await componentEntry.getSiblings({
     collection: RootCollection,
@@ -150,7 +153,7 @@ export default async function Component(
     )
   }
 
-  if (componentExports) {
+  if (componentHeadings.length) {
     headings.push(
       {
         level: 2,
@@ -158,11 +161,7 @@ export default async function Component(
         children: 'API Reference',
         text: 'API Reference',
       },
-      ...componentExports.map((componentExport) => ({
-        level: 3,
-        id: componentExport.getName(),
-        text: componentExport.getName(),
-      }))
+      ...componentHeadings
     )
   }
 

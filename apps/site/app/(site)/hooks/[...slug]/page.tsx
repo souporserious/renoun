@@ -80,6 +80,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
     : []
   const isExamplesPage = slug.at(-1) === 'examples'
   const hookExports = isExamplesPage ? undefined : await hookEntry.getExports()
+  const hookHeadings = isExamplesPage ? [] : await hookEntry.getHeadings()
   const updatedAt = await hookEntry.getLastCommitDate()
   const [previousEntry, nextEntry] = await hookEntry.getSiblings({
     collection: RootCollection,
@@ -110,7 +111,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
     )
   }
 
-  if (hookExports) {
+  if (hookHeadings.length) {
     headings.push(
       {
         level: 2,
@@ -118,12 +119,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
         children: 'API Reference',
         text: 'API Reference',
       },
-      ...hookExports.map((hookExport) => ({
-        level: 3,
-        id: hookExport.getSlug(),
-        children: hookExport.getName(),
-        text: hookExport.getName(),
-      }))
+      ...hookHeadings
     )
   }
 

@@ -1163,6 +1163,7 @@ export class JavaScriptFile<
   #loader?: ModuleLoader<Types>
   #slugCasing?: SlugCasing
   #modulePromise?: Promise<any>
+  #headings?: Headings
 
   constructor({
     loader,
@@ -1364,6 +1365,24 @@ export class JavaScriptFile<
   async getExportValue(name: string): Promise<any> {
     const fileExport = await this.getExport(name as any)
     return (await fileExport.getValue()) as any
+  }
+
+  /** Get headings derived from the file exports. */
+  async getHeadings(): Promise<Headings> {
+    if (!this.#headings) {
+      const fileExports = await this.getExports()
+      this.#headings = fileExports.map((fileExport) => {
+        const name = fileExport.getName()
+        return {
+          id: name,
+          level: 3,
+          children: name,
+          text: name,
+        }
+      })
+    }
+
+    return this.#headings
   }
 
   /** Check if an export exists statically in the JavaScript file. */

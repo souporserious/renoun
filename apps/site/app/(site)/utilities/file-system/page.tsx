@@ -16,8 +16,9 @@ export default async function Page() {
   }
 
   const Content = await docFile.getExportValue('default')
-  const headings = await docFile.getExportValue('headings')
+  const docHeadings = await docFile.getHeadings()
   const fileExports = await sourceFile.getExports()
+  const referenceHeadings = await sourceFile.getHeadings()
 
   return (
     <>
@@ -68,17 +69,18 @@ export default async function Page() {
       >
         <TableOfContents
           headings={[
-            ...headings,
-            {
-              id: 'api-reference',
-              text: 'API Reference',
-              level: 2,
-            },
-            ...fileExports.map((fileExport) => ({
-              id: fileExport.getName(),
-              text: fileExport.getName(),
-              level: 3,
-            })),
+            ...docHeadings,
+            ...(referenceHeadings.length
+              ? [
+                  {
+                    id: 'api-reference',
+                    text: 'API Reference',
+                    children: 'API Reference',
+                    level: 2,
+                  },
+                  ...referenceHeadings,
+                ]
+              : []),
           ]}
         />
       </div>

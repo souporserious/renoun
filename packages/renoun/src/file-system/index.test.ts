@@ -1300,6 +1300,32 @@ describe('file system', () => {
     ])
   })
 
+  test('javascript file getHeadings returns exports as headings', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'button.tsx': `
+        export const Button = () => null
+        export function useButton() {}
+      `,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('button', 'tsx')
+
+    expect(file).toBeInstanceOf(JavaScriptFile)
+
+    const headings = await file.getHeadings()
+
+    expect(headings).toMatchObject([
+      { id: 'Button', level: 3, text: 'Button', children: 'Button' },
+      {
+        id: 'useButton',
+        level: 3,
+        text: 'useButton',
+        children: 'useButton',
+      },
+    ])
+    expectTypeOf(headings).toMatchTypeOf<Headings>()
+  })
+
   test('schema transforms export value', async () => {
     const fileSystem = new MemoryFileSystem({
       'hello-world.ts': `export const metadata = { title: 'Hello, World!', date: '2022-01-01' }`,
