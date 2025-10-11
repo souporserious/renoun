@@ -1,5 +1,21 @@
 # renoun
 
+## 10.5.0
+
+### Minor Changes
+
+- a734171: Adds protocol-aware path resolution to the file system `Directory` and `File` utilities starting with a `workspace:` protocol. This will change the working directory to start from the root workspace directory:
+
+  ```ts
+  import { Directory } from 'renoun'
+
+  const examples = new Directory({ path: 'workspace:examples' })
+  ```
+
+### Patch Changes
+
+- 9932576: Improves git file URL handling by checking fragments are formatted correctly and pointing to the specific documentation when git source is not configured.
+
 ## 10.4.0
 
 ### Minor Changes
