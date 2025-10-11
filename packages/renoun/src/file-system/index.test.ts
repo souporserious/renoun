@@ -134,6 +134,24 @@ describe('file system', () => {
     expect(typeof Content).toBe('function')
   })
 
+  test('directory resolves workspace protocol paths', async () => {
+    const rootDirectory = getRootDirectory()
+    const originalCwd = process.cwd()
+    const siteDirectory = join(rootDirectory, 'apps/site')
+
+    process.chdir(siteDirectory)
+
+    try {
+      const examples = new Directory({ path: 'workspace:examples' })
+      expect(examples.getRelativePathToWorkspace()).toBe('examples')
+
+      const docs = await examples.getDirectory('docs')
+      expect(docs.getRelativePathToWorkspace()).toBe('examples/docs')
+    } finally {
+      process.chdir(originalCwd)
+    }
+  })
+
   test('uses default MDX compiler when no loader is provided for in-memory file', async () => {
     const fileSystem = new MemoryFileSystem({
       'index.mdx': ['export const number = 42', '', '# Hello World'].join('\n'),

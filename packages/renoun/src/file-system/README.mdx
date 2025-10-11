@@ -17,6 +17,22 @@ const posts = new Directory({
 
 Here we are creating a new `Directory` instance that targets the `posts` directory relative to the working directory. We are also specifying a loader for the `mdx` file extension that will be used to load the file contents using the bundler.
 
+### Referencing protocol paths
+
+The `Directory` and `File` constructors accept protocol-prefixed paths that resolve using internal resolvers before the adapters interact with the file system. The only supported protocol currently is `workspace:`, which resolves paths relative to the workspace root instead of the current working directory.
+
+This is helpful when using renoun from a nested package (for example `apps/site`) but you need to reference files located in another workspace folder (like `examples`):
+
+```tsx
+import { Directory } from 'renoun/file-system'
+
+const examples = new Directory({
+  path: 'workspace:examples',
+})
+```
+
+If the current working directory is `apps/site`, the example above resolves to `../../examples` internally while remaining `./examples` when run from the workspace root.
+
 ### Querying file system entries
 
 ```tsx

@@ -38,7 +38,7 @@ const StyledLink = styled('a', {
 })
 
 const ExamplesDirectory = new Directory({
-  path: '../../examples',
+  path: 'workspace:examples',
   basePathname: null,
 })
 
@@ -55,7 +55,9 @@ export async function Examples() {
     await Promise.all(
       directories.map(async (entry) => {
         const packageJson = await entry.getFile('package', 'json')
-        const { name, description } = packageSchema.parse(await packageJson.get())
+        const { name, description } = packageSchema.parse(
+          await packageJson.get()
+        )
         const relativePath = entry.getRelativePathToRoot()
         const repositoryPath = relativePath.startsWith('examples')
           ? relativePath
@@ -75,7 +77,9 @@ export async function Examples() {
       })
     )
   )
-    .filter((example): example is NonNullable<typeof example> => example !== null)
+    .filter(
+      (example): example is NonNullable<typeof example> => example !== null
+    )
     .sort((a, b) => a.title.localeCompare(b.title))
 
   return (

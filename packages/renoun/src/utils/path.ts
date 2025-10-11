@@ -1,3 +1,36 @@
+import { cwd } from 'node:process'
+
+import { getRootDirectory } from './get-root-directory.js'
+
+const PROTOCOL_RESOLVERS: Record<string, (path: string) => string> = {
+  workspace: (protocolPath: string) => {
+    const workspaceRoot = normalizeSlashes(getRootDirectory())
+    const normalizedProtocolPath = normalizeSlashes(protocolPath).replace(
+      /^\/+/,
+      ''
+    )
+
+    if (normalizedProtocolPath.length === 0) {
+      return workspaceRoot
+    }
+
+    return joinPaths(workspaceRoot, normalizedProtocolPath)
+  },
+}
+
+function parseProtocolPath(path: string) {
+  const match = /^(?<protocol>[a-zA-Z][a-zA-Z0-9+.-]*:)(?<rest>.*)$/.exec(path)
+
+  if (!match || !match.groups) {
+    return null
+  }
+
+  return {
+    protocol: match.groups['protocol'].slice(0, -1),
+    rest: match.groups['rest'],
+  }
+}
+
 /** Normalize Windows backslashes to POSIX forward slashes. */
 export function normalizeSlashes(path: string): string {
   return path.replace(/\\+/g, '/')
@@ -138,6 +171,29 @@ export function relativePath(from: string, to: string): string {
   const toRemaining = toParts.slice(commonIndex)
 
   return [...fromRemaining, ...toRemaining].join('/')
+}
+
+/** Resolve a protocol path relative to the current working directory. */
+export function resolveProtocolPath(path: string): string {
+  const parsed = parseProtocolPath(path)
+
+  if (!parsed) {
+    return path
+  }
+
+  const resolver = PROTOCOL_RESOLVERS[parsed.protocol]
+
+  if (!resolver) {
+    return path
+  }
+
+  const absolutePath = resolver(parsed.rest)
+  const relativeProtocolPath = relativePath(
+    normalizeSlashes(cwd()),
+    normalizeSlashes(absolutePath)
+  )
+
+  return relativeProtocolPath === '' ? '.' : relativeProtocolPath
 }
 
 /** Ensure a path is relative */

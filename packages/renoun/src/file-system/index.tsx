@@ -36,6 +36,7 @@ import {
   extensionName,
   joinPaths,
   normalizeSlashes,
+  resolveProtocolPath,
   removeExtension,
   removeAllExtensions,
   removeOrderPrefixes,
@@ -336,8 +337,9 @@ export class File<
   #directory: Directory<DirectoryTypes>
 
   constructor(options: FileOptions<DirectoryTypes, Path>) {
-    this.#name = baseName(options.path)
-    this.#path = options.path
+    const resolvedPath = resolveProtocolPath(options.path)
+    this.#name = baseName(resolvedPath)
+    this.#path = resolvedPath
     this.#basePathname = options.basePathname
     this.#slugCasing = options.slugCasing ?? 'kebab'
     this.#directory = options.directory ?? new Directory()
@@ -1988,7 +1990,9 @@ export class Directory<
       this.#slugCasing = 'kebab'
       this.#tsConfigPath = 'tsconfig.json'
     } else {
-      this.#path = options.path ? ensureRelativePath(options.path) : '.'
+      this.#path = options.path
+        ? ensureRelativePath(resolveProtocolPath(options.path))
+        : '.'
       this.#loader = options.loader
       this.#basePathname =
         options.basePathname === undefined
