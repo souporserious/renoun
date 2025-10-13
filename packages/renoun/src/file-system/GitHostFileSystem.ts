@@ -345,12 +345,15 @@ export class GitHostFileSystem extends MemoryFileSystem {
       if (chunks.length === 1) {
         buf = chunks[0]!
       } else {
-        const total = chunks.reduce((n, c) => n + c.length, 0)
+        const total = chunks.reduce(
+          (totalLength, chunk) => totalLength + chunk.length,
+          0
+        )
         buf = new Uint8Array(total)
         let offset = 0
-        for (const c of chunks) {
-          buf.set(c, offset)
-          offset += c.length
+        for (const chunk of chunks) {
+          buf.set(chunk, offset)
+          offset += chunk.length
         }
       }
 
@@ -706,7 +709,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
     while (true) {
       const header = await readFromStream(512)
-      if (header.length === 0 || header.every((b) => b === 0)) break
+      if (header.length === 0 || header.every((byte) => byte === 0)) break
       if (header.length < 512) throw new Error('[renoun] Truncated tar header')
       if (!this.#validTarChecksum(header)) {
         throw new Error('[renoun] Invalid tar header checksum')
@@ -770,9 +773,10 @@ export class GitHostFileSystem extends MemoryFileSystem {
       let len = 0
       let digits = 0
       while (index < buffer.length && buffer[index] !== 0x20) {
-        const c = buffer[index++]!
-        if (c < 0x30 || c > 0x39) throw new Error('[renoun] Invalid PAX length')
-        len = len * 10 + (c - 0x30)
+        const char = buffer[index++]!
+        if (char < 0x30 || char > 0x39)
+          throw new Error('[renoun] Invalid PAX length')
+        len = len * 10 + (char - 0x30)
         digits++
         if (len > 16 * 1024)
           throw new Error('[renoun] Oversized PAX header line')
