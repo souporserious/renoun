@@ -151,7 +151,7 @@
   },
   "dependencies": {
     "@renoun/mdx": "workspace:*",
-    "ignore": "7.0.5",
+    "fast-ignore": "1.1.3",
     "minimatch": "10.0.3",
     "oniguruma-to-es": "4.3.3",
     "restyle": "catalog:",

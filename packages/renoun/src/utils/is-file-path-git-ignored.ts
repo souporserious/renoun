@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import ignore from 'ignore'
+import ignore from 'fast-ignore'
 
 import { getRootDirectory } from './get-root-directory.js'
 
@@ -19,10 +19,10 @@ export function isFilePathGitIgnored(filePath: string): boolean {
 
   if (!ignoreManager) {
     const gitignorePatterns = getGitIgnorePatterns()
-    ignoreManager = ignore().add(gitignorePatterns)
+    ignoreManager = ignore(gitignorePatterns)
   }
 
-  return ignoreManager.ignores(relativePath)
+  return ignoreManager(relativePath)
 }
 
 function getGitIgnorePatterns(): string[] {

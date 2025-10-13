@@ -1,4 +1,4 @@
-import ignore from 'ignore'
+import ignore from 'fast-ignore'
 import * as tsMorph from 'ts-morph'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
@@ -169,8 +169,7 @@ export class MemoryFileSystem extends FileSystem {
             // Filter out comments and empty lines
             .filter((line) => line && !line.startsWith('#'))
 
-          this.#ignore = ignore()
-          this.#ignore.add(gitIgnorePatterns)
+          this.#ignore = ignore(gitIgnorePatterns)
         } else {
           return false
         }
@@ -179,7 +178,7 @@ export class MemoryFileSystem extends FileSystem {
       }
     }
 
-    return this.#ignore.ignores(filePath)
+    return this.#ignore(filePath)
   }
 }
 
