@@ -1,6 +1,3 @@
-import { createGunzip } from 'node:zlib'
-import { Readable } from 'node:stream'
-
 import { MemoryFileSystem, type MemoryFileContent } from './MemoryFileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
@@ -77,7 +74,6 @@ function buildOriginPolicy(
       auth: new Set([apiOrigin]),
     }
   }
-
   return {
     fetch: new Set(defaultOrigins[host].fetch),
     auth: new Set(defaultOrigins[host].auth),
@@ -189,6 +185,182 @@ export class GitHostFileSystem extends MemoryFileSystem {
       this.#initPromise = undefined
       throw error
     })
+  }
+
+  async #extractTarFromStream(
+    stream: ReadableStream<Uint8Array>
+  ): Promise<void> {
+    const files = this.getFiles()
+    files.clear()
+
+    let totalBytes = 0
+    let fileCount = 0
+    const seen = new Set<string>()
+    let rootPrefix: string | undefined
+    let paxHeader: Record<string, string> | null = null
+    let longPath: string | null = null
+
+    for await (const entry of this.#tarStreamEntries(stream)) {
+      const { size, typeFlag, name, prefix, readData, discard } = entry
+      totalBytes += size
+      if (totalBytes > MAX_ARCHIVE_SIZE_BYTES) {
+        throw new Error(
+          '[renoun] Repository archive exceeds allowed size during extraction'
+        )
+      }
+
+      const resolvedPath =
+        this.#sanitizeTarPath(paxHeader?.['path']) ??
+        longPath ??
+        this.#sanitizeTarPath(prefix ? `${prefix}/${name}` : name)
+
+      let fullPath = resolvedPath ?? ''
+      paxHeader = null
+      longPath = null
+      if (!fullPath) {
+        await discard()
+        continue
+      }
+
+      if (!rootPrefix) {
+        rootPrefix = fullPath.split('/')[0]
+      }
+      if (rootPrefix && fullPath.startsWith(`${rootPrefix}/`)) {
+        fullPath = fullPath.slice(rootPrefix.length + 1)
+      }
+      fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
+      fullPath = fullPath.replace(/^\/+/, '')
+      if (!fullPath || fullPath.endsWith('/')) {
+        await discard()
+        continue
+      }
+
+      const safeSegments: string[] = []
+      let isUnsafe = false
+      const parts = fullPath.split('/')
+      for (let index = 0; index < parts.length; index++) {
+        const segment = parts[index]!
+        const trimmedSegment = segment.trim()
+        if (!trimmedSegment || trimmedSegment === '.') continue
+        if (trimmedSegment === '..') {
+          isUnsafe = true
+          break
+        }
+        if (index === 0 && /^[A-Za-z]:$/.test(trimmedSegment)) {
+          isUnsafe = true
+          break
+        }
+        if (
+          segment.length > MAX_PATH_SEGMENT_LENGTH ||
+          trimmedSegment.length > MAX_PATH_SEGMENT_LENGTH
+        ) {
+          isUnsafe = true
+          break
+        }
+        safeSegments.push(trimmedSegment)
+      }
+      if (isUnsafe || safeSegments.length === 0) {
+        await discard()
+        continue
+      }
+
+      const relativePath = safeSegments.join('/')
+      if (relativePath.length > MAX_RELATIVE_PATH_LENGTH) {
+        await discard()
+        continue
+      }
+      if (safeSegments.length > MAX_PATH_SEGMENTS) {
+        await discard()
+        continue
+      }
+
+      // Handle special types
+      if (typeFlag === TAR_TYPE_FLAGS.PaxExtendedHeader) {
+        const buf = await readData(MAX_FILE_BYTES)
+        paxHeader = this.#parsePaxRecords(buf)
+        continue
+      }
+      if (typeFlag === TAR_TYPE_FLAGS.PaxGlobalExtendedHeader) {
+        await discard()
+        continue
+      }
+      if (typeFlag === TAR_TYPE_FLAGS.GnuLongPath) {
+        const buf = await readData(MAX_FILE_BYTES)
+        longPath = this.#sanitizeTarPath(new TextDecoder('utf-8').decode(buf))
+        continue
+      }
+      if (typeFlag === TAR_TYPE_FLAGS.GnuLongLink) {
+        await discard()
+        continue
+      }
+
+      const isDirectory = typeFlag === TAR_TYPE_FLAGS.Directory
+      const isFile =
+        typeFlag === TAR_TYPE_FLAGS.NormalFile ||
+        typeFlag === TAR_TYPE_FLAGS.NormalFileSpace ||
+        typeFlag === TAR_TYPE_FLAGS.NormalFileAlternative ||
+        typeFlag === TAR_TYPE_FLAGS.NormalFileSeven
+
+      if (!isFile || isDirectory) {
+        await discard()
+        continue
+      }
+
+      fileCount++
+      if (fileCount > MAX_FILE_COUNT) {
+        throw new Error('[renoun] Repository contains too many files')
+      }
+      if (seen.has(relativePath)) {
+        throw new Error('[renoun] Duplicate path in archive')
+      }
+
+      // Hard cap: skip overlarge files entirely
+      if (size > MAX_FILE_BYTES) {
+        await discard()
+        continue
+      }
+
+      let received = 0
+      const chunks: Uint8Array[] = []
+      while (true) {
+        const chunk = await readData(
+          Math.min(64 * 1024, MAX_FILE_BYTES - received)
+        )
+        if (chunk.length === 0) break
+        received += chunk.length
+        if (received > MAX_FILE_BYTES) {
+          await discard()
+          chunks.length = 0
+          received = 0
+          break
+        }
+        chunks.push(chunk)
+        if (received >= size) break
+      }
+      if (received === 0 && chunks.length === 0) {
+        continue
+      }
+
+      let buf: Uint8Array
+      if (chunks.length === 1) {
+        buf = chunks[0]!
+      } else {
+        const total = chunks.reduce((n, c) => n + c.length, 0)
+        buf = new Uint8Array(total)
+        let offset = 0
+        for (const c of chunks) {
+          buf.set(c, offset)
+          offset += c.length
+        }
+      }
+
+      const content: MemoryFileContent = this.#isBinaryBuffer(buf)
+        ? { kind: 'binary', content: buf, encoding: 'binary' }
+        : new TextDecoder('utf-8').decode(buf)
+
+      this.createFile(relativePath, content)
+      seen.add(relativePath)
+    }
   }
 
   clearCache() {
@@ -451,387 +623,81 @@ export class GitHostFileSystem extends MemoryFileSystem {
       throw new Error('[renoun] Unexpected content-type for repository archive')
     }
 
-    if (!response.body) {
-      // Fallback for environments without web streams (e.g., some mocks):
-      // stream the ArrayBuffer through a Readable and reuse extractor
-      let arrayBuffer: ArrayBuffer
-      try {
-        arrayBuffer = await response.arrayBuffer()
-      } catch (error) {
-        throw new Error('[renoun] Failed to read repository archive response')
-      }
-      const raw = Buffer.from(arrayBuffer)
-      const isGz = raw.length > 2 && raw[0] === 0x1f && raw[1] === 0x8b
-      const src = Readable.from(raw)
-      const source = isGz ? src.pipe(createGunzip()) : src
-
-      const files = this.getFiles()
-      files.clear()
-      let totalBytes = 0
-      let fileCount = 0
-      const seen = new Set<string>()
-      let rootPrefix: string | undefined
-      let paxHeader: Record<string, string> | null = null
-      let longPath: string | null = null
-
-      for await (const entry of this.#tarStreamEntries(source)) {
-        const { size, typeFlag, name, prefix, readData, discard } = entry
-        totalBytes += size
-        if (totalBytes > MAX_ARCHIVE_SIZE_BYTES) {
+    // Prefer Web Streams API, fall back to ArrayBuffer if body is not available
+    if (response.body) {
+      let stream = response.body as ReadableStream<Uint8Array>
+      if (/gzip/.test(contentType)) {
+        if (typeof DecompressionStream === 'function') {
+          const ds = new DecompressionStream(
+            'gzip'
+          ) as unknown as ReadableWritablePair<Uint8Array, Uint8Array>
+          stream = stream.pipeThrough(ds)
+        } else {
           throw new Error(
-            '[renoun] Repository archive exceeds allowed size during extraction'
+            '[renoun] Gzip decompression not supported in this environment'
           )
         }
-        const resolvedPath =
-          this.#sanitizeTarPath(paxHeader?.['path']) ??
-          longPath ??
-          this.#sanitizeTarPath(prefix ? `${prefix}/${name}` : name)
-        let fullPath = resolvedPath ?? ''
-        paxHeader = null
-        longPath = null
-        if (!fullPath) {
-          await discard()
-          continue
-        }
-        if (!rootPrefix) rootPrefix = fullPath.split('/')[0]
-        if (rootPrefix && fullPath.startsWith(`${rootPrefix}/`))
-          fullPath = fullPath.slice(rootPrefix.length + 1)
-        fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
-        if (!fullPath || fullPath.endsWith('/')) {
-          await discard()
-          continue
-        }
-        const parts = fullPath.split('/')
-        const safeSegments: string[] = []
-        let isUnsafe = false
-        for (let index = 0; index < parts.length; index++) {
-          const segment = parts[index]!
-          const ts = segment.trim()
-          if (!ts || ts === '.') continue
-          if (ts === '..') {
-            isUnsafe = true
-            break
-          }
-          if (index === 0 && /^[A-Za-z]:$/.test(ts)) {
-            isUnsafe = true
-            break
-          }
-          if (
-            segment.length > MAX_PATH_SEGMENT_LENGTH ||
-            ts.length > MAX_PATH_SEGMENT_LENGTH
-          ) {
-            isUnsafe = true
-            break
-          }
-          safeSegments.push(ts)
-        }
-        if (isUnsafe || safeSegments.length === 0) {
-          await discard()
-          continue
-        }
-        const relativePath = safeSegments.join('/')
-        if (relativePath.length > MAX_RELATIVE_PATH_LENGTH) {
-          await discard()
-          continue
-        }
-        if (safeSegments.length > MAX_PATH_SEGMENTS) {
-          await discard()
-          continue
-        }
-        if (typeFlag === TAR_TYPE_FLAGS.PaxExtendedHeader) {
-          const buf = await readData(MAX_FILE_BYTES)
-          paxHeader = this.#parsePaxRecords(buf)
-          continue
-        }
-        if (typeFlag === TAR_TYPE_FLAGS.PaxGlobalExtendedHeader) {
-          await discard()
-          continue
-        }
-        if (typeFlag === TAR_TYPE_FLAGS.GnuLongPath) {
-          const buf = await readData(MAX_FILE_BYTES)
-          longPath = this.#sanitizeTarPath(buf.toString('utf8'))
-          continue
-        }
-        if (typeFlag === TAR_TYPE_FLAGS.GnuLongLink) {
-          await discard()
-          continue
-        }
-        const isDirectory = typeFlag === TAR_TYPE_FLAGS.Directory
-        const isFile =
-          typeFlag === TAR_TYPE_FLAGS.NormalFile ||
-          typeFlag === TAR_TYPE_FLAGS.NormalFileSpace ||
-          typeFlag === TAR_TYPE_FLAGS.NormalFileAlternative ||
-          typeFlag === TAR_TYPE_FLAGS.NormalFileSeven
-        if (!isFile || isDirectory) {
-          await discard()
-          continue
-        }
-        fileCount++
-        if (fileCount > MAX_FILE_COUNT)
-          throw new Error('[renoun] Repository contains too many files')
-        if (seen.has(relativePath))
-          throw new Error('[renoun] Duplicate path in archive')
-        if (size > MAX_FILE_BYTES) {
-          await discard()
-          continue
-        }
-        let received = 0
-        const chunks: Buffer[] = []
-        while (true) {
-          const chunk = await readData(
-            Math.min(64 * 1024, MAX_FILE_BYTES - received)
-          )
-          if (chunk.length === 0) break
-          received += chunk.length
-          if (received > size) {
-            await discard()
-            chunks.length = 0
-            received = 0
-            break
-          }
-          chunks.push(chunk)
-          if (received >= size) break
-        }
-        if (received === 0 && chunks.length === 0) continue
-        const buf = Buffer.concat(chunks)
-        const content: MemoryFileContent = this.#isBinaryBuffer(buf)
-          ? { kind: 'binary', content: buf, encoding: 'binary' }
-          : buf.toString('utf8')
-        this.createFile(relativePath, content)
-        seen.add(relativePath)
       }
+      await this.#extractTarFromStream(stream)
       this.#initialized = true
       return
     }
 
-    // handle both Node.js and web-compatible ReadableStream and fallback if necessary
-    let nodeBody: NodeJS.ReadableStream
-    if (typeof Readable.fromWeb === 'function') {
-      try {
-        // Some environments may not have a true ReadableStream (Node.js <18, jest mocks, etc)
-        // Gracefully handle type mismatches for test/shim streams
-        nodeBody = Readable.fromWeb(
-          response.body as unknown as import('stream/web').ReadableStream<any>
-        )
-      } catch {
-        throw new Error(
-          '[renoun] Could not create Node.js stream from response body'
-        )
-      }
-    } else {
-      throw new Error(
-        '[renoun] Could not create Node.js stream from response body'
-      )
+    let arrayBuffer: ArrayBuffer
+    try {
+      arrayBuffer = await response.arrayBuffer()
+    } catch {
+      throw new Error('[renoun] Failed to read repository archive response')
     }
-
-    const shouldGunzip = /gzip/.test(contentType)
-    const source = shouldGunzip ? nodeBody.pipe(createGunzip()) : nodeBody
-    const files = this.getFiles()
-    files.clear()
-
-    let totalBytes = 0
-    let fileCount = 0
-    const seen = new Set<string>()
-    let rootPrefix: string | undefined
-    let paxHeader: Record<string, string> | null = null
-    let longPath: string | null = null
-
-    for await (const entry of this.#tarStreamEntries(source)) {
-      const { size, typeFlag, name, prefix, readData, discard } = entry
-      totalBytes += size
-      if (totalBytes > MAX_ARCHIVE_SIZE_BYTES) {
+    const raw = new Uint8Array(arrayBuffer)
+    const isGz = raw.length > 2 && raw[0] === 0x1f && raw[1] === 0x8b
+    let source: ReadableStream<Uint8Array> = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(raw)
+        controller.close()
+      },
+    })
+    if (isGz || /gzip/.test(contentType)) {
+      if (typeof DecompressionStream === 'function') {
+        const ds = new DecompressionStream(
+          'gzip'
+        ) as unknown as ReadableWritablePair<Uint8Array, Uint8Array>
+        source = source.pipeThrough(ds)
+      } else {
         throw new Error(
-          '[renoun] Repository archive exceeds allowed size during extraction'
+          '[renoun] Gzip decompression not supported in this environment'
         )
       }
-
-      // Validate checksum (already validated when parsed header)
-      // Parse names and sanitize
-      const resolvedPath =
-        this.#sanitizeTarPath(paxHeader?.['path']) ??
-        longPath ??
-        this.#sanitizeTarPath(prefix ? `${prefix}/${name}` : name)
-
-      let fullPath = resolvedPath ?? ''
-      paxHeader = null
-      longPath = null
-      if (!fullPath) {
-        await discard()
-        continue
-      }
-
-      if (!rootPrefix) {
-        rootPrefix = fullPath.split('/')[0]
-      }
-      if (rootPrefix && fullPath.startsWith(`${rootPrefix}/`)) {
-        fullPath = fullPath.slice(rootPrefix.length + 1)
-      }
-      fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
-      fullPath = fullPath.replace(/^\/+/, '')
-      fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
-      fullPath = fullPath.replace(/^\/+/, '')
-      if (!fullPath || fullPath.endsWith('/')) {
-        await discard()
-        continue
-      }
-
-      const safeSegments: string[] = []
-      let isUnsafe = false
-      const parts = fullPath.split('/')
-      for (let index = 0; index < parts.length; index++) {
-        const segment = parts[index]!
-        const trimmedSegment = segment.trim()
-        if (!trimmedSegment || trimmedSegment === '.') continue
-        if (trimmedSegment === '..') {
-          isUnsafe = true
-          break
-        }
-        if (index === 0 && /^[A-Za-z]:$/.test(trimmedSegment)) {
-          isUnsafe = true
-          break
-        }
-        if (
-          segment.length > MAX_PATH_SEGMENT_LENGTH ||
-          trimmedSegment.length > MAX_PATH_SEGMENT_LENGTH
-        ) {
-          isUnsafe = true
-          break
-        }
-        safeSegments.push(trimmedSegment)
-      }
-      if (isUnsafe || safeSegments.length === 0) {
-        await discard()
-        continue
-      }
-
-      const relativePath = safeSegments.join('/')
-      if (relativePath.length > MAX_RELATIVE_PATH_LENGTH) {
-        await discard()
-        continue
-      }
-      if (safeSegments.length > MAX_PATH_SEGMENTS) {
-        await discard()
-        continue
-      }
-
-      // Handle special types
-      if (typeFlag === TAR_TYPE_FLAGS.PaxExtendedHeader) {
-        const buf = await readData(MAX_FILE_BYTES)
-        paxHeader = this.#parsePaxRecords(buf)
-        continue
-      }
-      if (typeFlag === TAR_TYPE_FLAGS.PaxGlobalExtendedHeader) {
-        await discard()
-        continue
-      }
-      if (typeFlag === TAR_TYPE_FLAGS.GnuLongPath) {
-        const buf = await readData(MAX_FILE_BYTES)
-        longPath = this.#sanitizeTarPath(buf.toString('utf8'))
-        continue
-      }
-      if (typeFlag === TAR_TYPE_FLAGS.GnuLongLink) {
-        await discard()
-        continue
-      }
-
-      const isDirectory = typeFlag === TAR_TYPE_FLAGS.Directory
-      const isFile =
-        typeFlag === TAR_TYPE_FLAGS.NormalFile ||
-        typeFlag === TAR_TYPE_FLAGS.NormalFileSpace ||
-        typeFlag === TAR_TYPE_FLAGS.NormalFileAlternative ||
-        typeFlag === TAR_TYPE_FLAGS.NormalFileSeven
-
-      if (!isFile || isDirectory) {
-        await discard()
-        continue
-      }
-
-      fileCount++
-      if (fileCount > MAX_FILE_COUNT) {
-        throw new Error('[renoun] Repository contains too many files')
-      }
-      if (seen.has(relativePath)) {
-        throw new Error('[renoun] Duplicate path in archive')
-      }
-
-      // Hard cap: skip overlarge files entirely
-      if (size > MAX_FILE_BYTES) {
-        await discard()
-        continue
-      }
-
-      let received = 0
-      const chunks: Buffer[] = []
-      while (true) {
-        const chunk = await readData(
-          Math.min(64 * 1024, MAX_FILE_BYTES - received)
-        )
-        if (chunk.length === 0) break
-        received += chunk.length
-        if (received > MAX_FILE_BYTES) {
-          await discard()
-          chunks.length = 0
-          received = 0
-          break
-        }
-        chunks.push(chunk)
-        if (received >= size) break
-      }
-      if (received === 0 && chunks.length === 0) {
-        continue
-      }
-
-      const buf = Buffer.concat(chunks)
-      const content: MemoryFileContent = this.#isBinaryBuffer(buf)
-        ? { kind: 'binary', content: buf, encoding: 'binary' }
-        : buf.toString('utf8')
-
-      this.createFile(relativePath, content)
-      seen.add(relativePath)
     }
-
+    await this.#extractTarFromStream(source)
     this.#initialized = true
   }
 
-  async *#tarStreamEntries(stream: NodeJS.ReadableStream): AsyncGenerator<{
-    header: Buffer
+  async *#tarStreamEntries(stream: ReadableStream<Uint8Array>): AsyncGenerator<{
+    header: Uint8Array
     size: number
     typeFlag: number
     name: string
     prefix: string
-    readData: (maxChunk: number) => Promise<Buffer>
+    readData: (maxChunk: number) => Promise<Uint8Array>
     discard: () => Promise<void>
   }> {
-    let buffer = Buffer.alloc(0)
-    let isEnded = false
-    let isErrored: Error | null = null
-    const readFromStream = async (size: number): Promise<Buffer> => {
-      while (buffer.length < size && !isEnded && !isErrored) {
-        const chunk: Buffer | null = await new Promise((resolve) => {
-          const onReadable = () => {
-            stream.off('end', onEnd)
-            stream.off('error', onError)
-            const readChunk = (stream.read() as Buffer) || null
-            if (readChunk) buffer = Buffer.concat([buffer, readChunk])
-            resolve(readChunk)
-          }
-          const onEnd = () => {
-            stream.off('readable', onReadable)
-            stream.off('error', onError)
-            isEnded = true
-            resolve(null)
-          }
-          const onError = (err: Error) => {
-            stream.off('readable', onReadable)
-            stream.off('end', onEnd)
-            isErrored = err
-            resolve(null)
-          }
-          stream.once('readable', onReadable)
-          stream.once('end', onEnd)
-          stream.once('error', onError)
-        })
-        if (!chunk) break
+    const reader = stream.getReader()
+    let buffer = new Uint8Array(0)
+    let done = false
+    const readFromStream = async (size: number): Promise<Uint8Array> => {
+      while (buffer.length < size && !done) {
+        const { value, done: rdone } = await reader.read()
+        if (rdone) {
+          done = true
+          break
+        }
+        if (value && value.length > 0) {
+          const merged = new Uint8Array(buffer.length + value.length)
+          merged.set(buffer, 0)
+          merged.set(value, buffer.length)
+          buffer = merged
+        }
       }
       const out = buffer.subarray(0, Math.min(size, buffer.length))
       buffer = buffer.subarray(out.length)
@@ -840,7 +706,6 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
     while (true) {
       const header = await readFromStream(512)
-      if (isErrored) throw isErrored
       if (header.length === 0 || header.every((b) => b === 0)) break
       if (header.length < 512) throw new Error('[renoun] Truncated tar header')
       if (!this.#validTarChecksum(header)) {
@@ -848,7 +713,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
       }
 
       const size = this.#parseTarSize(header)
-      const typeFlag = header[156]
+      const typeFlag = header[156]!
       const name = this.#readTarString(header, 0, 100)
       const prefix = this.#readTarString(header, 345, 500)
 
@@ -857,8 +722,8 @@ export class GitHostFileSystem extends MemoryFileSystem {
       let remaining = dataSize
 
       let discarded = false
-      const readData = async (maxChunk: number): Promise<Buffer> => {
-        if (remaining <= 0) return Buffer.alloc(0)
+      const readData = async (maxChunk: number): Promise<Uint8Array> => {
+        if (remaining <= 0) return new Uint8Array(0)
         const toRead = Math.min(remaining, maxChunk)
         const chunk = await readFromStream(toRead)
         remaining -= chunk.length
@@ -896,33 +761,34 @@ export class GitHostFileSystem extends MemoryFileSystem {
     }
   }
 
-  #parsePaxRecords(buf: Buffer): Record<string, string> {
+  #parsePaxRecords(buffer: Uint8Array): Record<string, string> {
     const result: Record<string, string> = {}
     let index = 0
-    while (index < buf.length) {
-      // read length prefix (ASCII decimal) until space
+    const decoder = new TextDecoder('utf-8')
+
+    while (index < buffer.length) {
       let len = 0
       let digits = 0
-      while (index < buf.length && buf[index] !== 0x20) {
-        const c = buf[index++]
+      while (index < buffer.length && buffer[index] !== 0x20) {
+        const c = buffer[index++]!
         if (c < 0x30 || c > 0x39) throw new Error('[renoun] Invalid PAX length')
         len = len * 10 + (c - 0x30)
         digits++
         if (len > 16 * 1024)
           throw new Error('[renoun] Oversized PAX header line')
       }
-      if (buf[index++] !== 0x20)
+      if (buffer[index++] !== 0x20)
         throw new Error('[renoun] Invalid PAX record format')
       const end = index + (len - (digits + 1))
-      if (end > buf.length) throw new Error('[renoun] Truncated PAX record')
-      const rec = buf.subarray(index, end)
+      if (end > buffer.length) throw new Error('[renoun] Truncated PAX record')
+      const rec = buffer.subarray(index, end)
       index = end
-      if (index < buf.length && buf[index] === 0x0a) index++
+      if (index < buffer.length && buffer[index] === 0x0a) index++
 
       const eq = rec.indexOf(0x3d)
       if (eq === -1) continue
-      const key = rec.subarray(0, eq).toString('utf8')
-      const raw = rec.subarray(eq + 1).toString('utf8')
+      const key = decoder.decode(rec.subarray(0, eq))
+      const raw = decoder.decode(rec.subarray(eq + 1))
       if (!/^[\x20-\x7E]+$/.test(key) || key.length > 256) continue
       const value =
         key === 'path' || key === 'linkpath'
@@ -933,12 +799,12 @@ export class GitHostFileSystem extends MemoryFileSystem {
     return result
   }
 
-  #parseTarSize(header: Buffer): number {
+  #parseTarSize(header: Uint8Array): number {
     const sizeField = header.subarray(124, 136)
     const isBase256 = ((sizeField[0] ?? 0) & 0x80) !== 0
 
     if (isBase256) {
-      const negative = (sizeField[0] & 0x40) !== 0
+      const negative = (sizeField[0]! & 0x40) !== 0
       if (negative) {
         throw new Error(
           '[renoun] Tar entry size uses unsupported negative base-256 encoding'
@@ -959,16 +825,16 @@ export class GitHostFileSystem extends MemoryFileSystem {
       return Number(value)
     }
 
-    const sizeString = sizeField
-      .toString('utf8')
+    const sizeString = new TextDecoder('utf-8')
+      .decode(sizeField)
       .replace(/\0+.*$/, '')
       .trim()
     return sizeString ? parseInt(sizeString, 8) || 0 : 0
   }
 
-  #readTarString(header: Buffer, start: number, end: number) {
-    return header
-      .toString('utf8', start, end)
+  #readTarString(header: Uint8Array, start: number, end: number) {
+    return new TextDecoder('utf-8')
+      .decode(header.subarray(start, end))
       .replace(/\0+.*$/, '')
       .trim()
   }
@@ -999,7 +865,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
   // removed unused #parsePaxHeader
 
-  #isBinaryBuffer(buffer: Buffer): boolean {
+  #isBinaryBuffer(buffer: Uint8Array): boolean {
     if (buffer.length === 0) {
       return false
     }
@@ -1032,15 +898,14 @@ export class GitHostFileSystem extends MemoryFileSystem {
     }
   }
 
-  #validTarChecksum(header: Buffer): boolean {
+  #validTarChecksum(header: Uint8Array): boolean {
     let sum = 0
     for (let index = 0; index < 512; index++) {
       const isChecksumField = index >= 148 && index < 156
       sum += isChecksumField ? 32 : header[index]!
     }
-    const storedString = header
-      .subarray(148, 156)
-      .toString('utf8')
+    const storedString = new TextDecoder('utf-8')
+      .decode(header.subarray(148, 156))
       .replace(/\0.*$/, '')
       .trim()
     const stored = parseInt(storedString, 8)
@@ -1076,16 +941,16 @@ export class GitHostFileSystem extends MemoryFileSystem {
     return MemoryFileSystem.prototype.readFileSync.call(this, path)
   }
 
-  async readFileBinary(path: string): Promise<Buffer> {
+  async readFileBinary(path: string): Promise<Uint8Array> {
     await this.#ensureInitialized()
     const entry = this.getFileEntry(path)
     if (!entry) {
       throw new Error(`File not found: ${path}`)
     }
     if (entry.kind === 'binary') {
-      return Buffer.from(entry.content)
+      return entry.content.slice()
     }
-    return Buffer.from(entry.content, 'utf8')
+    return new TextEncoder().encode(entry.content)
   }
 
   readFileSync(): string {
