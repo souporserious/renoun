@@ -1,4 +1,28 @@
+import React from 'react'
 import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun'
+
+export function Annotations() {
+  return (
+    <CodeBlock
+      language="ts"
+      annotations={{
+        highlight: (props) => (
+          <span
+            style={{
+              padding: '0.25rem',
+              borderRadius: '0.125rem',
+              backgroundColor: props.color,
+            }}
+          >
+            {props.children}
+          </span>
+        ),
+      }}
+    >
+      {`const a = /*highlight color='rgba(255, 255, 0, 0.5)' */{ foo: 'bar' }/**highlight*/`}
+    </CodeBlock>
+  )
+}
 
 export function Basic() {
   return <CodeBlock language="ts">const beep = 'boop'</CodeBlock>
