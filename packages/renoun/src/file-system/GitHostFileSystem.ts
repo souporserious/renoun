@@ -27,6 +27,7 @@ const repoPattern = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
 const gitlabRepoPattern = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/
 
 const MAX_ARCHIVE_SIZE_BYTES = 100 * 1024 * 1024 // 100 MiB
+const MAX_TAR_STREAM_BYTES = 150 * 1024 * 1024 // 150 MiB
 
 const MAX_RELATIVE_PATH_LENGTH = 4_096
 const MAX_PATH_SEGMENT_LENGTH = 512
@@ -306,11 +307,22 @@ export class GitHostFileSystem extends MemoryFileSystem {
         continue
       }
 
+      // discard any unhandled entry types
+      if (
+        typeFlag !== TAR_TYPE_FLAGS.NormalFile &&
+        typeFlag !== TAR_TYPE_FLAGS.NormalFileSpace &&
+        typeFlag !== TAR_TYPE_FLAGS.NormalFileAlternative &&
+        typeFlag !== TAR_TYPE_FLAGS.NormalFileSeven
+      ) {
+        await discard()
+        continue
+      }
+
       fileCount++
       if (fileCount > MAX_FILE_COUNT) {
         throw new Error('[renoun] Repository contains too many files')
       }
-      if (seen.has(relativePath)) {
+      if (seen.has(relativePath.toLowerCase())) {
         throw new Error('[renoun] Duplicate path in archive')
       }
 
@@ -362,7 +374,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
         : new TextDecoder('utf-8').decode(buf)
 
       this.createFile(relativePath, content)
-      seen.add(relativePath)
+      seen.add(relativePath.toLowerCase())
     }
   }
 
@@ -620,9 +632,12 @@ export class GitHostFileSystem extends MemoryFileSystem {
       }
     }
 
-    const contentType =
-      response.headers.get('content-type')?.toLowerCase() || ''
-    if (contentType && !/tar|gzip|octet-stream/.test(contentType)) {
+    const contentType = (
+      response.headers.get('content-type') || ''
+    ).toLowerCase()
+    const allowedContentTypes =
+      /(application\/(x-)?(tar|gtar|gzip)|application\/octet-stream)/i
+    if (contentType && !allowedContentTypes.test(contentType)) {
       throw new Error('[renoun] Unexpected content-type for repository archive')
     }
 
@@ -688,6 +703,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
     const reader = stream.getReader()
     let buffer = new Uint8Array(0)
     let done = false
+    let rawBytesRead = 0
     const readFromStream = async (size: number): Promise<Uint8Array> => {
       while (buffer.length < size && !done) {
         const { value, done: rdone } = await reader.read()
@@ -696,6 +712,10 @@ export class GitHostFileSystem extends MemoryFileSystem {
           break
         }
         if (value && value.length > 0) {
+          rawBytesRead += value.length
+          if (rawBytesRead > MAX_TAR_STREAM_BYTES) {
+            throw new Error('[renoun] Archive exceeds maximum stream size')
+          }
           const merged = new Uint8Array(buffer.length + value.length)
           merged.set(buffer, 0)
           merged.set(value, buffer.length)
@@ -859,7 +879,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
       ''
     )
     const withoutInvisible = withoutControlChars.replace(
-      /[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g,
+      /[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\u061c]/g,
       ''
     )
 
