@@ -646,10 +646,12 @@ export class GitHostFileSystem extends MemoryFileSystem {
       let stream = response.body as ReadableStream<Uint8Array>
       if (/gzip/.test(contentType)) {
         if (typeof DecompressionStream === 'function') {
-          const ds = new DecompressionStream(
-            'gzip'
-          ) as unknown as ReadableWritablePair<Uint8Array, Uint8Array>
-          stream = stream.pipeThrough(ds)
+          stream = stream.pipeThrough(
+            new DecompressionStream('gzip') as unknown as ReadableWritablePair<
+              Uint8Array,
+              Uint8Array
+            >
+          )
         } else {
           throw new Error(
             '[renoun] Gzip decompression not supported in this environment'
@@ -668,19 +670,21 @@ export class GitHostFileSystem extends MemoryFileSystem {
       throw new Error('[renoun] Failed to read repository archive response')
     }
     const raw = new Uint8Array(arrayBuffer)
-    const isGz = raw.length > 2 && raw[0] === 0x1f && raw[1] === 0x8b
+    const isGzip = raw.length > 2 && raw[0] === 0x1f && raw[1] === 0x8b
     let source: ReadableStream<Uint8Array> = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(raw)
         controller.close()
       },
     })
-    if (isGz || /gzip/.test(contentType)) {
+    if (isGzip || /gzip/.test(contentType)) {
       if (typeof DecompressionStream === 'function') {
-        const ds = new DecompressionStream(
-          'gzip'
-        ) as unknown as ReadableWritablePair<Uint8Array, Uint8Array>
-        source = source.pipeThrough(ds)
+        source = source.pipeThrough(
+          new DecompressionStream('gzip') as unknown as ReadableWritablePair<
+            Uint8Array,
+            Uint8Array
+          >
+        )
       } else {
         throw new Error(
           '[renoun] Gzip decompression not supported in this environment'
@@ -790,29 +794,32 @@ export class GitHostFileSystem extends MemoryFileSystem {
     const decoder = new TextDecoder('utf-8')
 
     while (index < buffer.length) {
-      let len = 0
+      let length = 0
       let digits = 0
       while (index < buffer.length && buffer[index] !== 0x20) {
         const char = buffer[index++]!
-        if (char < 0x30 || char > 0x39)
+        if (char < 0x30 || char > 0x39) {
           throw new Error('[renoun] Invalid PAX length')
-        len = len * 10 + (char - 0x30)
+        }
+        length = length * 10 + (char - 0x30)
         digits++
-        if (len > 16 * 1024)
+        if (length > 16 * 1024) {
           throw new Error('[renoun] Oversized PAX header line')
+        }
       }
-      if (buffer[index++] !== 0x20)
+      if (buffer[index++] !== 0x20) {
         throw new Error('[renoun] Invalid PAX record format')
-      const end = index + (len - (digits + 1))
+      }
+      const end = index + (length - (digits + 1))
       if (end > buffer.length) throw new Error('[renoun] Truncated PAX record')
-      const rec = buffer.subarray(index, end)
+      const record = buffer.subarray(index, end)
       index = end
       if (index < buffer.length && buffer[index] === 0x0a) index++
 
-      const eq = rec.indexOf(0x3d)
-      if (eq === -1) continue
-      const key = decoder.decode(rec.subarray(0, eq))
-      const raw = decoder.decode(rec.subarray(eq + 1))
+      const equalsIndex = record.indexOf(0x3d)
+      if (equalsIndex === -1) continue
+      const key = decoder.decode(record.subarray(0, equalsIndex))
+      const raw = decoder.decode(record.subarray(equalsIndex + 1))
       if (!/^[\x20-\x7E]+$/.test(key) || key.length > 256) continue
       const value =
         key === 'path' || key === 'linkpath'
