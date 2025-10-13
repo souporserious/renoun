@@ -450,16 +450,14 @@ function buildTextSnippet(
         symbolId = 'default'
       }
       if (symbolId && usedLocals.has(symbolId)) {
-        lines.push(
-          statement.getFullText().replace(/\/\*\*[\s\S]*?\*\/\s*/g, '')
-        )
+        lines.push(stripLeadingJsDoc(statement.getFullText()))
       }
     } else if (
       tsMorph.Node.isExportAssignment(statement) &&
       !statement.isExportEquals() &&
       usedLocals.has('default')
     ) {
-      lines.push(statement.getFullText().replace(/\/\*\*[\s\S]*?\*\/\s*/g, ''))
+      lines.push(stripLeadingJsDoc(statement.getFullText()))
     } else if (tsMorph.Node.isVariableStatement(statement)) {
       const declarations = statement.getDeclarationList().getDeclarations()
       const matched = declarations.some((declaration) => {
@@ -470,14 +468,17 @@ function buildTextSnippet(
         )
       })
       if (matched) {
-        lines.push(
-          statement.getFullText().replace(/\/\*\*[\s\S]*?\*\/\s*/g, '')
-        )
+        lines.push(stripLeadingJsDoc(statement.getFullText()))
       }
     }
   }
 
   return lines.join('').trim()
+}
+
+/** Remove leading JSDoc blocks from a statement's full text, leaving inline comments intact. */
+function stripLeadingJsDoc(text: string): string {
+  return text.replace(/^(\s*)\/\*\*[\s\S]*?\*\/\s*/m, '$1')
 }
 
 /** Print a filtered import statement, removing unused imports. */
