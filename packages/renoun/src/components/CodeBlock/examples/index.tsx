@@ -58,14 +58,6 @@ export function LineHighlightAndFocus() {
   )
 }
 
-export function TokensOnly() {
-  return (
-    <pre>
-      <Tokens language="ts">{`const a = 1\nconst b = 2\na + b`}</Tokens>
-    </pre>
-  )
-}
-
 export function Annotations() {
   return (
     <CodeBlock
@@ -93,6 +85,14 @@ export function Annotations() {
       const /*mark*/AuthContext/**mark*/ = createContext(/*mark*/null/**mark*/);
       `}
     </CodeBlock>
+  )
+}
+
+export function TokensOnly() {
+  return (
+    <pre>
+      <Tokens language="ts">{`const a = 1\nconst b = 2\na + b`}</Tokens>
+    </pre>
   )
 }
 
