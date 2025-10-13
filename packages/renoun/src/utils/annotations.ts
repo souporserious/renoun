@@ -83,8 +83,24 @@ export function parseAnnotations(
     const isLineOnly =
       beforeText.trim().length === 0 && afterText.trim().length === 0
 
-    const segmentStart =
+    let segmentStart =
       isLineOnly && lineStart >= lastIndex ? lineStart : commentStart
+
+    // If this is a line-only annotation on the final line of the file,
+    // also remove the preceding newline so we don't leave a trailing newline
+    // in the cleaned output.
+    if (isLineOnly && lineEndIndex === -1 && lineStart > lastIndex) {
+      const prevIndex = lineStart - 1
+      if (value[prevIndex] === '\n') {
+        // Handle CRLF as well
+        if (prevIndex - 1 >= lastIndex && value[prevIndex - 1] === '\r') {
+          segmentStart = prevIndex - 1
+        } else {
+          segmentStart = prevIndex
+        }
+      }
+    }
+
     const segment = value.slice(lastIndex, segmentStart)
     segments.push(segment)
     cleanLength += segment.length
@@ -116,6 +132,14 @@ export function parseAnnotations(
 
   segments.push(value.slice(lastIndex))
 
+  if (stack.length > 0) {
+    const unclosed = Array.from(new Set(stack.map((frame) => frame.tag)))
+    const list = unclosed.join(', ')
+    throw new Error(
+      `[renoun] Unclosed annotation${unclosed.length > 1 ? 's' : ''}: "${list}" use '/**${list}*/' to close the previously opened '/*${list}*/'.`
+    )
+  }
+
   return {
     value: segments.join(''),
     block,
@@ -138,11 +162,21 @@ export function remapAnnotationInstructions(
   const mapIndex = createIndexMapper(originalValue, formattedValue)
 
   return {
-    block: instructions.block.map((instruction) => ({
-      ...instruction,
-      start: mapIndex(instruction.start),
-      end: mapIndex(instruction.end),
-    })),
+    block: instructions.block.map((instruction) => {
+      const mappedStart = mapIndex(instruction.start)
+      let mappedEnd = mapIndex(instruction.end)
+
+      // Guard against degenerate zero-length ranges after formatting/rounding.
+      if (instruction.end > instruction.start && mappedEnd <= mappedStart) {
+        mappedEnd = Math.min(formattedValue.length, mappedStart + 1)
+      }
+
+      return {
+        ...instruction,
+        start: mappedStart,
+        end: mappedEnd,
+      }
+    }),
     inline: instructions.inline.map((instruction) => ({
       ...instruction,
       index: mapIndex(instruction.index),

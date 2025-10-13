@@ -486,38 +486,87 @@ function renderWithAnnotations({
   let currentPosition = 0
   openAt(currentPosition)
 
+  // Precompute sorted event positions to allow splitting arbitrary text ranges
+  const startPositions = Array.from(blockStartMap.keys()).sort((a, b) => a - b)
+  const endPositions = Array.from(blockEndMap.keys()).sort((a, b) => a - b)
+  const boundarySet = new Set<number>([...startPositions, ...endPositions])
+  const advanceTo = (target: number) => {
+    while (true) {
+      let nextEvent: number | null = null
+      // Check for the nearest boundary > currentPosition and <= target
+      for (const position of boundarySet) {
+        if (position <= currentPosition) continue
+        if (position > target) continue
+        if (nextEvent === null || position < nextEvent) nextEvent = position
+      }
+
+      if (nextEvent === null) break
+
+      appendText(value.slice(currentPosition, nextEvent))
+      // eslint-disable-next-line no-console
+      console.log('boundary', nextEvent)
+      currentPosition = nextEvent
+      // Close before opening at the same index to respect boundaries
+      closeAt(currentPosition)
+      openAt(currentPosition)
+    }
+  }
+
   tokens.forEach((line, lineIndex) => {
     line.forEach((token, tokenIndex) => {
       if (token.start > currentPosition) {
+        advanceTo(token.start)
         appendText(value.slice(currentPosition, token.start))
         currentPosition = token.start
+      } else {
+        // No gap; still process events that occur exactly at this boundary
+        closeAt(token.start)
+        openAt(token.start)
       }
 
-      openAt(token.start)
-
-      let node = renderToken({
-        token,
-        tokenIndex,
-        lineIndex,
-        baseTokenClassName,
-        theme,
-        cssProp,
-        className,
-        style,
-      })
-
-      const inlineInstructions = inlineMap.get(token.start)
-      if (inlineInstructions) {
-        for (const instruction of inlineInstructions) {
-          node = createAnnotationElement(instruction.tag, instruction.props, [
-            node,
-          ])
+      // Emit this token in slices so that block boundaries within the token
+      // become their own nodes.
+      while (currentPosition < token.end) {
+        // Find next boundary inside this token range
+        let sliceEnd: number = token.end
+        for (const pos of boundarySet) {
+          if (pos <= currentPosition) continue
+          if (pos > token.end) continue
+          if (pos < sliceEnd) sliceEnd = pos
         }
-      }
 
-      appendNode(node)
-      currentPosition = token.end
-      closeAt(currentPosition)
+        let node = renderToken({
+          token: {
+            ...token,
+            start: currentPosition,
+            end: sliceEnd,
+            value: value.slice(currentPosition, sliceEnd),
+          },
+          tokenIndex,
+          lineIndex,
+          baseTokenClassName,
+          theme,
+          cssProp,
+          className,
+          style,
+        })
+
+        const inlineInstructions = inlineMap.get(currentPosition)
+        if (inlineInstructions) {
+          for (const instruction of inlineInstructions) {
+            node = createAnnotationElement(instruction.tag, instruction.props, [
+              node,
+            ])
+          }
+        }
+
+        appendNode(node)
+        currentPosition = sliceEnd
+        // Close/open any frames exactly at the slice boundary so that the next
+        // segment starts in the correct frame.
+        closeAt(currentPosition)
+        openAt(currentPosition)
+      }
     })
 
     if (lineIndex < tokens.length - 1) {
@@ -544,6 +593,7 @@ function renderWithAnnotations({
   })
 
   if (currentPosition < value.length) {
+    advanceTo(value.length)
     appendText(value.slice(currentPosition))
   }
 
