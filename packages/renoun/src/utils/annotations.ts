@@ -41,13 +41,22 @@ export function parseAnnotations(
   let cleanLength = 0
   let lastIndex = 0
 
-  const commentRegex = /\/\*([\s\S]*?)\*\//g
-  let match: RegExpExecArray | null
+  let scanIndex = 0
+  while (scanIndex < value.length) {
+    const commentStart = value.indexOf('/*', scanIndex)
+    if (commentStart === -1) break
 
-  while ((match = commentRegex.exec(value)) !== null) {
-    const commentStart = match.index
-    const commentEnd = commentStart + match[0].length
-    const trimmedContent = match[1].trim()
+    const endMarkerIndex = value.indexOf('*/', commentStart + 2)
+    if (endMarkerIndex === -1) {
+      // No closing delimiter found; append remainder and stop scanning
+      segments.push(value.slice(lastIndex))
+      cleanLength += value.length - lastIndex
+      lastIndex = value.length
+      break
+    }
+
+    const commentEnd = endMarkerIndex + 2
+    const trimmedContent = value.slice(commentStart + 2, endMarkerIndex).trim()
 
     let inner = trimmedContent
     let type: 'open' | 'close' | 'self' = 'open'
@@ -128,6 +137,7 @@ export function parseAnnotations(
     } else if (type === 'self') {
       inline.push({ tag, props, index: cleanLength })
     }
+    scanIndex = commentEnd
   }
 
   segments.push(value.slice(lastIndex))
