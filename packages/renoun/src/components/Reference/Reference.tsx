@@ -14,30 +14,73 @@ import { BaseDirectoryContext } from '../Context.js'
 
 type GapSize = 'small' | 'medium' | 'large'
 
-export type ReferenceComponent<
-  Tag extends keyof React.JSX.IntrinsicElements,
-  Props = {},
-> = React.ComponentType<React.JSX.IntrinsicElements[Tag] & Props>
-
 export interface ReferenceComponents {
-  Section: ReferenceComponent<'section', { kind: Kind['kind'] }>
-  SectionHeading: ReferenceComponent<'h3'>
-  SectionBody: ReferenceComponent<'div', { hasDescription: boolean }>
-  Column: ReferenceComponent<'div', { gap?: GapSize }>
-  Row: ReferenceComponent<'div', { gap?: GapSize }>
-  Code: ReferenceComponent<'code'>
-  Description: ReferenceComponent<'p', { children: string }>
-  Detail: ReferenceComponent<'div', { kind: Kind['kind'] }>
-  Signatures: ReferenceComponent<'div'>
-  DetailHeading: ReferenceComponent<'h4'>
-  Table: ReferenceComponent<'table'>
-  TableHead: ReferenceComponent<'thead'>
-  TableBody: ReferenceComponent<'tbody'>
-  TableRowGroup: ReferenceComponent<'tr', { hasSubRow?: boolean }>
-  TableRow: ReferenceComponent<'tr', { hasSubRow?: boolean }>
-  TableSubRow: React.ComponentType<{ children: React.ReactNode }>
-  TableHeader: ReferenceComponent<'th'>
-  TableData: ReferenceComponent<'td', { index: number; hasSubRow?: boolean }>
+  Section: React.ComponentType<{
+    id?: string
+    kind: Kind['kind']
+    children?: React.ReactNode
+  }>
+  SectionHeading: React.ComponentType<{
+    children?: React.ReactNode
+    'aria-label'?: string
+  }>
+  SectionBody: React.ComponentType<{
+    hasDescription: boolean
+    children: React.ReactNode
+  }>
+  Column: React.ComponentType<{
+    gap?: GapSize
+    children: React.ReactNode
+  }>
+  Row: React.ComponentType<{
+    gap?: GapSize
+    children: React.ReactNode
+  }>
+  Code: React.ComponentType<{
+    children?: React.ReactNode
+  }>
+  Description: React.ComponentType<{
+    children: string
+  }>
+  Detail: React.ComponentType<{
+    kind: Kind['kind']
+    children: React.ReactNode
+  }>
+  Signatures: React.ComponentType<{
+    children: React.ReactNode
+  }>
+  DetailHeading: React.ComponentType<{
+    children?: React.ReactNode
+  }>
+  Table: React.ComponentType<{
+    children?: React.ReactNode
+  }>
+  TableHead: React.ComponentType<{
+    children?: React.ReactNode
+  }>
+  TableBody: React.ComponentType<{
+    children?: React.ReactNode
+  }>
+  TableRowGroup: React.ComponentType<{
+    hasSubRow?: boolean
+    children?: React.ReactNode
+  }>
+  TableRow: React.ComponentType<{
+    hasSubRow?: boolean
+    children?: React.ReactNode
+  }>
+  TableSubRow: React.ComponentType<{
+    children: React.ReactNode
+  }>
+  TableHeader: React.ComponentType<{
+    children?: React.ReactNode
+  }>
+  TableData: React.ComponentType<{
+    index: number
+    hasSubRow?: boolean
+    colSpan?: number
+    children?: React.ReactNode
+  }>
 }
 
 type InternalReferenceComponents = {
@@ -52,7 +95,7 @@ const defaultGaps: Record<GapSize, string> = {
 
 /** Default implementations for every slot. */
 const defaultComponents: InternalReferenceComponents = {
-  Section: ({ kind: _, children }) => <section children={children} />,
+  Section: ({ id, children }) => <section id={id} children={children} />,
   SectionHeading: 'h3',
   SectionBody: ({ children }) => children,
   Column: ({ gap, children }) => (
@@ -82,12 +125,12 @@ const defaultComponents: InternalReferenceComponents = {
   Signatures: 'div',
   Table: 'table',
   TableHead: 'thead',
-  TableHeader: ({ style, ...props }) => (
-    <th style={{ textAlign: 'left', ...style }} {...props} />
+  TableHeader: ({ children }) => (
+    <th style={{ textAlign: 'left' }}>{children}</th>
   ),
   TableBody: 'tbody',
-  TableData: ({ index, hasSubRow, ...props }) => <td {...props} />,
-  TableRow: ({ hasSubRow, ...props }) => <tr {...props} />,
+  TableData: ({ colSpan, children }) => <td colSpan={colSpan}>{children}</td>,
+  TableRow: ({ children }) => <tr>{children}</tr>,
   TableSubRow: ({ children }) => (
     <tr>
       <td colSpan={3}>{children}</td>
@@ -166,7 +209,13 @@ async function ReferenceAsync({
     ...defaultComponents,
     ...components,
   }
-  const id = source.getName()
+  function getSectionId(node: Kind) {
+    if ('name' in node && node.name) {
+      return node.name
+    }
+
+    return undefined
+  }
 
   return (
     <BaseDirectoryContext value={filePath ? dirname(filePath) : undefined}>
@@ -176,14 +225,14 @@ async function ReferenceAsync({
             key={index}
             node={type}
             components={mergedComponents}
-            id={id}
+            id={getSectionId(type)}
           />
         ))
       ) : (
         <TypeNodeRouter
           node={resolvedType}
           components={mergedComponents}
-          id={id}
+          id={getSectionId(resolvedType)}
         />
       )}
     </BaseDirectoryContext>
@@ -197,7 +246,7 @@ function TypeNodeRouter({
 }: {
   node: Kind
   components: InternalReferenceComponents
-  id: string
+  id?: string
 }) {
   switch (node.kind) {
     case 'Variable':
@@ -367,7 +416,7 @@ function VariableSection({
 }: {
   node: TypeOfKind<'Variable'>
   components: InternalReferenceComponents
-  id: string
+  id?: string
 }) {
   return (
     <TypeSection
@@ -786,7 +835,7 @@ function ClassSection({
 }: {
   node: TypeOfKind<'Class'>
   components: InternalReferenceComponents
-  id: string
+  id?: string
 }) {
   return (
     <TypeSection
@@ -892,7 +941,7 @@ function ComponentSection({
 }: {
   node: TypeOfKind<'Component'>
   components: InternalReferenceComponents
-  id: string
+  id?: string
 }) {
   return (
     <TypeSection
@@ -992,7 +1041,7 @@ function FunctionSection({
 }: {
   node: TypeOfKind<'Function'>
   components: InternalReferenceComponents
-  id: string
+  id?: string
 }) {
   const multipleSignatures = node.signatures.length > 1
 
@@ -1030,7 +1079,7 @@ function TypeAliasSection({
 }: {
   node: TypeOfKind<'TypeAlias'>
   components: InternalReferenceComponents
-  id: string
+  id?: string
 }) {
   return (
     <TypeSection
@@ -1054,7 +1103,7 @@ function MembersSection({
 }: {
   node: Kind.Interface | Kind.TypeAlias<Kind.TypeLiteral>
   components: InternalReferenceComponents
-  id: string
+  id?: string
 }) {
   const members = node.kind === 'Interface' ? node.members : node.type.members
   let propertySignatures: Kind.PropertySignature[] = []
@@ -1172,7 +1221,7 @@ function MappedSection({
 }: {
   node: TypeOfKind<'MappedType'>
   components: InternalReferenceComponents
-  id: string
+  id?: string
 }) {
   const parameterText = `${node.typeParameter.name} in ${node.typeParameter.constraintType?.text ?? '?'}`
   const valueText = node.type.text
@@ -1205,7 +1254,7 @@ function IntersectionSection({
 }: {
   node: TypeOfKind<'IntersectionType'>
   components: InternalReferenceComponents
-  id: string
+  id?: string
   title?: string
 }) {
   // Always collect properties from TypeLiteral/Mapped members and render other members alongside.
