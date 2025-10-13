@@ -76,7 +76,8 @@ export function Annotations() {
             style={{
               padding: '0 0.05em',
               borderRadius: '0.25rem',
-              backgroundColor: 'rgb(255 246 191 / 5%)',
+              backgroundColor: 'rgb(164 146 234 / 20%)',
+              boxShadow: '0px 0px 0 1px rgb(182 149 207)',
               color: 'inherit',
             }}
           >
