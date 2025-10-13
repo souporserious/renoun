@@ -2,113 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { gzipSync } from 'node:zlib'
 import { GitHostFileSystem } from './GitHostFileSystem.js'
 
-function writeOctalField(
-  target: Buffer,
-  offset: number,
-  length: number,
-  value: number
-) {
-  const str = Math.max(0, value).toString(8)
-  const field = Buffer.alloc(length, 0x30) // '0' padding
-  const start = Math.max(0, length - 2 - str.length)
-  Buffer.from(str).copy(field, start)
-  field[length - 2] = 0 // null
-  field[length - 1] = 0x20 // space
-  field.copy(target, offset)
-}
-
-function createTarHeader(
-  name: string,
-  size: number,
-  typeflag: number = 0x30
-): Buffer {
-  const header = Buffer.alloc(512, 0)
-
-  // name (100)
-  Buffer.from(name).copy(header, 0, 0, Math.min(100, Buffer.byteLength(name)))
-
-  // mode (8), uid (8), gid (8)
-  writeOctalField(header, 100, 8, 0o777)
-  writeOctalField(header, 108, 8, 0)
-  writeOctalField(header, 116, 8, 0)
-
-  // size (12) and mtime (12)
-  writeOctalField(header, 124, 12, size)
-  writeOctalField(header, 136, 12, Math.floor(Date.now() / 1000))
-
-  // chksum (8) - set spaces for calculation
-  for (let i = 0; i < 8; i++) header[148 + i] = 0x20
-
-  // typeflag (1)
-  header[156] = typeflag
-
-  // magic (6) + version (2) -> 'ustar\0' + '00'
-  Buffer.from('ustar\0').copy(header, 257)
-  Buffer.from('00').copy(header, 263)
-
-  // Compute checksum: sum of all bytes of header
-  let sum = 0
-  for (let i = 0; i < 512; i++) sum += header[i]
-  const chksumOctal = sum.toString(8)
-  const chksumField = Buffer.alloc(8, 0x30) // '0' padding
-  Buffer.from(chksumOctal).copy(chksumField, 8 - 1 - chksumOctal.length - 1)
-  chksumField[6] = 0 // null
-  chksumField[7] = 0x20 // space
-  chksumField.copy(header, 148)
-
-  return header
-}
-
-function makeTar(
-  entries: { path: string; content: string | Buffer }[]
-): Buffer {
-  const parts: Buffer[] = []
-  for (const entry of entries) {
-    const contentBuf = Buffer.isBuffer(entry.content)
-      ? entry.content
-      : Buffer.from(entry.content, 'utf8')
-    const header = createTarHeader(entry.path, contentBuf.length)
-    parts.push(header)
-    parts.push(contentBuf)
-    const pad = (512 - (contentBuf.length % 512)) % 512
-    if (pad) parts.push(Buffer.alloc(pad, 0))
-  }
-  // Two 512-byte zero blocks at the end of the archive
-  parts.push(Buffer.alloc(1024, 0))
-  return Buffer.concat(parts)
-}
-
-function makeTarWithEntries(
-  entries: { path: string; content: string | Buffer; typeflag?: number }[]
-): Buffer {
-  const parts: Buffer[] = []
-  for (const entry of entries) {
-    const contentBuf = Buffer.isBuffer(entry.content)
-      ? entry.content
-      : Buffer.from(entry.content, 'utf8')
-    const header = createTarHeader(
-      entry.path,
-      contentBuf.length,
-      entry.typeflag
-    )
-    parts.push(header)
-    parts.push(contentBuf)
-    const pad = (512 - (contentBuf.length % 512)) % 512
-    if (pad) parts.push(Buffer.alloc(pad, 0))
-  }
-  parts.push(Buffer.alloc(1024, 0))
-  return Buffer.concat(parts)
-}
-
-function createHeaders(init?: Record<string, string>) {
-  const map = new Map<string, string>()
-  if (init)
-    for (const [k, v] of Object.entries(init)) map.set(k.toLowerCase(), v)
-  return {
-    get: (key: string) => map.get(key.toLowerCase()) ?? null,
-  }
-}
-
 const SUCCESS_ARCHIVE = makeTar([
   { path: 'root/file.txt', content: 'hello' },
   { path: 'root/dir/a.md', content: '# title' },
@@ -645,3 +538,113 @@ describe('GitHostFileSystem', () => {
     await expect(fs.readFile('file.txt')).rejects.toThrow('Too many redirects')
   })
 })
+
+function writeOctalField(
+  target: Buffer,
+  offset: number,
+  length: number,
+  value: number
+) {
+  const str = Math.max(0, value).toString(8)
+  const field = Buffer.alloc(length, 0x30) // '0' padding
+  const start = Math.max(0, length - 2 - str.length)
+  Buffer.from(str).copy(field, start)
+  field[length - 2] = 0 // null
+  field[length - 1] = 0x20 // space
+  field.copy(target, offset)
+}
+
+function createTarHeader(
+  name: string,
+  size: number,
+  typeflag: number = 0x30
+): Buffer {
+  const header = Buffer.alloc(512, 0)
+
+  // name (100)
+  Buffer.from(name).copy(header, 0, 0, Math.min(100, Buffer.byteLength(name)))
+
+  // mode (8), uid (8), gid (8)
+  writeOctalField(header, 100, 8, 0o777)
+  writeOctalField(header, 108, 8, 0)
+  writeOctalField(header, 116, 8, 0)
+
+  // size (12) and mtime (12)
+  writeOctalField(header, 124, 12, size)
+  writeOctalField(header, 136, 12, Math.floor(Date.now() / 1000))
+
+  // chksum (8) - set spaces for calculation
+  for (let i = 0; i < 8; i++) header[148 + i] = 0x20
+
+  // typeflag (1)
+  header[156] = typeflag
+
+  // magic (6) + version (2) -> 'ustar\0' + '00'
+  Buffer.from('ustar\0').copy(header, 257)
+  Buffer.from('00').copy(header, 263)
+
+  // Compute checksum: sum of all bytes of header
+  let sum = 0
+  for (let i = 0; i < 512; i++) sum += header[i]
+  const chksumOctal = sum.toString(8)
+  const chksumField = Buffer.alloc(8, 0x30) // '0' padding
+  Buffer.from(chksumOctal).copy(chksumField, 8 - 1 - chksumOctal.length - 1)
+  chksumField[6] = 0 // null
+  chksumField[7] = 0x20 // space
+  chksumField.copy(header, 148)
+
+  return header
+}
+
+function makeTar(
+  entries: { path: string; content: string | Buffer }[]
+): Buffer {
+  const parts: Buffer[] = []
+  for (const entry of entries) {
+    const contentBuf = Buffer.isBuffer(entry.content)
+      ? entry.content
+      : Buffer.from(entry.content, 'utf8')
+    const header = createTarHeader(entry.path, contentBuf.length)
+    parts.push(header)
+    parts.push(contentBuf)
+    const pad = (512 - (contentBuf.length % 512)) % 512
+    if (pad) parts.push(Buffer.alloc(pad, 0))
+  }
+  // Two 512-byte zero blocks at the end of the archive
+  parts.push(Buffer.alloc(1024, 0))
+  return Buffer.concat(parts)
+}
+
+function makeTarWithEntries(
+  entries: { path: string; content: string | Buffer; typeflag?: number }[]
+): Buffer {
+  const parts: Buffer[] = []
+  for (const entry of entries) {
+    const contentBuf = Buffer.isBuffer(entry.content)
+      ? entry.content
+      : Buffer.from(entry.content, 'utf8')
+    const header = createTarHeader(
+      entry.path,
+      contentBuf.length,
+      entry.typeflag
+    )
+    parts.push(header)
+    parts.push(contentBuf)
+    const pad = (512 - (contentBuf.length % 512)) % 512
+    if (pad) parts.push(Buffer.alloc(pad, 0))
+  }
+  parts.push(Buffer.alloc(1024, 0))
+  return Buffer.concat(parts)
+}
+
+function createHeaders(init?: Record<string, string>) {
+  const map = new Map<string, string>()
+  if (init) {
+    for (const [key, value] of Object.entries(init)) {
+      map.set(key.toLowerCase(), value)
+    }
+  }
+  return {
+    get: (key: string) => map.get(key.toLowerCase()) ?? null,
+  }
+}
