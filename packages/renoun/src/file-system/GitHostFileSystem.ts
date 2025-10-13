@@ -1,5 +1,7 @@
-import { Semaphore } from '../utils/Semaphore.js'
-import { MemoryFileSystem } from './MemoryFileSystem.js'
+import { createGunzip } from 'node:zlib'
+import { Readable } from 'node:stream'
+
+import { MemoryFileSystem, type MemoryFileContent } from './MemoryFileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
 type GitHost = 'github' | 'gitlab' | 'bitbucket'
@@ -14,7 +16,7 @@ interface GitHostFileSystemOptions {
   /** Git host */
   host: GitHost
 
-  /** Custom API base URL for self-hosted instances. */
+  /** Custom API base URL for self-hosted GitLab instances (https://host[:port]). */
   baseUrl?: string
 
   /** Personal access / OAuth token for private repositories or higher rate limits. */
@@ -22,48 +24,67 @@ interface GitHostFileSystemOptions {
 
   /** Request timeout in milliseconds. Defaults to 30 seconds. */
   timeoutMs?: number
-
-  /** Time-to-live for directory cache entries in milliseconds. Unlimited when `undefined`. */
-  cacheTTL?: number
-
-  /** Maximum number of simultaneous HTTP requests. Defaults to `8`. */
-  concurrency?: number
 }
 
-const repoPattern = /^[^/]+\/[^/]+$/
+const repoPattern = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
+const gitlabRepoPattern = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/
 
-function normalizePath(path: string) {
-  if (path === '.' || path === './') {
-    return ''
-  }
+const MAX_ARCHIVE_SIZE_BYTES = 100 * 1024 * 1024 // 100 MiB
 
-  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
-  const stack: string[] = []
+const MAX_RELATIVE_PATH_LENGTH = 4_096
+const MAX_PATH_SEGMENT_LENGTH = 512
+const MAX_PATH_SEGMENTS = 256
+const MAX_FILE_COUNT = 50_000
+const MAX_FILE_BYTES = 8 * 1024 * 1024
 
-  for (const part of parts) {
-    if (part === '.') {
-      continue
+const TAR_TYPE_FLAGS = {
+  NormalFile: 0x00,
+  NormalFileAlternative: 0x30, // '0'
+  NormalFileSpace: 0x20, // ' '
+  NormalFileSeven: 0x37, // '7'
+  Directory: 0x35, // '5'
+  PaxExtendedHeader: 0x78, // 'x'
+  PaxGlobalExtendedHeader: 0x67, // 'g'
+  GnuLongPath: 0x4c, // 'L'
+  GnuLongLink: 0x4b, // 'K'
+} as const
+
+const defaultOrigins = {
+  github: {
+    fetch: new Set(['https://api.github.com', 'https://codeload.github.com']),
+    auth: new Set(['https://api.github.com', 'https://codeload.github.com']),
+  },
+  gitlab: {
+    fetch: new Set(['https://gitlab.com']),
+    auth: new Set(['https://gitlab.com']),
+  },
+  bitbucket: {
+    fetch: new Set(['https://api.bitbucket.org', 'https://bitbucket.org']),
+    auth: new Set(['https://api.bitbucket.org', 'https://bitbucket.org']),
+  },
+} as const
+
+function buildOriginPolicy(
+  host: GitHost,
+  apiBaseUrl: string
+): { fetch: Set<string>; auth: Set<string> } {
+  const api = new URL(apiBaseUrl)
+  const apiOrigin = `${api.protocol}//${api.host}`
+
+  if (host === 'gitlab') {
+    return {
+      fetch: new Set([apiOrigin]),
+      auth: new Set([apiOrigin]),
     }
-    if (part === '..') {
-      stack.pop()
-    } else {
-      stack.push(part)
-    }
   }
 
-  return stack.join('/')
-}
-
-function decodeBase64(string: string) {
-  if (typeof atob === 'function') {
-    const binary = atob(string)
-    return new TextDecoder().decode(
-      Uint8Array.from(binary, (character) => character.charCodeAt(0))
-    )
+  return {
+    fetch: new Set(defaultOrigins[host].fetch),
+    auth: new Set(defaultOrigins[host].auth),
   }
-
-  return Buffer.from(string, 'base64').toString('utf-8')
 }
+
+const clamp = (ms: number, max = 15 * 60_000) => Math.min(Math.max(ms, 0), max)
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -112,19 +133,24 @@ export class GitHostFileSystem extends MemoryFileSystem {
   #host: GitHost
   #token?: string
   #timeoutMs: number
-  #cacheTTL?: number
-  #semaphore: Semaphore
   #apiBaseUrl: string
-
-  #directoryCache = new Map<
-    string,
-    { entries: DirectoryEntry[]; cachedAt: number }
-  >()
-  #fileFetches = new Map<string, Promise<void>>()
-  #headers: Record<string, string>
+  #apiHeaders: Record<string, string>
+  #noAuthHeaders: Record<string, string>
+  #originPolicy: { fetch: Set<string>; auth: Set<string> }
+  #ownerEncoded?: string
+  #repoEncoded?: string
+  #currentFetch?: AbortController
+  #initId = 0
+  #initialized = false
+  #initPromise?: Promise<void>
 
   constructor(options: GitHostFileSystemOptions) {
-    if (!repoPattern.test(options.repository)) {
+    if (
+      (options.host === 'gitlab' &&
+        !gitlabRepoPattern.test(options.repository)) ||
+      ((options.host === 'github' || options.host === 'bitbucket') &&
+        !repoPattern.test(options.repository))
+    ) {
       throw new Error('[renoun] Repository must be in "owner/repo" format')
     }
     if (!['github', 'gitlab', 'bitbucket'].includes(options.host)) {
@@ -137,77 +163,122 @@ export class GitHostFileSystem extends MemoryFileSystem {
     this.#ref = options.ref ?? 'main'
     this.#host = options.host
     this.#token = options.token
-    this.#timeoutMs = options.timeoutMs ?? 30_000
-    this.#cacheTTL = options.cacheTTL
-    this.#semaphore = new Semaphore(options.concurrency ?? 8)
-    this.#apiBaseUrl = options.baseUrl ?? this.#getDefaultApiBaseUrl()
-    this.#headers = this.#getHeaders()
-  }
-
-  clearCache(path?: string) {
-    path
-      ? this.#directoryCache.delete(normalizePath(path))
-      : this.#directoryCache.clear()
-  }
-
-  #getDefaultApiBaseUrl() {
-    switch (this.#host) {
-      case 'github':
-        return 'https://api.github.com'
-      case 'gitlab':
-        return 'https://gitlab.com/api/v4'
-      case 'bitbucket':
-        return 'https://api.bitbucket.org/2.0'
+    if (this.#token && /[\r\n]/.test(this.#token)) {
+      throw new Error('[renoun] Invalid token')
     }
+    const requestedTimeout = options.timeoutMs ?? 30_000
+    this.#timeoutMs = Math.min(Math.max(requestedTimeout, 0), 300_000)
+    // Split and encode owner/repo for GitHub/Bitbucket
+    if (this.#host === 'github' || this.#host === 'bitbucket') {
+      const parts = options.repository.split('/')
+      if (parts.length !== 2) {
+        throw new Error('[renoun] Repository must be in "owner/repo" format')
+      }
+      const [owner, repo] = parts
+      this.#ownerEncoded = encodeURIComponent(owner)
+      this.#repoEncoded = encodeURIComponent(repo)
+    }
+
+    this.#apiBaseUrl = this.#resolveApiBaseUrl(options)
+    this.#validateRef(this.#ref)
+    this.#originPolicy = buildOriginPolicy(this.#host, this.#apiBaseUrl)
+
+    this.#apiHeaders = Object.freeze(this.#getApiHeaders())
+    this.#noAuthHeaders = Object.freeze(this.#getNoAuthHeaders())
+    this.#initPromise = this.#loadArchive().catch((error) => {
+      this.#initPromise = undefined
+      throw error
+    })
   }
 
-  #getHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {}
+  clearCache() {
+    if (this.#currentFetch) {
+      try {
+        this.#currentFetch.abort()
+      } catch {}
+      this.#currentFetch = undefined
+    }
+    this.#initId++
+    const files = this.getFiles()
+    files.clear()
+    this.#initialized = false
+    this.#initPromise = undefined
+  }
 
+  // removed unused #getDefaultApiBaseUrl
+
+  #resolveApiBaseUrl(opts: GitHostFileSystemOptions) {
+    if (this.#host === 'gitlab') {
+      if (opts.baseUrl) {
+        const urlObject = new URL(opts.baseUrl)
+        if (urlObject.protocol !== 'https:') {
+          throw new Error('[renoun] HTTPS required')
+        }
+        return `${urlObject.origin}/api/v4`
+      }
+      return 'https://gitlab.com/api/v4'
+    }
+    if (this.#host === 'github') {
+      return 'https://api.github.com'
+    }
+    return 'https://api.bitbucket.org/2.0'
+  }
+
+  #getApiHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {}
+    headers['User-Agent'] = 'renoun'
     if (this.#host === 'github') {
       headers['Accept'] = 'application/vnd.github.v3+json'
+      headers['X-GitHub-Api-Version'] = '2022-11-28'
     }
-
-    if (!this.#token) {
-      return headers
+    if (this.#token) {
+      switch (this.#host) {
+        case 'github':
+          headers['Authorization'] = `Bearer ${this.#token}`
+          break
+        case 'gitlab':
+          headers['PRIVATE-TOKEN'] = this.#token
+          break
+        case 'bitbucket':
+          headers['Authorization'] = `Bearer ${this.#token}`
+          break
+      }
     }
-
-    switch (this.#host) {
-      case 'github':
-        headers['Authorization'] = /^gh[pus]_|^github_pat_/.test(this.#token)
-          ? `Bearer ${this.#token}`
-          : `token ${this.#token}`
-        break
-      case 'gitlab':
-        headers['PRIVATE-TOKEN'] = this.#token
-        break
-      case 'bitbucket':
-        headers['Authorization'] = `Bearer ${this.#token}`
-        break
-    }
-
     return headers
   }
 
+  #getNoAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {}
+    headers['User-Agent'] = 'renoun'
+    return headers
+  }
+
+  #assertAllowed(urlStr: string) {
+    const urlObject = new URL(urlStr)
+    if (urlObject.protocol !== 'https:') {
+      throw new Error('[renoun] HTTPS required')
+    }
+    const origin = `${urlObject.protocol}//${urlObject.host}`
+    if (!this.#originPolicy.fetch.has(origin)) {
+      throw new Error('[renoun] Redirected to disallowed origin')
+    }
+  }
+
   #isRateLimited(response: Response): boolean {
-    // 429 is a universal "Too Many Requests" status
     if (response.status === 429) {
       return true
     }
 
-    // Some hosts return 403 when the rate limit is exhausted.
     if (response.status !== 403) {
       return false
     }
 
     switch (this.#host) {
       case 'github':
-      case 'bitbucket': {
+      case 'bitbucket':
         return response.headers.get('X-RateLimit-Remaining') === '0'
-      }
-      case 'gitlab': {
+      case 'gitlab':
         return response.headers.get('RateLimit-Remaining') === '0'
-      }
       default:
         return false
     }
@@ -215,361 +286,810 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
   /** Fetch with retry and rate-limit handling. */
   async #fetchWithRetry(url: string, maxAttempts = 3): Promise<Response> {
-    const release = await this.#semaphore.acquire()
+    for (let attempt = 0; attempt < Math.max(1, maxAttempts); attempt++) {
+      let skipBackoff = false
+      const controller = new AbortController()
+      this.#currentFetch = controller
+      const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
 
-    try {
-      for (let attempt = 0; attempt < Math.max(1, maxAttempts); attempt++) {
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
-
-        try {
-          const response = await fetch(url, {
-            headers: this.#headers,
+      try {
+        this.#assertAllowed(url)
+        let currentUrl = url
+        let redirects = 0
+        while (true) {
+          const origin = new URL(currentUrl).origin
+          const useAuth = this.#originPolicy.auth.has(origin)
+          const response = await fetch(currentUrl, {
+            headers: useAuth ? this.#apiHeaders : this.#noAuthHeaders,
             signal: controller.signal,
+            referrerPolicy: 'no-referrer',
+            redirect: 'manual',
           })
 
-          if (this.#isRateLimited(response)) {
-            const delay =
-              Number(response.headers.get('Retry-After')) * 1_000 ||
-          getResetDelayMs(response, this.#host)
+          if (response.status >= 300 && response.status < 400) {
+            if (redirects >= 2) {
+              throw new Error('[renoun] Too many redirects')
+            }
+            const loc = response.headers.get('Location')
+            if (!loc) {
+              throw new Error('[renoun] Missing redirect location')
+            }
+            const nextUrl = new URL(loc, currentUrl).toString()
+            this.#assertAllowed(nextUrl)
+            currentUrl = nextUrl
+            redirects++
+            continue
+          }
 
-            if (delay !== undefined) {
-              await sleep(delay + 100)
-              continue
+          if (this.#isRateLimited(response)) {
+            let rawMs: number | undefined
+            const retryAfterHeader = response.headers.get('Retry-After')
+            if (retryAfterHeader) {
+              const seconds = Number(retryAfterHeader)
+              if (!Number.isNaN(seconds)) {
+                rawMs = seconds * 1_000
+              } else {
+                const date = Date.parse(retryAfterHeader)
+                if (!Number.isNaN(date)) {
+                  rawMs = Math.max(date - Date.now(), 0)
+                }
+              }
+            }
+            if (rawMs === undefined) {
+              const resetMs = getResetDelayMs(response, this.#host)
+              if (resetMs !== undefined) {
+                rawMs = resetMs
+              }
+            }
+            const retryAfter = rawMs !== undefined ? clamp(rawMs) : undefined
+
+            if (retryAfter !== undefined) {
+              await sleep(retryAfter)
+              // Honor server-advised delay exactly; skip client-side backoff
+              skipBackoff = true
+              break
             }
           }
 
-          /* Retry on 5xx except 501 (unlikely here) */
           if (response.status >= 500 && response.status !== 501) {
             if (attempt === maxAttempts - 1) {
               return response
             }
-            /* fall-through to back-off */
           } else {
             return response
           }
-        } catch (error) {
-          if (attempt === maxAttempts - 1) {
-            throw error
-          }
-        } finally {
-          clearTimeout(timer)
+          break
         }
-
-        /* Exponential back-off with jitter for 5xx / network failures */
-        const backoff = 2 ** attempt * 200 + Math.random() * 100
-        await sleep(backoff)
+      } catch (error) {
+        // Non-retriable redirect/auth errors should surface immediately
+        if (
+          error instanceof Error &&
+          (error.message.includes('Too many redirects') ||
+            error.message.includes('Missing redirect location') ||
+            error.message.includes('Redirected to disallowed origin'))
+        ) {
+          throw error
+        }
+        if (attempt === maxAttempts - 1) {
+          throw error
+        }
+      } finally {
+        clearTimeout(timer)
+        if (this.#currentFetch === controller) {
+          this.#currentFetch = undefined
+        }
       }
-    } finally {
-      release()
+
+      if (skipBackoff) {
+        continue
+      }
+      const backoff = 2 ** attempt * 200 + Math.random() * 100
+      await sleep(backoff)
     }
 
     throw new Error(`[renoun] Failed to fetch after ${maxAttempts} attempts`)
   }
 
-  #encodePath(path: string) {
-    return path
-      .split('/')
-      .map((segment) => encodeURIComponent(segment))
-      .join('/')
+  async #ensureInitialized() {
+    if (this.#initialized) {
+      return
+    }
+
+    const currentInit = ++this.#initId
+    if (!this.#initPromise) {
+      this.#initPromise = this.#loadArchive().catch((error) => {
+        this.#initPromise = undefined
+        throw error
+      })
+    }
+
+    await this.#initPromise
+    // If a clearCache occurred during load, restart init
+    if (!this.#initialized || currentInit !== this.#initId) {
+      this.#initPromise = undefined
+      await this.#ensureInitialized()
+    }
   }
 
-  async #fetchRootTree(): Promise<DirectoryEntry[]> {
-    const commitResponse = await this.#fetchWithRetry(
-      `${this.#apiBaseUrl}/repos/${this.#repository}/commits/${this.#ref}`
-    )
-    if (!commitResponse.ok) {
+  #getArchiveUrl() {
+    switch (this.#host) {
+      case 'github':
+        return `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/tarball/${encodeURIComponent(this.#ref)}`
+      case 'gitlab': {
+        const repo = encodeURIComponent(this.#repository)
+        const params = new URLSearchParams({ sha: this.#ref })
+        return `${this.#apiBaseUrl}/projects/${repo}/repository/archive.tar.gz?${params}`
+      }
+      case 'bitbucket':
+        return `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/src/${encodeURIComponent(this.#ref)}?format=tar.gz`
+    }
+  }
+
+  async #loadArchive() {
+    const response = await this.#fetchWithRetry(this.#getArchiveUrl())
+
+    if (!response.ok) {
       throw new Error(
-        `[renoun] Failed to resolve ref: ${commitResponse.status}`
+        `[renoun] Failed to fetch repository archive: ${response.status} ${response.statusText}`
       )
     }
 
-    const { commit } = await commitResponse.json()
-    const treeSha = commit.tree.sha as string
-
-    const treeResponse = await this.#fetchWithRetry(
-      `${this.#apiBaseUrl}/repos/${this.#repository}/git/trees/${treeSha}?recursive=1`
-    )
-    if (!treeResponse.ok) {
-      throw new Error(`[renoun] Tree fetch failed: ${treeResponse.status}`)
-    }
-
-    const { tree, truncated } = await treeResponse.json()
-
-    if (truncated) {
-      return this.#fetchDirectoryContents('')
-    }
-
-    return tree.map((item: any) => ({
-      name: item.path.split('/').pop(),
-      path: `./${item.path}`,
-      isDirectory: item.type === 'tree' || item.type === 'commit',
-      isFile: item.type === 'blob',
-    }))
-  }
-
-  async #fetchDirectoryContents(path: string): Promise<DirectoryEntry[]> {
-    const entries: DirectoryEntry[] = []
-    const pushEntries = (items: any[]) => {
-      switch (this.#host) {
-        case 'github':
-          entries.push(
-            ...items.map((item) => ({
-              name: item.name,
-              path: path ? `./${path}/${item.name}` : `./${item.name}`,
-              isDirectory: item.type === 'dir' || item.type === 'submodule',
-              isFile: item.type === 'file',
-            }))
-          )
-          break
-        case 'gitlab':
-          entries.push(
-            ...items.map((item) => ({
-              name: item.name,
-              path: path ? `./${path}/${item.name}` : `./${item.name}`,
-              isDirectory: item.type === 'tree',
-              isFile: item.type === 'blob',
-            }))
-          )
-          break
-        case 'bitbucket':
-          entries.push(
-            ...items.map((item: any) => ({
-              name: item.path.substring(item.path.lastIndexOf('/') + 1),
-              path: `./${item.path}`,
-              isDirectory: item.type === 'commit_directory',
-              isFile: item.type === 'commit_file',
-            }))
-          )
-          break
+    const contentLengthHeader = response.headers.get('content-length')
+    if (contentLengthHeader) {
+      const contentLength = Number(contentLengthHeader)
+      if (Number.isNaN(contentLength) || contentLength < 0) {
+        throw new Error('[renoun] Invalid content-length received for archive')
+      }
+      if (contentLength > MAX_ARCHIVE_SIZE_BYTES) {
+        throw new Error('[renoun] Repository archive exceeds allowed size')
       }
     }
 
-    if (this.#host === 'github') {
-      const apiPath = path ? `/${this.#encodePath(path)}` : ''
-      const perPage = 100
-      let page = 1
+    const contentType =
+      response.headers.get('content-type')?.toLowerCase() || ''
+    if (contentType && !/tar|gzip|octet-stream/.test(contentType)) {
+      throw new Error('[renoun] Unexpected content-type for repository archive')
+    }
 
-      while (true) {
-        const url = `${this.#apiBaseUrl}/repos/${this.#repository}/contents${apiPath}?ref=${this.#ref}&per_page=${perPage}&page=${page}`
-        const response = await this.#fetchWithRetry(url)
-
-        if (!response.ok) {
-          throw new Error(
-            `[renoun] Failed to fetch directory "${path}": ${response.status} ${response.statusText}`
-          )
-        }
-
-        const data = (await response.json()) as any[]
-        pushEntries(data)
-
-        if (data.length < perPage) {
-          break
-        }
-
-        page++
+    if (!response.body) {
+      // Fallback for environments without web streams (e.g., some mocks):
+      // stream the ArrayBuffer through a Readable and reuse extractor
+      let arrayBuffer: ArrayBuffer
+      try {
+        arrayBuffer = await response.arrayBuffer()
+      } catch (error) {
+        throw new Error('[renoun] Failed to read repository archive response')
       }
-    } else if (this.#host === 'gitlab') {
-      const repo = encodeURIComponent(this.#repository)
-      const perPage = 100
-      let page = 1
+      const raw = Buffer.from(arrayBuffer)
+      const isGz = raw.length > 2 && raw[0] === 0x1f && raw[1] === 0x8b
+      const src = Readable.from(raw)
+      const source = isGz ? src.pipe(createGunzip()) : src
 
-      while (true) {
-        const params = new URLSearchParams({
-          ref: this.#ref,
-          per_page: String(perPage),
-          page: String(page),
-        })
+      const files = this.getFiles()
+      files.clear()
+      let totalBytes = 0
+      let fileCount = 0
+      const seen = new Set<string>()
+      let rootPrefix: string | undefined
+      let paxHeader: Record<string, string> | null = null
+      let longPath: string | null = null
 
-        if (path) {
-          params.set('path', path)
-        }
-
-        const url = `${this.#apiBaseUrl}/projects/${repo}/repository/tree?${params}`
-        const response = await this.#fetchWithRetry(url)
-
-        if (!response.ok) {
+      for await (const entry of this.#tarStreamEntries(source)) {
+        const { size, typeFlag, name, prefix, readData, discard } = entry
+        totalBytes += size
+        if (totalBytes > MAX_ARCHIVE_SIZE_BYTES) {
           throw new Error(
-            `[renoun] Failed to fetch directory "${path}": ${response.status} ${response.statusText}`
+            '[renoun] Repository archive exceeds allowed size during extraction'
           )
         }
-
-        const data = (await response.json()) as any[]
-        pushEntries(data)
-
-        const nextPage = response.headers.get('X-Next-Page')
-        if (!nextPage) {
-          break
+        const resolvedPath =
+          this.#sanitizeTarPath(paxHeader?.['path']) ??
+          longPath ??
+          this.#sanitizeTarPath(prefix ? `${prefix}/${name}` : name)
+        let fullPath = resolvedPath ?? ''
+        paxHeader = null
+        longPath = null
+        if (!fullPath) {
+          await discard()
+          continue
         }
-
-        page = Number(nextPage) || 0
-        if (!page) {
-          break
+        if (!rootPrefix) rootPrefix = fullPath.split('/')[0]
+        if (rootPrefix && fullPath.startsWith(`${rootPrefix}/`))
+          fullPath = fullPath.slice(rootPrefix.length + 1)
+        fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
+        if (!fullPath || fullPath.endsWith('/')) {
+          await discard()
+          continue
         }
+        const parts = fullPath.split('/')
+        const safeSegments: string[] = []
+        let isUnsafe = false
+        for (let index = 0; index < parts.length; index++) {
+          const segment = parts[index]!
+          const ts = segment.trim()
+          if (!ts || ts === '.') continue
+          if (ts === '..') {
+            isUnsafe = true
+            break
+          }
+          if (index === 0 && /^[A-Za-z]:$/.test(ts)) {
+            isUnsafe = true
+            break
+          }
+          if (
+            segment.length > MAX_PATH_SEGMENT_LENGTH ||
+            ts.length > MAX_PATH_SEGMENT_LENGTH
+          ) {
+            isUnsafe = true
+            break
+          }
+          safeSegments.push(ts)
+        }
+        if (isUnsafe || safeSegments.length === 0) {
+          await discard()
+          continue
+        }
+        const relativePath = safeSegments.join('/')
+        if (relativePath.length > MAX_RELATIVE_PATH_LENGTH) {
+          await discard()
+          continue
+        }
+        if (safeSegments.length > MAX_PATH_SEGMENTS) {
+          await discard()
+          continue
+        }
+        if (typeFlag === TAR_TYPE_FLAGS.PaxExtendedHeader) {
+          const buf = await readData(MAX_FILE_BYTES)
+          paxHeader = this.#parsePaxRecords(buf)
+          continue
+        }
+        if (typeFlag === TAR_TYPE_FLAGS.PaxGlobalExtendedHeader) {
+          await discard()
+          continue
+        }
+        if (typeFlag === TAR_TYPE_FLAGS.GnuLongPath) {
+          const buf = await readData(MAX_FILE_BYTES)
+          longPath = this.#sanitizeTarPath(buf.toString('utf8'))
+          continue
+        }
+        if (typeFlag === TAR_TYPE_FLAGS.GnuLongLink) {
+          await discard()
+          continue
+        }
+        const isDirectory = typeFlag === TAR_TYPE_FLAGS.Directory
+        const isFile =
+          typeFlag === TAR_TYPE_FLAGS.NormalFile ||
+          typeFlag === TAR_TYPE_FLAGS.NormalFileSpace ||
+          typeFlag === TAR_TYPE_FLAGS.NormalFileAlternative ||
+          typeFlag === TAR_TYPE_FLAGS.NormalFileSeven
+        if (!isFile || isDirectory) {
+          await discard()
+          continue
+        }
+        fileCount++
+        if (fileCount > MAX_FILE_COUNT)
+          throw new Error('[renoun] Repository contains too many files')
+        if (seen.has(relativePath))
+          throw new Error('[renoun] Duplicate path in archive')
+        if (size > MAX_FILE_BYTES) {
+          await discard()
+          continue
+        }
+        let received = 0
+        const chunks: Buffer[] = []
+        while (true) {
+          const chunk = await readData(
+            Math.min(64 * 1024, MAX_FILE_BYTES - received)
+          )
+          if (chunk.length === 0) break
+          received += chunk.length
+          if (received > size) {
+            await discard()
+            chunks.length = 0
+            received = 0
+            break
+          }
+          chunks.push(chunk)
+          if (received >= size) break
+        }
+        if (received === 0 && chunks.length === 0) continue
+        const buf = Buffer.concat(chunks)
+        const content: MemoryFileContent = this.#isBinaryBuffer(buf)
+          ? { kind: 'binary', content: buf, encoding: 'binary' }
+          : buf.toString('utf8')
+        this.createFile(relativePath, content)
+        seen.add(relativePath)
+      }
+      this.#initialized = true
+      return
+    }
+
+    // handle both Node.js and web-compatible ReadableStream and fallback if necessary
+    let nodeBody: NodeJS.ReadableStream
+    if (typeof Readable.fromWeb === 'function') {
+      try {
+        // Some environments may not have a true ReadableStream (Node.js <18, jest mocks, etc)
+        // Gracefully handle type mismatches for test/shim streams
+        nodeBody = Readable.fromWeb(
+          response.body as unknown as import('stream/web').ReadableStream<any>
+        )
+      } catch {
+        throw new Error(
+          '[renoun] Could not create Node.js stream from response body'
+        )
       }
     } else {
-      let next: string | undefined = path
-        ? `${this.#apiBaseUrl}/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(
-            path
-          )}?format=meta&pagelen=100`
-        : `${this.#apiBaseUrl}/repositories/${this.#repository}/src/${this.#ref}?format=meta&pagelen=100`
+      throw new Error(
+        '[renoun] Could not create Node.js stream from response body'
+      )
+    }
 
-      while (next) {
-        const response = await this.#fetchWithRetry(next)
-        if (!response.ok) {
-          throw new Error(
-            `[renoun] Failed to fetch directory "${path}": ${response.status} ${response.statusText}`
-          )
+    const shouldGunzip = /gzip/.test(contentType)
+    const source = shouldGunzip ? nodeBody.pipe(createGunzip()) : nodeBody
+    const files = this.getFiles()
+    files.clear()
+
+    let totalBytes = 0
+    let fileCount = 0
+    const seen = new Set<string>()
+    let rootPrefix: string | undefined
+    let paxHeader: Record<string, string> | null = null
+    let longPath: string | null = null
+
+    for await (const entry of this.#tarStreamEntries(source)) {
+      const { size, typeFlag, name, prefix, readData, discard } = entry
+      totalBytes += size
+      if (totalBytes > MAX_ARCHIVE_SIZE_BYTES) {
+        throw new Error(
+          '[renoun] Repository archive exceeds allowed size during extraction'
+        )
+      }
+
+      // Validate checksum (already validated when parsed header)
+      // Parse names and sanitize
+      const resolvedPath =
+        this.#sanitizeTarPath(paxHeader?.['path']) ??
+        longPath ??
+        this.#sanitizeTarPath(prefix ? `${prefix}/${name}` : name)
+
+      let fullPath = resolvedPath ?? ''
+      paxHeader = null
+      longPath = null
+      if (!fullPath) {
+        await discard()
+        continue
+      }
+
+      if (!rootPrefix) {
+        rootPrefix = fullPath.split('/')[0]
+      }
+      if (rootPrefix && fullPath.startsWith(`${rootPrefix}/`)) {
+        fullPath = fullPath.slice(rootPrefix.length + 1)
+      }
+      fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
+      fullPath = fullPath.replace(/^\/+/, '')
+      fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
+      fullPath = fullPath.replace(/^\/+/, '')
+      if (!fullPath || fullPath.endsWith('/')) {
+        await discard()
+        continue
+      }
+
+      const safeSegments: string[] = []
+      let isUnsafe = false
+      const parts = fullPath.split('/')
+      for (let index = 0; index < parts.length; index++) {
+        const segment = parts[index]!
+        const trimmedSegment = segment.trim()
+        if (!trimmedSegment || trimmedSegment === '.') continue
+        if (trimmedSegment === '..') {
+          isUnsafe = true
+          break
         }
-        const data = (await response.json()) as any
-        pushEntries(data.values)
-        next = data.next
+        if (index === 0 && /^[A-Za-z]:$/.test(trimmedSegment)) {
+          isUnsafe = true
+          break
+        }
+        if (
+          segment.length > MAX_PATH_SEGMENT_LENGTH ||
+          trimmedSegment.length > MAX_PATH_SEGMENT_LENGTH
+        ) {
+          isUnsafe = true
+          break
+        }
+        safeSegments.push(trimmedSegment)
+      }
+      if (isUnsafe || safeSegments.length === 0) {
+        await discard()
+        continue
+      }
+
+      const relativePath = safeSegments.join('/')
+      if (relativePath.length > MAX_RELATIVE_PATH_LENGTH) {
+        await discard()
+        continue
+      }
+      if (safeSegments.length > MAX_PATH_SEGMENTS) {
+        await discard()
+        continue
+      }
+
+      // Handle special types
+      if (typeFlag === TAR_TYPE_FLAGS.PaxExtendedHeader) {
+        const buf = await readData(MAX_FILE_BYTES)
+        paxHeader = this.#parsePaxRecords(buf)
+        continue
+      }
+      if (typeFlag === TAR_TYPE_FLAGS.PaxGlobalExtendedHeader) {
+        await discard()
+        continue
+      }
+      if (typeFlag === TAR_TYPE_FLAGS.GnuLongPath) {
+        const buf = await readData(MAX_FILE_BYTES)
+        longPath = this.#sanitizeTarPath(buf.toString('utf8'))
+        continue
+      }
+      if (typeFlag === TAR_TYPE_FLAGS.GnuLongLink) {
+        await discard()
+        continue
+      }
+
+      const isDirectory = typeFlag === TAR_TYPE_FLAGS.Directory
+      const isFile =
+        typeFlag === TAR_TYPE_FLAGS.NormalFile ||
+        typeFlag === TAR_TYPE_FLAGS.NormalFileSpace ||
+        typeFlag === TAR_TYPE_FLAGS.NormalFileAlternative ||
+        typeFlag === TAR_TYPE_FLAGS.NormalFileSeven
+
+      if (!isFile || isDirectory) {
+        await discard()
+        continue
+      }
+
+      fileCount++
+      if (fileCount > MAX_FILE_COUNT) {
+        throw new Error('[renoun] Repository contains too many files')
+      }
+      if (seen.has(relativePath)) {
+        throw new Error('[renoun] Duplicate path in archive')
+      }
+
+      // Hard cap: skip overlarge files entirely
+      if (size > MAX_FILE_BYTES) {
+        await discard()
+        continue
+      }
+
+      let received = 0
+      const chunks: Buffer[] = []
+      while (true) {
+        const chunk = await readData(
+          Math.min(64 * 1024, MAX_FILE_BYTES - received)
+        )
+        if (chunk.length === 0) break
+        received += chunk.length
+        if (received > MAX_FILE_BYTES) {
+          await discard()
+          chunks.length = 0
+          received = 0
+          break
+        }
+        chunks.push(chunk)
+        if (received >= size) break
+      }
+      if (received === 0 && chunks.length === 0) {
+        continue
+      }
+
+      const buf = Buffer.concat(chunks)
+      const content: MemoryFileContent = this.#isBinaryBuffer(buf)
+        ? { kind: 'binary', content: buf, encoding: 'binary' }
+        : buf.toString('utf8')
+
+      this.createFile(relativePath, content)
+      seen.add(relativePath)
+    }
+
+    this.#initialized = true
+  }
+
+  async *#tarStreamEntries(stream: NodeJS.ReadableStream): AsyncGenerator<{
+    header: Buffer
+    size: number
+    typeFlag: number
+    name: string
+    prefix: string
+    readData: (maxChunk: number) => Promise<Buffer>
+    discard: () => Promise<void>
+  }> {
+    let buffer = Buffer.alloc(0)
+    let isEnded = false
+    let isErrored: Error | null = null
+    const readFromStream = async (size: number): Promise<Buffer> => {
+      while (buffer.length < size && !isEnded && !isErrored) {
+        const chunk: Buffer | null = await new Promise((resolve) => {
+          const onReadable = () => {
+            stream.off('end', onEnd)
+            stream.off('error', onError)
+            const readChunk = (stream.read() as Buffer) || null
+            if (readChunk) buffer = Buffer.concat([buffer, readChunk])
+            resolve(readChunk)
+          }
+          const onEnd = () => {
+            stream.off('readable', onReadable)
+            stream.off('error', onError)
+            isEnded = true
+            resolve(null)
+          }
+          const onError = (err: Error) => {
+            stream.off('readable', onReadable)
+            stream.off('end', onEnd)
+            isErrored = err
+            resolve(null)
+          }
+          stream.once('readable', onReadable)
+          stream.once('end', onEnd)
+          stream.once('error', onError)
+        })
+        if (!chunk) break
+      }
+      const out = buffer.subarray(0, Math.min(size, buffer.length))
+      buffer = buffer.subarray(out.length)
+      return out
+    }
+
+    while (true) {
+      const header = await readFromStream(512)
+      if (isErrored) throw isErrored
+      if (header.length === 0 || header.every((b) => b === 0)) break
+      if (header.length < 512) throw new Error('[renoun] Truncated tar header')
+      if (!this.#validTarChecksum(header)) {
+        throw new Error('[renoun] Invalid tar header checksum')
+      }
+
+      const size = this.#parseTarSize(header)
+      const typeFlag = header[156]
+      const name = this.#readTarString(header, 0, 100)
+      const prefix = this.#readTarString(header, 345, 500)
+
+      const dataSize = size
+      const paddedSize = Math.ceil(dataSize / 512) * 512
+      let remaining = dataSize
+
+      let discarded = false
+      const readData = async (maxChunk: number): Promise<Buffer> => {
+        if (remaining <= 0) return Buffer.alloc(0)
+        const toRead = Math.min(remaining, maxChunk)
+        const chunk = await readFromStream(toRead)
+        remaining -= chunk.length
+        return chunk
+      }
+      const discard = async () => {
+        let toSkip = remaining
+        while (toSkip > 0) {
+          const chunk = await readFromStream(Math.min(64 * 1024, toSkip))
+          if (chunk.length === 0) break
+          toSkip -= chunk.length
+        }
+        remaining = 0
+        let pad = paddedSize - dataSize
+        while (pad > 0) {
+          const chunk = await readFromStream(Math.min(64 * 1024, pad))
+          if (chunk.length === 0) break
+          pad -= chunk.length
+        }
+        discarded = true
+      }
+      const finishPadding = async () => {
+        const pad = paddedSize - dataSize
+        if (pad > 0) await readFromStream(pad)
+      }
+
+      yield { header, size, typeFlag, name, prefix, readData, discard }
+
+      // If consumer didn't fully read, ensure we consume padding
+      if (remaining > 0) {
+        await discard()
+      } else if (!discarded) {
+        await finishPadding()
+      }
+    }
+  }
+
+  #parsePaxRecords(buf: Buffer): Record<string, string> {
+    const result: Record<string, string> = {}
+    let index = 0
+    while (index < buf.length) {
+      // read length prefix (ASCII decimal) until space
+      let len = 0
+      let digits = 0
+      while (index < buf.length && buf[index] !== 0x20) {
+        const c = buf[index++]
+        if (c < 0x30 || c > 0x39) throw new Error('[renoun] Invalid PAX length')
+        len = len * 10 + (c - 0x30)
+        digits++
+        if (len > 16 * 1024)
+          throw new Error('[renoun] Oversized PAX header line')
+      }
+      if (buf[index++] !== 0x20)
+        throw new Error('[renoun] Invalid PAX record format')
+      const end = index + (len - (digits + 1))
+      if (end > buf.length) throw new Error('[renoun] Truncated PAX record')
+      const rec = buf.subarray(index, end)
+      index = end
+      if (index < buf.length && buf[index] === 0x0a) index++
+
+      const eq = rec.indexOf(0x3d)
+      if (eq === -1) continue
+      const key = rec.subarray(0, eq).toString('utf8')
+      const raw = rec.subarray(eq + 1).toString('utf8')
+      if (!/^[\x20-\x7E]+$/.test(key) || key.length > 256) continue
+      const value =
+        key === 'path' || key === 'linkpath'
+          ? this.#sanitizeTarPath(raw)
+          : this.#stripNullTerminator(raw)
+      if (value) result[key] = value
+    }
+    return result
+  }
+
+  #parseTarSize(header: Buffer): number {
+    const sizeField = header.subarray(124, 136)
+    const isBase256 = ((sizeField[0] ?? 0) & 0x80) !== 0
+
+    if (isBase256) {
+      const negative = (sizeField[0] & 0x40) !== 0
+      if (negative) {
+        throw new Error(
+          '[renoun] Tar entry size uses unsupported negative base-256 encoding'
+        )
+      }
+      let value = 0n
+
+      for (let index = 0; index < sizeField.length; index++) {
+        const byte = sizeField[index]!
+        const masked = index === 0 ? byte & 0x7f : byte
+        value = (value << 8n) | BigInt(masked)
+      }
+
+      if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error('[renoun] Tar entry size exceeds supported range')
+      }
+
+      return Number(value)
+    }
+
+    const sizeString = sizeField
+      .toString('utf8')
+      .replace(/\0+.*$/, '')
+      .trim()
+    return sizeString ? parseInt(sizeString, 8) || 0 : 0
+  }
+
+  #readTarString(header: Buffer, start: number, end: number) {
+    return header
+      .toString('utf8', start, end)
+      .replace(/\0+.*$/, '')
+      .trim()
+  }
+
+  #stripNullTerminator(value: string) {
+    return value.replace(/\0+$/, '')
+  }
+
+  #sanitizeTarPath(value: string | null | undefined): string | null {
+    if (!value) {
+      return null
+    }
+
+    const stripped = this.#stripNullTerminator(value)
+    const withoutNulls = stripped.replace(/\0/g, '')
+    const withoutControlChars = withoutNulls.replace(
+      /[\u0001-\u001f\u007f]/g,
+      ''
+    )
+    const withoutInvisible = withoutControlChars.replace(
+      /[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g,
+      ''
+    )
+
+    const normalized = withoutInvisible.normalize('NFKC')
+    return normalized || null
+  }
+
+  // removed unused #parsePaxHeader
+
+  #isBinaryBuffer(buffer: Buffer): boolean {
+    if (buffer.length === 0) {
+      return false
+    }
+
+    const sampleLength = Math.min(buffer.length, 1_024)
+    let suspicious = 0
+
+    for (let index = 0; index < sampleLength; index++) {
+      const byte = buffer[index]!
+
+      if (byte === 0) {
+        return true
+      }
+
+      if (byte < 7 || (byte > 13 && byte < 32) || byte === 255) {
+        suspicious++
       }
     }
 
-    this.#directoryCache.set(path, { entries, cachedAt: Date.now() })
-    return entries
+    if (suspicious / sampleLength > 0.1) {
+      return true
+    }
+
+    const sample = buffer.subarray(0, Math.min(buffer.length, 8_192))
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(sample)
+      return false
+    } catch {
+      return true
+    }
   }
 
-  async #fetchDirectory(path: string) {
-    if (this.#host === 'github' && path === '') {
-      return this.#fetchRootTree()
+  #validTarChecksum(header: Buffer): boolean {
+    let sum = 0
+    for (let index = 0; index < 512; index++) {
+      const isChecksumField = index >= 148 && index < 156
+      sum += isChecksumField ? 32 : header[index]!
     }
-    return this.#fetchDirectoryContents(path)
+    const storedString = header
+      .subarray(148, 156)
+      .toString('utf8')
+      .replace(/\0.*$/, '')
+      .trim()
+    const stored = parseInt(storedString, 8)
+    return Number.isFinite(stored) && stored === sum
+  }
+
+  #validateRef(ref: string) {
+    if (!/^[A-Za-z0-9._\-\/]{1,256}$/.test(ref)) {
+      throw new Error('[renoun] Invalid ref')
+    }
+    if (ref.includes('..')) {
+      throw new Error('[renoun] Invalid ref')
+    }
+    if (/[^\x20-\x7E]/.test(ref)) {
+      throw new Error('[renoun] Invalid ref')
+    }
+    if (ref.startsWith('/') || ref.endsWith('/')) {
+      throw new Error('[renoun] Invalid ref')
+    }
   }
 
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
-    const key = normalizePath(path)
-    const cached = this.#directoryCache.get(key)
-
-    if (
-      cached &&
-      this.#cacheTTL !== 0 &&
-      (!this.#cacheTTL || Date.now() - cached.cachedAt < this.#cacheTTL)
-    ) {
-      return cached.entries
-    }
-
-    this.#directoryCache.delete(key)
-    return this.#fetchDirectory(key)
+    await this.#ensureInitialized()
+    return MemoryFileSystem.prototype.readDirectorySync.call(this, path)
   }
 
   readDirectorySync(): DirectoryEntry[] {
-    throw new Error(
-      'readDirectorySync is not supported in GitHostFileSystem'
-    )
-  }
-
-  async #fetchFile(path: string): Promise<void> {
-    const normalizedPath = normalizePath(path)
-    let url: string
-
-    switch (this.#host) {
-      case 'github':
-        url = `${this.#apiBaseUrl}/repos/${this.#repository}/contents/${this.#encodePath(
-          normalizedPath
-        )}?ref=${this.#ref}`
-        break
-      case 'gitlab': {
-        const repo = encodeURIComponent(this.#repository)
-        const filePath = encodeURIComponent(normalizedPath)
-        url = `${this.#apiBaseUrl}/projects/${repo}/repository/files/${filePath}/raw?ref=${this.#ref}`
-        break
-      }
-      case 'bitbucket':
-        url = `${this.#apiBaseUrl}/repositories/${this.#repository}/src/${this.#ref}/${this.#encodePath(
-          normalizedPath
-        )}`
-        break
-    }
-
-    const response = await this.#fetchWithRetry(url)
-    if (!response.ok) {
-      throw new Error(
-        `[renoun] Failed to fetch file "${path}": ${response.status} ${response.statusText}`
-      )
-    }
-
-    const contentType = response.headers.get('Content-Type') || ''
-    const isText =
-      /^text\//.test(contentType) ||
-      /application\/(json|xml|javascript|typescript)/i.test(contentType) ||
-      /svg\+xml/.test(contentType)
-
-    if (this.#host === 'github') {
-      const data = await response.json()
-
-      /* Small files (≤1 MB) include base64 content outright */
-      if (typeof data.content === 'string' && data.encoding === 'base64') {
-        this.createFile(path, decodeBase64(data.content))
-        return
-      }
-
-      /* For private repos download_url is null wo we fall back to blob API */
-      if (typeof data.sha === 'string') {
-        const blobResponse = await this.#fetchWithRetry(
-          `${this.#apiBaseUrl}/repos/${this.#repository}/git/blobs/${data.sha}`
-        )
-        if (!blobResponse.ok) {
-          throw new Error(
-            `[renoun] Failed to fetch blob "${path}": ${blobResponse.status} ${blobResponse.statusText}`
-          )
-        }
-        const { content, encoding } = await blobResponse.json()
-        if (encoding === 'base64') {
-          this.createFile(path, decodeBase64(content))
-        } else {
-          this.createFile(path, content)
-        }
-        return
-      }
-
-      /* Public repos can still fall back to raw. */
-      if (typeof data.download_url === 'string') {
-        const rawResponse = await this.#fetchWithRetry(data.download_url)
-        this.createFile(path, await rawResponse.text())
-        return
-      }
-
-      throw new Error('[renoun] Unable to resolve GitHub file content')
-    }
-
-    /* GitLab & Bitbucket already return raw text/binary */
-    if (!isText) {
-      /* Buffer the binary as Base64-encoded string */
-      const arrayBuffer = await response.arrayBuffer()
-      const encoded = Buffer.from(arrayBuffer).toString('base64')
-      this.createFile(path, encoded)
-    } else {
-      this.createFile(path, await response.text())
-    }
+    throw new Error('readDirectorySync is not supported in GitHostFileSystem')
   }
 
   async readFile(path: string): Promise<string> {
-    const key = normalizePath(path)
+    await this.#ensureInitialized()
+    return MemoryFileSystem.prototype.readFileSync.call(this, path)
+  }
 
-    if (!this.fileExistsSync(key)) {
-      let fetchPromise = this.#fileFetches.get(key)
-
-      if (!fetchPromise) {
-        fetchPromise = this.#fetchFile(key).finally(() =>
-          this.#fileFetches.delete(key)
-        )
-        this.#fileFetches.set(key, fetchPromise)
-      }
-
-      await fetchPromise
+  async readFileBinary(path: string): Promise<Buffer> {
+    await this.#ensureInitialized()
+    const entry = this.getFileEntry(path)
+    if (!entry) {
+      throw new Error(`File not found: ${path}`)
     }
-
-    return super.readFile(key)
+    if (entry.kind === 'binary') {
+      return Buffer.from(entry.content)
+    }
+    return Buffer.from(entry.content, 'utf8')
   }
 
   readFileSync(): string {
     throw new Error('readFileSync is not supported in GitHostFileSystem')
-  }
-
-  fileExistsSync(path: string): boolean {
-    return super.fileExistsSync(normalizePath(path))
   }
 
   isFilePathGitIgnored(): boolean {
