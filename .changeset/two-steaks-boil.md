@@ -17,6 +17,6 @@ Adds an `annotations` prop to the `CodeBlock` and `Tokens` components to render 
 </CodeBlock>
 ```
 
-- Paired markers wrap a range: `/* <tag ...> */ … /* </tag> */`.
-- Self‑closing markers wrap the next token only: `/* <tag ... /> */identifier`.
+- Paired markers wrap a range: `/*tag ...*/ … /*tag*/`.
+- Self‑closing markers wrap the next token only: `/*tag ...**/identifier`.
 - Works across formatter changes; ranges are computed via offsets and remapped after formatting.
