@@ -13,6 +13,7 @@ import { Context } from './Context.js'
 import { LineNumbers } from './LineNumbers.js'
 import { Pre } from './Pre.js'
 import { Tokens } from './Tokens.js'
+import type { AnnotationRenderers } from './Tokens.js'
 import { Toolbar } from './Toolbar.js'
 import {
   generateFocusedLinesGradient,
@@ -62,6 +63,9 @@ export interface CodeBlockProps {
 
   /** Whether or not to format the source code using `prettier` if installed. */
   shouldFormat?: boolean
+
+  /** Annotation renderers used to transform inline or block annotations. */
+  annotations?: AnnotationRenderers
 
   /** CSS styles to apply to code block elements. */
   css?: {
@@ -258,6 +262,7 @@ async function CodeBlockAsync({
   className,
   css,
   style,
+  annotations,
 }: CodeBlockProps) {
   const containerPadding = computeDirectionalStyles(
     'padding',
@@ -412,6 +417,7 @@ async function CodeBlockAsync({
                     token: style?.token,
                     popover: style?.popover,
                   }}
+                  annotations={annotations}
                 >
                   {value}
                 </Tokens>
@@ -438,6 +444,7 @@ async function CodeBlockAsync({
                   token: style?.token,
                   popover: style?.popover,
                 }}
+                annotations={annotations}
               >
                 {value}
               </Tokens>

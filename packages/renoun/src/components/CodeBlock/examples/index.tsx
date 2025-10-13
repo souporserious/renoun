@@ -1,3 +1,4 @@
+import React from 'react'
 import { CodeBlock, LineNumbers, Tokens, Toolbar } from 'renoun'
 
 export function Basic() {
@@ -62,6 +63,35 @@ export function TokensOnly() {
     <pre>
       <Tokens language="ts">{`const a = 1\nconst b = 2\na + b`}</Tokens>
     </pre>
+  )
+}
+
+export function Annotations() {
+  return (
+    <CodeBlock
+      language="ts"
+      annotations={{
+        mark: ({ children }) => (
+          <mark
+            style={{
+              padding: '0 0.05em',
+              borderRadius: '0.25rem',
+              backgroundColor: 'rgb(255 246 191 / 5%)',
+              color: 'inherit',
+            }}
+          >
+            {children}
+          </mark>
+        ),
+      }}
+    >
+      {`
+      import { createContext } from 'react';
+
+      const /*mark*/ThemeContext/**mark*/ = createContext(/*mark*/'light'/**mark*/);
+      const /*mark*/AuthContext/**mark*/ = createContext(/*mark*/null/**mark*/);
+      `}
+    </CodeBlock>
   )
 }
 

@@ -5,18 +5,35 @@ import { css } from 'restyle/css'
 import { getSourceTextMetadata, getTokens } from '../../project/client.js'
 import type { Languages } from '../../utils/get-language.js'
 import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
+import type { Token, TokenizedLines } from '../../utils/get-tokens.js'
 import { getContext } from '../../utils/context.js'
 import {
   BASE_TOKEN_CLASS_NAME,
   getThemeColors,
   hasMultipleThemes,
 } from '../../utils/get-theme.js'
+import {
+  parseAnnotations,
+  remapAnnotationInstructions,
+  type AnnotationParseResult,
+  type AnnotationInstructions,
+  type BlockAnnotationInstruction,
+  type InlineAnnotationInstruction,
+} from '../../utils/annotations.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import type { ConfigurationOptions } from '../Config/types.js'
 import { QuickInfo } from './QuickInfo.js'
 import { QuickInfoProvider } from './QuickInfoProvider.js'
 import { Context } from './Context.js'
 import { Symbol } from './Symbol.js'
+
+type ThemeColors = Awaited<ReturnType<typeof getThemeColors>>
+
+export type AnnotationRenderer = React.ComponentType<
+  Record<string, any> & { children?: React.ReactNode }
+>
+
+export type AnnotationRenderers = Record<string, AnnotationRenderer>
 
 export interface TokensProps {
   /** Code string to highlight and render as tokens. */
@@ -64,6 +81,13 @@ export interface TokensProps {
     index: number
     isLast: boolean
   }) => React.ReactNode
+
+  /**
+   * Map of annotation tag names to render functions. When provided, comments
+   * matching the annotation signature will be removed from the rendered output
+   * and replaced with the corresponding annotation components.
+   */
+  annotations?: AnnotationRenderers
 }
 
 /** Renders syntax highlighted tokens for the `CodeBlock` component. */
@@ -79,6 +103,7 @@ export async function Tokens({
   className = {},
   style = {},
   theme: themeProp,
+  annotations,
 }: TokensProps) {
   const context = getContext(Context)
   const config = await getConfig()
@@ -104,6 +129,22 @@ export async function Tokens({
     )
   }
 
+  let annotationParseResult: AnnotationParseResult | null = null
+  let annotationInstructions: AnnotationInstructions | null = null
+  let processedValue = value
+
+  if (annotations) {
+    const annotationTags = Object.keys(annotations)
+    if (annotationTags.length > 0) {
+      annotationParseResult = parseAnnotations(value, annotationTags)
+      processedValue = annotationParseResult.value
+      annotationInstructions = {
+        block: annotationParseResult.block,
+        inline: annotationParseResult.inline,
+      }
+    }
+  }
+
   const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
   const metadata: SourceTextMetadata = {} as SourceTextMetadata
 
@@ -111,7 +152,7 @@ export async function Tokens({
     const result = await getSourceTextMetadata({
       filePath: context?.filePath,
       baseDirectory: context?.baseDirectory,
-      value,
+      value: processedValue,
       language,
       shouldFormat,
     })
@@ -120,9 +161,17 @@ export async function Tokens({
     metadata.filePath = result.filePath
     metadata.label = result.label
   } else {
-    metadata.value = value
+    metadata.value = processedValue
     metadata.language = language
     metadata.label = context?.label
+  }
+
+  if (annotationInstructions && annotationParseResult) {
+    annotationInstructions = remapAnnotationInstructions(
+      annotationInstructions,
+      annotationParseResult.value,
+      metadata.value
+    )
   }
 
   // Now we can resolve the context values for other components like `LineNumbers`, `CopyButton`, etc.
@@ -146,106 +195,411 @@ export async function Tokens({
     languages: config.languages,
   })
   const lastLineIndex = tokens.length - 1
+  const hasAnnotations =
+    annotationInstructions !== null &&
+    (annotationInstructions.block.length > 0 ||
+      annotationInstructions.inline.length > 0)
 
-  return (
-    <QuickInfoProvider>
-      {tokens.map((line, lineIndex) => {
-        const lineChildren = line.map((token, tokenIndex) => {
-          const hasSymbolMeta = token.diagnostics || token.quickInfo
-
-          if (
-            token.isWhiteSpace ||
-            (!hasSymbolMeta && !token.hasTextStyles && token.isBaseColor)
-          ) {
-            return token.value
-          }
-
-          if (hasSymbolMeta) {
-            const deprecatedStyles = {
-              textDecoration: 'line-through',
-            }
-            const diagnosticStyles = {
-              backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
-              backgroundRepeat: 'repeat-x',
-              backgroundPosition: 'bottom left',
-            }
-            const [symbolClassName, Styles] = css({
-              ...token.style,
-              ...(token.isDeprecated && deprecatedStyles),
-              ...(token.diagnostics && diagnosticStyles),
-              ...cssProp.token,
-            })
-            const tokenClassName = joinClassNames(
-              symbolClassName,
+  if (!hasAnnotations) {
+    return (
+      <QuickInfoProvider>
+        {tokens.map((line, lineIndex) => {
+          const lineChildren = line.map((token, tokenIndex) =>
+            renderToken({
+              token,
+              tokenIndex,
+              lineIndex,
               baseTokenClassName,
-              className.token
-            )
-
-            return (
-              <Symbol
-                key={tokenIndex}
-                highlightColor={theme.editor.hoverHighlightBackground}
-                popover={
-                  <QuickInfo
-                    diagnostics={token.diagnostics}
-                    quickInfo={token.quickInfo}
-                    css={cssProp.popover}
-                    className={className.popover}
-                    style={style.popover}
-                  />
-                }
-                className={tokenClassName}
-                style={style.token}
-              >
-                {token.value}
-                <Styles />
-              </Symbol>
-            )
-          }
-
-          const [classNames, Styles] = css({
-            ...token.style,
-            ...cssProp.token,
-          })
-          const tokenClassName = joinClassNames(
-            baseTokenClassName,
-            classNames,
-            className.token
+              theme,
+              cssProp,
+              className,
+              style,
+            })
           )
+          const isLastLine = lineIndex === lastLineIndex
+          const renderedLine = renderLine
+            ? renderLine({
+                children: lineChildren,
+                index: lineIndex,
+                isLast: isLastLine,
+              })
+            : lineChildren
+
+          if (renderLine && renderedLine) {
+            return renderedLine
+          }
 
           return (
-            <span
-              key={tokenIndex}
-              className={tokenClassName}
-              style={style.token}
-            >
-              {token.value}
-              <Styles />
-            </span>
+            <Fragment key={lineIndex}>
+              {lineChildren}
+              {isLastLine ? null : '\n'}
+            </Fragment>
           )
-        })
-        const isLastLine = lineIndex === lastLineIndex
-        let lineToRender = renderLine
-          ? renderLine({
-              children: lineChildren,
-              index: lineIndex,
-              isLast: isLastLine,
-            })
-          : lineChildren
+        })}
+      </QuickInfoProvider>
+    )
+  }
 
-        if (renderLine && lineToRender) {
-          return lineToRender
+  const annotatedNodes = renderWithAnnotations({
+    annotations: annotations!,
+    block: annotationInstructions!.block,
+    inline: annotationInstructions!.inline,
+    tokens,
+    value: metadata.value,
+    baseTokenClassName,
+    theme,
+    cssProp,
+    className,
+    style,
+  })
+
+  return <QuickInfoProvider>{annotatedNodes}</QuickInfoProvider>
+}
+
+interface RenderTokenOptions {
+  token: Token
+  tokenIndex: number
+  lineIndex: number
+  baseTokenClassName?: string
+  theme: ThemeColors
+  cssProp?: TokensProps['css']
+  className?: TokensProps['className']
+  style?: TokensProps['style']
+}
+
+interface RenderWithAnnotationsOptions {
+  annotations: AnnotationRenderers
+  block: BlockAnnotationInstruction[]
+  inline: InlineAnnotationInstruction[]
+  tokens: TokenizedLines
+  value: string
+  baseTokenClassName?: string
+  theme: ThemeColors
+  cssProp?: TokensProps['css']
+  className?: TokensProps['className']
+  style?: TokensProps['style']
+}
+
+function renderToken({
+  token,
+  tokenIndex,
+  lineIndex,
+  baseTokenClassName,
+  theme,
+  cssProp,
+  className,
+  style,
+}: RenderTokenOptions): React.ReactNode {
+  const hasSymbolMeta = token.diagnostics || token.quickInfo
+
+  if (
+    token.isWhiteSpace ||
+    (!hasSymbolMeta && !token.hasTextStyles && token.isBaseColor)
+  ) {
+    return token.value
+  }
+
+  if (hasSymbolMeta) {
+    const deprecatedStyles = {
+      textDecoration: 'line-through',
+    }
+    const diagnosticStyles = {
+      backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%2C0%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
+      backgroundRepeat: 'repeat-x',
+      backgroundPosition: 'bottom left',
+    }
+    const [symbolClassName, Styles] = css({
+      ...token.style,
+      ...(token.isDeprecated && deprecatedStyles),
+      ...(token.diagnostics && diagnosticStyles),
+      ...cssProp?.token,
+    })
+    const tokenClassName = joinClassNames(
+      symbolClassName,
+      baseTokenClassName,
+      className?.token
+    )
+
+    return (
+      <Symbol
+        key={`${lineIndex}-${tokenIndex}`}
+        highlightColor={theme.editor.hoverHighlightBackground}
+        popover={
+          <QuickInfo
+            diagnostics={token.diagnostics}
+            quickInfo={token.quickInfo}
+            css={cssProp?.popover}
+            className={className?.popover}
+            style={style?.popover}
+          />
+        }
+        className={tokenClassName}
+        style={style?.token}
+      >
+        {token.value}
+        <Styles />
+      </Symbol>
+    )
+  }
+
+  const [classNames, Styles] = css({
+    ...token.style,
+    ...cssProp?.token,
+  })
+  const tokenClassName = joinClassNames(
+    baseTokenClassName,
+    classNames,
+    className?.token
+  )
+
+  return (
+    <span
+      key={`${lineIndex}-${tokenIndex}`}
+      className={tokenClassName}
+      style={style?.token}
+    >
+      {token.value}
+      <Styles />
+    </span>
+  )
+}
+
+function renderWithAnnotations({
+  annotations,
+  block,
+  inline,
+  tokens,
+  value,
+  baseTokenClassName,
+  theme,
+  cssProp,
+  className,
+  style,
+}: RenderWithAnnotationsOptions): React.ReactNode {
+  const blockStartMap = new Map<number, BlockAnnotationInstruction[]>()
+  const blockEndMap = new Map<number, BlockAnnotationInstruction[]>()
+
+  for (const instruction of block) {
+    const startList = blockStartMap.get(instruction.start)
+    if (startList) startList.push(instruction)
+    else blockStartMap.set(instruction.start, [instruction])
+
+    const endList = blockEndMap.get(instruction.end)
+    if (endList) endList.push(instruction)
+    else blockEndMap.set(instruction.end, [instruction])
+  }
+
+  const inlineMap = new Map<number, InlineAnnotationInstruction[]>()
+  for (const instruction of inline) {
+    const list = inlineMap.get(instruction.index)
+    if (list) list.push(instruction)
+    else inlineMap.set(instruction.index, [instruction])
+  }
+
+  let annotationKey = 0
+  const rootChildren: React.ReactNode[] = []
+  const childrenStack: React.ReactNode[][] = [rootChildren]
+  const frameStack: BlockAnnotationInstruction[] = []
+
+  const currentChildren = () =>
+    childrenStack.length > 0
+      ? childrenStack[childrenStack.length - 1]
+      : rootChildren
+
+  const appendNode = (node: React.ReactNode) => {
+    if (node === null || node === undefined) {
+      return
+    }
+    currentChildren().push(node)
+  }
+
+  const appendText = (text: string) => {
+    if (text.length === 0) {
+      return
+    }
+    appendNode(text)
+  }
+
+  const createAnnotationElement = (
+    tag: string,
+    props: Record<string, any>,
+    children: React.ReactNode[]
+  ) => {
+    const Renderer = annotations[tag]
+    if (!Renderer) {
+      if (children.length === 1) {
+        return children[0]
+      }
+      return React.createElement(
+        React.Fragment,
+        { key: `annotation-${annotationKey++}` },
+        ...children
+      )
+    }
+
+    return React.createElement(
+      Renderer,
+      { ...props, key: `annotation-${annotationKey++}` },
+      ...children
+    )
+  }
+
+  const openAt = (position: number) => {
+    const instructions = blockStartMap.get(position)
+    if (!instructions) return
+
+    for (const instruction of instructions) {
+      frameStack.push(instruction)
+      childrenStack.push([])
+    }
+  }
+
+  const closeAt = (position: number) => {
+    const instructions = blockEndMap.get(position)
+    if (!instructions) return
+
+    for (let index = instructions.length - 1; index >= 0; index--) {
+      const instruction = instructions[index]
+      if (childrenStack.length <= 1) {
+        // Nothing to close; ignore stray closing instruction
+        continue
+      }
+
+      const children = childrenStack.pop() ?? []
+      const frame = frameStack.pop()
+      if (!frame || frame !== instruction) {
+        for (const child of children) {
+          appendNode(child)
+        }
+        continue
+      }
+
+      const element = createAnnotationElement(
+        instruction.tag,
+        instruction.props,
+        children
+      )
+      appendNode(element)
+    }
+  }
+
+  let currentPosition = 0
+  openAt(currentPosition)
+
+  // Precompute sorted event positions to allow splitting arbitrary text ranges
+  const startPositions = Array.from(blockStartMap.keys()).sort((a, b) => a - b)
+  const endPositions = Array.from(blockEndMap.keys()).sort((a, b) => a - b)
+  const boundarySet = new Set<number>([...startPositions, ...endPositions])
+  const advanceTo = (target: number) => {
+    while (true) {
+      let nextEvent: number | null = null
+      // Check for the nearest boundary > currentPosition and <= target
+      for (const position of boundarySet) {
+        if (position <= currentPosition) continue
+        if (position > target) continue
+        if (nextEvent === null || position < nextEvent) nextEvent = position
+      }
+
+      if (nextEvent === null) break
+
+      appendText(value.slice(currentPosition, nextEvent))
+      // eslint-disable-next-line no-console
+      console.log('boundary', nextEvent)
+      currentPosition = nextEvent
+      // Close before opening at the same index to respect boundaries
+      closeAt(currentPosition)
+      openAt(currentPosition)
+    }
+  }
+
+  tokens.forEach((line, lineIndex) => {
+    line.forEach((token, tokenIndex) => {
+      if (token.start > currentPosition) {
+        advanceTo(token.start)
+        appendText(value.slice(currentPosition, token.start))
+        currentPosition = token.start
+      } else {
+        // No gap; still process events that occur exactly at this boundary
+        closeAt(token.start)
+        openAt(token.start)
+      }
+
+      // Emit this token in slices so that block boundaries within the token
+      // become their own nodes.
+      while (currentPosition < token.end) {
+        // Find next boundary inside this token range
+        let sliceEnd: number = token.end
+        for (const pos of boundarySet) {
+          if (pos <= currentPosition) continue
+          if (pos > token.end) continue
+          if (pos < sliceEnd) sliceEnd = pos
         }
 
-        return (
-          <Fragment key={lineIndex}>
-            {lineChildren}
-            {isLastLine ? null : '\n'}
-          </Fragment>
-        )
-      })}
-    </QuickInfoProvider>
-  )
+        let node = renderToken({
+          token: {
+            ...token,
+            start: currentPosition,
+            end: sliceEnd,
+            value: value.slice(currentPosition, sliceEnd),
+          },
+          tokenIndex,
+          lineIndex,
+          baseTokenClassName,
+          theme,
+          cssProp,
+          className,
+          style,
+        })
+
+        const inlineInstructions = inlineMap.get(currentPosition)
+        if (inlineInstructions) {
+          for (const instruction of inlineInstructions) {
+            node = createAnnotationElement(instruction.tag, instruction.props, [
+              node,
+            ])
+          }
+        }
+
+        appendNode(node)
+        currentPosition = sliceEnd
+        // Close/open any frames exactly at the slice boundary so that the next
+        // segment starts in the correct frame.
+        closeAt(currentPosition)
+        openAt(currentPosition)
+      }
+    })
+
+    if (lineIndex < tokens.length - 1) {
+      const newlineStart = currentPosition
+      let newlineLength = 0
+
+      if (value[newlineStart] === '\r' && value[newlineStart + 1] === '\n') {
+        newlineLength = 2
+      } else if (value[newlineStart] === '\n') {
+        newlineLength = 1
+      }
+
+      if (newlineLength === 0) {
+        appendText('\n')
+        currentPosition += 1
+      } else {
+        appendText(value.slice(newlineStart, newlineStart + newlineLength))
+        currentPosition += newlineLength
+      }
+
+      closeAt(currentPosition)
+      openAt(currentPosition)
+    }
+  })
+
+  if (currentPosition < value.length) {
+    advanceTo(value.length)
+    appendText(value.slice(currentPosition))
+  }
+
+  closeAt(currentPosition)
+
+  return rootChildren
 }
 
 function joinClassNames(
