@@ -8,13 +8,28 @@ import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.js'
 import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
+export type MemoryFileTextEntry = {
+  kind: 'text'
+  content: string
+}
+
+export type MemoryFileBinaryEntry = {
+  kind: 'binary'
+  content: Uint8Array
+  encoding?: 'binary' | 'base64'
+}
+
+export type MemoryFileEntry = MemoryFileTextEntry | MemoryFileBinaryEntry
+
+export type MemoryFileContent = string | Uint8Array | MemoryFileEntry
+
 /** A file system that stores files in memory. */
 export class MemoryFileSystem extends FileSystem {
   #projectOptions: ProjectOptions
-  #files: Map<string, string>
+  #files: Map<string, MemoryFileEntry>
   #ignore: ReturnType<typeof ignore> | undefined
 
-  constructor(files: { [path: string]: string }) {
+  constructor(files: { [path: string]: MemoryFileContent }) {
     const projectId = generateProjectId()
 
     super()
@@ -29,28 +44,63 @@ export class MemoryFileSystem extends FileSystem {
     this.#files = new Map(
       Object.entries(files).map(([path, content]) => [
         normalizePath(path),
-        content,
+        this.#normalizeContent(content),
       ])
     )
 
     // Create a TypeScript source file for each JavaScript-like file
-    for (const [path, content] of this.#files) {
+    for (const [path, entry] of this.#files) {
       const extension = path.split('.').at(-1)
-      if (extension && isJavaScriptLikeExtension(extension)) {
+      if (
+        extension &&
+        isJavaScriptLikeExtension(extension) &&
+        entry.kind === 'text'
+      ) {
         const absolutePath = this.getAbsolutePath(path)
-        createSourceFile(absolutePath, content, this.#projectOptions)
+        createSourceFile(absolutePath, entry.content, this.#projectOptions)
       }
     }
   }
 
-  createFile(path: string, content: string): void {
+  #normalizeContent(content: MemoryFileContent): MemoryFileEntry {
+    if (typeof content === 'string') {
+      return { kind: 'text', content }
+    }
+
+    if (content instanceof Uint8Array) {
+      return { kind: 'binary', content: content.slice() }
+    }
+
+    if (content && typeof content === 'object') {
+      if (content.kind === 'text') {
+        return { kind: 'text', content: content.content }
+      }
+
+      if (content.kind === 'binary') {
+        return {
+          kind: 'binary',
+          content: content.content.slice(),
+          encoding: content.encoding,
+        }
+      }
+    }
+
+    throw new Error('[renoun] Unsupported file content provided to MemoryFileSystem')
+  }
+
+  createFile(path: string, content: MemoryFileContent): void {
     const normalizedPath = normalizePath(path)
-    this.#files.set(normalizedPath, content)
+    const entry = this.#normalizeContent(content)
+    this.#files.set(normalizedPath, entry)
 
     const extension = normalizedPath.split('.').pop()
-    if (extension && isJavaScriptLikeExtension(extension)) {
+    if (
+      extension &&
+      isJavaScriptLikeExtension(extension) &&
+      entry.kind === 'text'
+    ) {
       const absolutePath = this.getAbsolutePath(normalizedPath)
-      createSourceFile(absolutePath, content, this.#projectOptions)
+      createSourceFile(absolutePath, entry.content, this.#projectOptions)
     }
   }
 
@@ -79,8 +129,12 @@ export class MemoryFileSystem extends FileSystem {
     return normalized.startsWith('./') ? normalized.slice(2) : normalized
   }
 
-  getFiles() {
+  getFiles(): Map<string, MemoryFileEntry> {
     return this.#files
+  }
+
+  getFileEntry(path: string): MemoryFileEntry | undefined {
+    return this.#files.get(normalizePath(path))
   }
 
   readDirectorySync(path: string = '.'): DirectoryEntry[] {
@@ -142,11 +196,17 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   readFileSync(path: string): string {
-    const content = this.#files.get(normalizePath(path))
-    if (content === undefined) {
+    const entry = this.#files.get(normalizePath(path))
+    if (!entry) {
       throw new Error(`File not found: ${path}`)
     }
-    return content
+
+    if (entry.kind === 'text') {
+      return entry.content
+    }
+
+    const buffer = Buffer.from(entry.content)
+    return buffer.toString('base64')
   }
 
   async readFile(path: string): Promise<string> {
