@@ -120,15 +120,24 @@ await Promise.all(
     })
 )
 
-function toJsonModule(content: any): string {
-  if (content.includes('text.html.basic')) {
-    // we use the tsx grammar to highlight HTML javascript so we need to change the embedded scope
-    content = content.replaceAll('source.js', 'source.tsx')
+function toJsonModule(jsonText: string): string {
+  // Minify JSON to strip whitespace
+  jsonText = JSON.stringify(JSON.parse(jsonText))
+
+  // Adjust embedded JS scope when inside HTML grammar
+  if (jsonText.includes('text.html.basic')) {
+    jsonText = jsonText.replaceAll('source.js', 'source.tsx')
   }
+
+  const singleQuoted = `'${jsonText
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')}'`
 
   return `export default Object.freeze(
   JSON.parse(
-    ${JSON.stringify(content)}
+    ${singleQuoted}
   )
 )
 `
