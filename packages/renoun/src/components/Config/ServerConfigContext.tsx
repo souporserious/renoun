@@ -7,17 +7,23 @@ type Deferred<T> = {
   settled: boolean
   value?: T
   promise: Promise<T>
-  resolve: (v: T) => void
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
   version?: string
 }
 
 function createDeferred<Type>(): Deferred<Type> {
   let resolve!: (value: Type) => void
-  const promise = new Promise<Type>((r) => (resolve = r))
-  return { settled: false, promise, resolve }
+  let reject!: (error: unknown) => void
+  const promise = new Promise<Type>((_resolve, _reject) => {
+    resolve = _resolve
+    reject = _reject
+  })
+  return { settled: false, promise, resolve, reject }
 }
 
 const GLOBAL_KEY = Symbol.for('__RENOUN_CONFIG__')
+const GLOBAL_PRESENCE_KEY = Symbol.for('__RENOUN_HAS_PROVIDER__')
 
 function getGlobalDeferred(): Deferred<ConfigurationOptions> {
   if (!(globalThis as any)[GLOBAL_KEY]) {
@@ -35,6 +41,26 @@ function getDeferred(): Deferred<ConfigurationOptions> {
   return getRequestDeferred()
 }
 
+interface Presence {
+  present: boolean
+}
+
+function getGlobalPresence(): Presence {
+  if (!(globalThis as any)[GLOBAL_PRESENCE_KEY]) {
+    ;(globalThis as any)[GLOBAL_PRESENCE_KEY] = { present: false } as Presence
+  }
+  return (globalThis as any)[GLOBAL_PRESENCE_KEY]
+}
+
+const getRequestPresence = cache<() => Presence>(() => ({ present: false }))
+
+function getPresence(): Presence {
+  if (process.env.NODE_ENV === 'development') {
+    return getGlobalPresence()
+  }
+  return getRequestPresence()
+}
+
 /**
  * Get the current configuration set in the `RootProvider` component.
  * @internal
@@ -42,6 +68,11 @@ function getDeferred(): Deferred<ConfigurationOptions> {
 export async function getConfig(options?: {
   timeoutMs?: number
 }): Promise<ConfigurationOptions> {
+  const presence = getPresence()
+  // If no provider is present in the tree, fall back to the default config immediately
+  if (!presence.present) {
+    return defaultConfig
+  }
   const deferredValue = getDeferred()
   if (deferredValue.settled) {
     return deferredValue.value!
@@ -68,7 +99,7 @@ export function ServerConfigContext({
   children,
 }: {
   /** The configuration options to provide. */
-  value?: ConfigurationOptions
+  value?: ConfigurationOptions | Promise<ConfigurationOptions>
 
   /** Optional version string to force reset the config cache. */
   version?: string
@@ -76,6 +107,9 @@ export function ServerConfigContext({
   /** The element tree to render. */
   children: React.ReactNode
 }) {
+  const presence = getPresence()
+  presence.present = true
+
   let deferredValue = getDeferred()
 
   // If the version changed, reset the deferred value
@@ -90,11 +124,38 @@ export function ServerConfigContext({
   }
 
   if (!deferredValue.settled) {
-    deferredValue.settled = true
-    deferredValue.value = value
-    deferredValue.resolve(value)
+    if (value && typeof (value as any).then === 'function') {
+      // resolve when the promise settles for async config
+      ;(value as Promise<ConfigurationOptions>)
+        .then((resolved) => {
+          deferredValue.settled = true
+          deferredValue.value = resolved
+          deferredValue.resolve(resolved)
+        })
+        .catch((error) => {
+          // Surface legitimate errors by rejecting the deferred
+          deferredValue.reject(error)
+        })
+    } else {
+      // Sync config
+      deferredValue.settled = true
+      deferredValue.value = value as ConfigurationOptions
+      deferredValue.resolve(value as ConfigurationOptions)
+    }
   } else {
-    deferredValue.value = value
+    // Subsequent renders update the cached value
+    if (value && typeof (value as any).then === 'function') {
+      ;(value as Promise<ConfigurationOptions>)
+        .then((resolved) => {
+          deferredValue.value = resolved
+        })
+        .catch((error) => {
+          // Surface errors to any awaiting callers
+          deferredValue.reject(error)
+        })
+    } else {
+      deferredValue.value = value as ConfigurationOptions
+    }
   }
 
   return children
