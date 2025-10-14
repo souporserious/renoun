@@ -1,4 +1,5 @@
 import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.js'
+import { Semaphore } from '../utils/Semaphore.js'
 import { MemoryFileSystem, type MemoryFileContent } from './MemoryFileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
@@ -458,9 +459,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
   clearCache() {
     if (this.#currentFetch) {
-      try {
-        this.#currentFetch.abort()
-      } catch {}
+      this.#currentFetch.abort()
       this.#currentFetch = undefined
     }
     this.#initId++
@@ -525,6 +524,26 @@ export class GitHostFileSystem extends MemoryFileSystem {
     if (!this.#originPolicy.fetch.has(origin)) {
       throw new Error('[renoun] Redirected to disallowed origin')
     }
+  }
+
+  #isIgnorableNetworkAbortError(error: unknown): boolean {
+    if (error == null) {
+      return false
+    }
+    // DOMException in browsers
+    if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
+      return error.name === 'AbortError'
+    }
+    // AbortError thrown directly
+    if (error instanceof Error && error.name === 'AbortError') {
+      return true
+    }
+    // Node fetch abort often becomes AbortError with code 'ABORT_ERR'
+    // Some environments may surface TypeError on aborted fetch
+    if (error instanceof TypeError) {
+      return true
+    }
+    return false
   }
 
   #isRateLimited(response: Response): boolean {
@@ -732,7 +751,11 @@ export class GitHostFileSystem extends MemoryFileSystem {
               : undefined
         }
       }
-    } catch {}
+    } catch (error) {
+      if (!this.#isIgnorableNetworkAbortError(error)) {
+        throw error
+      }
+    }
   }
 
   async #loadArchive() {
@@ -1009,34 +1032,34 @@ export class GitHostFileSystem extends MemoryFileSystem {
     if (toFetch.length === 0) return true
 
     const concurrency = 8
-    let index = 0
-    const worker = async () => {
-      while (index < toFetch.length) {
-        const currentIndex = index++
-        const entry = toFetch[currentIndex]!
-        const url = buildUrl(entry.path)
+    const gate = new Semaphore(Math.min(concurrency, toFetch.length))
+    await Promise.all(
+      toFetch.map(async ({ path }) => {
+        const release = await gate.acquire()
         try {
+          const url = buildUrl(path)
           this.#assertAllowed(url)
           const response = await fetch(url, {
             headers: this.#noAuthHeaders,
             referrerPolicy: 'no-referrer',
           })
-          if (!response.ok) continue
+          if (!response.ok) return
           const arrayBuffer = await response.arrayBuffer()
           const buffer = new Uint8Array(arrayBuffer)
-          if (buffer.length > this.#maxFileBytes) continue
+          if (buffer.length > this.#maxFileBytes) return
           const content: MemoryFileContent = this.#isBinaryBuffer(buffer)
             ? { kind: 'binary', content: buffer, encoding: 'binary' }
             : new TextDecoder('utf-8').decode(buffer)
-          this.createFile(entry.path, content)
-        } catch {}
-      }
-    }
-    const workers = Array.from(
-      { length: Math.min(concurrency, toFetch.length) },
-      () => worker()
+          this.createFile(path, content)
+        } catch (error) {
+          if (!this.#isIgnorableNetworkAbortError(error)) {
+            throw error
+          }
+        } finally {
+          release()
+        }
+      })
     )
-    await Promise.all(workers)
     return this.getFiles().size > 0
   }
 
