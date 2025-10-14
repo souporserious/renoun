@@ -442,10 +442,13 @@ function formatDocumentationText(documentation: ts.SymbolDisplayPart[]) {
   return markdownText
 }
 
-const quickInfoCache = new Map<
-  string,
-  { displayText: string; documentationText: string }
->()
+interface QuickInfoEntry {
+  displayText: string
+  documentationText: string
+}
+
+const quickInfoCache = new Map<string, QuickInfoEntry>()
+const MAX_QUICK_INFO_CACHE_SIZE = 2000
 
 /** Get the quick info a token */
 function getQuickInfo(
@@ -456,9 +459,10 @@ function getQuickInfo(
   baseDirectory: string
 ) {
   const cacheKey = `${filePath}:${tokenStart}`
+  const cachedQuickInfo = getCachedQuickInfo(cacheKey)
 
-  if (quickInfoCache.has(cacheKey)) {
-    return quickInfoCache.get(cacheKey)
+  if (cachedQuickInfo) {
+    return cachedQuickInfo
   }
 
   const quickInfo = sourceFile
@@ -482,14 +486,43 @@ function getQuickInfo(
     .replaceAll('/renoun', '')
   const documentation = quickInfo.documentation || []
   const documentationText = formatDocumentationText(documentation)
-  const result = {
+  const result: QuickInfoEntry = {
     displayText,
     documentationText,
   }
 
-  quickInfoCache.set(cacheKey, result)
+  setCachedQuickInfo(cacheKey, result)
 
   return result
+}
+
+function getCachedQuickInfo(cacheKey: string) {
+  const cachedQuickInfo = quickInfoCache.get(cacheKey)
+
+  if (!cachedQuickInfo) {
+    return undefined
+  }
+
+  // Maintain LRU ordering by re-inserting the entry at the end of the map
+  quickInfoCache.delete(cacheKey)
+  quickInfoCache.set(cacheKey, cachedQuickInfo)
+
+  return cachedQuickInfo
+}
+
+function setCachedQuickInfo(cacheKey: string, value: QuickInfoEntry) {
+  if (
+    MAX_QUICK_INFO_CACHE_SIZE !== Number.POSITIVE_INFINITY &&
+    quickInfoCache.size >= MAX_QUICK_INFO_CACHE_SIZE
+  ) {
+    const leastRecentlyUsedEntry = quickInfoCache.keys().next()
+
+    if (!leastRecentlyUsedEntry.done) {
+      quickInfoCache.delete(leastRecentlyUsedEntry.value)
+    }
+  }
+
+  quickInfoCache.set(cacheKey, value)
 }
 
 /** Converts tokens to plain text. */
