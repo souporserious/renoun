@@ -99,7 +99,7 @@ export async function Tokens({
   shouldAnalyze: shouldAnalyzeProp,
   shouldFormat = true,
   renderLine,
-  css: cssProp = {},
+  css = {},
   className = {},
   style = {},
   theme: themeProp,
@@ -211,7 +211,7 @@ export async function Tokens({
               lineIndex,
               baseTokenClassName,
               theme,
-              cssProp,
+              css,
               className,
               style,
             })
@@ -248,7 +248,7 @@ export async function Tokens({
     value: metadata.value,
     baseTokenClassName,
     theme,
-    cssProp,
+    css,
     className,
     style,
   })
@@ -262,7 +262,7 @@ interface RenderTokenOptions {
   lineIndex: number
   baseTokenClassName?: string
   theme: ThemeColors
-  cssProp?: TokensProps['css']
+  css?: TokensProps['css']
   className?: TokensProps['className']
   style?: TokensProps['style']
 }
@@ -275,7 +275,7 @@ interface RenderWithAnnotationsOptions {
   value: string
   baseTokenClassName?: string
   theme: ThemeColors
-  cssProp?: TokensProps['css']
+  css?: TokensProps['css']
   className?: TokensProps['className']
   style?: TokensProps['style']
 }
@@ -286,7 +286,7 @@ function renderToken({
   lineIndex,
   baseTokenClassName,
   theme,
-  cssProp,
+  css: cssProp,
   className,
   style,
 }: RenderTokenOptions): React.ReactNode {
@@ -372,7 +372,7 @@ function renderWithAnnotations({
   value,
   baseTokenClassName,
   theme,
-  cssProp,
+  css,
   className,
   style,
 }: RenderWithAnnotationsOptions): React.ReactNode {
@@ -544,7 +544,7 @@ function renderWithAnnotations({
           lineIndex,
           baseTokenClassName,
           theme,
-          cssProp,
+          css,
           className,
           style,
         })
