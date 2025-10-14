@@ -57,9 +57,8 @@ export async function getTheme(
 
   let themePath: string | undefined
   if (themeConfigName === undefined) {
-    throw new Error(
-      `[renoun] No valid theme found. Ensure the \`theme\` property is configured on the \`RootProvider\` component. For more information, visit: https://renoun.dev/docs/configuration`
-    )
+    // fall back to built-in default theme when no theme is configured
+    themePath = undefined
   } else if (Array.isArray(themeConfigName)) {
     themePath = themeConfigName[0]
   } else {
@@ -102,9 +101,13 @@ export async function getTheme(
   const finalTheme = normalizeTheme(
     {
       ...theme,
-      name: Array.isArray(themeConfigName)
-        ? themeConfigName[0]
-        : themeConfigName,
+      // Preserve the theme's intrinsic name when no explicit name/config is provided
+      name:
+        themeConfigName === undefined
+          ? theme['name']
+          : Array.isArray(themeConfigName)
+            ? themeConfigName[0]
+            : themeConfigName,
     },
     themeOverrides
   )

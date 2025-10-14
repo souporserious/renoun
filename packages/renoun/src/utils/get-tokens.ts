@@ -134,7 +134,7 @@ export async function getTokens({
       const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
       const finalLanguage = getLanguage(language)
 
-      const themeNames: string[] =
+      let themeNames: string[] =
         typeof themeConfig === 'string'
           ? [themeConfig]
           : themeConfig
@@ -146,10 +146,9 @@ export async function getTokens({
               )
             : []
 
+      // Fallback to the built-in default theme when none is configured
       if (themeNames.length === 0) {
-        throw new Error(
-          '[renoun] No theme configured. Ensure `theme` is set on the RootProvider component.'
-        )
+        themeNames = ['default']
       }
 
       // Track highlighter performance

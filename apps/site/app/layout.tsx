@@ -14,11 +14,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <RootProvider
-      git="souporserious/renoun"
-      siteUrl="https://renoun.dev"
-      theme="theme.json"
-    >
+    <RootProvider git="souporserious/renoun" siteUrl="https://renoun.dev">
       <html lang="en">
         <link
           rel="icon"
