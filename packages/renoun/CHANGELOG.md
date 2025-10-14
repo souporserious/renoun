@@ -1,5 +1,45 @@
 # renoun
 
+## 10.5.0
+
+### Minor Changes
+
+- 912bab3: Adds tarball support to `GitHostFileSystem`. This streamlines fetching an entire repository instead of requesting every individual file and directory. This also adds `include` and `exclude` options to allow fetching a subset of entries using raw URLs.
+- a734171: Adds protocol-aware path resolution to the file system `Directory` and `File` utilities starting with a `workspace:` protocol. This will change the working directory to start from the root workspace directory:
+
+  ```ts
+  import { Directory } from 'renoun'
+
+  const examples = new Directory({ path: 'workspace:examples' })
+  ```
+
+- 019ebce: Adds binary asset storage and base64 read support in `MemoryFileSystem`.
+- 05cd0c3: Adds an `annotations` prop to the `CodeBlock` and `Tokens` components to render inline, inline comment-based annotations. Highlights and ranges are authored directly in the source using inline comments and mapped back after formatting:
+
+  ```tsx
+  <CodeBlock
+    language="ts"
+    annotations={{
+      mark: ({ children, color }) => (
+        <mark style={{ backgroundColor: color }}>{children}</mark>
+      ),
+    }}
+  >
+    {`const count = /*mark color='yellow'*/0/**mark*/`}
+  </CodeBlock>
+  ```
+
+  - Paired markers wrap a range: `/*tag ...*/ … /*tag*/`.
+  - Self‑closing markers wrap the next token only: `/*tag ...**/identifier`.
+
+### Patch Changes
+
+- 9932576: Improves git file URL handling by checking fragments are formatted correctly and pointing to the specific documentation when git source is not configured.
+- fbb54ff: Fixes default `Section` component `id` not being applied in the `Reference` component.
+- 0fd7151: Adds a `getHeadings` method to the `JavaScriptFile` utility that returns the exports formatted as headings for the `TableOfContents` component.
+- c58d20a: Fixes `getFileExportsText` to preserve inline annotation comments when including dependencies. Previously, we stripped all JSDoc blocks with a global regex which inadvertently removed valid inline comments.
+- f022e39: Switches gitignore handling to the `fast-ignore` package for improved speed.
+
 ## 10.4.0
 
 ### Minor Changes
