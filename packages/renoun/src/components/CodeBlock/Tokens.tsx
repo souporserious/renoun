@@ -503,8 +503,6 @@ function renderWithAnnotations({
       if (nextEvent === null) break
 
       appendText(value.slice(currentPosition, nextEvent))
-      // eslint-disable-next-line no-console
-      console.log('boundary', nextEvent)
       currentPosition = nextEvent
       // Close before opening at the same index to respect boundaries
       closeAt(currentPosition)
@@ -529,10 +527,10 @@ function renderWithAnnotations({
       while (currentPosition < token.end) {
         // Find next boundary inside this token range
         let sliceEnd: number = token.end
-        for (const pos of boundarySet) {
-          if (pos <= currentPosition) continue
-          if (pos > token.end) continue
-          if (pos < sliceEnd) sliceEnd = pos
+        for (const position of boundarySet) {
+          if (position <= currentPosition) continue
+          if (position > token.end) continue
+          if (position < sliceEnd) sliceEnd = position
         }
 
         let node = renderToken({
@@ -580,8 +578,12 @@ function renderWithAnnotations({
       }
 
       if (newlineLength === 0) {
+        // In some cases tokenization splits lines even when the source string
+        // does not contain an actual newline character at this position (e.g.,
+        // when formatting normalized whitespace). Render a visual newline but
+        // do not advance the string position to keep indices aligned with the
+        // original source string.
         appendText('\n')
-        currentPosition += 1
       } else {
         appendText(value.slice(newlineStart, newlineStart + newlineLength))
         currentPosition += newlineLength
@@ -598,6 +600,18 @@ function renderWithAnnotations({
   }
 
   closeAt(currentPosition)
+
+  // If any frames remain open due to minor index rounding
+  // differences after formatting/mapping, don't drop their contents.
+  // Instead, flush remaining children into the root in order.
+  if (childrenStack.length > 1) {
+    while (childrenStack.length > 1) {
+      const children = childrenStack.pop() ?? []
+      for (const child of children) {
+        rootChildren.push(child)
+      }
+    }
+  }
 
   return rootChildren
 }
