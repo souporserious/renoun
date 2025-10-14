@@ -1,3 +1,4 @@
+import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.js'
 import { MemoryFileSystem, type MemoryFileContent } from './MemoryFileSystem.js'
 import type { DirectoryEntry } from './types.js'
 
@@ -11,7 +12,7 @@ interface GitHostFileSystemOptions {
   ref?: string
 
   /** Git host */
-  host: GitHost
+  host?: GitHost
 
   /** Custom API base URL for self-hosted GitLab instances (https://host[:port]). */
   baseUrl?: string
@@ -21,6 +22,25 @@ interface GitHostFileSystemOptions {
 
   /** Request timeout in milliseconds. Defaults to 30 seconds. */
   timeoutMs?: number
+
+  /** Optional extraction/resource limits overrides. */
+  limits?: {
+    /** Max total archive bytes processed during extraction (default 100 MiB). */
+    maxArchiveBytes?: number
+
+    /** Max raw bytes read from the tar stream (default 150 MiB). */
+    maxTarStreamBytes?: number
+
+    /** Max number of files stored (default 50,000). */
+    maxFileCount?: number
+
+    /** Max bytes per single file; larger files are skipped (default 8 MiB). */
+    maxFileBytes?: number
+  }
+
+  include?: string[]
+
+  exclude?: string[]
 }
 
 const repoPattern = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
@@ -41,6 +61,8 @@ const TAR_TYPE_FLAGS = {
   NormalFileSpace: 0x20, // ' '
   NormalFileSeven: 0x37, // '7'
   Directory: 0x35, // '5'
+  HardLink: 0x31, // '1'
+  SymLink: 0x32, // '2'
   PaxExtendedHeader: 0x78, // 'x'
   PaxGlobalExtendedHeader: 0x67, // 'g'
   GnuLongPath: 0x4c, // 'L'
@@ -49,7 +71,11 @@ const TAR_TYPE_FLAGS = {
 
 const defaultOrigins = {
   github: {
-    fetch: new Set(['https://api.github.com', 'https://codeload.github.com']),
+    fetch: new Set([
+      'https://api.github.com',
+      'https://codeload.github.com',
+      'https://raw.githubusercontent.com',
+    ]),
     auth: new Set(['https://api.github.com', 'https://codeload.github.com']),
   },
   gitlab: {
@@ -140,8 +166,20 @@ export class GitHostFileSystem extends MemoryFileSystem {
   #initId = 0
   #initialized = false
   #initPromise?: Promise<void>
+  #userProvidedRef: boolean
+  #maxArchiveBytes: number
+  #maxTarStreamBytes: number
+  #maxFileCount: number
+  #maxFileBytes: number
+  #symlinkMap: Map<string, string>
+  #include?: string[]
+  #exclude?: string[]
 
   constructor(options: GitHostFileSystemOptions) {
+    if (!options.host) {
+      options.host = 'github'
+    }
+
     if (
       (options.host === 'gitlab' &&
         !gitlabRepoPattern.test(options.repository)) ||
@@ -157,14 +195,22 @@ export class GitHostFileSystem extends MemoryFileSystem {
     super({})
 
     this.#repository = options.repository
+    this.#userProvidedRef = options.ref !== undefined
     this.#ref = options.ref ?? 'main'
     this.#host = options.host
     this.#token = options.token
+
     if (this.#token && /[\r\n]/.test(this.#token)) {
       throw new Error('[renoun] Invalid token')
     }
     const requestedTimeout = options.timeoutMs ?? 30_000
     this.#timeoutMs = Math.min(Math.max(requestedTimeout, 0), 300_000)
+    this.#maxArchiveBytes =
+      options.limits?.maxArchiveBytes ?? MAX_ARCHIVE_SIZE_BYTES
+    this.#maxTarStreamBytes =
+      options.limits?.maxTarStreamBytes ?? MAX_TAR_STREAM_BYTES
+    this.#maxFileCount = options.limits?.maxFileCount ?? MAX_FILE_COUNT
+    this.#maxFileBytes = options.limits?.maxFileBytes ?? MAX_FILE_BYTES
     // Split and encode owner/repo for GitHub/Bitbucket
     if (this.#host === 'github' || this.#host === 'bitbucket') {
       const parts = options.repository.split('/')
@@ -182,6 +228,11 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
     this.#apiHeaders = Object.freeze(this.#getApiHeaders())
     this.#noAuthHeaders = Object.freeze(this.#getNoAuthHeaders())
+
+    this.#include = options.include
+    this.#exclude = options.exclude
+
+    this.#symlinkMap = new Map()
     this.#initPromise = this.#loadArchive().catch((error) => {
       this.#initPromise = undefined
       throw error
@@ -193,6 +244,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
   ): Promise<void> {
     const files = this.getFiles()
     files.clear()
+    this.#symlinkMap.clear()
 
     let totalBytes = 0
     let fileCount = 0
@@ -200,11 +252,12 @@ export class GitHostFileSystem extends MemoryFileSystem {
     let rootPrefix: string | undefined
     let paxHeader: Record<string, string> | null = null
     let longPath: string | null = null
+    let stripFirstSegment: boolean | undefined
 
     for await (const entry of this.#tarStreamEntries(stream)) {
       const { size, typeFlag, name, prefix, readData, discard } = entry
       totalBytes += size
-      if (totalBytes > MAX_ARCHIVE_SIZE_BYTES) {
+      if (totalBytes > this.#maxArchiveBytes) {
         throw new Error(
           '[renoun] Repository archive exceeds allowed size during extraction'
         )
@@ -216,6 +269,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
         this.#sanitizeTarPath(prefix ? `${prefix}/${name}` : name)
 
       let fullPath = resolvedPath ?? ''
+      const paxLinkPath = paxHeader?.['linkpath'] || null
       paxHeader = null
       longPath = null
       if (!fullPath) {
@@ -223,13 +277,13 @@ export class GitHostFileSystem extends MemoryFileSystem {
         continue
       }
 
+      fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
       if (!rootPrefix) {
         rootPrefix = fullPath.split('/')[0]
       }
       if (rootPrefix && fullPath.startsWith(`${rootPrefix}/`)) {
         fullPath = fullPath.slice(rootPrefix.length + 1)
       }
-      fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
       fullPath = fullPath.replace(/^\/+/, '')
       if (!fullPath || fullPath.endsWith('/')) {
         await discard()
@@ -265,7 +319,13 @@ export class GitHostFileSystem extends MemoryFileSystem {
         continue
       }
 
-      const relativePath = safeSegments.join('/')
+      if (stripFirstSegment === undefined) {
+        stripFirstSegment = safeSegments.length > 1
+      }
+      const effectiveSegments = stripFirstSegment
+        ? safeSegments.slice(1)
+        : safeSegments
+      const relativePath = effectiveSegments.join('/')
       if (relativePath.length > MAX_RELATIVE_PATH_LENGTH) {
         await discard()
         continue
@@ -277,7 +337,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
       // Handle special types
       if (typeFlag === TAR_TYPE_FLAGS.PaxExtendedHeader) {
-        const buf = await readData(MAX_FILE_BYTES)
+        const buf = await readData(this.#maxFileBytes)
         paxHeader = this.#parsePaxRecords(buf)
         continue
       }
@@ -286,7 +346,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
         continue
       }
       if (typeFlag === TAR_TYPE_FLAGS.GnuLongPath) {
-        const buf = await readData(MAX_FILE_BYTES)
+        const buf = await readData(this.#maxFileBytes)
         longPath = this.#sanitizeTarPath(new TextDecoder('utf-8').decode(buf))
         continue
       }
@@ -301,6 +361,24 @@ export class GitHostFileSystem extends MemoryFileSystem {
         typeFlag === TAR_TYPE_FLAGS.NormalFileSpace ||
         typeFlag === TAR_TYPE_FLAGS.NormalFileAlternative ||
         typeFlag === TAR_TYPE_FLAGS.NormalFileSeven
+      const isSymLink =
+        typeFlag === TAR_TYPE_FLAGS.SymLink ||
+        typeFlag === TAR_TYPE_FLAGS.HardLink
+
+      if (isSymLink) {
+        const rawTarget = this.#sanitizeTarPath(paxLinkPath) || ''
+        const target = normalizeSlashes(rawTarget).replace(/^\/+/, '')
+        const directory = effectiveSegments.slice(0, -1).join('/') || '.'
+        const resolvedTarget = normalizeSlashes(
+          joinPaths(directory, target)
+        ).replace(/^\/+/, '')
+        const key = normalizePath(relativePath)
+        const value = normalizePath(resolvedTarget)
+        this.#symlinkMap.set(key, value)
+
+        await discard()
+        continue
+      }
 
       if (!isFile || isDirectory) {
         await discard()
@@ -319,7 +397,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
       }
 
       fileCount++
-      if (fileCount > MAX_FILE_COUNT) {
+      if (fileCount > this.#maxFileCount) {
         throw new Error('[renoun] Repository contains too many files')
       }
       if (seen.has(relativePath.toLowerCase())) {
@@ -327,7 +405,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
       }
 
       // Hard cap: skip overlarge files entirely
-      if (size > MAX_FILE_BYTES) {
+      if (size > this.#maxFileBytes) {
         await discard()
         continue
       }
@@ -336,11 +414,11 @@ export class GitHostFileSystem extends MemoryFileSystem {
       const chunks: Uint8Array[] = []
       while (true) {
         const chunk = await readData(
-          Math.min(64 * 1024, MAX_FILE_BYTES - received)
+          Math.min(64 * 1024, this.#maxFileBytes - received)
         )
         if (chunk.length === 0) break
         received += chunk.length
-        if (received > MAX_FILE_BYTES) {
+        if (received > this.#maxFileBytes) {
           await discard()
           chunks.length = 0
           received = 0
@@ -392,12 +470,10 @@ export class GitHostFileSystem extends MemoryFileSystem {
     this.#initPromise = undefined
   }
 
-  // removed unused #getDefaultApiBaseUrl
-
-  #resolveApiBaseUrl(opts: GitHostFileSystemOptions) {
+  #resolveApiBaseUrl(options: GitHostFileSystemOptions) {
     if (this.#host === 'gitlab') {
-      if (opts.baseUrl) {
-        const urlObject = new URL(opts.baseUrl)
+      if (options.baseUrl) {
+        const urlObject = new URL(options.baseUrl)
         if (urlObject.protocol !== 'https:') {
           throw new Error('[renoun] HTTPS required')
         }
@@ -493,10 +569,11 @@ export class GitHostFileSystem extends MemoryFileSystem {
             redirect: 'manual',
           })
 
+          if (!response) {
+            throw new Error('[renoun] Too many redirects')
+          }
+
           if (response.status >= 300 && response.status < 400) {
-            if (redirects >= 2) {
-              throw new Error('[renoun] Too many redirects')
-            }
             const loc = response.headers.get('Location')
             if (!loc) {
               throw new Error('[renoun] Missing redirect location')
@@ -505,7 +582,15 @@ export class GitHostFileSystem extends MemoryFileSystem {
             this.#assertAllowed(nextUrl)
             currentUrl = nextUrl
             redirects++
+            if (redirects > 2) {
+              throw new Error('[renoun] Too many redirects')
+            }
             continue
+          }
+
+          // If we already followed too many redirects and still didn't land, fail
+          if (redirects >= 2) {
+            throw new Error('[renoun] Too many redirects')
           }
 
           if (this.#isRateLimited(response)) {
@@ -598,22 +683,102 @@ export class GitHostFileSystem extends MemoryFileSystem {
     }
   }
 
-  #getArchiveUrl() {
+  #getArchiveUrl(ref?: string) {
+    const useRef = ref ?? this.#ref
     switch (this.#host) {
       case 'github':
-        return `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/tarball/${encodeURIComponent(this.#ref)}`
+        return `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/tarball/${encodeURIComponent(useRef)}`
       case 'gitlab': {
         const repo = encodeURIComponent(this.#repository)
-        const params = new URLSearchParams({ sha: this.#ref })
+        const params = new URLSearchParams({ sha: useRef })
         return `${this.#apiBaseUrl}/projects/${repo}/repository/archive.tar.gz?${params}`
       }
       case 'bitbucket':
-        return `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/src/${encodeURIComponent(this.#ref)}?format=tar.gz`
+        return `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/src/${encodeURIComponent(useRef)}?format=tar.gz`
     }
   }
 
+  async #getDefaultRefFromApi(): Promise<string | undefined> {
+    try {
+      switch (this.#host) {
+        case 'github': {
+          const url = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}`
+          const response = await this.#fetchWithRetry(url, 1)
+          if (!response.ok) return
+          const data = await response.json()
+          return typeof data?.default_branch === 'string'
+            ? data.default_branch
+            : undefined
+        }
+        case 'gitlab': {
+          const repo = encodeURIComponent(this.#repository)
+          const url = `${this.#apiBaseUrl}/projects/${repo}`
+          const response = await this.#fetchWithRetry(url, 1)
+          if (!response.ok) return
+          const data = await response.json()
+          return typeof data?.default_branch === 'string'
+            ? data.default_branch
+            : undefined
+        }
+        case 'bitbucket': {
+          const url = `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}`
+          const response = await this.#fetchWithRetry(url, 1)
+          if (!response.ok) return
+          const data = await response.json()
+          return typeof data?.mainbranch?.name === 'string'
+            ? data.mainbranch.name
+            : typeof data?.default_branch === 'string'
+              ? data.default_branch
+              : undefined
+        }
+      }
+    } catch {}
+  }
+
   async #loadArchive() {
-    const response = await this.#fetchWithRetry(this.#getArchiveUrl())
+    // If include/exclude filters are present, attempt subset mode first
+    if (this.#include?.length || this.#exclude?.length) {
+      const ok = await this.#loadSubsetIfSupported().catch(() => false)
+      if (ok) {
+        this.#initialized = true
+        return
+      }
+    }
+
+    let tried = new Set<string>()
+    let startRef = this.#ref
+    // If user did not provide a ref, prefer the repository's default branch
+    if (!this.#userProvidedRef) {
+      const discovered = await this.#getDefaultRefFromApi()
+      if (discovered) {
+        startRef = discovered
+        this.#ref = discovered
+      }
+    }
+
+    let response = await this.#fetchWithRetry(this.#getArchiveUrl(startRef))
+    if (!response.ok && response.status === 404) {
+      // Try strict fallback order: discovered default (if not already), then main, then master
+      const discovered = await this.#getDefaultRefFromApi()
+      const fallbacks: (string | undefined)[] = this.#userProvidedRef
+        ? [discovered, 'main', 'master']
+        : ['main', 'master']
+      for (const candidate of fallbacks) {
+        if (!candidate) continue
+        if (tried.has(candidate)) continue
+        tried.add(candidate)
+
+        const retryResponse = await this.#fetchWithRetry(
+          this.#getArchiveUrl(candidate)
+        )
+        if (retryResponse.ok) {
+          response = retryResponse
+          // Update ref so subsequent operations use the working branch
+          this.#ref = candidate
+          break
+        }
+      }
+    }
 
     if (!response.ok) {
       throw new Error(
@@ -695,12 +860,193 @@ export class GitHostFileSystem extends MemoryFileSystem {
     this.#initialized = true
   }
 
+  #pathMatchesFilters(path: string): boolean {
+    const normalizedPath = path.replace(/^\.\/+/, '')
+    if (this.#include && this.#include.length > 0) {
+      const includeHit = this.#include.some((inc) =>
+        normalizedPath.startsWith(inc.replace(/^\/+/, ''))
+      )
+      if (!includeHit) return false
+    }
+    if (this.#exclude && this.#exclude.length > 0) {
+      const excludeHit = this.#exclude.some((exc) =>
+        normalizedPath.startsWith(exc.replace(/^\/+/, ''))
+      )
+      if (excludeHit) return false
+    }
+    return true
+  }
+
+  async #loadSubsetIfSupported(): Promise<boolean> {
+    // Resolve ref (prefer default if not user-provided)
+    let useRef = this.#ref
+    if (!this.#userProvidedRef) {
+      const discovered = await this.#getDefaultRefFromApi()
+      if (discovered) {
+        useRef = discovered
+        this.#ref = discovered
+      }
+    }
+
+    switch (this.#host) {
+      case 'github': {
+        const treeUrl = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/git/trees/${encodeURIComponent(useRef)}?recursive=1`
+        const treeResp = await this.#fetchWithRetry(treeUrl)
+        if (!treeResp.ok) return false
+        const treeData = await treeResp.json().catch(() => undefined)
+        if (!treeData || !Array.isArray(treeData.tree)) return false
+        type Entry = { path: string; type: string; size?: number }
+        const entries: Entry[] = treeData.tree
+          .filter(
+            (entry: any) =>
+              entry && typeof entry.path === 'string' && entry.type === 'blob'
+          )
+          .map((entry: any) => ({
+            path: entry.path as string,
+            type: 'blob',
+            size: typeof entry.size === 'number' ? entry.size : undefined,
+          }))
+        return await this.#fetchSubsetRaw(
+          entries,
+          (path) =>
+            `https://raw.githubusercontent.com/${this.#ownerEncoded}/${this.#repoEncoded}/${encodeURIComponent(useRef)}/${path}`
+        )
+      }
+      case 'gitlab': {
+        const project = encodeURIComponent(this.#repository)
+        let page = 1
+        const perPage = 100
+        type Entry = { path: string; type: string; size?: number }
+        const entries: Entry[] = []
+        while (true) {
+          const treeUrl = `${this.#apiBaseUrl}/projects/${project}/repository/tree?ref=${encodeURIComponent(useRef)}&recursive=true&per_page=${perPage}&page=${page}`
+          const response = await this.#fetchWithRetry(treeUrl)
+          if (!response.ok) break
+          const list = await response.json().catch(() => undefined)
+          if (!Array.isArray(list) || list.length === 0) break
+          for (const entry of list) {
+            if (
+              entry &&
+              entry.type === 'blob' &&
+              typeof entry.path === 'string'
+            ) {
+              entries.push({ path: entry.path, type: 'blob' })
+            }
+          }
+          const nextPage = response.headers.get('x-next-page')
+          if (!nextPage) break
+          const next = Number(nextPage)
+          if (!Number.isFinite(next) || next <= page) break
+          page = next
+          if (entries.length > this.#maxFileCount * 2) break
+        }
+        const origin = new URL(this.#apiBaseUrl)
+        const rawBase = `${origin.protocol}//${origin.host}`
+        return await this.#fetchSubsetRaw(
+          entries,
+          (path) =>
+            `${rawBase}/${this.#repository}/-/raw/${encodeURIComponent(useRef)}/${path}`
+        )
+      }
+      case 'bitbucket': {
+        let url = `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/src/${encodeURIComponent(useRef)}/?recursive=true`
+        type Entry = { path: string; type: string; size?: number }
+        const entries: Entry[] = []
+        while (url) {
+          const response = await this.#fetchWithRetry(url)
+          if (!response.ok) break
+          const data = await response.json().catch(() => undefined)
+          if (!data || !Array.isArray(data.values)) break
+          for (const value of data.values) {
+            if (
+              value &&
+              value.type === 'commit_file' &&
+              typeof value.path === 'string'
+            ) {
+              entries.push({
+                path: value.path,
+                type: 'blob',
+                size: typeof value.size === 'number' ? value.size : undefined,
+              })
+            }
+          }
+          url = typeof data.next === 'string' ? data.next : ''
+          if (entries.length > this.#maxFileCount * 2) break
+        }
+        return await this.#fetchSubsetRaw(
+          entries,
+          (path) =>
+            `https://bitbucket.org/${this.#ownerEncoded}/${this.#repoEncoded}/raw/${encodeURIComponent(useRef)}/${path}`
+        )
+      }
+      default:
+        return false
+    }
+  }
+
+  async #fetchSubsetRaw(
+    allEntries: { path: string; type: string; size?: number }[],
+    buildUrl: (path: string) => string
+  ): Promise<boolean> {
+    const filtered = allEntries.filter((entry) =>
+      this.#pathMatchesFilters(entry.path)
+    )
+    let total = 0
+    let count = 0
+    const toFetch: { path: string }[] = []
+    for (const entry of filtered) {
+      count++
+      if (count > this.#maxFileCount) break
+      if (typeof entry.size === 'number') {
+        if (entry.size > this.#maxFileBytes) continue
+        total += entry.size
+        if (total > this.#maxArchiveBytes) break
+      }
+      toFetch.push({ path: entry.path })
+    }
+    const files = this.getFiles()
+    files.clear()
+    if (toFetch.length === 0) return true
+
+    const concurrency = 8
+    let index = 0
+    const worker = async () => {
+      while (index < toFetch.length) {
+        const currentIndex = index++
+        const entry = toFetch[currentIndex]!
+        const url = buildUrl(entry.path)
+        try {
+          this.#assertAllowed(url)
+          const response = await fetch(url, {
+            headers: this.#noAuthHeaders,
+            referrerPolicy: 'no-referrer',
+          })
+          if (!response.ok) continue
+          const arrayBuffer = await response.arrayBuffer()
+          const buffer = new Uint8Array(arrayBuffer)
+          if (buffer.length > this.#maxFileBytes) continue
+          const content: MemoryFileContent = this.#isBinaryBuffer(buffer)
+            ? { kind: 'binary', content: buffer, encoding: 'binary' }
+            : new TextDecoder('utf-8').decode(buffer)
+          this.createFile(entry.path, content)
+        } catch {}
+      }
+    }
+    const workers = Array.from(
+      { length: Math.min(concurrency, toFetch.length) },
+      () => worker()
+    )
+    await Promise.all(workers)
+    return this.getFiles().size > 0
+  }
+
   async *#tarStreamEntries(stream: ReadableStream<Uint8Array>): AsyncGenerator<{
     header: Uint8Array
     size: number
     typeFlag: number
     name: string
     prefix: string
+    linkname: string
     readData: (maxChunk: number) => Promise<Uint8Array>
     discard: () => Promise<void>
   }> {
@@ -717,7 +1063,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
         }
         if (value && value.length > 0) {
           rawBytesRead += value.length
-          if (rawBytesRead > MAX_TAR_STREAM_BYTES) {
+          if (rawBytesRead > this.#maxTarStreamBytes) {
             throw new Error('[renoun] Archive exceeds maximum stream size')
           }
           const merged = new Uint8Array(buffer.length + value.length)
@@ -743,6 +1089,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
       const typeFlag = header[156]!
       const name = this.#readTarString(header, 0, 100)
       const prefix = this.#readTarString(header, 345, 500)
+      const linkname = this.#readTarString(header, 157, 257)
 
       const dataSize = size
       const paddedSize = Math.ceil(dataSize / 512) * 512
@@ -777,7 +1124,16 @@ export class GitHostFileSystem extends MemoryFileSystem {
         if (pad > 0) await readFromStream(pad)
       }
 
-      yield { header, size, typeFlag, name, prefix, readData, discard }
+      yield {
+        header,
+        size,
+        typeFlag,
+        name,
+        prefix,
+        linkname,
+        readData,
+        discard,
+      }
 
       // If consumer didn't fully read, ensure we consume padding
       if (remaining > 0) {
@@ -894,8 +1250,6 @@ export class GitHostFileSystem extends MemoryFileSystem {
     return normalized || null
   }
 
-  // removed unused #parsePaxHeader
-
   #isBinaryBuffer(buffer: Uint8Array): boolean {
     if (buffer.length === 0) {
       return false
@@ -967,14 +1321,58 @@ export class GitHostFileSystem extends MemoryFileSystem {
     throw new Error('readDirectorySync is not supported in GitHostFileSystem')
   }
 
+  #resolveSymlinkPath(path: string): string {
+    let targetPath = path
+    const visited = new Set<string>()
+    while (true) {
+      const key = targetPath.startsWith('./')
+        ? targetPath
+        : `./${normalizeSlashes(targetPath)}`
+      const link = this.#symlinkMap?.get(key)
+      if (!link) break
+      if (visited.has(key)) {
+        throw new Error('[renoun] Symlink loop detected')
+      }
+      visited.add(key)
+      targetPath = link
+    }
+    return targetPath
+  }
+
   async readFile(path: string): Promise<string> {
     await this.#ensureInitialized()
-    return MemoryFileSystem.prototype.readFileSync.call(this, path)
+
+    let targetPath = this.#resolveSymlinkPath(path)
+    let entry = this.getFileEntry(targetPath)
+    if (!entry) {
+      const keys = Array.from(this.getFiles().keys())
+      // Fallback try to locate file by suffix (handles tar root folder prefix)
+      const suffix = `/${normalizeSlashes(targetPath).replace(/^\.+\//, '')}`
+      const candidates = keys.filter(
+        (key) =>
+          key === `./${normalizeSlashes(targetPath)}` || key.endsWith(suffix)
+      )
+      if (candidates.length > 0) {
+        candidates.sort(
+          (first, second) => first.split('/').length - second.split('/').length
+        )
+        const best = candidates[0]!
+
+        targetPath = best.startsWith('./') ? best : `./${best}`
+        entry = this.getFileEntry(targetPath)
+      }
+
+      if (!entry) {
+        throw new Error(`File not found: ${path}`)
+      }
+    }
+    return MemoryFileSystem.prototype.readFileSync.call(this, targetPath)
   }
 
   async readFileBinary(path: string): Promise<Uint8Array> {
     await this.#ensureInitialized()
-    const entry = this.getFileEntry(path)
+    const targetPath = this.#resolveSymlinkPath(path)
+    const entry = this.getFileEntry(targetPath)
     if (!entry) {
       throw new Error(`File not found: ${path}`)
     }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { gzipSync } from 'node:zlib'
+
 import { GitHostFileSystem } from './GitHostFileSystem.js'
 
 const SUCCESS_ARCHIVE = makeTar([
@@ -49,6 +50,7 @@ describe('GitHostFileSystem', () => {
       repository: 'group/sub/project',
       host: 'gitlab',
       baseUrl: 'https://git.example.com',
+      ref: 'main',
     })
     ;[url] = mockFetch.mock.calls.at(-1)!
     expect(url).toMatch(
@@ -77,6 +79,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
     await expect(fs.readFile('file.txt')).rejects.toThrow()
 
@@ -92,6 +95,7 @@ describe('GitHostFileSystem', () => {
       new GitHostFileSystem({
         repository: 'owner/repo',
         host: 'github',
+        ref: 'main',
       }).readFile('file.txt')
     ).rejects.toThrow('Unexpected content-type')
   })
@@ -121,6 +125,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
     await expect(fs.readFile('file.txt')).resolves.toBe('v1')
     fs.clearCache()
@@ -200,6 +205,7 @@ describe('GitHostFileSystem', () => {
       repository: 'owner/repo',
       host: 'github',
       token,
+      ref: 'main',
     })
     expect(await fs.readFile('file.txt')).toBe('hello')
 
@@ -228,6 +234,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
     await expect(fs.readFile('file.txt')).rejects.toThrow(
       '[renoun] Redirected to disallowed origin'
@@ -290,6 +297,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
     await expect(fs.readFile('file.txt')).rejects.toThrow(
       'Invalid tar header checksum'
@@ -319,6 +327,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
     await expect(fs.readFile('a.txt')).rejects.toThrow('Duplicate path')
   })
@@ -375,6 +384,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
 
     const readPromise = fs.readFile('file.txt')
@@ -408,6 +418,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
     expect(await fs.readFile('file.txt')).toBe('v1')
 
@@ -436,6 +447,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
     await expect(fs.readFile('file.txt')).resolves.toBe('hello')
   })
@@ -466,6 +478,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
     await expect(fs.readFile('a.txt')).resolves.toBe('ok')
     await expect(fs.readFile('c.txt')).resolves.toBe('ok2')
@@ -492,6 +505,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      ref: 'main',
     })
 
     await expect(fs.readFile('a.txt')).resolves.toBe('ok')
@@ -528,7 +542,6 @@ describe('GitHostFileSystem', () => {
       .mockResolvedValueOnce(redirect)
       .mockResolvedValueOnce(redirect)
       .mockResolvedValueOnce(redirect)
-      .mockResolvedValueOnce(success)
     globalThis.fetch = mockFetch
 
     const fs = new GitHostFileSystem({
