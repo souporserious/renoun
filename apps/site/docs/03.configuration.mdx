@@ -165,7 +165,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <RootProvider includeThemeScript={false}>
+    <RootProvider
+      theme={{ light: 'nord', dark: 'nord' }}
+      includeThemeScript={false}
+    >
       <html>
         <body>
           <ThemeProvider>{children}</ThemeProvider>
