@@ -4294,7 +4294,7 @@ function hasTypeNode(
  */
 function containsFreeTypeParameter(
   type: Type | undefined,
-  seen: Set<Type> = new Set()
+  seen: Set<number> = new Set()
 ): boolean {
   if (!type) {
     return false
@@ -4305,10 +4305,10 @@ function containsFreeTypeParameter(
   }
 
   // avoid infinite recursion for self-referential types
-  if (seen.has(type)) {
+  if (seen.has(type.compilerType.id)) {
     return false
   }
-  seen.add(type)
+  seen.add(type.compilerType.id)
 
   const aliasArguments = type.getAliasTypeArguments()
   for (let index = 0, length = aliasArguments.length; index < length; ++index) {
