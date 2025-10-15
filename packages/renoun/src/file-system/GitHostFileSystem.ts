@@ -260,7 +260,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
       totalBytes += size
       if (totalBytes > this.#maxArchiveBytes) {
         throw new Error(
-          '[renoun] Repository archive exceeds allowed size during extraction'
+          '[renoun] Repository archive exceeds allowed size during extraction. Increase the `maxArchiveBytes` limit in the `GitHostFileSystem` constructor or filter the repository using the `include` and `exclude` options to reduce the size of the extracted repository entries.'
         )
       }
 
