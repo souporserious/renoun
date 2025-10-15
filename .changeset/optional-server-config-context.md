@@ -1,5 +1,5 @@
 ---
-'renoun': minor
+'renoun': patch
 ---
 
 Allows the `RootProvider` component to be optional by loading a default theme.
