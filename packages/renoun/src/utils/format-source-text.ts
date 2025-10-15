@@ -21,17 +21,22 @@ const extensionToParser = {
   mdx: 'mdx',
 }
 
+type ParserExtension = keyof typeof extensionToParser
+
 /** Returns the prettier parser for the provided file path. */
 function getPrettierParser(filePath: string, language?: string) {
   if (language) {
-    const parser = extensionToParser[language as keyof typeof extensionToParser]
+    const parser = extensionToParser[language as ParserExtension]
+
     if (parser) {
       return parser
     }
+
+    return undefined
   }
 
   const extension = extensionName(filePath).slice(1)
-  return extensionToParser[extension as keyof typeof extensionToParser]
+  return extensionToParser[extension as ParserExtension]
 }
 
 type Formatter = (
