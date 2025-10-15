@@ -1,4 +1,4 @@
-import React, { Fragment } from 'react'
+import React, { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
@@ -23,7 +23,7 @@ import {
 } from '../../utils/annotations.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import type { ConfigurationOptions } from '../Config/types.js'
-import { QuickInfo } from './QuickInfo.js'
+import { QuickInfo, QuickInfoLoading } from './QuickInfo.js'
 import { QuickInfoProvider } from './QuickInfoProvider.js'
 import { Context } from './Context.js'
 import { Symbol } from './Symbol.js'
@@ -329,13 +329,23 @@ function renderToken({
         key={`${lineIndex}-${tokenIndex}`}
         highlightColor={theme.editor.hoverHighlightBackground}
         popover={
-          <QuickInfo
-            diagnostics={token.diagnostics}
-            quickInfo={token.quickInfo}
-            css={cssProp?.popover}
-            className={className?.popover}
-            style={style?.popover}
-          />
+          <Suspense
+            fallback={
+              <QuickInfoLoading
+                css={cssProp?.popover}
+                className={className?.popover}
+                style={style?.popover}
+              />
+            }
+          >
+            <QuickInfo
+              diagnostics={token.diagnostics}
+              quickInfo={token.quickInfo}
+              css={cssProp?.popover}
+              className={className?.popover}
+              style={style?.popover}
+            />
+          </Suspense>
         }
         className={tokenClassName}
         style={style?.token}

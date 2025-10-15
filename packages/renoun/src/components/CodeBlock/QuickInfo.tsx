@@ -54,11 +54,21 @@ const mdxProps = {
   remarkPlugins,
 } satisfies Omit<MarkdownProps, 'children'>
 
-/**
- * A quick info popover that displays diagnostics and documentation.
- * @internal
- */
-export async function QuickInfo({
+let queue: Promise<unknown> = Promise.resolve()
+
+function enqueueQuickInfo<T>(task: () => Promise<T>) {
+  const next = queue.then(
+    () => task(),
+    () => task()
+  )
+  queue = next.then(
+    () => undefined,
+    () => undefined
+  )
+  return next
+}
+
+async function renderQuickInfo({
   diagnostics,
   quickInfo,
   css,
@@ -156,6 +166,51 @@ export async function QuickInfo({
   )
 }
 
+/**
+ * A quick info popover that displays diagnostics and documentation.
+ * @internal
+ */
+export async function QuickInfo(props: {
+  diagnostics?: TokenDiagnostic[]
+  quickInfo?: { displayText: string; documentationText: string }
+  css?: CSSObject
+  className?: string
+  style?: React.CSSProperties
+}) {
+  return enqueueQuickInfo(() => renderQuickInfo(props))
+}
+
+export function QuickInfoLoading({
+  css,
+  className,
+  style,
+}: {
+  css?: CSSObject
+  className?: string
+  style?: React.CSSProperties
+}) {
+  return (
+    <QuickInfoPopover>
+      <Container
+        css={{
+          boxSizing: 'border-box',
+          border: '1px solid var(--renoun-editor-hover-widget-border, #3c3c3c)',
+          backgroundColor:
+            'var(--renoun-editor-hover-widget-background, rgba(37, 37, 38, 0.95))',
+          color: 'var(--renoun-editor-hover-widget-foreground, #cccccc)',
+          ...css,
+        }}
+        className={className}
+        style={style}
+      >
+        <ContentContainer>
+          <LoadingText>loading…</LoadingText>
+        </ContentContainer>
+      </Container>
+    </QuickInfoPopover>
+  )
+}
+
 const Container = styled('div', {
   fontSize: '1rem',
   position: 'absolute',
@@ -191,6 +246,13 @@ const Diagnostic = styled('div', {
 
 const DiagnosticCode = styled('span', {
   opacity: 0.7,
+})
+
+const LoadingText = styled('div', {
+  padding: '0.5em 0.75em',
+  fontSize: '0.875em',
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
 })
 
 const Divider = styled('hr', ({ color }: { color: string }) => ({
