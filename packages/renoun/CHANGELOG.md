@@ -1,5 +1,13 @@
 # renoun
 
+## 10.5.2
+
+### Patch Changes
+
+- 4927f10: Improves `JavaScriptModuleExport#getType` by using the compiler type id to cache free type parameter checks.
+- b98dded: Skips formatting when a requested code block language is unsupported.
+- 0ac9a44: Queues `QuickInfo` popover rendering behind `Suspense` with a fallback to prevent overwhelming symbol analysis.
+
 ## 10.5.1
 
 ### Patch Changes
