@@ -13,6 +13,7 @@ import {
   hasMultipleThemes,
 } from '../../utils/get-theme.js'
 import {
+  hasAnnotationCandidates,
   parseAnnotations,
   remapAnnotationInstructions,
   type AnnotationParseResult,
@@ -135,7 +136,10 @@ export async function Tokens({
 
   if (annotations) {
     const annotationTags = Object.keys(annotations)
-    if (annotationTags.length > 0) {
+    if (
+      annotationTags.length > 0 &&
+      hasAnnotationCandidates(value, annotationTags)
+    ) {
       annotationParseResult = parseAnnotations(value, annotationTags)
       processedValue = annotationParseResult.value
       annotationInstructions = {

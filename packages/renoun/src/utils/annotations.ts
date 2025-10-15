@@ -20,6 +20,53 @@ export interface AnnotationParseResult extends AnnotationInstructions {
   value: string
 }
 
+export function hasAnnotationCandidates(
+  value: string,
+  annotations: Iterable<string>
+): boolean {
+  const tags = new Set<string>(annotations)
+
+  if (tags.size === 0) return false
+
+  let searchIndex = value.indexOf('/*')
+
+  while (searchIndex !== -1) {
+    const afterMarker = searchIndex + 2
+
+    if (afterMarker >= value.length) {
+      break
+    }
+
+    let tagStart = afterMarker
+
+    if (value.charCodeAt(tagStart) === ASTERISK) {
+      tagStart += 1
+    }
+
+    if (tagStart >= value.length) {
+      break
+    }
+
+    const firstCodePoint = value.charCodeAt(tagStart)
+
+    if (!isTagLead(firstCodePoint)) {
+      searchIndex = value.indexOf('/*', afterMarker)
+      continue
+    }
+
+    const tagEnd = scanTagEnd(value, tagStart)
+    const tag = value.slice(tagStart, tagEnd)
+
+    if (tag.length > 0 && tags.has(tag)) {
+      return true
+    }
+
+    searchIndex = value.indexOf('/*', afterMarker)
+  }
+
+  return false
+}
+
 export function parseAnnotations(
   value: string,
   annotations: Iterable<string>
@@ -46,7 +93,10 @@ export function parseAnnotations(
     const commentStart = value.indexOf('/*', scanIndex)
     if (commentStart === -1) break
 
-    const endMarkerIndex = value.indexOf('*/', commentStart + 2)
+    const afterMarker = commentStart + 2
+    if (afterMarker >= value.length) break
+
+    const endMarkerIndex = value.indexOf('*/', afterMarker)
     if (endMarkerIndex === -1) {
       // No closing delimiter found; append remainder and stop scanning
       segments.push(value.slice(lastIndex))
@@ -56,33 +106,63 @@ export function parseAnnotations(
     }
 
     const commentEnd = endMarkerIndex + 2
-    const trimmedContent = value.slice(commentStart + 2, endMarkerIndex).trim()
 
-    let inner = trimmedContent
     let type: 'open' | 'close' | 'self' = 'open'
+    let tagStart = afterMarker
 
-    if (inner.startsWith('*')) {
+    if (value.charCodeAt(tagStart) === ASTERISK) {
       type = 'close'
-      inner = inner.slice(1).trim()
-    } else if (inner.endsWith('*')) {
-      type = 'self'
-      inner = inner.slice(0, -1).trim()
+      tagStart += 1
     }
 
-    const firstSpaceIndex = inner.search(/\s/)
-    const tag = firstSpaceIndex === -1 ? inner : inner.slice(0, firstSpaceIndex)
-
-    if (!tags.has(tag)) {
+    if (tagStart >= endMarkerIndex) {
       const segment = value.slice(lastIndex, commentEnd)
       segments.push(segment)
       cleanLength += segment.length
       lastIndex = commentEnd
+      scanIndex = commentEnd
       continue
     }
 
+    const tagEnd = scanTagEnd(value, tagStart, endMarkerIndex)
+    const tag = value.slice(tagStart, tagEnd)
+
+    if (tag.length === 0 || !tags.has(tag)) {
+      const segment = value.slice(lastIndex, commentEnd)
+      segments.push(segment)
+      cleanLength += segment.length
+      lastIndex = commentEnd
+      scanIndex = commentEnd
+      continue
+    }
+
+    let propsEnd = endMarkerIndex
+    while (
+      propsEnd > tagEnd &&
+      isWhitespaceChar(value.charCodeAt(propsEnd - 1))
+    ) {
+      propsEnd -= 1
+    }
+
+    if (type === 'open' && propsEnd > tagEnd) {
+      if (value.charCodeAt(propsEnd - 1) === ASTERISK) {
+        type = 'self'
+        propsEnd -= 1
+        while (
+          propsEnd > tagEnd &&
+          isWhitespaceChar(value.charCodeAt(propsEnd - 1))
+        ) {
+          propsEnd -= 1
+        }
+      }
+    }
+
     const propsString =
-      firstSpaceIndex === -1 ? '' : inner.slice(firstSpaceIndex + 1)
-    const props = parseAnnotationProps(propsString)
+      type === 'close' || propsEnd <= tagEnd
+        ? ''
+        : value.slice(tagEnd, propsEnd)
+    const props =
+      type === 'close' ? {} : parseAnnotationProps(propsString)
 
     const lineStart = value.lastIndexOf('\n', commentStart - 1) + 1
     const lineEndIndex = value.indexOf('\n', commentEnd)
@@ -134,9 +214,10 @@ export function parseAnnotations(
         })
         break
       }
-    } else if (type === 'self') {
+    } else {
       inline.push({ tag, props, index: cleanLength })
     }
+
     scanIndex = commentEnd
   }
 
@@ -155,6 +236,39 @@ export function parseAnnotations(
     block,
     inline,
   }
+}
+
+const ASTERISK = '*'.charCodeAt(0)
+const FORWARD_SLASH = '/'.charCodeAt(0)
+
+function isWhitespaceChar(code: number): boolean {
+  return (
+    code === 32 ||
+    code === 9 ||
+    code === 10 ||
+    code === 13 ||
+    code === 12 ||
+    code === 11
+  )
+}
+
+function isTagLead(code: number): boolean {
+  return code !== ASTERISK && code !== FORWARD_SLASH && !isWhitespaceChar(code)
+}
+
+function scanTagEnd(value: string, start: number, limit?: number): number {
+  const end = limit ?? value.length
+
+  let index = start
+  while (index < end) {
+    const code = value.charCodeAt(index)
+    if (code === ASTERISK || code === FORWARD_SLASH || isWhitespaceChar(code)) {
+      break
+    }
+    index += 1
+  }
+
+  return index
 }
 
 export function remapAnnotationInstructions(

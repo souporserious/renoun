@@ -1,6 +1,22 @@
 import { describe, expect, test } from 'vitest'
 
-import { parseAnnotations, remapAnnotationInstructions } from './annotations.js'
+import {
+  hasAnnotationCandidates,
+  parseAnnotations,
+  remapAnnotationInstructions,
+} from './annotations.js'
+
+describe('hasAnnotationCandidates', () => {
+  test('returns false when source lacks matching comment markers', () => {
+    const source = ['const value = 1', '/* not an annotation */'].join('\n')
+    expect(hasAnnotationCandidates(source, ['highlight'])).toBe(false)
+  })
+
+  test('returns true when at least one annotation tag is present', () => {
+    const source = "console./*highlight*/log('hi')/**highlight*/"
+    expect(hasAnnotationCandidates(source, ['highlight'])).toBe(true)
+  })
+})
 
 describe('parseAnnotations', () => {
   test('extracts inline annotations and removes annotations', () => {
@@ -131,7 +147,7 @@ describe('remapAnnotationInstructions', () => {
   })
 
   test('precisely captures selection boundaries on a single line', () => {
-    const source = 'console.log(/* hi */level/** hi */)'
+    const source = 'console.log(/*hi*/level/**hi*/)'
     const result = parseAnnotations(source, ['hi'])
     expect(result.value).toBe('console.log(level)')
     expect(result.block).toHaveLength(1)
@@ -141,7 +157,7 @@ describe('remapAnnotationInstructions', () => {
   })
 
   test('parses self-closing inline annotations and keeps position', () => {
-    const source = "console./* hi **/warn('Warning')"
+    const source = "console./*hi**/warn('Warning')"
     const result = parseAnnotations(source, ['hi'])
     expect(result.value).toBe("console.warn('Warning')")
     expect(result.inline).toHaveLength(1)
@@ -150,7 +166,7 @@ describe('remapAnnotationInstructions', () => {
   })
 
   test('parses self-closing inline annotations with props', () => {
-    const source = "console./* hi color='yellow' **/log('Error')"
+    const source = "console./*hi color='yellow' **/log('Error')"
     const result = parseAnnotations(source, ['hi'])
     expect(result.value).toBe("console.log('Error')")
     expect(result.inline).toHaveLength(1)
