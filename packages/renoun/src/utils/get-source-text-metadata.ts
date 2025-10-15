@@ -99,7 +99,7 @@ export async function getSourceTextMetadata({
       finalValue = await formatSourceText(filePath, finalValue, finalLanguage)
     } catch (error) {
       throw new Error(
-        `[renoun] Error formatting CodeBlock source text${filePath ? ` at file path "${filePath}"` : ''} ${error}`
+        `[renoun] Error formatting CodeBlock source text using language "${finalLanguage}"${filePath ? ` at file path "${filePath}"` : ''} ${error}`
       )
     }
 
