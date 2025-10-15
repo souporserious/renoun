@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import type { SVGProps } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -35,22 +35,38 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
   )
 
   const filteredEntries = useMemo(() => {
-    if (!searchQuery.trim()) {
+    const trimmed = searchQuery.trim()
+    if (!trimmed) {
       return routes
     }
 
-    return routes.filter((entry) => {
-      return (
-        contains(entry.title, searchQuery) ||
-        contains(entry.pathname, searchQuery)
-      )
-    })
-  }, [contains, routes, searchQuery])
+    const terms = trimmed.toLowerCase().split(/\s+/).filter(Boolean)
+    if (!terms.length) {
+      return routes
+    }
 
-  const menuItems = useMemo(
-    () => filteredEntries.map((entry) => ({ ...entry, id: entry.pathname })),
-    [filteredEntries]
-  )
+    type RankedRoute = { route: SearchRoute; score: number; index: number }
+
+    const scored: RankedRoute[] = routes.map((route, index) => ({
+      route,
+      score: getRouteScore(route, terms),
+      index,
+    }))
+
+    return scored
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score
+        return a.index - b.index
+      })
+      .map((entry) => entry.route)
+  }, [routes, searchQuery])
+
+  const highlightTerms = useMemo(() => {
+    const trimmed = searchQuery.trim().toLowerCase()
+    if (!trimmed) return [] as string[]
+    return trimmed.split(/\s+/).filter(Boolean)
+  }, [searchQuery])
 
   // Derive a category from the first segment of the pathname
   function getCategory(pathname: string) {
@@ -277,32 +293,91 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                         >
                           {group.category}
                         </Header>
-                        {group.items.map((item) => (
-                          <MenuItem
-                            key={item.pathname}
-                            id={item.pathname}
-                            textValue={item.title}
-                            style={({ isFocused, isSelected }) => ({
-                              display: 'flex',
-                              width: '100%',
-                              alignItems: 'center',
-                              borderRadius: 6,
-                              padding: '0.5rem 0.75rem',
-                              boxSizing: 'border-box',
-                              cursor: 'default',
-                              userSelect: 'none',
-                              color: 'var(--color-foreground, #ffffff)',
-                              background: isSelected
-                                ? 'var(--color-surface-primary, rgba(255,255,255,0.12))'
-                                : isFocused
-                                  ? 'var(--color-surface-interactive-highlighted, rgba(255,255,255,0.08))'
-                                  : 'transparent',
-                              transition: 'background 120ms ease',
-                            })}
-                          >
-                            {item.title}
-                          </MenuItem>
-                        ))}
+                        {group.items.map((item) => {
+                          const [primaryTitle, ...rest] = item.title.split(' · ')
+                          const secondaryTitle = rest.join(' · ')
+                          const fallback = formatPathname(item.pathname)
+
+                          return (
+                            <MenuItem
+                              key={item.pathname}
+                              id={item.pathname}
+                              textValue={item.title}
+                              style={({ isFocused, isSelected }) => ({
+                                display: 'flex',
+                                width: '100%',
+                                alignItems: 'stretch',
+                                borderRadius: 6,
+                                padding: '0.5rem 0.75rem',
+                                boxSizing: 'border-box',
+                                cursor: 'default',
+                                userSelect: 'none',
+                                color: 'var(--color-foreground, #ffffff)',
+                                background: isSelected
+                                  ? 'var(--color-surface-primary, rgba(255,255,255,0.12))'
+                                  : isFocused
+                                    ? 'var(--color-surface-interactive-highlighted, rgba(255,255,255,0.08))'
+                                    : 'transparent',
+                                transition: 'background 120ms ease',
+                              })}
+                            >
+                              {({}) => (
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.125rem',
+                                    textAlign: 'left',
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: '0.9375rem',
+                                      lineHeight: '1.375rem',
+                                      fontWeight: 600,
+                                      color: 'var(--color-foreground, #ffffff)',
+                                    }}
+                                  >
+                                    {renderHighlightedText(
+                                      primaryTitle,
+                                      highlightTerms
+                                    )}
+                                    {secondaryTitle ? (
+                                      <span
+                                        style={{
+                                          fontWeight: 500,
+                                          color:
+                                            'var(--color-foreground-muted, rgba(229,231,235,0.72))',
+                                        }}
+                                      >
+                                        {' '}
+                                        &middot;{' '}
+                                        {renderHighlightedText(
+                                          secondaryTitle,
+                                          highlightTerms
+                                        )}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      lineHeight: '1rem',
+                                      color:
+                                        'var(--color-foreground-interactive, #9ca3af)',
+                                      textTransform: 'none',
+                                    }}
+                                  >
+                                    {renderHighlightedText(
+                                      fallback,
+                                      highlightTerms
+                                    )}
+                                  </span>
+                                </div>
+                              )}
+                            </MenuItem>
+                          )
+                        })}
                       </Section>
                     )}
                   </Menu>
@@ -325,6 +400,106 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
       </ModalOverlay>
     </DialogTrigger>
   )
+}
+
+function getRouteScore(route: SearchRoute, terms: string[]) {
+  if (!terms.length) return 1
+
+  let total = 0
+
+  for (const term of terms) {
+    const normalizedTerm = term.trim()
+    if (!normalizedTerm) continue
+
+    const titleScore = scoreText(route.title, normalizedTerm) * 5
+    const keywordScore = Math.max(
+      0,
+      ...(route.keywords ?? []).map((keyword) =>
+        scoreText(keyword, normalizedTerm)
+      )
+    ) * 3
+    const pathScore = scoreText(route.pathname, normalizedTerm) * 2
+
+    const bestScore = Math.max(titleScore, keywordScore, pathScore)
+
+    if (bestScore <= 0) {
+      return 0
+    }
+
+    total += bestScore
+  }
+
+  return total
+}
+
+function scoreText(text: string | undefined, term: string) {
+  if (!text) return 0
+  const normalized = text.toLowerCase()
+  const index = normalized.indexOf(term)
+  if (index === -1) return 0
+
+  if (normalized === term) {
+    return 120
+  }
+
+  if (normalized.startsWith(term)) {
+    return 80
+  }
+
+  const boundary = new RegExp(`(?:^|[^\w])${escapeRegExp(term)}(?:$|[^\w])`, 'i')
+  if (boundary.test(normalized)) {
+    return 55
+  }
+
+  return 30
+}
+
+function renderHighlightedText(text: string, terms: string[]) {
+  if (!terms.length || !text) return text
+
+  const escaped = terms.map(escapeRegExp).filter(Boolean)
+  if (!escaped.length) {
+    return text
+  }
+
+  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi')
+  const parts = text.split(pattern).filter((part) => part.length > 0)
+
+  return parts.map((part, index) => {
+    const isMatch = terms.some((term) => part.toLowerCase() === term)
+    if (!isMatch) {
+      return <Fragment key={`${part}-${index}`}>{part}</Fragment>
+    }
+
+    return (
+      <span
+        key={`${part}-${index}`}
+        style={{
+          backgroundColor: 'rgba(59,130,246,0.25)',
+          color: 'var(--color-foreground, #ffffff)',
+          borderRadius: 4,
+          padding: '0 0.15rem',
+          fontWeight: 700,
+        }}
+      >
+        {part}
+      </span>
+    )
+  })
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function formatPathname(pathname: string) {
+  const cleaned = pathname.replace(/^\//, '')
+  if (!cleaned) return '/'
+  return cleaned
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => segment.replace(/-/g, ' '))
+    .join(' / ')
 }
 
 function SearchIcon(props: SVGProps<SVGSVGElement>) {

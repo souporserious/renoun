@@ -13,6 +13,7 @@ import { RootCollection } from '@/collections'
 export type SearchRoute = {
   pathname: string
   title: string
+  keywords?: string[]
 }
 
 type InternalRoute = SearchRoute & { order?: number; position: number }
@@ -21,7 +22,7 @@ async function getEntryMetadata(entry: FileSystemEntry<any>) {
   if (!(isJavaScriptFile(entry) || isMDXFile(entry))) return undefined
   try {
     return (await entry.getExportValue('metadata')) as
-      | { title?: string; label?: string; order?: number }
+      | { title?: string; label?: string; order?: number; tags?: string[] }
       | undefined
   } catch (error) {
     if (error instanceof ModuleExportNotFoundError) return undefined
@@ -66,49 +67,154 @@ async function getRouteTitle(entry: FileSystemEntry<any>) {
       // ignore inability to resolve file
     }
   }
-  return { title, order }
+  const keywords = new Set<string>()
+  keywords.add(title)
+  if (metadata?.tags) {
+    for (const tag of metadata.tags) {
+      keywords.add(tag)
+    }
+  }
+  if (metadata?.label) {
+    keywords.add(metadata.label)
+  }
+  const segments =
+    typeof (entry as any).getPathnameSegments === 'function'
+      ? (entry as any)
+          .getPathnameSegments({ includeBasePathname: false })
+          .filter(Boolean)
+      : []
+  for (const segment of segments) {
+    const normalized = segment.replace(/[-_]/g, ' ')
+    keywords.add(segment)
+    if (normalized && normalized !== segment) {
+      keywords.add(normalized)
+    }
+  }
+  return { title, order, keywords }
+}
+
+async function getApiRoutes(
+  entry: FileSystemEntry<any>,
+  {
+    pathname,
+    parentTitle,
+    order,
+    position,
+  }: {
+    pathname: string
+    parentTitle: string
+    order?: number
+    position: number
+  }
+) {
+  if (!isJavaScriptFile(entry)) return []
+
+  // Skip modifier files such as *.examples.tsx which do not render reference sections.
+  if (typeof entry.getModifierName === 'function' && entry.getModifierName()) {
+    return []
+  }
+
+  let exports
+  try {
+    exports = await entry.getExports()
+  } catch {
+    return []
+  }
+
+  const routes: InternalRoute[] = []
+
+  for (const [index, fileExport] of exports.entries()) {
+    const tags = fileExport.getTags?.()
+    if (tags?.some((tag) => tag.name === 'internal')) {
+      continue
+    }
+
+    const exportName = fileExport.getName?.()
+    if (!exportName) continue
+
+    const exportTitle = fileExport.getTitle?.() ?? exportName
+    const keywords = new Set<string>()
+    keywords.add(exportTitle)
+    keywords.add(exportName)
+    if (typeof fileExport.getSlug === 'function') {
+      keywords.add(fileExport.getSlug())
+    }
+    keywords.add(parentTitle)
+    keywords.add('api')
+    keywords.add('api reference')
+
+    const encodedAnchor = encodeURIComponent(exportName)
+
+    routes.push({
+      pathname: `${pathname}#${encodedAnchor}`,
+      title: `${exportTitle} · ${parentTitle}`,
+      keywords: Array.from(keywords),
+      order,
+      position: position + (index + 1) / (exports.length + 1),
+    })
+  }
+
+  return routes
 }
 
 export const getSearchRoutes = cache(async () => {
   const entries = await RootCollection.getEntries({ recursive: true })
 
   const routes = await Promise.all(
-    entries.map(async (entry, index): Promise<InternalRoute | null> => {
+    entries.map(async (entry, index): Promise<(InternalRoute | null)[]> => {
       const pathname = entry.getPathname()
 
       if (!pathname) {
-        return null
+        return [null]
       }
 
       if (pathname === '/') {
-        return null
+        return [null]
       }
 
-      const { title, order } = await getRouteTitle(entry)
+      const { title, order, keywords } = await getRouteTitle(entry)
 
-      if (!title) return null
+      if (!title) return [null]
 
       // Omit top-level directory entries that just duplicate their category header.
-      const segs = pathname.split('/').filter(Boolean)
+      const segments = pathname.split('/').filter(Boolean)
       if (
-        segs.length === 1 &&
+        segments.length === 1 &&
         'getEntries' in entry &&
-        title.trim().toLowerCase() === segs[0].toLowerCase()
+        title.trim().toLowerCase() === segments[0].toLowerCase()
       ) {
-        return null
+        return [null]
       }
 
-      return { pathname, title, order, position: index }
+      const apiRoutes = await getApiRoutes(entry, {
+        pathname,
+        parentTitle: title,
+        order,
+        position: index,
+      })
+
+      return [
+        {
+          pathname,
+          title,
+          order,
+          position: index,
+          keywords: Array.from(keywords),
+        },
+        ...apiRoutes,
+      ]
     })
   )
 
   const deduped = new Map<string, InternalRoute>()
 
-  for (const route of routes) {
-    if (!route) continue
+  for (const routeGroup of routes) {
+    for (const route of routeGroup) {
+      if (!route) continue
 
-    if (!deduped.has(route.pathname)) {
-      deduped.set(route.pathname, route)
+      if (!deduped.has(route.pathname)) {
+        deduped.set(route.pathname, route)
+      }
     }
   }
 
@@ -125,5 +231,9 @@ export const getSearchRoutes = cache(async () => {
     return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
   })
 
-  return sorted.map(({ pathname, title }) => ({ pathname, title }))
+  return sorted.map(({ pathname, title, keywords }) => ({
+    pathname,
+    title,
+    keywords,
+  }))
 })
