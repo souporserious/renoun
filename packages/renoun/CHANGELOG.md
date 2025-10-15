@@ -1,5 +1,16 @@
 # renoun
 
+## 10.5.1
+
+### Patch Changes
+
+- b3899fe: Fixes `CodeBlock` `annotations` prop cutting off source text in some cases.
+- c606c62: Minifies default grammars by stripping whitespace and newlines.
+- 413c915: Allows the `RootProvider` component to be optional by loading a default theme.
+- 12eb5e3: Adds LRU cache for quick info to prevent unbounded growth.
+- c338705: Improves annotation candidate detection and parsing heuristics to avoid unnecessary work in the `CodeBlock` component when using the `annotations` prop.
+- 6780b25: Fixes `RootProvider` configuration erroring when not provided.
+
 ## 10.5.0
 
 ### Minor Changes
