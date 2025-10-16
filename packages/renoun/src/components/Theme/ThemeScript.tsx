@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { Script } from '../Script'
+import { Script } from '../Script.js'
 
 /**
  * A script that sets the theme based on local storage before the page renders
