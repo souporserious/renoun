@@ -57,8 +57,8 @@ export function JoinButton() {
             }}
           >
             <svg
-              width="18"
-              height="18"
+              width="24"
+              height="24"
               viewBox="0 0 18 18"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -89,9 +89,8 @@ export function JoinButton() {
             css={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '1rem',
-              fontSize: 'var(--font-size-body-1)',
-              lineHeight: 1.6,
+              fontSize: 'var(--font-size-body-2)',
+              lineHeight: 'var(--line-height-body-2)',
               color: 'hsla(210, 100%, 90%, 0.85)',
             }}
           >
@@ -105,10 +104,7 @@ export function JoinButton() {
               Real quick.
             </p>
             <p css={{ margin: 0 }}>
-              Would you like to learn how to get the most out of how to use
-              renoun?
-              <br />
-              If not, feel free to press{' '}
+              Want to learn the best way to use renoun? <br /> If not, press{' '}
               <kbd
                 css={{
                   display: 'inline-flex',
