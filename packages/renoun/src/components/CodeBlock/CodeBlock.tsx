@@ -220,7 +220,7 @@ function CodeBlockWithFallback(props: CodeBlockProps) {
               </FallbackLineNumbers>
             )}
 
-            <FallbackCode
+            <Code
               css={{
                 gridColumn: restProps.showLineNumbers ? 2 : 1,
                 padding: restProps.showLineNumbers
@@ -229,7 +229,7 @@ function CodeBlockWithFallback(props: CodeBlockProps) {
               }}
             >
               {restProps.children}
-            </FallbackCode>
+            </Code>
           </FallbackPre>
         </Container>
       }
@@ -534,8 +534,18 @@ const Code = styled('code', {
 })
 
 const FallbackToolbar = styled('div', {
-  padding: '0.5lh',
+  fontSize: 'inherit',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.25em',
   boxShadow: `inset 0 -1px 0 0 #666`,
+  '&:before': {
+    content: '""',
+    display: 'block',
+    width: '12ch',
+    height: '1lh',
+    backgroundColor: '#f1f1f1',
+  },
 })
 
 const FallbackPre = styled('pre', {
@@ -556,10 +566,4 @@ const FallbackLineNumbers = styled('span', {
   gridRow: '1 / -1',
   width: '4ch',
   backgroundColor: 'inherit',
-})
-
-const FallbackCode = styled('code', {
-  display: 'block',
-  width: 'max-content',
-  backgroundColor: 'transparent',
 })
