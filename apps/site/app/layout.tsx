@@ -1,6 +1,6 @@
 import { Analytics } from '@vercel/analytics/react'
 import type { Metadata } from 'next'
-import { RootProvider } from 'renoun'
+import { RootProvider, Script } from 'renoun'
 import { GeistSans } from 'geist/font/sans'
 
 export const metadata = {
@@ -30,6 +30,7 @@ export default function RootLayout({
         <body className={GeistSans.className}>
           {children}
           <Analytics />
+          <Script>{import('./script.ts')}</Script>
         </body>
       </html>
     </RootProvider>
