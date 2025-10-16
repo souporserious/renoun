@@ -9,7 +9,7 @@ export default function Page() {
         flexDirection: 'column',
         alignItems: 'center',
         gap: '4rem',
-        padding: '5rem 1.75rem 7rem',
+        padding: '0 1.75rem 7rem',
         textAlign: 'center',
 
         '@media (min-width: 60rem)': {
