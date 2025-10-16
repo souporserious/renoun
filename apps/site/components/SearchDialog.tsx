@@ -21,6 +21,29 @@ import {
 
 import type { SearchRoute } from '@/lib/get-search-routes'
 
+const dialogTokens = {
+  overlay: 'color-mix(in srgb, var(--color-background) 75%, transparent)',
+  overlayBlur: '10px',
+  panelBackground: 'var(--color-surface)',
+  panelBorder: 'var(--color-separator-secondary)',
+  inputBackground: 'var(--color-surface-interactive)',
+  inputBorder: 'var(--color-separator-interactive)',
+  inputText: 'var(--color-foreground-interactive)',
+  textPrimary: 'var(--color-foreground)',
+  textSecondary: 'var(--color-foreground-secondary)',
+  textMuted:
+    'color-mix(in srgb, var(--color-foreground-interactive) 70%, transparent)',
+  labelMuted: 'var(--color-foreground-interactive)',
+  triggerBackground: 'var(--color-surface-secondary)',
+  triggerBorder: 'var(--color-separator-secondary)',
+  triggerText: 'var(--color-foreground-interactive)',
+  kbdBackground: 'var(--color-surface-interactive)',
+  kbdText: 'var(--color-foreground-secondary)',
+  listBackgroundHover: 'var(--color-surface-interactive)',
+  listBackgroundActive: 'var(--color-surface-interactive-highlighted)',
+  highlightBackground: `color-mix(in srgb, var(--color-surface-accent) 35%, transparent)`,
+}
+
 export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
   const [isOpen, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -140,8 +163,8 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
           width: '6.675rem',
           height: '2.25rem',
           borderRadius: 8,
-          background: 'var(--color-surface-secondary, #f5f5f5)',
-          color: 'var(--color-foreground, #ffffff)',
+          background: dialogTokens.triggerBackground,
+          color: dialogTokens.triggerText,
           padding: '0 0.75rem',
           fontSize: '.875rem',
           lineHeight: '1.25rem',
@@ -150,14 +173,14 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
           gap: '0.5rem',
           cursor: 'default',
           outline: 'none',
-          border: 'none',
+          border: `1px solid ${dialogTokens.triggerBorder}`,
         }}
       >
         <SearchIcon
           style={{
             width: 16,
             height: 16,
-            color: 'var(--color-foreground-interactive, #9ca3af)',
+            color: dialogTokens.textMuted,
           }}
         />
         <span style={{ flex: 1, textAlign: 'left' }}>Search</span>
@@ -169,8 +192,8 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
               fontWeight: 600,
               borderRadius: 4,
               fontSize: '0.75rem',
-              background: 'var(--color-surface-interactive, #e5e7eb)',
-              color: 'var(--color-foreground-interactive, #374151)',
+              background: dialogTokens.kbdBackground,
+              color: dialogTokens.kbdText,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -189,8 +212,8 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
           position: 'fixed',
           inset: 0,
           zIndex: 50,
-          background: 'rgba(0,0,0,0.25)',
-          backdropFilter: 'blur(4px)',
+          background: dialogTokens.overlay,
+          backdropFilter: `blur(${dialogTokens.overlayBlur})`,
           display: 'flex',
           minHeight: '100vh',
           alignItems: 'flex-start',
@@ -201,6 +224,12 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
         }}
       >
         <Modal>
+          <style>{`
+            .search-dialog-input::placeholder {
+              color: color-mix(in srgb, var(--color-foreground-interactive) 70%, transparent);
+              opacity: 0.85;
+            }
+          `}</style>
           <Dialog style={{ outline: 'none', position: 'relative' }}>
             <div
               style={{
@@ -210,9 +239,9 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                 width: 'min(95vw, 500px)',
                 maxWidth: '100%',
                 borderRadius: 12,
-                background: 'var(--color-surface-interactive, #111827)',
-                boxShadow:
-                  '0 4px 10px -2px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.04)',
+                background: dialogTokens.panelBackground,
+                boxShadow: '0 24px 60px rgba(2, 6, 23, 0.45)',
+                border: `1px solid ${dialogTokens.panelBorder}`,
                 padding: 8,
               }}
             >
@@ -234,23 +263,23 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                       transform: 'translateY(-50%)',
                       width: 16,
                       height: 16,
-                      color: 'var(--color-foreground-interactive, #9ca3af)',
+                      color: dialogTokens.textMuted,
                     }}
                   />
                   <Input
+                    className="search-dialog-input"
                     autoFocus
                     placeholder="Search documentation..."
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     style={{
                       width: '100%',
-                      padding: '0.5rem 0.75rem 0.5rem 2.25rem',
+                      padding: '0.55rem 0.85rem 0.55rem 2.4rem',
                       fontSize: '1rem',
                       lineHeight: '1.25rem',
-                      color: 'var(--color-foreground, #ffffff)',
-                      background:
-                        'var(--color-surface-secondary, rgba(0,0,0,0.05))',
-                      border: '1px solid var(--color-separator, transparent)',
+                      color: dialogTokens.inputText,
+                      background: dialogTokens.inputBackground,
+                      border: `1px solid ${dialogTokens.inputBorder}`,
                       borderRadius: 8,
                       outline: 'none',
                     }}
@@ -285,9 +314,7 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                             fontWeight: 600,
                             textTransform: 'uppercase',
                             padding: '0.5rem 0.75rem 0.25rem',
-                            color:
-                              'var(--color-foreground-interactive, #9ca3af)',
-                            opacity: 0.9,
+                            color: dialogTokens.labelMuted,
                             textAlign: 'left',
                           }}
                         >
@@ -309,15 +336,15 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                                 width: '100%',
                                 alignItems: 'stretch',
                                 borderRadius: 6,
-                                padding: '0.5rem 0.75rem',
+                                padding: '0.55rem 0.75rem',
                                 boxSizing: 'border-box',
                                 cursor: 'default',
                                 userSelect: 'none',
-                                color: 'var(--color-foreground, #ffffff)',
+                                color: dialogTokens.textPrimary,
                                 background: isSelected
-                                  ? 'var(--color-surface-primary, rgba(255,255,255,0.12))'
+                                  ? dialogTokens.listBackgroundActive
                                   : isFocused
-                                    ? 'var(--color-surface-interactive-highlighted, rgba(255,255,255,0.08))'
+                                    ? dialogTokens.listBackgroundHover
                                     : 'transparent',
                                 transition: 'background 120ms ease',
                               })}
@@ -336,7 +363,7 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                                       fontSize: '0.9375rem',
                                       lineHeight: '1.375rem',
                                       fontWeight: 600,
-                                      color: 'var(--color-foreground, #ffffff)',
+                                      color: dialogTokens.textPrimary,
                                     }}
                                   >
                                     {renderHighlightedText(
@@ -347,8 +374,7 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                                       <span
                                         style={{
                                           fontWeight: 500,
-                                          color:
-                                            'var(--color-foreground-muted, rgba(229,231,235,0.72))',
+                                          color: dialogTokens.textSecondary,
                                         }}
                                       >
                                         {' '}
@@ -364,8 +390,7 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                                     style={{
                                       fontSize: '0.75rem',
                                       lineHeight: '1rem',
-                                      color:
-                                        'var(--color-foreground-interactive, #9ca3af)',
+                                      color: dialogTokens.textMuted,
                                       textTransform: 'none',
                                     }}
                                   >
@@ -388,7 +413,7 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                       marginTop: 8,
                       padding: '1rem 0.75rem',
                       fontSize: '0.875rem',
-                      color: 'var(--color-foreground-interactive, #6b7280)',
+                      color: dialogTokens.textMuted,
                     }}
                   >
                     No matches found.
@@ -480,11 +505,16 @@ function renderHighlightedText(text: string, terms: string[]) {
       <span
         key={`${part}-${index}`}
         style={{
-          backgroundColor: 'rgba(59,130,246,0.25)',
-          color: 'var(--color-foreground, #ffffff)',
+          backgroundColor: dialogTokens.highlightBackground,
+          color: dialogTokens.textPrimary,
           borderRadius: 4,
-          padding: '0 0.15rem',
-          fontWeight: 700,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 0.125rem',
+          minWidth: '0.625rem',
+          boxDecorationBreak: 'clone',
+          WebkitBoxDecorationBreak: 'clone',
         }}
       >
         {part}
