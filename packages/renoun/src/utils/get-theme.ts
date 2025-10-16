@@ -46,7 +46,7 @@ function getThemeConfigName(
   return themeConfig
 }
 
-const cachedThemes = new Map<string, Record<string, any>>()
+const cachedThemes = new Map<string | undefined, Record<string, any>>()
 
 /** Gets a normalized VS Code theme. */
 export async function getTheme(
@@ -69,7 +69,7 @@ export async function getTheme(
     themePath = resolve(process.cwd(), themePath)
   }
 
-  if (themePath && cachedThemes.has(themePath)) {
+  if (cachedThemes.has(themePath)) {
     return cachedThemes.get(themePath)! as TextMateThemeRaw
   }
 
@@ -80,7 +80,7 @@ export async function getTheme(
   let theme: Theme
 
   if (themePath === undefined) {
-    theme = (await import('./default-theme.js')).defaultTheme as Theme
+    theme = (await import('../theme.js')).default as Theme
   } else if (themePath.endsWith('.json')) {
     theme = JSON.parse(readFileSync(themePath, 'utf-8')) as Theme
   } else if (themes.includes(themePath as any)) {
@@ -112,7 +112,7 @@ export async function getTheme(
     themeOverrides
   )
 
-  cachedThemes.set(themePath!, finalTheme)
+  cachedThemes.set(themePath, finalTheme)
 
   return finalTheme
 }

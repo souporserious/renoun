@@ -135,28 +135,30 @@ function pruneTheme(
   }
 
   // dedupe identical settings
-  const seen = new Map<string, number>()
-  for (const rule of usedRules) {
-    const key = JSON.stringify(rule.settings)
-    if (seen.has(key)) {
-      const index = seen.get(key)!
-      // merge scopes
-      out.tokenColors![index].scope = [
-        ...new Set([
-          ...(Array.isArray(out.tokenColors![index].scope)
-            ? (out.tokenColors![index].scope as string[])
-            : []),
-          ...rule.scope,
-        ]),
-      ]
-    } else {
-      seen.set(key, out.tokenColors!.length)
-      out.tokenColors!.push({
-        scope: rule.scope.length ? rule.scope : undefined,
-        settings: rule.settings,
-      })
-    }
+  function scopeKey(scopes: string[]): string {
+    if (!scopes.length) return '__UNSCOPED__'
+    // use set to drop duplicates, sort for order-insensitive equality
+    return Array.from(new Set(scopes)).sort().join('|')
   }
+
+  // build from the end so the last matching rule is kept.
+  const kept = new Set<string>()
+  const deduped: Array<{ scope?: string[]; settings: any }> = []
+
+  for (let index = usedRules.length - 1; index >= 0; index--) {
+    const rule = usedRules[index]
+    const key = scopeKey(rule.scope) + '::' + rule.settings
+    if (kept.has(key)) continue // earlier duplicate → drop
+    kept.add(key)
+    deduped.push({
+      scope: rule.scope.length ? rule.scope : undefined, // preserve later rule's scope order
+      settings: rule.settings,
+    })
+  }
+
+  // restore original order
+  deduped.reverse()
+  out.tokenColors = deduped
 
   // final fallback rule to avoid “black on black” if theme misses something
   if (!out.tokenColors!.some((rule) => !rule.scope)) {
@@ -175,12 +177,26 @@ async function main() {
   if (fs.existsSync(themePath)) {
     const theme: VSCodeTheme = JSON.parse(fs.readFileSync(themePath, 'utf8'))
     const prunedTheme = pruneTheme(theme, ALLOWED_SCOPES)
-    const themeOut = path.resolve('src/theme.json')
+    const themeOut = path.resolve('src/theme.ts')
     fs.mkdirSync(path.dirname(themeOut), { recursive: true })
-    fs.writeFileSync(themeOut, JSON.stringify(prunedTheme))
+    fs.writeFileSync(
+      themeOut,
+      toJsonModule(JSON.stringify(prunedTheme)),
+      'utf8'
+    )
   }
 
   console.log('✓ Pruned theme')
+}
+
+function toJsonModule(jsonText: string): string {
+  const singleQuoted = `'${jsonText
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')}'`
+
+  return `export default Object.freeze(\n  JSON.parse(\n    ${singleQuoted}\n  )\n)\n`
 }
 
 main().catch((error) => {
