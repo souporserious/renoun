@@ -544,7 +544,6 @@ const FallbackToolbar = styled('div', {
     display: 'block',
     width: '12ch',
     height: '1lh',
-    backgroundColor: '#f1f1f1',
   },
 })
 
