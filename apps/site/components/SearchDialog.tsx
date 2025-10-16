@@ -294,7 +294,8 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                           {group.category}
                         </Header>
                         {group.items.map((item) => {
-                          const [primaryTitle, ...rest] = item.title.split(' · ')
+                          const [primaryTitle, ...rest] =
+                            item.title.split(' · ')
                           const secondaryTitle = rest.join(' · ')
                           const fallback = formatPathname(item.pathname)
 
@@ -412,12 +413,13 @@ function getRouteScore(route: SearchRoute, terms: string[]) {
     if (!normalizedTerm) continue
 
     const titleScore = scoreText(route.title, normalizedTerm) * 5
-    const keywordScore = Math.max(
-      0,
-      ...(route.keywords ?? []).map((keyword) =>
-        scoreText(keyword, normalizedTerm)
-      )
-    ) * 3
+    const keywordScore =
+      Math.max(
+        0,
+        ...(route.keywords ?? []).map((keyword) =>
+          scoreText(keyword, normalizedTerm)
+        )
+      ) * 3
     const pathScore = scoreText(route.pathname, normalizedTerm) * 2
 
     const bestScore = Math.max(titleScore, keywordScore, pathScore)
@@ -446,7 +448,10 @@ function scoreText(text: string | undefined, term: string) {
     return 80
   }
 
-  const boundary = new RegExp(`(?:^|[^\w])${escapeRegExp(term)}(?:$|[^\w])`, 'i')
+  const boundary = new RegExp(
+    `(?:^|[^\\w])${escapeRegExp(term)}(?:$|[^\\w])`,
+    'i'
+  )
   if (boundary.test(normalized)) {
     return 55
   }
