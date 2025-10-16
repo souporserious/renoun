@@ -72,10 +72,6 @@ Strips out badges, which are often used in README files.
 
 Cleans up the document by removing unnecessary empty paragraphs which can be caused by packages like `remark-strip-badges`.
 
-#### [`rehype-infer-reading-time-meta`](https://www.npmjs.com/package/rehype-infer-reading-time-meta)
-
-Infers reading time metadata for MDX content.
-
 #### [`rehype-unwrap-images`](https://www.npmjs.com/package/rehype-unwrap-images)
 
 Ensures that images are not wrapped in paragraph tags.
@@ -186,7 +182,28 @@ export default function Page() {
 
 #### rehype `add-reading-time`
 
-Exports the reading time metadata added by `rehype-infer-reading-time-meta` as a `readingTime` variable.
+Exports an estimated reading time for MDX content as a `readingTime` value. It uses `Intl.Segmenter` for accurate, locale-aware word segmentation, `Intl.NumberFormat` for formatting the reading time, can optionally include code blocks, and accounts for images.
+
+<Note>
+
+`readingTime` is exported for MDX files only (not plain Markdown). When using the default `MDX` component from `renoun`, this plugin is included automatically. If you override `rehypePlugins`, re-add it to keep the export.
+
+</Note>
+
+Consuming the exported `readingTime` from an MDX file:
+
+```tsx allowErrors showErrors={false}
+import GettingStarted, { readingTime } from './docs/getting-started.mdx'
+
+export default function Page() {
+  return (
+    <>
+      <p>{readingTime} min read</p>
+      <GettingStarted />
+    </>
+  )
+}
+```
 
 ## Applying plugins
 
