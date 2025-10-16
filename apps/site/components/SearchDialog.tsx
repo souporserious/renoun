@@ -41,6 +41,7 @@ const dialogTokens = {
   kbdText: 'var(--color-foreground-secondary)',
   listBackgroundHover: 'var(--color-surface-interactive)',
   listBackgroundActive: 'var(--color-surface-interactive-highlighted)',
+  listDivider: `color-mix(in srgb, var(--color-separator-secondary) 65%, transparent)`,
   highlightBackground: `color-mix(in srgb, var(--color-surface-accent) 35%, transparent)`,
 }
 
@@ -122,9 +123,10 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
       map.get(cat)!.push(entry)
     }
     // Preserve original order of appearance while keeping group order stable
-    return Array.from(map.entries()).map(([category, items]) => ({
+    return Array.from(map.entries()).map(([category, items], index) => ({
       category,
       items,
+      index,
     }))
   }, [filteredEntries])
 
@@ -178,8 +180,8 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
       >
         <SearchIcon
           style={{
-            width: 16,
-            height: 16,
+            width: '1rem',
+            height: '1rem',
             color: dialogTokens.textMuted,
           }}
         />
@@ -242,49 +244,50 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                 background: dialogTokens.panelBackground,
                 boxShadow: '0 24px 60px rgba(2, 6, 23, 0.45)',
                 border: `1px solid ${dialogTokens.panelBorder}`,
-                padding: 8,
               }}
             >
               <Autocomplete filter={contains}>
-                <TextField
-                  aria-label="Search documentation"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    position: 'relative',
-                    padding: '0.5rem 0.25rem',
-                  }}
-                >
-                  <SearchIcon
+                <div style={{ padding: '0.25rem 0.25rem 0' }}>
+                  <TextField
+                    aria-label="Search documentation"
                     style={{
-                      position: 'absolute',
-                      left: '1rem',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      width: 16,
-                      height: 16,
-                      color: dialogTokens.textMuted,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      position: 'relative',
+                      padding: '0.5rem 0.25rem',
                     }}
-                  />
-                  <Input
-                    className="search-dialog-input"
-                    autoFocus
-                    placeholder="Search documentation..."
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '0.55rem 0.85rem 0.55rem 2.4rem',
-                      fontSize: '1rem',
-                      lineHeight: '1.25rem',
-                      color: dialogTokens.inputText,
-                      background: dialogTokens.inputBackground,
-                      border: `1px solid ${dialogTokens.inputBorder}`,
-                      borderRadius: 8,
-                      outline: 'none',
-                    }}
-                  />
-                </TextField>
+                  >
+                    <SearchIcon
+                      style={{
+                        position: 'absolute',
+                        left: '1rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        width: '1rem',
+                        height: '1rem',
+                        color: dialogTokens.textMuted,
+                      }}
+                    />
+                    <Input
+                      className="search-dialog-input"
+                      autoFocus
+                      placeholder="Search documentation..."
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.85rem 0.55rem 2.4rem',
+                        fontSize: '1rem',
+                        lineHeight: '1.25rem',
+                        color: dialogTokens.inputText,
+                        background: dialogTokens.inputBackground,
+                        border: `1px solid ${dialogTokens.inputBorder}`,
+                        borderRadius: 8,
+                        outline: 'none',
+                      }}
+                    />
+                  </TextField>
+                </div>
                 {filteredEntries.length ? (
                   <Menu
                     aria-label="Search results"
@@ -298,9 +301,11 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                       setOpen(false)
                     }}
                     style={{
-                      marginTop: 8,
-                      padding: 4,
-                      maxHeight: '11rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      padding: '0 0.25rem',
+                      gap: '0.5rem',
+                      maxHeight: 'clamp(14rem, 80vh, 32rem)',
                       overflow: 'auto',
                     }}
                     items={groupedEntries}
@@ -316,15 +321,17 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                             padding: '0.5rem 0.75rem 0.25rem',
                             color: dialogTokens.labelMuted,
                             textAlign: 'left',
+                            borderBottom: `1px solid ${dialogTokens.listDivider}`,
                           }}
                         >
                           {group.category}
                         </Header>
-                        {group.items.map((item) => {
+                        {group.items.map((item, itemIndex) => {
                           const [primaryTitle, ...rest] =
                             item.title.split(' · ')
                           const secondaryTitle = rest.join(' · ')
                           const fallback = formatPathname(item.pathname)
+                          const hasDivider = itemIndex > 0
 
                           return (
                             <MenuItem
@@ -335,12 +342,14 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                                 display: 'flex',
                                 width: '100%',
                                 alignItems: 'stretch',
-                                borderRadius: 6,
                                 padding: '0.55rem 0.75rem',
                                 boxSizing: 'border-box',
                                 cursor: 'default',
                                 userSelect: 'none',
                                 color: dialogTokens.textPrimary,
+                                boxShadow: hasDivider
+                                  ? `inset 0 1px 0 ${dialogTokens.listDivider}`
+                                  : 'none',
                                 background: isSelected
                                   ? dialogTokens.listBackgroundActive
                                   : isFocused
@@ -530,7 +539,9 @@ function escapeRegExp(value: string) {
 function formatPathname(pathname: string) {
   const cleaned = pathname.replace(/^\//, '')
   if (!cleaned) return '/'
-  return cleaned
+  const [withoutHash] = cleaned.split('#')
+  if (!withoutHash) return '/'
+  return withoutHash
     .split('/')
     .filter(Boolean)
     .map((segment) => segment.replace(/-/g, ' '))
