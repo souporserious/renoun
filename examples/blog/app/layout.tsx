@@ -1,4 +1,8 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import { RootProvider } from 'renoun'
+
+import { ThemeToggle } from './theme-toggle'
 import './layout.css'
 
 export const metadata: Metadata = {
@@ -16,8 +20,25 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
+    <RootProvider
+      theme={{
+        light: 'github-light',
+        dark: 'github-dark',
+      }}
+    >
+      <html lang="en" data-theme="light">
+        <body>
+          <div className="layout">
+            <header className="layout__header">
+              <Link href="/" className="layout__title">
+                renoun blog
+              </Link>
+              <ThemeToggle />
+            </header>
+            {children}
+          </div>
+        </body>
+      </html>
+    </RootProvider>
   )
 }
