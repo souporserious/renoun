@@ -1,5 +1,5 @@
 import ignore from 'fast-ignore'
-import * as tsMorph from 'ts-morph'
+import { getTsMorph } from '../utils/ts-morph.js'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
 import type { ProjectOptions } from '../project/types.js'
@@ -7,6 +7,8 @@ import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension
 import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.js'
 import { FileSystem } from './FileSystem.js'
 import type { DirectoryEntry } from './types.js'
+
+const tsMorph = getTsMorph()
 
 export type MemoryFileTextEntry = {
   kind: 'text'

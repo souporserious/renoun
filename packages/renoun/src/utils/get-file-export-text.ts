@@ -1,10 +1,12 @@
-import type { Project } from 'ts-morph'
-import * as tsMorph from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+import type { Project, SyntaxKind } from './ts-morph.js'
 
 import { createProjectFileCache } from '../project/cache.js'
 import { getFileExportDeclaration } from './get-file-exports.js'
 import { getFileExportsText } from './get-file-exports-text.js'
 import { getRootDirectory } from './get-root-directory.js'
+
+const tsMorph = getTsMorph()
 
 /** Get a specific file export's text by identifier, optionally including its dependencies. */
 export async function getFileExportText({
@@ -16,7 +18,7 @@ export async function getFileExportText({
 }: {
   filePath: string
   position: number
-  kind: tsMorph.SyntaxKind
+  kind: SyntaxKind
   project: Project
   includeDependencies?: boolean
 }) {

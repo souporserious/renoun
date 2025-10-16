@@ -1,13 +1,11 @@
 import { describe, test, expect } from 'vitest'
-import {
-  Project,
-  SyntaxKind,
-  type ClassDeclaration,
-  type FunctionDeclaration,
-} from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+import type { ClassDeclaration, FunctionDeclaration } from './ts-morph.js'
 import dedent from 'dedent'
 
 import { resolveType } from './resolve-type.js'
+
+const { Project, SyntaxKind } = getTsMorph()
 
 const project = new Project()
 

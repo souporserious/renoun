@@ -1,4 +1,4 @@
-import type { ProjectOptions as TsMorphProjectOptions } from 'ts-morph'
+import type { ProjectOptions as TsMorphProjectOptions } from '../utils/ts-morph.js'
 
 import type { Themes } from '../grammars/index.js'
 

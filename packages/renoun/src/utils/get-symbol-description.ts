@@ -1,5 +1,7 @@
-import type { Symbol } from 'ts-morph'
-import tsMorph from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+import type { Symbol } from './ts-morph.js'
+
+const tsMorph = getTsMorph()
 
 /** Gets the description from a symbol's JSDoc or leading comment range. */
 export function getSymbolDescription(symbol: Symbol) {

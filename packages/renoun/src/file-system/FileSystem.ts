@@ -1,5 +1,5 @@
 import { Minimatch } from 'minimatch'
-import type { SyntaxKind, ts } from 'ts-morph'
+import type { SyntaxKind, ts } from '../utils/ts-morph.js'
 
 import {
   getFileExports,

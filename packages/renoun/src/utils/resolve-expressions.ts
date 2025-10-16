@@ -1,9 +1,11 @@
+import { getTsMorph } from './ts-morph.js'
 import type {
   ArrayLiteralExpression,
   Expression,
   ObjectLiteralExpression,
-} from 'ts-morph'
-import tsMorph from 'ts-morph'
+} from './ts-morph.js'
+
+const tsMorph = getTsMorph()
 
 const { Node } = tsMorph
 

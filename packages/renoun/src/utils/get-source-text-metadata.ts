@@ -1,5 +1,5 @@
 import { dirname, join, posix, isAbsolute } from 'node:path'
-import type { Project } from 'ts-morph'
+import type { Project } from './ts-morph.js'
 
 import { waitForRefreshingProjects } from '../project/refresh.js'
 import { formatSourceText } from './format-source-text.js'

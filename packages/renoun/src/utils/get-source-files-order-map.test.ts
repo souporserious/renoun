@@ -1,5 +1,8 @@
 import { describe, test, expect, beforeEach } from 'vitest'
-import { Project, type Directory } from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+import type { Directory } from './ts-morph.js'
+
+const { Project } = getTsMorph()
 
 import { getSourceFilesOrderMap } from './get-source-files-order-map.js'
 

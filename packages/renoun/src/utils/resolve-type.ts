@@ -1,3 +1,4 @@
+import { getTsMorph } from './ts-morph.js'
 import type {
   Project,
   Node,
@@ -21,8 +22,18 @@ import type {
   TypeParameterDeclaration,
   TypeReferenceNode,
   ModuleDeclaration,
-} from 'ts-morph'
-import tsMorph from 'ts-morph'
+  TypeNode,
+  TypeLiteralNode,
+  MappedTypeNode,
+  IntersectionTypeNode,
+  TupleTypeNode,
+  EntityName,
+  Expression,
+  SourceFile,
+} from './ts-morph.js'
+import type * as TsMorph from './ts-morph.js'
+
+const tsMorph = getTsMorph()
 
 import {
   getInitializerValueKey,
@@ -668,7 +679,7 @@ declare module 'ts-morph' {
 const resolvingTypes = new Set<number>()
 
 /** Tracks aliases currently being expanded to prevent recursive type references. */
-const resolvingAliasSymbols = new Set<tsMorph.Symbol>()
+const resolvingAliasSymbols = new Set<Symbol>()
 
 /** Creates a shallow reference to a type. */
 function toShallowReference(
@@ -1576,7 +1587,7 @@ function resolveTypeExpression(
     } else if (isConditionalType(type)) {
       const compilerFactory = (type as any)._context.compilerFactory
       const typeChecker = (type as any)._context.typeChecker
-        .compilerObject as tsMorph.ts.TypeChecker
+        .compilerObject as TsMorph.ts.TypeChecker
       const checkType = compilerFactory.getType(type.compilerType.checkType)
       const resolvedCheckType = resolveTypeExpression(
         checkType,
@@ -1698,15 +1709,15 @@ function resolveTypeExpression(
           const unionTypes: Kind.TypeExpression[] = []
 
           for (const element of unionElements) {
-            let currentNode: tsMorph.Node | undefined
-            let currentType: tsMorph.Type
+            let currentNode: Node | undefined
+            let currentType: Type
 
             if (isUnionTypeNode) {
-              const typeNode = element as tsMorph.TypeNode
+              const typeNode = element as TypeNode
               currentNode = typeNode
               currentType = typeNode.getType()
             } else {
-              const unionType = element as tsMorph.Type
+              const unionType = element as Type
               currentType = unionType
               const elementAliasSymbol = unionType.getAliasSymbol()
               const unionDeclaration = getPrimaryDeclaration(
@@ -1784,7 +1795,7 @@ function resolveTypeExpression(
         }
       }
     } else if (type.isIntersection()) {
-      let intersectionNode: tsMorph.IntersectionTypeNode | undefined
+      let intersectionNode: IntersectionTypeNode | undefined
 
       if (tsMorph.Node.isIntersectionTypeNode(enclosingNode)) {
         intersectionNode = enclosingNode
@@ -1967,7 +1978,7 @@ function resolveTypeExpression(
             : false,
         } satisfies Kind.FunctionType
       } else if (isMappedType(type)) {
-        let mappedNode: tsMorph.MappedTypeNode | undefined
+        let mappedNode: MappedTypeNode | undefined
 
         if (tsMorph.Node.isMappedTypeNode(enclosingNode)) {
           mappedNode = enclosingNode
@@ -2025,7 +2036,7 @@ function resolveTypeExpression(
         }
       } else if (type.isObject()) {
         let resolvedMembers: Kind.MemberUnion[] = []
-        let objectNode: tsMorph.TypeLiteralNode | undefined
+        let objectNode: TypeLiteralNode | undefined
 
         if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
           const typeNode = symbolDeclaration.getTypeNode()
@@ -2431,7 +2442,7 @@ function resolveTypeParameterDeclaration(
  * - Authored inside the project
  * - External and no longer generic
  */
-function shouldResolveCallSignature(signature: tsMorph.Signature): boolean {
+function shouldResolveCallSignature(signature: Signature): boolean {
   // Always keep signatures authored in the project
   if (!signature.getDeclaration().getSourceFile().isInNodeModules()) {
     return true
@@ -2639,7 +2650,7 @@ function resolveParameter(
   dependencies?: Set<string>
 ): Kind.Parameter | undefined {
   let parameterDeclaration: ParameterDeclaration | undefined
-  let jsDocParameter: tsMorph.JSDocParameterTag | undefined
+  let jsDocParameter: TsMorph.JSDocParameterTag | undefined
   let parameterType: Type | undefined
   const symbol = tsMorph.Node.isNode(parameterDeclarationOrSymbol)
     ? parameterDeclarationOrSymbol.getSymbol()
@@ -2661,7 +2672,7 @@ function resolveParameter(
 
     if (enclosingNode) {
       parameterType = (
-        parameterDeclarationOrSymbol as tsMorph.Symbol
+        parameterDeclarationOrSymbol as Symbol
       ).getTypeAtLocation(enclosingNode)
     } else {
       throw new Error(
@@ -3069,8 +3080,8 @@ function resolvePropertySignature(
 }
 
 /** Unwrap Rest and Optional type nodes. */
-function unwrapRestAndOptional(node: tsMorph.TypeNode) {
-  let currentNode: tsMorph.TypeNode = node
+function unwrapRestAndOptional(node: TypeNode) {
+  let currentNode: TypeNode = node
   let isRest = false
   let isOptional = false
 
@@ -3101,13 +3112,13 @@ function resolveTypeTupleElements(
     isOptional?: boolean
     isRest?: boolean
     isReadonly?: boolean
-    node?: tsMorph.TypeNode
+    node?: TypeNode
   }
 
   const elementMetadataList: TupleElementMetadata[] = []
 
   // Prefer a nearby TupleTypeNode so we can read labels & tokens
-  let tupleNode: tsMorph.TupleTypeNode | undefined
+  let tupleNode: TupleTypeNode | undefined
   if (tsMorph.Node.isTupleTypeNode(enclosingNode)) {
     tupleNode = enclosingNode
   } else if (tsMorph.Node.isTypeAliasDeclaration(enclosingNode)) {
@@ -3129,7 +3140,7 @@ function resolveTypeTupleElements(
   if (tupleNode) {
     for (const tupleElementNode of tupleNode.getElements()) {
       const elementMetadata: TupleElementMetadata = {}
-      let elementTypeNode: tsMorph.TypeNode
+      let elementTypeNode: TypeNode
 
       if (tsMorph.Node.isNamedTupleMember(tupleElementNode)) {
         elementMetadata.name = tupleElementNode.getNameNode().getText()
@@ -3162,7 +3173,7 @@ function resolveTypeTupleElements(
         elementTypeNode = unwrappedInfo.node
       } else {
         // Plain element: could be RestTypeNode or OptionalType by kind
-        elementTypeNode = tupleElementNode as tsMorph.TypeNode
+        elementTypeNode = tupleElementNode as TypeNode
         const unwrappedInfo = unwrapRestAndOptional(elementTypeNode)
         elementMetadata.isOptional = unwrappedInfo.isOptional
         elementMetadata.isRest = unwrappedInfo.isRest
@@ -4002,21 +4013,21 @@ function isReferenceType(type: Type): boolean {
 /** Returns true if the given Type is a conditional type (e.g. `A extends B ? X : Y`). */
 function isConditionalType(
   type: Type
-): type is Type & { compilerType: tsMorph.ts.ConditionalType } {
+): type is Type & { compilerType: TsMorph.ts.ConditionalType } {
   return (type.compilerType.flags & tsMorph.ts.TypeFlags.Conditional) !== 0
 }
 
 /** Returns true if the given type is an indexed access type (e.g. `Type[Key]`). */
 function isIndexedAccessType(
   type: Type
-): type is Type & { compilerType: tsMorph.ts.IndexedAccessType } {
+): type is Type & { compilerType: TsMorph.ts.IndexedAccessType } {
   return (type.compilerType.flags & tsMorph.ts.TypeFlags.IndexedAccess) !== 0
 }
 
 /** Returns true if the given type is a type operator type (e.g. `keyof Type`). */
 function isTypeOperatorType(
   type: Type
-): type is Type & { compilerType: tsMorph.ts.IndexType } {
+): type is Type & { compilerType: TsMorph.ts.IndexType } {
   return (type.compilerType.flags & tsMorph.ts.TypeFlags.Index) !== 0
 }
 
@@ -4221,7 +4232,7 @@ function isOnlyStringAndEmpty(types: Kind.TypeExpression[]): boolean {
 
 /** Checks if a type reference's primary declaration is exported. */
 function isTypeReferenceExported(
-  typeReference: tsMorph.TypeReferenceNode
+  typeReference: TypeReferenceNode
 ): boolean {
   const declaration = getPrimaryDeclaration(
     typeReference.getTypeName().getSymbolOrThrow()
@@ -4233,9 +4244,9 @@ function isTypeReferenceExported(
 
 /** Gets the left most type reference of an indexed access type node. */
 function getLeftMostTypeReference(
-  node: tsMorph.IndexedAccessTypeNode
-): tsMorph.TypeReferenceNode | undefined {
-  let current: tsMorph.TypeNode = node.getObjectTypeNode()
+  node: TsMorph.IndexedAccessTypeNode
+): TypeReferenceNode | undefined {
+  let current: TypeNode = node.getObjectTypeNode()
   while (tsMorph.Node.isIndexedAccessTypeNode(current)) {
     current = current.getObjectTypeNode()
   }
@@ -4345,7 +4356,7 @@ function containsFreeTypeParameter(
 
 /** Gets the visibility of a symbol. */
 function getSymbolVisibility(
-  symbol: tsMorph.Symbol | undefined,
+  symbol: Symbol | undefined,
   enclosingNode: Node | undefined
 ) {
   if (!symbol) {
@@ -4475,8 +4486,8 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
 
 /** Determine whether a `MappedType` should be fully resolved or kept as a reference. */
 function shouldResolveMappedType(
-  mappedNode: tsMorph.MappedTypeNode,
-  type: tsMorph.Type
+  mappedNode: MappedTypeNode,
+  type: Type
 ): boolean {
   for (const typeArgument of [
     ...type.getAliasTypeArguments(),
@@ -4522,7 +4533,7 @@ function shouldResolveMappedType(
  * Examine every declaration for the provided symbol and return the first
  * module specifier that comes from an import-style declaration.
  */
-function getModuleFromSymbol(symbol: tsMorph.Symbol | undefined) {
+function getModuleFromSymbol(symbol: Symbol | undefined) {
   if (!symbol) {
     return undefined
   }
@@ -4566,8 +4577,8 @@ function getModuleFromSymbol(symbol: tsMorph.Symbol | undefined) {
 
 /** Check imports within a single source file to resolve the module specifier. */
 function matchImportInSourceFile(
-  sourceFile: tsMorph.SourceFile,
-  symbol: tsMorph.Symbol,
+  sourceFile: SourceFile,
+  symbol: Symbol,
   declarationFilePaths: Set<string>
 ): string | undefined {
   for (const importDeclaration of sourceFile.getImportDeclarations()) {
@@ -4608,7 +4619,7 @@ function matchImportInSourceFile(
 /** Resolve module specifier by matching the symbol against the current file's imports. */
 function getModuleSpecifierFromImports(
   enclosingNode: Node | undefined,
-  symbol?: tsMorph.Symbol
+  symbol?: Symbol
 ) {
   if (!enclosingNode || !symbol) {
     return undefined
@@ -4673,7 +4684,7 @@ function getModuleSpecifierFromTypeReference(
     }
 
     // Walk left until we reach the root identifier and try that.
-    let leftSide: tsMorph.EntityName | tsMorph.Expression = typeName.getLeft()
+    let leftSide: EntityName | Expression = typeName.getLeft()
     while (tsMorph.Node.isQualifiedName(leftSide)) {
       leftSide = leftSide.getLeft()
     }
@@ -4716,13 +4727,13 @@ function getOriginUnionTypes(type: Type): Type[] {
 
   const compilerFactory = (type as any)._context.compilerFactory
 
-  return origin.types.map((unionType: tsMorph.ts.Type) =>
+  return origin.types.map((unionType: TsMorph.ts.Type) =>
     compilerFactory.getType(unionType)
   )
 }
 
 /** Prints helpful information about a node for debugging. */
-function printNode(node: tsMorph.Node) {
+function printNode(node: Node) {
   const kindName = node.getKindName()
   let output = `Kind: ${kindName}\n`
 

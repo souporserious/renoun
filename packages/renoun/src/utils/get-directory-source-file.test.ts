@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'vitest'
-import { Project } from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+
+const { Project } = getTsMorph()
 
 import { getDirectorySourceFile } from './get-directory-source-file'
 

@@ -1,4 +1,4 @@
-import type { Project } from 'ts-morph'
+import type { Project } from '../utils/ts-morph.js'
 
 import { waitForRefreshingProjects } from './refresh.js'
 
