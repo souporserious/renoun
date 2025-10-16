@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 3.2.1
+
+### Patch Changes
+
+- e23c119: Replaces the `rehype-infer-reading-time-meta` dependency with a built-in utility for calculating the reading time.
+
 ## 3.2.0
 
 ### Minor Changes

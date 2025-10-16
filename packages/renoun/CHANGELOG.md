@@ -1,5 +1,14 @@
 # renoun
 
+## 10.5.3
+
+### Patch Changes
+
+- 5525a52: Fixes the default theme not getting included in the published build.
+- 5af6878: Fixes the `CodeBlock` component's `Suspense` fallback layout shift.
+- Updated dependencies [e23c119]
+  - @renoun/mdx@3.2.1
+
 ## 10.5.2
 
 ### Patch Changes
