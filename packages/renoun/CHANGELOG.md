@@ -1,5 +1,11 @@
 # renoun
 
+## 10.5.4
+
+### Patch Changes
+
+- 8feaf50: Fixes `ts-morph` erroring in Vite builds by loading the package dynamically to resolve the CommonJS module at runtime.
+
 ## 10.5.3
 
 ### Patch Changes
