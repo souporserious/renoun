@@ -132,9 +132,7 @@ async function getApiRoutes(
     const exportName = fileExport.getName?.()
     if (!exportName) continue
 
-    const exportTitle = fileExport.getTitle?.() ?? exportName
     const keywords = new Set<string>()
-    keywords.add(exportTitle)
     keywords.add(exportName)
     if (typeof fileExport.getSlug === 'function') {
       keywords.add(fileExport.getSlug())
@@ -147,7 +145,7 @@ async function getApiRoutes(
 
     routes.push({
       pathname: `${pathname}#${encodedAnchor}`,
-      title: `${exportTitle} · ${parentTitle}`,
+      title: `${exportName} · ${parentTitle}`,
       keywords: Array.from(keywords),
       order,
       position: position + (index + 1) / (exports.length + 1),
