@@ -95,6 +95,7 @@ export function Trigger({
         padding: 0,
         border: 0,
         background: 'none',
+        color: 'inherit',
         ...css,
       }}
       {...props}
