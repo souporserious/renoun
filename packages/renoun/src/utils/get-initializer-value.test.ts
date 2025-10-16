@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'vitest'
 import dedent from 'dedent'
-import { Project, SyntaxKind } from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+
+const { Project, SyntaxKind } = getTsMorph()
 
 import { getInitializerValue } from './get-initializer-value.js'
 

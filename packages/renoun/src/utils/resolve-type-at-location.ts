@@ -1,9 +1,11 @@
-import type { Project } from 'ts-morph'
-import { SyntaxKind } from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+import type { Project, SyntaxKind as TsMorphSyntaxKind } from './ts-morph.js'
 
 import { getDebugLogger } from './debug.js'
 import type { Kind, TypeFilter } from './resolve-type.js'
 import { resolveType } from './resolve-type.js'
+
+const { SyntaxKind } = getTsMorph()
 
 export const resolvedTypeCache = new Map<
   string,
@@ -18,7 +20,7 @@ export async function resolveTypeAtLocation(
   project: Project,
   filePath: string,
   position: number,
-  kind: SyntaxKind,
+  kind: TsMorphSyntaxKind,
   filter?: TypeFilter,
   isMemoryFileSystem = false
 ) {

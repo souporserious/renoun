@@ -1,5 +1,7 @@
-import type { Project, ts } from 'ts-morph'
-import * as tsMorph from 'ts-morph'
+import { getTsMorph } from '../utils/ts-morph.js'
+import type { Project, ts } from '../utils/ts-morph.js'
+
+const tsMorph = getTsMorph()
 
 const printerCache = new WeakMap<Project, ts.Printer>()
 const LineFeed = tsMorph.ts.NewLineKind.LineFeed

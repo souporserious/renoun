@@ -1,5 +1,7 @@
-import type { Node, Project } from 'ts-morph'
-import * as tsMorph from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+import type { Node, Project, SyntaxKind } from './ts-morph.js'
+
+const tsMorph = getTsMorph()
 
 import { getDebugLogger } from './debug.js'
 import { getDeclarationLocation } from './get-declaration-location.js'
@@ -9,7 +11,7 @@ export interface ModuleExport {
   name: string
   path: string
   position: number
-  kind: tsMorph.SyntaxKind
+  kind: SyntaxKind
 }
 
 const exportableKinds = new Set([
@@ -146,7 +148,7 @@ export function getFileExports(
 export function getFileExportDeclaration(
   filePath: string,
   position: number,
-  kind: tsMorph.SyntaxKind,
+  kind: SyntaxKind,
   project: Project
 ) {
   return getDebugLogger().trackOperation(
@@ -196,7 +198,7 @@ export function getFileExportDeclaration(
         kind: tsMorph.SyntaxKind[kind],
       },
     }
-  ) as tsMorph.Node
+  ) as Node
 }
 
 /** Returns metadata about a specific export of a file. */
@@ -204,7 +206,7 @@ export async function getFileExportMetadata(
   name: string,
   filePath: string,
   position: number,
-  kind: tsMorph.SyntaxKind,
+  kind: SyntaxKind,
   project: Project
 ) {
   return getDebugLogger().trackOperation(

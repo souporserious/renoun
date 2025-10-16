@@ -1,4 +1,5 @@
-import { Project, ts } from 'ts-morph'
+import { getTsMorph } from '../utils/ts-morph.js'
+import type { Project as TsMorphProject, ts as TsMorphTS } from '../utils/ts-morph.js'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
@@ -15,9 +16,11 @@ import {
 } from './refresh.js'
 import type { ProjectOptions } from './types.js'
 
-const projects = new Map<string, Project>()
+const { Project, ts } = getTsMorph()
+
+const projects = new Map<string, TsMorphProject>()
 const directoryWatchers = new Map<string, FSWatcher>()
-const directoryToProjects = new Map<string, Set<Project>>()
+const directoryToProjects = new Map<string, Set<TsMorphProject>>()
 
 const defaultCompilerOptions = {
   allowJs: true,
@@ -32,7 +35,7 @@ const defaultCompilerOptions = {
   module: ts.ModuleKind.ESNext,
   moduleDetection: ts.ModuleDetectionKind.Force,
   target: ts.ScriptTarget.ESNext,
-} satisfies ts.CompilerOptions
+} satisfies TsMorphTS.CompilerOptions
 
 /** Get the project associated with the provided options. */
 export function getProject(options?: ProjectOptions) {
@@ -161,7 +164,7 @@ export function getProject(options?: ProjectOptions) {
   return project
 }
 
-function refreshOrAddSourceFile(project: Project, filePath: string) {
+function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {
   const existingSourceFile = project.getSourceFile(filePath)
 
   if (!existingSourceFile) {
@@ -190,7 +193,7 @@ function createProjectDebugContext({
   projectOptions,
   cacheStatus,
 }: {
-  project: Project
+  project: TsMorphProject
   projectId: string
   projectDirectory: string
   projectOptions?: ProjectOptions

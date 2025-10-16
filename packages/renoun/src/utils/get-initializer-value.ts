@@ -1,3 +1,4 @@
+import { getTsMorph } from './ts-morph.js'
 import type {
   Expression,
   ParameterDeclaration,
@@ -6,8 +7,9 @@ import type {
   ObjectBindingPattern,
   PropertyDeclaration,
   PropertySignature,
-} from 'ts-morph'
-import tsMorph from 'ts-morph'
+} from './ts-morph.js'
+
+const tsMorph = getTsMorph()
 
 import {
   resolveLiteralExpression,

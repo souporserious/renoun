@@ -1,6 +1,6 @@
 import { join, posix } from 'node:path'
-import type { Diagnostic, Project, SourceFile, ts } from 'ts-morph'
-import tsMorph from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+import type { Diagnostic, Project, SourceFile, ts } from './ts-morph.js'
 
 import type { ConfigurationOptions } from '../components/Config/types.js'
 import type { Languages as TextMateLanguages } from '../grammars/index.js'
@@ -13,6 +13,7 @@ import { isJsxOnly } from './is-jsx-only.js'
 import { generatedFilenames } from './get-source-text-metadata.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 
+const tsMorph = getTsMorph()
 const { Node, SyntaxKind } = tsMorph
 
 type Color = string

@@ -1,5 +1,7 @@
-import type { Node } from 'ts-morph'
-import tsMorph from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+import type { Node } from './ts-morph.js'
+
+const tsMorph = getTsMorph()
 
 /** Gets the description and tags from a JSDoc comment for a node. */
 export function getJsDocMetadata(node: Node):

@@ -1,4 +1,4 @@
-import type { Project } from 'ts-morph'
+import type { Project } from './ts-morph.js'
 
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
 

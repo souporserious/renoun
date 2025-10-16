@@ -1,6 +1,7 @@
 import { watch } from 'node:fs'
 import { join } from 'node:path'
-import { SyntaxKind } from 'ts-morph'
+import { getTsMorph } from '../utils/ts-morph.js'
+import type { SyntaxKind as TsMorphSyntaxKind } from '../utils/ts-morph.js'
 
 import {
   createHighlighter,
@@ -28,6 +29,8 @@ import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpi
 import { WebSocketServer } from './rpc/server.js'
 import { getProject } from './get-project.js'
 import type { ProjectOptions } from './types.js'
+
+const { SyntaxKind } = getTsMorph()
 
 let currentHighlighter: Promise<Highlighter> | null = null
 
@@ -120,7 +123,7 @@ export async function createServer(options?: { port?: number }) {
     }: {
       filePath: string
       position: number
-      kind: SyntaxKind
+      kind: TsMorphSyntaxKind
       filter?: string
       projectOptions?: ProjectOptions
     }) {
@@ -192,7 +195,7 @@ export async function createServer(options?: { port?: number }) {
       name: string
       filePath: string
       position: number
-      kind: SyntaxKind
+      kind: TsMorphSyntaxKind
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
@@ -215,7 +218,7 @@ export async function createServer(options?: { port?: number }) {
     }: {
       filePath: string
       position: number
-      kind: SyntaxKind
+      kind: TsMorphSyntaxKind
       includeDependencies?: boolean
       projectOptions?: ProjectOptions
     }) {
@@ -244,7 +247,7 @@ export async function createServer(options?: { port?: number }) {
     }: {
       filePath: string
       position: number
-      kind: SyntaxKind
+      kind: TsMorphSyntaxKind
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)

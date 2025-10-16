@@ -1,5 +1,7 @@
-import type { Project } from 'ts-morph'
-import tsMorph from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
+import type { Expression, Project, SyntaxKind } from './ts-morph.js'
+
+const tsMorph = getTsMorph()
 
 import { getFileExportDeclaration } from './get-file-exports.js'
 import {
@@ -12,7 +14,7 @@ import {
 export async function getFileExportStaticValue(
   filePath: string,
   position: number,
-  kind: tsMorph.SyntaxKind,
+  kind: SyntaxKind,
   project: Project
 ): Promise<LiteralExpressionValue> {
   let sourceFile = project.getSourceFile(filePath)
@@ -31,7 +33,7 @@ export async function getFileExportStaticValue(
     kind,
     project
   )
-  let expression: tsMorph.Expression | undefined
+  let expression: Expression | undefined
 
   if (tsMorph.Node.isVariableDeclaration(exportDeclaration)) {
     expression = exportDeclaration.getInitializer()

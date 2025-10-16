@@ -1,8 +1,10 @@
 import { describe, test, expect } from 'vitest'
-import { Project } from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
 import dedent from 'dedent'
 
 import { getDiagnosticMessageText } from './get-diagnostic-message.js'
+
+const { Project } = getTsMorph()
 
 describe('getDiagnosticMessageText', () => {
   const project = new Project()

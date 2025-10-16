@@ -1,7 +1,9 @@
 import { describe, test, expect } from 'vitest'
-import { Project } from 'ts-morph'
+import { getTsMorph } from './ts-morph.js'
 
 import { getFileExportsText } from './get-file-exports-text.js'
+
+const { Project } = getTsMorph()
 
 const sourceFileText = `
 import * as React from 'react'

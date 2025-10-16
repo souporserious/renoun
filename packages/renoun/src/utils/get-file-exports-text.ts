@@ -1,13 +1,16 @@
+import { getTsMorph } from './ts-morph.js'
 import type {
   ImportDeclaration,
   Node,
   Project,
   SourceFile,
   SyntaxKind,
-} from 'ts-morph'
-import * as tsMorph from 'ts-morph'
+  ts,
+} from './ts-morph.js'
 
 import { getPrinter } from '../project/get-printer.js'
+
+const tsMorph = getTsMorph()
 
 interface DeclarationInfo {
   /** The symbol ID of the declaration */
@@ -408,7 +411,7 @@ function buildTextSnippet(
   usedLocals: Set<string>,
   sourceFile: SourceFile,
   declarationMap: Map<string, DeclarationInfo>,
-  printer: tsMorph.ts.Printer
+  printer: ts.Printer
 ): string {
   const usedImports = getUsedImports(usedLocals, declarationMap)
   const fileStatements = sourceFile.getStatements()
@@ -485,7 +488,7 @@ function stripLeadingJsDoc(text: string): string {
 function printFilteredImportStatement(
   declaration: ImportDeclaration,
   usedAliases: Set<string>,
-  printer: tsMorph.ts.Printer
+  printer: ts.Printer
 ): string | undefined {
   const ts = tsMorph.ts
   const { factory } = ts
@@ -545,17 +548,17 @@ function printFilteredImportStatement(
 
 /** Determine if a node has a specific modifier kind. */
 function hasModifier(
-  node: tsMorph.Node & { getModifiers?: () => tsMorph.Node[] },
-  kind: tsMorph.SyntaxKind
+  node: Node & { getModifiers?: () => Node[] },
+  kind: SyntaxKind
 ) {
   return node.getModifiers?.()?.some((modifier) => modifier.getKind() === kind)
 }
 
 /** Returns true if this is an anonymous default export (no name, export + default modifiers). */
 function isAnonymousDefaultExportStatement(
-  statement: tsMorph.Node & {
-    getModifiers?: () => tsMorph.Node[]
-    getNameNode?: () => tsMorph.Node | undefined
+  statement: Node & {
+    getModifiers?: () => Node[]
+    getNameNode?: () => Node | undefined
   }
 ) {
   // Must be function or class declarations for our current anonymous support.

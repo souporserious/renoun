@@ -1,4 +1,4 @@
-import type { SyntaxKind } from 'ts-morph'
+import type { SyntaxKind } from '../utils/ts-morph.js'
 
 import type { ConfigurationOptions } from '../components/Config/types.js'
 import {
