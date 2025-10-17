@@ -22,7 +22,10 @@ import { Markdown, type MarkdownComponents } from '../components/Markdown.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
 import { getClosestFile } from '../utils/get-closest-file.js'
-import { getEditorUri } from '../utils/get-editor-uri.js'
+import {
+  getEditorUri,
+  type GetEditorUriOptions,
+} from '../utils/get-editor-uri.js'
 import type { ModuleExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
 import {
@@ -547,8 +550,13 @@ export class File<
   }
 
   /** Get the URI to the file source code for the configured editor. */
-  getEditorUri() {
-    return getEditorUri({ path: this.getAbsolutePath() })
+  getEditorUri(options?: Omit<GetEditorUriOptions, 'path'>) {
+    return getEditorUri({
+      path: this.getAbsolutePath(),
+      line: options?.line,
+      column: options?.column,
+      editor: options?.editor,
+    })
   }
 
   /** Get the first local git commit date of the file. */
@@ -989,7 +997,7 @@ export class JavaScriptModuleExport<Value> {
   }
 
   /** Get the URI to the file export source code for the configured editor. */
-  getEditorUri() {
+  getEditorUri(options?: Omit<GetEditorUriOptions, 'path'>) {
     const path = this.#file.getAbsolutePath()
 
     if (this.#metadata?.location) {
@@ -997,12 +1005,18 @@ export class JavaScriptModuleExport<Value> {
 
       return getEditorUri({
         path,
-        line: location.position.start.line,
-        column: location.position.start.column,
+        line: options?.line ?? location.position.start.line,
+        column: options?.column ?? location.position.start.column,
+        editor: options?.editor,
       })
     }
 
-    return getEditorUri({ path })
+    return getEditorUri({
+      path,
+      line: options?.line,
+      column: options?.column,
+      editor: options?.editor,
+    })
   }
 
   /** Get the resolved type of the export. */
@@ -1452,8 +1466,8 @@ export class MDXModuleExport<Value> {
     return createSlug(this.getName(), this.#slugCasing)
   }
 
-  getEditorUri() {
-    return this.#file.getEditorUri()
+  getEditorUri(options?: Omit<GetEditorUriOptions, 'path'>) {
+    return this.#file.getEditorUri(options)
   }
 
   getEditUrl(
@@ -2972,8 +2986,11 @@ export class Directory<
   }
 
   /** Get the URI to the directory source code for the configured editor. */
-  getEditorUri() {
-    return getEditorUri({ path: this.getAbsolutePath() })
+  getEditorUri(options?: Pick<GetEditorUriOptions, 'editor'>) {
+    return getEditorUri({
+      path: this.getAbsolutePath(),
+      editor: options?.editor,
+    })
   }
 
   /** Get the first local git commit date of this directory. */

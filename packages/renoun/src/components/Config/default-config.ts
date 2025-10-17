@@ -5,6 +5,7 @@ import type { ConfigurationOptions } from './types'
  * @internal
  */
 export const defaultConfig: ConfigurationOptions = {
+  editor: 'vscode',
   languages: [
     'css',
     'js',

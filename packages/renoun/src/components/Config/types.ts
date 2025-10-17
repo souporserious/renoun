@@ -1,4 +1,5 @@
 import type { Languages, Themes } from '../../grammars/index.js'
+import type { Editors } from '../../utils/get-editor-uri.js'
 
 /**
  * The theme name.
@@ -74,4 +75,7 @@ export interface ConfigurationOptions {
 
   /** The default package manager used by the `Install` component. */
   defaultPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun'
+
+  /** The default editor used when constructing editor URIs. */
+  editor?: Editors
 }
