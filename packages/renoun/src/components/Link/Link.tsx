@@ -124,6 +124,27 @@ RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
       }
     }
 
+    if (methodName === 'getEditorUri') {
+      const editorOptions =
+        options && typeof options === 'object'
+          ? { ...(options as Record<string, any>) }
+          : undefined
+
+      if (
+        config.editor &&
+        (editorOptions?.['editor'] === undefined ||
+          editorOptions?.['editor'] === null)
+      ) {
+        if (editorOptions) {
+          editorOptions['editor'] = config.editor
+        } else {
+          return method.call(source, { editor: config.editor })
+        }
+      }
+
+      return method.call(source, editorOptions)
+    }
+
     const needsRepository = methodName.endsWith('Url')
     const href = needsRepository
       ? method.call(source, {

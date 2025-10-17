@@ -59,6 +59,7 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   languages,
   git,
   siteUrl,
+  editor,
   defaultPackageManager = 'npm',
   includeCommandScript = true,
   includeTableOfContentsScript = true,
@@ -71,6 +72,9 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   }
   if (languages !== undefined) {
     overrides.languages = languages
+  }
+  if (editor !== undefined) {
+    overrides.editor = editor
   }
   if (git !== undefined) {
     if (typeof git === 'string') {

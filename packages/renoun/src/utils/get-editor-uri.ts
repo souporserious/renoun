@@ -2,6 +2,7 @@ export type Editors =
   | 'vscode'
   | 'vscode-insiders'
   | 'vscodium'
+  | 'cursor'
   | 'android-studio'
   | 'idea'
   | 'phpstorm'
@@ -34,6 +35,7 @@ export function getEditorUri({
     case 'vscode':
     case 'vscode-insiders':
     case 'vscodium':
+    case 'cursor':
       return `${editor}://file/${path}:${line}:${column}`
 
     case 'android-studio':
@@ -50,7 +52,7 @@ export function getEditorUri({
 
     default:
       throw new Error(
-        `Unsupported editor: ${editor}. Supported editors are: vscode, vscode-insiders, vscodium, sublime, phpstorm, webstorm, idea, android-studio, textmate.`
+        `Unsupported editor: ${editor}. Supported editors are: vscode, vscode-insiders, vscodium, cursor, sublime, phpstorm, webstorm, idea, android-studio, textmate.`
       )
   }
 }

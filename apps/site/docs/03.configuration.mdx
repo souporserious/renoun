@@ -287,6 +287,28 @@ export default function RootLayout({
 }
 ```
 
+## Editor Links
+
+Control which IDE is used when constructing editor URIs by setting the `editor` prop. Any editor supported by [`getEditorUri`](https://renoun.dev/docs/components/link#variants) can be provided, including VS Code compatible editors and JetBrains IDEs.
+
+```tsx
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider editor="cursor">
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}
+```
+
 ## Git Information
 
 Set `git` on `RootProvider` to enable edit/source links and canonical URLs:
