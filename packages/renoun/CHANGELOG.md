@@ -1,5 +1,11 @@
 # renoun
 
+## 10.6.0
+
+### Minor Changes
+
+- 5be3fbe: Adds Cursor to the supported editor URI schemes and allows configuring the editor through `RootProvider`.
+
 ## 10.5.4
 
 ### Patch Changes
