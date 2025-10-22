@@ -1,0 +1,156 @@
+---
+title: Building Performant Web Applications with React 18
+date: 2024-10-08
+summary: Discover React 18's new features including concurrent rendering, automatic batching, and Suspense to build faster web applications.
+category: Development
+tags:
+  - react18
+  - performance
+  - concurrent
+  - suspense
+---
+
+React 18 introduced groundbreaking features that fundamentally change how we build performant web applications. In this post, we'll explore these new capabilities and learn how to leverage them for better user experiences.
+
+## Concurrent Rendering and startTransition
+
+React 18's concurrent features allow you to mark updates as non-urgent, preventing them from blocking user interactions:
+
+```tsx path="components/SearchResults.tsx"
+import { useState, useTransition, useDeferredValue } from 'react'
+
+export function SearchResults() {
+  const [query, setQuery] = useState('')
+  const [isPending, startTransition] = useTransition()
+  const deferredQuery = useDeferredValue(query)
+  
+  const handleSearch = (value: string) => {
+    setQuery(value)
+    // Mark expensive search as non-urgent
+    startTransition(() => {
+      // This update won't block urgent updates
+      performExpensiveSearch(value)
+    })
+  }
+
+  return (
+    <div>
+      <input 
+        value={query}
+        onChange={(e) => handleSearch(e.target.value)}
+        placeholder="Search..."
+      />
+      {isPending && <div>Searching...</div>}
+      <Results query={deferredQuery} />
+    </div>
+  )
+}
+```
+
+## Automatic Batching
+
+React 18 automatically batches multiple state updates, even in promises and event handlers:
+
+```tsx path="components/UserDashboard.tsx"
+import { useState } from 'react'
+
+export function UserDashboard() {
+  const [count, setCount] = useState(0)
+  const [loading, setLoading] = useState(false)
+
+  const handleAsyncUpdate = async () => {
+    // These updates are automatically batched in React 18
+    setLoading(true)
+    setCount(prev => prev + 1)
+    
+    try {
+      await fetch('/api/update')
+      // These are also batched together
+      setLoading(false)
+      setCount(prev => prev + 1)
+    } catch (error) {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={handleAsyncUpdate} disabled={loading}>
+        {loading ? 'Updating...' : 'Update'}
+      </button>
+    </div>
+  )
+}
+```
+
+## Enhanced Suspense with Error Boundaries
+
+Combine Suspense with error boundaries for robust loading states:
+
+```tsx path="components/DataWrapper.tsx"
+import { Suspense } from 'react'
+import { ErrorBoundary } from './ErrorBoundary'
+
+function LoadingFallback() {
+  return (
+    <div className="loading-spinner">
+      <div>Loading...</div>
+    </div>
+  )
+}
+
+function ErrorFallback({ error }: { error: Error }) {
+  return (
+    <div className="error-message">
+      <h2>Something went wrong</h2>
+      <p>{error.message}</p>
+      <button onClick={() => window.location.reload()}>
+        Try again
+      </button>
+    </div>
+  )
+}
+
+export function DataWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary fallback={ErrorFallback}>
+      <Suspense fallback={<LoadingFallback />}>
+        {children}
+      </Suspense>
+    </ErrorBoundary>
+  )
+}
+```
+
+## useSyncExternalStore for External State
+
+Safely subscribe to external stores with the new useSyncExternalStore hook:
+
+```tsx path="hooks/useWindowSize.tsx"
+import { useSyncExternalStore } from 'react'
+
+function subscribe(callback: () => void) {
+  window.addEventListener('resize', callback)
+  return () => window.removeEventListener('resize', callback)
+}
+
+function getSnapshot() {
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight
+  }
+}
+
+export function useWindowSize() {
+  return useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    () => ({ width: 0, height: 0 }) // Server snapshot
+  )
+}
+```
+
+## Conclusion
+
+React 18's new features provide powerful tools for building more responsive and performant applications. By adopting concurrent rendering, automatic batching, and enhanced Suspense, you can create better user experiences with smoother interactions and more predictable loading states.

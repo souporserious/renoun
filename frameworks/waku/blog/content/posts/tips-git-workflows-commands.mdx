@@ -1,0 +1,304 @@
+---
+title: Git Workflows and Commands Every Developer Should Master
+date: 2024-10-07
+summary: Essential Git commands, workflows, and best practices to improve your development process and collaboration with teams.
+category: Tips and Tricks
+tags:
+  - git
+  - workflow
+  - version control
+  - collaboration
+---
+
+Git is the backbone of modern software development. Whether you're working solo or with a team, mastering these Git workflows and commands will significantly improve your development process.
+
+## Essential Git Commands
+
+### 1. Interactive Staging with `git add -p`
+
+Review and stage changes in chunks:
+
+```bash
+git add -p filename.js
+```
+
+This allows you to:
+- Stage specific hunks of changes
+- Split large changes into logical commits
+- Review each change before staging
+
+### 2. Powerful Commit Search
+
+Find commits by various criteria:
+
+```bash
+# Search commit messages
+git log --grep="bug fix"
+
+# Search by author
+git log --author="John Doe"
+
+# Search by file changes
+git log -p -- filename.js
+
+# Search code content in history
+git log -S "function searchTerm" --source --all
+```
+
+### 3. Interactive Rebase for Clean History
+
+Clean up commit history before pushing:
+
+```bash
+git rebase -i HEAD~3
+```
+
+Options during interactive rebase:
+- `pick` - keep the commit
+- `reword` - change commit message
+- `squash` - combine with previous commit
+- `drop` - remove the commit
+
+## Advanced Git Workflows
+
+### Feature Branch Workflow
+
+```bash
+# Start new feature
+git checkout -b feature/user-authentication
+git push -u origin feature/user-authentication
+
+# Work on feature with regular commits
+git add .
+git commit -m "Add login form validation"
+
+# Keep feature branch updated
+git checkout main
+git pull origin main
+git checkout feature/user-authentication
+git rebase main
+
+# Submit for review
+git push origin feature/user-authentication
+```
+
+### Git Flow for Release Management
+
+```bash
+# Initialize git flow
+git flow init
+
+# Start new feature
+git flow feature start user-profile
+
+# Finish feature (merges to develop)
+git flow feature finish user-profile
+
+# Start release
+git flow release start v1.2.0
+
+# Finish release (merges to main and develop)
+git flow release finish v1.2.0
+
+# Hotfix for production
+git flow hotfix start critical-bug
+git flow hotfix finish critical-bug
+```
+
+## Useful Git Aliases
+
+Add these to your `~/.gitconfig`:
+
+```ini
+[alias]
+    # Short status
+    st = status -s
+    
+    # Pretty log
+    lg = log --oneline --decorate --graph --all
+    
+    # Last commit
+    last = log -1 HEAD --stat
+    
+    # Unstage files
+    unstage = reset HEAD --
+    
+    # Show branches
+    br = branch -a
+    
+    # Quick commit
+    cm = commit -m
+    
+    # Amend last commit
+    amend = commit --amend --no-edit
+    
+    # Show current branch
+    current = branch --show-current
+    
+    # Delete merged branches
+    cleanup = "!git branch --merged | grep -v '\\*\\|main\\|develop' | xargs -n 1 git branch -d"
+```
+
+## Handling Common Scenarios
+
+### Fixing the Last Commit
+
+```bash
+# Change last commit message
+git commit --amend -m "New commit message"
+
+# Add files to last commit
+git add forgotten-file.js
+git commit --amend --no-edit
+
+# Completely redo last commit
+git reset --soft HEAD~1
+# Make new changes
+git commit -m "Better commit message"
+```
+
+### Working with Stashes
+
+```bash
+# Stash current changes
+git stash push -m "Work in progress on feature X"
+
+# List stashes
+git stash list
+
+# Apply stash without removing it
+git stash apply stash@{0}
+
+# Apply and remove stash
+git stash pop
+
+# Stash including untracked files
+git stash -u
+
+# Create branch from stash
+git stash branch feature-branch stash@{1}
+```
+
+### Resolving Merge Conflicts
+
+```bash
+# Start merge
+git merge feature-branch
+
+# View conflict status
+git status
+
+# Use merge tool
+git mergetool
+
+# After resolving conflicts
+git add resolved-file.js
+git commit -m "Resolve merge conflicts"
+
+# Abort merge if needed
+git merge --abort
+```
+
+## Branch Management Best Practices
+
+### Naming Conventions
+
+```bash
+# Features
+feature/user-authentication
+feature/shopping-cart
+
+# Bug fixes
+bugfix/login-error
+bugfix/payment-validation
+
+# Hotfixes
+hotfix/security-patch
+hotfix/critical-bug
+
+# Releases
+release/v1.2.0
+release/2024-q1
+```
+
+### Clean Branch Strategy
+
+```bash
+# Delete local branch
+git branch -d feature/completed-feature
+
+# Delete remote branch
+git push origin --delete feature/completed-feature
+
+# Prune remote tracking branches
+git remote prune origin
+
+# Force delete unmerged branch (use carefully!)
+git branch -D feature/abandoned-feature
+```
+
+## Git Hooks for Automation
+
+### Pre-commit Hook Example
+
+```bash
+#!/bin/sh
+# .git/hooks/pre-commit
+
+# Run linter
+npm run lint
+if [ $? -ne 0 ]; then
+    echo "Linting failed. Please fix errors before committing."
+    exit 1
+fi
+
+# Run tests
+npm test
+if [ $? -ne 0 ]; then
+    echo "Tests failed. Please fix failing tests before committing."
+    exit 1
+fi
+```
+
+### Commit Message Validation
+
+```bash
+#!/bin/sh
+# .git/hooks/commit-msg
+
+commit_regex='^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .{1,50}'
+
+if ! grep -qE "$commit_regex" "$1"; then
+    echo "Invalid commit message format!"
+    echo "Format: type(scope): description"
+    echo "Types: feat, fix, docs, style, refactor, test, chore"
+    exit 1
+fi
+```
+
+## Pro Tips
+
+1. **Use `.gitignore` templates**: GitHub provides excellent templates for different languages and frameworks.
+
+2. **Sign your commits**: Use GPG signing for verified commits:
+   ```bash
+   git config --global commit.gpgsign true
+   ```
+
+3. **Use conventional commits**: Follow the conventional commit format for better changelog generation.
+
+4. **Backup important branches**: Create backup branches before risky operations:
+   ```bash
+   git branch backup/feature-before-rebase
+   ```
+
+5. **Use `git bisect` for debugging**: Binary search through commit history to find bugs:
+   ```bash
+   git bisect start
+   git bisect bad          # Current commit is bad
+   git bisect good v1.0    # v1.0 is known good
+   ```
+
+## Conclusion
+
+Mastering Git workflows and commands takes practice, but the investment pays off in improved productivity and collaboration. Start with the basics, gradually incorporate advanced techniques, and establish consistent workflows that work for your team.

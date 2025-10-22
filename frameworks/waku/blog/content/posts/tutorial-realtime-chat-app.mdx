@@ -1,0 +1,999 @@
+---
+title: Creating a Real-time Chat Application with React and Socket.io
+date: 2024-10-10
+summary: Build a complete real-time chat application with React, Node.js, Socket.io, featuring multiple rooms, typing indicators, and message history.
+category: Tutorials
+tags:
+  - react
+  - socketio
+  - realtime
+  - nodejs
+  - chat
+---
+
+Real-time communication is essential for modern web applications. In this tutorial, we'll build a complete chat application with React and Socket.io, featuring multiple chat rooms, typing indicators, online user lists, and persistent message history.
+
+## What We'll Build
+
+- Multiple chat rooms
+- Real-time messaging
+- Typing indicators
+- Online user lists
+- Message history with pagination
+- Emoji support
+- File sharing
+- Responsive design
+
+## Backend Setup with Socket.io
+
+### Project Initialization
+
+```bash
+mkdir chat-backend
+cd chat-backend
+npm init -y
+npm install express socket.io cors mongoose bcryptjs jsonwebtoken multer
+npm install -D nodemon
+```
+
+### Server Setup
+
+```javascript
+// server.js
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    methods: ["GET", "POST"]
+  }
+});
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use('/uploads', express.static('uploads'));
+
+// Database connection
+mongoose.connect(process.env.MONGODB_URI);
+
+// Models
+const User = require('./models/User');
+const Message = require('./models/Message');
+const Room = require('./models/Room');
+
+// Store active users
+const activeUsers = new Map();
+const typingUsers = new Map();
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  // User joins
+  socket.on('join', async (userData) => {
+    try {
+      const { userId, username, roomId } = userData;
+      
+      // Store user info
+      activeUsers.set(socket.id, {
+        userId,
+        username,
+        roomId,
+        socketId: socket.id
+      });
+      
+      // Join room
+      socket.join(roomId);
+      
+      // Notify others in room
+      socket.to(roomId).emit('userJoined', {
+        userId,
+        username,
+        message: `${username} joined the chat`
+      });
+      
+      // Send active users list
+      const roomUsers = Array.from(activeUsers.values())
+        .filter(user => user.roomId === roomId);
+      io.to(roomId).emit('activeUsers', roomUsers);
+      
+      // Send recent messages
+      const messages = await Message.find({ roomId })
+        .populate('sender', 'username avatar')
+        .sort({ createdAt: -1 })
+        .limit(50);
+      
+      socket.emit('messageHistory', messages.reverse());
+      
+    } catch (error) {
+      console.error('Join error:', error);
+      socket.emit('error', 'Failed to join room');
+    }
+  });
+
+  // Send message
+  socket.on('sendMessage', async (messageData) => {
+    try {
+      const { content, roomId, type = 'text' } = messageData;
+      const user = activeUsers.get(socket.id);
+      
+      if (!user) {
+        socket.emit('error', 'User not authenticated');
+        return;
+      }
+      
+      // Create message
+      const message = new Message({
+        content,
+        sender: user.userId,
+        roomId,
+        type,
+        timestamp: new Date()
+      });
+      
+      await message.save();
+      await message.populate('sender', 'username avatar');
+      
+      // Send to all users in room
+      io.to(roomId).emit('newMessage', {
+        _id: message._id,
+        content: message.content,
+        sender: message.sender,
+        type: message.type,
+        timestamp: message.timestamp,
+        roomId: message.roomId
+      });
+      
+    } catch (error) {
+      console.error('Send message error:', error);
+      socket.emit('error', 'Failed to send message');
+    }
+  });
+
+  // Typing indicators
+  socket.on('typing', ({ roomId, username }) => {
+    const typingKey = `${roomId}-${socket.id}`;
+    
+    // Clear existing timeout
+    if (typingUsers.has(typingKey)) {
+      clearTimeout(typingUsers.get(typingKey));
+    }
+    
+    // Notify others user is typing
+    socket.to(roomId).emit('userTyping', { username, isTyping: true });
+    
+    // Set timeout to stop typing
+    const timeout = setTimeout(() => {
+      socket.to(roomId).emit('userTyping', { username, isTyping: false });
+      typingUsers.delete(typingKey);
+    }, 3000);
+    
+    typingUsers.set(typingKey, timeout);
+  });
+
+  // Stop typing
+  socket.on('stopTyping', ({ roomId, username }) => {
+    const typingKey = `${roomId}-${socket.id}`;
+    
+    if (typingUsers.has(typingKey)) {
+      clearTimeout(typingUsers.get(typingKey));
+      typingUsers.delete(typingKey);
+    }
+    
+    socket.to(roomId).emit('userTyping', { username, isTyping: false });
+  });
+
+  // Load more messages (pagination)
+  socket.on('loadMoreMessages', async ({ roomId, page = 0, limit = 20 }) => {
+    try {
+      const messages = await Message.find({ roomId })
+        .populate('sender', 'username avatar')
+        .sort({ createdAt: -1 })
+        .skip(page * limit)
+        .limit(limit);
+      
+      socket.emit('moreMessages', {
+        messages: messages.reverse(),
+        hasMore: messages.length === limit
+      });
+    } catch (error) {
+      socket.emit('error', 'Failed to load messages');
+    }
+  });
+
+  // Handle disconnection
+  socket.on('disconnect', () => {
+    const user = activeUsers.get(socket.id);
+    
+    if (user) {
+      const { username, roomId } = user;
+      
+      // Remove from active users
+      activeUsers.delete(socket.id);
+      
+      // Clean up typing indicators
+      const typingKey = `${roomId}-${socket.id}`;
+      if (typingUsers.has(typingKey)) {
+        clearTimeout(typingUsers.get(typingKey));
+        typingUsers.delete(typingKey);
+      }
+      
+      // Notify room
+      socket.to(roomId).emit('userLeft', {
+        username,
+        message: `${username} left the chat`
+      });
+      
+      // Update active users list
+      const roomUsers = Array.from(activeUsers.values())
+        .filter(u => u.roomId === roomId);
+      io.to(roomId).emit('activeUsers', roomUsers);
+    }
+    
+    console.log('User disconnected:', socket.id);
+  });
+});
+
+// REST API routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/rooms', require('./routes/rooms'));
+app.use('/api/upload', require('./routes/upload'));
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+```
+
+### Database Models
+
+```javascript
+// models/Message.js
+const mongoose = require('mongoose');
+
+const messageSchema = new mongoose.Schema({
+  content: {
+    type: String,
+    required: true,
+  },
+  sender: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  roomId: {
+    type: String,
+    required: true,
+  },
+  type: {
+    type: String,
+    enum: ['text', 'image', 'file'],
+    default: 'text',
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+  },
+  edited: {
+    type: Boolean,
+    default: false,
+  },
+  editedAt: Date,
+}, {
+  timestamps: true,
+});
+
+module.exports = mongoose.model('Message', messageSchema);
+```
+
+```javascript
+// models/Room.js
+const mongoose = require('mongoose');
+
+const roomSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  description: String,
+  isPrivate: {
+    type: Boolean,
+    default: false,
+  },
+  members: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  }],
+  admins: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  }],
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+}, {
+  timestamps: true,
+});
+
+module.exports = mongoose.model('Room', roomSchema);
+```
+
+## React Frontend Implementation
+
+### Project Setup
+
+```bash
+npx create-react-app chat-frontend
+cd chat-frontend
+npm install socket.io-client react-router-dom @hookform/resolvers yup react-hook-form emoji-picker-react
+```
+
+### Socket Context
+
+```tsx
+// contexts/SocketContext.tsx
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import io, { Socket } from 'socket.io-client';
+
+interface Message {
+  _id: string;
+  content: string;
+  sender: {
+    _id: string;
+    username: string;
+    avatar?: string;
+  };
+  type: 'text' | 'image' | 'file';
+  timestamp: string;
+  roomId: string;
+}
+
+interface User {
+  userId: string;
+  username: string;
+  socketId: string;
+}
+
+interface SocketContextType {
+  socket: Socket | null;
+  messages: Message[];
+  activeUsers: User[];
+  typingUsers: string[];
+  isConnected: boolean;
+  joinRoom: (userData: { userId: string; username: string; roomId: string }) => void;
+  sendMessage: (content: string, type?: string) => void;
+  startTyping: () => void;
+  stopTyping: () => void;
+}
+
+const SocketContext = createContext<SocketContextType | undefined>(undefined);
+
+export const useSocket = () => {
+  const context = useContext(SocketContext);
+  if (context === undefined) {
+    throw new Error('useSocket must be used within a SocketProvider');
+  }
+  return context;
+};
+
+export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [activeUsers, setActiveUsers] = useState<User[]>([]);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [currentRoom, setCurrentRoom] = useState<string>('');
+  const [currentUsername, setCurrentUsername] = useState<string>('');
+
+  useEffect(() => {
+    const newSocket = io(process.env.REACT_APP_SERVER_URL || 'http://localhost:5000');
+    
+    newSocket.on('connect', () => {
+      setIsConnected(true);
+      console.log('Connected to server');
+    });
+    
+    newSocket.on('disconnect', () => {
+      setIsConnected(false);
+      console.log('Disconnected from server');
+    });
+    
+    newSocket.on('newMessage', (message: Message) => {
+      setMessages(prev => [...prev, message]);
+    });
+    
+    newSocket.on('messageHistory', (history: Message[]) => {
+      setMessages(history);
+    });
+    
+    newSocket.on('activeUsers', (users: User[]) => {
+      setActiveUsers(users);
+    });
+    
+    newSocket.on('userJoined', (data) => {
+      console.log(data.message);
+    });
+    
+    newSocket.on('userLeft', (data) => {
+      console.log(data.message);
+    });
+    
+    newSocket.on('userTyping', ({ username, isTyping }) => {
+      setTypingUsers(prev => {
+        if (isTyping) {
+          return prev.includes(username) ? prev : [...prev, username];
+        } else {
+          return prev.filter(user => user !== username);
+        }
+      });
+    });
+    
+    newSocket.on('error', (error) => {
+      console.error('Socket error:', error);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.close();
+    };
+  }, []);
+
+  const joinRoom = (userData: { userId: string; username: string; roomId: string }) => {
+    if (socket) {
+      setCurrentRoom(userData.roomId);
+      setCurrentUsername(userData.username);
+      socket.emit('join', userData);
+    }
+  };
+
+  const sendMessage = (content: string, type: string = 'text') => {
+    if (socket && currentRoom) {
+      socket.emit('sendMessage', {
+        content,
+        roomId: currentRoom,
+        type,
+      });
+    }
+  };
+
+  const startTyping = () => {
+    if (socket && currentRoom) {
+      socket.emit('typing', {
+        roomId: currentRoom,
+        username: currentUsername,
+      });
+    }
+  };
+
+  const stopTyping = () => {
+    if (socket && currentRoom) {
+      socket.emit('stopTyping', {
+        roomId: currentRoom,
+        username: currentUsername,
+      });
+    }
+  };
+
+  return (
+    <SocketContext.Provider value={{
+      socket,
+      messages,
+      activeUsers,
+      typingUsers,
+      isConnected,
+      joinRoom,
+      sendMessage,
+      startTyping,
+      stopTyping,
+    }}>
+      {children}
+    </SocketContext.Provider>
+  );
+};
+```
+
+### Chat Component
+
+```tsx
+// components/Chat.tsx
+import React, { useState, useEffect, useRef } from 'react';
+import { useSocket } from '../contexts/SocketContext';
+import { MessageList } from './MessageList';
+import { MessageInput } from './MessageInput';
+import { UserList } from './UserList';
+import { TypingIndicator } from './TypingIndicator';
+
+interface ChatProps {
+  roomId: string;
+  username: string;
+  userId: string;
+}
+
+export const Chat: React.FC<ChatProps> = ({ roomId, username, userId }) => {
+  const { joinRoom, messages, activeUsers, typingUsers, isConnected } = useSocket();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isConnected) {
+      joinRoom({ userId, username, roomId });
+    }
+  }, [isConnected, userId, username, roomId, joinRoom]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  return (
+    <div className="flex h-screen bg-gray-100">
+      {/* User List Sidebar */}
+      <div className="w-64 bg-white shadow-lg">
+        <div className="p-4 bg-blue-600 text-white">
+          <h2 className="text-xl font-bold">Online Users</h2>
+          <p className="text-sm opacity-75">{activeUsers.length} online</p>
+        </div>
+        <UserList users={activeUsers} />
+      </div>
+
+      {/* Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Chat Header */}
+        <div className="bg-white shadow-sm p-4 border-b">
+          <h1 className="text-xl font-semibold">Room: {roomId}</h1>
+          <div className="flex items-center text-sm text-gray-500">
+            <div className={`w-2 h-2 rounded-full mr-2 ${
+              isConnected ? 'bg-green-500' : 'bg-red-500'
+            }`} />
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </div>
+        </div>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <MessageList messages={messages} currentUserId={userId} />
+          <TypingIndicator typingUsers={typingUsers} />
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Message Input */}
+        <div className="bg-white border-t p-4">
+          <MessageInput />
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+### Message Components
+
+```tsx
+// components/MessageList.tsx
+import React from 'react';
+import { Message } from './Message';
+
+interface MessageListProps {
+  messages: Array<{
+    _id: string;
+    content: string;
+    sender: {
+      _id: string;
+      username: string;
+      avatar?: string;
+    };
+    type: 'text' | 'image' | 'file';
+    timestamp: string;
+  }>;
+  currentUserId: string;
+}
+
+export const MessageList: React.FC<MessageListProps> = ({ messages, currentUserId }) => {
+  return (
+    <div className="space-y-4">
+      {messages.map((message) => (
+        <Message 
+          key={message._id}
+          message={message}
+          isOwn={message.sender._id === currentUserId}
+        />
+      ))}
+    </div>
+  );
+};
+```
+
+```tsx
+// components/Message.tsx
+import React from 'react';
+
+interface MessageProps {
+  message: {
+    _id: string;
+    content: string;
+    sender: {
+      _id: string;
+      username: string;
+      avatar?: string;
+    };
+    type: 'text' | 'image' | 'file';
+    timestamp: string;
+  };
+  isOwn: boolean;
+}
+
+export const Message: React.FC<MessageProps> = ({ message, isOwn }) => {
+  const formatTime = (timestamp: string) => {
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+        isOwn 
+          ? 'bg-blue-500 text-white' 
+          : 'bg-white text-gray-800 shadow-sm'
+      }`}>
+        {!isOwn && (
+          <div className="text-xs font-medium text-gray-600 mb-1">
+            {message.sender.username}
+          </div>
+        )}
+        
+        {message.type === 'text' && (
+          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+        )}
+        
+        {message.type === 'image' && (
+          <img 
+            src={message.content} 
+            alt="Shared image"
+            className="max-w-full h-auto rounded"
+          />
+        )}
+        
+        {message.type === 'file' && (
+          <a 
+            href={message.content}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs underline"
+          >
+            📎 Download File
+          </a>
+        )}
+        
+        <div className={`text-xs mt-1 ${
+          isOwn ? 'text-blue-100' : 'text-gray-500'
+        }`}>
+          {formatTime(message.timestamp)}
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+### Message Input with Emoji Support
+
+```tsx
+// components/MessageInput.tsx
+import React, { useState, useRef } from 'react';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
+import { useSocket } from '../contexts/SocketContext';
+
+export const MessageInput: React.FC = () => {
+  const [message, setMessage] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const { sendMessage, startTyping, stopTyping } = useSocket();
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (message.trim()) {
+      sendMessage(message);
+      setMessage('');
+      handleStopTyping();
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessage(e.target.value);
+    
+    if (!isTyping) {
+      setIsTyping(true);
+      startTyping();
+    }
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set new timeout
+    typingTimeoutRef.current = setTimeout(() => {
+      handleStopTyping();
+    }, 1000);
+  };
+
+  const handleStopTyping = () => {
+    setIsTyping(false);
+    stopTyping();
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setMessage(prev => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await response.json();
+      sendMessage(data.url, file.type.startsWith('image/') ? 'image' : 'file');
+    } catch (error) {
+      console.error('File upload failed:', error);
+    }
+  };
+
+  return (
+    <div className="relative">
+      {showEmojiPicker && (
+        <div className="absolute bottom-full right-0 mb-2">
+          <EmojiPicker onEmojiClick={handleEmojiClick} />
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="flex items-center space-x-2">
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="p-2 text-gray-500 hover:text-gray-700"
+        >
+          📎
+        </button>
+        
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileUpload}
+          className="hidden"
+          accept="image/*,.pdf,.doc,.docx,.txt"
+        />
+        
+        <input
+          type="text"
+          value={message}
+          onChange={handleInputChange}
+          placeholder="Type a message..."
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+          maxLength={500}
+        />
+        
+        <button
+          type="button"
+          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          className="p-2 text-gray-500 hover:text-gray-700"
+        >
+          😊
+        </button>
+        
+        <button
+          type="submit"
+          disabled={!message.trim()}
+          className="px-6 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          Send
+        </button>
+      </form>
+    </div>
+  );
+};
+```
+
+### Typing Indicator
+
+```tsx
+// components/TypingIndicator.tsx
+import React from 'react';
+
+interface TypingIndicatorProps {
+  typingUsers: string[];
+}
+
+export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ typingUsers }) => {
+  if (typingUsers.length === 0) return null;
+
+  const getTypingText = () => {
+    if (typingUsers.length === 1) {
+      return `${typingUsers[0]} is typing...`;
+    } else if (typingUsers.length === 2) {
+      return `${typingUsers[0]} and ${typingUsers[1]} are typing...`;
+    } else {
+      return `${typingUsers.length} people are typing...`;
+    }
+  };
+
+  return (
+    <div className="flex items-center space-x-2 text-gray-500 text-sm py-2">
+      <div className="flex space-x-1">
+        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+      </div>
+      <span>{getTypingText()}</span>
+    </div>
+  );
+};
+```
+
+## Features and Enhancements
+
+### File Upload Support
+
+Add file upload functionality to share images and documents:
+
+```javascript
+// routes/upload.js
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+
+const router = express.Router();
+
+const storage = multer.diskStorage({
+  destination: './uploads/',
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 10000000 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Invalid file type'));
+    }
+  }
+});
+
+router.post('/', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  
+  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  res.json({ url: fileUrl, filename: req.file.originalname });
+});
+
+module.exports = router;
+```
+
+### Room Management
+
+```tsx
+// components/RoomSelector.tsx
+import React, { useState, useEffect } from 'react';
+
+interface Room {
+  _id: string;
+  name: string;
+  description: string;
+  memberCount: number;
+}
+
+export const RoomSelector: React.FC<{ onRoomSelect: (roomId: string) => void }> = ({ onRoomSelect }) => {
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<string>('');
+
+  useEffect(() => {
+    fetchRooms();
+  }, []);
+
+  const fetchRooms = async () => {
+    try {
+      const response = await fetch('/api/rooms');
+      const data = await response.json();
+      setRooms(data);
+      
+      // Auto-select first room
+      if (data.length > 0) {
+        setSelectedRoom(data[0]._id);
+        onRoomSelect(data[0]._id);
+      }
+    } catch (error) {
+      console.error('Failed to fetch rooms:', error);
+    }
+  };
+
+  return (
+    <div className="w-64 bg-gray-800 text-white">
+      <div className="p-4">
+        <h2 className="text-xl font-bold mb-4">Chat Rooms</h2>
+        <div className="space-y-2">
+          {rooms.map(room => (
+            <button
+              key={room._id}
+              onClick={() => {
+                setSelectedRoom(room._id);
+                onRoomSelect(room._id);
+              }}
+              className={`w-full text-left p-3 rounded-lg transition-colors ${
+                selectedRoom === room._id
+                  ? 'bg-blue-600'
+                  : 'bg-gray-700 hover:bg-gray-600'
+              }`}
+            >
+              <div className="font-medium">{room.name}</div>
+              <div className="text-sm text-gray-300">{room.memberCount} members</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+## Deployment Considerations
+
+1. **Environment Variables**: Set up proper environment configuration
+2. **CORS**: Configure CORS for production domains
+3. **Rate Limiting**: Implement rate limiting for message sending
+4. **File Upload Security**: Validate and sanitize uploaded files
+5. **Scaling**: Consider Redis for session storage in production
+
+## Next Steps
+
+This chat application can be extended with:
+
+- Private messaging
+- Message reactions
+- Voice/video calling
+- Push notifications
+- Message search
+- User roles and permissions
+- Message encryption
+
+## Conclusion
+
+You've built a complete real-time chat application with React and Socket.io! The application includes all the essential features for modern chat functionality and can serve as a foundation for more advanced real-time applications.

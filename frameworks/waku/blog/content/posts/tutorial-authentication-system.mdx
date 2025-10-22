@@ -1,0 +1,749 @@
+---
+title: Building a Complete Authentication System with React and Node.js
+date: 2024-10-16
+summary: Step-by-step tutorial to build a secure authentication system with React frontend, Node.js backend, JWT tokens, and password reset functionality.
+category: Tutorials
+tags:
+  - react
+  - nodejs
+  - authentication
+  - jwt
+  - security
+---
+
+Authentication is a critical component of most web applications. In this comprehensive tutorial, we'll build a complete authentication system with user registration, login, password reset, and protected routes using React and Node.js.
+
+## What We'll Build
+
+- User registration and login
+- JWT-based authentication
+- Password hashing with bcrypt
+- Email verification
+- Password reset functionality
+- Protected routes in React
+- Refresh token mechanism
+
+## Backend Setup with Node.js
+
+### Project Setup
+
+First, let's create our Node.js backend:
+
+```bash
+mkdir auth-backend
+cd auth-backend
+npm init -y
+npm install express mongoose bcryptjs jsonwebtoken nodemailer cors dotenv
+npm install -D nodemon
+```
+
+### Basic Server Setup
+
+```javascript
+// server.js
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Database connection
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+// Routes
+app.use('/api/auth', require('./routes/auth'));
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+```
+
+### User Model
+
+```javascript
+// models/User.js
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const userSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+  },
+  password: {
+    type: String,
+    required: true,
+    minlength: 6,
+  },
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+  verificationToken: String,
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
+}, {
+  timestamps: true,
+});
+
+// Hash password before saving
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Compare password method
+userSchema.methods.comparePassword = async function(password) {
+  return bcrypt.compare(password, this.password);
+};
+
+module.exports = mongoose.model('User', userSchema);
+```
+
+### JWT Utilities
+
+```javascript
+// utils/jwt.js
+const jwt = require('jsonwebtoken');
+
+const generateTokens = (userId) => {
+  const accessToken = jwt.sign(
+    { userId }, 
+    process.env.JWT_ACCESS_SECRET,
+    { expiresIn: '15m' }
+  );
+  
+  const refreshToken = jwt.sign(
+    { userId }, 
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: '7d' }
+  );
+  
+  return { accessToken, refreshToken };
+};
+
+const verifyAccessToken = (token) => {
+  return jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+};
+
+const verifyRefreshToken = (token) => {
+  return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+};
+
+module.exports = {
+  generateTokens,
+  verifyAccessToken,
+  verifyRefreshToken,
+};
+```
+
+### Authentication Routes
+
+```javascript
+// routes/auth.js
+const express = require('express');
+const crypto = require('crypto');
+const User = require('../models/User');
+const { generateTokens } = require('../utils/jwt');
+const { sendEmail } = require('../utils/email');
+const authMiddleware = require('../middleware/auth');
+
+const router = express.Router();
+
+// Register
+router.post('/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    
+    // Check if user exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        message: 'User already exists with this email'
+      });
+    }
+    
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    
+    // Create user
+    const user = new User({
+      name,
+      email,
+      password,
+      verificationToken,
+    });
+    
+    await user.save();
+    
+    // Send verification email
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+    await sendEmail({
+      to: email,
+      subject: 'Verify Your Email',
+      html: `
+        <h1>Welcome to Our App!</h1>
+        <p>Please click the link below to verify your email:</p>
+        <a href="${verificationUrl}">Verify Email</a>
+      `,
+    });
+    
+    res.status(201).json({
+      message: 'User registered successfully. Please check your email to verify your account.',
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Find user
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+    
+    // Check password
+    const isValidPassword = await user.comparePassword(password);
+    if (!isValidPassword) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+    
+    // Check if email is verified
+    if (!user.isVerified) {
+      return res.status(400).json({
+        message: 'Please verify your email before logging in'
+      });
+    }
+    
+    // Generate tokens
+    const { accessToken, refreshToken } = generateTokens(user._id);
+    
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+      accessToken,
+      refreshToken,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Verify Email
+router.post('/verify-email/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    const user = await User.findOne({ verificationToken: token });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid verification token' });
+    }
+    
+    user.isVerified = true;
+    user.verificationToken = undefined;
+    await user.save();
+    
+    res.json({ message: 'Email verified successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Forgot Password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    
+    await user.save();
+    
+    // Send reset email
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    await sendEmail({
+      to: email,
+      subject: 'Password Reset',
+      html: `
+        <h1>Password Reset Request</h1>
+        <p>Click the link below to reset your password:</p>
+        <a href="${resetUrl}">Reset Password</a>
+        <p>This link will expire in 1 hour.</p>
+      `,
+    });
+    
+    res.json({ message: 'Password reset email sent' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Reset Password
+router.post('/reset-password/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+    
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+    
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+    
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    
+    await user.save();
+    
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get User Profile (Protected Route)
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('-password');
+    res.json({ user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+module.exports = router;
+```
+
+### Authentication Middleware
+
+```javascript
+// middleware/auth.js
+const { verifyAccessToken } = require('../utils/jwt');
+
+const authMiddleware = (req, res, next) => {
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ message: 'No token, authorization denied' });
+  }
+  
+  try {
+    const decoded = verifyAccessToken(token);
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    res.status(401).json({ message: 'Token is not valid' });
+  }
+};
+
+module.exports = authMiddleware;
+```
+
+## React Frontend Setup
+
+### Project Setup
+
+```bash
+npx create-react-app auth-frontend
+cd auth-frontend
+npm install axios react-router-dom @hookform/resolvers yup react-hook-form
+```
+
+### Authentication Context
+
+```tsx
+// contexts/AuthContext.tsx
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  logout: () => void;
+  loading: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+// Axios instance with interceptors
+const api = axios.create({
+  baseURL: API_URL,
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('accessToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const original = error.config;
+    
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+      
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const response = await axios.post(`${API_URL}/auth/refresh`, {
+            refreshToken,
+          });
+          
+          const { accessToken } = response.data;
+          localStorage.setItem('accessToken', accessToken);
+          
+          return api(original);
+        } catch (refreshError) {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          window.location.href = '/login';
+        }
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      fetchUserProfile();
+    } else {
+      setLoading(false);
+    }
+  }, []);
+  
+  const fetchUserProfile = async () => {
+    try {
+      const response = await api.get('/auth/profile');
+      setUser(response.data.user);
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const login = async (email: string, password: string) => {
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      const { user, accessToken, refreshToken } = response.data;
+      
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      setUser(user);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Login failed');
+    }
+  };
+  
+  const register = async (name: string, email: string, password: string) => {
+    try {
+      await api.post('/auth/register', { name, email, password });
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Registration failed');
+    }
+  };
+  
+  const logout = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    setUser(null);
+  };
+  
+  return (
+    <AuthContext.Provider value={{
+      user,
+      login,
+      register,
+      logout,
+      loading,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+```
+
+### Login Component
+
+```tsx
+// components/LoginForm.tsx
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
+import { useAuth } from '../contexts/AuthContext';
+import { Link, useNavigate } from 'react-router-dom';
+
+const schema = yup.object({
+  email: yup.string().email('Invalid email').required('Email is required'),
+  password: yup.string().required('Password is required'),
+});
+
+interface LoginFormData {
+  email: string;
+  password: string;
+}
+
+export const LoginForm: React.FC = () => {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [error, setError] = React.useState('');
+  
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormData>({
+    resolver: yupResolver(schema),
+  });
+  
+  const onSubmit = async (data: LoginFormData) => {
+    try {
+      setError('');
+      await login(data.email, data.password);
+      navigate('/dashboard');
+    } catch (error: any) {
+      setError(error.message);
+    }
+  };
+  
+  return (
+    <div className="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          {error}
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            Email
+          </label>
+          <input
+            {...register('email')}
+            type="email"
+            id="email"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          />
+          {errors.email && (
+            <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+          )}
+        </div>
+        
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            Password
+          </label>
+          <input
+            {...register('password')}
+            type="password"
+            id="password"
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          />
+          {errors.password && (
+            <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+          )}
+        </div>
+        
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          {isSubmitting ? 'Logging in...' : 'Login'}
+        </button>
+      </form>
+      
+      <div className="mt-4 text-center">
+        <Link to="/register" className="text-blue-600 hover:text-blue-500">
+          Don't have an account? Register here
+        </Link>
+      </div>
+      
+      <div className="mt-2 text-center">
+        <Link to="/forgot-password" className="text-blue-600 hover:text-blue-500">
+          Forgot your password?
+        </Link>
+      </div>
+    </div>
+  );
+};
+```
+
+### Protected Route Component
+
+```tsx
+// components/ProtectedRoute.tsx
+import React from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  
+  return <>{children}</>;
+};
+```
+
+### Main App Component
+
+```tsx
+// App.tsx
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { LoginForm } from './components/LoginForm';
+import { RegisterForm } from './components/RegisterForm';
+import { Dashboard } from './components/Dashboard';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import './App.css';
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <div className="min-h-screen bg-gray-100">
+          <Routes>
+            <Route path="/login" element={<LoginForm />} />
+            <Route path="/register" element={<RegisterForm />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </div>
+      </Router>
+    </AuthProvider>
+  );
+}
+
+export default App;
+```
+
+## Security Best Practices
+
+1. **Password Hashing**: Always hash passwords with bcrypt
+2. **JWT Security**: Use short-lived access tokens with refresh tokens
+3. **HTTPS Only**: Always use HTTPS in production
+4. **Rate Limiting**: Implement rate limiting for auth endpoints
+5. **Input Validation**: Validate all inputs on both client and server
+6. **Environment Variables**: Store secrets in environment variables
+
+## Next Steps
+
+This tutorial covered the basics of authentication. Consider adding:
+
+- Two-factor authentication
+- OAuth integration (Google, GitHub, etc.)
+- Account lockout after failed attempts
+- Audit logging
+- Session management
+- Remember me functionality
+
+## Conclusion
+
+You now have a complete authentication system with secure password handling, email verification, and password reset functionality. This foundation can be extended with additional security features as your application grows.
