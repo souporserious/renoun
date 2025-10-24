@@ -370,6 +370,70 @@ export function getThemeTokenVariables(
   return themeVariables
 }
 
+/** Infer theme type from background color when not explicitly provided. */
+function inferThemeType(theme: Theme): 'light' | 'dark' {
+  if (theme.type === 'light' || theme.type === 'dark') {
+    return theme.type
+  }
+
+  const editorBg = theme.colors['editor.background']
+  const bg = editorBg || theme.colors.background || undefined
+
+  if (typeof bg !== 'string') {
+    return 'dark'
+  }
+
+  const rgb = parseColorToRgb(bg)
+  if (!rgb) {
+    return 'dark'
+  }
+
+  // Perceived brightness heuristic
+  const brightness = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000
+  return brightness >= 128 ? 'light' : 'dark'
+}
+
+function parseColorToRgb(
+  value: string
+): { r: number; g: number; b: number } | null {
+  const hex = value.trim().toLowerCase()
+  // #rgb or #rrggbb
+  if (hex.startsWith('#')) {
+    const raw = hex.slice(1)
+    if (raw.length === 3) {
+      const r = parseInt(raw[0] + raw[0], 16)
+      const g = parseInt(raw[1] + raw[1], 16)
+      const b = parseInt(raw[2] + raw[2], 16)
+      if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
+        return { r, g, b }
+      }
+    } else if (raw.length === 6) {
+      const r = parseInt(raw.slice(0, 2), 16)
+      const g = parseInt(raw.slice(2, 4), 16)
+      const b = parseInt(raw.slice(4, 6), 16)
+      if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
+        return { r, g, b }
+      }
+    }
+    return null
+  }
+
+  // rgb() or rgba()
+  const rgbMatch = value
+    .trim()
+    .match(
+      /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0|0?\.\d+|1))?\s*\)$/i
+    )
+  if (rgbMatch) {
+    const r = Math.max(0, Math.min(255, parseInt(rgbMatch[1], 10)))
+    const g = Math.max(0, Math.min(255, parseInt(rgbMatch[2], 10)))
+    const b = Math.max(0, Math.min(255, parseInt(rgbMatch[3], 10)))
+    return { r, g, b }
+  }
+
+  return null
+}
+
 /** Normalize a VS Code theme to a TextMate theme. */
 export function normalizeTheme(
   theme: Theme,
@@ -395,7 +459,7 @@ export function normalizeTheme(
 
   applyForegroundBackground(theme)
 
-  applyFallbacks(theme.colors, theme.type || 'dark')
+  applyFallbacks(theme.colors, inferThemeType(theme))
 
   return theme as TextMateThemeRaw
 }
