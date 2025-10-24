@@ -63,18 +63,21 @@ export interface TokensProps {
   css?: {
     token?: CSSObject
     popover?: CSSObject
+    error?: CSSObject
   }
 
   /** Class names to apply to the tokens and popover elements. */
   className?: {
     token?: string
     popover?: string
+    error?: string
   }
 
   /** Styles to apply to the tokens and popover elements. */
   style?: {
     token?: React.CSSProperties
     popover?: React.CSSProperties
+    error?: React.CSSProperties
   }
 
   /** Optional theme configuration to drive highlighting explicitly. */
@@ -292,6 +295,7 @@ interface RenderDiagnosticsOptions {
   lineIndex: number
   baseTokenClassName?: string
   theme: ThemeColors
+  css?: TokensProps['css']
   className?: TokensProps['className']
   style?: TokensProps['style']
 }
@@ -429,6 +433,7 @@ function renderDiagnostics({
   lineIndex,
   baseTokenClassName,
   theme,
+  css: cssProp,
   className,
   style,
 }: RenderDiagnosticsOptions): React.ReactNode[] {
@@ -445,6 +450,7 @@ function renderDiagnostics({
       color: diagnosticColor,
       paddingLeft: '0.75ch',
       whiteSpace: 'pre-wrap',
+      ...cssProp?.error,
     })
     const diagnosticText =
       diagnostic.code !== undefined
@@ -458,9 +464,10 @@ function renderDiagnostics({
         className={joinClassNames(
           baseTokenClassName,
           diagnosticClassName,
-          className?.token
+          className?.token,
+          className?.error
         )}
-        style={style?.token}
+        style={{ ...style?.token, ...style?.error }}
       >
         {diagnosticText}
         <Styles />

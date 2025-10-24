@@ -74,6 +74,7 @@ export interface CodeBlockProps {
     lineNumbers?: CSSObject
     token?: CSSObject
     popover?: CSSObject
+    error?: CSSObject
     copyButton?: CSSObject
   }
 
@@ -84,6 +85,7 @@ export interface CodeBlockProps {
     lineNumbers?: string
     token?: string
     popover?: string
+    error?: string
     copyButton?: string
   }
 
@@ -94,6 +96,7 @@ export interface CodeBlockProps {
     lineNumbers?: React.CSSProperties
     token?: React.CSSProperties
     popover?: React.CSSProperties
+    error?: React.CSSProperties
     copyButton?: React.CSSProperties
   }
 }
@@ -408,14 +411,17 @@ async function CodeBlockAsync({
                   css={{
                     token: css?.token,
                     popover: css?.popover,
+                    error: css?.error,
                   }}
                   className={{
                     token: className?.token,
                     popover: className?.popover,
+                    error: className?.error,
                   }}
                   style={{
                     token: style?.token,
                     popover: style?.popover,
+                    error: style?.error,
                   }}
                   annotations={annotations}
                 >
@@ -435,14 +441,17 @@ async function CodeBlockAsync({
                 css={{
                   token: css?.token,
                   popover: css?.popover,
+                  error: css?.error,
                 }}
                 className={{
                   token: className?.token,
                   popover: className?.popover,
+                  error: className?.error,
                 }}
                 style={{
                   token: style?.token,
                   popover: style?.popover,
+                  error: style?.error,
                 }}
                 annotations={annotations}
               >
