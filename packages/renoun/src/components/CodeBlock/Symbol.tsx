@@ -2,7 +2,7 @@
 import React, { useEffect, useId, useRef } from 'react'
 
 import { useQuickInfoContext } from './QuickInfoProvider.js'
-import { getClosestViewport } from './utils.js'
+import { getScrollableAncestors } from './utils.js'
 
 /**
  * A symbol that can display a popover when hovered.
@@ -31,15 +31,19 @@ export function Symbol({
       function handleScroll() {
         resetQuickInfo(true)
       }
-      const viewport = getClosestViewport(symbolRef.current)
-      viewport.addEventListener('scroll', handleScroll, { passive: true })
-      window.addEventListener('scroll', handleScroll, { passive: true })
+      const controller = new AbortController()
+      const scrollTargets = getScrollableAncestors(symbolRef.current)
+      scrollTargets.forEach((target) => {
+        target.addEventListener('scroll', handleScroll, {
+          passive: true,
+          signal: controller.signal,
+        })
+      })
       return () => {
-        viewport.removeEventListener('scroll', handleScroll)
-        window.removeEventListener('scroll', handleScroll)
+        controller.abort()
       }
     }
-  }, [quickInfo])
+  }, [quickInfo, resetQuickInfo])
 
   return (
     <span

@@ -1,29 +1,71 @@
 import type { CSSObject } from 'restyle'
 
 /**
+ * Get all scrollable ancestors for a node ordered from closest to farthest.
+ * @internal
+ */
+export function getScrollableAncestors(node: HTMLElement) {
+  const scrollableAncestors: Array<HTMLElement | Window> = []
+  const addScrollableAncestor = (ancestor: HTMLElement | Window) => {
+    if (!scrollableAncestors.includes(ancestor)) {
+      scrollableAncestors.push(ancestor)
+    }
+  }
+  let scrollableNode: ParentNode | null = node.parentNode
+
+  while (scrollableNode) {
+    if (scrollableNode === document) {
+      const scrollingElement =
+        document.scrollingElement ?? document.documentElement ?? document.body
+
+      if (scrollingElement instanceof HTMLElement) {
+        addScrollableAncestor(scrollingElement)
+      }
+
+      addScrollableAncestor(window)
+      break
+    }
+
+    if (scrollableNode instanceof HTMLElement) {
+      const { overflow, overflowX, overflowY } =
+        getComputedStyle(scrollableNode)
+      const canScroll = /(auto|scroll|hidden)/.test(
+        overflow + overflowX + overflowY
+      )
+      if (canScroll) {
+        addScrollableAncestor(scrollableNode)
+      }
+      scrollableNode = scrollableNode.parentNode
+    } else {
+      scrollableNode = (scrollableNode as Node | null)?.parentNode ?? null
+    }
+  }
+
+  if (!scrollableAncestors.length) {
+    const scrollingElement =
+      document.scrollingElement ?? document.documentElement ?? document.body
+
+    if (scrollingElement instanceof HTMLElement) {
+      addScrollableAncestor(scrollingElement)
+    }
+
+    addScrollableAncestor(window)
+  } else if (!scrollableAncestors.includes(window)) {
+    addScrollableAncestor(window)
+  }
+
+  return scrollableAncestors
+}
+
+/**
  * Get the closest scrollable viewport of a node.
  * @internal
  */
 export function getClosestViewport(node: HTMLElement) {
-  let scrollableNode: ParentNode | null = node.parentNode
-
-  while (scrollableNode) {
-    if (scrollableNode === document.body) {
-      return document.body
-    }
-    const { overflow, overflowX, overflowY } = getComputedStyle(
-      scrollableNode as HTMLElement
-    )
-    const canScroll = /(auto|scroll|hidden)/.test(
-      overflow + overflowX + overflowY
-    )
-    if (canScroll) {
-      return scrollableNode as HTMLElement
-    }
-    scrollableNode = scrollableNode.parentNode
-  }
-
-  return document.body
+  const [closestViewport] = getScrollableAncestors(node)
+  return closestViewport instanceof HTMLElement
+    ? closestViewport
+    : document.body
 }
 
 /**
