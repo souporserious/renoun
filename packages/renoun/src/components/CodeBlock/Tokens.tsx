@@ -243,6 +243,19 @@ export async function Tokens({
             ? lineChildren.concat(diagnosticNodes)
             : lineChildren
           const isLastLine = lineIndex === lastLineIndex
+          // If diagnostics are rendered with display: block, avoid adding the
+          // trailing newline after the line; the block element will naturally
+          // place subsequent content on the next line, and adding a newline
+          // would introduce extra vertical space below the diagnostic.
+          const hasDiagnostics = diagnosticNodes.length > 0
+          const explicitDiagnosticDisplay =
+            css?.error?.display ?? style?.error?.display
+          const diagnosticsAreBlock = explicitDiagnosticDisplay
+            ? explicitDiagnosticDisplay !== 'inline' &&
+              explicitDiagnosticDisplay !== 'inline-block'
+            : true
+          const shouldAppendLineBreak =
+            !isLastLine && !(hasDiagnostics && diagnosticsAreBlock)
           const renderedLine = renderLine
             ? renderLine({
                 children: lineChildrenWithDiagnostics,
@@ -258,7 +271,7 @@ export async function Tokens({
           return (
             <Fragment key={lineIndex}>
               {lineChildrenWithDiagnostics}
-              {isLastLine ? null : '\n'}
+              {shouldAppendLineBreak ? '\n' : null}
             </Fragment>
           )
         })}
@@ -448,6 +461,7 @@ function renderDiagnostics({
 
   diagnostics.forEach((diagnostic, index) => {
     const [diagnosticClassName, Styles] = css({
+      display: 'block',
       color: theme.editorError.foreground,
       backgroundColor: 'color-mix(in oklab, currentColor 18%, transparent)',
       paddingLeft: '0.75ch',
