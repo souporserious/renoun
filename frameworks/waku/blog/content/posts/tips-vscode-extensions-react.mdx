@@ -1,0 +1,149 @@
+---
+title: 10 VS Code Extensions Every React Developer Should Know
+date: 2024-10-14
+summary: Boost your React development productivity with these essential VS Code extensions for better coding experience and efficiency.
+category: Tips and Tricks
+tags:
+  - vscode
+  - productivity
+  - react
+  - tools
+---
+
+Visual Studio Code has become the go-to editor for React developers, and the right extensions can dramatically improve your development workflow. Here are 10 essential extensions that every React developer should have installed.
+
+## 1. ES7+ React/Redux/React-Native Snippets
+
+This extension provides a collection of snippets for React, Redux, and React Native development.
+
+**Key snippets:**
+- `rafce` → React Arrow Function Component with Export
+- `useState` → useState Hook snippet  
+- `useEffect` → useEffect Hook snippet
+- `redux` → Redux action and reducer snippets
+
+```tsx
+// Type 'rafce' and press Tab
+import React from 'react'
+
+const ComponentName = () => {
+  return (
+    <div>ComponentName</div>
+  )
+}
+
+export default ComponentName
+```
+
+## 2. Auto Rename Tag
+
+Automatically renames paired HTML/JSX tags when you edit one of them.
+
+```jsx
+// When you change <div> to <section>, the closing tag updates automatically
+<section className="container">
+  <h1>Hello World</h1>
+</section>
+```
+
+## 3. Bracket Pair Colorizer 2
+
+Colors matching brackets to make code more readable (now built into VS Code natively).
+
+## 4. GitLens
+
+Provides advanced Git capabilities directly in your editor:
+- Blame annotations
+- Code lens showing recent changes
+- Interactive rebase editor
+- Rich commit search
+
+## 5. Prettier - Code Formatter
+
+Essential for consistent code formatting across your team:
+
+```json
+// .prettierrc
+{
+  "semi": false,
+  "singleQuote": true,
+  "tabWidth": 2,
+  "trailingComma": "es5"
+}
+```
+
+## 6. ESLint
+
+Integrates ESLint into VS Code for real-time linting:
+
+```json
+// .eslintrc.json
+{
+  "extends": [
+    "eslint:recommended",
+    "@typescript-eslint/recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended"
+  ]
+}
+```
+
+## 7. Thunder Client
+
+REST API testing directly in VS Code - perfect for testing your React app's backend:
+
+```javascript
+// Test API endpoints without leaving your editor
+GET https://api.example.com/users
+Content-Type: application/json
+Authorization: Bearer your-token-here
+```
+
+## 8. Auto Import - ES6, TS, JSX, TSX
+
+Automatically finds, parses and provides code actions for all available imports.
+
+## 9. Tailwind CSS IntelliSense
+
+If you're using Tailwind CSS with React, this extension provides:
+- Autocomplete for class names
+- CSS preview on hover
+- Syntax highlighting
+
+```jsx
+<div className="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
+  {/* IntelliSense will suggest and preview these classes */}
+</div>
+```
+
+## 10. React Developer Tools (Browser Extension)
+
+While not a VS Code extension, this browser extension is essential for debugging React applications:
+
+- Component tree inspection
+- Props and state examination
+- Performance profiling
+- Hook debugging
+
+## Pro Tips for Maximum Productivity
+
+**Keyboard Shortcuts:**
+- `Ctrl+Shift+P` (Cmd+Shift+P on Mac) - Command Palette
+- `Ctrl+P` (Cmd+P) - Quick File Open
+- `F2` - Rename Symbol
+- `Alt+Shift+F` - Format Document
+
+**Workspace Settings:**
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "typescript.preferences.importModuleSpecifier": "relative"
+}
+```
+
+## Conclusion
+
+These extensions will transform your React development experience in VS Code. Start with the most essential ones like ES7+ React snippets, Prettier, and ESLint, then gradually add others based on your specific needs and workflow.

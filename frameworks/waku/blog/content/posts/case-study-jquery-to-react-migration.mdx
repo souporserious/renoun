@@ -1,0 +1,446 @@
+---
+title: Migrating a Legacy jQuery Application to React
+date: 2024-10-13
+summary: A detailed case study of migrating a 5-year-old jQuery application to modern React, including challenges faced and lessons learned.
+category: Case Studies
+tags:
+  - migration
+  - jquery
+  - react
+  - legacy
+  - modernization
+---
+
+When we inherited a 5-year-old jQuery application with over 15,000 lines of JavaScript, we knew we had a challenge ahead. This case study documents our journey from legacy jQuery to modern React, including the strategies that worked and the pitfalls we encountered.
+
+## The Legacy Application Overview
+
+**Initial State:**
+- 15,000+ lines of jQuery code
+- Multiple CSS frameworks mixed together
+- No build process or module system
+- Manual DOM manipulation throughout
+- Inline event handlers and global state
+- 40+ HTML files with duplicated code
+
+**Key Challenges:**
+- Tightly coupled components
+- No clear data flow
+- Inconsistent UI patterns
+- Performance issues with complex DOM manipulation
+- Difficult to test and maintain
+
+## Migration Strategy
+
+### Phase 1: Analysis and Planning (2 weeks)
+
+We started by thoroughly analyzing the existing codebase:
+
+```javascript
+// Example of typical legacy jQuery code we encountered
+$(document).ready(function() {
+  $('#user-form').on('submit', function(e) {
+    e.preventDefault();
+    
+    var userData = {
+      name: $('#name').val(),
+      email: $('#email').val(),
+      phone: $('#phone').val()
+    };
+    
+    // Direct DOM manipulation scattered throughout
+    $('.loading').show();
+    $('.error-message').hide();
+    
+    $.ajax({
+      url: '/api/users',
+      method: 'POST',
+      data: userData,
+      success: function(response) {
+        $('.loading').hide();
+        $('#user-list').append('<div class="user">' + response.name + '</div>');
+        $('#user-form')[0].reset();
+      },
+      error: function() {
+        $('.loading').hide();
+        $('.error-message').text('Failed to save user').show();
+      }
+    });
+  });
+});
+```
+
+**Analysis Results:**
+- Identified 23 distinct UI components
+- Found 8 different data entities
+- Discovered 15 API endpoints
+- Mapped 12 user workflows
+
+### Phase 2: Incremental Migration (8 weeks)
+
+We chose an incremental approach, replacing components one by one:
+
+```tsx
+// Modern React equivalent of the jQuery form
+import React, { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+interface UserFormProps {
+  onUserAdded?: (user: User) => void;
+}
+
+export function UserForm({ onUserAdded }: UserFormProps) {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: ''
+  });
+  
+  const queryClient = useQueryClient();
+  
+  const createUser = useMutation({
+    mutationFn: (userData: UserData) => 
+      fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+      }).then(res => res.json()),
+    
+    onSuccess: (newUser) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setFormData({ name: '', email: '', phone: '' });
+      onUserAdded?.(newUser);
+    },
+    
+    onError: (error) => {
+      console.error('Failed to create user:', error);
+    }
+  });
+  
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createUser.mutate(formData);
+  };
+  
+  const handleChange = (field: keyof typeof formData) => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: e.target.value
+    }));
+  };
+  
+  return (
+    <form onSubmit={handleSubmit} className="user-form">
+      <div className="form-group">
+        <label htmlFor="name">Name</label>
+        <input
+          id="name"
+          type="text"
+          value={formData.name}
+          onChange={handleChange('name')}
+          required
+        />
+      </div>
+      
+      <div className="form-group">
+        <label htmlFor="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          value={formData.email}
+          onChange={handleChange('email')}
+          required
+        />
+      </div>
+      
+      <div className="form-group">
+        <label htmlFor="phone">Phone</label>
+        <input
+          id="phone"
+          type="tel"
+          value={formData.phone}
+          onChange={handleChange('phone')}
+        />
+      </div>
+      
+      <button type="submit" disabled={createUser.isPending}>
+        {createUser.isPending ? 'Saving...' : 'Save User'}
+      </button>
+      
+      {createUser.error && (
+        <div className="error-message">
+          Failed to save user. Please try again.
+        </div>
+      )}
+    </form>
+  );
+}
+```
+
+### Phase 3: Hybrid Coexistence
+
+We created a bridge system to allow React and jQuery components to coexist:
+
+```typescript
+// Bridge utility for jQuery-React integration
+export class LegacyBridge {
+  private static reactMountPoints = new Map<string, HTMLElement>();
+  
+  static mountReactComponent(
+    containerId: string,
+    Component: React.ComponentType<any>,
+    props: any = {}
+  ) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    const root = ReactDOM.createRoot(container);
+    root.render(React.createElement(Component, props));
+    
+    this.reactMountPoints.set(containerId, container);
+  }
+  
+  static unmountComponent(containerId: string) {
+    const container = this.reactMountPoints.get(containerId);
+    if (container) {
+      const root = ReactDOM.createRoot(container);
+      root.unmount();
+      this.reactMountPoints.delete(containerId);
+    }
+  }
+  
+  // jQuery event bus for communication
+  static emitToJQuery(event: string, data: any) {
+    $(document).trigger(event, data);
+  }
+  
+  static listenFromJQuery(event: string, handler: (data: any) => void) {
+    $(document).on(event, (e, data) => handler(data));
+  }
+}
+
+// Usage in legacy jQuery code
+$(document).ready(function() {
+  // Mount React component in existing jQuery page
+  LegacyBridge.mountReactComponent('user-form-container', UserForm, {
+    onUserAdded: function(user) {
+      // Notify jQuery code of new user
+      LegacyBridge.emitToJQuery('user:added', user);
+    }
+  });
+  
+  // Listen for React events
+  LegacyBridge.listenFromJQuery('user:added', function(user) {
+    // Update jQuery-managed user list
+    $('#user-list').append(`<div class="user">${user.name}</div>`);
+  });
+});
+```
+
+## Key Challenges and Solutions
+
+### 1. State Management Migration
+
+**Challenge:** Global jQuery state scattered across multiple files.
+
+**Solution:** Implemented Zustand for gradual state migration:
+
+```typescript
+// Centralized state management
+import { create } from 'zustand';
+
+interface AppState {
+  users: User[];
+  currentUser: User | null;
+  isLoading: boolean;
+  
+  setUsers: (users: User[]) => void;
+  addUser: (user: User) => void;
+  setCurrentUser: (user: User | null) => void;
+  setLoading: (loading: boolean) => void;
+}
+
+export const useAppStore = create<AppState>((set) => ({
+  users: [],
+  currentUser: null,
+  isLoading: false,
+  
+  setUsers: (users) => set({ users }),
+  addUser: (user) => set((state) => ({ 
+    users: [...state.users, user] 
+  })),
+  setCurrentUser: (currentUser) => set({ currentUser }),
+  setLoading: (isLoading) => set({ isLoading }),
+}));
+```
+
+### 2. API Layer Modernization
+
+**Challenge:** Inconsistent jQuery AJAX calls throughout the codebase.
+
+**Solution:** Created a unified API client:
+
+```typescript
+// Modern API client
+class ApiClient {
+  private baseURL = '/api';
+  
+  async request<T>(
+    endpoint: string, 
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+    
+    const response = await fetch(url, config);
+    
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+    
+    return response.json();
+  }
+  
+  get<T>(endpoint: string) {
+    return this.request<T>(endpoint);
+  }
+  
+  post<T>(endpoint: string, data: any) {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+  
+  put<T>(endpoint: string, data: any) {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+  
+  delete<T>(endpoint: string) {
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+    });
+  }
+}
+
+export const apiClient = new ApiClient();
+```
+
+### 3. Component Testing Strategy
+
+We implemented comprehensive testing for new React components:
+
+```tsx
+// Example test for migrated component
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { UserForm } from './UserForm';
+
+const createTestQueryClient = () => new QueryClient({
+  defaultOptions: { queries: { retry: false } }
+});
+
+describe('UserForm', () => {
+  it('submits user data correctly', async () => {
+    const mockOnUserAdded = jest.fn();
+    const queryClient = createTestQueryClient();
+    
+    // Mock API call
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ 
+          id: 1, 
+          name: 'John Doe', 
+          email: 'john@example.com' 
+        }),
+      })
+    ) as jest.Mock;
+    
+    render(
+      <QueryClientProvider client={queryClient}>
+        <UserForm onUserAdded={mockOnUserAdded} />
+      </QueryClientProvider>
+    );
+    
+    // Fill form
+    fireEvent.change(screen.getByLabelText(/name/i), {
+      target: { value: 'John Doe' }
+    });
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'john@example.com' }
+    });
+    
+    // Submit form
+    fireEvent.click(screen.getByText(/save user/i));
+    
+    // Verify API call
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'John Doe',
+          email: 'john@example.com',
+          phone: ''
+        })
+      });
+    });
+    
+    // Verify callback
+    await waitFor(() => {
+      expect(mockOnUserAdded).toHaveBeenCalledWith({
+        id: 1,
+        name: 'John Doe',
+        email: 'john@example.com'
+      });
+    });
+  });
+});
+```
+
+## Results and Metrics
+
+### Performance Improvements
+- **Page load time**: Reduced from 3.2s to 1.1s
+- **Time to interactive**: Improved from 4.8s to 1.8s
+- **Bundle size**: Reduced from 2.1MB to 890KB (with code splitting)
+
+### Developer Experience
+- **Build time**: Added Vite build process (2s for development builds)
+- **Type safety**: 100% TypeScript coverage for new code
+- **Test coverage**: Increased from 0% to 85%
+
+### Code Quality
+- **Lines of code**: Reduced from 15,000 to 8,500
+- **Maintainability index**: Improved from 42 to 78
+- **Cyclomatic complexity**: Reduced average from 8.2 to 3.1
+
+## Lessons Learned
+
+1. **Incremental migration is key**: Big-bang rewrites are risky and disruptive.
+
+2. **Invest in bridge utilities**: They enable gradual migration while maintaining functionality.
+
+3. **Prioritize high-value components**: Start with components that provide the most user value.
+
+4. **Establish clear boundaries**: Define clear interfaces between legacy and modern code.
+
+5. **Test everything**: Comprehensive testing prevents regressions during migration.
+
+6. **Documentation is crucial**: Document both legacy behavior and new patterns.
+
+## Conclusion
+
+Our jQuery-to-React migration took 12 weeks and resulted in a more maintainable, performant, and scalable application. The incremental approach allowed us to maintain business continuity while gradually modernizing the codebase. The key was patience, thorough planning, and building bridges between old and new systems.

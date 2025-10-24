@@ -1,0 +1,100 @@
+---
+title: Modern React Patterns for Scalable Applications
+date: 2024-10-15
+summary: Explore advanced React patterns including compound components, render props, and custom hooks for building maintainable applications.
+category: Development
+tags:
+  - react
+  - patterns
+  - architecture
+  - hooks
+---
+
+As React applications grow in complexity, it becomes crucial to implement patterns that promote code reusability, maintainability, and developer experience. In this post, we'll explore some modern React patterns that can help you build more scalable applications.
+
+## Compound Components Pattern
+
+The compound component pattern allows you to create components that work together to form a complete UI element while maintaining flexibility in their composition.
+
+```tsx path="components/Card/index.tsx"
+import React, { createContext, useContext } from 'react'
+
+const CardContext = createContext<{ variant?: 'primary' | 'secondary' }>({})
+
+export function Card({ children, variant = 'primary' }) {
+  return (
+    <CardContext.Provider value={{ variant }}>
+      <div className={`card card--${variant}`}>
+        {children}
+      </div>
+    </CardContext.Provider>
+  )
+}
+
+Card.Header = function CardHeader({ children }) {
+  const { variant } = useContext(CardContext)
+  return <div className={`card__header card__header--${variant}`}>{children}</div>
+}
+
+Card.Body = function CardBody({ children }) {
+  return <div className="card__body">{children}</div>
+}
+
+Card.Footer = function CardFooter({ children }) {
+  return <div className="card__footer">{children}</div>
+}
+```
+
+Usage example:
+
+```tsx path="pages/dashboard.tsx"
+<Card variant="primary">
+  <Card.Header>
+    <h2>Dashboard Statistics</h2>
+  </Card.Header>
+  <Card.Body>
+    <p>Your application metrics and insights.</p>
+  </Card.Body>
+  <Card.Footer>
+    <button>View Details</button>
+  </Card.Footer>
+</Card>
+```
+
+## Custom Hooks for Data Fetching
+
+Creating custom hooks for data fetching helps encapsulate loading states, error handling, and caching logic.
+
+```tsx path="hooks/useApi.tsx"
+import { useState, useEffect } from 'react'
+
+export function useApi<T>(url: string) {
+  const [data, setData] = useState<T | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch(url)
+        if (!response.ok) throw new Error('Failed to fetch')
+        const result = await response.json()
+        setData(result)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [url])
+
+  return { data, loading, error }
+}
+```
+
+## Conclusion
+
+Modern React patterns like compound components and custom hooks provide powerful abstractions that make your code more maintainable and reusable. By adopting these patterns, you can create applications that scale gracefully while maintaining clean, readable code.

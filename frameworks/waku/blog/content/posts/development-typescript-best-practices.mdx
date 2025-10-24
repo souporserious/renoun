@@ -1,0 +1,133 @@
+---
+title: TypeScript Best Practices for React Development
+date: 2024-10-12
+summary: Learn essential TypeScript patterns and techniques to write type-safe React applications with better developer experience.
+category: Development
+tags:
+  - typescript
+  - react
+  - types
+  - development
+---
+
+TypeScript has become an essential tool for React development, providing type safety and improved developer experience. In this post, we'll explore best practices for using TypeScript effectively in React applications.
+
+## Proper Component Type Definitions
+
+Start with properly typed React components using interfaces for props:
+
+```tsx path="components/UserProfile.tsx"
+interface UserProfileProps {
+  user: {
+    id: string
+    name: string
+    email: string
+    avatar?: string
+  }
+  onEdit?: (userId: string) => void
+  className?: string
+  children?: React.ReactNode
+}
+
+export function UserProfile({ 
+  user, 
+  onEdit, 
+  className = '', 
+  children 
+}: UserProfileProps) {
+  return (
+    <div className={`user-profile ${className}`}>
+      <img src={user.avatar || '/default-avatar.png'} alt={user.name} />
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+      {onEdit && (
+        <button onClick={() => onEdit(user.id)}>
+          Edit Profile
+        </button>
+      )}
+      {children}
+    </div>
+  )
+}
+```
+
+## Generic Components
+
+Create reusable components using TypeScript generics:
+
+```tsx path="components/DataList.tsx"
+interface DataListProps<T> {
+  items: T[]
+  renderItem: (item: T, index: number) => React.ReactNode
+  keyExtractor: (item: T) => string | number
+  loading?: boolean
+  emptyMessage?: string
+}
+
+export function DataList<T>({ 
+  items, 
+  renderItem, 
+  keyExtractor, 
+  loading = false,
+  emptyMessage = 'No items found'
+}: DataListProps<T>) {
+  if (loading) {
+    return <div>Loading...</div>
+  }
+
+  if (items.length === 0) {
+    return <div>{emptyMessage}</div>
+  }
+
+  return (
+    <ul className="data-list">
+      {items.map((item, index) => (
+        <li key={keyExtractor(item)}>
+          {renderItem(item, index)}
+        </li>
+      ))}
+    </ul>
+  )
+}
+```
+
+## Advanced Hook Types
+
+Use TypeScript to create strongly typed custom hooks:
+
+```tsx path="hooks/useLocalStorage.tsx"
+import { useState, useEffect } from 'react'
+
+type SetValue<T> = (value: T | ((prev: T) => T)) => void
+
+export function useLocalStorage<T>(
+  key: string, 
+  initialValue: T
+): [T, SetValue<T>] {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key)
+      return item ? JSON.parse(item) : initialValue
+    } catch (error) {
+      console.warn(`Error reading localStorage key "${key}":`, error)
+      return initialValue
+    }
+  })
+
+  const setValue: SetValue<T> = (value) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value
+      setStoredValue(valueToStore)
+      window.localStorage.setItem(key, JSON.stringify(valueToStore))
+    } catch (error) {
+      console.warn(`Error setting localStorage key "${key}":`, error)
+    }
+  }
+
+  return [storedValue, setValue]
+}
+```
+
+## Conclusion
+
+TypeScript transforms React development by catching errors at compile time and providing excellent IntelliSense support. By following these practices, you'll write more robust and maintainable React applications.
