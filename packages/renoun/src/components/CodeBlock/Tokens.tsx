@@ -5,7 +5,11 @@ import { css } from 'restyle/css'
 import { getSourceTextMetadata, getTokens } from '../../project/client.js'
 import type { Languages } from '../../utils/get-language.js'
 import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
-import type { Token, TokenizedLines } from '../../utils/get-tokens.js'
+import type {
+  Token,
+  TokenDiagnostic,
+  TokenizedLines,
+} from '../../utils/get-tokens.js'
 import { getContext } from '../../utils/context.js'
 import {
   BASE_TOKEN_CLASS_NAME,
@@ -220,14 +224,26 @@ export async function Tokens({
               style,
             })
           )
+          const diagnostics = getUniqueDiagnostics(line)
+          const diagnosticNodes = renderDiagnostics({
+            diagnostics,
+            lineIndex,
+            baseTokenClassName,
+            theme,
+            className,
+            style,
+          })
+          const lineChildrenWithDiagnostics = diagnosticNodes.length
+            ? lineChildren.concat(diagnosticNodes)
+            : lineChildren
           const isLastLine = lineIndex === lastLineIndex
           const renderedLine = renderLine
             ? renderLine({
-                children: lineChildren,
+                children: lineChildrenWithDiagnostics,
                 index: lineIndex,
                 isLast: isLastLine,
               })
-            : lineChildren
+            : lineChildrenWithDiagnostics
 
           if (renderLine && renderedLine) {
             return renderedLine
@@ -235,7 +251,7 @@ export async function Tokens({
 
           return (
             <Fragment key={lineIndex}>
-              {lineChildren}
+              {lineChildrenWithDiagnostics}
               {isLastLine ? null : '\n'}
             </Fragment>
           )
@@ -271,6 +287,15 @@ interface RenderTokenOptions {
   style?: TokensProps['style']
 }
 
+interface RenderDiagnosticsOptions {
+  diagnostics: TokenDiagnostic[]
+  lineIndex: number
+  baseTokenClassName?: string
+  theme: ThemeColors
+  className?: TokensProps['className']
+  style?: TokensProps['style']
+}
+
 interface RenderWithAnnotationsOptions {
   annotations: AnnotationRenderers
   block: BlockAnnotationInstruction[]
@@ -294,36 +319,42 @@ function renderToken({
   className,
   style,
 }: RenderTokenOptions): React.ReactNode {
-  const hasSymbolMeta = token.diagnostics || token.quickInfo
+  const hasDiagnostics = Boolean(token.diagnostics?.length)
+  const hasQuickInfo = Boolean(token.quickInfo)
 
   if (
     token.isWhiteSpace ||
-    (!hasSymbolMeta && !token.hasTextStyles && token.isBaseColor)
+    (!hasQuickInfo &&
+      !hasDiagnostics &&
+      !token.hasTextStyles &&
+      token.isBaseColor)
   ) {
     return token.value
   }
 
-  if (hasSymbolMeta) {
-    const deprecatedStyles = {
-      textDecoration: 'line-through',
-    }
-    const diagnosticStyles = {
-      backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%2C0%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
-      backgroundRepeat: 'repeat-x',
-      backgroundPosition: 'bottom left',
-    }
-    const [symbolClassName, Styles] = css({
-      ...token.style,
-      ...(token.isDeprecated && deprecatedStyles),
-      ...(token.diagnostics && diagnosticStyles),
-      ...cssProp?.token,
-    })
-    const tokenClassName = joinClassNames(
-      symbolClassName,
-      baseTokenClassName,
-      className?.token
-    )
+  const deprecatedStyles = {
+    textDecoration: 'line-through',
+  }
+  const diagnosticStyles = hasDiagnostics
+    ? {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%2C0%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
+        backgroundRepeat: 'repeat-x',
+        backgroundPosition: 'bottom left',
+      }
+    : undefined
+  const [tokenClassNamePart, Styles] = css({
+    ...token.style,
+    ...(token.isDeprecated && deprecatedStyles),
+    ...diagnosticStyles,
+    ...cssProp?.token,
+  })
+  const tokenClassName = joinClassNames(
+    tokenClassNamePart,
+    baseTokenClassName,
+    className?.token
+  )
 
+  if (hasQuickInfo) {
     return (
       <Symbol
         key={`${lineIndex}-${tokenIndex}`}
@@ -339,7 +370,6 @@ function renderToken({
             }
           >
             <QuickInfo
-              diagnostics={token.diagnostics}
               quickInfo={token.quickInfo}
               css={cssProp?.popover}
               className={className?.popover}
@@ -356,16 +386,6 @@ function renderToken({
     )
   }
 
-  const [classNames, Styles] = css({
-    ...token.style,
-    ...cssProp?.token,
-  })
-  const tokenClassName = joinClassNames(
-    baseTokenClassName,
-    classNames,
-    className?.token
-  )
-
   return (
     <span
       key={`${lineIndex}-${tokenIndex}`}
@@ -376,6 +396,79 @@ function renderToken({
       <Styles />
     </span>
   )
+}
+
+function getUniqueDiagnostics(line: Token[]): TokenDiagnostic[] {
+  if (!line.length) {
+    return []
+  }
+
+  const seen = new Set<string>()
+  const uniqueDiagnostics: TokenDiagnostic[] = []
+
+  for (const token of line) {
+    if (!token.diagnostics) {
+      continue
+    }
+
+    for (const diagnostic of token.diagnostics) {
+      const key = `${diagnostic.code ?? 'unknown'}:${diagnostic.message}`
+      if (seen.has(key)) {
+        continue
+      }
+      seen.add(key)
+      uniqueDiagnostics.push(diagnostic)
+    }
+  }
+
+  return uniqueDiagnostics
+}
+
+function renderDiagnostics({
+  diagnostics,
+  lineIndex,
+  baseTokenClassName,
+  theme,
+  className,
+  style,
+}: RenderDiagnosticsOptions): React.ReactNode[] {
+  if (!diagnostics.length) {
+    return []
+  }
+
+  const nodes: React.ReactNode[] = []
+  const diagnosticColor = theme.editorError.foreground
+
+  diagnostics.forEach((diagnostic, index) => {
+    const [diagnosticClassName, Styles] = css({
+      display: 'block',
+      color: diagnosticColor,
+      paddingLeft: '0.75ch',
+      whiteSpace: 'pre-wrap',
+    })
+    const diagnosticText =
+      diagnostic.code !== undefined
+        ? `${diagnostic.message} (${diagnostic.code})`
+        : diagnostic.message
+
+    nodes.push('\n')
+    nodes.push(
+      <span
+        key={`diagnostic-${lineIndex}-${index}`}
+        className={joinClassNames(
+          baseTokenClassName,
+          diagnosticClassName,
+          className?.token
+        )}
+        style={style?.token}
+      >
+        {diagnosticText}
+        <Styles />
+      </span>
+    )
+  })
+
+  return nodes
 }
 
 function renderWithAnnotations({
@@ -580,6 +673,19 @@ function renderWithAnnotations({
         openAt(currentPosition)
       }
     })
+
+    const diagnosticNodes = renderDiagnostics({
+      diagnostics: getUniqueDiagnostics(line),
+      lineIndex,
+      baseTokenClassName,
+      theme,
+      className,
+      style,
+    })
+
+    for (const node of diagnosticNodes) {
+      appendNode(node)
+    }
 
     if (lineIndex < tokens.length - 1) {
       const newlineStart = currentPosition

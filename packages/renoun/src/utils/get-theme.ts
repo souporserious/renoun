@@ -180,6 +180,12 @@ const themeFallbacks = {
     },
   ],
   'editor.rangeHighlightBackground': ['editor.hoverHighlightBackground'],
+  'editorError.foreground': [
+    {
+      dark: '#f14c4c',
+      light: '#f14c4c',
+    },
+  ],
   'editorLineNumber.foreground': ['editor.foreground'],
   'editorLineNumber.activeForeground': ['editorLineNumber.foreground'],
   'editorHoverWidget.background': [

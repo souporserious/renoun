@@ -53,6 +53,7 @@ function pruneTheme(
       // editor base colors and sources
       'editor.foreground',
       'editor.background',
+      'editorError.foreground',
       // UI areas referenced directly
       'activityBar.background',
       'activityBar.foreground',
