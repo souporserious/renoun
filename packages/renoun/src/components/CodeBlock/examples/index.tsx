@@ -7,7 +7,7 @@ export function Basic() {
 
 export function TypeChecking() {
   return (
-    <CodeBlock language="ts" allowCopy={false} allowErrors showErrors>
+    <CodeBlock language="ts" showErrors>
       const a = 1; a + b;
     </CodeBlock>
   )
