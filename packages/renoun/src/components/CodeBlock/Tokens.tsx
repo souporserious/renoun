@@ -446,7 +446,6 @@ function renderDiagnostics({
 
   diagnostics.forEach((diagnostic, index) => {
     const [diagnosticClassName, Styles] = css({
-      display: 'block',
       color: diagnosticColor,
       paddingLeft: '0.75ch',
       whiteSpace: 'pre-wrap',
