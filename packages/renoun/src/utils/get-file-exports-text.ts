@@ -476,7 +476,41 @@ function buildTextSnippet(
     }
   }
 
-  return lines.join('').trim()
+  // Merge statements preserving original whitespace as much as possible, while
+  // guaranteeing there is at least one newline between adjacent statements if
+  // neither side provides one. This avoids invalid concatenations like
+  // "`import ..." without randomly adding extra blank lines.
+  if (lines.length === 0) {
+    return ''
+  }
+
+  const outputChunks: string[] = []
+  let previousEndsWithLineFeed = false
+
+  for (let index = 0; index < lines.length; index++) {
+    const currentLine = lines[index]
+
+    if (index > 0) {
+      const startsWithNewline =
+        currentLine.length > 0 &&
+        (currentLine.charCodeAt(0) === 10 ||
+          (currentLine.charCodeAt(0) === 13 &&
+            currentLine.charCodeAt(1) === 10))
+
+      if (!(previousEndsWithLineFeed || startsWithNewline)) {
+        outputChunks.push('\n')
+      }
+    }
+
+    outputChunks.push(currentLine)
+
+    const currentLength = currentLine.length
+
+    previousEndsWithLineFeed =
+      currentLength > 0 && currentLine.charCodeAt(currentLength - 1) === 10
+  }
+
+  return outputChunks.join('').trim()
 }
 
 /** Remove leading JSDoc blocks from a statement's full text, leaving inline comments intact. */

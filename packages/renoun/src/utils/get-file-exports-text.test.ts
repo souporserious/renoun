@@ -249,4 +249,30 @@ describe('getFileExportsText', () => {
     )!
     expect(defaultExport.text).toContain('export default class Component')
   })
+
+  test('inserts newlines between reconstructed statements to prevent invalid concatenation', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    const text = `
+const code = \`
+export default async function Page() {
+  return <div />
+}
+\`
+
+export function Demo() {
+  return <div>{join('a','b')}{code}</div>
+}
+
+import { join } from 'node:path'
+`.trim()
+
+    project.createSourceFile('repro.tsx', text)
+    const exports = getFileExportsText('repro.tsx', project)
+    const demo = exports.find((namedExport) => namedExport.name === 'Demo')!
+
+    // Ensure an import that appears later in the file is separated from the
+    // preceding template literal by at least one newline.
+    expect(demo.text).toContain('\nimport ')
+    expect(demo.text).not.toContain('`import ')
+  })
 })
