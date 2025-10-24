@@ -442,11 +442,11 @@ function renderDiagnostics({
   }
 
   const nodes: React.ReactNode[] = []
-  const diagnosticColor = theme.editorError.foreground
 
   diagnostics.forEach((diagnostic, index) => {
     const [diagnosticClassName, Styles] = css({
-      color: diagnosticColor,
+      color: theme.editorError.foreground,
+      backgroundColor: 'color-mix(in oklab, currentColor 18%, transparent)',
       paddingLeft: '0.75ch',
       whiteSpace: 'pre-wrap',
       ...cssProp?.error,
