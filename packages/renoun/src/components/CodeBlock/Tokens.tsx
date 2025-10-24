@@ -200,7 +200,10 @@ export async function Tokens({
     value: metadata.value,
     language: metadata.language,
     filePath: metadata.filePath,
-    allowErrors: allowErrors || context?.allowErrors,
+    allowErrors:
+      allowErrors ??
+      context?.allowErrors ??
+      (showErrors || context?.showErrors ? true : undefined),
     showErrors: showErrors || context?.showErrors,
     theme: themeConfiguration,
     languages: config.languages,
