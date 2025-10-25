@@ -1,5 +1,6 @@
 import React, { cache } from 'react'
 
+import { svgToJsx } from '../utils/svg-to-jsx.js'
 import { getConfig } from './Config/ServerConfigContext.js'
 import type { NormalizedFigmaConfig } from './Config/types.js'
 
@@ -758,6 +759,25 @@ export async function Image<Source extends string>({
     queryKey,
     token
   )
+
+  // Prefer turning SVG markup into React elements for durability and styling control
+  if (format === 'svg') {
+    try {
+      const response = await fetch(imageUrl)
+      if (response.ok) {
+        const svgText = await response.text()
+        return svgToJsx(svgText, {
+          rootProps: {
+            ...props,
+            role: props.role ?? 'img',
+            'aria-label': description ?? resolvedDescription ?? undefined,
+          },
+        })
+      }
+    } catch {
+      // fall through to data URL below
+    }
+  }
 
   // Avoid using expiring Figma URLs directly when possible by embedding a data URL.
   let src = imageUrl

@@ -185,27 +185,26 @@ function parseAttributes(
 /** Convert a single tag's attributes string into a props object. */
 function attributesToProps(
   rawAttributes: string,
-  opts: SvgToJsxOptions
+  options: SvgToJsxOptions
 ): Record<string, unknown> {
-  const pairs = parseAttributes(rawAttributes)
-  const remove = new Set(
-    (opts.removeAttributes ?? []).map((a) => a.toLowerCase())
+  const attributePairs = parseAttributes(rawAttributes)
+  const removeAttributesSet = new Set(
+    (options.removeAttributes ?? []).map((attribute) => attribute.toLowerCase())
   )
 
   const renameMap: Record<string, string> = {
     ...BUILTIN_ATTR_RENAMES,
-    ...(opts.renameAttributes ?? {}),
+    ...(options.renameAttributes ?? {}),
   }
 
   const props: Record<string, unknown> = {}
 
-  for (const { name, value, quoted } of pairs) {
+  for (const { name, value, quoted } of attributePairs) {
     const lowerName = name.toLowerCase()
-    if (remove.has(lowerName)) continue
+    if (removeAttributesSet.has(lowerName)) continue
 
-    const explicitRename = renameMap[lowerName]
-    const renamed = explicitRename ?? camelCasedAttribute(name)
-    if (renamed === 'style' && value && opts.expandStyle) {
+    const renamed = renameMap[lowerName] ?? camelCasedAttribute(name)
+    if (renamed === 'style' && value && options.expandStyle) {
       props['style'] = styleToObject(value)
       continue
     }
@@ -219,8 +218,8 @@ function attributesToProps(
       continue
     }
 
-    const numeric = !quoted && /^[+-]?\d+(\.\d+)?$/.test(value)
-    if (numeric) {
+    const isNumeric = !quoted && /^[+-]?\d+(\.\d+)?$/.test(value)
+    if (isNumeric) {
       props[renamed] = Number(value)
     } else {
       props[renamed] = value
@@ -242,7 +241,7 @@ export function svgToJsx(
   svg: string,
   options: SvgToJsxOptions = {}
 ): React.ReactElement {
-  const opts: SvgToJsxOptions = { expandStyle: true, ...options }
+  const resolvedOptions: SvgToJsxOptions = { expandStyle: true, ...options }
 
   const tokens = tokenize(svg)
   const rootChildren: Array<ElementNode | { kind: 'text'; value: string }> = []
@@ -276,48 +275,58 @@ export function svgToJsx(
     }
 
     if (token.type === 'tagOpen') {
-      const name = token.name
-      const props = attributesToProps(token.attributes, opts)
-      const node: ElementNode = { kind: 'element', name, props, children: [] }
+      const elementName = token.name
+      const elementProps = attributesToProps(token.attributes, resolvedOptions)
+      const elementNode: ElementNode = {
+        kind: 'element',
+        name: elementName,
+        props: elementProps,
+        children: [],
+      }
       if (token.selfClosing) {
-        appendChild(node)
+        appendChild(elementNode)
       } else {
-        appendChild(node)
-        stack.push(node)
+        appendChild(elementNode)
+        stack.push(elementNode)
       }
       continue
     }
   }
 
+  function isTextNode(
+    node: ElementNode | { kind: 'text'; value: string }
+  ): node is { kind: 'text'; value: string } {
+    return node.kind === 'text'
+  }
+
   function toReact(
     node: ElementNode | { kind: 'text'; value: string }
   ): React.ReactNode {
-    if (node.kind === 'text') return node.value
-    const elementNode: ElementNode = node
+    if (isTextNode(node)) return node.value
+    const elementNode = node
     const childrenNodes = elementNode.children.map((child) => toReact(child))
-    const propsForElement: Record<string, unknown> = elementNode.props
     return React.createElement(
       elementNode.name,
-      propsForElement,
+      elementNode.props,
       ...childrenNodes
     )
   }
 
   // If multiple roots, wrap in a fragment
   const elements = rootChildren
-    .filter((child) => child.kind !== 'text' || child.value.trim())
+    .filter((child) => !isTextNode(child) || child.value.trim())
     .map((child) => toReact(child))
 
   if (elements.length === 0) {
-    return React.createElement('svg', opts.rootProps ?? {})
+    return React.createElement('svg', resolvedOptions.rootProps ?? {})
   }
 
   if (elements.length === 1) {
     const onlyElement = elements[0]
-    if (opts.rootProps && React.isValidElement(onlyElement)) {
+    if (resolvedOptions.rootProps && React.isValidElement(onlyElement)) {
       const mergedProps: Record<string, unknown> = {
         ...(onlyElement.props ?? {}),
-        ...(opts.rootProps ?? {}),
+        ...(resolvedOptions.rootProps ?? {}),
       }
       return React.cloneElement(onlyElement, mergedProps)
     }
