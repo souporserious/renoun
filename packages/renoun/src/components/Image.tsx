@@ -7,7 +7,7 @@ import type { NormalizedFigmaConfig } from './Config/types.js'
 const FIGMA_HOST_PATTERN = /\.figma\.com$/
 const FIGMA_PROTOCOL = /^figma:/i
 
-type RemoteComponentMeta = {
+interface RemoteComponentMeta {
   node_id: string
   name: string
   description?: string | null
@@ -15,7 +15,7 @@ type RemoteComponentMeta = {
   containing_page?: { name?: string | null }
 }
 
-type ComponentMetadata = {
+interface ComponentMetadata {
   nodeId: string
   name: string
   description?: string
@@ -166,7 +166,7 @@ const fetchFigmaComponents = cache(
   }
 )
 
-type FigmaNode = {
+interface FigmaNode {
   id: string
   name: string
   type: string
@@ -557,7 +557,14 @@ function buildFigmaQuery(
   nodeId: string,
   options: Pick<
     FigmaImageOptions,
-    'format' | 'scale' | 'background' | 'useAbsoluteBounds'
+    | 'format'
+    | 'scale'
+    | 'background'
+    | 'useAbsoluteBounds'
+    | 'svgOutlineText'
+    | 'svgIncludeId'
+    | 'svgIncludeNodeId'
+    | 'svgSimplifyStroke'
   >
 ): URLSearchParams {
   const params = new URLSearchParams()
@@ -583,6 +590,21 @@ function buildFigmaQuery(
     params.set('use_absolute_bounds', 'true')
   }
 
+  if (options.format === 'svg') {
+    if (options.svgOutlineText !== undefined) {
+      params.set('svg_outline_text', String(options.svgOutlineText))
+    }
+    if (options.svgIncludeId !== undefined) {
+      params.set('svg_include_id', String(options.svgIncludeId))
+    }
+    if (options.svgIncludeNodeId !== undefined) {
+      params.set('svg_include_node_id', String(options.svgIncludeNodeId))
+    }
+    if (options.svgSimplifyStroke !== undefined) {
+      params.set('svg_simplify_stroke', String(options.svgSimplifyStroke))
+    }
+  }
+
   return params
 }
 
@@ -591,15 +613,20 @@ type FigmaSource =
   | `https://${string}.figma.com${string}`
   | `http://${string}.figma.com${string}`
 
-type SharedImageProps = Omit<
-  React.ComponentProps<'img'>,
-  'alt' | 'src' | 'srcSet'
-> & {
+interface SharedImageProps
+  extends Omit<React.ComponentProps<'img'>, 'alt' | 'src' | 'srcSet'> {
   /** Optional description for accessibility. */
   description?: string
 }
 
-type FigmaImageOptions = {
+interface FigmaSvgOptions {
+  svgOutlineText?: boolean
+  svgIncludeId?: boolean
+  svgIncludeNodeId?: boolean
+  svgSimplifyStroke?: boolean
+}
+
+interface FigmaImageOptions extends FigmaSvgOptions {
   /** Desired output format when rendering from Figma. Defaults to `png`. */
   format?: 'png' | 'jpg' | 'svg' | 'pdf'
 
@@ -613,7 +640,7 @@ type FigmaImageOptions = {
   useAbsoluteBounds?: boolean
 }
 
-type NonFigmaImageOptions = {
+interface NonFigmaImageOptions {
   format?: never
   scale?: never
   background?: never
@@ -624,6 +651,42 @@ export type ImageProps<Source extends string = string> = SharedImageProps &
   (Source extends FigmaSource
     ? { source: Source } & FigmaImageOptions
     : { source: Source } & NonFigmaImageOptions)
+
+async function getFigmaImageUrlWithFallback(
+  fileId: string,
+  nodeId: string,
+  baseOptions: Omit<FigmaImageOptions, 'format'>,
+  token: string
+): Promise<{ url: string; format: 'svg' | 'png' }> {
+  const svgParams = buildFigmaQuery(nodeId, { ...baseOptions, format: 'svg' })
+  let originalError: unknown = null
+  try {
+    const svgUrl = await fetchFigmaImageUrl(
+      fileId,
+      nodeId,
+      svgParams.toString(),
+      token
+    )
+    const probe = await fetch(svgUrl)
+    if (probe.ok) return { url: svgUrl, format: 'svg' }
+  } catch (error) {
+    originalError = error
+  }
+
+  const pngParams = buildFigmaQuery(nodeId, { ...baseOptions, format: 'png' })
+  try {
+    const pngUrl = await fetchFigmaImageUrl(
+      fileId,
+      nodeId,
+      pngParams.toString(),
+      token
+    )
+    return { url: pngUrl, format: 'png' }
+  } catch (pngError) {
+    if (originalError instanceof Error) throw originalError
+    throw pngError
+  }
+}
 
 /** Display images from Figma files, URLs, or local assets.  */
 export async function Image<Source extends string>({
@@ -697,7 +760,6 @@ export async function Image<Source extends string>({
 
   const config = await getConfig()
   const figmaConfig = config.figma
-  const options = { format, scale, background, useAbsoluteBounds }
 
   let fileId: string
   let nodeId: string
@@ -742,8 +804,6 @@ export async function Image<Source extends string>({
       )
       resolvedDescription = metadata?.description?.trim() || undefined
     } catch (error) {
-      // If we cannot fetch components metadata (e.g., insufficient permissions),
-      // continue without auto-filling the description.
       if (process.env.RENOUN_DEBUG === 'debug') {
         // eslint-disable-next-line no-console
         console.debug('[renoun] Skipping component metadata fetch:', error)
@@ -751,19 +811,25 @@ export async function Image<Source extends string>({
     }
   }
 
-  const params = buildFigmaQuery(resolvedNodeId, options)
-  const queryKey = params.toString()
-  const imageUrl = await fetchFigmaImageUrl(
-    fileId,
-    resolvedNodeId,
-    queryKey,
-    token
-  )
+  const { url: bestUrl, format: resolvedFormat } =
+    await getFigmaImageUrlWithFallback(
+      fileId,
+      resolvedNodeId,
+      {
+        scale,
+        background,
+        useAbsoluteBounds,
+        svgOutlineText: false,
+        svgIncludeId: false,
+        svgIncludeNodeId: false,
+        svgSimplifyStroke: true,
+      },
+      token
+    )
 
-  // Prefer turning SVG markup into React elements for durability and styling control
-  if (format === 'svg') {
+  if (resolvedFormat === 'svg') {
     try {
-      const response = await fetch(imageUrl)
+      const response = await fetch(bestUrl)
       if (response.ok) {
         const svgText = await response.text()
         return svgToJsx(svgText, {
@@ -775,22 +841,17 @@ export async function Image<Source extends string>({
         })
       }
     } catch {
-      // fall through to data URL below
+      // fall through to raster fallback below
     }
   }
 
-  // Avoid using expiring Figma URLs directly when possible by embedding a data URL.
-  let src = imageUrl
-  if (format === 'png' || format === 'jpg' || format === 'svg') {
-    const dataUrl = await fetchAsDataUrl(imageUrl, format)
-    if (dataUrl) {
-      src = dataUrl
-    }
-  }
-
+  const dataUrl = await fetchAsDataUrl(
+    bestUrl,
+    resolvedFormat === 'png' ? 'png' : 'jpg'
+  )
   return React.createElement('img', {
     ...props,
-    src,
+    src: dataUrl ?? bestUrl,
     alt: description ?? resolvedDescription ?? '',
   })
 }
