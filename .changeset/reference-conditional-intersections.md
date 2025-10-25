@@ -2,4 +2,8 @@
 'renoun': patch
 ---
 
-Fixes conditional intersection rendering in the `Reference` component so API docs for complex props that use generics and conditional types show the correct property tables.
+Improves conditional type rendering in the `Reference` component::
+
+- Builds decision-tree branches and computes a properties table.
+- Prefer alias names in guards (e.g. `Variant extends LinkVariant`).
+- Adds support for top-level `ConditionalType` in type aliases.

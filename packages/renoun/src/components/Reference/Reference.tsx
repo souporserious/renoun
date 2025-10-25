@@ -269,6 +269,22 @@ function TypeNodeRouter({
           />
         )
       }
+      if (node.type.kind === 'ConditionalType') {
+        return (
+          <ConditionalSection
+            node={node.type}
+            components={components}
+            id={id}
+            title={node.name}
+            typeParameterConstraints={Object.fromEntries(
+              (node.typeParameters || []).map((parameter) => [
+                parameter.name ?? '',
+                parameter.constraintType,
+              ])
+            )}
+          />
+        )
+      }
       if (node.type.kind === 'IntersectionType') {
         return (
           <IntersectionSection
@@ -276,6 +292,12 @@ function TypeNodeRouter({
             components={components}
             id={id}
             title={node.name}
+            typeParameterConstraints={Object.fromEntries(
+              (node.typeParameters || []).map((parameter) => [
+                parameter.name ?? '',
+                parameter.constraintType,
+              ])
+            )}
           />
         )
       }
@@ -1313,11 +1335,13 @@ function IntersectionSection({
   components,
   id,
   title,
+  typeParameterConstraints,
 }: {
   node: TypeOfKind<'IntersectionType'>
   components: InternalReferenceComponents
   id?: string
   title?: string
+  typeParameterConstraints?: Record<string, Kind.TypeExpression | undefined>
 }) {
   // Collect base rows (unconditional) and conditional nodes to build a decision tree.
   const baseRows: IntersectionPropertyRow[] = []
@@ -1347,19 +1371,41 @@ function IntersectionSection({
     rows: IntersectionPropertyRow[]
   }
 
+  function renderConditionalExtendsOperand(
+    conditional: TypeOfKind<'ConditionalType'>
+  ): React.ReactNode {
+    if (
+      conditional.extendsType.kind === 'TypeReference' &&
+      conditional.extendsType.name
+    ) {
+      return <components.Code>{conditional.extendsType.name}</components.Code>
+    }
+    if (
+      conditional.checkType.kind === 'TypeReference' &&
+      conditional.checkType.name &&
+      typeParameterConstraints
+    ) {
+      const constraint = typeParameterConstraints[conditional.checkType.name]
+      if (constraint?.kind === 'TypeReference' && constraint.name) {
+        return <components.Code>{constraint.name}</components.Code>
+      }
+    }
+    return <components.Code>{conditional.extendsType.text}</components.Code>
+  }
+
   function expandConditionalToLeaves(
     conditional: TypeOfKind<'ConditionalType'>
   ): Branch[] {
     const whenPart = (
       <>
         <components.Code>{conditional.checkType.text}</components.Code> extends{' '}
-        <components.Code>{conditional.extendsType.text}</components.Code>
+        {renderConditionalExtendsOperand(conditional)}
       </>
     )
     const elsePart = (
       <>
         <components.Code>{conditional.checkType.text}</components.Code> does not{' '}
-        extend <components.Code>{conditional.extendsType.text}</components.Code>
+        extend {renderConditionalExtendsOperand(conditional)}
       </>
     )
 
@@ -1580,6 +1626,204 @@ function IntersectionSection({
           </components.Code>
         </TypeDetail>
       ) : null}
+    </TypeSection>
+  )
+}
+
+function ConditionalSection({
+  node,
+  components,
+  id,
+  title,
+  typeParameterConstraints,
+}: {
+  node: TypeOfKind<'ConditionalType'>
+  components: InternalReferenceComponents
+  id?: string
+  title?: string
+  typeParameterConstraints?: Record<string, Kind.TypeExpression | undefined>
+}) {
+  type Branch = {
+    guardParts: React.ReactNode[]
+    rows: IntersectionPropertyRow[]
+    typeText?: string
+  }
+
+  function expandConditionalToLeaves(
+    conditional: TypeOfKind<'ConditionalType'>
+  ): Branch[] {
+    function renderExtendsOperand(): React.ReactNode {
+      // Prefer a named reference on the right side.
+      if (
+        conditional.extendsType.kind === 'TypeReference' &&
+        conditional.extendsType.name
+      ) {
+        return <components.Code>{conditional.extendsType.name}</components.Code>
+      }
+
+      // Otherwise, if the check side is a type parameter with a referenced constraint, use that alias name.
+      if (
+        conditional.checkType.kind === 'TypeReference' &&
+        conditional.checkType.name &&
+        typeParameterConstraints
+      ) {
+        const constraint = typeParameterConstraints[conditional.checkType.name]
+        if (constraint?.kind === 'TypeReference' && constraint.name) {
+          return <components.Code>{constraint.name}</components.Code>
+        }
+      }
+
+      // Fallback to full text.
+      return <components.Code>{conditional.extendsType.text}</components.Code>
+    }
+
+    const whenPart = (
+      <>
+        <components.Code>{conditional.checkType.text}</components.Code> extends{' '}
+        {renderExtendsOperand()}
+      </>
+    )
+    const elsePart = (
+      <>
+        <components.Code>{conditional.checkType.text}</components.Code> does not{' '}
+        extend {renderExtendsOperand()}
+      </>
+    )
+
+    const trueArm = conditional.trueType
+    const falseArm = conditional.falseType
+
+    const trueLeaves: Branch[] =
+      trueArm.kind === 'ConditionalType'
+        ? expandConditionalToLeaves(trueArm).map((leaf) => ({
+            guardParts: [whenPart, ...leaf.guardParts],
+            rows: leaf.rows,
+            typeText: leaf.typeText,
+          }))
+        : [
+            {
+              guardParts: [whenPart],
+              rows: getIntersectionPropertyRows(trueArm),
+              typeText: trueArm.text?.trim?.(),
+            },
+          ]
+
+    const falseLeaves: Branch[] =
+      falseArm.kind === 'ConditionalType'
+        ? expandConditionalToLeaves(falseArm).map((leaf) => ({
+            guardParts: [elsePart, ...leaf.guardParts],
+            rows: leaf.rows,
+            typeText: leaf.typeText,
+          }))
+        : [
+            {
+              guardParts: [elsePart],
+              rows: getIntersectionPropertyRows(falseArm),
+              typeText: falseArm.text?.trim?.(),
+            },
+          ]
+
+    return [...trueLeaves, ...falseLeaves]
+  }
+
+  const leaves = expandConditionalToLeaves(node)
+
+  function rowsToMap(
+    rows: IntersectionPropertyRow[]
+  ): Map<string, IntersectionPropertyRow> {
+    const map = new Map<string, IntersectionPropertyRow>()
+    for (const row of rows) {
+      if (!isNeverTypeText(row.text)) map.set(row.name, row)
+    }
+    return map
+  }
+
+  const leafMaps = leaves.map((leaf) => rowsToMap(leaf.rows))
+
+  // Always = rows present in every leaf with identical type
+  const alwaysRows: IntersectionPropertyRow[] = []
+  if (leafMaps.length > 0) {
+    const first = leafMaps[0]
+    for (const [name, row] of first) {
+      let sameInAll = true
+      for (let i = 1; i < leafMaps.length; i++) {
+        const other = leafMaps[i].get(name)
+        if (!other || other.text.trim() !== row.text.trim()) {
+          sameInAll = false
+          break
+        }
+      }
+      if (sameInAll) alwaysRows.push(row)
+    }
+  }
+  const alwaysNames = new Set(alwaysRows.map((r) => r.name))
+
+  const renderRow = (row: IntersectionPropertyRow, hasSubRow: boolean) => (
+    <>
+      <components.TableData index={0} hasSubRow={hasSubRow}>
+        {row.name}
+        {row.isOptional ? '?' : ''}
+      </components.TableData>
+      <components.TableData index={1} hasSubRow={hasSubRow} colSpan={2}>
+        <components.Code>{row.text}</components.Code>
+      </components.TableData>
+    </>
+  )
+
+  return (
+    <TypeSection
+      kind="ConditionalType"
+      title={title}
+      id={id}
+      components={components}
+    >
+      {alwaysRows.length > 0 ? (
+        <TypeDetail label="Properties" components={components} kind={node.kind}>
+          <TypeTable
+            rows={alwaysRows}
+            headers={['Property', 'Type']}
+            renderRow={renderRow}
+            components={components}
+          />
+        </TypeDetail>
+      ) : null}
+
+      {leaves.map((leaf, index) => {
+        const delta = leaf.rows.filter((row) => !alwaysNames.has(row.name))
+        if (delta.length === 0) return null
+        // Drop the root else guard when a more specific guard exists
+        const guardsToShow =
+          leaf.guardParts.length > 1
+            ? leaf.guardParts.slice(1)
+            : leaf.guardParts
+        const label = (
+          <>
+            {guardsToShow.map((part, i) => (
+              <React.Fragment key={i}>
+                {i > 0 ? ' and ' : null}
+                {part}
+              </React.Fragment>
+            ))}
+          </>
+        )
+        return (
+          <TypeDetail
+            key={index}
+            label={label}
+            components={components}
+            kind={node.kind}
+          >
+            {delta.length > 0 ? (
+              <TypeTable
+                rows={delta}
+                headers={['Property', 'Type']}
+                renderRow={renderRow}
+                components={components}
+              />
+            ) : null}
+          </TypeDetail>
+        )
+      })}
     </TypeSection>
   )
 }
