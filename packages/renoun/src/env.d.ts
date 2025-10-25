@@ -12,5 +12,6 @@ declare namespace NodeJS {
     RENOUN_SERVER_ID?: string
     RENOUN_SERVER_PORT?: string
     WS_NO_BUFFER_UTIL?: string
+    FIGMA_TOKEN?: string
   }
 }

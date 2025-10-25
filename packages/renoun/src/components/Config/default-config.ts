@@ -18,4 +18,5 @@ export const defaultConfig: ConfigurationOptions = {
     'json',
     'html',
   ],
+  figma: undefined,
 }

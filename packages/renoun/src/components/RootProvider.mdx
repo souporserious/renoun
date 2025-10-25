@@ -17,6 +17,7 @@ export default function RootLayout({
       languages={['ts', 'tsx', 'mdx']}
       git="souporserious/renoun"
       siteUrl="https://renoun.dev"
+      figma={{ icons: 'KsxgdfDdV3fEQ0oQz0CMNeg' }}
     >
       <html>
         <body>{children}</body>
@@ -25,5 +26,7 @@ export default function RootLayout({
   )
 }
 ```
+
+When you configure the `figma` prop you can reference these files from the [`Image` component](/docs/components/image) using the `figma:` protocol (e.g. `figma:icons/563:1297`).
 
 See the [Configuration guide](/docs/configuration) for more information on the available configuration options.

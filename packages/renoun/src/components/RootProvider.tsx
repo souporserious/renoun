@@ -6,6 +6,10 @@ import { CommandScript } from './Command/CommandScript.js'
 import { ClientConfigProvider } from './Config/ClientConfigContext.js'
 import { ServerConfigContext } from './Config/ServerConfigContext.js'
 import { defaultConfig } from './Config/default-config.js'
+import {
+  normalizeFigmaConfig,
+  type FigmaConfigInput,
+} from './Config/normalize-figma-config.js'
 import type { ConfigurationOptions, ThemeValue } from './Config/types.js'
 import { Refresh } from './Refresh/index.js'
 import { TableOfContentsScript } from './TableOfContents/TableOfContents.js'
@@ -17,12 +21,15 @@ type HeadProps = React.ComponentProps<'head'>
 type ThemeMap = Record<string, ThemeValue>
 
 interface BaseProps
-  extends Omit<Partial<ConfigurationOptions>, 'git' | 'theme'> {
+  extends Omit<Partial<ConfigurationOptions>, 'git' | 'theme' | 'figma'> {
   /** The nonce to use for the provider scripts. */
   nonce?: string
 
   /** Configuration options for git linking. Accepts a string shorthand or an object. */
   git?: ConfigurationOptions['git'] | string
+
+  /** Configuration for Figma assets. Accepts a normalized config or a shorthand alias map. */
+  figma?: FigmaConfigInput
 
   /** Control whether to include the script for the `Command` component in the document head. */
   includeCommandScript?: boolean
@@ -61,6 +68,7 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   siteUrl,
   editor,
   defaultPackageManager = 'npm',
+  figma,
   includeCommandScript = true,
   includeTableOfContentsScript = true,
   includeThemeScript = true,
@@ -75,6 +83,9 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   }
   if (editor !== undefined) {
     overrides.editor = editor
+  }
+  if (figma !== undefined) {
+    overrides.figma = normalizeFigmaConfig(figma)
   }
   if (git !== undefined) {
     if (typeof git === 'string') {

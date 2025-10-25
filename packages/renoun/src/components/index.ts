@@ -45,3 +45,4 @@ export {
 } from './Navigation.js'
 export { Script } from './Script.js'
 export { Sponsors } from './Sponsors.js'
+export { Image, type ImageProps } from './Image.js'
