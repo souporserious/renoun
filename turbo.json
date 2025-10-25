@@ -2,8 +2,9 @@
   "$schema": "https://turborepo.org/schema.json",
   "ui": "tui",
   "globalEnv": [
-    "RENOUN_DEBUG",
+    "FIGMA_TOKEN",
     "GITHUB_SPONSORS_TOKEN",
+    "RENOUN_DEBUG",
     "TEMPLATE_CHECKOUT_URL"
   ],
   "tasks": {

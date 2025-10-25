@@ -57,6 +57,24 @@ export type GitConfig = {
 }
 
 /**
+ * A mapping of friendly aliases to Figma file IDs.
+ * @internal
+ */
+export type FigmaFileMap = Record<string, string>
+
+/**
+ * The normalized configuration options for talking to the Figma API.
+ * @internal
+ */
+export interface NormalizedFigmaConfig {
+  /** Map of aliases to the Figma file IDs they represent. */
+  files: FigmaFileMap
+
+  /** Optional alias to use when an image source omits an explicit file. */
+  defaultFile?: string
+}
+
+/**
  * The configuration options.
  * @internal
  */
@@ -78,4 +96,7 @@ export interface ConfigurationOptions {
 
   /** The default editor used when constructing editor URIs. */
   editor?: Editors
+
+  /** Configuration for accessing assets from the Figma API. */
+  figma?: NormalizedFigmaConfig
 }
