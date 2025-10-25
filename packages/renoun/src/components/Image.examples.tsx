@@ -2,15 +2,15 @@ import React from 'react'
 import { Image } from 'renoun'
 
 export function ComponentName() {
-  return <Image source="figma:KsxguDdVW4EQ0oQz0CMNeg/arrow-down" />
+  return <Image source="figma:dAtPdBGcoK4joJbnxxdjYO/mark" />
 }
 
 export function FrameId() {
-  return <Image source="figma:KsxguDdVW4EQ0oQz0CMNeg/915:1075" />
+  return <Image source="figma:dAtPdBGcoK4joJbnxxdjYO/2762:418" />
 }
 
 export function Link() {
   return (
-    <Image source="https://www.figma.com/design/KsxguDdVW4EQ0oQz0CMNeg/renoun-design-system-template?node-id=924-1079&t=PQWQYN6UuwyAdgrn-4" />
+    <Image source="https://www.figma.com/design/dAtPdBGcoK4joJbnxxdjYO/renoun-site?node-id=2762-418" />
   )
 }
