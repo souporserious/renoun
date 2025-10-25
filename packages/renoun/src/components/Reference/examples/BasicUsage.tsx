@@ -46,7 +46,7 @@ const components = {
       }}
     />
   ),
-  SectionHeading: (props) => (
+  SectionHeading: ({ label, title, ...props }) => (
     <h3
       {...props}
       css={{
@@ -66,7 +66,9 @@ const components = {
           color: 'var(--color-foreground-secondary)',
         },
       }}
-    />
+    >
+      <span>{label}</span> {title}
+    </h3>
   ),
   Detail: (props) => (
     <div

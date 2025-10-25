@@ -47,7 +47,7 @@ export function Reference(props: ReferenceProps) {
         />
       </Collapse.Provider>
     ),
-    SectionHeading: (props) => (
+    SectionHeading: ({ label, title, ...props }) => (
       <h3
         {...props}
         css={{
@@ -104,7 +104,7 @@ export function Reference(props: ReferenceProps) {
               color: 'var(--color-foreground-secondary)',
             }}
           />
-          {props.children}
+          <span>{label}</span> {title}
         </Collapse.Trigger>
       </h3>
     ),

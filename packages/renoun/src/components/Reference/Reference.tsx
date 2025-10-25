@@ -16,69 +16,114 @@ type GapSize = 'small' | 'medium' | 'large'
 
 export interface ReferenceComponents {
   Section: React.ComponentType<{
+    /** The section's ID. */
     id?: string
+
+    /** The kind of the section. */
     kind: Kind['kind']
+
+    /** The content of the section. */
     children?: React.ReactNode
   }>
   SectionHeading: React.ComponentType<{
-    children?: React.ReactNode
+    /** The kind formatted as a label, e.g. "Type Alias", "Function". */
+    label?: string
+
+    /** The section's title, e.g. the export identifier name. */
+    title?: string
+
+    /** Label based on the kind and title. */
     'aria-label'?: string
   }>
   SectionBody: React.ComponentType<{
+    /** Whether the section has a description. */
     hasDescription: boolean
+
+    /** The content of the section body. */
     children: React.ReactNode
   }>
   Column: React.ComponentType<{
+    /** The gap size between the column's children. */
     gap?: GapSize
-    children: React.ReactNode
+
+    /** The content of the column. */
+    children?: React.ReactNode
   }>
   Row: React.ComponentType<{
+    /** The gap size between the row's children. */
     gap?: GapSize
-    children: React.ReactNode
+
+    /** The content of the row. */
+    children?: React.ReactNode
   }>
   Code: React.ComponentType<{
+    /** The content of the code. */
     children?: React.ReactNode
   }>
   Description: React.ComponentType<{
+    /** The content of the description. */
     children: string
   }>
   Detail: React.ComponentType<{
+    /** The kind of the detail. */
     kind: Kind['kind']
+
+    /** The content of the detail. */
     children: React.ReactNode
   }>
   Signatures: React.ComponentType<{
+    /** The content of the signatures. */
     children: React.ReactNode
   }>
   DetailHeading: React.ComponentType<{
+    /** The content of the detail heading. */
     children?: React.ReactNode
   }>
   Table: React.ComponentType<{
+    /** The content of the table. */
     children?: React.ReactNode
   }>
   TableHead: React.ComponentType<{
+    /** The content of the table head. */
     children?: React.ReactNode
   }>
   TableBody: React.ComponentType<{
+    /** The content of the table body. */
     children?: React.ReactNode
   }>
   TableRowGroup: React.ComponentType<{
+    /** Whether the row has a sub-row. */
     hasSubRow?: boolean
+
+    /** The content of the row group. */
     children?: React.ReactNode
   }>
   TableRow: React.ComponentType<{
+    /** Whether the row has a sub-row. */
     hasSubRow?: boolean
+
+    /** The content of the row. */
     children?: React.ReactNode
   }>
   TableSubRow: React.ComponentType<{
+    /** The content of the sub-row. */
     children: React.ReactNode
   }>
   TableHeader: React.ComponentType<{
+    /** The content of the header cell. */
     children?: React.ReactNode
   }>
   TableData: React.ComponentType<{
+    /** Index of the data cell. */
     index: number
+
+    /** Whether the row has a sub-row. */
     hasSubRow?: boolean
+
+    /** The number of columns the cell should span. */
     colSpan?: number
+
+    /** The content of the cell. */
     children?: React.ReactNode
   }>
 }
@@ -96,7 +141,7 @@ const defaultGaps: Record<GapSize, string> = {
 /** Default implementations for every slot. */
 const defaultComponents: InternalReferenceComponents = {
   Section: ({ id, children }) => <section id={id} children={children} />,
-  SectionHeading: 'h3',
+  SectionHeading: ({ label, title, ...props }) => <h3 {...props}>{title}</h3>,
   SectionBody: ({ children }) => children,
   Column: ({ gap, children }) => (
     <div
@@ -344,10 +389,10 @@ function TypeSection({
   return (
     <components.Section id={id} kind={kind}>
       <components.SectionHeading
+        label={label}
+        title={title}
         aria-label={title ? `${title} ${label}` : label}
-      >
-        <span>{label}</span> {title}
-      </components.SectionHeading>
+      />
       <components.SectionBody hasDescription={Boolean(description)}>
         {description ? (
           <components.Column gap="medium">
