@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       debug:
-        description: 'Turn on verbose debug output'
+        description: "Turn on verbose debug output"
         type: boolean
         default: false
 
@@ -48,6 +48,7 @@ jobs:
 
       - name: Build
         env:
+          FIGMA_TOKEN: ${{ secrets.FIGMA_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: pnpm build --filter=!@examples/*
