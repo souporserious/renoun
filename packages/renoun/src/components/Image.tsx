@@ -88,6 +88,31 @@ const fetchFigmaImageUrl = cache(
   }
 )
 
+const fetchAsDataUrl = cache(
+  async (
+    url: string,
+    format: 'png' | 'jpg' | 'svg'
+  ): Promise<string | null> => {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) {
+        return null
+      }
+      if (format === 'svg') {
+        const svgText = await response.text()
+        const base64 = Buffer.from(svgText, 'utf8').toString('base64')
+        return `data:image/svg+xml;base64,${base64}`
+      }
+      const arrayBuffer = await response.arrayBuffer()
+      const base64 = Buffer.from(arrayBuffer).toString('base64')
+      const mime = format === 'png' ? 'image/png' : 'image/jpeg'
+      return `data:${mime};base64,${base64}`
+    } catch {
+      return null
+    }
+  }
+)
+
 const fetchFigmaComponents = cache(
   async (fileId: string, token: string): Promise<ComponentMetadata[]> => {
     const url = new URL(`https://api.figma.com/v1/files/${fileId}/components`)
@@ -734,9 +759,18 @@ export async function Image<Source extends string>({
     token
   )
 
+  // Avoid using expiring Figma URLs directly when possible by embedding a data URL.
+  let src = imageUrl
+  if (format === 'png' || format === 'jpg' || format === 'svg') {
+    const dataUrl = await fetchAsDataUrl(imageUrl, format)
+    if (dataUrl) {
+      src = dataUrl
+    }
+  }
+
   return React.createElement('img', {
     ...props,
-    src: imageUrl,
+    src,
     alt: description ?? resolvedDescription ?? '',
   })
 }
