@@ -158,7 +158,7 @@ function parseAttributes(
   let remainingString = raw.trim()
   while (remainingString) {
     const match = remainingString.match(
-      /^([^\s=\/>]+)\s*(?:=\s*([^'"`\s][^\s\/>]*|"(?:\\.|[^"])*"|'(?:\\.|[^'])*'))?/
+      /^([^\s=\/>]+)\s*(?:=\s*([^'"`\s][^\s\/>]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'))?/
     )
     if (!match) break
     const name = match[1]
