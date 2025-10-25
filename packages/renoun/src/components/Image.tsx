@@ -599,9 +599,7 @@ export type ImageProps<Source extends string = string> = SharedImageProps &
     ? { source: Source } & FigmaImageOptions
     : { source: Source } & NonFigmaImageOptions)
 
-/**
- * Render an image that can source from Figma files using the `figma:` protocol or shared URLs.
- */
+/** Display images from Figma files, URLs, or local assets.  */
 export async function Image<Source extends string>({
   source,
   format = 'png',

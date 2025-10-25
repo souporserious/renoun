@@ -6,11 +6,11 @@ export function ComponentName() {
 }
 
 export function FrameId() {
-  return <Image source="figma:dAtPdBGcoK4joJbnxxdjYO/2762:418" />
+  return <Image source="figma:dAtPdBGcoK4joJbnxxdjYO/2775:415" />
 }
 
 export function Link() {
   return (
-    <Image source="https://www.figma.com/design/dAtPdBGcoK4joJbnxxdjYO/renoun-site?node-id=2762-418" />
+    <Image source="https://www.figma.com/design/dAtPdBGcoK4joJbnxxdjYO/renoun-site?node-id=2775-415" />
   )
 }
