@@ -199,7 +199,7 @@ function attributesToProps(
 
   const props: Record<string, unknown> = {}
 
-  for (const { name, value, quoted } of attributePairs) {
+  for (const { name, value } of attributePairs) {
     const lowerName = name.toLowerCase()
     if (removeAttributesSet.has(lowerName)) continue
 
@@ -218,8 +218,10 @@ function attributesToProps(
       continue
     }
 
-    const isNumeric = !quoted && /^[+-]?\d+(\.\d+)?$/.test(value)
-    if (isNumeric) {
+    const shouldPreserveAsString =
+      renamed.startsWith('data-') || renamed.startsWith('aria-')
+    const isNumeric = /^[+-]?\d+(\.\d+)?$/.test(value)
+    if (isNumeric && !shouldPreserveAsString) {
       props[renamed] = Number(value)
     } else {
       props[renamed] = value
