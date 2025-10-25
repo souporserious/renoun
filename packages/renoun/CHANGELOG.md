@@ -1,5 +1,34 @@
 # renoun
 
+## 10.7.0
+
+### Minor Changes
+
+- bde10dd: Introduces a new `<Image>` component that is able to fetch component frames, names, and descriptions directly from configured Figma files:
+
+  ```tsx
+  import { Image } from 'renoun'
+
+  export function Page() {
+    return <Image source="figma:icons/arrow-down" />
+  }
+  ```
+
+- 719baaf: Adds `label` and `title` props to `Reference`'s `SectionHeading` component slot.
+
+### Patch Changes
+
+- d8b72e2: Default `allowErrors` to `true` when `showErrors` is enabled in `CodeBlock` and `Tokens`, so consumers only need to set `showErrors` in most cases.
+- 9f71b70: Fixes a bug where the provided `Tokens` code could concatenate a template literal and a following `import` without a separating newline, causing the formatter to throw.
+- 726c072: Ensures `Tokens` quick info popovers attach scroll listeners to all scroll ancestors to ensure they always close on scroll.
+- 2e9fee1: Renders diagnostics on subsequent lines in `Tokens` and keeps symbol quick info tooltips focused on type information.
+- 50fd3cb: Improves conditional type rendering in the `Reference` component::
+  - Builds decision-tree branches and computes a properties table.
+  - Prefer alias names in guards (e.g. `Variant extends LinkVariant`).
+  - Adds support for top-level `ConditionalType` in type aliases.
+
+- c4a2b12: Fixes theme normalization regression when using a custom theme. If a theme does not declare a `type`, light/dark is inferred from the background color.
+
 ## 10.6.0
 
 ### Minor Changes
