@@ -1246,6 +1246,68 @@ function MappedSection({
   )
 }
 
+type IntersectionPropertyRow = {
+  name: string
+  text: string
+  defaultValue?: unknown
+  isOptional?: boolean
+  isReadonly?: boolean
+}
+
+function isNeverTypeText(typeText?: string): boolean {
+  if (!typeText) return false
+  return typeText === 'never'
+}
+
+function getIntersectionPropertyRows(
+  typeExpression: Kind.TypeExpression
+): IntersectionPropertyRow[] {
+  if (typeExpression.kind === 'TypeLiteral') {
+    const rows: IntersectionPropertyRow[] = []
+
+    for (const member of typeExpression.members) {
+      if (member.kind === 'PropertySignature') {
+        if (isNeverTypeText(member.type.text)) continue
+        rows.push({
+          name: member.name ?? member.text,
+          text: member.type.text,
+          isOptional: member.isOptional,
+          isReadonly: member.isReadonly,
+        })
+      } else if (member.kind === 'IndexSignature') {
+        if (isNeverTypeText(member.type.text)) continue
+        rows.push({
+          name: `[${member.parameter.name}: ${member.parameter.type.text}]`,
+          text: member.type.text,
+          isReadonly: member.isReadonly,
+        })
+      }
+    }
+
+    return rows
+  }
+
+  if (typeExpression.kind === 'IntersectionType') {
+    return typeExpression.types.flatMap((inner) =>
+      getIntersectionPropertyRows(inner)
+    )
+  }
+
+  if (typeExpression.kind === 'MappedType') {
+    if (isNeverTypeText(typeExpression.type.text)) return []
+    return [
+      {
+        name: `[${typeExpression.typeParameter.text}]`,
+        text: typeExpression.type.text,
+        isOptional: typeExpression.isOptional,
+        isReadonly: typeExpression.isReadonly,
+      },
+    ]
+  }
+
+  return []
+}
+
 function IntersectionSection({
   node,
   components,
@@ -1257,45 +1319,225 @@ function IntersectionSection({
   id?: string
   title?: string
 }) {
-  // Always collect properties from TypeLiteral/Mapped members and render other members alongside.
-  const rows: {
-    name: string
-    text: string
-    defaultValue?: unknown
-    isOptional?: boolean
-    isReadonly?: boolean
-  }[] = []
+  // Collect base rows (unconditional) and conditional nodes to build a decision tree.
+  const baseRows: IntersectionPropertyRow[] = []
+  const conditionals: TypeOfKind<'ConditionalType'>[] = []
   const otherTypes: string[] = []
 
   for (const type of node.types) {
-    if (type.kind === 'TypeLiteral') {
-      for (const member of type.members) {
-        if (member.kind === 'PropertySignature') {
-          rows.push({
-            name: member.name!,
-            text: member.type.text,
-            isOptional: member.isOptional,
-            isReadonly: member.isReadonly,
-          })
-        } else if (member.kind === 'IndexSignature') {
-          rows.push({
-            name: member.parameter.name,
-            text: member.type.text,
-            isReadonly: member.isReadonly,
-          })
-        }
-      }
-    } else if (type.kind === 'MappedType') {
-      rows.push({
-        name: type.typeParameter.text,
-        text: type.type.text,
-        isOptional: type.isOptional,
-        isReadonly: type.isReadonly,
-      })
+    if (type.kind === 'ConditionalType') {
+      conditionals.push(type)
+      // Also keep raw conditional text for footer if not never
+      const rawText = type.text.trim()
+      if (!isNeverTypeText(rawText)) otherTypes.push(rawText)
+      continue
+    }
+
+    const collected = getIntersectionPropertyRows(type)
+    if (collected.length > 0) {
+      baseRows.push(...collected)
     } else {
-      otherTypes.push(type.text)
+      const text = type.text.trim()
+      if (!isNeverTypeText(text) && text) otherTypes.push(text)
     }
   }
+
+  type Branch = {
+    guardParts: React.ReactNode[]
+    rows: IntersectionPropertyRow[]
+  }
+
+  function expandConditionalToLeaves(
+    conditional: TypeOfKind<'ConditionalType'>
+  ): Branch[] {
+    const whenPart = (
+      <>
+        <components.Code>{conditional.checkType.text}</components.Code> extends{' '}
+        <components.Code>{conditional.extendsType.text}</components.Code>
+      </>
+    )
+    const elsePart = (
+      <>
+        <components.Code>{conditional.checkType.text}</components.Code> does not{' '}
+        extend <components.Code>{conditional.extendsType.text}</components.Code>
+      </>
+    )
+
+    const trueArm = conditional.trueType
+    const falseArm = conditional.falseType
+
+    const trueLeaves: Branch[] =
+      trueArm.kind === 'ConditionalType'
+        ? expandConditionalToLeaves(trueArm).map((leaf) => ({
+            guardParts: [whenPart, ...leaf.guardParts],
+            rows: leaf.rows,
+          }))
+        : [
+            {
+              guardParts: [whenPart],
+              rows: getIntersectionPropertyRows(trueArm),
+            },
+          ]
+
+    const falseLeaves: Branch[] =
+      falseArm.kind === 'ConditionalType'
+        ? expandConditionalToLeaves(falseArm).map((leaf) => ({
+            guardParts: [elsePart, ...leaf.guardParts],
+            rows: leaf.rows,
+          }))
+        : [
+            {
+              guardParts: [elsePart],
+              rows: getIntersectionPropertyRows(falseArm),
+            },
+          ]
+
+    return [...trueLeaves, ...falseLeaves]
+  }
+
+  // Cross-product combine multiple conditional trees into leaf branches
+  let leaves: Branch[] = conditionals.length
+    ? [{ guardParts: [], rows: [] }]
+    : []
+
+  for (const conditional of conditionals) {
+    const expanded = expandConditionalToLeaves(conditional)
+    const next: Branch[] = []
+    for (const prefix of leaves) {
+      for (const leaf of expanded) {
+        next.push({
+          guardParts: [...prefix.guardParts, ...leaf.guardParts],
+          rows: [...prefix.rows, ...leaf.rows],
+        })
+      }
+    }
+    leaves = next
+  }
+
+  // Map rows by name (last wins) and drop `never`
+  function rowsToMap(
+    rows: IntersectionPropertyRow[]
+  ): Map<string, IntersectionPropertyRow> {
+    const map = new Map<string, IntersectionPropertyRow>()
+    for (const r of rows) {
+      if (!isNeverTypeText(r.text)) {
+        map.set(r.name, r)
+      }
+    }
+    return map
+  }
+
+  const baseMap = rowsToMap(baseRows)
+
+  // Build per-leaf maps including base rows
+  const leafMaps: Map<string, IntersectionPropertyRow>[] = leaves.map(
+    (leaf) => {
+      const combined: IntersectionPropertyRow[] = [...baseRows, ...leaf.rows]
+      return rowsToMap(combined)
+    }
+  )
+
+  // Compute Always-available rows (appear in all leaves with identical type)
+  let alwaysRows: IntersectionPropertyRow[] = []
+  if (leaves.length === 0) {
+    // No conditionals; show base properties as-is
+    alwaysRows = baseRows
+  } else if (leafMaps.length > 0) {
+    // Start from keys of the first map
+    const first = leafMaps[0]
+    for (const [name, row] of first) {
+      let sameInAll = true
+      for (let i = 1; i < leafMaps.length; i++) {
+        const other = leafMaps[i].get(name)
+        if (!other || other.text.trim() !== row.text.trim()) {
+          sameInAll = false
+          break
+        }
+      }
+      if (sameInAll) {
+        alwaysRows.push(row)
+      }
+    }
+  }
+
+  const alwaysNames = new Set(alwaysRows.map((r) => r.name))
+
+  // Compute per-branch deltas: added and overrides (vs base rows)
+  type DeltaRow = IntersectionPropertyRow & { overridden?: boolean }
+
+  const branchPanels: {
+    label: React.ReactNode
+    rows: DeltaRow[]
+  }[] = []
+
+  if (leaves.length > 0) {
+    leaves.forEach((leaf) => {
+      const leafMap = rowsToMap([...baseRows, ...leaf.rows])
+      const overrides: DeltaRow[] = []
+      const added: DeltaRow[] = []
+
+      for (const [name, row] of leafMap) {
+        if (alwaysNames.has(name)) {
+          // Already shown in Always with identical type; skip
+          continue
+        }
+        const base = baseMap.get(name)
+        if (base && base.text.trim() !== row.text.trim()) {
+          overrides.push({ ...row, overridden: true })
+          continue
+        }
+        if (!base) {
+          added.push(row)
+        }
+      }
+
+      const deltaRows: DeltaRow[] = [...overrides, ...added]
+      if (deltaRows.length === 0) return
+
+      const label = (
+        <>
+          {leaf.guardParts.map((part, index) => (
+            <React.Fragment key={index}>
+              {index > 0 ? ' and ' : null}
+              {part}
+            </React.Fragment>
+          ))}
+        </>
+      )
+
+      branchPanels.push({ label, rows: deltaRows })
+    })
+  }
+
+  const renderIntersectionRow = (
+    row: IntersectionPropertyRow,
+    hasSubRow: boolean
+  ) => (
+    <>
+      <components.TableData index={0} hasSubRow={hasSubRow}>
+        {row.name}
+        {row.isOptional ? '?' : ''}
+      </components.TableData>
+      <components.TableData index={1} hasSubRow={hasSubRow} colSpan={2}>
+        <components.Code>{row.text}</components.Code>
+      </components.TableData>
+    </>
+  )
+
+  const renderDeltaRow = (row: DeltaRow, hasSubRow: boolean) => (
+    <>
+      <components.TableData index={0} hasSubRow={hasSubRow}>
+        {row.name}
+        {row.isOptional ? '?' : ''}
+        {row.hasOwnProperty('overridden') && (row as any).overridden
+          ? ' (overrides)'
+          : ''}
+      </components.TableData>
+      <components.TableData index={1} hasSubRow={hasSubRow} colSpan={2}>
+        <components.Code>{row.text}</components.Code>
+      </components.TableData>
+    </>
+  )
 
   return (
     <TypeSection
@@ -1304,34 +1546,38 @@ function IntersectionSection({
       id={id}
       components={components}
     >
-      {rows.length > 0 ? (
+      {alwaysRows.length > 0 ? (
         <TypeDetail label="Properties" components={components} kind={node.kind}>
           <TypeTable
-            rows={rows}
+            rows={alwaysRows}
             headers={['Property', 'Type']}
-            renderRow={(row, hasSubRow) => (
-              <>
-                <components.TableData index={0} hasSubRow={hasSubRow}>
-                  {row.name}
-                  {row.isOptional ? '?' : ''}
-                </components.TableData>
-                <components.TableData
-                  index={1}
-                  hasSubRow={hasSubRow}
-                  colSpan={2}
-                >
-                  <components.Code>{row.text}</components.Code>
-                </components.TableData>
-              </>
-            )}
+            renderRow={renderIntersectionRow}
             components={components}
           />
         </TypeDetail>
       ) : null}
 
+      {branchPanels.map((panel, index) => (
+        <TypeDetail
+          key={index}
+          label={panel.label}
+          components={components}
+          kind={node.kind}
+        >
+          <TypeTable
+            rows={panel.rows}
+            headers={['Property', 'Type']}
+            renderRow={renderDeltaRow}
+            components={components}
+          />
+        </TypeDetail>
+      ))}
+
       {otherTypes.length > 0 ? (
         <TypeDetail label="Intersects" components={components} kind={node.kind}>
-          <components.Code>{otherTypes.join(' & ')}</components.Code>
+          <components.Code>
+            {[...new Set(otherTypes)].join(' & ')}
+          </components.Code>
         </TypeDetail>
       ) : null}
     </TypeSection>
