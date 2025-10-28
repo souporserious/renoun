@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+
 import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
 
@@ -20,11 +23,9 @@ import {
   generateHighlightedLinesGradient,
   getScrollContainerStyles,
 } from './utils.js'
+import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.js'
 
-export interface CodeBlockProps {
-  /** Pass a code string to highlight or override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
-  children: React.ReactNode
-
+export interface CodeBlockBaseProps {
   /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
   path?: string
 
@@ -101,6 +102,19 @@ export interface CodeBlockProps {
   }
 }
 
+export type CodeBlockProps =
+  | (CodeBlockBaseProps & {
+      /** Pass a code string to highlight or override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. */
+      children: React.ReactNode
+    })
+  | (CodeBlockBaseProps & {
+      /** Pass a code string to highlight or override default rendering using `Tokens`, `LineNumbers`, and `Toolbar` components. When omitted, the source text will be loaded from the file system using the `path` and `baseDirectory` props. */
+      children?: React.ReactNode
+
+      /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
+      path: string
+    })
+
 /**
  * Displays syntax-highlighted source code with optional line numbers, toolbar,
  * copy-to-clipboard button, and error diagnostics.
@@ -122,7 +136,9 @@ function CodeBlockWithFallback(props: CodeBlockProps) {
     ...restProps
   } = props
   const baseDirectoryContext = getContext(BaseDirectoryContext)
-  const baseDirectory = baseDirectoryProp ?? baseDirectoryContext
+  const baseDirectory = normalizeBaseDirectory(
+    baseDirectoryProp ?? baseDirectoryContext
+  )
 
   if (typeof restProps.children !== 'string') {
     return (
@@ -249,7 +265,7 @@ function CodeBlockWithFallback(props: CodeBlockProps) {
 
 async function CodeBlockAsync({
   path,
-  baseDirectory: baseDirectory,
+  baseDirectory: baseDirectoryProp,
   language,
   highlightedLines,
   focusedLines,
@@ -273,6 +289,10 @@ async function CodeBlockAsync({
     css?.container,
     style?.container
   )
+  const baseDirectoryContext = getContext(BaseDirectoryContext)
+  const baseDirectory = normalizeBaseDirectory(
+    baseDirectoryProp ?? baseDirectoryContext
+  )
   const resolvers: any = {}
   resolvers.promise = new Promise<void>((resolve, reject) => {
     resolvers.resolve = resolve
@@ -291,7 +311,7 @@ async function CodeBlockAsync({
     baseDirectory,
     resolvers,
   } satisfies ContextValue
-  let value: string
+  let value: string | undefined
 
   if (typeof children === 'string') {
     value = children
@@ -301,6 +321,8 @@ async function CodeBlockAsync({
     'then' in children
   ) {
     value = (await children) as string
+  } else if ((children === undefined || children === null) && path) {
+    value = await readCodeFromPath(path, baseDirectory)
   } else {
     return <Context value={contextValue}>{children}</Context>
   }
@@ -487,6 +509,26 @@ async function CodeBlockAsync({
 
 const languageKey = 'language-'
 const languageLength = languageKey.length
+
+/** Reads the code from a file path. */
+async function readCodeFromPath(path: string, baseDirectory?: string) {
+  const normalizedBase = normalizeBaseDirectory(baseDirectory)
+  const resolvedPath = normalizedBase
+    ? resolve(normalizedBase, path)
+    : resolve(path)
+
+  try {
+    return await readFile(resolvedPath, 'utf-8')
+  } catch (error) {
+    const baseDirectoryMessage = baseDirectory
+      ? ` with base directory "${baseDirectory}"`
+      : ''
+    throw new Error(
+      `[renoun] Error reading CodeBlock source at path "${path}"${baseDirectoryMessage}`,
+      error instanceof Error ? { cause: error } : undefined
+    )
+  }
+}
 
 /** Parses the props of an MDX `pre` element for passing to `CodeBlock`. */
 export function parsePreProps(props: React.ComponentProps<'pre'>): {

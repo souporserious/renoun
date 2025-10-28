@@ -11,6 +11,7 @@ import {
   type TypeOfKind,
 } from '../../utils/resolve-type.js'
 import { BaseDirectoryContext } from '../Context.js'
+import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.js'
 
 type GapSize = 'small' | 'medium' | 'large'
 
@@ -222,11 +223,8 @@ async function ReferenceAsync({
 
   if (typeof source === 'string') {
     if (baseDirectory) {
-      if (URL.canParse(baseDirectory)) {
-        const { pathname } = new URL(baseDirectory)
-        baseDirectory = pathname.slice(0, pathname.lastIndexOf('/'))
-      }
-      filePath = resolve(baseDirectory, source)
+      const normalized = normalizeBaseDirectory(baseDirectory)
+      filePath = resolve(normalized ?? baseDirectory, source)
     } else {
       filePath = source
     }

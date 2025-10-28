@@ -13,6 +13,12 @@ export function TypeChecking() {
   )
 }
 
+export function FileSystem() {
+  return (
+    <CodeBlock path="./counter/useCounter.ts" baseDirectory={import.meta.url} />
+  )
+}
+
 export function Ordered() {
   return (
     <div style={{ display: 'grid', gap: '2rem' }}>
