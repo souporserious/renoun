@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 
 import { createServer } from '../project/server.js'
 import { getDebugLogger } from '../utils/debug.js'
+import { reorderEntries } from './reorder.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
@@ -210,6 +211,15 @@ if (
     console.error('Unhandled rejection:', reason)
     cleanupAndExit(1)
   })
+} else if (firstArgument === 'reorder') {
+  try {
+    await reorderEntries(secondArgument)
+    process.exit(0)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('Failed to reorder entries:', message)
+    process.exit(1)
+  }
 } else if (firstArgument === 'watch') {
   if (process.env['NODE_ENV'] === undefined) {
     process.env['NODE_ENV'] = 'development'
