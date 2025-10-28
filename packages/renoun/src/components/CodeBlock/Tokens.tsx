@@ -27,6 +27,7 @@ import {
 } from '../../utils/annotations.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import type { ConfigurationOptions } from '../Config/types.js'
+import { readCodeFromPath } from '../../utils/read-code-from-path.js'
 import { QuickInfo, QuickInfoLoading } from './QuickInfo.js'
 import { QuickInfoProvider } from './QuickInfoProvider.js'
 import { Context } from './Context.js'
@@ -132,9 +133,13 @@ export async function Tokens({
   }
 
   if (value === undefined) {
-    throw new Error(
-      '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `baseDirectory` props.'
-    )
+    if (context?.filePath) {
+      value = await readCodeFromPath(context.filePath, context.baseDirectory)
+    } else {
+      throw new Error(
+        '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `baseDirectory` props.'
+      )
+    }
   }
 
   let annotationParseResult: AnnotationParseResult | null = null

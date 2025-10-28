@@ -1,6 +1,3 @@
-import { readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
-
 import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
 
@@ -321,9 +318,7 @@ async function CodeBlockAsync({
     'then' in children
   ) {
     value = (await children) as string
-  } else if ((children === undefined || children === null) && path) {
-    value = await readCodeFromPath(path, baseDirectory)
-  } else {
+  } else if (!(children === undefined || children === null) && !path) {
     return <Context value={contextValue}>{children}</Context>
   }
 
@@ -509,26 +504,6 @@ async function CodeBlockAsync({
 
 const languageKey = 'language-'
 const languageLength = languageKey.length
-
-/** Reads the code from a file path. */
-async function readCodeFromPath(path: string, baseDirectory?: string) {
-  const normalizedBase = normalizeBaseDirectory(baseDirectory)
-  const resolvedPath = normalizedBase
-    ? resolve(normalizedBase, path)
-    : resolve(path)
-
-  try {
-    return await readFile(resolvedPath, 'utf-8')
-  } catch (error) {
-    const baseDirectoryMessage = baseDirectory
-      ? ` with base directory "${baseDirectory}"`
-      : ''
-    throw new Error(
-      `[renoun] Error reading CodeBlock source at path "${path}"${baseDirectoryMessage}`,
-      error instanceof Error ? { cause: error } : undefined
-    )
-  }
-}
 
 /** Parses the props of an MDX `pre` element for passing to `CodeBlock`. */
 export function parsePreProps(props: React.ComponentProps<'pre'>): {
