@@ -64,7 +64,7 @@ function CodeInlineWithFallback({
             display: props.allowCopy ? 'inline-flex' : 'inline-block',
             alignItems: props.allowCopy ? 'center' : undefined,
             verticalAlign: 'text-bottom',
-            padding: `${paddingY} ${paddingX} 0`,
+            padding: `${paddingY} ${paddingX}`,
             paddingRight: props.allowCopy
               ? `calc(1ch + 1lh + ${paddingX})`
               : undefined,
@@ -72,7 +72,6 @@ function CodeInlineWithFallback({
             borderRadius: 5,
             whiteSpace: 'nowrap',
             position: 'relative',
-            ...getScrollContainerStyles({ paddingBottom: paddingY }),
             ...props.css,
           }}
           className={props.className}
@@ -120,7 +119,6 @@ async function CodeInlineAsync({
     position: 'relative',
     overflowY: 'hidden',
     ...getScrollContainerStyles({
-      paddingBottom: paddingY,
       color: theme.scrollbarSlider.hoverBackground,
     }),
     ...cssProp,

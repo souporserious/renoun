@@ -204,9 +204,6 @@ function CodeBlockWithFallback(props: CodeBlockProps) {
               color: shouldRenderToolbar ? undefined : 'inherit',
               borderRadius: shouldRenderToolbar ? 'inherit' : 5,
               boxShadow: shouldRenderToolbar ? undefined : '0 0 0 1px #666',
-              ...getScrollContainerStyles({
-                paddingBottom: containerPadding.bottom,
-              }),
               ...(shouldRenderToolbar ? {} : restProps.css?.container),
               padding: 0,
             }}
@@ -386,7 +383,6 @@ async function CodeBlockAsync({
               ? undefined
               : `0 0 0 1px ${theme.panel.border}`,
             ...getScrollContainerStyles({
-              paddingBottom: containerPadding.bottom,
               color: theme.scrollbarSlider.hoverBackground,
             }),
             ...(highlightedLines
@@ -421,7 +417,8 @@ async function CodeBlockAsync({
               <Code
                 css={{
                   gridColumn: 2,
-                  padding: `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`,
+                  padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
+                  paddingInlineStart: 0,
                   ...focusedLinesStyles,
                 }}
               >
@@ -451,7 +448,7 @@ async function CodeBlockAsync({
             <Code
               css={{
                 gridColumn: 1,
-                padding: `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
+                padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
                 ...focusedLinesStyles,
               }}
             >

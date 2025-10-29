@@ -262,21 +262,12 @@ export function generateFocusedLinesGradient(highlightedLines: string) {
 }
 
 /**
- * Returns the CSS styles for the scroll container accounting for bottom padding.
+ * Returns the CSS styles for the scroll container.
  * @internal
  */
-export function getScrollContainerStyles({
-  paddingBottom,
-  color,
-}: {
-  paddingBottom?: string
-  color?: string
-}) {
+export function getScrollContainerStyles({ color }: { color?: string }) {
   return {
     overflowX: 'scroll',
-    '::-webkit-scrollbar': {
-      height: paddingBottom,
-    },
     '::-webkit-scrollbar-corner': {
       backgroundColor: 'transparent',
     },
@@ -285,12 +276,6 @@ export function getScrollContainerStyles({
     },
     ':hover::-webkit-scrollbar-thumb': {
       backgroundColor: color,
-    },
-    '@supports (-webkit-touch-callout: none)': {
-      paddingBottom,
-    },
-    '@-moz-document url-prefix()': {
-      paddingBottom,
     },
   } satisfies CSSObject
 }
