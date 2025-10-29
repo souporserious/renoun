@@ -692,7 +692,7 @@ interface FigmaSvgOptions {
 
 interface FigmaImageOptions extends FigmaSvgOptions {
   /** Desired output format when rendering from Figma. Defaults to `png`. */
-  format?: 'png' | 'jpg' | 'svg' | 'pdf'
+  format?: 'png' | 'jpg' | 'svg'
 
   /** Resolution scale to request from Figma. */
   scale?: number
@@ -716,14 +716,37 @@ export type ImageProps<Source extends string = string> = SharedImageProps &
     ? { source: Source } & FigmaImageOptions
     : { source: Source } & NonFigmaImageOptions)
 
-async function getFigmaImageUrlWithFallback(
+async function getFigmaImageUrl(
   fileId: string,
   nodeId: string,
   baseOptions: Omit<FigmaImageOptions, 'format'>,
-  token: string
-): Promise<{ url: string; format: 'svg' | 'png' }> {
-  const svgParams = buildFigmaQuery(nodeId, { ...baseOptions, format: 'svg' })
+  token: string,
+  preferredFormat?: 'svg' | 'png' | 'jpg'
+): Promise<{ url: string; format: 'svg' | 'png' | 'jpg' }> {
+  // If the caller specified a format, try that first
+  if (preferredFormat) {
+    const preferredParams = buildFigmaQuery(nodeId, {
+      ...baseOptions,
+      format: preferredFormat,
+    })
+    try {
+      const preferredUrl = await fetchFigmaImageUrl(
+        fileId,
+        nodeId,
+        preferredParams.toString(),
+        token
+      )
+      // Probe to ensure the URL is valid before returning
+      const probe = await fetch(preferredUrl)
+      if (probe.ok) return { url: preferredUrl, format: preferredFormat }
+    } catch {
+      // fall through to generic fallback below
+    }
+  }
+
+  // First try SVG for fidelity, then raster fallback
   let originalError: unknown = null
+  const svgParams = buildFigmaQuery(nodeId, { ...baseOptions, format: 'svg' })
   try {
     const svgUrl = await fetchFigmaImageUrl(
       fileId,
@@ -737,18 +760,22 @@ async function getFigmaImageUrlWithFallback(
     originalError = error
   }
 
-  const pngParams = buildFigmaQuery(nodeId, { ...baseOptions, format: 'png' })
+  const rasterFormat: 'png' | 'jpg' = preferredFormat === 'jpg' ? 'jpg' : 'png'
+  const rasterParams = buildFigmaQuery(nodeId, {
+    ...baseOptions,
+    format: rasterFormat,
+  })
   try {
-    const pngUrl = await fetchFigmaImageUrl(
+    const rasterUrl = await fetchFigmaImageUrl(
       fileId,
       nodeId,
-      pngParams.toString(),
+      rasterParams.toString(),
       token
     )
-    return { url: pngUrl, format: 'png' }
-  } catch (pngError) {
+    return { url: rasterUrl, format: rasterFormat }
+  } catch (rasterError) {
     if (originalError instanceof Error) throw originalError
-    throw pngError
+    throw rasterError
   }
 }
 
@@ -893,21 +920,21 @@ export async function Image<Source extends string>({
     }
   }
 
-  const { url: bestUrl, format: resolvedFormat } =
-    await getFigmaImageUrlWithFallback(
-      fileId,
-      resolvedNodeId,
-      {
-        scale,
-        background,
-        useAbsoluteBounds,
-        svgOutlineText: false,
-        svgIncludeId: false,
-        svgIncludeNodeId: false,
-        svgSimplifyStroke: true,
-      },
-      token
-    )
+  const { url: bestUrl, format: resolvedFormat } = await getFigmaImageUrl(
+    fileId,
+    resolvedNodeId,
+    {
+      scale,
+      background,
+      useAbsoluteBounds,
+      svgOutlineText: false,
+      svgIncludeId: false,
+      svgIncludeNodeId: false,
+      svgSimplifyStroke: true,
+    },
+    token,
+    format
+  )
 
   if (resolvedFormat === 'svg') {
     try {
