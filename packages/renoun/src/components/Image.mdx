@@ -1,6 +1,6 @@
 ## Rendering images from Figma
 
-The `Image` component can fetch frames directly from the Figma Image API. It behaves like a regular `<img />` element but accepts additional shorthand such as the `figma:` protocol or a full Figma URL.
+The `Image` component can fetch frames and components directly from Figma. It behaves like a regular `<img />` element but accepts additional paths such as a [configured source](#1-configure-supported-files) (e.g. `icons:arrow-up`), the default `figma:` source, or a full Figma URL.
 
 When rendering Figma components the description from the file is automatically used for the `<img />` accessibility text. You can override it by passing a `description` prop.
 
@@ -35,31 +35,43 @@ Restart your dev server so the change is picked up.
 
 ### 3. Configure supported files
 
-Use the `figma` prop on `RootProvider` to declare which Figma files are allowed. You can pass either a single file id or an alias map:
+Define custom sources on `RootProvider` to declare which Figma files are allowed. Each source entry is explicitly typed and future‑proof:
 
 ```tsx
 import { RootProvider } from 'renoun'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <RootProvider figma={{ icons: 'KsxgdfDdV3fEQ0oQz0CMNeg' }}>
+    <RootProvider
+      sources={{
+        icons: {
+          type: 'figma',
+          fileId: 'KsxgdfVdV3fEQ0oz0CMNeg',
+        },
+        illustration: {
+          type: 'figma',
+          fileId: 'DxgdfDdVsd3fEQ0oQz0CMNeg',
+          basePathname: 'illustration',
+        },
+      }}
+    >
       {children}
     </RootProvider>
   )
 }
 ```
 
-When only one file is configured it becomes the default, allowing you to omit the alias in the `figma:` URL. If you configure multiple files you can either set `defaultFile` or reference the alias directly (e.g. `figma:icons/563:1297`).
+You can reference your assets by using the registered source directly (e.g. `icons:arrow-up` or `illustration:marketing`). The built‑in `figma:` scheme and direct Figma URLs are also supported for convenience.
 
 ### Usage
 
 ```tsx
 import { Image } from 'renoun'
 
-export function IconPreview() {
+export function NodeId() {
   return (
     <Image
-      description="Logo mark"
+      description="renoun logo mark"
       width={128}
       height={128}
       source="figma:563:1297"
@@ -80,13 +92,18 @@ export function Link() {
 }
 ```
 
-When using the `figma:` protocol you can reference components by their name rather than the node id. For example, the following will resolve to the `arrow-down` component inside the `icons` file configured on the `RootProvider`:
+When using the default `figma:` source or a custom source, you can reference components by their name rather than the node id. For example, the following will resolve to the `arrow-down` component inside the `icons` source configured on the `RootProvider`:
 
 ```tsx
 import { Image } from 'renoun'
 
 export function ComponentName() {
-  return <Image source="figma:icons/arrow-down" />
+  return (
+    <>
+      <Image source="figma:icons/arrow-down" />
+      <Image source="icons:arrow-down" />
+    </>
+  )
 }
 ```
 
@@ -102,7 +119,7 @@ export function FrameId() {
 
 <Note>
 
-When using component names, renoun first queries Figma’s Components API. If no match is returned, it falls back to scanning the file document to locate the component by name, which can be slightly slower. For the best performance, use a numeric node id (e.g. `915:1075`). Make sure your token has `file_content:read` and, if referencing published components, `library_content:read` (and `team_library_content:read` for team libraries).
+When using component names, renoun first queries Figma's Components API. If no match is returned, it falls back to scanning the file document to locate the component by name, which can be slightly slower. For the best performance, use a numeric node id (e.g. `915:1075`). Make sure your token has `file_content:read` and, if referencing published components, `library_content:read` (and `team_library_content:read` for team libraries).
 
 </Note>
 

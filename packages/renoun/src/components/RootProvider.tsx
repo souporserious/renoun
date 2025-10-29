@@ -7,9 +7,9 @@ import { ClientConfigProvider } from './Config/ClientConfigContext.js'
 import { ServerConfigContext } from './Config/ServerConfigContext.js'
 import { defaultConfig } from './Config/default-config.js'
 import {
-  normalizeFigmaConfig,
-  type FigmaConfigInput,
-} from './Config/normalize-figma-config.js'
+  normalizeSourcesConfig,
+  type SourcesConfigInput,
+} from './Config/normalize-sources-config.js'
 import type { ConfigurationOptions, ThemeValue } from './Config/types.js'
 import { Refresh } from './Refresh/index.js'
 import { TableOfContentsScript } from './TableOfContents/TableOfContents.js'
@@ -28,8 +28,8 @@ interface BaseProps
   /** Configuration options for git linking. Accepts a string shorthand or an object. */
   git?: ConfigurationOptions['git'] | string
 
-  /** Configuration for Figma assets. Accepts a normalized config or a shorthand alias map. */
-  figma?: FigmaConfigInput
+  /** Custom asset sources (e.g. { icons: { type: 'figma', fileId } }). */
+  sources?: SourcesConfigInput
 
   /** Control whether to include the script for the `Command` component in the document head. */
   includeCommandScript?: boolean
@@ -68,7 +68,7 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   siteUrl,
   editor,
   defaultPackageManager = 'npm',
-  figma,
+  sources,
   includeCommandScript = true,
   includeTableOfContentsScript = true,
   includeThemeScript = true,
@@ -84,8 +84,8 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   if (editor !== undefined) {
     overrides.editor = editor
   }
-  if (figma !== undefined) {
-    overrides.figma = normalizeFigmaConfig(figma)
+  if (sources !== undefined) {
+    overrides.sources = normalizeSourcesConfig(sources)
   }
   if (git !== undefined) {
     if (typeof git === 'string') {

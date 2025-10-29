@@ -17,7 +17,20 @@ export default function RootLayout({
       languages={['ts', 'tsx', 'mdx']}
       git="souporserious/renoun"
       siteUrl="https://renoun.dev"
-      figma={{ icons: 'KsxgdfDdV3fEQ0oQz0CMNeg' }}
+      sources={{
+        // Define a custom source backed by Figma
+        icons: {
+          type: 'figma',
+          fileId: 'KsxgdfVdV3fEQ0oz0CMNeg',
+        },
+
+        // Provide a basePathname when your node names include a top-level namespace
+        illustration: {
+          type: 'figma',
+          fileId: 'DxgdfDdVsd3fEQ0oQz0CMNeg',
+          basePathname: 'illustration',
+        },
+      }}
     >
       <html>
         <body>{children}</body>
@@ -27,6 +40,11 @@ export default function RootLayout({
 }
 ```
 
-When you configure the `figma` prop you can reference these files from the [`Image` component](/docs/components/image) using the `figma:` protocol (e.g. `figma:icons/563:1297`).
+When you configure the `sources` prop you can reference these from the [`Image` component](/docs/components/image):
+
+- Using a custom source, e.g. `icons:arrow-up` or `illustration:marketing`
+- The built-in `figma:` protocol, e.g. `figma:icons/563:1297`
+
+With `basePathname`, selectors like `marketing` will also match `illustration/marketing` inside that file.
 
 See the [Configuration guide](/docs/configuration) for more information on the available configuration options.

@@ -19,6 +19,7 @@ export {
   type CommandProps,
   type CommandVariant,
 } from './Command/index.js'
+export { Image, type ImageProps } from './Image.js'
 export { Link } from './Link/index.js'
 export { Logo } from './Logo.js'
 export {
@@ -45,4 +46,3 @@ export {
 } from './Navigation.js'
 export { Script } from './Script.js'
 export { Sponsors } from './Sponsors.js'
-export { Image, type ImageProps } from './Image.js'

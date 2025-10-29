@@ -2,10 +2,11 @@ import React, { cache } from 'react'
 
 import { svgToJsx } from '../utils/svg-to-jsx.js'
 import { getConfig } from './Config/ServerConfigContext.js'
-import type { NormalizedFigmaConfig } from './Config/types.js'
+import type { SourcesConfig } from './Config/types.js'
 
 const FIGMA_HOST_PATTERN = /\.figma\.com$/
 const FIGMA_PROTOCOL = /^figma:/i
+const HTTP_PROTOCOL = /^(https?:)/i
 
 interface RemoteComponentMeta {
   node_id: string
@@ -212,7 +213,13 @@ const fetchFigmaFile = cache(
   }
 )
 
-function collectComponentNodes(
+function isExportableNodeType(type: string): boolean {
+  // Only allow nodes we explicitly want to match by name within the SAME file.
+  // Excludes INSTANCE and other node types that may reference external libraries.
+  return type === 'FRAME' || type === 'COMPONENT' || type === 'COMPONENT_SET'
+}
+
+function collectNamedNodes(
   node: FigmaNode,
   path: string[] = []
 ): Array<{
@@ -221,6 +228,7 @@ function collectComponentNodes(
   pageName?: string
   frameName?: string
   fullPath: string
+  type: string
 }> {
   const results: Array<{
     id: string
@@ -228,25 +236,27 @@ function collectComponentNodes(
     pageName?: string
     frameName?: string
     fullPath: string
+    type: string
   }> = []
 
   const nextPath = [...path, node.name]
-  const isComponent = node.type === 'COMPONENT' || node.type === 'COMPONENT_SET'
-  if (isComponent) {
+  if (isExportableNodeType(node.type)) {
     const pageName = path.length > 0 ? path[1] : undefined // [0] is DOCUMENT
-    const frameName = path.length > 2 ? path[path.length - 1] : undefined
+    const frameName =
+      path.length > 1 ? nextPath[nextPath.length - 1] : undefined
     results.push({
       id: node.id,
       name: node.name,
       pageName,
       frameName,
       fullPath: nextPath.join('/'),
+      type: node.type,
     })
   }
 
   if (node.children && node.children.length > 0) {
     for (const child of node.children) {
-      results.push(...collectComponentNodes(child, nextPath))
+      results.push(...collectNamedNodes(child, nextPath))
     }
   }
 
@@ -280,55 +290,10 @@ function isLikelyFileId(value: string): boolean {
   return /^[A-Za-z0-9]{10,}$/.test(value)
 }
 
-function resolveFileId(
-  config: NormalizedFigmaConfig | undefined,
-  alias: string | undefined,
-  source: string
-): string {
-  if (alias) {
-    const trimmedAlias = alias.trim()
-    if (!trimmedAlias) {
-      throw new Error(
-        `[renoun] Figma source ${source} is missing a file alias before the node id.`
-      )
-    }
-    const fromConfig = config?.files?.[trimmedAlias]
-    if (fromConfig) {
-      return fromConfig
-    }
-    if (isLikelyFileId(trimmedAlias)) {
-      return trimmedAlias
-    }
-    throw new Error(
-      `[renoun] Unknown Figma file alias "${trimmedAlias}". Configure it in <RootProvider figma={{ ${trimmedAlias}: 'FILE_ID' }}> or provide a direct file id.`
-    )
-  }
-
-  if (config) {
-    const { defaultFile, files } = config
-    if (defaultFile && files[defaultFile]) {
-      return files[defaultFile]
-    }
-    const aliases = Object.keys(files)
-    if (aliases.length === 1) {
-      return files[aliases[0]]
-    }
-  }
-
-  throw new Error(
-    [
-      `[renoun] Unable to determine the Figma file for source "${source}" in the Image component.`,
-      'Configure a file in <RootProvider figma={{ alias: "FILE_ID" }}> (and optionally set defaultFile),',
-      'or include the alias in the source, e.g. figma:icons/123:456.',
-      'Also verify the file ID is correct and that your FIGMA_TOKEN has access to that file.',
-    ].join('\n')
-  )
-}
-
-function parseFigmaProtocol(
-  rawSource: string,
-  config: NormalizedFigmaConfig | undefined
-): { fileId: string; nodeId: string } {
+function parseFigmaProtocol(rawSource: string): {
+  fileId: string
+  nodeId: string
+} {
   const value = rawSource.slice('figma:'.length)
   const trimmed = value.trim()
   if (!trimmed) {
@@ -345,7 +310,18 @@ function parseFigmaProtocol(
     )
   }
 
-  const fileId = resolveFileId(config, alias, rawSource)
+  let fileId: string
+  if (alias && isLikelyFileId(alias)) {
+    fileId = alias
+  } else if (!alias) {
+    throw new Error(
+      '[renoun] figma: requires a file id (e.g. figma:FILE_ID/123:456). To use a friendly name, define a custom protocol in <RootProvider protocols={{ name: { type: "figma", fileId: "FILE_ID" } }} /> and reference it like name:123:456.'
+    )
+  } else {
+    throw new Error(
+      `[renoun] figma: unknown file alias "${alias}". Define a custom protocol instead: <RootProvider protocols={{ ${alias}: { type: 'figma', fileId: 'FILE_ID' } }} /> and use ${alias}:123:456.`
+    )
+  }
   const nodeId = decodeNodeId(rawNodeId)
   return { fileId, nodeId }
 }
@@ -398,6 +374,38 @@ function parseFigmaUrl(
   return { fileId, nodeId: decodeNodeId(nodeIdParam) }
 }
 
+function parseCustomSource(
+  source: string,
+  sources: SourcesConfig | undefined
+): { fileId: string; nodeId: string; basePathname?: string } | null {
+  const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):(.*)$/.exec(source)
+  if (!match) {
+    return null
+  }
+  const scheme = match[1]
+  if (HTTP_PROTOCOL.test(scheme + ':') || /^figma$/i.test(scheme)) {
+    return null
+  }
+  const definition = sources?.[scheme]
+  if (!definition) {
+    return null
+  }
+  if (definition['type'] === 'figma') {
+    const node = match[2].trim().replace(/^\/+|\/+$/g, '')
+    if (!node) {
+      throw new Error(
+        `[renoun] ${scheme}: sources must include a node selector or id.`
+      )
+    }
+    return {
+      fileId: definition['fileId'],
+      nodeId: node,
+      basePathname: definition['basePathname'],
+    }
+  }
+  return null
+}
+
 function isLikelyNodeId(value: string): boolean {
   return /^[0-9:]+$/.test(value)
 }
@@ -405,6 +413,8 @@ function isLikelyNodeId(value: string): boolean {
 function namesEqual(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase()
 }
+
+// matchFigmaPathPrefix moved to ./Image/utils.ts
 
 function matchesSelector(
   component: ComponentMetadata,
@@ -453,6 +463,7 @@ async function resolveComponentBySelector(
     return null
   }
 
+  // First try: components endpoint (fast, includes description metadata)
   let components: ComponentMetadata[]
   try {
     components = await fetchFigmaComponents(fileId, token)
@@ -497,18 +508,65 @@ async function resolveComponentBySelector(
     )
   }
 
-  // Fallback: crawl the file document to find components by name if the components endpoint didn't return it
+  // Second try: crawl the file and match exportable nodes (frames/components) by name
   try {
     const file = await fetchFigmaFile(fileId, token)
-    const nodes = collectComponentNodes(file.document)
-    const fromFileExact = nodes.find((n) => namesEqual(n.name, trimmed))
-    if (fromFileExact) {
+    const nodes = collectNamedNodes(file.document)
+    const componentNameSet = new Set(
+      components.map((component) => component.name.trim().toLowerCase())
+    )
+
+    // Prefer components in the crawl as well
+    const fromFileExactComponent = nodes.find(
+      (node) =>
+        namesEqual(node.name, trimmed) &&
+        (node.type === 'COMPONENT' || node.type === 'COMPONENT_SET')
+    )
+    if (fromFileExactComponent) {
+      return {
+        nodeId: fromFileExactComponent.id,
+        name: fromFileExactComponent.name,
+        description: undefined,
+        pageName: fromFileExactComponent.pageName,
+        frameName: fromFileExactComponent.frameName,
+      }
+    }
+
+    const fromFileExact = nodes.find((node) => namesEqual(node.name, trimmed))
+    if (
+      fromFileExact &&
+      !componentNameSet.has(fromFileExact.name.trim().toLowerCase())
+    ) {
       return {
         nodeId: fromFileExact.id,
         name: fromFileExact.name,
         description: undefined,
         pageName: fromFileExact.pageName,
         frameName: fromFileExact.frameName,
+      }
+    }
+
+    const fromFileScopedComponent = nodes.find(
+      (node) =>
+        (node.type === 'COMPONENT' || node.type === 'COMPONENT_SET') &&
+        matchesSelector(
+          {
+            nodeId: node.id,
+            name: node.name,
+            description: undefined,
+            pageName: node.pageName,
+            frameName: node.frameName,
+          },
+          trimmed
+        )
+    )
+    if (fromFileScopedComponent) {
+      return {
+        nodeId: fromFileScopedComponent.id,
+        name: fromFileScopedComponent.name,
+        description: undefined,
+        pageName: fromFileScopedComponent.pageName,
+        frameName: fromFileScopedComponent.frameName,
       }
     }
 
@@ -524,7 +582,10 @@ async function resolveComponentBySelector(
         trimmed
       )
     )
-    if (fromFileScoped) {
+    if (
+      fromFileScoped &&
+      !componentNameSet.has(fromFileScoped.name.trim().toLowerCase())
+    ) {
       return {
         nodeId: fromFileScoped.id,
         name: fromFileScoped.name,
@@ -534,21 +595,24 @@ async function resolveComponentBySelector(
       }
     }
   } catch {
-    // ignore and fall through to error
+    // ignore and move on to error construction below
   }
 
+  let suggestions = ''
+
   // Build a small list of similar names to help debug
-  const sample = components
-    .map((c) => c.name)
-    .filter((name, index, arr) => arr.indexOf(name) === index)
+  const sampleComponents = components
+    .map((component) => component.name)
+    .filter((name, index, array) => array.indexOf(name) === index)
     .filter((name) => name.toLowerCase().includes(trimmed.toLowerCase()))
     .slice(0, 8)
-  const suggestions =
-    sample.length > 0 ? `\nSimilar components: ${sample.join(', ')}` : ''
+  if (sampleComponents.length > 0) {
+    suggestions += `\nSimilar components: ${sampleComponents.join(', ')}`
+  }
   throw new Error(
-    `[renoun] Could not find a component named "${trimmed}" in file "${fileId}".` +
+    `[renoun] Could not find a component or frame named "${trimmed}" in file "${fileId}".` +
       '\n- Ensure the name matches exactly (case-insensitive).\n' +
-      '- If multiple components share a name, scope it with page/frame (e.g. Page/Frame/Component).' +
+      '- If multiple nodes share a name, scope it with page/frame (e.g. Page/Frame/Node).' +
       suggestions
   )
 }
@@ -707,7 +771,27 @@ export async function Image<Source extends string>({
   const parsedFigmaUrl = parseFigmaUrl(trimmedSource)
   const isFigmaProtocol = FIGMA_PROTOCOL.test(trimmedSource)
 
-  if (!isFigmaProtocol && !parsedFigmaUrl) {
+  const config = await getConfig()
+  const userSources = config.sources
+
+  let fileId: string
+  let nodeId: string
+  let resolvedDescription: string | undefined
+
+  let matched: { fileId: string; nodeId: string } | null = null
+  let matchedBasePathname: string | undefined
+
+  const custom = parseCustomSource(trimmedSource, userSources)
+  if (custom) {
+    matched = { fileId: custom.fileId, nodeId: custom.nodeId }
+    matchedBasePathname = custom.basePathname
+  } else if (isFigmaProtocol) {
+    matched = parseFigmaProtocol(trimmedSource)
+  } else if (parsedFigmaUrl) {
+    matched = parsedFigmaUrl
+  }
+
+  if (!matched) {
     return React.createElement('img', {
       ...props,
       src: trimmedSource,
@@ -758,37 +842,35 @@ export async function Image<Source extends string>({
     throw new Error(lines.join('\n'))
   }
 
-  const config = await getConfig()
-  const figmaConfig = config.figma
-
-  let fileId: string
-  let nodeId: string
-  let resolvedDescription: string | undefined
-
-  if (isFigmaProtocol) {
-    ;({ fileId, nodeId } = parseFigmaProtocol(trimmedSource, figmaConfig))
-  } else if (parsedFigmaUrl) {
-    ;({ fileId, nodeId } = parsedFigmaUrl)
-  } else {
-    return React.createElement('img', {
-      ...props,
-      src: trimmedSource,
-      alt: description ?? '',
-    })
-  }
+  const { fileId: matchedFileId, nodeId: matchedNodeId } = matched
+  fileId = matchedFileId
+  nodeId = matchedNodeId
 
   let resolvedNodeId = nodeId
 
   if (!isLikelyNodeId(resolvedNodeId)) {
-    const component = await resolveComponentBySelector(
-      fileId,
-      resolvedNodeId,
-      token
-    )
+    const selectorCandidates: string[] = [resolvedNodeId]
+    if (matchedBasePathname) {
+      const full = `${matchedBasePathname.replace(/\/+$/, '')}/${resolvedNodeId}`
+      if (!selectorCandidates.includes(full)) {
+        selectorCandidates.push(full)
+      }
+    }
+
+    let component: ComponentMetadata | null = null
+    for (const candidate of selectorCandidates) {
+      try {
+        component = await resolveComponentBySelector(fileId, candidate, token)
+        if (component) break
+      } catch (error) {
+        // Save the last error to rethrow if nothing matches
+        component = null
+      }
+    }
 
     if (!component) {
       throw new Error(
-        `[renoun] Could not find a component named "${resolvedNodeId}" in file "${fileId}".`
+        `[renoun] Could not find a component or frame named "${resolvedNodeId}" in file "${fileId}".`
       )
     }
 
