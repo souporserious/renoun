@@ -277,6 +277,9 @@ export function getScrollContainerStyles({
     '::-webkit-scrollbar': {
       height: paddingBottom,
     },
+    '::-webkit-scrollbar-corner': {
+      backgroundColor: 'transparent',
+    },
     '::-webkit-scrollbar-thumb': {
       backgroundColor: 'rgba(0, 0, 0, 0)',
     },
