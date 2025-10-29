@@ -70,4 +70,36 @@ describe('svgToJsx', () => {
       }
     }
   })
+
+  it('scopes ids and rewrites url(#...) references to avoid collisions', () => {
+    const input = `
+      <svg width="10" height="10">
+        <defs>
+          <clipPath id="clip0"><rect width="10" height="10"/></clipPath>
+          <filter id="f0"></filter>
+        </defs>
+        <g clip-path="url(#clip0)" filter="url(#f0)">
+          <rect width="10" height="10" fill="red"/>
+        </g>
+      </svg>
+    `
+    const element = svgToJsx(input) as ReactElement<{ [key: string]: unknown }>
+    expect(React.isValidElement(element)).toBe(true)
+    const svg = element as ReactElement<{ children?: React.ReactNode }>
+    const children = React.Children.toArray(svg.props.children ?? null)
+    const defs = children[0] as ReactElement<{ children?: React.ReactNode }>
+    const defsChildren = React.Children.toArray(defs.props.children ?? null)
+    const clipPath = defsChildren[0] as ReactElement<{ id?: string }>
+    const filter = defsChildren[1] as ReactElement<{ id?: string }>
+    expect(typeof clipPath.props.id).toBe('string')
+    expect(typeof filter.props.id).toBe('string')
+    expect(clipPath.props.id).toMatch(/^r[0-9a-z]+-clip0$/)
+    expect(filter.props.id).toMatch(/^r[0-9a-z]+-f0$/)
+    const group = children[1] as ReactElement<{
+      clipPath?: string
+      filter?: string
+    }>
+    expect(group.props.clipPath).toBe(`url(#${clipPath.props.id})`)
+    expect(group.props.filter).toBe(`url(#${filter.props.id})`)
+  })
 })

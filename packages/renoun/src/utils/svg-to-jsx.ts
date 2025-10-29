@@ -12,6 +12,14 @@ export interface SvgToJsxOptions {
 
   /** Optional props to merge into the root SVG element */
   rootProps?: Record<string, unknown>
+
+  /**
+   * When true, scope IDs defined inside the SVG (e.g. clipPath/filter/mask/gradient)
+   * with a unique, deterministic prefix and rewrite all url(#...) and id-based
+   * references accordingly. This prevents collisions when multiple identical
+   * SVGs exist on the page.
+   */
+  scopeIds?: boolean
 }
 
 const BUILTIN_ATTR_RENAMES: Record<string, string> = {
@@ -243,7 +251,11 @@ export function svgToJsx(
   svg: string,
   options: SvgToJsxOptions = {}
 ): React.ReactElement {
-  const resolvedOptions: SvgToJsxOptions = { expandStyle: true, ...options }
+  const resolvedOptions: SvgToJsxOptions = {
+    expandStyle: true,
+    scopeIds: true,
+    ...options,
+  }
 
   const tokens = tokenize(svg)
   const rootChildren: Array<ElementNode | { kind: 'text'; value: string }> = []
@@ -299,6 +311,105 @@ export function svgToJsx(
     node: ElementNode | { kind: 'text'; value: string }
   ): node is { kind: 'text'; value: string } {
     return node.kind === 'text'
+  }
+
+  // ---- Scoped ID rewriting to avoid collisions across multiple SVGs ----
+  if (resolvedOptions.scopeIds) {
+    // Build a deterministic short hash from the original SVG string
+    function hash(input: string): string {
+      let h = 2166136261 >>> 0 // FNV-1a 32-bit offset basis
+      for (let i = 0; i < input.length; i++) {
+        h ^= input.charCodeAt(i)
+        h = Math.imul(h, 16777619) >>> 0
+      }
+      return h.toString(36)
+    }
+
+    const prefix = `r${hash(svg)}-`
+
+    // Collect all ids defined inside this SVG
+    const idMap = new Map<string, string>()
+
+    function walkCollect(node: ElementNode | { kind: 'text'; value: string }) {
+      if (isTextNode(node)) return
+      const props = node.props
+      const idValue = (props as Record<string, unknown>)['id']
+      if (typeof idValue === 'string' && idValue) {
+        if (!idMap.has(idValue)) idMap.set(idValue, `${prefix}${idValue}`)
+      }
+      for (const child of node.children) walkCollect(child)
+    }
+
+    for (const child of rootChildren) walkCollect(child)
+
+    if (idMap.size > 0) {
+      const URL_REF = /url\(#([^\)]+)\)/g
+
+      function rewriteValue(value: unknown, key?: string): unknown {
+        if (typeof value === 'string') {
+          // url(#id) references (clipPath/mask/filter/gradient/markers)
+          if (value.includes('url(#')) {
+            return value.replace(URL_REF, (_, id: string) => {
+              const mapped = idMap.get(id)
+              return mapped ? `url(#${mapped})` : `url(#${id})`
+            })
+          }
+          // href/xlinkHref fragments like #id
+          if (
+            (key === 'href' || key === 'xlinkHref') &&
+            value.startsWith('#')
+          ) {
+            const id = value.slice(1)
+            const mapped = idMap.get(id)
+            return `#${mapped ?? id}`
+          }
+          // aria-labelledby / aria-describedby space-separated id lists
+          if (
+            (key === 'aria-labelledby' || key === 'aria-describedby') &&
+            /\S/.test(value)
+          ) {
+            return value
+              .split(/\s+/)
+              .map((token) =>
+                idMap.has(token) ? (idMap.get(token) as string) : token
+              )
+              .join(' ')
+          }
+          return value
+        }
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          // style object potentially containing url(#id)
+          const next: Record<string, unknown> = {}
+          for (const [k, v] of Object.entries(
+            value as Record<string, unknown>
+          )) {
+            next[k] = rewriteValue(v)
+          }
+          return next
+        }
+        return value
+      }
+
+      function walkRewrite(
+        node: ElementNode | { kind: 'text'; value: string }
+      ): void {
+        if (isTextNode(node)) return
+        const props = node.props as Record<string, unknown>
+        if (typeof props['id'] === 'string') {
+          const mapped = idMap.get(props['id'] as string)
+          if (mapped) props['id'] = mapped
+        }
+        for (const [k, v] of Object.entries(props)) {
+          // 'id' was already handled above
+          if (k === 'id') continue
+          const rewritten = rewriteValue(v, k)
+          if (rewritten !== v) props[k] = rewritten
+        }
+        for (const child of node.children) walkRewrite(child)
+      }
+
+      for (const child of rootChildren) walkRewrite(child)
+    }
   }
 
   function toReact(
