@@ -50,11 +50,20 @@ let formatter: Formatter | null | undefined
 export async function formatSourceText(
   filePath: string,
   sourceText: string,
-  language?: string
+  language?: string,
+  requireFormatter?: boolean
 ) {
   // TODO: Add support for other formatters like dprint and biome
 
   if (formatter === null) {
+    if (requireFormatter) {
+      throw new Error(
+        `The \"shouldFormat\" option was explicitly enabled, but Prettier is not installed.\n` +
+          `Install Prettier with one of the following commands:\n` +
+          `  pnpm add -D prettier\n  npm i -D prettier\n  yarn add -D prettier\n` +
+          `Or disable formatting by setting shouldFormat={false}.`
+      )
+    }
     return sourceText
   }
 
@@ -75,7 +84,15 @@ export async function formatSourceText(
         })
       }
     } else {
-      // No parser found for the provided language, use the default formatter.
+      // No installed Prettier; honor requirement if explicitly requested.
+      if (requireFormatter) {
+        throw new Error(
+          `The \"shouldFormat\" option was explicitly enabled, but Prettier is not installed.\n` +
+            `Install Prettier with one of the following commands:\n` +
+            `  pnpm add -D prettier\n  npm i -D prettier\n  yarn add -D prettier\n` +
+            `Or disable formatting by setting shouldFormat={false}.`
+        )
+      }
       formatter = null
     }
   }

@@ -15,9 +15,17 @@ export interface SourceTextMetadata {
 
 export interface GetSourceTextMetadataOptions
   extends Omit<SourceTextMetadata, 'label'> {
+  /** The project to use for the source text. */
   project: Project
-  shouldFormat?: boolean
+
+  /** The base directory to use for the source text. */
   baseDirectory?: string
+
+  /** Whether formatting should be performed. */
+  shouldFormat?: boolean
+
+  /** Whether formatting was explicitly requested by the caller. */
+  isFormattingExplicit?: boolean
 }
 
 export const generatedFilenames = new Set<string>()
@@ -36,6 +44,7 @@ export async function getSourceTextMetadata({
   filePath: filePathProp,
   language,
   shouldFormat = true,
+  isFormattingExplicit,
   value,
   baseDirectory,
 }: GetSourceTextMetadataOptions): Promise<SourceTextMetadata> {
@@ -96,7 +105,12 @@ export async function getSourceTextMetadata({
   // Format source text if enabled.
   if (shouldFormat) {
     try {
-      finalValue = await formatSourceText(filePath, finalValue, finalLanguage)
+      finalValue = await formatSourceText(
+        filePath,
+        finalValue,
+        finalLanguage,
+        isFormattingExplicit
+      )
     } catch (error) {
       throw new Error(
         `[renoun] Error formatting CodeBlock source text using language "${finalLanguage}"${filePath ? ` at file path "${filePath}"` : ''} ${error}`

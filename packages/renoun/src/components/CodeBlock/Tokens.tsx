@@ -106,7 +106,7 @@ export async function Tokens({
   allowErrors,
   showErrors,
   shouldAnalyze: shouldAnalyzeProp,
-  shouldFormat = true,
+  shouldFormat: shouldFormatProp,
   renderLine,
   css = {},
   className = {},
@@ -162,6 +162,9 @@ export async function Tokens({
   }
 
   const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
+  const shouldFormat = shouldFormatProp ?? context?.shouldFormat ?? true
+  const isFormattingExplicit =
+    shouldFormatProp !== undefined || context?.shouldFormat !== undefined
   const metadata: SourceTextMetadata = {} as SourceTextMetadata
 
   if (shouldAnalyze) {
@@ -171,6 +174,7 @@ export async function Tokens({
       value: processedValue,
       language,
       shouldFormat,
+      isFormattingExplicit,
     })
     metadata.value = result.value
     metadata.language = result.language
