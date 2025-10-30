@@ -1468,6 +1468,52 @@ describe('file system', () => {
     expect(basename('/path/to/file.ts', '.ts')).toBe('file')
   })
 
+  test('loader factory returns loader map and is resolved once', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.ts': '',
+      'foo.ts': '',
+    })
+
+    let factoryCalls = 0
+
+    const directory = new Directory({
+      fileSystem,
+      loader: () => {
+        factoryCalls++
+        return {
+          ts: () => ({ value: 42 }),
+        }
+      },
+    })
+
+    const indexFile = await directory.getFile('index', 'ts')
+    const indexValue = await indexFile.getExportValue('value')
+    expect(indexValue).toBe(42)
+
+    const fooFile = await directory.getFile('foo', 'ts')
+    const fooValue = await fooFile.getExportValue('value')
+    expect(fooValue).toBe(42)
+
+    expect(factoryCalls).toBe(1)
+  })
+
+  test('unwraps lazy loader functions returning a module promise', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.ts': '',
+    })
+
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        ts: () => () => Promise.resolve({ answer: 7 }),
+      },
+    })
+
+    const file = await directory.getFile('index', 'ts')
+    const value = await file.getExportValue('answer')
+    expect(value).toBe(7)
+  })
+
   test('getExportValue', async () => {
     const fileSystem = new MemoryFileSystem({
       'index.ts': 'export const metadata = { title: "Hello, World!" }',

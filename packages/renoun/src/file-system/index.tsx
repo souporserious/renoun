@@ -96,10 +96,15 @@ const defaultLoaders: {
 } satisfies Record<string, ModuleRuntimeLoader<any>>
 
 /** A function that resolves the module runtime. */
+type ModuleRuntimeResult<Value> =
+  | Value
+  | Promise<Value>
+  | (() => Value | Promise<Value>)
+
 type ModuleRuntimeLoader<Value> = (
   path: string,
   file: File<any> | JavaScriptFile<any> | MarkdownFile<any> | MDXFile<any>
-) => Promise<Value>
+) => ModuleRuntimeResult<Value>
 
 /** A record of named exports in a module. */
 type ModuleExports<Value = any> = {
@@ -270,6 +275,21 @@ function isLoaderWithSchema<Schema extends ModuleExports>(
   loader: ModuleLoader<Schema>
 ): loader is ModuleLoaderWithSchema<Schema> {
   return 'schema' in loader && 'runtime' in loader
+}
+
+/** Unwraps a loader result that may be a value, a promise, or a lazy factory. */
+async function unwrapModuleResult<T>(result: any): Promise<T> {
+  let value = result
+  if (typeof value === 'function') {
+    value = (value as () => any)()
+  }
+  if (value && typeof value.then === 'function') {
+    value = await value
+  }
+  if (typeof value === 'function') {
+    value = await (value as () => any)()
+  }
+  return value as T
 }
 
 /** Error for when a file is not found. */
@@ -1087,11 +1107,11 @@ export class JavaScriptModuleExport<Value> {
     const path = removeExtension(this.#file.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
-      return this.#loader(path, this.#file)
+      return unwrapModuleResult<any>(this.#loader(path, this.#file))
     }
 
     if (isLoaderWithSchema(this.#loader) && this.#loader.runtime) {
-      return this.#loader.runtime(path, this.#file)
+      return unwrapModuleResult<any>(this.#loader.runtime(path, this.#file))
     }
 
     const parentPath = this.#file.getParent().getRelativePathToWorkspace()
@@ -1212,7 +1232,7 @@ export class JavaScriptFile<
     let executeModuleLoader: () => Promise<any>
 
     if (isLoader(loader)) {
-      executeModuleLoader = () => loader(path, this)
+      executeModuleLoader = () => unwrapModuleResult(loader(path, this))
     } else if (isLoaderWithSchema(loader)) {
       if (!loader.runtime) {
         const parentPath = this.getParent().getRelativePathToWorkspace()
@@ -1221,7 +1241,8 @@ export class JavaScriptFile<
           `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
         )
       }
-      executeModuleLoader = () => (loader.runtime as any)(path, this)
+      executeModuleLoader = () =>
+        unwrapModuleResult((loader.runtime as any)(path, this))
     } else {
       throw new Error(
         `[renoun] This loader is missing a runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
@@ -1621,11 +1642,11 @@ export class MDXModuleExport<Value> {
     const path = removeExtension(this.#file.getRelativePathToRoot())
 
     if (isLoader(this.#loader)) {
-      return this.#loader(path, this.#file)
+      return unwrapModuleResult<any>(this.#loader(path, this.#file))
     }
 
     if (isLoaderWithSchema(this.#loader) && this.#loader.runtime) {
-      return this.#loader.runtime(path, this.#file)
+      return unwrapModuleResult<any>(this.#loader.runtime(path, this.#file))
     }
 
     const parentPath = this.#file.getParent().getRelativePathToWorkspace()
@@ -1800,7 +1821,7 @@ export class MDXFile<
     let executeModuleLoader: () => Promise<any>
 
     if (isLoader(loader)) {
-      executeModuleLoader = () => loader(path, this)
+      executeModuleLoader = () => unwrapModuleResult(loader(path, this))
     } else if (isLoaderWithSchema(loader)) {
       if (!loader.runtime) {
         const parentPath = this.getParent().getRelativePathToWorkspace()
@@ -1867,7 +1888,9 @@ export class MarkdownFile<
     let executeModuleLoader: () => Promise<any>
 
     if (isLoader(loader)) {
-      executeModuleLoader = () => loader(path, this)
+      executeModuleLoader = () => {
+        return unwrapModuleResult(loader(path, this))
+      }
     } else if (isLoaderWithSchema(loader)) {
       if (!loader.runtime) {
         const parentPath = this.getParent().getRelativePathToWorkspace()
@@ -1875,7 +1898,9 @@ export class MarkdownFile<
           `[renoun] A markdown runtime loader for the parent Directory at ${parentPath} is not defined.`
         )
       }
-      executeModuleLoader = () => (loader.runtime as any)(path, this)
+      executeModuleLoader = () => {
+        return unwrapModuleResult((loader.runtime as any)(path, this))
+      }
     } else {
       throw new Error(
         `[renoun] This loader is missing a markdown runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
@@ -1965,7 +1990,7 @@ export interface DirectoryOptions<
   filter?: Filter
 
   /** Extension loaders with or without `withSchema`. */
-  loader?: Loaders
+  loader?: Loaders | (() => Loaders)
 
   /** Base route prepended to descendant `getPathname()` results. */
   basePathname?: string | null
@@ -2001,7 +2026,8 @@ export class Directory<
   #basePathname?: string | null
   #tsConfigPath?: string
   #slugCasing: SlugCasing
-  #loader?: Loaders
+  #loader?: Loaders | (() => Loaders)
+  #resolvedLoaders?: Loaders
   #directory?: Directory<any, any, any>
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
@@ -2130,8 +2156,23 @@ export class Directory<
     directory.#repository = this.#repository
     directory.#rootPath = this.getRootPath()
     directory.#pathLookup = this.#pathLookup
+    directory.#resolvedLoaders = this.#resolvedLoaders
 
     return directory
+  }
+
+  /** Resolve the loaders map when a factory is provided and cache the result. */
+  #getLoaders(): Loaders | undefined {
+    if (!this.#loader) {
+      return undefined
+    }
+    if (typeof this.#loader === 'function') {
+      if (!this.#resolvedLoaders) {
+        this.#resolvedLoaders = (this.#loader as () => Loaders)()
+      }
+      return this.#resolvedLoaders
+    }
+    return this.#loader as Loaders
   }
 
   /** Get the file system for this directory. */
@@ -2685,7 +2726,8 @@ export class Directory<
           slugCasing: this.#slugCasing,
         } as const
         const extension = extensionName(entry.name).slice(1)
-        const loader = this.#loader?.[extension] as
+        const loaders = this.#getLoaders()
+        const loader = loaders?.[extension] as
           | ModuleLoader<LoaderTypes[any]>
           | undefined
 
