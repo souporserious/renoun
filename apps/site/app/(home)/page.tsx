@@ -3,6 +3,7 @@ import { JoinButton } from './JoinButton'
 export default function Page() {
   return (
     <div
+      data-grid="manual"
       css={{
         gridColumn: '2 / -2',
         display: 'flex',
@@ -13,7 +14,8 @@ export default function Page() {
         textAlign: 'center',
 
         '@media (min-width: 60rem)': {
-          gridColumn: '3 / -3',
+          // Place into the content track of the subgrid (3rd column in span)
+          gridColumn: '3 / 4',
           padding: '2rem 0 9rem',
         },
       }}

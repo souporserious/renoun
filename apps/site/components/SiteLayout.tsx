@@ -89,19 +89,20 @@ export async function SiteLayout({
 
         <nav
           css={{
-            gridColumn: '2 / -2',
+            gridColumn: '1 / -1',
             gridRow: '1 / 3',
             display: 'grid',
-            gridTemplateColumns: '12rem 1fr 12rem',
+            gridTemplateColumns: 'subgrid',
             alignItems: 'center',
             padding: '0 2rem',
-            columnGap: '1.5rem',
+            '@media screen and (min-width: 60rem)': {
+              padding: 0,
+            },
             '@media screen and (max-width: calc(60rem - 1px))': {
               // On small screens, span full width so header content is not squeezed
-              gridColumn: '1 / -1',
-              // Use flex to avoid grid column artifacts and extra gaps
               display: 'flex',
               alignItems: 'center',
+              gap: '1.5rem',
             },
           }}
         >
@@ -110,6 +111,10 @@ export async function SiteLayout({
             css={{
               display: 'flex',
               alignItems: 'center',
+              gridColumn: '2',
+              '@media screen and (min-width: 60rem)': {
+                margin: '0 2rem',
+              },
             }}
           >
             <RenounLogo
@@ -123,6 +128,7 @@ export async function SiteLayout({
 
           <div
             css={{
+              gridColumn: '4',
               justifySelf: 'center',
               alignItems: 'center',
               justifyContent: 'center',
@@ -237,19 +243,16 @@ export async function SiteLayout({
 
           <div
             css={{
-              justifySelf: 'end',
+              gridColumn: '6',
+              justifySelf: 'stretch',
               display: 'flex',
               alignItems: 'center',
-              gap: '1.5rem',
+              gap: '1rem',
+              padding: '0 1rem',
               '@media screen and (max-width: calc(60rem - 1px))': {
                 marginLeft: 'auto',
+                padding: 0,
               },
-              '@media screen and (min-width: 60rem)':
-                variant === 'docs'
-                  ? {
-                      gap: '1rem',
-                    }
-                  : undefined,
             }}
           >
             <SearchDialog routes={searchRoutes} />
@@ -290,7 +293,19 @@ export async function SiteLayout({
                   },
                 }}
               />
-            ) : null}
+            ) : (
+              // Reserve space on small screens to keep actions stable
+              <div
+                css={{
+                  width: 'var(--font-size-body-1)',
+                  height: 'var(--font-size-body-1)',
+                  '@media screen and (min-width: 60rem)': {
+                    display: 'none',
+                  },
+                }}
+                aria-hidden
+              />
+            )}
           </div>
         </nav>
       </header>
@@ -311,16 +326,24 @@ export async function SiteLayout({
 
       <main
         css={{
-          gridColumn: '-1 / 1',
-          gridRow: '4',
+          gridColumn: '1 / -1',
+          gridRow: '2',
+          display: 'grid',
+          gridTemplateColumns: 'subgrid',
           padding: '4rem 2rem',
+          // Default placement for page content on small screens
+          '& > :not([data-grid])': {
+            gridColumn: '2 / -2',
+          },
 
           '@media screen and (min-width: 60rem)': {
-            display: 'grid',
-            gridTemplateColumns: 'subgrid',
             gridColumn: sidebar ? '4 / -2' : '2 / -2',
             gridRow: '2',
             padding: '4rem 0',
+            // On large screens, children should span the subgrid region by default
+            '& > :not([data-grid])': {
+              gridColumn: '1 / -1',
+            },
           },
         }}
       >

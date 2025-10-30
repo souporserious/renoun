@@ -159,10 +159,9 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
   return (
     <DialogTrigger isOpen={isOpen} onOpenChange={setOpen}>
       <Button
-        style={{
+        style={({ isFocusVisible }) => ({
           display: 'flex',
           alignItems: 'center',
-          width: '6.675rem',
           height: '2.25rem',
           borderRadius: 8,
           background: dialogTokens.triggerBackground,
@@ -176,7 +175,10 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
           cursor: 'default',
           outline: 'none',
           border: `1px solid ${dialogTokens.triggerBorder}`,
-        }}
+          boxShadow: isFocusVisible
+            ? '0 0 0 2px var(--color-background), 0 0 0 4px var(--color-foreground-interactive)'
+            : 'none',
+        })}
       >
         <SearchIcon
           style={{
