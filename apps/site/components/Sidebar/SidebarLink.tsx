@@ -6,8 +6,22 @@ import Link from 'next/link'
 import { Collapse } from '../Collapse'
 
 const StyledLink = styled(Link, {
-  display: 'block',
-  padding: '0.25rem 0',
+  display: 'flex',
+  alignItems: 'center',
+  // Keep desktop styles unchanged; only enhance on mobile
+  // Larger touch targets on small screens (iOS/Android guidelines ~44–48px)
+  '@media screen and (max-width: calc(60rem - 1px))': {
+    width: '100%',
+    minHeight: '2.75rem',
+    padding: '0.5rem 0.75rem',
+    borderRadius: '0.5rem',
+    ':hover': {
+      backgroundColor: 'var(--color-surface-interactive)',
+    },
+    ':active': {
+      backgroundColor: 'var(--color-surface-interactive-highlighted)',
+    },
+  },
 })
 
 export function SidebarLink({
@@ -24,8 +38,13 @@ export function SidebarLink({
   const activePathname = usePathname()
   const isActive = pathname === activePathname
   const styles: CSSObject = {
-    display: 'block',
+    display: 'flex',
+    alignItems: 'center',
     padding: '0.25rem 0',
+    '@media screen and (max-width: calc(60rem - 1px))': {
+      minHeight: '2.75rem',
+      padding: '0.5rem 0.75rem',
+    },
   }
 
   if (isActive) {
@@ -61,6 +80,11 @@ export function SidebarLink({
             alignItems: 'center',
             justifyContent: 'center',
             borderRadius: '0.25rem',
+            '@media screen and (max-width: calc(60rem - 1px))': {
+              width: '1.25rem',
+              height: '1.25rem',
+              left: '-1.5rem',
+            },
             ':focus': {
               outline: 'none',
             },

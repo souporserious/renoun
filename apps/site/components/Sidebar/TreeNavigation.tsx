@@ -27,6 +27,7 @@ const components: Partial<NavigationComponents> = {
           fontSize: 'var(--font-size-body-2)',
           display: 'flex',
           flexDirection: 'column',
+          gap: 0,
           paddingLeft: 0,
           margin: 0,
           ...(depth > 0
@@ -36,6 +37,16 @@ const components: Partial<NavigationComponents> = {
                 borderLeft: '1px solid var(--color-separator)',
               }
             : {}),
+          '@media screen and (max-width: calc(60rem - 1px))': {
+            gap: '0.5rem',
+            // On mobile, avoid the nested guideline to reduce visual clutter
+            ...(depth > 0
+              ? {
+                  borderLeft: 'none',
+                  marginLeft: 0,
+                }
+              : {}),
+          },
         }}
       >
         {children}
