@@ -1,6 +1,7 @@
 'use client'
-import { usePathname } from 'next/navigation'
+import type { ComponentProps } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { styled, type CSSObject } from 'restyle'
 
 const StyledLink = styled(Link, {
@@ -15,13 +16,14 @@ export function NavigationLink({
   activePathnames,
   css,
   children,
+  ...props
 }: {
   href: string
   activeColor?: string
   activePathnames?: string[]
   css?: CSSObject
   children: React.ReactNode
-}) {
+} & Omit<ComponentProps<typeof Link>, 'href' | 'children'>) {
   const activePathname = usePathname()
   const isActive = activePathnames
     ? activePathnames.find((pathname) => activePathname.startsWith(pathname))
@@ -43,7 +45,7 @@ export function NavigationLink({
   }
 
   return (
-    <StyledLink href={href} css={{ ...styles, ...css }}>
+    <StyledLink href={href} css={{ ...styles, ...css }} {...props}>
       {children}
     </StyledLink>
   )
