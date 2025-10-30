@@ -1,0 +1,107 @@
+export const metadata = {
+  title: 'ArkType Guide',
+  label: 'ArkType',
+  description:
+    'Learn how to add schema validation to your file system using ArkType in renoun.',
+}
+
+```ts
+import { Directory, withSchema } from 'renoun'
+import { type } from 'arktype'
+
+const frontmatterSchema = type({
+  title: 'string',
+  date: 'date',
+  'summary?': 'string',
+  'tags?': 'string[]',
+})
+
+const posts = new Directory({
+  path: 'posts',
+  filter: '*.mdx',
+  loader: {
+    mdx: withSchema(
+      { frontmatter: frontmatterSchema },
+      (path) => import(`./posts/${path}.mdx`)
+    ),
+  },
+})
+```
+
+## Introduction
+
+In this guide, we'll walk through how to use [ArkType](https://arktype.io/) to add schema validation to your file system. ArkType provides a concise, TypeScript-aligned syntax with fast runtime validation and a great editor experience.
+
+### Before You Begin
+
+Before you start, make sure you have a basic understanding of how the [File System API](/utilities/file-system) works in renoun. We'll also be using MDX files in this guide, so make sure you're familiar with the [MDX Guide](/guides/mdx) as well.
+
+## Using ArkType
+
+ArkType is a TypeScript-first validator with a 1:1 type syntax and strong developer ergonomics. Let's look at how you can use ArkType to add schema validation to your file system in renoun.
+
+### Install
+
+First, install `arktype` using your package manager:
+
+<Command variant="install">arktype</Command>
+
+### Define Schema
+
+Now, we'll create a schema using `arktype` for the front matter of an MDX file:
+
+```ts
+import { type } from 'arktype'
+
+const frontmatterSchema = type({
+  title: 'string',
+  date: 'date',
+  'summary?': 'string',
+  'tags?': 'string[]',
+})
+```
+
+### Apply to a Directory
+
+We can now apply the ArkType `frontmatterSchema` to your `Directory` using the `withSchema` helper:
+
+```ts highlightedLines="1,11-20"
+import { Directory, withSchema } from 'renoun'
+import { type } from 'arktype'
+
+const frontmatterSchema = type({
+  title: 'string',
+  date: 'date',
+  'summary?': 'string',
+  'tags?': 'string[]',
+})
+
+const posts = new Directory({
+  path: 'posts',
+  filter: '*.mdx',
+  loader: {
+    mdx: withSchema(
+      { frontmatter: frontmatterSchema },
+      (path) => import(`./posts/${path}.mdx`)
+    ),
+  },
+})
+```
+
+Now, the `frontmatter` export in your MDX files will be validated against the `frontmatterSchema` we defined using ArkType. If the data does not match the schema, an error will be thrown.
+
+## Beyond Front Matter
+
+While the example in this guide focused on validating front matter in MDX files, the same approach can be applied to validate any kind of export within a file. Whether you need to enforce a specific structure for other metadata, content fields, or custom data exports, ArkType provides the flexibility to define schemas that fit your file system requirements.
+
+### Validating MDX headings
+
+When using the MDX remark plugin that [auto-exports `headings`](/guides/mdx#remark-add-headings), TypeScript does not know the shape of that export unless you include it in your schema.
+
+In this scenario, we manually type the exported `headings` in our schema so validation and type inference work as expected:
+
+<CodeBlock path="guides/arktype.ts" />
+
+## Conclusion
+
+By using ArkType, you can add fast and ergonomic schema validation to your file system. This ensures that your data is always in the expected format, making your application more robust and maintainable. For more information, refer to the [ArkType documentation](https://arktype.io/).

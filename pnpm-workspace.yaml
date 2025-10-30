@@ -13,6 +13,7 @@ catalog:
   '@types/mdx': 2.0.13
   '@types/react': 19.2.2
   '@types/react-dom': 19.2.2
+  arktype: 2.1.25
   geist: 1.5.1
   next: 15.5.5
   prettier: 3.6.2
@@ -28,6 +29,8 @@ catalog:
   unified: 11.0.5
   valibot: 1.1.0
   zod: 4.1.12
+
+catalogMode: prefer
 
 minimumReleaseAge: 1440
 

@@ -33,6 +33,9 @@ catalogs:
     '@types/react-dom':
       specifier: 19.2.2
       version: 19.2.2
+    arktype:
+      specifier: 2.1.25
+      version: 2.1.25
     geist:
       specifier: 1.5.1
       version: 1.5.1
@@ -86,6 +89,10 @@ overrides:
 importers:
 
   .:
+    dependencies:
+      arktype:
+        specifier: 'catalog:'
+        version: 2.1.25
     devDependencies:
       '@changesets/cli':
         specifier: 2.29.7
@@ -135,6 +142,9 @@ importers:
       '@vercel/analytics':
         specifier: 1.5.0
         version: 1.5.0(next@15.5.5(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+      arktype:
+        specifier: 'catalog:'
+        version: 2.1.25
       geist:
         specifier: 'catalog:'
         version: 1.5.1(next@15.5.5(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
@@ -501,6 +511,12 @@ packages:
 
   '@antfu/install-pkg@1.1.0':
     resolution: {integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==}
+
+  '@ark/schema@0.53.0':
+    resolution: {integrity: sha512-1PB7RThUiTlmIu8jbSurPrhHpVixPd4C+xNBUF/HrjIENCeDcAMg36n5mpMzED7OQGDVIzpfXXiMnaTiutjHJw==}
+
+  '@ark/util@0.53.0':
+    resolution: {integrity: sha512-TGn4gLlA6dJcQiqrtCtd88JhGb2XBHo6qIejsDre+nxpGuUVW4G3YZGVrwjNBTO0EyR+ykzIo4joHJzOj+/cpA==}
 
   '@babel/code-frame@7.27.1':
     resolution: {integrity: sha512-cjQ7ZlQ0Mv3b47hABuTevyTuYN4i+loJKGeV9flcCgIK37cCXRh+L1bd3iBHlynerhQ7BhCkn2BPbQUL+rGqFg==}
@@ -2309,6 +2325,12 @@ packages:
 
   argparse@1.0.10:
     resolution: {integrity: sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg==}
+
+  arkregex@0.0.2:
+    resolution: {integrity: sha512-ttjDUICBVoXD/m8bf7eOjx8XMR6yIT2FmmW9vsN0FCcFOygEZvvIX8zK98tTdXkzi0LkRi5CmadB44jFEIyDNA==}
+
+  arktype@2.1.25:
+    resolution: {integrity: sha512-fdj10sNlUPeDRg1QUqMbzJ4Q7gutTOWOpLUNdcC4vxeVrN0G+cbDOvLbuxQOFj/NDAode1G7kwFv4yKwQvupJg==}
 
   array-iterate@2.0.1:
     resolution: {integrity: sha512-I1jXZMjAgCMmxT4qxXfPXa6SthSoE8h6gkSI9BGGNv8mP8G/v0blc+qFnZu6K42vTOiuME596QaLO0TP3Lk0xg==}
@@ -4208,6 +4230,12 @@ snapshots:
     dependencies:
       package-manager-detector: 1.4.1
       tinyexec: 1.0.1
+
+  '@ark/schema@0.53.0':
+    dependencies:
+      '@ark/util': 0.53.0
+
+  '@ark/util@0.53.0': {}
 
   '@babel/code-frame@7.27.1':
     dependencies:
@@ -6412,6 +6440,16 @@ snapshots:
   argparse@1.0.10:
     dependencies:
       sprintf-js: 1.0.3
+
+  arkregex@0.0.2:
+    dependencies:
+      '@ark/util': 0.53.0
+
+  arktype@2.1.25:
+    dependencies:
+      '@ark/schema': 0.53.0
+      '@ark/util': 0.53.0
+      arkregex: 0.0.2
 
   array-iterate@2.0.1: {}
 
