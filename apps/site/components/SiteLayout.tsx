@@ -337,7 +337,7 @@ export async function SiteLayout({
           },
 
           '@media screen and (min-width: 60rem)': {
-            gridColumn: sidebar ? '4 / -2' : '2 / -2',
+            gridColumn: sidebar ? '4 / -4' : '2 / -2',
             gridRow: '2',
             padding: '4rem 0',
             // On large screens, children should span the subgrid region by default
