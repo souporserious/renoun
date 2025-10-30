@@ -94,6 +94,36 @@ Now, the `frontmatter` export in your MDX files will be validated against the `f
 
 While the example in this guide focused on validating front matter in MDX files, the same approach can be applied to validate any kind of export within a file. Whether you need to enforce a specific structure for other metadata, content fields, or custom data exports, Valibot provides the flexibility to define schemas that fit your file system requirements.
 
+### Validating MDX headings
+
+When using the MDX remark plugin that [auto-exports `headings`](/guides/mdx#remark-add-headings), TypeScript does not know the shape of that export unless you include it in your schema.
+
+In this scenario, we manually type the exported `headings` in our schema so validation and type inference work as expected:
+
+```ts
+import { Directory, withSchema } from 'renoun'
+import * as v from 'valibot'
+
+const mdxSchema = v.object({
+  headings: v.array(
+    v.object({
+      id: v.string(),
+      level: v.number(),
+      children: v.unknown<NonNullable<React.ReactNode>>(),
+      text: v.string(),
+    })
+  ),
+})
+
+const docs = new Directory({
+  path: 'docs',
+  filter: '*.mdx',
+  loader: {
+    mdx: withSchema(mdxSchema, (path) => import(`@/docs/${path}.mdx`)),
+  },
+})
+```
+
 ## Conclusion
 
 By using Valibot, you can add reliable schema validation to your collections in renoun. This ensures that your data is always in the expected format, making your application more robust and maintainable.
