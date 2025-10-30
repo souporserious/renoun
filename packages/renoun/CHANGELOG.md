@@ -1,5 +1,36 @@
 # renoun
 
+## 10.8.0
+
+### Minor Changes
+
+- 910fdd6: Adds configurable `sources` prop to `RootProvider` in place of the `figma` option:
+  - `RootProvider`: The new `sources` prop allows defining custom sources, e.g. `sources={{ icons: { type: 'figma', fileId }, illustration: { type: 'figma', fileId, basePathname: 'illustration' } }}`.
+  - `Image`: Can use these sources, e.g. `icons:arrow-up` or `illustration:marketing`. Names are resolved by components first, then frames/groups. If `basePathname` is provided, it also matches names like `illustration/<path>`.
+
+- d2c1a02: Adds the ability for `Tokens` to load file contents itself when used inside `CodeBlock`:
+
+  ```tsx
+  <CodeBlock path="./counter/Counter.tsx" baseDirectory={import.meta.url}>
+    <pre>
+      <Tokens />
+    </pre>
+  </CodeBlock>
+  ```
+
+### Patch Changes
+
+- 6954981: Throws a helpful error when `shouldFormat` is explicitly enabled but no formatter is installed.
+- 2fd4509: Fixes `CodeBlock` scrollbar corner styling so the bottom-right intersection of
+  vertical and horizontal scrollbars never shows a white gap.
+- 6169864: Adds support for loading files into `CodeBlock` when only a `path` is provided.
+- d15023c: Adds a `reorder` command to the CLI that reorders numbered entries while preserving the last modified duplicate.
+- 7daa21d: Fixes the `Image` component not respecting the `format` prop when exporting from Figma.
+- e36b3ad: Scopes Figma SVG ids during conversion in `Image` component and rewrites `url(#...)`/`#id` references to prevent ID collisions. This fixes cases where clipping, masks, filters, or gradients
+  from Figma exports spilled outside their containers when multiple SVGs shared
+  the same ids.
+- eb1f5bb: Uses stable scrollbar gutters for `CodeBlock` and `CodeInline`. This fixes situations where large scrollbars would appear when padding is large.
+
 ## 10.7.0
 
 ### Minor Changes
