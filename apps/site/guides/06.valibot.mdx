@@ -22,7 +22,7 @@ const posts = new Directory({
   loader: {
     mdx: withSchema(
       { frontmatter: frontmatterSchema },
-      (path) => import(`@/posts/${path}.mdx`)
+      (path) => import(`./posts/${path}.mdx`)
     ),
   },
 })
@@ -82,7 +82,7 @@ const posts = new Directory({
   loader: {
     mdx: withSchema(
       { frontmatter: frontmatterSchema },
-      (path) => import(`@/posts/${path}.mdx`)
+      (path) => import(`./posts/${path}.mdx`)
     ),
   },
 })
@@ -100,29 +100,7 @@ When using the MDX remark plugin that [auto-exports `headings`](/guides/mdx#rema
 
 In this scenario, we manually type the exported `headings` in our schema so validation and type inference work as expected:
 
-```ts
-import { Directory, withSchema } from 'renoun'
-import * as v from 'valibot'
-
-const mdxSchema = v.object({
-  headings: v.array(
-    v.object({
-      id: v.string(),
-      level: v.number(),
-      children: v.unknown<NonNullable<React.ReactNode>>(),
-      text: v.string(),
-    })
-  ),
-})
-
-const docs = new Directory({
-  path: 'docs',
-  filter: '*.mdx',
-  loader: {
-    mdx: withSchema(mdxSchema, (path) => import(`@/docs/${path}.mdx`)),
-  },
-})
-```
+<CodeBlock path="guides/valibot.ts" />
 
 ## Conclusion
 
