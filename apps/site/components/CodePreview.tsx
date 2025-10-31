@@ -69,6 +69,7 @@ export async function CodePreview({
                   padding: '4rem',
                   margin: 'auto',
                   overflow: 'auto',
+                  overscrollBehavior: 'contain',
                 }}
               >
                 {Layout ? (
@@ -121,6 +122,7 @@ function HeroExample({
                   paddingBottom: 'calc(0.75rem + 2.5rem + 0.5rem)',
                   backgroundColor: 'var(--color-surface-secondary)',
                   overflow: 'auto',
+                  overscrollBehavior: 'contain',
 
                   '[data-state="closed"] &': {
                     overflow: 'hidden',
@@ -261,6 +263,7 @@ function HeroExample({
               padding: '0.75rem 1rem',
               backgroundColor: 'var(--color-surface-secondary)',
               overflow: 'auto',
+              overscrollBehavior: 'contain',
             }}
             className={GeistMono.className}
           >
