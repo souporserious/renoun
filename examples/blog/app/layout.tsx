@@ -31,7 +31,7 @@ export default function RootLayout({
           <div className="layout">
             <header className="layout__header">
               <Link href="/" className="layout__title">
-                renoun blog
+                blog
               </Link>
               <ThemeToggle />
             </header>

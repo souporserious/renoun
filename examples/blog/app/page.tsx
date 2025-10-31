@@ -30,7 +30,7 @@ export default async function Page() {
   return (
     <main className="page">
       <header className="page__hero">
-        <h1>blog</h1>
+        <h1>Field Notes</h1>
         <p>
           A small collection of MDX posts that show how renoun keeps content,
           metadata, and React components close together.
