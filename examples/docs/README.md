@@ -2,7 +2,7 @@
 
 This example shows how to build a documentation site with renoun and Next.js.
 
-[Live demo](https://renoun-docs.vercel.app/)
+[Demo](https://renoun-docs.vercel.app/)
 
 ## How to use
 

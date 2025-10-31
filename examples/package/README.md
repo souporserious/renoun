@@ -2,7 +2,7 @@
 
 This example shows how to build documentation for a simple package with renoun and Next.js.
 
-[Live demo](https://renoun-package.vercel.app/)
+[Demo](https://renoun-package.vercel.app/)
 
 ## How to use
 

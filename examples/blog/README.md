@@ -4,7 +4,7 @@ This example shows how to build a blog with renoun and Next.js. It includes seve
 highlight typed collections, metadata-driven layouts, tag-driven filtering, and rich code snippets
 powered by renoun's components.
 
-[Live demo](https://renoun-blog.vercel.app/)
+[Demo](https://renoun-blog.vercel.app/)
 
 ## How to use
 
