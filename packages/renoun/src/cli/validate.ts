@@ -8,10 +8,10 @@ import {
 } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import {
-  getMdxLinks,
+  getMDXLinks,
   type LinkPosition,
   type LinkSource,
-  type MdxLinkOccurrence,
+  type MDXLinkOccurrence,
 } from '@renoun/mdx'
 
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
@@ -220,9 +220,9 @@ async function runStaticValidation(
       continue
     }
 
-    let occurrences: MdxLinkOccurrence[]
+    let occurrences: MDXLinkOccurrence[]
     try {
-      occurrences = getMdxLinks(source, filePath)
+      occurrences = getMDXLinks(source, filePath)
     } catch (error) {
       warnings.push(
         `[static] Failed to parse MDX file at ${relativePath(rootDirectory, filePath)}: ${error instanceof Error ? error.message : String(error)}`
@@ -469,7 +469,7 @@ type LinkResolution =
     }
 
 function resolveLinkTarget(
-  occurrence: MdxLinkOccurrence,
+  occurrence: MDXLinkOccurrence,
   routeMap: Map<string, string>
 ): LinkResolution {
   if (occurrence.kind === 'dynamic') {
@@ -671,7 +671,7 @@ function extractLinksFromHtml(html: string, originUrl: string): LiveLink[] {
       continue
     }
 
-    const hrefLower = href.toLowerCase();
+    const hrefLower = href.toLowerCase()
     if (
       hrefLower.startsWith('javascript:') ||
       hrefLower.startsWith('data:') ||

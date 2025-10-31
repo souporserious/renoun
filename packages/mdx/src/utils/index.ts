@@ -8,8 +8,8 @@ export type {
 export { getMDXExportStaticValues } from './get-mdx-export-static-values.js'
 export { getMDXContent, type MDXContentOptions } from './get-mdx-content.js'
 export {
-  getMdxLinks,
-  type MDXLinkOccurrence as MdxLinkOccurrence,
+  getMDXLinks,
+  type MDXLinkOccurrence,
   type LinkPosition,
   type LinkSource,
   type LinkKind,

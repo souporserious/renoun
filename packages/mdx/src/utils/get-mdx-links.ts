@@ -47,7 +47,7 @@ type HrefAttribute = HrefAttributeLiteral | HrefAttributeDynamic
  * Parse an MDX source string and collect all link occurrences found in markdown links,
  * reference links, and JSX href attributes.
  */
-export function getMdxLinks(
+export function getMDXLinks(
   source: string,
   filePath: string
 ): MDXLinkOccurrence[] {
