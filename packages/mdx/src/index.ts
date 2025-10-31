@@ -11,8 +11,13 @@ export {
   getMarkdownContent,
   getMDXExportStaticValues,
   getMDXContent,
+  getMdxLinks,
   type SlugCasing,
   type MarkdownComponents,
   type MarkdownContentOptions,
   type MDXContentOptions,
+  type MdxLinkOccurrence,
+  type LinkPosition,
+  type LinkSource,
+  type LinkKind,
 } from './utils/index.js'

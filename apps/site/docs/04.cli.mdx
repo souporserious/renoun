@@ -66,3 +66,32 @@ renoun theme theme.json
 If you are testing multiple variants, copy each JSON file, rename it to a descriptive filename, and
 prune them individually. You can then map the files to light and dark slots when configuring
 multiple themes.
+
+## Validating links
+
+Use `renoun validate` to check for broken internal links in your MDX content or on a running site.
+
+- **Static analysis (default)**: Parses MDX to collect links and validates them against routes inferred from your MDX file structure. External links and dynamic JSX `href` values are skipped. Files and directories matched by your root `.gitignore` are ignored.
+- **Runtime crawler (URL)**: Follows links on a running site and checks responses.
+
+### Usage
+
+Run static MDX analysis across the workspace:
+
+```bash
+renoun validate
+```
+
+Run static MDX analysis only for files under the provided directory:
+
+```bash
+renoun validate ./docs
+```
+
+Run live validation by crawling the provided URL:
+
+```bash
+renoun validate http://localhost:3000/
+```
+
+When broken links are found, the command reports the source MDX file and the normalized link path (for static), or the failing URL and HTTP status (for live).
