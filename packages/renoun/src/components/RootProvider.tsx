@@ -1,4 +1,6 @@
 import React, { Children, cloneElement, isValidElement } from 'react'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 
 import { parseGitSpecifier } from '../file-system/Repository.js'
 import { hasMultipleThemes } from '../utils/get-theme.js'
@@ -122,6 +124,32 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   }
   if (siteUrl !== undefined) {
     overrides.siteUrl = siteUrl
+  }
+  // Derive siteUrl from nearest package.json homepage if not explicitly provided
+  if (overrides.siteUrl === undefined) {
+    try {
+      let currentDir = process.cwd()
+      let previousDir: string | undefined
+      while (currentDir && currentDir !== previousDir) {
+        const packagePath = join(currentDir, 'package.json')
+        if (existsSync(packagePath)) {
+          const packageJson = JSON.parse(readFileSync(packagePath, 'utf8')) as {
+            homepage?: unknown
+          }
+          if (
+            typeof packageJson.homepage === 'string' &&
+            packageJson.homepage.trim().length > 0
+          ) {
+            overrides.siteUrl = packageJson.homepage.trim()
+            break
+          }
+        }
+        previousDir = currentDir
+        currentDir = dirname(currentDir)
+      }
+    } catch {
+      // ignore and leave siteUrl undefined
+    }
   }
   if (defaultPackageManager) {
     overrides.defaultPackageManager = defaultPackageManager
