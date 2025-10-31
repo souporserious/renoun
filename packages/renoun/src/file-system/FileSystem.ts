@@ -1,5 +1,9 @@
 import { Minimatch } from 'minimatch'
 import type { SyntaxKind, ts } from '../utils/ts-morph.js'
+import type {
+  ReadableStream as NodeReadableStream,
+  WritableStream as NodeWritableStream,
+} from 'node:stream/web'
 
 import {
   getFileExports,
@@ -19,6 +23,16 @@ import {
 import { parseJsonWithComments } from '../utils/parse-json-with-comments.js'
 import type { TypeFilter } from '../utils/resolve-type.js'
 import type { DirectoryEntry } from './types.js'
+
+export type FileSystemWriteFileContent =
+  | string
+  | Uint8Array
+  | ArrayBuffer
+  | ArrayBufferView
+
+export type FileReadableStream = NodeReadableStream<Uint8Array>
+
+export type FileWritableStream = NodeWritableStream<Uint8Array>
 
 export interface FileSystemOptions {
   /** Path to the tsconfig.json file to use when analyzing types and determining if a file is excluded. */
@@ -81,8 +95,34 @@ export abstract class FileSystem {
 
   abstract readFile(path: string): Promise<string>
 
+  abstract readFileBinarySync(path: string): Uint8Array
+
+  abstract readFileBinary(path: string): Promise<Uint8Array>
+
+  abstract readFileStream(path: string): FileReadableStream
+
+  abstract writeFileSync(
+    path: string,
+    content: FileSystemWriteFileContent
+  ): void
+
+  abstract writeFile(
+    path: string,
+    content: FileSystemWriteFileContent
+  ): Promise<void>
+
+  abstract writeFileStream(path: string): FileWritableStream
+
   /** Check synchronously if a file exists at the given path. */
   abstract fileExistsSync(path: string): boolean
+
+  async fileExists(path: string): Promise<boolean> {
+    return this.fileExistsSync(path)
+  }
+
+  abstract deleteFileSync(path: string): void
+
+  abstract deleteFile(path: string): Promise<void>
 
   #getTsConfig(): TsConfig | undefined {
     if (!this.fileExistsSync(this.#tsConfigPath)) {

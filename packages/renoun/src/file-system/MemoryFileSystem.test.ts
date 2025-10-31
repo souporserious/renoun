@@ -67,6 +67,41 @@ describe('MemoryFileSystem', () => {
     await expect(fileSystem.readFile('readme.txt')).resolves.toBe('hello')
   })
 
+  test('supports binary reads, streaming writes, and deletion', async () => {
+    const encoder = new TextEncoder()
+    const decoder = new TextDecoder()
+    const fileSystem = new MemoryFileSystem({})
+
+    await fileSystem.writeFile('text.txt', 'hello world')
+    expect(decoder.decode(await fileSystem.readFileBinary('text.txt'))).toBe(
+      'hello world'
+    )
+
+    const input = new Uint8Array([9, 8, 7])
+    await fileSystem.writeFile('binary.dat', input)
+    const binary = await fileSystem.readFileBinary('binary.dat')
+    expect(Array.from(binary)).toEqual([9, 8, 7])
+    expect(binary).not.toBe(input)
+
+    const writer = fileSystem.writeFileStream('stream.txt').getWriter()
+    await writer.write(encoder.encode('chunk-1 '))
+    await writer.write(encoder.encode('chunk-2'))
+    await writer.close()
+
+    const stream = fileSystem.readFileStream('stream.txt')
+    const reader = stream.getReader()
+    const first = await reader.read()
+    expect(first.done).toBe(false)
+    expect(decoder.decode(first.value!)).toBe('chunk-1 chunk-2')
+    expect((await reader.read()).done).toBe(true)
+    reader.releaseLock()
+
+    expect(await fileSystem.readFile('stream.txt')).toBe('chunk-1 chunk-2')
+
+    await fileSystem.deleteFile('stream.txt')
+    expect(await fileSystem.fileExists('stream.txt')).toBe(false)
+  })
+
   test('readDirectorySync lists files and directories at a path', () => {
     const fileSystem = new MemoryFileSystem({
       'a/b/c.txt': '1',

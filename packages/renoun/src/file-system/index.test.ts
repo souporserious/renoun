@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { beforeAll, describe, test, expect, expectTypeOf, vi } from 'vitest'
 import { runInNewContext } from 'node:vm'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import * as v from 'valibot'
@@ -94,11 +95,89 @@ describe('file system', () => {
     )
   })
 
+  test('node file system supports binary, stream, and write operations', async () => {
+    const fileSystem = new NodeFileSystem()
+    const rootDirectory = getRootDirectory()
+    const baseTmpDirectory = join(rootDirectory, 'tmp')
+    mkdirSync(baseTmpDirectory, { recursive: true })
+    const tempDirectory = mkdtempSync(join(baseTmpDirectory, 'fs-'))
+
+    const textFilePath = join(tempDirectory, 'hello.txt')
+    const binaryFilePath = join(tempDirectory, 'binary.bin')
+    const streamFilePath = join(tempDirectory, 'stream.txt')
+    const decoder = new TextDecoder()
+    const encoder = new TextEncoder()
+
+    try {
+      await fileSystem.writeFile(textFilePath, 'Hello World')
+      expect(await fileSystem.readFile(textFilePath)).toBe('Hello World')
+
+      const binary = await fileSystem.readFileBinary(textFilePath)
+      expect(decoder.decode(binary)).toBe('Hello World')
+
+      const readStream = fileSystem.readFileStream(textFilePath)
+      const reader = readStream.getReader()
+      const firstChunk = await reader.read()
+      expect(firstChunk.done).toBe(false)
+      expect(decoder.decode(firstChunk.value!)).toBe('Hello World')
+      expect((await reader.read()).done).toBe(true)
+      reader.releaseLock()
+
+      await fileSystem.writeFile(binaryFilePath, new Uint8Array([0, 1, 2]))
+      expect(await fileSystem.fileExists(binaryFilePath)).toBe(true)
+      await fileSystem.deleteFile(binaryFilePath)
+      expect(await fileSystem.fileExists(binaryFilePath)).toBe(false)
+
+      const writer = fileSystem.writeFileStream(streamFilePath).getWriter()
+      await writer.write(encoder.encode('Stream data'))
+      await writer.close()
+
+      expect(await fileSystem.readFile(streamFilePath)).toBe('Stream data')
+    } finally {
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('virtual file system read directory', async () => {
     const fileSystem = new MemoryFileSystem({ 'fixtures/utils/path.ts': '' })
     const entries = await fileSystem.readDirectory('fixtures/utils')
     expect(entries).toHaveLength(1)
     expect(entries[0].name).toBe('path.ts')
+  })
+
+  test('memory file system supports binary, stream, and write operations', async () => {
+    const fileSystem = new MemoryFileSystem({})
+    const decoder = new TextDecoder()
+    const encoder = new TextEncoder()
+
+    await fileSystem.writeFile('hello.txt', 'Hello Memory')
+    expect(await fileSystem.readFile('hello.txt')).toBe('Hello Memory')
+
+    const binary = await fileSystem.readFileBinary('hello.txt')
+    expect(decoder.decode(binary)).toBe('Hello Memory')
+
+    const writer = fileSystem.writeFileStream('stream.txt').getWriter()
+    await writer.write(encoder.encode('Chunk '))
+    await writer.write(encoder.encode('data'))
+    await writer.close()
+
+    const stream = fileSystem.readFileStream('stream.txt')
+    const reader = stream.getReader()
+    let text = ''
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) {
+        break
+      }
+      text += decoder.decode(value)
+    }
+    reader.releaseLock()
+    expect(text).toBe('Chunk data')
+
+    expect(await fileSystem.readFile('stream.txt')).toBe('Chunk data')
+
+    await fileSystem.deleteFile('stream.txt')
+    expect(await fileSystem.fileExists('stream.txt')).toBe(false)
   })
 
   test('directory with no configuration', async () => {

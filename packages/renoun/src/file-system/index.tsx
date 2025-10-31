@@ -46,7 +46,12 @@ import {
   relativePath,
 } from '../utils/path.js'
 import type { TypeFilter } from '../utils/resolve-type.js'
-import type { FileSystem } from './FileSystem.js'
+import type {
+  FileReadableStream,
+  FileSystem,
+  FileSystemWriteFileContent,
+  FileWritableStream,
+} from './FileSystem.js'
 import { NodeFileSystem } from './NodeFileSystem.js'
 import {
   Repository,
@@ -641,6 +646,50 @@ export class File<
   async getText(): Promise<string> {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.readFile(this.#path)
+  }
+
+  /** Get the binary contents of this file. */
+  async getBinary(): Promise<Uint8Array> {
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.readFileBinary(this.#path)
+  }
+
+  /** Get the contents of this file as an ArrayBuffer. */
+  async getArrayBuffer(): Promise<ArrayBuffer> {
+    const binary = await this.getBinary()
+    const arrayBuffer = new ArrayBuffer(binary.byteLength)
+    new Uint8Array(arrayBuffer).set(binary)
+    return arrayBuffer
+  }
+
+  /** Get a readable stream for this file. */
+  getStream(): FileReadableStream {
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.readFileStream(this.#path)
+  }
+
+  /** Write content to this file. */
+  async write(content: FileSystemWriteFileContent): Promise<void> {
+    const fileSystem = this.#directory.getFileSystem()
+    await fileSystem.writeFile(this.#path, content)
+  }
+
+  /** Create a writable stream for this file. */
+  writeStream(): FileWritableStream {
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.writeFileStream(this.#path)
+  }
+
+  /** Delete this file from the file system. */
+  async delete(): Promise<void> {
+    const fileSystem = this.#directory.getFileSystem()
+    await fileSystem.deleteFile(this.#path)
+  }
+
+  /** Check if this file exists in the file system. */
+  async exists(): Promise<boolean> {
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.fileExists(this.#path)
   }
 }
 
