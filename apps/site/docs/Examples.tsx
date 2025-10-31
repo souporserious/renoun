@@ -121,7 +121,7 @@ export async function Examples() {
         return {
           title,
           description,
-          homepage: homepage ?? null,
+          homepage,
           repositoryHref: `https://github.com/souporserious/renoun/tree/main/${repositoryPath}`,
         }
       })
