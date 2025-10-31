@@ -1,5 +1,4 @@
 import { Directory, isDirectory } from 'renoun'
-import { Logo } from 'renoun/components'
 import { styled } from 'restyle'
 import { z } from 'zod'
 
@@ -11,10 +10,8 @@ const StyledCard = styled('div', {
   flexDirection: 'column',
   alignItems: 'stretch',
   borderRadius: '0.25rem',
+  overflow: 'hidden',
   backgroundColor: 'var(--color-surface-interactive)',
-  '&:hover': {
-    backgroundColor: 'var(--color-surface-interactive-highlighted)',
-  },
   '& h3': {
     display: 'flex',
     flexDirection: 'column',
@@ -31,19 +28,11 @@ const StyledCard = styled('div', {
     lineHeight: 'var(--line-height-body-2)',
     textAlign: 'center',
     padding: '1.5rem 0.75rem',
-    minHeight: 'calc(var(--line-height-body-2) * 3 + 3rem)',
+    minHeight: 'calc(var(--line-height-body-2) * 2 + 3rem)',
     letterSpacing: '0.025em',
     textWrap: 'balance',
     color: 'var(--color-foreground-interactive)',
   },
-})
-
-const StyledOverlayLink = styled('a', {
-  position: 'absolute',
-  inset: 0,
-  borderRadius: '0.25rem',
-  textDecoration: 'none !important',
-  zIndex: 1,
 })
 
 const StyledContent = styled('div', {
@@ -54,23 +43,45 @@ const StyledContent = styled('div', {
   flexDirection: 'column',
 })
 
-const StyledSourceLink = styled('a', {
-  position: 'absolute',
-  top: '0.5rem',
-  right: '0.5rem',
-  zIndex: 2,
-  display: 'inline-flex',
+const StyledFooter = styled('div', {
+  display: 'flex',
+  borderTop: '1px solid var(--color-separator)',
+  borderBottom: '1px solid var(--color-separator)',
+})
+
+const StyledFooterLink = styled('a', {
+  flex: 1,
+  display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  width: '28px',
-  height: '28px',
-  borderRadius: '6px',
-  color: 'var(--color-foreground-secondary)',
+  padding: '0.75rem 0.5rem',
+  fontSize: 'var(--font-size-button-2)',
+  fontWeight: 'var(--font-weight-button)',
+  letterSpacing: '0.02em',
+  color: 'var(--color-foreground-interactive)',
   backgroundColor: 'transparent',
-  textDecoration: 'none',
+  textDecoration: 'none !important',
+  outline: 'none',
   ':hover': {
-    color: 'var(--color-foreground-primary)',
+    color: 'var(--color-foreground-interactive-highlighted)',
     backgroundColor: 'var(--color-surface-secondary)',
+    textDecoration: 'none !important',
+    outline: 'none',
+  },
+  ':focus': {
+    outline: 'none',
+    textDecoration: 'none !important',
+  },
+  ':focus-visible': {
+    outline: 'none',
+    textDecoration: 'none !important',
+  },
+  ':active': {
+    outline: 'none',
+    textDecoration: 'none !important',
+  },
+  ':not(:first-child)': {
+    borderLeft: '1px solid var(--color-separator)',
   },
 })
 
@@ -92,7 +103,7 @@ export async function Examples() {
   const examples = (
     await Promise.all(
       directories.map(async (entry) => {
-        const packageJson = await entry.getFile('package', 'json')
+        const packageJson = await entry.getFile('package.json')
         const { name, description, homepage } = packageSchema.parse(
           await packageJson.get()
         )
@@ -125,20 +136,27 @@ export async function Examples() {
     <Row variant="medium">
       {examples.map((example) => (
         <StyledCard key={example.title}>
-          <StyledOverlayLink
-            href={example.homepage ?? example.repositoryHref}
-            aria-label={`${example.title} ${example.homepage ? 'live site' : 'source code'}`}
-          />
-          <StyledSourceLink
-            href={example.repositoryHref}
-            aria-label={`${example.title} source code on GitHub`}
-          >
-            <Logo variant="gitHost" css={{ width: 18, height: 18 }} />
-          </StyledSourceLink>
           <StyledContent>
             <h3>{example.title}</h3>
+            <StyledFooter>
+              {example.homepage && (
+                <StyledFooterLink
+                  href={example.homepage}
+                  aria-label={`${example.title} live demo`}
+                >
+                  Demo
+                </StyledFooterLink>
+              )}
+              <StyledFooterLink
+                href={example.repositoryHref}
+                aria-label={`${example.title} source code on GitHub`}
+              >
+                Source
+              </StyledFooterLink>
+            </StyledFooter>
             <p>{example.description}</p>
           </StyledContent>
+          {/* Footer moved above description */}
         </StyledCard>
       ))}
     </Row>
