@@ -5,8 +5,8 @@ import { RootProvider } from 'renoun'
 import './layout.css'
 
 export const metadata: Metadata = {
-  title: 'Design System',
-  description: 'Design system documentation built with renoun and Next.js.',
+  title: 'Package',
+  description: `A simple package documentation example built with renoun and Next.js.`,
   robots: {
     index: false,
     follow: false,

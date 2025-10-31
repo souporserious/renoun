@@ -8,3 +8,10 @@ export const ComponentsCollection = new Directory({
     mdx: (path) => import(`./components/${path}.mdx`),
   },
 })
+
+export const HooksDirectory = new Directory({
+  path: 'hooks',
+  loader: {
+    ts: (path) => import(`./hooks/${path}.ts`),
+  },
+})
