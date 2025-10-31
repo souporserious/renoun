@@ -298,8 +298,12 @@ function TypeNodeRouter({
       return <ClassSection node={node} components={components} id={id} />
     case 'Component':
       return <ComponentSection node={node} components={components} id={id} />
+    case 'ComponentType':
+      return <ComponentTypeSection node={node} components={components} id={id} />
     case 'Function':
       return <FunctionSection node={node} components={components} id={id} />
+    case 'FunctionType':
+      return <FunctionTypeSection node={node} components={components} id={id} />
     case 'Interface':
       return <MembersSection node={node} components={components} id={id} />
     case 'TypeAlias':
@@ -349,6 +353,18 @@ function TypeNodeRouter({
       return <MappedSection node={node} components={components} id={id} />
     case 'IntersectionType':
       return <IntersectionSection node={node} components={components} id={id} />
+    case 'ConditionalType':
+      return (
+        <ConditionalSection node={node} components={components} id={id} />
+      )
+    case 'IndexedAccessType':
+      return <IndexedAccessSection node={node} components={components} id={id} />
+    case 'TypeOperator':
+      return <TypeOperatorSection node={node} components={components} id={id} />
+    case 'TypeQuery':
+      return <TypeQuerySection node={node} components={components} id={id} />
+    case 'InferType':
+      return <InferTypeSection node={node} components={components} id={id} />
     case 'UnionType':
     case 'Tuple':
     case 'TypeLiteral':
@@ -357,8 +373,14 @@ function TypeNodeRouter({
     case 'Number':
     case 'Boolean':
     case 'Symbol':
+    case 'BigInt':
+    case 'Object':
     case 'Any':
     case 'Unknown':
+    case 'Void':
+    case 'Null':
+    case 'Undefined':
+    case 'Never':
       return <TypeExpressionSection node={node} components={components} />
     default:
       throw new Error(
@@ -711,6 +733,64 @@ function renderDocumentation(
   return <components.Column gap="medium">{items}</components.Column>
 }
 
+function renderTypeParametersDetail(
+  typeParameters: Kind.TypeParameter[] | undefined,
+  components: InternalReferenceComponents,
+  kind: Kind['kind'],
+  key?: React.Key
+) {
+  if (!typeParameters?.length) {
+    return null
+  }
+
+  return (
+    <TypeDetail
+      key={key}
+      label="Type Parameters"
+      components={components}
+      kind={kind}
+    >
+      <TypeTable
+        rows={typeParameters}
+        headers={[
+          'Parameter',
+          'Constraint',
+          'Default',
+        ]}
+        renderRow={(typeParameter, hasSubRow) => (
+          <>
+            <components.TableData index={0} hasSubRow={hasSubRow}>
+              <components.Code>
+                {typeParameter.name ?? typeParameter.text}
+              </components.Code>
+              {typeParameter.isInferred ? ' (inferred)' : ''}
+            </components.TableData>
+            <components.TableData index={1} hasSubRow={hasSubRow}>
+              {typeParameter.constraintType ? (
+                <components.Code>
+                  {typeParameter.constraintType.text}
+                </components.Code>
+              ) : (
+                <components.Code>—</components.Code>
+              )}
+            </components.TableData>
+            <components.TableData index={2} hasSubRow={hasSubRow}>
+              {typeParameter.defaultType ? (
+                <components.Code>
+                  {typeParameter.defaultType.text}
+                </components.Code>
+              ) : (
+                <components.Code>—</components.Code>
+              )}
+            </components.TableData>
+          </>
+        )}
+        components={components}
+      />
+    </TypeDetail>
+  )
+}
+
 function renderCallSignatureDetails(
   signature: TypeOfKind<'CallSignature'>,
   components: InternalReferenceComponents,
@@ -751,23 +831,14 @@ function renderCallSignatureDetails(
     )
   }
 
-  if (signature.typeParameters?.length) {
-    items.push(
-      <TypeDetail
-        key="generics"
-        label="Type Parameters"
-        components={components}
-        kind={signature.kind}
-      >
-        <components.Column gap="small">
-          {signature.typeParameters.map((typeParameter, index) => (
-            <components.Code key={typeParameter.name ?? index}>
-              {typeParameter.text}
-            </components.Code>
-          ))}
-        </components.Column>
-      </TypeDetail>
-    )
+  const typeParametersDetail = renderTypeParametersDetail(
+    signature.typeParameters,
+    components,
+    signature.kind,
+    'generics'
+  )
+  if (typeParametersDetail) {
+    items.push(typeParametersDetail)
   }
 
   if (signature.thisType) {
@@ -999,6 +1070,47 @@ function ClassSection({
   )
 }
 
+function renderComponentParameterContent(
+  parameter: Kind.ComponentParameter | undefined,
+  components: InternalReferenceComponents
+) {
+  if (parameter?.type.kind === 'TypeLiteral') {
+    return (
+      <TypeTable
+        rows={parameter.type.members}
+        headers={['Property', 'Type', 'Default Value']}
+        renderRow={(property, hasSubRow) =>
+          property.kind === 'PropertySignature' ? (
+            <>
+              <components.TableData index={0} hasSubRow={hasSubRow}>
+                {property.name}
+                {property.isOptional ? '?' : ''}
+              </components.TableData>
+              <components.TableData index={1} hasSubRow={hasSubRow}>
+                <components.Code>{property.type.text}</components.Code>
+              </components.TableData>
+              <components.TableData index={2} hasSubRow={hasSubRow}>
+                <components.Code>—</components.Code>
+              </components.TableData>
+            </>
+          ) : (
+            <components.TableData
+              index={0}
+              hasSubRow={hasSubRow}
+              colSpan={3}
+            >
+              <components.Code>{property.text}</components.Code>
+            </components.TableData>
+          )
+        }
+        components={components}
+      />
+    )
+  }
+
+  return <components.Code>{getParameterText(parameter)}</components.Code>
+}
+
 function ComponentSection({
   node,
   components,
@@ -1025,52 +1137,53 @@ function ComponentSection({
                 components={components}
                 kind={node.kind}
               >
-                {signature.parameter?.type.kind === 'TypeLiteral' ? (
-                  <TypeTable
-                    rows={signature.parameter.type.members}
-                    headers={['Property', 'Type', 'Default Value']}
-                    renderRow={(property, hasSubRow) =>
-                      property.kind === 'PropertySignature' ? (
-                        <>
-                          <components.TableData index={0} hasSubRow={hasSubRow}>
-                            {property.name}
-                            {property.isOptional ? '?' : ''}
-                          </components.TableData>
-                          <components.TableData index={1} hasSubRow={hasSubRow}>
-                            <components.Code>
-                              {property.type.text}
-                            </components.Code>
-                          </components.TableData>
-                          <components.TableData index={2} hasSubRow={hasSubRow}>
-                            {/* TODO: immediate type literals should have an initializer e.g. function Button({ variant = 'outline' }: { variant: 'fill' | 'outline' }) {}, this could be a special ImmediateTypeLiteral/Object kind that provides it. */}
-                            {/* <InitializerValue
-                          value={property.initializer}
-                          components={components}
-                        /> */}
-                          </components.TableData>
-                        </>
-                      ) : (
-                        <components.TableData
-                          index={0}
-                          hasSubRow={hasSubRow}
-                          colSpan={3}
-                        >
-                          <components.Code>{property.text}</components.Code>
-                        </components.TableData>
-                      )
-                    }
-                    components={components}
-                  />
-                ) : (
-                  <components.Code>
-                    {getParameterText(signature.parameter)}
-                  </components.Code>
-                )}
+                {renderComponentParameterContent(signature.parameter, components)}
               </TypeDetail>
             </components.Column>
           )
         })}
       </components.Signatures>
+    </TypeSection>
+  )
+}
+
+function ComponentTypeSection({
+  node,
+  components,
+  id,
+}: {
+  node: TypeOfKind<'ComponentType'>
+  components: InternalReferenceComponents
+  id?: string
+}) {
+  const modifiers: string[] = []
+  if (node.isAsync) modifiers.push('async')
+  if (node.isGenerator) modifiers.push('generator')
+
+  return (
+    <TypeSection kind={node.kind} id={id} components={components}>
+      <TypeDetail label="Signature" components={components} kind={node.kind}>
+        <components.Code>{node.text}</components.Code>
+      </TypeDetail>
+      {renderTypeParametersDetail(node.typeParameters, components, node.kind)}
+      {node.thisType ? (
+        <TypeDetail label="This Type" components={components} kind={node.kind}>
+          <components.Code>{node.thisType.text}</components.Code>
+        </TypeDetail>
+      ) : null}
+      <TypeDetail label="Properties" components={components} kind={node.kind}>
+        {renderComponentParameterContent(node.parameter, components)}
+      </TypeDetail>
+      {node.returnType ? (
+        <TypeDetail label="Returns" components={components} kind={node.kind}>
+          <components.Code>{node.returnType.text}</components.Code>
+        </TypeDetail>
+      ) : null}
+      {modifiers.length ? (
+        <TypeDetail label="Modifiers" components={components} kind={node.kind}>
+          <components.Code>{modifiers.join(', ')}</components.Code>
+        </TypeDetail>
+      ) : null}
     </TypeSection>
   )
 }
@@ -1137,6 +1250,56 @@ function FunctionSection({
   )
 }
 
+function FunctionTypeSection({
+  node,
+  components,
+  id,
+}: {
+  node: TypeOfKind<'FunctionType'>
+  components: InternalReferenceComponents
+  id?: string
+}) {
+  const modifiers: string[] = []
+  if (node.isAsync) modifiers.push('async')
+  if (node.isGenerator) modifiers.push('generator')
+
+  return (
+    <TypeSection kind={node.kind} id={id} components={components}>
+      <TypeDetail label="Signature" components={components} kind={node.kind}>
+        <components.Code>{node.text}</components.Code>
+      </TypeDetail>
+      {renderTypeParametersDetail(node.typeParameters, components, node.kind)}
+      {node.thisType ? (
+        <TypeDetail label="This Type" components={components} kind={node.kind}>
+          <components.Code>{node.thisType.text}</components.Code>
+        </TypeDetail>
+      ) : null}
+      {node.parameters.length ? (
+        <TypeDetail label="Parameters" components={components} kind={node.kind}>
+          <TypeTable
+            rows={node.parameters}
+            headers={['Parameter', 'Type', 'Default Value']}
+            renderRow={(parameter, hasSubRow) =>
+              renderParameterRow(parameter, components, hasSubRow)
+            }
+            components={components}
+          />
+        </TypeDetail>
+      ) : null}
+      {node.returnType ? (
+        <TypeDetail label="Returns" components={components} kind={node.kind}>
+          <components.Code>{node.returnType.text}</components.Code>
+        </TypeDetail>
+      ) : null}
+      {modifiers.length ? (
+        <TypeDetail label="Modifiers" components={components} kind={node.kind}>
+          <components.Code>{modifiers.join(', ')}</components.Code>
+        </TypeDetail>
+      ) : null}
+    </TypeSection>
+  )
+}
+
 function TypeAliasSection({
   node,
   components,
@@ -1154,6 +1317,7 @@ function TypeAliasSection({
       id={id}
       components={components}
     >
+      {renderTypeParametersDetail(node.typeParameters, components, node.kind)}
       <TypeDetail label="Type" components={components} kind={node.kind}>
         <components.Code>{node.type.text}</components.Code>
       </TypeDetail>
@@ -1197,6 +1361,7 @@ function MembersSection({
       id={id}
       components={components}
     >
+      {renderTypeParametersDetail(node.typeParameters, components, node.kind)}
       {propertySignatures.length > 0 ? (
         <TypeDetail label="Properties" components={components} kind={node.kind}>
           <TypeTable
@@ -1306,6 +1471,113 @@ function MappedSection({
           {node.isOptional ? 'optional' : null}
           {!node.isReadonly && !node.isOptional ? '—' : null}
         </components.Code>
+      </TypeDetail>
+    </TypeSection>
+  )
+}
+
+function IndexedAccessSection({
+  node,
+  components,
+  id,
+}: {
+  node: TypeOfKind<'IndexedAccessType'>
+  components: InternalReferenceComponents
+  id?: string
+}) {
+  return (
+    <TypeSection kind={node.kind} id={id} components={components}>
+      <TypeDetail label="Object Type" components={components} kind={node.kind}>
+        <components.Code>{node.objectType.text}</components.Code>
+      </TypeDetail>
+      <TypeDetail label="Index Type" components={components} kind={node.kind}>
+        <components.Code>{node.indexType.text}</components.Code>
+      </TypeDetail>
+      <TypeDetail label="Result" components={components} kind={node.kind}>
+        <components.Code>{node.text}</components.Code>
+      </TypeDetail>
+    </TypeSection>
+  )
+}
+
+function TypeOperatorSection({
+  node,
+  components,
+  id,
+}: {
+  node: TypeOfKind<'TypeOperator'>
+  components: InternalReferenceComponents
+  id?: string
+}) {
+  return (
+    <TypeSection kind={node.kind} id={id} components={components}>
+      <TypeDetail label="Operator" components={components} kind={node.kind}>
+        <components.Code>{node.operator}</components.Code>
+      </TypeDetail>
+      <TypeDetail label="Operand" components={components} kind={node.kind}>
+        <components.Code>{node.type.text}</components.Code>
+      </TypeDetail>
+      <TypeDetail label="Result" components={components} kind={node.kind}>
+        <components.Code>{node.text}</components.Code>
+      </TypeDetail>
+    </TypeSection>
+  )
+}
+
+function TypeQuerySection({
+  node,
+  components,
+  id,
+}: {
+  node: TypeOfKind<'TypeQuery'>
+  components: InternalReferenceComponents
+  id?: string
+}) {
+  return (
+    <TypeSection kind={node.kind} id={id} components={components}>
+      <TypeDetail label="Expression" components={components} kind={node.kind}>
+        <components.Code>{node.name}</components.Code>
+      </TypeDetail>
+      {node.typeArguments?.length ? (
+        <TypeDetail
+          label="Type Arguments"
+          components={components}
+          kind={node.kind}
+        >
+          <components.Column gap="small">
+            {node.typeArguments.map((typeArgument, index) => (
+              <components.Code key={index}>{typeArgument.text}</components.Code>
+            ))}
+          </components.Column>
+        </TypeDetail>
+      ) : null}
+      <TypeDetail label="Result" components={components} kind={node.kind}>
+        <components.Code>{node.text}</components.Code>
+      </TypeDetail>
+    </TypeSection>
+  )
+}
+
+function InferTypeSection({
+  node,
+  components,
+  id,
+}: {
+  node: TypeOfKind<'InferType'>
+  components: InternalReferenceComponents
+  id?: string
+}) {
+  const typeParameterDetail = renderTypeParametersDetail(
+    [node.typeParameter],
+    components,
+    node.kind
+  )
+
+  return (
+    <TypeSection kind={node.kind} id={id} components={components}>
+      {typeParameterDetail}
+      <TypeDetail label="Result" components={components} kind={node.kind}>
+        <components.Code>{node.text}</components.Code>
       </TypeDetail>
     </TypeSection>
   )
