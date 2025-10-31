@@ -834,6 +834,31 @@ describe('file system', () => {
     ).rejects.toThrowError(FileNotFoundError)
   })
 
+  test('resolves package.json inside a directory named "package"', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'examples/package/package.json': '{"name":"@examples/package"}',
+      'examples/package/app/page.tsx': '',
+    })
+    const examples = new Directory({ path: 'examples', fileSystem })
+    const packageDirectory = await examples.getDirectory('package')
+    const packageJson = await packageDirectory.getFile('package', 'json')
+
+    expect(packageJson).toBeInstanceOf(JSONFile)
+    expect(packageJson.getAbsolutePath()).toBe('/examples/package/package.json')
+  })
+
+  test('prefers file over same-named directory when extension specified', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'foo/package.json': '{"name":"foo"}',
+      'foo/package/index.ts': '',
+    })
+    const root = new Directory({ path: 'foo', fileSystem })
+    const packageJson = await root.getFile('package', 'json')
+
+    expect(packageJson).toBeInstanceOf(JSONFile)
+    expect(packageJson.getAbsolutePath()).toBe('/foo/package.json')
+  })
+
   test('index file', async () => {
     const fixturesDirectory = new Directory()
     const file = await fixturesDirectory.getFile([

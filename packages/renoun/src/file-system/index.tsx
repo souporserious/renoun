@@ -2298,6 +2298,18 @@ export class Directory<
 
     let fallback: FileSystemEntry<LoaderTypes> | undefined
 
+    // If an extension was requested and there are no remaining segments,
+    // prefer a file match over a directory with the same base name.
+    if (allExtensions && remainingSegments.length === 0) {
+      for (const entry of entries) {
+        if (!(entry instanceof File)) continue
+        const baseSlug = createSlug(entry.getBaseName(), this.#slugCasing)
+        if (baseSlug !== currentSegment) continue
+        if (!allExtensions.includes(entry.getExtension())) continue
+        return entry
+      }
+    }
+
     for (const entry of entries) {
       const baseSlug = createSlug(entry.getBaseName(), this.#slugCasing)
 
