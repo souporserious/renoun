@@ -1,24 +1,24 @@
 import type { FileSystemEntry } from 'renoun'
 import Link from 'next/link'
 
-import { ComponentsCollection } from '@/collections'
+import { HooksDirectory } from '@/collections'
 
-export default async function Components() {
-  const entries = await ComponentsCollection.getEntries()
+export default async function Hooks() {
+  const entries = await HooksDirectory.getEntries()
 
   return (
     <main className="prose prose-slate dark:prose-invert max-w-none">
-      <h1 className="!mt-0">Components</h1>
+      <h1 className="!mt-0">Hooks</h1>
       <ul className="list-none p-0 m-0 divide-y divide-gray-200 dark:divide-gray-800 border rounded-lg border-gray-200 dark:border-gray-800">
         {entries.map((entry) => (
-          <ComponentEntry key={entry.getPathname()} entry={entry} />
+          <HookEntry key={entry.getPathname()} entry={entry} />
         ))}
       </ul>
     </main>
   )
 }
 
-async function ComponentEntry({ entry }: { entry: FileSystemEntry<any> }) {
+async function HookEntry({ entry }: { entry: FileSystemEntry<any> }) {
   return (
     <li>
       <Link

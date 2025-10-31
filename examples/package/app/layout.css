@@ -1,27 +1,18 @@
-:root {
-  --color-background: #f8f8f8;
-  --color-foreground: #333;
+@import 'tailwindcss';
+@plugin "@tailwindcss/typography";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #000000;
-    --color-foreground: #f8f8f8;
-  }
+h1,
+h2,
+h3,
+h4 {
+  text-wrap: balance;
 }
 
-body {
-  font-family: sans-serif;
-  display: grid;
-  grid-template-columns: 1fr minmax(0, 60rem) 1fr;
-  background-color: var(--color-background);
-  color: var(--color-foreground);
-}
-
-body > * {
-  grid-column: 2;
-}
-
-a {
-  color: inherit;
+p {
+  text-wrap: pretty;
 }

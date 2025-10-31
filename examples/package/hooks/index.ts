@@ -1,2 +1,2 @@
-export * from './use-counter'
-export * from './use-hover'
+export * from './useCounter'
+export * from './useHover'

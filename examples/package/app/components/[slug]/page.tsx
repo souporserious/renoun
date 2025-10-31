@@ -75,21 +75,14 @@ export default async function Component(
   const [previousEntry, nextEntry] = await parentDirectory.getSiblings()
 
   return (
-    <div
-      css={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '4rem 0',
-        gap: '4rem',
-      }}
-    >
-      <div>
-        <h1>{title}</h1>
+    <div className="flex flex-col gap-12">
+      <div className="prose prose-slate dark:prose-invert max-w-none">
+        <h1 className="!mt-0">{title}</h1>
         {Readme ? <Readme /> : null}
       </div>
 
       {mainEntry ? (
-        <div>
+        <div className="prose prose-slate dark:prose-invert max-w-none">
           <h2>API Reference</h2>
           <Reference source={mainEntry} />
         </div>
@@ -97,16 +90,8 @@ export default async function Component(
 
       {exampleFiles ? (
         <div>
-          <h2 css={{ margin: '0 0 2rem' }}>Examples</h2>
-          <ul
-            css={{
-              listStyle: 'none',
-              display: 'grid',
-              padding: 0,
-              margin: 0,
-              gap: '2rem',
-            }}
-          >
+          <h2 className="text-xl font-semibold mb-6">Examples</h2>
+          <ul className="list-none p-0 m-0 grid gap-6">
             {exampleFiles.map(async (file) => {
               const fileExports = await file.getExports()
 
@@ -122,28 +107,15 @@ export default async function Component(
         </div>
       ) : null}
 
-      <div>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            padding: '1rem',
-          }}
-        >
+      <div className="border-t border-gray-200 dark:border-gray-800 pt-6">
+        <div className="grid grid-cols-2 px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
           {lastCommitDate ? (
-            <div
-              style={{
-                gridColumn: 1,
-                fontSize: 'var(--font-size-body-3)',
-                color: 'var(--color-foreground-secondary)',
-                textAlign: 'left',
-              }}
-            >
+            <div className="text-left">
               Last updated{' '}
               <time
                 dateTime={lastCommitDate.toISOString()}
                 itemProp="dateModified"
-                style={{ fontWeight: 600 }}
+                className="font-semibold"
               >
                 {lastCommitDate.toLocaleString('en', {
                   year: '2-digit',
@@ -154,28 +126,23 @@ export default async function Component(
             </div>
           ) : null}
 
-          <Link
-            source={componentEntry}
-            variant={
-              process.env.NODE_ENV === 'development'
-                ? 'editor'
-                : isDirectory(componentEntry)
-                  ? 'source'
-                  : 'edit'
-            }
-            style={{ gridColumn: 2, textAlign: 'right' }}
-          >
-            Edit this page
-          </Link>
+          <div className="text-right">
+            <Link
+              source={componentEntry}
+              variant={
+                process.env.NODE_ENV === 'development'
+                  ? 'editor'
+                  : isDirectory(componentEntry)
+                    ? 'source'
+                    : 'edit'
+              }
+            >
+              Edit this page
+            </Link>
+          </div>
         </div>
 
-        <nav
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            padding: '1rem',
-          }}
-        >
+        <nav className="grid grid-cols-2 px-4 py-2">
           {previousEntry ? (
             <SiblingLink entry={previousEntry} direction="previous" />
           ) : null}
@@ -200,32 +167,42 @@ async function Preview({
   const isComponent = typeof Value === 'function' && isUppercase
 
   return (
-    <section key={name}>
+    <section key={name} className="flex flex-col gap-3">
       <header>
-        <Stack flexDirection="row" alignItems="baseline" gap="0.5rem">
-          <h3 css={{ margin: 0 }}>{name}</h3>
-          <Link source={fileExport}>View source</Link>
-        </Stack>
-        {description ? <p>{description}</p> : null}
+        <div className="flex items-center gap-2">
+          <h3 className="m-0 text-lg font-semibold flex-1">{name}</h3>
+          <Link
+            source={fileExport}
+            className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+            aria-label="View source"
+            title="View source"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 13v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <path d="M15 3h6v6" />
+              <path d="M10 14 21 3" />
+            </svg>
+          </Link>
+        </div>
+        {description ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400 m-0">
+            {description}
+          </p>
+        ) : null}
       </header>
 
-      <div
-        css={{
-          display: 'grid',
-          gridTemplateRows: isComponent ? 'minmax(16rem, 1fr) auto' : undefined,
-          borderRadius: 5,
-          boxShadow: '0 0 0 1px #3b4252',
-          overflow: 'clip',
-        }}
-      >
+      <div className="rounded-md border border-gray-200 dark:border-gray-800 overflow-hidden">
         {isComponent ? (
-          <div
-            css={{
-              padding: '4rem',
-              margin: 'auto',
-              overflow: 'auto',
-            }}
-          >
+          <div className="p-8 overflow-auto">
             <Value />
           </div>
         ) : null}

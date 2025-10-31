@@ -1,14 +1,31 @@
 import { styled } from 'restyle'
+import { Box } from '@/components'
 
-import { Box } from '..'
+const Title = styled('div', {
+  fontWeight: 600,
+  marginBottom: 6,
+})
 
-const StyledText = styled('span', { color: 'tomato' })
+const Description = styled('p', {
+  margin: 0,
+  opacity: 0.9,
+})
 
-/** A basic example of using the `Box` component */
+/** A practical card-like container using padding and borders. */
 export default function BasicUsage() {
   return (
-    <Box>
-      Hello <StyledText>Box</StyledText>
+    <Box
+      padding={16}
+      style={{
+        borderRadius: 8,
+        border: '1px solid rgba(148, 163, 184, 0.25)',
+        backgroundColor: 'rgba(148, 163, 184, 0.06)',
+      }}
+    >
+      <Title>Box container</Title>
+      <Description>
+        Use <code>Box</code> to create simple layout surfaces with padding.
+      </Description>
     </Box>
   )
 }

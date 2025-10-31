@@ -9,6 +9,7 @@ import * as React from 'react'
  *
  * export default function Example() {
  *   const [hover, hoverProps] = useHover()
+ *
  *   return (
  *     <div {...hoverProps}>
  *       Hover me! {hover ? 'Hovered' : 'Not hovered'}

@@ -1,8 +1,21 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { Geist, Geist_Mono } from 'next/font/google'
 import { RootProvider } from 'renoun'
 
+import { Sidebar } from '@/ui/Sidebar'
+
 import './layout.css'
+
+const geistSans = Geist({
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
+})
+
+const geistMono = Geist_Mono({
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
+})
 
 export const metadata: Metadata = {
   title: 'Package',
@@ -23,25 +36,25 @@ export default function RootLayout({
       git="souporserious/renoun"
       siteUrl="https://renoun.dev"
       theme={{
-        light: 'everforest-light',
-        dark: [
-          'dracula-soft',
-          {
-            colors: {
-              'panel.border': '#666',
-            },
-          },
-        ],
+        light: 'dracula',
+        dark: 'nord',
       }}
       languages={['tsx', 'typescript']}
     >
-      <html lang="en">
-        <body>
-          <nav css={{ display: 'flex', gap: '1rem' }}>
-            <Link href="/">Home</Link>
-            <Link href="/components">Components</Link>
-          </nav>
-          {children}
+      <html
+        lang="en"
+        className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+      >
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
+        >
+          <Sidebar />
+
+          <main className="md:pl-64 min-h-screen">
+            <div className="px-10 pt-24 pb-10 md:pt-24 md:pb-16 max-w-4xl mx-auto">
+              {children}
+            </div>
+          </main>
         </body>
       </html>
     </RootProvider>

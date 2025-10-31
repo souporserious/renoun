@@ -1,6 +1,6 @@
 import { styled } from 'restyle'
 
-export type BoxProps = {
+export interface BoxProps {
   padding?: number | string
   backgroundColor?: string
   color?: string
