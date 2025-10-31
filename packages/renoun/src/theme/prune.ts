@@ -1,4 +1,4 @@
-import { grammars as bundledGrammarMap } from '../grammars'
+import { grammars as bundledGrammarMap } from '../grammars/index.js'
 
 export interface VSCodeTheme {
   name?: string
@@ -82,8 +82,10 @@ export function pruneTheme(
     }
   }
 
-  const usedRules: Array<{ scope: string[]; settings: Record<string, unknown> }>
-    = []
+  const usedRules: Array<{
+    scope: string[]
+    settings: Record<string, unknown>
+  }> = []
 
   const genericPrefixes = new Set([
     'comment',
@@ -140,7 +142,10 @@ export function pruneTheme(
   }
 
   const kept = new Set<string>()
-  const deduped: Array<{ scope?: string[]; settings: Record<string, unknown> }> = []
+  const deduped: Array<{
+    scope?: string[]
+    settings: Record<string, unknown>
+  }> = []
 
   for (let index = usedRules.length - 1; index >= 0; index--) {
     const rule = usedRules[index]
