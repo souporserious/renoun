@@ -48,9 +48,9 @@
 
 ## Examples
 
-- [Blog](/examples/blog) — MDX-powered blog with collections and post organization
-- [Documentation Site](/examples/docs) — Next.js docs site with MDX, custom UI, and Tailwind CSS
-- [Design System](/examples/design-system) — Component library with MDX docs, examples, and hooks
+- Blog: [Demo](https://renoun-blog.vercel.app/) | [Source](/examples/blog) — MDX-powered blog with collections and post organization
+- Docs: [Demo](https://renoun-docs.vercel.app/) | [Source](/examples/docs) — Next.js docs site with MDX, custom UI, and Tailwind CSS
+- Package: [Demo](https://renoun-package.vercel.app/) | [Source](/examples/package) — Component library with MDX docs, examples, and hooks
 
 ## Why renoun?
 
