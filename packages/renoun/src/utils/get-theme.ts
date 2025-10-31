@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, watch } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { ConfigurationOptions } from '../components/Config/types.js'
@@ -46,7 +46,42 @@ function getThemeConfigName(
   return themeConfig
 }
 
-const cachedThemes = new Map<string | undefined, Record<string, any>>()
+const cachedThemes = new Map<string | undefined, TextMateThemeRaw>()
+const themeWatchers = new Map<string, ReturnType<typeof watch>>()
+// Only create file-system watchers while developing so production builds
+// don't hold onto extra handles or perform redundant work.
+const shouldWatchThemes =
+  process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test'
+
+function ensureThemeWatcher(themePath: string) {
+  if (!shouldWatchThemes || themeWatchers.has(themePath)) {
+    return
+  }
+
+  try {
+    const watcher = watch(
+      themePath,
+      { persistent: false },
+      (eventType) => {
+        cachedThemes.delete(themePath)
+
+        if (eventType === 'rename') {
+          watcher.close()
+          themeWatchers.delete(themePath)
+        }
+      }
+    )
+
+    watcher.on('error', () => {
+      watcher.close()
+      themeWatchers.delete(themePath)
+    })
+
+    themeWatchers.set(themePath, watcher)
+  } catch {
+    // If the file cannot be watched (e.g. it was removed), fail silently.
+  }
+}
 
 /** Gets a normalized VS Code theme. */
 export async function getTheme(
@@ -69,8 +104,16 @@ export async function getTheme(
     themePath = resolve(process.cwd(), themePath)
   }
 
-  if (cachedThemes.has(themePath)) {
-    return cachedThemes.get(themePath)! as TextMateThemeRaw
+  const cachedTheme = cachedThemes.get(themePath)
+
+  if (themePath && themePath.endsWith('.json')) {
+    ensureThemeWatcher(themePath)
+
+    if (cachedTheme) {
+      return cachedTheme
+    }
+  } else if (cachedTheme) {
+    return cachedTheme
   }
 
   const { themes } = await import('../grammars/index.js')
