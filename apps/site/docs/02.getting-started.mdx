@@ -19,24 +19,9 @@ First, install renoun and additionally set up a Next.js project if you haven't a
 
 ### CLI
 
-A CLI is included with renoun to help isolate the processing required for syntax highlighting and resolving type information. This greatly improves performance of these operations by keeping them separate from your application's development and build processes.
+The renoun CLI keeps syntax highlighting and type analysis tasks in a background process while your React framework handles rendering. Once you install renoun you can run any command by prefixing it with `renoun`, for example `renoun next dev`.
 
-To use the CLI, prepend `renoun` to your Next.js `dev` and `build` commands in your project's `package.json`:
-
-```json
-{
-  "scripts": {
-    "dev": "renoun next dev",
-    "build": "renoun next build"
-  }
-}
-```
-
-Then start the development server:
-
-<Command variant="run">dev</Command>
-
-Prepending the renoun CLI ensures that the renoun process starts before your framework's server. The CLI starts a WebSocket server that will watch for changes to the file system and communicates with renoun components and utilities.
+Refer to the [CLI guide](/docs/cli) for an overview of the framework shims, additional flags, and utilities like theme pruning.
 
 ## MDX Content
 

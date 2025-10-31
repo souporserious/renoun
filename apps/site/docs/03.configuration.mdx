@@ -98,6 +98,20 @@ export default function RootLayout({
 }
 ```
 
+#### Copying themes from the VS Code Marketplace
+
+Most VS Code themes publish their source on GitHub in repositories that follow the structure of the extension. You can browse the extension's Marketplace listing, click **Repository**, and then look for a `themes` directory that contains one or more JSON files. Download the theme JSON you want to use, add it to your project, and point `RootProvider` at the file path.
+
+Once the file is in your project, run [`renoun theme`](/docs/cli#pruning-theme-files) to strip out metadata that renoun does not need at runtime. This keeps the bundle small while preserving all of the colors required by the theme loader.
+
+### Pruning custom themes
+
+Many third-party themes include metadata that renoun does not need at runtime. You can trim those files down with the renoun CLI so they stay as small as possible while keeping the required shape for the theme loader. Run the `theme` command and pass it the path to your JSON file:
+
+<Command variant="run">theme path/to/theme.json</Command>
+
+The command will validate the file, remove unused keys, and write the minimized JSON back to disk in place. Because the file is overwritten, it's a good idea to keep the theme under version control or create a backup before pruning it.
+
 ### Multiple Themes
 
 You can also specify multiple themes, the first theme defined in the object will be the default:

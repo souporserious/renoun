@@ -1,0 +1,68 @@
+export const metadata = {
+  title: 'CLI',
+  description:
+    'Run React framework scripts and renoun utilities from a single command-line interface.',
+}
+
+The renoun CLI keeps the background language tools in sync with your project while you work.
+It starts a persistent server that handles syntax highlighting, type checking, and grammar
+loading so your React framework can focus on rendering.
+
+## Framework commands
+
+When you run a framework command through the CLI, renoun boots its background services before
+forwarding every flag and positional argument to the framework. This keeps the developer
+experience identical to your existing scripts while ensuring renoun stays connected to your
+content.
+
+- **Next.js** — `renoun next dev` (defaults to `dev` when no subcommand is supplied)
+- **Vite** — `renoun vite dev`
+- **Waku** — `renoun waku dev`
+
+Update your `package.json` scripts to prepend `renoun` to the framework commands you already use:
+
+```json
+{
+  "scripts": {
+    "dev": "renoun next dev",
+    "build": "renoun next build"
+  }
+}
+```
+
+You can pass through additional flags with the standard `--` separator. For example, the
+following command enables Vite's production optimizations while renoun keeps the grammar cache in
+sync:
+
+```bash
+renoun vite build -- --mode production
+```
+
+## Pruning theme files
+
+Use `renoun theme` to minimize VS Code theme JSON files. The command validates the input file,
+removes unused properties, and writes the optimized JSON back to the same path:
+
+```bash
+renoun theme path/to/theme.json
+```
+
+Because the command overwrites the original file, keep the theme under version control or save a
+backup before running it. The pruned output is ready to reference from `RootProvider`.
+
+## Copying themes from the VS Code Marketplace
+
+Most Marketplace listings link to the extension's GitHub repository. Open the repository, locate
+the `themes` directory, and download the JSON file for the variant you want. Place the file in your
+project (for example, `./theme.json`) and point `RootProvider` at the new path.
+
+After copying the file, run the pruning command to remove metadata that the renoun runtime does not
+need:
+
+```bash
+renoun theme theme.json
+```
+
+If you are testing multiple variants, copy each JSON file, rename it to a descriptive filename, and
+prune them individually. You can then map the files to light and dark slots when configuring
+multiple themes.

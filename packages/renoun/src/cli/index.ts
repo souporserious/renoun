@@ -7,11 +7,15 @@ import { dirname, join } from 'node:path'
 import { createServer } from '../project/server.js'
 import { getDebugLogger } from '../utils/debug.js'
 import { reorderEntries } from './reorder.js'
+import { runThemeCommand } from './theme.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
 if (firstArgument === 'help') {
-  const usageMessage = `Usage:   renoun <your-framework-args>\nExample:   renoun next dev`
+  const usageMessage =
+    `Usage:   renoun <your-framework-args>\n` +
+    `         renoun theme <path-to-theme.json>\n` +
+    `Example: renoun next dev`
   console.log(usageMessage)
   process.exit(0)
 }
@@ -45,7 +49,10 @@ function resolveFrameworkBinFile(framework: Framework): string {
   return join(packageJsonDirectory, binRelativePath.replace(/^\.\//, ''))
 }
 
-if (
+if (firstArgument === 'theme') {
+  await runThemeCommand(secondArgument)
+  process.exit(0)
+} else if (
   firstArgument === 'next' ||
   firstArgument === 'vite' ||
   firstArgument === 'waku'
