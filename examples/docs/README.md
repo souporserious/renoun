@@ -2,7 +2,7 @@
 
 This example shows how to build a documentation site with renoun and Next.js.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/souporserious/renoun/tree/main/examples/docs&project-name=renoun-docs&repository-name=renoun-docs)
+[Live demo](https://renoun-docs.vercel.app/)
 
 ## How to use
 

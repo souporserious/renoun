@@ -2,7 +2,7 @@
 
 This example shows how to build documentation for a simple package with renoun and Next.js.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/souporserious/renoun/tree/main/examples/package&project-name=renoun-package&repository-name=renoun-package)
+[Live demo](https://renoun-package.vercel.app/)
 
 ## How to use
 
