@@ -8,6 +8,7 @@ import { createServer } from '../project/server.js'
 import { getDebugLogger } from '../utils/debug.js'
 import { reorderEntries } from './reorder.js'
 import { runThemeCommand } from './theme.js'
+import { runValidateCommand } from './validate.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
@@ -15,6 +16,7 @@ if (firstArgument === 'help') {
   const usageMessage =
     `Usage:   renoun <your-framework-args>\n` +
     `         renoun theme <path-to-theme.json>\n` +
+    `         renoun validate [directory_path|url]\n` +
     `Example: renoun next dev`
   console.log(usageMessage)
   process.exit(0)
@@ -49,7 +51,13 @@ function resolveFrameworkBinFile(framework: Framework): string {
   return join(packageJsonDirectory, binRelativePath.replace(/^\.\//, ''))
 }
 
-if (firstArgument === 'theme') {
+if (firstArgument === 'validate') {
+  const args = [secondArgument, ...restArguments].filter(
+    (value): value is string => typeof value === 'string'
+  )
+  await runValidateCommand(args)
+  process.exit(process.exitCode ?? 0)
+} else if (firstArgument === 'theme') {
   await runThemeCommand(secondArgument)
   process.exit(0)
 } else if (

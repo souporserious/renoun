@@ -438,6 +438,9 @@ importers:
 
   packages/renoun:
     dependencies:
+      '@mdx-js/mdx':
+        specifier: 3.1.1
+        version: 3.1.1
       '@renoun/mdx':
         specifier: workspace:*
         version: link:../mdx

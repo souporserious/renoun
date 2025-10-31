@@ -6,7 +6,11 @@ export type {
   MarkdownContentOptions,
 } from './get-markdown-content.js'
 export { getMDXExportStaticValues } from './get-mdx-export-static-values.js'
+export { getMDXContent, type MDXContentOptions } from './get-mdx-content.js'
 export {
-  getMDXContent,
-  type MDXContentOptions,
-} from './get-mdx-content.js'
+  getMdxLinks,
+  type MDXLinkOccurrence as MdxLinkOccurrence,
+  type LinkPosition,
+  type LinkSource,
+  type LinkKind,
+} from './get-mdx-links.js'
