@@ -290,6 +290,21 @@ function isLikelyFileId(value: string): boolean {
   return /^[A-Za-z0-9]{10,}$/.test(value)
 }
 
+function trimLeadingAndTrailingSlashes(value: string): string {
+  let start = 0
+  let end = value.length
+  // 47 is '/'
+  while (start < end && value.charCodeAt(start) === 47) start++
+  while (end > start && value.charCodeAt(end - 1) === 47) end--
+  return value.slice(start, end)
+}
+
+function trimTrailingSlashes(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end--
+  return value.slice(0, end)
+}
+
 function parseFigmaProtocol(rawSource: string): {
   fileId: string
   nodeId: string
@@ -391,7 +406,7 @@ function parseCustomSource(
     return null
   }
   if (definition['type'] === 'figma') {
-    const node = match[2].trim().replace(/^\/+|\/+$/g, '')
+    const node = trimLeadingAndTrailingSlashes(match[2].trim())
     if (!node) {
       throw new Error(
         `[renoun] ${scheme}: sources must include a node selector or id.`
@@ -878,7 +893,7 @@ export async function Image<Source extends string>({
   if (!isLikelyNodeId(resolvedNodeId)) {
     const selectorCandidates: string[] = [resolvedNodeId]
     if (matchedBasePathname) {
-      const full = `${matchedBasePathname.replace(/\/+$/, '')}/${resolvedNodeId}`
+      const full = `${trimTrailingSlashes(matchedBasePathname)}/${resolvedNodeId}`
       if (!selectorCandidates.includes(full)) {
         selectorCandidates.push(full)
       }
