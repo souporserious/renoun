@@ -671,10 +671,13 @@ function extractLinksFromHtml(html: string, originUrl: string): LiveLink[] {
       continue
     }
 
+    const hrefLower = href.toLowerCase();
     if (
-      href.startsWith('javascript:') ||
-      href.startsWith('mailto:') ||
-      href.startsWith('tel:')
+      hrefLower.startsWith('javascript:') ||
+      hrefLower.startsWith('data:') ||
+      hrefLower.startsWith('vbscript:') ||
+      hrefLower.startsWith('mailto:') ||
+      hrefLower.startsWith('tel:')
     ) {
       continue
     }
