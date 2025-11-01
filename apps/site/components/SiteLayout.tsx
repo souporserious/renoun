@@ -166,11 +166,6 @@ export async function SiteLayout({
                   '/guides',
                 ]}
                 aria-haspopup="true"
-                css={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                }}
               >
                 Docs
                 <svg

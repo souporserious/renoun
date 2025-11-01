@@ -24,8 +24,10 @@ export function NavigationLink({
     ? activePathnames.find((pathname) => activePathname.startsWith(pathname))
     : activePathname.startsWith(href)
   const styles: CSSObject = {
-    display: 'block',
+    display: 'flex',
+    alignItems: 'center',
     padding: '0.5rem 0.75rem',
+    gap: '0.35rem',
     fontSize: 'var(--font-size-body-2)',
     whiteSpace: 'nowrap',
     ...cssProp,
