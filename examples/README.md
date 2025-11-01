@@ -4,18 +4,18 @@ This directory contains example projects showcasing different use cases and impl
 
 ## Available Examples
 
-### [Documentation Site](./docs)
+### [Docs](./docs)
 
-A complete documentation site example built with Renoun. Features:
+A complete documentation site example built with renoun.
 
 - MDX support for content
 - Custom UI components
 - Tailwind CSS styling
 - Next.js configuration
 
-### [Design System](./design-system)
+### [Package](./package)
 
-A design system example demonstrating component organization and documentation. Features:
+An example demonstrating a package documentation site.
 
 - Component library structure
 - Custom hooks
@@ -24,7 +24,7 @@ A design system example demonstrating component organization and documentation. 
 
 ### [Blog](./blog)
 
-A blog example showing content management and organization. Features:
+A blog example showing content management and organization.
 
 - Blog post management
 - MDX support
