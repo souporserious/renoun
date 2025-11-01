@@ -1,5 +1,11 @@
 # create-renoun
 
+## 2.0.3
+
+### Patch Changes
+
+- d7ddaac: Fixes example list so it's always using the latest examples.
+
 ## 2.0.2
 
 ### Patch Changes
