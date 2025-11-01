@@ -1,5 +1,50 @@
 # renoun
 
+## 10.9.0
+
+### Minor Changes
+
+- c703686: `RootProvider` now automatically derives `siteUrl` from the nearest `package.json` `homepage` when the `siteUrl` prop is not provided.
+- 7be68d7: Adds support for loader factories and globbed modules when defining a `Directory` loader:
+
+  ```tsx
+  import { Directory, withSchema } from 'renoun'
+
+  interface PostType {
+    frontmatter: {
+      title: string
+      date: Date
+    }
+  }
+
+  const posts = new Directory({
+    path: 'posts',
+    loader: () => {
+      const mdxModules = import.meta.glob('./posts/**/*.mdx')
+      return {
+        mdx: withSchema<PostType>((path) => mdxModules[`./posts/${path}.mdx`]),
+      }
+    },
+  })
+  ```
+
+- 387a689: Improves `Reference` component type renderer coverage and will now render complex type aliases with call signatures and type parameters.
+- 543774c: Adds a `validate` CLI command and exposes MDX link utilities for validating links in MDX content as well as links for a live site.
+- 46497f6: Improves workspace root detection and error diagnostics in the internal `getRootDirectory` utility.
+
+### Patch Changes
+
+- 60446c7: Adds support for binary, streaming, writing, and deletion operations for both `NodeFileSystem` and `MemoryFileSystem` utilities.
+- c82b042: Fixes file resolution when a directory shares the same base name as the
+  requested file and an extension is specified. The resolver now prefers the
+  exact file match (e.g. `package.json`) over a same‑named directory (e.g.
+  `package/`).
+- 696f1a0: Ensures custom JSON theme edits invalidate the cache so local development picks up changes immediately.
+- b929b97: Adds more actionable `FileNotFoundError` details.
+- f9c90fe: Add a `renoun theme` CLI command that prunes theme JSON files in place so users can trim or minify their own themes.
+- Updated dependencies [543774c]
+  - @renoun/mdx@3.3.0
+
 ## 10.8.0
 
 ### Minor Changes

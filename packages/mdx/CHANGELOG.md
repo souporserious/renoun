@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 3.3.0
+
+### Minor Changes
+
+- 543774c: Adds a `validate` CLI command and exposes MDX link utilities for validating links in MDX content as well as links for a live site.
+
 ## 3.2.1
 
 ### Patch Changes
