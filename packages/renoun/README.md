@@ -19,13 +19,13 @@
 
 ## Features
 
-- 📝 Author MDX content in seconds
+- 📝 Author MDX content
 - 📊 Query and analyze file system metadata
 - 🛟 Validate module exports
 - 📘 Generate up‑to‑date API references
-- 🌈 Highlight code with precision
+- 🌈 Highlight code accurately
 - ✅ Type‑check code blocks
-- 🖼️ Render source code examples
+- 🖼️ Render code previews
 - 📦 Integrate with your favorite framework
 
 ## Examples
