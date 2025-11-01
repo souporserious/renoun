@@ -346,11 +346,6 @@ export class FileNotFoundError extends Error {
       lines.push(`Nearby entries (at failure point):\n${preview}`)
     }
 
-    // Short guidance so users know what to try next
-    lines.push(
-      'Tips: the path is relative to the Directory path above. If you pass the extension as the second argument, omit it from the first (e.g. getFile("post", "mdx")); otherwise include it in the path (e.g. "post.mdx"). If you intended to resolve a directory, ensure it contains a same‑named file, "index", or "readme".'
-    )
-
     super(lines.join('\n'))
     this.name = 'FileNotFoundError'
   }
