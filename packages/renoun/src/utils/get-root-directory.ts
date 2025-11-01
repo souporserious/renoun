@@ -81,10 +81,16 @@ export function getRootDirectory(startDirectory: string = cwd()): string {
   lines.push('')
   lines.push('How to fix:')
   lines.push(
-    "  • If deploying to serverless/edge (e.g. Vercel), this code is running where your repo files aren't available at runtime. Move this call to the Node.js runtime (set 'export const runtime = \"nodejs\"') or run it at build time."
+    "  • If deploying to serverless/edge (e.g. Vercel, Netlify, Cloudflare, AWS Lambda/Edge), this code is running where your repo files aren't available at runtime. Move this call to a Node.js runtime or run it at build time."
   )
   lines.push(
-    '  • Ensure your deployment includes a workspace manifest at the repo root (pnpm-workspace.yaml or a package.json with a workspaces field).'
+    '  • Next.js: set \'export const runtime = "nodejs"\' in any page/layout/route that uses renoun, or precompute data during build (e.g. SSG).'
+  )
+  lines.push(
+    '  • On Edge runtimes, avoid filesystem access at request-time; precompute and import static data instead.'
+  )
+  lines.push(
+    '  • Ensure your deployment includes a workspace manifest at the repo root (pnpm-workspace.yaml or a package.json with a workspaces field) if you run on a server with access to the repo.'
   )
   lines.push('')
   lines.push(
