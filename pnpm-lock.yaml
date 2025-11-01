@@ -89,10 +89,6 @@ overrides:
 importers:
 
   .:
-    dependencies:
-      arktype:
-        specifier: 'catalog:'
-        version: 2.1.25
     devDependencies:
       '@changesets/cli':
         specifier: 2.29.7

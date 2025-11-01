@@ -36,8 +36,5 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@10.16.1",
-  "dependencies": {
-    "arktype": "catalog:"
-  }
+  "packageManager": "pnpm@10.16.1"
 }
