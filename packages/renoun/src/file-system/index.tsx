@@ -299,7 +299,23 @@ async function unwrapModuleResult<T>(result: any): Promise<T> {
 
 /** Error for when a file is not found. */
 export class FileNotFoundError extends Error {
-  constructor(path: string | string[], extension?: any) {
+  constructor(
+    path: string | string[],
+    extension?: any,
+    context?: {
+      /** Directory path (relative to workspace) where the lookup started. */
+      directoryPath?: string
+
+      /** Absolute directory path (useful in server builds). */
+      absoluteDirectoryPath?: string
+
+      /** Root path used by the Directory (relative to workspace). */
+      rootPath?: string
+
+      /** Nearby entries at the point of failure (base names only). */
+      nearestCandidates?: string[]
+    }
+  ) {
     const normalizedPath = Array.isArray(path) ? joinPaths(...path) : path
     const normalizedExtension = extension
       ? Array.isArray(extension)
@@ -309,9 +325,33 @@ export class FileNotFoundError extends Error {
     const extensionMessage = normalizedExtension.length
       ? ` with extension${normalizedExtension.length > 1 ? 's' : ''}: ${normalizedExtension.join(',')}`
       : ''
-    super(
-      `[renoun] File not found at path "${normalizedPath}"${extensionMessage}`
+
+    const lines: string[] = [
+      `[renoun] File not found at path "${normalizedPath}"${extensionMessage}`,
+    ]
+
+    const directoryHint =
+      context?.directoryPath || context?.absoluteDirectoryPath
+    if (directoryHint) {
+      lines.push(`Lookup started in directory: "${directoryHint}"`)
+    }
+    if (context?.rootPath) {
+      lines.push(`Directory root: "${context.rootPath}"`)
+    }
+    if (context?.nearestCandidates && context.nearestCandidates.length) {
+      const preview = context.nearestCandidates
+        .slice(0, 8)
+        .map((n) => `- ${n}`)
+        .join('\n')
+      lines.push(`Nearby entries (at failure point):\n${preview}`)
+    }
+
+    // Short guidance so users know what to try next
+    lines.push(
+      'Tips: the path is relative to the Directory path above. If you pass the extension as the second argument, omit it from the first (e.g. getFile("post", "mdx")); otherwise include it in the path (e.g. "post.mdx"). If you intended to resolve a directory, ensure it contains a same‑named file, "index", or "readme".'
     )
+
+    super(lines.join('\n'))
     this.name = 'FileNotFoundError'
   }
 }
@@ -2355,7 +2395,11 @@ export class Directory<
       return fallback
     }
 
-    throw new FileNotFoundError(segments.join('/'), allExtensions)
+    throw new FileNotFoundError(segments.join('/'), allExtensions, {
+      directoryPath: directory.getRelativePathToWorkspace(),
+      rootPath: directory.getRootPath(),
+      nearestCandidates: entries.map((entry) => entry.getBaseName()),
+    })
   }
 
   /**
@@ -2476,7 +2520,10 @@ export class Directory<
     )
 
     if (segments.length === 0) {
-      throw new FileNotFoundError(rawPath, allExtensions)
+      throw new FileNotFoundError(rawPath, allExtensions, {
+        directoryPath: this.getRelativePathToWorkspace(),
+        rootPath: this.getRootPath(),
+      })
     }
 
     let entry = await this.#findEntry(this, segments, allExtensions)
@@ -2548,7 +2595,13 @@ export class Directory<
       } else if (anyMatchingFile) {
         entry = anyMatchingFile
       } else {
-        throw new FileNotFoundError(rawPath, allExtensions)
+        throw new FileNotFoundError(rawPath, allExtensions, {
+          directoryPath: entry.getRelativePathToWorkspace(),
+          rootPath: entry.getRootPath(),
+          nearestCandidates: directoryEntries.map((entry) =>
+            entry.getBaseName()
+          ),
+        })
       }
     }
 
@@ -2556,7 +2609,10 @@ export class Directory<
       return entry as any
     }
 
-    throw new FileNotFoundError(rawPath, allExtensions)
+    throw new FileNotFoundError(rawPath, allExtensions, {
+      directoryPath: this.getRelativePathToWorkspace(),
+      rootPath: this.getRootPath(),
+    })
   }
 
   /** Get a directory at the specified `path`. */
@@ -2593,7 +2649,10 @@ export class Directory<
       }
 
       if (!entry || !(entry instanceof Directory)) {
-        throw new FileNotFoundError(path)
+        throw new FileNotFoundError(path, undefined, {
+          directoryPath: this.getRelativePathToWorkspace(),
+          rootPath: this.getRootPath(),
+        })
       }
 
       currentDirectory = entry
