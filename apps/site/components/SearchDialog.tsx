@@ -357,7 +357,6 @@ export function SearchDialog({ routes }: { routes: SearchRoute[] }) {
                                   : isFocused
                                     ? dialogTokens.listBackgroundHover
                                     : 'transparent',
-                                transition: 'background 120ms ease',
                               })}
                             >
                               {({}) => (
