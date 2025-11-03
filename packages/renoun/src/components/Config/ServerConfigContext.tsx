@@ -1,86 +1,113 @@
 import React from 'react'
 
+import { getDebugLogger } from '../../utils/debug.js'
 import { defaultConfig } from './default-config.js'
 import type { ConfigurationOptions } from './types.js'
 
-type Deferred<T> = {
-  settled: boolean
-  value?: T
-  promise: Promise<T>
-  resolve: (value: T) => void
+interface DeferredValue<ValueType> {
+  hasSettled: boolean
+  currentValue?: ValueType
+  promise: Promise<ValueType>
+  resolve: (resolvedValue: ValueType) => void
   reject: (error: unknown) => void
   version?: string
 }
 
-function createDeferred<Type>(): Deferred<Type> {
-  let resolve!: (value: Type) => void
-  let reject!: (error: unknown) => void
-  const promise = new Promise<Type>((_resolve, _reject) => {
-    resolve = _resolve
-    reject = _reject
+function createDeferredValue<ValueType>(): DeferredValue<ValueType> {
+  let deferredResolve!: (resolvedValue: ValueType) => void
+  let deferredReject!: (error: unknown) => void
+
+  const sharedPromise = new Promise<ValueType>((resolve, reject) => {
+    deferredResolve = resolve
+    deferredReject = reject
   })
-  return { settled: false, promise, resolve, reject }
-}
 
-const GLOBAL_KEY = Symbol.for('__RENOUN_CONFIG__')
-const GLOBAL_PRESENCE_KEY = Symbol.for('__RENOUN_HAS_PROVIDER__')
-
-function getDeferred(): Deferred<ConfigurationOptions> {
-  if (!(globalThis as any)[GLOBAL_KEY]) {
-    ;(globalThis as any)[GLOBAL_KEY] = createDeferred<ConfigurationOptions>()
+  return {
+    hasSettled: false,
+    promise: sharedPromise,
+    resolve: deferredResolve,
+    reject: deferredReject,
   }
-  return (globalThis as any)[GLOBAL_KEY]
 }
 
-interface Presence {
-  present: boolean
+const GLOBAL_CONFIGURATION_SYMBOL_KEY = Symbol.for('__RENOUN_CONFIGURATION__')
+const GLOBAL_PROVIDER_PRESENCE_SYMBOL_KEY = Symbol.for(
+  '__RENOUN_HAS_PROVIDER__'
+)
+
+type GlobalObjectWithSymbols = typeof globalThis & {
+  [GLOBAL_CONFIGURATION_SYMBOL_KEY]?: DeferredValue<ConfigurationOptions>
+  [GLOBAL_PROVIDER_PRESENCE_SYMBOL_KEY]?: { isPresent: boolean }
 }
 
-function getPresence(): Presence {
-  if (!(globalThis as any)[GLOBAL_PRESENCE_KEY]) {
-    ;(globalThis as any)[GLOBAL_PRESENCE_KEY] = { present: false } as Presence
+/** Accessor for the single process/worker-local deferred configuration. */
+function getOrCreateDeferredConfiguration(): DeferredValue<ConfigurationOptions> {
+  const globalObject = globalThis as GlobalObjectWithSymbols
+  if (!globalObject[GLOBAL_CONFIGURATION_SYMBOL_KEY]) {
+    globalObject[GLOBAL_CONFIGURATION_SYMBOL_KEY] =
+      createDeferredValue<ConfigurationOptions>()
   }
-  return (globalThis as any)[GLOBAL_PRESENCE_KEY]
+  return globalObject[GLOBAL_CONFIGURATION_SYMBOL_KEY]!
+}
+
+/** Presence flag so `getConfig` can immediately fall back to defaults when no provider is mounted. */
+function getOrCreateProviderPresence(): { isPresent: boolean } {
+  const globalObject = globalThis as GlobalObjectWithSymbols
+  if (!globalObject[GLOBAL_PROVIDER_PRESENCE_SYMBOL_KEY]) {
+    globalObject[GLOBAL_PROVIDER_PRESENCE_SYMBOL_KEY] = { isPresent: false }
+  }
+  return globalObject[GLOBAL_PROVIDER_PRESENCE_SYMBOL_KEY]!
 }
 
 /**
- * Get the current configuration set in the `RootProvider` component.
+ * Reads the current configuration.
+ * - If no provider is mounted, returns defaultConfig immediately.
+ * - Otherwise waits for the provider to resolve (with a timeout).
  * @internal
  */
 export async function getConfig(options?: {
   timeoutMs?: number
 }): Promise<ConfigurationOptions> {
-  const presence = getPresence()
-  // If no provider is present in the tree, fall back to the default config immediately
-  if (!presence.present) {
+  const providerPresence = getOrCreateProviderPresence()
+  if (!providerPresence.isPresent) {
     return defaultConfig
   }
-  const deferredValue = getDeferred()
-  if (deferredValue.settled) {
-    return deferredValue.value!
+
+  const deferredConfiguration = getOrCreateDeferredConfiguration()
+  if (deferredConfiguration.hasSettled) {
+    return deferredConfiguration.currentValue!
   }
-  const { timeoutMs = 8000 } = options ?? {}
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => {
-      reject(
-        new Error(
-          '[renoun] getConfig() timed out: ServerConfigContext did not resolve'
+
+  const timeoutMs = options?.timeoutMs ?? 8000
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+  try {
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(
+          new Error(
+            '[renoun] getConfig() timed out: ServerConfigContext did not resolve a configuration value'
+          )
         )
-      )
-    }, timeoutMs)
-  )
-  return Promise.race([deferredValue.promise, timeout])
+      }, timeoutMs)
+    })
+
+    return await Promise.race([deferredConfiguration.promise, timeoutPromise])
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+  }
 }
 
-/** A provider that captures the server configuration and provides it to the server.
+/**
+ * Initializes and caches the configuration.
+ * - Accepts a static value or a Promise<ConfigurationOptions>.
+ * - Optional `version` lets you force a refresh across HMR/redeploys.
  * @internal
  */
-export function ServerConfigContext({
-  value = defaultConfig,
-  version,
-  children,
-}: {
-  /** The configuration options to provide. */
+export function ServerConfigContext(props: {
+  /** The configuration value to use. */
   value?: ConfigurationOptions | Promise<ConfigurationOptions>
 
   /** Optional version string to force reset the config cache. */
@@ -89,51 +116,59 @@ export function ServerConfigContext({
   /** The element tree to render. */
   children: React.ReactNode
 }) {
-  const presence = getPresence()
-  presence.present = true
+  const { value = defaultConfig, version, children } = props
 
-  let deferredValue = getDeferred()
+  const providerPresence = getOrCreateProviderPresence()
+  providerPresence.isPresent = true
 
-  // If the version changed, reset the deferred value
-  if (version !== undefined && deferredValue.version !== version) {
-    ;(globalThis as any)[GLOBAL_KEY] = createDeferred<ConfigurationOptions>()
-    deferredValue = getDeferred()
-    deferredValue.version = version
+  const isDevelopmentEnvironment = process.env.NODE_ENV !== 'production'
+  let deferredConfiguration = getOrCreateDeferredConfiguration()
+
+  /** Decide whether we should reset the deferred container. */
+  const shouldResetDeferred =
+    (version !== undefined && deferredConfiguration.version !== version) ||
+    // In dev, allow re-initialization to play nicely with HMR before the first settle:
+    (isDevelopmentEnvironment && !deferredConfiguration.hasSettled)
+
+  if (shouldResetDeferred) {
+    ;(globalThis as GlobalObjectWithSymbols)[GLOBAL_CONFIGURATION_SYMBOL_KEY] =
+      createDeferredValue<ConfigurationOptions>()
+    deferredConfiguration = getOrCreateDeferredConfiguration()
+    deferredConfiguration.version = version
   }
 
-  if (!deferredValue.settled) {
-    if (value && typeof (value as any).then === 'function') {
-      // resolve when the promise settles for async config
-      ;(value as Promise<ConfigurationOptions>)
-        .then((resolved) => {
-          deferredValue.settled = true
-          deferredValue.value = resolved
-          deferredValue.resolve(resolved)
-        })
-        .catch((error) => {
-          // Surface legitimate errors by rejecting the deferred
-          deferredValue.reject(error)
-        })
+  /** Resolve only once, subsequent updates replace the cached value without touching the settled promise. */
+  const resolveConfigurationOnce = (
+    nextConfiguration: ConfigurationOptions
+  ) => {
+    if (!deferredConfiguration.hasSettled) {
+      deferredConfiguration.hasSettled = true
+      deferredConfiguration.currentValue = nextConfiguration
+      deferredConfiguration.resolve(nextConfiguration)
     } else {
-      // Sync config
-      deferredValue.settled = true
-      deferredValue.value = value as ConfigurationOptions
-      deferredValue.resolve(value as ConfigurationOptions)
+      // Already settled: refresh the cached value for future synchronous reads.
+      deferredConfiguration.currentValue = nextConfiguration
     }
+  }
+
+  /** Reject only if the deferred has not yet settled and avoid throwing on a settled promise. */
+  const rejectConfigurationOnce = (error: unknown) => {
+    if (!deferredConfiguration.hasSettled) {
+      deferredConfiguration.reject(error)
+    } else {
+      getDebugLogger().error('Late configuration error', () => ({
+        operation: 'ServerConfigContext.rejectConfigurationOnce',
+        data: { error },
+      }))
+    }
+  }
+
+  if (value && typeof (value as any).then === 'function') {
+    ;(value as Promise<ConfigurationOptions>)
+      .then(resolveConfigurationOnce)
+      .catch(rejectConfigurationOnce)
   } else {
-    // Subsequent renders update the cached value
-    if (value && typeof (value as any).then === 'function') {
-      ;(value as Promise<ConfigurationOptions>)
-        .then((resolved) => {
-          deferredValue.value = resolved
-        })
-        .catch((error) => {
-          // Surface errors to any awaiting callers
-          deferredValue.reject(error)
-        })
-    } else {
-      deferredValue.value = value as ConfigurationOptions
-    }
+    resolveConfigurationOnce(value as ConfigurationOptions)
   }
 
   return children
