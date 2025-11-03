@@ -402,8 +402,24 @@ function parseCustomSource(
     return null
   }
   const definition = sources?.[scheme]
+  // Allow common pass-through URL schemes to continue without requiring a custom source
+  const passThroughSchemes = new Set(['data', 'blob', 'file'])
   if (!definition) {
-    return null
+    if (passThroughSchemes.has(scheme.toLowerCase())) {
+      return null
+    }
+    // Unknown scheme – guide the user to configure RootProvider or correct formatting
+    throw new Error(
+      `[
+renoun] Unknown image source scheme "${scheme}".\n\n` +
+        'How to fix:\n' +
+        `- Define it on <RootProvider sources={{ ${scheme}: { type: 'figma', fileId: 'FILE_ID' } }} /> and reference nodes like "${scheme}:Page/Frame/Component" or "${scheme}:123:456".\n` +
+        '- Or use one of the supported forms:\n' +
+        '  • figma:FILE_ID/123:456\n' +
+        '  • https://www.figma.com/file/<FILE_ID>?node-id=123-456\n' +
+        '  • A direct URL (https://...) or data: URI.\n\n' +
+        `Received: ${source}`
+    )
   }
   if (definition['type'] === 'figma') {
     const node = trimLeadingAndTrailingSlashes(match[2].trim())
@@ -418,7 +434,14 @@ function parseCustomSource(
       basePathname: definition['basePathname'],
     }
   }
-  return null
+  // If a custom source is configured but not supported by <Image />, provide a clear error
+  throw new Error(
+    `[
+renoun] The "${scheme}" source is configured with unsupported type "${String(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      (definition as unknown as Record<string, unknown>)['type']
+    )}". <Image /> currently supports only { type: 'figma' } sources.`
+  )
 }
 
 function isLikelyNodeId(value: string): boolean {
