@@ -1,4 +1,4 @@
-import React, { cache } from 'react'
+import React from 'react'
 
 import { defaultConfig } from './default-config.js'
 import type { ConfigurationOptions } from './types.js'
@@ -25,40 +25,22 @@ function createDeferred<Type>(): Deferred<Type> {
 const GLOBAL_KEY = Symbol.for('__RENOUN_CONFIG__')
 const GLOBAL_PRESENCE_KEY = Symbol.for('__RENOUN_HAS_PROVIDER__')
 
-function getGlobalDeferred(): Deferred<ConfigurationOptions> {
+function getDeferred(): Deferred<ConfigurationOptions> {
   if (!(globalThis as any)[GLOBAL_KEY]) {
     ;(globalThis as any)[GLOBAL_KEY] = createDeferred<ConfigurationOptions>()
   }
   return (globalThis as any)[GLOBAL_KEY]
 }
 
-const getRequestDeferred = cache(() => createDeferred<ConfigurationOptions>())
-
-function getDeferred(): Deferred<ConfigurationOptions> {
-  if (process.env.NODE_ENV === 'development') {
-    return getGlobalDeferred()
-  }
-  return getRequestDeferred()
-}
-
 interface Presence {
   present: boolean
 }
 
-function getGlobalPresence(): Presence {
+function getPresence(): Presence {
   if (!(globalThis as any)[GLOBAL_PRESENCE_KEY]) {
     ;(globalThis as any)[GLOBAL_PRESENCE_KEY] = { present: false } as Presence
   }
   return (globalThis as any)[GLOBAL_PRESENCE_KEY]
-}
-
-const getRequestPresence = cache<() => Presence>(() => ({ present: false }))
-
-function getPresence(): Presence {
-  if (process.env.NODE_ENV === 'development') {
-    return getGlobalPresence()
-  }
-  return getRequestPresence()
 }
 
 /**
@@ -114,12 +96,8 @@ export function ServerConfigContext({
 
   // If the version changed, reset the deferred value
   if (version !== undefined && deferredValue.version !== version) {
-    if (process.env.NODE_ENV === 'development') {
-      ;(globalThis as any)[GLOBAL_KEY] = createDeferred<ConfigurationOptions>()
-      deferredValue = getDeferred()
-    } else {
-      deferredValue = getDeferred()
-    }
+    ;(globalThis as any)[GLOBAL_KEY] = createDeferred<ConfigurationOptions>()
+    deferredValue = getDeferred()
     deferredValue.version = version
   }
 
