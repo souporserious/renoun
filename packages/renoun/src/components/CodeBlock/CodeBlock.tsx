@@ -237,8 +237,8 @@ function CodeBlockWithFallback(props: CodeBlockProps) {
               css={{
                 gridColumn: restProps.showLineNumbers ? 2 : 1,
                 padding: restProps.showLineNumbers
-                  ? `${containerPadding.vertical} ${containerPadding.horizontal} 0 0`
-                  : `${containerPadding.vertical} ${containerPadding.horizontal} 0`,
+                  ? `${containerPadding.vertical} ${containerPadding.horizontal} ${containerPadding.vertical} 0`
+                  : `${containerPadding.vertical} ${containerPadding.horizontal}`,
               }}
             >
               {restProps.children}
