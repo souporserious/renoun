@@ -102,6 +102,34 @@ Exporting `headings` directly is not supported. If you need to override headings
 
 If you're validating or typing the exported `headings` with a schema library, see the [Zod Guide](/guides/zod) and [Valibot Guide](/guides/valibot) for concrete examples of manually typing the `headings` export in your schema.
 
+##### `Heading` component
+
+This plugin also rewrites markdown headings (`#`, `##`, etc.) to render through a `Heading` MDX component. If you do nothing, a built-in default is used:
+
+- **Tag**: renders the proper heading tag (`h1`-`h6`) passed as `Tag`
+- **id**: assigns the generated slug as the element id
+- **anchor**: wraps the children in an anchor element pointing to `#<id>`
+
+You can override this by supplying your own `Heading` component via your MDX components provider. For example:
+
+```tsx path="examples/docs/mdx-components.tsx"
+import type { MDXComponents } from 'renoun'
+
+export function useMDXComponents() {
+  return {
+    Heading: ({ Tag, id, children, ...rest }) => {
+      return (
+        <Tag id={id} {...rest}>
+          <a href={`#${id}`} className="not-prose">
+            {children}
+          </a>
+        </Tag>
+      )
+    },
+  } satisfies MDXComponents
+}
+```
+
 ##### Security considerations
 
 This plugin is designed for trusted MDX sources.
