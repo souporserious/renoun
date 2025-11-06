@@ -8,9 +8,7 @@ export function Accordion({
   children: React.ReactNode
 }) {
   return (
-    <details
-      className={`Accordion w-full bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden mb-4 [&::-webkit-details-marker]:hidden group [&:has(:focus-visible)]:bg-gray-200 [&:has(:focus-visible)]:dark:bg-gray-700`}
-    >
+    <details className="Accordion w-full bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden mb-4 [&::-webkit-details-marker]:hidden group [&:has(:focus-visible)]:bg-gray-200 [&:has(:focus-visible)]:dark:bg-gray-700">
       <style href="Accordion" precedence="Accordion">{`
         .Accordion {
           &::details-content {

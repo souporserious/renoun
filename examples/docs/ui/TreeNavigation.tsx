@@ -7,8 +7,8 @@ import {
   type FileSystemEntry,
 } from 'renoun'
 
-import { SidebarLink } from './SidebarLink'
 import * as SidebarCollapse from './SidebarCollapse'
+import { SidebarLink } from './SidebarLink'
 
 async function ListNavigation({
   entry,

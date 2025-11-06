@@ -16,7 +16,7 @@ export function SidebarLink({
   collapsible?: React.ReactNode
 }) {
   const pathname = usePathname()
-  const isActive = pathname === href || pathname.startsWith(href + '/')
+  const isActive = pathname === href
   const baseLinkStyles = `flex items-center gap-2 rounded h-9 px-3 font-medium transition-colors outline-none focus-visible:bg-violet-100 dark:focus-visible:bg-blue-400/20${
     className ? ` ${className}` : ''
   }`

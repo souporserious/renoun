@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { RootProvider } from 'renoun'
-import { routes } from '@/collections'
-import { SiblingLinks } from '@/ui/SiblingLinks'
+import { Layout } from '@/ui/Layout'
 import { Sidebar } from '@/ui/Sidebar'
 import './layout.css'
 
@@ -42,15 +41,10 @@ export default async function RootLayout({
         className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
       >
         <body
-          className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
+          className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased [--column-gap:0] md:[--column-gap:2rem] lg:[--column-gap:4rem] [--grid-template-columns:minmax(1rem,1fr)_14rem_var(--column-gap)_minmax(0,48rem)_var(--column-gap)_14rem_minmax(1rem,1fr)]`}
         >
           <Sidebar />
-          <main className="md:pl-64 min-h-screen">
-            <div className="px-10 py-20 max-w-4xl mx-auto">
-              <SiblingLinks routes={await routes} />
-              {children}
-            </div>
-          </main>
+          <Layout>{children}</Layout>
         </body>
       </html>
     </RootProvider>

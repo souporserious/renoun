@@ -6,26 +6,24 @@ export function SidebarOverlay({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <button
-        className={`fixed top-4 left-10 z-50 md:hidden p-2 rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow transition-transform ${open ? 'translate-x-64' : ''}`}
-        aria-label={open ? 'Close sidebar' : 'Open sidebar'}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        {open ? <CloseIcon /> : <MenuIcon />}
-      </button>
+      <header className="fixed inset-x-0 top-0 z-50 md:hidden h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center">
+        <div className="flex-1" />
+        <button
+          className="mr-4 p-2 rounded border border-gray-200 dark:border-gray-700"
+          aria-label={open ? 'Close menu' : 'Open menu'}
+          onClick={() => setOpen((prev) => !prev)}
+        >
+          {open ? <CloseIcon /> : <MenuIcon />}
+        </button>
+      </header>
 
-      <div
-        className={`fixed inset-0 z-40 bg-black bg-opacity-40 transition-opacity md:hidden ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => setOpen(false)}
-        aria-hidden={!open}
-      />
-      <aside
-        className={`fixed top-0 left-0 h-screen w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-8 overflow-y-auto overscroll-contain z-50 transition-transform md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'} md:block`}
-        style={{ transitionProperty: 'transform' }}
-        aria-hidden={!open}
-      >
-        {children}
-      </aside>
+      {open ? (
+        <div className="fixed inset-0 z-40 md:hidden bg-white dark:bg-gray-900">
+          <aside className="h-full w-full overflow-y-auto overscroll-contain p-4 pt-20">
+            {children}
+          </aside>
+        </div>
+      ) : null}
     </>
   )
 }
