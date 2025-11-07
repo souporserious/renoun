@@ -117,7 +117,7 @@ export default function addHeadings(
           const child = node.children[index]
           if (child?.type === 'link') {
             const message = file.message(
-              '[@renoun/mdx/add-headings] Links inside headings are not supported. Remove the link to allow the `Heading` component to provide the section anchor.',
+              '[`@renoun/mdx/remark/add-headings`] Links inside headings are not supported. Remove the link to allow the `Heading` component to provide the section anchor.',
               node
             )
             message.fatal = true
