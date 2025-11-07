@@ -13,6 +13,45 @@ describe('addHeadings', () => {
     expect(code).toContain('export const headings = [{')
     expect(code).not.toContain('export const Heading')
     expect(code).not.toContain('_missingMdxReference("Heading"')
+    expect(String(result)).toMatchInlineSnapshot(`
+      "import {Fragment as _Fragment, jsx as _jsx} from "react/jsx-runtime";
+      export const headings = [{
+        id: "hello-world",
+        level: 1,
+        children: "Hello, world!",
+        text: "Hello, world!"
+      }];
+      function _createMdxContent(props) {
+        const _components = {
+          a: "a",
+          ...props.components
+        };
+        return _jsx(_Fragment, {
+          children: _jsx(_components.Heading || (({Tag, id, children, ...rest}) => _jsx(Tag, {
+            id: id,
+            ...rest,
+            children: _jsx(_components.a, {
+              href: \`#\${id}\`,
+              children: children
+            })
+          })), {
+            Tag: _components.h1 || "h1",
+            id: "hello-world",
+            children: "Hello, world!"
+          })
+        });
+      }
+      export default function MDXContent(props = {}) {
+        const {wrapper: MDXLayout} = props.components || ({});
+        return MDXLayout ? _jsx(MDXLayout, {
+          ...props,
+          children: _jsx(_createMdxContent, {
+            ...props
+          })
+        }) : _createMdxContent(props);
+      }
+      "
+    `)
   })
 
   test('code heading', async () => {
@@ -25,6 +64,54 @@ describe('addHeadings', () => {
     expect(code).not.toContain('export const Heading')
     expect(code).toContain('_components.code')
     expect(code).not.toContain('_missingMdxReference("Heading"')
+    expect(String(result)).toMatchInlineSnapshot(`
+      "import {Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs} from "react/jsx-runtime";
+      export const headings = [{
+        id: "hello-world",
+        level: 1,
+        children: _jsxs(_Fragment, {
+          children: ["Hello, ", _jsx("code", {
+            children: "world"
+          }), "!"]
+        }),
+        text: "Hello, world!"
+      }];
+      function _createMdxContent(props) {
+        const _components = {
+          a: "a",
+          code: "code",
+          ...props.components
+        };
+        return _jsx(_Fragment, {
+          children: _jsx(_components.Heading || (({Tag, id, children, ...rest}) => _jsx(Tag, {
+            id: id,
+            ...rest,
+            children: _jsx(_components.a, {
+              href: \`#\${id}\`,
+              children: children
+            })
+          })), {
+            Tag: _components.h1 || "h1",
+            id: "hello-world",
+            children: _jsxs(_Fragment, {
+              children: ["Hello, ", _jsx(_components.code, {
+                children: "world"
+              }), "!"]
+            })
+          })
+        });
+      }
+      export default function MDXContent(props = {}) {
+        const {wrapper: MDXLayout} = props.components || ({});
+        return MDXLayout ? _jsx(MDXLayout, {
+          ...props,
+          children: _jsx(_createMdxContent, {
+            ...props
+          })
+        }) : _createMdxContent(props);
+      }
+      "
+    `)
   })
 
   test('link heading throws error', async () => {
@@ -48,6 +135,52 @@ describe('addHeadings', () => {
     expect(code).not.toContain('export const Heading')
     expect(code).toContain('_components.img')
     expect(code).not.toContain('_missingMdxReference("Heading"')
+    expect(String(result)).toMatchInlineSnapshot(`
+      "import {Fragment as _Fragment, jsx as _jsx} from "react/jsx-runtime";
+      export const headings = [{
+        id: "hello-world",
+        level: 1,
+        children: _jsx("img", {
+          src: "https://example.com/image.png",
+          alt: "Hello, world!"
+        }),
+        text: "Hello, world!"
+      }];
+      function _createMdxContent(props) {
+        const _components = {
+          a: "a",
+          img: "img",
+          ...props.components
+        };
+        return _jsx(_Fragment, {
+          children: _jsx(_components.Heading || (({Tag, id, children, ...rest}) => _jsx(Tag, {
+            id: id,
+            ...rest,
+            children: _jsx(_components.a, {
+              href: \`#\${id}\`,
+              children: children
+            })
+          })), {
+            Tag: _components.h1 || "h1",
+            id: "hello-world",
+            children: _jsx(_components.img, {
+              src: "https://example.com/image.png",
+              alt: "Hello, world!"
+            })
+          })
+        });
+      }
+      export default function MDXContent(props = {}) {
+        const {wrapper: MDXLayout} = props.components || ({});
+        return MDXLayout ? _jsx(MDXLayout, {
+          ...props,
+          children: _jsx(_createMdxContent, {
+            ...props
+          })
+        }) : _createMdxContent(props);
+      }
+      "
+    `)
   })
 
   test('Heading can be overridden via MDX components provider', async () => {
@@ -57,17 +190,19 @@ describe('addHeadings', () => {
       jsx: () => null,
       jsxs: () => null,
     }
-    const mod = await evaluate(mdxSource, {
+    const mdxModule = await evaluate(mdxSource, {
       remarkPlugins: [addHeadings],
       development: false,
       ...jsxRuntime,
     })
+
     // Should render with default without error
-    expect(() => (mod as any).default({})).not.toThrow()
+    expect(() => (mdxModule as any).default({})).not.toThrow()
+
     // Should also render with an override without error
     const override = () => 'OVERRIDDEN'
     expect(() =>
-      (mod as any).default({ components: { Heading: override } })
+      (mdxModule as any).default({ components: { Heading: override } })
     ).not.toThrow()
   })
 
