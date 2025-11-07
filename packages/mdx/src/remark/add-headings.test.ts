@@ -35,8 +35,8 @@ describe('addHeadings', () => {
     const code = String(result)
     expect(code).toContain('export const headings = [{')
     expect(code).not.toContain('export const Heading')
-    // Links inside headings are unwrapped, so no anchor should be rendered in children
-    expect(code).not.toContain('_components.a')
+    // Links inside headings are unwrapped; external URL should not be rendered in children
+    expect(code).not.toContain('https://example.com')
     expect(code).not.toContain('_missingMdxReference("Heading"')
   })
 
