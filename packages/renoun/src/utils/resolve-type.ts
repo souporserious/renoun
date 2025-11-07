@@ -2682,9 +2682,72 @@ function resolveParameter(
   }
 
   if (!parameterDeclaration && !jsDocParameter) {
-    throw new Error(
-      `[renoun:resolveParameter]: No parameter declaration found. If you are seeing this error, please file an issue.`
+    if (!parameterType) {
+      return
+    }
+
+    const resolvedParameterType = resolveTypeExpression(
+      parameterType,
+      enclosingNode,
+      filter,
+      undefined,
+      dependencies
     )
+
+    if (!resolvedParameterType) {
+      return
+    }
+
+    const optionalFromSymbol = (() => {
+      if (!symbol) {
+        return undefined
+      }
+
+      try {
+        const symbolFlags = symbol.getFlags?.()
+
+        if (typeof symbolFlags === 'number') {
+          return (symbolFlags & tsMorph.SymbolFlags.Optional) !== 0
+        }
+      } catch {
+        // Ignore failures when inspecting symbol flags.
+      }
+
+      return undefined
+    })()
+    const isOptional = optionalFromSymbol ?? Boolean(
+      parameterType.isNullable?.() ?? parameterType.isUndefined?.()
+    )
+    const resolvedType = isOptional
+      ? filterUndefinedFromUnion(resolvedParameterType)
+      : resolvedParameterType
+    const escapedName = symbol?.getEscapedName?.()
+    const hasImplicitName = escapedName?.startsWith('__') ?? false
+    const name = hasImplicitName ? undefined : escapedName ?? symbol?.getName?.()
+    const description = (() => {
+      if (!symbol) {
+        return undefined
+      }
+
+      try {
+        return getSymbolDescription(symbol)
+      } catch {
+        return undefined
+      }
+    })()
+
+    return {
+      kind: 'Parameter',
+      name,
+      type: resolvedType,
+      initializer: undefined,
+      isOptional,
+      isRest: false,
+      description,
+      text: name
+        ? `${name}${isOptional ? '?' : ''}: ${resolvedType.text}`
+        : resolvedType.text,
+    } satisfies Kind.Parameter
   }
 
   if (parameterDeclaration) {

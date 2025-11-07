@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
 import { getTsMorph } from './ts-morph.js'
 import type { ClassDeclaration, FunctionDeclaration } from './ts-morph.js'
 import dedent from 'dedent'
@@ -20365,4 +20365,61 @@ describe('resolveType', () => {
       }
     `)
   })
+test('handles parameters without declarations gracefully', () => {
+  const jsProject = new Project({
+    useInMemoryFileSystem: true,
+    compilerOptions: { allowJs: true, checkJs: true },
+  })
+  const jsSource = jsProject.createSourceFile(
+    'math-node.js',
+    dedent`
+      export class MathNode {
+        method(value) {
+          return value
+        }
+      }
+    `,
+    { overwrite: true }
+  )
+  const classDeclaration = jsSource.getClassOrThrow('MathNode')
+  const method = classDeclaration
+    .getInstanceMethods()
+    .find((instanceMethod) => instanceMethod.getName() === 'method')
+
+  if (!method) {
+    throw new Error('Expected method declaration to be defined')
+  }
+
+  const parameter = method.getParameters()[0]
+  const symbol = parameter.getSymbolOrThrow()
+  const getDeclarationsSpy = vi
+    .spyOn(symbol, 'getDeclarations')
+    .mockReturnValue([])
+
+  const resolvedClass = resolveType(
+    classDeclaration.getType(),
+    classDeclaration
+  )
+
+  getDeclarationsSpy.mockRestore()
+
+  expect(resolvedClass?.kind).toBe('Class')
+
+  const resolvedMethod = (resolvedClass as any)?.methods?.find(
+    (member: any) => member.kind === 'ClassMethod' && member.name === 'method'
+  )
+
+  expect(resolvedMethod).toBeDefined()
+
+  const signature = resolvedMethod.signatures[0]
+
+  expect(signature.parameters).toHaveLength(1)
+  const fallbackParameter = signature.parameters[0]
+
+  expect(fallbackParameter?.name).toBe('value')
+  expect(fallbackParameter?.text).toBe('value: any')
+  expect(fallbackParameter?.type.kind).toBe('Any')
+})
+
+
 })
