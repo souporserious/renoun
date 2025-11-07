@@ -112,6 +112,19 @@ export default function addHeadings(
       node.data.hProperties.id = slug
 
       if (!isMarkdown) {
+        // Avoid conflicting anchors and inconsistent styling by throwing an error if a link is found inside the heading.
+        for (let index = 0; index < node.children.length; index++) {
+          const child = node.children[index]
+          if (child?.type === 'link') {
+            const message = file.message(
+              '[@renoun/mdx/add-headings] Links inside headings are not supported. Remove the link to allow the `Heading` component to provide the section anchor.',
+              node
+            )
+            message.fatal = true
+            return
+          }
+        }
+
         convertHeadingToComponent(node)
       }
     })

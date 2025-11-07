@@ -27,17 +27,14 @@ describe('addHeadings', () => {
     expect(code).not.toContain('_missingMdxReference("Heading"')
   })
 
-  test('link heading', async () => {
+  test('link heading throws error', async () => {
     const result = await compile(`# [Hello, world!](https://example.com)`, {
       remarkPlugins: [addHeadings],
     })
-
-    const code = String(result)
-    expect(code).toContain('export const headings = [{')
-    expect(code).not.toContain('export const Heading')
-    // Links inside headings are unwrapped; external URL should not be rendered in children
-    expect(code).not.toContain('https://example.com')
-    expect(code).not.toContain('_missingMdxReference("Heading"')
+    const hasError = result.messages.some((message) =>
+      /Links inside headings are not supported/i.test(message.reason)
+    )
+    expect(hasError).toBe(true)
   })
 
   test('image heading', async () => {
