@@ -7,6 +7,7 @@ describe('addHeadings', () => {
   test('string heading', async () => {
     const result = await compile(`# Hello, world!`, {
       remarkPlugins: [addHeadings],
+      development: true,
     })
 
     const code = String(result)
@@ -14,41 +15,55 @@ describe('addHeadings', () => {
     expect(code).not.toContain('export const Heading')
     expect(code).not.toContain('_missingMdxReference("Heading"')
     expect(String(result)).toMatchInlineSnapshot(`
-      "import {Fragment as _Fragment, jsx as _jsx} from "react/jsx-runtime";
+      "import {Fragment as _Fragment, jsxDEV as _jsxDEV} from "react/jsx-dev-runtime";
       export const headings = [{
         id: "hello-world",
         level: 1,
         children: "Hello, world!",
         text: "Hello, world!"
       }];
+      const DefaultHeadingComponent = ({Tag, id, children, ...rest}) => _jsxDEV(Tag, {
+        id: id,
+        ...rest,
+        children: _jsxDEV("a", {
+          href: \`#\${id}\`,
+          children: children
+        }, undefined, false, {
+          fileName: "<source.js>"
+        }, this)
+      }, undefined, false, {
+        fileName: "<source.js>"
+      }, this);
       function _createMdxContent(props) {
-        const _components = {
-          a: "a",
-          ...props.components
-        };
-        return _jsx(_Fragment, {
-          children: _jsx(_components.Heading || (({Tag, id, children, ...rest}) => _jsx(Tag, {
-            id: id,
-            ...rest,
-            children: _jsx(_components.a, {
-              href: \`#\${id}\`,
-              children: children
-            })
-          })), {
-            Tag: _components.h1 || "h1",
-            id: "hello-world",
-            children: "Hello, world!"
-          })
-        });
+        return _jsxDEV(_Fragment, {
+          children: (() => {
+            const HeadingComponent = props.components && props.components.Heading || DefaultHeadingComponent;
+            return _jsxDEV(HeadingComponent, {
+              Tag: props.components && props.components.h1 || "h1",
+              id: "hello-world",
+              children: "Hello, world!"
+            }, undefined, false, {
+              fileName: "<source.js>"
+            }, this);
+          })()
+        }, undefined, false, {
+          fileName: "<source.js>",
+          lineNumber: 1,
+          columnNumber: 1
+        }, this);
       }
       export default function MDXContent(props = {}) {
         const {wrapper: MDXLayout} = props.components || ({});
-        return MDXLayout ? _jsx(MDXLayout, {
+        return MDXLayout ? _jsxDEV(MDXLayout, {
           ...props,
-          children: _jsx(_createMdxContent, {
+          children: _jsxDEV(_createMdxContent, {
             ...props
-          })
-        }) : _createMdxContent(props);
+          }, undefined, false, {
+            fileName: "<source.js>"
+          }, this)
+        }, undefined, false, {
+          fileName: "<source.js>"
+        }, this) : _createMdxContent(props);
       }
       "
     `)
@@ -76,29 +91,32 @@ describe('addHeadings', () => {
         }),
         text: "Hello, world!"
       }];
+      const DefaultHeadingComponent = ({Tag, id, children, ...rest}) => _jsx(Tag, {
+        id: id,
+        ...rest,
+        children: _jsx("a", {
+          href: \`#\${id}\`,
+          children: children
+        })
+      });
       function _createMdxContent(props) {
         const _components = {
-          a: "a",
           code: "code",
           ...props.components
         };
         return _jsx(_Fragment, {
-          children: _jsx(_components.Heading || (({Tag, id, children, ...rest}) => _jsx(Tag, {
-            id: id,
-            ...rest,
-            children: _jsx(_components.a, {
-              href: \`#\${id}\`,
-              children: children
-            })
-          })), {
-            Tag: _components.h1 || "h1",
-            id: "hello-world",
-            children: _jsxs(_Fragment, {
-              children: ["Hello, ", _jsx(_components.code, {
-                children: "world"
-              }), "!"]
-            })
-          })
+          children: (() => {
+            const HeadingComponent = props.components && props.components.Heading || DefaultHeadingComponent;
+            return _jsx(HeadingComponent, {
+              Tag: props.components && props.components.h1 || "h1",
+              id: "hello-world",
+              children: _jsxs(_Fragment, {
+                children: ["Hello, ", _jsx(_components.code, {
+                  children: "world"
+                }), "!"]
+              })
+            });
+          })()
         });
       }
       export default function MDXContent(props = {}) {
@@ -146,28 +164,31 @@ describe('addHeadings', () => {
         }),
         text: "Hello, world!"
       }];
+      const DefaultHeadingComponent = ({Tag, id, children, ...rest}) => _jsx(Tag, {
+        id: id,
+        ...rest,
+        children: _jsx("a", {
+          href: \`#\${id}\`,
+          children: children
+        })
+      });
       function _createMdxContent(props) {
         const _components = {
-          a: "a",
           img: "img",
           ...props.components
         };
         return _jsx(_Fragment, {
-          children: _jsx(_components.Heading || (({Tag, id, children, ...rest}) => _jsx(Tag, {
-            id: id,
-            ...rest,
-            children: _jsx(_components.a, {
-              href: \`#\${id}\`,
-              children: children
-            })
-          })), {
-            Tag: _components.h1 || "h1",
-            id: "hello-world",
-            children: _jsx(_components.img, {
-              src: "https://example.com/image.png",
-              alt: "Hello, world!"
-            })
-          })
+          children: (() => {
+            const HeadingComponent = props.components && props.components.Heading || DefaultHeadingComponent;
+            return _jsx(HeadingComponent, {
+              Tag: props.components && props.components.h1 || "h1",
+              id: "hello-world",
+              children: _jsx(_components.img, {
+                src: "https://example.com/image.png",
+                alt: "Hello, world!"
+              })
+            });
+          })()
         });
       }
       export default function MDXContent(props = {}) {
@@ -206,13 +227,13 @@ describe('addHeadings', () => {
     ).not.toThrow()
   })
 
-  test('Tag resolves through _components.h1 with fallback to "h1"', async () => {
+  test('Tag resolves through props.components.h1 with fallback to "h1"', async () => {
     const result = await compile(`# Hello`, {
       remarkPlugins: [addHeadings],
     })
     const code = String(result)
     // Ensure Tag is selected via components map first, then intrinsic element
-    expect(code).toContain('_components.h1 || "h1"')
+    expect(code).toContain('props.components && props.components.h1 || "h1"')
   })
 
   test('wraps headings with getHeadings when exported', async () => {
