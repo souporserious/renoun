@@ -64,6 +64,7 @@ export default function addHeadings(
     const headingCounts = new Map<string, number>()
     let hasGetHeadingsExport = false
     let hasHeadingsExport = false
+    let hasJsxImport = false
 
     visit(tree, 'heading', (node: Heading) => {
       const text = toString(node)
@@ -140,6 +141,26 @@ export default function addHeadings(
         return
       }
 
+      // Record whether react/jsx-runtime jsx import exists
+      for (const statement of program.body) {
+        if (
+          statement.type === 'ImportDeclaration' &&
+          statement.source?.value === 'react/jsx-runtime'
+        ) {
+          if (Array.isArray(statement.specifiers)) {
+            for (const spec of statement.specifiers) {
+              if (
+                spec.type === 'ImportSpecifier' &&
+                spec.imported?.name === 'jsx'
+              ) {
+                hasJsxImport = true
+                break
+              }
+            }
+          }
+        }
+      }
+
       for (const statement of program.body) {
         if (statement.type !== 'ExportNamedDeclaration') continue
         if (statement.declaration) {
@@ -206,6 +227,34 @@ export default function addHeadings(
     }
 
     if (!isMarkdown) {
+      // Ensure jsx runtime import is present when we emit inline _jsx calls
+      if (!hasJsxImport) {
+        const jsxImportNode: any = {
+          type: 'mdxjsEsm',
+          value: '',
+          data: {
+            estree: {
+              type: 'Program',
+              sourceType: 'module',
+              body: [
+                {
+                  type: 'ImportDeclaration',
+                  source: { type: 'Literal', value: 'react/jsx-runtime' },
+                  specifiers: [
+                    {
+                      type: 'ImportSpecifier',
+                      imported: { type: 'Identifier', name: 'jsx' },
+                      local: { type: 'Identifier', name: '_jsx' },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        }
+        ;(tree as any).children?.unshift(jsxImportNode)
+      }
+
       const generatedHeadingsArrayExpression: any = {
         type: 'ArrayExpression',
         elements: headingsArray,
