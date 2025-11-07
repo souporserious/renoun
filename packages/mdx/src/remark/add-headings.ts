@@ -1,3 +1,4 @@
+import type React from 'react'
 import type { Processor } from 'unified'
 import type { Root, Heading } from 'mdast'
 import type { Properties } from 'hast'
@@ -39,6 +40,17 @@ export type Headings = {
   /** The heading JSX children. */
   children?: React.ReactNode
 }[]
+
+export type HeadingComponentProps<
+  Tag extends React.ElementType = React.ElementType,
+> = {
+  Tag: Tag
+  id: string
+} & React.ComponentPropsWithoutRef<Tag>
+
+export type HeadingComponent<
+  Tag extends React.ElementType = React.ElementType,
+> = (props: HeadingComponentProps<Tag>) => React.ReactNode
 
 export default function addHeadings(
   this: Processor,
@@ -98,6 +110,23 @@ export default function addHeadings(
       node.data ??= {}
       node.data.hProperties ??= {}
       node.data.hProperties.id = slug
+
+      if (!isMarkdown) {
+        // Avoid conflicting anchors and inconsistent styling by throwing an error if a link is found inside the heading.
+        for (let index = 0; index < node.children.length; index++) {
+          const child = node.children[index]
+          if (child?.type === 'link') {
+            const message = file.message(
+              '[`@renoun/mdx/remark/add-headings`] Links inside headings are not supported. Remove the link to allow the `Heading` component to provide the section anchor.',
+              node
+            )
+            message.fatal = true
+            return
+          }
+        }
+
+        convertHeadingToComponent(node)
+      }
     })
 
     visit(tree, (node) => {
@@ -277,6 +306,301 @@ export default function addHeadings(
 
       define(tree, file, { headings: headingsExpression as any })
     }
+  }
+}
+
+function convertHeadingToComponent(node: Heading) {
+  const tagName = `h${node.depth}`
+  const properties = node.data?.hProperties ?? {}
+
+  // Build props object: { Tag: 'h<depth>', id, ...hProperties, children }
+  const propsObject: any = {
+    type: 'ObjectExpression',
+    properties: [
+      {
+        type: 'Property',
+        kind: 'init',
+        method: false,
+        shorthand: false,
+        computed: false,
+        key: { type: 'Identifier', name: 'Tag' },
+        // Resolve Tag through MDX components map first (e.g. _components.h1), then fallback to intrinsic "h1"
+        value: {
+          type: 'LogicalExpression',
+          operator: '||',
+          left: {
+            type: 'MemberExpression',
+            object: { type: 'Identifier', name: '_components' },
+            property: { type: 'Identifier', name: tagName },
+            computed: false,
+            optional: false,
+          },
+          right: { type: 'Literal', value: tagName },
+        },
+      },
+      ...(properties.id !== undefined
+        ? [
+            {
+              type: 'Property',
+              kind: 'init',
+              method: false,
+              shorthand: false,
+              computed: false,
+              key: { type: 'Identifier', name: 'id' },
+              value: toEstree((properties as any).id),
+            },
+          ]
+        : []),
+      ...Object.entries(properties)
+        .filter(([key]) => key !== 'id')
+        .map(([key, value]) => ({
+          type: 'Property',
+          kind: 'init',
+          method: false,
+          shorthand: false,
+          computed: !isIdentifierName(key),
+          key: isIdentifierName(key)
+            ? { type: 'Identifier', name: key }
+            : { type: 'Literal', value: key },
+          value: toEstree(value),
+        })),
+      {
+        type: 'Property',
+        kind: 'init',
+        method: false,
+        shorthand: false,
+        computed: false,
+        key: { type: 'Identifier', name: 'children' },
+        value: mdastNodesToJsxFragment((node as any).children ?? []),
+      },
+    ],
+  }
+
+  // Inline fallback using JSX runtime:
+  // jsx(_components.Heading || DefaultHeading, { ...props })
+  const callExpression: any = {
+    type: 'CallExpression',
+    // Use MDX's injected alias from react/jsx-runtime
+    callee: { type: 'Identifier', name: '_jsx' },
+    optional: false,
+    arguments: [
+      {
+        type: 'LogicalExpression',
+        operator: '||',
+        left: {
+          type: 'MemberExpression',
+          object: { type: 'Identifier', name: '_components' },
+          property: { type: 'Identifier', name: 'Heading' },
+          computed: false,
+          optional: false,
+        },
+        right: createDefaultHeadingComponent(),
+      },
+      propsObject,
+    ],
+  }
+
+  Object.assign(node, {
+    type: 'mdxFlowExpression',
+    value: '',
+    data: {
+      estree: {
+        type: 'Program',
+        sourceType: 'module',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression: callExpression,
+          },
+        ],
+      },
+    },
+  })
+
+  // Remove the depth property now that it's been converted to a component
+  delete (node as any).depth
+}
+
+function createAttributeValue(value: unknown) {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  const expression = toEstree(value)
+
+  return {
+    type: 'mdxJsxAttributeValueExpression',
+    value: '',
+    data: {
+      estree: {
+        type: 'Program',
+        sourceType: 'module',
+        body: [
+          {
+            type: 'ExpressionStatement',
+            expression,
+          },
+        ],
+      },
+    },
+  }
+}
+
+function toEstree(value: unknown): any {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return { type: 'Literal', value }
+  }
+
+  if (Array.isArray(value)) {
+    return {
+      type: 'ArrayExpression',
+      elements: value.map((item) => toEstree(item)),
+    }
+  }
+
+  if (typeof value === 'object' && value) {
+    return {
+      type: 'ObjectExpression',
+      properties: Object.entries(value).map(([key, item]) => ({
+        type: 'Property',
+        kind: 'init',
+        method: false,
+        shorthand: false,
+        computed: false,
+        key: isIdentifierName(key)
+          ? { type: 'Identifier', name: key }
+          : { type: 'Literal', value: key },
+        value: toEstree(item),
+      })),
+    }
+  }
+
+  return { type: 'Literal', value: String(value) }
+}
+
+function isIdentifierName(value: string) {
+  return /^[$A-Z_][0-9A-Z_$]*$/i.test(value)
+}
+
+function createDefaultHeadingComponent(): any {
+  return {
+    type: 'ArrowFunctionExpression',
+    async: false,
+    expression: true,
+    params: [
+      {
+        type: 'ObjectPattern',
+        properties: [
+          {
+            type: 'Property',
+            kind: 'init',
+            method: false,
+            shorthand: true,
+            computed: false,
+            key: { type: 'Identifier', name: 'Tag' },
+            value: { type: 'Identifier', name: 'Tag' },
+          },
+          {
+            type: 'Property',
+            kind: 'init',
+            method: false,
+            shorthand: true,
+            computed: false,
+            key: { type: 'Identifier', name: 'id' },
+            value: { type: 'Identifier', name: 'id' },
+          },
+          {
+            type: 'Property',
+            kind: 'init',
+            method: false,
+            shorthand: true,
+            computed: false,
+            key: { type: 'Identifier', name: 'children' },
+            value: { type: 'Identifier', name: 'children' },
+          },
+          {
+            type: 'RestElement',
+            argument: { type: 'Identifier', name: 'rest' },
+          },
+        ],
+      },
+    ],
+    body: {
+      type: 'JSXElement',
+      openingElement: {
+        type: 'JSXOpeningElement',
+        name: { type: 'JSXIdentifier', name: 'Tag' },
+        attributes: [
+          {
+            type: 'JSXAttribute',
+            name: { type: 'JSXIdentifier', name: 'id' },
+            value: {
+              type: 'JSXExpressionContainer',
+              expression: { type: 'Identifier', name: 'id' },
+            },
+          },
+          {
+            type: 'JSXSpreadAttribute',
+            argument: { type: 'Identifier', name: 'rest' },
+          },
+        ],
+        selfClosing: false,
+      },
+      closingElement: {
+        type: 'JSXClosingElement',
+        name: { type: 'JSXIdentifier', name: 'Tag' },
+      },
+      children: [
+        {
+          type: 'JSXElement',
+          openingElement: {
+            type: 'JSXOpeningElement',
+            name: { type: 'JSXIdentifier', name: 'a' },
+            attributes: [
+              {
+                type: 'JSXAttribute',
+                name: { type: 'JSXIdentifier', name: 'href' },
+                value: {
+                  type: 'JSXExpressionContainer',
+                  expression: {
+                    type: 'TemplateLiteral',
+                    expressions: [{ type: 'Identifier', name: 'id' }],
+                    quasis: [
+                      {
+                        type: 'TemplateElement',
+                        tail: false,
+                        value: { raw: '#', cooked: '#' },
+                      },
+                      {
+                        type: 'TemplateElement',
+                        tail: true,
+                        value: { raw: '', cooked: '' },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+            selfClosing: false,
+          },
+          closingElement: {
+            type: 'JSXClosingElement',
+            name: { type: 'JSXIdentifier', name: 'a' },
+          },
+          children: [
+            {
+              type: 'JSXExpressionContainer',
+              expression: { type: 'Identifier', name: 'children' },
+            },
+          ],
+        },
+      ],
+    },
   }
 }
 
