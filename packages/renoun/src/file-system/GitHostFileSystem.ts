@@ -1386,7 +1386,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
       }
 
       if (!entry) {
-        throw new Error(`File not found: ${path}`)
+        throw new Error(`[renoun] File not found: ${path}`)
       }
     }
     return MemoryFileSystem.prototype.readFileSync.call(this, targetPath)
@@ -1397,16 +1397,15 @@ export class GitHostFileSystem extends MemoryFileSystem {
     const targetPath = this.#resolveSymlinkPath(path)
     const entry = this.getFileEntry(targetPath)
     if (!entry) {
-      throw new Error(`File not found: ${path}`)
+      throw new Error(`[renoun] File not found: ${path}`)
     }
-    if (entry.kind === 'binary') {
-      return entry.content.slice()
-    }
-    return new TextEncoder().encode(entry.content)
+    return MemoryFileSystem.prototype.readFileBinarySync.call(this, targetPath)
   }
 
   readFileSync(): string {
-    throw new Error('readFileSync is not supported in GitHostFileSystem')
+    throw new Error(
+      '[renoun] readFileSync is not supported in GitHostFileSystem'
+    )
   }
 
   isFilePathGitIgnored(): boolean {

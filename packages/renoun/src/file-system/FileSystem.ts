@@ -1,9 +1,5 @@
 import { Minimatch } from 'minimatch'
 import type { SyntaxKind, ts } from '../utils/ts-morph.js'
-import type {
-  ReadableStream as NodeReadableStream,
-  WritableStream as NodeWritableStream,
-} from 'node:stream/web'
 
 import {
   getFileExports,
@@ -30,9 +26,9 @@ export type FileSystemWriteFileContent =
   | ArrayBuffer
   | ArrayBufferView
 
-export type FileReadableStream = NodeReadableStream<Uint8Array>
+export type FileReadableStream = ReadableStream<Uint8Array>
 
-export type FileWritableStream = NodeWritableStream<Uint8Array>
+export type FileWritableStream = WritableStream<Uint8Array>
 
 export interface FileSystemOptions {
   /** Path to the tsconfig.json file to use when analyzing types and determining if a file is excluded. */

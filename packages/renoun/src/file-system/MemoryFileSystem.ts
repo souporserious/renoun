@@ -1,5 +1,4 @@
 import ignore from 'fast-ignore'
-import { ReadableStream, WritableStream } from 'node:stream/web'
 import { getTsMorph } from '../utils/ts-morph.js'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.js'
@@ -21,11 +20,9 @@ export type MemoryFileTextEntry = {
   content: string
 }
 
-export type MemoryFileBinaryEntry = {
-  kind: 'binary'
-  content: Uint8Array
-  encoding?: 'binary' | 'base64'
-}
+export type MemoryFileBinaryEntry =
+  | { kind: 'binary'; encoding?: 'binary'; content: Uint8Array }
+  | { kind: 'binary'; encoding: 'base64'; content: string }
 
 export type MemoryFileEntry = MemoryFileTextEntry | MemoryFileBinaryEntry
 
@@ -43,7 +40,7 @@ export class MemoryFileSystem extends FileSystem {
   #ignore: ReturnType<typeof ignore> | undefined
 
   constructor(files: { [path: string]: MemoryFileContent }) {
-    const projectId = generateProjectId()
+    const projectId = crypto.randomUUID()
 
     super()
 
@@ -104,6 +101,13 @@ export class MemoryFileSystem extends FileSystem {
       }
 
       if (content.kind === 'binary') {
+        if (content.encoding === 'base64') {
+          return {
+            kind: 'binary',
+            content: base64ToBytes(content.content),
+          }
+        }
+
         return {
           kind: 'binary',
           content: content.content.slice(),
@@ -234,8 +238,11 @@ export class MemoryFileSystem extends FileSystem {
       return entry.content
     }
 
-    const buffer = Buffer.from(entry.content)
-    return buffer.toString('base64')
+    if (typeof entry.content === 'string') {
+      return entry.content
+    }
+
+    return bytesToBase64(entry.content)
   }
 
   async readFile(path: string): Promise<string> {
@@ -251,6 +258,10 @@ export class MemoryFileSystem extends FileSystem {
 
     if (entry.kind === 'text') {
       return new TextEncoder().encode(entry.content)
+    }
+
+    if (typeof entry.content === 'string') {
+      return base64ToBytes(entry.content)
     }
 
     return entry.content.slice()
@@ -361,11 +372,7 @@ export class MemoryFileSystem extends FileSystem {
   }
 }
 
-/** Generate a random project ID. */
-function generateProjectId(): string {
-  return Math.random().toString(36).slice(2, 9)
-}
-
+/** Concatenate Uint8Arrays into a single Uint8Array. */
 function concatenateUint8Arrays(chunks: Uint8Array[]): Uint8Array {
   const totalLength = chunks.reduce(
     (length, chunk) => length + chunk.byteLength,
@@ -380,4 +387,26 @@ function concatenateUint8Arrays(chunks: Uint8Array[]): Uint8Array {
   }
 
   return result
+}
+
+/** The chunk size for converting bytes to base64. */
+const CHUNK_SIZE = 0x8000
+
+/** Convert a Uint8Array to a base64 string. */
+function bytesToBase64(u8: Uint8Array) {
+  let bin = ''
+  for (let index = 0; index < u8.length; index += CHUNK_SIZE) {
+    bin += String.fromCharCode(...u8.subarray(index, index + CHUNK_SIZE))
+  }
+  return globalThis.btoa(bin)
+}
+
+/** Convert a base64 string to a Uint8Array. */
+function base64ToBytes(b64: string) {
+  const bin = globalThis.atob(b64)
+  const out = new Uint8Array(bin.length)
+  for (let index = 0; index < bin.length; index++) {
+    out[index] = bin.charCodeAt(index)
+  }
+  return out
 }
