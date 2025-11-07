@@ -20,9 +20,11 @@ export type MemoryFileTextEntry = {
   content: string
 }
 
-export type MemoryFileBinaryEntry =
-  | { kind: 'binary'; encoding?: 'binary'; content: Uint8Array }
-  | { kind: 'binary'; encoding: 'base64'; content: string }
+export type MemoryFileBinaryEntry = {
+  kind: 'binary'
+  content: Uint8Array | string
+  encoding?: 'binary' | 'base64'
+}
 
 export type MemoryFileEntry = MemoryFileTextEntry | MemoryFileBinaryEntry
 
@@ -102,16 +104,31 @@ export class MemoryFileSystem extends FileSystem {
 
       if (content.kind === 'binary') {
         if (content.encoding === 'base64') {
-          return {
-            kind: 'binary',
-            content: base64ToBytes(content.content),
+          // Provided as base64 string
+          if (typeof content.content === 'string') {
+            return {
+              kind: 'binary',
+              content: base64ToBytes(content.content),
+              encoding: 'base64',
+            }
+          }
+
+          // Provided as bytes but marked base64
+          if (content.content instanceof Uint8Array) {
+            return {
+              kind: 'binary',
+              content: content.content.slice(),
+              encoding: 'base64',
+            }
           }
         }
-
-        return {
-          kind: 'binary',
-          content: content.content.slice(),
-          encoding: content.encoding,
+        // Treat as raw binary
+        else if (content.content instanceof Uint8Array) {
+          return {
+            kind: 'binary',
+            content: content.content.slice(),
+            encoding: content.encoding,
+          }
         }
       }
     }
@@ -274,12 +291,31 @@ export class MemoryFileSystem extends FileSystem {
   readFileStream(path: string): FileReadableStream {
     const data = this.readFileBinarySync(path)
 
-    return new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(data.slice())
-        controller.close()
+    let position = 0
+    const total = data.byteLength
+
+    return new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          if (position >= total) {
+            controller.close()
+            return
+          }
+          const end = Math.min(position + CHUNK_SIZE, total)
+          controller.enqueue(data.subarray(position, end))
+          position = end
+        },
+        cancel() {
+          position = total
+        },
       },
-    })
+      {
+        highWaterMark: 1,
+        size(chunk) {
+          return chunk.byteLength
+        },
+      } as QueuingStrategy<Uint8Array>
+    )
   }
 
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {
@@ -310,25 +346,33 @@ export class MemoryFileSystem extends FileSystem {
     const chunks: Uint8Array[] = []
     const fileSystem = this
 
-    return new WritableStream<Uint8Array>({
-      write(chunk) {
-        chunks.push(chunk.slice())
+    return new WritableStream<Uint8Array>(
+      {
+        write(chunk) {
+          chunks.push(chunk.slice())
+        },
+        close() {
+          const combined = concatenateUint8Arrays(chunks)
+          try {
+            const text = new TextDecoder('utf-8', { fatal: true }).decode(
+              combined
+            )
+            fileSystem.writeFileSync(normalizedPath, text)
+          } catch {
+            fileSystem.writeFileSync(normalizedPath, combined)
+          }
+        },
+        abort() {
+          chunks.length = 0
+        },
       },
-      close() {
-        const combined = concatenateUint8Arrays(chunks)
-        try {
-          const text = new TextDecoder('utf-8', { fatal: true }).decode(
-            combined
-          )
-          fileSystem.writeFileSync(normalizedPath, text)
-        } catch {
-          fileSystem.writeFileSync(normalizedPath, combined)
-        }
-      },
-      abort() {
-        chunks.length = 0
-      },
-    })
+      {
+        highWaterMark: 16,
+        size(chunk) {
+          return chunk.byteLength
+        },
+      } as QueuingStrategy<Uint8Array>
+    )
   }
 
   fileExistsSync(path: string): boolean {

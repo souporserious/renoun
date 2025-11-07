@@ -102,6 +102,65 @@ describe('MemoryFileSystem', () => {
     expect(await fileSystem.fileExists('stream.txt')).toBe(false)
   })
 
+  test('readFileStream yields multiple chunks for large files', async () => {
+    const size = 100_000
+    const data = new Uint8Array(size)
+    for (let i = 0; i < size; i++) data[i] = i % 256
+    const fs = new MemoryFileSystem({ 'big.bin': data })
+
+    const stream = fs.readFileStream('big.bin')
+    const reader = stream.getReader()
+    const out = new Uint8Array(size)
+    let offset = 0
+    let chunks = 0
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      out.set(value!, offset)
+      offset += value!.length
+      chunks++
+    }
+    reader.releaseLock()
+
+    expect(offset).toBe(size)
+    expect(chunks).toBeGreaterThan(1) // should not emit all at once
+    expect(Array.from(out)).toEqual(Array.from(data))
+  })
+
+  test('writeFileStream stores large data; readFileStream returns multiple chunks', async () => {
+    const fs = new MemoryFileSystem({})
+    const size = 120_000
+    const partA = new Uint8Array(60_000).fill(65) // 'A'
+    const partB = new Uint8Array(60_000).fill(66) // 'B'
+    const expected = new Uint8Array(size)
+    expected.set(partA, 0)
+    expected.set(partB, partA.length)
+
+    const writer = fs.writeFileStream('large.bin').getWriter()
+    await writer.write(partA)
+    await writer.write(partB)
+    await writer.close()
+
+    const stream = fs.readFileStream('large.bin')
+    const reader = stream.getReader()
+    const received = new Uint8Array(size)
+    let offset = 0
+    let chunks = 0
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      received.set(value!, offset)
+      offset += value!.length
+      chunks++
+    }
+    reader.releaseLock()
+
+    expect(offset).toBe(size)
+    expect(chunks).toBeGreaterThan(1)
+    expect(Array.from(received)).toEqual(Array.from(expected))
+  })
+
   test('readDirectorySync lists files and directories at a path', () => {
     const fileSystem = new MemoryFileSystem({
       'a/b/c.txt': '1',
