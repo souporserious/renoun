@@ -1149,6 +1149,43 @@ function resolveTypeExpression(
       const typeName = enclosingNode.getTypeName()
       let referenceName = typeName.getText()
       let locationNode: Node = enclosingNode
+      const typeNameSymbol = typeName.getSymbol()
+      const referenceDefaults: string[] = []
+      const referenceTextFromNode = enclosingNode
+        .getText()
+        .replace(/'([^']*)'/g, '"$1"')
+
+      if (typeNameSymbol) {
+        const typeNameDeclaration = getPrimaryDeclaration(typeNameSymbol)
+        const typeParameters = (typeNameDeclaration as TypeAliasDeclaration | InterfaceDeclaration | undefined)?.getTypeParameters?.()
+
+        if (typeParameters && typeParameters.length > enclosingNode.getTypeArguments().length) {
+          for (
+            let index = enclosingNode.getTypeArguments().length;
+            index < typeParameters.length;
+            ++index
+          ) {
+            const defaultNode = typeParameters[index].getDefault()
+            if (defaultNode) {
+              referenceDefaults.push(defaultNode.getText())
+            }
+          }
+        }
+      }
+
+      let referenceText = referenceTextFromNode
+
+      if (referenceDefaults.length) {
+        if (referenceText.includes('<')) {
+          const insertIndex = referenceText.lastIndexOf('>')
+          const before = referenceText.slice(0, insertIndex)
+          const after = referenceText.slice(insertIndex)
+          const hasExplicitArgs = enclosingNode.getTypeArguments().length > 0
+          referenceText = `${before}${hasExplicitArgs ? ', ' : ''}${referenceDefaults.join(', ')}${after}`
+        } else {
+          referenceText = `${referenceText}<${referenceDefaults.join(', ')}>`
+        }
+      }
 
       // If the type name resolves to a type parameter, grab the concrete symbol
       if (tsMorph.Node.isIdentifier(typeName)) {
@@ -2763,7 +2800,7 @@ function resolveParameter(
      * - Otherwise we're at an instantiated call site, so use the contextual type.
      */
     const parameterTypeNode = parameterDeclaration.getTypeNode()
-    const initializer = getInitializerValue(parameterDeclaration)
+    let initializer = getInitializerValue(parameterDeclaration)
     const isLocal = parameterDeclaration === enclosingNode
     const isExternal = parameterDeclaration
       ? parameterDeclaration.getSourceFile().isInNodeModules()
@@ -2791,11 +2828,74 @@ function resolveParameter(
     }
 
     if (resolvedParameterType) {
-      const isOptional = parameterDeclaration.hasQuestionToken()
-      const resolvedType =
+      let isOptional = parameterDeclaration.hasQuestionToken()
+      let resolvedType =
         (isOptional ?? Boolean(initializer))
           ? filterUndefinedFromUnion(resolvedParameterType)
           : resolvedParameterType
+      let isRest = parameterDeclaration.isRestParameter()
+
+      if (!isOptional || !isRest) {
+        const functionLike = parameterDeclaration.getParent()
+        const jsDocParameterTag = (() => {
+          const jsDocs = (functionLike as any)?.getJsDocs?.()
+          if (!jsDocs) {
+            return undefined
+          }
+
+          for (const jsDoc of jsDocs) {
+            for (const tag of jsDoc.getTags()) {
+              if (
+                tsMorph.Node.isJSDocParameterTag(tag) &&
+                tag.getName() === parameterDeclaration.getName()
+              ) {
+                return tag
+              }
+            }
+          }
+
+          return undefined
+        })()
+
+        if (jsDocParameterTag) {
+          const jsDocTypeNode = jsDocParameterTag
+            .getTypeExpression()
+            ?.getTypeNode()
+          const unwrappedJsDocType = jsDocTypeNode
+            ? unwrapRestAndOptional(jsDocTypeNode)
+            : undefined
+
+          if (
+            !isOptional &&
+            (unwrappedJsDocType?.isOptional || jsDocParameterTag.isBracketed())
+          ) {
+            isOptional = true
+            resolvedType = filterUndefinedFromUnion(resolvedParameterType)
+          }
+
+          if (!isRest && unwrappedJsDocType?.isRest) {
+            isRest = true
+          }
+
+          // If bracketed with a default, capture it as the initializer when none exists
+          if (initializer === undefined && jsDocParameterTag.isBracketed()) {
+            const tagText = jsDocParameterTag.getText()
+            const match = tagText.match(/\[([^\]]+)\]/)
+            if (match) {
+              const inner = match[1]
+              const eqIndex = inner.indexOf('=')
+              if (eqIndex !== -1) {
+                const defaultRaw = inner.slice(eqIndex + 1).trim()
+                const parsed = parseJsDocDefaultValue(defaultRaw)
+                if (parsed !== undefined) {
+                  initializer = parsed
+                }
+              }
+            }
+          }
+        }
+      }
+
       let name: string | undefined = parameterDeclaration.getName()
 
       if (name.startsWith('__')) {
@@ -2808,7 +2908,7 @@ function resolveParameter(
         type: resolvedType,
         initializer,
         isOptional: isOptional ?? Boolean(initializer),
-        isRest: parameterDeclaration.isRestParameter(),
+        isRest,
         description: getSymbolDescription(
           parameterDeclaration.getSymbolOrThrow()
         ),
@@ -2837,12 +2937,16 @@ function resolveParameter(
     return
   }
 
-  const isOptional = jsDocParameter.isBracketed()
+  const jsDocTypeNode = jsDocParameter.getTypeExpression()?.getTypeNode()
+  const unwrappedJsDocType = jsDocTypeNode
+    ? unwrapRestAndOptional(jsDocTypeNode)
+    : undefined
+  const isRest = unwrappedJsDocType?.isRest ?? false
+  const isOptional =
+    jsDocParameter.isBracketed() || unwrappedJsDocType?.isOptional === true
   const resolvedType = isOptional
     ? filterUndefinedFromUnion(resolvedParameterType)
     : resolvedParameterType
-  const jsDocTypeNode = jsDocParameter.getTypeExpression()?.getTypeNode()
-  const isRest = jsDocTypeNode?.getText().startsWith('...') ?? false
   const name = jsDocParameter.getName()
   const description = jsDocParameter.getCommentText()
 
@@ -2850,7 +2954,22 @@ function resolveParameter(
     kind: 'Parameter',
     name,
     type: resolvedType,
-    initializer: undefined,
+    initializer: (() => {
+      // Detect default in bracketed form: @param {T} [name=default]
+      if (jsDocParameter.isBracketed()) {
+        const tagText = jsDocParameter.getText()
+        const match = tagText.match(/\[([^\]]+)\]/)
+        if (match) {
+          const inner = match[1]
+          const eqIndex = inner.indexOf('=')
+          if (eqIndex !== -1) {
+            const defaultRaw = inner.slice(eqIndex + 1).trim()
+            return parseJsDocDefaultValue(defaultRaw)
+          }
+        }
+      }
+      return undefined
+    })(),
     isOptional,
     isRest,
     description:
@@ -2861,6 +2980,37 @@ function resolveParameter(
   }
 }
 
+/** Parse JSDoc default string value to a JS value. */
+function parseJsDocDefaultValue(defaultRaw: string): unknown {
+  const raw = defaultRaw.trim()
+  // Strip surrounding quotes for strings
+  const quoted =
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  const unquoted = quoted ? raw.slice(1, -1) : raw
+
+  // Try JSON for arrays/objects and primitives if quoted properly
+  if (/^[\[\{]/.test(raw)) {
+    try {
+      return JSON.parse(raw)
+    } catch {
+      // fall through
+    }
+  }
+
+  if (raw === 'null') return null
+  if (raw === 'undefined') return undefined
+  if (raw === 'true') return true
+  if (raw === 'false') return false
+
+  // Number
+  if (!Number.isNaN(Number(unquoted)) && unquoted !== '') {
+    return Number(unquoted)
+  }
+
+  // String
+  return unquoted
+}
 /** Process index signatures of an interface or type alias. */
 function resolveIndexSignatures(node?: Node, filter?: TypeFilter) {
   const resolvedSignatures: Kind.IndexSignature[] = []
@@ -3157,8 +3307,24 @@ function unwrapRestAndOptional(node: TypeNode) {
     }
   }
 
+  if (currentNode.getKind() === tsMorph.SyntaxKind.JSDocVariadicType) {
+    isRest = true
+    const innerTypeNode = (currentNode as any).getTypeNode?.()
+    if (innerTypeNode) {
+      currentNode = innerTypeNode
+    }
+  }
+
   if (currentNode.getKind() === tsMorph.SyntaxKind.OptionalType) {
     isOptional = true
+  }
+
+  if (currentNode.getKind() === tsMorph.SyntaxKind.JSDocOptionalType) {
+    isOptional = true
+    const innerTypeNode = (currentNode as any).getTypeNode?.()
+    if (innerTypeNode) {
+      currentNode = innerTypeNode
+    }
   }
 
   return { node: currentNode, isRest, isOptional }
