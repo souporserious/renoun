@@ -22,6 +22,9 @@ export default function ({
   const smoothScrollBehavior: ScrollBehavior = prefersReducedMotion
     ? 'auto'
     : 'smooth'
+  const OVERFLOW_REGEX = /(auto|scroll)/
+  const viewportCache = new WeakMap<HTMLElement, HTMLElement>()
+
   let previousActiveLink: HTMLAnchorElement | null = null
   let previousLastSectionInView = false
   let isScrollingIntoView = false
@@ -41,15 +44,31 @@ export default function ({
   }
 
   function getClosestViewport(node: HTMLElement): HTMLElement {
-    let current: ParentNode | null = node.parentNode
-    while (current) {
-      if (current === document.body) return document.body as HTMLElement
-      const element = current as HTMLElement
-      const { overflow, overflowX, overflowY } = getComputedStyle(element)
-      if (/(auto|scroll)/.test(overflow + overflowX + overflowY)) return element
-      current = element.parentNode
+    const cached = viewportCache.get(node)
+    if (cached) {
+      return cached
     }
-    return document.body as HTMLElement
+
+    let current: ParentNode | null = node.parentNode
+
+    while (current) {
+      if (current === document.body) {
+        return document.body
+      }
+
+      if (current instanceof HTMLElement) {
+        const { overflow, overflowX, overflowY } = getComputedStyle(current)
+        if (OVERFLOW_REGEX.test(overflow + overflowX + overflowY)) {
+          viewportCache.set(node, current)
+          return current
+        }
+      }
+
+      current = current.parentNode
+    }
+
+    viewportCache.set(node, document.body)
+    return document.body
   }
 
   function setActiveLink(target: HTMLElement): void {
@@ -169,16 +188,21 @@ export default function ({
             lastLink
           ) {
             const viewport = getClosestViewport(lastLink)
-            viewport.scrollTo({
-              top: viewport.scrollHeight,
-              behavior: smoothScrollBehavior,
-            })
+            if (viewport !== document.body) {
+              viewport.scrollTo({
+                top: viewport.scrollHeight,
+                behavior: smoothScrollBehavior,
+              })
+            }
           }
         } else if (previousActiveLink) {
-          previousActiveLink.scrollIntoView({
-            behavior: smoothScrollBehavior,
-            block: 'nearest',
-          })
+          const viewport = getClosestViewport(previousActiveLink)
+          if (viewport !== document.body) {
+            previousActiveLink.scrollIntoView({
+              behavior: smoothScrollBehavior,
+              block: 'nearest',
+            })
+          }
         }
         previousLastSectionInView = lastSectionInView
       }
