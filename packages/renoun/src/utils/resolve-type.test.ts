@@ -19472,6 +19472,332 @@ describe('resolveType', () => {
     `)
   })
 
+  test('resolves properties from JSDoc typedefs', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @typedef {Object} Foo
+       * @property {number} value
+       * @property {string=} label
+       */
+
+      /** @type {Foo} */
+      export const foo = {}
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('foo')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved).toMatchObject({
+      kind: 'Variable',
+      name: 'foo',
+      type: {
+        kind: 'TypeLiteral',
+        members: expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'PropertySignature',
+            name: 'value',
+            type: expect.objectContaining({ kind: 'Number' }),
+          }),
+          expect.objectContaining({
+            kind: 'PropertySignature',
+            name: 'label',
+            isOptional: true,
+            type: expect.objectContaining({ kind: 'String' }),
+          }),
+        ]),
+      },
+    })
+  })
+
+  test('resolves optional and rest JSDoc parameters', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @param {string=} label
+       * @param {...number} values
+       */
+      export function format(label, ...values) {
+        return [label, ...values]
+      }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getFunctionOrThrow('format')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved).toBeDefined()
+    if (!resolved || resolved.kind !== 'Function') {
+      throw new Error('Expected resolved function')
+    }
+    const [signature] = resolved.signatures
+
+    expect(signature?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'label',
+          isOptional: true,
+          type: expect.objectContaining({ kind: 'String' }),
+        }),
+        expect.objectContaining({
+          name: 'values',
+          isRest: true,
+          type: expect.objectContaining({
+            kind: 'TypeReference',
+            name: 'Array',
+          }),
+        }),
+      ])
+    )
+  })
+
+  test('resolves bracket-optional JSDoc parameters and filters undefined', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @param {string} [label]
+       */
+      export function format(label) {
+        return label
+      }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getFunctionOrThrow('format')
+    const resolved = resolveType(declaration.getType(), declaration)
+    expect(resolved).toBeDefined()
+    if (!resolved || resolved.kind !== 'Function') {
+      throw new Error('Expected resolved function')
+    }
+    const [signature] = resolved.signatures
+
+    expect(signature?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'label',
+          isOptional: true,
+          type: expect.objectContaining({ kind: 'String' }),
+        }),
+      ])
+    )
+  })
+
+  test('resolves @returns JSDoc for JS functions', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @returns {number}
+       */
+      export function getValue() {
+        return 42
+      }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getFunctionOrThrow('getValue')
+    const resolved = resolveType(declaration.getType(), declaration)
+    expect(resolved).toBeDefined()
+    if (!resolved || resolved.kind !== 'Function') {
+      throw new Error('Expected resolved function')
+    }
+    const [signature] = resolved.signatures
+
+    expect(signature?.returnType).toEqual(
+      expect.objectContaining({ kind: 'Number' })
+    )
+  })
+
+  test('captures JSDoc default values for JS functions', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @param {string} [label="ok"]
+       * @param {number} [count=3]
+       * @param {boolean} [flag=false]
+       * @param {null} [nullable=null]
+       */
+      export function fn(label, count, flag, nullable) {
+        return [label, count, flag, nullable]
+      }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getFunctionOrThrow('fn')
+    const resolved = resolveType(declaration.getType(), declaration)
+    expect(resolved).toBeDefined()
+    if (!resolved || resolved.kind !== 'Function') {
+      throw new Error('Expected resolved function')
+    }
+    const [signature] = resolved.signatures
+    const params = signature?.parameters || []
+
+    expect(params.find((p) => p.name === 'label')?.initializer).toBe('ok')
+    expect(params.find((p) => p.name === 'count')?.initializer).toBe(3)
+    expect(params.find((p) => p.name === 'flag')?.initializer).toBe(false)
+    expect(params.find((p) => p.name === 'nullable')?.initializer).toBe(null)
+  })
+
+  test('captures JSDoc default values for TS-declared params', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: { strict: true },
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.ts',
+      dedent`
+      /**
+       * @param {string} [label="ok"]
+       * @param {number} [count=3]
+       */
+      export function fn(label: string, count: number) {
+        return [label, count]
+      }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getFunctionOrThrow('fn')
+    const resolved = resolveType(declaration.getType(), declaration)
+    expect(resolved).toBeDefined()
+    if (!resolved || resolved.kind !== 'Function') {
+      throw new Error('Expected resolved function')
+    }
+    const [signature] = resolved.signatures
+    const params = signature?.parameters || []
+
+    expect(params.find((p) => p.name === 'label')?.initializer).toBe('ok')
+    expect(params.find((p) => p.name === 'count')?.initializer).toBe(3)
+  })
+
+  test('resolves nullable and non-nullable JSDoc parameter types', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @param {(string|null)} maybe
+        * @param {!string} sure
+       */
+      export function fn(maybe, sure) {
+        return [maybe, sure]
+      }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getFunctionOrThrow('fn')
+    const resolved = resolveType(declaration.getType(), declaration)
+    expect(resolved).toBeDefined()
+    if (!resolved || resolved.kind !== 'Function') {
+      throw new Error('Expected resolved function')
+    }
+    const [signature] = resolved.signatures
+
+    const params = signature?.parameters || []
+    const maybeParam = params.find((p) => p.name === 'maybe')
+    const sureParam = params.find((p) => p.name === 'sure')
+
+    const maybeType = maybeParam?.type as any
+    const isString = maybeType?.kind === 'String'
+    const isStringOrNullUnion =
+      maybeType?.kind === 'UnionType' &&
+      Array.isArray(maybeType.types) &&
+      maybeType.types.some((t: any) => t.kind === 'String') &&
+      maybeType.types.some((t: any) => t.kind === 'Null')
+    expect(isString || isStringOrNullUnion).toBe(true)
+    expect(sureParam?.type).toEqual(expect.objectContaining({ kind: 'String' }))
+  })
+
+  test('resolves bracket-optional @property in JSDoc typedefs', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @typedef {Object} Props
+       * @property {number} value
+       * @property {string} [label]
+       */
+      /** @type {Props} */
+      export const props = {}
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('props')
+    const resolved = resolveType(declaration.getType(), declaration)
+    expect(resolved).toBeDefined()
+    if (
+      !resolved ||
+      resolved.kind !== 'Variable' ||
+      resolved.type.kind !== 'TypeLiteral'
+    ) {
+      throw new Error('Expected variable with type literal')
+    }
+    const type = resolved.type
+
+    expect(type?.members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'PropertySignature',
+          name: 'value',
+          isOptional: false,
+          type: expect.objectContaining({ kind: 'Number' }),
+        }),
+        expect.objectContaining({
+          kind: 'PropertySignature',
+          name: 'label',
+          isOptional: true,
+          type: expect.objectContaining({ kind: 'String' }),
+        }),
+      ])
+    )
+  })
   test('synthetic return type union types', () => {
     const project = new Project({
       compilerOptions: { strict: true },
@@ -20365,61 +20691,59 @@ describe('resolveType', () => {
       }
     `)
   })
-test('handles parameters without declarations gracefully', () => {
-  const jsProject = new Project({
-    useInMemoryFileSystem: true,
-    compilerOptions: { allowJs: true, checkJs: true },
-  })
-  const jsSource = jsProject.createSourceFile(
-    'math-node.js',
-    dedent`
+  test('handles parameters without declarations gracefully', () => {
+    const jsProject = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: { allowJs: true, checkJs: true },
+    })
+    const jsSource = jsProject.createSourceFile(
+      'math-node.js',
+      dedent`
       export class MathNode {
         method(value) {
           return value
         }
       }
     `,
-    { overwrite: true }
-  )
-  const classDeclaration = jsSource.getClassOrThrow('MathNode')
-  const method = classDeclaration
-    .getInstanceMethods()
-    .find((instanceMethod) => instanceMethod.getName() === 'method')
+      { overwrite: true }
+    )
+    const classDeclaration = jsSource.getClassOrThrow('MathNode')
+    const method = classDeclaration
+      .getInstanceMethods()
+      .find((instanceMethod) => instanceMethod.getName() === 'method')
 
-  if (!method) {
-    throw new Error('Expected method declaration to be defined')
-  }
+    if (!method) {
+      throw new Error('Expected method declaration to be defined')
+    }
 
-  const parameter = method.getParameters()[0]
-  const symbol = parameter.getSymbolOrThrow()
-  const getDeclarationsSpy = vi
-    .spyOn(symbol, 'getDeclarations')
-    .mockReturnValue([])
+    const parameter = method.getParameters()[0]
+    const symbol = parameter.getSymbolOrThrow()
+    const getDeclarationsSpy = vi
+      .spyOn(symbol, 'getDeclarations')
+      .mockReturnValue([])
 
-  const resolvedClass = resolveType(
-    classDeclaration.getType(),
-    classDeclaration
-  )
+    const resolvedClass = resolveType(
+      classDeclaration.getType(),
+      classDeclaration
+    )
 
-  getDeclarationsSpy.mockRestore()
+    getDeclarationsSpy.mockRestore()
 
-  expect(resolvedClass?.kind).toBe('Class')
+    expect(resolvedClass?.kind).toBe('Class')
 
-  const resolvedMethod = (resolvedClass as any)?.methods?.find(
-    (member: any) => member.kind === 'ClassMethod' && member.name === 'method'
-  )
+    const resolvedMethod = (resolvedClass as any)?.methods?.find(
+      (member: any) => member.kind === 'ClassMethod' && member.name === 'method'
+    )
 
-  expect(resolvedMethod).toBeDefined()
+    expect(resolvedMethod).toBeDefined()
 
-  const signature = resolvedMethod.signatures[0]
+    const signature = resolvedMethod.signatures[0]
 
-  expect(signature.parameters).toHaveLength(1)
-  const fallbackParameter = signature.parameters[0]
+    expect(signature.parameters).toHaveLength(1)
+    const fallbackParameter = signature.parameters[0]
 
-  expect(fallbackParameter?.name).toBe('value')
-  expect(fallbackParameter?.text).toBe('value: any')
-  expect(fallbackParameter?.type.kind).toBe('Any')
-})
-
-
+    expect(fallbackParameter?.name).toBe('value')
+    expect(fallbackParameter?.text).toBe('value: any')
+    expect(fallbackParameter?.type.kind).toBe('Any')
+  })
 })
