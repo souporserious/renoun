@@ -1,5 +1,22 @@
 # renoun
 
+## 10.9.1
+
+### Patch Changes
+
+- ac3ece9: Implements actual streaming for `readFileStream` and `writeFileStream` methods in `MemoryFileSystem`.
+- 47a533a: Fixes the `CodeBlock` component's Suspense fallback missing bottom padding.
+- 5f17344: Improves contextual parameter type resolution in `JavaScriptModuleExport#getType` when declarations are unavailable by inferring metadata from symbol flags.
+- 63804b6: The `Image` component now throws clear errors for unknown or misconfigured custom source schemes.
+- 04d1ba0: Improves JSDoc support in `JavaScriptModuleExport#getType`.
+- 455c9b6: Fixes `RootProvider` config not being applied in dynamic applications. Now `globalThis` is exclusively used instead of `React.cache`.
+- 24cbe39: Refactors the tokenizer used in the `Tokens` component to process multiple themes concurrently to improve performance.
+- 43870ad: Refactors the `Tokens` component to run TypeScript analysis and syntax highlighting concurrently.
+- 0fa840a: Fixes `MemoryFileSystem` and `GitHostFileSystem` so the file system methods work cross-platform.
+- f0ac1c5: Adds `Suspense` boundary around the `Navigation` component to improve performance during local development.
+- Updated dependencies [afcfb23]
+  - @renoun/mdx@3.4.0
+
 ## 10.9.0
 
 ### Minor Changes
