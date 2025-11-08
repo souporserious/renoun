@@ -379,22 +379,10 @@ function convertHeadingToComponent(node: Heading) {
     left: {
       type: 'LogicalExpression',
       operator: '&&',
-      left: {
-        type: 'MemberExpression',
-        object: { type: 'Identifier', name: 'props' },
-        property: { type: 'Identifier', name: 'components' },
-        computed: false,
-        optional: false,
-      },
+      left: { type: 'Identifier', name: 'C' },
       right: {
         type: 'MemberExpression',
-        object: {
-          type: 'MemberExpression',
-          object: { type: 'Identifier', name: 'props' },
-          property: { type: 'Identifier', name: 'components' },
-          computed: false,
-          optional: false,
-        },
+        object: { type: 'Identifier', name: 'C' },
         property: { type: 'Identifier', name: tagName },
         computed: false,
         optional: false,
@@ -473,8 +461,9 @@ function convertHeadingToComponent(node: Heading) {
             kind: 'const',
             declarations: [
               {
+                // const C = ((typeof _components !== 'undefined') && _components) || (props.components || {})
                 type: 'VariableDeclarator',
-                id: headingComponentIdentifier,
+                id: { type: 'Identifier', name: 'C' },
                 init: {
                   type: 'LogicalExpression',
                   operator: '||',
@@ -482,25 +471,45 @@ function convertHeadingToComponent(node: Heading) {
                     type: 'LogicalExpression',
                     operator: '&&',
                     left: {
+                      type: 'BinaryExpression',
+                      operator: '!==',
+                      left: {
+                        type: 'UnaryExpression',
+                        operator: 'typeof',
+                        prefix: true,
+                        argument: { type: 'Identifier', name: '_components' },
+                      },
+                      right: { type: 'Literal', value: 'undefined' },
+                    },
+                    right: { type: 'Identifier', name: '_components' },
+                  },
+                  right: {
+                    type: 'LogicalExpression',
+                    operator: '||',
+                    left: {
                       type: 'MemberExpression',
                       object: { type: 'Identifier', name: 'props' },
                       property: { type: 'Identifier', name: 'components' },
                       computed: false,
                       optional: false,
                     },
-                    right: {
-                      type: 'MemberExpression',
-                      object: {
-                        type: 'MemberExpression',
-                        object: { type: 'Identifier', name: 'props' },
-                        property: { type: 'Identifier', name: 'components' },
-                        computed: false,
-                        optional: false,
-                      },
-                      property: { type: 'Identifier', name: 'Heading' },
-                      computed: false,
-                      optional: false,
-                    },
+                    right: { type: 'ObjectExpression', properties: [] },
+                  },
+                },
+              },
+              {
+                // const HeadingComponent = C.Heading || DefaultHeadingComponent
+                type: 'VariableDeclarator',
+                id: { type: 'Identifier', name: 'HeadingComponent' },
+                init: {
+                  type: 'LogicalExpression',
+                  operator: '||',
+                  left: {
+                    type: 'MemberExpression',
+                    object: { type: 'Identifier', name: 'C' },
+                    property: { type: 'Identifier', name: 'Heading' },
+                    computed: false,
+                    optional: false,
                   },
                   right: {
                     type: 'Identifier',
@@ -534,31 +543,6 @@ function convertHeadingToComponent(node: Heading) {
 
   // Remove the depth property now that it's been converted to a HeadingComponent
   delete (node as any).depth
-}
-
-function createAttributeValue(value: unknown) {
-  if (typeof value === 'string') {
-    return value
-  }
-
-  const expression = toEstree(value)
-
-  return {
-    type: 'mdxJsxAttributeValueExpression',
-    value: '',
-    data: {
-      estree: {
-        type: 'Program',
-        sourceType: 'module',
-        body: [
-          {
-            type: 'ExpressionStatement',
-            expression,
-          },
-        ],
-      },
-    },
-  }
 }
 
 function toEstree(value: unknown): any {

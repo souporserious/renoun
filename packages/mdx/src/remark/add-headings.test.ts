@@ -37,9 +37,9 @@ describe('addHeadings', () => {
       function _createMdxContent(props) {
         return _jsxDEV(_Fragment, {
           children: (() => {
-            const HeadingComponent = props.components && props.components.Heading || DefaultHeadingComponent;
+            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent;
             return _jsxDEV(HeadingComponent, {
-              Tag: props.components && props.components.h1 || "h1",
+              Tag: C && C.h1 || "h1",
               id: "hello-world",
               children: "Hello, world!"
             }, undefined, false, {
@@ -106,9 +106,9 @@ describe('addHeadings', () => {
         };
         return _jsx(_Fragment, {
           children: (() => {
-            const HeadingComponent = props.components && props.components.Heading || DefaultHeadingComponent;
+            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent;
             return _jsx(HeadingComponent, {
-              Tag: props.components && props.components.h1 || "h1",
+              Tag: C && C.h1 || "h1",
               id: "hello-world",
               children: _jsxs(_Fragment, {
                 children: ["Hello, ", _jsx(_components.code, {
@@ -179,9 +179,9 @@ describe('addHeadings', () => {
         };
         return _jsx(_Fragment, {
           children: (() => {
-            const HeadingComponent = props.components && props.components.Heading || DefaultHeadingComponent;
+            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent;
             return _jsx(HeadingComponent, {
-              Tag: props.components && props.components.h1 || "h1",
+              Tag: C && C.h1 || "h1",
               id: "hello-world",
               children: _jsx(_components.img, {
                 src: "https://example.com/image.png",
@@ -233,7 +233,39 @@ describe('addHeadings', () => {
     })
     const code = String(result)
     // Ensure Tag is selected via components map first, then intrinsic element
-    expect(code).toContain('props.components && props.components.h1 || "h1"')
+    expect(code).toContain('Tag: C && C.h1 || "h1"')
+  })
+
+  test('uses provided Heading component and passes expected props (snapshot)', async () => {
+    const mdxSource = `# Hello`
+    const calls: Array<any> = []
+    function HeadingOverride() {
+      return null
+    }
+    const jsxStub = (type: any, props: any) => {
+      calls.push({ type, props })
+      return null
+    }
+    const mdxModule = await evaluate(mdxSource, {
+      remarkPlugins: [addHeadings],
+      development: false,
+      Fragment: Symbol.for('react.fragment'),
+      jsx: jsxStub,
+      jsxs: jsxStub,
+    })
+
+    mdxModule.default({ components: { Heading: HeadingOverride } })
+
+    const invocation = calls.find(
+      (component) => component.type === HeadingOverride
+    )
+    expect(invocation?.props).toMatchInlineSnapshot(`
+      {
+        "Tag": "h1",
+        "children": "Hello",
+        "id": "hello",
+      }
+    `)
   })
 
   test('wraps headings with getHeadings when exported', async () => {
