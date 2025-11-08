@@ -11,6 +11,8 @@ h2,
 h3,
 h4 {
   text-wrap: balance;
+  scroll-margin-top: theme(spacing.8);
+  text-box: trim-both cap alphabetic;
 }
 
 p {
