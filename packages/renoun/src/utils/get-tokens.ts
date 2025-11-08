@@ -16,6 +16,26 @@ import { splitTokenByRanges } from './split-tokens-by-ranges.js'
 const tsMorph = getTsMorph()
 const { Node, SyntaxKind } = tsMorph
 
+interface SymbolMetadata {
+  start: number
+  end: number
+  isDeprecated: boolean
+}
+
+interface TypeScriptMetadata {
+  sourceFile: SourceFile | undefined
+  diagnostics: Diagnostic<ts.Diagnostic>[]
+  symbolMetadata: SymbolMetadata[]
+}
+
+type MetadataCollector = (
+  project: Project,
+  filePath: string | undefined,
+  jsxOnly: boolean,
+  allowErrors?: string | boolean,
+  showErrors?: boolean
+) => Promise<TypeScriptMetadata>
+
 type Color = string
 
 type ThemeTokenColor = {
@@ -82,6 +102,7 @@ export interface GetTokensOptions {
   highlighter: Highlighter | null
   sourcePath?: string | false
   theme: ConfigurationOptions['theme']
+  metadataCollector?: MetadataCollector
 }
 
 /** Converts a string of code to an array of highlighted tokens. */
@@ -94,6 +115,7 @@ export async function getTokens({
   showErrors,
   highlighter = null,
   theme: themeConfig,
+  metadataCollector = collectTypeScriptMetadata,
 }: GetTokensOptions): Promise<TokenizedLines> {
   return getDebugLogger().trackTokenProcessing(
     language,
@@ -152,16 +174,22 @@ export async function getTokens({
         themeNames = ['default']
       }
 
-      // Track highlighter performance
-      const tokens = await getDebugLogger().trackOperation(
+      const tsMetadataPromise = metadataCollector(
+        project,
+        filePath,
+        jsxOnly,
+        allowErrors,
+        showErrors
+      )
+
+      const tokensPromise = getDebugLogger().trackOperation(
         'highlighter',
-        async () => {
-          return await highlighter(
+        async () =>
+          await highlighter(
             value,
             finalLanguage as TextMateLanguages,
             themeNames
-          )
-        },
+          ),
         {
           data: {
             language: finalLanguage,
@@ -171,75 +199,16 @@ export async function getTokens({
         }
       )
 
-      const sourceFile = filePath ? project.getSourceFile(filePath) : undefined
+      const [tokens, tsMetadata] = await Promise.all([
+        tokensPromise,
+        tsMetadataPromise,
+      ])
 
-      const sourceFileDiagnostics = getDiagnostics(
+      const {
         sourceFile,
-        allowErrors,
-        showErrors
-      )
-
-      const importSpecifiers =
-        sourceFile && !jsxOnly
-          ? sourceFile
-              .getImportDeclarations()
-              .map((importDeclaration) =>
-                importDeclaration.getModuleSpecifier()
-              )
-          : []
-      const identifiers = sourceFile
-        ? sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
-        : []
-
-      const suggestionDiagnostics = sourceFile
-        ? project
-            .getLanguageService()
-            .compilerObject.getSuggestionDiagnostics(sourceFile.getFilePath())
-        : []
-      const deprecatedRanges = suggestionDiagnostics
-        .filter(
-          (diagnostic) =>
-            (diagnostic.reportsDeprecated || diagnostic.code === 6385) &&
-            diagnostic.start !== undefined
-        )
-        .map((diagnostic) => ({
-          start: diagnostic.start,
-          end: diagnostic.start + (diagnostic.length ?? 0),
-        }))
-
-      const symbolMetadata = [...importSpecifiers, ...identifiers]
-        .filter((node) => {
-          const parent = node.getParent()
-          const isJsxOnlyImport = jsxOnly
-            ? Node.isImportSpecifier(parent) || Node.isImportClause(parent)
-            : false
-          return (
-            !isJsxOnlyImport &&
-            !Node.isJSDocTag(parent) &&
-            !Node.isJSDoc(parent)
-          )
-        })
-        .map((node) => {
-          let start = node.getStart()
-          let end = node.getEnd()
-
-          // Offset module specifiers since they contain quotes which are tokenized separately
-          // e.g. import React from 'react' -> ["'", "react", "'"]
-          if (Node.isStringLiteral(node)) {
-            start += 1
-            end -= 1
-          }
-
-          const isDeprecated = deprecatedRanges.some(
-            (range) => range.start === start && range.end === end
-          )
-
-          return {
-            start: node.getStart(),
-            end: node.getEnd(),
-            isDeprecated,
-          }
-        })
+        diagnostics: sourceFileDiagnostics,
+        symbolMetadata,
+      } = tsMetadata
 
       const rootDirectory = getRootDirectory()
       const baseDirectory = process.cwd().replace(rootDirectory, '')
@@ -378,6 +347,87 @@ export async function getTokens({
       return parsedTokens
     }
   )
+}
+
+/** Collects typescript metadata for a given source file. */
+export async function collectTypeScriptMetadata(
+  project: Project,
+  filePath: string | undefined,
+  jsxOnly: boolean,
+  allowErrors?: string | boolean,
+  showErrors?: boolean
+): Promise<TypeScriptMetadata> {
+  const sourceFile = filePath ? project.getSourceFile(filePath) : undefined
+
+  if (!sourceFile) {
+    return {
+      sourceFile: undefined,
+      diagnostics: [],
+      symbolMetadata: [],
+    }
+  }
+
+  const diagnostics = getDiagnostics(sourceFile, allowErrors, showErrors)
+
+  const importSpecifiers = !jsxOnly
+    ? sourceFile
+        .getImportDeclarations()
+        .map((importDeclaration) => importDeclaration.getModuleSpecifier())
+    : []
+
+  const identifiers = sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)
+
+  const suggestionDiagnostics = project
+    .getLanguageService()
+    .compilerObject.getSuggestionDiagnostics(sourceFile.getFilePath())
+
+  const deprecatedRanges = suggestionDiagnostics
+    .filter(
+      (diagnostic) =>
+        (diagnostic.reportsDeprecated || diagnostic.code === 6385) &&
+        diagnostic.start !== undefined
+    )
+    .map((diagnostic) => ({
+      start: diagnostic.start!,
+      end: diagnostic.start! + (diagnostic.length ?? 0),
+    }))
+
+  const symbolMetadata = [...importSpecifiers, ...identifiers]
+    .filter((node) => {
+      const parent = node.getParent()
+      const isJsxOnlyImport = jsxOnly
+        ? Node.isImportSpecifier(parent) || Node.isImportClause(parent)
+        : false
+
+      return (
+        !isJsxOnlyImport && !Node.isJSDocTag(parent) && !Node.isJSDoc(parent)
+      )
+    })
+    .map((node) => {
+      let start = node.getStart()
+      let end = node.getEnd()
+
+      if (Node.isStringLiteral(node)) {
+        start += 1
+        end -= 1
+      }
+
+      const isDeprecated = deprecatedRanges.some(
+        (range) => range.start === start && range.end === end
+      )
+
+      return {
+        start: node.getStart(),
+        end: node.getEnd(),
+        isDeprecated,
+      }
+    })
+
+  return {
+    sourceFile,
+    diagnostics,
+    symbolMetadata,
+  }
 }
 
 /** Retrieves diagnostics from a source file. */
