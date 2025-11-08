@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 
 import {
   isFile,
@@ -41,7 +41,37 @@ export interface NavigationProps {
   components?: Partial<NavigationComponents>
 }
 
-export async function Navigation({
+/** A navigation that displays a list of entries. */
+export const Navigation =
+  process.env.NODE_ENV === 'development'
+    ? NavigationWithFallback
+    : NavigationAsync
+
+async function NavigationWithFallback({
+  source,
+  components: componentsProp = {},
+}: NavigationProps) {
+  const components: NavigationComponents = {
+    ...defaultComponents,
+    ...componentsProp,
+  }
+
+  return (
+    <Suspense
+      fallback={
+        <components.Root source={source}>
+          <components.List entry={source} depth={0}>
+            <li>Loading...</li>
+          </components.List>
+        </components.Root>
+      }
+    >
+      <NavigationAsync source={source} components={componentsProp} />
+    </Suspense>
+  )
+}
+
+async function NavigationAsync({
   source,
   components: componentsProp = {},
 }: NavigationProps) {
@@ -66,6 +96,7 @@ export async function Navigation({
   )
 }
 
+/** A navigation item that displays a link to an entry. */
 async function Item({
   entry,
   components,
