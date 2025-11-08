@@ -281,37 +281,44 @@ export class Tokenizer<Theme extends string> {
     const states: StateStack[] = []
 
     // Manage a registry for each theme to ensure that each theme has its own state
-    for (let themeIndex = 0; themeIndex < themes.length; themeIndex++) {
-      const themeName = themes[themeIndex]
+    const themeInitializationResults = await Promise.all(
+      themes.map(async (themeName, themeIndex) => {
+        let registry = this.#registries.get(themeName)
 
-      let registry = this.#registries.get(themeName)
-      if (!registry) {
-        registry = new Registry(this.#registryOptions)
-        const theme = await registry.fetchTheme(themeName)
-        registry.setTheme(theme)
-        this.#baseColors.set(themeName, theme.colors!['foreground'])
-        this.#registries.set(themeName, registry)
-      }
+        if (!registry) {
+          registry = new Registry(this.#registryOptions)
+          const theme = await registry.fetchTheme(themeName)
+          registry.setTheme(theme)
+          this.#baseColors.set(themeName, theme.colors!['foreground'])
+          this.#registries.set(themeName, registry)
+        }
 
-      const loadedGrammar = await registry
-        .loadGrammar(language)
-        .catch((error) => {
+        let loadedGrammar: TextMateGrammar | null
+        try {
+          loadedGrammar = await registry.loadGrammar(language)
+        } catch (error) {
           throw new Error(
             `[renoun] Grammar could not be loaded for language "${language}". Ensure this language is included in the \`languages\` prop on \`RootProvider\`.`,
             { cause: error }
           )
-        })
+        }
 
-      if (loadedGrammar) {
-        themeGrammars[themeIndex] = loadedGrammar
-      }
+        if (!loadedGrammar) {
+          throw new Error(
+            `[renoun] Could not load grammar for language: ${language}`
+          )
+        }
 
-      if (!themeGrammars[themeIndex]) {
-        throw new Error(
-          `[renoun] Could not load grammar for language: ${language}`
-        )
-      }
+        return {
+          themeIndex,
+          grammar: loadedGrammar,
+          registry,
+        }
+      })
+    )
 
+    for (const { themeIndex, grammar, registry } of themeInitializationResults) {
+      themeGrammars[themeIndex] = grammar
       themeColorMaps[themeIndex] = registry.getThemeColors()
       states[themeIndex] = TextMate.INITIAL
     }
@@ -327,37 +334,52 @@ export class Tokenizer<Theme extends string> {
       }> = []
       const boundarySet = new Set<number>()
 
-      for (let themeIndex = 0; themeIndex < themes.length; themeIndex++) {
-        const grammar = themeGrammars[themeIndex]
+      const lineTokenizationResults = await Promise.all(
+        themeGrammars.map((grammar, themeIndex) => {
+          if (!grammar) {
+            return Promise.resolve({
+              themeIndex,
+              ruleStack: states[themeIndex],
+              tokens: new Uint32Array(),
+            })
+          }
 
-        if (!grammar) {
-          continue
-        }
+          const previousState = states[themeIndex]
 
-        const lineResult = grammar.tokenizeLine2(
-          lineText,
-          states[themeIndex],
-          timeLimit
-        )
-        states[themeIndex] = lineResult.ruleStack
+          return Promise.resolve().then(() => {
+            const lineResult = grammar.tokenizeLine2(
+              lineText,
+              previousState,
+              timeLimit
+            )
 
-        const tokenData = lineResult.tokens
+            return {
+              themeIndex,
+              ruleStack: lineResult.ruleStack,
+              tokens: lineResult.tokens,
+            }
+          })
+        })
+      )
+
+      for (const { themeIndex, tokens, ruleStack } of lineTokenizationResults) {
+        states[themeIndex] = ruleStack
 
         for (
           let tokenDataIndex = 0;
-          tokenDataIndex < tokenData.length;
+          tokenDataIndex < tokens.length;
           tokenDataIndex += 2
         ) {
-          const startOffset = tokenData[tokenDataIndex]
+          const startOffset = tokens[tokenDataIndex]
           const endOffset =
-            tokenDataIndex + 2 < tokenData.length
-              ? tokenData[tokenDataIndex + 2]
+            tokenDataIndex + 2 < tokens.length
+              ? tokens[tokenDataIndex + 2]
               : lineText.length
 
           allTokens.push({
             start: startOffset,
             end: endOffset,
-            bits: tokenData[tokenDataIndex + 1],
+            bits: tokens[tokenDataIndex + 1],
             themeIndex,
           })
           boundarySet.add(startOffset)
