@@ -1,114 +1,112 @@
+import { Children, Fragment, cloneElement, isValidElement } from 'react'
 import {
   ModuleExportNotFoundError,
-  isFile,
+  isDirectory,
   isJavaScriptFile,
   isMDXFile,
-  type Directory,
+  Navigation,
   type FileSystemEntry,
+  type NavigationComponents,
+  type Directory,
 } from 'renoun'
 
 import * as SidebarCollapse from './SidebarCollapse'
 import { SidebarLink } from './SidebarLink'
 
-async function ListNavigation({
-  entry,
-  variant = 'title',
-}: {
-  entry: FileSystemEntry<any>
-  variant?: 'name' | 'title'
-}) {
-  const pathname = entry.getPathname()
-  const depth = entry.getDepth()
-  const metadata =
-    variant === 'title' && (isJavaScriptFile(entry) || isMDXFile(entry))
-      ? await entry
-          .getExportValue<
-            { title?: string; label?: string },
-            'metadata'
-          >('metadata')
-          .catch((error) => {
-            if (error instanceof ModuleExportNotFoundError) {
-              return undefined
-            }
-            throw error
-          })
-      : null
-
-  if (isFile(entry)) {
-    const baseName = entry.getBaseName()
-    return (
-      <li>
-        <SidebarLink href={pathname} className={depth > 0 ? 'pl-6' : ''}>
-          {variant === 'title'
-            ? metadata?.label || metadata?.title || entry.getTitle()
-            : baseName}
-        </SidebarLink>
-      </li>
-    )
-  }
-
-  const entries = await entry.getEntries()
-
-  if (entries.length === 0) {
-    return (
-      <li>
-        <SidebarLink href={pathname} className={depth > 0 ? 'pl-6' : ''}>
-          {variant === 'title'
-            ? metadata?.label || metadata?.title || entry.getTitle()
-            : entry.getBaseName()}
-        </SidebarLink>
-      </li>
-    )
-  }
-
-  return (
-    <li>
-      <SidebarCollapse.Provider pathname={pathname}>
-        <SidebarLink
-          href={pathname}
-          className={depth > 0 ? 'pl-6' : ''}
-          collapsible
-        >
-          {variant === 'title'
-            ? metadata?.label || metadata?.title || entry.getTitle()
-            : entry.getBaseName()}
-        </SidebarLink>
-        <SidebarCollapse.Content>
-          <ul className="flex flex-col list-none text-sm relative before:absolute before:left-[1.25rem] before:-translate-x-1/2 before:top-0 before:bottom-0 before:w-px before:bg-gray-200 dark:before:bg-gray-800">
-            {entries.map((childEntry) => (
-              <ListNavigation
-                key={childEntry.getPathname()}
-                entry={childEntry}
-                variant={variant}
-              />
-            ))}
-          </ul>
-        </SidebarCollapse.Content>
-      </SidebarCollapse.Provider>
-    </li>
-  )
-}
-
-export async function TreeNavigation({
+export function TreeNavigation({
   collection,
-  variant,
+  variant = 'title',
 }: {
   collection: Directory<any>
   variant?: 'name' | 'title'
 }) {
-  const entries = await collection.getEntries()
+  const components: Partial<NavigationComponents> = {
+    Root: Fragment,
+    List: ({ depth, children }) => {
+      const isRoot = depth === 0
+      const className = isRoot
+        ? 'text-sm flex flex-col list-none pl-0'
+        : 'flex flex-col list-none text-sm relative before:absolute before:left-[1.25rem] before:-translate-x-1/2 before:top-0 before:bottom-0 before:w-px before:bg-gray-200 dark:before:bg-gray-800'
+      return <ul className={className}>{children}</ul>
+    },
+    Item: ({ entry, children }) => {
+      const childArray = Children.toArray(children)
+      const [firstChild, ...restChildren] = childArray
+      const nestedChildren = restChildren.filter(
+        (child) => child !== null && child !== undefined
+      )
 
-  return (
-    <ul className="text-sm flex flex-col list-none pl-0">
-      {entries.map((entry) => {
-        return (
-          <ListNavigation
-            key={entry.getPathname()}
-            entry={entry}
-            variant={variant}
-          />
-        )
-      })}
-    </ul>
-  )
+      if (!(isDirectory(entry) && nestedChildren.length > 0)) {
+        return <li>{children}</li>
+      }
+
+      const link = isValidElement(firstChild)
+        ? cloneElement<any>(firstChild, { collapsible: true })
+        : firstChild
+
+      const directoryPathname = entry.getPathname()
+
+      return (
+        <li>
+          <SidebarCollapse.Provider pathname={directoryPathname}>
+            {link}
+            <SidebarCollapse.Content>{nestedChildren}</SidebarCollapse.Content>
+          </SidebarCollapse.Provider>
+        </li>
+      )
+    },
+    Link: async (props) => {
+      const {
+        entry,
+        pathname,
+        depth,
+        collapsible,
+      }: {
+        entry: FileSystemEntry<any>
+        pathname: string
+        depth: number
+        collapsible?: React.ReactNode
+      } = props as any
+      const metadata =
+        variant === 'title' && (isJavaScriptFile(entry) || isMDXFile(entry))
+          ? await getMetadata(entry)
+          : null
+
+      let label: string
+      if (variant === 'title') {
+        label = metadata?.label || metadata?.title || entry.getTitle()
+      } else {
+        label = isDirectory(entry) ? entry.getBaseName() : entry.getBaseName()
+      }
+
+      return (
+        <SidebarLink
+          href={pathname}
+          className={depth > 0 ? 'pl-6' : ''}
+          collapsible={collapsible}
+        >
+          {label}
+        </SidebarLink>
+      )
+    },
+  }
+
+  return <Navigation source={collection} components={components} />
+}
+
+async function getMetadata(entry: FileSystemEntry<any>) {
+  if (!(isJavaScriptFile(entry) || isMDXFile(entry))) {
+    return undefined
+  }
+  try {
+    return await entry.getExportValue<
+      { title?: string; label?: string },
+      'metadata'
+    >('metadata')
+  } catch (error) {
+    if (error instanceof ModuleExportNotFoundError) {
+      return undefined
+    }
+    throw error
+  }
 }
