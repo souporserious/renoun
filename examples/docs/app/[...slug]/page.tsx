@@ -20,10 +20,10 @@ export default async function Page(props: PageProps<'/[...slug]'>) {
 
   return (
     <>
-      <div className="col-end-[-1] md:col-start-[4] md:col-end-[-2] lg:col-end-[5] md:row-start-[1] md:row-end-[-1] py-8">
+      <div className="col-end-[-1] md:col-start-[4] md:col-end-[-2] lg:col-end-[5] md:row-start-[1] md:row-end-[-1] py-25">
         <div className="prose md:prose-md lg:prose-lg dark:prose-invert">
           <h1>{metadata.title}</h1>
-          <div className="mb-32 [&>p:first-of-type]:-mt-6 [&>p:first-of-type]:text-2xl [&>p:first-of-type]:text-blue-400 dark:[&>p:first-of-type]:text-blue-200 [&>p:first-of-type]:mb-8">
+          <div className="mb-32 [&>p:first-of-type]:text-2xl [&>p:first-of-type]:text-blue-400 dark:[&>p:first-of-type]:text-blue-200 [&>p:first-of-type]:mb-8 [text-box:trim-both_cap_alphabetic]">
             <Content />
           </div>
           {updatedAt ? (

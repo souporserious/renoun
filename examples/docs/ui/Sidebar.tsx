@@ -11,10 +11,10 @@ export async function Sidebar() {
         <SidebarOverlay>
           <div className="flex flex-col gap-8">
             <CommandMenu routes={await routes} />
-            <nav className="flex flex-col">
-              <span className="pl-9 pr-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">
+            <nav className="flex flex-col gap-3">
+              <h4 className="pl-9 pr-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
                 Documentation
-              </span>
+              </h4>
               <TreeNavigation collection={docs} variant="title" />
             </nav>
           </div>
@@ -25,10 +25,10 @@ export async function Sidebar() {
         <div className="pointer-events-auto col-start-[2] col-end-[3] h-screen overflow-y-auto overscroll-contain py-8">
           <div className="flex flex-col gap-8">
             <CommandMenu routes={await routes} />
-            <nav className="flex flex-col">
-              <span className="pl-9 pr-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">
+            <nav className="flex flex-col gap-3">
+              <h4 className="pl-9 pr-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
                 Documentation
-              </span>
+              </h4>
               <TreeNavigation collection={docs} variant="title" />
             </nav>
           </div>
