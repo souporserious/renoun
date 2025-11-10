@@ -2213,6 +2213,14 @@ export class Directory<
     }
   }
 
+  /** Returns the glob filter pattern kind for this directory if defined. */
+  getFilterPatternKind(): 'recursive' | 'shallow' | null {
+    if (!this.#filterPattern) {
+      return null
+    }
+    return this.#filterPattern.includes('**') ? 'recursive' : 'shallow'
+  }
+
   async #passesFilter(entry: FileSystemEntry<LoaderTypes>): Promise<boolean> {
     if (!this.#filter) {
       return true
@@ -3373,7 +3381,11 @@ export class Collection<
         allEntries.push(entry)
 
         if (options?.recursive && entry instanceof Directory) {
-          const nestedEntries = await entry.getEntries(options)
+          const childOptions =
+            entry.getFilterPatternKind() === 'recursive'
+              ? options
+              : ({ ...options, recursive: undefined } as typeof options)
+          const nestedEntries = await entry.getEntries(childOptions)
           const startIndex = allEntries.length
           const nestedLength = nestedEntries.length
           allEntries.length = startIndex + nestedLength
