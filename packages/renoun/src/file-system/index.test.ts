@@ -2250,7 +2250,7 @@ describe('file system', () => {
     }
   })
 
-  test('errors when trying to recursively get entries with a single-level filter pattern', async () => {
+  test('errors when trying to recursively get entries with a shallow filter pattern', async () => {
     const directory = new Directory({
       path: 'fixtures',
       filter: '*.mdx',
@@ -2261,9 +2261,13 @@ describe('file system', () => {
         // @ts-expect-error
         recursive: true,
       })
-    ).rejects.toThrow(
-      '[renoun] Cannot use recursive option with a single-level filter pattern. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
-    )
+    ).rejects.toThrowErrorMatchingInlineSnapshot(`
+      [Error: [renoun] Cannot use recursive option with a shallow filter pattern.
+      Method: Directory#getEntries
+      Directory path: "./fixtures"
+      Filter pattern: "*.mdx"
+      Hint: Use a recursive pattern (e.g. "**/*.mdx") when "recursive" is enabled.]
+    `)
   })
 
   test('allows recursive option with multi-level filter pattern', async () => {

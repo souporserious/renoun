@@ -72,9 +72,10 @@ export class NodeFileSystem extends FileSystem {
     for (const entry of entries) {
       const entryPath = join(basePath, entry.name)
 
+      const isAbsolute = entryPath.startsWith('/')
       directoryEntries.push({
         name: entry.name,
-        path: ensureRelativePath(entryPath),
+        path: isAbsolute ? entryPath : ensureRelativePath(entryPath),
         isDirectory: entry.isDirectory(),
         isFile: entry.isFile(),
       } satisfies DirectoryEntry)

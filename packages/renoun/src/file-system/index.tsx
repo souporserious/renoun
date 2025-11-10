@@ -39,12 +39,13 @@ import {
   extensionName,
   joinPaths,
   normalizeSlashes,
-  resolveProtocolPath,
+  resolveSchemePath,
   removeExtension,
   removeAllExtensions,
   removeOrderPrefixes,
   relativePath,
 } from '../utils/path.js'
+import { getRootDirectory } from '../utils/get-root-directory.js'
 import type { TypeFilter } from '../utils/resolve-type.js'
 import type {
   FileReadableStream,
@@ -400,7 +401,7 @@ export class File<
   #directory: Directory<DirectoryTypes>
 
   constructor(options: FileOptions<DirectoryTypes, Path>) {
-    const resolvedPath = resolveProtocolPath(options.path)
+    const resolvedPath = resolveSchemePath(options.path)
     this.#name = baseName(resolvedPath)
     this.#path = resolvedPath
     this.#basePathname = options.basePathname
@@ -2163,9 +2164,30 @@ export class Directory<
       this.#slugCasing = 'kebab'
       this.#tsConfigPath = 'tsconfig.json'
     } else {
-      this.#path = options.path
-        ? ensureRelativePath(resolveProtocolPath(options.path))
-        : '.'
+      if (options.path) {
+        const resolved = resolveSchemePath(options.path)
+        if (resolved.startsWith('/')) {
+          // If the resolved path is inside the workspace, store a workspace‑relative path
+          const workspaceRoot = normalizeSlashes(getRootDirectory())
+          const absoluteResolved = normalizeSlashes(resolved)
+          if (
+            absoluteResolved === workspaceRoot ||
+            absoluteResolved.startsWith(
+              workspaceRoot.endsWith('/') ? workspaceRoot : `${workspaceRoot}/`
+            )
+          ) {
+            // Store absolute (workspace‑anchored) path to avoid cwd coupling
+            this.#path = absoluteResolved
+          } else {
+            // Keep external absolute path as is
+            this.#path = resolved
+          }
+        } else {
+          this.#path = ensureRelativePath(resolved)
+        }
+      } else {
+        this.#path = '.'
+      }
       this.#loader = options.loader
       this.#basePathname =
         options.basePathname === undefined
@@ -2258,8 +2280,8 @@ export class Directory<
       const extension = entry.getExtension()
 
       if (extension === 'ts' || extension === 'tsx') {
-          const filteredExports = await entry.getExports()
-          return filteredExports.length > 0
+        const filteredExports = await entry.getExports()
+        return filteredExports.length > 0
       }
 
       return true
