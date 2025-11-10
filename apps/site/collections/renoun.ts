@@ -17,6 +17,7 @@ type ComponentSchema = Record<string, React.ComponentType>
 
 export const ComponentsDirectory = new Directory({
   path: '../../packages/renoun/src/components',
+  filter: '**/*.{ts,tsx}',
   repository: 'souporserious/renoun',
   loader: {
     ts: withSchema<ComponentSchema>(
@@ -57,6 +58,7 @@ type HookSchema = Record<string, unknown>
 
 export const HooksDirectory = new Directory({
   path: '../../packages/renoun/src/hooks',
+  filter: '**/*.{ts,tsx}',
   loader: {
     ts: withSchema<HookSchema>(
       (path) =>
