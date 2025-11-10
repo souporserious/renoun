@@ -2250,19 +2250,8 @@ export class Directory<
       const extension = entry.getExtension()
 
       if (extension === 'ts' || extension === 'tsx') {
-        try {
-          // Determine if this file has any exports at all (raw), and then whether
-          // any non-internal exports remain after filtering.
-          const fileSystem = entry.getParent().getFileSystem()
-          if (!fileSystem.shouldStripInternal()) {
-            return true
-          }
           const filteredExports = await entry.getExports()
           return filteredExports.length > 0
-        } catch {
-          // If export analysis fails for any reason, default to including the entry.
-          return true
-        }
       }
 
       return true
@@ -2289,7 +2278,10 @@ export class Directory<
           if (childExtension === 'ts' || childExtension === 'tsx') {
             try {
               const fileSystem = child.getParent().getFileSystem()
-              if (!fileSystem.shouldStripInternal()) {
+              const allExports = await fileSystem.getFileExports(
+                child.getAbsolutePath()
+              )
+              if (allExports.length === 0) {
                 return true
               }
               const filteredExports = await child.getExports()
@@ -2298,12 +2290,10 @@ export class Directory<
               }
               continue
             } catch {
-              // On analysis errors, include the directory by default.
               return true
             }
           }
         }
-
         // For non-JS files (e.g. mdx, md, json, assets), include the directory.
         return true
       }
