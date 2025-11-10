@@ -1405,11 +1405,41 @@ export class JavaScriptFile<
   async getExports() {
     const fileExports = await this.#getExports()
 
-    return Promise.all(
+    const exports = await Promise.all(
       fileExports.map((exportMetadata) =>
         this.getExport(exportMetadata.name as Extract<keyof Types, string>)
       )
     )
+
+    // Optionally filter out @internal exports based on tsconfig `stripInternal`
+    const fileSystem = this.getParent().getFileSystem()
+    if (!fileSystem.shouldStripInternal()) {
+      return exports
+    }
+
+    // filter out @internal exports
+    let writeIndex = 0
+    for (let readIndex = 0; readIndex < exports.length; readIndex++) {
+      const fileExport = exports[readIndex]
+      const tags = fileExport.getTags()
+      if (!tags || tags.length === 0) {
+        exports[writeIndex++] = fileExport
+        continue
+      }
+      let isPublic = false
+      for (let tagIndex = 0; tagIndex < tags.length; tagIndex++) {
+        const tag = tags[tagIndex]
+        if (!tag || tag.name !== 'internal') {
+          isPublic = true
+          break
+        }
+      }
+      if (isPublic) {
+        exports[writeIndex++] = fileExport
+      }
+    }
+    exports.length = writeIndex
+    return exports
   }
 
   /** Get a JavaScript file export by name. */
@@ -2213,6 +2243,77 @@ export class Directory<
     return passes
   }
 
+  async #shouldIncludeEntry(
+    entry: FileSystemEntry<LoaderTypes>
+  ): Promise<boolean> {
+    if (entry instanceof JavaScriptFile) {
+      const extension = entry.getExtension()
+
+      if (extension === 'ts' || extension === 'tsx') {
+        try {
+          // Determine if this file has any exports at all (raw), and then whether
+          // any non-internal exports remain after filtering.
+          const fileSystem = entry.getParent().getFileSystem()
+          if (!fileSystem.shouldStripInternal()) {
+            return true
+          }
+          const filteredExports = await entry.getExports()
+          return filteredExports.length > 0
+        } catch {
+          // If export analysis fails for any reason, default to including the entry.
+          return true
+        }
+      }
+
+      return true
+    }
+
+    if (entry instanceof Directory) {
+      const children = await entry.getEntries({
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        includeTsConfigExcludedFiles: true,
+      })
+
+      for (const child of children) {
+        if (child instanceof Directory) {
+          if (await this.#shouldIncludeEntry(child)) {
+            return true
+          }
+          continue
+        }
+
+        if (child instanceof JavaScriptFile) {
+          const childExtension = child.getExtension()
+
+          if (childExtension === 'ts' || childExtension === 'tsx') {
+            try {
+              const fileSystem = child.getParent().getFileSystem()
+              if (!fileSystem.shouldStripInternal()) {
+                return true
+              }
+              const filteredExports = await child.getExports()
+              if (filteredExports.length > 0) {
+                return true
+              }
+              continue
+            } catch {
+              // On analysis errors, include the directory by default.
+              return true
+            }
+          }
+        }
+
+        // For non-JS files (e.g. mdx, md, json, assets), include the directory.
+        return true
+      }
+
+      return false
+    }
+
+    return true
+  }
+
   /** Duplicate the directory with the same initial options. */
   #duplicate(options?: DirectoryOptions<any, any, any>) {
     const directory = new Directory<
@@ -2876,9 +2977,17 @@ export class Directory<
       }
     }
 
-    const immediateEntries = Array.from(
+    const initialEntries = Array.from(
       entriesMap.values()
     ) as FileSystemEntry<LoaderTypes>[]
+
+    const immediateEntries: FileSystemEntry<LoaderTypes>[] = []
+
+    for (const entry of initialEntries) {
+      if (await this.#shouldIncludeEntry(entry)) {
+        immediateEntries.push(entry)
+      }
+    }
 
     if (this.#sort) {
       try {

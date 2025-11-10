@@ -626,8 +626,52 @@ describe('file system', () => {
       },
     })
     const entries = await directory.getEntries()
-
     expect(entries).toHaveLength(1)
+  })
+
+  test('javascript file getExports filters @internal exports', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'tsconfig.json': '{ "compilerOptions": { "stripInternal": true } }',
+      'Button.tsx': '/** @internal */ export const Button = () => {}',
+      'Link.tsx': 'export const Link = () => {}',
+    })
+    const directory = new Directory({ fileSystem })
+    const internalOnlyFile = new JavaScriptFile({
+      path: 'Button.tsx',
+      directory,
+    })
+    const publicFile = new JavaScriptFile({
+      path: 'Link.tsx',
+      directory,
+    })
+
+    const internalExports = await internalOnlyFile.getExports()
+    const publicExports = await publicFile.getExports()
+
+    expect(internalExports).toHaveLength(0)
+    expect(publicExports.map((fileExport) => fileExport.getName())).toEqual([
+      'Link',
+    ])
+  })
+
+  test('directory excludes files and folders with only internal exports', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'tsconfig.json': '{ "compilerOptions": { "stripInternal": true } }',
+      '.gitignore': '**/tsconfig.json\n**/.gitignore\n',
+      'Button.tsx': '/** @internal */ export const Button = () => {}',
+      'components/Foo.tsx': '/** @internal */ export const Foo = () => {}',
+      'components/Bar.tsx': '/** @internal */ export const Bar = () => {}',
+      'utils/helpers.ts': 'export const helper = () => {}',
+    })
+    const root = new Directory({ fileSystem })
+    const entries = (await root.getEntries()).filter(
+      (entry): entry is Directory<any> => entry instanceof Directory
+    )
+
+    // Should only include "utils" since "Button.tsx" is internal-only and "components" has only internal children
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toBeInstanceOf(Directory)
+    expect(entries[0].getName()).toBe('utils')
   })
 
   test('string filter', async () => {

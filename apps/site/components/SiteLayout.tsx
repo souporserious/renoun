@@ -1,4 +1,5 @@
 import { Link, Logo } from 'renoun'
+// @ts-expect-error - RenounLogo is internal
 import { RenounLogo } from 'renoun/assets'
 
 import { getSearchRoutes } from '@/lib/get-search-routes'

@@ -16,6 +16,7 @@
     "isolatedModules": true,
     "jsx": "react",
     "verbatimModuleSyntax": true,
+    "stripInternal": true,
     "rootDir": "./src",
     "outDir": "./dist",
     "declaration": true

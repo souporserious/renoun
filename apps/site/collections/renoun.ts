@@ -1,50 +1,5 @@
-import {
-  Directory,
-  isDirectory,
-  isFile,
-  withSchema,
-  type FileSystemEntry,
-  type Headings,
-} from 'renoun'
+import { Directory, withSchema, type Headings } from 'renoun'
 import { z } from 'zod'
-
-async function filterInternalExports(entry: FileSystemEntry<any>) {
-  if (isFile(entry, ['ts', 'tsx'])) {
-    const fileExports = await entry.getExports()
-    const allTags = await Promise.all(
-      fileExports.map((exportSource) => exportSource.getTags())
-    )
-    const allInternal = fileExports.every((_, index) => {
-      const tags = allTags[index]
-      return tags?.every((tag) => tag.name === 'internal')
-    })
-    return !allInternal
-  }
-
-  if (isDirectory(entry)) {
-    const children = await entry.getEntries({
-      includeDirectoryNamedFiles: true,
-      includeIndexAndReadmeFiles: true,
-      includeTsConfigExcludedFiles: true,
-    })
-    for (const child of children) {
-      if (isFile(child, ['ts', 'tsx'])) {
-        const fileExports = await child.getExports()
-        const allTags = await Promise.all(
-          fileExports.map((exportSource) => exportSource.getTags())
-        )
-        const allInternal = fileExports.every((_, index) => {
-          const tags = allTags[index]
-          return tags?.every((tag) => tag.name === 'internal')
-        })
-        if (!allInternal) return true
-      }
-    }
-    return false
-  }
-
-  return isFile(entry, 'mdx')
-}
 
 export const FileSystemDirectory = new Directory({
   path: '../../packages/renoun/src/file-system',
@@ -56,7 +11,6 @@ export const FileSystemDirectory = new Directory({
       (path) => import(`../../../packages/renoun/src/file-system/${path}.mdx`)
     ),
   },
-  filter: filterInternalExports,
 })
 
 type ComponentSchema = Record<string, React.ComponentType>
@@ -97,7 +51,6 @@ export const ComponentsDirectory = new Directory({
       (path) => import(`../../../packages/renoun/src/components/${path}.mdx`)
     ),
   },
-  filter: filterInternalExports,
 })
 
 type HookSchema = Record<string, unknown>
@@ -137,5 +90,4 @@ export const HooksDirectory = new Directory({
       (path) => import(`../../../packages/renoun/src/hooks/${path}.mdx`)
     ),
   },
-  filter: filterInternalExports,
 })

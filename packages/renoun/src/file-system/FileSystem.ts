@@ -120,6 +120,15 @@ export abstract class FileSystem {
 
   abstract deleteFile(path: string): Promise<void>
 
+  /** Whether compilerOptions.stripInternal is enabled in the active tsconfig. */
+  shouldStripInternal(): boolean {
+    if (this.#tsConfig === undefined) {
+      this.#tsConfig = this.#getTsConfig()
+    }
+    const flag = this.#tsConfig?.compilerOptions?.stripInternal
+    return Boolean(flag)
+  }
+
   #getTsConfig(): TsConfig | undefined {
     if (!this.fileExistsSync(this.#tsConfigPath)) {
       return

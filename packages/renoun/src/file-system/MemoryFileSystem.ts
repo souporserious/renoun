@@ -412,7 +412,8 @@ export class MemoryFileSystem extends FileSystem {
       }
     }
 
-    return this.#ignore(filePath)
+    const normalized = normalizeSlashes(filePath).replace(/^\.\//, '')
+    return this.#ignore(normalized)
   }
 }
 
