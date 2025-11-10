@@ -2873,9 +2873,17 @@ export class Directory<
   > {
     if (options?.recursive && this.#filterPattern) {
       if (!this.#filterPattern.includes('**')) {
-        throw new Error(
-          '[renoun] Cannot use recursive option with a single-level filter pattern. Use a multi-level pattern (e.g. "**/*.mdx") instead.'
-        )
+        const lines: string[] = [
+          `[renoun] Cannot use recursive option with a shallow filter pattern.`,
+          `Method: Directory#getEntries`,
+          `Directory path: "${this.#path}"`,
+          `Filter pattern: "${this.#filterPattern}"`,
+          `Hint: Use a recursive pattern (e.g. "**/*.mdx") when "recursive" is enabled.`,
+        ]
+        if (this.#rootPath) {
+          lines.push(`Directory root: "${this.#rootPath}"`)
+        }
+        throw new Error(lines.join('\n'))
       }
     }
 
