@@ -102,7 +102,7 @@ export async function getConfig(options?: {
 
 /**
  * Initializes and caches the configuration.
- * - Accepts a static value or a Promise<ConfigurationOptions>.
+ * - Accepts a static value or a `Promise<ConfigurationOptions>`.
  * - Optional `version` lets you force a refresh across HMR/redeploys.
  * @internal
  */
