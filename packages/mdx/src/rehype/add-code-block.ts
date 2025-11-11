@@ -2,6 +2,7 @@ import type { Processor } from 'unified'
 import type { Element, Root, Parent } from 'hast'
 import type { MdxJsxFlowElement } from 'mdast-util-mdx'
 import { visitParents, SKIP } from 'unist-util-visit-parents'
+import { valueToEstree } from 'estree-util-value-to-estree'
 
 declare module 'unified' {
   interface Data {
@@ -45,9 +46,14 @@ export default function addCodeBlock(this: Processor) {
         : typeof className === 'string'
           ? className.split(/\s+/)
           : []
-      const languageClassName = classList.find((className) =>
-        className.startsWith('language-')
-      )
+      let languageClassName: string | undefined
+      for (let index = 0; index < classList.length; index++) {
+        const value = classList[index]
+        if (value.startsWith('language-')) {
+          languageClassName = value
+          break
+        }
+      }
 
       if (languageClassName) {
         const raw = languageClassName.slice('language-'.length)
@@ -63,58 +69,91 @@ export default function addCodeBlock(this: Processor) {
         }
       }
 
-      meta?.split(/\s+/).forEach((property) => {
-        const equalsIndex = property.indexOf('=')
+      if (meta) {
+        const parts = meta.split(/\s+/)
+        for (let index = 0; index < parts.length; index++) {
+          const property = parts[index]
+          const equalsIndex = property.indexOf('=')
 
-        // bare flag -> boolean true
-        if (equalsIndex === -1) {
-          properties[property] = true
-          return
-        }
-
-        const key = property.slice(0, equalsIndex)
-        const raw = property.slice(equalsIndex + 1)
-
-        // quoted string -> string
-        if (/^(['"])(.*)\1$/.test(raw)) {
-          properties[key] = raw.slice(1, -1)
-          return
-        }
-
-        // coerce braced values to string, boolean, or number
-        const match = raw.match(/^\{(.+)\}$/)
-
-        if (match) {
-          let value = match[1]
-
-          if (/^(['"])(.*)\1$/.test(value)) {
-            properties[key] = value.slice(1, -1)
-          } else if (value === 'true' || value === 'false') {
-            properties[key] = value === 'true'
-          } else {
-            const number = Number(value)
-            if (Number.isNaN(number)) {
-              properties[key] = value
-            } else {
-              properties[key] = number
-            }
+          // bare flag -> boolean true
+          if (equalsIndex === -1) {
+            properties[property] = true
+            continue
           }
-          return
-        }
 
-        throw new Error(
-          `Invalid meta prop “${property}”: values must be either a bare flag (foo), a quoted string ("…"/'…'), or braced ({…}).`
-        )
-      })
+          const key = property.slice(0, equalsIndex)
+          const raw = property.slice(equalsIndex + 1)
+
+          // quoted string -> string
+          if (/^(['"])(.*)\1$/.test(raw)) {
+            properties[key] = raw.slice(1, -1)
+            continue
+          }
+
+          // coerce braced values to string, boolean, or number
+          const match = raw.match(/^\{(.+)\}$/)
+
+          if (match) {
+            let value = match[1]
+
+            if (/^(['"])(.*)\1$/.test(value)) {
+              properties[key] = value.slice(1, -1)
+            } else if (value === 'true' || value === 'false') {
+              properties[key] = value === 'true'
+            } else {
+              const number = Number(value)
+              if (Number.isNaN(number)) {
+                properties[key] = value
+              } else {
+                properties[key] = number
+              }
+            }
+            continue
+          }
+
+          throw new Error(
+            `Invalid meta prop “${property}”: values must be either a bare flag (foo), a quoted string ("…"/'…'), or braced ({…}).`
+          )
+        }
+      }
+
+      const attributes: MdxJsxFlowElement['attributes'] = []
+      for (const key in properties) {
+        const value = properties[key]
+        if (typeof value === 'boolean' || typeof value === 'number') {
+          attributes.push({
+            type: 'mdxJsxAttribute',
+            name: key,
+            value: {
+              type: 'mdxJsxAttributeValueExpression',
+              value: String(value),
+              data: {
+                estree: {
+                  type: 'Program',
+                  sourceType: 'module',
+                  body: [
+                    {
+                      type: 'ExpressionStatement',
+                      expression: valueToEstree(value),
+                    },
+                  ],
+                },
+              },
+            },
+          } as any)
+        } else {
+          attributes.push({
+            type: 'mdxJsxAttribute',
+            name: key,
+            value,
+          } as any)
+        }
+      }
 
       const codeBlockNode: MdxJsxFlowElement = {
         type: 'mdxJsxFlowElement',
         name: 'CodeBlock',
-        attributes: Object.entries(properties).map(([key, value]) => ({
-          type: 'mdxJsxAttribute',
-          name: key,
-          value: String(value),
-        })),
+        attributes,
         children: code.children as any,
       }
       const parent = ancestors[ancestors.length - 1]
