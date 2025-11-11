@@ -2280,8 +2280,20 @@ export class Directory<
       const extension = entry.getExtension()
 
       if (extension === 'ts' || extension === 'tsx') {
-        const filteredExports = await entry.getExports()
-        return filteredExports.length > 0
+        const fileSystem = entry.getParent().getFileSystem()
+        if (!fileSystem.shouldStripInternal()) {
+          return true
+        }
+        // If there are no exports at all, include the file
+        const allExports = await fileSystem.getFileExports(
+          entry.getAbsolutePath()
+        )
+        if (allExports.length === 0) {
+          return true
+        }
+        // Otherwise, include only if at least one non-internal export remains
+        const filtered = await entry.getExports()
+        return filtered.length > 0
       }
 
       return true
@@ -2306,25 +2318,24 @@ export class Directory<
           const childExtension = child.getExtension()
 
           if (childExtension === 'ts' || childExtension === 'tsx') {
-            try {
-              const fileSystem = child.getParent().getFileSystem()
-              const allExports = await fileSystem.getFileExports(
-                child.getAbsolutePath()
-              )
-              if (allExports.length === 0) {
-                return true
-              }
-              const filteredExports = await child.getExports()
-              if (filteredExports.length > 0) {
-                return true
-              }
-              continue
-            } catch {
+            const fileSystem = child.getParent().getFileSystem()
+            if (!fileSystem.shouldStripInternal()) {
               return true
             }
+            const allExports = await fileSystem.getFileExports(
+              child.getAbsolutePath()
+            )
+            if (allExports.length === 0) {
+              return true
+            }
+            const filtered = await child.getExports()
+            if (filtered.length > 0) {
+              return true
+            }
+            continue
           }
         }
-        // For non-JS files (e.g. mdx, md, json, assets), include the directory.
+
         return true
       }
 
