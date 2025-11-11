@@ -2450,6 +2450,36 @@ export class Directory<
     segments: string[],
     allExtensions?: string[]
   ): Promise<FileSystemEntry<LoaderTypes>> {
+    // Fast path try direct path lookup without hydrating the directory.
+    if (segments.length > 0) {
+      const directoryWorkspacePath = directory
+        .getRelativePathToWorkspace()
+        .replace(/^\.\/?/, '')
+        .replace(/\/$/, '')
+      const targetPath =
+        (directoryWorkspacePath ? directoryWorkspacePath + '/' : '') +
+        segments.join('/')
+      const hit = this.#pathLookup.get(targetPath)
+      if (hit) {
+        if (hit instanceof Directory) {
+          const [, ...remainingSegments] = segments
+          // If no remaining segments, we've reached the target directory.
+          if (!remainingSegments.length) {
+            return hit
+          }
+          // Otherwise, continue walking from the hit.
+          return this.#findEntry(hit, remainingSegments, allExtensions)
+        }
+        if (hit instanceof File) {
+          if (allExtensions && !allExtensions.includes(hit.getExtension())) {
+            // Fall through to regular resolution when extension doesn't match.
+          } else {
+            return hit
+          }
+        }
+      }
+    }
+
     // Always hydrate this directory once and populate its lookup map.
     const entries = await directory.getEntries({
       includeDirectoryNamedFiles: true,
@@ -2865,6 +2895,21 @@ export class Directory<
     // Remove leading and trailing slashes
     const normalizedPath = routePath.replace(/^\.\/?/, '').replace(/\/$/, '')
     this.#pathLookup.set(normalizedPath, entry)
+    // Also index by workspace-relative filesystem path so lookups by raw path
+    // (e.g. "fixtures/docs/index") can short-circuit hydration.
+    const workspacePath = entry.getRelativePathToWorkspace()
+    const normalizedWorkspacePath = workspacePath
+      .replace(/^\.\/?/, '')
+      .replace(/\/$/, '')
+    this.#pathLookup.set(normalizedWorkspacePath, entry)
+    // For files, also index the workspace path without extensions to match
+    // extension-agnostic lookups.
+    if (entry instanceof File) {
+      const workspacePathWithoutExtension = removeAllExtensions(
+        normalizedWorkspacePath
+      )
+      this.#pathLookup.set(workspacePathWithoutExtension, entry)
+    }
   }
 
   /**
