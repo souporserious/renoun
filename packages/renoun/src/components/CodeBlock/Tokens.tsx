@@ -205,15 +205,14 @@ export async function Tokens({
     context.resolvers.resolve()
   }
 
+  const resolvedAllowErrors = allowErrors ?? context?.allowErrors ?? false
+  const resolvedShowErrors = showErrors ?? context?.showErrors ?? false
   const tokens = await getTokens({
     value: metadata.value,
     language: metadata.language,
     filePath: metadata.filePath,
-    allowErrors:
-      allowErrors ??
-      context?.allowErrors ??
-      (showErrors || context?.showErrors ? true : undefined),
-    showErrors: showErrors || context?.showErrors,
+    allowErrors: resolvedAllowErrors,
+    showErrors: resolvedShowErrors,
     theme: themeConfiguration,
     languages: config.languages,
   })

@@ -292,11 +292,10 @@ async function CodeBlockAsync({
     resolvers.resolve = resolve
     resolvers.reject = reject
   })
-  const allowErrorsResolved = allowErrors ?? (showErrors ? true : undefined)
   const contextValue = {
     filePath: path,
     padding: containerPadding.all,
-    allowErrors: allowErrorsResolved,
+    allowErrors: allowErrors ?? false,
     showErrors,
     shouldAnalyze,
     shouldFormat,
