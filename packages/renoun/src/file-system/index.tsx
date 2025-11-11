@@ -1520,19 +1520,109 @@ export class JavaScriptFile<
   /** Get headings derived from the file exports. */
   async getHeadings(): Promise<Headings> {
     if (!this.#headings) {
-      const fileExports = await this.getExports()
-      this.#headings = fileExports.map((fileExport) => {
-        const name = fileExport.getName()
-        return {
+      // Fast path: try to derive headings from a quick static scan of the source
+      // text without initializing any TypeScript project or reading symbol
+      // metadata. This is sufficient for simple cases and avoids the overhead of
+      // creating a TypeScript project
+      const fastNames = await this.#getFastExportNames()
+      if (fastNames && fastNames.length > 0) {
+        this.#headings = fastNames.map((name) => ({
           id: name,
           level: 3,
           children: name,
           text: name,
-        }
-      })
+        }))
+      } else {
+        // Fallback to the full export analysis
+        const fileExports = await this.getExports()
+        this.#headings = fileExports.map((fileExport) => {
+          const name = fileExport.getName()
+          return {
+            id: name,
+            level: 3,
+            children: name,
+            text: name,
+          }
+        })
+      }
     }
 
     return this.#headings
+  }
+
+  /**
+   * Attempt to quickly extract named export identifiers from the file source
+   * using lightweight regexes. This intentionally handles the most common
+   * patterns:
+   *   - export const Name = …
+   *   - export function Name(…
+   *   - export class Name …
+   *   - export { A, B as C }  (captures A and C)
+   * It skips default exports on purpose since those are not used for headings.
+   */
+  async #getFastExportNames(): Promise<string[] | undefined> {
+    try {
+      const source = await this.getText()
+      // If the file contains any explicit re-exports, skip the fast path and
+      // defer to the full TypeScript analysis which can follow the graph.
+      const hasReExports =
+        /\bexport\s*\*\s*(?:as\s+[A-Za-z_\$][\w\$]*)?\s*from\s*['"][^'"]+['"]/.test(
+          source
+        ) || /\bexport\s*\{[^}]+\}\s*from\s*['"][^'"]+['"]/.test(source)
+      if (hasReExports) {
+        return undefined
+      }
+      const names = new Set<string>()
+
+      // export const Name = …
+      // export let Name = …
+      // export var Name = …
+      const varRegex = /\bexport\s+(?:const|let|var)\s+([A-Za-z_\$][\w\$]*)\b/g
+      for (let m; (m = varRegex.exec(source)); ) {
+        names.add(m[1])
+      }
+
+      // export function Name(…
+      const fnRegex = /\bexport\s+function\s+([A-Za-z_\$][\w\$]*)\s*\(/g
+      for (let m; (m = fnRegex.exec(source)); ) {
+        names.add(m[1])
+      }
+
+      // export class Name …
+      const classRegex = /\bexport\s+class\s+([A-Za-z_\$][\w\$]*)\b/g
+      for (let m; (m = classRegex.exec(source)); ) {
+        names.add(m[1])
+      }
+
+      // export { A, B as C }
+      const namedListRegex = /\bexport\s*\{\s*([^}]+)\s*\}/g
+      for (let m; (m = namedListRegex.exec(source)); ) {
+        const list = m[1]
+        for (const part of list.split(',')) {
+          const piece = part.trim()
+          if (!piece) continue
+          // Handle "B as C" aliasing
+          const aliasMatch = piece.match(
+            /^([A-Za-z_\$][\w\$]*)\s+as\s+([A-Za-z_\$][\w\$]*)$/
+          )
+          if (aliasMatch) {
+            names.add(aliasMatch[2])
+          } else {
+            const ident = piece.match(/^([A-Za-z_\$][\w\$]*)$/)
+            if (ident) {
+              names.add(ident[1])
+            }
+          }
+        }
+      }
+
+      if (names.size > 0) {
+        return Array.from(names)
+      }
+    } catch {
+      // Ignore and fall back to the full analysis path
+    }
+    return undefined
   }
 
   /** Check if an export exists statically in the JavaScript file. */
@@ -2442,6 +2532,62 @@ export class Directory<
   }
 
   /**
+   * Perform a shallow, filter-free read of a directory's immediate children.
+   * This is used for path traversal to avoid expensive recursive inclusion checks.
+   */
+  async #readDirectoryShallowForTraversal(
+    directory: Directory<LoaderTypes>
+  ): Promise<FileSystemEntry<LoaderTypes>[]> {
+    const fileSystem = directory.getFileSystem()
+    const rawEntries = await fileSystem.readDirectory(directory.#path)
+    const entriesMap = new Map<string, FileSystemEntry<LoaderTypes>>()
+
+    for (const entry of rawEntries) {
+      // Always include index/readme and directory‑named files during traversal.
+      const entryKey =
+        entry.isDirectory || true ? entry.path : removeAllExtensions(entry.path)
+
+      if (entriesMap.has(entryKey)) {
+        continue
+      }
+
+      if (entry.isDirectory) {
+        const subdirectory = directory.#duplicate({ path: entry.path })
+        entriesMap.set(entryKey, subdirectory)
+        directory.#addPathLookup(subdirectory)
+      } else if (entry.isFile) {
+        const sharedOptions = {
+          path: entry.path,
+          directory,
+          basePathname: directory.#basePathname,
+          slugCasing: directory.#slugCasing,
+        } as const
+        const extension = extensionName(entry.name).slice(1)
+        const loaders = directory.#getLoaders()
+        const loader = loaders?.[extension] as
+          | ModuleLoader<LoaderTypes[any]>
+          | undefined
+
+        const file =
+          extension === 'md'
+            ? new MarkdownFile({ ...sharedOptions, loader })
+            : extension === 'mdx'
+              ? new MDXFile({ ...sharedOptions, loader })
+              : extension === 'json'
+                ? new JSONFile(sharedOptions)
+                : isJavaScriptLikeExtension(extension)
+                  ? new JavaScriptFile({ ...sharedOptions, loader })
+                  : new File(sharedOptions)
+
+        entriesMap.set(entryKey, file)
+        directory.#addPathLookup(file)
+      }
+    }
+
+    return Array.from(entriesMap.values())
+  }
+
+  /**
    * Walk `segments` starting at `directory`, returning the first entry whose
    * slugified path exactly matches the requested path segments.
    */
@@ -2480,12 +2626,8 @@ export class Directory<
       }
     }
 
-    // Always hydrate this directory once and populate its lookup map.
-    const entries = await directory.getEntries({
-      includeDirectoryNamedFiles: true,
-      includeIndexAndReadmeFiles: true,
-      includeTsConfigExcludedFiles: true,
-    })
+    // Shallow traversal to populate the lookup map without expensive filtering.
+    const entries = await this.#readDirectoryShallowForTraversal(directory)
     const [currentSegment, ...remainingSegments] = segments
 
     // If the current segment is empty, we are at the root of this directory.
@@ -2784,10 +2926,10 @@ export class Directory<
 
     while (segments.length > 0) {
       const currentSegment = createSlug(segments.shift()!, this.#slugCasing)
-      const allEntries = await currentDirectory.getEntries({
-        includeDirectoryNamedFiles: true,
-        includeTsConfigExcludedFiles: true,
-      })
+      // Use shallow, filter-free traversal to avoid expensive recursion or
+      // export-based inclusion checks while walking segments.
+      const allEntries =
+        await this.#readDirectoryShallowForTraversal(currentDirectory)
       let entry: FileSystemEntry<LoaderTypes> | undefined
 
       for (const currentEntry of allEntries) {
