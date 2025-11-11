@@ -167,23 +167,42 @@ export function getProject(options?: ProjectOptions) {
 function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {
   const existingSourceFile = project.getSourceFile(filePath)
 
-  if (!existingSourceFile) {
-    project.addSourceFileAtPath(filePath)
-    return
-  }
-
-  resolvedTypeCache.clear()
-
-  startRefreshingProjects()
-
-  const promise = existingSourceFile.refreshFromFileSystem().finally(() => {
-    activeRefreshingProjects.delete(promise)
-    if (activeRefreshingProjects.size === 0) {
-      completeRefreshingProjects()
+  try {
+    if (!existingSourceFile) {
+      project.addSourceFileAtPath(filePath)
+      return
     }
-  })
 
-  activeRefreshingProjects.add(promise)
+    resolvedTypeCache.clear()
+
+    const promise = existingSourceFile.refreshFromFileSystem()
+
+    startRefreshingProjects()
+
+    activeRefreshingProjects.add(promise)
+
+    promise.finally(() => {
+      activeRefreshingProjects.delete(promise)
+      if (activeRefreshingProjects.size === 0) {
+        completeRefreshingProjects()
+      }
+    })
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.includes('File not found') ||
+        (typeof (error as NodeJS.ErrnoException).code === 'string' &&
+          (error as NodeJS.ErrnoException).code === 'ENOENT'))
+    ) {
+      if (existingSourceFile) {
+        existingSourceFile.deleteImmediatelySync()
+      }
+
+      return
+    }
+
+    throw error
+  }
 }
 
 function createProjectDebugContext({
