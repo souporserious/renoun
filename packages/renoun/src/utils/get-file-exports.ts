@@ -5,6 +5,7 @@ const tsMorph = getTsMorph()
 
 import { getDebugLogger } from './debug.js'
 import { getDeclarationLocation } from './get-declaration-location.js'
+import { getExportPosition } from './get-export-position.js'
 import { getJsDocMetadata } from './get-js-doc-metadata.js'
 
 export interface ModuleExport {
@@ -116,7 +117,7 @@ export function getFileExports(
           const fileExport: ModuleExport = {
             name,
             path: node.getSourceFile().getFilePath(),
-            position: node.getPos(),
+            position: getExportPosition(node),
             kind: node.getKind(),
           }
           let insertAt = exportDeclarations.length

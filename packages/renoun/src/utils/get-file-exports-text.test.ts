@@ -80,7 +80,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 263,
           "name": "useHover",
-          "position": 243,
+          "position": 261,
           "text": "export function useHover() {
         return null
       }",
@@ -88,7 +88,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 263,
           "name": "Avatar",
-          "position": 384,
+          "position": 402,
           "text": "import { Image } from "components";
 
       export function Avatar() {
@@ -102,7 +102,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 261,
           "name": "Box",
-          "position": 703,
+          "position": 704,
           "text": "type SystemProps = { as: any }
 
       type BoxProps = { children: any } & SystemProps
@@ -112,7 +112,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 263,
           "name": "Badge",
-          "position": 826,
+          "position": 844,
           "text": "export function Badge(props: { children: any }) {
         return <div {...props} />
       }",
@@ -120,7 +120,7 @@ describe('getFileExportsText', () => {
         {
           "kind": 261,
           "name": "Button",
-          "position": 947,
+          "position": 948,
           "text": "const Stack = (props: { children: any; style?: any }) => <div {...props} />
 
       interface ButtonProps {}
@@ -130,13 +130,13 @@ describe('getFileExportsText', () => {
         {
           "kind": 261,
           "name": "Stack",
-          "position": 756,
+          "position": 757,
           "text": "const Stack = (props: { children: any; style?: any }) => <div {...props} />",
         },
         {
           "kind": 264,
           "name": "Car",
-          "position": 1036,
+          "position": 1051,
           "text": "export class Car {
         wheels = 4
       }",

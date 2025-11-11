@@ -9,6 +9,7 @@ import type {
 } from './ts-morph.js'
 
 import { getPrinter } from '../project/get-printer.js'
+import { getExportPosition } from './get-export-position.js'
 
 const tsMorph = getTsMorph()
 
@@ -78,7 +79,7 @@ export function getFileExportsText(
       declarationMap
     )
     const declaration = declarationMap.get(exportedSymbolId)!
-    const position = declaration.node.getPos()
+    const position = getExportPosition(declaration.node)
     const kind = declaration.node.getKind()
     const textSnippet = buildTextSnippet(
       usedLocals,
