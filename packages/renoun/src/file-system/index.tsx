@@ -2969,6 +2969,8 @@ export class Directory<
    * - If no directory exists, a file at the `path` is resolved.
    *
    * ```ts
+   * import { Directory } from 'renoun'
+   *
    * // Same‑named file inside directory
    * // components/Button/Button.tsx
    * await new Directory({ path: 'components' }).getEntry('button') // JavaScriptFile

@@ -125,6 +125,7 @@ Now when we call `JavaScript#getExportValue` and `JavaScriptExport#getRuntimeVal
 When using bundler utilities like [`import.meta.glob`](https://vite.dev/guide/features.html#glob-import), you can return a loader map from the `loader` option to reuse the globbed modules:
 
 ```tsx
+/// <reference types="vite/client" />
 import { Directory, withSchema } from 'renoun'
 
 interface PostType {

@@ -10,15 +10,20 @@
   "dependencies": {
     "@mdx-js/loader": "catalog:",
     "@mdx-js/react": "catalog:",
+    "@mdx-js/rollup": "3.1.1",
     "@next/mdx": "catalog:",
     "@preact/signals-core": "1.12.1",
+    "@renoun/mdx": "workspace:*",
     "@types/mdx": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vercel/analytics": "1.5.0",
+    "@vitejs/plugin-react": "5.1.0",
+    "@vitejs/plugin-rsc": "0.5.1",
     "arktype": "catalog:",
     "geist": "catalog:",
     "next": "catalog:",
+    "next-themes": "0.4.6",
     "react": "catalog:",
     "react-aria-components": "catalog:",
     "react-dom": "catalog:",
@@ -27,6 +32,7 @@
     "serve": "14.2.5",
     "ts-morph": "catalog:",
     "valibot": "catalog:",
+    "vite": "7.2.2",
     "zod": "catalog:"
   }
 }

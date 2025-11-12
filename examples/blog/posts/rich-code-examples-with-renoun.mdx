@@ -18,11 +18,21 @@ Register the languages and theme you need once in the `RootProvider`. Every fenc
 same presentation so your readers do not have to adjust to different styles post to post.
 
 ```tsx path="app/layout.tsx"
-<RootProvider theme="nord" languages={['css', 'tsx', 'typescript']}>
-  <html lang="en">
-    <body>{children}</body>
-  </html>
-</RootProvider>
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider theme="nord" languages={['css', 'tsx', 'typescript']}>
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}
 ```
 
 Add a `path` hint to your fence when you want to show readers where a snippet lives. renoun renders it

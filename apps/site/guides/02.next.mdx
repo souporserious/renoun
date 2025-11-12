@@ -16,13 +16,13 @@ To use renoun with Next.js, start with an existing or new Next.js project. If yo
 npx create-next-app@latest
 ```
 
-Next, we need to install the `renoun` package dependencies:
+Then we need to install the `renoun` package dependencies:
 
 <Command variant="install">renoun ts-morph</Command>
 
 <Note>
 
-The `ts-morph` package is required for code analysis in renoun. Next.js requires this dependency to be installed
+The `ts-morph` package is required for code analysis in `renoun`. Next.js requires this dependency to be installed
 explicitly in your project.
 
 </Note>
@@ -166,20 +166,27 @@ Next, we can use the `Directory` instance to render the contents of our MDX file
 ```tsx
 import { Directory } from 'renoun'
 
-const posts = new Directory({
-  path: 'posts',
-  filter: '*.mdx',
+const components = new Directory({
+  path: 'components',
+  filter: '*.tsx',
   loader: {
-    mdx: (path) => import(`@/posts/${path}.mdx`),
+    tsx: (path) => import(`@/components/${path}.tsx`),
   },
 })
 
-export default async function Page(props: PageProps<'/posts/[slug]'>) {
+export default async function Page(props: PageProps<'/components/[...slug]'>) {
   const { slug } = await props.params
-  const post = await posts.getFile(slug, 'mdx')
-  const Content = await post.getExportValue('default')
+  const component = await components.getFile(slug, 'tsx')
+  const fileExports = await component.getExports()
 
-  return <Content />
+  return fileExports.map((fileExport) => {
+    return (
+      <div key={fileExport.getName()}>
+        <h2>{fileExport.getName()}</h2>
+        <p>{fileExport.getDescription()}</p>
+      </div>
+    )
+  })
 }
 ```
 
@@ -248,13 +255,26 @@ const posts = new Directory({
 
 <Note>
 
-Adjust the regular expression to match the files you want to ignore. For example, to exclude test files for a TSX component:
+Adjust the regular expression to match the files you want to ignore. For example, to _exclude_ test files for a TSX component:
 
 ```tsx
-import(
-  /* webpackExclude: /\\.test\\.tsx$/ */
-  `@/components/${path}.tsx`
-)
+function getComponent(path: string) {
+  return import(
+    /* webpackExclude: /\\.test\\.tsx$/ */
+    `@/components/${path}.tsx`
+  )
+}
+```
+
+Alternatively, you can choose what to _include_ like example files:
+
+```tsx
+function getComponentExample(path: string) {
+  return import(
+    /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
+    `@/components/${path}.tsx`
+  )
+}
 ```
 
 </Note>

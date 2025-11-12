@@ -250,7 +250,7 @@ export default function Page() {
 
 Note, by overriding the `rehypePlugins` it will remove the default `@renoun/mdx` rehype plugins. If you want to keep the default plugins, you can import and apply them to the `MDX` component and add your own additional plugins:
 
-```tsx
+```tsx allowErrors="2307"
 import { MDX, rehypePlugins, remarkPlugins } from 'renoun'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkMdxFrontmatter from 'remark-mdx-frontmatter'

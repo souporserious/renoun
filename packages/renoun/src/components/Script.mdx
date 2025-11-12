@@ -2,7 +2,7 @@ A tiny helper that lets you author a client-side script using an imported source
 
 ## Quick start
 
-```tsx path="app/page.tsx"
+```tsx path="app/page.tsx" allowErrors="2307"
 import { Script } from 'renoun'
 
 export default function Page() {
@@ -46,18 +46,25 @@ export default function () {
 
 Export a function. The component stringifies the function and hands it off to a React script element.
 
+✅ Classic function
+
 ```ts
-// ✅ Classic function
 export default function () {
   // your script
 }
+```
 
-// ✅ Arrow with a block body
+✅ Arrow with a block body
+
+```ts
 export default () => {
   // your script
 }
+```
 
-// ⚠️ No named exports
+⚠️ No named exports
+
+```ts
 export function setup() {}
 ```
 

@@ -19,7 +19,7 @@ npm create vite@latest
 Next, install the required dependencies:
 
 <Command variant="install">
-  renoun @vitejs/plugin-react @vitejs/plugin-react-rsc @mdx-js/rollup
+  renoun @vitejs/plugin-react @vitejs/plugin-rsc @mdx-js/rollup
 </Command>
 
 ## Setup
@@ -28,7 +28,7 @@ Configure the React, React Server Components, and MDX plugins in your `vite.conf
 
 ```ts path="vite.config.ts"
 import react from '@vitejs/plugin-react'
-import rsc from '@vitejs/plugin-react-rsc'
+import rsc from '@vitejs/plugin-rsc'
 import mdx from '@mdx-js/rollup'
 import { defineConfig } from 'vite'
 
@@ -66,8 +66,8 @@ const docs = new Directory({
 })
 
 export default async function Page() {
-  const doc = await docs.getFile('getting-started', 'mdx')
-  const Content = await doc.getExportValue('default')
+  const doc = await docs.getFile('getting-started.mdx')
+  const Content = await doc.getContent()
   return <Content />
 }
 ```

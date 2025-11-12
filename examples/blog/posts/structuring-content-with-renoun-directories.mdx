@@ -19,6 +19,9 @@ Group related content into directories that mirror the reading experience you wa
 Each directory can define its own schema, sort order, and loader.
 
 ```ts
+import { Directory, withSchema } from 'renoun'
+import { z } from 'zod'
+
 const tutorials = new Directory({
   path: 'tutorials',
   filter: '*.mdx',
