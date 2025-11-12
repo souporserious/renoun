@@ -567,10 +567,28 @@ export class GitHostFileSystem extends MemoryFileSystem {
     if (!relative || relative === '.' || relative === './') {
       return ''
     }
-    return relative
-      .replace(/^(\.\/)+/, '')
-      .replace(/^\/+/, '')
-      .replace(/\/+$/, '')
+    // Trim leading "./" segments
+    let normalized = relative
+    while (normalized.startsWith('./')) {
+      normalized = normalized.slice(2)
+    }
+    // Trim leading slashes
+    let start = 0
+    while (start < normalized.length && normalized.charCodeAt(start) === 47) {
+      start++
+    }
+    if (start > 0) {
+      normalized = normalized.slice(start)
+    }
+    // Trim trailing slashes
+    let end = normalized.length
+    while (end > 0 && normalized.charCodeAt(end - 1) === 47) {
+      end--
+    }
+    if (end < normalized.length) {
+      normalized = normalized.slice(0, end)
+    }
+    return normalized
   }
 
   #createGitMetadataState(): GitMetadataState {
