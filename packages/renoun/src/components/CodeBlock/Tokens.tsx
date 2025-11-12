@@ -103,8 +103,8 @@ export interface TokensProps {
 export async function Tokens({
   children,
   language: languageProp,
-  allowErrors,
-  showErrors,
+  allowErrors: allowErrorsProp,
+  showErrors: showErrorsProp,
   shouldAnalyze: shouldAnalyzeProp,
   shouldFormat: shouldFormatProp,
   renderLine,
@@ -205,14 +205,23 @@ export async function Tokens({
     context.resolvers.resolve()
   }
 
-  const resolvedAllowErrors = allowErrors ?? context?.allowErrors ?? false
-  const resolvedShowErrors = showErrors ?? context?.showErrors ?? false
+  const showErrors =
+    showErrorsProp === undefined ? context?.showErrors : showErrorsProp
+  const allowErrors =
+    allowErrorsProp === undefined
+      ? context?.allowErrors === undefined
+        ? showErrors
+          ? true
+          : undefined
+        : context.allowErrors
+      : allowErrorsProp
+
   const tokens = await getTokens({
     value: metadata.value,
     language: metadata.language,
     filePath: metadata.filePath,
-    allowErrors: resolvedAllowErrors,
-    showErrors: resolvedShowErrors,
+    allowErrors,
+    showErrors,
     theme: themeConfiguration,
     languages: config.languages,
   })

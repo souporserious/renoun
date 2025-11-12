@@ -295,7 +295,7 @@ async function CodeBlockAsync({
   const contextValue = {
     filePath: path,
     padding: containerPadding.all,
-    allowErrors: allowErrors ?? false,
+    allowErrors: allowErrors === undefined ? showErrors : allowErrors,
     showErrors,
     shouldAnalyze,
     shouldFormat,
@@ -422,6 +422,8 @@ async function CodeBlockAsync({
                 }}
               >
                 <Tokens
+                  allowErrors={allowErrors}
+                  showErrors={showErrors}
                   css={{
                     token: css?.token,
                     popover: css?.popover,
@@ -452,6 +454,8 @@ async function CodeBlockAsync({
               }}
             >
               <Tokens
+                allowErrors={allowErrors}
+                showErrors={showErrors}
                 css={{
                   token: css?.token,
                   popover: css?.popover,
