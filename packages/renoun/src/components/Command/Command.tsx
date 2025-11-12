@@ -31,6 +31,100 @@ const installDevFlags = {
   bun: '--dev',
 } as const
 
+const EXACT_VERSION_PATTERN = /^(\d+\.\d+\.\d+)(?:[-+].+)?$/
+const DIST_TAG_PATTERN = /^[a-zA-Z][\w.-]*$/
+
+type PackageValidationResult = {
+  name: string
+  version?: string
+}
+
+function isPackageSpec(token: string) {
+  return Boolean(token) && !token.startsWith('-')
+}
+
+function parsePackageSpec(token: string): PackageValidationResult | null {
+  if (!isPackageSpec(token)) {
+    return null
+  }
+
+  if (token.startsWith('@')) {
+    const atIndex = token.lastIndexOf('@')
+    if (atIndex > 0) {
+      const name = token.slice(0, atIndex)
+      const version = token.slice(atIndex + 1)
+      if (version) {
+        return { name, version }
+      }
+    }
+    return { name: token }
+  }
+
+  const atIndex = token.lastIndexOf('@')
+  if (atIndex > 0) {
+    const name = token.slice(0, atIndex)
+    const version = token.slice(atIndex + 1)
+    if (version) {
+      return { name, version }
+    }
+  }
+
+  return { name: token }
+}
+
+async function validatePackage({ name, version }: PackageValidationResult) {
+  const encodedName = encodeURIComponent(name)
+  const response = await fetch(`https://registry.npmjs.org/${encodedName}`)
+  if (!response.ok) {
+    throw new Error(`[renoun] Package "${name}" does not exist on npm.`)
+  }
+
+  if (!version) {
+    return
+  }
+
+  const isExactVersion = EXACT_VERSION_PATTERN.test(version)
+  const isDistTag = DIST_TAG_PATTERN.test(version)
+  if (!isExactVersion && !isDistTag) {
+    return
+  }
+
+  const metadata: {
+    versions?: Record<string, unknown>
+    'dist-tags'?: Record<string, string>
+  } = await response.json()
+
+  const { versions = {}, 'dist-tags': distTags = {} } = metadata
+  if (isExactVersion && !versions[version]) {
+    throw new Error(
+      `[renoun] Version "${version}" for package "${name}" does not exist on npm.`
+    )
+  }
+
+  if (isDistTag && !distTags[version]) {
+    throw new Error(
+      `[renoun] Version "${version}" for package "${name}" does not exist on npm.`
+    )
+  }
+}
+
+async function validatePackages(variant: CommandVariant, subject: string) {
+  if (variant !== 'install' && variant !== 'install-dev') {
+    return
+  }
+
+  const tokens = subject.split(/\s+/).filter(Boolean)
+  const specs = tokens
+    .map(parsePackageSpec)
+    .filter((spec): spec is PackageValidationResult => Boolean(spec))
+
+  if (specs.length === 0) {
+    return
+  }
+
+  await Promise.all(specs.map((spec) => validatePackage(spec)))
+}
+
 function buildCommand(
   packageManager: PackageManager,
   variant: CommandVariant,
@@ -96,6 +190,9 @@ export interface CommandProps {
 
   /** Content used as the subject: packages (install), script (run), binary (exec), or template (create). */
   children: React.ReactNode
+
+  /** Whether the command should validate the npm package before rendering. */
+  shouldValidate?: boolean
 
   /** Override styles for each part of the component. */
   css?: {
@@ -198,10 +295,15 @@ async function CommandAsync({
   id,
   variant,
   command: subject,
+  shouldValidate,
   css,
   className,
   style,
 }: CommandAsyncProps) {
+  if (shouldValidate) {
+    await validatePackages(variant, subject)
+  }
+
   const config = await getConfig()
   const theme = await getThemeColors(config.theme)
 
@@ -304,6 +406,7 @@ export function Command({
   css,
   className,
   style,
+  shouldValidate = true,
 }: CommandProps) {
   if (!variant) {
     return (
@@ -326,6 +429,7 @@ export function Command({
       css={css}
       className={className}
       style={style}
+      shouldValidate={shouldValidate}
     />
   )
 }
