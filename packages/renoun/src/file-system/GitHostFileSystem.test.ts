@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { gzipSync } from 'node:zlib'
 
 import { GitHostFileSystem } from './GitHostFileSystem.js'
+import { Directory } from './index.js'
 
 const SUCCESS_ARCHIVE = makeTar([
   { path: 'root/file.txt', content: 'hello' },
@@ -136,6 +137,96 @@ describe('GitHostFileSystem', () => {
     vi.useRealTimers()
     globalThis.fetch = originalFetch
     vi.restoreAllMocks()
+  })
+
+  it('fetches git metadata for files when using GitHostFileSystem', async () => {
+    const commitHistory = [
+      {
+        sha: '3',
+        commit: {
+          author: {
+            name: 'Bob',
+            email: 'bob@example.com',
+            date: '2022-03-15T12:00:00Z',
+          },
+        },
+      },
+      {
+        sha: '2',
+        commit: {
+          author: {
+            name: 'Alice',
+            email: 'alice@example.com',
+            date: '2021-01-01T08:00:00Z',
+          },
+        },
+      },
+      {
+        sha: '1',
+        commit: {
+          author: {
+            name: 'Alice',
+            email: 'alice@example.com',
+            date: '2020-06-01T08:00:00Z',
+          },
+        },
+      },
+    ]
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+        arrayBuffer: async () => SUCCESS_ARCHIVE,
+        url: 'https://codeload.github.com/owner/repo/tarball/main',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: createHeaders({}),
+        json: async () => commitHistory,
+        url: 'https://api.github.com/repos/owner/repo/commits',
+      })
+
+    globalThis.fetch = mockFetch
+
+    const fs = new GitHostFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    const directory = new Directory({ fileSystem: fs })
+    const file = await directory.getFile('dir/a.md')
+
+    const firstCommitDate = await file.getFirstCommitDate()
+    const lastCommitDate = await file.getLastCommitDate()
+    const authors = await file.getAuthors()
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    const commitRequest = mockFetch.mock.calls[1]![0]
+    expect(commitRequest).toContain('/repos/owner/repo/commits')
+    expect(commitRequest).toContain('path=dir%2Fa.md')
+
+    expect(firstCommitDate?.toISOString()).toBe('2020-06-01T08:00:00.000Z')
+    expect(lastCommitDate?.toISOString()).toBe('2022-03-15T12:00:00.000Z')
+
+    expect(authors).toHaveLength(2)
+    expect(authors[0]).toMatchObject({
+      name: 'Alice',
+      commitCount: 2,
+    })
+    expect(authors[0]?.firstCommitDate.toISOString()).toBe(
+      '2020-06-01T08:00:00.000Z'
+    )
+    expect(authors[0]?.lastCommitDate.toISOString()).toBe(
+      '2021-01-01T08:00:00.000Z'
+    )
+    expect(authors[1]).toMatchObject({ name: 'Bob', commitCount: 1 })
   })
 
   it('loads archive and reads files (unauthenticated public)', async () => {

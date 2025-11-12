@@ -1,4 +1,5 @@
 import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.js'
+import type { GitMetadata } from '../utils/get-local-git-file-metadata.js'
 import { Semaphore } from '../utils/Semaphore.js'
 import { MemoryFileSystem, type MemoryFileContent } from './MemoryFileSystem.js'
 import type { DirectoryEntry } from './types.js'
@@ -69,6 +70,20 @@ const TAR_TYPE_FLAGS = {
   GnuLongPath: 0x4c, // 'L'
   GnuLongLink: 0x4b, // 'K'
 } as const
+
+type GitMetadataState = {
+  authors: Map<
+    string,
+    {
+      name: string
+      commitCount: number
+      firstCommitDate: Date
+      lastCommitDate: Date
+    }
+  >
+  firstCommitDate?: Date
+  lastCommitDate?: Date
+}
 
 const defaultOrigins = {
   github: {
@@ -175,6 +190,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
   #symlinkMap: Map<string, string>
   #include?: string[]
   #exclude?: string[]
+  #gitMetadataCache: Map<string, GitMetadata>
 
   constructor(options: GitHostFileSystemOptions) {
     if (!options.host) {
@@ -234,6 +250,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
     this.#exclude = options.exclude
 
     this.#symlinkMap = new Map()
+    this.#gitMetadataCache = new Map()
     this.#initPromise = this.#loadArchive().catch((error) => {
       this.#initPromise = undefined
       throw error
@@ -465,6 +482,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
     this.#initId++
     const files = this.getFiles()
     files.clear()
+    this.#gitMetadataCache.clear()
     this.#initialized = false
     this.#initPromise = undefined
   }
@@ -513,6 +531,394 @@ export class GitHostFileSystem extends MemoryFileSystem {
     const headers: Record<string, string> = {}
     headers['User-Agent'] = 'renoun'
     return headers
+  }
+
+  async getGitFileMetadata(path: string): Promise<GitMetadata> {
+    await this.#ensureInitialized()
+
+    const normalizedPath = this.#normalizeGitMetadataPath(path)
+    const cacheKey = `${this.#ref}::${normalizedPath}`
+
+    if (this.#gitMetadataCache.has(cacheKey)) {
+      return this.#gitMetadataCache.get(cacheKey)!
+    }
+
+    let metadata: GitMetadata
+    try {
+      metadata = await this.#fetchGitMetadataForHost(normalizedPath)
+    } catch {
+      metadata = this.#createEmptyGitMetadata()
+    }
+
+    this.#gitMetadataCache.set(cacheKey, metadata)
+    return metadata
+  }
+
+  #createEmptyGitMetadata(): GitMetadata {
+    return {
+      authors: [],
+      firstCommitDate: undefined,
+      lastCommitDate: undefined,
+    }
+  }
+
+  #normalizeGitMetadataPath(path: string): string {
+    const relative = normalizeSlashes(this.getRelativePathToWorkspace(path))
+    if (!relative || relative === '.' || relative === './') {
+      return ''
+    }
+    return relative
+      .replace(/^(\.\/)+/, '')
+      .replace(/^\/+/, '')
+      .replace(/\/+$/, '')
+  }
+
+  #createGitMetadataState(): GitMetadataState {
+    return {
+      authors: new Map(),
+      firstCommitDate: undefined,
+      lastCommitDate: undefined,
+    }
+  }
+
+  #updateGitMetadataState(
+    state: GitMetadataState,
+    name: string | undefined,
+    email: string | undefined,
+    date: Date
+  ) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return
+    }
+
+    const normalizedEmail =
+      typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : undefined
+    const normalizedName =
+      typeof name === 'string' && name.trim()
+        ? name.trim()
+        : normalizedEmail
+          ? normalizedEmail
+          : 'Unknown'
+
+    const key = normalizedEmail ?? normalizedName.toLowerCase() ?? 'unknown'
+    const author = state.authors.get(key)
+
+    if (!author) {
+      state.authors.set(key, {
+        name: normalizedName,
+        commitCount: 1,
+        firstCommitDate: date,
+        lastCommitDate: date,
+      })
+    } else {
+      author.commitCount += 1
+      if (date < author.firstCommitDate) {
+        author.firstCommitDate = date
+      }
+      if (date > author.lastCommitDate) {
+        author.lastCommitDate = date
+      }
+      if (!author.name && normalizedName) {
+        author.name = normalizedName
+      }
+    }
+
+    if (!state.firstCommitDate || date < state.firstCommitDate) {
+      state.firstCommitDate = date
+    }
+    if (!state.lastCommitDate || date > state.lastCommitDate) {
+      state.lastCommitDate = date
+    }
+  }
+
+  #finalizeGitMetadataState(state: GitMetadataState): GitMetadata {
+    const authors = Array.from(state.authors.values()).sort(
+      (a, b) =>
+        b.commitCount - a.commitCount ||
+        b.lastCommitDate.getTime() - a.lastCommitDate.getTime()
+    )
+
+    return {
+      authors,
+      firstCommitDate: state.firstCommitDate,
+      lastCommitDate: state.lastCommitDate,
+    }
+  }
+
+  async #fetchGitMetadataForHost(path: string): Promise<GitMetadata> {
+    const state = this.#createGitMetadataState()
+
+    switch (this.#host) {
+      case 'github':
+        await this.#collectGitHubGitMetadata(path, state)
+        break
+      case 'gitlab':
+        await this.#collectGitLabGitMetadata(path, state)
+        break
+      case 'bitbucket':
+        await this.#collectBitbucketGitMetadata(path, state)
+        break
+      default:
+        return this.#createEmptyGitMetadata()
+    }
+
+    if (state.authors.size === 0 && state.firstCommitDate === undefined) {
+      return this.#createEmptyGitMetadata()
+    }
+
+    return this.#finalizeGitMetadataState(state)
+  }
+
+  async #collectGitHubGitMetadata(
+    path: string,
+    state: GitMetadataState
+  ): Promise<void> {
+    if (!this.#ownerEncoded || !this.#repoEncoded) {
+      return
+    }
+
+    let url = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/commits?sha=${encodeURIComponent(this.#ref)}&per_page=100`
+    if (path) {
+      url += `&path=${encodeURIComponent(path)}`
+    }
+
+    const visited = new Set<string>()
+
+    while (url && !visited.has(url)) {
+      visited.add(url)
+      const response = await this.#fetchWithRetry(url)
+      if (!response.ok) {
+        return
+      }
+
+      const commits = await response.json().catch(() => undefined)
+      if (!Array.isArray(commits) || commits.length === 0) {
+        return
+      }
+
+      for (const commit of commits) {
+        const commitData = commit?.commit
+        const authorInfo = commitData?.author ?? commitData?.committer
+        const dateString = authorInfo?.date
+        if (typeof dateString !== 'string') {
+          continue
+        }
+        const date = new Date(dateString)
+        if (Number.isNaN(date.getTime())) {
+          continue
+        }
+
+        const emailCandidate =
+          (typeof commitData?.author?.email === 'string'
+            ? commitData.author.email
+            : undefined) ??
+          (typeof commit?.author?.email === 'string'
+            ? commit.author.email
+            : undefined) ??
+          (typeof commitData?.committer?.email === 'string'
+            ? commitData.committer.email
+            : undefined)
+
+        const nameCandidate =
+          (typeof commitData?.author?.name === 'string'
+            ? commitData.author.name
+            : undefined) ??
+          (typeof commit?.author?.login === 'string'
+            ? commit.author.login
+            : undefined) ??
+          (typeof commitData?.committer?.name === 'string'
+            ? commitData.committer.name
+            : undefined)
+
+        this.#updateGitMetadataState(
+          state,
+          nameCandidate,
+          emailCandidate,
+          date
+        )
+      }
+
+      const nextLink = this.#getNextLink(
+        response.headers.get('link'),
+        response.url
+      )
+      if (!nextLink) {
+        return
+      }
+      url = nextLink
+    }
+  }
+
+  async #collectGitLabGitMetadata(
+    path: string,
+    state: GitMetadataState
+  ): Promise<void> {
+    const project = encodeURIComponent(this.#repository)
+    let page = 1
+    const visitedPages = new Set<number>()
+
+    while (!visitedPages.has(page)) {
+      visitedPages.add(page)
+      let url = `${this.#apiBaseUrl}/projects/${project}/repository/commits?ref_name=${encodeURIComponent(this.#ref)}&per_page=100&page=${page}`
+      if (path) {
+        url += `&path=${encodeURIComponent(path)}`
+      }
+
+      const response = await this.#fetchWithRetry(url)
+      if (!response.ok) {
+        return
+      }
+
+      const commits = await response.json().catch(() => undefined)
+      if (!Array.isArray(commits) || commits.length === 0) {
+        return
+      }
+
+      for (const commit of commits) {
+        const dateString =
+          (typeof commit?.committed_date === 'string'
+            ? commit.committed_date
+            : undefined) ??
+          (typeof commit?.created_at === 'string'
+            ? commit.created_at
+            : undefined)
+        if (!dateString) {
+          continue
+        }
+        const date = new Date(dateString)
+        if (Number.isNaN(date.getTime())) {
+          continue
+        }
+
+        const email =
+          typeof commit?.author_email === 'string'
+            ? commit.author_email
+            : undefined
+        const name =
+          (typeof commit?.author_name === 'string'
+            ? commit.author_name
+            : undefined) ?? email
+
+        this.#updateGitMetadataState(state, name, email, date)
+      }
+
+      const nextPage = response.headers.get('x-next-page')
+      if (!nextPage) {
+        return
+      }
+      const next = Number(nextPage)
+      if (!Number.isFinite(next) || next <= page) {
+        return
+      }
+      page = next
+    }
+  }
+
+  async #collectBitbucketGitMetadata(
+    path: string,
+    state: GitMetadataState
+  ): Promise<void> {
+    if (!this.#ownerEncoded || !this.#repoEncoded) {
+      return
+    }
+
+    let url = `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/commits/${encodeURIComponent(this.#ref)}?pagelen=100`
+    if (path) {
+      url += `&path=${encodeURIComponent(path)}`
+    }
+
+    const visited = new Set<string>()
+
+    while (url && !visited.has(url)) {
+      visited.add(url)
+      const response = await this.#fetchWithRetry(url)
+      if (!response.ok) {
+        return
+      }
+
+      const data = await response.json().catch(() => undefined)
+      const commits = Array.isArray(data?.values) ? data.values : undefined
+      if (!commits || commits.length === 0) {
+        return
+      }
+
+      for (const commit of commits) {
+        const dateString =
+          typeof commit?.date === 'string' ? commit.date : undefined
+        if (!dateString) {
+          continue
+        }
+        const date = new Date(dateString)
+        if (Number.isNaN(date.getTime())) {
+          continue
+        }
+
+        const { name, email } = this.#parseBitbucketAuthor(commit?.author)
+        this.#updateGitMetadataState(state, name, email, date)
+      }
+
+      url = typeof data?.next === 'string' && data.next ? data.next : ''
+    }
+  }
+
+  #parseBitbucketAuthor(author: any): {
+    name?: string
+    email?: string
+  } {
+    if (!author || typeof author !== 'object') {
+      return {}
+    }
+
+    let name: string | undefined
+    let email: string | undefined
+
+    const user = author.user
+    if (user && typeof user === 'object') {
+      const displayName =
+        typeof user.display_name === 'string' ? user.display_name.trim() : ''
+      const nickname =
+        typeof user.nickname === 'string' ? user.nickname.trim() : ''
+      name = displayName || nickname || undefined
+    }
+
+    if (typeof author.raw === 'string') {
+      const raw = author.raw.trim()
+      const match = raw.match(/<([^>]+)>/)
+      if (match && match[1]) {
+        email = match[1].trim()
+      }
+      if (!name) {
+        const withoutEmail = raw.replace(/<[^>]*>/g, '').trim()
+        if (withoutEmail) {
+          name = withoutEmail
+        }
+      }
+    }
+
+    return { name, email }
+  }
+
+  #getNextLink(
+    header: string | null,
+    responseUrl: string
+  ): string | undefined {
+    if (!header) {
+      return undefined
+    }
+
+    const parts = header.split(',')
+    for (const part of parts) {
+      const match = part.match(/<([^>]+)>;\s*rel="([^"]+)"/)
+      if (match && match[2] === 'next') {
+        const target = match[1]
+        try {
+          return new URL(target, responseUrl).toString()
+        } catch {
+          return undefined
+        }
+      }
+    }
+    return undefined
   }
 
   #assertAllowed(urlStr: string) {

@@ -28,6 +28,7 @@ import {
 } from '../utils/get-editor-uri.js'
 import type { ModuleExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
+import type { GitMetadata } from '../utils/get-local-git-file-metadata.js'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
@@ -210,6 +211,19 @@ type ModuleLoader<Exports extends ModuleExports = ModuleExports> =
   | ModuleRuntimeLoader<Exports>
   | WithSchema<Exports>
   | ModuleLoaderWithSchema<Exports>
+
+interface GitMetadataProvider {
+  getGitFileMetadata(path: string): Promise<GitMetadata>
+}
+
+function isGitMetadataProvider(
+  fileSystem: FileSystem
+): fileSystem is FileSystem & GitMetadataProvider {
+  return (
+    typeof (fileSystem as Partial<GitMetadataProvider>).getGitFileMetadata ===
+    'function'
+  )
+}
 
 /** A record of loaders for different file extensions. */
 type ModuleLoaders = {
@@ -622,19 +636,28 @@ export class File<
 
   /** Get the first local git commit date of the file. */
   async getFirstCommitDate() {
-    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    const fileSystem = this.#directory.getFileSystem()
+    const gitMetadata = isGitMetadataProvider(fileSystem)
+      ? await fileSystem.getGitFileMetadata(this.#path)
+      : await getLocalGitFileMetadata(this.#path)
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last local git commit date of the file. */
   async getLastCommitDate() {
-    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    const fileSystem = this.#directory.getFileSystem()
+    const gitMetadata = isGitMetadataProvider(fileSystem)
+      ? await fileSystem.getGitFileMetadata(this.#path)
+      : await getLocalGitFileMetadata(this.#path)
     return gitMetadata.lastCommitDate
   }
 
   /** Get the local git authors of the file. */
   async getAuthors() {
-    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    const fileSystem = this.#directory.getFileSystem()
+    const gitMetadata = isGitMetadataProvider(fileSystem)
+      ? await fileSystem.getGitFileMetadata(this.#path)
+      : await getLocalGitFileMetadata(this.#path)
     return gitMetadata.authors
   }
 
@@ -3489,19 +3512,28 @@ export class Directory<
 
   /** Get the first local git commit date of this directory. */
   async getFirstCommitDate() {
-    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    const fileSystem = this.getFileSystem()
+    const gitMetadata = isGitMetadataProvider(fileSystem)
+      ? await fileSystem.getGitFileMetadata(this.#path)
+      : await getLocalGitFileMetadata(this.#path)
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last local git commit date of this directory. */
   async getLastCommitDate() {
-    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    const fileSystem = this.getFileSystem()
+    const gitMetadata = isGitMetadataProvider(fileSystem)
+      ? await fileSystem.getGitFileMetadata(this.#path)
+      : await getLocalGitFileMetadata(this.#path)
     return gitMetadata.lastCommitDate
   }
 
   /** Get the local git authors of this directory. */
   async getAuthors() {
-    const gitMetadata = await getLocalGitFileMetadata(this.#path)
+    const fileSystem = this.getFileSystem()
+    const gitMetadata = isGitMetadataProvider(fileSystem)
+      ? await fileSystem.getGitFileMetadata(this.#path)
+      : await getLocalGitFileMetadata(this.#path)
     return gitMetadata.authors
   }
 
