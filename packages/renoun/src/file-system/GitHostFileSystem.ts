@@ -610,7 +610,9 @@ export class GitHostFileSystem extends MemoryFileSystem {
     }
 
     const normalizedEmail =
-      typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : undefined
+      typeof email === 'string' && email.trim()
+        ? email.trim().toLowerCase()
+        : undefined
     const normalizedName =
       typeof name === 'string' && name.trim()
         ? name.trim()
@@ -748,12 +750,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
             ? commitData.committer.name
             : undefined)
 
-        this.#updateGitMetadataState(
-          state,
-          nameCandidate,
-          emailCandidate,
-          date
-        )
+        this.#updateGitMetadataState(state, nameCandidate, emailCandidate, date)
       }
 
       const nextLink = this.#getNextLink(
@@ -906,7 +903,13 @@ export class GitHostFileSystem extends MemoryFileSystem {
         email = match[1].trim()
       }
       if (!name) {
-        const withoutEmail = raw.replace(/<[^>]*>/g, '').trim()
+        let previous = ''
+        let text = raw
+        while (text !== previous) {
+          previous = text
+          text = text.replace(/<[^>]*>/g, '')
+        }
+        const withoutEmail = text.trim()
         if (withoutEmail) {
           name = withoutEmail
         }
@@ -916,10 +919,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
     return { name, email }
   }
 
-  #getNextLink(
-    header: string | null,
-    responseUrl: string
-  ): string | undefined {
+  #getNextLink(header: string | null, responseUrl: string): string | undefined {
     if (!header) {
       return undefined
     }
