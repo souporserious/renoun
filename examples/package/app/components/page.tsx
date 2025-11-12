@@ -1,32 +1,8 @@
-import type { FileSystemEntry } from 'renoun'
-import Link from 'next/link'
-
 import { ComponentsCollection } from '@/collections'
+import { EntryIndex } from '@/ui/EntryIndex'
 
 export default async function Components() {
   const entries = await ComponentsCollection.getEntries()
 
-  return (
-    <main className="prose prose-slate dark:prose-invert max-w-none">
-      <h1 className="!mt-0">Components</h1>
-      <ul className="list-none p-0 m-0 divide-y divide-gray-200 dark:divide-gray-800 border rounded-lg border-gray-200 dark:border-gray-800">
-        {entries.map((entry) => (
-          <ComponentEntry key={entry.getPathname()} entry={entry} />
-        ))}
-      </ul>
-    </main>
-  )
-}
-
-async function ComponentEntry({ entry }: { entry: FileSystemEntry<any> }) {
-  return (
-    <li>
-      <Link
-        href={entry.getPathname()}
-        className="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 no-underline"
-      >
-        <h2 className="m-0 text-base font-medium">{entry.getBaseName()}</h2>
-      </Link>
-    </li>
-  )
+  return <EntryIndex title="Components" entries={entries} />
 }
