@@ -19636,6 +19636,147 @@ describe('resolveType', () => {
     )
   })
 
+  test('resolves generic @type annotations from JSDoc', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @template T
+       * @typedef {object} Node
+       * @property {T} value
+       */
+
+      /** @typedef {Float32Array} mat3 */
+
+      /**
+       * @tsl
+       * @type {Node<mat3>}
+       */
+      export const TBNViewMatrix = createMatrix()
+      function createMatrix() {}
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('TBNViewMatrix')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved?.kind).toBe('Variable')
+    if (resolved?.kind !== 'Variable') {
+      return
+    }
+
+    expect(resolved.type?.kind).toBe('TypeReference')
+    if (resolved.type?.kind !== 'TypeReference') {
+      return
+    }
+
+    expect(resolved.type.text).toBe('Node<mat3>')
+    expect(resolved.type.typeArguments?.[0]?.text).toBe('mat3')
+  })
+
+  test('resolves @template metadata from JSDoc', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @template T - value type
+       * @param {T} value
+       * @returns {T}
+       */
+      export function identity(value) {
+        return value
+      }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getFunctionOrThrow('identity')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved?.kind).toBe('Function')
+    if (resolved?.kind !== 'Function') {
+      return
+    }
+
+    const [signature] = resolved.signatures
+
+    expect(signature?.typeParameters?.[0]?.name).toBe('T')
+    expect(signature?.typeParameters?.[0]?.description).toBe('value type')
+    expect(signature?.typeParameters?.[0]?.tags).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'template', text: 'value type' }),
+      ])
+    )
+
+    expect(signature?.parameters?.[0]?.type?.text).toBe('T')
+    expect(signature?.returnType?.text).toBe('T')
+  })
+
+  test('resolves @extends and @implements from JSDoc for JS classes', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @template T
+       */
+      class Base {
+        /**
+         * @param {T} value
+         */
+        constructor(value) {
+          this.value = value
+        }
+      }
+
+      /** @typedef {{ dispose(): void }} Disposable */
+
+      /**
+       * @implements {Disposable}
+       * @extends {Base<number>}
+       */
+      export class Derived extends Base {
+        constructor() {
+          super(0)
+        }
+
+        dispose() {}
+      }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getClassOrThrow('Derived')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved?.kind).toBe('Class')
+    if (resolved?.kind !== 'Class') {
+      return
+    }
+
+    expect(resolved.extends?.text).toBe('Base<number>')
+    expect(resolved.implements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Disposable' }),
+      ])
+    )
+  })
+
   test('captures JSDoc default values for JS functions', () => {
     const project = new Project({
       compilerOptions: { allowJs: true, checkJs: true },
