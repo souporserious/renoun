@@ -162,6 +162,8 @@ export function Reference(props: ReferenceProps) {
           display: 'flex',
           flexDirection: 'column',
           '& > *:not(:last-child)': {
+            paddingBottom: '1.5rem',
+            marginBottom: '1.5rem',
             borderBottom: '1px solid var(--color-separator-secondary)',
           },
         }}
