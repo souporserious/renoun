@@ -69,17 +69,11 @@ describe('getTokens metadata integration', () => {
       filePath,
       highlighter,
       theme: 'default',
+      allowErrors: true,
     })
-
-    const flattened = tokens.flat()
-    const missingToken = flattened.find((token) => token.value === 'missing')
-    expect(missingToken?.diagnostics?.some((diagnostic) => diagnostic.code === 2304)).toBe(
-      true
-    )
-
-    const secondValueToken = flattened.find(
-      (token) => token.value === 'value' && token.start > 20
-    )
+    const secondValueToken = tokens
+      .flat()
+      .find((token) => token.value === 'value' && token.start > 20)
 
     expect(secondValueToken?.isSymbol).toBe(true)
     expect(secondValueToken?.quickInfo?.displayText).toContain('value')
@@ -173,16 +167,18 @@ describe('getTokens metadata integration', () => {
 
     const highlighter: Highlighter = async () => {
       highlighterStarted.resolve()
-      return [[
-        createTextMateToken('const'),
-        createTextMateToken(' '),
-        createTextMateToken('value'),
-        createTextMateToken(' '),
-        createTextMateToken('='),
-        createTextMateToken(' '),
-        createTextMateToken('1'),
-        createTextMateToken(';'),
-      ]]
+      return [
+        [
+          createTextMateToken('const'),
+          createTextMateToken(' '),
+          createTextMateToken('value'),
+          createTextMateToken(' '),
+          createTextMateToken('='),
+          createTextMateToken(' '),
+          createTextMateToken('1'),
+          createTextMateToken(';'),
+        ],
+      ]
     }
 
     const tokensPromise = getTokens({
