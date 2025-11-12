@@ -1,4 +1,10 @@
-import { Reference, isDirectory, type FileSystemEntry } from 'renoun'
+import {
+  Reference,
+  CodeBlock,
+  isDirectory,
+  Link,
+  type FileSystemEntry,
+} from 'renoun'
 import NextLink from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -33,11 +39,14 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
   const [previousEntry, nextEntry] = await parentDirectory.getSiblings()
   const fileExports = mainEntry ? await mainEntry.getExports() : []
   const exampleTags = fileExports
-    .map((exp) => ({ name: exp.getName(), tags: exp.getTags() ?? [] }))
+    .map((example) => ({
+      name: example.getName(),
+      tags: example.getTags() ?? [],
+    }))
     .flatMap(({ name, tags }) =>
       tags
-        .filter((t) => t.name === 'example' && t.text && t.text.trim())
-        .map((t) => ({ exportName: name, text: t.text as string }))
+        .filter((tag) => tag.name === 'example' && tag.text && tag.text.trim())
+        .map((tag) => ({ exportName: name, text: tag.text }))
     )
 
   return (
@@ -56,16 +65,26 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
       {exampleTags.length > 0 ? (
         <div className="prose prose-slate dark:prose-invert max-w-none">
           <h2>Examples</h2>
-          <ul className="list-none p-0 m-0 grid gap-6">
-            {exampleTags.map((ex, i) => (
-              <li key={`${ex.exportName}-${i}`}>
+          <ul className="not-prose list-none p-0 m-0 grid gap-6">
+            {exampleTags.map((example, index) => (
+              <li key={`${example.exportName}-${index}`}>
                 <div className="rounded-md border border-gray-200 dark:border-gray-800 overflow-hidden">
                   <div className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
-                    {ex.exportName}
+                    {example.exportName}
                   </div>
-                  <pre className="m-0 p-4 overflow-auto text-sm leading-relaxed">
-                    <code>{ex.text}</code>
-                  </pre>
+                  <CodeBlock
+                    language="tsx"
+                    css={{
+                      container: {
+                        margin: 0,
+                        borderRadius: 0,
+                        boxShadow: undefined,
+                        padding: '1rem',
+                      },
+                    }}
+                  >
+                    {example.text}
+                  </CodeBlock>
                 </div>
               </li>
             ))}
@@ -93,8 +112,9 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
           ) : null}
 
           <div className="text-right">
-            {/* Fallback to source/edit akin to components page if desired later */}
-            <NextLink href={hookEntry.getPathname()}>View source</NextLink>
+            <Link source={hookEntry} variant="source">
+              View source
+            </Link>
           </div>
         </div>
 
