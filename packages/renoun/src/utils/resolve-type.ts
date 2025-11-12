@@ -589,6 +589,7 @@ export namespace Kind {
 
 export type Kind =
   | Kind.TypeExpression
+  | Kind.TupleElement
   | Kind.Class
   | Kind.ClassConstructor
   | Kind.ClassProperty
@@ -604,10 +605,13 @@ export type Kind =
   | Kind.TypeParameter
   | Kind.CallSignature
   | Kind.ConstructSignature
+  | Kind.GetAccessorSignature
+  | Kind.SetAccessorSignature
   | Kind.ComponentSignature
   | Kind.MethodSignature
   | Kind.PropertySignature
   | Kind.IndexSignature
+  | Kind.IndexSignatureParameter
   | Kind.Parameter
   | Kind.Namespace
 
@@ -1066,7 +1070,9 @@ export function resolveType(
 }
 
 /** Returns the first JSDoc @type node for a variable declaration, if present. */
-function getJsDocTypeNode(declaration: VariableDeclaration): TypeNode | undefined {
+function getJsDocTypeNode(
+  declaration: VariableDeclaration
+): TypeNode | undefined {
   const candidates: Node[] = []
 
   const declarationList = declaration.getParent()
@@ -1140,7 +1146,7 @@ function resolveTypeExpression(
       enclosingNode.getTypeArguments().length > 0
     const shouldBypassResolution =
       isJsDocTypeReference &&
-      ((type.isAny() || type.isUnknown()) || hasTypeArguments)
+      (type.isAny() || type.isUnknown() || hasTypeArguments)
     const resolutionNode = getJsDocOwner(enclosingNode) ?? enclosingNode
 
     let shouldResolveReference = shouldResolveTypeReference(
@@ -1160,7 +1166,9 @@ function resolveTypeExpression(
           tsMorph.Node.isJSDocTypeLiteral(child) &&
           child
             .getChildren()
-            .some((literalChild) => tsMorph.Node.isJSDocPropertyTag(literalChild))
+            .some((literalChild) =>
+              tsMorph.Node.isJSDocPropertyTag(literalChild)
+            )
         ) {
           aliasHasPropertyTags = true
           break
@@ -1254,9 +1262,17 @@ function resolveTypeExpression(
 
       if (typeNameSymbol) {
         const typeNameDeclaration = getPrimaryDeclaration(typeNameSymbol)
-        const typeParameters = (typeNameDeclaration as TypeAliasDeclaration | InterfaceDeclaration | undefined)?.getTypeParameters?.()
+        const typeParameters = (
+          typeNameDeclaration as
+            | TypeAliasDeclaration
+            | InterfaceDeclaration
+            | undefined
+        )?.getTypeParameters?.()
 
-        if (typeParameters && typeParameters.length > enclosingNode.getTypeArguments().length) {
+        if (
+          typeParameters &&
+          typeParameters.length > enclosingNode.getTypeArguments().length
+        ) {
           for (
             let index = enclosingNode.getTypeArguments().length;
             index < typeParameters.length;
@@ -1272,7 +1288,7 @@ function resolveTypeExpression(
 
       const shouldUseReferenceTextFromNode =
         tsMorph.Node.isTypeReference(enclosingNode) &&
-        ((type.isAny() || type.isUnknown()) || isJsDocTypeReference)
+        (type.isAny() || type.isUnknown() || isJsDocTypeReference)
 
       let referenceText = shouldUseReferenceTextFromNode
         ? referenceTextFromNode
@@ -2891,15 +2907,17 @@ function resolveParameter(
 
       return undefined
     })()
-    const isOptional = optionalFromSymbol ?? Boolean(
-      parameterType.isNullable?.() ?? parameterType.isUndefined?.()
-    )
+    const isOptional =
+      optionalFromSymbol ??
+      Boolean(parameterType.isNullable?.() ?? parameterType.isUndefined?.())
     const resolvedType = isOptional
       ? filterUndefinedFromUnion(resolvedParameterType)
       : resolvedParameterType
     const escapedName = symbol?.getEscapedName?.()
     const hasImplicitName = escapedName?.startsWith('__') ?? false
-    const name = hasImplicitName ? undefined : escapedName ?? symbol?.getName?.()
+    const name = hasImplicitName
+      ? undefined
+      : (escapedName ?? symbol?.getName?.())
     const description = (() => {
       if (!symbol) {
         return undefined
@@ -2945,9 +2963,7 @@ function resolveParameter(
       ? parameterDeclaration.getSourceFile().isInNodeModules()
       : false
     const jsDocParameterTag = getJsDocParameterTag(parameterDeclaration)
-    const jsDocTypeNode = jsDocParameterTag
-      ?.getTypeExpression()
-      ?.getTypeNode()
+    const jsDocTypeNode = jsDocParameterTag?.getTypeExpression()?.getTypeNode()
     const shouldPreferJsDocType = Boolean(
       jsDocTypeNode &&
         parameterType &&
@@ -3205,7 +3221,9 @@ function getJsDocReturnTag(
 
 function getJsDocTemplateMetadata(
   parameterDeclaration: TypeParameterDeclaration
-): { description?: string; tags?: { name: string; text?: string }[] } | undefined {
+):
+  | { description?: string; tags?: { name: string; text?: string }[] }
+  | undefined {
   const name = parameterDeclaration.getName()
   const tags: { name: string; text?: string }[] = []
   const seen = new Set<string | undefined>()
@@ -3273,9 +3291,7 @@ function getJsDocTemplateMetadata(
   }
 }
 
-function getJsDocHeritageExpressions(
-  classDeclaration: ClassDeclaration
-): {
+function getJsDocHeritageExpressions(classDeclaration: ClassDeclaration): {
   extends?: ExpressionWithTypeArguments
   implements: ExpressionWithTypeArguments[]
 } {
@@ -3291,9 +3307,13 @@ function getJsDocHeritageExpressions(
       let expressionNode: ExpressionWithTypeArguments | undefined
 
       if (tsMorph.Node.isJSDocAugmentsTag(tag)) {
-        const compilerExpression = (tag.compilerNode as TsMorph.ts.JSDocAugmentsTag).class
+        const compilerExpression = (
+          tag.compilerNode as TsMorph.ts.JSDocAugmentsTag
+        ).class
         if (compilerExpression) {
-          const node = (tag as any)._context.compilerFactory.getNodeFromCompilerNode(
+          const node = (
+            tag as any
+          )._context.compilerFactory.getNodeFromCompilerNode(
             compilerExpression,
             classDeclaration.getSourceFile()
           )
@@ -3303,9 +3323,13 @@ function getJsDocHeritageExpressions(
           }
         }
       } else if (tsMorph.Node.isJSDocImplementsTag(tag)) {
-        const compilerExpression = (tag.compilerNode as TsMorph.ts.JSDocImplementsTag).class
+        const compilerExpression = (
+          tag.compilerNode as TsMorph.ts.JSDocImplementsTag
+        ).class
         if (compilerExpression) {
-          const node = (tag as any)._context.compilerFactory.getNodeFromCompilerNode(
+          const node = (
+            tag as any
+          )._context.compilerFactory.getNodeFromCompilerNode(
             compilerExpression,
             classDeclaration.getSourceFile()
           )
@@ -4839,9 +4863,7 @@ function isOnlyStringAndEmpty(types: Kind.TypeExpression[]): boolean {
 }
 
 /** Checks if a type reference's primary declaration is exported. */
-function isTypeReferenceExported(
-  typeReference: TypeReferenceNode
-): boolean {
+function isTypeReferenceExported(typeReference: TypeReferenceNode): boolean {
   const declaration = getPrimaryDeclaration(
     typeReference.getTypeName().getSymbolOrThrow()
   )
