@@ -57,6 +57,9 @@ const MAX_PATH_SEGMENTS = 256
 const MAX_FILE_COUNT = 50_000
 const MAX_FILE_BYTES = 8 * 1024 * 1024
 
+const MAX_GITHUB_BLAME_BATCH = 20
+const GITHUB_BLAME_BATCH_DELAY_MS = 15
+
 const TAR_TYPE_FLAGS = {
   NormalFile: 0x00,
   NormalFileAlternative: 0x30, // '0'
@@ -191,6 +194,12 @@ export class GitHostFileSystem extends MemoryFileSystem {
   #include?: string[]
   #exclude?: string[]
   #gitMetadataCache: Map<string, GitMetadata>
+  #ghBlameBatchQueue?: {
+    path: string
+    resolve: (ranges: any[] | null) => void
+    reject: (error: unknown) => void
+  }[]
+  #ghBlameBatchTimer?: any
 
   constructor(options: GitHostFileSystemOptions) {
     if (!options.host) {
@@ -693,74 +702,254 @@ export class GitHostFileSystem extends MemoryFileSystem {
     path: string,
     state: GitMetadataState
   ): Promise<void> {
+    // Try a cheap, single-request GraphQL blame if we have a token.
+    // Falls back to REST sampling if GraphQL is unavailable or fails.
+    const blameOk = await this.#collectGitHubBlameGitMetadata(
+      path,
+      state
+    ).catch(() => false)
+    if (blameOk) {
+      return
+    }
+
     if (!this.#ownerEncoded || !this.#repoEncoded) {
       return
     }
 
-    let url = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/commits?sha=${encodeURIComponent(this.#ref)}&per_page=100`
-    if (path) {
-      url += `&path=${encodeURIComponent(path)}`
+    // REST sampling strategy: fetch the first page, then (if available) the last page.
+    // This yields recent authors and the earliest known date with just 1-2 requests.
+    const base = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/commits?sha=${encodeURIComponent(this.#ref)}&per_page=100`
+    const url = path ? `${base}&path=${encodeURIComponent(path)}` : base
+
+    const firstResponse = await this.#fetchWithRetry(url)
+    if (!firstResponse.ok) {
+      return
+    }
+    await this.#accumulateGitHubCommitsIntoState(firstResponse, state)
+
+    const linkHeader = firstResponse.headers.get('link')
+    const lastLink = this.#getLastLink(linkHeader, firstResponse.url)
+    if (!lastLink || lastLink === firstResponse.url) {
+      return
+    }
+    const lastResp = await this.#fetchWithRetry(lastLink)
+    if (!lastResp.ok) {
+      return
+    }
+    await this.#accumulateGitHubCommitsIntoState(lastResp, state)
+  }
+
+  async #collectGitHubBlameGitMetadata(
+    path: string,
+    state: GitMetadataState
+  ): Promise<boolean> {
+    if (!this.#token || !this.#ownerEncoded || !this.#repoEncoded) {
+      return false
+    }
+    const ranges = await this.#enqueueGitHubBlameRequest(path).catch(() => null)
+    if (!Array.isArray(ranges) || ranges.length === 0) {
+      return false
+    }
+    const seenCommitOids = new Set<string>()
+    for (const range of ranges) {
+      const commit = range?.commit
+      if (!commit) {
+        continue
+      }
+      const oid = typeof commit?.oid === 'string' ? commit.oid : undefined
+      const dateString =
+        typeof commit?.committedDate === 'string'
+          ? commit.committedDate
+          : undefined
+      if (!dateString) {
+        continue
+      }
+      const date = new Date(dateString)
+      if (Number.isNaN(date.getTime())) {
+        continue
+      }
+      const author = commit?.author
+      const email = typeof author?.email === 'string' ? author.email : undefined
+      const name =
+        (typeof author?.name === 'string' ? author.name : undefined) ??
+        (typeof author?.user?.login === 'string'
+          ? author.user.login
+          : undefined)
+      // Only count each commit once to approximate commit counts.
+      if (oid && seenCommitOids.has(oid)) {
+        // Update last/first dates even if we do not increment count again.
+        this.#updateGitMetadataState(state, name, email, date)
+        continue
+      }
+      if (oid) {
+        seenCommitOids.add(oid)
+      }
+      this.#updateGitMetadataState(state, name, email, date)
+    }
+    return state.authors.size > 0
+  }
+
+  async #accumulateGitHubCommitsIntoState(
+    response: Response,
+    state: GitMetadataState
+  ) {
+    const commits = await response.json().catch(() => undefined)
+    if (!Array.isArray(commits) || commits.length === 0) {
+      return
+    }
+    for (const commit of commits) {
+      const commitData = commit?.commit
+      const authorInfo = commitData?.author ?? commitData?.committer
+      const dateString = authorInfo?.date
+      if (typeof dateString !== 'string') {
+        continue
+      }
+      const date = new Date(dateString)
+      if (Number.isNaN(date.getTime())) {
+        continue
+      }
+
+      const emailCandidate =
+        (typeof commitData?.author?.email === 'string'
+          ? commitData.author.email
+          : undefined) ??
+        (typeof commit?.author?.email === 'string'
+          ? commit.author.email
+          : undefined) ??
+        (typeof commitData?.committer?.email === 'string'
+          ? commitData.committer.email
+          : undefined)
+
+      const nameCandidate =
+        (typeof commitData?.author?.name === 'string'
+          ? commitData.author.name
+          : undefined) ??
+        (typeof commit?.author?.login === 'string'
+          ? commit.author.login
+          : undefined) ??
+        (typeof commitData?.committer?.name === 'string'
+          ? commitData.committer.name
+          : undefined)
+
+      this.#updateGitMetadataState(state, nameCandidate, emailCandidate, date)
+    }
+  }
+
+  async #enqueueGitHubBlameRequest(path: string): Promise<any[] | null> {
+    if (!this.#ghBlameBatchQueue) {
+      this.#ghBlameBatchQueue = []
+    }
+    return await new Promise<any[] | null>((resolve, reject) => {
+      this.#ghBlameBatchQueue!.push({ path, resolve, reject })
+      if (!this.#ghBlameBatchTimer) {
+        this.#ghBlameBatchTimer = setTimeout(() => {
+          this.#ghBlameBatchTimer = undefined
+          this.#flushGitHubBlameBatch().catch((error) => {
+            // Reject all pending in case of a top-level failure
+            const pending = this.#ghBlameBatchQueue ?? []
+            this.#ghBlameBatchQueue = []
+            for (const item of pending) {
+              item.reject(error)
+            }
+          })
+        }, GITHUB_BLAME_BATCH_DELAY_MS)
+      }
+      if (this.#ghBlameBatchQueue!.length >= MAX_GITHUB_BLAME_BATCH) {
+        clearTimeout(this.#ghBlameBatchTimer)
+        this.#ghBlameBatchTimer = undefined
+        // Flush immediately
+        this.#flushGitHubBlameBatch().catch((error) => {
+          const pending = this.#ghBlameBatchQueue ?? []
+          this.#ghBlameBatchQueue = []
+          for (const item of pending) {
+            item.reject(error)
+          }
+        })
+      }
+    })
+  }
+
+  async #flushGitHubBlameBatch(): Promise<void> {
+    const queue = this.#ghBlameBatchQueue ?? []
+    if (queue.length === 0) {
+      return
+    }
+    // Take up to batch size
+    const batch = queue.splice(0, MAX_GITHUB_BLAME_BATCH)
+    // If more remain, schedule another flush
+    if (queue.length > 0 && !this.#ghBlameBatchTimer) {
+      this.#ghBlameBatchTimer = setTimeout(() => {
+        this.#ghBlameBatchTimer = undefined
+        this.#flushGitHubBlameBatch().catch((error) => {
+          const pending = this.#ghBlameBatchQueue ?? []
+          this.#ghBlameBatchQueue = []
+          for (const item of pending) {
+            item.reject(error)
+          }
+        })
+      }, GITHUB_BLAME_BATCH_DELAY_MS)
     }
 
-    const visited = new Set<string>()
-
-    while (url && !visited.has(url)) {
-      visited.add(url)
-      const response = await this.#fetchWithRetry(url)
-      if (!response.ok) {
-        return
-      }
-
-      const commits = await response.json().catch(() => undefined)
-      if (!Array.isArray(commits) || commits.length === 0) {
-        return
-      }
-
-      for (const commit of commits) {
-        const commitData = commit?.commit
-        const authorInfo = commitData?.author ?? commitData?.committer
-        const dateString = authorInfo?.date
-        if (typeof dateString !== 'string') {
-          continue
-        }
-        const date = new Date(dateString)
-        if (Number.isNaN(date.getTime())) {
-          continue
-        }
-
-        const emailCandidate =
-          (typeof commitData?.author?.email === 'string'
-            ? commitData.author.email
-            : undefined) ??
-          (typeof commit?.author?.email === 'string'
-            ? commit.author.email
-            : undefined) ??
-          (typeof commitData?.committer?.email === 'string'
-            ? commitData.committer.email
-            : undefined)
-
-        const nameCandidate =
-          (typeof commitData?.author?.name === 'string'
-            ? commitData.author.name
-            : undefined) ??
-          (typeof commit?.author?.login === 'string'
-            ? commit.author.login
-            : undefined) ??
-          (typeof commitData?.committer?.name === 'string'
-            ? commitData.committer.name
-            : undefined)
-
-        this.#updateGitMetadataState(state, nameCandidate, emailCandidate, date)
-      }
-
-      const nextLink = this.#getNextLink(
-        response.headers.get('link'),
-        response.url
+    // Construct GraphQL query with aliases and variables
+    const owner = decodeURIComponent(this.#ownerEncoded!)
+    const name = decodeURIComponent(this.#repoEncoded!)
+    const varDefinitions: string[] = [`$owner: String!`, `$name: String!`]
+    const fields: string[] = []
+    const variables: Record<string, any> = { owner, name }
+    batch.forEach((item, index) => {
+      const varName = `expr${index}`
+      varDefinitions.push(`$${varName}: String!`)
+      variables[varName] = `${this.#ref}:${item.path}`
+      const alias = `f${index}`
+      fields.push(
+        `${alias}: object(expression: $${varName}) { ... on Blob { blame { ranges { commit { oid committedDate author { name email user { login } } } } } } }`
       )
-      if (!nextLink) {
+    })
+    const query = `
+      query FileBlameBatch(${varDefinitions.join(', ')}) {
+        repository(owner: $owner, name: $name) {
+          ${fields.join('\n')}
+        }
+      }`
+
+    const graphqlUrl = 'https://api.github.com/graphql'
+    this.#assertAllowed(graphqlUrl)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
+    try {
+      const response = await fetch(graphqlUrl, {
+        method: 'POST',
+        headers: {
+          ...this.#apiHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query, variables }),
+        signal: controller.signal,
+        referrerPolicy: 'no-referrer',
+      })
+      if (!response.ok) {
+        for (const item of batch) {
+          item.resolve(null)
+        }
         return
       }
-      url = nextLink
+      const payload = await response.json().catch(() => undefined as any)
+      const repo = payload?.data?.repository
+      batch.forEach((item, index) => {
+        const alias = `f${index}`
+        const ranges = repo?.[alias]?.blame?.ranges ?? null
+        if (Array.isArray(ranges)) {
+          item.resolve(ranges)
+        } else {
+          item.resolve(null)
+        }
+      })
+    } catch (error) {
+      for (const item of batch) {
+        item.resolve(null)
+      }
+    } finally {
+      clearTimeout(timer)
     }
   }
 
@@ -919,15 +1108,14 @@ export class GitHostFileSystem extends MemoryFileSystem {
     return { name, email }
   }
 
-  #getNextLink(header: string | null, responseUrl: string): string | undefined {
+  #getLastLink(header: string | null, responseUrl: string): string | undefined {
     if (!header) {
       return undefined
     }
-
     const parts = header.split(',')
     for (const part of parts) {
       const match = part.match(/<([^>]+)>;\s*rel="([^"]+)"/)
-      if (match && match[2] === 'next') {
+      if (match && match[2] === 'last') {
         const target = match[1]
         try {
           return new URL(target, responseUrl).toString()
