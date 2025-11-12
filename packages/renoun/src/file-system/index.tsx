@@ -158,7 +158,7 @@ export function withSchema<
 
 /** A function that resolves the module runtime. */
 export function withSchema<Types extends ModuleExports>(
-  runtime: ModuleRuntimeLoader<NoInfer<Types>>
+  runtime: ModuleRuntimeLoader<NoInfer<Types> | unknown>
 ): ModuleLoaderWithSchema<Types, true>
 
 /**
