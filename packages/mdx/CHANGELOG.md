@@ -1,5 +1,12 @@
 # @renoun/mdx
 
+## 3.4.1
+
+### Patch Changes
+
+- b2a14cb: Fixes `Heading` override in MDX provider not being applied when using the `@renoun/mdx/remark/add-headings` plugin.
+- f1dfed0: Preserves `boolean`/`number` props in the rehype `add-code-block` plugin by emitting MDX attribute value expressions instead of stringifying.
+
 ## 3.4.0
 
 ### Minor Changes

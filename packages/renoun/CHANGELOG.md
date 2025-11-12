@@ -1,5 +1,32 @@
 # renoun
 
+## 10.10.0
+
+### Minor Changes
+
+- 15c9613: Filters `@internal` exports and entries based on `stripInternal` in the related TypeScript configuration.
+- 100ce06: Add git metadata support to `GitHostFileSystem` and teach the file system helpers to use commit information provided by remote hosts.
+- 647fdcc: Improves the `Reference` component's type expression renderers to surface resolved metadata for tuples, unions, type literals, and references while presenting constructor signatures in a concise format.
+- 2b86fa3: Adds a `shouldValidate` prop to the `Command` component that validates the npm packages exist.
+
+### Patch Changes
+
+- aeab8b6: Relaxes `withSchema` runtime-only overloads to allow `unknown` loader return types. This better enables loaders sourced from patterns like `import.meta.glob` to type-check, while still encouraging typed loaders when available.
+- 770fe7b: Fixes `Collection#getEntries({ recursive: true })` when using a shallow glob. The `Collection` utility now proactively checks each child `Directory`'s filter kind via `getFilterPatternKind()` and disables recursion for directories with single‑level filter patterns.
+- cc11165: Fixes export positions to the declaration name instead of modifiers/comments.
+- 3311481: Fixes `Tokens` component regression causing valid source code errors to not throw.
+- 15bda5c: Handles missing files in the project watcher without leaving refresh tracking stuck.
+- 6f35451: Prevents the `TableOfContents` from forcing the page to scroll when the scroll container is the document body.
+- 507cb31: Fixes the `CodeBlock` component not passing down `allowErrors` and `showErrors` props to the `Tokens` component.
+- 7a6a014: Improves file system `Directory` and `JavaScriptFile` performance by speeding up simple lookups and headings analysis.
+- d7150e1: Fixes import with type json error when using multiple themes by moving to require.
+- 4353095: Improve parameter resolution when falling back to TypeScript metadata after preferring JSDoc tags.
+- 97ed262: Stabilizes `workspace:` scheme resolution. `Directory` now stores absolute workspace‑anchored paths when resolving `workspace:` to avoid cwd coupling.
+- 8ccea91: Improves `Directory#getEntries({ recursive: true })` error when attempting to use the `recursive` option when a shallow file pattern filter is configured.
+- Updated dependencies [b2a14cb]
+- Updated dependencies [f1dfed0]
+  - @renoun/mdx@3.4.1
+
 ## 10.9.1
 
 ### Patch Changes
