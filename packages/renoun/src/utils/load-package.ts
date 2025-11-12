@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 
 import { findPackageDependency } from './find-package-dependency.js'
+
+const require = createRequire(import.meta.url)
 
 /** Attempts to load a package if it is installed. */
 async function loadPackage<Value>(name: string, getImport: () => any) {
@@ -46,11 +49,9 @@ export function loadTmGrammar(name: string) {
       return JSON.parse(readFileSync(filePath, 'utf-8'))
     }
 
-    const module = await import(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-grammars/grammars/${name}.json`,
-      { with: { type: 'json' } }
+    return require(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-grammars/grammars/${name}.json`
     )
-    return module.default
   })
 }
 
@@ -63,10 +64,8 @@ export function loadTmTheme(name: string) {
       return JSON.parse(readFileSync(filePath, 'utf-8'))
     }
 
-    const module = await import(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-themes/themes/${name}.json`,
-      { with: { type: 'json' } }
+    return require(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-themes/themes/${name}.json`
     )
-    return module.default
   })
 }
