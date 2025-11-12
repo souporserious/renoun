@@ -656,7 +656,7 @@ function throwDiagnosticErrors(
   const formattedErrors = errorMessages.join('\n')
   const actionsToTake = `You can fix this error by taking one of the following actions:
   - Use the diagnostic ${errorMessages.length > 1 ? 'messages' : 'message'} above to identify and fix any issues.
-  - If type declarations are missing, ensure that the necessary types are installed and available in the targeted workspace.
+  - If type declarations are missing, ensure that the necessary package types are installed in the current workspace's package.json.
   - Make sure the "path" is unique and does not conflict with other file paths in the same project. Prefix the file name with a number for progressive examples e.g. path="01.${fileName}".
   - If this error is expected for educational purposes or temporary migrations, pass the "allowErrors" prop to the component.
   - If you are unable to resolve this error, please file an issue at: https://github.com/souporserious/renoun/issues
