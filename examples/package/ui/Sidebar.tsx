@@ -21,7 +21,7 @@ export async function Sidebar() {
         <nav className="flex flex-col">
           <Link
             href="/components"
-            className="block px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 no-underline"
+            className="block px-3 py-2 text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase mb-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 no-underline"
           >
             Components
           </Link>
@@ -40,7 +40,7 @@ export async function Sidebar() {
           <div className="h-px bg-gray-200 dark:bg-gray-800 mx-3 my-5" />
           <Link
             href="/hooks"
-            className="block px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 no-underline"
+            className="block px-3 py-2 text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase mb-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 no-underline"
           >
             Hooks
           </Link>
