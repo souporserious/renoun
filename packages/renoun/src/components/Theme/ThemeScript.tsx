@@ -7,6 +7,17 @@ import { Script } from '../Script.js'
  * and subscribes to system theme changes.
  * @internal
  */
-export function ThemeScript({ nonce }: { nonce?: string }) {
-  return <Script nonce={nonce}>{import('./script.js')}</Script>
+export function ThemeScript({
+  nonce,
+  storageKey,
+}: {
+  nonce?: string
+  /** LocalStorage key to use for storing the selected color mode. */
+  storageKey?: string
+}) {
+  return (
+    <Script nonce={nonce} storageKey={storageKey}>
+      {import('./script.js')}
+    </Script>
+  )
 }

@@ -2,9 +2,10 @@
  * Sets the initial color mode based on user or system preference.
  * @internal
  */
-export default function () {
+export default function ({ storageKey }: { storageKey?: string } = {}) {
   try {
-    const storedColorMode = localStorage.getItem('colorMode')
+    const key = storageKey && storageKey.length > 0 ? storageKey : 'colorMode'
+    const storedColorMode = localStorage.getItem(key)
 
     if (storedColorMode === 'light' || storedColorMode === 'dark') {
       document.documentElement.dataset['theme'] = storedColorMode

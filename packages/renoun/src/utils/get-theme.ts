@@ -59,18 +59,14 @@ function ensureThemeWatcher(themePath: string) {
   }
 
   try {
-    const watcher = watch(
-      themePath,
-      { persistent: false },
-      (eventType) => {
-        cachedThemes.delete(themePath)
+    const watcher = watch(themePath, { persistent: false }, (eventType) => {
+      cachedThemes.delete(themePath)
 
-        if (eventType === 'rename') {
-          watcher.close()
-          themeWatchers.delete(themePath)
-        }
+      if (eventType === 'rename') {
+        watcher.close()
+        themeWatchers.delete(themePath)
       }
-    )
+    })
 
     watcher.on('error', () => {
       watcher.close()
@@ -296,7 +292,7 @@ export type ThemeColors = {
   background: string
 } & ThemeColorFallbacks
 
-let cachedThemeColors: Record<string, any> | null = null
+const cachedThemeColors = new Map<string, Record<string, any>>()
 
 /**
  * Gets the configured VS Code theme colors as a nested object.
@@ -311,9 +307,9 @@ let cachedThemeColors: Record<string, any> | null = null
 export async function getThemeColors(
   themeConfig: ConfigurationOptions['theme']
 ): Promise<ThemeColors> {
-  if (cachedThemeColors !== null) {
-    return cachedThemeColors as ThemeColors
-  }
+  const cacheKey = createThemeCacheKey(themeConfig)
+  const cached = cachedThemeColors.get(cacheKey)
+  if (cached) return cached as ThemeColors
 
   let flatColors: Record<string, any> = {}
   let useVariables = false
@@ -351,9 +347,10 @@ export async function getThemeColors(
     }
   }
 
-  cachedThemeColors = buildNestedObject(flatColors, useVariables)
+  const nested = buildNestedObject(flatColors, useVariables)
+  cachedThemeColors.set(cacheKey, nested)
 
-  return cachedThemeColors as ThemeColors
+  return nested as ThemeColors
 }
 
 /**
@@ -382,6 +379,22 @@ function buildNestedObject(
   }
 
   return result
+}
+
+/** Build a stable cache key for a theme configuration. */
+function createThemeCacheKey(themeConfig: ConfigurationOptions['theme']) {
+  if (typeof themeConfig === 'string' || themeConfig === undefined) {
+    return String(themeConfig ?? 'undefined')
+  }
+  const entries = Object.entries(themeConfig)
+    .map(([mode, val]) => {
+      if (Array.isArray(val)) {
+        return [mode, val[0], val[1] ? JSON.stringify(val[1]) : ''] as const
+      }
+      return [mode, val] as const
+    })
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+  return JSON.stringify(entries)
 }
 
 /**
