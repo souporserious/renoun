@@ -2065,7 +2065,7 @@ describe('resolveType', () => {
                     },
                   },
                 ],
-                "text": "Record<string, { value: number; }>",
+                "text": "{ [key: string]: { value: number; } }",
               },
             },
             {
@@ -6649,7 +6649,7 @@ describe('resolveType', () => {
               },
             },
           ],
-          "text": "Readonly<{ red: "red"; blue: "blue"; green: "green"; }>",
+          "text": "{ red:  "red"; blue:  "blue"; green:  "green" }",
         },
       }
     `)
@@ -12481,7 +12481,7 @@ describe('resolveType', () => {
                           "line": 2314,
                         },
                       },
-                      "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
+                      "text": "MouseEvent<HTMLButtonElement, globalThis.MouseEvent>",
                       "typeArguments": [
                         {
                           "filePath": "node_modules/@types/react/index.d.ts",
@@ -12516,7 +12516,7 @@ describe('resolveType', () => {
                               "line": 2314,
                             },
                           },
-                          "text": "MouseEvent",
+                          "text": "globalThis.MouseEvent",
                           "typeArguments": [],
                         },
                       ],
@@ -12703,7 +12703,7 @@ describe('resolveType', () => {
                                 "line": 2314,
                               },
                             },
-                            "text": "MouseEvent<HTMLButtonElement, MouseEvent>",
+                            "text": "MouseEvent<HTMLButtonElement, globalThis.MouseEvent>",
                             "typeArguments": [
                               {
                                 "filePath": "node_modules/@types/react/index.d.ts",
@@ -12738,7 +12738,7 @@ describe('resolveType', () => {
                                     "line": 2314,
                                   },
                                 },
-                                "text": "MouseEvent",
+                                "text": "globalThis.MouseEvent",
                                 "typeArguments": [],
                               },
                             ],
@@ -12793,10 +12793,10 @@ describe('resolveType', () => {
                   "line": 7,
                 },
               },
-              "text": "Element",
+              "text": "React.JSX.Element",
               "typeArguments": [],
             },
-            "text": "(props: ButtonProps) => Element",
+            "text": "(props: ButtonProps) => React.JSX.Element",
             "thisType": undefined,
           },
         ],
@@ -16278,7 +16278,7 @@ describe('resolveType', () => {
             "line": 4,
           },
         },
-        "text": "string",
+        "text": "Keys",
         "type": {
           "filePath": "test.ts",
           "kind": "String",
@@ -16331,7 +16331,7 @@ describe('resolveType', () => {
             "line": 4,
           },
         },
-        "text": "string",
+        "text": "Foo",
         "type": {
           "kind": "String",
           "text": "string",
@@ -16373,7 +16373,7 @@ describe('resolveType', () => {
             "line": 4,
           },
         },
-        "text": "string",
+        "text": "Foo",
         "type": {
           "indexType": {
             "filePath": "test.ts",
@@ -16449,7 +16449,7 @@ describe('resolveType', () => {
             "line": 4,
           },
         },
-        "text": "string",
+        "text": "B",
         "type": {
           "kind": "String",
           "text": "string",
@@ -16492,7 +16492,7 @@ describe('resolveType', () => {
             "line": 4,
           },
         },
-        "text": "string",
+        "text": "B",
         "type": {
           "indexType": {
             "filePath": "index.ts",
@@ -17523,7 +17523,7 @@ describe('resolveType', () => {
             "line": 4,
           },
         },
-        "text": "\`foo\${string}\`",
+        "text": "Foo",
         "type": {
           "filePath": "test.ts",
           "kind": "String",
@@ -19044,7 +19044,7 @@ describe('resolveType', () => {
             "line": 2,
           },
         },
-        "text": "Kind.Shared",
+        "text": "SharedKind",
         "type": {
           "filePath": "test.ts",
           "kind": "TypeReference",
@@ -19774,7 +19774,8 @@ describe('resolveType', () => {
       { overwrite: true }
     )
 
-    const declaration = sourceFile.getVariableDeclarationOrThrow('TBNViewMatrix')
+    const declaration =
+      sourceFile.getVariableDeclarationOrThrow('TBNViewMatrix')
     const resolved = resolveType(declaration.getType(), declaration)
 
     expect(resolved?.kind).toBe('Variable')
@@ -19882,9 +19883,7 @@ describe('resolveType', () => {
 
     expect(resolved.extends?.text).toBe('Base<number>')
     expect(resolved.implements).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ text: 'Disposable' }),
-      ])
+      expect.arrayContaining([expect.objectContaining({ text: 'Disposable' })])
     )
   })
 

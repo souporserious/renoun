@@ -891,7 +891,11 @@ export function resolveType(
       resolvedType = {
         kind: 'TypeAlias',
         name: symbolMetadata.name,
-        text: typeText,
+        text:
+          symbolMetadata.name +
+          (resolvedTypeParameters.length
+            ? `<${resolvedTypeParameters.map((parameter) => parameter.name).join(', ')}>`
+            : ''),
         typeParameters: resolvedTypeParameters,
         type: resolvedTypeExpression,
       } satisfies Kind.TypeAlias
@@ -927,7 +931,11 @@ export function resolveType(
       resolvedType = {
         kind: 'TypeAlias',
         name: symbolMetadata.name,
-        text: typeText,
+        text:
+          symbolMetadata.name +
+          (resolvedTypeParameters.length
+            ? `<${resolvedTypeParameters.map((parameter) => parameter.name).join(', ')}>`
+            : ''),
         typeParameters: resolvedTypeParameters,
         type: resolvedTypeExpression,
       } satisfies Kind.TypeAlias
@@ -1413,7 +1421,7 @@ function resolveTypeExpression(
       resolvedType = {
         kind: 'TypeReference',
         name,
-        text: typeText,
+        text: type.getText(enclosingNode, TYPE_FORMAT_FLAGS),
         typeArguments: resolvedTypeArguments,
         moduleSpecifier,
         ...(locationNode ? getDeclarationLocation(locationNode) : {}),
@@ -2416,9 +2424,18 @@ function resolveMappedType(
     return
   }
 
+  const bodyText = members
+    .map((member) =>
+      member.kind === 'PropertySignature'
+        ? `${member.name}${member.isOptional ? '?:' : ': '} ${member.type.text}`
+        : (member.text?.replace?.(/\s*;\s*$/, '') ?? '')
+    )
+    .filter(Boolean)
+    .join('; ')
+
   return {
     kind: 'TypeLiteral',
-    text: type.getText(undefined, TYPE_FORMAT_FLAGS),
+    text: `{ ${bodyText} }`,
     members,
   } satisfies Kind.TypeLiteral
 }
