@@ -9419,6 +9419,117 @@ describe('resolveType', () => {
     `)
   })
 
+  test('mapped types preserve property type references', () => {
+    const project = new Project()
+
+    const sourceFile = project.createSourceFile(
+      'text.ts',
+      dedent`
+        const textStyles = {
+          heading1: '1',
+          heading2: '2',
+        } as const
+
+        type DropDollarPrefix<T> = {
+          [K in keyof T as K extends \`$\${infer I}\` ? I : K]: T[K]
+        }
+
+        export type TextVariants = keyof typeof textStyles
+
+        type StyledTextProps = {
+          $variant?: TextVariants
+        }
+
+        export type TextProps = DropDollarPrefix<StyledTextProps>
+      `,
+      { overwrite: true }
+    )
+
+    const typeAlias = sourceFile.getTypeAliasOrThrow('TextProps')
+    const types = resolveType(typeAlias.getType(), typeAlias)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "text.ts",
+        "kind": "TypeAlias",
+        "name": "TextProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 8,
+          },
+          "start": {
+            "column": 1,
+            "line": 6,
+          },
+        },
+        "text": "TextProps",
+        "type": {
+          "filePath": "text.ts",
+          "kind": "TypeReference",
+          "moduleSpecifier": undefined,
+          "name": "DropDollarPrefix",
+          "position": {
+            "end": {
+              "column": 58,
+              "line": 16,
+            },
+            "start": {
+              "column": 25,
+              "line": 16,
+            },
+          },
+          "text": "DropDollarPrefix<StyledTextProps>",
+          "typeArguments": [
+            {
+              "kind": "TypeLiteral",
+              "members": [
+                {
+                  "filePath": "text.ts",
+                  "isOptional": true,
+                  "isReadonly": false,
+                  "kind": "PropertySignature",
+                  "name": "$variant",
+                  "position": {
+                    "end": {
+                      "column": 26,
+                      "line": 13,
+                    },
+                    "start": {
+                      "column": 3,
+                      "line": 13,
+                    },
+                  },
+                  "text": "$variant?: TextVariants",
+                  "type": {
+                    "filePath": "text.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "TextVariants",
+                    "position": {
+                      "end": {
+                        "column": 26,
+                        "line": 13,
+                      },
+                      "start": {
+                        "column": 14,
+                        "line": 13,
+                      },
+                    },
+                    "text": ""heading1" | "heading2"",
+                    "typeArguments": [],
+                  },
+                },
+              ],
+              "text": "StyledTextProps",
+            },
+          ],
+        },
+        "typeParameters": [],
+      }
+    `)
+  })
+
   test('interface property that references type parameter', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
