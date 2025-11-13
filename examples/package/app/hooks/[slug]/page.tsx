@@ -3,7 +3,7 @@ import NextLink from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { HooksDirectory } from '@/collections'
-import { Reference } from '@/components'
+import { Reference } from '@/ui/Reference'
 
 export async function generateStaticParams() {
   const entries = await HooksDirectory.getEntries()
