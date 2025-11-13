@@ -1034,6 +1034,11 @@ function renderCallSignatureDetails(
   }
 
   if (signature.returnType) {
+    const returnContent = renderReturnTypeContent(
+      signature.returnType,
+      components
+    )
+
     items.push(
       <TypeDetail
         key="returns"
@@ -1041,7 +1046,7 @@ function renderCallSignatureDetails(
         components={components}
         kind={signature.kind}
       >
-        <components.Code>{signature.returnType.text}</components.Code>
+        {returnContent}
       </TypeDetail>
     )
   }
@@ -1064,6 +1069,134 @@ function renderCallSignatureDetails(
   }
 
   return <components.Column gap="medium">{items}</components.Column>
+}
+
+function renderReturnTypeContent(
+  returnType: Kind.TypeExpression,
+  components: InternalReferenceComponents
+): React.ReactNode {
+  return renderReturnTypeExtras(returnType, components, {
+    showTypeText: true,
+  })
+}
+
+function renderReturnTypeExtras(
+  returnType: Kind.TypeExpression,
+  components: InternalReferenceComponents,
+  options: { showTypeText?: boolean; fallbackToTypeText?: boolean } = {}
+): React.ReactNode | null {
+  const { showTypeText = false, fallbackToTypeText = showTypeText } = options
+
+  const withTypeText = (
+    content: React.ReactNode | null
+  ): React.ReactNode | null => {
+    if (showTypeText) {
+      if (!content) {
+        return <components.Code>{returnType.text}</components.Code>
+      }
+
+      return (
+        <components.Column gap="medium">
+          <components.Code>{returnType.text}</components.Code>
+          {content}
+        </components.Column>
+      )
+    }
+
+    if (!content) {
+      if (!fallbackToTypeText) {
+        return null
+      }
+
+      return <components.Code>{returnType.text}</components.Code>
+    }
+
+    return content
+  }
+
+  switch (returnType.kind) {
+    case 'TypeLiteral': {
+      const memberDetails = renderMembersDetails({
+        members: returnType.members,
+        components,
+        ownerKind: returnType.kind,
+      })
+
+      if (memberDetails.length === 0) {
+        return withTypeText(null)
+      }
+
+      return withTypeText(
+        <components.Column gap="medium">{memberDetails}</components.Column>
+      )
+    }
+
+    case 'UnionType': {
+      const variantRows = returnType.types.map((type, index) => ({
+        type,
+        index,
+      }))
+
+      if (variantRows.length === 0) {
+        return withTypeText(null)
+      }
+
+      return withTypeText(
+        <TypeTable
+          rows={variantRows}
+          headers={['Variant']}
+          renderRow={({ type }, hasSubRow) => (
+            <components.TableData index={0} hasSubRow={hasSubRow}>
+              <components.Code>{type.text}</components.Code>
+            </components.TableData>
+          )}
+          renderSubRow={({ type }) => {
+            const nested = renderReturnTypeExtras(type, components, {
+              showTypeText: false,
+              fallbackToTypeText: false,
+            })
+
+            if (!nested) {
+              return null
+            }
+
+            return nested
+          }}
+          components={components}
+        />
+      )
+    }
+
+    case 'IntersectionType': {
+      const rows = getIntersectionPropertyRows(returnType)
+
+      if (rows.length === 0) {
+        return withTypeText(null)
+      }
+
+      return withTypeText(
+        <TypeTable
+          rows={rows}
+          headers={['Property', 'Type']}
+          renderRow={(row, hasSubRow) => (
+            <>
+              <components.TableData index={0} hasSubRow={hasSubRow}>
+                {row.name}
+                {row.isOptional ? '?' : ''}
+              </components.TableData>
+              <components.TableData index={1} hasSubRow={hasSubRow}>
+                <components.Code>{row.text}</components.Code>
+              </components.TableData>
+            </>
+          )}
+          components={components}
+        />
+      )
+    }
+
+    default:
+      return withTypeText(null)
+  }
 }
 
 function renderConstructorSignature(
@@ -1449,7 +1582,7 @@ function ComponentTypeSection({
       </TypeDetail>
       {node.returnType ? (
         <TypeDetail label="Returns" components={components} kind={node.kind}>
-          <components.Code>{node.returnType.text}</components.Code>
+          {renderReturnTypeContent(node.returnType, components)}
         </TypeDetail>
       ) : null}
       {modifiers.length ? (
@@ -1575,7 +1708,7 @@ function FunctionTypeSection({
       ) : null}
       {node.returnType ? (
         <TypeDetail label="Returns" components={components} kind={node.kind}>
-          <components.Code>{node.returnType.text}</components.Code>
+          {renderReturnTypeContent(node.returnType, components)}
         </TypeDetail>
       ) : null}
       {modifiers.length ? (
