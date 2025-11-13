@@ -4070,27 +4070,24 @@ describe('resolveType', () => {
                   "line": 3,
                 },
               },
-              "text": "Color",
+              "text": "color?: Color",
               "type": {
-                "kind": "UnionType",
-                "text": ""red" | "blue" | "green"",
-                "types": [
-                  {
-                    "kind": "String",
-                    "text": ""red"",
-                    "value": "red",
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": "library",
+                "name": "Color",
+                "position": {
+                  "end": {
+                    "column": 17,
+                    "line": 8,
                   },
-                  {
-                    "kind": "String",
-                    "text": ""blue"",
-                    "value": "blue",
+                  "start": {
+                    "column": 12,
+                    "line": 8,
                   },
-                  {
-                    "kind": "String",
-                    "text": ""green"",
-                    "value": "green",
-                  },
-                ],
+                },
+                "text": "Color",
+                "typeArguments": [],
               },
             },
           ],
@@ -9465,65 +9462,46 @@ describe('resolveType', () => {
         },
         "text": "TextProps",
         "type": {
-          "filePath": "text.ts",
-          "kind": "TypeReference",
-          "moduleSpecifier": undefined,
-          "name": "DropDollarPrefix",
-          "position": {
-            "end": {
-              "column": 58,
-              "line": 16,
-            },
-            "start": {
-              "column": 25,
-              "line": 16,
-            },
-          },
-          "text": "DropDollarPrefix<StyledTextProps>",
-          "typeArguments": [
+          "kind": "TypeLiteral",
+          "members": [
             {
-              "kind": "TypeLiteral",
-              "members": [
-                {
-                  "filePath": "text.ts",
-                  "isOptional": true,
-                  "isReadonly": false,
-                  "kind": "PropertySignature",
-                  "name": "$variant",
-                  "position": {
-                    "end": {
-                      "column": 26,
-                      "line": 13,
-                    },
-                    "start": {
-                      "column": 3,
-                      "line": 13,
-                    },
+              "filePath": "text.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "variant",
+              "position": {
+                "end": {
+                  "column": 2,
+                  "line": 8,
+                },
+                "start": {
+                  "column": 28,
+                  "line": 6,
+                },
+              },
+              "text": "variant?: TextVariants",
+              "type": {
+                "filePath": "text.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
+                "name": "TextVariants",
+                "position": {
+                  "end": {
+                    "column": 26,
+                    "line": 13,
                   },
-                  "text": "$variant?: TextVariants",
-                  "type": {
-                    "filePath": "text.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "TextVariants",
-                    "position": {
-                      "end": {
-                        "column": 26,
-                        "line": 13,
-                      },
-                      "start": {
-                        "column": 14,
-                        "line": 13,
-                      },
-                    },
-                    "text": ""heading1" | "heading2"",
-                    "typeArguments": [],
+                  "start": {
+                    "column": 14,
+                    "line": 13,
                   },
                 },
-              ],
-              "text": "StyledTextProps",
+                "text": "TextVariants",
+                "typeArguments": [],
+              },
             },
           ],
+          "text": "{ variant?: TextVariants }",
         },
         "typeParameters": [],
       }
@@ -14495,41 +14473,139 @@ describe('resolveType', () => {
                 },
                 "text": "schema: Schema<Types>",
                 "type": {
-                  "filePath": "test.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "name": "Schema",
-                  "position": {
-                    "end": {
-                      "column": 24,
-                      "line": 12,
-                    },
-                    "start": {
-                      "column": 11,
-                      "line": 12,
-                    },
-                  },
-                  "text": "Schema<Types>",
-                  "typeArguments": [
+                  "kind": "TypeLiteral",
+                  "members": [
                     {
                       "filePath": "test.ts",
-                      "kind": "TypeReference",
-                      "moduleSpecifier": undefined,
-                      "name": "Types",
-                      "position": {
-                        "end": {
-                          "column": 23,
-                          "line": 12,
-                        },
-                        "start": {
-                          "column": 18,
-                          "line": 12,
+                      "isReadonly": false,
+                      "kind": "IndexSignature",
+                      "parameter": {
+                        "kind": "IndexSignatureParameter",
+                        "name": "key",
+                        "text": "key: string",
+                        "type": {
+                          "kind": "String",
+                          "text": "string",
                         },
                       },
-                      "text": "Types",
-                      "typeArguments": [],
+                      "position": {
+                        "end": {
+                          "column": 2,
+                          "line": 5,
+                        },
+                        "start": {
+                          "column": 50,
+                          "line": 3,
+                        },
+                      },
+                      "text": "[key: string]: (value: Types[string]) => boolean | void",
+                      "type": {
+                        "isAsync": false,
+                        "kind": "FunctionType",
+                        "parameters": [
+                          {
+                            "description": undefined,
+                            "filePath": "test.ts",
+                            "initializer": undefined,
+                            "isOptional": false,
+                            "isRest": false,
+                            "kind": "Parameter",
+                            "name": "value",
+                            "position": {
+                              "end": {
+                                "column": 43,
+                                "line": 4,
+                              },
+                              "start": {
+                                "column": 26,
+                                "line": 4,
+                              },
+                            },
+                            "text": "value: Types[Key]",
+                            "type": {
+                              "indexType": {
+                                "filePath": "test.ts",
+                                "kind": "TypeReference",
+                                "moduleSpecifier": undefined,
+                                "name": "Key",
+                                "position": {
+                                  "end": {
+                                    "column": 42,
+                                    "line": 4,
+                                  },
+                                  "start": {
+                                    "column": 39,
+                                    "line": 4,
+                                  },
+                                },
+                                "text": "Key",
+                                "typeArguments": [],
+                              },
+                              "kind": "IndexedAccessType",
+                              "objectType": {
+                                "filePath": "test.ts",
+                                "kind": "TypeReference",
+                                "moduleSpecifier": undefined,
+                                "name": "Types",
+                                "position": {
+                                  "end": {
+                                    "column": 38,
+                                    "line": 4,
+                                  },
+                                  "start": {
+                                    "column": 33,
+                                    "line": 4,
+                                  },
+                                },
+                                "text": "Types",
+                                "typeArguments": [],
+                              },
+                              "text": "Types[string]",
+                            },
+                          },
+                        ],
+                        "returnType": {
+                          "kind": "UnionType",
+                          "text": "boolean | void",
+                          "types": [
+                            {
+                              "filePath": "test.ts",
+                              "kind": "Boolean",
+                              "position": {
+                                "end": {
+                                  "column": 55,
+                                  "line": 4,
+                                },
+                                "start": {
+                                  "column": 48,
+                                  "line": 4,
+                                },
+                              },
+                              "text": "boolean",
+                            },
+                            {
+                              "filePath": "test.ts",
+                              "kind": "Void",
+                              "position": {
+                                "end": {
+                                  "column": 62,
+                                  "line": 4,
+                                },
+                                "start": {
+                                  "column": 58,
+                                  "line": 4,
+                                },
+                              },
+                              "text": "void",
+                            },
+                          ],
+                        },
+                        "text": "(value: Types[string]) => boolean | void",
+                        "thisType": undefined,
+                      },
                     },
                   ],
+                  "text": "{ [key: string]: (value: Types[string]) => boolean | void }",
                 },
               },
               {

@@ -1162,6 +1162,25 @@ function resolveTypeExpression(
       resolutionNode
     )
 
+    // If this is a local internal mapped type alias reference,
+    // force resolution so we expand the alias while preserving inner property references.
+    if (
+      !shouldResolveReference &&
+      symbolDeclaration &&
+      tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)
+    ) {
+      const aliasTypeNode = symbolDeclaration.getTypeNode()
+      if (aliasTypeNode && tsMorph.Node.isMappedTypeNode(aliasTypeNode)) {
+        const visibility = getSymbolVisibility(
+          type.getAliasSymbol() || type.getSymbol(),
+          enclosingNode
+        )
+        if (visibility === 'local-internal') {
+          shouldResolveReference = true
+        }
+      }
+    }
+
     let aliasHasPropertyTags = false
     if (tsMorph.Node.isJSDocTypedefTag(symbolDeclaration)) {
       for (const child of symbolDeclaration.getChildren()) {
@@ -2419,6 +2438,87 @@ function resolveMappedType(
       dependencies
     )
   )
+
+  // Try to preserve alias references for property value types in common mapped cases.
+  // When a mapped alias like `{ [K in keyof T]: T[K] }` is fully instantiated, TS often
+  // substitutes the property value to its concrete form (e.g. a union), losing the
+  // original alias reference. If we can locate the original property's annotated type
+  // on the operand type `T`, and it is a TypeReference, prefer that.
+  {
+    const aliasArgs = type.getAliasTypeArguments()
+    const operand = aliasArgs.length > 0 ? aliasArgs[0] : undefined
+    if (
+      operand &&
+      (operand.isObject() || tsMorph.Node.isTypeLiteral(enclosingNode))
+    ) {
+      const operandProps = operand.getApparentProperties()
+      const byName = new Map<string, Symbol>()
+      for (const prop of operandProps) {
+        const propName = prop.getName()
+        byName.set(propName, prop)
+        // Heuristic for common "$" prefix stripping remaps
+        if (propName.startsWith('$')) {
+          byName.set(propName.slice(1), prop)
+        }
+      }
+      for (const member of members) {
+        if (
+          member.kind !==
+          ('PropertySignature' as Kind.PropertySignature['kind'])
+        ) {
+          continue
+        }
+        const sourceSymbol =
+          byName.get(member.name ?? '') ??
+          byName.get(member.name ? `$${member.name}` : '')
+        if (!sourceSymbol) {
+          continue
+        }
+        // Prefer a declared PropertySignature to keep alias references
+        let originalDecl: PropertySignature | undefined
+        const decls = sourceSymbol.getDeclarations?.() ?? []
+        for (let i = 0; i < decls.length; i++) {
+          const d = decls[i]
+          if (tsMorph.Node.isPropertySignature(d)) {
+            originalDecl = d
+            break
+          }
+        }
+        if (!originalDecl) {
+          const primary = getPrimaryDeclaration(sourceSymbol)
+          if (tsMorph.Node.isPropertySignature(primary)) {
+            originalDecl = primary
+          }
+        }
+        if (!originalDecl) {
+          continue
+        }
+        const originalTypeNode = originalDecl.getTypeNode()
+        if (!originalTypeNode) {
+          continue
+        }
+        const originalResolved = resolveTypeExpression(
+          originalTypeNode.getType(),
+          originalTypeNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+        if (!originalResolved || originalResolved.kind !== 'TypeReference') {
+          continue
+        }
+        // Override the member's type with the referenced alias form.
+        // Prefer displaying the alias name as text to avoid showing expanded unions.
+        const overriddenResolved: Kind.TypeReference = {
+          ...originalResolved,
+          text: originalResolved.name ?? originalResolved.text,
+        }
+        member.type = overriddenResolved
+        const isOptional = member.isOptional
+        member.text = `${member.name}${isOptional ? '?:' : ': '} ${overriddenResolved.text}`
+      }
+    }
+  }
 
   if (!members.length) {
     return
@@ -5056,11 +5156,34 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
     return false
   }
 
-  if (
-    resolvingTypes.has(type.compilerType.id) ||
-    containsFreeTypeParameter(type)
-  ) {
+  if (resolvingTypes.has(type.compilerType.id)) {
     return false
+  }
+
+  // If the reference appears to contain free type parameters, allow an
+  // exception when the alias is fully instantiated with concrete arguments.
+  // This lets mapped type aliases (which introduce internal type parameters
+  // like key or infer placeholders) still resolve once their external
+  // parameters are bound.
+  if (containsFreeTypeParameter(type)) {
+    const aliasOrSymbol = type.getAliasSymbol() || type.getSymbol()
+    const primaryDeclaration = getPrimaryDeclaration(aliasOrSymbol)
+
+    if (tsMorph.Node.isTypeAliasDeclaration(primaryDeclaration)) {
+      const expectedParams = primaryDeclaration.getTypeParameters().length
+      const aliasArgs = type.getAliasTypeArguments()
+      const fullyInstantiated =
+        expectedParams > 0 &&
+        aliasArgs.length === expectedParams &&
+        aliasArgs.every((arg) => !containsFreeTypeParameter(arg))
+
+      if (!fullyInstantiated) {
+        return false
+      }
+      // fall through to continue resolution
+    } else {
+      return false
+    }
   }
 
   // In conditional types, prefer keeping the extends operand as a reference to avoid flattening which can lose intent
