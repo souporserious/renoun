@@ -25,7 +25,7 @@ export async function Sidebar() {
           >
             Components
           </Link>
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col">
             {componentEntries.map((entry) => (
               <li key={entry.getPathname()}>
                 <Link
@@ -44,7 +44,7 @@ export async function Sidebar() {
           >
             Hooks
           </Link>
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col">
             {hookEntries.map((entry) => (
               <li key={entry.getPathname()}>
                 <Link
