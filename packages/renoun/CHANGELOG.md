@@ -1,5 +1,20 @@
 # renoun
 
+## 10.10.1
+
+### Patch Changes
+
+- 613cad1: Improves `GitHostFileSystem` git metadata collection for GitHub. Now multiple files are batched into one GraphQL query via aliases and use fewer API calls overall. This significantly reduces requests and rate-limit risk for repositories with large histories while preserving useful author/date metadata.
+- 5cb020b: Replaces regex-based path normalization in `GitHostFileSystem` with linear-time string trimming to avoid potential polynomial ReDoS and improve performance when handling paths with repeated slashes.
+- bf02032: Fixes caching multiple themes by using the configuration as the key.
+- 9975af9: Hardens Bitbucket author parsing by repeatedly stripping angle-bracket tags to
+  avoid incomplete multi-character sanitization in `GitHostFileSystem`.
+- c4332f8: Improves `Reference` return type renderer to handle immediately returned properties better.
+- 0c4af21: Fixes `JavaScriptModuleExport#getType` failing to preserve property type references when resolving mapped types.
+- c010c7d: Fixes parameters rendering after the returns section in the `Reference` component.
+- 30b2636: Improves text output for resolved types in `JavaScriptModuleExport#getType`.
+- 1d16218: Improves `Reference` type alias union type rendering to use a consistent renderer.
+
 ## 10.10.0
 
 ### Minor Changes
