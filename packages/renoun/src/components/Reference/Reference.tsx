@@ -1587,8 +1587,8 @@ function ComponentSection({
 
           return (
             <components.Column gap="large" key={index}>
-              {detail}
               {parameterDetail}
+              {detail}
             </components.Column>
           )
         })}
