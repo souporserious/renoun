@@ -355,6 +355,16 @@ function TypeNodeRouter({
           />
         )
       }
+      if (node.type.kind === 'UnionType') {
+        return (
+          <UnionTypeSection
+            node={node.type}
+            components={components}
+            id={id}
+            title={node.name}
+          />
+        )
+      }
       return <TypeAliasSection node={node} components={components} id={id} />
     case 'MappedType':
       return <MappedSection node={node} components={components} id={id} />
@@ -1116,6 +1126,54 @@ function renderReturnTypeExtras(
 
   switch (returnType.kind) {
     case 'TypeLiteral': {
+      // Special-case: if the return type is a plain object with properties only,
+      // render just the properties table (no "Properties" subheading and no type text)
+      const {
+        propertySignatures,
+        methodSignatures,
+        indexSignatures,
+        callSignatures,
+        constructSignatures,
+        accessorSignatures,
+      } = partitionMembers(returnType.members)
+
+      const onlyProperties =
+        propertySignatures.length > 0 &&
+        methodSignatures.length === 0 &&
+        indexSignatures.length === 0 &&
+        callSignatures.length === 0 &&
+        constructSignatures.length === 0 &&
+        accessorSignatures.length === 0
+
+      if (onlyProperties) {
+        return (
+          <TypeTable
+            rows={propertySignatures}
+            headers={['Property', 'Type', 'Modifiers']}
+            renderRow={(property, hasSubRow) => (
+              <>
+                <components.TableData index={0} hasSubRow={hasSubRow}>
+                  {property.name}
+                  {property.isOptional ? '?' : ''}
+                </components.TableData>
+                <components.TableData index={1} hasSubRow={hasSubRow}>
+                  <components.Code>{property.type.text}</components.Code>
+                </components.TableData>
+                <components.TableData index={2} hasSubRow={hasSubRow}>
+                  <components.Code>
+                    {property.isReadonly ? 'readonly' : '—'}
+                  </components.Code>
+                </components.TableData>
+              </>
+            )}
+            renderSubRow={(property) =>
+              renderDocumentation(property, components)
+            }
+            components={components}
+          />
+        )
+      }
+
       const memberDetails = renderMembersDetails({
         members: returnType.members,
         components,
@@ -2967,15 +3025,17 @@ function UnionTypeSection({
   node,
   components,
   id,
+  title,
 }: {
   node: TypeOfKind<'UnionType'>
   components: InternalReferenceComponents
   id?: string
+  title?: string
 }) {
   const variantRows = node.types.map((type, index) => ({ type, index }))
 
   return (
-    <TypeSection kind={node.kind} id={id} components={components}>
+    <TypeSection kind={node.kind} id={id} components={components} title={title}>
       {variantRows.length > 0 ? (
         <TypeDetail
           key="variants"
