@@ -1,5 +1,4 @@
 import {
-  Reference,
   isFile,
   isDirectory,
   FileNotFoundError,
@@ -11,7 +10,7 @@ import NextLink from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { ComponentsCollection } from '@/collections'
-import { Stack } from '@/components'
+import { Reference } from '@/components'
 
 export async function generateStaticParams() {
   const entries = await ComponentsCollection.getEntries()

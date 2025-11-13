@@ -1,14 +1,9 @@
-import {
-  Reference,
-  CodeBlock,
-  isDirectory,
-  Link,
-  type FileSystemEntry,
-} from 'renoun'
+import { CodeBlock, isDirectory, Link, type FileSystemEntry } from 'renoun'
 import NextLink from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { HooksDirectory } from '@/collections'
+import { Reference } from '@/components'
 
 export async function generateStaticParams() {
   const entries = await HooksDirectory.getEntries()
