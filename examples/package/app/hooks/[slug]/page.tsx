@@ -1,7 +1,7 @@
 import { CodeBlock, isDirectory, Link } from 'renoun'
 import { notFound } from 'next/navigation'
 
-import { HooksDirectory } from '@/collections'
+import { HooksDirectory, RootCollection } from '@/collections'
 import { EntryLayout } from '@/ui/EntryLayout'
 import { Reference } from '@/ui/Reference'
 
@@ -31,7 +31,9 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
   )
     ? parentDirectory.getBaseName()
     : hookEntry.getBaseName()
-  const [previousEntry, nextEntry] = await parentDirectory.getSiblings()
+  const [previousEntry, nextEntry] = await hookEntry.getSiblings({
+    collection: RootCollection,
+  })
   const fileExports = mainEntry ? await mainEntry.getExports() : []
   const exampleTags = fileExports
     .map((example) => ({

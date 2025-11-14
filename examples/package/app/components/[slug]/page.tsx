@@ -7,12 +7,12 @@ import {
 } from 'renoun'
 import { notFound } from 'next/navigation'
 
-import { ComponentsCollection } from '@/collections'
+import { ComponentsDirectory, RootCollection } from '@/collections'
 import { EntryLayout } from '@/ui/EntryLayout'
 import { Reference } from '@/ui/Reference'
 
 export async function generateStaticParams() {
-  const entries = await ComponentsCollection.getEntries()
+  const entries = await ComponentsDirectory.getEntries()
   return entries.map((entry) => ({ slug: entry.getSlug() }))
 }
 
@@ -20,7 +20,7 @@ export default async function Component(
   props: PageProps<'/components/[slug]'>
 ) {
   const { slug } = await props.params
-  const componentEntry = await ComponentsCollection.getEntry(slug)
+  const componentEntry = await ComponentsDirectory.getEntry(slug)
 
   if (!componentEntry) {
     notFound()
@@ -70,7 +70,9 @@ export default async function Component(
   )
     ? parentDirectory.getBaseName()
     : componentEntry.getBaseName()
-  const [previousEntry, nextEntry] = await parentDirectory.getSiblings()
+  const [previousEntry, nextEntry] = await componentEntry.getSiblings({
+    collection: RootCollection,
+  })
 
   return (
     <EntryLayout

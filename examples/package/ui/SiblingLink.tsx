@@ -9,6 +9,7 @@ export function SiblingLink({
   direction: 'previous' | 'next'
 }) {
   const isPrevious = direction === 'previous'
+  const label = entry.getTitle()
 
   return (
     <Link
@@ -64,11 +65,11 @@ export function SiblingLink({
                 strokeLinejoin="round"
               />
             </svg>
-            {entry.getBaseName()}
+            {label}
           </>
         ) : (
           <>
-            {entry.getBaseName()}
+            {label}
             <svg
               viewBox="0 0 24 24"
               className="h-4 w-4 flex-shrink-0"

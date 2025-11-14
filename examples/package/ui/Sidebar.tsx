@@ -1,11 +1,11 @@
 import Link from 'next/link'
 
-import { ComponentsCollection, HooksDirectory } from '@/collections'
+import { ComponentsDirectory, HooksDirectory } from '@/collections'
 import { SidebarOverlay } from './SidebarOverlay'
 
 export async function Sidebar() {
   const [componentEntries, hookEntries] = await Promise.all([
-    ComponentsCollection.getEntries(),
+    ComponentsDirectory.getEntries(),
     HooksDirectory.getEntries(),
   ])
 

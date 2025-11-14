@@ -1,6 +1,6 @@
-import { Directory } from 'renoun'
+import { Collection, Directory } from 'renoun'
 
-export const ComponentsCollection = new Directory({
+export const ComponentsDirectory = new Directory({
   path: 'components',
   loader: {
     ts: (path) => import(`./components/${path}.ts`),
@@ -14,4 +14,8 @@ export const HooksDirectory = new Directory({
   loader: {
     ts: (path) => import(`./hooks/${path}.ts`),
   },
+})
+
+export const RootCollection = new Collection({
+  entries: [ComponentsDirectory, HooksDirectory],
 })
