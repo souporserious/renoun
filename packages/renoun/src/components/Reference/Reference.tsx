@@ -1221,23 +1221,71 @@ function renderReturnType(
         return withTypeText(null)
       }
 
-      return withTypeText(
-        <TypeTable
-          rows={rows}
-          headers={['Property', 'Type']}
-          renderRow={(row, hasSubRow) => (
-            <>
-              <components.TableData index={0} hasSubRow={hasSubRow}>
-                {row.name}
-                {row.isOptional ? '?' : ''}
-              </components.TableData>
-              <components.TableData index={1} hasSubRow={hasSubRow}>
-                <components.Code>{row.text}</components.Code>
-              </components.TableData>
-            </>
-          )}
-          components={components}
-        />
+      // For intersection return types that are "object-ish" (e.g. an inline
+      // object intersected with a helper type), render the object shape as a
+      // properties table and list any remaining intersection members in an
+      // "Intersects" row — similar to how the dedicated Intersection section
+      // behaves elsewhere in the reference.
+      const otherTypes: string[] = []
+
+      for (const type of returnType.types) {
+        const text = type.text?.trim()
+
+        if (!text || isNeverTypeText(text)) {
+          continue
+        }
+
+        const typeRows = getIntersectionPropertyRows(type)
+
+        // If this branch contributes no property rows, treat it as an
+        // additional intersected type.
+        if (typeRows.length === 0) {
+          otherTypes.push(text)
+        }
+      }
+
+      const uniqueOtherTypes = [...new Set(otherTypes)]
+
+      return (
+        <components.Column gap="large">
+          <TypeTable
+            rows={rows}
+            headers={['Property', 'Type']}
+            renderRow={(row, hasSubRow) => (
+              <>
+                <components.TableData index={0} hasSubRow={hasSubRow}>
+                  {row.name}
+                  {row.isOptional ? '?' : ''}
+                </components.TableData>
+                <components.TableData
+                  index={1}
+                  hasSubRow={hasSubRow}
+                  colSpan={2}
+                >
+                  <components.Code>{row.text}</components.Code>
+                </components.TableData>
+              </>
+            )}
+            components={components}
+          />
+
+          {uniqueOtherTypes.length > 0 ? (
+            <TypeTable
+              rows={uniqueOtherTypes}
+              headers={['Intersects']}
+              renderRow={(text, hasSubRow) => (
+                <components.TableData
+                  index={0}
+                  hasSubRow={hasSubRow}
+                  colSpan={3}
+                >
+                  <components.Code>{text}</components.Code>
+                </components.TableData>
+              )}
+              components={components}
+            />
+          ) : null}
+        </components.Column>
       )
     }
 
@@ -1283,18 +1331,24 @@ function renderConstructorSignature(
     )
   }
 
-  // Parameters table (if any) without enclosing TypeDetail label
+  // Parameters table (if any)
   if (signature.parameters.length) {
     items.push(
-      <TypeTable
+      <TypeDetail
         key="parameters"
-        rows={signature.parameters}
-        headers={['Parameter', 'Type', 'Default Value']}
-        renderRow={(parameter, hasSubRow) =>
-          renderParameterRow(parameter, components, hasSubRow)
-        }
+        label="Parameters"
         components={components}
-      />
+        kind={signature.kind}
+      >
+        <TypeTable
+          rows={signature.parameters}
+          headers={['Parameter', 'Type', 'Default Value']}
+          renderRow={(parameter, hasSubRow) =>
+            renderParameterRow(parameter, components, hasSubRow)
+          }
+          components={components}
+        />
+      </TypeDetail>
     )
   }
 
@@ -1550,6 +1604,7 @@ function ComponentSection({
 
           const parameterDetail = signature.parameter ? (
             <TypeDetail
+              key="properties"
               label="Properties"
               components={components}
               kind={node.kind}
