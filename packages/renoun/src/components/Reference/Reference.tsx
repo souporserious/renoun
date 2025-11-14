@@ -701,6 +701,7 @@ function renderMethodSubRow(
       heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
       showSignatureText: multipleSignatures,
       parentDescription: method.description,
+      descriptionStrategy: 'skip-if-parent',
     })
 
     if (detail) {
@@ -947,6 +948,26 @@ function renderCallSignatureDetails(
     heading?: string
     showSignatureText?: boolean
     parentDescription?: string
+    descriptionStrategy?: 'inherit' | 'skip-if-parent' | 'never'
+  } = {}
+) {
+  const items = getCallSignatureDetailItems(signature, components, options)
+
+  if (items.length === 0) {
+    return null
+  }
+
+  return <components.Column gap="medium">{items}</components.Column>
+}
+
+function getCallSignatureDetailItems(
+  signature: TypeOfKind<'CallSignature'>,
+  components: InternalReferenceComponents,
+  options: {
+    heading?: string
+    showSignatureText?: boolean
+    parentDescription?: string
+    descriptionStrategy?: 'inherit' | 'skip-if-parent' | 'never'
   } = {}
 ) {
   const items: React.ReactNode[] = []
@@ -991,14 +1012,25 @@ function renderCallSignatureDetails(
     )
   }
 
-  const shouldSkipDocumentation =
-    options.parentDescription && signature.description
-      ? signature.description.trim() === options.parentDescription.trim()
-      : false
+  const { descriptionStrategy = 'inherit', parentDescription } = options
 
-  const documentation = shouldSkipDocumentation
-    ? null
-    : renderDocumentation(signature, components)
+  let shouldSkipDocumentation = false
+
+  if (descriptionStrategy === 'never') {
+    shouldSkipDocumentation = true
+  } else if (
+    descriptionStrategy === 'skip-if-parent' &&
+    parentDescription &&
+    signature.description
+  ) {
+    shouldSkipDocumentation =
+      signature.description.trim() === parentDescription.trim()
+  }
+
+  const documentation =
+    shouldSkipDocumentation || !signature
+      ? null
+      : renderDocumentation(signature, components)
 
   if (documentation) {
     items.push(
@@ -1073,11 +1105,7 @@ function renderCallSignatureDetails(
     )
   }
 
-  if (items.length === 0) {
-    return null
-  }
-
-  return <components.Column gap="medium">{items}</components.Column>
+  return items
 }
 
 function renderReturnType(
@@ -1493,6 +1521,8 @@ function ComponentSection({
   components: InternalReferenceComponents
   id?: string
 }) {
+  const multipleSignatures = node.signatures.length > 1
+
   return (
     <TypeSection
       kind="Component"
@@ -1518,22 +1548,8 @@ function ComponentSection({
             position: signature.position,
           }
 
-          const detail = renderCallSignatureDetails(
-            adaptedSignature,
-            components,
-            {
-              heading:
-                node.signatures.length > 1
-                  ? `Overload ${index + 1}`
-                  : undefined,
-              showSignatureText: true,
-              parentDescription: node.description,
-            }
-          )
-
           const parameterDetail = signature.parameter ? (
             <TypeDetail
-              key="properties"
               label="Properties"
               components={components}
               kind={node.kind}
@@ -1542,14 +1558,30 @@ function ComponentSection({
             </TypeDetail>
           ) : null
 
-          if (!detail && !parameterDetail) {
+          const items = getCallSignatureDetailItems(
+            adaptedSignature,
+            components,
+            {
+              heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
+              showSignatureText: true,
+              parentDescription: node.description,
+              descriptionStrategy: multipleSignatures
+                ? 'skip-if-parent'
+                : 'never',
+            }
+          )
+
+          if (parameterDetail) {
+            items.unshift(parameterDetail)
+          }
+
+          if (items.length === 0) {
             return null
           }
 
           return (
-            <components.Column gap="large" key={index}>
-              {parameterDetail}
-              {detail}
+            <components.Column gap="medium" key={index}>
+              {items}
             </components.Column>
           )
         })}
@@ -1664,6 +1696,9 @@ function FunctionSection({
             heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
             showSignatureText: true,
             parentDescription: node.description,
+            descriptionStrategy: multipleSignatures
+              ? 'skip-if-parent'
+              : 'never',
           })
 
           if (!detail) {
@@ -2051,6 +2086,7 @@ function renderMembersDetails({
               heading:
                 callSignatures.length > 1 ? `Overload ${index + 1}` : undefined,
               showSignatureText: true,
+              descriptionStrategy: 'inherit',
             })
 
             if (!detail) {
@@ -2098,6 +2134,7 @@ function renderMembersDetails({
                     ? `Overload ${index + 1}`
                     : undefined,
                 showSignatureText: true,
+                descriptionStrategy: 'inherit',
               }
             )
 
@@ -2997,29 +3034,8 @@ function UnionTypeSection({
   id?: string
   title?: string
 }) {
-  const variantRows = node.types.map((type, index) => ({ type, index }))
-
   return (
     <TypeSection kind={node.kind} id={id} components={components} title={title}>
-      {variantRows.length > 0 ? (
-        <TypeDetail
-          key="variants"
-          label="Variants"
-          components={components}
-          kind={node.kind}
-        >
-          <TypeTable
-            rows={variantRows}
-            headers={['Variant']}
-            renderRow={({ type }, hasSubRow) => (
-              <components.TableData index={0} hasSubRow={hasSubRow}>
-                <components.Code>{type.text}</components.Code>
-              </components.TableData>
-            )}
-            components={components}
-          />
-        </TypeDetail>
-      ) : null}
       <TypeDetail
         key="type"
         label="Type"
