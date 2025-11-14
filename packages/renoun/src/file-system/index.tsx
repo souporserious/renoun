@@ -13,6 +13,8 @@ import {
   getMDXContent,
   getMDXHeadings,
   getMarkdownHeadings,
+  parseFrontMatter,
+  type FrontMatterParseResult,
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
@@ -86,21 +88,50 @@ const defaultLoaders: {
 } = {
   md: async (_, file) => {
     const value = await file.getText()
+    const frontMatter =
+      'getFrontMatter' in file &&
+      typeof (file as any).getFrontMatter === 'function'
+        ? await (file as any).getFrontMatter()
+        : undefined
     return {
       default: () => (
         <Markdown components={markdownComponents}>{value}</Markdown>
       ),
+      frontMatter,
     }
   },
   mdx: async (_, file) => {
-    const source = await file.getText()
-    const { default: Content, ...mdxExports } = await getMDXContent({
+    const fileSystem = file.getParent().getFileSystem()
+    let source: string
+
+    try {
+      source = await fileSystem.readFile(file.getRelativePathToWorkspace())
+    } catch (relativeError) {
+      try {
+        source = await fileSystem.readFile(file.getAbsolutePath())
+      } catch {
+        throw relativeError
+      }
+    }
+    const {
+      default: Content,
+      frontMatter: exportedFrontMatter,
+      ...mdxExports
+    } = await getMDXContent({
       source,
       remarkPlugins,
       rehypePlugins,
     })
+    let frontMatter = exportedFrontMatter as
+      | Record<string, unknown>
+      | undefined
+
+    if (frontMatter === undefined) {
+      frontMatter = parseFrontMatter(source).frontMatter
+    }
     return {
       default: () => <Content components={markdownComponents} />,
+      frontMatter,
       ...mdxExports,
     }
   },
@@ -1910,6 +1941,9 @@ export class MDXFile<
   #staticExportValues?: Map<string, unknown>
   #headings?: Headings
   #modulePromise?: Promise<any>
+  #rawSource?: Promise<string>
+  #parsedSource?: Promise<FrontMatterParseResult>
+  #resolvingFrontMatter?: boolean
 
   constructor({
     loader,
@@ -1924,6 +1958,54 @@ export class MDXFile<
     }
 
     this.#slugCasing = fileOptions.slugCasing ?? 'kebab'
+  }
+
+  async #getRawSource() {
+    if (!this.#rawSource) {
+      this.#rawSource = super.getText()
+    }
+    return this.#rawSource
+  }
+
+  async #getSourceWithFrontMatter() {
+    if (!this.#parsedSource) {
+      this.#parsedSource = (async () => {
+        const source = await this.#getRawSource()
+        return parseFrontMatter(source)
+      })()
+    }
+
+    return this.#parsedSource
+  }
+
+  override async getText(): Promise<string> {
+    const result = await this.#getSourceWithFrontMatter()
+    return result.content
+  }
+
+  async getFrontMatter(): Promise<Record<string, unknown> | undefined> {
+    if (!this.#resolvingFrontMatter) {
+      try {
+        this.#resolvingFrontMatter = true
+        const frontMatter = await this.getExportValue<
+          Record<string, unknown> | undefined,
+          'frontMatter'
+        >('frontMatter')
+
+        if (frontMatter !== undefined) {
+          return frontMatter
+        }
+      } catch (error) {
+        if (!(error instanceof ModuleExportNotFoundError)) {
+          throw error
+        }
+      } finally {
+        this.#resolvingFrontMatter = false
+      }
+    }
+
+    const result = await this.#getSourceWithFrontMatter()
+    return result.frontMatter
   }
 
   async getExports() {
@@ -2100,6 +2182,9 @@ export class MarkdownFile<
   #loader: ModuleLoader<{ default: MDXContent } & Types>
   #headings?: Headings
   #modulePromise?: Promise<any>
+  #rawSource?: Promise<string>
+  #parsedSource?: Promise<FrontMatterParseResult>
+  #resolvingFrontMatter?: boolean
 
   constructor({
     loader,
@@ -2111,6 +2196,54 @@ export class MarkdownFile<
   >) {
     super(fileOptions)
     this.#loader = loader ?? defaultLoaders.md
+  }
+
+  async #getRawSource() {
+    if (!this.#rawSource) {
+      this.#rawSource = super.getText()
+    }
+    return this.#rawSource
+  }
+
+  async #getSourceWithFrontMatter() {
+    if (!this.#parsedSource) {
+      this.#parsedSource = (async () => {
+        const source = await this.#getRawSource()
+        return parseFrontMatter(source)
+      })()
+    }
+
+    return this.#parsedSource
+  }
+
+  override async getText(): Promise<string> {
+    const result = await this.#getSourceWithFrontMatter()
+    return result.content
+  }
+
+  async getFrontMatter(): Promise<Record<string, unknown> | undefined> {
+    if (!this.#resolvingFrontMatter) {
+      try {
+        this.#resolvingFrontMatter = true
+        const frontMatter = await this.getExportValue<
+          Record<string, unknown> | undefined,
+          'frontMatter'
+        >('frontMatter')
+
+        if (frontMatter !== undefined) {
+          return frontMatter
+        }
+      } catch (error) {
+        if (!(error instanceof ModuleExportNotFoundError)) {
+          throw error
+        }
+      } finally {
+        this.#resolvingFrontMatter = false
+      }
+    }
+
+    const result = await this.#getSourceWithFrontMatter()
+    return result.frontMatter
   }
 
   #getModule() {

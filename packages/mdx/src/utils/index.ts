@@ -14,3 +14,7 @@ export {
   type LinkSource,
   type LinkKind,
 } from './get-mdx-links.js'
+export {
+  parseFrontMatter,
+  type FrontMatterParseResult,
+} from './parse-front-matter.js'
