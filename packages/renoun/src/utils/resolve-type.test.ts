@@ -742,7 +742,7 @@ describe('resolveType', () => {
               "text": "complexUnion: ((a: string) => string | number) | { a: string } | { b: number, c: (string | number)[] } | string;",
               "type": {
                 "kind": "UnionType",
-                "text": "(a: string) => string | number | { a: string; } | { b: number; c: Array<string | number>; } | string",
+                "text": "(a: string) => string | number | { a: string; } | { b: number; c: (string | number)[]; } | string",
                 "types": [
                   {
                     "filePath": "test.ts",
@@ -952,12 +952,34 @@ describe('resolveType', () => {
                               "text": "string | number",
                               "types": [
                                 {
+                                  "filePath": "test.ts",
                                   "kind": "String",
+                                  "position": {
+                                    "end": {
+                                      "column": 107,
+                                      "line": 26,
+                                    },
+                                    "start": {
+                                      "column": 88,
+                                      "line": 26,
+                                    },
+                                  },
                                   "text": "string",
                                   "value": undefined,
                                 },
                                 {
+                                  "filePath": "test.ts",
                                   "kind": "Number",
+                                  "position": {
+                                    "end": {
+                                      "column": 107,
+                                      "line": 26,
+                                    },
+                                    "start": {
+                                      "column": 88,
+                                      "line": 26,
+                                    },
+                                  },
                                   "text": "number",
                                   "value": undefined,
                                 },
@@ -967,7 +989,7 @@ describe('resolveType', () => {
                         },
                       },
                     ],
-                    "text": "{ b: number; c: Array<string | number>; }",
+                    "text": "{ b: number; c: (string | number)[]; }",
                   },
                   {
                     "filePath": "test.ts",
@@ -2648,7 +2670,18 @@ describe('resolveType', () => {
               "text": "string | Promise<Sponsor>",
               "types": [
                 {
+                  "filePath": "index.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 42,
+                      "line": 1,
+                    },
+                    "start": {
+                      "column": 1,
+                      "line": 1,
+                    },
+                  },
                   "text": "string",
                   "value": undefined,
                 },
@@ -3095,22 +3128,33 @@ describe('resolveType', () => {
                   "text": "string | Iterable<ReactNode>",
                   "types": [
                     {
+                      "filePath": "index.tsx",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 2,
+                          "line": 5,
+                        },
+                        "start": {
+                          "column": 1,
+                          "line": 3,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
                     {
-                      "filePath": "node_modules/typescript/lib/lib.es2015.iterable.d.ts",
+                      "filePath": "index.tsx",
                       "kind": "TypeReference",
                       "moduleSpecifier": undefined,
                       "name": "Iterable",
                       "position": {
                         "end": {
-                          "column": 560,
-                          "line": 3,
+                          "column": 2,
+                          "line": 5,
                         },
                         "start": {
-                          "column": 469,
+                          "column": 1,
                           "line": 3,
                         },
                       },
@@ -3133,30 +3177,30 @@ describe('resolveType', () => {
                           "text": "ReactNode",
                         },
                         {
-                          "filePath": "node_modules/typescript/lib/lib.es2015.iterable.d.ts",
+                          "filePath": "index.tsx",
                           "kind": "Any",
                           "position": {
                             "end": {
-                              "column": 560,
-                              "line": 3,
+                              "column": 2,
+                              "line": 5,
                             },
                             "start": {
-                              "column": 469,
+                              "column": 1,
                               "line": 3,
                             },
                           },
                           "text": "any",
                         },
                         {
-                          "filePath": "node_modules/typescript/lib/lib.es2015.iterable.d.ts",
+                          "filePath": "index.tsx",
                           "kind": "Any",
                           "position": {
                             "end": {
-                              "column": 560,
-                              "line": 3,
+                              "column": 2,
+                              "line": 5,
                             },
                             "start": {
-                              "column": 469,
+                              "column": 1,
                               "line": 3,
                             },
                           },
@@ -3367,7 +3411,7 @@ describe('resolveType', () => {
                     "line": 4,
                   },
                 },
-                "text": "(path: string, callback: (err: Error, data: Buffer<ArrayBufferLike>) => void) => void",
+                "text": "(path: string, callback: (err: Error | null, data: Buffer) => void) => void",
                 "typeArguments": [],
               },
             },
@@ -4203,9 +4247,20 @@ describe('resolveType', () => {
                         "text": "FunctionMetadata & { slug: string; }",
                         "types": [
                           {
+                            "filePath": "test.ts",
                             "kind": "TypeReference",
-                            "moduleSpecifier": undefined,
-                            "name": "FunctionMetadata",
+                            "moduleSpecifier": "library",
+                            "name": "Metadata",
+                            "position": {
+                              "end": {
+                                "column": 29,
+                                "line": 3,
+                              },
+                              "start": {
+                                "column": 21,
+                                "line": 3,
+                              },
+                            },
                             "text": "FunctionMetadata",
                             "typeArguments": [],
                           },
@@ -4256,9 +4311,20 @@ describe('resolveType', () => {
                         "text": "TypeMetadata & { slug: string; }",
                         "types": [
                           {
+                            "filePath": "test.ts",
                             "kind": "TypeReference",
-                            "moduleSpecifier": undefined,
-                            "name": "TypeMetadata",
+                            "moduleSpecifier": "library",
+                            "name": "Metadata",
+                            "position": {
+                              "end": {
+                                "column": 29,
+                                "line": 3,
+                              },
+                              "start": {
+                                "column": 21,
+                                "line": 3,
+                              },
+                            },
                             "text": "TypeMetadata",
                             "typeArguments": [],
                           },
@@ -5709,7 +5775,7 @@ describe('resolveType', () => {
                         "line": 203,
                       },
                     },
-                    "text": "FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight">",
+                    "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight">",
                     "typeArguments": [
                       {
                         "filePath": "node_modules/styled-components/dist/types.d.ts",
@@ -6020,12 +6086,12 @@ describe('resolveType', () => {
                     "kind": "String",
                     "position": {
                       "end": {
-                        "column": 14,
-                        "line": 2,
+                        "column": 2,
+                        "line": 5,
                       },
                       "start": {
-                        "column": 3,
-                        "line": 2,
+                        "column": 1,
+                        "line": 1,
                       },
                     },
                     "text": "Color.Red",
@@ -6036,12 +6102,12 @@ describe('resolveType', () => {
                     "kind": "String",
                     "position": {
                       "end": {
-                        "column": 16,
-                        "line": 3,
+                        "column": 2,
+                        "line": 5,
                       },
                       "start": {
-                        "column": 3,
-                        "line": 3,
+                        "column": 1,
+                        "line": 1,
                       },
                     },
                     "text": "Color.Blue",
@@ -6052,12 +6118,12 @@ describe('resolveType', () => {
                     "kind": "String",
                     "position": {
                       "end": {
-                        "column": 18,
-                        "line": 4,
+                        "column": 2,
+                        "line": 5,
                       },
                       "start": {
-                        "column": 3,
-                        "line": 4,
+                        "column": 1,
+                        "line": 1,
                       },
                     },
                     "text": "Color.Green",
@@ -6736,7 +6802,7 @@ describe('resolveType', () => {
                         "line": 6,
                       },
                     },
-                    "text": "(key: "red" | "blue" | "green") => "red" | "blue" | "green"",
+                    "text": "(key: keyof typeof colors) => "red" | "blue" | "green"",
                     "typeArguments": [],
                   },
                 ],
@@ -6835,7 +6901,7 @@ describe('resolveType', () => {
                         "line": 6,
                       },
                     },
-                    "text": "(key: "red" | "blue" | "green") => "red" | "blue" | "green"",
+                    "text": "(key: keyof typeof colors) => "red" | "blue" | "green"",
                     "typeArguments": [],
                   },
                 ],
@@ -7153,10 +7219,10 @@ describe('resolveType', () => {
                   "line": 2,
                 },
               },
-              "text": "ReactNode",
+              "text": "React.ReactNode",
               "typeArguments": [],
             },
-            "text": "function Text(): ReactNode",
+            "text": "function Text(): React.ReactNode",
             "thisType": undefined,
           },
         ],
@@ -8342,7 +8408,18 @@ describe('resolveType', () => {
                   "text": "string | { color: string; }",
                   "types": [
                     {
+                      "filePath": "test.ts",
                       "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 41,
+                          "line": 1,
+                        },
+                        "start": {
+                          "column": 1,
+                          "line": 1,
+                        },
+                      },
                       "text": "string",
                       "value": undefined,
                     },
@@ -8900,7 +8977,7 @@ describe('resolveType', () => {
                     },
                   },
                 ],
-                "text": "{ variant?: "primary" | "secondary" | undefined; }",
+                "text": "{ variant?: "primary" | "secondary"; }",
               },
             },
             "position": {
@@ -9719,7 +9796,7 @@ describe('resolveType', () => {
                         "line": 203,
                       },
                     },
-                    "text": "FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
+                    "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
                     "typeArguments": [
                       {
                         "filePath": "node_modules/styled-components/dist/types.d.ts",
@@ -9963,7 +10040,7 @@ describe('resolveType', () => {
                         "line": 203,
                       },
                     },
-                    "text": "FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
+                    "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
                     "typeArguments": [
                       {
                         "filePath": "node_modules/styled-components/dist/types.d.ts",
@@ -10131,7 +10208,7 @@ describe('resolveType', () => {
               "text": "props: P",
               "type": {
                 "kind": "IntersectionType",
-                "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>",
+                "text": "Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>",
                 "types": [
                   {
                     "filePath": "node_modules/styled-components/dist/types.d.ts",
@@ -10148,7 +10225,7 @@ describe('resolveType', () => {
                         "line": 203,
                       },
                     },
-                    "text": "FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows">",
+                    "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows">",
                     "typeArguments": [
                       {
                         "filePath": "node_modules/styled-components/dist/types.d.ts",
@@ -12743,7 +12820,7 @@ describe('resolveType', () => {
                     },
                   },
                 ],
-                "text": "{ isDisabled?: boolean; } & ButtonHTMLAttributes<HTMLButtonElement>",
+                "text": "{ isDisabled?: boolean; } & React.ButtonHTMLAttributes<HTMLButtonElement>",
               },
             },
             "position": {
@@ -13010,10 +13087,10 @@ describe('resolveType', () => {
                                 "line": 19,
                               },
                             },
-                            "text": "ReactNode",
+                            "text": "React.ReactNode",
                             "typeArguments": [],
                           },
-                          "text": "(exportedTypes: Array<{ name: string; description: string; }>) => ReactNode",
+                          "text": "(exportedTypes: ReturnType<typeof getExportedTypes>) => React.ReactNode",
                         },
                       },
                     ],
@@ -13198,10 +13275,10 @@ describe('resolveType', () => {
                                 "line": 19,
                               },
                             },
-                            "text": "ReactNode",
+                            "text": "React.ReactNode",
                             "typeArguments": [],
                           },
-                          "text": "(exportedTypes: Array<{ name: string; description: string; }>) => ReactNode",
+                          "text": "(exportedTypes: ReturnType<typeof getExportedTypes>) => React.ReactNode",
                         },
                       },
                     ],
@@ -15495,7 +15572,7 @@ describe('resolveType', () => {
                   },
                 },
               ],
-              "text": "{ Markdown: ComponentType<MarkdownProps>; }",
+              "text": "{ Markdown: React.ComponentType<MarkdownProps>; }",
             },
           ],
         },
@@ -15544,7 +15621,7 @@ describe('resolveType', () => {
           "text": "MarkdownComponents",
           "type": {
             "kind": "UnionType",
-            "text": "ComponentType<IntrinsicElements[Key]> | keyof IntrinsicElements",
+            "text": "React.ComponentType<React.JSX.IntrinsicElements[Key]> | keyof React.JSX.IntrinsicElements",
             "types": [
               {
                 "filePath": "test.ts",
@@ -15561,7 +15638,7 @@ describe('resolveType', () => {
                     "line": 5,
                   },
                 },
-                "text": "ComponentType<IntrinsicElements[Key]>",
+                "text": "React.ComponentType<React.JSX.IntrinsicElements[Key]>",
                 "typeArguments": [
                   {
                     "indexType": {
@@ -15598,17 +15675,17 @@ describe('resolveType', () => {
                           "line": 5,
                         },
                       },
-                      "text": "IntrinsicElements",
+                      "text": "React.JSX.IntrinsicElements",
                       "typeArguments": [],
                     },
-                    "text": "IntrinsicElements[Key]",
+                    "text": "React.JSX.IntrinsicElements[Key]",
                   },
                 ],
               },
               {
                 "kind": "TypeOperator",
                 "operator": "keyof",
-                "text": "keyof IntrinsicElements",
+                "text": "keyof React.JSX.IntrinsicElements",
                 "type": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
@@ -15624,7 +15701,7 @@ describe('resolveType', () => {
                       "line": 6,
                     },
                   },
-                  "text": "IntrinsicElements",
+                  "text": "React.JSX.IntrinsicElements",
                   "typeArguments": [],
                 },
               },
@@ -15634,7 +15711,7 @@ describe('resolveType', () => {
             "constraintType": {
               "kind": "TypeOperator",
               "operator": "keyof",
-              "text": "keyof IntrinsicElements",
+              "text": "keyof React.JSX.IntrinsicElements",
               "type": {
                 "filePath": "test.ts",
                 "kind": "TypeReference",
@@ -15650,7 +15727,7 @@ describe('resolveType', () => {
                     "line": 4,
                   },
                 },
-                "text": "IntrinsicElements",
+                "text": "React.JSX.IntrinsicElements",
                 "typeArguments": [],
               },
             },
@@ -17839,7 +17916,7 @@ describe('resolveType', () => {
               },
               "text": "void",
             },
-            "text": "(mergedIntersection: Intersection) => void",
+            "text": "(mergedIntersection: infer Intersection) => void",
           },
           "falseType": {
             "filePath": "test.ts",
@@ -18079,18 +18156,18 @@ describe('resolveType', () => {
                           "operator": "keyof",
                           "text": "keyof Types",
                           "type": {
-                            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                            "filePath": "test.ts",
                             "kind": "TypeReference",
                             "moduleSpecifier": undefined,
                             "name": "Types",
                             "position": {
                               "end": {
-                                "column": 390,
-                                "line": 6,
+                                "column": 63,
+                                "line": 1,
                               },
                               "start": {
-                                "column": 371,
-                                "line": 6,
+                                "column": 1,
+                                "line": 1,
                               },
                             },
                             "text": "Types",
@@ -18098,16 +18175,16 @@ describe('resolveType', () => {
                           },
                         },
                         {
-                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                          "filePath": "test.ts",
                           "kind": "String",
                           "position": {
                             "end": {
-                              "column": 390,
-                              "line": 6,
+                              "column": 63,
+                              "line": 1,
                             },
                             "start": {
-                              "column": 371,
-                              "line": 6,
+                              "column": 1,
+                              "line": 1,
                             },
                           },
                           "text": "string",
@@ -18327,7 +18404,7 @@ describe('resolveType', () => {
                     },
                   },
                 ],
-                "text": "{ default: DefaultType; }",
+                "text": "{ default: infer DefaultType; }",
               },
               "falseType": {
                 "filePath": "test.ts",
@@ -18569,10 +18646,10 @@ describe('resolveType', () => {
                   "line": 4,
                 },
               },
-              "text": "ReactNode",
+              "text": "React.ReactNode",
               "typeArguments": [],
             },
-            "text": "(props: Props) => ReactNode",
+            "text": "(props: Props) => React.ReactNode",
             "thisType": undefined,
           },
         ],
@@ -19136,7 +19213,7 @@ describe('resolveType', () => {
               "line": 7,
             },
           },
-          "text": "Shared",
+          "text": "Kind.Shared",
           "typeArguments": [],
         },
         "typeParameters": [],
@@ -20182,7 +20259,18 @@ describe('resolveType', () => {
               "text": ""d" | Union",
               "types": [
                 {
+                  "filePath": "index.ts",
                   "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 8,
+                      "line": 7,
+                    },
+                    "start": {
+                      "column": 7,
+                      "line": 5,
+                    },
+                  },
                   "text": ""d"",
                   "value": "d",
                 },

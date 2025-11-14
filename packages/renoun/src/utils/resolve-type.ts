@@ -1141,7 +1141,7 @@ function resolveTypeExpression(
   const symbol = type.getSymbol()
   const aliasSymbol = type.getAliasSymbol()
   const symbolDeclaration = getPrimaryDeclaration(aliasSymbol || symbol)
-  const typeText = type.getText(undefined, TYPE_FORMAT_FLAGS)
+  const typeText = type.getText(enclosingNode, TYPE_FORMAT_FLAGS)
 
   let resolvedType: Kind.TypeExpression | undefined
   let moduleSpecifier: string | undefined
@@ -1924,7 +1924,7 @@ function resolveTypeExpression(
                   for (const typeArgument of unionType.getAliasTypeArguments()) {
                     const resolvedTypeArgument = resolveTypeExpression(
                       typeArgument,
-                      currentNode ?? symbolDeclaration,
+                      enclosingNode ?? currentNode ?? symbolDeclaration,
                       filter,
                       defaultValues,
                       dependencies
@@ -1937,7 +1937,10 @@ function resolveTypeExpression(
                   unionTypes.push({
                     kind: 'TypeReference',
                     name: elementAliasSymbol.getName(),
-                    text: currentType.getText(undefined, TYPE_FORMAT_FLAGS),
+                    text: currentType.getText(
+                      enclosingNode ?? currentNode ?? symbolDeclaration,
+                      TYPE_FORMAT_FLAGS
+                    ),
                     typeArguments: resolvedTypeArguments,
                     ...getDeclarationLocation(declaration),
                   } satisfies Kind.TypeReference)
@@ -1949,7 +1952,7 @@ function resolveTypeExpression(
 
             const resolvedUnionType = resolveTypeExpression(
               currentType,
-              currentNode,
+              isUnionTypeNode ? currentNode : (enclosingNode ?? currentNode),
               filter,
               defaultValues,
               dependencies
