@@ -204,6 +204,61 @@ describe('addHeadings', () => {
     `)
   })
 
+  test('attaches summaries for each heading when possible', async () => {
+    const mdxSource = `# Search Plugin
+
+Before diving in, this introduction paragraph provides some immediate context about search indexing in renoun. It explains how the plugin works, what kind of data is collected, and why concise excerpts improve the quality of the search results across the documentation site.
+
+## Getting started
+
+Search indexing begins by scanning your document headings and collecting the first meaningful block after each section. This typically results in a concise paragraph that remains under the target length while still covering the topic with enough detail for a helpful preview.
+
+### Choosing excerpts
+
+- Start with the first descriptive paragraph when possible
+- Prefer rich paragraphs over dense code samples
+- Use short lists if the section opens with bullet points
+`
+
+    const jsxRuntime = {
+      Fragment: Symbol.for('react.fragment'),
+      jsx: () => null,
+      jsxs: () => null,
+    }
+
+    const mdxModule = await evaluate(mdxSource, {
+      remarkPlugins: [addHeadings],
+      development: false,
+      ...jsxRuntime,
+    })
+
+    expect(mdxModule.headings).toMatchInlineSnapshot(`
+      [
+        {
+          "children": "Search Plugin",
+          "id": "search-plugin",
+          "level": 1,
+          "summary": "Before diving in, this introduction paragraph provides some immediate context about search indexing in renoun. It explains how the plugin works, what kind of data is collected, and why concise excerpts improve the quality of the search results across the documentation site.",
+          "text": "Search Plugin",
+        },
+        {
+          "children": "Getting started",
+          "id": "getting-started",
+          "level": 2,
+          "summary": "Search indexing begins by scanning your document headings and collecting the first meaningful block after each section. This typically results in a concise paragraph that remains under the target length while still covering the topic with enough detail for a helpful preview.",
+          "text": "Getting started",
+        },
+        {
+          "children": "Choosing excerpts",
+          "id": "choosing-excerpts",
+          "level": 3,
+          "summary": "Start with the first descriptive paragraph when possible • Prefer rich paragraphs over dense code samples",
+          "text": "Choosing excerpts",
+        },
+      ]
+    `)
+  })
+
   test('Heading can be overridden via MDX components provider', async () => {
     const mdxSource = `# Hello`
     const jsxRuntime = {
@@ -299,6 +354,7 @@ export function getHeadings(headings) {
     expect(Array.isArray(headings)).toBe(true)
     expect(headings.length).toBe(2)
     expect(headings[0].id).toBe('hello')
+    expect(headings[0].summary).toBeNull()
     expect(headings[1].id).toBe('extra')
   })
 

@@ -206,6 +206,7 @@ describe('file system', () => {
       level: 1,
       text: 'Docs',
       children: 'Docs',
+      summary: 'This is a test of the documentation system.',
     })
 
     // Default export is a renderable MDX component
@@ -1490,12 +1491,17 @@ describe('file system', () => {
     const headings = await file.getHeadings()
 
     expect(headings).toMatchObject([
-      { id: 'Button', level: 3, text: 'Button', children: 'Button' },
       {
+        children: 'Button',
+        id: 'Button',
+        level: 3,
+        text: 'Button',
+      },
+      {
+        children: 'useButton',
         id: 'useButton',
         level: 3,
         text: 'useButton',
-        children: 'useButton',
       },
     ])
     expectTypeOf(headings).toMatchTypeOf<Headings>()

@@ -1,6 +1,14 @@
 import type React from 'react'
 import type { Processor } from 'unified'
-import type { Root, Heading } from 'mdast'
+import type {
+  Heading,
+  List,
+  ListItem,
+  Paragraph,
+  PhrasingContent,
+  Root,
+  RootContent,
+} from 'mdast'
 import type { Properties } from 'hast'
 import type { VFile } from 'vfile'
 import { define } from 'unist-util-mdx-define'
@@ -22,9 +30,16 @@ declare module 'mdast' {
   }
 }
 
+const MAX_SUMMARY_LENGTH = 300
+
 export interface AddHeadingsOptions {
   /** Whether to allow the `getHeadings` export. */
   allowGetHeadings?: boolean
+}
+
+type HeadingSection = {
+  heading: Heading
+  nodes: RootContent[]
 }
 
 export type Headings = {
@@ -36,6 +51,9 @@ export type Headings = {
 
   /** The stringified heading text. */
   text: string
+
+  /** Concise summary derived from the section content. */
+  summary?: string
 
   /** The heading JSX children. */
   children?: React.ReactNode
@@ -60,6 +78,7 @@ export default function addHeadings(
   const { allowGetHeadings = false } = opts
 
   return function (tree: Root, file: VFile) {
+    const headingSummaries = computeHeadingSummaries(tree)
     const headingsArray: any[] = []
     const headingCounts = new Map<string, number>()
     let hasGetHeadingsExport = false
@@ -70,6 +89,8 @@ export default function addHeadings(
     visit(tree, 'heading', (node: Heading) => {
       const text = toString(node)
       let slug = createSlug(text)
+
+      const summary = headingSummaries.get(node) ?? null
 
       if (headingCounts.has(slug)) {
         const count = headingCounts.get(slug)! + 1
@@ -92,6 +113,15 @@ export default function addHeadings(
             type: 'Property',
             key: { type: 'Identifier', name: 'level' },
             value: { type: 'Literal', value: node.depth },
+            kind: 'init',
+          },
+          {
+            type: 'Property',
+            key: { type: 'Identifier', name: 'summary' },
+            value:
+              summary === null
+                ? { type: 'Literal', value: null }
+                : { type: 'Literal', value: summary },
             kind: 'init',
           },
           {
@@ -361,6 +391,206 @@ export default function addHeadings(
       define(tree, file, { headings: headingsExpression as any })
     }
   }
+}
+
+function computeHeadingSummaries(tree: Root): Map<Heading, string | null> {
+  const summaries = new Map<Heading, string | null>()
+  const stack: HeadingSection[] = []
+
+  for (const child of tree.children) {
+    if (child.type === 'mdxjsEsm') {
+      continue
+    }
+
+    if (child.type === 'heading') {
+      const headingNode = child as Heading
+
+      while (
+        stack.length &&
+        stack[stack.length - 1]!.heading.depth >= headingNode.depth
+      ) {
+        const completed = stack.pop()!
+        summaries.set(completed.heading, pickSummary(completed.nodes))
+      }
+
+      stack.push({ heading: headingNode, nodes: [] })
+      continue
+    }
+
+    if (!stack.length) {
+      continue
+    }
+
+    const currentSection = stack[stack.length - 1]!
+    currentSection.nodes.push(child as RootContent)
+  }
+
+  while (stack.length) {
+    const completed = stack.pop()!
+    summaries.set(completed.heading, pickSummary(completed.nodes))
+  }
+
+  return summaries
+}
+
+type Block =
+  | { type: 'paragraph'; text: string }
+  | { type: 'list'; items: string[] }
+
+function pickSummary(nodes: RootContent[]): string | null {
+  const blocks = toBlocks(nodes)
+  if (!blocks.length) {
+    return null
+  }
+
+  const paragraphBlocks = blocks.filter(
+    (block): block is Extract<Block, { type: 'paragraph' }> =>
+      block.type === 'paragraph'
+  )
+
+  for (const block of paragraphBlocks) {
+    if (countWords(block.text) >= 40) {
+      return truncate(block.text, MAX_SUMMARY_LENGTH)
+    }
+  }
+
+  if (paragraphBlocks.length) {
+    const merged = cleanWhitespace(
+      paragraphBlocks
+        .slice(0, 2)
+        .map((paragraph) => paragraph.text)
+        .join(' ')
+    )
+    if (merged) {
+      return truncate(merged, MAX_SUMMARY_LENGTH)
+    }
+  }
+
+  const listBlock = blocks.find(
+    (block): block is Extract<Block, { type: 'list' }> => block.type === 'list'
+  )
+  if (listBlock && listBlock.items.length) {
+    const listText = cleanWhitespace(listBlock.items.slice(0, 2).join(' • '))
+    if (listText) {
+      return truncate(listText, MAX_SUMMARY_LENGTH)
+    }
+  }
+
+  const fallbackText = cleanWhitespace(
+    paragraphBlocks.map((paragraph) => paragraph.text).join(' ')
+  )
+  if (fallbackText) {
+    const sentences = fallbackText.split(/(?<=\.)\s+/).filter(Boolean)
+    if (sentences.length) {
+      return truncate(sentences.slice(0, 2).join(' '), MAX_SUMMARY_LENGTH)
+    }
+    return truncate(fallbackText, MAX_SUMMARY_LENGTH)
+  }
+
+  return null
+}
+
+function toBlocks(nodes: RootContent[]): Block[] {
+  const blocks: Block[] = []
+
+  for (const node of nodes) {
+    if (node.type === 'paragraph') {
+      const text = paragraphToText(node)
+      if (text) {
+        blocks.push({ type: 'paragraph', text })
+      }
+    } else if (node.type === 'list') {
+      const items = listToItems(node)
+      if (items.length) {
+        blocks.push({ type: 'list', items })
+      }
+    } else if (
+      node.type === 'heading' ||
+      node.type === 'code' ||
+      node.type === 'blockquote'
+    ) {
+      continue
+    }
+  }
+
+  return blocks
+}
+
+function paragraphToText(node: Paragraph): string {
+  const parts = node.children
+    .map((child) => phrasingToText(child))
+    .filter((value): value is string => Boolean(value && value.trim()))
+  return cleanWhitespace(parts.join(' '))
+}
+
+function listToItems(list: List): string[] {
+  const items: string[] = []
+  for (const item of list.children) {
+    const text = listItemToText(item)
+    if (text) {
+      items.push(text)
+    }
+  }
+  return items
+}
+
+function listItemToText(item: ListItem): string {
+  const parts: string[] = []
+  for (const child of item.children) {
+    if (child.type === 'paragraph') {
+      const text = paragraphToText(child)
+      if (text) {
+        parts.push(text)
+      }
+    }
+  }
+  return cleanWhitespace(parts.join(' '))
+}
+
+function phrasingToText(node: PhrasingContent | RootContent): string {
+  switch (node.type) {
+    case 'text':
+      return node.value
+    case 'inlineCode':
+      return node.value
+    case 'footnoteReference':
+      return ''
+    case 'emphasis':
+    case 'strong':
+    case 'delete':
+    case 'link':
+    case 'linkReference':
+    case 'footnoteDefinition':
+    case 'paragraph':
+    case 'list':
+      return node.children.map((child) => phrasingToText(child)).join(' ')
+    case 'mdxTextExpression':
+    case 'html':
+    case 'mdxJsxTextElement':
+      return ''
+    case 'break':
+      return ' '
+    default:
+      return ''
+  }
+}
+
+function truncate(value: string, limit: number) {
+  if (value.length <= limit) {
+    return value
+  }
+  return value.slice(0, limit - 1).trimEnd() + '…'
+}
+
+function cleanWhitespace(value: string) {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function countWords(value: string) {
+  if (!value) {
+    return 0
+  }
+  return value.trim().split(/\s+/).length
 }
 
 function convertHeadingToComponent(node: Heading) {
