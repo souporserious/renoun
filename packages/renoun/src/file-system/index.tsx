@@ -46,6 +46,7 @@ import {
   removeAllExtensions,
   removeOrderPrefixes,
   relativePath,
+  type PathLike,
 } from '../utils/path.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import type { TypeFilter } from '../utils/resolve-type.js'
@@ -421,7 +422,7 @@ export interface FileOptions<
   Types extends Record<string, any> = Record<string, any>,
   Path extends string = string,
 > {
-  path: Path
+  path: Path | URL
   basePathname?: string | null
   slugCasing?: SlugCasing
   depth?: number
@@ -2348,7 +2349,7 @@ export interface DirectoryOptions<
   > = DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
   /** Directory path in the workspace. */
-  path?: string
+  path?: PathLike
 
   /** Filter entries with a minimatch pattern or predicate. */
   filter?: Filter

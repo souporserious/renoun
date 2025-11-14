@@ -1,17 +1,56 @@
-export function normalizeBaseDirectory(
-  baseDirectory?: string
-): string | undefined {
-  if (!baseDirectory) return baseDirectory
+import {
+  pathLikeToString,
+  resolveSchemePath,
+  type PathLike,
+} from './path.js'
 
-  try {
-    if (URL.canParse(baseDirectory)) {
-      const { pathname } = new URL(baseDirectory)
-      // Convert file URL to its directory path (drop the filename)
-      return pathname.slice(0, pathname.lastIndexOf('/'))
+export function normalizeBaseDirectory(
+  baseDirectory?: PathLike
+): string | undefined {
+  if (baseDirectory === undefined) return baseDirectory
+
+  let directoryUrl: URL | undefined
+
+  if (baseDirectory instanceof URL) {
+    const shouldResolveToParent =
+      baseDirectory.protocol === 'file:' ||
+      !baseDirectory.pathname.endsWith('/')
+    directoryUrl = shouldResolveToParent
+      ? new URL('.', baseDirectory)
+      : baseDirectory
+  } else if (typeof baseDirectory === 'string') {
+    if (baseDirectory.startsWith('file:')) {
+      try {
+        directoryUrl = new URL('.', baseDirectory)
+      } catch {
+        directoryUrl = undefined
+      }
+    } else if (URL.canParse(baseDirectory)) {
+      try {
+        directoryUrl = new URL('.', baseDirectory)
+      } catch {
+        directoryUrl = undefined
+      }
     }
-  } catch {
-    // Fall through and return the original value on parse errors
   }
 
-  return baseDirectory
+  if (directoryUrl) {
+    const directoryString =
+      directoryUrl.protocol === 'file:'
+        ? pathLikeToString(directoryUrl)
+        : directoryUrl.href
+    const resolvedDirectory = resolveSchemePath(directoryString)
+
+    if (resolvedDirectory.endsWith('/') && resolvedDirectory !== '/') {
+      return resolvedDirectory.slice(0, -1)
+    }
+
+    return resolvedDirectory
+  }
+
+  const normalizedBaseDirectory = pathLikeToString(baseDirectory)
+
+  if (!normalizedBaseDirectory) return normalizedBaseDirectory
+
+  return resolveSchemePath(normalizedBaseDirectory)
 }

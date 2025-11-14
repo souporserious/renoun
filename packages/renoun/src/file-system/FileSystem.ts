@@ -12,9 +12,11 @@ import type { ProjectOptions } from '../project/types.js'
 import {
   directoryName,
   joinPaths,
+  pathLikeToString,
   relativePath,
   removeAllExtensions,
   removeOrderPrefixes,
+  type PathLike,
 } from '../utils/path.js'
 import { parseJsonWithComments } from '../utils/parse-json-with-comments.js'
 import type { TypeFilter } from '../utils/resolve-type.js'
@@ -61,12 +63,13 @@ export abstract class FileSystem {
   abstract getRelativePathToWorkspace(path: string): string
 
   getPathname(
-    path: string,
+    path: PathLike,
     options: { basePath?: string; rootPath?: string } = {}
   ) {
+    const normalizedPath = pathLikeToString(path)
     const rootRelativePath = options.rootPath
-      ? relativePath(options.rootPath, path)
-      : path
+      ? relativePath(options.rootPath, normalizedPath)
+      : normalizedPath
 
     if (rootRelativePath === '') {
       return joinPaths('/', options.basePath)

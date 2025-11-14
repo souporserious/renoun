@@ -1,4 +1,29 @@
+import { fileURLToPath } from 'node:url'
+
 import { getRootDirectory } from './get-root-directory.js'
+
+export type PathLike = string | URL
+
+/** Convert a `PathLike` input into a usable file system path string. */
+export function pathLikeToString(path: PathLike): string {
+  if (path instanceof URL) {
+    if (path.protocol === 'file:') {
+      return fileURLToPath(path)
+    }
+
+    return path.href
+  }
+
+  if (typeof path === 'string' && path.startsWith('file:')) {
+    try {
+      return fileURLToPath(new URL(path))
+    } catch {
+      // Ignore parsing errors and fall back to the original string.
+    }
+  }
+
+  return path
+}
 
 const SCHEME_RESOLVERS: Record<string, (path: string) => string> = {
   workspace: (schemePath: string) => {
@@ -173,17 +198,18 @@ export function relativePath(from: string, to: string): string {
 }
 
 /** Resolve a path scheme relative to the current working directory. */
-export function resolveSchemePath(path: string): string {
-  const parsed = parseSchemePath(path)
+export function resolveSchemePath(path: PathLike): string {
+  const normalizedPath = pathLikeToString(path)
+  const parsed = parseSchemePath(normalizedPath)
 
   if (!parsed) {
-    return path
+    return normalizedPath
   }
 
   const resolver = SCHEME_RESOLVERS[parsed.scheme]
 
   if (!resolver) {
-    return path
+    return normalizedPath
   }
 
   // Return an absolute path resolved from the workspace root

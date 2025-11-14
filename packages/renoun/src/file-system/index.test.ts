@@ -335,6 +335,15 @@ describe('file system', () => {
     `)
   })
 
+  test('directory accepts URL path input', async () => {
+    const projectUrl = new URL('../../fixtures/project', import.meta.url)
+    const directory = new Directory({ path: projectUrl })
+    const file = await directory.getFile('server', 'ts')
+
+    expect(file).toBeInstanceOf(File)
+    expect(file.getAbsolutePath()).toContain('/fixtures/project/server.ts')
+  })
+
   test('recursive entries does not error', async () => {
     const fixturesDirectory = new Directory({ path: 'fixtures' })
 

@@ -12,6 +12,7 @@ import {
 } from '../../utils/resolve-type.js'
 import { BaseDirectoryContext } from '../Context.js'
 import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.js'
+import { pathLikeToString, type PathLike } from '../../utils/path.js'
 
 type GapSize = 'small' | 'medium' | 'large'
 
@@ -195,13 +196,13 @@ function getNodeAnchorId(node: Kind): string | undefined {
 
 export interface ReferenceProps {
   /** The file path, `JavaScriptFile`, or `JavaScriptModuleExport` type reference to resolve. */
-  source: string | JavaScriptFile<any> | JavaScriptModuleExport<any>
+  source: string | PathLike | JavaScriptFile<any> | JavaScriptModuleExport<any>
 
   /** Optional filter for including additional properties from referenced types. */
   filter?: TypeFilter
 
   /** Base directory for relative `source` values. Passing `import.meta.url` will resolve the directory of the current file. */
-  baseDirectory?: string
+  baseDirectory?: PathLike
 
   /** Override default component renderers. */
   components?: Partial<ReferenceComponents>
@@ -229,12 +230,14 @@ async function ReferenceAsync({
 }: ReferenceProps) {
   let filePath: string | undefined = undefined
 
-  if (typeof source === 'string') {
+  if (typeof source === 'string' || source instanceof URL) {
+    const resolvedSource =
+      source instanceof URL ? pathLikeToString(source) : source
     if (baseDirectory) {
       const normalized = normalizeBaseDirectory(baseDirectory)
-      filePath = resolve(normalized ?? baseDirectory, source)
+      filePath = resolve(normalized ?? pathLikeToString(baseDirectory), resolvedSource)
     } else {
-      filePath = source
+      filePath = resolvedSource
     }
     source = new JavaScriptFile({ path: filePath })
   }

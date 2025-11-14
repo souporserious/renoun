@@ -159,19 +159,19 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   transpileFile(path: string) {
-    path = normalizeSlashes(path)
-    return transpileSourceFile(path, this.#projectOptions)
+    const normalized = normalizeSlashes(path)
+    return transpileSourceFile(normalized, this.#projectOptions)
   }
 
   getAbsolutePath(path: string) {
-    path = normalizeSlashes(path)
-    if (path.startsWith('/')) {
-      return path
+    const normalizedPath = normalizeSlashes(path)
+    if (normalizedPath.startsWith('/')) {
+      return normalizedPath
     }
-    if (path.startsWith('./')) {
-      return path.slice(1)
+    if (normalizedPath.startsWith('./')) {
+      return normalizedPath.slice(1)
     }
-    return joinPaths('/', path)
+    return joinPaths('/', normalizedPath)
   }
 
   getRelativePathToWorkspace(path: string) {
@@ -188,17 +188,17 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   readDirectorySync(path: string = '.'): DirectoryEntry[] {
-    path = normalizePath(path)
+    const normalizedDirectoryPath = normalizePath(path)
 
     const entries: DirectoryEntry[] = []
     const addedPaths = new Set<string>()
 
     for (const filePath of this.#files.keys()) {
-      if (!filePath.startsWith(path)) {
+      if (!filePath.startsWith(normalizedDirectoryPath)) {
         continue
       }
 
-      let relativePath = filePath.slice(path.length)
+      let relativePath = filePath.slice(normalizedDirectoryPath.length)
 
       if (relativePath.startsWith('/')) {
         relativePath = relativePath.slice(1)
@@ -211,9 +211,9 @@ export class MemoryFileSystem extends FileSystem {
       }
 
       const entryName = segments.at(0)!
-      const entryPath = path.endsWith('/')
-        ? `${path}${entryName}`
-        : `${path}/${entryName}`
+      const entryPath = normalizedDirectoryPath.endsWith('/')
+        ? `${normalizedDirectoryPath}${entryName}`
+        : `${normalizedDirectoryPath}/${entryName}`
 
       if (addedPaths.has(entryPath)) {
         continue
@@ -246,9 +246,10 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   readFileSync(path: string): string {
-    const entry = this.#files.get(normalizePath(path))
+    const normalizedPath = normalizePath(path)
+    const entry = this.#files.get(normalizedPath)
     if (!entry) {
-      throw new Error(`File not found: ${path}`)
+      throw new Error(`File not found: ${normalizedPath}`)
     }
 
     if (entry.kind === 'text') {
@@ -267,10 +268,11 @@ export class MemoryFileSystem extends FileSystem {
   }
 
   readFileBinarySync(path: string): Uint8Array {
-    const entry = this.#files.get(normalizePath(path))
+    const normalizedPath = normalizePath(path)
+    const entry = this.#files.get(normalizedPath)
 
     if (!entry) {
-      throw new Error(`File not found: ${path}`)
+      throw new Error(`File not found: ${normalizedPath}`)
     }
 
     if (entry.kind === 'text') {
@@ -412,7 +414,10 @@ export class MemoryFileSystem extends FileSystem {
       }
     }
 
-    const normalized = normalizeSlashes(filePath).replace(/^\.\//, '')
+    const normalized = normalizeSlashes(filePath).replace(
+      /^\.\//,
+      ''
+    )
     return this.#ignore(normalized)
   }
 

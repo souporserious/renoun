@@ -21,13 +21,14 @@ import {
   getScrollContainerStyles,
 } from './utils.js'
 import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.js'
+import { pathLikeToString, type PathLike } from '../../utils/path.js'
 
 export interface CodeBlockBaseProps {
   /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
-  path?: string
+  path?: PathLike
 
   /** The base directory to use when analyzing the source code. This will read the local file system contents from the `baseDirectory` joined with the `path` prop instead of creating a virtual file. */
-  baseDirectory?: string
+  baseDirectory?: PathLike
 
   /** Language of the source code provided to the `Tokens` component. When `path` is defined, the file extension will be used to determine the language by default. */
   language?: Languages
@@ -109,7 +110,7 @@ export type CodeBlockProps =
       children?: React.ReactNode
 
       /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
-      path: string
+      path: PathLike
     })
 
 /**
@@ -258,7 +259,7 @@ function CodeBlockWithFallback(props: CodeBlockProps) {
 }
 
 async function CodeBlockAsync({
-  path,
+  path: pathProp,
   baseDirectory: baseDirectoryProp,
   language,
   highlightedLines,
@@ -287,6 +288,7 @@ async function CodeBlockAsync({
   const baseDirectory = normalizeBaseDirectory(
     baseDirectoryProp ?? baseDirectoryContext
   )
+  const path = pathProp ? pathLikeToString(pathProp) : pathProp
   const resolvers: any = {}
   resolvers.promise = new Promise<void>((resolve, reject) => {
     resolvers.resolve = resolve
