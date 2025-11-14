@@ -116,6 +116,17 @@ export abstract class FileSystem {
     return this.fileExistsSync(path)
   }
 
+  /**
+   * Get the last modified timestamp of a file or directory in milliseconds.
+   * Implementations should return `undefined` if the path does not exist or
+   * if the timestamp cannot be determined.
+   */
+  abstract getFileLastModifiedMsSync(path: string): number | undefined
+
+  async getFileLastModifiedMs(path: string): Promise<number | undefined> {
+    return this.getFileLastModifiedMsSync(path)
+  }
+
   abstract deleteFileSync(path: string): void
 
   abstract deleteFile(path: string): Promise<void>

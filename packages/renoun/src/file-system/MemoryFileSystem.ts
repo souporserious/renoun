@@ -415,6 +415,17 @@ export class MemoryFileSystem extends FileSystem {
     const normalized = normalizeSlashes(filePath).replace(/^\.\//, '')
     return this.#ignore(normalized)
   }
+
+  getFileLastModifiedMsSync(_path: string): number | undefined {
+    // Memory file systems do not have real modification timestamps.
+    // Callers should treat `undefined` as "unknown" and avoid relying on it
+    // for cache invalidation.
+    return undefined
+  }
+
+  async getFileLastModifiedMs(path: string): Promise<number | undefined> {
+    return this.getFileLastModifiedMsSync(path)
+  }
 }
 
 /** Concatenate Uint8Arrays into a single Uint8Array. */

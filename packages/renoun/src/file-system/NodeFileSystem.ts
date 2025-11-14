@@ -6,9 +6,10 @@ import {
   rmSync,
   createReadStream,
   createWriteStream,
+  statSync,
   type Dirent,
 } from 'node:fs'
-import { access, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import { ensureRelativePath, relativePath } from '../utils/path.js'
@@ -168,6 +169,25 @@ export class NodeFileSystem extends FileSystem {
 
   isFilePathGitIgnored(filePath: string): boolean {
     return isFilePathGitIgnored(filePath)
+  }
+
+  getFileLastModifiedMsSync(path: string): number | undefined {
+    this.#assertWithinWorkspace(path)
+    try {
+      return statSync(path).mtimeMs
+    } catch {
+      return undefined
+    }
+  }
+
+  async getFileLastModifiedMs(path: string): Promise<number | undefined> {
+    this.#assertWithinWorkspace(path)
+    try {
+      const stats = await stat(path)
+      return stats.mtimeMs
+    } catch {
+      return undefined
+    }
   }
 }
 
