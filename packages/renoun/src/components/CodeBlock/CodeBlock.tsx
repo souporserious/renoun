@@ -123,7 +123,7 @@ export const CodeBlock =
 
 /**
  * CodeBlock component used during development that wraps the async version in a
- * Suspense boundary with a fallback so we can render the code block as soon as possible.
+ * Suspense boundary with a fallback so the code block renders as soon as possible.
  */
 function CodeBlockWithFallback(props: CodeBlockProps) {
   const {
