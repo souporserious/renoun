@@ -26,7 +26,6 @@ import {
   getEditorUri,
   type GetEditorUriOptions,
 } from '../utils/get-editor-uri.js'
-import type { ModuleExport } from '../utils/get-file-exports.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
 import type { GitMetadata } from '../utils/get-local-git-file-metadata.js'
 import {
@@ -61,6 +60,11 @@ import {
   type GetFileUrlOptions,
   type GetDirectoryUrlOptions,
 } from './Repository.js'
+import {
+  DirectorySnapshot,
+  createDirectorySnapshot,
+  type DirectorySnapshotDirectoryMetadata,
+} from './directory-snapshot'
 import type { StandardSchemaV1 } from './standard-schema.js'
 import type { ExtractFileExtension, IsNever } from './types.js'
 
@@ -731,11 +735,13 @@ export class File<
   async write(content: FileSystemWriteFileContent): Promise<void> {
     const fileSystem = this.#directory.getFileSystem()
     await fileSystem.writeFile(this.#path, content)
+    this.#directory.invalidateSnapshots()
   }
 
   /** Create a writable stream for this file. */
   writeStream(): FileWritableStream {
     const fileSystem = this.#directory.getFileSystem()
+    this.#directory.invalidateSnapshots()
     return fileSystem.writeFileStream(this.#path)
   }
 
@@ -743,6 +749,7 @@ export class File<
   async delete(): Promise<void> {
     const fileSystem = this.#directory.getFileSystem()
     await fileSystem.deleteFile(this.#path)
+    this.#directory.invalidateSnapshots()
   }
 
   /** Check if this file exists in the file system. */
@@ -962,7 +969,6 @@ export class JavaScriptModuleExport<Value> {
   #file: JavaScriptFile<any>
   #loader?: ModuleLoader<any>
   #slugCasing: SlugCasing
-  #location: Omit<ModuleExport, 'name'> | undefined
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
   #staticPromise?: Promise<Value>
   #runtimePromise?: Promise<Value>
@@ -996,10 +1002,7 @@ export class JavaScriptModuleExport<Value> {
   }
 
   async #getLocation() {
-    if (this.#location === undefined) {
-      this.#location = await this.#file.getExportLocation(this.#name)
-    }
-    return this.#location
+    return this.#file.getExportLocation(this.#name)
   }
 
   async #isNotStatic() {
@@ -2239,6 +2242,72 @@ export interface DirectoryOptions<
   repository?: Repository | RepositoryConfig | string
 }
 
+const enum DirectorySnapshotOptionBit {
+  Recursive = 1 << 0,
+  IncludeDirectoryNamedFiles = 1 << 1,
+  IncludeIndexAndReadmeFiles = 1 << 2,
+  IncludeGitIgnoredFiles = 1 << 3,
+  IncludeTsConfigExcludedFiles = 1 << 4,
+}
+
+interface NormalizedDirectoryEntriesOptions {
+  recursive: boolean
+  includeDirectoryNamedFiles: boolean
+  includeIndexAndReadmeFiles: boolean
+  includeGitIgnoredFiles: boolean
+  includeTsConfigExcludedFiles: boolean
+}
+
+type DirectorySnapshotMetadataEntry<LoaderTypes extends Record<string, any>> =
+  | FileEntryMetadata<LoaderTypes>
+  | DirectoryEntryMetadata<LoaderTypes>
+
+interface FileEntryMetadata<LoaderTypes extends Record<string, any>> {
+  type: 'file'
+  entry: FileSystemEntry<LoaderTypes>
+  includeInFinal: boolean
+  isGitIgnored: boolean
+  isIndexOrReadme: boolean
+  isTsConfigExcluded: boolean
+  isDirectoryNamedFile: boolean
+  passesFilter: boolean
+  shouldIncludeFile: boolean
+}
+
+interface DirectoryEntryMetadata<LoaderTypes extends Record<string, any>> {
+  type: 'directory'
+  entry: Directory<LoaderTypes>
+  includeInFinal: boolean
+  passesFilterSelf: boolean
+  snapshot: DirectorySnapshot<LoaderTypes>
+}
+
+function createOptionsMask(options: NormalizedDirectoryEntriesOptions) {
+  let mask = 0
+
+  if (options.recursive) {
+    mask |= DirectorySnapshotOptionBit.Recursive
+  }
+
+  if (options.includeDirectoryNamedFiles) {
+    mask |= DirectorySnapshotOptionBit.IncludeDirectoryNamedFiles
+  }
+
+  if (options.includeIndexAndReadmeFiles) {
+    mask |= DirectorySnapshotOptionBit.IncludeIndexAndReadmeFiles
+  }
+
+  if (options.includeGitIgnoredFiles) {
+    mask |= DirectorySnapshotOptionBit.IncludeGitIgnoredFiles
+  }
+
+  if (options.includeTsConfigExcludedFiles) {
+    mask |= DirectorySnapshotOptionBit.IncludeTsConfigExcludedFiles
+  }
+
+  return mask
+}
+
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
   Types extends InferModuleLoadersTypes<Loaders>,
@@ -2386,7 +2455,7 @@ export class Directory<
     return passes
   }
 
-  async #shouldIncludeEntry(
+  async #shouldIncludeFile(
     entry: FileSystemEntry<LoaderTypes>
   ): Promise<boolean> {
     if (entry instanceof JavaScriptFile) {
@@ -2397,62 +2466,15 @@ export class Directory<
         if (!fileSystem.shouldStripInternal()) {
           return true
         }
-        // If there are no exports at all, include the file
         const allExports = await fileSystem.getFileExports(
           entry.getAbsolutePath()
         )
         if (allExports.length === 0) {
           return true
         }
-        // Otherwise, include only if at least one non-internal export remains
         const filtered = await entry.getExports()
         return filtered.length > 0
       }
-
-      return true
-    }
-
-    if (entry instanceof Directory) {
-      const children = await entry.getEntries({
-        includeDirectoryNamedFiles: true,
-        includeIndexAndReadmeFiles: true,
-        includeTsConfigExcludedFiles: true,
-      })
-
-      for (const child of children) {
-        if (child instanceof Directory) {
-          if (await this.#shouldIncludeEntry(child)) {
-            return true
-          }
-          continue
-        }
-
-        if (child instanceof JavaScriptFile) {
-          const childExtension = child.getExtension()
-
-          if (childExtension === 'ts' || childExtension === 'tsx') {
-            const fileSystem = child.getParent().getFileSystem()
-            if (!fileSystem.shouldStripInternal()) {
-              return true
-            }
-            const allExports = await fileSystem.getFileExports(
-              child.getAbsolutePath()
-            )
-            if (allExports.length === 0) {
-              return true
-            }
-            const filtered = await child.getExports()
-            if (filtered.length > 0) {
-              return true
-            }
-            continue
-          }
-        }
-
-        return true
-      }
-
-      return false
     }
 
     return true
@@ -3048,7 +3070,7 @@ export class Directory<
     }
   }
 
-  #entriesCache = new Map<string, FileSystemEntry<LoaderTypes>[]>()
+  #snapshotCache = new Map<number, DirectorySnapshot<LoaderTypes>>()
   #pathLookup = new Map<string, FileSystemEntry<LoaderTypes>>()
 
   /**
@@ -3077,6 +3099,10 @@ export class Directory<
       )
       this.#pathLookup.set(workspacePathWithoutExtension, entry)
     }
+  }
+
+  invalidateSnapshots() {
+    this.#snapshotCache.clear()
   }
 
   /**
@@ -3132,226 +3158,369 @@ export class Directory<
       }
     }
 
-    let cacheKey = ''
+    const normalized = this.#normalizeEntriesOptions(options)
+    const mask = createOptionsMask(normalized)
 
-    if (process.env.NODE_ENV === 'production') {
-      if (options) {
-        cacheKey += options.recursive ? 'r' : ''
-        cacheKey += options.includeDirectoryNamedFiles ? 'd' : ''
-        cacheKey += options.includeIndexAndReadmeFiles ? 'i' : ''
-        cacheKey += options.includeGitIgnoredFiles ? 'g' : ''
-        cacheKey += options.includeTsConfigExcludedFiles ? 't' : ''
+    const cachedSnapshot = this.#snapshotCache.get(mask)
+    if (cachedSnapshot) {
+      if (process.env.NODE_ENV === 'development') {
+        const isStale = await this.#isSnapshotStale(cachedSnapshot)
+        if (!isStale) {
+          return cachedSnapshot.materialize() as any
+        }
+        this.#snapshotCache.delete(mask)
+      } else {
+        return cachedSnapshot.materialize() as any
       }
+    }
 
-      if (this.#entriesCache.has(cacheKey)) {
-        return this.#entriesCache.get(cacheKey)! as any
-      }
+    const snapshot = await this.#hydrateDirectorySnapshot(
+      this,
+      normalized,
+      mask
+    )
+
+    return snapshot.materialize() as any
+  }
+
+  #normalizeEntriesOptions(options?: {
+    recursive?: boolean
+    includeDirectoryNamedFiles?: boolean
+    includeIndexAndReadmeFiles?: boolean
+    includeGitIgnoredFiles?: boolean
+    includeTsConfigExcludedFiles?: boolean
+  }): NormalizedDirectoryEntriesOptions {
+    return {
+      recursive: options?.recursive ?? false,
+      includeDirectoryNamedFiles: options?.includeDirectoryNamedFiles ?? false,
+      includeIndexAndReadmeFiles: options?.includeIndexAndReadmeFiles ?? false,
+      includeGitIgnoredFiles: options?.includeGitIgnoredFiles ?? false,
+      includeTsConfigExcludedFiles:
+        options?.includeTsConfigExcludedFiles ?? false,
+    }
+  }
+
+  async #hydrateDirectorySnapshot(
+    directory: Directory<LoaderTypes>,
+    options: NormalizedDirectoryEntriesOptions,
+    mask: number
+  ): Promise<DirectorySnapshot<LoaderTypes>> {
+    const { snapshot } = await this.#buildSnapshot(directory, options, mask)
+    return snapshot
+  }
+
+  async #isSnapshotStale(
+    snapshot: DirectorySnapshot<LoaderTypes>
+  ): Promise<boolean> {
+    const dependencies = snapshot.getDependencies()
+    if (!dependencies || dependencies.size === 0) {
+      return false
     }
 
     const fileSystem = this.getFileSystem()
-    const directoryEntries = await fileSystem.readDirectory(this.#path)
-    const entriesMap = new Map<string, FileSystemEntry<LoaderTypes>>()
 
-    for (const entry of directoryEntries) {
-      const shouldSkipIndexOrReadme = options?.includeIndexAndReadmeFiles
-        ? false
-        : ['index', 'readme'].some((n) =>
-            entry.name.toLowerCase().startsWith(n)
-          )
-
+    for (const [path, previousModified] of dependencies) {
+      const currentModified = await fileSystem.getFileLastModifiedMs(path)
       if (
-        shouldSkipIndexOrReadme ||
-        (!options?.includeGitIgnoredFiles &&
-          fileSystem.isFilePathGitIgnored(entry.path)) ||
-        (!options?.includeTsConfigExcludedFiles &&
-          fileSystem.isFilePathExcludedFromTsConfig(
-            entry.path,
-            entry.isDirectory
-          ))
+        currentModified === undefined ||
+        currentModified !== previousModified
       ) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  async #buildSnapshot(
+    directory: Directory<LoaderTypes>,
+    options: NormalizedDirectoryEntriesOptions,
+    mask: number
+  ): Promise<{
+    snapshot: DirectorySnapshot<LoaderTypes>
+    shouldIncludeSelf: boolean
+  }> {
+    const cached = directory.#snapshotCache.get(mask)
+    if (cached) {
+      return { snapshot: cached, shouldIncludeSelf: cached.shouldIncludeSelf }
+    }
+
+    const fileSystem = directory.getFileSystem()
+    const rawEntries = await fileSystem.readDirectory(directory.#path)
+    const dependencyTimestamps: Map<string, number> | undefined =
+      process.env.NODE_ENV === 'development'
+        ? new Map<string, number>()
+        : undefined
+
+    const fileMetadata: FileEntryMetadata<LoaderTypes>[] = []
+    const finalMetadata: DirectorySnapshotMetadataEntry<LoaderTypes>[] = []
+    const finalKeys = new Set<string>()
+    const directoriesMap = new Map<
+      Directory<LoaderTypes>,
+      DirectorySnapshotDirectoryMetadata<LoaderTypes>
+    >()
+
+    for (const entry of rawEntries) {
+      if (dependencyTimestamps) {
+        try {
+          const mtime = await fileSystem.getFileLastModifiedMs(entry.path)
+          if (mtime !== undefined) {
+            dependencyTimestamps.set(entry.path, mtime)
+          }
+        } catch {
+          // Ignore errors when reading timestamps; fall back to snapshot invalidation
+          // via explicit cache clearing (e.g. write/delete operations).
+        }
+      }
+
+      const isGitIgnored = fileSystem.isFilePathGitIgnored(entry.path)
+
+      if (isGitIgnored && !options.includeGitIgnoredFiles) {
         continue
       }
 
-      const entryKey =
-        entry.isDirectory || options?.includeDirectoryNamedFiles
+      const isTsConfigExcluded = fileSystem.isFilePathExcludedFromTsConfig(
+        entry.path,
+        entry.isDirectory
+      )
+
+      if (entry.isDirectory) {
+        if (isTsConfigExcluded && !options.includeTsConfigExcludedFiles) {
+          continue
+        }
+
+        const key = entry.path
+        if (finalKeys.has(key)) {
+          continue
+        }
+
+        const subdirectory = directory.#duplicate({ path: entry.path })
+        directory.#addPathLookup(subdirectory)
+
+        const { snapshot: childSnapshot } = await this.#buildSnapshot(
+          subdirectory,
+          options,
+          mask
+        )
+
+        const passesFilterSelf =
+          directory.#simpleFilter?.recursive === true
+            ? true
+            : directory.#filter
+              ? await directory.#passesFilter(subdirectory)
+              : true
+
+        const metadata: DirectoryEntryMetadata<LoaderTypes> = {
+          type: 'directory',
+          entry: subdirectory,
+          includeInFinal: true,
+          passesFilterSelf,
+          snapshot: childSnapshot,
+        }
+
+        finalKeys.add(key)
+        finalMetadata.push(metadata)
+
+        continue
+      }
+
+      if (!entry.isFile) {
+        continue
+      }
+
+      const sharedOptions = {
+        path: entry.path,
+        directory,
+        basePathname: directory.#basePathname,
+        slugCasing: directory.#slugCasing,
+      } as const
+
+      const extension = extensionName(entry.name).slice(1)
+      const loaders = directory.#getLoaders()
+      const loader = loaders?.[extension] as
+        | ModuleLoader<LoaderTypes[any]>
+        | undefined
+
+      const file =
+        extension === 'md'
+          ? new MarkdownFile({ ...sharedOptions, loader })
+          : extension === 'mdx'
+            ? new MDXFile({ ...sharedOptions, loader })
+            : extension === 'json'
+              ? new JSONFile(sharedOptions)
+              : isJavaScriptLikeExtension(extension)
+                ? new JavaScriptFile({ ...sharedOptions, loader })
+                : new File(sharedOptions)
+
+      const passesFilter = directory.#filter
+        ? await directory.#passesFilter(file)
+        : true
+
+      if (!passesFilter) {
+        continue
+      }
+
+      const shouldIncludeFile = await directory.#shouldIncludeFile(file)
+      const isIndexOrReadme = ['index', 'readme'].some((name) =>
+        entry.name.toLowerCase().startsWith(name)
+      )
+      const isDirectoryNamedFile =
+        removeAllExtensions(entry.name) === directory.getBaseName()
+
+      let includeInFinal = true
+
+      if (!options.includeIndexAndReadmeFiles && isIndexOrReadme) {
+        includeInFinal = false
+      }
+
+      if (!options.includeTsConfigExcludedFiles && isTsConfigExcluded) {
+        includeInFinal = false
+      }
+
+      if (
+        !options.includeDirectoryNamedFiles &&
+        !options.recursive &&
+        isDirectoryNamedFile
+      ) {
+        includeInFinal = false
+      }
+
+      if (!options.includeGitIgnoredFiles && isGitIgnored) {
+        includeInFinal = false
+      }
+
+      if (!shouldIncludeFile) {
+        includeInFinal = false
+      }
+
+      const metadata: FileEntryMetadata<LoaderTypes> = {
+        type: 'file',
+        entry: file,
+        includeInFinal,
+        isGitIgnored,
+        isIndexOrReadme,
+        isTsConfigExcluded,
+        isDirectoryNamedFile,
+        passesFilter,
+        shouldIncludeFile,
+      }
+
+      fileMetadata.push(metadata)
+
+      if (includeInFinal) {
+        const key = options.includeDirectoryNamedFiles
           ? entry.path
           : removeAllExtensions(entry.path)
 
-      if (entriesMap.has(entryKey)) {
-        continue
+        if (!finalKeys.has(key)) {
+          finalKeys.add(key)
+          finalMetadata.push(metadata)
+          directory.#addPathLookup(file)
+        }
       }
+    }
 
-      if (entry.isDirectory) {
-        const subdirectory = this.#duplicate({ path: entry.path })
-        entriesMap.set(entryKey, subdirectory)
-        this.#addPathLookup(subdirectory)
-      } else if (entry.isFile) {
-        const sharedOptions = {
-          path: entry.path,
-          directory: this,
-          basePathname: this.#basePathname,
-          slugCasing: this.#slugCasing,
-        } as const
-        const extension = extensionName(entry.name).slice(1)
-        const loaders = this.#getLoaders()
-        const loader = loaders?.[extension] as
-          | ModuleLoader<LoaderTypes[any]>
-          | undefined
+    let shouldIncludeSelf = false
 
-        // Skip files that share the same base name as this directory unless
-        // explicitly included via `includeDirectoryNamedFiles`.
+    for (const metadata of fileMetadata) {
+      if (!metadata.isGitIgnored && metadata.shouldIncludeFile) {
+        shouldIncludeSelf = true
+        break
+      }
+    }
+
+    if (!shouldIncludeSelf) {
+      for (const metadata of finalMetadata) {
         if (
-          !options?.recursive &&
-          !options?.includeDirectoryNamedFiles &&
-          removeAllExtensions(entry.name) === this.getBaseName()
+          metadata.type === 'directory' &&
+          metadata.snapshot.shouldIncludeSelf
         ) {
-          continue
+          shouldIncludeSelf = true
+          break
         }
-
-        const file =
-          extension === 'md'
-            ? new MarkdownFile({ ...sharedOptions, loader })
-            : extension === 'mdx'
-              ? new MDXFile({ ...sharedOptions, loader })
-              : extension === 'json'
-                ? new JSONFile(sharedOptions)
-                : isJavaScriptLikeExtension(extension)
-                  ? new JavaScriptFile({ ...sharedOptions, loader })
-                  : new File(sharedOptions)
-
-        if (this.#filter && !(await this.#passesFilter(file))) {
-          continue
-        }
-
-        entriesMap.set(entryKey, file)
-        this.#addPathLookup(file)
       }
     }
 
-    const initialEntries = Array.from(
-      entriesMap.values()
-    ) as FileSystemEntry<LoaderTypes>[]
+    const immediateMetadata: DirectorySnapshotMetadataEntry<LoaderTypes>[] = []
 
-    const immediateEntries: FileSystemEntry<LoaderTypes>[] = []
-
-    for (const entry of initialEntries) {
-      if (await this.#shouldIncludeEntry(entry)) {
-        immediateEntries.push(entry)
+    for (const metadata of finalMetadata) {
+      if (metadata.type === 'file') {
+        if (metadata.shouldIncludeFile && metadata.includeInFinal) {
+          immediateMetadata.push(metadata)
+        }
+      } else if (metadata.snapshot.shouldIncludeSelf) {
+        immediateMetadata.push(metadata)
       }
     }
 
-    if (this.#sort) {
-      try {
-        await sortEntries(immediateEntries, this.#sort)
-      } catch (error) {
-        const badge = '[renoun] '
-        if (error instanceof Error && error.message.includes(badge)) {
-          throw new Error(
-            `[renoun] Error occurred while sorting entries for directory at "${this.#path}". \n\n${error.message.slice(
-              badge.length
-            )}`
-          )
-        }
-        throw error
-      }
+    const immediateEntries = immediateMetadata.map((meta) => meta.entry)
+
+    if (this.#sort && immediateEntries.length > 1) {
+      await sortEntries(immediateEntries, this.#sort)
+      const order = new Map(
+        immediateEntries.map((entry, index) => [entry, index] as const)
+      )
+      immediateMetadata.sort(
+        (a, b) => order.get(a.entry)! - order.get(b.entry)!
+      )
     }
 
     const entriesResult: FileSystemEntry<LoaderTypes>[] = []
-    const directories: Directory<LoaderTypes>[] = []
 
-    for (let index = 0; index < immediateEntries.length; index++) {
-      const entry = immediateEntries[index]
-      if (entry instanceof Directory) {
-        directories.push(entry)
-      }
-    }
-
-    let childrenEntriesLists: FileSystemEntry<LoaderTypes>[][] = []
-    let filterMap: Map<Directory<LoaderTypes>, boolean> | undefined
-
-    if (options?.recursive) {
-      // Compute filter decisions for directories (only used to decide whether
-      // to include the directory entry itself in the result set). We still
-      // recurse into all subdirectories to allow discovering matching
-      // descendants even when the directory itself is excluded by the filter
-      // predicate. Skip this work for simple extension-only recursive patterns,
-      // where directories are always included (decision is trivial).
-      let filterMask: boolean[] | undefined
-      if (this.#filter && this.#simpleFilter?.recursive !== true) {
-        filterMask = await Promise.all(
-          directories.map((directory) => this.#passesFilter(directory))
-        )
-      }
-
-      // Always recurse into all subdirectories when recursive is true so that
-      // child entries can be discovered and filtered independently.
-      const pendingEntries: Promise<FileSystemEntry<LoaderTypes>[]>[] =
-        directories.map((directory) => directory.getEntries(options))
-      childrenEntriesLists = await Promise.all(pendingEntries)
-
-      // Cache filter decisions for reuse below
-      if (filterMask) {
-        filterMap = new Map<Directory<LoaderTypes>, boolean>()
-        for (let index = 0; index < directories.length; index++) {
-          filterMap.set(directories[index], filterMask[index])
-        }
-      }
-    }
-
-    let childIndex = 0
-    for (let index = 0; index < immediateEntries.length; index++) {
-      const entry = immediateEntries[index]
-
-      if (!(entry instanceof Directory)) {
-        entriesResult.push(entry)
+    for (const metadata of immediateMetadata) {
+      if (metadata.type === 'file') {
+        entriesResult.push(metadata.entry)
         continue
       }
 
-      const passesFilterSelf =
-        entry instanceof Directory
-          ? this.#simpleFilter?.recursive === true
-            ? true
-            : filterMap
-              ? (filterMap.get(entry) ?? false)
-              : this.#filter
-                ? await this.#passesFilter(entry)
-                : true
-          : true
-      const childrenEntries = options?.recursive
-        ? (childrenEntriesLists[childIndex++] ?? [])
+      const directoryEntry = metadata.entry
+      const childSnapshot = metadata.snapshot
+      const childrenEntries = options.recursive
+        ? childSnapshot.materialize()
         : []
+      const hasVisibleDescendant = options.recursive
+        ? childrenEntries.length > 0
+        : childSnapshot.hasVisibleDescendant
 
       if (
-        passesFilterSelf &&
-        (childrenEntries.length > 0 || !options?.recursive)
+        metadata.passesFilterSelf &&
+        (!options.recursive || hasVisibleDescendant)
       ) {
-        entriesResult.push(entry)
+        entriesResult.push(directoryEntry)
       }
 
-      const directoryBaseName = entry.getBaseName()
-      for (
-        let childIndex = 0;
-        childIndex < childrenEntries.length;
-        childIndex++
-      ) {
-        const childEntry = childrenEntries[childIndex]
-        const isDirectoryNamedFile =
-          childEntry instanceof File &&
-          childEntry.getParent() === entry &&
-          childEntry.getBaseName() === directoryBaseName &&
-          !options?.includeDirectoryNamedFiles
+      directoriesMap.set(directoryEntry, {
+        hasVisibleDescendant,
+        materializedEntries: childrenEntries,
+      })
 
-        if (!isDirectoryNamedFile) {
-          entriesResult.push(childEntry)
+      if (options.recursive) {
+        const directoryBaseName = directoryEntry.getBaseName()
+        for (const childEntry of childrenEntries) {
+          const isDirectoryNamedFile =
+            childEntry instanceof File &&
+            childEntry.getParent() === directoryEntry &&
+            childEntry.getBaseName() === directoryBaseName &&
+            !options.includeDirectoryNamedFiles
+
+          if (!isDirectoryNamedFile) {
+            entriesResult.push(childEntry)
+          }
         }
       }
     }
 
-    if (process.env.NODE_ENV === 'production') {
-      this.#entriesCache.set(cacheKey, entriesResult)
-    }
+    const snapshot = createDirectorySnapshot<LoaderTypes>({
+      entries: entriesResult,
+      directories: directoriesMap,
+      shouldIncludeSelf,
+      hasVisibleDescendant: entriesResult.length > 0,
+      dependencies: dependencyTimestamps,
+    })
 
-    return entriesResult as any
+    directory.#snapshotCache.set(mask, snapshot)
+
+    return { snapshot, shouldIncludeSelf }
   }
 
   /** Get the root directory path. */

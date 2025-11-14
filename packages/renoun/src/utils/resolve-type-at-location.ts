@@ -32,7 +32,7 @@ export async function resolveTypeAtLocation(
     async () => {
       const sourceFile = project.addSourceFileAtPath(filePath)
 
-      let declaration = sourceFile.getDescendantAtPos(position)
+      const declaration = sourceFile.getDescendantAtPos(position)
 
       if (!declaration) {
         throw new Error(
@@ -40,7 +40,10 @@ export async function resolveTypeAtLocation(
         )
       }
 
-      const exportDeclaration = declaration.getFirstAncestorByKind(kind)
+      const exportDeclaration =
+        declaration.getKind() === kind
+          ? declaration
+          : declaration.getFirstAncestorByKind(kind)
 
       if (!exportDeclaration) {
         throw new Error(

@@ -1,4 +1,4 @@
-import { bench, beforeAll, describe, it, expect } from 'vitest'
+import { bench, beforeAll, describe, it, expect, vi } from 'vitest'
 import {
   Directory,
   NodeFileSystem,
@@ -162,6 +162,33 @@ beforeAll(async () => {
     fileSystem: memoryFs,
     loader: { mdx: mdxLoader, ts: tsAnyLoader, tsx: tsxLoader },
   })
+})
+
+it('avoids additional readDirectory calls for identical options', async () => {
+  const fileSystem = new MemoryFileSystem({
+    'index.ts': '',
+    'components/Button/index.tsx': '',
+    'components/Button/Button.tsx': '',
+  })
+  const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectory')
+  const directory = new Directory({ fileSystem })
+
+  await directory.getEntries({
+    recursive: true,
+    includeDirectoryNamedFiles: true,
+    includeIndexAndReadmeFiles: true,
+  })
+
+  const callsAfterFirst = readDirectorySpy.mock.calls.length
+
+  await directory.getEntries({
+    recursive: true,
+    includeDirectoryNamedFiles: true,
+    includeIndexAndReadmeFiles: true,
+  })
+
+  expect(readDirectorySpy).toHaveBeenCalledTimes(callsAfterFirst)
+  readDirectorySpy.mockRestore()
 })
 
 it('sanity: MDX file resolves with real plugin', async () => {

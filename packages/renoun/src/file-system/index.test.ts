@@ -289,6 +289,33 @@ describe('file system', () => {
     expect(entries).toHaveLength(2)
   })
 
+  test('reuses cached snapshots for identical getEntries options', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.ts': '',
+      'components/Button/index.tsx': '',
+      'components/Button/Button.tsx': '',
+    })
+    const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectory')
+    const directory = new Directory({ fileSystem })
+
+    await directory.getEntries({
+      recursive: true,
+      includeDirectoryNamedFiles: true,
+      includeIndexAndReadmeFiles: true,
+    })
+
+    const callsAfterFirst = readDirectorySpy.mock.calls.length
+
+    await directory.getEntries({
+      recursive: true,
+      includeDirectoryNamedFiles: true,
+      includeIndexAndReadmeFiles: true,
+    })
+
+    expect(readDirectorySpy).toHaveBeenCalledTimes(callsAfterFirst)
+    readDirectorySpy.mockRestore()
+  })
+
   test('recursive entries', async () => {
     const directory = new Directory({ path: 'fixtures/project' })
     const entries = await directory.getEntries({

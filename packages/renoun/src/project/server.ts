@@ -160,7 +160,10 @@ export async function createServer(options?: { port?: number }) {
       )
     },
     {
-      memoize: true,
+      // Type resolution already has its own dependency-aware cache
+      // (see `resolve-type-at-location.ts`). Avoid RPC-level memoization
+      // so changes to source or its dependencies are always reflected.
+      memoize: false,
       concurrency: 3,
     }
   )
