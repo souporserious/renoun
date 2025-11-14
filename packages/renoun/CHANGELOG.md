@@ -1,5 +1,15 @@
 # renoun
 
+## 10.10.2
+
+### Patch Changes
+
+- 3fdf9fc: Improves file-system utility performance and local developer experience by using granular directory snapshots and more robust type resolution.
+- c3552ce: Fixes the `Reference` component rendering multiple descriptions and will now group Properties, Returns, and Modifiers sections in a single block for consistent spacing.
+- d94c8fd: Fixes union type resolution to preserve fully qualified type names (`React.JSX.Element`) instead of showing unqualified names (`Element`) when resolving union types.
+- 77bf65b: Improves the `Reference` component rendering by showing structured intersection return types as property tables as well as adding clearer constructor Parameters headings.
+- e1caacf: Only show text for a return type that is a union type in the `Reference` component.
+
 ## 10.10.1
 
 ### Patch Changes
