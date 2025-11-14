@@ -2,8 +2,8 @@ import { CodeBlock, isDirectory, Link } from 'renoun'
 import { notFound } from 'next/navigation'
 
 import { HooksDirectory } from '@/collections'
+import { EntryLayout } from '@/ui/EntryLayout'
 import { Reference } from '@/ui/Reference'
-import { SiblingLink } from '@/ui/SiblingLink'
 
 export async function generateStaticParams() {
   const entries = await HooksDirectory.getEntries()
@@ -45,11 +45,25 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
     )
 
   return (
-    <div className="flex flex-col gap-12">
-      <div className="prose prose-slate dark:prose-invert max-w-none">
-        <h1 className="!mt-0">{title}</h1>
-      </div>
-
+    <EntryLayout
+      header={
+        <div className="prose prose-slate dark:prose-invert max-w-none">
+          <h1 className="!mt-0">{title}</h1>
+        </div>
+      }
+      footer={
+        <Link
+          source={hookEntry}
+          variant={process.env.NODE_ENV === 'development' ? 'editor' : 'edit'}
+          className="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+        >
+          View source
+        </Link>
+      }
+      lastUpdated={lastCommitDate}
+      previousEntry={previousEntry}
+      nextEntry={nextEntry}
+    >
       {mainEntry ? (
         <div className="prose prose-slate dark:prose-invert max-w-none">
           <h2>API Reference</h2>
@@ -86,54 +100,6 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
           </ul>
         </div>
       ) : null}
-
-      <div className="border-t border-gray-200 dark:border-gray-800 pt-6">
-        <div className="grid grid-cols-2 items-center gap-4 px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
-          {lastCommitDate ? (
-            <div className="text-left">
-              Last updated{' '}
-              <time
-                dateTime={lastCommitDate.toISOString()}
-                itemProp="dateModified"
-                className="font-semibold"
-              >
-                {lastCommitDate.toLocaleString('en', {
-                  year: '2-digit',
-                  month: '2-digit',
-                  day: '2-digit',
-                })}
-              </time>
-            </div>
-          ) : null}
-
-          <div className="flex justify-end gap-4">
-            <Link
-              source={hookEntry}
-              variant={
-                process.env.NODE_ENV === 'development' ? 'editor' : 'edit'
-              }
-              className="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
-            >
-              Edit page
-            </Link>
-            <Link
-              source={hookEntry}
-              className="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
-            >
-              View source
-            </Link>
-          </div>
-        </div>
-
-        <nav className="grid grid-cols-2 gap-4 px-4 py-2">
-          {previousEntry ? (
-            <SiblingLink entry={previousEntry} direction="previous" />
-          ) : null}
-          {nextEntry ? (
-            <SiblingLink entry={nextEntry} direction="next" />
-          ) : null}
-        </nav>
-      </div>
-    </div>
+    </EntryLayout>
   )
 }
