@@ -1044,10 +1044,9 @@ function renderCallSignatureDetails(
   }
 
   if (signature.returnType) {
-    const returnContent = renderReturnTypeContent(
-      signature.returnType,
-      components
-    )
+    const returnContent = renderReturnType(signature.returnType, components, {
+      showTypeText: true,
+    })
 
     items.push(
       <TypeDetail
@@ -1081,16 +1080,7 @@ function renderCallSignatureDetails(
   return <components.Column gap="medium">{items}</components.Column>
 }
 
-function renderReturnTypeContent(
-  returnType: Kind.TypeExpression,
-  components: InternalReferenceComponents
-): React.ReactNode {
-  return renderReturnTypeExtras(returnType, components, {
-    showTypeText: true,
-  })
-}
-
-function renderReturnTypeExtras(
+function renderReturnType(
   returnType: Kind.TypeExpression,
   components: InternalReferenceComponents,
   options: { showTypeText?: boolean; fallbackToTypeText?: boolean } = {}
@@ -1190,39 +1180,10 @@ function renderReturnTypeExtras(
     }
 
     case 'UnionType': {
-      const variantRows = returnType.types.map((type, index) => ({
-        type,
-        index,
-      }))
-
-      if (variantRows.length === 0) {
-        return withTypeText(null)
-      }
-
-      return withTypeText(
-        <TypeTable
-          rows={variantRows}
-          headers={['Variant']}
-          renderRow={({ type }, hasSubRow) => (
-            <components.TableData index={0} hasSubRow={hasSubRow}>
-              <components.Code>{type.text}</components.Code>
-            </components.TableData>
-          )}
-          renderSubRow={({ type }) => {
-            const nested = renderReturnTypeExtras(type, components, {
-              showTypeText: false,
-              fallbackToTypeText: false,
-            })
-
-            if (!nested) {
-              return null
-            }
-
-            return nested
-          }}
-          components={components}
-        />
-      )
+      // For union return types, prefer a concise inline representation rather than a table.
+      // This keeps the focus on the overall union type instead of rendering a variant table,
+      // which can be noisy and hard to scan in documentation.
+      return withTypeText(null)
     }
 
     case 'IntersectionType': {
@@ -1640,7 +1601,9 @@ function ComponentTypeSection({
       </TypeDetail>
       {node.returnType ? (
         <TypeDetail label="Returns" components={components} kind={node.kind}>
-          {renderReturnTypeContent(node.returnType, components)}
+          {renderReturnType(node.returnType, components, {
+            showTypeText: true,
+          })}
         </TypeDetail>
       ) : null}
       {modifiers.length ? (
@@ -1766,7 +1729,9 @@ function FunctionTypeSection({
       ) : null}
       {node.returnType ? (
         <TypeDetail label="Returns" components={components} kind={node.kind}>
-          {renderReturnTypeContent(node.returnType, components)}
+          {renderReturnType(node.returnType, components, {
+            showTypeText: true,
+          })}
         </TypeDetail>
       ) : null}
       {modifiers.length ? (
