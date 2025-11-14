@@ -1,9 +1,9 @@
-import { CodeBlock, isDirectory, Link, type FileSystemEntry } from 'renoun'
-import NextLink from 'next/link'
+import { CodeBlock, isDirectory, Link } from 'renoun'
 import { notFound } from 'next/navigation'
 
 import { HooksDirectory } from '@/collections'
 import { Reference } from '@/ui/Reference'
+import { SiblingLink } from '@/ui/SiblingLink'
 
 export async function generateStaticParams() {
   const entries = await HooksDirectory.getEntries()
@@ -88,7 +88,7 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
       ) : null}
 
       <div className="border-t border-gray-200 dark:border-gray-800 pt-6">
-        <div className="grid grid-cols-2 px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+        <div className="grid grid-cols-2 items-center gap-4 px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
           {lastCommitDate ? (
             <div className="text-left">
               Last updated{' '}
@@ -106,14 +106,26 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
             </div>
           ) : null}
 
-          <div className="text-right">
-            <Link source={hookEntry} variant="source">
+          <div className="flex justify-end gap-4">
+            <Link
+              source={hookEntry}
+              variant={
+                process.env.NODE_ENV === 'development' ? 'editor' : 'edit'
+              }
+              className="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+            >
+              Edit page
+            </Link>
+            <Link
+              source={hookEntry}
+              className="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+            >
               View source
             </Link>
           </div>
         </div>
 
-        <nav className="grid grid-cols-2 px-4 py-2">
+        <nav className="grid grid-cols-2 gap-4 px-4 py-2">
           {previousEntry ? (
             <SiblingLink entry={previousEntry} direction="previous" />
           ) : null}
@@ -123,23 +135,5 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
         </nav>
       </div>
     </div>
-  )
-}
-
-async function SiblingLink({
-  entry,
-  direction,
-}: {
-  entry: FileSystemEntry<any>
-  direction: 'previous' | 'next'
-}) {
-  return (
-    <NextLink
-      href={entry.getPathname()}
-      className={direction === 'previous' ? 'text-left' : 'text-right'}
-    >
-      <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {entry.getBaseName()}
-    </NextLink>
   )
 }

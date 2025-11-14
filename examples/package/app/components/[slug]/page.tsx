@@ -3,14 +3,13 @@ import {
   isDirectory,
   FileNotFoundError,
   Link,
-  type FileSystemEntry,
   type JavaScriptModuleExport,
 } from 'renoun'
-import NextLink from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { ComponentsCollection } from '@/collections'
 import { Reference } from '@/ui/Reference'
+import { SiblingLink } from '@/ui/SiblingLink'
 
 export async function generateStaticParams() {
   const entries = await ComponentsCollection.getEntries()
@@ -89,7 +88,9 @@ export default async function Component(
 
       {exampleFiles ? (
         <div>
-          <h2 className="text-xl font-semibold mb-6">Examples</h2>
+          <h2 className="text-2xl font-semibold leading-snug mt-6 mb-4 text-slate-800 dark:text-slate-100">
+            Examples
+          </h2>
           <ul className="list-none p-0 m-0 grid gap-6">
             {exampleFiles.map(async (file) => {
               const fileExports = await file.getExports()
@@ -107,7 +108,7 @@ export default async function Component(
       ) : null}
 
       <div className="border-t border-gray-200 dark:border-gray-800 pt-6">
-        <div className="grid grid-cols-2 px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+        <div className="grid grid-cols-2 items-center gap-4 px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
           {lastCommitDate ? (
             <div className="text-left">
               Last updated{' '}
@@ -125,23 +126,20 @@ export default async function Component(
             </div>
           ) : null}
 
-          <div className="text-right">
+          <div className="flex justify-end gap-4">
             <Link
               source={componentEntry}
               variant={
-                process.env.NODE_ENV === 'development'
-                  ? 'editor'
-                  : isDirectory(componentEntry)
-                    ? 'source'
-                    : 'edit'
+                process.env.NODE_ENV === 'development' ? 'editor' : 'edit'
               }
+              className="inline-flex items-center gap-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
             >
-              Edit this page
+              View source
             </Link>
           </div>
         </div>
 
-        <nav className="grid grid-cols-2 px-4 py-2">
+        <nav className="grid grid-cols-2 gap-4 px-4 py-2">
           {previousEntry ? (
             <SiblingLink entry={previousEntry} direction="previous" />
           ) : null}
@@ -207,26 +205,5 @@ async function Preview({
         ) : null}
       </div>
     </section>
-  )
-}
-
-async function SiblingLink({
-  entry,
-  direction,
-}: {
-  entry: FileSystemEntry<any>
-  direction: 'previous' | 'next'
-}) {
-  return (
-    <NextLink
-      href={entry.getPathname()}
-      style={{
-        gridColumn: direction === 'previous' ? 1 : 2,
-        textAlign: direction === 'previous' ? 'left' : 'right',
-      }}
-    >
-      <div>{direction === 'previous' ? 'Previous' : 'Next'}</div>
-      {entry.getBaseName()}
-    </NextLink>
   )
 }
