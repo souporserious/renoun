@@ -196,7 +196,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
                 Last updated: {updatedAt.toLocaleDateString()}
               </span>
               <Link source={hookEntry} variant="edit">
-                {(href) => (
+                {({ href }) => (
                   <a
                     href={href}
                     css={{
@@ -264,7 +264,7 @@ async function Preview({
           >
             <h3 css={{ margin: 0 }}>{title}</h3>{' '}
             <Link source={fileExport} variant="edit">
-              {(href) => (
+              {({ href }) => (
                 <a href={href} css={{ fontSize: 'var(--font-size-body-3)' }}>
                   View Source
                 </a>

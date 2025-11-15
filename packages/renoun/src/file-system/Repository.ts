@@ -58,6 +58,15 @@ export interface GetReleaseOptions {
   /** Which release to resolve. */
   release?: ReleaseSpecifier
 
+  /**
+   * Filter releases by a specific package name.
+   *
+   * When provided, only releases whose tag or name start with `${packageName}@`
+   * will be considered. This is useful for repositories that publish multiple
+   * packages (e.g. `renoun`, `@renoun/mdx`) from a single Git releases feed.
+   */
+  packageName?: string
+
   /** Force a refresh of the cached release metadata. */
   refresh?: boolean
 }
@@ -583,7 +592,10 @@ export class Repository {
   /** Retrieve metadata about a release for the repository. */
   async getRelease(options?: GetReleaseOptions): Promise<Release> {
     const releaseSpecifier = options?.release ?? 'latest'
-    const cacheKey = JSON.stringify({ release: releaseSpecifier })
+    const cacheKey = JSON.stringify({
+      release: releaseSpecifier,
+      packageName: options?.packageName,
+    })
 
     if (options?.refresh) {
       this.#releasePromises.delete(cacheKey)
@@ -594,7 +606,7 @@ export class Repository {
 
     let promise = this.#releasePromises.get(cacheKey)
     if (!promise) {
-      promise = this.#resolveRelease(releaseSpecifier)
+      promise = this.#resolveRelease(releaseSpecifier, options)
       this.#releasePromises.set(cacheKey, promise)
     }
 
@@ -662,7 +674,10 @@ export class Repository {
     return release.htmlUrl
   }
 
-  async #resolveRelease(specifier: ReleaseSpecifier): Promise<Release> {
+  async #resolveRelease(
+    specifier: ReleaseSpecifier,
+    options?: GetReleaseOptions
+  ): Promise<Release> {
     if (!this.#owner || !this.#repo) {
       throw new Error(
         '[renoun] Cannot determine owner/repository while resolving a release.'
@@ -672,7 +687,7 @@ export class Repository {
     try {
       switch (this.#host) {
         case 'github':
-          return await this.#resolveGitHubRelease(specifier)
+          return await this.#resolveGitHubRelease(specifier, options)
         case 'gitlab':
         case 'bitbucket':
         case 'pierre':
@@ -696,7 +711,10 @@ export class Repository {
     }
   }
 
-  async #resolveGitHubRelease(specifier: ReleaseSpecifier): Promise<Release> {
+  async #resolveGitHubRelease(
+    specifier: ReleaseSpecifier,
+    options?: GetReleaseOptions
+  ): Promise<Release> {
     const releases = await this.#fetchGitHubReleases()
 
     if (!Array.isArray(releases) || releases.length === 0) {
@@ -710,9 +728,23 @@ export class Repository {
     }
 
     const normalized = specifier ?? 'latest'
+    const packageName = options?.packageName
+
+    const matchesPackage = (release: any): boolean => {
+      if (!packageName) {
+        return true
+      }
+
+      const tagName =
+        typeof release?.tag_name === 'string' ? release.tag_name : ''
+      const name = typeof release?.name === 'string' ? release.name : ''
+      const prefix = `${packageName}@`
+
+      return tagName.startsWith(prefix) || name.startsWith(prefix)
+    }
 
     const findFirst = (predicate: (release: any) => boolean) =>
-      releases.find((release) => predicate(release))
+      releases.find((release) => matchesPackage(release) && predicate(release))
 
     const format = (release: any): Release => this.#formatGitHubRelease(release)
 
@@ -730,20 +762,24 @@ export class Repository {
       }
     } else {
       const normalizedLower = normalized.toLowerCase()
-      const exactTag = releases.find(
-        (release) =>
+      const exactTag = releases.find((release) => {
+        if (!matchesPackage(release)) return false
+        return (
           typeof release?.tag_name === 'string' &&
           release.tag_name.toLowerCase() === normalizedLower
-      )
+        )
+      })
       if (exactTag) {
         return format(exactTag)
       }
 
-      const exactName = releases.find(
-        (release) =>
+      const exactName = releases.find((release) => {
+        if (!matchesPackage(release)) return false
+        return (
           typeof release?.name === 'string' &&
           release.name.toLowerCase() === normalizedLower
-      )
+        )
+      })
       if (exactName) {
         return format(exactName)
       }
@@ -751,6 +787,7 @@ export class Repository {
       const coercedSpecifier = coerceSemVer(normalized)
       if (coercedSpecifier) {
         const matchingVersion = releases.find((release) => {
+          if (!matchesPackage(release)) return false
           const version = this.#coerceGitHubReleaseVersion(release)
           return version && compareSemVer(version, coercedSpecifier) === 0
         })
@@ -767,6 +804,7 @@ export class Repository {
         .filter((entry): entry is { release: any; version: SemVer } =>
           Boolean(
             entry.version &&
+              matchesPackage(entry.release) &&
               satisfiesRange(entry.version, normalized, {
                 includePrerelease: true,
               })

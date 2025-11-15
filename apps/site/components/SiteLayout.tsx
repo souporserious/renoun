@@ -88,25 +88,54 @@ export async function SiteLayout({
             },
           }}
         >
-          <a
-            href="/"
+          <div
             css={{
               display: 'flex',
               alignItems: 'center',
+              gap: '0.75rem',
               gridColumn: '2',
               '@media screen and (min-width: 60rem)': {
                 margin: '0 2rem',
               },
             }}
           >
-            <RenounLogo
+            <a
+              href="/"
               css={{
-                width: 'unset',
-                height: 'var(--font-size-heading-3)',
-                fill: 'white',
+                display: 'flex',
+                alignItems: 'center',
               }}
-            />
-          </a>
+            >
+              <RenounLogo
+                css={{
+                  width: 'unset',
+                  height: 'var(--font-size-heading-3)',
+                  fill: 'white',
+                }}
+              />
+            </a>
+
+            {variant === 'docs' ? (
+              <Link variant="release" packageName="renoun">
+                {({ href, tag }) => (
+                  <a
+                    href={href}
+                    css={{
+                      fontSize: 'var(--font-size-body-3)',
+                      color: 'var(--color-foreground-interactive)',
+                      textDecoration: 'none',
+                      ':hover': {
+                        color: `var(--color-foreground-interactive-highlighted)`,
+                        textDecoration: 'underline',
+                      },
+                    }}
+                  >
+                    {tag}
+                  </a>
+                )}
+              </Link>
+            ) : null}
+          </div>
 
           <div
             css={{

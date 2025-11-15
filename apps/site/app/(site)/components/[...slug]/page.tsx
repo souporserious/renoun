@@ -326,7 +326,7 @@ async function Preview({
           >
             <h3 css={{ margin: 0 }}>{title}</h3>{' '}
             <Link source={fileExport} variant="edit">
-              {(href) => (
+              {({ href }) => (
                 <a href={href} css={{ fontSize: 'var(--font-size-body-3)' }}>
                   View Source
                 </a>

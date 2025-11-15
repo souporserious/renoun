@@ -1,4 +1,3 @@
-import React from 'react'
 import { Link, Logo, JavaScriptFile } from 'renoun'
 
 const file = new JavaScriptFile({
@@ -33,7 +32,7 @@ export function GitRepositoryCustom() {
 export async function CustomElement() {
   return (
     <Link source={file} variant="edit">
-      {(href) => <a href={href}>Edit Source</a>}
+      {({ href }) => <a href={href}>Edit Source</a>}
     </Link>
   )
 }
@@ -57,11 +56,7 @@ export function ConfigLinks() {
       </li>
       <li>
         <Link variant="release">
-          {(href, release) => (
-            <a href={href}>
-              {release.name}@{release.tag}
-            </a>
-          )}
+          {({ href, label }) => <a href={href}>{label}</a>}
         </Link>
       </li>
     </ul>

@@ -6,6 +6,7 @@ import {
   type RepositoryConfig,
   type GetReleaseUrlOptions,
   type Release,
+  type ReleaseSpecifier,
 } from '../../file-system/Repository.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import { Logo } from '../Logo.js'
@@ -62,7 +63,7 @@ export interface LinkReleaseContext extends Release {
   /** Normalized label suitable for display. */
   label: string
 
-  /** String representation that React will use when rendered directly. */
+  /** String representation when rendered in a string context. */
   toString(): string
 }
 
@@ -115,13 +116,44 @@ function createLinkReleaseContext(release: Release): LinkReleaseContext {
   }
 }
 
+export interface LinkReleaseRenderContext {
+  /** The URL of the release. */
+  href: string
+
+  /** The tag of the release. */
+  tag?: string
+
+  /** The name of the release. */
+  name?: string
+
+  /** The tag and name of the release. */
+  label: `${string}@${string}`
+
+  /** ISO timestamp for when the release was published, if provided by the host. */
+  publishedAt?: string
+
+  /** Indicates whether the release is marked as a prerelease. */
+  isPrerelease: boolean
+
+  /** Indicates whether the release is marked as a draft. */
+  isDraft: boolean
+}
+
+interface LinkBaseRenderContext {
+  /** The URL of the link. */
+  href: string
+}
+
 type LinkContextFor<Variant extends LinkVariant> = Variant extends 'release'
-  ? LinkReleaseContext
-  : undefined
+  ? LinkReleaseRenderContext
+  : LinkBaseRenderContext
+
+type InternalLinkContextFor<Variant extends LinkVariant> =
+  Variant extends 'release' ? LinkReleaseContext : undefined
 
 type LinkChildren<Variant extends LinkVariant> =
   | React.ReactNode
-  | ((href: string, context: LinkContextFor<Variant>) => React.ReactNode)
+  | ((context: LinkContextFor<Variant>) => React.ReactNode)
 
 type AnchorBaseProps = Omit<
   React.ComponentPropsWithRef<'a'>,
@@ -152,8 +184,27 @@ export type LinkProps<
       /** Which getter to use for the href. */
       variant?: Variant
 
-      /** Options forwarded to the variant getter method. */
-      options?: ReleaseLinkOptions
+      /** Optional package name to filter releases in monorepos. */
+      packageName?: string
+
+      /** Which release to resolve. */
+      release?: ReleaseSpecifier
+
+      /** Force a refresh of the cached release metadata. */
+      refresh?: boolean
+
+      /** Select a downloadable asset by heuristic or matcher. */
+      asset?: true | string | RegExp
+
+      /** Link to the release source archive. */
+      archiveSource?: 'zip' | 'tar'
+
+      /** Link to a compare view from this ref to the resolved release. */
+      compare?: string
+
+      /** Override repository for computing release URL. */
+      repository?: Repository | RepositoryConfig | string
+
       /** The content of the link. */
       children?: LinkChildren<Variant>
     }
@@ -186,8 +237,8 @@ async function computeLink<Source, Variant extends LinkVariant>({
 }: {
   source?: Source
   variant: Variant
-  options?: LinkProps<Source, Variant>['options']
-}): Promise<{ href: string; context: LinkContextFor<Variant> }> {
+  options?: any
+}): Promise<{ href: string; context: InternalLinkContextFor<Variant> }> {
   const config = await getConfig()
 
   if (variant === 'release') {
@@ -220,7 +271,7 @@ async function computeLink<Source, Variant extends LinkVariant>({
 
       return {
         href,
-        context: context as LinkContextFor<Variant>,
+        context: context as InternalLinkContextFor<Variant>,
       }
     }
 
@@ -276,7 +327,7 @@ async function computeLink<Source, Variant extends LinkVariant>({
 
     return {
       href,
-      context: context as LinkContextFor<Variant>,
+      context: context as InternalLinkContextFor<Variant>,
     }
   }
 
@@ -334,12 +385,12 @@ async function computeLink<Source, Variant extends LinkVariant>({
           const href = await (method as any).call(source, {
             editor: config.editor,
           })
-          return { href, context: undefined as LinkContextFor<Variant> }
+          return { href, context: undefined as InternalLinkContextFor<Variant> }
         }
       }
 
       const href = await (method as any).call(source, editorOptions)
-      return { href, context: undefined as LinkContextFor<Variant> }
+      return { href, context: undefined as InternalLinkContextFor<Variant> }
     }
 
     const needsRepository = methodName.endsWith('Url')
@@ -352,7 +403,7 @@ async function computeLink<Source, Variant extends LinkVariant>({
 
     return {
       href: href as string,
-      context: undefined as LinkContextFor<Variant>,
+      context: undefined as InternalLinkContextFor<Variant>,
     }
   }
 
@@ -367,24 +418,24 @@ async function computeLink<Source, Variant extends LinkVariant>({
     case 'repository':
       return {
         href: gitConfig.source,
-        context: undefined as LinkContextFor<Variant>,
+        context: undefined as InternalLinkContextFor<Variant>,
       }
     case 'owner':
       return {
         href: `${gitConfig.baseUrl}/${gitConfig.owner}`,
-        context: undefined as LinkContextFor<Variant>,
+        context: undefined as InternalLinkContextFor<Variant>,
       }
     case 'branch': {
       const ref = (options as any)?.ref ?? gitConfig.branch
       return {
         href: `${gitConfig.source}/tree/${ref}`,
-        context: undefined as LinkContextFor<Variant>,
+        context: undefined as InternalLinkContextFor<Variant>,
       }
     }
     case 'issue':
       return {
         href: `${gitConfig.source}/issues/new`,
-        context: undefined as LinkContextFor<Variant>,
+        context: undefined as InternalLinkContextFor<Variant>,
       }
     default:
       throw new Error(`[renoun] Unsupported Link variant: ${String(variant)}`)
@@ -401,31 +452,83 @@ export async function Link<Source, Variant extends LinkVariant = 'source'>(
   const {
     source,
     variant = 'source',
-    options,
     children,
     css: cssProp,
     className,
     style,
     ...restProps
   } = props
+
+  let computedOptions: any =
+    variant === 'release' ? undefined : (props as any).options
+
+  if (variant === 'release') {
+    const {
+      packageName,
+      release,
+      refresh,
+      asset,
+      archiveSource,
+      compare,
+      repository,
+    } = props as LinkProps<Source, 'release'>
+
+    const hasReleaseOptions =
+      packageName !== undefined ||
+      release !== undefined ||
+      refresh !== undefined ||
+      asset !== undefined ||
+      archiveSource !== undefined ||
+      compare !== undefined ||
+      repository !== undefined
+
+    computedOptions = hasReleaseOptions
+      ? ({
+          packageName,
+          release,
+          refresh,
+          asset,
+          source: archiveSource,
+          compare,
+          repository,
+        } satisfies ReleaseLinkOptions)
+      : undefined
+  }
+
   const { href, context } = await computeLink<Source, Variant>({
     source,
     variant: variant as Variant,
-    options,
+    options: computedOptions,
   })
 
   if (typeof children === 'function') {
     const render = children as (
-      href: string,
       context: LinkContextFor<Variant>
     ) => React.ReactNode
-    return render(href, context)
+
+    if (variant === 'release') {
+      const releaseContext = context as InternalLinkContextFor<'release'>
+      const publicContext = {
+        href,
+        tag: releaseContext?.tag,
+        name: releaseContext?.name,
+        label: releaseContext?.label ?? href,
+        publishedAt: releaseContext?.publishedAt,
+        isPrerelease: releaseContext?.isPrerelease ?? false,
+        isDraft: releaseContext?.isDraft ?? false,
+      } as LinkContextFor<Variant>
+
+      return render(publicContext)
+    }
+
+    const baseContext = { href } as LinkContextFor<Variant>
+    return render(baseContext)
   }
 
   let childrenToRender = children
 
   if (variant === 'release') {
-    const releaseContext = context as LinkReleaseContext
+    const releaseContext = context as InternalLinkContextFor<'release'>
     const releaseLabel = releaseContext.label
 
     if (!children) {
