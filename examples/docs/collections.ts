@@ -8,6 +8,15 @@ export const docs = new Directory({
   loader: {
     mdx: withSchema(
       {
+        headings: z.array(
+          z.object({
+            id: z.string(),
+            level: z.number(),
+            text: z.string(),
+            summary: z.string().optional(),
+            children: z.custom<NonNullable<React.ReactNode>>().optional(),
+          })
+        ),
         metadata: z.object({
           title: z.string(),
           order: z.number(),

@@ -284,13 +284,22 @@ type InferModuleLoaderTypes<Loader extends ModuleLoader> =
           : Types
         : never
 
+/**
+ * Front matter parsed from the markdown file. When using the default
+ * loaders this is populated automatically (if present), and custom
+ * loaders can further narrow this shape via `withSchema`.
+ */
+export type FrontMatter = Record<string, unknown>
+
 /** Default module types for common file extensions. */
 export interface DefaultModuleTypes {
   md: {
     default: MDXContent
+    frontMatter?: FrontMatter
   }
   mdx: {
     default: MDXContent
+    frontMatter?: FrontMatter
   }
   json: JSONObject
 }
@@ -1565,9 +1574,6 @@ export class JavaScriptFile<
   async getExportValue<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
   ): Promise<Types[ExportName]>
-  async getExportValue<Value, ExportName extends string>(
-    name: ExportName
-  ): Promise<Value>
   async getExportValue(name: string): Promise<any> {
     const fileExport = await this.getExport(name as any)
     return (await fileExport.getValue()) as any
@@ -1986,10 +1992,9 @@ export class MDXFile<
     if (!this.#resolvingFrontMatter) {
       try {
         this.#resolvingFrontMatter = true
-        const frontMatter = await this.getExportValue<
-          Record<string, unknown> | undefined,
-          'frontMatter'
-        >('frontMatter')
+        const frontMatter = (await this.getExportValue(
+          'frontMatter' as any
+        )) as Record<string, unknown> | undefined
 
         if (frontMatter !== undefined) {
           return frontMatter
@@ -2097,9 +2102,6 @@ export class MDXFile<
   async getExportValue<
     ExportName extends 'default' | Extract<keyof Types, string>,
   >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]>
-  async getExportValue<Value, ExportName extends string>(
-    name: ExportName
-  ): Promise<Value>
   async getExportValue(name: string): Promise<any> {
     const fileExport = await this.getExport(name as any)
     return (await fileExport.getValue()) as any
@@ -2224,10 +2226,9 @@ export class MarkdownFile<
     if (!this.#resolvingFrontMatter) {
       try {
         this.#resolvingFrontMatter = true
-        const frontMatter = await this.getExportValue<
-          Record<string, unknown> | undefined,
-          'frontMatter'
-        >('frontMatter')
+        const frontMatter = (await this.getExportValue(
+          'frontMatter' as any
+        )) as Record<string, unknown> | undefined
 
         if (frontMatter !== undefined) {
           return frontMatter
@@ -2299,9 +2300,6 @@ export class MarkdownFile<
   async getExportValue<
     ExportName extends 'default' | Extract<keyof Types, string>,
   >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]>
-  async getExportValue<Value, ExportName extends string>(
-    name: ExportName
-  ): Promise<Value>
   async getExportValue(name: string): Promise<any> {
     const fileModule = await this.#getModule()
     if (!(name in fileModule)) {
