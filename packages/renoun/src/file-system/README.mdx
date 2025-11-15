@@ -96,6 +96,35 @@ export default async function Page() {
 }
 ```
 
+#### File selection criteria
+
+When querying files using `getFile` or `getEntry`, the file system follows a specific priority order to resolve ambiguous paths:
+
+1. **Sibling files over directories**: When both a file and a directory exist with the same base name (e.g., `integrations.mdx` and `integrations/`), the sibling file is preferred over the directory. This ensures that `getEntry('integrations')` returns `integrations.mdx` rather than the `integrations/` directory.
+
+2. **Base files over files with modifiers**: When multiple files share the same base name but have different modifiers (e.g., `Reference.tsx` and `Reference.examples.tsx`), the base file without a modifier is preferred.
+
+3. **Extension matching**: When an extension is specified in the query (e.g., `getFile('button', 'tsx')`), only files matching that extension are considered.
+
+4. **Directory representatives**: If a directory is selected, the file system looks for a representative file within that directory in this order:
+   - A file with the same name as the directory (e.g., `Button/Button.tsx`)
+   - An `index` file (e.g., `Button/index.tsx`)
+   - A `readme` file (e.g., `Button/readme.md`)
+
+```tsx
+import { Directory, MemoryFileSystem } from 'renoun'
+
+const directory = new Directory({ path: 'posts' })
+
+// Example: When both integrations.mdx and integrations/ exist
+const entry = await directory.getEntry('integrations')
+// Returns: integrations.mdx (sibling file, not the directory)
+
+// Example: When both Reference.tsx and Reference.examples.tsx exist
+const file = await directory.getFile('Reference')
+// Returns: Reference.tsx (base file without modifier)
+```
+
 ### Type checking file exports
 
 To improve type safety, you can utilize the `withSchema` helper to specify the schema for the file’s exports:
