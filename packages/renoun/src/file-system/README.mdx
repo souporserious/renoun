@@ -242,3 +242,38 @@ const posts = new Directory({
 ```
 
 The file system utilities are not limited to MDX files and can be used with _any file type_. By organizing content and source code into structured collections, you can easily generate static pages and manage complex routing and navigations.
+
+### Using `GitHostFileSystem`
+
+The `GitHostFileSystem` adapter lets you mirror files from a remote Git provider into memory so they can be queried just like local entries. It accepts the repository coordinates and optional filters and then streams the tarball for the requested ref.
+
+```ts
+import { Directory, GitHostFileSystem } from 'renoun'
+
+const docs = new Directory({
+  path: '.',
+  fileSystem: new GitHostFileSystem({
+    repository: 'souporserious/renoun',
+    ref: 'main',
+  }),
+})
+```
+
+#### Avoiding rate limits
+
+Git providers apply very small anonymous rate limits (for example, GitHub only allows 60 unauthenticated requests per hour). Passing an access token to `GitHostFileSystem` raises those limits dramatically and unlocks the more efficient metadata paths that renoun uses internally.
+
+- **GitHub** – create a [classic personal access token](https://github.com/settings/tokens?type=beta) with the `repo` scope for private repositories or no scopes for public repositories.
+- **GitLab** – use a [personal access token](https://gitlab.com/-/user_settings/personal_access_tokens) with the `read_api` scope.
+- **Bitbucket** – supply an [app password](https://support.atlassian.com/bitbucket-cloud/docs/app-passwords/) with read access.
+
+Provide the token via the `token` option, ideally by reading from an environment variable so it is not committed to source control:
+
+```ts
+const repoFs = new GitHostFileSystem({
+  repository: 'souporserious/renoun',
+  token: process.env.GITHUB_TOKEN,
+})
+```
+
+When a token is supplied, renoun batches GraphQL blame queries and reuses cached metadata to keep requests to a minimum. Without a token the file system falls back to higher-volume REST sampling, so authenticated requests are the easiest way to prevent rate limiting during development and CI.
