@@ -354,7 +354,7 @@ export function getHeadings(headings) {
     expect(Array.isArray(headings)).toBe(true)
     expect(headings.length).toBe(2)
     expect(headings[0].id).toBe('hello')
-    expect(headings[0].summary).toBeNull()
+    expect(headings[0].summary).toBeUndefined()
     expect(headings[1].id).toBe('extra')
   })
 

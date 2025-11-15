@@ -90,7 +90,7 @@ export default function addHeadings(
       const text = toString(node)
       let slug = createSlug(text)
 
-      const summary = headingSummaries.get(node) ?? null
+      const summary = headingSummaries.get(node)
 
       if (headingCounts.has(slug)) {
         const count = headingCounts.get(slug)! + 1
@@ -100,43 +100,45 @@ export default function addHeadings(
         headingCounts.set(slug, 1)
       }
 
+      const properties = [
+        {
+          type: 'Property',
+          key: { type: 'Identifier', name: 'id' },
+          value: { type: 'Literal', value: slug },
+          kind: 'init',
+        },
+        {
+          type: 'Property',
+          key: { type: 'Identifier', name: 'level' },
+          value: { type: 'Literal', value: node.depth },
+          kind: 'init',
+        },
+        {
+          type: 'Property',
+          key: { type: 'Identifier', name: 'children' },
+          value: mdastNodesToJsxFragment(node.children),
+          kind: 'init',
+        },
+        {
+          type: 'Property',
+          key: { type: 'Identifier', name: 'text' },
+          value: { type: 'Literal', value: text },
+          kind: 'init',
+        },
+      ]
+
+      if (summary !== undefined) {
+        properties.push({
+          type: 'Property',
+          key: { type: 'Identifier', name: 'summary' },
+          value: { type: 'Literal', value: summary },
+          kind: 'init',
+        })
+      }
+
       headingsArray.push({
         type: 'ObjectExpression',
-        properties: [
-          {
-            type: 'Property',
-            key: { type: 'Identifier', name: 'id' },
-            value: { type: 'Literal', value: slug },
-            kind: 'init',
-          },
-          {
-            type: 'Property',
-            key: { type: 'Identifier', name: 'level' },
-            value: { type: 'Literal', value: node.depth },
-            kind: 'init',
-          },
-          {
-            type: 'Property',
-            key: { type: 'Identifier', name: 'summary' },
-            value:
-              summary === null
-                ? { type: 'Literal', value: null }
-                : { type: 'Literal', value: summary },
-            kind: 'init',
-          },
-          {
-            type: 'Property',
-            key: { type: 'Identifier', name: 'children' },
-            value: mdastNodesToJsxFragment(node.children),
-            kind: 'init',
-          },
-          {
-            type: 'Property',
-            key: { type: 'Identifier', name: 'text' },
-            value: { type: 'Literal', value: text },
-            kind: 'init',
-          },
-        ],
+        properties,
       })
 
       node.data ??= {}
@@ -393,8 +395,8 @@ export default function addHeadings(
   }
 }
 
-function computeHeadingSummaries(tree: Root): Map<Heading, string | null> {
-  const summaries = new Map<Heading, string | null>()
+function computeHeadingSummaries(tree: Root): Map<Heading, string | undefined> {
+  const summaries = new Map<Heading, string | undefined>()
   const stack: HeadingSection[] = []
 
   for (const child of tree.children) {
@@ -437,10 +439,10 @@ type Block =
   | { type: 'paragraph'; text: string }
   | { type: 'list'; items: string[] }
 
-function pickSummary(nodes: RootContent[]): string | null {
+function pickSummary(nodes: RootContent[]): string | undefined {
   const blocks = toBlocks(nodes)
   if (!blocks.length) {
-    return null
+    return undefined
   }
 
   const paragraphBlocks = blocks.filter(
@@ -487,7 +489,7 @@ function pickSummary(nodes: RootContent[]): string | null {
     return truncate(fallbackText, MAX_SUMMARY_LENGTH)
   }
 
-  return null
+  return undefined
 }
 
 function toBlocks(nodes: RootContent[]): Block[] {
