@@ -123,9 +123,7 @@ const defaultLoaders: {
       remarkPlugins,
       rehypePlugins,
     })
-    let frontMatter = exportedFrontMatter as
-      | Record<string, unknown>
-      | undefined
+    let frontMatter = exportedFrontMatter as Record<string, unknown> | undefined
 
     if (frontMatter === undefined) {
       frontMatter = parseFrontMatter(source).frontMatter
@@ -2786,20 +2784,30 @@ export class Directory<
         segments.join('/')
       const hit = this.#pathLookup.get(targetPath)
       if (hit) {
-        if (hit instanceof Directory) {
-          const [, ...remainingSegments] = segments
-          // If no remaining segments, we've reached the target directory.
-          if (!remainingSegments.length) {
-            return hit
+        const [, ...remainingSegments] = segments
+        // When there are no remaining segments, prefer files over directories
+        // to ensure sibling files are preferred (e.g., "integrations.mdx" over "integrations/").
+        if (!remainingSegments.length) {
+          if (hit instanceof File) {
+            if (allExtensions && !allExtensions.includes(hit.getExtension())) {
+              // Fall through to regular resolution when extension doesn't match.
+            } else {
+              return hit
+            }
           }
-          // Otherwise, continue walking from the hit.
-          return this.#findEntry(hit, remainingSegments, allExtensions)
-        }
-        if (hit instanceof File) {
-          if (allExtensions && !allExtensions.includes(hit.getExtension())) {
-            // Fall through to regular resolution when extension doesn't match.
-          } else {
-            return hit
+          // If it's a directory and we have no remaining segments, fall through
+          // to check for a sibling file in the regular resolution logic.
+        } else {
+          // When there are remaining segments, directories are valid intermediate paths.
+          if (hit instanceof Directory) {
+            return this.#findEntry(hit, remainingSegments, allExtensions)
+          }
+          if (hit instanceof File) {
+            if (allExtensions && !allExtensions.includes(hit.getExtension())) {
+              // Fall through to regular resolution when extension doesn't match.
+            } else {
+              return hit
+            }
           }
         }
       }
@@ -2815,16 +2823,35 @@ export class Directory<
     }
 
     let fallback: FileSystemEntry<LoaderTypes> | undefined
+    let matchingDirectory: Directory<LoaderTypes> | undefined
 
-    // If an extension was requested and there are no remaining segments,
-    // prefer a file match over a directory with the same base name.
-    if (allExtensions && remainingSegments.length === 0) {
+    // If there are no remaining segments, prefer a file match over a directory
+    // with the same base name. This ensures sibling files are preferred over
+    // directories when both exist (e.g., "integrations.mdx" over "integrations/").
+    // Also prefer base files (without modifiers) over files with modifiers.
+    if (remainingSegments.length === 0) {
+      let matchingFile: File<LoaderTypes> | undefined
+      let matchingFileWithModifier: File<LoaderTypes> | undefined
       for (const entry of entries) {
         if (!(entry instanceof File)) continue
         const baseSlug = createSlug(entry.getBaseName(), this.#slugCasing)
         if (baseSlug !== currentSegment) continue
-        if (!allExtensions.includes(entry.getExtension())) continue
-        return entry
+        // If extensions were specified, only consider matching files.
+        if (allExtensions && !allExtensions.includes(entry.getExtension())) {
+          continue
+        }
+        // Prefer files without modifiers over files with modifiers.
+        if (!entry.getModifierName()) {
+          matchingFile = entry
+        } else if (!matchingFileWithModifier) {
+          matchingFileWithModifier = entry
+        }
+      }
+      if (matchingFile) {
+        return matchingFile
+      }
+      if (matchingFileWithModifier) {
+        return matchingFileWithModifier
       }
     }
 
@@ -2832,9 +2859,12 @@ export class Directory<
       const baseSlug = createSlug(entry.getBaseName(), this.#slugCasing)
 
       if (entry instanceof Directory && baseSlug === currentSegment) {
-        return remainingSegments.length === 0
-          ? entry
-          : this.#findEntry(entry, remainingSegments, allExtensions)
+        if (remainingSegments.length === 0) {
+          matchingDirectory = entry
+          continue
+        }
+
+        return this.#findEntry(entry, remainingSegments, allExtensions)
       }
 
       if (!(entry instanceof File) || baseSlug !== currentSegment) {
@@ -2871,6 +2901,10 @@ export class Directory<
 
     if (fallback) {
       return fallback
+    }
+
+    if (matchingDirectory) {
+      return matchingDirectory
     }
 
     throw new FileNotFoundError(segments.join('/'), allExtensions, {
@@ -3178,6 +3212,31 @@ export class Directory<
     try {
       const directory = await this.getDirectory(path)
       const directoryBaseName = directory.getBaseName()
+      let sameNamedSibling: File<LoaderTypes> | undefined
+
+      try {
+        const parentDirectory = directory.getParent()
+        try {
+          const sibling = await parentDirectory.getFile(directoryBaseName)
+          if (
+            sibling instanceof File &&
+            sibling.getBaseName() === directoryBaseName
+          ) {
+            sameNamedSibling = sibling as File<LoaderTypes>
+          }
+        } catch (error) {
+          if (!(error instanceof FileNotFoundError)) {
+            throw error
+          }
+        }
+      } catch {
+        // Root directory does not have a parent. Ignore.
+      }
+
+      if (sameNamedSibling) {
+        return sameNamedSibling
+      }
+
       const entries = await directory.getEntries({
         includeDirectoryNamedFiles: true,
         includeIndexAndReadmeFiles: true,
@@ -3189,7 +3248,7 @@ export class Directory<
           entry instanceof File &&
           (entryBaseName === directoryBaseName ||
             entryBaseName === 'index' ||
-            directoryBaseName === 'readme')
+            entryBaseName === 'readme')
         ) {
           return entry
         }

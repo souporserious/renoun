@@ -2023,6 +2023,35 @@ describe('file system', () => {
     expect((await guides.getFile('intro')).getPathname()).toBe('/docs/intro')
   })
 
+  test('prefers same-named sibling file as directory index', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'integrations.mdx': '',
+      'integrations/index.mdx': '',
+      'integrations/stripe.mdx': '',
+    })
+
+    const directory = new Directory({ fileSystem })
+
+    const file = await directory.getFile('integrations', 'mdx')
+
+    expect(file).toBeInstanceOf(MDXFile)
+    expect(file.getRelativePathToWorkspace()).toBe('integrations.mdx')
+
+    const entry = await directory.getEntry('integrations')
+
+    expect(entry).toBeInstanceOf(MDXFile)
+
+    if (entry instanceof MDXFile) {
+      expect(entry.getRelativePathToWorkspace()).toBe('integrations.mdx')
+    }
+
+    const nested = await directory.getFile('integrations/stripe', 'mdx')
+
+    expect(nested.getRelativePathToWorkspace()).toBe(
+      'integrations/stripe.mdx'
+    )
+  })
+
   test('entry group', async () => {
     const memoryFileSystem = new MemoryFileSystem({
       'posts/building-a-button-component.mdx': '# Building a Button Component',
