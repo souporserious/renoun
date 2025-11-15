@@ -272,14 +272,11 @@ Git providers apply very small anonymous rate limits (for example, GitHub only a
 Provide the token via the `token` option, ideally by reading from an environment variable so it is not committed to source control:
 
 ```ts
-import { Directory, GitHostFileSystem } from 'renoun'
+import { GitHostFileSystem } from 'renoun'
 
-const docs = new Directory({
-  path: '.',
-  fileSystem: new GitHostFileSystem({
-    repository: 'souporserious/renoun',
-    token: process.env.GITHUB_TOKEN,
-  }),
+const repoFs = new GitHostFileSystem({
+  repository: 'souporserious/renoun',
+  token: process.env.GITHUB_TOKEN,
 })
 ```
 
