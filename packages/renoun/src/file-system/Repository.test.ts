@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { Repository, type RepositoryConfig } from './Repository'
 
@@ -716,5 +716,392 @@ describe('Repository', () => {
   test('repository string representation', () => {
     const repo = new Repository('owner/repo@develop')
     expect(repo.toString()).toBe('github:owner/repo@develop')
+  })
+
+  describe('getRelease', () => {
+    const originalFetch = globalThis.fetch
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch
+      vi.restoreAllMocks()
+    })
+
+    test('fetches release metadata from GitHub and caches results', async () => {
+      const releasesPayload = [
+        {
+          tag_name: 'v1.2.3',
+          html_url: 'https://github.com/owner/repo/releases/tag/v1.2.3',
+          name: 'v1.2.3 Release',
+          published_at: '2024-01-01T00:00:00Z',
+          draft: false,
+          prerelease: false,
+          assets: [
+            {
+              name: 'cli-win.exe',
+              browser_download_url:
+                'https://github.com/owner/repo/releases/download/v1.2.3/cli-win.exe',
+              content_type: 'application/x-msdownload',
+              size: 123,
+            },
+            {
+              name: 'cli-linux.tar.gz',
+              browser_download_url:
+                'https://github.com/owner/repo/releases/download/v1.2.3/cli-linux.tar.gz',
+              content_type: 'application/gzip',
+              size: 456,
+            },
+          ],
+          zipball_url: 'https://github.com/owner/repo/zipball/v1.2.3',
+          tarball_url: 'https://github.com/owner/repo/tarball/v1.2.3',
+        },
+        {
+          tag_name: 'v1.2.3-rc.1',
+          html_url: 'https://github.com/owner/repo/releases/tag/v1.2.3-rc.1',
+          name: 'v1.2.3 RC',
+          published_at: '2023-12-25T00:00:00Z',
+          draft: false,
+          prerelease: true,
+          assets: [],
+          zipball_url: 'https://github.com/owner/repo/zipball/v1.2.3-rc.1',
+          tarball_url: 'https://github.com/owner/repo/tarball/v1.2.3-rc.1',
+        },
+      ]
+
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => releasesPayload,
+      })) as unknown as typeof fetch
+
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository('owner/repo')
+      const release = await repository.getRelease()
+
+      expect(release).toEqual({
+        tagName: 'v1.2.3',
+        name: 'v1.2.3 Release',
+        htmlUrl: 'https://github.com/owner/repo/releases/tag/v1.2.3',
+        publishedAt: '2024-01-01T00:00:00Z',
+        isDraft: false,
+        isPrerelease: false,
+        isFallback: false,
+        assets: [
+          {
+            name: 'cli-win.exe',
+            downloadUrl:
+              'https://github.com/owner/repo/releases/download/v1.2.3/cli-win.exe',
+            contentType: 'application/x-msdownload',
+            size: 123,
+          },
+          {
+            name: 'cli-linux.tar.gz',
+            downloadUrl:
+              'https://github.com/owner/repo/releases/download/v1.2.3/cli-linux.tar.gz',
+            contentType: 'application/gzip',
+            size: 456,
+          },
+        ],
+        tarballUrl: 'https://github.com/owner/repo/tarball/v1.2.3',
+        zipballUrl: 'https://github.com/owner/repo/zipball/v1.2.3',
+      })
+
+      await expect(repository.getReleaseUrl()).resolves.toBe(
+        'https://github.com/owner/repo/releases/tag/v1.2.3'
+      )
+      await expect(repository.getReleaseUrl({ asset: 'linux' })).resolves.toBe(
+        'https://github.com/owner/repo/releases/download/v1.2.3/cli-linux.tar.gz'
+      )
+
+      const originalNavigator = (globalThis as any).navigator
+      try {
+        Object.defineProperty(globalThis, 'navigator', {
+          configurable: true,
+          value: { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
+        })
+
+        await expect(
+          repository.getReleaseUrl({ asset: true })
+        ).resolves.toBe(
+          'https://github.com/owner/repo/releases/download/v1.2.3/cli-linux.tar.gz'
+        )
+      } finally {
+        if (originalNavigator === undefined) {
+          delete (globalThis as any).navigator
+        } else {
+          Object.defineProperty(globalThis, 'navigator', {
+            configurable: true,
+            value: originalNavigator,
+          })
+        }
+      }
+      await expect(repository.getReleaseUrl({ source: 'zip' })).resolves.toBe(
+        'https://github.com/owner/repo/zipball/v1.2.3'
+      )
+      await expect(repository.getReleaseUrl({ source: 'tar' })).resolves.toBe(
+        'https://github.com/owner/repo/tarball/v1.2.3'
+      )
+      await expect(
+        repository.getReleaseUrl({ compare: 'v1.2.2' })
+      ).resolves.toBe(
+        'https://github.com/owner/repo/compare/v1.2.2...v1.2.3'
+      )
+
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+
+      // Cached result should avoid another fetch.
+      await repository.getRelease()
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
+    test('resolves releases by explicit tag name and supports cache refresh', async () => {
+      const releasesPayload = [
+        {
+          tag_name: 'v3.0.0',
+          html_url: 'https://github.com/owner/repo/releases/tag/v3.0.0',
+          name: 'v3.0.0 Release',
+          draft: false,
+          prerelease: false,
+          assets: [],
+        },
+        {
+          tag_name: 'v1.4.0',
+          html_url: 'https://github.com/owner/repo/releases/tag/v1.4.0',
+          name: 'v1.4.0',
+          draft: false,
+          prerelease: false,
+          assets: [],
+        },
+      ]
+
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => releasesPayload,
+      })) as unknown as typeof fetch
+
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository('owner/repo')
+
+      const first = await repository.getRelease()
+      expect(first.tagName).toBe('v3.0.0')
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+
+      const byTag = await repository.getRelease({
+        release: 'v1.4.0',
+      })
+      expect(byTag.tagName).toBe('v1.4.0')
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+
+      const refreshed = await repository.getRelease({ refresh: true })
+      expect(refreshed.tagName).toBe('v3.0.0')
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+    })
+
+    test('resolves releases using semver range matching', async () => {
+      const releasesPayload = [
+        {
+          tag_name: 'v2.0.0-beta.1',
+          html_url: 'https://github.com/owner/repo/releases/tag/v2.0.0-beta.1',
+          name: 'v2.0.0 Beta',
+          draft: false,
+          prerelease: true,
+          assets: [],
+        },
+        {
+          tag_name: 'v1.10.0',
+          html_url: 'https://github.com/owner/repo/releases/tag/v1.10.0',
+          name: 'v1.10.0',
+          draft: false,
+          prerelease: false,
+          assets: [],
+        },
+        {
+          tag_name: 'v1.9.5',
+          html_url: 'https://github.com/owner/repo/releases/tag/v1.9.5',
+          name: 'v1.9.5',
+          draft: false,
+          prerelease: false,
+          assets: [],
+        },
+      ]
+
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => releasesPayload,
+      })) as unknown as typeof fetch
+
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository('owner/repo')
+      const release = await repository.getRelease({
+        release: '~1.10.0',
+        refresh: true,
+      })
+
+      expect(release.tagName).toBe('v1.10.0')
+      expect(release.isPrerelease).toBe(false)
+    })
+
+    test('selects release assets by matcher and platform heuristics', async () => {
+      const releasesPayload = [
+        {
+          tag_name: 'v1.0.0',
+          html_url: 'https://github.com/owner/repo/releases/tag/v1.0.0',
+          name: 'v1.0.0',
+          draft: false,
+          prerelease: false,
+          assets: [
+            {
+              name: 'tool-win.exe',
+              browser_download_url:
+                'https://github.com/owner/repo/releases/download/v1.0.0/tool-win.exe',
+            },
+            {
+              name: 'tool-mac.dmg',
+              browser_download_url:
+                'https://github.com/owner/repo/releases/download/v1.0.0/tool-mac.dmg',
+            },
+            {
+              name: 'tool-linux.tar.gz',
+              browser_download_url:
+                'https://github.com/owner/repo/releases/download/v1.0.0/tool-linux.tar.gz',
+            },
+          ],
+        },
+      ]
+
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => releasesPayload,
+      })) as unknown as typeof fetch
+
+      globalThis.fetch = mockFetch
+
+      const originalNavigator = (globalThis as any).navigator
+
+      try {
+        Object.defineProperty(globalThis, 'navigator', {
+          configurable: true,
+          value: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5)' },
+        })
+
+        const repository = new Repository('owner/repo')
+
+        await expect(
+          repository.getReleaseUrl({ asset: /linux/, refresh: true })
+        ).resolves.toBe(
+          'https://github.com/owner/repo/releases/download/v1.0.0/tool-linux.tar.gz'
+        )
+
+        await expect(
+          repository.getReleaseUrl({ asset: true })
+        ).resolves.toBe(
+          'https://github.com/owner/repo/releases/download/v1.0.0/tool-mac.dmg'
+        )
+      } finally {
+        if (originalNavigator === undefined) {
+          delete (globalThis as any).navigator
+        } else {
+          Object.defineProperty(globalThis, 'navigator', {
+            configurable: true,
+            value: originalNavigator,
+          })
+        }
+      }
+    })
+
+    test('throws a descriptive error when asset selection fails', async () => {
+      const releasesPayload = [
+        {
+          tag_name: 'v1.0.0',
+          html_url: 'https://github.com/owner/repo/releases/tag/v1.0.0',
+          name: 'v1.0.0',
+          draft: false,
+          prerelease: false,
+          assets: [
+            {
+              name: 'tool-win.exe',
+              browser_download_url:
+                'https://github.com/owner/repo/releases/download/v1.0.0/tool-win.exe',
+            },
+          ],
+        },
+      ]
+
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => releasesPayload,
+      })) as unknown as typeof fetch
+
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository('owner/repo')
+
+      await expect(
+        repository.getReleaseUrl({ asset: 'mac', refresh: true })
+      ).rejects.toThrow('No release asset matched the provided criteria')
+    })
+
+    test('supports next release specifier including prereleases', async () => {
+      const releasesPayload = [
+        {
+          tag_name: 'v2.0.0-beta.1',
+          html_url: 'https://github.com/owner/repo/releases/tag/v2.0.0-beta.1',
+          name: 'v2.0.0 Beta',
+          published_at: '2024-02-01T00:00:00Z',
+          draft: false,
+          prerelease: true,
+          assets: [],
+        },
+        {
+          tag_name: 'v1.9.0',
+          html_url: 'https://github.com/owner/repo/releases/tag/v1.9.0',
+          name: 'v1.9.0',
+          published_at: '2023-11-01T00:00:00Z',
+          draft: false,
+          prerelease: false,
+          assets: [],
+        },
+      ]
+
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => releasesPayload,
+      })) as unknown as typeof fetch
+
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository('owner/repo')
+      const release = await repository.getRelease({
+        release: 'next',
+        refresh: true,
+      })
+
+      expect(release.tagName).toBe('v2.0.0-beta.1')
+      expect(release.isPrerelease).toBe(true)
+    })
+
+    test('falls back to releases overview when no releases can be resolved', async () => {
+      const mockFetch = vi.fn(async () => ({
+        ok: false,
+        status: 404,
+        json: async () => ({}),
+      })) as unknown as typeof fetch
+
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository('owner/repo')
+      const release = await repository.getRelease({ refresh: true })
+
+      expect(release.htmlUrl).toBe('https://github.com/owner/repo/releases')
+      expect(release.isFallback).toBe(true)
+      expect(release.assets).toEqual([])
+    })
   })
 })
