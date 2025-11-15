@@ -29,15 +29,29 @@ export default function (props: {
     )
   }
 
+  function getStoredPackageManager(): PackageManager | null {
+    try {
+      const stored = localStorage.getItem(stateKey)
+      return isPackageManager(stored) ? stored : null
+    } catch {
+      return null
+    }
+  }
+
+  function persistPackageManager(value: PackageManager): void {
+    try {
+      localStorage.setItem(stateKey, value)
+    } catch {
+      // no-op if localStorage access fails
+    }
+  }
+
   window.setPackageManager = (packageManager: PackageManager | null): void => {
     // Resolve selection precedence: explicit > stored > default
-    let resolved: string | null = packageManager
-    if (!resolved) {
-      const stored = localStorage.getItem(stateKey)
-      resolved = stored
-    }
-    const selected: PackageManager = isPackageManager(resolved)
-      ? resolved
+    const stored = getStoredPackageManager()
+    const candidate = packageManager ?? stored
+    const selected: PackageManager = isPackageManager(candidate)
+      ? candidate
       : defaultPackageManager
 
     const elements = document.querySelectorAll<HTMLElement>(
@@ -115,7 +129,7 @@ export default function (props: {
     const command = target.dataset['command']
     if (!isPackageManager(command)) return
 
-    localStorage.setItem(stateKey, command)
+    persistPackageManager(command)
     window.setPackageManager(command)
   })
 }
