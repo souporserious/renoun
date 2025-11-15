@@ -1,6 +1,12 @@
 import React from 'react'
 import { css, type CSSObject } from 'restyle'
 
+import {
+  Repository,
+  type RepositoryConfig,
+  type GetReleaseUrlOptions,
+  type Release,
+} from '../../file-system/Repository.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import { Logo } from '../Logo.js'
 
@@ -11,6 +17,7 @@ const VARIANT_METHODS = {
   blame: 'getBlameUrl',
   source: 'getSourceUrl',
   editor: 'getEditorUri',
+  release: 'getReleaseUrl',
 } as const
 
 type ConfigVariants = 'repository' | 'owner' | 'branch' | 'issue'
@@ -35,6 +42,87 @@ type VariantOptions<
     : never
   : { ref?: string } | undefined
 
+type ReleaseLinkOptions = GetReleaseUrlOptions & {
+  repository?: Repository | RepositoryConfig | string
+}
+
+export interface LinkReleaseContext extends Release {
+  /** Original tag name from the provider (e.g. GitHub `tag_name`). */
+  rawTagName?: string
+
+  /** Original release name/title from the provider. */
+  rawName?: string
+
+  /** Primary tag identifier, normalized from the underlying release. */
+  tag?: string
+
+  /** Package or display name, normalized from the underlying release. */
+  name?: string
+
+  /** Normalized label suitable for display. */
+  label: string
+
+  /** String representation that React will use when rendered directly. */
+  toString(): string
+}
+
+function createLinkReleaseContext(release: Release): LinkReleaseContext {
+  const rawTagName = release.tagName
+  const rawName = release.name
+
+  let name = rawName
+  let tag = rawTagName
+
+  const parseNameAndTag = (input: string | undefined) => {
+    if (!input) return
+
+    const atIndex = input.lastIndexOf('@')
+    if (atIndex <= 0 || atIndex >= input.length - 1) {
+      return
+    }
+
+    const candidateName = input.slice(0, atIndex)
+    const candidateTag = input.slice(atIndex + 1)
+
+    // Heuristic: treat the suffix as a tag/version only when it looks version-like.
+    if (!/\d/.test(candidateTag)) {
+      return
+    }
+
+    name = candidateName
+    tag = candidateTag
+  }
+
+  // Prefer parsing from the release name (e.g. "package@1.2.3") and then from the tag.
+  parseNameAndTag(rawName)
+  if (!tag) {
+    parseNameAndTag(rawTagName)
+  }
+
+  const label =
+    name && tag ? `${name}@${tag}` : (rawTagName ?? rawName ?? 'View release')
+
+  return {
+    ...release,
+    rawTagName,
+    rawName,
+    tag,
+    name,
+    label,
+    toString() {
+      return label
+    },
+  }
+}
+
+type LinkContextFor<Variant extends LinkVariant> = Variant extends 'release'
+  ? LinkReleaseContext
+  : undefined
+
+type LinkChildren<Variant extends LinkVariant> =
+  | React.ReactNode
+  | ((href: string, context: LinkContextFor<Variant>) => React.ReactNode)
+
 type AnchorBaseProps = Omit<
   React.ComponentPropsWithRef<'a'>,
   'href' | 'children'
@@ -56,38 +144,141 @@ type ConfigVariantProps<Variant extends ConfigVariants> =
 export type LinkProps<
   Source,
   Variant extends LinkVariant = 'source',
-> = Variant extends keyof typeof VARIANT_METHODS
+> = Variant extends 'release'
   ? AnchorBaseProps & {
       /** Entry to derive the href from. */
-      source: Source
+      source?: Source
 
       /** Which getter to use for the href. */
       variant?: Variant
 
       /** Options forwarded to the variant getter method. */
-      options?: VariantOptions<Source, Variant>
-
+      options?: ReleaseLinkOptions
       /** The content of the link. */
-      children?: React.ReactNode | ((href: string) => React.ReactNode)
+      children?: LinkChildren<Variant>
     }
-  : Variant extends ConfigVariants
-    ? AnchorBaseProps &
-        ConfigVariantProps<Extract<Variant, ConfigVariants>> & {
-          /** The content of the link. */
-          children?: React.ReactNode | ((href: string) => React.ReactNode)
-        }
-    : never
+  : Variant extends keyof typeof VARIANT_METHODS
+    ? AnchorBaseProps & {
+        /** Entry to derive the href from. */
+        source: Source
 
-async function computeHref<Source, Variant extends LinkVariant>({
+        /** Which getter to use for the href. */
+        variant?: Variant
+
+        /** Options forwarded to the variant getter method. */
+        options?: VariantOptions<Source, Variant>
+
+        /** The content of the link. */
+        children?: LinkChildren<Variant>
+      }
+    : Variant extends ConfigVariants
+      ? AnchorBaseProps &
+          ConfigVariantProps<Extract<Variant, ConfigVariants>> & {
+            /** The content of the link. */
+            children?: LinkChildren<Variant>
+          }
+      : never
+
+async function computeLink<Source, Variant extends LinkVariant>({
   source,
   variant,
   options,
 }: {
   source?: Source
   variant: Variant
-  options?: VariantOptions<Source, Variant> | undefined
-}) {
+  options?: LinkProps<Source, Variant>['options']
+}): Promise<{ href: string; context: LinkContextFor<Variant> }> {
   const config = await getConfig()
+
+  if (variant === 'release') {
+    const releaseOptions = options as ReleaseLinkOptions | undefined
+
+    if (
+      source &&
+      VARIANT_METHODS.release &&
+      typeof (source as any)[VARIANT_METHODS.release] === 'function'
+    ) {
+      const methodName = VARIANT_METHODS.release
+      const method = (source as any)[methodName] as (
+        options?: ReleaseLinkOptions
+      ) => Promise<string> | string
+
+      const href = await method.call(source, releaseOptions)
+
+      const releaseGetter = (source as any).getRelease as
+        | ((options?: ReleaseLinkOptions) => Promise<Release>)
+        | undefined
+
+      if (typeof releaseGetter !== 'function') {
+        throw new Error(
+          `[renoun] Link variant "${String(variant)}" is not supported for this source.`
+        )
+      }
+
+      const release = await releaseGetter.call(source, releaseOptions)
+      const context = createLinkReleaseContext(release)
+
+      return {
+        href,
+        context: context as LinkContextFor<Variant>,
+      }
+    }
+
+    const { repository: repositoryOverride, ...restOptions } =
+      releaseOptions ?? {}
+
+    let repository: Repository
+
+    if (repositoryOverride) {
+      repository =
+        repositoryOverride instanceof Repository
+          ? repositoryOverride
+          : new Repository(repositoryOverride)
+    } else {
+      const gitConfig = config.git
+      if (!gitConfig) {
+        throw new Error(
+          '[renoun] Git configuration is required to compute this Link variant. Ensure `RootProvider` is configured with a `git` repository.'
+        )
+      }
+
+      const required: (keyof typeof gitConfig)[] = [
+        'baseUrl',
+        'owner',
+        'repository',
+        'branch',
+        'source',
+        'host',
+      ]
+
+      for (const key of required) {
+        if (!(key in gitConfig) || gitConfig[key] === undefined) {
+          throw new Error(
+            `[renoun] Missing git configuration field: "${String(
+              key
+            )}". Please configure RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
+          )
+        }
+      }
+
+      repository = new Repository({
+        baseUrl: gitConfig.baseUrl,
+        host: gitConfig.host,
+        owner: gitConfig.owner,
+        repository: gitConfig.repository,
+        branch: gitConfig.branch,
+      } as RepositoryConfig)
+    }
+
+    const release = await repository.getRelease(restOptions)
+    const href = await repository.getReleaseUrl(restOptions)
+    const context = createLinkReleaseContext(release)
+
+    return {
+      href,
+      context: context as LinkContextFor<Variant>,
+    }
+  }
 
   if (VARIANT_METHODS[variant as keyof typeof VARIANT_METHODS]) {
     const methodName = VARIANT_METHODS[variant as keyof typeof VARIANT_METHODS]
@@ -100,12 +291,12 @@ async function computeHref<Source, Variant extends LinkVariant>({
     }
 
     if (methodName.endsWith('Url')) {
-      // Ensure git config exists for URL variants
       if (!config.git) {
         throw new Error(
           '[renoun] Git configuration is required to compute this Link variant. Ensure `RootProvider` is configured with a `git` repository.'
         )
       }
+
       const required: (keyof NonNullable<typeof config.git>)[] = [
         'baseUrl',
         'owner',
@@ -114,11 +305,13 @@ async function computeHref<Source, Variant extends LinkVariant>({
         'source',
         'host',
       ]
+
       for (const key of required) {
         if (!(key in config.git!) || config.git[key] === undefined) {
           throw new Error(
-            `[renoun] Missing git configuration field: "${String(key)}". Please configure \
-RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
+            `[renoun] Missing git configuration field: "${String(
+              key
+            )}". Please configure RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
           )
         }
       }
@@ -138,22 +331,29 @@ RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
         if (editorOptions) {
           editorOptions['editor'] = config.editor
         } else {
-          return method.call(source, { editor: config.editor })
+          const href = await (method as any).call(source, {
+            editor: config.editor,
+          })
+          return { href, context: undefined as LinkContextFor<Variant> }
         }
       }
 
-      return method.call(source, editorOptions)
+      const href = await (method as any).call(source, editorOptions)
+      return { href, context: undefined as LinkContextFor<Variant> }
     }
 
     const needsRepository = methodName.endsWith('Url')
     const href = needsRepository
-      ? method.call(source, {
+      ? await (method as any).call(source, {
           ...(options as any),
           repository: (options as any)?.repository ?? config.git!,
         })
-      : method.call(source, options)
+      : await (method as any).call(source, options)
 
-    return href as string
+    return {
+      href: href as string,
+      context: undefined as LinkContextFor<Variant>,
+    }
   }
 
   const gitConfig = config.git
@@ -165,15 +365,27 @@ RootProvider with a valid git object or shorthand (e.g. "owner/repo#branch").`
 
   switch (variant as ConfigVariants) {
     case 'repository':
-      return gitConfig.source
+      return {
+        href: gitConfig.source,
+        context: undefined as LinkContextFor<Variant>,
+      }
     case 'owner':
-      return `${gitConfig.baseUrl}/${gitConfig.owner}`
+      return {
+        href: `${gitConfig.baseUrl}/${gitConfig.owner}`,
+        context: undefined as LinkContextFor<Variant>,
+      }
     case 'branch': {
       const ref = (options as any)?.ref ?? gitConfig.branch
-      return `${gitConfig.source}/tree/${ref}`
+      return {
+        href: `${gitConfig.source}/tree/${ref}`,
+        context: undefined as LinkContextFor<Variant>,
+      }
     }
     case 'issue':
-      return `${gitConfig.source}/issues/new`
+      return {
+        href: `${gitConfig.source}/issues/new`,
+        context: undefined as LinkContextFor<Variant>,
+      }
     default:
       throw new Error(`[renoun] Unsupported Link variant: ${String(variant)}`)
   }
@@ -196,15 +408,30 @@ export async function Link<Source, Variant extends LinkVariant = 'source'>(
     style,
     ...restProps
   } = props
-  const href = await computeHref({ source, variant, options })
+  const { href, context } = await computeLink<Source, Variant>({
+    source,
+    variant: variant as Variant,
+    options,
+  })
 
   if (typeof children === 'function') {
-    return children(href)
+    const render = children as (
+      href: string,
+      context: LinkContextFor<Variant>
+    ) => React.ReactNode
+    return render(href, context)
   }
 
   let childrenToRender = children
 
-  if (!children && variant === 'repository') {
+  if (variant === 'release') {
+    const releaseContext = context as LinkReleaseContext
+    const releaseLabel = releaseContext.label
+
+    if (!children) {
+      childrenToRender = releaseLabel
+    }
+  } else if (!children && variant === 'repository') {
     childrenToRender = <Logo variant="gitHost" width="100%" height="100%" />
   }
 

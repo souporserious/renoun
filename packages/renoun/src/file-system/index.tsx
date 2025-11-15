@@ -62,6 +62,9 @@ import {
   type RepositoryConfig,
   type GetFileUrlOptions,
   type GetDirectoryUrlOptions,
+  type GetReleaseOptions,
+  type GetReleaseUrlOptions,
+  type Release,
 } from './Repository.js'
 import {
   DirectorySnapshot,
@@ -150,6 +153,14 @@ type ModuleRuntimeLoader<Value> = (
 /** A record of named exports in a module. */
 type ModuleExports<Value = any> = {
   [exportName: string]: Value
+}
+
+type SourceReleaseOptions = GetReleaseOptions & {
+  repository?: RepositoryConfig | string | Repository
+}
+
+type SourceReleaseUrlOptions = GetReleaseUrlOptions & {
+  repository?: RepositoryConfig | string | Repository
 }
 
 /** A function that validates and returns a specific type. */
@@ -667,6 +678,22 @@ export class File<
     })
   }
 
+  /** Get a release URL for the configured git repository. */
+  getReleaseUrl(options?: SourceReleaseUrlOptions) {
+    const { repository: repositoryOption, ...rest } = options ?? {}
+    return this.#directory
+      .getRepository(repositoryOption)
+      .getReleaseUrl(rest)
+  }
+
+  /** Retrieve metadata about a release for the configured git repository. */
+  getRelease(options?: SourceReleaseOptions): Promise<Release> {
+    const { repository: repositoryOption, ...rest } = options ?? {}
+    return this.#directory
+      .getRepository(repositoryOption)
+      .getRelease(rest)
+  }
+
   /** Get the URI to the file source code for the configured editor. */
   getEditorUri(options?: Omit<GetEditorUriOptions, 'path'>) {
     return getEditorUri({
@@ -1164,6 +1191,14 @@ export class JavaScriptModuleExport<Value> {
       line: this.#metadata?.location?.position.start.line,
       repository: options?.repository,
     })
+  }
+
+  getReleaseUrl(options?: SourceReleaseUrlOptions) {
+    return this.#file.getReleaseUrl(options)
+  }
+
+  getRelease(options?: SourceReleaseOptions) {
+    return this.#file.getRelease(options)
   }
 
   /** Get the URI to the file export source code for the configured editor. */
@@ -1772,6 +1807,14 @@ export class MDXModuleExport<Value> {
     }
   ) {
     return this.#file.getSourceUrl(options)
+  }
+
+  getReleaseUrl(options?: SourceReleaseUrlOptions) {
+    return this.#file.getReleaseUrl(options)
+  }
+
+  getRelease(options?: SourceReleaseOptions) {
+    return this.#file.getRelease(options)
   }
 
   /** Parse and validate an export value using the configured schema if available. */
@@ -3860,6 +3903,18 @@ export class Directory<
       type: 'source',
       ref: options?.ref,
     })
+  }
+
+  /** Get a release URL for the configured git repository. */
+  getReleaseUrl(options?: SourceReleaseUrlOptions) {
+    const { repository: repositoryOption, ...rest } = options ?? {}
+    return this.getRepository(repositoryOption).getReleaseUrl(rest)
+  }
+
+  /** Retrieve metadata about a release for the configured git repository. */
+  getRelease(options?: SourceReleaseOptions): Promise<Release> {
+    const { repository: repositoryOption, ...rest } = options ?? {}
+    return this.getRepository(repositoryOption).getRelease(rest)
   }
 
   /** Get the URI to the directory source code for the configured editor. */

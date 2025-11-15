@@ -1,3 +1,4 @@
+import React from 'react'
 import { Link, Logo, JavaScriptFile } from 'renoun'
 
 const file = new JavaScriptFile({
@@ -53,6 +54,15 @@ export function ConfigLinks() {
       </li>
       <li>
         <Link variant="issue">New Issue</Link>
+      </li>
+      <li>
+        <Link variant="release">
+          {(href, release) => (
+            <a href={href}>
+              {release.name}@{release.tag}
+            </a>
+          )}
+        </Link>
       </li>
     </ul>
   )

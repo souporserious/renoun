@@ -88,13 +88,13 @@ export interface ReleaseAsset {
 }
 
 export interface Release {
-  /** The release tag name, when available. */
+  /** The release tag name. */
   tagName?: string
 
-  /** The release title, when available. */
+  /** The release title. */
   name?: string
 
-  /** The HTML URL to the release (or releases overview when unavailable). */
+  /** The HTML URL to the release or releases overview when unavailable. */
   htmlUrl: string
 
   /** ISO timestamp for when the release was published, if provided by the host. */
