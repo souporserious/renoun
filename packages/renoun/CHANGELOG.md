@@ -1,5 +1,11 @@
 # renoun
 
+## 10.11.1
+
+### Patch Changes
+
+- 147cb03: Adds `getFirstCommitDate` and `getLastCommitDate` metadata helpers to `JavaScriptModuleExport`.
+
 ## 10.11.0
 
 ### Minor Changes
