@@ -2,6 +2,8 @@ import type { Node } from 'estree'
 import { createProcessor } from '@mdx-js/mdx'
 import { visit } from 'unist-util-visit'
 
+import { safeAssign } from './safe-assign.js'
+
 let processor: ReturnType<typeof createProcessor>
 
 /** Parse MDX source text and return a map of export names to their static literal values. */
@@ -115,7 +117,7 @@ function evaluate(node: Node, scope: Map<string, any>): any {
             object[key] = evaluate(prop.value, scope)
           }
         } else if (prop.type === 'SpreadElement') {
-          Object.assign(object, evaluate(prop.argument, scope))
+          safeAssign(object, evaluate(prop.argument, scope))
         }
       }
       return object

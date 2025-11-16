@@ -1,3 +1,4 @@
+import { safeAssign } from './safe-assign.js'
 import { getTsMorph } from './ts-morph.js'
 import type {
   Expression,
@@ -134,7 +135,10 @@ function getObjectBindingPatternInitializerValue(
     previousDefaultValue?.constructor === Object &&
     (defaultValue as Record<string, any>)?.constructor === Object
   ) {
-    return Object.assign(previousDefaultValue, defaultValue)
+    return safeAssign(
+      previousDefaultValue as Record<PropertyKey, unknown>,
+      defaultValue
+    ) as LiteralExpressionValue
   }
 
   return defaultValue

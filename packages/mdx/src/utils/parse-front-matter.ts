@@ -1,3 +1,5 @@
+import { safeAssign } from './safe-assign.js'
+
 export interface FrontMatterParseResult {
   content: string
   frontMatter?: Record<string, unknown>
@@ -47,14 +49,15 @@ export function parseFrontMatter(source: string): FrontMatterParseResult {
   }
 
   const frontMatterRaw = source.slice(frontMatterStart, closingLineStart)
-  const contentStart = skipNewline(source, findLineEnd(source, closingLineStart))
+  const contentStart = skipNewline(
+    source,
+    findLineEnd(source, closingLineStart)
+  )
   const content = stripLeadingBlankLines(source.slice(contentStart))
 
   const parsed = parseFrontMatterBlock(frontMatterRaw)
 
-  return parsed === undefined
-    ? { content }
-    : { content, frontMatter: parsed }
+  return parsed === undefined ? { content } : { content, frontMatter: parsed }
 }
 
 function stripLeadingBlankLines(value: string): string {
@@ -70,7 +73,9 @@ interface LineToken {
   content: string
 }
 
-function parseFrontMatterBlock(raw: string): Record<string, unknown> | undefined {
+function parseFrontMatterBlock(
+  raw: string
+): Record<string, unknown> | undefined {
   const normalized = raw.replace(/\r\n?/g, '\n')
   const rawLines = normalized.split('\n')
   const lines: LineToken[] = []
@@ -218,7 +223,7 @@ function parseFrontMatterBlock(raw: string): Record<string, unknown> | undefined
           !lines[index].content.startsWith('- ')
         ) {
           const nested = parseObject(lines[index].indent)
-          Object.assign(value, nested)
+          safeAssign(value, nested)
         }
       } else {
         item = parseScalar(rawValue)
@@ -235,7 +240,7 @@ function parseFrontMatterBlock(raw: string): Record<string, unknown> | undefined
             typeof item === 'object' &&
             !Array.isArray(item)
           ) {
-            Object.assign(item, nested)
+            safeAssign(item, nested)
           } else if (item === null) {
             item = nested
           } else if (
@@ -388,7 +393,9 @@ function parseInlineArray(source: string): any[] | undefined {
   return items
 }
 
-function parseInlineObject(source: string): Record<string, unknown> | undefined {
+function parseInlineObject(
+  source: string
+): Record<string, unknown> | undefined {
   const trimmed = source.trim()
 
   if (!trimmed) {

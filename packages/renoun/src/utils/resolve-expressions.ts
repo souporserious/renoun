@@ -1,3 +1,4 @@
+import { safeAssign } from './safe-assign.js'
 import { getTsMorph } from './ts-morph.js'
 import type {
   ArrayLiteralExpression,
@@ -100,7 +101,7 @@ export function resolveObjectLiteralExpression(
     if (Node.isSpreadAssignment(property)) {
       const spreadExpression = property.getExpression()
 
-      Object.assign(object, resolveLiteralExpression(spreadExpression))
+      safeAssign(object, resolveLiteralExpression(spreadExpression))
     }
   }
 

@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 
 import { getDebugLogger } from '../../utils/debug.js'
+import { safeAssign } from '../../utils/safe-assign.js'
 import type { WebSocketResponse } from './server.js'
 
 type Request = {
@@ -708,7 +709,7 @@ export class WebSocketClient extends EventEmitter {
         'message' in error
       ) {
         const constructedError = new Error((error as any).message)
-        Object.assign(constructedError, error)
+        safeAssign(constructedError as any, error)
         throw constructedError
       }
 
@@ -1026,7 +1027,7 @@ function parseServerError(error: any): Error {
   ) {
     const constructed = new Error((error as any).message)
     // Preserve server-provided properties like code, data, etc.
-    Object.assign(constructed, error)
+    safeAssign(constructed as any, error)
     // If server included detailed error info under data, propagate it.
     const data = (error as any).data
     if (data && typeof data === 'object') {
