@@ -31,6 +31,10 @@ import {
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
 import type { GitMetadata } from '../utils/get-local-git-file-metadata.js'
 import {
+  getLocalGitExportMetadata,
+  type GitExportMetadata,
+} from '../utils/get-local-git-export-metadata.js'
+import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
   type HasJavaScriptLikeExtensions,
@@ -267,6 +271,23 @@ function isGitMetadataProvider(
   return (
     typeof (fileSystem as Partial<GitMetadataProvider>).getGitFileMetadata ===
     'function'
+  )
+}
+
+interface GitExportMetadataProvider {
+  getGitExportMetadata(
+    path: string,
+    startLine: number,
+    endLine: number
+  ): Promise<GitExportMetadata>
+}
+
+function isGitExportMetadataProvider(
+  fileSystem: FileSystem
+): fileSystem is FileSystem & GitExportMetadataProvider {
+  return (
+    typeof (fileSystem as Partial<GitExportMetadataProvider>)
+      .getGitExportMetadata === 'function'
   )
 }
 
@@ -1282,6 +1303,62 @@ export class JavaScriptModuleExport<Value> {
       column: options?.column,
       editor: options?.editor,
     })
+  }
+
+  /** Get the first git commit date that touched this export. */
+  async getFirstCommitDate() {
+    const metadata = await this.getStaticMetadata()
+
+    if (!metadata?.location) {
+      return undefined
+    }
+
+    const startLine = metadata.location.position.start.line
+    const endLine = Math.max(startLine, metadata.location.position.end.line)
+    const location = await this.#getLocation()
+
+    if (location === undefined) {
+      return undefined
+    }
+
+    const fileSystem = this.#file.getParent().getFileSystem()
+    const gitMetadata = isGitExportMetadataProvider(fileSystem)
+      ? await fileSystem.getGitExportMetadata(
+          location.path,
+          startLine,
+          endLine
+        )
+      : await getLocalGitExportMetadata(location.path, startLine, endLine)
+
+    return gitMetadata.firstCommitDate
+  }
+
+  /** Get the last git commit date that touched this export. */
+  async getLastCommitDate() {
+    const metadata = await this.getStaticMetadata()
+
+    if (!metadata?.location) {
+      return undefined
+    }
+
+    const startLine = metadata.location.position.start.line
+    const endLine = Math.max(startLine, metadata.location.position.end.line)
+    const location = await this.#getLocation()
+
+    if (location === undefined) {
+      return undefined
+    }
+
+    const fileSystem = this.#file.getParent().getFileSystem()
+    const gitMetadata = isGitExportMetadataProvider(fileSystem)
+      ? await fileSystem.getGitExportMetadata(
+          location.path,
+          startLine,
+          endLine
+        )
+      : await getLocalGitExportMetadata(location.path, startLine, endLine)
+
+    return gitMetadata.lastCommitDate
   }
 
   /** Get the resolved type of the export. */

@@ -1,5 +1,6 @@
 import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.js'
 import type { GitMetadata } from '../utils/get-local-git-file-metadata.js'
+import type { GitExportMetadata } from '../utils/get-local-git-export-metadata.js'
 import { Semaphore } from '../utils/Semaphore.js'
 import { MemoryFileSystem, type MemoryFileContent } from './MemoryFileSystem.js'
 import type { DirectoryEntry } from './types.js'
@@ -86,6 +87,12 @@ type GitMetadataState = {
   >
   firstCommitDate?: Date
   lastCommitDate?: Date
+}
+
+type GitHubBlameRange = {
+  startingLine?: number
+  endingLine?: number
+  commit?: { committedDate?: string }
 }
 
 const defaultOrigins = {
@@ -197,6 +204,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
   #include?: string[]
   #exclude?: string[]
   #gitMetadataCache: Map<string, GitMetadata>
+  #gitBlameCache: Map<string, Promise<GitHubBlameRange[] | null>>
   #ghBlameBatchQueue?: {
     path: string
     resolve: (ranges: any[] | null) => void
@@ -263,6 +271,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
     this.#symlinkMap = new Map()
     this.#gitMetadataCache = new Map()
+    this.#gitBlameCache = new Map()
     this.#initPromise = this.#loadArchive().catch((error) => {
       this.#initPromise = undefined
       throw error
@@ -566,6 +575,33 @@ export class GitHostFileSystem extends MemoryFileSystem {
     return metadata
   }
 
+  async getGitExportMetadata(
+    path: string,
+    startLine: number,
+    endLine: number
+  ): Promise<GitExportMetadata> {
+    await this.#ensureInitialized()
+
+    const normalizedPath = this.#normalizeGitMetadataPath(path)
+
+    if (this.#host === 'github' && this.#token) {
+      const ranges = await this.#getGitHubBlameRanges(normalizedPath)
+      if (ranges && ranges.length > 0) {
+        return this.#summarizeGitHubBlameRanges(
+          ranges,
+          startLine,
+          endLine
+        )
+      }
+    }
+
+    const fallback = await this.getGitFileMetadata(path)
+    return {
+      firstCommitDate: fallback.firstCommitDate,
+      lastCommitDate: fallback.lastCommitDate,
+    }
+  }
+
   #createEmptyGitMetadata(): GitMetadata {
     return {
       authors: [],
@@ -609,6 +645,73 @@ export class GitHostFileSystem extends MemoryFileSystem {
       firstCommitDate: undefined,
       lastCommitDate: undefined,
     }
+  }
+
+  async #getGitHubBlameRanges(
+    path: string
+  ): Promise<GitHubBlameRange[] | null> {
+    if (!this.#token || !this.#ownerEncoded || !this.#repoEncoded) {
+      return null
+    }
+
+    const cacheKey = `${this.#ref}::${path}`
+
+    if (!this.#gitBlameCache.has(cacheKey)) {
+      this.#gitBlameCache.set(
+        cacheKey,
+        this.#enqueueGitHubBlameRequest(path).catch(() => null)
+      )
+    }
+
+    const cached = this.#gitBlameCache.get(cacheKey)
+    if (!cached) {
+      return null
+    }
+    return (await cached) ?? null
+  }
+
+  #summarizeGitHubBlameRanges(
+    ranges: GitHubBlameRange[],
+    startLine: number,
+    endLine: number
+  ): GitExportMetadata {
+    const normalizedStart = Math.max(1, Math.min(startLine, endLine))
+    const normalizedEnd = Math.max(normalizedStart, Math.max(startLine, endLine))
+
+    let firstCommitDate: Date | undefined
+    let lastCommitDate: Date | undefined
+
+    for (const range of ranges) {
+      const rangeStart = Number(range?.startingLine)
+      const rangeEnd = Number(range?.endingLine)
+
+      if (!Number.isFinite(rangeStart) || !Number.isFinite(rangeEnd)) {
+        continue
+      }
+
+      if (rangeEnd < normalizedStart || rangeStart > normalizedEnd) {
+        continue
+      }
+
+      const dateString = range?.commit?.committedDate
+      if (typeof dateString !== 'string') {
+        continue
+      }
+
+      const date = new Date(dateString)
+      if (Number.isNaN(date.getTime())) {
+        continue
+      }
+
+      if (firstCommitDate === undefined || date < firstCommitDate) {
+        firstCommitDate = date
+      }
+      if (lastCommitDate === undefined || date > lastCommitDate) {
+        lastCommitDate = date
+      }
+    }
+
+    return { firstCommitDate, lastCommitDate }
   }
 
   #updateGitMetadataState(

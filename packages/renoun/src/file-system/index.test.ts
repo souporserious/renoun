@@ -4,6 +4,7 @@ import { runInNewContext } from 'node:vm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { getRootDirectory } from '../utils/get-root-directory.js'
+import * as gitExportMetadataModule from '../utils/get-local-git-export-metadata.js'
 import * as v from 'valibot'
 import { z } from 'zod'
 
@@ -1683,6 +1684,100 @@ describe('file system', () => {
 
     expect(fileExport).toBeInstanceOf(JavaScriptModuleExport)
     expect(fileExport.getName()).toBe('Button')
+  })
+
+  test('getFirstCommitDate uses git metadata provider when available', async () => {
+    const firstCommitDate = new Date('2023-12-31T00:00:00.000Z')
+    const spy = vi.fn().mockResolvedValue({
+      firstCommitDate,
+      lastCommitDate: new Date('2024-01-02T00:00:00.000Z'),
+    })
+
+    class GitAwareMemoryFileSystem extends MemoryFileSystem {
+      async getGitExportMetadata(path: string, startLine: number, endLine: number) {
+        return spy(path, startLine, endLine)
+      }
+    }
+
+    const fileSystem = new GitAwareMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+    const fileExport = await file.getExport('value')
+
+    await expect(fileExport.getFirstCommitDate()).resolves.toEqual(firstCommitDate)
+    expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
+  })
+
+  test('getFirstCommitDate falls back to local git metadata when provider missing', async () => {
+    const firstCommitDate = new Date('2022-01-01T00:00:00.000Z')
+    const spy = vi
+      .spyOn(gitExportMetadataModule, 'getLocalGitExportMetadata')
+      .mockResolvedValue({ firstCommitDate, lastCommitDate: undefined })
+
+    try {
+      const fileSystem = new MemoryFileSystem({
+        'index.ts': 'export const answer = 42',
+      })
+      const directory = new Directory({ fileSystem })
+      const file = await directory.getFile('index', 'ts')
+      const fileExport = await file.getExport('answer')
+
+      await expect(fileExport.getFirstCommitDate()).resolves.toEqual(
+        firstCommitDate
+      )
+      expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  test('getLastCommitDate uses git metadata provider when available', async () => {
+    const lastCommitDate = new Date('2024-01-02T00:00:00.000Z')
+    const spy = vi.fn().mockResolvedValue({
+      firstCommitDate: new Date('2023-12-31T00:00:00.000Z'),
+      lastCommitDate,
+    })
+
+    class GitAwareMemoryFileSystem extends MemoryFileSystem {
+      async getGitExportMetadata(path: string, startLine: number, endLine: number) {
+        return spy(path, startLine, endLine)
+      }
+    }
+
+    const fileSystem = new GitAwareMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+    const fileExport = await file.getExport('value')
+
+    await expect(fileExport.getLastCommitDate()).resolves.toEqual(lastCommitDate)
+    expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
+  })
+
+  test('getLastCommitDate falls back to local git metadata when provider missing', async () => {
+    const lastCommitDate = new Date('2022-02-02T00:00:00.000Z')
+    const spy = vi
+      .spyOn(gitExportMetadataModule, 'getLocalGitExportMetadata')
+      .mockResolvedValue({ firstCommitDate: undefined, lastCommitDate })
+
+    try {
+      const fileSystem = new MemoryFileSystem({
+        'index.ts': 'export const answer = 42',
+      })
+      const directory = new Directory({ fileSystem })
+      const file = await directory.getFile('index', 'ts')
+      const fileExport = await file.getExport('answer')
+
+      await expect(fileExport.getLastCommitDate()).resolves.toEqual(
+        lastCommitDate
+      )
+      expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   test('file export type reference', async () => {
