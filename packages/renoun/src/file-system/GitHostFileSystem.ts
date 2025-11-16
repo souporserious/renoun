@@ -126,7 +126,10 @@ function buildOriginPolicy(
   }
 }
 
-const clamp = (ms: number, max = 15 * 60_000) => Math.min(Math.max(ms, 0), max)
+const clamp = (ms: number, max = 60_000) => Math.min(Math.max(ms, 0), max)
+
+const RATE_LIMIT_GUIDANCE =
+  'Try providing a personal access token or retry later.'
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -1180,6 +1183,15 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
   /** Fetch with retry and rate-limit handling. */
   async #fetchWithRetry(url: string, maxAttempts = 3): Promise<Response> {
+    type FetchFailure =
+      | { type: 'rateLimit'; status: number; retryAfterMs?: number }
+      | { type: 'response'; status: number; url: string }
+      | { type: 'error'; error: unknown }
+
+    let lastFailure: FetchFailure | undefined
+    let notifiedFirstRetryFailure = false
+    let notifiedRateLimit = false
+
     for (let attempt = 0; attempt < Math.max(1, maxAttempts); attempt++) {
       let skipBackoff = false
       const controller = new AbortController()
@@ -1247,6 +1259,22 @@ export class GitHostFileSystem extends MemoryFileSystem {
             const retryAfter = rawMs !== undefined ? clamp(rawMs) : undefined
 
             if (retryAfter !== undefined) {
+              lastFailure = {
+                type: 'rateLimit',
+                status: response.status,
+                retryAfterMs: retryAfter,
+              }
+              if (!notifiedRateLimit) {
+                const hostName = this.#formatHostName()
+                const waitSeconds = Math.ceil(retryAfter / 1_000)
+                const waitMessage = waitSeconds
+                  ? ` Waiting about ${waitSeconds} seconds before trying again.`
+                  : ''
+                console.warn(
+                  `[renoun] ${hostName} is rate limiting this request.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
+                )
+                notifiedRateLimit = true
+              }
               await sleep(retryAfter)
               // Honor server-advised delay exactly; skip client-side backoff
               skipBackoff = true
@@ -1255,6 +1283,11 @@ export class GitHostFileSystem extends MemoryFileSystem {
           }
 
           if (response.status >= 500 && response.status !== 501) {
+            lastFailure = {
+              type: 'response',
+              status: response.status,
+              url: response.url,
+            }
             if (attempt === maxAttempts - 1) {
               return response
             }
@@ -1273,6 +1306,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
         ) {
           throw error
         }
+        lastFailure = { type: 'error', error }
         if (attempt === maxAttempts - 1) {
           throw error
         }
@@ -1283,11 +1317,74 @@ export class GitHostFileSystem extends MemoryFileSystem {
         }
       }
 
+      if (
+        attempt === 1 &&
+        !notifiedFirstRetryFailure &&
+        lastFailure &&
+        !(lastFailure.type === 'rateLimit' && notifiedRateLimit)
+      ) {
+        const hostName = this.#formatHostName()
+        let details: string
+        if (lastFailure.type === 'rateLimit') {
+          const waitSeconds =
+            lastFailure.retryAfterMs !== undefined
+              ? Math.ceil(lastFailure.retryAfterMs / 1_000)
+              : undefined
+          const waitMessage = waitSeconds
+            ? ` Waiting about ${waitSeconds} seconds before trying again.`
+            : ''
+          details = `We're still being rate limited by ${hostName}.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
+        } else if (lastFailure.type === 'response') {
+          details = `The host responded with status ${lastFailure.status}.`
+        } else {
+          const message =
+            lastFailure.error instanceof Error
+              ? lastFailure.error.message
+              : 'an unknown error'
+          details = `Encountered ${message} while contacting ${hostName}.`
+        }
+        console.warn(`[renoun] Fetch retry is still failing. ${details}`)
+        notifiedFirstRetryFailure = true
+      }
+
       if (skipBackoff) {
         continue
       }
       const backoff = 2 ** attempt * 200 + Math.random() * 100
       await sleep(backoff)
+    }
+
+    const hostName = this.#formatHostName()
+    if (lastFailure?.type === 'rateLimit') {
+      const waitMessage =
+        lastFailure.retryAfterMs !== undefined
+          ? ` after waiting about ${Math.ceil(lastFailure.retryAfterMs / 1_000)} seconds`
+          : ''
+      throw new Error(
+        `[renoun] Fetch failed because ${hostName} rate limited the request${waitMessage}. ${RATE_LIMIT_GUIDANCE}`
+      )
+    }
+    if (lastFailure?.type === 'response') {
+      const host = (() => {
+        try {
+          return new URL(lastFailure.url).host
+        } catch {
+          return this.#formatHostName()
+        }
+      })()
+      throw new Error(
+        `[renoun] Fetch failed with status ${lastFailure.status} from ${host}.`
+      )
+    }
+    if (lastFailure?.type === 'error') {
+      if (lastFailure.error instanceof Error) {
+        throw new Error(
+          `[renoun] Failed to fetch after ${maxAttempts} attempts: ${lastFailure.error.message}`
+        )
+      }
+      throw new Error(
+        `[renoun] Failed to fetch after ${maxAttempts} attempts due to an unknown error`
+      )
     }
 
     throw new Error(`[renoun] Failed to fetch after ${maxAttempts} attempts`)
@@ -1312,6 +1409,18 @@ export class GitHostFileSystem extends MemoryFileSystem {
       this.#initPromise = undefined
       await this.#ensureInitialized()
     }
+  }
+
+  #formatHostName() {
+    switch (this.#host) {
+      case 'github':
+        return 'GitHub'
+      case 'gitlab':
+        return 'GitLab'
+      case 'bitbucket':
+        return 'Bitbucket'
+    }
+    return 'Git host'
   }
 
   #getArchiveUrl(ref?: string) {
