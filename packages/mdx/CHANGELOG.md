@@ -1,5 +1,16 @@
 # @renoun/mdx
 
+## 3.5.0
+
+### Minor Changes
+
+- c415977: Extends generated `heading` export metadata to include a `summary` field in the `@renoun/mdx/remark/add-headings` plugin.
+- 2f4ba21: Adds a new `@renoun/mdx/remark/add-front-matter` plugin that will trim the front matter and export it from the file. This also exposes a `getFrontMatter` method for `MarkdownFile` and `MDXFile` utilities.
+
+### Patch Changes
+
+- 87c0a98: Guards object merges against prototype pollution in the MDX and core packages by skipping dangerous keys when spreading user-authored data.
+
 ## 3.4.1
 
 ### Patch Changes
