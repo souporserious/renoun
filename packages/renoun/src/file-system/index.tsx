@@ -593,7 +593,62 @@ export class File<
   /** Get the file path relative to the workspace root. */
   getRelativePathToWorkspace() {
     const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.getRelativePathToWorkspace(this.#path)
+    const rawPath = this.#path
+
+    // If the file path is already absolute or explicitly relative from the
+    // workspace root (`./` / `../`), delegate directly to the file system.
+    if (
+      rawPath.startsWith('/') ||
+      rawPath.startsWith('./') ||
+      rawPath.startsWith('../')
+    ) {
+      return fileSystem.getRelativePathToWorkspace(rawPath)
+    }
+
+    // Base workspace-relative path for this file, ignoring any Directory prefix.
+    const workspacePathForFile = fileSystem.getRelativePathToWorkspace(rawPath)
+    const directoryWorkspacePath = this.#directory.getRelativePathToWorkspace()
+
+    // If the directory is at the workspace root ("" or ".") or its workspace
+    // path is unknown, the base workspace path is already correct.
+    if (!directoryWorkspacePath || directoryWorkspacePath === '.') {
+      return workspacePathForFile
+    }
+
+    // Derive the workspace "scope" (e.g. "packages/renoun") from the base
+    // workspace path by stripping the raw path suffix when possible.
+    let scope = ''
+    const suffix = `/${rawPath}`
+    if (workspacePathForFile.endsWith(suffix)) {
+      scope = workspacePathForFile.slice(
+        0,
+        workspacePathForFile.length - suffix.length
+      )
+    }
+
+    // If we could not determine a scope, fall back to joining the directory
+    // workspace path with the raw file path.
+    if (!scope) {
+      return joinPaths(directoryWorkspacePath, rawPath)
+    }
+
+    // Normalize the directory workspace path by removing any repeated
+    // occurrences of the scope prefix, then recombine:
+    // scope + "/" + (directoryWorkspacePath without leading scope segments) + rawPath
+    let remainingPath = directoryWorkspacePath
+    const repeatedPrefix = `${scope}/`
+
+    while (remainingPath.startsWith(repeatedPrefix)) {
+      remainingPath = remainingPath.slice(repeatedPrefix.length)
+    }
+
+    const finalPath = remainingPath.replace(/^\/+/, '')
+
+    if (!finalPath) {
+      return joinPaths(scope, rawPath)
+    }
+
+    return joinPaths(scope, finalPath, rawPath)
   }
 
   /** Get the absolute file system path. */
@@ -681,17 +736,13 @@ export class File<
   /** Get a release URL for the configured git repository. */
   getReleaseUrl(options?: SourceReleaseUrlOptions) {
     const { repository: repositoryOption, ...rest } = options ?? {}
-    return this.#directory
-      .getRepository(repositoryOption)
-      .getReleaseUrl(rest)
+    return this.#directory.getRepository(repositoryOption).getReleaseUrl(rest)
   }
 
   /** Retrieve metadata about a release for the configured git repository. */
   getRelease(options?: SourceReleaseOptions): Promise<Release> {
     const { repository: repositoryOption, ...rest } = options ?? {}
-    return this.#directory
-      .getRepository(repositoryOption)
-      .getRelease(rest)
+    return this.#directory.getRepository(repositoryOption).getRelease(rest)
   }
 
   /** Get the URI to the file source code for the configured editor. */

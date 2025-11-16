@@ -78,6 +78,21 @@ describe('file system', () => {
       const file = new File({ path: '01.beep.boop.bop' })
       expect(file.getName()).toBe('01.beep.boop.bop')
     })
+
+    test('applies directory instance prefix when provided with relative path', () => {
+      const directory = new Directory({
+        path: 'packages/renoun/src/components',
+      })
+
+      const file = new File({
+        directory,
+        path: 'Link/Link.tsx',
+      })
+
+      expect(file.getRelativePathToWorkspace()).toBe(
+        'packages/renoun/src/components/Link/Link.tsx'
+      )
+    })
   })
 
   test('node file system read directory', async () => {
@@ -2047,9 +2062,7 @@ describe('file system', () => {
 
     const nested = await directory.getFile('integrations/stripe', 'mdx')
 
-    expect(nested.getRelativePathToWorkspace()).toBe(
-      'integrations/stripe.mdx'
-    )
+    expect(nested.getRelativePathToWorkspace()).toBe('integrations/stripe.mdx')
   })
 
   test('entry group', async () => {
