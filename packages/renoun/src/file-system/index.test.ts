@@ -1395,6 +1395,31 @@ describe('file system', () => {
     expect(getTextSpy).toHaveBeenCalledTimes(1)
   })
 
+  test('mdx file provides chat urls with raw source', async () => {
+    const source = ['# Hello', '', '## World'].join('\n')
+    const fileSystem = new MemoryFileSystem({
+      'index.mdx': source,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index.mdx')
+
+    const chatGptUrl = await file.getChatGPTUrl()
+    const claudeUrl = await file.getClaudeUrl()
+
+    expect(chatGptUrl).toBe(
+      `https://chat.openai.com/?${new URLSearchParams({
+        hints: 'search',
+        q: source,
+      })}`
+    )
+    expect(claudeUrl).toBe(
+      `https://claude.ai/new?${new URLSearchParams({
+        hints: 'search',
+        q: source,
+      })}`
+    )
+  })
+
   test('markdown file default loader provides content and headings', async () => {
     const fileSystem = new MemoryFileSystem({
       'index.md': '# Hello\n\n## World',
@@ -1481,6 +1506,31 @@ describe('file system', () => {
     await file.getHeadings()
 
     expect(getTextSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test('markdown file provides chat urls with raw source', async () => {
+    const source = ['# Hello', '', '## World'].join('\n')
+    const fileSystem = new MemoryFileSystem({
+      'index.md': source,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = (await directory.getFile('index', 'md')) as MarkdownFile
+
+    const chatGptUrl = await file.getChatGPTUrl()
+    const claudeUrl = await file.getClaudeUrl()
+
+    expect(chatGptUrl).toBe(
+      `https://chat.openai.com/?${new URLSearchParams({
+        hints: 'search',
+        q: source,
+      })}`
+    )
+    expect(claudeUrl).toBe(
+      `https://claude.ai/new?${new URLSearchParams({
+        hints: 'search',
+        q: source,
+      })}`
+    )
   })
 
   test('mdx file getContent/getHeadings alias exported values', async () => {

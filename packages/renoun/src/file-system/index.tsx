@@ -2115,6 +2115,20 @@ export class MDXFile<
     return result.frontMatter
   }
 
+  async getChatGPTUrl(): Promise<string> {
+    const q = await this.#getRawSource()
+    const params = new URLSearchParams({ hints: 'search', q })
+
+    return `https://chat.openai.com/?${params}`
+  }
+
+  async getClaudeUrl(): Promise<string> {
+    const q = await this.#getRawSource()
+    const params = new URLSearchParams({ hints: 'search', q })
+
+    return `https://claude.ai/new?${params}`
+  }
+
   async getExports() {
     const fileModule = await this.#getModule()
     const exportNames = Object.keys(fileModule)
@@ -2347,6 +2361,20 @@ export class MarkdownFile<
 
     const result = await this.#getSourceWithFrontMatter()
     return result.frontMatter
+  }
+
+  async getChatGPTUrl(): Promise<string> {
+    const q = await this.#getRawSource()
+    const params = new URLSearchParams({ hints: 'search', q })
+
+    return `https://chat.openai.com/?${params}`
+  }
+
+  async getClaudeUrl(): Promise<string> {
+    const q = await this.#getRawSource()
+    const params = new URLSearchParams({ hints: 'search', q })
+
+    return `https://claude.ai/new?${params}`
   }
 
   #getModule() {
