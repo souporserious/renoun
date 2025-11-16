@@ -444,12 +444,14 @@ export interface FileOptions<
   basePathname?: string | null
   slugCasing?: SlugCasing
   depth?: number
-  directory?: Directory<
-    Types,
-    WithDefaultTypes<Types>,
-    ModuleLoaders,
-    DirectoryFilter<FileSystemEntry<Types>, Types>
-  >
+  directory?:
+    | PathLike
+    | Directory<
+        Types,
+        WithDefaultTypes<Types>,
+        ModuleLoaders,
+        DirectoryFilter<FileSystemEntry<Types>, Types>
+      >
 }
 
 /** A file in the file system. */
@@ -469,12 +471,19 @@ export class File<
   #directory: Directory<DirectoryTypes>
 
   constructor(options: FileOptions<DirectoryTypes, Path>) {
+    if (options.directory instanceof Directory) {
+      this.#directory = options.directory
+    } else if (options.directory !== undefined) {
+      this.#directory = new Directory({ path: options.directory })
+    } else {
+      this.#directory = new Directory()
+    }
+
     const resolvedPath = resolveSchemePath(options.path)
     this.#name = baseName(resolvedPath)
     this.#path = resolvedPath
     this.#basePathname = options.basePathname
     this.#slugCasing = options.slugCasing ?? 'kebab'
-    this.#directory = options.directory ?? new Directory()
 
     const match = this.#name.match(
       /^(?:(\d+)[.-])?([^.]+)(?:\.([^.]+))?(?:\.([^.]+))?$/

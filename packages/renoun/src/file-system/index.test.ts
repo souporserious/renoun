@@ -79,6 +79,28 @@ describe('file system', () => {
       expect(file.getName()).toBe('01.beep.boop.bop')
     })
 
+    test('applies string directory prefix when provided with relative path', () => {
+      const file = new File({
+        directory: 'packages/renoun/src/components',
+        path: 'Link/Link.tsx',
+      })
+
+      expect(file.getRelativePathToWorkspace()).toBe(
+        'packages/renoun/src/components/Link/Link.tsx'
+      )
+    })
+
+    test('applies URL directory prefix when provided with relative path', () => {
+      const file = new File({
+        directory: new URL('../components', import.meta.url),
+        path: 'Link/Link.tsx',
+      })
+
+      expect(file.getRelativePathToWorkspace()).toBe(
+        'packages/renoun/src/components/Link/Link.tsx'
+      )
+    })
+
     test('applies directory instance prefix when provided with relative path', () => {
       const directory = new Directory({
         path: 'packages/renoun/src/components',
