@@ -1,5 +1,31 @@
 # renoun
 
+## 10.11.0
+
+### Minor Changes
+
+- b583b1d: Adds a `release` variant to the `Link` component that resolves tagged versions, assets, source archives, and compare URLs from repository metadata.
+- 5103d0d: Allows `CodeBlock` and `Reference` components and file system utilities to accept `URL` path inputs alongside strings.
+- 2f4ba21: Adds a new `@renoun/mdx/remark/add-front-matter` plugin that will trim the front matter and export it from the file. This also exposes a `getFrontMatter` method for `MarkdownFile` and `MDXFile` utilities.
+- 657f565: Enhances the `Repository` utility with release helpers that can now do specifier matching, asset and archive selection, and compare URLs.
+
+### Patch Changes
+
+- c415977: Extends generated `heading` export metadata to include a `summary` field in the `@renoun/mdx/remark/add-headings` plugin.
+- bfd8799: Adds ChatGPT and Claude URL helpers to MDX and Markdown files to prefill raw source content with search hints.
+- dfadffb: Fixes `JavaScriptFile#getExport` name types widening. The name now properly autocompletes again based on the defined schema.
+- 7a2f484: Fixes `File.getRelativePathToWorkspace` so that files constructed with a `directory` instance and a relative path correctly resolve to the directory's workspace-prefixed path without duplicating segments.
+- e6e12ea: Improves `GitHostFileSystem` rate limit logging to warn immediately and surface clearer retry failures.
+- 50f7acd: Handles when `localStorage` is not available in the `Command` component copy action
+- acd7a43: Fixes directory representatives choosing the readme file instead of the
+  same-named page when both are present.
+- 87c0a98: Guards object merges against prototype pollution in the MDX and core packages by skipping dangerous keys when spreading user-authored data.
+- 1192dbd: Allows `File` utility `directory` option to accept a string path or `URL`.
+- Updated dependencies [c415977]
+- Updated dependencies [2f4ba21]
+- Updated dependencies [87c0a98]
+  - @renoun/mdx@3.5.0
+
 ## 10.10.2
 
 ### Patch Changes
