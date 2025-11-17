@@ -51,6 +51,7 @@ import {
   removeAllExtensions,
   removeOrderPrefixes,
   relativePath,
+  trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
@@ -5090,7 +5091,7 @@ function normalizeExportSubpath(exportPath: string) {
     normalized = normalized.slice(0, wildcardIndex)
   }
 
-  return normalized.replace(/\/+$/, '')
+  return trimTrailingSlashes(normalized)
 }
 
 function isDirectoryLikeExport(exportPath: string) {
@@ -5337,10 +5338,10 @@ function getWorkspacePatternBase(pattern: string) {
 
   const wildcardIndex = normalized.search(/[\*\?\[{]/)
   if (wildcardIndex === -1) {
-    return normalized.replace(/\/+$/, '')
+    return trimTrailingSlashes(normalized)
   }
 
-  return normalized.slice(0, wildcardIndex).replace(/\/+$/, '')
+  return trimTrailingSlashes(normalized.slice(0, wildcardIndex))
 }
 
 function buildWorkspaceSearchRoots(patterns: string[]) {
@@ -5535,6 +5536,8 @@ export class Package<
   #fileSystem: FileSystem
   #packageJson?: PackageJson
   #packageAbsolutePath?: string
+  #repository?: Repository | RepositoryConfig | string
+  #exportLoaders?: ExportLoaders
   #exportOverrides?: Record<
     string,
     PackageExportOptions<Types, LoaderTypes, Loaders, Filter>
@@ -5581,9 +5584,10 @@ export class Package<
 
     this.#fileSystem = fileSystem
     this.#packagePath = packagePath
-    // Defer reading package.json until first async operation that needs it.
     this.#name = options.name
+    this.#repository = options.repository ?? repositoryInstance
     this.#exportOverrides = options.exports
+    this.#exportLoaders = options.loader
     this.#sourceRootPath =
       options.sourcePath === null
         ? this.#packagePath
@@ -5833,6 +5837,37 @@ export class Package<
     const keys = packageExportKeys.slice()
     const manifestEntries = this.#getManifestEntries('exports')
 
+    // Normalize the optional per‑export loader map to the same subpath
+    // format used when matching exports (`normalizePackageExportSpecifier`
+    // / `normalizeExportSubpath`).
+    const normalizedExportLoaders = new Map<string, Loaders>()
+
+    if (this.#exportLoaders) {
+      for (const [rawKey, loader] of Object.entries(this.#exportLoaders)) {
+        if (!loader) continue
+        const normalizedSpecifier = normalizePackageExportSpecifier(
+          rawKey,
+          this.#name
+        )
+
+        // Skip root export mappings for now – they would apply to the
+        // package root directory and are not needed for current use‑cases.
+        if (!normalizedSpecifier) continue
+
+        // Map the loader to the base export subpath so that keys like
+        // "remark/add-headings" will be associated with the "./remark/*"
+        // export directory.
+        const baseSubpath =
+          normalizeExportSubpath(normalizedSpecifier).split('/')[0]
+
+        if (!baseSubpath) continue
+
+        normalizedExportLoaders.set(baseSubpath, {
+          ...createPackageExportModuleLoaders(loader),
+        } as Loaders)
+      }
+    }
+
     for (const key of overrideKeys) {
       if (!keys.includes(key)) {
         keys.push(key)
@@ -5876,6 +5911,13 @@ export class Package<
           ...overrideOptions,
           path: directoryPath,
           fileSystem: this.#fileSystem,
+          repository: this.#repository,
+          // If a loader was provided at the `Package` level for this export
+          // subpath and no explicit loader override exists for this export,
+          // adapt it into a per‑extension loader map for the directory.
+          loader:
+            overrideOptions.loader ??
+            normalizedExportLoaders.get(normalizeExportSubpath(exportKey)),
         },
         analysis
       )
@@ -5999,5 +6041,29 @@ export class PackageImportEntry {
 
   getAnalysis() {
     return this.#analysis
+  }
+}
+
+/**
+ * Adapts a `Package` export loader (which does not receive path/file
+ * information) into a per‑extension `ModuleLoaders` map that can be
+ * consumed by `Directory` / `JavaScriptFile`.
+ *
+ * We intentionally wire the same runtime for the common JavaScript‑like
+ * extensions so that whichever concrete file extension is present for the
+ * package export can still resolve the runtime module.
+ */
+function createPackageExportModuleLoaders(
+  exportLoader: PackageExportLoader<ModuleExports<any>>
+): ModuleLoaders {
+  const runtimeLoader: ModuleRuntimeLoader<any> = () => exportLoader()
+
+  return {
+    js: runtimeLoader,
+    jsx: runtimeLoader,
+    ts: runtimeLoader,
+    tsx: runtimeLoader,
+    mjs: runtimeLoader,
+    cjs: runtimeLoader,
   }
 }

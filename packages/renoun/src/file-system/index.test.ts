@@ -3301,32 +3301,11 @@ describe('file system', () => {
     })
 
     test('executes runtime value from package export using package loader', async () => {
-      const runtimeLoader = async (
-        _path: string,
-        file: JavaScriptFile<Record<string, unknown>>
-      ) => {
-        const normalizedPath = file
-          .getRelativePathToWorkspace()
-          .replace(/\\/g, '/')
-        const srcIndex = normalizedPath.lastIndexOf('/src/')
-        const relativeFromSrc =
-          srcIndex === -1
-            ? normalizedPath
-            : normalizedPath.slice(srcIndex + '/src/'.length)
-        const packageRelative = relativeFromSrc.replace(/\.[^.]+$/, '')
-        const specifier =
-          packageRelative === 'index'
-            ? '@renoun/mdx'
-            : `@renoun/mdx/${packageRelative}`
-
-        return import(specifier)
-      }
-
       const pkg = new Package({
         name: '@renoun/mdx',
-        directoryOverrides: {
-          loader: {
-            ts: runtimeLoader,
+        loader: {
+          'remark/add-headings': () => {
+            return import('@renoun/mdx/remark/add-headings')
           },
         },
       })
@@ -3359,7 +3338,16 @@ describe('file system', () => {
       const file = {
         message: vi.fn(() => ({ fatal: false })),
       }
-      const tree = {
+      type TestRoot = {
+        type: 'root'
+        children: {
+          type: 'heading'
+          depth: number
+          children: { type: 'text'; value: string }[]
+          data?: { hProperties?: { id?: string } }
+        }[]
+      }
+      const tree: TestRoot = {
         type: 'root',
         children: [
           {
