@@ -289,16 +289,17 @@ The file system utilities also include a `Package` helper that can discover work
 ```ts
 import { Package } from 'renoun'
 
-const renounMdx = new Package({ name: '@renoun/mdx' })
-
-// Resolve the "remark/add-headings" export from the manifest
+const renounMdx = new Package({
+  name: '@renoun/mdx',
+  loader: {
+    'remark/add-headings': () => import('@renoun/mdx/remark/add-headings'),
+  },
+})
 const remarkAddHeadings = await renounMdx.getExport('remark/add-headings')
+const defaultExport = await remarkAddHeadings.getExport('default')
 
-// Drill into a specific binding that export exposes
-const defaultExport = remarkAddHeadings?.getExport('default')
-const addHeadings = await defaultExport?.getRuntimeValue()
-
-addHeadings?.getType() //=> exposes the schema/type information for that export
+await defaultExport.getRuntimeValue()
+await defaultExport.getType()
 ```
 
 Each export directory tracks the manifest conditions, target file path, and helper methods for loading runtime values. The same API works for `getImports()` when you need to trace how a package consumes other modules, making it straightforward to build documentation or automated analysis around any published or workspace package.

@@ -162,6 +162,23 @@ type ModuleExports<Value = any> = {
   [exportName: string]: Value
 }
 
+/** A runtime loader for a specific package export (no path/file arguments). */
+type PackageExportLoader<Module extends ModuleExports<any>> =
+  () => ModuleRuntimeResult<Module>
+
+/** Shape of the `loader` map accepted by `Package`. */
+type PackageExportLoaderMap = Record<
+  string,
+  PackageExportLoader<ModuleExports<any>>
+>
+
+/** Infers the module type from a `Package` export loader function. */
+type InferPackageExportModule<Fn> = Fn extends () => infer Return
+  ? Awaited<Return> extends ModuleExports<any>
+    ? Awaited<Return>
+    : never
+  : never
+
 type SourceReleaseOptions = GetReleaseOptions & {
   repository?: RepositoryConfig | string | Repository
 }
@@ -4761,22 +4778,15 @@ function parseSimpleGlobPattern(
   return null
 }
 
-type PackageDirectoryOverrides<
-  Types extends InferModuleLoadersTypes<Loaders>,
-  LoaderTypes extends WithDefaultTypes<Types>,
-  Loaders extends ModuleLoaders,
-  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
-> = Omit<
-  DirectoryOptions<Types, LoaderTypes, Loaders, Filter>,
-  'path' | 'fileSystem'
->
-
 export interface PackageExportOptions<
   Types extends InferModuleLoadersTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types>,
   Loaders extends ModuleLoaders,
   Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
-> extends PackageDirectoryOverrides<Types, LoaderTypes, Loaders, Filter> {
+> extends Omit<
+    DirectoryOptions<Types, LoaderTypes, Loaders, Filter>,
+    'path' | 'fileSystem'
+  > {
   path?: PathLike
 }
 
@@ -4785,19 +4795,11 @@ export interface PackageOptions<
   LoaderTypes extends WithDefaultTypes<Types>,
   Loaders extends ModuleLoaders,
   Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  ExportLoaders extends PackageExportLoaderMap = {},
 > {
   name?: string
   path?: PathLike
-  directory?:
-    | PathLike
-    | Directory<any, any, any>
-    | PackageDirectoryOverrides<Types, LoaderTypes, Loaders, Filter>
-  directoryOverrides?: PackageDirectoryOverrides<
-    Types,
-    LoaderTypes,
-    Loaders,
-    Filter
-  >
+  directory?: PathLike | Directory<any, any, any>
   sourcePath?: PathLike | null
   fileSystem?: FileSystem
   exports?: Record<
@@ -4805,6 +4807,8 @@ export interface PackageOptions<
     PackageExportOptions<Types, LoaderTypes, Loaders, Filter>
   >
   repository?: RepositoryConfig | string | Repository
+  /** Optional runtime loaders for individual package exports. */
+  loader?: ExportLoaders
 }
 
 interface PackageJson {
@@ -5515,42 +5519,6 @@ function isPathLikeValue(value: unknown): value is PathLike {
   return typeof URL !== 'undefined' && value instanceof URL
 }
 
-function splitPackageDirectoryOptions<
-  Types extends InferModuleLoadersTypes<Loaders>,
-  LoaderTypes extends WithDefaultTypes<Types>,
-  Loaders extends ModuleLoaders,
-  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
->(
-  directoryInput?:
-    | PathLike
-    | Directory<any, any, any>
-    | PackageDirectoryOverrides<Types, LoaderTypes, Loaders, Filter>,
-  explicitOverrides?: PackageDirectoryOverrides<
-    Types,
-    LoaderTypes,
-    Loaders,
-    Filter
-  >
-) {
-  let startDirectory: Directory<any, any, any> | PathLike | undefined
-  let directoryOverrides = explicitOverrides
-
-  if (isDirectoryInstance(directoryInput)) {
-    startDirectory = directoryInput
-  } else if (isPathLikeValue(directoryInput)) {
-    startDirectory = directoryInput
-  } else if (!directoryOverrides && directoryInput) {
-    directoryOverrides = directoryInput as PackageDirectoryOverrides<
-      Types,
-      LoaderTypes,
-      Loaders,
-      Filter
-    >
-  }
-
-  return { startDirectory, directoryOverrides }
-}
-
 export class Package<
   Types extends InferModuleLoadersTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
@@ -5559,6 +5527,7 @@ export class Package<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
   > = DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  ExportLoaders extends PackageExportLoaderMap = {},
 > {
   #name?: string
   #packagePath: string
@@ -5566,12 +5535,6 @@ export class Package<
   #fileSystem: FileSystem
   #packageJson?: PackageJson
   #packageAbsolutePath?: string
-  #directoryOptions?: PackageDirectoryOverrides<
-    Types,
-    LoaderTypes,
-    Loaders,
-    Filter
-  >
   #exportOverrides?: Record<
     string,
     PackageExportOptions<Types, LoaderTypes, Loaders, Filter>
@@ -5586,19 +5549,21 @@ export class Package<
   #exportManifestEntries?: Map<string, PackageManifestEntry>
   #importManifestEntries?: Map<string, PackageManifestEntry>
 
-  constructor(options: PackageOptions<Types, LoaderTypes, Loaders, Filter>) {
+  constructor(
+    options: PackageOptions<Types, LoaderTypes, Loaders, Filter, ExportLoaders>
+  ) {
     if (!options?.name && !options?.path) {
       throw new Error(
         '[renoun] A package "name" or explicit "path" must be provided.'
       )
     }
 
-    const { startDirectory, directoryOverrides } = splitPackageDirectoryOptions<
-      Types,
-      LoaderTypes,
-      Loaders,
-      Filter
-    >(options.directory, options.directoryOverrides)
+    let startDirectory: Directory<any, any, any> | PathLike | undefined
+    if (isDirectoryInstance(options.directory)) {
+      startDirectory = options.directory
+    } else if (isPathLikeValue(options.directory)) {
+      startDirectory = options.directory
+    }
 
     const repositoryInstance =
       options.repository instanceof Repository
@@ -5618,23 +5583,6 @@ export class Package<
     this.#packagePath = packagePath
     // Defer reading package.json until first async operation that needs it.
     this.#name = options.name
-
-    if (directoryOverrides) {
-      this.#directoryOptions =
-        repositoryInstance && directoryOverrides.repository === undefined
-          ? {
-              ...directoryOverrides,
-              repository: repositoryInstance,
-            }
-          : directoryOverrides
-    } else if (repositoryInstance) {
-      this.#directoryOptions = {
-        repository: repositoryInstance,
-      } as PackageDirectoryOverrides<Types, LoaderTypes, Loaders, Filter>
-    } else {
-      this.#directoryOptions = undefined
-    }
-
     this.#exportOverrides = options.exports
     this.#sourceRootPath =
       options.sourcePath === null
@@ -5654,10 +5602,20 @@ export class Package<
     return this.#exportDirectories
   }
 
+  async getExport<Key extends keyof ExportLoaders & string>(
+    exportSpecifier: Key,
+    extension?: string | string[]
+  ): Promise<
+    JavaScriptFile<InferPackageExportModule<ExportLoaders[Key]>, LoaderTypes>
+  >
   async getExport(
     exportSpecifier: string,
     extension?: string | string[]
-  ): Promise<FileSystemEntry<LoaderTypes>> {
+  ): Promise<FileSystemEntry<LoaderTypes>>
+  async getExport(
+    exportSpecifier: string,
+    extension?: string | string[]
+  ): Promise<any> {
     const normalizedSpecifier = normalizePackageExportSpecifier(
       exportSpecifier,
       this.#name
@@ -5915,7 +5873,6 @@ export class Package<
       >(
         exportKey,
         {
-          ...this.#directoryOptions,
           ...overrideOptions,
           path: directoryPath,
           fileSystem: this.#fileSystem,
