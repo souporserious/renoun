@@ -16,6 +16,7 @@ import {
 
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
 import { getRootDirectory } from '../utils/get-root-directory.js'
+import { trimTrailingSlashes } from '../utils/path.js'
 
 const MAX_WAIT_TIME = 30_000
 const PING_INTERVAL = 2_000
@@ -526,7 +527,7 @@ function normalizeRoutePath(path: string) {
   if (!normalized.startsWith('/')) {
     normalized = `/${normalized}`
   }
-  normalized = normalized.replace(/\/+$/, '')
+  normalized = trimTrailingSlashes(normalized)
   if (normalized === '') {
     normalized = '/'
   }

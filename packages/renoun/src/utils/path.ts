@@ -60,6 +60,14 @@ export function normalizeSlashes(path: string): string {
   return path.replace(/\\+/g, '/')
 }
 
+/** Remove trailing forward slashes from a path-like string. */
+export function trimTrailingSlashes(value: string): string {
+  let end = value.length
+  // 47 is '/'
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end--
+  return value.slice(0, end)
+}
+
 /** Normalize a path to be relative to the current working directory. */
 export function normalizePath(path: string): string {
   const normalizedSlashes = normalizeSlashes(path)
