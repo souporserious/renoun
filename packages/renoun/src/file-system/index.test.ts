@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import * as gitExportMetadataModule from '../utils/get-local-git-export-metadata.js'
+import * as rootDirectoryModule from '../utils/get-root-directory.js'
 import * as v from 'valibot'
 import { z } from 'zod'
 
@@ -12,6 +13,7 @@ import type { basename } from '#fixtures/utils/path.ts'
 import type { MDXContent, Headings } from '../mdx'
 import { NodeFileSystem } from './NodeFileSystem'
 import { MemoryFileSystem } from './MemoryFileSystem'
+import * as gitHostFileSystemModule from './GitHostFileSystem'
 import {
   type FileSystemEntry,
   type InferModuleExports,
@@ -22,6 +24,7 @@ import {
   MarkdownFile,
   MDXFile,
   Collection,
+  Package,
   isDirectory,
   isFile,
   isJavaScriptFile,
@@ -1694,7 +1697,11 @@ describe('file system', () => {
     })
 
     class GitAwareMemoryFileSystem extends MemoryFileSystem {
-      async getGitExportMetadata(path: string, startLine: number, endLine: number) {
+      async getGitExportMetadata(
+        path: string,
+        startLine: number,
+        endLine: number
+      ) {
         return spy(path, startLine, endLine)
       }
     }
@@ -1706,7 +1713,9 @@ describe('file system', () => {
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('value')
 
-    await expect(fileExport.getFirstCommitDate()).resolves.toEqual(firstCommitDate)
+    await expect(fileExport.getFirstCommitDate()).resolves.toEqual(
+      firstCommitDate
+    )
     expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
   })
 
@@ -1741,7 +1750,11 @@ describe('file system', () => {
     })
 
     class GitAwareMemoryFileSystem extends MemoryFileSystem {
-      async getGitExportMetadata(path: string, startLine: number, endLine: number) {
+      async getGitExportMetadata(
+        path: string,
+        startLine: number,
+        endLine: number
+      ) {
         return spy(path, startLine, endLine)
       }
     }
@@ -1753,7 +1766,9 @@ describe('file system', () => {
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('value')
 
-    await expect(fileExport.getLastCommitDate()).resolves.toEqual(lastCommitDate)
+    await expect(fileExport.getLastCommitDate()).resolves.toEqual(
+      lastCommitDate
+    )
     expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
   })
 
@@ -2991,6 +3006,375 @@ describe('file system', () => {
     const defaultExport = await file.getExport('default')
 
     expect(await defaultExport.getRuntimeValue()).toBe(123)
+  })
+
+  describe('Package', () => {
+    test('getExports returns directories for package exports', () => {
+      const fileSystem = new MemoryFileSystem({
+        'node_modules/acme/package.json': JSON.stringify({
+          name: 'acme',
+          exports: {
+            '.': './dist/index.js',
+            './components': './dist/components/index.js',
+            './components/*': './dist/components/*.js',
+            './hooks/*': './dist/hooks/*.js',
+            './package.json': './package.json',
+          },
+        }),
+        'node_modules/acme/src/index.ts': '',
+        'node_modules/acme/src/components/Button.tsx': '',
+        'node_modules/acme/src/hooks/useFoo.ts': '',
+      })
+
+      const pkg = new Package({ name: 'acme', fileSystem })
+      const exports = pkg.getExports()
+
+      expect(exports).toHaveLength(3)
+      expect(exports.map((entry) => entry.getExportPath())).toEqual([
+        '.',
+        './components',
+        './hooks/*',
+      ])
+      expect(exports[0]).toBeInstanceOf(Directory)
+      expect(exports[0].getAbsolutePath()).toBe('/node_modules/acme/src')
+      expect(exports[1].getAbsolutePath()).toBe(
+        '/node_modules/acme/src/components'
+      )
+      expect(exports[2].getAbsolutePath()).toBe('/node_modules/acme/src/hooks')
+    })
+
+    test('supports export overrides and custom directories', () => {
+      const fileSystem = new MemoryFileSystem({
+        'node_modules/acme/package.json': JSON.stringify({
+          name: 'acme',
+          exports: {
+            '.': './dist/index.js',
+          },
+        }),
+        'node_modules/acme/src/index.ts': '',
+        'node_modules/acme/src/custom/Button.tsx': '',
+        'node_modules/acme/docs/intro.mdx': '',
+      })
+
+      const pkg = new Package({
+        name: 'acme',
+        fileSystem,
+        directoryOverrides: { basePathname: 'pkg' },
+        exports: {
+          './components': {
+            path: 'src/custom',
+            basePathname: 'components',
+          },
+          './guides': {
+            path: 'docs',
+          },
+        },
+      })
+
+      const exports = pkg.getExports()
+      const exportPaths = exports.map((entry) => entry.getExportPath())
+
+      expect(exportPaths).toContain('.')
+      expect(exportPaths).toContain('./components')
+      expect(exportPaths).toContain('./guides')
+
+      const components = exports.find(
+        (entry) => entry.getExportPath() === './components'
+      )
+      const guides = exports.find(
+        (entry) => entry.getExportPath() === './guides'
+      )
+
+      expect(components?.getAbsolutePath()).toBe(
+        '/node_modules/acme/src/custom'
+      )
+      expect(guides?.getAbsolutePath()).toBe('/node_modules/acme/docs')
+    })
+
+    test('accepts explicit path and null sourcePath', () => {
+      const fileSystem = new MemoryFileSystem({
+        'packages/local/package.json': JSON.stringify({ name: 'local' }),
+        'packages/local/index.ts': '',
+      })
+
+      const pkg = new Package({
+        path: 'packages/local',
+        sourcePath: null,
+        fileSystem,
+      })
+
+      const exports = pkg.getExports()
+
+      expect(exports).toHaveLength(1)
+      expect(exports[0].getExportPath()).toBe('.')
+      expect(exports[0].getAbsolutePath()).toBe('/packages/local')
+      expect(pkg.getName()).toBe('local')
+    })
+
+    test('prefers workspace packages before node_modules', () => {
+      const getRootSpy = vi
+        .spyOn(rootDirectoryModule, 'getRootDirectory')
+        .mockReturnValue('.')
+
+      try {
+        const fileSystem = new MemoryFileSystem({
+          'pnpm-workspace.yaml': 'packages:\n  - packages/*\n',
+          'packages/ui/package.json': JSON.stringify({
+            name: 'ui',
+            exports: '.',
+          }),
+          'packages/ui/src/index.ts': '',
+          'node_modules/ui/package.json': JSON.stringify({ name: 'ui' }),
+          'node_modules/ui/src/index.ts': '',
+        })
+
+        const pkg = new Package({ name: 'ui', fileSystem })
+        const exports = pkg.getExports()
+
+        expect(exports).toHaveLength(1)
+        expect(exports[0].getAbsolutePath()).toBe('/packages/ui/src')
+      } finally {
+        getRootSpy.mockRestore()
+      }
+    })
+
+    test('finds nearest node_modules relative to directory path', () => {
+      const getRootSpy = vi
+        .spyOn(rootDirectoryModule, 'getRootDirectory')
+        .mockReturnValue('.')
+
+      try {
+        const fileSystem = new MemoryFileSystem({
+          'apps/site/node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+          }),
+          'apps/site/node_modules/acme/src/index.ts': '',
+          'node_modules/acme/package.json': JSON.stringify({ name: 'acme' }),
+          'node_modules/acme/src/index.ts': '',
+        })
+
+        const pkg = new Package({
+          name: 'acme',
+          fileSystem,
+          directory: 'apps/site',
+        })
+
+        const exports = pkg.getExports()
+        expect(exports[0].getAbsolutePath()).toBe(
+          '/apps/site/node_modules/acme/src'
+        )
+      } finally {
+        getRootSpy.mockRestore()
+      }
+    })
+
+    test('accepts Directory instance as directory option', () => {
+      const getRootSpy = vi
+        .spyOn(rootDirectoryModule, 'getRootDirectory')
+        .mockReturnValue('.')
+
+      try {
+        const fileSystem = new MemoryFileSystem({
+          'apps/site/node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+          }),
+          'apps/site/node_modules/acme/src/index.ts': '',
+          'node_modules/acme/package.json': JSON.stringify({ name: 'acme' }),
+          'node_modules/acme/src/index.ts': '',
+        })
+
+        const directory = new Directory({ path: 'apps/site', fileSystem })
+
+        const pkg = new Package({
+          name: 'acme',
+          fileSystem,
+          directory,
+        })
+
+        const exports = pkg.getExports()
+        expect(exports[0].getAbsolutePath()).toBe(
+          '/apps/site/node_modules/acme/src'
+        )
+      } finally {
+        getRootSpy.mockRestore()
+      }
+    })
+
+    test('falls back to repository when available', () => {
+      const remoteFs = new MemoryFileSystem({
+        'package.json': JSON.stringify({ name: 'remote', exports: '.' }),
+        'src/index.ts': '',
+      })
+      const gitHostSpy = vi
+        .spyOn(gitHostFileSystemModule, 'GitHostFileSystem')
+        .mockImplementation(((options: any) => {
+          expect(options.repository).toBe('souporserious/remote')
+          return remoteFs as unknown as gitHostFileSystemModule.GitHostFileSystem
+        }) as any)
+
+      try {
+        const pkg = new Package({
+          name: 'remote',
+          repository: 'souporserious/remote',
+        })
+        const exports = pkg.getExports()
+
+        expect(exports).toHaveLength(1)
+        expect(exports[0].getAbsolutePath()).toBe('/src')
+        expect(exports[0].getRepository().toString()).toContain(
+          'souporserious/remote'
+        )
+      } finally {
+        gitHostSpy.mockRestore()
+      }
+    })
+
+    test('exposes manifest analysis for exports and imports', () => {
+      const fileSystem = new MemoryFileSystem({
+        'node_modules/acme/package.json': JSON.stringify({
+          name: 'acme',
+          exports: {
+            '.': {
+              import: './dist/index.mjs',
+              require: './dist/index.cjs',
+            },
+            './components/*': './dist/components/*.js',
+          },
+          imports: {
+            '#internal/*': './src/internal/*.ts',
+            '#pkg': 'lodash',
+          },
+        }),
+        'node_modules/acme/src/index.ts': '',
+        'node_modules/acme/src/components/Button.tsx': '',
+        'node_modules/acme/src/internal/foo.ts': '',
+      })
+
+      const pkg = new Package({ name: 'acme', fileSystem })
+      const exports = pkg.getExports()
+      const imports = pkg.getImports()
+
+      const rootExport = exports.find((entry) => entry.getExportPath() === '.')
+      const componentsExport = exports.find(
+        (entry) => entry.getExportPath() === './components/*'
+      )
+      const internalImport = imports.find(
+        (entry) => entry.getImportPath() === '#internal/*'
+      )
+      const pkgImport = imports.find(
+        (entry) => entry.getImportPath() === '#pkg'
+      )
+
+      expect(rootExport?.getAnalysis()?.manifestTarget?.kind).toBe('conditions')
+      expect(rootExport?.getAnalysis()?.derivedAbsolutePath).toBe(
+        '/node_modules/acme/src'
+      )
+      expect(componentsExport?.getAnalysis()?.manifestTarget?.kind).toBe('path')
+      expect(
+        componentsExport?.getAnalysis()?.manifestTarget?.absolutePath
+      ).toBe('/node_modules/acme/dist/components/*.js')
+
+      expect(imports).toHaveLength(2)
+      expect(internalImport?.getAnalysis()?.manifestTarget?.kind).toBe('path')
+      expect(pkgImport?.getAnalysis()?.manifestTarget?.kind).toBe('specifier')
+      expect(pkgImport?.getAnalysis()?.manifestTarget).toEqual({
+        kind: 'specifier',
+        specifier: 'lodash',
+      })
+    })
+
+    test('analyzes exports from a local workspace package', async () => {
+      const pkg = new Package({ name: '@renoun/mdx' })
+      const addHeadingsEntry = await pkg.getExport('remark/add-headings')
+
+      expect(isJavaScriptFile(addHeadingsEntry)).toBe(true)
+
+      if (!isJavaScriptFile(addHeadingsEntry)) {
+        throw new Error('Expected JavaScript file for MDX plugin export')
+      }
+
+      const addHeadingsExport = await addHeadingsEntry.getExport('default')
+      const type = await addHeadingsExport.getType()
+
+      expect(type).toBeDefined()
+      expect(type!.kind).toBeDefined()
+    })
+
+    test('executes runtime value from package export using package loader', async () => {
+      const runtimeLoader = async (
+        _path: string,
+        file: JavaScriptFile<Record<string, unknown>>
+      ) => {
+        const normalizedPath = file
+          .getRelativePathToWorkspace()
+          .replace(/\\/g, '/')
+        const srcIndex = normalizedPath.lastIndexOf('/src/')
+        const relativeFromSrc =
+          srcIndex === -1
+            ? normalizedPath
+            : normalizedPath.slice(srcIndex + '/src/'.length)
+        const packageRelative = relativeFromSrc.replace(/\.[^.]+$/, '')
+        const specifier =
+          packageRelative === 'index'
+            ? '@renoun/mdx'
+            : `@renoun/mdx/${packageRelative}`
+
+        return import(specifier)
+      }
+
+      const pkg = new Package({
+        name: '@renoun/mdx',
+        directoryOverrides: {
+          loader: {
+            ts: runtimeLoader,
+          },
+        },
+      })
+
+      const addHeadingsEntry = await pkg.getExport('remark/add-headings')
+
+      expect(isJavaScriptFile(addHeadingsEntry)).toBe(true)
+
+      if (!isJavaScriptFile(addHeadingsEntry)) {
+        throw new Error('Expected JavaScript file for MDX plugin export')
+      }
+
+      const addHeadingsExport = await addHeadingsEntry.getExport('default')
+      const addHeadings = await addHeadingsExport.getRuntimeValue()
+
+      expect(typeof addHeadings).toBe('function')
+
+      const processor = {
+        data(key: string) {
+          if (key === 'isMarkdown') {
+            return true
+          }
+          return undefined
+        },
+      }
+
+      const transformer = addHeadings.call(processor, {
+        allowGetHeadings: true,
+      })
+      const file = {
+        message: vi.fn(() => ({ fatal: false })),
+      }
+      const tree = {
+        type: 'root',
+        children: [
+          {
+            type: 'heading',
+            depth: 1,
+            children: [{ type: 'text', value: 'Hello World' }],
+          },
+        ],
+      }
+
+      await Promise.resolve(transformer(tree as any, file as any))
+
+      expect(tree.children[0]?.data?.hProperties?.id).toBe('hello-world')
+      expect(file.message).not.toHaveBeenCalled()
+    })
   })
 
   test('throws when repository is not configured', () => {

@@ -281,3 +281,24 @@ const repoFs = new GitHostFileSystem({
 ```
 
 When a token is supplied, renoun batches GraphQL blame queries and reuses cached metadata to keep requests to a minimum. Without a token the file system falls back to higher-volume REST sampling, so authenticated requests are the easiest way to prevent rate limiting during development and CI.
+
+### Inspecting packages with `Package`
+
+The file system utilities also include a `Package` helper that can discover workspace packages, resolve the closest `node_modules` installation, or fall back to repositories fetched through `GitHostFileSystem`. Once discovered, the package manifest is analyzed so you can introspect exports and imports without manually walking the file tree.
+
+```ts
+import { Package } from 'renoun'
+
+const renounMdx = new Package({ name: '@renoun/mdx' })
+
+// Resolve the "remark/add-headings" export from the manifest
+const remarkAddHeadings = await renounMdx.getExport('remark/add-headings')
+
+// Drill into a specific binding that export exposes
+const defaultExport = remarkAddHeadings?.getExport('default')
+const addHeadings = await defaultExport?.getRuntimeValue()
+
+addHeadings?.getType() //=> exposes the schema/type information for that export
+```
+
+Each export directory tracks the manifest conditions, target file path, and helper methods for loading runtime values. The same API works for `getImports()` when you need to trace how a package consumes other modules, making it straightforward to build documentation or automated analysis around any published or workspace package.
