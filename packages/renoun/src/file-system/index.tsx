@@ -164,8 +164,9 @@ type ModuleExports<Value = any> = {
 }
 
 /** A runtime loader for a specific package export (no path/file arguments). */
-type PackageExportLoader<Module extends ModuleExports<any>> =
-  () => ModuleRuntimeResult<Module>
+type PackageExportLoader<Module extends ModuleExports<any>> = (
+  path: string
+) => ModuleRuntimeResult<Module>
 
 /** Shape of the `loader` map accepted by `Package`. */
 type PackageExportLoaderMap = Record<
@@ -4808,8 +4809,11 @@ export interface PackageOptions<
     PackageExportOptions<Types, LoaderTypes, Loaders, Filter>
   >
   repository?: RepositoryConfig | string | Repository
-  /** Optional runtime loaders for individual package exports. */
-  loader?: ExportLoaders
+  /**
+   * Optional runtime loaders for individual package exports or a resolver that
+   * will be invoked with the export path (e.g. "remark/add-headings").
+   */
+  loader?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
 }
 
 interface PackageJson {
@@ -5537,7 +5541,7 @@ export class Package<
   #packageJson?: PackageJson
   #packageAbsolutePath?: string
   #repository?: Repository | RepositoryConfig | string
-  #exportLoaders?: ExportLoaders
+  #exportLoaders?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
   #exportOverrides?: Record<
     string,
     PackageExportOptions<Types, LoaderTypes, Loaders, Filter>
@@ -5612,6 +5616,10 @@ export class Package<
   ): Promise<
     JavaScriptFile<InferPackageExportModule<ExportLoaders[Key]>, LoaderTypes>
   >
+  async getExport<Module extends ModuleExports<any>>(
+    exportSpecifier: string,
+    extension?: string | string[]
+  ): Promise<JavaScriptFile<Module, LoaderTypes>>
   async getExport(
     exportSpecifier: string,
     extension?: string | string[]
@@ -5840,10 +5848,18 @@ export class Package<
     // Normalize the optional per‑export loader map to the same subpath
     // format used when matching exports (`normalizePackageExportSpecifier`
     // / `normalizeExportSubpath`).
+    const loaderOption = this.#exportLoaders
+    const exportLoaderResolver =
+      typeof loaderOption === 'function' ? loaderOption : undefined
+    const exportLoaderMap =
+      loaderOption && typeof loaderOption === 'object'
+        ? (loaderOption as ExportLoaders)
+        : undefined
     const normalizedExportLoaders = new Map<string, Loaders>()
+    const resolverLoaderCache = new Map<string, Loaders>()
 
-    if (this.#exportLoaders) {
-      for (const [rawKey, loader] of Object.entries(this.#exportLoaders)) {
+    if (exportLoaderMap) {
+      for (const [rawKey, loader] of Object.entries(exportLoaderMap)) {
         if (!loader) continue
         const normalizedSpecifier = normalizePackageExportSpecifier(
           rawKey,
@@ -5863,9 +5879,23 @@ export class Package<
         if (!baseSubpath) continue
 
         normalizedExportLoaders.set(baseSubpath, {
-          ...createPackageExportModuleLoaders(loader),
+          ...createPackageExportModuleLoaders(loader, baseSubpath),
         } as Loaders)
       }
+    }
+
+    const resolveResolverLoaderForSubpath = (subpath: string) => {
+      if (!exportLoaderResolver) {
+        return undefined
+      }
+
+      if (!resolverLoaderCache.has(subpath)) {
+        resolverLoaderCache.set(subpath, {
+          ...createPackageExportModuleLoaders(exportLoaderResolver, subpath),
+        } as Loaders)
+      }
+
+      return resolverLoaderCache.get(subpath)
     }
 
     for (const key of overrideKeys) {
@@ -5877,6 +5907,7 @@ export class Package<
     for (const exportKey of keys) {
       const override = this.#exportOverrides?.[exportKey]
       const { path: overridePath, ...overrideOptions } = override ?? {}
+      const normalizedExportSubpath = normalizeExportSubpath(exportKey)
       const directoryPath = normalizePackagePath(
         overridePath
           ? this.#resolveWithinPackage(overridePath)
@@ -5917,7 +5948,8 @@ export class Package<
           // adapt it into a per‑extension loader map for the directory.
           loader:
             overrideOptions.loader ??
-            normalizedExportLoaders.get(normalizeExportSubpath(exportKey)),
+            normalizedExportLoaders.get(normalizedExportSubpath) ??
+            resolveResolverLoaderForSubpath(normalizedExportSubpath),
         },
         analysis
       )
@@ -6054,9 +6086,26 @@ export class PackageImportEntry {
  * package export can still resolve the runtime module.
  */
 function createPackageExportModuleLoaders(
-  exportLoader: PackageExportLoader<ModuleExports<any>>
+  exportLoader: PackageExportLoader<ModuleExports<any>>,
+  baseSubpath?: string
 ): ModuleLoaders {
-  const runtimeLoader: ModuleRuntimeLoader<any> = () => exportLoader()
+  const normalizedBase =
+    baseSubpath && baseSubpath.length ? normalizeSlashes(baseSubpath) : ''
+  const runtimeLoader: ModuleRuntimeLoader<any> = (relativePath) => {
+    const normalizedRelative = relativePath
+      ? normalizeSlashes(relativePath)
+      : ''
+    const loaderPath =
+      normalizedBase && normalizedRelative
+        ? `${normalizedBase}/${normalizedRelative}`
+        : normalizedBase || normalizedRelative
+    const normalizedPath =
+      loaderPath.length && !loaderPath.startsWith('/')
+        ? `/${loaderPath}`
+        : loaderPath
+
+    return exportLoader(normalizedPath)
+  }
 
   return {
     js: runtimeLoader,

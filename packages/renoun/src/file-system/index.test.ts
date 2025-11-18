@@ -3058,8 +3058,6 @@ describe('file system', () => {
 
       const pkg = new Package({
         name: 'acme',
-        fileSystem,
-        directoryOverrides: { basePathname: 'pkg' },
         exports: {
           './components': {
             path: 'src/custom',
@@ -3069,6 +3067,7 @@ describe('file system', () => {
             path: 'docs',
           },
         },
+        fileSystem,
       })
 
       const exports = pkg.getExports()
@@ -3300,18 +3299,9 @@ describe('file system', () => {
       expect(type!.kind).toBeDefined()
     })
 
-    test('executes runtime value from package export using package loader', async () => {
-      const pkg = new Package({
-        name: '@renoun/mdx',
-        loader: {
-          'remark/add-headings': () => {
-            return import('@renoun/mdx/remark/add-headings')
-          },
-        },
-      })
-
-      const addHeadingsEntry = await pkg.getExport('remark/add-headings')
-
+    const expectRemarkAddHeadingsRuntime = async (
+      addHeadingsEntry: JavaScriptFile<any, any, any, any>
+    ) => {
       expect(isJavaScriptFile(addHeadingsEntry)).toBe(true)
 
       if (!isJavaScriptFile(addHeadingsEntry)) {
@@ -3362,6 +3352,56 @@ describe('file system', () => {
 
       expect(tree.children[0]?.data?.hProperties?.id).toBe('hello-world')
       expect(file.message).not.toHaveBeenCalled()
+    }
+
+    test('executes runtime value from package export using explicit loader map', async () => {
+      const loader = vi.fn<
+        () => Promise<typeof import('@renoun/mdx/remark/add-headings')>
+      >(() => import('@renoun/mdx/remark/add-headings'))
+      const pkg = new Package({
+        name: '@renoun/mdx',
+        loader: {
+          'remark/add-headings': loader,
+        },
+      })
+      const addHeadingsEntry = await pkg.getExport('remark/add-headings')
+      const defaultExport = await addHeadingsEntry.getExport('default')
+
+      type Test = Expect<IsNotAny<typeof defaultExport>>
+
+      expectTypeOf(defaultExport).toMatchTypeOf<
+        JavaScriptModuleExport<
+          (typeof import('@renoun/mdx/remark/add-headings'))['default']
+        >
+      >()
+
+      await expectRemarkAddHeadingsRuntime(addHeadingsEntry)
+      expect(loader).toHaveBeenCalledWith('/remark/add-headings')
+    })
+
+    test('executes runtime value from package export using package loader resolver', async () => {
+      const loader = vi.fn<(path: string) => Promise<any>>(
+        (path) => import(`@renoun/mdx${path}`)
+      )
+      const pkg = new Package({
+        name: '@renoun/mdx',
+        loader,
+      })
+      const addHeadingsEntry = await pkg.getExport<
+        typeof import('@renoun/mdx/remark/add-headings')
+      >('remark/add-headings')
+      const defaultExport = await addHeadingsEntry.getExport('default')
+
+      type Test = Expect<IsNotAny<typeof defaultExport>>
+
+      expectTypeOf(defaultExport).toMatchTypeOf<
+        JavaScriptModuleExport<
+          (typeof import('@renoun/mdx/remark/add-headings'))['default']
+        >
+      >()
+
+      await expectRemarkAddHeadingsRuntime(addHeadingsEntry)
+      expect(loader).toHaveBeenCalledWith('/remark/add-headings')
     })
   })
 
