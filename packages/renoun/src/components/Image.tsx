@@ -42,29 +42,7 @@ const fetchFigmaImageUrl = cache(
     })
 
     if (!response.ok) {
-      const hints: string[] = []
-      if (response.status === 401) {
-        hints.push(
-          'The FIGMA_TOKEN is missing or invalid. Ensure it is set correctly.'
-        )
-      } else if (response.status === 403) {
-        hints.push(
-          'Access denied. Verify:',
-          ' - Your FIGMA_TOKEN includes the scope: file_content:read',
-          ' - The token owner can open the referenced file in Figma',
-          ' - The file ID is correct and belongs to that account/org'
-        )
-      } else if (response.status === 404) {
-        hints.push(
-          'Not found. Double-check the file ID and node id (or selector).'
-        )
-      } else if (response.status === 429) {
-        hints.push('Rate limit reached. Try again in a moment.')
-      }
-      const suffix = hints.length ? `\n${hints.join('\n')}` : ''
-      throw new Error(
-        `[renoun] Figma images request failed (${response.status}).${suffix}`
-      )
+      throw createFigmaError('images', response)
     }
 
     const payload = (await response.json()) as {
@@ -125,30 +103,7 @@ const fetchFigmaComponents = cache(
     })
 
     if (!response.ok) {
-      const hints: string[] = []
-      if (response.status === 401) {
-        hints.push(
-          'The FIGMA_TOKEN is missing or invalid. Ensure it is set correctly.'
-        )
-      } else if (response.status === 403) {
-        hints.push(
-          'Access denied. Verify:',
-          ' - Your FIGMA_TOKEN includes the scope: file_content:read',
-          ' - Add library scopes if needed: library_content:read (and team_library_content:read for team libraries)',
-          ' - The token owner can open the referenced file in Figma',
-          ' - Add library scopes if needed: library_content:read (and team_library_content:read for team libraries)',
-          ' - The token owner can open the referenced file in Figma',
-          ' - The file ID is correct and belongs to that account/org'
-        )
-      } else if (response.status === 404) {
-        hints.push('Not found. Double-check the file ID.')
-      } else if (response.status === 429) {
-        hints.push('Rate limit reached. Try again in a moment.')
-      }
-      const suffix = hints.length ? `\n${hints.join('\n')}` : ''
-      throw new Error(
-        `[renoun] Figma components request failed (${response.status}).${suffix}`
-      )
+      throw createFigmaError('components', response)
     }
 
     const payload = (await response.json()) as {
@@ -167,10 +122,12 @@ const fetchFigmaComponents = cache(
   }
 )
 
+type FigmaNodeType = 'FRAME' | 'COMPONENT' | 'COMPONENT_SET' | string
+
 interface FigmaNode {
   id: string
   name: string
-  type: string
+  type: FigmaNodeType
   children?: FigmaNode[]
 }
 
@@ -184,28 +141,7 @@ const fetchFigmaFile = cache(
     })
 
     if (!response.ok) {
-      const hints: string[] = []
-      if (response.status === 401) {
-        hints.push(
-          'The FIGMA_TOKEN is missing or invalid. Ensure it is set correctly.'
-        )
-      } else if (response.status === 403) {
-        hints.push(
-          'Access denied. Verify:',
-          ' - Your FIGMA_TOKEN includes the scope: file_content:read',
-          ' - Add library scopes if needed: library_content:read (and team_library_content:read for team libraries)',
-          ' - The token owner can open the referenced file in Figma',
-          ' - The file ID is correct and belongs to that account/org'
-        )
-      } else if (response.status === 404) {
-        hints.push('Not found. Double-check the file ID.')
-      } else if (response.status === 429) {
-        hints.push('Rate limit reached. Try again in a moment.')
-      }
-      const suffix = hints.length ? `\n${hints.join('\n')}` : ''
-      throw new Error(
-        `[renoun] Figma file request failed (${response.status}).${suffix}`
-      )
+      throw createFigmaError('file', response)
     }
 
     const payload = (await response.json()) as { document: FigmaNode }
@@ -213,37 +149,42 @@ const fetchFigmaFile = cache(
   }
 )
 
-function isExportableNodeType(type: string): boolean {
+function isExportableNodeType(type: FigmaNodeType): boolean {
   // Only allow nodes we explicitly want to match by name within the SAME file.
   // Excludes INSTANCE and other node types that may reference external libraries.
   return type === 'FRAME' || type === 'COMPONENT' || type === 'COMPONENT_SET'
 }
 
-function collectNamedNodes(
-  node: FigmaNode,
-  path: string[] = []
-): Array<{
+interface NamedNode {
   id: string
   name: string
   pageName?: string
   frameName?: string
   fullPath: string
-  type: string
-}> {
-  const results: Array<{
-    id: string
-    name: string
-    pageName?: string
-    frameName?: string
-    fullPath: string
-    type: string
-  }> = []
+  type: FigmaNodeType
+}
 
+function collectNamedNodes(
+  node: FigmaNode,
+  path: string[] = [],
+  context: { pageName?: string; frameName?: string } = {}
+): NamedNode[] {
+  const results: NamedNode[] = []
   const nextPath = [...path, node.name]
+
+  let pageName = context.pageName
+  let frameName = context.frameName
+
+  // Infer page/frame context based on node.type & depth
+  if (node.type === 'PAGE') {
+    pageName = node.name
+    frameName = undefined
+  } else if (node.type === 'FRAME' || node.type === 'COMPONENT_SET') {
+    // Treat FRAME / COMPONENT_SET as the "frame scope"
+    frameName = node.name
+  }
+
   if (isExportableNodeType(node.type)) {
-    const pageName = path.length > 0 ? path[1] : undefined // [0] is DOCUMENT
-    const frameName =
-      path.length > 1 ? nextPath[nextPath.length - 1] : undefined
     results.push({
       id: node.id,
       name: node.name,
@@ -256,7 +197,9 @@ function collectNamedNodes(
 
   if (node.children && node.children.length > 0) {
     for (const child of node.children) {
-      results.push(...collectNamedNodes(child, nextPath))
+      results.push(
+        ...collectNamedNodes(child, nextPath, { pageName, frameName })
+      )
     }
   }
 
@@ -410,8 +353,7 @@ function parseCustomSource(
     }
     // Unknown scheme – guide the user to configure RootProvider or correct formatting
     throw new Error(
-      `[
-renoun] Unknown image source scheme "${scheme}".\n\n` +
+      `[renoun] Unknown image source scheme "${scheme}".\n\n` +
         'How to fix:\n' +
         `- Define it on <RootProvider sources={{ ${scheme}: { type: 'figma', fileId: 'FILE_ID' } }} /> and reference nodes like "${scheme}:Page/Frame/Component" or "${scheme}:123:456".\n` +
         '- Or use one of the supported forms:\n' +
@@ -436,8 +378,7 @@ renoun] Unknown image source scheme "${scheme}".\n\n` +
   }
   // If a custom source is configured but not supported by <Image />, provide a clear error
   throw new Error(
-    `[
-renoun] The "${scheme}" source is configured with unsupported type "${String(
+    `[renoun] The "${scheme}" source is configured with unsupported type "${String(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       (definition as unknown as Record<string, unknown>)['type']
     )}". <Image /> currently supports only { type: 'figma' } sources.`
@@ -655,6 +596,49 @@ async function resolveComponentBySelector(
   )
 }
 
+function createFigmaError(
+  scope: 'images' | 'components' | 'file',
+  response: Response
+): Error {
+  const hints: string[] = []
+
+  if (response.status === 401) {
+    hints.push(
+      'The FIGMA_TOKEN is missing or invalid. Ensure it is set correctly.'
+    )
+  } else if (response.status === 403) {
+    hints.push(
+      'Access denied. Verify:',
+      ' - FIGMA_TOKEN includes scope: file_content:read',
+      ' - Add library scopes if needed: library_content:read (and team_library_content:read for team libraries)',
+      ' - The token owner can open the referenced file in Figma',
+      ' - The file ID is correct and belongs to that account/org'
+    )
+  } else if (response.status === 404) {
+    hints.push('Not found. Double-check the file ID.')
+  } else if (response.status === 429) {
+    hints.push('Rate limit reached. Try again in a moment.')
+  }
+
+  const suffix = hints.length ? `\n${hints.join('\n')}` : ''
+  return new Error(
+    `[renoun] Figma ${scope} request failed (${response.status}).${suffix}`
+  )
+}
+
+function getErrorMessage(error: unknown): string | undefined {
+  if (!error) {
+    return undefined
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  if (typeof error === 'string') {
+    return error
+  }
+  return String(error)
+}
+
 function buildFigmaQuery(
   nodeId: string,
   options: Pick<
@@ -774,15 +758,13 @@ async function getFigmaImageUrl(
         preferredParams.toString(),
         token
       )
-      // Probe to ensure the URL is valid before returning
-      const probe = await fetch(preferredUrl)
-      if (probe.ok) return { url: preferredUrl, format: preferredFormat }
+      return { url: preferredUrl, format: preferredFormat }
     } catch {
-      // fall through to generic fallback below
+      // fall through
     }
   }
 
-  // First try SVG for fidelity, then raster fallback
+  // Try SVG then raster, no probe
   let originalError: unknown = null
   const svgParams = buildFigmaQuery(nodeId, { ...baseOptions, format: 'svg' })
   try {
@@ -792,8 +774,7 @@ async function getFigmaImageUrl(
       svgParams.toString(),
       token
     )
-    const probe = await fetch(svgUrl)
-    if (probe.ok) return { url: svgUrl, format: 'svg' }
+    return { url: svgUrl, format: 'svg' }
   } catch (error) {
     originalError = error
   }
@@ -923,6 +904,7 @@ export async function Image<Source extends string>({
     }
 
     let component: ComponentMetadata | null = null
+    let lastErrorMessage: string | undefined
     for (const candidate of selectorCandidates) {
       try {
         component = await resolveComponentBySelector(fileId, candidate, token)
@@ -930,10 +912,16 @@ export async function Image<Source extends string>({
       } catch (error) {
         // Save the last error to rethrow if nothing matches
         component = null
+        lastErrorMessage = getErrorMessage(error)
       }
     }
 
     if (!component) {
+      if (lastErrorMessage) {
+        throw new Error(
+          `[renoun] Unable to resolve "${resolvedNodeId}" in file "${fileId}".\n${lastErrorMessage}`
+        )
+      }
       throw new Error(
         `[renoun] Could not find a component or frame named "${resolvedNodeId}" in file "${fileId}".`
       )
@@ -992,13 +980,13 @@ export async function Image<Source extends string>({
     }
   }
 
-  const dataUrl = await fetchAsDataUrl(
-    bestUrl,
-    resolvedFormat === 'png' ? 'png' : 'jpg'
+  const dataUrl = await fetchAsDataUrl(bestUrl, resolvedFormat)
+
+  return (
+    <img
+      {...props}
+      src={dataUrl ?? bestUrl}
+      alt={description ?? resolvedDescription ?? ''}
+    />
   )
-  return React.createElement('img', {
-    ...props,
-    src: dataUrl ?? bestUrl,
-    alt: description ?? resolvedDescription ?? '',
-  })
 }
