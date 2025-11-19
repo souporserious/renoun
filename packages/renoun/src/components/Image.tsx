@@ -77,7 +77,8 @@ function slugifyForFileName(value: string): string {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-') // non-alphanum → '-'
-    .replace(/^-+|-+$/g, '') // trim leading/trailing '-'
+    .replace(/^-+/, '') // trim leading '-'
+    .replace(/-+$/, '') // trim trailing '-'
     .slice(0, 80) // avoid path-length issues
 }
 
