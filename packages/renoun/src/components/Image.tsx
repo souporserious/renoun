@@ -978,7 +978,16 @@ function createFigmaError(
     )
 
     if (rawMessage) {
-      hints.push(` - Figma says: ${rawMessage}`)
+      // Try to pull "err" from JSON, otherwise fall back to string
+      try {
+        const parsed = JSON.parse(rawMessage) as { err?: string }
+        if (parsed && typeof parsed.err === 'string') {
+          rawMessage = parsed.err
+        }
+      } catch {
+        // not JSON, keep original
+      }
+      hints.push(` - Figma error message: ${rawMessage}`)
     }
   } else if (response.status === 404) {
     hints.push('Not found. Double-check the file ID.')
