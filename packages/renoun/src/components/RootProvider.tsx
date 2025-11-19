@@ -23,7 +23,7 @@ type HeadProps = React.ComponentProps<'head'>
 type ThemeMap = Record<string, ThemeValue>
 
 interface BaseProps
-  extends Omit<Partial<ConfigurationOptions>, 'git' | 'theme' | 'figma'> {
+  extends Omit<Partial<ConfigurationOptions>, 'git' | 'theme'> {
   /** The nonce to use for the provider scripts. */
   nonce?: string
 
@@ -71,6 +71,7 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   editor,
   defaultPackageManager = 'npm',
   sources,
+  images,
   includeCommandScript = true,
   includeTableOfContentsScript = true,
   includeThemeScript = true,
@@ -88,6 +89,12 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
   }
   if (sources !== undefined) {
     overrides.sources = normalizeSourcesConfig(sources)
+  }
+  if (images !== undefined) {
+    overrides.images = {
+      ...defaultConfig.images,
+      ...images,
+    }
   }
   if (git !== undefined) {
     if (typeof git === 'string') {

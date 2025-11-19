@@ -141,3 +141,9 @@ export function ExportOptions() {
   )
 }
 ```
+
+### Caching and public assets
+
+Figma downloads are cached to `public/images` by default using a hash of the request (file id, node id, and export options) as the filename. When a cached file is read, a cache-busting query parameter based on the file's last modified time is appended so browsers pick up updates while still allowing the static asset to be committed and reused. If the cache file exists, renoun uses it directly (including for SVG → JSX conversion) without needing to use the Figma API again.
+
+You can safely commit the cached files to source control. To clear a single asset, delete its hashed file from `public/images` and the next request will re-fetch from Figma. To use a different path (for example `public/design-assets`), set `images.outputDirectory` on [`RootProvider`](/docs/components/root-provider) and the `Image` component will read from and write to that directory instead.

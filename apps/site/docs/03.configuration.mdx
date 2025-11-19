@@ -44,6 +44,16 @@ The `RootProvider` component clones the `html` element and adds the [`suppressHy
 
 </Note>
 
+### Caching Figma images
+
+When using the [`Image` component](/docs/components/image) with Figma sources, downloads are cached to `public/images` by default. To change where those files are written (for example to commit them under a different directory), set the `images.outputDirectory` option on `RootProvider` to either a project-relative or absolute path:
+
+```tsx
+<RootProvider images={{ outputDirectory: 'public/design-assets' }} />
+```
+
+The cache path you choose is used for both reading and writing files and should point to a location that your framework serves as static assets.
+
 ## Themes
 
 renoun provides accurate syntax highlighting using TextMate grammars and VS Code–compatible color themes. To keep install size small, renoun does not bundle any themes by default. You can either reference a local theme JSON file or install the optional `tm-themes` package to load a bundled theme by name.
