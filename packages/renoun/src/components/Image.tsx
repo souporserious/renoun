@@ -73,13 +73,19 @@ function getFigmaCacheKey(input: {
 }
 
 function slugifyForFileName(value: string): string {
-  return value
+  const normalized = value
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-') // non-alphanum → '-'
-    .replace(/^-+/, '') // trim leading '-'
-    .replace(/-+$/, '') // trim trailing '-'
-    .slice(0, 80) // avoid path-length issues
+
+  let start = 0
+  let end = normalized.length
+
+  // 45 === '-'
+  while (start < end && normalized.charCodeAt(start) === 45) start++
+  while (end > start && normalized.charCodeAt(end - 1) === 45) end--
+
+  return normalized.slice(start, end).slice(0, 80)
 }
 
 function slugifyNodeId(nodeId: string): string {
