@@ -257,6 +257,34 @@ async function writeFigmaCacheFile(
   return { publicPath }
 }
 
+interface FigmaFileMetaPayload {
+  file?: {
+    name?: string
+    folder_name?: string
+    last_touched_at?: string
+    version?: string
+  }
+}
+
+const fetchFigmaFileMeta = cache(
+  async (fileId: string, token: string): Promise<FigmaFileMetaPayload> => {
+    const url = new URL(`https://api.figma.com/v1/files/${fileId}/meta`)
+    const response = await fetch(url, {
+      headers: {
+        'X-Figma-Token': token,
+      },
+    })
+
+    if (!response.ok) {
+      // You can either add a new scope name here, or just reuse 'file'
+      // depending on how fancy you want the hint text to be.
+      throw createFigmaError('file', response)
+    }
+
+    return (await response.json()) as FigmaFileMetaPayload
+  }
+)
+
 const fetchFigmaImageUrl = cache(
   async (
     fileId: string,
@@ -368,12 +396,15 @@ async function getFigmaFileVersion(
   token: string
 ): Promise<string | undefined> {
   try {
-    const file = await fetchFigmaFile(fileId, token)
-    // Prefer explicit version, fall back to lastModified
-    return file.version ?? file.lastModified
+    const meta = await fetchFigmaFileMeta(fileId, token)
+    const file = meta.file
+    if (!file) return undefined
+
+    // Prefer explicit version, fall back to last_touched_at
+    return file.version ?? file.last_touched_at
   } catch (error) {
     if (process.env.RENOUN_DEBUG === 'debug') {
-      console.debug('[renoun] Skipping Figma version lookup:', error)
+      console.debug('[renoun] Skipping Figma version lookup (meta):', error)
     }
     return undefined
   }

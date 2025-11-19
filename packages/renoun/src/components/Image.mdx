@@ -8,9 +8,10 @@ When rendering Figma components the description from the file is automatically u
 
 In the Figma app, go to Main menu → Help and account → Account settings → Security → Personal access tokens. Click "Generate new token" and copy it. The token must include the following scopes:
 
-- `file_content:read` (required for exporting images and reading file content)
-- `library_content:read` (required if you reference components by name or read published components)
-- `team_library_content:read` (if components are published in team libraries)
+- `file_metadata:read`: required for reading the file `version` and `last_touched_at` fields to invalidate the cache
+- `file_content:read`: required for exporting images and reading file content
+- `library_content:read`: required if you reference components by name or read published components
+- `team_library_content:read`: required if components are published in team libraries
 
 Refer to the official docs: [Figma access tokens](https://www.figma.com/developers/api#access-tokens).
 
