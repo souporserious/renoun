@@ -318,7 +318,7 @@ const fetchFigmaFileMeta = cache(
   }
 )
 
-type ImageBatchKey = string // `${fileId}|${queryKey}`
+type ImageBatchKey = `${string}|${string}` // `${fileId}|${queryKey}`
 
 interface ImageBatch {
   nodeIds: string[]
