@@ -324,24 +324,77 @@ interface ImageBatch {
   nodeIds: string[]
   resolvers: Array<(urls: Record<string, string | null>) => void>
   rejecters: Array<(err: unknown) => void>
-  timer?: NodeJS.Timeout
+  scheduled: boolean
 }
 
-const imageBatches = new Map<ImageBatchKey, ImageBatch>()
+function createFigmaImageLoader(token: string) {
+  const batches = new Map<ImageBatchKey, ImageBatch>()
 
-const fetchFigmaImageUrl = cache(
-  async (
+  function schedule(batchKey: ImageBatchKey) {
+    const batch = batches.get(batchKey)
+    if (!batch || batch.scheduled) return
+    batch.scheduled = true
+
+    queueMicrotask(async () => {
+      const current = batches.get(batchKey)
+      if (!current) return
+      batches.delete(batchKey)
+
+      const [fileId, queryKey] = batchKey.split('|')
+      const searchParams = new URLSearchParams(queryKey)
+      // Dedupe node ids
+      searchParams.set('ids', Array.from(new Set(current.nodeIds)).join(','))
+
+      const url = new URL(`https://api.figma.com/v1/images/${fileId}`)
+      url.search = searchParams.toString()
+
+      let response: Response
+      try {
+        response = await fetchWithRateLimit('images', url, token)
+      } catch (error) {
+        current.rejecters.forEach((reject) => reject(error))
+        return
+      }
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        const err = createFigmaError('images', response, text || undefined)
+        current.rejecters.forEach((reject) => reject(err))
+        return
+      }
+
+      const payload = (await response.json()) as {
+        err: string | null
+        images: Record<string, string | null>
+      }
+
+      if (payload.err) {
+        const err = new Error(
+          `[renoun] Figma API responded with an error: ${payload.err}`
+        )
+        current.rejecters.forEach((reject) => reject(err))
+        return
+      }
+
+      current.resolvers.forEach((resolve) => resolve(payload.images))
+    })
+  }
+
+  function load(
     fileId: string,
     nodeId: string,
-    queryKey: string,
-    token: string
-  ): Promise<string> => {
+    queryKey: string
+  ): Promise<string> {
     const batchKey: ImageBatchKey = `${fileId}|${queryKey}`
-    let batch = imageBatches.get(batchKey)
+    let batch = batches.get(batchKey)
     if (!batch) {
-      batch = { nodeIds: [], resolvers: [], rejecters: [] }
-      imageBatches.set(batchKey, batch)
-      batch.timer = setTimeout(() => flushImageBatch(batchKey, token), 0)
+      batch = {
+        nodeIds: [],
+        resolvers: [],
+        rejecters: [],
+        scheduled: false,
+      }
+      batches.set(batchKey, batch)
     }
 
     return new Promise<string>((resolve, reject) => {
@@ -357,53 +410,28 @@ const fetchFigmaImageUrl = cache(
         }
       })
       batch!.rejecters.push(reject)
+      schedule(batchKey)
     })
   }
+
+  return { load }
+}
+
+const getFigmaImageLoader = cache((token: string) =>
+  createFigmaImageLoader(token)
 )
 
-async function flushImageBatch(batchKey: ImageBatchKey, token: string) {
-  const batch = imageBatches.get(batchKey)
-  if (!batch) return
-  imageBatches.delete(batchKey)
-
-  const [fileId, queryKey] = batchKey.split('|')
-  const searchParams = new URLSearchParams(queryKey)
-  // Dedupe node ids
-  searchParams.set('ids', Array.from(new Set(batch.nodeIds)).join(','))
-
-  const url = new URL(`https://api.figma.com/v1/images/${fileId}`)
-  url.search = searchParams.toString()
-
-  let response: Response
-  try {
-    response = await fetchWithRateLimit('images', url, token)
-  } catch (error) {
-    batch.rejecters.forEach((reject) => reject(error))
-    return
+const fetchFigmaImageUrl = cache(
+  async (
+    fileId: string,
+    nodeId: string,
+    queryKey: string,
+    token: string
+  ): Promise<string> => {
+    const loader = getFigmaImageLoader(token)
+    return loader.load(fileId, nodeId, queryKey)
   }
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    const err = createFigmaError('images', response, text || undefined)
-    batch.rejecters.forEach((reject) => reject(err))
-    return
-  }
-
-  const payload = (await response.json()) as {
-    err: string | null
-    images: Record<string, string | null>
-  }
-
-  if (payload.err) {
-    const err = new Error(
-      `[renoun] Figma API responded with an error: ${payload.err}`
-    )
-    batch.rejecters.forEach((reject) => reject(err))
-    return
-  }
-
-  batch.resolvers.forEach((resolve) => resolve(payload.images))
-}
+)
 
 const fetchFigmaComponents = cache(
   async (fileId: string, token: string): Promise<ComponentMetadata[]> => {
