@@ -1,12 +1,11 @@
 import React, { cache } from 'react'
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile, readdir, unlink } from 'node:fs/promises'
-import { isAbsolute, join, posix as pathPosix } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { isAbsolute, dirname, join, posix as pathPosix } from 'node:path'
 
 import { svgToJsx } from '../utils/svg-to-jsx.js'
 import { getConfig } from './Config/ServerConfigContext.js'
 import type { SourcesConfig } from './Config/types.js'
-import type { Dirent } from 'node:fs'
 
 const FIGMA_HOST_PATTERN = /\.figma\.com$/
 const FIGMA_PROTOCOL = /^figma:/i
@@ -93,92 +92,89 @@ function slugifyNodeId(nodeId: string): string {
   return slugifyForFileName(nodeId.replace(/:/g, '-'))
 }
 
-function getCachedFigmaPaths(
-  key: string,
-  format: 'svg' | 'png' | 'jpg',
-  cacheLocation: FigmaCacheLocation,
-  options?: { label?: string; nodeId?: string }
-) {
-  const shortHash = key.slice(0, 8)
-  let baseLabel: string | undefined
-
-  if (options?.label) {
-    baseLabel = slugifyForFileName(options.label)
-  } else if (options?.nodeId) {
-    baseLabel = `node-${slugifyNodeId(options.nodeId)}`
+function buildScaleSuffix(scale?: number): string {
+  if (scale === undefined || !Number.isFinite(scale) || scale === 1) {
+    return ''
   }
 
-  const baseName = baseLabel ? `${baseLabel}-${shortHash}` : shortHash
+  const number = Number(scale)
+  if (!Number.isFinite(number) || number <= 0) {
+    return ''
+  }
+
+  const scaleString = Number.isInteger(number)
+    ? String(number)
+    : number.toString().replace('.', '_')
+
+  return `@${scaleString}x`
+}
+
+function getFigmaExportBasename(options?: {
+  label?: string
+  nodeId?: string
+  scale?: number
+}): { dirSegments: string[]; baseName: string } {
+  let rawSegments: string[] = []
+
+  if (options?.label && options.label.trim()) {
+    // e.g. "Page/Frame/Component" → ["Page", "Frame", "Component"]
+    rawSegments = options.label
+      .split('/')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  } else if (options?.nodeId) {
+    // Fallback when we don't have a nice label yet
+    rawSegments = [`node-${slugifyNodeId(options.nodeId)}`]
+  }
+
+  if (rawSegments.length === 0) {
+    rawSegments = ['figma-image']
+  }
+
+  const slugged = rawSegments.map((segment) => slugifyForFileName(segment))
+  const dirSegments = slugged.slice(0, -1)
+  const last = slugged[slugged.length - 1] || 'figma-image'
+
+  const scaleSuffix = buildScaleSuffix(options?.scale)
+  const baseName = `${last}${scaleSuffix}`
+
+  return { dirSegments, baseName }
+}
+
+type Format = 'svg' | 'png' | 'jpg'
+
+function getCachedFigmaPaths(
+  key: string,
+  format: Format,
+  cacheLocation: FigmaCacheLocation,
+  options?: { label?: string; nodeId?: string; scale?: number }
+) {
+  const { dirSegments, baseName } = getFigmaExportBasename(options)
   const fileName = `${baseName}.${format}`
+
+  // Filesystem path: <cacheDir>[/segments...]/fileName
+  const fileSystemPath = join(cacheLocation.directory, ...dirSegments, fileName)
+
+  // Public path: <publicBasePath>[/segments...]/fileName
+  const publicBaseDir =
+    dirSegments.length > 0
+      ? pathPosix.join(cacheLocation.publicBasePath, ...dirSegments)
+      : cacheLocation.publicBasePath
+
+  const publicPathWithoutQuery = pathPosix.join(publicBaseDir, fileName)
+
+  // Use hash only as cache-busting query param, not in the filename
+  const shortHash = key.slice(0, 8)
+  const publicPath =
+    shortHash.length > 0
+      ? `${publicPathWithoutQuery}?v=${encodeURIComponent(shortHash)}`
+      : publicPathWithoutQuery
 
   return {
     baseName,
     fileName,
-    fileSystemPath: join(cacheLocation.directory, fileName),
-    publicPath: pathPosix.join(cacheLocation.publicBasePath, fileName),
-  }
-}
-
-/** Remove stale Figma variants for the same component label. */
-async function removeStaleFigmaVariants(
-  /** The base name of the cached file. This will look like "label-slug-abcdef12" or "abcdef12". */
-  baseName: string,
-
-  /** The cache location. */
-  cacheLocation: FigmaCacheLocation
-): Promise<void> {
-  // We only try to group by label when it looks like label-<8 hex chars>.
-  const match = /^(.+)-([0-9a-f]{8})$/i.exec(baseName)
-  if (!match) {
-    // No label prefix (just the hash) – nothing smart to clean up.
-    return
-  }
-
-  const [, labelPart, currentHash] = match
-  const directory = cacheLocation.directory
-
-  let entries: Dirent[]
-  try {
-    entries = await readdir(directory, { withFileTypes: true })
-  } catch {
-    // Directory may not exist yet – nothing to clean.
-    return
-  }
-
-  const deletions: Promise<unknown>[] = []
-
-  for (const entry of entries) {
-    if (!entry.isFile()) continue
-
-    const name = entry.name
-    const dotIndex = name.lastIndexOf('.')
-
-    if (dotIndex <= 0) continue
-
-    const candidateBase = name.slice(0, dotIndex)
-    const candidateMatch = /^(.+)-([0-9a-f]{8})$/i.exec(candidateBase)
-
-    if (!candidateMatch) continue
-
-    const [, candidateLabel, candidateHash] = candidateMatch
-
-    if (candidateLabel !== labelPart) continue
-
-    const isSameHash = candidateHash === currentHash
-
-    // Delete any other hash for the same label.
-    if (!isSameHash) {
-      const fullPath = join(directory, name)
-      deletions.push(
-        unlink(fullPath).catch(() => {
-          // Best-effort cleanup – ignore failures
-        })
-      )
-    }
-  }
-
-  if (deletions.length > 0) {
-    await Promise.all(deletions)
+    fileSystemPath,
+    publicPath,
   }
 }
 
@@ -204,7 +200,7 @@ function resolveFigmaCacheLocation(
 async function readCachedFigmaImage(
   key: string,
   cacheLocation: FigmaCacheLocation,
-  options?: { label?: string; nodeId?: string }
+  options?: { label?: string; nodeId?: string; scale?: number }
 ): Promise<CachedFigmaImage | null> {
   const formats: Array<CachedFigmaImage['format']> = ['svg', 'png', 'jpg']
   for (const format of formats) {
@@ -234,26 +230,26 @@ async function readCachedFigmaImage(
 
 async function writeFigmaCacheFile(
   key: string,
-  format: 'svg' | 'png' | 'jpg',
+  format: Format,
   content: string | ArrayBuffer,
   cacheLocation: FigmaCacheLocation,
-  options?: { label?: string; nodeId?: string }
+  options?: { label?: string; nodeId?: string; scale?: number }
 ): Promise<{ publicPath: string }> {
-  const { fileSystemPath, publicPath, baseName } = getCachedFigmaPaths(
+  const { fileSystemPath, publicPath } = getCachedFigmaPaths(
     key,
     format,
     cacheLocation,
     options
   )
 
-  await mkdir(cacheLocation.directory, { recursive: true })
-
-  await removeStaleFigmaVariants(baseName, cacheLocation)
+  // Ensure the nested directory structure exists
+  await mkdir(dirname(fileSystemPath), { recursive: true })
 
   await writeFile(
     fileSystemPath,
     typeof content === 'string' ? content : Buffer.from(content)
   )
+
   return { publicPath }
 }
 
@@ -1098,7 +1094,7 @@ interface FigmaSvgOptions {
 
 interface FigmaImageOptions extends FigmaSvgOptions {
   /** Desired output format when rendering from Figma. Defaults to `png`. */
-  format?: 'png' | 'jpg' | 'svg'
+  format?: Format
 
   /** Resolution scale to request from Figma. */
   scale?: number
@@ -1127,8 +1123,8 @@ async function getFigmaImageUrl(
   nodeId: string,
   baseOptions: Omit<FigmaImageOptions, 'format'>,
   token: string,
-  preferredFormat?: 'svg' | 'png' | 'jpg'
-): Promise<{ url: string; format: 'svg' | 'png' | 'jpg' }> {
+  preferredFormat?: Format
+): Promise<{ url: string; format: Format }> {
   // If the caller specified a format, try that first
   if (preferredFormat) {
     const preferredParams = buildFigmaQuery(nodeId, {
@@ -1267,9 +1263,45 @@ export async function Image<Source extends string>({
 
   const token = process.env['FIGMA_TOKEN']
   if (!token) {
-    // ... your existing FIGMA_TOKEN error block unchanged ...
-    // (omitted here for brevity)
-    throw new Error('FIGMA_TOKEN missing – see original implementation')
+    const isProduction = process.env.NODE_ENV === 'production'
+    const lines: string[] = [
+      '[renoun] a FIGMA_TOKEN environment variable is required to load images from Figma.\n',
+      'How to fix:',
+      '1) In the Figma app, go to Main menu → Help and account → Account settings → Security → Personal access tokens, click "Generate new token", then copy it (see https://www.figma.com/developers/api#access-tokens).',
+      '   Required scopes: file_content:read',
+    ]
+
+    if (!isProduction) {
+      lines.push(
+        '2) For local development, create a ".env.local" file at the project root with:',
+        '   FIGMA_TOKEN=YOUR_TOKEN',
+        '3) Restart your dev server so the env var is picked up.'
+      )
+      lines.push(
+        '',
+        'When deploying to production:',
+        '   - Vercel (Dashboard): Project → Settings → Environment Variables',
+        '   - Vercel (CLI): run "vercel env add FIGMA_TOKEN" (and optionally "vercel env pull .env.local" to sync locally)',
+        '   - Netlify (Dashboard): Site configuration → Environment variables',
+        '   - Netlify (CLI): run "netlify env:set FIGMA_TOKEN YOUR_TOKEN"',
+        '   - Amplify: App settings → Environment variables'
+      )
+    } else {
+      lines.push(
+        '2) Set it as the FIGMA_TOKEN environment variable in your hosting provider, then redeploy:',
+        '   - Vercel (Dashboard): Project → Settings → Environment Variables',
+        '   - Vercel (CLI): run "vercel env add FIGMA_TOKEN"',
+        '   - Netlify (Dashboard): Site configuration → Environment variables',
+        '   - Netlify (CLI): run "netlify env:set FIGMA_TOKEN YOUR_TOKEN"',
+        '   - Amplify: App settings → Environment variables'
+      )
+    }
+
+    lines.push(
+      '\nSee the <Image /> docs for more details: https://renoun.dev/components/image'
+    )
+
+    throw new Error(lines.join('\n'))
   }
 
   const { fileId: matchedFileId, nodeId: matchedNodeId } = matched
@@ -1368,8 +1400,8 @@ export async function Image<Source extends string>({
     version: fileVersion,
   })
 
-  // 5) Single cache read using canonical { key, label, nodeId }
-  const cacheOptions = { label: cacheLabel, nodeId: cacheNodeId }
+  // 5) Single cache read using canonical { key, label, nodeId, scale }
+  const cacheOptions = { label: cacheLabel, nodeId: cacheNodeId, scale }
   const cachedImage = await readCachedFigmaImage(
     cacheKey,
     cacheLocation,
