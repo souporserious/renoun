@@ -257,6 +257,44 @@ async function writeFigmaCacheFile(
   return { publicPath }
 }
 
+type FigmaScope = 'images' | 'components' | 'fileContent' | 'fileMeta'
+
+const rateLimitUntil: Partial<Record<FigmaScope, number>> = {}
+
+function isRateLimited(scope: FigmaScope): boolean {
+  const until = rateLimitUntil[scope]
+  return typeof until === 'number' && until > Date.now()
+}
+
+function markRateLimited(scope: FigmaScope, response: Response) {
+  const header = response.headers.get('Retry-After')?.trim()
+  const seconds = header && !Number.isNaN(Number(header)) ? Number(header) : 60
+  rateLimitUntil[scope] = Date.now() + Math.max(seconds, 1) * 1000
+}
+
+async function fetchWithRateLimit(
+  scope: FigmaScope,
+  url: URL,
+  token: string
+): Promise<Response> {
+  if (isRateLimited(scope)) {
+    throw new Error(
+      `[renoun] Figma ${scope} endpoint is temporarily rate-limited. ` +
+        'Serving previously cached images only for now.'
+    )
+  }
+
+  const response = await fetch(url, {
+    headers: { 'X-Figma-Token': token },
+  })
+
+  if (response.status === 429) {
+    markRateLimited(scope, response)
+  }
+
+  return response
+}
+
 interface FigmaFileMetaPayload {
   file?: {
     name?: string
@@ -269,11 +307,7 @@ interface FigmaFileMetaPayload {
 const fetchFigmaFileMeta = cache(
   async (fileId: string, token: string): Promise<FigmaFileMetaPayload> => {
     const url = new URL(`https://api.figma.com/v1/files/${fileId}/meta`)
-    const response = await fetch(url, {
-      headers: {
-        'X-Figma-Token': token,
-      },
-    })
+    const response = await fetchWithRateLimit('fileMeta', url, token)
 
     // file metadata needs file_metadata:read
     if (!response.ok) {
@@ -284,6 +318,17 @@ const fetchFigmaFileMeta = cache(
   }
 )
 
+type ImageBatchKey = string // `${fileId}|${queryKey}`
+
+interface ImageBatch {
+  nodeIds: string[]
+  resolvers: Array<(urls: Record<string, string | null>) => void>
+  rejecters: Array<(err: unknown) => void>
+  timer?: NodeJS.Timeout
+}
+
+const imageBatches = new Map<ImageBatchKey, ImageBatch>()
+
 const fetchFigmaImageUrl = cache(
   async (
     fileId: string,
@@ -291,52 +336,79 @@ const fetchFigmaImageUrl = cache(
     queryKey: string,
     token: string
   ): Promise<string> => {
-    const searchParams = new URLSearchParams(queryKey)
-    const url = new URL(`https://api.figma.com/v1/images/${fileId}`)
-    url.search = searchParams.toString()
+    const batchKey: ImageBatchKey = `${fileId}|${queryKey}`
+    let batch = imageBatches.get(batchKey)
+    if (!batch) {
+      batch = { nodeIds: [], resolvers: [], rejecters: [] }
+      imageBatches.set(batchKey, batch)
+      batch.timer = setTimeout(() => flushImageBatch(batchKey, token), 0)
+    }
 
-    const response = await fetch(url, {
-      headers: {
-        'X-Figma-Token': token,
-      },
+    return new Promise<string>((resolve, reject) => {
+      batch!.nodeIds.push(nodeId)
+      batch!.resolvers.push((urls) => {
+        const url = urls[nodeId]
+        if (!url) {
+          reject(
+            new Error(`[renoun] Figma returned no image for node ${nodeId}.`)
+          )
+        } else {
+          resolve(url)
+        }
+      })
+      batch!.rejecters.push(reject)
     })
-
-    // images endpoint needs file_content:read
-    if (!response.ok) {
-      throw createFigmaError('images', response)
-    }
-
-    const payload = (await response.json()) as {
-      err: string | null
-      images: Record<string, string | null>
-    }
-
-    if (payload.err) {
-      throw new Error(
-        `[renoun] Figma API responded with an error: ${payload.err}`
-      )
-    }
-
-    const imageUrl = payload.images[nodeId]
-
-    if (!imageUrl) {
-      throw new Error(
-        `[renoun] Figma returned no image for node ${nodeId}. Verify the node exists and is visible.`
-      )
-    }
-
-    return imageUrl
   }
 )
+
+async function flushImageBatch(batchKey: ImageBatchKey, token: string) {
+  const batch = imageBatches.get(batchKey)
+  if (!batch) return
+  imageBatches.delete(batchKey)
+
+  const [fileId, queryKey] = batchKey.split('|')
+  const searchParams = new URLSearchParams(queryKey)
+  // Dedupe node ids
+  searchParams.set('ids', Array.from(new Set(batch.nodeIds)).join(','))
+
+  const url = new URL(`https://api.figma.com/v1/images/${fileId}`)
+  url.search = searchParams.toString()
+
+  let response: Response
+  try {
+    response = await fetchWithRateLimit('images', url, token)
+  } catch (error) {
+    batch.rejecters.forEach((reject) => reject(error))
+    return
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    const err = createFigmaError('images', response, text || undefined)
+    batch.rejecters.forEach((reject) => reject(err))
+    return
+  }
+
+  const payload = (await response.json()) as {
+    err: string | null
+    images: Record<string, string | null>
+  }
+
+  if (payload.err) {
+    const err = new Error(
+      `[renoun] Figma API responded with an error: ${payload.err}`
+    )
+    batch.rejecters.forEach((reject) => reject(err))
+    return
+  }
+
+  batch.resolvers.forEach((resolve) => resolve(payload.images))
+}
 
 const fetchFigmaComponents = cache(
   async (fileId: string, token: string): Promise<ComponentMetadata[]> => {
     const url = new URL(`https://api.figma.com/v1/files/${fileId}/components`)
-    const response = await fetch(url, {
-      headers: {
-        'X-Figma-Token': token,
-      },
-    })
+    const response = await fetchWithRateLimit('components', url, token)
 
     // components needs library_content:read
     if (!response.ok) {
@@ -377,11 +449,7 @@ interface FigmaFilePayload {
 const fetchFigmaFile = cache(
   async (fileId: string, token: string): Promise<FigmaFilePayload> => {
     const url = new URL(`https://api.figma.com/v1/files/${fileId}`)
-    const response = await fetch(url, {
-      headers: {
-        'X-Figma-Token': token,
-      },
-    })
+    const response = await fetchWithRateLimit('fileContent', url, token)
 
     // file JSON needs file_content:read
     if (!response.ok) {
