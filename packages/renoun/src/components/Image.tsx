@@ -275,10 +275,9 @@ const fetchFigmaFileMeta = cache(
       },
     })
 
+    // file metadata needs file_metadata:read
     if (!response.ok) {
-      // You can either add a new scope name here, or just reuse 'file'
-      // depending on how fancy you want the hint text to be.
-      throw createFigmaError('file', response)
+      throw createFigmaError('fileMeta', response)
     }
 
     return (await response.json()) as FigmaFileMetaPayload
@@ -302,6 +301,7 @@ const fetchFigmaImageUrl = cache(
       },
     })
 
+    // images endpoint needs file_content:read
     if (!response.ok) {
       throw createFigmaError('images', response)
     }
@@ -338,6 +338,7 @@ const fetchFigmaComponents = cache(
       },
     })
 
+    // components needs library_content:read
     if (!response.ok) {
       throw createFigmaError('components', response)
     }
@@ -382,8 +383,9 @@ const fetchFigmaFile = cache(
       },
     })
 
+    // file JSON needs file_content:read
     if (!response.ok) {
-      throw createFigmaError('file', response)
+      throw createFigmaError('fileContent', response)
     }
 
     const payload = (await response.json()) as FigmaFilePayload
@@ -840,9 +842,12 @@ async function resolveComponentBySelector(
   )
 }
 
+type FigmaErrorScope = 'images' | 'components' | 'fileContent' | 'fileMeta'
+
 function createFigmaError(
-  scope: 'images' | 'components' | 'file',
-  response: Response
+  scope: FigmaErrorScope,
+  response: Response,
+  rawMessage?: string
 ): Error {
   const hints: string[] = []
 
@@ -851,26 +856,45 @@ function createFigmaError(
       'The FIGMA_TOKEN is missing or invalid. Ensure it is set correctly.'
     )
   } else if (response.status === 403) {
+    const requiredScopesByScope: Record<FigmaErrorScope, string[]> = {
+      images: ['file_content:read'],
+      fileContent: ['file_content:read'],
+      fileMeta: ['file_metadata:read'],
+      components: ['library_content:read'],
+    }
+
+    const requiredScopes = requiredScopesByScope[scope] ?? []
+
+    hints.push('Access denied. Verify:')
+    if (requiredScopes.length) {
+      hints.push(
+        ` - FIGMA_TOKEN includes scope(s): ${requiredScopes.join(', ')}`
+      )
+    }
+    if (scope === 'components') {
+      hints.push(
+        ' - Add team library scopes if needed: team_library_content:read'
+      )
+    }
     hints.push(
-      'Access denied. Verify:',
-      ' - FIGMA_TOKEN includes scope: file_content:read',
-      ' - Add library scopes if needed: library_content:read (and team_library_content:read for team libraries)',
       ' - The token owner can open the referenced file in Figma',
       ' - The file ID is correct and belongs to that account/org'
     )
+
+    if (rawMessage) {
+      hints.push(` - Figma says: ${rawMessage}`)
+    }
   } else if (response.status === 404) {
     hints.push('Not found. Double-check the file ID.')
   } else {
     const retryAfterHint = getRetryAfterHint(response)
     if (response.status === 429) {
-      // Special-case rate limits so we don't say "in a moment" and then "3 days"
       if (retryAfterHint) {
         hints.push('Rate limit reached.', retryAfterHint)
       } else {
         hints.push('Rate limit reached. Try again later.')
       }
     } else if (retryAfterHint) {
-      // For other statuses, we may still have a Retry-After header
       hints.push(retryAfterHint)
     }
   }
