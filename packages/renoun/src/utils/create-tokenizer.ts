@@ -267,20 +267,22 @@ export class Tokenizer<Theme extends string> {
     this.#registryOptions = registryOptions
   }
 
-  /** Tokenize the given source for multiple themes. */
-  tokenize = async (
+  /**
+   * Stream tokens line-by-line for the given source.
+   * Useful for long-running operations where incremental results are desired.
+   */
+  async *stream(
     source: string,
     language: Languages,
     themes: Theme[],
     timeLimit?: number
-  ): Promise<TextMateToken[][]> => {
+  ): AsyncGenerator<TextMateToken[]> {
     const lines = source.split(/\r?\n/)
     const useCssVariables = themes.length > 1
     const themeGrammars: (TextMateGrammar | null)[] = []
     const themeColorMaps: string[][] = []
     const states: StateStack[] = []
 
-    // Manage a registry for each theme to ensure that each theme has its own state
     const themeInitializationResults = await Promise.all(
       themes.map(async (themeName, themeIndex) => {
         let registry = this.#registries.get(themeName)
@@ -317,13 +319,15 @@ export class Tokenizer<Theme extends string> {
       })
     )
 
-    for (const { themeIndex, grammar, registry } of themeInitializationResults) {
+    for (const {
+      themeIndex,
+      grammar,
+      registry,
+    } of themeInitializationResults) {
       themeGrammars[themeIndex] = grammar
       themeColorMaps[themeIndex] = registry.getThemeColors()
       states[themeIndex] = TextMate.INITIAL
     }
-
-    const mergedLines: TextMateToken[][] = []
 
     for (const lineText of lines) {
       const allTokens: Array<{
@@ -463,16 +467,23 @@ export class Tokenizer<Theme extends string> {
         })
       }
 
-      mergedLines.push(mergedLineTokens)
+      yield mergedLineTokens
+    }
+  }
+
+  /** Tokenize the given source for multiple themes. */
+  async tokenize(
+    source: string,
+    language: Languages,
+    themes: Theme[],
+    timeLimit?: number
+  ): Promise<TextMateToken[][]> {
+    const mergedLines: TextMateToken[][] = []
+
+    for await (const line of this.stream(source, language, themes, timeLimit)) {
+      mergedLines.push(line)
     }
 
     return mergedLines
   }
-}
-
-export function createTokenizer<Theme extends string>(
-  options: RegistryOptions<Theme>
-): Tokenizer<Theme>['tokenize'] {
-  const tokenizer = new Tokenizer(options)
-  return tokenizer.tokenize
 }

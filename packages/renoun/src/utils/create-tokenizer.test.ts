@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 
 import {
-  createTokenizer,
+  Tokenizer,
   type RegistryOptions,
   type TextMateThemeRaw,
   type TextMateGrammarRaw,
@@ -78,14 +78,17 @@ const registryOptions: RegistryOptions<ThemeName> = {
   },
 }
 
-describe('createTokenizer', () => {
+describe('Tokenizer', () => {
   test('tokenizes multiple themes without altering merged output', async () => {
-    const tokenize = createTokenizer<ThemeName>(registryOptions)
+    const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const source = '/* comment line 1\ncomment line 2 */'
 
-    const multiThemeTokens = await tokenize(source, 'css', ['light', 'dark'])
-    const lightOnlyTokens = await tokenize(source, 'css', ['light'])
-    const darkOnlyTokens = await tokenize(source, 'css', ['dark'])
+    const multiThemeTokens = await tokenizer.tokenize(source, 'css', [
+      'light',
+      'dark',
+    ])
+    const lightOnlyTokens = await tokenizer.tokenize(source, 'css', ['light'])
+    const darkOnlyTokens = await tokenizer.tokenize(source, 'css', ['dark'])
 
     const tokenValues = (lines: typeof multiThemeTokens) =>
       lines.map((line) => line.map((token) => token.value))
@@ -120,5 +123,20 @@ describe('createTokenizer', () => {
 
     expect(firstLineComment?.style.color).toBeUndefined()
     expect(secondLineComment?.style.color).toBeUndefined()
+  })
+
+  test('streams tokenized lines without changing output', async () => {
+    const tokenizer = new Tokenizer<ThemeName>(registryOptions)
+    const source = '/* comment line 1*/\n/* comment line 2 */'
+
+    const streamed: string[][] = []
+    for await (const line of tokenizer.stream(source, 'css', ['light'])) {
+      streamed.push(line.map((token) => token.value))
+    }
+
+    const tokens = await tokenizer.tokenize(source, 'css', ['light'])
+    const nonStreamed = tokens.map((line) => line.map((token) => token.value))
+
+    expect(streamed).toEqual(nonStreamed)
   })
 })

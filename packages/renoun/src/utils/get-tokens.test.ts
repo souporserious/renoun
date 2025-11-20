@@ -30,7 +30,17 @@ function createTextMateToken(value: string): TextMateToken {
 
 function createStubHighlighter(lines: string[][]): Highlighter {
   const tokenLines = lines.map((line) => line.map(createTextMateToken))
-  return async () => tokenLines
+  const tokenize = async () => tokenLines
+  tokenize.stream = async function* (
+    _source: string,
+    _language: any,
+    _themes: string[]
+  ) {
+    for (const line of tokenLines) {
+      yield line
+    }
+  }
+  return tokenize
 }
 
 function createDeferred<T>() {
@@ -165,21 +175,33 @@ describe('getTokens metadata integration', () => {
 
     const highlighterStarted = createDeferred<void>()
 
-    const highlighter: Highlighter = async () => {
+    const tokenLines = [
+      [
+        createTextMateToken('const'),
+        createTextMateToken(' '),
+        createTextMateToken('value'),
+        createTextMateToken(' '),
+        createTextMateToken('='),
+        createTextMateToken(' '),
+        createTextMateToken('1'),
+        createTextMateToken(';'),
+      ],
+    ]
+    const tokenize = async () => {
       highlighterStarted.resolve()
-      return [
-        [
-          createTextMateToken('const'),
-          createTextMateToken(' '),
-          createTextMateToken('value'),
-          createTextMateToken(' '),
-          createTextMateToken('='),
-          createTextMateToken(' '),
-          createTextMateToken('1'),
-          createTextMateToken(';'),
-        ],
-      ]
+      return tokenLines
     }
+    tokenize.stream = async function* (
+      _source: string,
+      _language: any,
+      _themes: string[]
+    ) {
+      highlighterStarted.resolve()
+      for (const line of tokenLines) {
+        yield line
+      }
+    }
+    const highlighter: Highlighter = tokenize
 
     const tokensPromise = getTokens({
       project,
