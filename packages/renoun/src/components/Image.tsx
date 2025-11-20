@@ -7,7 +7,6 @@ import { svgToJsx } from '../utils/svg-to-jsx.js'
 import { getConfig } from './Config/ServerConfigContext.js'
 import type { SourcesConfig } from './Config/types.js'
 
-const FIGMA_HOST_PATTERN = /\.figma\.com$/
 const FIGMA_PROTOCOL = /^figma:/i
 const HTTP_PROTOCOL = /^(https?:)/i
 interface FigmaCacheLocation {
@@ -62,12 +61,19 @@ interface ComponentMetadata {
 
 function getFigmaCacheKey(input: {
   fileId: string
-  nodeId: string
+  selector: string
   options: Omit<FigmaImageOptions, 'format'>
   version?: string
 }): string {
   const hash = createHash('sha256')
-  hash.update(JSON.stringify(input))
+  hash.update(
+    JSON.stringify({
+      fileId: input.fileId,
+      selector: input.selector,
+      options: input.options,
+      version: input.version,
+    })
+  )
   return hash.digest('hex')
 }
 
@@ -561,29 +567,6 @@ function collectNamedNodes(
   return results
 }
 
-function decodeNodeId(nodeId: string): string {
-  let decoded: string
-  try {
-    decoded = decodeURIComponent(nodeId.trim())
-  } catch {
-    decoded = nodeId.trim()
-  }
-
-  const trimmed = decoded
-  if (!trimmed) {
-    throw new Error('[renoun] Figma node id cannot be empty.')
-  }
-  if (trimmed.includes(':')) {
-    return trimmed
-  }
-  // Only convert hyphens to colons for numeric node ids (e.g. 915-1075 → 915:1075)
-  // Preserve hyphens in component names (e.g. arrow-down)
-  if (/^[0-9-]+$/.test(trimmed)) {
-    return trimmed.replace(/-/g, ':')
-  }
-  return trimmed
-}
-
 function isLikelyFileId(value: string): boolean {
   return /^[A-Za-z0-9]{10,}$/.test(value)
 }
@@ -603,94 +586,120 @@ function trimTrailingSlashes(value: string): string {
   return value.slice(0, end)
 }
 
-function parseFigmaProtocol(rawSource: string): {
-  fileId: string
-  nodeId: string
-} {
+function buildCacheLabel(
+  selector: string,
+  alias?: string,
+  basePathname?: string
+): string {
+  const normalizedAlias = alias?.trim()
+  const normalizedBasePathname = basePathname?.trim()
+
+  const aliasSegments = normalizedAlias
+    ? normalizedAlias.split('/').map((segment) => segment.trim()).filter(Boolean)
+    : []
+
+  const basePathSegments = normalizedBasePathname
+    ? normalizedBasePathname
+        .split('/')
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+    : []
+
+  const selectorSegments = selector
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+
+  const startsWithBasePath =
+    basePathSegments.length > 0 &&
+    basePathSegments.every(
+      (segment, index) => selectorSegments[index] === segment
+    )
+
+  const segments: string[] = []
+  if (aliasSegments.length > 0) {
+    segments.push(...aliasSegments)
+  }
+  if (basePathSegments.length > 0 && !startsWithBasePath) {
+    segments.push(...basePathSegments)
+  }
+  segments.push(...selectorSegments)
+
+  return segments.length > 0 ? segments.join('/') : 'figma-image'
+}
+
+function parseFigmaProtocol(
+  rawSource: string,
+  sources: SourcesConfig | undefined
+): { fileId: string; selector: string; basePathname?: string; alias?: string } {
   const value = rawSource.slice('figma:'.length)
   const trimmed = value.trim()
   if (!trimmed) {
-    throw new Error('[renoun] figma: sources must include a node id.')
+    throw new Error(
+      '[renoun] figma: sources must include a file id and component selector.'
+    )
   }
 
   const slashIndex = trimmed.indexOf('/')
-  const alias = slashIndex === -1 ? undefined : trimmed.slice(0, slashIndex)
-  const rawNodeId = slashIndex === -1 ? trimmed : trimmed.slice(slashIndex + 1)
-
-  if (!rawNodeId.trim()) {
+  if (slashIndex === -1) {
     throw new Error(
-      `[renoun] figma: sources must include a node id after the alias. Received ${rawSource}.`
+      `[renoun] figma: sources must include a file id (or configured source) and selector (e.g. figma:FILE_ID/ComponentName). Received ${rawSource}.`
+    )
+  }
+
+  const alias = trimmed.slice(0, slashIndex).trim()
+  const rawSelector = trimmed.slice(slashIndex + 1)
+  const selector = trimLeadingAndTrailingSlashes(rawSelector.trim())
+
+  if (!selector) {
+    throw new Error(
+      `[renoun] figma: sources must include a component or frame name after the alias. Received ${rawSource}.`
+    )
+  }
+
+  if (isLikelyNodeId(selector)) {
+    throw new Error(
+      `[renoun] figma: frame or component ids (e.g. "1:1379") are not supported. Provide the component or frame name instead. Received ${rawSource}.`
     )
   }
 
   let fileId: string
+  let basePathname: string | undefined
+  let aliasValue: string | undefined
+
   if (alias && isLikelyFileId(alias)) {
     fileId = alias
+  } else if (alias && sources && alias in sources) {
+    fileId = sources[alias].fileId
+    basePathname = sources[alias].basePathname
+    aliasValue = alias
   } else if (!alias) {
     throw new Error(
-      '[renoun] figma: requires a file id (e.g. figma:FILE_ID/123:456). To use a friendly name, define a custom protocol in <RootProvider protocols={{ name: { type: "figma", fileId: "FILE_ID" } }} /> and reference it like name:123:456.'
+      '[renoun] figma: requires a file id (e.g. figma:FILE_ID/ComponentName).'
     )
   } else {
     throw new Error(
-      `[renoun] figma: unknown file alias "${alias}". Define a custom protocol instead: <RootProvider protocols={{ ${alias}: { type: 'figma', fileId: 'FILE_ID' } }} /> and use ${alias}:123:456.`
+      `[renoun] figma: unknown file alias "${alias}". Define a custom source on <RootProvider sources={{ ${alias}: { type: 'figma', fileId: 'FILE_ID' } }} /> and reference it like ${alias}:ComponentName or figma:${alias}/ComponentName.`
     )
   }
-  const nodeId = decodeNodeId(rawNodeId)
-  return { fileId, nodeId }
-}
 
-function parseFigmaUrl(
-  source: string
-): { fileId: string; nodeId: string } | null {
-  let url: URL
-  try {
-    url = new URL(source)
-  } catch {
-    return null
+  return {
+    fileId,
+    selector,
+    basePathname,
+    alias: aliasValue,
   }
-
-  if (!FIGMA_HOST_PATTERN.test(url.hostname.toLowerCase())) {
-    return null
-  }
-
-  const nodeIdParam =
-    url.searchParams.get('node-id') ?? url.searchParams.get('nodeId')
-
-  if (!nodeIdParam) {
-    return null
-  }
-
-  const segments = url.pathname.split('/').filter(Boolean)
-  if (segments.length === 0) {
-    return null
-  }
-
-  const prefixes = new Set(['file', 'design', 'proto', 'embed'])
-  let fileId: string | undefined
-
-  for (let index = 0; index < segments.length; index++) {
-    const segment = segments[index]
-    if (prefixes.has(segment) && index + 1 < segments.length) {
-      fileId = segments[index + 1]
-      break
-    }
-  }
-
-  if (!fileId) {
-    fileId = segments[0]
-  }
-
-  if (!fileId) {
-    return null
-  }
-
-  return { fileId, nodeId: decodeNodeId(nodeIdParam) }
 }
 
 function parseCustomSource(
   source: string,
   sources: SourcesConfig | undefined
-): { fileId: string; nodeId: string; basePathname?: string } | null {
+): {
+  fileId: string
+  selector: string
+  basePathname?: string
+  alias?: string
+} | null {
   const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):(.*)$/.exec(source)
   if (!match) {
     return null
@@ -710,25 +719,29 @@ function parseCustomSource(
     throw new Error(
       `[renoun] Unknown image source scheme "${scheme}".\n\n` +
         'How to fix:\n' +
-        `- Define it on <RootProvider sources={{ ${scheme}: { type: 'figma', fileId: 'FILE_ID' } }} /> and reference nodes like "${scheme}:Page/Frame/Component" or "${scheme}:123:456".\n` +
+        `- Define it on <RootProvider sources={{ ${scheme}: { type: 'figma', fileId: 'FILE_ID' } }} /> and reference nodes like "${scheme}:Page/Frame/Component".\n` +
         '- Or use one of the supported forms:\n' +
-        '  • figma:FILE_ID/123:456\n' +
-        '  • https://www.figma.com/file/<FILE_ID>?node-id=123-456\n' +
-        '  • A direct URL (https://...) or data: URI.\n\n' +
+        '  • figma:FILE_ID/ComponentName\n' +
         `Received: ${source}`
     )
   }
   if (definition['type'] === 'figma') {
-    const node = trimLeadingAndTrailingSlashes(match[2].trim())
-    if (!node) {
+    const selector = trimLeadingAndTrailingSlashes(match[2].trim())
+    if (!selector) {
       throw new Error(
-        `[renoun] ${scheme}: sources must include a node selector or id.`
+        `[renoun] ${scheme}: sources must include a component or frame name.`
+      )
+    }
+    if (isLikelyNodeId(selector)) {
+      throw new Error(
+        `[renoun] ${scheme}: frame or component ids (e.g. "1:1379") are not supported. Provide the component or frame name instead.`
       )
     }
     return {
       fileId: definition['fileId'],
-      nodeId: node,
+      selector,
       basePathname: definition['basePathname'],
+      alias: scheme,
     }
   }
   // If a custom source is configured but not supported by <Image />, provide a clear error
@@ -741,7 +754,7 @@ function parseCustomSource(
 }
 
 function isLikelyNodeId(value: string): boolean {
-  return /^[0-9:]+$/.test(value)
+  return /^[0-9:-]+$/.test(value.trim())
 }
 
 function namesEqual(a: string, b: string): boolean {
@@ -1074,10 +1087,7 @@ function buildFigmaQuery(
   return params
 }
 
-type FigmaSource =
-  | `figma:${string}`
-  | `https://${string}.figma.com${string}`
-  | `http://${string}.figma.com${string}`
+type FigmaSource = `figma:${string}`
 
 interface SharedImageProps
   extends Omit<React.ComponentProps<'img'>, 'alt' | 'src' | 'srcSet'> {
@@ -1178,38 +1188,6 @@ async function getFigmaImageUrl(
   }
 }
 
-async function findComponentByNodeId(
-  fileId: string,
-  nodeId: string,
-  token: string
-): Promise<ComponentMetadata | null> {
-  // First try real components from the components endpoint
-  const components = await fetchFigmaComponents(fileId, token)
-  const fromComponents =
-    components.find((component) => component.nodeId === nodeId) ?? null
-
-  if (fromComponents) {
-    return fromComponents
-  }
-
-  // Or crawl the file and match exportable nodes (frames/components)
-  const file = await fetchFigmaFile(fileId, token)
-  const nodes = collectNamedNodes(file.document)
-
-  const fromFile = nodes.find((node) => node.id === nodeId)
-  if (!fromFile) {
-    return null
-  }
-
-  return {
-    nodeId: fromFile.id,
-    name: fromFile.name,
-    description: undefined,
-    pageName: fromFile.pageName,
-    frameName: fromFile.frameName,
-  }
-}
-
 /** Display images from Figma files, URLs, or local assets. */
 export async function Image<Source extends string>({
   source,
@@ -1226,7 +1204,6 @@ export async function Image<Source extends string>({
     throw new Error('[renoun] <Image /> requires a non-empty source.')
   }
 
-  const parsedFigmaUrl = parseFigmaUrl(trimmedSource)
   const isFigmaProtocol = FIGMA_PROTOCOL.test(trimmedSource)
 
   const config = await getConfig()
@@ -1236,20 +1213,28 @@ export async function Image<Source extends string>({
   )
 
   let fileId: string
-  let nodeId: string
   let resolvedDescription: string | undefined
 
-  let matched: { fileId: string; nodeId: string } | null = null
+  let matched: {
+    fileId: string
+    selector: string
+    basePathname?: string
+    alias?: string
+  } | null = null
   let matchedBasePathname: string | undefined
 
   const custom = parseCustomSource(trimmedSource, userSources)
   if (custom) {
-    matched = { fileId: custom.fileId, nodeId: custom.nodeId }
+    matched = {
+      fileId: custom.fileId,
+      selector: custom.selector,
+      basePathname: custom.basePathname,
+      alias: custom.alias,
+    }
     matchedBasePathname = custom.basePathname
   } else if (isFigmaProtocol) {
-    matched = parseFigmaProtocol(trimmedSource)
-  } else if (parsedFigmaUrl) {
-    matched = parsedFigmaUrl
+    matched = parseFigmaProtocol(trimmedSource, userSources)
+    matchedBasePathname = matched.basePathname
   }
 
   // Non-figma sources → passthrough <img>
@@ -1304,15 +1289,11 @@ export async function Image<Source extends string>({
     throw new Error(lines.join('\n'))
   }
 
-  const { fileId: matchedFileId, nodeId: matchedNodeId } = matched
+  const { fileId: matchedFileId, selector, alias } = matched
   fileId = matchedFileId
-  nodeId = matchedNodeId
 
-  // We’ll normalize everything to this node id
-  let resolvedNodeId = nodeId
-  let cacheNodeId = resolvedNodeId
-  let cacheLabel: string | undefined
-  let componentForLabel: ComponentMetadata | null = null
+  const cacheLabel = buildCacheLabel(selector, alias, matchedBasePathname)
+  const cacheOptions = { label: cacheLabel, scale }
 
   const figmaOptions = {
     scale,
@@ -1324,86 +1305,14 @@ export async function Image<Source extends string>({
     svgSimplifyStroke: true,
   } satisfies Omit<FigmaImageOptions, 'format'>
 
-  // 1) Resolve by selector (e.g. "mark") → node id + metadata
-  if (!isLikelyNodeId(resolvedNodeId)) {
-    const selectorCandidates: string[] = [resolvedNodeId]
-    if (matchedBasePathname) {
-      const full = `${trimTrailingSlashes(matchedBasePathname)}/${resolvedNodeId}`
-      if (!selectorCandidates.includes(full)) {
-        selectorCandidates.push(full)
-      }
-    }
-
-    let component: ComponentMetadata | null = null
-    let lastErrorMessage: string | undefined
-    for (const candidate of selectorCandidates) {
-      try {
-        component = await resolveComponentBySelector(fileId, candidate, token)
-        if (component) break
-      } catch (error) {
-        component = null
-        lastErrorMessage = getErrorMessage(error)
-      }
-    }
-
-    if (!component) {
-      const detail = lastErrorMessage ? stripRenounPrefix(lastErrorMessage) : ''
-      throw new Error(
-        `[renoun] Unable to resolve "${resolvedNodeId}" in file "${fileId}".` +
-          (detail ? `\n\nDetails:\n${detail}` : '')
-      )
-    }
-
-    resolvedNodeId = component.nodeId
-    cacheNodeId = resolvedNodeId
-    resolvedDescription = component.description?.trim() || undefined
-    componentForLabel = component
-  } else {
-    // 2) We already have a numeric node id (e.g. "1:1379" / "1-1379"/ URL)
-    // Try to get metadata so we can name the file nicely (mark-xxxx.png) instead
-    // of node-1-1379-xxxx.png, and share the same cache across all callers.
-    try {
-      const meta = await findComponentByNodeId(fileId, resolvedNodeId, token)
-      if (meta) {
-        componentForLabel = meta
-        if (!resolvedDescription) {
-          resolvedDescription = meta.description?.trim() || undefined
-        }
-      }
-    } catch (error) {
-      if (process.env.RENOUN_DEBUG === 'debug') {
-        // eslint-disable-next-line no-console
-        console.debug(
-          '[renoun] Skipping component metadata lookup by node id:',
-          error
-        )
-      }
-    }
-  }
-
-  // 3) Derive a canonical label from whatever metadata we have
-  if (componentForLabel) {
-    const parts = [
-      componentForLabel.pageName,
-      componentForLabel.frameName,
-      componentForLabel.name,
-    ].filter(Boolean) as string[]
-    cacheLabel = parts.length > 0 ? parts.join('/') : undefined
-  }
-
-  // 4) Now compute the canonical cache key based on the normalized node id
-  const fileVersion = await getFigmaFileVersion(fileId, token)
-  const cacheKey = getFigmaCacheKey({
+  const cacheKeyWithoutVersion = getFigmaCacheKey({
     fileId,
-    nodeId: resolvedNodeId,
+    selector: cacheLabel,
     options: figmaOptions,
-    version: fileVersion,
   })
 
-  // 5) Single cache read using canonical { key, label, nodeId, scale }
-  const cacheOptions = { label: cacheLabel, nodeId: cacheNodeId, scale }
   const cachedImage = await readCachedFigmaImage(
-    cacheKey,
+    cacheKeyWithoutVersion,
     cacheLocation,
     cacheOptions
   )
@@ -1411,9 +1320,50 @@ export async function Image<Source extends string>({
     return renderCachedFigmaImage(
       cachedImage,
       props,
-      description ?? resolvedDescription
+      description ?? undefined
     )
   }
+
+  // Resolve by selector (e.g. "mark") → node id + metadata
+  const selectorCandidates: string[] = [selector]
+  if (matchedBasePathname) {
+    const full = `${trimTrailingSlashes(matchedBasePathname)}/${selector}`
+    if (!selectorCandidates.includes(full)) {
+      selectorCandidates.push(full)
+    }
+  }
+
+  let component: ComponentMetadata | null = null
+  let lastErrorMessage: string | undefined
+  for (const candidate of selectorCandidates) {
+    try {
+      component = await resolveComponentBySelector(fileId, candidate, token)
+      if (component) break
+    } catch (error) {
+      component = null
+      lastErrorMessage = getErrorMessage(error)
+    }
+  }
+
+  if (!component) {
+    const detail = lastErrorMessage ? stripRenounPrefix(lastErrorMessage) : ''
+    throw new Error(
+      `[renoun] Unable to resolve "${selector}" in file "${fileId}".` +
+        (detail ? `\n\nDetails:\n${detail}` : '')
+    )
+  }
+
+  const resolvedNodeId = component.nodeId
+  resolvedDescription = component.description?.trim() || undefined
+
+  const fileVersion = await getFigmaFileVersion(fileId, token)
+  const cacheKey = getFigmaCacheKey({
+    fileId,
+    selector: cacheLabel,
+    options: figmaOptions,
+    version: fileVersion,
+  })
+
 
   // 6) Optionally enrich description if still missing
   if (!resolvedDescription && description === undefined) {
