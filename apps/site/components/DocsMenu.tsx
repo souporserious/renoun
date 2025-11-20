@@ -1,5 +1,11 @@
 'use client'
-import { useEffect, useRef } from 'react'
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FocusEvent,
+} from 'react'
 import { usePathname } from 'next/navigation'
 
 import { NavigationLink } from './NavigationLink'
@@ -28,6 +34,14 @@ export function DocsMenu() {
   const pathname = usePathname()
   const triggerRef = useRef<HTMLAnchorElement>(null)
   const previousPathname = useRef<string | null>(null)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const menuId = useId()
+
+  const closeMenuIfFocusLeaves = (event: FocusEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setIsMenuOpen(false)
+    }
+  }
 
   useEffect(() => {
     if (
@@ -40,23 +54,29 @@ export function DocsMenu() {
   }, [pathname])
 
   return (
-    <div
+    <nav
+      aria-label="Docs menu"
+      data-open={isMenuOpen}
       css={{
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        '&:hover .docs-menu, & .docs-menu:hover, &:has(.docs-trigger:focus-visible) .docs-menu, &:has(.docs-menu :focus-visible) .docs-menu':
+        '&:hover .docs-menu, & .docs-menu:hover, &:has(.docs-trigger:focus-visible) .docs-menu, &:has(.docs-menu :focus-visible) .docs-menu, &[data-open="true"] .docs-menu':
           {
             opacity: 1,
             pointerEvents: 'auto',
             transform: 'translate(-50%, 0)',
           },
-        '&:hover svg, &:has(.docs-trigger:focus-visible) svg, &:has(.docs-menu :focus-visible) svg':
+        '&:hover svg, &:has(.docs-trigger:focus-visible) svg, &:has(.docs-menu :focus-visible) svg, &[data-open="true"] svg':
           {
             transform: 'rotate(180deg)',
             color: 'var(--color-foreground-interactive-highlighted)',
           },
       }}
+      onPointerEnter={() => setIsMenuOpen(true)}
+      onPointerLeave={() => setIsMenuOpen(false)}
+      onFocusCapture={() => setIsMenuOpen(true)}
+      onBlurCapture={closeMenuIfFocusLeaves}
     >
       <NavigationLink
         ref={triggerRef}
@@ -70,6 +90,8 @@ export function DocsMenu() {
         ]}
         aria-haspopup="true"
         className="docs-trigger"
+        aria-expanded={isMenuOpen}
+        aria-controls={menuId}
       >
         Docs
         <svg
@@ -93,8 +115,10 @@ export function DocsMenu() {
           />
         </svg>
       </NavigationLink>
-      <div
+      <ul
         className="docs-menu"
+        id={menuId}
+        role="menu"
         css={{
           position: 'absolute',
           top: '100%',
@@ -114,26 +138,31 @@ export function DocsMenu() {
           pointerEvents: 'none',
           transition: 'opacity 150ms ease, transform 150ms ease',
           zIndex: 10,
+          listStyle: 'none',
+          margin: 0,
         }}
       >
         {docsQuickLinks.map((item) => (
-          <NavigationLink
-            key={item.href}
-            href={item.href}
-            activePathnames={[item.activePathname ?? item.href]}
-            css={{
-              color: 'var(--color-foreground-interactive)',
-              padding: '0.5rem 1rem',
-              width: '100%',
-              ':hover': {
-                color: 'var(--color-foreground-interactive-highlighted)',
-              },
-            }}
-          >
-            {item.label}
-          </NavigationLink>
+          <li key={item.href} role="none">
+            <NavigationLink
+              href={item.href}
+              activePathnames={[item.activePathname ?? item.href]}
+              css={{
+                color: 'var(--color-foreground-interactive)',
+                padding: '0.5rem 1rem',
+                width: '100%',
+                display: 'block',
+                ':hover': {
+                  color: 'var(--color-foreground-interactive-highlighted)',
+                },
+              }}
+              role="menuitem"
+            >
+              {item.label}
+            </NavigationLink>
+          </li>
         ))}
-      </div>
-    </div>
+      </ul>
+    </nav>
   )
 }

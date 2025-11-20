@@ -70,6 +70,7 @@ export async function SiteLayout({
         ) : null}
 
         <nav
+          aria-label="Primary"
           css={{
             gridColumn: '1 / -1',
             gridRow: '1 / 3',
@@ -177,6 +178,7 @@ export async function SiteLayout({
                 color: 'var(--color-foreground-interactive)',
               }}
               href="https://discord.gg/7Mf4xEBYx9"
+              aria-label="Join the renoun Discord community"
             >
               <svg
                 width="100%"
@@ -196,6 +198,7 @@ export async function SiteLayout({
                 height: 'var(--font-size-body-1)',
                 color: 'var(--color-foreground-interactive)',
               }}
+              aria-label="View the renoun repository"
             >
               <Logo variant="gitHost" width="100%" height="100%" />
             </Link>
