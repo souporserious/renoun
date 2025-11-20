@@ -6,6 +6,9 @@ import type { ConfigurationOptions } from './types'
  */
 export const defaultConfig: ConfigurationOptions = {
   editor: 'vscode',
+  images: {
+    outputDirectory: 'public/images',
+  },
   languages: [
     'css',
     'js',

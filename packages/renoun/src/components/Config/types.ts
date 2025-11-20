@@ -74,12 +74,27 @@ export type SourceDefinition = {
 export type SourcesConfig = Record<string, SourceDefinition>
 
 /**
+ * Configuration for image handling.
+ * @internal
+ */
+export interface ImagesConfig {
+  /**
+   * Filesystem path where Figma images should be cached. Relative paths are
+   * resolved from the project root; defaults to `public/images`.
+   */
+  outputDirectory?: string
+}
+
+/**
  * The configuration options.
  * @internal
  */
 export interface ConfigurationOptions {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */
   theme?: ThemeValue | Record<string, ThemeValue>
+
+  /** Configuration for image assets. */
+  images?: ImagesConfig
 
   /** List of languages to load for syntax highlighting. */
   languages: Languages[]

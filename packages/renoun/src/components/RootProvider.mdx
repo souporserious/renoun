@@ -17,6 +17,10 @@ export default function RootLayout({
       languages={['ts', 'tsx', 'mdx']}
       git="souporserious/renoun"
       siteUrl="https://renoun.dev"
+      images={{
+        // Override where image sources (e.g. Figma) are downloaded
+        outputDirectory: 'public/assets',
+      }}
       sources={{
         // Define a custom source backed by Figma
         icons: {
@@ -46,5 +50,7 @@ When you configure the `sources` prop you can reference these from the [`Image` 
 - The built-in `figma:` protocol, e.g. `figma:icons/563:1297`
 
 With `basePathname`, selectors like `marketing` will also match `illustration/marketing` inside that file.
+
+The `images.outputDirectory` option controls where Figma downloads are written (defaults to `public/images`). It accepts either a path relative to the project root or an absolute path and is shared by the [`Image` component](/docs/components/image).
 
 See the [Configuration guide](/docs/configuration) for more information on the available configuration options.
