@@ -17,7 +17,6 @@ import { getFileExportText as baseGetFileExportText } from '../utils/get-file-ex
 import { getRootDirectory } from '../utils/get-root-directory.js'
 import {
   getTokens as baseGetTokens,
-  streamTokens as baseStreamTokens,
   type GetTokensOptions,
 } from '../utils/get-tokens.js'
 import {
@@ -87,12 +86,10 @@ export async function createServer(options?: { port?: number }) {
     'getTokens',
     async function getTokens({
       projectOptions,
-      stream,
       ...options
     }: GetTokensOptions & {
       projectOptions?: ProjectOptions
       languages?: ConfigurationOptions['languages']
-      stream?: boolean
     }) {
       const project = getProject(projectOptions)
 
@@ -104,14 +101,6 @@ export async function createServer(options?: { port?: number }) {
       }
 
       const highlighter = await currentHighlighter
-
-      if (stream) {
-        return baseStreamTokens({
-          ...options,
-          highlighter,
-          project,
-        })
-      }
 
       return baseGetTokens({
         ...options,

@@ -97,20 +97,12 @@ export async function getTokens(
 ): Promise<TokenizedLines> {
   const client = getClient()
   if (client) {
-    const tokenStream = client.callStream<
+    return client.callMethod<
       Omit<GetTokensOptions, 'highlighter' | 'project'> & {
         projectOptions?: ProjectOptions
       },
-      TokenizedLines[number]
-    >('getTokens', { ...options, stream: true })
-
-    const tokens: TokenizedLines = []
-    for await (const line of tokenStream) {
-      if (line) {
-        tokens.push(line)
-      }
-    }
-    return tokens
+      TokenizedLines
+    >('getTokens', options)
   }
 
   const { projectOptions, languages, ...getTokensOptions } = options
