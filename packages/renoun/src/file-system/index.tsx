@@ -318,6 +318,22 @@ export type ModuleLoaders = {
   [extension: string]: ModuleLoader
 }
 
+type DirectoryLoader = ModuleLoaders | ModuleRuntimeLoader<any>
+
+type InferDirectoryLoaderTypes<Loader extends DirectoryLoader> =
+  Loader extends ModuleRuntimeLoader<infer RuntimeTypes>
+    ? Record<
+        string,
+        IsAny<RuntimeTypes> extends true
+          ? { [exportName: string]: any }
+          : RuntimeTypes extends ModuleExports
+            ? RuntimeTypes
+            : { [exportName: string]: any }
+      >
+    : Loader extends ModuleLoaders
+      ? InferModuleLoadersTypes<Loader>
+      : never
+
 type IsAny<Type> = 0 extends 1 & Type ? true : false
 
 /** Infer the type of a loader based on its schema or runtime. */
@@ -337,6 +353,10 @@ type InferModuleLoaderTypes<Loader extends ModuleLoader> =
           ? { [exportName: string]: any }
           : Types
         : never
+
+function isRuntimeLoader(loader: any): loader is ModuleRuntimeLoader<any> {
+  return typeof loader === 'function' && loader.length > 0
+}
 
 /**
  * Front matter parsed from the markdown file. When using the default
@@ -492,7 +512,7 @@ export interface FileOptions<
     | Directory<
         Types,
         WithDefaultTypes<Types>,
-        ModuleLoaders,
+        DirectoryLoader,
         DirectoryFilter<FileSystemEntry<Types>, Types>
       >
 }
@@ -2558,9 +2578,9 @@ export type DirectoryFilter<
   | string
 
 export interface DirectoryOptions<
-  Types extends InferModuleLoadersTypes<Loaders> = any,
+  Types extends InferDirectoryLoaderTypes<Loaders> = any,
   LoaderTypes extends Types = any,
-  Loaders extends ModuleLoaders = ModuleLoaders,
+  Loaders extends DirectoryLoader = DirectoryLoader,
   Filter extends DirectoryFilter<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
@@ -2662,9 +2682,9 @@ function createOptionsMask(options: NormalizedDirectoryEntriesOptions) {
 
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
-  Types extends InferModuleLoadersTypes<Loaders>,
+  Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
-  Loaders extends ModuleLoaders = ModuleLoaders,
+  Loaders extends DirectoryLoader = DirectoryLoader,
   Filter extends DirectoryFilter<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
@@ -2676,7 +2696,7 @@ export class Directory<
   #tsConfigPath?: string
   #slugCasing: SlugCasing
   #loader?: Loaders | (() => Loaders)
-  #resolvedLoaders?: Loaders
+  #resolvedLoaders?: ModuleLoaders | ModuleRuntimeLoader<any>
   #directory?: Directory<any, any, any>
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
@@ -2865,17 +2885,25 @@ export class Directory<
   }
 
   /** Resolve the loaders map when a factory is provided and cache the result. */
-  #getLoaders(): Loaders | undefined {
+  #getLoaders(): ModuleLoaders | ModuleRuntimeLoader<any> | undefined {
     if (!this.#loader) {
       return undefined
     }
     if (typeof this.#loader === 'function') {
-      if (!this.#resolvedLoaders) {
-        this.#resolvedLoaders = (this.#loader as () => Loaders)()
+      if (isRuntimeLoader(this.#loader)) {
+        return this.#loader
       }
+
+      if (!this.#resolvedLoaders) {
+        const resolved = (this.#loader as () => Loaders)()
+        this.#resolvedLoaders = isRuntimeLoader(resolved)
+          ? (resolved as any)
+          : resolved
+      }
+
       return this.#resolvedLoaders
     }
-    return this.#loader as Loaders
+    return this.#loader as ModuleLoaders
   }
 
   /** Get the file system for this directory. */
@@ -2955,15 +2983,20 @@ export class Directory<
       } else if (entry.isFile) {
         const sharedOptions = {
           path: entry.path,
-          directory,
+          directory: directory as Directory<
+            LoaderTypes,
+            WithDefaultTypes<LoaderTypes>,
+            ModuleLoaders,
+            DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>
+          >,
           basePathname: directory.#basePathname,
           slugCasing: directory.#slugCasing,
         } as const
         const extension = extensionName(entry.name).slice(1)
         const loaders = directory.#getLoaders()
-        const loader = loaders?.[extension] as
-          | ModuleLoader<LoaderTypes[any]>
-          | undefined
+        const loader = (
+          typeof loaders === 'function' ? loaders : loaders?.[extension]
+        ) as ModuleLoader<LoaderTypes[any]> | undefined
 
         const file =
           extension === 'md'
@@ -3151,7 +3184,14 @@ export class Directory<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
+        ? JavaScriptFile<
+            Extension extends keyof LoaderTypes
+              ? InferDefaultModuleTypes<Extension> & LoaderTypes[Extension]
+              : InferDefaultModuleTypes<Extension>,
+            LoaderTypes,
+            string,
+            Extension
+          >
         : Extension extends 'mdx'
           ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
           : Extension extends 'md'
@@ -3176,7 +3216,14 @@ export class Directory<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<LoaderTypes[Extension], LoaderTypes, string, Extension>
+        ? JavaScriptFile<
+            Extension extends keyof LoaderTypes
+              ? InferDefaultModuleTypes<Extension> & LoaderTypes[Extension]
+              : InferDefaultModuleTypes<Extension>,
+            LoaderTypes,
+            string,
+            Extension
+          >
         : Extension extends 'mdx'
           ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
           : Extension extends 'md'
@@ -3743,16 +3790,21 @@ export class Directory<
 
       const sharedOptions = {
         path: entry.path,
-        directory,
+        directory: directory as Directory<
+          LoaderTypes,
+          WithDefaultTypes<LoaderTypes>,
+          ModuleLoaders,
+          DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>
+        >,
         basePathname: directory.#basePathname,
         slugCasing: directory.#slugCasing,
       } as const
 
       const extension = extensionName(entry.name).slice(1)
       const loaders = directory.#getLoaders()
-      const loader = loaders?.[extension] as
-        | ModuleLoader<LoaderTypes[any]>
-        | undefined
+      const loader = (
+        typeof loaders === 'function' ? loaders : loaders?.[extension]
+      ) as ModuleLoader<LoaderTypes[any]> | undefined
 
       const file =
         extension === 'md'
@@ -4191,7 +4243,11 @@ type UnionToIntersection<Union> = (
 /** Helper type to extract loader types from entries. */
 type LoadersFromEntries<Entries extends FileSystemEntry<any>[]> =
   UnionToIntersection<
-    Entries[number] extends Directory<any, any, infer Loaders> ? Loaders : {}
+    Entries[number] extends Directory<any, any, infer Loaders>
+      ? Loaders extends ModuleLoaders
+        ? Loaders
+        : {}
+      : {}
   >
 
 /** Options for a `Collection`. */
@@ -4564,18 +4620,25 @@ type NestedPropertyPath<
           : never
     }[Extract<keyof Type, string>]
 
-type ExtensionPropertyPaths<ExtensionTypes> = {
-  [Extension in keyof ExtensionTypes & string]: NestedPropertyPath<
-    ExtensionTypes[Extension]
-  >
-}[keyof ExtensionTypes & string]
+type ExtensionPropertyPaths<ExtensionTypes> =
+  IsAny<ExtensionTypes> extends true
+    ? never
+    : {
+        [Extension in keyof ExtensionTypes & string]: NestedPropertyPath<
+          ExtensionTypes[Extension]
+        >
+      }[keyof ExtensionTypes & string]
 
 type BuiltinProperty = 'name' | 'directory'
 
 type ValidSortKey<ExtensionTypes> =
   LoadersWithRuntimeKeys<ExtensionTypes> extends never
     ? BuiltinProperty
-    : BuiltinProperty | ExtensionPropertyPaths<ExtensionTypes>
+    : [ExtensionPropertyPaths<ExtensionTypes>] extends [never]
+      ? BuiltinProperty
+      : string extends ExtensionPropertyPaths<ExtensionTypes>
+        ? BuiltinProperty
+        : BuiltinProperty | ExtensionPropertyPaths<ExtensionTypes>
 
 type Awaitable<Type> = Promise<Type> | Type
 
@@ -4781,9 +4844,9 @@ function parseSimpleGlobPattern(
 }
 
 export interface PackageExportOptions<
-  Types extends InferModuleLoadersTypes<Loaders>,
+  Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types>,
-  Loaders extends ModuleLoaders,
+  Loaders extends DirectoryLoader,
   Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > extends Omit<
     DirectoryOptions<Types, LoaderTypes, Loaders, Filter>,
@@ -4793,9 +4856,9 @@ export interface PackageExportOptions<
 }
 
 export interface PackageOptions<
-  Types extends InferModuleLoadersTypes<Loaders>,
+  Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types>,
-  Loaders extends ModuleLoaders,
+  Loaders extends DirectoryLoader,
   Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
   ExportLoaders extends PackageExportLoaderMap = {},
 > {
@@ -4887,9 +4950,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 export interface PackageExportDirectory<
-  Types extends InferModuleLoadersTypes<Loaders>,
+  Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
-  Loaders extends ModuleLoaders = ModuleLoaders,
+  Loaders extends DirectoryLoader = DirectoryLoader,
   Filter extends DirectoryFilter<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
@@ -4907,9 +4970,9 @@ function isDirectoryInstance(
 }
 
 export class PackageExportDirectory<
-  Types extends InferModuleLoadersTypes<Loaders>,
+  Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
-  Loaders extends ModuleLoaders = ModuleLoaders,
+  Loaders extends DirectoryLoader = DirectoryLoader,
   Filter extends DirectoryFilter<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes
@@ -5525,9 +5588,9 @@ function isPathLikeValue(value: unknown): value is PathLike {
 }
 
 export class Package<
-  Types extends InferModuleLoadersTypes<Loaders>,
+  Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
-  Loaders extends ModuleLoaders = ModuleLoaders,
+  Loaders extends DirectoryLoader = DirectoryLoader,
   Filter extends DirectoryFilter<
     FileSystemEntry<LoaderTypes>,
     LoaderTypes

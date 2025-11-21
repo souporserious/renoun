@@ -11,6 +11,7 @@ import { z } from 'zod'
 
 import type { basename } from '#fixtures/utils/path.ts'
 import type { MDXContent, Headings } from '../mdx'
+import { removeExtension } from '../utils/path.js'
 import { NodeFileSystem } from './NodeFileSystem'
 import { MemoryFileSystem } from './MemoryFileSystem'
 import * as gitHostFileSystemModule from './GitHostFileSystem'
@@ -506,6 +507,40 @@ describe('file system', () => {
       (path: string, extension?: string) => string
     >()
     expect(basenameFn('fixtures/utils/path.ts')).toBe('path.ts')
+  })
+
+  test('supports runtime loader functions for directories', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.ts': '',
+      'guide.mdx': '# Guide',
+    })
+    const runtimeLoader = vi.fn(async (path: string, file: any) => ({
+      default: `loaded:${path}:${file.getExtension()}`,
+    }))
+
+    const directory = new Directory({ fileSystem, loader: runtimeLoader })
+
+    const tsFile = await directory.getFile('index', 'ts')
+    const tsDefault = await tsFile.getExportValue('default')
+
+    const mdxFile = await directory.getFile('guide', 'mdx')
+    const mdxDefault = await mdxFile.getExportValue('default')
+
+    expect(tsDefault).toBe(
+      `loaded:${removeExtension(tsFile.getRelativePathToRoot())}:${tsFile.getExtension()}`
+    )
+    expect(mdxDefault).toBe(
+      `loaded:${removeExtension(mdxFile.getRelativePathToRoot())}:${mdxFile.getExtension()}`
+    )
+
+    expect(runtimeLoader).toHaveBeenCalledWith(
+      removeExtension(tsFile.getRelativePathToRoot()),
+      tsFile
+    )
+    expect(runtimeLoader).toHaveBeenCalledWith(
+      removeExtension(mdxFile.getRelativePathToRoot()),
+      mdxFile
+    )
   })
 
   describe('withSchema', () => {
