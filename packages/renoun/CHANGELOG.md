@@ -1,5 +1,54 @@
 # renoun
 
+## 10.12.0
+
+### Minor Changes
+
+- 023f207: Adds a `Package` file-system helper that can locate packages from workspaces, `node_modules`, or remote packages, analyze their `exports` / `imports` fields, and expose simple `getExport` / `getImport` APIs for inspecting package entry points.
+
+  ```ts
+  import { Package } from 'renoun'
+
+  const renounMdx = new Package({
+    name: '@renoun/mdx',
+    loader: {
+      'remark/add-headings': () => import('@renoun/mdx/remark/add-headings'),
+    },
+  })
+  const remarkAddHeadings = await renounMdx.getExport('remark/add-headings')
+  const defaultExport = await remarkAddHeadings.getExport('default')
+
+  await defaultExport.getRuntimeValue()
+  await defaultExport.getType()
+  ```
+
+- 71e3fc9: Adds a `stream` method to the `Tokenizer` utility for improved responsiveness.
+
+### Patch Changes
+
+- 147cb03: Adds `getFirstCommitDate` and `getLastCommitDate` metadata helpers to `JavaScriptModuleExport`.
+- 87b6fb6: Stores cached Figma image assets under `public/images` with cache-sensitive URLs and allows overriding the output directory in a new images setting in the `RootProvider` component.
+- dd317b9: Allows defining one top-level loader that receives the `path` with the extension for bundlers that support this:
+
+  ```tsx
+  import { Directory } from 'renoun'
+
+  new Directory({
+    loader: (path) => import(`@/posts/${path}`),
+  })
+  ```
+
+- 960f76f: Fixes multiple constructor overloads type resolution in `JavaScriptModuleExport#getType`.
+- 7cb2c2b: Adds support for resolving construct signature types:
+
+  ```tsx
+  interface Foo {
+    new (x: number): Foo
+  }
+  ```
+
+- 9a65608: Improves the `Image` component by surfacing Figma errors properly instead of falling through to a generic error.
+
 ## 10.11.0
 
 ### Minor Changes
