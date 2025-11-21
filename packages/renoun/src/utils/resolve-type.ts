@@ -4211,15 +4211,18 @@ function resolveClass(
   const constructorDeclarations = classDeclaration.getConstructors()
 
   if (constructorDeclarations.length > 0) {
-    const constructorSignaturesToResolve = constructorDeclarations.map(
-      (constructor) => constructor.getSignature()
-    )
-    const resolvedCallSignatures = resolveCallSignatures(
-      constructorSignaturesToResolve,
-      classDeclaration,
-      filter,
-      dependencies
-    )
+    const resolvedCallSignatures = constructorDeclarations
+      .map((declaration) =>
+        resolveCallSignature(
+          declaration.getSignature(),
+          declaration, // ← enclosingNode = the constructor itself
+          filter,
+          dependencies
+        )
+      )
+      .filter((signature): signature is Kind.CallSignature =>
+        Boolean(signature)
+      )
 
     if (resolvedCallSignatures.length > 0) {
       const primaryConstructorDeclaration = constructorDeclarations[0]

@@ -19349,6 +19349,158 @@ describe('resolveType', () => {
     `)
   })
 
+  test('class constructor overloads', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+      class Foo {
+        /** First overload */
+        constructor(value: string);
+        /** Second overload */
+        constructor(value: number);
+        constructor(value: string | number) {
+          // implementation
+        }
+      }
+      `,
+      { overwrite: true }
+    )
+    const declaration = sourceFile.getClassOrThrow('Foo')
+    const type = resolveType(declaration.getType(), declaration)
+
+    expect(type).toMatchInlineSnapshot(`
+      {
+        "constructor": {
+          "filePath": "test.ts",
+          "kind": "ClassConstructor",
+          "position": {
+            "end": {
+              "column": 4,
+              "line": 8,
+            },
+            "start": {
+              "column": 3,
+              "line": 6,
+            },
+          },
+          "signatures": [
+            {
+              "filePath": "test.ts",
+              "kind": "CallSignature",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "test.ts",
+                  "initializer": undefined,
+                  "isOptional": false,
+                  "isRest": false,
+                  "kind": "Parameter",
+                  "name": "value",
+                  "position": {
+                    "end": {
+                      "column": 37,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 15,
+                      "line": 6,
+                    },
+                  },
+                  "text": "value: string | number",
+                  "type": {
+                    "kind": "UnionType",
+                    "text": "string | number",
+                    "types": [
+                      {
+                        "filePath": "test.ts",
+                        "kind": "String",
+                        "position": {
+                          "end": {
+                            "column": 28,
+                            "line": 6,
+                          },
+                          "start": {
+                            "column": 22,
+                            "line": 6,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
+                      },
+                      {
+                        "filePath": "test.ts",
+                        "kind": "Number",
+                        "position": {
+                          "end": {
+                            "column": 37,
+                            "line": 6,
+                          },
+                          "start": {
+                            "column": 31,
+                            "line": 6,
+                          },
+                        },
+                        "text": "number",
+                        "value": undefined,
+                      },
+                    ],
+                  },
+                },
+              ],
+              "position": {
+                "end": {
+                  "column": 4,
+                  "line": 8,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 6,
+                },
+              },
+              "returnType": {
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
+                "name": "Foo",
+                "position": {
+                  "end": {
+                    "column": 4,
+                    "line": 8,
+                  },
+                  "start": {
+                    "column": 3,
+                    "line": 6,
+                  },
+                },
+                "text": "Foo",
+                "typeArguments": [],
+              },
+              "text": "(value: string | number) => Foo",
+              "thisType": undefined,
+            },
+          ],
+          "text": "constructor(value: string | number) {
+          // implementation
+        }",
+        },
+        "filePath": "test.ts",
+        "kind": "Class",
+        "name": "Foo",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 9,
+          },
+          "start": {
+            "column": 1,
+            "line": 1,
+          },
+        },
+        "text": "Foo",
+      }
+    `)
+  })
+
   test('synthetic indexed access type', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
