@@ -2670,6 +2670,36 @@ function resolveMemberSignature(
     } satisfies Kind.CallSignature
   }
 
+  if (tsMorph.Node.isConstructSignatureDeclaration(member)) {
+    const signature = member.getSignature()
+    const resolvedParameters = resolveParameters(
+      signature,
+      member,
+      filter,
+      dependencies
+    )
+    const returnType = resolveTypeExpression(
+      signature.getReturnType(),
+      signature.getDeclaration(),
+      filter,
+      undefined,
+      dependencies
+    )
+
+    if (!returnType) {
+      throw new UnresolvedTypeExpressionError(member.getType(), member)
+    }
+
+    return {
+      kind: 'ConstructSignature',
+      text: member.getText(),
+      ...resolvedParameters,
+      returnType,
+      ...getJsDocMetadata(member),
+      ...getDeclarationLocation(member),
+    } satisfies Kind.ConstructSignature
+  }
+
   if (tsMorph.Node.isIndexSignatureDeclaration(member)) {
     return {
       ...resolveIndexSignature(member, filter),
