@@ -80,6 +80,10 @@ export function SidebarLink({
             alignItems: 'center',
             justifyContent: 'center',
             borderRadius: '0.25rem',
+            svg: {
+              width: '0.75rem',
+              height: '0.75rem',
+            },
             '@media screen and (max-width: calc(60rem - 1px))': {
               width: '1.25rem',
               height: '1.25rem',
