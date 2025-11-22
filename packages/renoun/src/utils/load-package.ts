@@ -1,10 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { createRequire } from 'node:module'
 
 import { findPackageDependency } from './find-package-dependency.js'
-
-const require = createRequire(import.meta.url)
 
 /** Attempts to load a package if it is installed. */
 async function loadPackage<Value>(name: string, getImport: () => any) {
@@ -38,6 +35,10 @@ export function loadTmGrammars() {
   })
 }
 
+const jsonImportOptions = {
+  with: { type: 'json' },
+}
+
 /** Attempts to load a grammar from the tm-grammars package if it is installed. */
 export function loadTmGrammar(name: string) {
   return loadPackage<Record<string, any>>('tm-grammars', async () => {
@@ -48,10 +49,10 @@ export function loadTmGrammar(name: string) {
       )
       return JSON.parse(readFileSync(filePath, 'utf-8'))
     }
-
-    return require(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-grammars/grammars/${name}.json`
-    )
+    return import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-grammars/grammars/${name}.json`,
+      jsonImportOptions
+    ).then((module) => module.default)
   })
 }
 
@@ -63,9 +64,9 @@ export function loadTmTheme(name: string) {
       const filePath = fileURLToPath(resolve(`tm-themes/themes/${name}.json`))
       return JSON.parse(readFileSync(filePath, 'utf-8'))
     }
-
-    return require(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-themes/themes/${name}.json`
-    )
+    return import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-themes/themes/${name}.json`,
+      jsonImportOptions
+    ).then((module) => module.default)
   })
 }
