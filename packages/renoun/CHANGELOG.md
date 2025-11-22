@@ -1,5 +1,11 @@
 # renoun
 
+## 10.12.1
+
+### Patch Changes
+
+- d9a7aae: Fixes regression where the bundler attempts to statically analyze the `require` call site for textmate grammars and themes.
+
 ## 10.12.0
 
 ### Minor Changes
