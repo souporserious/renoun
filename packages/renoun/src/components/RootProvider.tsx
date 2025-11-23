@@ -22,6 +22,66 @@ type HtmlProps = React.ComponentProps<'html'>
 type HeadProps = React.ComponentProps<'head'>
 type ThemeMap = Record<string, ThemeValue>
 
+interface PackageJson {
+  dependencies?: Record<string, unknown>
+  devDependencies?: Record<string, unknown>
+  peerDependencies?: Record<string, unknown>
+  homepage?: unknown
+}
+
+type FrameworkName = 'next' | 'vite' | 'waku'
+
+function hasDependency(packageJson: PackageJson, name: string) {
+  return (
+    typeof packageJson.dependencies?.[name] === 'string' ||
+    typeof packageJson.devDependencies?.[name] === 'string' ||
+    typeof packageJson.peerDependencies?.[name] === 'string'
+  )
+}
+
+function detectFramework() {
+  try {
+    let currentDir = process.cwd()
+    let previousDir: string | undefined
+
+    while (currentDir && currentDir !== previousDir) {
+      const packagePath = join(currentDir, 'package.json')
+
+      if (existsSync(packagePath)) {
+        const packageJson = JSON.parse(
+          readFileSync(packagePath, 'utf8')
+        ) as PackageJson
+
+        if (hasDependency(packageJson, 'next')) return 'next'
+        if (hasDependency(packageJson, 'waku')) return 'waku'
+        if (hasDependency(packageJson, '@vitejs/plugin-rsc')) return 'vite'
+      }
+
+      previousDir = currentDir
+      currentDir = dirname(currentDir)
+    }
+  } catch {
+    // ignore and fall back to the default message
+  }
+
+  return undefined
+}
+
+function getRootProviderErrorMessage() {
+  const framework = detectFramework()
+  const filePaths: Partial<Record<FrameworkName, string>> = {
+    next: 'app/layout.tsx',
+    vite: 'src/root.tsx',
+    waku: 'src/pages/_root.tsx',
+  }
+  const filePath = framework ? filePaths[framework] : undefined
+  const instruction = filePath
+    ? ` Add RootProvider to your "${filePath}" file so it wraps the <html> element.`
+    : ''
+
+  return `[renoun] RootProvider must wrap the html element.${instruction}`
+}
+
 interface BaseProps
   extends Omit<Partial<ConfigurationOptions>, 'git' | 'theme'> {
   /** The nonce to use for the provider scripts. */
@@ -140,9 +200,9 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
       while (currentDir && currentDir !== previousDir) {
         const packagePath = join(currentDir, 'package.json')
         if (existsSync(packagePath)) {
-          const packageJson = JSON.parse(readFileSync(packagePath, 'utf8')) as {
-            homepage?: unknown
-          }
+          const packageJson = JSON.parse(
+            readFileSync(packagePath, 'utf8')
+          ) as PackageJson
           if (
             typeof packageJson.homepage === 'string' &&
             packageJson.homepage.trim().length > 0
@@ -173,11 +233,11 @@ export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
 
   if (isValidElement<React.ComponentProps<'html'>>(children)) {
     if (children.type !== 'html') {
-      throw new Error('[renoun] RootProvider must wrap the html element.')
+      throw new Error(getRootProviderErrorMessage())
     }
     html = cloneElement(children, { suppressHydrationWarning: true })
   } else {
-    throw new Error('[renoun] RootProvider must wrap the html element.')
+    throw new Error(getRootProviderErrorMessage())
   }
 
   if (includeTableOfContentsScript || includeCommandScript) {
