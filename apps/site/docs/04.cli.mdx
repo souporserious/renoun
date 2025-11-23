@@ -40,32 +40,12 @@ renoun vite build -- --mode production
 
 ## Pruning theme files
 
-Use `renoun theme` to minimize VS Code theme JSON files. The command validates the input file,
+Use `renoun theme` to minimize VS Code theme JSON files. The command validates the input file,
 removes unused properties, and writes the optimized JSON back to the same path:
 
 ```bash
 renoun theme path/to/theme.json
 ```
-
-Because the command overwrites the original file, keep the theme under version control or save a
-backup before running it. The pruned output is ready to reference from `RootProvider`.
-
-## Copying themes from the VS Code Marketplace
-
-Most Marketplace listings link to the extension's GitHub repository. Open the repository, locate
-the `themes` directory, and download the JSON file for the variant you want. Place the file in your
-project (for example, `./theme.json`) and point `RootProvider` at the new path.
-
-After copying the file, run the pruning command to remove metadata that the renoun runtime does not
-need:
-
-```bash
-renoun theme theme.json
-```
-
-If you are testing multiple variants, copy each JSON file, rename it to a descriptive filename, and
-prune them individually. You can then map the files to light and dark slots when configuring
-multiple themes.
 
 ## Validating links
 
