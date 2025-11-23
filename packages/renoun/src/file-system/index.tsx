@@ -1244,14 +1244,27 @@ export class JavaScriptModuleExport<Value> {
     return formatNameAsTitle(this.getName())
   }
 
-  /** Get the JS Doc description of the export. */
+  /** Get the JSDoc description for the export. */
   getDescription() {
     return this.#metadata?.jsDocMetadata?.description
   }
 
-  /** Get the JS Doc tags of the export. */
-  getTags() {
-    return this.#metadata?.jsDocMetadata?.tags
+  /** Get the JSDoc tags for the export. */
+  getTags({
+    includeTypes = false,
+  }: {
+    /** Whether to include type-related tags e.g. `@param`, `@returns`, `@type`, etc. */
+    includeTypes?: boolean
+  } = {}) {
+    const tags = this.#metadata?.jsDocMetadata?.tags
+
+    if (!tags || includeTypes) {
+      return tags
+    }
+
+    const filteredTags = tags.filter((tag) => tag.name !== 'template')
+
+    return filteredTags.length > 0 ? filteredTags : undefined
   }
 
   /** Get the environment of the export. */

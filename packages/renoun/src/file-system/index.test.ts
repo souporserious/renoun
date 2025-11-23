@@ -1711,6 +1711,29 @@ describe('file system', () => {
     `)
   })
 
+  test('getTags filters jsdoc template tags by default', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'identity.ts': `/**
+ * Identity function.
+ * @template T the value type
+ */
+export function identity<T>(value: T) {
+  return value
+}`,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('identity', 'ts')
+    const fileExport = await file.getExport('identity')
+
+    expect(fileExport.getTags()).toBeUndefined()
+
+    const tagsWithTypes = fileExport.getTags({ includeTypes: true })
+
+    expect(tagsWithTypes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'template' })])
+    )
+  })
+
   test('barrel file export metadata', async () => {
     const fileSystem = new MemoryFileSystem({
       'index.ts': `export { Button } from './Button.tsx'`,
