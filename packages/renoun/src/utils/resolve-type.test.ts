@@ -5,7 +5,7 @@ import dedent from 'dedent'
 
 import { resolveType } from './resolve-type.js'
 
-const { Project, SyntaxKind } = getTsMorph()
+const { Project, SyntaxKind, ts } = getTsMorph()
 
 const project = new Project()
 
@@ -44,6 +44,23 @@ describe('resolveType', () => {
       function: FunctionType;
     };
   `
+  )
+
+  const jsFile = project.createSourceFile(
+    'batch.js',
+    dedent`
+      function nodeProxy() {
+        return () => {}
+      }
+
+      /**
+       * @function
+       * @param {number} id - identifier
+       * @returns {string}
+       */
+      export const batch = /** @type {any} */ (nodeProxy())
+    `,
+    { scriptKind: ts.ScriptKind.JS }
   )
 
   test('process generic properties', () => {
@@ -262,6 +279,29 @@ describe('resolveType', () => {
         "typeParameters": [],
       }
     `)
+  })
+
+  test('resolves jsdoc function annotations for variables', () => {
+    const declaration = jsFile.getVariableDeclarationOrThrow('batch')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved).toMatchObject({
+      kind: 'Function',
+      signatures: [
+        {
+          parameters: [
+            {
+              name: 'id',
+              type: { kind: 'Number' },
+              description: 'identifier',
+              isOptional: false,
+              isRest: false,
+            },
+          ],
+          returnType: { kind: 'String' },
+        },
+      ],
+    })
   })
 
   test('resolves empty object literal return types', () => {

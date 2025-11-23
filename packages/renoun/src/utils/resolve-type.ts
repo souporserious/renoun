@@ -748,16 +748,29 @@ export function resolveType(
       }
     }
 
-    let resolvedType: Kind = {
-      kind: 'Unknown',
-      text: typeText,
-    } satisfies Kind.Unknown
+    let resolvedType: Kind | undefined
     const callSignatures = type.getCallSignatures()
 
     if (
       callSignatures.length === 0 &&
       tsMorph.Node.isVariableDeclaration(enclosingNode)
     ) {
+      const jsDocSignatures = resolveJsDocFunctionSignatures(
+        enclosingNode,
+        filter,
+        defaultValues,
+        dependencies
+      )
+
+      if (jsDocSignatures) {
+        resolvedType = {
+          kind: 'Function',
+          name: symbolMetadata.name,
+          text: typeText,
+          signatures: jsDocSignatures,
+        } satisfies Kind.Function
+      }
+
       const typeNode = enclosingNode.getTypeNode()
       const jsDocTypeNode =
         !typeNode && tsMorph.Node.isVariableDeclaration(enclosingNode)
@@ -783,7 +796,7 @@ export function resolveType(
         return
       }
 
-      resolvedType = {
+      resolvedType ??= {
         kind: 'Variable',
         name: symbolMetadata.name,
         text: typeText,
@@ -1128,6 +1141,131 @@ function getJsDocOwner(node?: Node): Node | undefined {
   }
 
   return undefined
+}
+
+function resolveJsDocFunctionSignatures(
+  declaration: VariableDeclaration,
+  filter?: TypeFilter,
+  defaultValues?: Record<string, unknown> | unknown,
+  dependencies?: Set<string>
+): Kind.CallSignature[] | undefined {
+  const candidates: Node[] = []
+
+  const declarationList = declaration.getParent()
+  if (tsMorph.Node.isVariableDeclarationList(declarationList)) {
+    const statement = declarationList.getParent()
+    if (tsMorph.Node.isVariableStatement(statement)) {
+      candidates.push(statement)
+    }
+  }
+
+  candidates.push(declaration)
+
+  let parameterTags: TsMorph.JSDocParameterTag[] = []
+  let returnTag: TsMorph.JSDocReturnTag | undefined
+
+  for (const candidate of candidates) {
+    if (!tsMorph.Node.isJSDocable(candidate)) {
+      continue
+    }
+
+    for (const jsDoc of candidate.getJsDocs()) {
+      for (const tag of jsDoc.getTags()) {
+        if (tsMorph.Node.isJSDocParameterTag(tag)) {
+          parameterTags.push(tag)
+        }
+
+        if (!returnTag && tsMorph.Node.isJSDocReturnTag(tag)) {
+          returnTag = tag
+        }
+      }
+    }
+  }
+
+  if (parameterTags.length === 0 && !returnTag) {
+    return undefined
+  }
+
+  parameterTags = parameterTags.filter(
+    (tag, index) => tag.getName() && parameterTags.indexOf(tag) === index
+  )
+
+  const resolvedParameters: Kind.Parameter[] = []
+
+  for (const parameterTag of parameterTags) {
+    const typeExpression = parameterTag.getTypeExpression()
+    const typeNode = typeExpression?.getTypeNode()
+    const type = typeNode?.getType()
+
+    if (!type || !typeNode) {
+      continue
+    }
+
+    const resolvedType = resolveTypeExpression(
+      type,
+      typeNode,
+      filter,
+      defaultValues,
+      dependencies
+    )
+
+    if (!resolvedType) {
+      continue
+    }
+
+    const name = parameterTag.getName()
+    const isOptional = parameterTag.isBracketed()
+    const isRest = false
+    const rawDescription = parameterTag.getCommentText()?.trim()
+    const description = rawDescription?.replace(/^[-]\s*/, '')
+    const text = `${isRest ? '...' : ''}${name}${isOptional ? '?' : ''}: ${resolvedType.text}`
+
+    resolvedParameters.push({
+      kind: 'Parameter',
+      name,
+      type: resolvedType,
+      initializer: undefined,
+      isOptional,
+      isRest,
+      description,
+      text,
+    } satisfies Kind.Parameter)
+  }
+
+  let resolvedReturnType: Kind.TypeExpression | undefined
+
+  if (returnTag) {
+    const typeExpression = returnTag.getTypeExpression()
+    const typeNode = typeExpression?.getTypeNode()
+    const type = typeNode?.getType()
+
+    if (type && typeNode) {
+      resolvedReturnType = resolveTypeExpression(
+        type,
+        typeNode,
+        filter,
+        defaultValues,
+        dependencies
+      )
+    }
+  }
+
+  if (!resolvedReturnType) {
+    return undefined
+  }
+
+  const parametersText = resolvedParameters
+    .map((parameter) => parameter.text)
+    .join(', ')
+
+  return [
+    {
+      kind: 'CallSignature',
+      text: `(${parametersText}) => ${resolvedReturnType.text}`,
+      parameters: resolvedParameters,
+      returnType: resolvedReturnType,
+    } satisfies Kind.CallSignature,
+  ]
 }
 
 /** Resolves a type expression. */
