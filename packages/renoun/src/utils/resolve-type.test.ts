@@ -4932,7 +4932,7 @@ describe('resolveType', () => {
               "initializer": {
                 "color": "red",
               },
-              "isOptional": false,
+              "isOptional": true,
               "isRest": false,
               "kind": "Parameter",
               "name": "props",
@@ -5048,7 +5048,7 @@ describe('resolveType', () => {
                   "fontWeight": 400,
                 },
               },
-              "isOptional": false,
+              "isOptional": true,
               "isRest": false,
               "kind": "Parameter",
               "name": "{ style: { fontSize, color } }",
@@ -6403,7 +6403,7 @@ describe('resolveType', () => {
                     "description": undefined,
                     "filePath": "test.ts",
                     "initializer": false,
-                    "isOptional": false,
+                    "isOptional": true,
                     "isRest": false,
                     "kind": "Parameter",
                     "name": "isDirectory",
@@ -7310,7 +7310,7 @@ describe('resolveType', () => {
                 "description": "Provides the initial count.",
                 "filePath": "test.ts",
                 "initializer": 0,
-                "isOptional": false,
+                "isOptional": true,
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "initialCount",
@@ -7420,7 +7420,7 @@ describe('resolveType', () => {
                 "initializer": {
                   "initialCount": 0,
                 },
-                "isOptional": false,
+                "isOptional": true,
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "{ initialCount = 0 }",
@@ -7721,7 +7721,7 @@ describe('resolveType', () => {
                 "description": undefined,
                 "filePath": "test.ts",
                 "initializer": 0,
-                "isOptional": false,
+                "isOptional": true,
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "initialCount",
@@ -7825,7 +7825,7 @@ describe('resolveType', () => {
                 "description": undefined,
                 "filePath": "test.ts",
                 "initializer": 0,
-                "isOptional": false,
+                "isOptional": true,
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "initialCount",
@@ -7936,7 +7936,7 @@ describe('resolveType', () => {
                 "initializer": {
                   "initialCount": 0,
                 },
-                "isOptional": false,
+                "isOptional": true,
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "{ initialCount = 0 }",
@@ -8051,7 +8051,7 @@ describe('resolveType', () => {
                 "initializer": {
                   "initialCount": 0,
                 },
-                "isOptional": false,
+                "isOptional": true,
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "{ initialCount = 0 }",
@@ -9465,7 +9465,7 @@ describe('resolveType', () => {
               "initializer": {
                 "variant": "body1",
               },
-              "isOptional": false,
+              "isOptional": true,
               "isRest": false,
               "kind": "Parameter",
               "name": "props",
@@ -11065,7 +11065,7 @@ describe('resolveType', () => {
                   "description": undefined,
                   "filePath": "test.ts",
                   "initializer": 0,
-                  "isOptional": false,
+                  "isOptional": true,
                   "isRest": false,
                   "kind": "Parameter",
                   "name": "initialCount",
@@ -11474,7 +11474,7 @@ describe('resolveType', () => {
                 "initializer": {
                   "initialCount": 0,
                 },
-                "isOptional": false,
+                "isOptional": true,
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "{ initialCount: renamedInitialCount = 0 }",
@@ -11639,7 +11639,7 @@ describe('resolveType', () => {
                 "description": undefined,
                 "filePath": "test.ts",
                 "initializer": 0,
-                "isOptional": false,
+                "isOptional": true,
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "b",
@@ -15068,7 +15068,7 @@ describe('resolveType', () => {
                       "className": "",
                       "variant": "primary",
                     },
-                    "isOptional": false,
+                    "isOptional": true,
                     "isRest": false,
                     "kind": "Parameter",
                     "name": "{
@@ -21618,5 +21618,42 @@ describe('resolveType', () => {
     expect(fallbackParameter?.name).toBe('value')
     expect(fallbackParameter?.text).toBe('value: any')
     expect(fallbackParameter?.type.kind).toBe('Any')
+  })
+
+  test('treats parameters with falsy initializers as optional', () => {
+    const jsProject = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: { allowJs: true, checkJs: true },
+    })
+
+    const arrayNode = jsProject.createSourceFile(
+      'array-node.js',
+      dedent`
+        export class ArrayNode {
+          constructor(values = null, count = 0) {}
+        }
+      `,
+      { overwrite: true, scriptKind: ts.ScriptKind.JS }
+    )
+
+    const classDeclaration = arrayNode.getClassOrThrow('ArrayNode')
+    const resolved = resolveType(classDeclaration.getType(), classDeclaration)
+
+    expect(resolved?.kind).toBe('Class')
+    const constructor = (resolved as any).constructor
+    expect(constructor?.signatures?.[0]?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'values',
+          isOptional: true,
+          initializer: null,
+        }),
+        expect.objectContaining({
+          name: 'count',
+          isOptional: true,
+          initializer: 0,
+        }),
+      ])
+    )
   })
 })

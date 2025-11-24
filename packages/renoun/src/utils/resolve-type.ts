@@ -3540,6 +3540,7 @@ function resolveParameter(
      */
     const parameterTypeNode = parameterDeclaration.getTypeNode()
     let initializer = getInitializerValue(parameterDeclaration)
+    const hasInitializer = initializer !== undefined
     const isLocal = parameterDeclaration === enclosingNode
     const isExternal = parameterDeclaration
       ? parameterDeclaration.getSourceFile().isInNodeModules()
@@ -3588,11 +3589,11 @@ function resolveParameter(
     }
 
     if (resolvedParameterType) {
-      let isOptional = parameterDeclaration.hasQuestionToken()
-      let resolvedType =
-        (isOptional ?? Boolean(initializer))
-          ? filterUndefinedFromUnion(resolvedParameterType)
-          : resolvedParameterType
+      let isOptional =
+        parameterDeclaration.hasQuestionToken() || hasInitializer
+      let resolvedType = isOptional
+        ? filterUndefinedFromUnion(resolvedParameterType)
+        : resolvedParameterType
       let isRest = parameterDeclaration.isRestParameter()
 
       if (jsDocParameterTag) {
@@ -3641,7 +3642,7 @@ function resolveParameter(
         name,
         type: resolvedType,
         initializer,
-        isOptional: isOptional ?? Boolean(initializer),
+        isOptional: isOptional || hasInitializer,
         isRest,
         description: getSymbolDescription(
           parameterDeclaration.getSymbolOrThrow()
