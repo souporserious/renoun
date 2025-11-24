@@ -7,7 +7,9 @@ import { resolveType } from './resolve-type.js'
 
 const { Project, SyntaxKind, ts } = getTsMorph()
 
-const project = new Project()
+const project = new Project({
+  compilerOptions: { allowJs: true, checkJs: true },
+})
 
 describe('resolveType', () => {
   const sourceFile = project.createSourceFile(
@@ -62,6 +64,315 @@ describe('resolveType', () => {
     `,
     { scriptKind: ts.ScriptKind.JS }
   )
+
+  test('resolves constructor parameter types in JS files', () => {
+    const jsClassFile = project.createSourceFile(
+      'array-node.js',
+      `
+      class TempNode {}
+
+      /**
+       * ArrayNode represents a collection of nodes, typically created using the {@link array} function.
+       */
+      class ArrayNode extends TempNode {
+        /**
+         * Constructs a new array node.
+         *
+         * @param {?string} nodeType - The data type of the elements.
+         * @param {number} count - Size of the array.
+         * @param {?Array<Node>} [values=null] - Array default values.
+         */
+        constructor( nodeType, count, values = null ) {
+          super( nodeType )
+          this.count = count
+          this.values = values
+          this.isArrayNode = true
+        }
+      }
+      
+      export { ArrayNode }
+      `,
+      { scriptKind: ts.ScriptKind.JS }
+    )
+
+    const classDeclaration = jsClassFile.getClassOrThrow('ArrayNode')
+    const resolvedClass = resolveType(classDeclaration.getType())
+
+    expect(resolvedClass).toMatchInlineSnapshot(`
+      {
+        "constructor": {
+          "description": "Constructs a new array node.",
+          "filePath": "array-node.js",
+          "kind": "ClassConstructor",
+          "position": {
+            "end": {
+              "column": 10,
+              "line": 20,
+            },
+            "start": {
+              "column": 9,
+              "line": 15,
+            },
+          },
+          "signatures": [
+            {
+              "description": "Constructs a new array node.",
+              "filePath": "array-node.js",
+              "kind": "CallSignature",
+              "parameters": [
+                {
+                  "description": undefined,
+                  "filePath": "array-node.js",
+                  "initializer": undefined,
+                  "isOptional": false,
+                  "isRest": false,
+                  "kind": "Parameter",
+                  "name": "nodeType",
+                  "position": {
+                    "end": {
+                      "column": 30,
+                      "line": 15,
+                    },
+                    "start": {
+                      "column": 22,
+                      "line": 15,
+                    },
+                  },
+                  "text": "nodeType",
+                  "type": {
+                    "filePath": "array-node.js",
+                    "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 10,
+                        "line": 20,
+                      },
+                      "start": {
+                        "column": 9,
+                        "line": 15,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                },
+                {
+                  "description": undefined,
+                  "filePath": "array-node.js",
+                  "initializer": undefined,
+                  "isOptional": false,
+                  "isRest": false,
+                  "kind": "Parameter",
+                  "name": "count",
+                  "position": {
+                    "end": {
+                      "column": 37,
+                      "line": 15,
+                    },
+                    "start": {
+                      "column": 32,
+                      "line": 15,
+                    },
+                  },
+                  "text": "count",
+                  "type": {
+                    "filePath": "array-node.js",
+                    "kind": "Number",
+                    "position": {
+                      "end": {
+                        "column": 10,
+                        "line": 20,
+                      },
+                      "start": {
+                        "column": 9,
+                        "line": 15,
+                      },
+                    },
+                    "text": "number",
+                    "value": undefined,
+                  },
+                },
+                {
+                  "description": undefined,
+                  "filePath": "array-node.js",
+                  "initializer": null,
+                  "isOptional": true,
+                  "isRest": false,
+                  "kind": "Parameter",
+                  "name": "values",
+                  "position": {
+                    "end": {
+                      "column": 52,
+                      "line": 15,
+                    },
+                    "start": {
+                      "column": 39,
+                      "line": 15,
+                    },
+                  },
+                  "text": "values = null",
+                  "type": {
+                    "filePath": "array-node.js",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "Array",
+                    "position": {
+                      "end": {
+                        "column": 10,
+                        "line": 20,
+                      },
+                      "start": {
+                        "column": 9,
+                        "line": 15,
+                      },
+                    },
+                    "text": "Array<Node>",
+                    "typeArguments": [
+                      {
+                        "filePath": "array-node.js",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "Node",
+                        "position": {
+                          "end": {
+                            "column": 10,
+                            "line": 20,
+                          },
+                          "start": {
+                            "column": 9,
+                            "line": 15,
+                          },
+                        },
+                        "text": "Node",
+                        "typeArguments": [],
+                      },
+                    ],
+                  },
+                },
+              ],
+              "position": {
+                "end": {
+                  "column": 10,
+                  "line": 20,
+                },
+                "start": {
+                  "column": 9,
+                  "line": 15,
+                },
+              },
+              "returnType": {
+                "filePath": "array-node.js",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
+                "name": "ArrayNode",
+                "position": {
+                  "end": {
+                    "column": 10,
+                    "line": 20,
+                  },
+                  "start": {
+                    "column": 9,
+                    "line": 15,
+                  },
+                },
+                "text": "ArrayNode",
+                "typeArguments": [],
+              },
+              "tags": [
+                {
+                  "name": "param",
+                  "text": "- The data type of the elements.",
+                },
+                {
+                  "name": "param",
+                  "text": "- Size of the array.",
+                },
+                {
+                  "name": "param",
+                  "text": "- Array default values.",
+                },
+              ],
+              "text": "(nodeType, count, values = null) => ArrayNode",
+              "thisType": undefined,
+            },
+          ],
+          "tags": [
+            {
+              "name": "param",
+              "text": "- The data type of the elements.",
+            },
+            {
+              "name": "param",
+              "text": "- Size of the array.",
+            },
+            {
+              "name": "param",
+              "text": "- Array default values.",
+            },
+          ],
+          "text": "constructor( nodeType, count, values = null ) {
+                super( nodeType )
+                this.count = count
+                this.values = values
+                this.isArrayNode = true
+              }",
+        },
+        "description": "ArrayNode represents a collection of nodes, typically created using the {@link array} function.",
+        "extends": {
+          "filePath": "array-node.js",
+          "kind": "TypeReference",
+          "moduleSpecifier": undefined,
+          "name": "TempNode",
+          "position": {
+            "end": {
+              "column": 8,
+              "line": 21,
+            },
+            "start": {
+              "column": 7,
+              "line": 7,
+            },
+          },
+          "text": "TempNode",
+          "typeArguments": [
+            {
+              "filePath": "array-node.js",
+              "kind": "TypeReference",
+              "moduleSpecifier": undefined,
+              "name": "ArrayNode",
+              "position": {
+                "end": {
+                  "column": 8,
+                  "line": 21,
+                },
+                "start": {
+                  "column": 7,
+                  "line": 7,
+                },
+              },
+              "text": "this",
+              "typeArguments": [],
+            },
+          ],
+        },
+        "filePath": "array-node.js",
+        "kind": "Class",
+        "name": "ArrayNode",
+        "position": {
+          "end": {
+            "column": 8,
+            "line": 21,
+          },
+          "start": {
+            "column": 7,
+            "line": 7,
+          },
+        },
+        "tags": undefined,
+        "text": "ArrayNode",
+      }
+    `)
+  })
 
   test('process generic properties', () => {
     const typeAlias = sourceFile.getTypeAliasOrThrow('ModuleData')
@@ -326,8 +637,19 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
+            "filePath": "index.ts",
             "kind": "ClassMethod",
             "name": "getValue",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
             "scope": undefined,
             "signatures": [
               {
@@ -6207,8 +6529,19 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
+            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "setValue",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
             "scope": undefined,
             "signatures": [
               {
@@ -6353,8 +6686,19 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
+            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "isFilePath",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
             "scope": undefined,
             "signatures": [
               {
@@ -11143,8 +11487,19 @@ describe('resolveType', () => {
         "methods": [
           {
             "description": "Increments the count.",
+            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "increment",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 18,
+              },
+              "start": {
+                "column": 3,
+                "line": 16,
+              },
+            },
             "scope": undefined,
             "signatures": [
               {
@@ -11190,8 +11545,19 @@ describe('resolveType', () => {
           },
           {
             "description": "Decrements the count.",
+            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "decrement",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 23,
+              },
+              "start": {
+                "column": 3,
+                "line": 21,
+              },
+            },
             "scope": undefined,
             "signatures": [
               {
@@ -11237,8 +11603,19 @@ describe('resolveType', () => {
           },
           {
             "description": "Returns the current count.",
+            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "getCount",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 38,
+              },
+              "start": {
+                "column": 3,
+                "line": 36,
+              },
+            },
             "scope": undefined,
             "signatures": [
               {
@@ -11320,8 +11697,19 @@ describe('resolveType', () => {
             "visibility": "public",
           },
           {
+            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "getStaticCount",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 42,
+              },
+              "start": {
+                "column": 3,
+                "line": 40,
+              },
+            },
             "scope": "static",
             "signatures": [
               {
@@ -14289,8 +14677,19 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
+            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "greet",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 17,
+              },
+              "start": {
+                "column": 3,
+                "line": 14,
+              },
+            },
             "scope": undefined,
             "signatures": [
               {
@@ -20951,13 +21350,13 @@ describe('resolveType', () => {
                     "line": 2,
                   },
                   "start": {
-                    "column": 3,
+                    "column": 19,
                     "line": 2,
                   },
                 },
                 "text": "any",
               },
-              "text": "(runtime: any): any",
+              "text": "(runtime: any) => any",
               "thisType": undefined,
             },
             {
@@ -21054,13 +21453,13 @@ describe('resolveType', () => {
                     "line": 3,
                   },
                   "start": {
-                    "column": 3,
+                    "column": 32,
                     "line": 3,
                   },
                 },
                 "text": "any",
               },
-              "text": "(schema: any, runtime: any): any",
+              "text": "(schema: any, runtime: any) => any",
               "thisType": undefined,
             },
           ],
@@ -21093,8 +21492,19 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
+            "filePath": "index.ts",
             "kind": "ClassMethod",
             "name": "getToday",
+            "position": {
+              "end": {
+                "column": 4,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
             "scope": undefined,
             "signatures": [
               {
@@ -21337,22 +21747,57 @@ describe('resolveType', () => {
                 "typeArguments": [],
               },
               "extendsType": {
-                "filePath": "test.ts",
+                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
                 "kind": "TypeReference",
                 "moduleSpecifier": undefined,
-                "name": "ThemeMap",
+                "name": "Record",
                 "position": {
                   "end": {
-                    "column": 27,
-                    "line": 15,
+                    "column": 314,
+                    "line": 6,
                   },
                   "start": {
-                    "column": 19,
-                    "line": 15,
+                    "column": 301,
+                    "line": 6,
                   },
                 },
-                "text": "ThemeMap",
-                "typeArguments": [],
+                "text": "Record<string, ThemeValue>",
+                "typeArguments": [
+                  {
+                    "filePath": "test.ts",
+                    "kind": "String",
+                    "position": {
+                      "end": {
+                        "column": 30,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 24,
+                        "line": 4,
+                      },
+                    },
+                    "text": "string",
+                    "value": undefined,
+                  },
+                  {
+                    "filePath": "test.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": "./config",
+                    "name": "ThemeValue",
+                    "position": {
+                      "end": {
+                        "column": 42,
+                        "line": 4,
+                      },
+                      "start": {
+                        "column": 32,
+                        "line": 4,
+                      },
+                    },
+                    "text": "ThemeValue",
+                    "typeArguments": [],
+                  },
+                ],
               },
               "falseType": {
                 "kind": "TypeLiteral",
@@ -21437,6 +21882,77 @@ describe('resolveType', () => {
                 "members": [
                   {
                     "filePath": "test.ts",
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "PropertySignature",
+                    "name": "theme",
+                    "position": {
+                      "end": {
+                        "column": 26,
+                        "line": 17,
+                      },
+                      "start": {
+                        "column": 11,
+                        "line": 17,
+                      },
+                    },
+                    "text": "theme: ThemeMap",
+                    "type": {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Record",
+                      "position": {
+                        "end": {
+                          "column": 314,
+                          "line": 6,
+                        },
+                        "start": {
+                          "column": 301,
+                          "line": 6,
+                        },
+                      },
+                      "text": "Record<string, ThemeValue>",
+                      "typeArguments": [
+                        {
+                          "filePath": "test.ts",
+                          "kind": "String",
+                          "position": {
+                            "end": {
+                              "column": 30,
+                              "line": 4,
+                            },
+                            "start": {
+                              "column": 24,
+                              "line": 4,
+                            },
+                          },
+                          "text": "string",
+                          "value": undefined,
+                        },
+                        {
+                          "filePath": "test.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": "./config",
+                          "name": "ThemeValue",
+                          "position": {
+                            "end": {
+                              "column": 42,
+                              "line": 4,
+                            },
+                            "start": {
+                              "column": 32,
+                              "line": 4,
+                            },
+                          },
+                          "text": "ThemeValue",
+                          "typeArguments": [],
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    "filePath": "test.ts",
                     "isOptional": true,
                     "isReadonly": false,
                     "kind": "PropertySignature",
@@ -21478,7 +21994,7 @@ describe('resolveType', () => {
           {
             "constraintType": {
               "kind": "UnionType",
-              "text": "ThemeValue | undefined",
+              "text": "ThemeValue | Record<string, ThemeValue> | undefined",
               "types": [
                 {
                   "filePath": "test.ts",
@@ -21497,6 +22013,59 @@ describe('resolveType', () => {
                   },
                   "text": "ThemeValue",
                   "typeArguments": [],
+                },
+                {
+                  "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
+                  "name": "Record",
+                  "position": {
+                    "end": {
+                      "column": 314,
+                      "line": 6,
+                    },
+                    "start": {
+                      "column": 301,
+                      "line": 6,
+                    },
+                  },
+                  "text": "Record<string, ThemeValue>",
+                  "typeArguments": [
+                    {
+                      "filePath": "test.ts",
+                      "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 30,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 24,
+                          "line": 4,
+                        },
+                      },
+                      "text": "string",
+                      "value": undefined,
+                    },
+                    {
+                      "filePath": "test.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": "./config",
+                      "name": "ThemeValue",
+                      "position": {
+                        "end": {
+                          "column": 42,
+                          "line": 4,
+                        },
+                        "start": {
+                          "column": 32,
+                          "line": 4,
+                        },
+                      },
+                      "text": "ThemeValue",
+                      "typeArguments": [],
+                    },
+                  ],
                 },
                 {
                   "filePath": "test.ts",

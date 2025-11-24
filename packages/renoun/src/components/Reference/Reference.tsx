@@ -235,7 +235,10 @@ async function ReferenceAsync({
       source instanceof URL ? pathLikeToString(source) : source
     if (baseDirectory) {
       const normalized = normalizeBaseDirectory(baseDirectory)
-      filePath = resolve(normalized ?? pathLikeToString(baseDirectory), resolvedSource)
+      filePath = resolve(
+        normalized ?? pathLikeToString(baseDirectory),
+        resolvedSource
+      )
     } else {
       filePath = resolvedSource
     }
@@ -1601,7 +1604,7 @@ function ComponentSection({
             isGenerator: signature.isGenerator,
             description: signature.description,
             tags: signature.tags,
-            path: signature.path,
+            filePath: signature.filePath,
             position: signature.position,
           }
 
@@ -2179,7 +2182,7 @@ function renderMembersDetails({
               isGenerator: signature.isGenerator,
               description: signature.description,
               tags: signature.tags,
-              path: signature.path,
+              filePath: signature.filePath,
               position: signature.position,
             }
 

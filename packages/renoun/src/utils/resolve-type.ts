@@ -51,7 +51,7 @@ export namespace Kind {
     text: string
 
     /** The path to the file where the symbol declaration is located. */
-    path?: string
+    filePath?: string
 
     /** The line and column number of the symbol declaration. */
     position?: {
@@ -798,9 +798,6 @@ function toTypeReference(
   }
 
   let moduleSpecifier = getModuleSpecifierFromImports(enclosingNode, symbol)
-  const typeArguments = symbol
-    ? [...type.getAliasTypeArguments(), ...type.getTypeArguments()]
-    : []
 
   if (!moduleSpecifier && symbol) {
     moduleSpecifier = getModuleFromSymbol(symbol)
@@ -827,7 +824,11 @@ function toTypeReference(
     kind: 'TypeReference',
     name: referenceName ?? name,
     text: textWithReferenceDefaults,
-    typeArguments: typeArguments.length ? resolvedTypeArguments : undefined,
+    // Use resolvedTypeArguments.length to check if we have resolved type arguments from the node
+    // This ensures we capture type arguments even when the Type itself doesn't have them
+    typeArguments: resolvedTypeArguments.length
+      ? resolvedTypeArguments
+      : undefined,
     moduleSpecifier,
     ...(locationNode ? getDeclarationLocation(locationNode) : {}),
   } satisfies Kind.TypeReference
@@ -2613,16 +2614,58 @@ function resolveTypeExpression(
             : false,
         } satisfies Kind.FunctionType
       } else if (isMappedType(type)) {
+        // If we have an alias symbol and the enclosing node or its type node is a TypeReference,
+        // try to resolve as a type reference first to preserve the alias name
+        if (aliasSymbol) {
+          let typeReferenceNode: TypeReferenceNode | undefined
+
+          if (tsMorph.Node.isTypeReference(enclosingNode)) {
+            typeReferenceNode = enclosingNode
+          } else if (tsMorph.Node.isPropertySignature(enclosingNode)) {
+            const typeNode = enclosingNode.getTypeNode()
+            if (tsMorph.Node.isTypeReference(typeNode)) {
+              typeReferenceNode = typeNode
+            }
+          }
+
+          if (typeReferenceNode) {
+            const resolvedAsReference = toTypeReference(
+              type,
+              typeReferenceNode,
+              filter,
+              defaultValues,
+              dependencies
+            )
+            if (resolvedAsReference) {
+              return resolvedAsReference
+            }
+          }
+        }
+
         let mappedNode: MappedTypeNode | undefined
 
         if (tsMorph.Node.isMappedTypeNode(enclosingNode)) {
           mappedNode = enclosingNode
         } else if (tsMorph.Node.isMappedTypeNode(symbolDeclaration)) {
           mappedNode = symbolDeclaration
-        } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
-          const typeNode = symbolDeclaration.getTypeNode()
-          if (tsMorph.Node.isMappedTypeNode(typeNode)) {
-            mappedNode = typeNode
+        } else {
+          // Check alias symbol's declaration first (for type aliases like Record<string, T>)
+          const aliasSymbolDeclaration = aliasSymbol
+            ? getPrimaryDeclaration(aliasSymbol)
+            : undefined
+          if (
+            aliasSymbolDeclaration &&
+            tsMorph.Node.isTypeAliasDeclaration(aliasSymbolDeclaration)
+          ) {
+            const typeNode = aliasSymbolDeclaration.getTypeNode()
+            if (tsMorph.Node.isMappedTypeNode(typeNode)) {
+              mappedNode = typeNode
+            }
+          } else if (tsMorph.Node.isTypeAliasDeclaration(symbolDeclaration)) {
+            const typeNode = symbolDeclaration.getTypeNode()
+            if (tsMorph.Node.isMappedTypeNode(typeNode)) {
+              mappedNode = typeNode
+            }
           }
         }
 
@@ -2667,6 +2710,59 @@ function resolveTypeExpression(
               isReadonly: Boolean(mappedNode.getReadonlyToken()),
               isOptional: Boolean(mappedNode.getQuestionToken()),
             } satisfies Kind.MappedType
+          }
+        } else if (aliasSymbol) {
+          // Fallback: If we can't find the mapped node but have a type alias,
+          // try to resolve it as a type reference (e.g., Record<string, T> utility type)
+          const aliasDeclaration = getPrimaryDeclaration(aliasSymbol)
+          if (
+            aliasDeclaration &&
+            tsMorph.Node.isTypeAliasDeclaration(aliasDeclaration)
+          ) {
+            const aliasTypeNode = aliasDeclaration.getTypeNode()
+            // If the alias points to a TypeReference (like Record<string, T>),
+            // try to resolve it as a type reference
+            if (aliasTypeNode && tsMorph.Node.isTypeReference(aliasTypeNode)) {
+              return toTypeReference(
+                type,
+                aliasTypeNode,
+                filter,
+                defaultValues,
+                dependencies
+              )
+            }
+            // If the alias points to a mapped type node directly, use it
+            if (aliasTypeNode && tsMorph.Node.isMappedTypeNode(aliasTypeNode)) {
+              mappedNode = aliasTypeNode
+              // Retry with the found mapped node
+              const keyNode = mappedNode.getTypeParameter()
+              const resolvedKeyType = resolveTypeParameterDeclaration(
+                keyNode,
+                filter,
+                dependencies
+              )
+              const valueNode = mappedNode.getTypeNode()
+              const resolvedValueType = valueNode
+                ? resolveTypeExpression(
+                    valueNode.getType(),
+                    valueNode,
+                    filter,
+                    defaultValues,
+                    dependencies
+                  )
+                : undefined
+
+              if (resolvedKeyType && resolvedValueType) {
+                return {
+                  kind: 'MappedType',
+                  text: typeText,
+                  typeParameter: resolvedKeyType,
+                  type: resolvedValueType,
+                  isReadonly: Boolean(mappedNode.getReadonlyToken()),
+                  isOptional: Boolean(mappedNode.getQuestionToken()),
+                } satisfies Kind.MappedType
+              }
+            }
           }
         }
       } else if (type.isObject()) {
@@ -3027,19 +3123,24 @@ function resolveMemberSignature(
       )
     }
 
-    return resolvePropertySignature(
+    const resolvedPropertySignature = resolvePropertySignature(
       symbol,
       member,
       filter,
       defaultValues,
       dependencies
     )
+
+    if (!resolvedPropertySignature) {
+      throw new UnresolvedTypeExpressionError(member.getType(), member)
+    }
+
+    return resolvedPropertySignature
   }
 
   if (tsMorph.Node.isMethodSignature(member)) {
-    const signature = member.getSignature()
     const resolvedSignature = resolveCallSignature(
-      signature,
+      member.getSignature(),
       member,
       filter,
       dependencies
@@ -3060,58 +3161,38 @@ function resolveMemberSignature(
   }
 
   if (tsMorph.Node.isCallSignatureDeclaration(member)) {
-    const signature = member.getSignature()
-    const resolvedParameters = resolveParameters(
-      signature,
+    const resolvedCallSignature = resolveCallSignature(
+      member.getSignature(),
       member,
       filter,
       dependencies
     )
-    const returnType = resolveTypeExpression(
-      signature.getReturnType(),
-      signature.getDeclaration(),
-      filter,
-      undefined,
-      dependencies
-    )
 
-    return {
-      kind: 'CallSignature',
-      text: member.getText(),
-      ...resolvedParameters,
-      returnType,
-      ...getJsDocMetadata(member),
-      ...getDeclarationLocation(member),
-    } satisfies Kind.CallSignature
-  }
-
-  if (tsMorph.Node.isConstructSignatureDeclaration(member)) {
-    const signature = member.getSignature()
-    const resolvedParameters = resolveParameters(
-      signature,
-      member,
-      filter,
-      dependencies
-    )
-    const returnType = resolveTypeExpression(
-      signature.getReturnType(),
-      signature.getDeclaration(),
-      filter,
-      undefined,
-      dependencies
-    )
-
-    if (!returnType) {
+    if (!resolvedCallSignature) {
       throw new UnresolvedTypeExpressionError(member.getType(), member)
     }
 
     return {
+      ...resolvedCallSignature,
+      kind: 'CallSignature',
+    } satisfies Kind.CallSignature
+  }
+
+  if (tsMorph.Node.isConstructSignatureDeclaration(member)) {
+    const resolvedCallSignature = resolveCallSignature(
+      member.getSignature(),
+      member,
+      filter,
+      dependencies
+    )
+
+    if (!resolvedCallSignature) {
+      throw new UnresolvedTypeExpressionError(member.getType(), member)
+    }
+
+    return {
+      ...resolvedCallSignature,
       kind: 'ConstructSignature',
-      text: member.getText(),
-      ...resolvedParameters,
-      returnType,
-      ...getJsDocMetadata(member),
-      ...getDeclarationLocation(member),
     } satisfies Kind.ConstructSignature
   }
 
@@ -3589,8 +3670,7 @@ function resolveParameter(
     }
 
     if (resolvedParameterType) {
-      let isOptional =
-        parameterDeclaration.hasQuestionToken() || hasInitializer
+      let isOptional = parameterDeclaration.hasQuestionToken() || hasInitializer
       let resolvedType = isOptional
         ? filterUndefinedFromUnion(resolvedParameterType)
         : resolvedParameterType
@@ -4694,21 +4774,40 @@ function resolveClass(
   const constructorDeclarations = classDeclaration.getConstructors()
 
   if (constructorDeclarations.length > 0) {
-    const resolvedCallSignatures = constructorDeclarations
-      .map((declaration) =>
-        resolveCallSignature(
-          declaration.getSignature(),
-          declaration, // ← enclosingNode = the constructor itself
-          filter,
-          dependencies
+    const primaryConstructorDeclaration = constructorDeclarations[0]
+    // Use the constructor type's call signatures to include all overloads,
+    // similar to how Function and ClassMethod handle overloads
+    const constructorType = primaryConstructorDeclaration.getType()
+    const constructorCallSignatures = constructorType.getCallSignatures()
+
+    let resolvedCallSignatures: Kind.CallSignature[]
+
+    // If getCallSignatures() returns signatures (including overloads), use them
+    if (constructorCallSignatures.length > 0) {
+      resolvedCallSignatures = resolveCallSignatures(
+        constructorCallSignatures,
+        primaryConstructorDeclaration,
+        filter,
+        dependencies
+      )
+    } else {
+      // Fallback: use declaration.getSignature() for cases where getCallSignatures() is empty
+      // (e.g., in JavaScript files or when type information isn't available)
+      resolvedCallSignatures = constructorDeclarations
+        .map((declaration) =>
+          resolveCallSignature(
+            declaration.getSignature(),
+            declaration,
+            filter,
+            dependencies
+          )
         )
-      )
-      .filter((signature): signature is Kind.CallSignature =>
-        Boolean(signature)
-      )
+        .filter((signature): signature is Kind.CallSignature =>
+          Boolean(signature)
+        )
+    }
 
     if (resolvedCallSignatures.length > 0) {
-      const primaryConstructorDeclaration = constructorDeclarations[0]
       const constructor: Kind.ClassConstructor = {
         kind: 'ClassConstructor',
         signatures: resolvedCallSignatures,
@@ -4979,6 +5078,7 @@ function resolveClassMethod(
     signatures: resolvedCallSignatures,
     text: method.getType().getText(method, TYPE_FORMAT_FLAGS),
     ...getJsDocMetadata(method),
+    ...getDeclarationLocation(method),
   } satisfies Kind.ClassMethod
 }
 
@@ -5407,7 +5507,10 @@ function isPromiseLike(type: Kind.TypeExpression): boolean {
       if (type.name === 'Promise') {
         return true
       }
-      if (type.path && /lib\.es.*promise|promise.*lib\.es/.test(type.path)) {
+      if (
+        type.filePath &&
+        /lib\.es.*promise|promise.*lib\.es/.test(type.filePath)
+      ) {
         return true
       }
       return false
