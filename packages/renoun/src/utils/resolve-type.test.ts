@@ -21535,6 +21535,35 @@ describe('resolveType', () => {
       }
     `)
   })
+
+  test('conditional extends operand resolves based on visibility', () => {
+    const sourceFile = project.createSourceFile(
+      'conditional-visibility.ts',
+      dedent`
+        type Internal = { hidden: boolean }
+        export type Public = { visible: string }
+
+        export type UsesPublic<T> = T extends Public ? 'public' : 'other'
+        export type UsesInternal<T> = T extends Internal ? 'internal' : 'other'
+      `,
+      { overwrite: true }
+    )
+
+    const publicAlias = sourceFile.getTypeAliasOrThrow('UsesPublic')
+    const internalAlias = sourceFile.getTypeAliasOrThrow('UsesInternal')
+
+    const publicType = resolveType(publicAlias.getType(), publicAlias)
+    const internalType = resolveType(internalAlias.getType(), internalAlias)
+
+    const publicConditional = (publicType as any)?.type
+    const internalConditional = (internalType as any)?.type
+
+    expect(publicConditional.extendsType.kind).toBe('TypeReference')
+    expect(publicConditional.extendsType.text).toBe('Public')
+
+    expect(internalConditional.extendsType.kind).toBe('TypeLiteral')
+    expect(internalConditional.extendsType.members[0].name).toBe('hidden')
+  })
   test('handles parameters without declarations gracefully', () => {
     const jsProject = new Project({
       useInMemoryFileSystem: true,

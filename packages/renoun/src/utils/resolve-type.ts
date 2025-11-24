@@ -704,6 +704,135 @@ function toShallowReference(
   } satisfies Kind.TypeReference
 }
 
+function toTypeReference(
+  type: Type,
+  enclosingNode: TypeReferenceNode,
+  filter?: TypeFilter,
+  defaultValues?: Record<string, unknown> | unknown,
+  dependencies?: Set<string>,
+  options: { allowLocalInternal?: boolean } = {}
+): Kind.TypeReference | undefined {
+  const allowLocalInternal = options.allowLocalInternal ?? true
+  const symbol = type.getAliasSymbol() || type.getSymbol()
+  const visibility = getSymbolVisibility(symbol, enclosingNode)
+
+  if (!allowLocalInternal && visibility === 'local-internal') {
+    return undefined
+  }
+
+  const resolvedTypeArguments: Kind.TypeExpression[] = []
+
+  for (const typeArgument of enclosingNode.getTypeArguments()) {
+    const typeArgumentType = typeArgument.getType()
+    if (resolvingTypes.has(typeArgumentType.compilerType.id)) {
+      resolvedTypeArguments.push(
+        toShallowReference(typeArgumentType, typeArgument)
+      )
+      continue
+    }
+
+    const resolvedTypeArgument = resolveTypeExpression(
+      typeArgumentType,
+      typeArgument,
+      filter,
+      defaultValues,
+      dependencies
+    )
+
+    if (resolvedTypeArgument) {
+      resolvedTypeArguments.push(resolvedTypeArgument)
+    }
+  }
+
+  const typeName = enclosingNode.getTypeName()
+  let referenceName = typeName.getText()
+  let locationNode: Node = enclosingNode
+  const typeNameSymbol = typeName.getSymbol()
+  const referenceDefaults: string[] = []
+  const referenceTextFromNode = enclosingNode
+    .getText()
+    .replace(/'([^']*)'/g, '"$1"')
+
+  if (typeNameSymbol) {
+    const typeNameDeclaration = getPrimaryDeclaration(typeNameSymbol)
+    const typeParameters = (
+      typeNameDeclaration as
+        | TypeAliasDeclaration
+        | InterfaceDeclaration
+        | undefined
+    )?.getTypeParameters?.()
+
+    if (
+      typeParameters &&
+      typeParameters.length > enclosingNode.getTypeArguments().length
+    ) {
+      for (
+        let index = enclosingNode.getTypeArguments().length;
+        index < typeParameters.length;
+        ++index
+      ) {
+        const defaultNode = typeParameters[index].getDefault()
+        if (defaultNode) {
+          referenceDefaults.push(defaultNode.getText())
+        }
+      }
+    }
+  }
+
+  const shouldUseReferenceTextFromNode =
+    tsMorph.Node.isTypeReference(enclosingNode) &&
+    (type.isAny() ||
+      type.isUnknown() ||
+      isJsDocTypeReferenceNode(enclosingNode))
+  const symbolDeclaration = getPrimaryDeclaration(type.getSymbol())
+
+  if (
+    referenceDefaults.length &&
+    (shouldUseReferenceTextFromNode || !symbolDeclaration)
+  ) {
+    referenceName = referenceTextFromNode
+  }
+
+  if (symbolDeclaration) {
+    locationNode = symbolDeclaration
+  }
+
+  let moduleSpecifier = getModuleSpecifierFromImports(enclosingNode, symbol)
+  const typeArguments = symbol
+    ? [...type.getAliasTypeArguments(), ...type.getTypeArguments()]
+    : []
+
+  if (!moduleSpecifier && symbol) {
+    moduleSpecifier = getModuleFromSymbol(symbol)
+  }
+
+  let name = symbol?.getName()
+  // Prefer the alias name if defined in the project
+  if (symbol?.isAlias()) {
+    if (
+      name?.startsWith('__') ||
+      getSymbolVisibility(symbol, enclosingNode) !== 'node-modules'
+    ) {
+      name = symbol.getName()
+      locationNode = getPrimaryDeclaration(symbol) ?? locationNode
+    }
+  }
+
+  const textWithReferenceDefaults =
+    referenceDefaults.length && symbolDeclaration && (name ?? referenceName)
+      ? `${(name ?? referenceName)!}<${referenceDefaults.join(', ')}>`
+      : referenceTextFromNode
+
+  return {
+    kind: 'TypeReference',
+    name: referenceName ?? name,
+    text: textWithReferenceDefaults,
+    typeArguments: typeArguments.length ? resolvedTypeArguments : undefined,
+    moduleSpecifier,
+    ...(locationNode ? getDeclarationLocation(locationNode) : {}),
+  } satisfies Kind.TypeReference
+}
+
 const TYPE_FORMAT_FLAGS =
   tsMorph.TypeFormatFlags.NoTruncation |
   tsMorph.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope |
@@ -1971,13 +2100,55 @@ function resolveTypeExpression(
       )
       const extendsNode = enclosingNode.getExtendsType()
       const extendsType = extendsNode.getType()
-      const resolvedExtendsType = resolveTypeExpression(
-        extendsType,
-        extendsNode,
-        filter,
-        defaultValues,
-        dependencies
-      )
+      let resolvedExtendsType: Kind.TypeExpression | undefined
+
+      if (tsMorph.Node.isTypeReference(extendsNode)) {
+        resolvedExtendsType =
+          toTypeReference(
+            extendsType,
+            extendsNode,
+            filter,
+            defaultValues,
+            dependencies,
+            { allowLocalInternal: false }
+          ) ??
+          resolveTypeExpression(
+            extendsType,
+            extendsNode,
+            filter,
+            defaultValues,
+            dependencies
+          )
+
+        if (!resolvedExtendsType) {
+          const fallbackReference = toTypeReference(
+            extendsType,
+            extendsNode,
+            filter,
+            defaultValues,
+            dependencies
+          )
+
+          if (fallbackReference) {
+            resolvedExtendsType = {
+              ...fallbackReference,
+              moduleSpecifier:
+                fallbackReference.moduleSpecifier ??
+                getModuleSpecifierFromTypeReference(extendsNode),
+              typeArguments: fallbackReference.typeArguments ?? [],
+              ...getDeclarationLocation(extendsNode),
+            }
+          }
+        }
+      } else {
+        resolvedExtendsType = resolveTypeExpression(
+          extendsType,
+          extendsNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+      }
       const trueNode = enclosingNode.getTrueType()
       const trueType = trueNode.getType()
       const resolvedTrueType = resolveTypeExpression(
@@ -5503,15 +5674,6 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
     }
   }
 
-  // In conditional types, prefer keeping the extends operand as a reference to avoid flattening which can lose intent
-  // TODO: this can create references that won't ever be resolved if they are not exported
-  if (
-    tsMorph.Node.isTypeReference(enclosingNode) &&
-    tsMorph.Node.isConditionalTypeNode(enclosingNode.getParent())
-  ) {
-    return false
-  }
-
   const symbol = type.getAliasSymbol() || type.getSymbol()
 
   if (!symbol) {
@@ -5521,7 +5683,9 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
   const visibility = getSymbolVisibility(symbol, enclosingNode)
 
   if (visibility === 'local-internal') {
-    return true
+    // Let conditional branches attempt reference emission before falling back
+    // to resolution so we base the decision on actual visibility outcomes.
+    return !tsMorph.Node.isConditionalTypeNode(enclosingNode)
   }
 
   if (type.isArray()) {
