@@ -20232,6 +20232,243 @@ describe('resolveType', () => {
     )
   })
 
+  test('resolves @this JSDoc for JS functions', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @typedef {object} Ctx
+       * @property {number} value
+       */
+      /**
+       * @this {Ctx}
+       * @returns {number}
+       */
+      export function fn() {
+        return this.value
+      }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getFunctionOrThrow('fn')
+    const resolved = resolveType(declaration.getType(), declaration)
+    expect(resolved).toBeDefined()
+    if (!resolved || resolved.kind !== 'Function') {
+      throw new Error('Expected resolved function')
+    }
+
+    const [signature] = resolved.signatures
+
+    expect(signature?.thisType).toEqual(
+      expect.objectContaining({ kind: 'TypeLiteral' })
+    )
+
+    const members = (signature?.thisType as any)?.members || []
+    expect(members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'value', kind: 'PropertySignature' }),
+      ])
+    )
+  })
+
+  test('resolves @enum JSDoc declarations', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @enum {number}
+       */
+      export const Color = { RED: 1, BLUE: 2, NEGATIVE: -1 }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('Color')
+    const resolved = resolveType(declaration.getType(), declaration)
+    expect(resolved).toBeDefined()
+    if (!resolved || resolved.kind !== 'Enum') {
+      throw new Error('Expected resolved enum')
+    }
+
+    expect(resolved.members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'RED', value: 1 }),
+        expect.objectContaining({ name: 'BLUE', value: 2 }),
+        expect.objectContaining({ name: 'NEGATIVE', value: -1 }),
+      ])
+    )
+  })
+
+  test('resolves type references nested in @callback tags', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @typedef {object} User
+       * @property {string} name
+       */
+      /**
+       * @callback Greeter
+       * @param {User} user
+       * @returns {string}
+       */
+      /** @type {Greeter} */
+      export const greet = (user) => user.name
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('greet')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved?.kind).toBe('Function')
+    if (resolved?.kind !== 'Function') {
+      throw new Error('Expected resolved function')
+    }
+
+    const [signature] = resolved.signatures
+    const [userParam] = signature.parameters ?? []
+
+    expect(userParam?.type?.kind).toBe('TypeLiteral')
+    const members = (userParam?.type as any)?.members || []
+    expect(members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'name', kind: 'PropertySignature' }),
+      ])
+    )
+  })
+
+  test('resolves @prop aliases in JSDoc typedefs', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @typedef {object} User
+       * @property {string} name
+       */
+      /**
+       * @typedef {object} Config
+       * @prop {User} user
+       */
+      /** @type {Config} */
+      export const config = { user: { name: 'Ada' } }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('config')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved?.kind).toBe('Variable')
+    const type = resolved?.kind === 'Variable' ? resolved.type : undefined
+    expect(type?.kind).toBe('TypeLiteral')
+
+    const members = (type as any)?.members || []
+    const userProp = members.find(
+      (member: any) =>
+        member.name === 'user' && member.kind === 'PropertySignature'
+    )
+
+    expect(userProp?.type?.kind).toBe('TypeLiteral')
+    const userMembers = (userProp?.type as any)?.members || []
+    expect(userMembers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'name', kind: 'PropertySignature' }),
+      ])
+    )
+  })
+
+  test('resolves @const type annotations', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @typedef {object} Box
+       * @property {number} value
+       */
+      /** @const {Box} */
+      export const box = { value: 1 }
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('box')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved?.kind).toBe('Variable')
+    const type = resolved?.kind === 'Variable' ? resolved.type : undefined
+    expect(type?.kind).toBe('TypeLiteral')
+
+    const members = (type as any)?.members || []
+    expect(members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'value', kind: 'PropertySignature' }),
+      ])
+    )
+  })
+
+  test('collects @module and export tags on resolved declarations', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * @module
+       * @exports widget
+       * @export {number} widget
+       */
+      export const widget = 1
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('widget')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved?.kind).toBe('Variable')
+    if (resolved?.kind !== 'Variable') {
+      throw new Error('expected kind Variable')
+    }
+
+    expect(resolved.tags).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'module' }),
+        expect.objectContaining({ name: 'exports' }),
+        expect.objectContaining({ name: 'export' }),
+      ])
+    )
+  })
+
   test('captures JSDoc default values for JS functions', () => {
     const project = new Project({
       compilerOptions: { allowJs: true, checkJs: true },

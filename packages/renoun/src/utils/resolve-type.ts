@@ -796,6 +796,61 @@ export function resolveType(
         return
       }
 
+      const jsDocEnumTag = getJsDocEnumTag(enclosingNode)
+      const initializer = enclosingNode.getInitializer()
+
+      if (jsDocEnumTag && tsMorph.Node.isObjectLiteralExpression(initializer)) {
+        const members = initializer.getProperties().flatMap((property) => {
+          if (!tsMorph.Node.isPropertyAssignment(property)) {
+            return []
+          }
+
+          const valueInitializer = property.getInitializer()
+          const memberValue = (() => {
+            if (!valueInitializer) {
+              return undefined
+            }
+
+            if (
+              tsMorph.Node.isNumericLiteral(valueInitializer) ||
+              tsMorph.Node.isStringLiteral(valueInitializer)
+            ) {
+              return valueInitializer.getLiteralValue()
+            }
+
+            if (
+              tsMorph.Node.isPrefixUnaryExpression(valueInitializer) &&
+              valueInitializer.getOperatorToken() ===
+                tsMorph.SyntaxKind.MinusToken
+            ) {
+              const operand = valueInitializer.getOperand()
+              if (tsMorph.Node.isNumericLiteral(operand)) {
+                return -operand.getLiteralValue()
+              }
+            }
+
+            return undefined
+          })()
+
+          return [
+            {
+              kind: 'EnumMember' as const,
+              name: property.getName(),
+              text: property.getText(),
+              value: memberValue,
+              ...getDeclarationLocation(property),
+            },
+          ]
+        })
+
+        resolvedType ??= {
+          kind: 'Enum',
+          name: symbolMetadata.name,
+          text: typeText,
+          members,
+        } satisfies Kind.Enum
+      }
+
       resolvedType ??= {
         kind: 'Variable',
         name: symbolMetadata.name,
@@ -1113,11 +1168,16 @@ function getJsDocTypeNode(
 
     for (const jsDoc of candidate.getJsDocs()) {
       for (const tag of jsDoc.getTags()) {
-        if (!tsMorph.Node.isJSDocTypeTag(tag)) {
+        const isTypeLikeTag =
+          tsMorph.Node.isJSDocTypeTag(tag) ||
+          tsMorph.Node.isJSDocEnumTag(tag) ||
+          tag.getTagName?.() === 'const'
+
+        if (!isTypeLikeTag || !('getTypeExpression' in tag)) {
           continue
         }
 
-        const typeExpression = tag.getTypeExpression()
+        const typeExpression = tag.getTypeExpression?.()
         const typeNode = typeExpression?.getTypeNode()
         if (typeNode) {
           jsDocTypeOwners.set(typeNode, declaration)
@@ -1126,6 +1186,28 @@ function getJsDocTypeNode(
       }
     }
   }
+}
+
+function getJsDocEnumTag(
+  declaration: VariableDeclaration
+): TsMorph.JSDocEnumTag | undefined {
+  const declarationList = declaration.getParent()
+
+  if (tsMorph.Node.isVariableDeclarationList(declarationList)) {
+    const statement = declarationList.getParent()
+
+    if (tsMorph.Node.isVariableStatement(statement)) {
+      for (const jsDoc of statement.getJsDocs()) {
+        for (const tag of jsDoc.getTags()) {
+          if (tsMorph.Node.isJSDocEnumTag(tag)) {
+            return tag
+          }
+        }
+      }
+    }
+  }
+
+  return undefined
 }
 
 function getJsDocOwner(node?: Node): Node | undefined {
@@ -1163,6 +1245,7 @@ function resolveJsDocFunctionSignatures(
 
   let parameterTags: TsMorph.JSDocParameterTag[] = []
   let returnTag: TsMorph.JSDocReturnTag | undefined
+  let thisTag: TsMorph.JSDocThisTag | undefined
 
   for (const candidate of candidates) {
     if (!tsMorph.Node.isJSDocable(candidate)) {
@@ -1177,6 +1260,10 @@ function resolveJsDocFunctionSignatures(
 
         if (!returnTag && tsMorph.Node.isJSDocReturnTag(tag)) {
           returnTag = tag
+        }
+
+        if (!thisTag && tsMorph.Node.isJSDocThisTag(tag)) {
+          thisTag = tag
         }
       }
     }
@@ -1250,6 +1337,24 @@ function resolveJsDocFunctionSignatures(
     }
   }
 
+  let resolvedThisType: Kind.TypeExpression | undefined
+
+  if (thisTag) {
+    const typeExpression = thisTag.getTypeExpression()
+    const typeNode = typeExpression?.getTypeNode()
+    const type = typeNode?.getType()
+
+    if (type && typeNode) {
+      resolvedThisType = resolveTypeExpression(
+        type,
+        typeNode,
+        filter,
+        defaultValues,
+        dependencies
+      )
+    }
+  }
+
   if (!resolvedReturnType) {
     return undefined
   }
@@ -1263,6 +1368,7 @@ function resolveJsDocFunctionSignatures(
       kind: 'CallSignature',
       text: `(${parametersText}) => ${resolvedReturnType.text}`,
       parameters: resolvedParameters,
+      thisType: resolvedThisType,
       returnType: resolvedReturnType,
     } satisfies Kind.CallSignature,
   ]
@@ -3088,6 +3194,23 @@ function resolveParameters(
         thisType = resolvedThisParameter.type
       }
     }
+
+    if (!thisType) {
+      const jsDocThisTag = getJsDocThisTag(signatureDeclaration)
+      const typeExpression = jsDocThisTag?.getTypeExpression()
+      const typeNode = typeExpression?.getTypeNode()
+      const type = typeNode?.getType()
+
+      if (type && typeNode) {
+        thisType = resolveTypeExpression(
+          type,
+          typeNode,
+          filter,
+          undefined,
+          dependencies
+        )
+      }
+    }
   }
 
   const contextualParameters = signature.getParameters()
@@ -3499,6 +3622,26 @@ function getJsDocReturnTag(
   for (const jsDoc of jsDocs) {
     for (const tag of jsDoc.getTags()) {
       if (tsMorph.Node.isJSDocReturnTag(tag)) {
+        return tag
+      }
+    }
+  }
+
+  return undefined
+}
+
+function getJsDocThisTag(
+  declaration: TsMorph.Node & { getJsDocs?: () => TsMorph.JSDoc[] }
+): TsMorph.JSDocThisTag | undefined {
+  const jsDocs = declaration.getJsDocs?.()
+
+  if (!jsDocs) {
+    return undefined
+  }
+
+  for (const jsDoc of jsDocs) {
+    for (const tag of jsDoc.getTags()) {
+      if (tsMorph.Node.isJSDocThisTag(tag)) {
         return tag
       }
     }
@@ -5543,8 +5686,18 @@ function isJsDocTypeReferenceNode(node?: Node): node is TypeReferenceNode {
       tsMorph.Node.isJSDocParameterTag(current) ||
       tsMorph.Node.isJSDocReturnTag(current) ||
       tsMorph.Node.isJSDocTemplateTag(current) ||
+      (tsMorph.Node.isJSDocTag(current) &&
+        ['const', 'export', 'exports', 'module'].includes(
+          current.getTagName?.() ?? ''
+        )) ||
+      (tsMorph.Node.isJSDocTag(current) &&
+        ['prop', 'property'].includes(current.getTagName?.() ?? '')) ||
+      tsMorph.Node.isJSDocPropertyTag(current) ||
+      tsMorph.Node.isJSDocCallbackTag?.(current) ||
       tsMorph.Node.isJSDocImplementsTag(current) ||
-      tsMorph.Node.isJSDocAugmentsTag(current)
+      tsMorph.Node.isJSDocAugmentsTag(current) ||
+      tsMorph.Node.isJSDocThisTag(current) ||
+      tsMorph.Node.isJSDocEnumTag(current)
     ) {
       return true
     }
