@@ -5,6 +5,8 @@ import {
 } from '@renoun/mdx'
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 
+import { useMDXComponents } from '../mdx/components.js'
+
 export type { MarkdownComponents }
 
 export interface MarkdownProps {
@@ -24,10 +26,15 @@ export interface MarkdownProps {
 /** Compiles and renders a string of markdown content. */
 export async function Markdown({
   children,
-  components,
-  remarkPlugins = [],
-  rehypePlugins = [],
+  components = useMDXComponents(),
+  remarkPlugins,
+  rehypePlugins,
 }: MarkdownProps) {
+  if (remarkPlugins === undefined && rehypePlugins === undefined) {
+    remarkPlugins = (await import('@renoun/mdx/remark')).remarkPlugins
+    rehypePlugins = (await import('@renoun/mdx/rehype')).rehypePlugins
+  }
+
   return getMarkdownContent({
     source: children,
     components,
