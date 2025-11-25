@@ -139,4 +139,35 @@ describe('Tokenizer', () => {
 
     expect(streamed).toEqual(nonStreamed)
   })
+
+  test('retrieves grammar state and reuses it across tokenization runs', async () => {
+    const tokenizer = new Tokenizer<ThemeName>(registryOptions)
+    const firstChunk = '/* comment line 1'
+    const secondChunk = 'comment line 2 */'
+
+    const firstTokens = await tokenizer.tokenize(firstChunk, 'css', ['light'])
+    const grammarState = tokenizer.getGrammarState()
+
+    expect(grammarState).toBeDefined()
+
+    const secondTokens = await tokenizer.tokenize(
+      secondChunk,
+      'css',
+      ['light'],
+      { grammarState }
+    )
+
+    const incremental = [...firstTokens, ...secondTokens].map((line) =>
+      line.map((token) => token.value)
+    )
+
+    const fullTokens = await tokenizer.tokenize(
+      `${firstChunk}\n${secondChunk}`,
+      'css',
+      ['light']
+    )
+    const complete = fullTokens.map((line) => line.map((token) => token.value))
+
+    expect(incremental).toEqual(complete)
+  })
 })
