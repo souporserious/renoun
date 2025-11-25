@@ -547,6 +547,7 @@ function renderWithAnnotations({
   const rootChildren: React.ReactNode[] = []
   const childrenStack: React.ReactNode[][] = [rootChildren]
   const frameStack: BlockAnnotationInstruction[] = []
+  let lastProcessedBoundary: number | null = null
 
   const currentChildren = () =>
     childrenStack.length > 0
@@ -630,8 +631,17 @@ function renderWithAnnotations({
     }
   }
 
+  const processBoundary = (position: number) => {
+    if (position === lastProcessedBoundary) return
+    if (!blockStartMap.has(position) && !blockEndMap.has(position)) return
+
+    closeAt(position)
+    openAt(position)
+    lastProcessedBoundary = position
+  }
+
   let currentPosition = 0
-  openAt(currentPosition)
+  processBoundary(currentPosition)
 
   // Precompute sorted event positions to allow splitting arbitrary text ranges
   const startPositions = Array.from(blockStartMap.keys()).sort((a, b) => a - b)
@@ -665,8 +675,7 @@ function renderWithAnnotations({
         currentPosition = token.start
       } else {
         // No gap; still process events that occur exactly at this boundary
-        closeAt(token.start)
-        openAt(token.start)
+        processBoundary(token.start)
       }
 
       // Emit this token in slices so that block boundaries within the token
@@ -709,8 +718,7 @@ function renderWithAnnotations({
         currentPosition = sliceEnd
         // Close/open any frames exactly at the slice boundary so that the next
         // segment starts in the correct frame.
-        closeAt(currentPosition)
-        openAt(currentPosition)
+        processBoundary(currentPosition)
       }
     })
 
@@ -749,8 +757,7 @@ function renderWithAnnotations({
         currentPosition += newlineLength
       }
 
-      closeAt(currentPosition)
-      openAt(currentPosition)
+      processBoundary(currentPosition)
     }
   })
 
@@ -759,7 +766,7 @@ function renderWithAnnotations({
     appendText(value.slice(currentPosition))
   }
 
-  closeAt(currentPosition)
+  processBoundary(currentPosition)
 
   // If any frames remain open due to minor index rounding
   // differences after formatting/mapping, don't drop their contents.
