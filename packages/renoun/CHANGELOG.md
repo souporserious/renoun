@@ -1,5 +1,33 @@
 # renoun
 
+## 10.13.0
+
+### Minor Changes
+
+- 602ffaa: Adds `getGrammarState` method to `Tokenizer` along with a `grammarState` option so callers can seed tokenization with prior rule stacks.
+- cf8dee7: Adds an `includeTypes` option to `JavaScriptModuleExport#getTags` that will now by default filter out type-related tags.
+- 7c0c8f0: Improves `File` web compatibility by now exposing `type` and `size` getters, as well as `slice`, `stream`, `text`, and `arrayBuffer` methods which enforce byte ranges when lengths are known and falls back to file system streams when not.
+
+### Patch Changes
+
+- 57abbc3: Aligns `Markdown` component defaults with the `MDX` component, ensuring consistent components when overrides are not provided.
+- 211b00e: Ensures git export metadata always follows the blame-first flow for accurate module export commit dates.
+- 81978f8: Handles conditional extends operands in `JavaScriptModuleExport#getType` by emitting references when visible and inlining only when referenced symbols cannot be resolved.
+- 5709c86: Improves JSDoc tag coverage in `JavaScriptModuleExport#getType` by handling additional type-related tags and documenting module/export annotations.
+- e6c6044: Fixes `JavaScriptModuleExport#getType` resolving `isOptional` as `false` when an initializer is present.
+- 59b1ed3: Fixes annotation processing re-running at the same character boundary causing `CodeBlock`/`Tokens` to wrap the same segment twice when ranges align with token edges.
+- 92af065: Improves resolving JSDoc functions for variable declarations in `JavaScriptModuleExport#getType` and no longer falls back to `any`.
+- b08774c: Fixes several issues in `JavaScriptModuleExport#getType` type resolution:
+  - **Constructor overloads**: Now properly resolves all constructor overload signatures using `getType().getCallSignatures()`, matching the behavior of `Function` and `ClassMethod` overloads. Includes fallback for JavaScript files where type information may be limited.
+  - **Mapped type resolution**: Fixes resolution of mapped types that come from type aliases (e.g., `type ThemeMap = Record<string, ThemeValue>`) by checking alias symbol declarations and falling back to type reference resolution when the mapped node cannot be found. This ensures type aliases to utility types like `Record` are properly resolved.
+  - **Stricter error handling**: Added error throwing in `resolveMemberSignature` when property or call signature resolution fails, ensuring type resolution errors are properly surfaced instead of silently returning undefined.
+  - **Metadata consistency**: Added missing `filePath` and `position` metadata to `ClassMethod` objects for consistency with other resolved types.
+  - **Fixes Kind.Shared type**: Fixes incorrect `Kind.Shared` file path type `path` -> `filePath`.
+
+- ccef5b5: Improves the `RootProvider` component error message with framework-specific guidance when not wrapping the root `html` element properly.
+- d9a7aae: Fixes regression where the bundler attempts to statically analyze the `require` call site for textmate grammars and themes.
+- cade66d: Fixes duplicate signature metadata in the `Reference` component.
+
 ## 10.12.0
 
 ### Minor Changes
