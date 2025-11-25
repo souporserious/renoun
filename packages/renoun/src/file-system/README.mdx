@@ -1,5 +1,3 @@
-## File System
-
 The File System utilities offer a way to organize and query file-system data in renoun. It is a powerful tool that allows you to define a schema for file exports and query those exports using a simple API.
 
 To get started with the File System API, instantiate the `Directory` class to target a set of files and directories from the file system. You can then use the `getEntry` / `getDirectory` / `getFile` methods to query a specific descendant file or directory:
@@ -17,11 +15,11 @@ const posts = new Directory({
 
 Here we are creating a new `Directory` instance that targets the `posts` directory relative to the working directory. We are also specifying a loader for the `mdx` file extension that will be used to load the file contents using the bundler.
 
-### Referencing protocol paths
+### Referencing path schemes
 
-The `Directory` and `File` constructors accept protocol-prefixed paths that resolve using internal resolvers before the adapters interact with the file system. The only supported protocol currently is `workspace:`, which resolves paths relative to the workspace root instead of the current working directory.
+The `Directory` and `File` constructors accept path schemes that resolve using internal resolvers before the adapters interact with the file system. The only supported scheme currently is `workspace:`, which resolves paths relative to the workspace root instead of the current working directory.
 
-This is helpful when using renoun from a nested package (for example `apps/site`) but you need to reference files located in another workspace folder (like `examples`):
+This is helpful when using renoun from a nested package (for example `apps/site`) but you need to reference files located in another workspace directory (like `examples`):
 
 ```tsx
 import { Directory } from 'renoun'
@@ -116,13 +114,13 @@ import { Directory, MemoryFileSystem } from 'renoun'
 
 const directory = new Directory({ path: 'posts' })
 
-// Example: When both integrations.mdx and integrations/ exist
+// When both integrations.mdx and integrations/ exist
+// returns integrations.mdx (sibling file, not the directory)
 const entry = await directory.getEntry('integrations')
-// Returns: integrations.mdx (sibling file, not the directory)
 
-// Example: When both Reference.tsx and Reference.examples.tsx exist
+// When both Reference.tsx and Reference.examples.tsx exist
+// returns Reference.tsx (base file without modifier)
 const file = await directory.getFile('Reference')
-// Returns: Reference.tsx (base file without modifier)
 ```
 
 ### Type checking file exports
@@ -242,6 +240,85 @@ const posts = new Directory({
 ```
 
 The file system utilities are not limited to MDX files and can be used with _any file type_. By organizing content and source code into structured collections, you can easily generate static pages and manage complex routing and navigations.
+
+### Streaming
+
+`File` instances expose web streamable methods directly, `slice`, `stream`, `arrayBuffer`, and `text`—without buffering file contents. Content type and size are inferred from the file metadata (via the `type` / `size` accessors), so you can treat a `File` as a streaming `Blob` immediately.
+
+Because these helpers mirror the standard Web implementations, they can be passed directly to APIs that expect a `Blob` or `File` while still streaming their contents in byte ranges. Below are common ways to use them:
+
+If the underlying file system adapter cannot report a byte length, `stream()` falls back to the raw readable stream instead of throwing. In that case the `size` accessor and `slice()` remain unavailable because they rely on a known length, but you can still forward the stream directly.
+
+#### Surface streaming views from renoun `File` instances
+
+```ts
+import { Directory, File, MemoryFileSystem } from 'renoun/file-system'
+
+const directory = new Directory({
+  fileSystem: new MemoryFileSystem({
+    'video.mp4': new Uint8Array([1, 2, 3]),
+  }),
+})
+const file = new File({ directory, path: 'video.mp4' })
+
+// Work with slices directly on the File
+const previewChunk = await file.slice(0, 1024 * 1024).arrayBuffer()
+const type = file.type
+```
+
+#### Upload streaming files with `fetch`
+
+Streaming files work with `fetch` (including in Node runtimes that support Web streams). Nothing is buffered before the request is sent:
+
+```ts
+import { Directory, File, MemoryFileSystem } from 'renoun/file-system'
+
+const directory = new Directory({
+  fileSystem: new MemoryFileSystem({
+    'video.mp4': new Uint8Array([1, 2, 3]),
+  }),
+})
+const file = await directory.getFile('video.mp4')
+
+await fetch('https://example.com/upload', {
+  method: 'PUT',
+  body: file.slice(), // streamed as the body
+  headers: { 'content-type': file.type },
+})
+```
+
+#### Serve partial responses efficiently
+
+You can return slices without reading the whole asset:
+
+```ts
+import { Directory, File } from 'renoun/file-system'
+
+const directory = new Directory({
+  path: 'workspace:public',
+})
+
+export async function GET(request: Request) {
+  const rangeHeader = request.headers.get('range')
+  const file = new File({ directory, path: 'video.mp4' })
+  const { start = 0, end = file.size } = parseRange(rangeHeader)
+  const slice = file.slice(start, end)
+
+  return new Response(slice.stream(), {
+    status: 206,
+    headers: {
+      'content-type': file.type,
+      'content-range': `bytes ${start}-${end - 1}/${file.size}`,
+    },
+  })
+}
+
+function parseRange(header: string | null) {
+  if (!header?.startsWith('bytes=')) return {}
+  const [start, end] = header.replace('bytes=', '').split('-').map(Number)
+  return { start, end: Number.isFinite(end) ? end + 1 : undefined }
+}
+```
 
 ### Using `GitHostFileSystem`
 

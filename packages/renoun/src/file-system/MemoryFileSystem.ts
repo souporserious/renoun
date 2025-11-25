@@ -320,6 +320,15 @@ export class MemoryFileSystem extends FileSystem {
     )
   }
 
+  getFileByteLengthSync(path: string): number | undefined {
+    try {
+      const content = this.readFileBinarySync(path)
+      return content.byteLength
+    } catch {
+      return undefined
+    }
+  }
+
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {
     const normalizedPath = normalizePath(path)
     const entry = this.#normalizeContent(content as MemoryFileContent)
@@ -414,10 +423,7 @@ export class MemoryFileSystem extends FileSystem {
       }
     }
 
-    const normalized = normalizeSlashes(filePath).replace(
-      /^\.\//,
-      ''
-    )
+    const normalized = normalizeSlashes(filePath).replace(/^\.\//, '')
     return this.#ignore(normalized)
   }
 

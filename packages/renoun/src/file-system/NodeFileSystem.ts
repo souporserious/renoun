@@ -9,7 +9,14 @@ import {
   statSync,
   type Dirent,
 } from 'node:fs'
-import { access, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  access,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import { ensureRelativePath, relativePath } from '../utils/path.js'
@@ -123,6 +130,25 @@ export class NodeFileSystem extends FileSystem {
     return Readable.toWeb(stream) as FileReadableStream
   }
 
+  getFileByteLengthSync(path: string): number | undefined {
+    this.#assertWithinWorkspace(path)
+    try {
+      return statSync(path).size
+    } catch {
+      return undefined
+    }
+  }
+
+  async getFileByteLength(path: string): Promise<number | undefined> {
+    this.#assertWithinWorkspace(path)
+    try {
+      const stats = await stat(path)
+      return stats.size
+    } catch {
+      return undefined
+    }
+  }
+
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {
     this.#assertWithinWorkspace(path)
     writeFileSync(path, normalizeWriteContent(content))
@@ -191,7 +217,9 @@ export class NodeFileSystem extends FileSystem {
   }
 }
 
-function normalizeWriteContent(content: FileSystemWriteFileContent): Uint8Array {
+function normalizeWriteContent(
+  content: FileSystemWriteFileContent
+): Uint8Array {
   if (typeof content === 'string') {
     return Buffer.from(content)
   }

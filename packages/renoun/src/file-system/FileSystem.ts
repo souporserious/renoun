@@ -100,6 +100,16 @@ export abstract class FileSystem {
 
   abstract readFileStream(path: string): FileReadableStream
 
+  /**
+   * Get the size of a file in bytes. Implementations should return `undefined`
+   * if the file does not exist or the size cannot be determined.
+   */
+  abstract getFileByteLengthSync(path: string): number | undefined
+
+  async getFileByteLength(path: string): Promise<number | undefined> {
+    return this.getFileByteLengthSync(path)
+  }
+
   abstract writeFileSync(
     path: string,
     content: FileSystemWriteFileContent

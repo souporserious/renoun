@@ -79,14 +79,67 @@ import {
   createDirectorySnapshot,
   type DirectorySnapshotDirectoryMetadata,
 } from './directory-snapshot'
+import {
+  createRangeLimitedStream,
+  StreamableBlob,
+  type StreamableContent,
+} from './StreamableBlob.js'
 import type { StandardSchemaV1 } from './standard-schema.js'
 import type { ExtractFileExtension, IsNever } from './types.js'
+
+const mimeTypesByExtension: Record<string, string> = {
+  aac: 'audio/aac',
+  avif: 'image/avif',
+  bmp: 'image/bmp',
+  css: 'text/css',
+  csv: 'text/csv',
+  gif: 'image/gif',
+  htm: 'text/html',
+  html: 'text/html',
+  ico: 'image/vnd.microsoft.icon',
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  js: 'text/javascript',
+  json: 'application/json',
+  mjs: 'text/javascript',
+  md: 'text/markdown',
+  mdx: 'text/markdown',
+  mp3: 'audio/mpeg',
+  mp4: 'video/mp4',
+  oga: 'audio/ogg',
+  ogg: 'audio/ogg',
+  ogv: 'video/ogg',
+  pdf: 'application/pdf',
+  png: 'image/png',
+  svg: 'image/svg+xml',
+  ts: 'text/typescript',
+  tsx: 'text/tsx',
+  txt: 'text/plain',
+  wasm: 'application/wasm',
+  wav: 'audio/wav',
+  webm: 'video/webm',
+  webp: 'image/webp',
+  xml: 'application/xml',
+}
 
 export { FileSystem } from './FileSystem.js'
 export { GitHostFileSystem } from './GitHostFileSystem.js'
 export { MemoryFileSystem } from './MemoryFileSystem.js'
+export {
+  StreamableBlob,
+  createRangeLimitedStream,
+  type StreamableContent as StreamingContent,
+} from './StreamableBlob.js'
 export { NodeFileSystem } from './NodeFileSystem.js'
 export { Repository } from './Repository.js'
+
+function inferMediaType(extension?: string) {
+  const normalizedExtension = extension?.replace(/^\./, '').toLowerCase()
+  return (
+    (normalizedExtension && mimeTypesByExtension[normalizedExtension]) ||
+    'application/octet-stream'
+  )
+}
 
 const markdownComponents = {
   pre: (props) => <CodeBlock {...parsePreProps(props)} />,
@@ -906,18 +959,94 @@ export class File<
     return fileSystem.readFileBinary(this.#path)
   }
 
-  /** Get the contents of this file as an ArrayBuffer. */
-  async getArrayBuffer(): Promise<ArrayBuffer> {
+  /** Create a readable stream for the file contents. */
+  stream(): FileReadableStream {
+    const streamingContent = this.#getStreamingContent()
+    if (streamingContent) {
+      return new StreamableBlob(streamingContent, {
+        type: this.type,
+      }).stream()
+    }
+
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.readFileStream(this.#path)
+  }
+
+  /** Get the MIME type inferred from the file extension. */
+  get type(): string {
+    return inferMediaType(this.#extension)
+  }
+
+  /** Get the file size in bytes without reading the contents. */
+  get size(): number {
+    return this.#requireStreamingContent().byteLength
+  }
+
+  /** Read the file contents as text. */
+  async text(): Promise<string> {
+    return this.#getStreamingBlob().text()
+  }
+
+  /** Read the file contents as an ArrayBuffer. */
+  async arrayBuffer(): Promise<ArrayBuffer> {
+    const streamingContent = this.#getStreamingContent()
+
+    if (streamingContent) {
+      return new StreamableBlob(streamingContent, {
+        type: this.type,
+      }).arrayBuffer()
+    }
+
     const binary = await this.getBinary()
     const arrayBuffer = new ArrayBuffer(binary.byteLength)
     new Uint8Array(arrayBuffer).set(binary)
     return arrayBuffer
   }
 
-  /** Get a readable stream for this file. */
-  getStream(): FileReadableStream {
+  /** Slice the file contents without buffering. */
+  slice(start?: number, end?: number, contentType?: string): Blob {
+    return this.#getStreamingBlob().slice(start, end, contentType)
+  }
+
+  /** Get the byte length of this file without reading the contents. */
+  async getByteLength(): Promise<number> {
+    return this.size
+  }
+
+  #getStreamingBlob(options?: BlobPropertyBag): Blob {
+    const content = this.#requireStreamingContent()
+    return new StreamableBlob(content, {
+      ...options,
+      type: options?.type ?? this.type,
+    })
+  }
+
+  #requireStreamingContent(): StreamableContent {
+    const content = this.#getStreamingContent()
+    if (content) {
+      return content
+    }
+
+    throw new Error(`[renoun] Unable to determine size for file: ${this.#path}`)
+  }
+
+  #getStreamingContent(): StreamableContent | undefined {
     const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.readFileStream(this.#path)
+    const byteLength = fileSystem.getFileByteLengthSync(this.#path)
+
+    if (byteLength === undefined) {
+      return
+    }
+
+    return {
+      byteLength,
+      stream: (start, end) =>
+        createRangeLimitedStream(
+          () => fileSystem.readFileStream(this.#path),
+          start,
+          end
+        ),
+    }
   }
 
   /** Write content to this file. */
