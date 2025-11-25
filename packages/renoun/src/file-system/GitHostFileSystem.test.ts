@@ -229,6 +229,175 @@ describe('GitHostFileSystem', () => {
     expect(authors[1]).toMatchObject({ name: 'Bob', commitCount: 1 })
   })
 
+  it('uses ranged blame queries for export metadata when authenticated', async () => {
+    const blameDate = '2024-02-01T00:00:00Z'
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+        arrayBuffer: async () => SUCCESS_ARCHIVE,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: createHeaders({}),
+        json: async () => ({
+          data: {
+            repository: {
+              f0: {
+                blame: {
+                  ranges: [
+                    {
+                      startingLine: 5,
+                      endingLine: 6,
+                      commit: { committedDate: blameDate },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      })
+
+    globalThis.fetch = mockFetch
+    const fs = new GitHostFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      token: 'token',
+      ref: 'main',
+    })
+
+    vi.spyOn(fs, 'getGitFileMetadata').mockResolvedValue({
+      authors: [],
+      firstCommitDate: undefined,
+      lastCommitDate: new Date('2024-02-10T00:00:00Z'),
+    })
+
+    vi.useFakeTimers()
+    const metadataPromise = fs.getGitExportMetadata('/file.txt', 5, 6)
+    await vi.runAllTimersAsync()
+    const metadata = await metadataPromise
+    vi.useRealTimers()
+
+    const [, graphqlCall] = mockFetch.mock.calls
+    const requestBody = JSON.parse(graphqlCall![1].body as string)
+
+    expect(requestBody.query).toContain(
+      'blame(startLine: $start0, endLine: $end0)'
+    )
+    expect(requestBody.variables).toMatchObject({ start0: 5, end0: 6 })
+    expect(metadata.firstCommitDate?.toISOString()).toBe(
+      '2024-02-01T00:00:00.000Z'
+    )
+  })
+
+  it('reuses cached superset blame ranges for nested export requests', async () => {
+    const blameDate = '2024-02-02T00:00:00Z'
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+        arrayBuffer: async () => SUCCESS_ARCHIVE,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: createHeaders({}),
+        json: async () => ({
+          data: {
+            repository: {
+              f0: {
+                blame: {
+                  ranges: [
+                    {
+                      startingLine: 1,
+                      endingLine: 10,
+                      commit: { committedDate: blameDate },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      })
+
+    globalThis.fetch = mockFetch
+    vi.useFakeTimers()
+
+    const fs = new GitHostFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      token: 'token',
+      ref: 'main',
+    })
+
+    vi.spyOn(fs, 'getGitFileMetadata').mockResolvedValue({
+      authors: [],
+      firstCommitDate: undefined,
+      lastCommitDate: undefined,
+    })
+
+    const initialMetadataPromise = fs.getGitExportMetadata('/file.txt', 1, 10)
+    await vi.runAllTimersAsync()
+    await initialMetadataPromise
+
+    const nestedMetadataPromise = fs.getGitExportMetadata('/file.txt', 3, 4)
+    await vi.runAllTimersAsync()
+    const nestedMetadata = await nestedMetadataPromise
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    expect(nestedMetadata.firstCommitDate?.toISOString()).toBe(
+      '2024-02-02T00:00:00.000Z'
+    )
+  })
+
+  it('uses file-level git metadata when the file was created and last touched in one commit', async () => {
+    const firstCommitDate = new Date('2024-03-01T00:00:00Z')
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+      arrayBuffer: async () => SUCCESS_ARCHIVE,
+    })
+
+    globalThis.fetch = mockFetch
+
+    const fs = new GitHostFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      token: 'token',
+      ref: 'main',
+    })
+
+    const fileMetadataSpy = vi
+      .spyOn(fs, 'getGitFileMetadata')
+      .mockResolvedValue({
+        authors: [],
+        firstCommitDate,
+        lastCommitDate: new Date(firstCommitDate.getTime()),
+      })
+
+    const metadata = await fs.getGitExportMetadata('/file.txt', 1, 5)
+
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(fileMetadataSpy).toHaveBeenCalledWith('/file.txt')
+    expect(metadata).toEqual({
+      firstCommitDate,
+      lastCommitDate: firstCommitDate,
+    })
+  })
+
   it('loads archive and reads files (unauthenticated public)', async () => {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {

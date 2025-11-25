@@ -57,6 +57,7 @@ const MAX_PATH_SEGMENT_LENGTH = 512
 const MAX_PATH_SEGMENTS = 256
 const MAX_FILE_COUNT = 50_000
 const MAX_FILE_BYTES = 8 * 1024 * 1024
+const MAX_GITHUB_BLAME_LINE = 1_000_000
 
 const MAX_GITHUB_BLAME_BATCH = 20
 const GITHUB_BLAME_BATCH_DELAY_MS = 15
@@ -207,6 +208,8 @@ export class GitHostFileSystem extends MemoryFileSystem {
   #gitBlameCache: Map<string, Promise<GitHubBlameRange[] | null>>
   #ghBlameBatchQueue?: {
     path: string
+    startLine?: number
+    endLine?: number
     resolve: (ranges: any[] | null) => void
     reject: (error: unknown) => void
   }[]
@@ -582,23 +585,49 @@ export class GitHostFileSystem extends MemoryFileSystem {
   ): Promise<GitExportMetadata> {
     await this.#ensureInitialized()
 
+    const normalizedStart = Math.max(1, Math.min(startLine, endLine))
+    const normalizedEnd = Math.max(
+      normalizedStart,
+      Math.max(startLine, endLine)
+    )
     const normalizedPath = this.#normalizeGitMetadataPath(path)
 
+    // Fast path: if the file was introduced and last touched in the same
+    // commit, every export in the file shares that creation date and we can
+    // avoid any more granular blame lookups.
+    const fileMetadata = await this.getGitFileMetadata(path)
+    const fileFirstCommit = fileMetadata.firstCommitDate
+    const fileLastCommit = fileMetadata.lastCommitDate
+
+    if (
+      fileFirstCommit &&
+      fileLastCommit &&
+      fileFirstCommit.getTime() === fileLastCommit.getTime()
+    ) {
+      return {
+        firstCommitDate: fileFirstCommit,
+        lastCommitDate: fileLastCommit,
+      }
+    }
+
     if (this.#host === 'github' && this.#token) {
-      const ranges = await this.#getGitHubBlameRanges(normalizedPath)
+      const ranges = await this.#getGitHubBlameRanges(
+        normalizedPath,
+        normalizedStart,
+        normalizedEnd
+      )
       if (ranges && ranges.length > 0) {
         return this.#summarizeGitHubBlameRanges(
           ranges,
-          startLine,
-          endLine
+          normalizedStart,
+          normalizedEnd
         )
       }
     }
 
-    const fallback = await this.getGitFileMetadata(path)
     return {
-      firstCommitDate: fallback.firstCommitDate,
-      lastCommitDate: fallback.lastCommitDate,
+      firstCommitDate: fileFirstCommit,
+      lastCommitDate: fileLastCommit,
     }
   }
 
@@ -648,18 +677,67 @@ export class GitHostFileSystem extends MemoryFileSystem {
   }
 
   async #getGitHubBlameRanges(
-    path: string
+    path: string,
+    startLine?: number,
+    endLine?: number
   ): Promise<GitHubBlameRange[] | null> {
     if (!this.#token || !this.#ownerEncoded || !this.#repoEncoded) {
       return null
     }
 
-    const cacheKey = `${this.#ref}::${path}`
+    let normalizedStart =
+      Number.isFinite(startLine) && typeof startLine === 'number'
+        ? Math.max(1, Math.min(Math.floor(startLine), MAX_GITHUB_BLAME_LINE))
+        : undefined
+    let normalizedEnd =
+      Number.isFinite(endLine) && typeof endLine === 'number'
+        ? Math.max(1, Math.min(Math.floor(endLine), MAX_GITHUB_BLAME_LINE))
+        : undefined
+
+    if (
+      normalizedStart !== undefined &&
+      normalizedEnd !== undefined &&
+      normalizedEnd < normalizedStart
+    ) {
+      ;[normalizedStart, normalizedEnd] = [normalizedEnd, normalizedStart]
+    }
+
+    startLine = normalizedStart
+
+    const cacheKey = `${this.#ref}::${path}::${startLine ?? ''}-${
+      normalizedEnd ?? ''
+    }`
+
+    const rangePrefix = `${this.#ref}::${path}::`
+    for (const [key, promise] of this.#gitBlameCache) {
+      if (!key.startsWith(rangePrefix)) continue
+      const [, , range] = key.split('::')
+      const [cachedStartStr, cachedEndStr] = range.split('-')
+      const cachedStart = cachedStartStr ? Number(cachedStartStr) : undefined
+      const cachedEnd = cachedEndStr ? Number(cachedEndStr) : undefined
+
+      const coversRequestedStart =
+        startLine === undefined
+          ? cachedStart === undefined
+          : cachedStart === undefined || cachedStart <= startLine
+      const coversRequestedEnd =
+        normalizedEnd === undefined
+          ? cachedEnd === undefined
+          : cachedEnd === undefined || cachedEnd >= normalizedEnd
+
+      if (coversRequestedStart && coversRequestedEnd) {
+        this.#gitBlameCache.set(cacheKey, promise)
+        const cached = await promise
+        return cached ?? null
+      }
+    }
 
     if (!this.#gitBlameCache.has(cacheKey)) {
       this.#gitBlameCache.set(
         cacheKey,
-        this.#enqueueGitHubBlameRequest(path).catch(() => null)
+        this.#enqueueGitHubBlameRequest(path, startLine, normalizedEnd).catch(
+          () => null
+        )
       )
     }
 
@@ -672,12 +750,9 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
   #summarizeGitHubBlameRanges(
     ranges: GitHubBlameRange[],
-    startLine: number,
-    endLine: number
+    normalizedStart: number,
+    normalizedEnd: number
   ): GitExportMetadata {
-    const normalizedStart = Math.max(1, Math.min(startLine, endLine))
-    const normalizedEnd = Math.max(normalizedStart, Math.max(startLine, endLine))
-
     let firstCommitDate: Date | undefined
     let lastCommitDate: Date | undefined
 
@@ -689,8 +764,12 @@ export class GitHostFileSystem extends MemoryFileSystem {
         continue
       }
 
-      if (rangeEnd < normalizedStart || rangeStart > normalizedEnd) {
+      if (rangeEnd < normalizedStart) {
         continue
+      }
+
+      if (rangeStart > normalizedEnd) {
+        break
       }
 
       const dateString = range?.commit?.committedDate
@@ -941,12 +1020,22 @@ export class GitHostFileSystem extends MemoryFileSystem {
     }
   }
 
-  async #enqueueGitHubBlameRequest(path: string): Promise<any[] | null> {
+  async #enqueueGitHubBlameRequest(
+    path: string,
+    startLine?: number,
+    endLine?: number
+  ): Promise<any[] | null> {
     if (!this.#ghBlameBatchQueue) {
       this.#ghBlameBatchQueue = []
     }
     return await new Promise<any[] | null>((resolve, reject) => {
-      this.#ghBlameBatchQueue!.push({ path, resolve, reject })
+      this.#ghBlameBatchQueue!.push({
+        path,
+        startLine,
+        endLine,
+        resolve,
+        reject,
+      })
       if (!this.#ghBlameBatchTimer) {
         this.#ghBlameBatchTimer = setTimeout(() => {
           this.#ghBlameBatchTimer = undefined
@@ -1007,8 +1096,29 @@ export class GitHostFileSystem extends MemoryFileSystem {
       varDefinitions.push(`$${varName}: String!`)
       variables[varName] = `${this.#ref}:${item.path}`
       const alias = `f${index}`
+
+      const blameArgDefs: string[] = []
+      const blameArgValues: string[] = []
+      if (typeof item.startLine === 'number') {
+        const startName = `start${index}`
+        blameArgDefs.push(`$${startName}: Int!`)
+        blameArgValues.push(`startLine: $${startName}`)
+        variables[startName] = item.startLine
+      }
+      if (typeof item.endLine === 'number') {
+        const endName = `end${index}`
+        blameArgDefs.push(`$${endName}: Int!`)
+        blameArgValues.push(`endLine: $${endName}`)
+        variables[endName] = item.endLine
+      }
+      varDefinitions.push(...blameArgDefs)
+
+      const blameArgs = blameArgValues.length
+        ? `(${blameArgValues.join(', ')})`
+        : ''
+
       fields.push(
-        `${alias}: object(expression: $${varName}) { ... on Blob { blame { ranges { commit { oid committedDate author { name email user { login } } } } } } }`
+        `${alias}: object(expression: $${varName}) { ... on Blob { blame${blameArgs} { ranges { commit { oid committedDate author { name email user { login } } } } } } }`
       )
     })
     const query = `
