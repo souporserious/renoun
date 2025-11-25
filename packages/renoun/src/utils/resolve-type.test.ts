@@ -101,19 +101,7 @@ describe('resolveType', () => {
     expect(resolvedClass).toMatchInlineSnapshot(`
       {
         "constructor": {
-          "description": "Constructs a new array node.",
-          "filePath": "array-node.js",
           "kind": "ClassConstructor",
-          "position": {
-            "end": {
-              "column": 10,
-              "line": 20,
-            },
-            "start": {
-              "column": 9,
-              "line": 15,
-            },
-          },
           "signatures": [
             {
               "description": "Constructs a new array node.",
@@ -294,20 +282,6 @@ describe('resolveType', () => {
               ],
               "text": "(nodeType, count, values = null) => ArrayNode",
               "thisType": undefined,
-            },
-          ],
-          "tags": [
-            {
-              "name": "param",
-              "text": "- The data type of the elements.",
-            },
-            {
-              "name": "param",
-              "text": "- Size of the array.",
-            },
-            {
-              "name": "param",
-              "text": "- Array default values.",
             },
           ],
           "text": "constructor( nodeType, count, values = null ) {
@@ -637,19 +611,8 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
-            "filePath": "index.ts",
             "kind": "ClassMethod",
             "name": "getValue",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 4,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
             "scope": undefined,
             "signatures": [
               {
@@ -2997,19 +2960,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "index.ts",
         "kind": "Function",
         "name": "getSponsor",
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 5,
-          },
-          "start": {
-            "column": 1,
-            "line": 3,
-          },
-        },
         "signatures": [
           {
             "filePath": "index.ts",
@@ -6529,19 +6481,8 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
-            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "setValue",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 6,
-              },
-              "start": {
-                "column": 3,
-                "line": 4,
-              },
-            },
             "scope": undefined,
             "signatures": [
               {
@@ -6686,19 +6627,8 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
-            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "isFilePath",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 4,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
             "scope": undefined,
             "signatures": [
               {
@@ -7630,19 +7560,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounter",
-        "position": {
-          "end": {
-            "column": 64,
-            "line": 2,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -7736,20 +7655,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "description": "Provides a counter state.",
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounter",
-        "position": {
-          "end": {
-            "column": 63,
-            "line": 5,
-          },
-          "start": {
-            "column": 1,
-            "line": 4,
-          },
-        },
         "signatures": [
           {
             "description": "Provides a counter state.",
@@ -7860,12 +7767,6 @@ describe('resolveType', () => {
             "thisType": undefined,
           },
         ],
-        "tags": [
-          {
-            "name": "deprecated",
-            "text": "use \`Counter\` component",
-          },
-        ],
         "text": "({ initialCount }: { initialCount?: number; }) => void",
       }
     `)
@@ -7885,19 +7786,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounter",
-        "position": {
-          "end": {
-            "column": 90,
-            "line": 1,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -8043,19 +7933,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounter",
-        "position": {
-          "end": {
-            "column": 52,
-            "line": 1,
-          },
-          "start": {
-            "column": 20,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -8147,19 +8026,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounter",
-        "position": {
-          "end": {
-            "column": 58,
-            "line": 1,
-          },
-          "start": {
-            "column": 20,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -8254,19 +8122,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounter",
-        "position": {
-          "end": {
-            "column": 102,
-            "line": 1,
-          },
-          "start": {
-            "column": 42,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -8369,19 +8226,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounterOverride",
-        "position": {
-          "end": {
-            "column": 121,
-            "line": 1,
-          },
-          "start": {
-            "column": 38,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -8748,19 +8594,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "Component",
-        "position": {
-          "end": {
-            "column": 36,
-            "line": 3,
-          },
-          "start": {
-            "column": 1,
-            "line": 3,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -11386,19 +11221,7 @@ describe('resolveType', () => {
           },
         ],
         "constructor": {
-          "description": "Constructs a new counter.",
-          "filePath": "test.ts",
           "kind": "ClassConstructor",
-          "position": {
-            "end": {
-              "column": 4,
-              "line": 13,
-            },
-            "start": {
-              "column": 3,
-              "line": 9,
-            },
-          },
           "signatures": [
             {
               "description": "Constructs a new counter.",
@@ -11475,7 +11298,6 @@ describe('resolveType', () => {
               "thisType": undefined,
             },
           ],
-          "tags": undefined,
           "text": "constructor(initialCount: number = 0) {
           this.count = count;
           this.initialCount = initialCount;
@@ -11486,20 +11308,8 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
-            "description": "Increments the count.",
-            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "increment",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 18,
-              },
-              "start": {
-                "column": 3,
-                "line": 16,
-              },
-            },
             "scope": undefined,
             "signatures": [
               {
@@ -11539,25 +11349,12 @@ describe('resolveType', () => {
                 "thisType": undefined,
               },
             ],
-            "tags": undefined,
             "text": "() => void",
             "visibility": undefined,
           },
           {
-            "description": "Decrements the count.",
-            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "decrement",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 23,
-              },
-              "start": {
-                "column": 3,
-                "line": 21,
-              },
-            },
             "scope": undefined,
             "signatures": [
               {
@@ -11597,25 +11394,12 @@ describe('resolveType', () => {
                 "thisType": undefined,
               },
             ],
-            "tags": undefined,
             "text": "() => void",
             "visibility": undefined,
           },
           {
-            "description": "Returns the current count.",
-            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "getCount",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 38,
-              },
-              "start": {
-                "column": 3,
-                "line": 36,
-              },
-            },
             "scope": undefined,
             "signatures": [
               {
@@ -11692,24 +11476,12 @@ describe('resolveType', () => {
                 "thisType": undefined,
               },
             ],
-            "tags": undefined,
             "text": "(isFloored?: boolean) => number",
             "visibility": "public",
           },
           {
-            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "getStaticCount",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 42,
-              },
-              "start": {
-                "column": 3,
-                "line": 40,
-              },
-            },
             "scope": "static",
             "signatures": [
               {
@@ -11836,19 +11608,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounter",
-        "position": {
-          "end": {
-            "column": 97,
-            "line": 1,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -11967,19 +11728,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "add",
-        "position": {
-          "end": {
-            "column": 64,
-            "line": 1,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -12574,19 +12324,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "useCounter",
-        "position": {
-          "end": {
-            "column": 5,
-            "line": 3,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -14507,19 +14246,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "loggedMethod",
-        "position": {
-          "end": {
-            "column": 75,
-            "line": 1,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -14677,19 +14405,8 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
-            "filePath": "test.ts",
             "kind": "ClassMethod",
             "name": "greet",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 17,
-              },
-              "start": {
-                "column": 3,
-                "line": 14,
-              },
-            },
             "scope": undefined,
             "signatures": [
               {
@@ -14822,20 +14539,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "description": "Implementation of withSchema handling both overloads.",
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "withSchema",
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 22,
-          },
-          "start": {
-            "column": 1,
-            "line": 17,
-          },
-        },
         "signatures": [
           {
             "description": "A loader function.",
@@ -15380,7 +15085,6 @@ describe('resolveType', () => {
             ],
           },
         ],
-        "tags": undefined,
         "text": "{ <Types>(loader: Loader<Types>): Loader<Types>; <Types extends Record<string, any>>(schema: Schema<Types>, loader: Loader<{ [Key in keyof Types]: Types[Key]; }>): Loader<{ [Key in keyof Types]: Types[Key]; }>; }",
       }
     `)
@@ -16527,19 +16231,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "returnsFn",
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 3,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -16610,19 +16303,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "getFile",
-        "position": {
-          "end": {
-            "column": 50,
-            "line": 7,
-          },
-          "start": {
-            "column": 1,
-            "line": 5,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -17810,19 +17492,8 @@ describe('resolveType', () => {
 
     expect(type).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "resolveFileFromEntry",
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 8,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -18460,19 +18131,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "isFile",
-        "position": {
-          "end": {
-            "column": 7,
-            "line": 6,
-          },
-          "start": {
-            "column": 1,
-            "line": 3,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -18659,19 +18319,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "foo",
-        "position": {
-          "end": {
-            "column": 30,
-            "line": 1,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -18745,19 +18394,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "getDefaultExport",
-        "position": {
-          "end": {
-            "column": 5,
-            "line": 5,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -19676,18 +19314,7 @@ describe('resolveType', () => {
     expect(type).toMatchInlineSnapshot(`
       {
         "constructor": {
-          "filePath": "test.ts",
           "kind": "ClassConstructor",
-          "position": {
-            "end": {
-              "column": 19,
-              "line": 2,
-            },
-            "start": {
-              "column": 3,
-              "line": 2,
-            },
-          },
           "signatures": [
             {
               "filePath": "test.ts",
@@ -19810,18 +19437,7 @@ describe('resolveType', () => {
     expect(type).toMatchInlineSnapshot(`
       {
         "constructor": {
-          "filePath": "test.ts",
           "kind": "ClassConstructor",
-          "position": {
-            "end": {
-              "column": 4,
-              "line": 8,
-            },
-            "start": {
-              "column": 3,
-              "line": 6,
-            },
-          },
           "signatures": [
             {
               "filePath": "test.ts",
@@ -19965,19 +19581,8 @@ describe('resolveType', () => {
 
     expect(type).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "getExports",
-        "position": {
-          "end": {
-            "column": 4,
-            "line": 10,
-          },
-          "start": {
-            "column": 3,
-            "line": 8,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -20129,19 +19734,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "test.ts",
         "kind": "Function",
         "name": "resolveTypeAtLocation",
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 9,
-          },
-          "start": {
-            "column": 1,
-            "line": 7,
-          },
-        },
         "signatures": [
           {
             "filePath": "test.ts",
@@ -20227,20 +19821,8 @@ describe('resolveType', () => {
 
     expect(resolved).toMatchInlineSnapshot(`
       {
-        "description": undefined,
-        "filePath": "index.js",
         "kind": "Function",
         "name": "foo",
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 4,
-          },
-          "start": {
-            "column": 4,
-            "line": 2,
-          },
-        },
         "signatures": [
           {
             "filePath": "index.js",
@@ -20310,16 +19892,6 @@ describe('resolveType', () => {
             },
             "text": "(value: number) => any",
             "thisType": undefined,
-          },
-        ],
-        "tags": [
-          {
-            "name": "callback",
-            "text": undefined,
-          },
-          {
-            "name": "type",
-            "text": undefined,
           },
         ],
         "text": "Foo",
@@ -21052,19 +20624,8 @@ describe('resolveType', () => {
 
     expect(types).toMatchInlineSnapshot(`
       {
-        "filePath": "index.ts",
         "kind": "Function",
         "name": "foo",
-        "position": {
-          "end": {
-            "column": 8,
-            "line": 7,
-          },
-          "start": {
-            "column": 7,
-            "line": 5,
-          },
-        },
         "signatures": [
           {
             "filePath": "index.ts",
@@ -21492,19 +21053,8 @@ describe('resolveType', () => {
         "kind": "Class",
         "methods": [
           {
-            "filePath": "index.ts",
             "kind": "ClassMethod",
             "name": "getToday",
-            "position": {
-              "end": {
-                "column": 4,
-                "line": 4,
-              },
-              "start": {
-                "column": 3,
-                "line": 2,
-              },
-            },
             "scope": undefined,
             "signatures": [
               {
@@ -21580,19 +21130,8 @@ describe('resolveType', () => {
 
     expect(type).toMatchInlineSnapshot(`
       {
-        "filePath": "index.ts",
         "kind": "Function",
         "name": "getToday",
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 3,
-          },
-          "start": {
-            "column": 1,
-            "line": 1,
-          },
-        },
         "signatures": [
           {
             "filePath": "index.ts",

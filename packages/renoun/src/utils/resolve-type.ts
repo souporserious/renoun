@@ -309,12 +309,15 @@ export namespace Kind {
     implements?: TypeReference[]
   }
 
-  export interface ClassConstructor extends SharedDocumentable {
+  export interface ClassConstructor extends Shared {
     kind: 'ClassConstructor'
     signatures: CallSignature[]
   }
 
-  export interface SharedClassMember extends SharedDocumentable {
+  export interface SharedClassMember extends Shared {
+    /** The name of the class member. */
+    name?: string
+
     /** The scope modifier of the class member. If not provided, the member is related to the instance. */
     scope?: 'abstract' | 'static'
 
@@ -412,8 +415,10 @@ export namespace Kind {
     parameter: Parameter
   }
 
-  export interface Function extends SharedDocumentable {
+  export interface Function extends Shared {
     kind: 'Function'
+    /** The name of the function. */
+    name?: string
     signatures: CallSignature[]
   }
 
@@ -1265,10 +1270,19 @@ export function resolveType(
       metadataDeclaration = enclosingNode
     }
 
+    // Skip metadata spreading for Function, ClassMethod, and ClassConstructor
+    // as metadata should only be on their signatures to avoid duplication
+    const shouldSkipMetadata =
+      resolvedType.kind === 'Function' ||
+      resolvedType.kind === 'ClassMethod' ||
+      resolvedType.kind === 'ClassConstructor'
+
     return {
-      ...(metadataDeclaration ? getJsDocMetadata(metadataDeclaration) : {}),
+      ...(metadataDeclaration && !shouldSkipMetadata
+        ? getJsDocMetadata(metadataDeclaration)
+        : {}),
       ...resolvedType,
-      ...declarationLocation,
+      ...(shouldSkipMetadata ? {} : declarationLocation),
     }
   } finally {
     resolvingTypes.delete(type.compilerType.id)
@@ -4812,8 +4826,6 @@ function resolveClass(
         kind: 'ClassConstructor',
         signatures: resolvedCallSignatures,
         text: primaryConstructorDeclaration.getText(),
-        ...getJsDocMetadata(primaryConstructorDeclaration),
-        ...getDeclarationLocation(primaryConstructorDeclaration),
       }
       classMetadata.constructor = constructor
     }
@@ -5077,8 +5089,6 @@ function resolveClassMethod(
     visibility: getVisibility(method),
     signatures: resolvedCallSignatures,
     text: method.getType().getText(method, TYPE_FORMAT_FLAGS),
-    ...getJsDocMetadata(method),
-    ...getDeclarationLocation(method),
   } satisfies Kind.ClassMethod
 }
 

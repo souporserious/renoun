@@ -693,12 +693,11 @@ function renderMethodRow(
 }
 
 function renderMethodSubRow(
-  method: Pick<Kind.SharedDocumentable, 'description' | 'tags'> & {
+  method: {
     signatures: TypeOfKind<'CallSignature'>[]
   },
   components: InternalReferenceComponents
 ) {
-  const documentation = renderDocumentation(method, components)
   const multipleSignatures = method.signatures.length > 1
   const signatureDetails: React.ReactNode[] = []
 
@@ -706,8 +705,7 @@ function renderMethodSubRow(
     const detail = renderCallSignatureDetails(signature, components, {
       heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
       showSignatureText: multipleSignatures,
-      parentDescription: method.description,
-      descriptionStrategy: 'skip-if-parent',
+      descriptionStrategy: 'inherit',
     })
 
     if (detail) {
@@ -717,16 +715,11 @@ function renderMethodSubRow(
     }
   })
 
-  if (!documentation && signatureDetails.length === 0) {
+  if (signatureDetails.length === 0) {
     return null
   }
 
-  return (
-    <components.Column gap="large">
-      {documentation}
-      {signatureDetails}
-    </components.Column>
-  )
+  return <components.Column gap="large">{signatureDetails}</components.Column>
 }
 
 function renderClassPropertySubRow(
@@ -869,20 +862,6 @@ function renderDocumentation(
       <components.Description key="description">
         {metadata.description}
       </components.Description>
-    )
-  }
-
-  if (metadata.tags?.length) {
-    items.push(
-      <components.Column gap="small" key="tags">
-        <components.DetailHeading>Tags</components.DetailHeading>
-        {metadata.tags.map((tag, index) => (
-          <components.Code key={index}>
-            @{tag.name}
-            {tag.text ? ` ${tag.text}` : ''}
-          </components.Code>
-        ))}
-      </components.Column>
     )
   }
 
@@ -1402,7 +1381,6 @@ function ClassSection({
           components={components}
           kind="ClassConstructor"
         >
-          {renderDocumentation(node.constructor, components)}
           <components.Signatures>
             {node.constructor.signatures.map((signature, index) => (
               <React.Fragment key={index}>
@@ -1747,7 +1725,6 @@ function FunctionSection({
     <TypeSection
       kind="Function"
       title={node.name}
-      description={node.description}
       id={id}
       components={components}
     >
@@ -1756,10 +1733,7 @@ function FunctionSection({
           const detail = renderCallSignatureDetails(signature, components, {
             heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
             showSignatureText: true,
-            parentDescription: node.description,
-            descriptionStrategy: multipleSignatures
-              ? 'skip-if-parent'
-              : 'never',
+            descriptionStrategy: 'inherit',
           })
 
           if (!detail) {
