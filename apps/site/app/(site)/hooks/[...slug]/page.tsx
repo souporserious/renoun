@@ -5,7 +5,7 @@ import {
   ModuleExportNotFoundError,
   Link,
   type JavaScriptFile,
-  type JavaScriptModuleExport,
+  type ModuleExport,
   type Headings,
 } from 'renoun'
 
@@ -244,7 +244,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
 async function Preview({
   fileExport,
 }: {
-  fileExport: JavaScriptModuleExport<React.ComponentType>
+  fileExport: ModuleExport<React.ComponentType>
 }) {
   const title = fileExport.getTitle()
   const description = fileExport.getDescription()

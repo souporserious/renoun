@@ -21,7 +21,7 @@ import {
   File,
   Directory,
   JavaScriptFile,
-  JavaScriptModuleExport,
+  ModuleExport,
   MarkdownFile,
   MDXFile,
   Collection,
@@ -1690,7 +1690,7 @@ describe('file system', () => {
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('default')
 
-    expect(fileExport).toBeInstanceOf(JavaScriptModuleExport)
+    expect(fileExport).toBeInstanceOf(ModuleExport)
     expect(fileExport.getName()).toBe('hello')
     expect(fileExport.getDescription()).toBe('Say hello.')
     expect(fileExport.getTags()).toMatchObject([
@@ -1743,7 +1743,7 @@ export function identity<T>(value: T) {
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('Button')
 
-    expect(fileExport).toBeInstanceOf(JavaScriptModuleExport)
+    expect(fileExport).toBeInstanceOf(ModuleExport)
     expect(fileExport.getName()).toBe('Button')
   })
 
@@ -1882,7 +1882,7 @@ export function identity<T>(value: T) {
     const fileExport = await file.getExport('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
-    expect(fileExport).toBeInstanceOf(JavaScriptModuleExport)
+    expect(fileExport).toBeInstanceOf(ModuleExport)
 
     const basename = await fileExport.getRuntimeValue()
 
@@ -1905,7 +1905,7 @@ export function identity<T>(value: T) {
     const fileExport = await file.getExport('basename')
 
     expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
-    expect(fileExport).toBeInstanceOf(JavaScriptModuleExport)
+    expect(fileExport).toBeInstanceOf(ModuleExport)
 
     const basename = await fileExport.getRuntimeValue()
 
@@ -3428,7 +3428,7 @@ export function identity<T>(value: T) {
       type Test = Expect<IsNotAny<typeof defaultExport>>
 
       expectTypeOf(defaultExport).toMatchTypeOf<
-        JavaScriptModuleExport<
+        ModuleExport<
           (typeof import('@renoun/mdx/remark/add-headings'))['default']
         >
       >()
@@ -3453,7 +3453,7 @@ export function identity<T>(value: T) {
       type Test = Expect<IsNotAny<typeof defaultExport>>
 
       expectTypeOf(defaultExport).toMatchTypeOf<
-        JavaScriptModuleExport<
+        ModuleExport<
           (typeof import('@renoun/mdx/remark/add-headings'))['default']
         >
       >()

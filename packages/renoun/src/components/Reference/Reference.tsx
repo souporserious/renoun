@@ -1,10 +1,7 @@
 import React, { Suspense } from 'react'
 import { dirname, resolve } from 'node:path'
 
-import {
-  JavaScriptFile,
-  type JavaScriptModuleExport,
-} from '../../file-system/index.js'
+import { JavaScriptFile, type ModuleExport } from '../../file-system/index.js'
 import {
   type Kind,
   type TypeFilter,
@@ -195,8 +192,8 @@ function getNodeAnchorId(node: Kind): string | undefined {
 }
 
 export interface ReferenceProps {
-  /** The file path, `JavaScriptFile`, or `JavaScriptModuleExport` type reference to resolve. */
-  source: string | PathLike | JavaScriptFile<any> | JavaScriptModuleExport<any>
+  /** The file path, `JavaScriptFile`, or `ModuleExport` type reference to resolve. */
+  source: string | PathLike | JavaScriptFile<any> | ModuleExport<any>
 
   /** Optional filter for including additional properties from referenced types. */
   filter?: TypeFilter

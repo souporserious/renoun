@@ -2,7 +2,7 @@ import {
   Reference as DefaultReference,
   type ReferenceProps,
   type ReferenceComponents,
-  type JavaScriptModuleExport,
+  type ModuleExport,
 } from 'renoun'
 import { GeistMono } from 'geist/font/mono'
 import type { CSSObject } from 'restyle'
@@ -13,7 +13,7 @@ import { Markdown } from './Markdown'
 export function References({
   fileExports,
 }: {
-  fileExports: JavaScriptModuleExport<any>[]
+  fileExports: ModuleExport<any>[]
 }) {
   return (
     <div

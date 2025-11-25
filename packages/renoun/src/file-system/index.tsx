@@ -1281,8 +1281,8 @@ export class ModuleExportNotFoundError extends Error {
   }
 }
 
-/** A JavaScript file export. */
-export class JavaScriptModuleExport<Value> {
+/** A JavaScript module export. */
+export class ModuleExport<Value> {
   #name: string
   #file: JavaScriptFile<any>
   #loader?: ModuleLoader<any>
@@ -1308,13 +1308,8 @@ export class JavaScriptModuleExport<Value> {
     file: JavaScriptFile<any>,
     loader?: ModuleLoader<any>,
     slugCasing?: SlugCasing
-  ): Promise<JavaScriptModuleExport<Value>> {
-    const fileExport = new JavaScriptModuleExport<Value>(
-      name,
-      file,
-      loader,
-      slugCasing
-    )
+  ): Promise<ModuleExport<Value>> {
+    const fileExport = new ModuleExport<Value>(name, file, loader, slugCasing)
     await fileExport.getStaticMetadata()
     return fileExport
   }
@@ -1691,7 +1686,7 @@ export class JavaScriptFile<
   const Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
 > extends File<DirectoryTypes, Path, Extension> {
-  #exports = new Map<string, JavaScriptModuleExport<any>>()
+  #exports = new Map<string, ModuleExport<any>>()
   #loader?: ModuleLoader<Types>
   #slugCasing?: SlugCasing
   #modulePromise?: Promise<any>
@@ -1859,13 +1854,13 @@ export class JavaScriptFile<
   /** Get a JavaScript file export by name. */
   async getExport<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<JavaScriptModuleExport<Types[ExportName]>> {
+  ): Promise<ModuleExport<Types[ExportName]>> {
     if (await this.hasExport(name)) {
       if (this.#exports.has(name)) {
         return this.#exports.get(name)!
       }
 
-      const fileExport = await JavaScriptModuleExport.init<Types[ExportName]>(
+      const fileExport = await ModuleExport.init<Types[ExportName]>(
         name,
         this as any,
         this.#loader,
@@ -1893,7 +1888,7 @@ export class JavaScriptFile<
   /** Get a named export from the JavaScript file. */
   async getNamedExport<ExportName extends Extract<keyof Types, string>>(
     name: ExportName
-  ): Promise<JavaScriptModuleExport<Types[ExportName]>> {
+  ): Promise<ModuleExport<Types[ExportName]>> {
     return this.getExport(name)
   }
 
@@ -1903,7 +1898,7 @@ export class JavaScriptFile<
       ? JavaScriptFile<Types, DirectoryTypes, Path, Extension>
       : never
   ): Promise<
-    JavaScriptModuleExport<
+    ModuleExport<
       Types extends { default: infer DefaultType } ? DefaultType : never
     >
   > {

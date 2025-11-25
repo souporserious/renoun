@@ -4,7 +4,7 @@ import {
   FileNotFoundError,
   ModuleExportNotFoundError,
   type JavaScriptFile,
-  type JavaScriptModuleExport,
+  type ModuleExport,
   type Headings,
   Link,
 } from 'renoun'
@@ -304,8 +304,8 @@ async function Preview({
   fileExport,
   layoutExport,
 }: {
-  fileExport: JavaScriptModuleExport<React.ComponentType>
-  layoutExport?: JavaScriptModuleExport<any>
+  fileExport: ModuleExport<React.ComponentType>
+  layoutExport?: ModuleExport<any>
 }) {
   const title = fileExport.getTitle()
   const description = fileExport.getDescription()

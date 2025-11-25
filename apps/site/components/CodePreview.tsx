@@ -1,4 +1,4 @@
-import { Tokens, type JavaScriptModuleExport } from 'renoun'
+import { Tokens, type ModuleExport } from 'renoun'
 import { keyframes } from 'restyle'
 import { GeistMono } from 'geist/font/mono'
 
@@ -10,8 +10,8 @@ export async function CodePreview({
   header,
   fullBleed = false,
 }: {
-  fileExport: JavaScriptModuleExport<React.ComponentType>
-  layoutExport?: JavaScriptModuleExport<any>
+  fileExport: ModuleExport<React.ComponentType>
+  layoutExport?: ModuleExport<any>
   header?: React.ReactNode
   fullBleed?: boolean
 }) {
