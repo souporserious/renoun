@@ -1,5 +1,3 @@
-import { ButtonLink } from '@/components/ButtonLink'
-
 export default function TemplatePurchaseSuccess() {
   return (
     <div
@@ -43,28 +41,10 @@ export default function TemplatePurchaseSuccess() {
             margin: 0,
           }}
         >
-          I appreciate your support. If you have questions or need help getting
-          started, reach out on Discord or X.
+          I really appreciate your support. Please check your email for your
+          purchase receipt. You should now have access to the repository
+          containing the template and access to the Discord server for help.
         </p>
-      </div>
-
-      <div
-        css={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1rem',
-          '@media (min-width: 40rem)': {
-            flexDirection: 'row',
-            gap: '1.5rem',
-          },
-        }}
-      >
-        <ButtonLink href="https://discord.gg/7Mf4xEBYx9">
-          Join Discord
-        </ButtonLink>
-        <ButtonLink href="https://x.com/renoun_dev" variant="secondary">
-          Follow on X
-        </ButtonLink>
       </div>
     </div>
   )
