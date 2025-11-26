@@ -27,7 +27,7 @@ catalog:
   ts-morph: 27.0.2
   typescript: 5.9.3
   unified: 11.0.5
-  valibot: 1.1.0
+  valibot: 1.2.0
   zod: 4.1.12
 
 catalogMode: prefer
