@@ -1,5 +1,15 @@
 # renoun
 
+## 10.14.0
+
+### Minor Changes
+
+- 8ff9b60: Renames `JavaScriptModuleExport` to `ModuleExport`.
+
+### Patch Changes
+
+- bdcf30a: Fixes the default `CodeBlock` component used in the `Markdown` component not processing pre props correctly.
+
 ## 10.13.0
 
 ### Minor Changes
