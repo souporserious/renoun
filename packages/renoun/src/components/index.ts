@@ -3,7 +3,6 @@ export {
   LineNumbers,
   Tokens,
   Toolbar,
-  parsePreProps,
   type CodeBlockProps,
   type TokensProps,
   type ToolbarProps,

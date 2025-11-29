@@ -1,4 +1,4 @@
-export { CodeBlock, parsePreProps, type CodeBlockProps } from './CodeBlock.js'
+export { CodeBlock, type CodeBlockProps } from './CodeBlock.js'
 export { CopyButton } from '../CopyButton/index.js'
 export { LineNumbers, type LineNumbersProps } from './LineNumbers.js'
 export { Tokens, type TokensProps } from './Tokens.js'

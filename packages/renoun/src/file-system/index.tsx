@@ -18,8 +18,7 @@ import {
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
-import { CodeBlock, parsePreProps } from '../components/CodeBlock/index.js'
-import { CodeInline, parseCodeProps } from '../components/CodeInline.js'
+import { CodeBlock } from '../components/CodeBlock/index.js'
 import { Markdown, type MarkdownComponents } from '../components/Markdown.js'
 import { getFileExportMetadata } from '../project/client.js'
 import { formatNameAsTitle } from '../utils/format-name-as-title.js'
@@ -142,8 +141,7 @@ function inferMediaType(extension?: string) {
 }
 
 const markdownComponents = {
-  pre: (props) => <CodeBlock {...parsePreProps(props)} />,
-  code: (props) => <CodeInline {...parseCodeProps(props)} />,
+  CodeBlock,
 } satisfies MDXComponents & MarkdownComponents
 
 const defaultLoaders: {

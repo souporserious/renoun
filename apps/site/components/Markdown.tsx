@@ -2,9 +2,6 @@ import {
   CodeInline,
   Markdown as DefaultMarkdown,
   parseCodeProps,
-  parsePreProps,
-  rehypePlugins,
-  remarkPlugins,
   type MarkdownProps,
 } from 'renoun'
 import { GeistMono } from 'geist/font/mono'
@@ -16,7 +13,7 @@ export function Markdown(props: MarkdownProps) {
     <DefaultMarkdown
       {...props}
       components={{
-        pre: (preProps) => <CodeBlock {...parsePreProps(preProps)} />,
+        CodeBlock,
         code: (codeProps) => (
           <CodeInline
             {...parseCodeProps(codeProps)}
@@ -28,8 +25,6 @@ export function Markdown(props: MarkdownProps) {
           />
         ),
       }}
-      rehypePlugins={rehypePlugins}
-      remarkPlugins={remarkPlugins}
     />
   )
 }

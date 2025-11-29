@@ -15,7 +15,7 @@ function run(html: string, options?: { meta?: string; isMarkdown?: boolean }) {
 
   processor.use(addCodeBlock)
 
-  const tree = processor.parse(file) as any
+  const tree = processor.parse(file)
 
   // Inject meta (simulating remark->rehype pipeline attaching meta to code node)
   if (options?.meta) {
@@ -37,11 +37,11 @@ function run(html: string, options?: { meta?: string; isMarkdown?: boolean }) {
   return { tree: out, file }
 }
 
-function getFirstChild(root: any) {
+function getFirstChild(root) {
   return Array.isArray(root.children) ? root.children[0] : undefined
 }
 
-function getAttr(
+function getAttribute(
   node: any,
   name: string
 ): { type: string; name: string; value: any } | undefined {
@@ -57,8 +57,8 @@ describe('rehype/add-code-block', () => {
     expect(node?.type).toBe('mdxJsxFlowElement')
     expect(node?.name).toBe('CodeBlock')
 
-    const language = getAttr(node, 'language')
-    const shouldFormat = getAttr(node, 'shouldFormat')
+    const language = getAttribute(node, 'language')
+    const shouldFormat = getAttribute(node, 'shouldFormat')
     expect(language?.value).toBe('tsx')
     expect(shouldFormat?.value?.type).toBe('mdxJsxAttributeValueExpression')
     expect(shouldFormat?.value?.value).toBe('false')
@@ -73,10 +73,10 @@ describe('rehype/add-code-block', () => {
     expect(node?.type).toBe('mdxJsxFlowElement')
     expect(node?.name).toBe('CodeBlock')
 
-    const showLineNumbers = getAttr(node, 'showLineNumbers')
-    const title = getAttr(node, 'title')
-    const tabSize = getAttr(node, 'tabSize')
-    const shouldFormat = getAttr(node, 'shouldFormat')
+    const showLineNumbers = getAttribute(node, 'showLineNumbers')
+    const title = getAttribute(node, 'title')
+    const tabSize = getAttribute(node, 'tabSize')
+    const shouldFormat = getAttribute(node, 'shouldFormat')
 
     expect(showLineNumbers?.value?.type).toBe('mdxJsxAttributeValueExpression')
     expect(showLineNumbers?.value?.value).toBe('true')
@@ -94,8 +94,8 @@ describe('rehype/add-code-block', () => {
     expect(node?.type).toBe('mdxJsxFlowElement')
     expect(node?.name).toBe('CodeBlock')
 
-    expect(getAttr(node, 'path')?.value).toBe('getting-started.mdx')
-    expect(getAttr(node, 'language')?.value).toBe('mdx')
+    expect(getAttribute(node, 'path')?.value).toBe('getting-started.mdx')
+    expect(getAttribute(node, 'language')?.value).toBe('mdx')
   })
 
   it('throws on invalid meta (unquoted/unbraced value)', () => {
@@ -106,12 +106,17 @@ describe('rehype/add-code-block', () => {
     ).toThrow(/Invalid meta prop/i)
   })
 
-  it('does nothing when processor data.isMarkdown=true', () => {
+  it('replaces <pre><code> with a CodeBlock element when processor data.isMarkdown=true', () => {
     const { tree } = run('<pre><code class="language-tsx">x</code></pre>', {
       isMarkdown: true,
+      meta: 'showLineNumbers tabSize={4}',
     })
     const node = getFirstChild(tree)
     expect(node?.type).toBe('element')
-    expect(node?.tagName).toBe('pre')
+    expect(node?.tagName).toBe('CodeBlock')
+    expect(node?.properties?.language).toBe('tsx')
+    expect(node?.properties?.shouldFormat).toBe(false)
+    expect(node?.properties?.showLineNumbers).toBe(true)
+    expect(node?.properties?.tabSize).toBe(4)
   })
 })

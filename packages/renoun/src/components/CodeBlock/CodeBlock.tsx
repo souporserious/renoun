@@ -126,13 +126,15 @@ export const CodeBlock =
  * CodeBlock component used during development that wraps the async version in a
  * Suspense boundary with a fallback so the code block renders as soon as possible.
  */
-function CodeBlockWithFallback(props: CodeBlockProps) {
+function CodeBlockWithFallback(
+  props: CodeBlockProps | React.ComponentProps<'pre'>
+) {
   const {
     shouldAnalyze = true,
     unfocusedLinesOpacity = 0.6,
     baseDirectory: baseDirectoryProp,
     ...restProps
-  } = props
+  } = normalizeCodeBlockProps(props)
   const baseDirectoryContext = getContext(BaseDirectoryContext)
   const baseDirectory = normalizeBaseDirectory(
     baseDirectoryProp ?? baseDirectoryContext
@@ -258,26 +260,29 @@ function CodeBlockWithFallback(props: CodeBlockProps) {
   )
 }
 
-async function CodeBlockAsync({
-  path: pathProp,
-  baseDirectory: baseDirectoryProp,
-  language,
-  highlightedLines,
-  focusedLines,
-  unfocusedLinesOpacity,
-  allowCopy,
-  allowErrors,
-  showErrors,
-  showLineNumbers,
-  showToolbar,
-  shouldAnalyze,
-  shouldFormat,
-  children,
-  className,
-  css,
-  style,
-  annotations,
-}: CodeBlockProps) {
+async function CodeBlockAsync(
+  props: CodeBlockProps | React.ComponentProps<'pre'>
+) {
+  const {
+    path: pathProp,
+    baseDirectory: baseDirectoryProp,
+    language,
+    highlightedLines,
+    focusedLines,
+    unfocusedLinesOpacity,
+    allowCopy,
+    allowErrors,
+    showErrors,
+    showLineNumbers,
+    showToolbar,
+    shouldAnalyze,
+    shouldFormat,
+    children,
+    className,
+    css,
+    style,
+    annotations,
+  } = normalizeCodeBlockProps(props)
   const containerPadding = computeDirectionalStyles(
     'padding',
     '0.5lh',
@@ -507,26 +512,29 @@ async function CodeBlockAsync({
 const languageKey = 'language-'
 const languageLength = languageKey.length
 
-/** Parses the props of an MDX `pre` element for passing to `CodeBlock`. */
-export function parsePreProps(props: React.ComponentProps<'pre'>): {
-  /** The code fence content. */
-  children: string
+function isPreElementProps(
+  props: CodeBlockProps | React.ComponentProps<'pre'>
+): props is React.ComponentProps<'pre'> {
+  const value = props.className
+  return typeof value === 'string' || Array.isArray(value)
+}
 
-  /** The language of the code block if defined e.g. `tsx`. */
-  language?: Languages
+function normalizeCodeBlockProps(
+  props: CodeBlockProps | React.ComponentProps<'pre'>
+): CodeBlockProps {
+  if (!isPreElementProps(props)) {
+    return props as CodeBlockProps
+  }
 
-  /** The path of the code block if defined e.g. `posts/markdown-guide.mdx`. */
-  path?: string
-} & Omit<React.ComponentProps<'pre'>, 'children' | 'className' | 'style'> {
   const { children, className, style, ...restProps } = props
   const code = children as React.ReactElement<{
     className?: string
     children: string
   }>
   const languageToken =
-    code.props.className
+    code?.props?.className
       ?.split(/\s+/)
-      .find((className) => className.startsWith(languageKey)) ?? ''
+      .find((token) => token.startsWith(languageKey)) ?? ''
 
   let language: Languages = 'plaintext'
   let path: string | undefined
@@ -545,11 +553,14 @@ export function parsePreProps(props: React.ComponentProps<'pre'>): {
   }
 
   return {
-    children: code.props.children.trim(),
+    ...restProps,
+    children:
+      typeof code?.props?.children === 'string'
+        ? code.props.children.trim()
+        : '',
     language,
     path,
-    ...restProps,
-  }
+  } as CodeBlockProps
 }
 
 const StyledContainer = styled('div')

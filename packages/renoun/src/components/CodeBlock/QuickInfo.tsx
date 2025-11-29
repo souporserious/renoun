@@ -10,7 +10,7 @@ import { CodeInline } from '../CodeInline.js'
 import { getConfig } from '../Config/ServerConfigContext.js'
 import { Markdown, type MarkdownProps } from '../Markdown.js'
 import { QuickInfoPopover } from './QuickInfoPopover.js'
-import { CodeBlock, parsePreProps } from './CodeBlock.js'
+import { CodeBlock } from './CodeBlock.js'
 
 const Paragraph = styled('p', {
   fontFamily: 'sans-serif',
@@ -31,7 +31,7 @@ const Table = styled('table', {
 const mdxProps = {
   components: {
     pre: (props) => {
-      return <CodeBlock {...parsePreProps(props)} shouldAnalyze={false} />
+      return <CodeBlock {...props} shouldAnalyze={false} />
     },
     code: (props) => {
       return (

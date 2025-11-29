@@ -18,16 +18,19 @@ interface CodeMetaElement extends Element {
 
 /**
  * Parses the meta string from code fences as props and replaces the parent
- * `pre` element with a `CodeBlock`  element.
+ * `pre` element with a `CodeBlock` element.
+ *
+ * - For **MDX** documents, this injects an `mdxJsxFlowElement` so boolean and
+ *   number props are preserved via `mdxJsxAttributeValueExpression`.
+ * - For **markdown** documents, this replaces the `pre` element with a standard
+ *   HAST `element` node whose `tagName` is `CodeBlock` and whose `properties` map
+ *   directly to React props. This allows markdown code fences to be rendered
+ *   with the same `CodeBlock` component as MDX.
  */
 export default function addCodeBlock(this: Processor) {
   const isMarkdown = this.data('isMarkdown') === true
 
   return (tree: Root) => {
-    if (isMarkdown) {
-      return
-    }
-
     visitParents(tree, 'element', (element: Element, ancestors: Parent[]) => {
       if (element.tagName !== 'pre') {
         return
@@ -117,45 +120,61 @@ export default function addCodeBlock(this: Processor) {
         }
       }
 
-      const attributes: MdxJsxFlowElement['attributes'] = []
-      for (const key in properties) {
-        const value = properties[key]
-        if (typeof value === 'boolean' || typeof value === 'number') {
-          attributes.push({
-            type: 'mdxJsxAttribute',
-            name: key,
-            value: {
-              type: 'mdxJsxAttributeValueExpression',
-              value: String(value),
-              data: {
-                estree: {
-                  type: 'Program',
-                  sourceType: 'module',
-                  body: [
-                    {
-                      type: 'ExpressionStatement',
-                      expression: valueToEstree(value),
+      // When compiling markdown (via `getMarkdownContent`), we want a HAST
+      // element so `hast-util-to-jsx-runtime` can turn it into JSX using the
+      // provided `components` map (e.g. `{ CodeBlock }`).
+      //
+      // When compiling MDX, we emit an `mdxJsxFlowElement` so that the MDX
+      // compiler preserves the prop types correctly.
+      const codeBlockNode: Element | MdxJsxFlowElement = isMarkdown
+        ? {
+            type: 'element',
+            tagName: 'CodeBlock',
+            properties,
+            children: code.children,
+          }
+        : (() => {
+            const attributes: MdxJsxFlowElement['attributes'] = []
+            for (const key in properties) {
+              const value = properties[key]
+              if (typeof value === 'boolean' || typeof value === 'number') {
+                attributes.push({
+                  type: 'mdxJsxAttribute',
+                  name: key,
+                  value: {
+                    type: 'mdxJsxAttributeValueExpression',
+                    value: String(value),
+                    data: {
+                      estree: {
+                        type: 'Program',
+                        sourceType: 'module',
+                        body: [
+                          {
+                            type: 'ExpressionStatement',
+                            expression: valueToEstree(value),
+                          },
+                        ],
+                      },
                     },
-                  ],
-                },
-              },
-            },
-          } as any)
-        } else {
-          attributes.push({
-            type: 'mdxJsxAttribute',
-            name: key,
-            value,
-          } as any)
-        }
-      }
+                  },
+                })
+              } else {
+                attributes.push({
+                  type: 'mdxJsxAttribute',
+                  name: key,
+                  value,
+                })
+              }
+            }
 
-      const codeBlockNode: MdxJsxFlowElement = {
-        type: 'mdxJsxFlowElement',
-        name: 'CodeBlock',
-        attributes,
-        children: code.children as any,
-      }
+            return {
+              type: 'mdxJsxFlowElement',
+              name: 'CodeBlock',
+              attributes,
+              children: code.children,
+            } as MdxJsxFlowElement
+          })()
+
       const parent = ancestors[ancestors.length - 1]
       const index = parent.children.indexOf(element)
       if (index === -1) {
