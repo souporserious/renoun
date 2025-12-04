@@ -21764,4 +21764,245 @@ describe('resolveType', () => {
       ])
     )
   })
+
+  test('expands transparent type utilities', () => {
+    project.createSourceFile(
+      'node_modules/type-fest/index.d.ts',
+      dedent`
+      export type Simplify<T> = {
+        [Key in keyof T]: T[Key];
+      } & {};
+      `
+    )
+    const testFile = project.createSourceFile(
+      'index.ts',
+      dedent`
+      import type { PropsWithChildren } from "react"
+      import type { Simplify } from "type-fest"
+
+      type StepperItemProps = Simplify<
+        PropsWithChildren<{
+          /** The title of the step. */
+          title?: string
+        }>
+      >
+
+      export { StepperProps, StepperItemProps }
+      `,
+      { overwrite: true }
+    )
+    const stepperItemProps = testFile.getTypeAliasOrThrow('StepperItemProps')
+    const types = resolveType(stepperItemProps.getType(), stepperItemProps)
+
+    expect(types).toMatchInlineSnapshot(`
+      {
+        "filePath": "node_modules/type-fest/index.d.ts",
+        "kind": "TypeAlias",
+        "name": "StepperItemProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 3,
+          },
+          "start": {
+            "column": 27,
+            "line": 1,
+          },
+        },
+        "text": "StepperItemProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "description": "The title of the step.",
+              "filePath": "index.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "title",
+              "position": {
+                "end": {
+                  "column": 19,
+                  "line": 7,
+                },
+                "start": {
+                  "column": 5,
+                  "line": 7,
+                },
+              },
+              "tags": undefined,
+              "text": "title?: string",
+              "type": {
+                "filePath": "index.ts",
+                "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 19,
+                    "line": 7,
+                  },
+                  "start": {
+                    "column": 13,
+                    "line": 7,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+            },
+            {
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "children",
+              "position": {
+                "end": {
+                  "column": 81,
+                  "line": 1414,
+                },
+                "start": {
+                  "column": 49,
+                  "line": 1414,
+                },
+              },
+              "text": "ReactNode",
+              "type": {
+                "filePath": "node_modules/@types/react/index.d.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": "react",
+                "name": "ReactNode",
+                "position": {
+                  "end": {
+                    "column": 81,
+                    "line": 1414,
+                  },
+                  "start": {
+                    "column": 49,
+                    "line": 1414,
+                  },
+                },
+                "text": "ReactNode",
+                "typeArguments": [],
+              },
+            },
+          ],
+          "text": "{ title?: string; children?: ReactNode | undefined; }",
+        },
+        "typeParameters": [],
+      }
+    `)
+  })
+
+  test('type alias with Simplify utility type should expand properties', () => {
+    const testFile = project.createSourceFile(
+      'test.ts',
+      dedent`
+        type Simplify<T> = { [Key in keyof T]: T[Key]; } & {};
+
+        type PropWithChildren = {
+          children?: string
+        }
+
+        export type StepperItemProps = Simplify<PropWithChildren & { label: string }>
+      `,
+      { overwrite: true }
+    )
+
+    const stepperItemProps = testFile.getTypeAliasOrThrow('StepperItemProps')
+    const resolved = resolveType(stepperItemProps.getType(), stepperItemProps)
+
+    expect(resolved).toMatchInlineSnapshot(`
+      {
+        "filePath": "test.ts",
+        "kind": "TypeAlias",
+        "name": "StepperItemProps",
+        "position": {
+          "end": {
+            "column": 49,
+            "line": 1,
+          },
+          "start": {
+            "column": 20,
+            "line": 1,
+          },
+        },
+        "text": "StepperItemProps",
+        "type": {
+          "kind": "TypeLiteral",
+          "members": [
+            {
+              "filePath": "test.ts",
+              "isOptional": true,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "children",
+              "position": {
+                "end": {
+                  "column": 20,
+                  "line": 4,
+                },
+                "start": {
+                  "column": 3,
+                  "line": 4,
+                },
+              },
+              "text": "children?: string",
+              "type": {
+                "filePath": "test.ts",
+                "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 20,
+                    "line": 4,
+                  },
+                  "start": {
+                    "column": 14,
+                    "line": 4,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+            },
+            {
+              "filePath": "test.ts",
+              "isOptional": false,
+              "isReadonly": false,
+              "kind": "PropertySignature",
+              "name": "label",
+              "position": {
+                "end": {
+                  "column": 75,
+                  "line": 7,
+                },
+                "start": {
+                  "column": 62,
+                  "line": 7,
+                },
+              },
+              "text": "label: string",
+              "type": {
+                "filePath": "test.ts",
+                "kind": "String",
+                "position": {
+                  "end": {
+                    "column": 75,
+                    "line": 7,
+                  },
+                  "start": {
+                    "column": 69,
+                    "line": 7,
+                  },
+                },
+                "text": "string",
+                "value": undefined,
+              },
+            },
+          ],
+          "text": "{ children?: string; label: string; }",
+        },
+        "typeParameters": [],
+      }
+    `)
+  })
 })

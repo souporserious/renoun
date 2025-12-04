@@ -1633,13 +1633,125 @@ function resolveTypeExpression(
         } as Kind.TypeReference
       } else {
         resolvingTypes.add(type.compilerType.id)
-        resolvedType = resolveTypeExpression(
-          type.getApparentType(),
-          symbolDeclaration ?? enclosingNode,
-          filter,
-          defaultValues,
-          dependencies
-        )
+        // For transparent utility types (like Simplify), resolve without alias context
+        // to get the flattened TypeLiteral instead of keeping the wrapper
+        let isTransparent = isTransparentUtilityType(type)
+
+        // Also check via enclosingNode if it's a type reference
+        if (!isTransparent && tsMorph.Node.isTypeReference(enclosingNode)) {
+          const typeNameSymbol = enclosingNode.getTypeName().getSymbol()
+          if (typeNameSymbol) {
+            // Need to resolve through import aliases to get the actual type declaration
+            let targetSymbol = typeNameSymbol
+            if (typeNameSymbol.isAlias()) {
+              const aliasedSymbol = typeNameSymbol.getAliasedSymbol()
+              if (aliasedSymbol) {
+                targetSymbol = aliasedSymbol
+              }
+            }
+
+            const declaration = getPrimaryDeclaration(targetSymbol)
+            // Check for transparent utility types (works for both local and node_modules)
+            if (tsMorph.Node.isTypeAliasDeclaration(declaration)) {
+              const typeParams = declaration.getTypeParameters()
+              if (typeParams.length === 1) {
+                const typeNode = declaration.getTypeNode()
+                if (
+                  typeNode &&
+                  hasIdentityMappedTypeNode(typeNode, typeParams)
+                ) {
+                  isTransparent = true
+                }
+              }
+            }
+          }
+        }
+
+        if (isTransparent) {
+          // For transparent utility types, directly create a TypeLiteral from the
+          // apparent type's properties instead of going through normal resolution
+          // (which would find the MappedType node from the declaration)
+          const apparentType = type.getApparentType()
+
+          // Resolve properties, but keep node_modules types as shallow references
+          const apparentProperties = apparentType.getApparentProperties()
+          const propertySignatures: Kind.PropertySignature[] = []
+
+          for (const property of apparentProperties) {
+            const propertyDeclaration = getPrimaryDeclaration(property)
+
+            // Check if the property declaration itself is from node_modules
+            const isPropertyFromNodeModules = propertyDeclaration
+              ?.getSourceFile()
+              .isInNodeModules()
+
+            if (isPropertyFromNodeModules && propertyDeclaration) {
+              // For properties defined in node_modules, create a shallow property signature
+              // that doesn't deeply expand the type
+              const propertyType =
+                property.getTypeAtLocation(propertyDeclaration)
+              const isOptional = property.isOptional()
+              const typeText = propertyType.getText(
+                propertyDeclaration,
+                TYPE_FORMAT_FLAGS
+              )
+
+              // Get the module specifier for the type if available
+              const moduleSpecifier = getModuleSpecifierFromImports(
+                enclosingNode,
+                propertyType.getAliasSymbol() || propertyType.getSymbol()
+              )
+
+              // Create a simple TypeReference for the property type instead of expanding
+              const cleanTypeName = typeText.replace(/\s*\|\s*undefined$/, '') // Remove "| undefined" suffix
+              const simpleType: Kind.TypeExpression = {
+                kind: 'TypeReference',
+                name: cleanTypeName,
+                text: cleanTypeName,
+                typeArguments: [],
+                moduleSpecifier,
+                ...getDeclarationLocation(propertyDeclaration),
+              } as Kind.TypeReference
+
+              propertySignatures.push({
+                kind: 'PropertySignature',
+                name: property.getName(),
+                text: cleanTypeName,
+                isOptional,
+                isReadonly: false,
+                type: simpleType,
+                ...getDeclarationLocation(propertyDeclaration),
+              } satisfies Kind.PropertySignature)
+            } else {
+              // Resolve normally for local types
+              const resolvedProperty = resolvePropertySignature(
+                property,
+                enclosingNode,
+                filter,
+                defaultValues,
+                dependencies
+              )
+
+              if (resolvedProperty) {
+                propertySignatures.push(resolvedProperty)
+              }
+            }
+          }
+
+          resolvedType = {
+            kind: 'TypeLiteral',
+            text: apparentType.getText(enclosingNode, TYPE_FORMAT_FLAGS),
+            members: propertySignatures,
+          } satisfies Kind.TypeLiteral
+        } else {
+          resolvedType = resolveTypeExpression(
+            type.getApparentType(),
+            symbolDeclaration ?? enclosingNode,
+            filter,
+            defaultValues,
+            dependencies
+          )
+        }
         resolvingTypes.delete(type.compilerType.id)
       }
     } else if (tsMorph.Node.isTypeReference(enclosingNode)) {
@@ -5744,6 +5856,133 @@ function isTrivialType(type: Type): boolean {
 }
 
 /**
+ * Checks if a mapped type node represents an identity mapping pattern.
+ * An identity mapped type has the form: { [K in keyof T]: T[K] }
+ *
+ * Uses text-based matching for robustness across different ts-morph versions.
+ */
+function isIdentityMappedTypeNode(
+  mappedNode: MappedTypeNode,
+  typeParams: TypeParameterDeclaration[]
+): boolean {
+  const mappedParam = mappedNode.getTypeParameter()
+  const mappedParamName = mappedParam.getName()
+
+  // Check if there's a key remapping (as clause) - if so, this is NOT an identity mapping
+  // e.g., { [K in keyof T as K extends `$${infer I}` ? I : K]: T[K] }
+  const nameTypeNode = mappedNode.getNameTypeNode()
+  if (nameTypeNode) {
+    return false
+  }
+
+  // Get constraint text (e.g., "keyof T")
+  const constraint = mappedParam.getConstraint()
+  if (!constraint) {
+    return false
+  }
+
+  const constraintText = constraint.getText().trim()
+
+  // Check if constraint is "keyof T" where T is a type parameter
+  // Handle both "keyof T" and "keyof  T" (with extra spaces)
+  const keyofMatch = constraintText.match(/^keyof\s+(.+)$/)
+  if (!keyofMatch) {
+    return false
+  }
+
+  const targetParamName = keyofMatch[1].trim()
+
+  // Check that targetParamName matches one of the type parameters
+  const matchingParam = typeParams.find((p) => p.getName() === targetParamName)
+  if (!matchingParam) {
+    return false
+  }
+
+  // Check if the value type is T[K] (identity mapping)
+  const valueNode = mappedNode.getTypeNode()
+  if (!valueNode) {
+    return false
+  }
+
+  const valueText = valueNode.getText().trim()
+
+  // Check for pattern like "T[Key]" where T is the target param and Key is the mapped param
+  // Handle potential whitespace: T[Key], T[ Key ], etc.
+  const valueMatch = valueText.match(/^(\w+)\s*\[\s*(\w+)\s*\]$/)
+  if (!valueMatch) {
+    return false
+  }
+
+  const [, objectName, indexName] = valueMatch
+
+  if (objectName !== targetParamName || indexName !== mappedParamName) {
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Checks if a type node contains an identity mapped type pattern.
+ * Handles intersection types like `{ [K in keyof T]: T[K] } & {}`.
+ */
+function hasIdentityMappedTypeNode(
+  node: TypeNode,
+  typeParams: TypeParameterDeclaration[]
+): boolean {
+  // Handle intersection types - look for identity mapped type in any branch
+  if (tsMorph.Node.isIntersectionTypeNode(node)) {
+    return node
+      .getTypeNodes()
+      .some((node) => hasIdentityMappedTypeNode(node, typeParams))
+  }
+
+  if (tsMorph.Node.isMappedTypeNode(node)) {
+    return isIdentityMappedTypeNode(node, typeParams)
+  }
+
+  return false
+}
+
+/**
+ * Detects "transparent utility types" like Simplify, Expand, Prettify, etc.
+ * These are type aliases that have an identity mapped type pattern,
+ * meaning they don't change the structure of the type - they just flatten it for display.
+ *
+ * Pattern: `type Simplify<T> = { [K in keyof T]: T[K] } & {}`
+ */
+function isTransparentUtilityType(type: Type): boolean {
+  // Try to get the alias symbol - this is the primary way to identify the type
+  const aliasSymbol = type.getAliasSymbol()
+
+  // Also try the regular symbol as a fallback
+  const symbol = aliasSymbol || type.getSymbol()
+  if (!symbol) {
+    return false
+  }
+
+  const declaration = getPrimaryDeclaration(symbol)
+
+  if (!tsMorph.Node.isTypeAliasDeclaration(declaration)) {
+    return false
+  }
+
+  const typeParams = declaration.getTypeParameters()
+
+  // Transparent utility types typically have exactly one type parameter
+  if (typeParams.length !== 1) {
+    return false
+  }
+
+  const typeNode = declaration.getTypeNode()
+  if (!typeNode) {
+    return false
+  }
+
+  return hasIdentityMappedTypeNode(typeNode, typeParams)
+}
+
+/**
  * Decide whether a `TypeReference` should be fully resolved or kept as a reference.
  *
  * A type is resolved when all of the following criteria are met:
@@ -5758,8 +5997,46 @@ function shouldResolveTypeReference(type: Type, enclosingNode?: Node): boolean {
     return false
   }
 
+  // Check for transparent utility types via enclosingNode FIRST, before resolvingTypes check
+  // This is important because when TypeScript resolves Simplify<T>, the Type object
+  // is already the flattened result, so type.getAliasSymbol() returns undefined.
+  // We need to check the enclosingNode (the TypeReference) to detect Simplify.
+  if (tsMorph.Node.isTypeReference(enclosingNode)) {
+    const typeNameSymbol = enclosingNode.getTypeName().getSymbol()
+    if (typeNameSymbol) {
+      // Need to get the aliased symbol if this is an import
+      let targetSymbol = typeNameSymbol
+      if (typeNameSymbol.isAlias()) {
+        const aliasedSymbol = typeNameSymbol.getAliasedSymbol()
+        if (aliasedSymbol) {
+          targetSymbol = aliasedSymbol
+        }
+      }
+
+      const declaration = getPrimaryDeclaration(targetSymbol)
+
+      // Check if this is a transparent utility type (works for both local and node_modules)
+      if (tsMorph.Node.isTypeAliasDeclaration(declaration)) {
+        const typeParams = declaration.getTypeParameters()
+        if (typeParams.length === 1) {
+          const typeNode = declaration.getTypeNode()
+          if (typeNode && hasIdentityMappedTypeNode(typeNode, typeParams)) {
+            return true
+          }
+        }
+      }
+    }
+  }
+
   if (resolvingTypes.has(type.compilerType.id)) {
     return false
+  }
+
+  // Check for transparent utility types early - these should always be expanded
+  // regardless of other conditions like containsFreeTypeParameter
+  // Try multiple approaches to detect transparent types
+  if (isTransparentUtilityType(type)) {
+    return true
   }
 
   // If the reference appears to contain free type parameters, allow an
