@@ -1,5 +1,23 @@
 # renoun
 
+## 10.14.0
+
+### Minor Changes
+
+- 8ff9b60: Renames `JavaScriptModuleExport` to `ModuleExport`.
+- d473caf: Updates the `CodeBlock` component and MDX utilities so code fences are handled consistently in the `Markdown` and `MDX` components.
+  - `CodeBlock` now accepts raw `pre` element props directly and internally infers the `language`, `path`, and `children` from the nested `code` element.
+  - The `parsePreProps` helper has been removed from the public API. Any previous `pre: (props) => <CodeBlock {...parsePreProps(props)} />` mappings should switch to `pre: (props) => <CodeBlock {...props} />` or just provide `CodeBlock` when using the `@renoun/mdx/rehype/add-code-block` plugin.
+  - The `@renoun/mdx` rehype `add-code-block` plugin now also replaces markdown code fences with a `CodeBlock` element, so `CodeBlock` and its meta props work the same way across Markdown and MDX pipelines.
+
+### Patch Changes
+
+- 4501478: Fixes transparent type resolution in `ModuleExport#getType` for mapped type utilities like `Simplify`.
+- 04e5401: Fixes interface merging for non-exported local types in `ModuleExport#getType`.
+- eb31efe: Fixes the `Tokens` component `showErrors` prop printing diagnostics even when explicitly set to `false`.
+- Updated dependencies [d473caf]
+  - @renoun/mdx@3.6.0
+
 ## 10.13.0
 
 ### Minor Changes
