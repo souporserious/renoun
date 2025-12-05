@@ -436,14 +436,14 @@ export function getDiagnostics(
   allowErrors?: string | boolean,
   showErrors?: boolean
 ): Diagnostic<ts.Diagnostic>[] {
+  if (!sourceFile || showErrors === false) {
+    return []
+  }
+
   const allowedErrorCodes: number[] =
     typeof allowErrors === 'string'
       ? allowErrors.split(',').map((code) => parseInt(code, 10))
       : []
-
-  if (!sourceFile) {
-    return []
-  }
 
   const diagnostics = sourceFile
     .getPreEmitDiagnostics()
