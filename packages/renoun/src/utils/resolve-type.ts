@@ -471,6 +471,9 @@ export namespace Kind {
 
     /** The type parameters that can be provided as arguments to the type alias. */
     typeParameters: TypeParameter[]
+
+    /** Base interfaces that this interface extends. */
+    extends?: TypeReference[]
   }
 
   export interface TypeParameter extends SharedDocumentable {
@@ -1158,17 +1161,96 @@ export function resolveType(
         }
       }
 
+      const extendsClauses = enclosingNode.getExtends()
+      const hasExtends = extendsClauses.length > 0
+
+      // Start with explicitly declared members on this interface
+      const members: Kind.MemberUnion[] = resolveMemberSignatures(
+        enclosingNode.getMembers(),
+        filter,
+        defaultValues,
+        dependencies
+      )
+
+      // Only merge inherited members when the interface explicitly extends something
+      if (hasExtends && type.isObject()) {
+        const existingPropertyNames = new Set(
+          members
+            .filter(
+              (member): member is Kind.PropertySignature =>
+                member.kind ===
+                ('PropertySignature' as Kind.PropertySignature['kind'])
+            )
+            .map((member) => member.name)
+            .filter((name): name is string => Boolean(name))
+        )
+
+        const inheritedProperties = resolvePropertySignatures(
+          type,
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        for (const property of inheritedProperties) {
+          const name = property.name
+          if (!name || existingPropertyNames.has(name)) {
+            continue
+          }
+          existingPropertyNames.add(name)
+          members.push(property)
+        }
+
+        // Merge in index signatures, including those from base interfaces
+        const existingIndexTexts = new Set(
+          members
+            .filter((member) => member.kind === 'IndexSignature')
+            .map((member) => member.text)
+        )
+
+        const indexSignatures = resolveIndexSignatures(enclosingNode, filter)
+
+        for (const indexSignature of indexSignatures) {
+          if (existingIndexTexts.has(indexSignature.text)) {
+            continue
+          }
+          existingIndexTexts.add(indexSignature.text)
+          members.push(indexSignature)
+        }
+      }
+
+      // Resolve extended interfaces into TypeReference metadata when possible,
+      // but only when the base is a visible (exported or external) symbol.
+      const resolvedExtends: Kind.TypeReference[] = []
+
+      if (extendsClauses.length) {
+        for (const extendsClause of extendsClauses) {
+          const baseType = extendsClause.getType()
+          const baseSymbol = baseType.getAliasSymbol() || baseType.getSymbol()
+          const visibility = getSymbolVisibility(baseSymbol, enclosingNode)
+
+          // Skip local-internal bases, since their members are already merged
+          // and they are not directly referenceable from the public API surface.
+          if (visibility === 'local-internal') {
+            continue
+          }
+
+          const reference = toShallowReference(
+            baseType,
+            extendsClause
+          ) as Kind.TypeReference
+          resolvedExtends.push(reference)
+        }
+      }
+
       resolvedType = {
         kind: 'Interface',
         name: symbolMetadata.name,
         text: typeText,
         typeParameters: resolvedTypeParameters,
-        members: resolveMemberSignatures(
-          enclosingNode.getMembers(),
-          filter,
-          defaultValues,
-          dependencies
-        ),
+        members,
+        ...(resolvedExtends.length ? { extends: resolvedExtends } : {}),
       } satisfies Kind.Interface
     } else if (
       tsMorph.Node.isInterfaceDeclaration(symbolDeclaration) &&
@@ -1189,17 +1271,95 @@ export function resolveType(
         }
       }
 
+      const extendsClauses = symbolDeclaration.getExtends()
+      const hasExtends = extendsClauses.length > 0
+
+      // Start with explicitly declared members on this interface
+      const members: Kind.MemberUnion[] = resolveMemberSignatures(
+        symbolDeclaration.getMembers(),
+        filter,
+        defaultValues,
+        dependencies
+      )
+
+      // Only merge inherited members when the interface explicitly extends something
+      if (hasExtends && type.isObject()) {
+        const existingPropertyNames = new Set(
+          members
+            .filter((member) => member.kind === 'PropertySignature')
+            .map((member) => member.name)
+            .filter((name) => Boolean(name))
+        )
+
+        const inheritedProperties = resolvePropertySignatures(
+          type,
+          symbolDeclaration,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        for (const property of inheritedProperties) {
+          const name = property.name
+          if (!name || existingPropertyNames.has(name)) {
+            continue
+          }
+          existingPropertyNames.add(name)
+          members.push(property)
+        }
+
+        // Merge in index signatures, including those from base interfaces
+        const existingIndexTexts = new Set(
+          members
+            .filter((member) => member.kind === 'IndexSignature')
+            .map((member) => member.text)
+        )
+
+        const indexSignatures = resolveIndexSignatures(
+          symbolDeclaration,
+          filter
+        )
+
+        for (const indexSignature of indexSignatures) {
+          if (existingIndexTexts.has(indexSignature.text)) {
+            continue
+          }
+          existingIndexTexts.add(indexSignature.text)
+          members.push(indexSignature)
+        }
+      }
+
+      // Resolve extended interfaces into TypeReference metadata when possible,
+      // but only when the base is a visible (exported or external) symbol.
+      const resolvedExtends: Kind.TypeReference[] = []
+
+      if (extendsClauses.length) {
+        for (const extendsClause of extendsClauses) {
+          const baseType = extendsClause.getType()
+          const baseSymbol = baseType.getAliasSymbol() || baseType.getSymbol()
+          const visibility = getSymbolVisibility(baseSymbol, symbolDeclaration)
+
+          // Skip local-internal bases, since their members are already merged
+          // and they are not directly referenceable from the public API surface.
+          if (visibility === 'local-internal') {
+            continue
+          }
+
+          const reference = toShallowReference(
+            baseType,
+            extendsClause
+          ) as Kind.TypeReference
+          resolvedExtends.push(reference)
+        }
+      }
+
       resolvedType = {
         kind: 'Interface',
         name: symbolMetadata.name,
         text: typeText,
         typeParameters: resolvedTypeParameters,
-        members: resolveMemberSignatures(
-          symbolDeclaration.getMembers(),
-          filter,
-          defaultValues,
-          dependencies
-        ),
+        members,
+        ...(resolvedExtends.length ? { extends: resolvedExtends } : {}),
       } satisfies Kind.Interface
     } else if (tsMorph.Node.isModuleDeclaration(enclosingNode)) {
       const types: Kind[] = []

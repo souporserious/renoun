@@ -10989,6 +10989,40 @@ describe('resolveType', () => {
               ],
             },
           },
+          {
+            "filePath": "test.ts",
+            "isOptional": false,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "color",
+            "position": {
+              "end": {
+                "column": 16,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
+            "text": "color: string",
+            "type": {
+              "filePath": "test.ts",
+              "kind": "String",
+              "position": {
+                "end": {
+                  "column": 16,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 10,
+                  "line": 2,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+          },
         ],
         "name": "Props",
         "position": {
@@ -15337,6 +15371,13 @@ describe('resolveType', () => {
           "ButtonProps",
           [
             {
+              "extends": [
+                {
+                  "kind": "TypeReference",
+                  "name": "ButtonHTMLAttributes",
+                  "text": "React.ButtonHTMLAttributes<HTMLButtonElement>",
+                },
+              ],
               "filePath": "test.ts",
               "kind": "Interface",
               "members": [
@@ -22001,6 +22042,117 @@ describe('resolveType', () => {
           ],
           "text": "{ children?: string; label: string; }",
         },
+        "typeParameters": [],
+      }
+    `)
+  })
+
+  test('interface extending another interface should show all properties', () => {
+    const testFile = project.createSourceFile(
+      'test-extends.ts',
+      dedent`
+        interface Base {
+          title?: string
+        }
+
+        interface Extended extends Base {
+          content?: string
+        }
+
+        export { Extended }
+      `,
+      { overwrite: true }
+    )
+
+    const extended = testFile.getInterfaceOrThrow('Extended')
+    const resolved = resolveType(extended.getType(), extended)
+
+    expect(resolved).toMatchInlineSnapshot(`
+      {
+        "filePath": "test-extends.ts",
+        "kind": "Interface",
+        "members": [
+          {
+            "filePath": "test-extends.ts",
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "content",
+            "position": {
+              "end": {
+                "column": 19,
+                "line": 6,
+              },
+              "start": {
+                "column": 3,
+                "line": 6,
+              },
+            },
+            "text": "content?: string",
+            "type": {
+              "filePath": "test-extends.ts",
+              "kind": "String",
+              "position": {
+                "end": {
+                  "column": 19,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 13,
+                  "line": 6,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+          },
+          {
+            "filePath": "test-extends.ts",
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "title",
+            "position": {
+              "end": {
+                "column": 17,
+                "line": 2,
+              },
+              "start": {
+                "column": 3,
+                "line": 2,
+              },
+            },
+            "text": "title?: string",
+            "type": {
+              "filePath": "test-extends.ts",
+              "kind": "String",
+              "position": {
+                "end": {
+                  "column": 17,
+                  "line": 2,
+                },
+                "start": {
+                  "column": 11,
+                  "line": 2,
+                },
+              },
+              "text": "string",
+              "value": undefined,
+            },
+          },
+        ],
+        "name": "Extended",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 7,
+          },
+          "start": {
+            "column": 1,
+            "line": 5,
+          },
+        },
+        "text": "Extended",
         "typeParameters": [],
       }
     `)
