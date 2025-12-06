@@ -4476,9 +4476,15 @@ export class Collection<
   }
 
   /** Get a file at the specified path and optional extension(s). */
-  async getFile<const Extension extends string | undefined = undefined>(
-    /** The path to the entry excluding leading numbers and the extension. */
-    path: string | string[],
+  async getFile<
+    Path extends string | string[],
+    const Extension extends string | undefined = undefined,
+  >(
+    /**
+     * The path to the entry excluding leading numbers. The final segment may
+     * optionally include the file extension e.g. `"Button.mdx"`.
+     */
+    path: Path,
 
     /** The extension or extensions to match. */
     extension?: Extension | Extension[]
@@ -4491,18 +4497,30 @@ export class Collection<
           : Extension extends 'md'
             ? MarkdownFile<Types['md']>
             : File<Types>
-      : File<Types>
+      : Path extends string
+        ? ExtractFileExtension<Path> extends infer PathExtension extends string
+          ? IsJavaScriptLikeExtension<PathExtension> extends true
+            ? JavaScriptFile<Types[PathExtension]>
+            : PathExtension extends 'mdx'
+              ? MDXFile<Types['mdx']>
+              : PathExtension extends 'md'
+                ? MarkdownFile<Types['md']>
+                : File<Types>
+          : File<Types>
+        : File<Types>
   > {
     const normalizedPath = Array.isArray(path)
       ? path.map(normalizeSlashes)
       : normalizeSlashes(path).split('/').filter(Boolean)
     const rootPath = normalizedPath.at(0)
+    const rootBaseName =
+      typeof rootPath === 'string' ? removeAllExtensions(rootPath) : rootPath
 
     for (const entry of this.#entries) {
       const baseName = entry.getBaseName()
       const isRootDirectory = baseName === '.'
 
-      if (isRootDirectory || baseName === rootPath) {
+      if (isRootDirectory || baseName === rootBaseName) {
         if (entry instanceof Directory) {
           const directoryFile = await entry
             .getFile(

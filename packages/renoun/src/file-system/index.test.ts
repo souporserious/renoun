@@ -2462,6 +2462,11 @@ export function identity<T>(value: T) {
     const group = new Collection({
       entries: [directoryA, directoryB],
     })
+
+    expectTypeOf(await group.getFile('Button.mdx')).toExtend<
+      MDXFile<{ default: MDXContent } & MDXTypes>
+    >()
+
     const file = await group.getFile('Button', 'mdx')
 
     expectTypeOf(file).toExtend<MDXFile<{ default: MDXContent } & MDXTypes>>()
