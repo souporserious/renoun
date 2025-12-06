@@ -229,7 +229,7 @@ describe('file system', () => {
 
     type Tests = [Expect<Is<typeof Content, MDXContent>>]
 
-    expectTypeOf(Content).toMatchTypeOf<MDXContent>()
+    expectTypeOf(Content).toExtend<MDXContent>()
   })
 
   test('uses default MDX compiler when no loader is provided', async () => {
@@ -503,7 +503,7 @@ describe('file system', () => {
 
     type Test = Expect<IsNotAny<typeof basenameFn>>
 
-    expectTypeOf(basenameFn).toMatchTypeOf<
+    expectTypeOf(basenameFn).toExtend<
       (path: string, extension?: string) => string
     >()
     expect(basenameFn('fixtures/utils/path.ts')).toBe('path.ts')
@@ -559,7 +559,7 @@ describe('file system', () => {
 
       type Test = Expect<IsNotAny<typeof value>>
 
-      expectTypeOf(value).toMatchTypeOf<{ title: string } | undefined>()
+      expectTypeOf(value).toExtend<{ title: string } | undefined>()
     })
 
     test('custom validator', async () => {
@@ -585,7 +585,7 @@ describe('file system', () => {
 
       type Test = Expect<IsNotAny<typeof value>>
 
-      expectTypeOf(value).toMatchTypeOf<{ title: string }>()
+      expectTypeOf(value).toExtend<{ title: string }>()
     })
 
     test('inferred validator', async () => {
@@ -608,7 +608,7 @@ describe('file system', () => {
 
       type Test = Expect<IsNotAny<typeof value>>
 
-      expectTypeOf(value).toMatchTypeOf<{ title: string } | undefined>()
+      expectTypeOf(value).toExtend<{ title: string } | undefined>()
     })
 
     test('valibot', async () => {
@@ -632,9 +632,7 @@ describe('file system', () => {
 
       type Test = Expect<IsNotAny<typeof value>>
 
-      expectTypeOf(value).toMatchTypeOf<
-        { title: string; date: Date } | undefined
-      >()
+      expectTypeOf(value).toExtend<{ title: string; date: Date } | undefined>()
     })
 
     test('zod', async () => {
@@ -658,9 +656,7 @@ describe('file system', () => {
 
       type Test = Expect<IsNotAny<typeof value>>
 
-      expectTypeOf(value).toMatchTypeOf<
-        { title: string; date?: Date } | undefined
-      >()
+      expectTypeOf(value).toExtend<{ title: string; date?: Date } | undefined>()
     })
   })
 
@@ -685,7 +681,7 @@ describe('file system', () => {
     })
     const files = await posts.getEntries()
 
-    expectTypeOf(files).toMatchTypeOf<
+    expectTypeOf(files).toExtend<
       MDXFile<{ default: MDXContent } & PostType>[]
     >()
     expect(files).toHaveLength(1)
@@ -707,7 +703,7 @@ describe('file system', () => {
     })
     const files = await posts.getEntries()
 
-    expectTypeOf(files).toMatchTypeOf<
+    expectTypeOf(files).toExtend<
       MDXFile<{ default: MDXContent } & PostType>[]
     >()
     expect(files).toHaveLength(1)
@@ -799,7 +795,7 @@ describe('file system', () => {
     })
     const entries = await directory.getEntries()
 
-    expectTypeOf(entries).toMatchTypeOf<MDXFile[]>()
+    expectTypeOf(entries).toExtend<MDXFile[]>()
 
     expect(entries).toHaveLength(1)
   })
@@ -942,7 +938,7 @@ describe('file system', () => {
     const rootDirectory = new Directory()
     const file = await rootDirectory.getFile('tsconfig', 'json')
 
-    expectTypeOf(file!).toMatchTypeOf<File>()
+    expectTypeOf(file!).toExtend<File>()
     expect(file!).toBeInstanceOf(File)
 
     const tsConfigFile = new File({
@@ -1042,7 +1038,7 @@ describe('file system', () => {
     const file = await projectDirectory.getFile('server', 'ts')
 
     expect(file!).toBeInstanceOf(JavaScriptFile)
-    expectTypeOf(file!).toMatchTypeOf<JavaScriptFile<any>>()
+    expectTypeOf(file!).toExtend<JavaScriptFile<any>>()
 
     const jsFile = new JavaScriptFile({ path: 'fixtures/project/server.ts' })
     const jsFileExports = await jsFile.getExports()
@@ -1060,7 +1056,7 @@ describe('file system', () => {
     const file = await projectDirectory.getFile('server', 'ts')
 
     expect(file).toBeInstanceOf(JavaScriptFile)
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
+    expectTypeOf(file).toExtend<JavaScriptFile<any>>()
   })
 
   test('is javascript file with runtime', async () => {
@@ -1075,7 +1071,7 @@ describe('file system', () => {
     expect(isJavaScriptFile(entry)).toBe(true)
 
     if (isJavaScriptFile(entry)) {
-      expectTypeOf(entry).toMatchTypeOf<JavaScriptFile<any>>()
+      expectTypeOf(entry).toExtend<JavaScriptFile<any>>()
     }
   })
 
@@ -1285,7 +1281,7 @@ describe('file system', () => {
     const fileExport = await file.getExport('useHover')
     const value = await fileExport.getRuntimeValue()
 
-    expectTypeOf(value).toMatchTypeOf<Function>()
+    expectTypeOf(value).toExtend<Function>()
     expect(value).toBeInstanceOf(Function)
   })
 
@@ -1302,7 +1298,7 @@ describe('file system', () => {
     const fileExport = await file.getExport('createServer')
     const value = await fileExport.getRuntimeValue()
 
-    expectTypeOf(value).toMatchTypeOf<Function>()
+    expectTypeOf(value).toExtend<Function>()
   })
 
   test('file export schema', async () => {
@@ -1469,14 +1465,14 @@ describe('file system', () => {
     expect(file).toBeInstanceOf(MarkdownFile)
 
     const Content = await file.getContent()
-    expectTypeOf(Content).toMatchTypeOf<MDXContent>()
+    expectTypeOf(Content).toExtend<MDXContent>()
 
     const headings = await file.getHeadings()
     expect(headings).toMatchObject([
       { id: 'hello', level: 1, text: 'Hello' },
       { id: 'world', level: 2, text: 'World' },
     ])
-    expectTypeOf(headings).toMatchTypeOf<Headings>()
+    expectTypeOf(headings).toExtend<Headings>()
   })
 
   test('json file getAll and get(path) with dot notation', async () => {
@@ -1491,7 +1487,7 @@ describe('file system', () => {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('config.json')
 
-    expectTypeOf(file).toMatchTypeOf<JSONFile<any, any>>()
+    expectTypeOf(file).toExtend<JSONFile<any, any>>()
 
     expect(file).toBeInstanceOf(JSONFile)
 
@@ -1582,14 +1578,14 @@ describe('file system', () => {
     expect(file).toBeInstanceOf(MDXFile)
 
     const Content = await file.getContent()
-    expectTypeOf(Content).toMatchTypeOf<MDXContent>()
+    expectTypeOf(Content).toExtend<MDXContent>()
 
     const headings = await file.getHeadings()
     expect(headings).toMatchObject([
       { id: 'hello', level: 1, text: 'Hello' },
       { id: 'world', level: 2, text: 'World' },
     ])
-    expectTypeOf(headings).toMatchTypeOf<Headings>()
+    expectTypeOf(headings).toExtend<Headings>()
   })
 
   test('mdx file getHeadings falls back to parsing when export missing', async () => {
@@ -1639,7 +1635,7 @@ describe('file system', () => {
         text: 'useButton',
       },
     ])
-    expectTypeOf(headings).toMatchTypeOf<Headings>()
+    expectTypeOf(headings).toExtend<Headings>()
   })
 
   test('schema transforms export value', async () => {
@@ -1876,7 +1872,7 @@ export function identity<T>(value: T) {
     })
     const file = await directory.getFile('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
+    expectTypeOf(file).toExtend<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = await file.getExport('basename')
@@ -1899,7 +1895,7 @@ export function identity<T>(value: T) {
     })
     const file = await directory.getFile('path', 'ts')
 
-    expectTypeOf(file).toMatchTypeOf<JavaScriptFile<any>>()
+    expectTypeOf(file).toExtend<JavaScriptFile<any>>()
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = await file.getExport('basename')
@@ -2164,7 +2160,7 @@ export function identity<T>(value: T) {
     expect(isFile(entry)).toBe(true)
 
     if (isDirectory(entry)) {
-      expectTypeOf(entry).toMatchTypeOf<Directory<any>>()
+      expectTypeOf(entry).toExtend<Directory<any>>()
     }
 
     const normalizedDirectory = isFile(entry) ? entry.getParent() : entry
@@ -2175,7 +2171,7 @@ export function identity<T>(value: T) {
 
     expect(isDirectory(file)).toBe(false)
 
-    expectTypeOf(file).toMatchTypeOf<
+    expectTypeOf(file).toExtend<
       MDXFile<{
         default: MDXContent
         frontmatter: {
@@ -2200,7 +2196,7 @@ export function identity<T>(value: T) {
     expect(hasTsxExtension).toBe(true)
 
     if (hasTsxExtension) {
-      expectTypeOf(file).toMatchTypeOf<JavaScriptFile<Metadata>>()
+      expectTypeOf(file).toExtend<JavaScriptFile<Metadata>>()
     }
   })
 
@@ -2220,7 +2216,7 @@ export function identity<T>(value: T) {
     expect(hasTsLikeExtension).toBe(true)
 
     if (hasTsLikeExtension) {
-      expectTypeOf(file).toMatchTypeOf<JavaScriptFile<Metadata>>()
+      expectTypeOf(file).toExtend<JavaScriptFile<Metadata>>()
     }
 
     const hasCssExtension = isFile(file, ['css'])
@@ -2228,7 +2224,7 @@ export function identity<T>(value: T) {
     expect(hasCssExtension).toBe(false)
 
     if (hasCssExtension) {
-      expectTypeOf(file).toMatchTypeOf<File>()
+      expectTypeOf(file).toExtend<File>()
     }
   })
 
@@ -2344,7 +2340,7 @@ export function identity<T>(value: T) {
     const jsFile = await group.getFile('posts/meta', 'js')
 
     expect(jsFile).toBeInstanceOf(JavaScriptFile)
-    expectTypeOf(jsFile).toMatchTypeOf<JavaScriptFile<any>>()
+    expectTypeOf(jsFile).toExtend<JavaScriptFile<any>>()
 
     const mdxFile = await group.getFile(
       'posts/building-a-button-component',
@@ -2352,7 +2348,7 @@ export function identity<T>(value: T) {
     )
 
     expect(mdxFile).toBeInstanceOf(MDXFile)
-    expectTypeOf(mdxFile).toMatchTypeOf<
+    expectTypeOf(mdxFile).toExtend<
       MDXFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
     >()
 
@@ -2468,9 +2464,7 @@ export function identity<T>(value: T) {
     })
     const file = await group.getFile('Button', 'mdx')
 
-    expectTypeOf(file).toMatchTypeOf<
-      MDXFile<{ default: MDXContent } & MDXTypes>
-    >()
+    expectTypeOf(file).toExtend<MDXFile<{ default: MDXContent } & MDXTypes>>()
 
     const entry = await group.getEntry('Button')
 
@@ -2481,7 +2475,7 @@ export function identity<T>(value: T) {
     type Test = Expect<IsNotAny<typeof entry>>
 
     if (directoryA.hasFile(entry, 'mdx')) {
-      expectTypeOf(entry).toMatchTypeOf<
+      expectTypeOf(entry).toExtend<
         MDXFile<{ default: MDXContent } & MDXTypes>
       >()
     }
@@ -2559,13 +2553,13 @@ export function identity<T>(value: T) {
       const fileExport = await file.getExport('default')
       const fileExportValue = await fileExport.getRuntimeValue()
 
-      expectTypeOf(fileExportValue).toMatchTypeOf<MDXContent>()
+      expectTypeOf(fileExportValue).toExtend<MDXContent>()
 
       const Content = await file.getExportValue('default')
       const frontmatter = await file.getExportValue('frontmatter')
 
-      expectTypeOf(Content).toMatchTypeOf<MDXContent>()
-      expectTypeOf(frontmatter).toMatchTypeOf<{ title: string }>()
+      expectTypeOf(Content).toExtend<MDXContent>()
+      expectTypeOf(frontmatter).toExtend<{ title: string }>()
 
       type Tests = [
         Expect<IsNotAny<typeof fileExportValue>>,
@@ -2709,10 +2703,10 @@ export function identity<T>(value: T) {
     for (const entry of entries) {
       if (isDirectory(entry)) {
         expect(entry).toBeInstanceOf(Directory)
-        expectTypeOf(entry).toMatchTypeOf<Directory<any>>()
+        expectTypeOf(entry).toExtend<Directory<any>>()
       } else {
         expect(entry).toBeInstanceOf(MDXFile)
-        expectTypeOf(entry).toMatchTypeOf<MDXFile<{ default: MDXContent }>>()
+        expectTypeOf(entry).toExtend<MDXFile<{ default: MDXContent }>>()
       }
     }
   })
@@ -3427,7 +3421,7 @@ export function identity<T>(value: T) {
 
       type Test = Expect<IsNotAny<typeof defaultExport>>
 
-      expectTypeOf(defaultExport).toMatchTypeOf<
+      expectTypeOf(defaultExport).toExtend<
         ModuleExport<
           (typeof import('@renoun/mdx/remark/add-headings'))['default']
         >
@@ -3452,7 +3446,7 @@ export function identity<T>(value: T) {
 
       type Test = Expect<IsNotAny<typeof defaultExport>>
 
-      expectTypeOf(defaultExport).toMatchTypeOf<
+      expectTypeOf(defaultExport).toExtend<
         ModuleExport<
           (typeof import('@renoun/mdx/remark/add-headings'))['default']
         >
