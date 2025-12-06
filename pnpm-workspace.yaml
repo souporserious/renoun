@@ -6,31 +6,29 @@ packages:
 catalog:
   '@mdx-js/loader': 3.1.1
   '@mdx-js/react': 3.1.1
-  '@next/mdx': 15.5.5
-  '@tailwindcss/postcss': 4.1.14
+  '@next/mdx': 16.0.7
+  '@tailwindcss/postcss': 4.1.17
   '@tailwindcss/typography': 0.5.19
   '@types/hast': 3.0.4
   '@types/mdx': 2.0.13
-  '@types/react': 19.2.2
-  '@types/react-dom': 19.2.2
-  arktype: 2.1.25
+  '@types/react': 19.2.7
+  '@types/react-dom': 19.2.3
+  arktype: 2.1.28
   geist: 1.5.1
-  next: 15.5.5
-  prettier: 3.6.2
-  react: 19.2.0
+  next: 16.0.7
+  prettier: 3.7.4
+  react: 19.2.1
   react-aria-components: 1.13.0
-  react-dom: 19.2.0
+  react-dom: 19.2.1
   restyle: 3.4.2
-  tailwindcss: 4.1.14
-  tm-grammars: 1.24.22
-  tm-themes: 1.10.11
+  tailwindcss: 4.1.17
+  tm-grammars: 1.26.0
+  tm-themes: 1.10.13
   ts-morph: 27.0.2
   typescript: 5.9.3
   unified: 11.0.5
   valibot: 1.2.0
-  zod: 4.1.12
-
-catalogMode: prefer
+  zod: 4.1.13
 
 minimumReleaseAge: 1440
 

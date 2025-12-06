@@ -3,8 +3,8 @@
   "name": "@apps/site",
   "type": "module",
   "scripts": {
-    "dev": "../../packages/renoun/dist/cli/index.js next dev",
-    "build": "../../packages/renoun/dist/cli/index.js next build",
+    "dev": "../../packages/renoun/dist/cli/index.js next dev --webpack",
+    "build": "../../packages/renoun/dist/cli/index.js next build --webpack",
     "start": "serve out"
   },
   "dependencies": {
@@ -17,9 +17,9 @@
     "@types/mdx": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@vercel/analytics": "1.5.0",
-    "@vitejs/plugin-react": "5.1.0",
-    "@vitejs/plugin-rsc": "0.5.1",
+    "@vercel/analytics": "1.6.1",
+    "@vitejs/plugin-react": "5.1.1",
+    "@vitejs/plugin-rsc": "0.5.4",
     "arktype": "catalog:",
     "geist": "catalog:",
     "next": "catalog:",
@@ -32,7 +32,7 @@
     "serve": "14.2.5",
     "ts-morph": "catalog:",
     "valibot": "catalog:",
-    "vite": "7.2.2",
+    "vite": "7.2.6",
     "zod": "catalog:"
   }
 }

@@ -19,13 +19,13 @@
     "clean": "node -e \"(function rm(directory) { ['.next', '.turbo', 'node_modules', 'dist'].includes(path.basename(directory)) ? fs.rmSync(directory, { recursive: true, force: true }) : fs.existsSync(directory) && fs.statSync(directory).isDirectory() && fs.readdirSync(directory).forEach(filePath => rm(path.join(directory, filePath))); })('.');\""
   },
   "devDependencies": {
-    "@changesets/cli": "2.29.7",
-    "@octokit/rest": "22.0.0",
-    "@types/node": "24.7.2",
+    "@changesets/cli": "2.29.8",
+    "@octokit/rest": "22.0.1",
+    "@types/node": "24.10.1",
     "prettier": "catalog:",
-    "turbo": "2.5.8",
+    "turbo": "2.6.3",
     "typescript": "catalog:",
-    "vitest": "3.2.4"
+    "vitest": "4.0.15"
   },
   "pnpm": {
     "overrides": {

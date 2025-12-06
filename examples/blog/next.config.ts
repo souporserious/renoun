@@ -1,14 +1,11 @@
 import createMDXPlugin from '@next/mdx'
-import rehypeAddCodeBlock from '@renoun/mdx/rehype/add-code-block'
-import remarkFrontmatter from 'remark-frontmatter'
-import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
 
 const withMDX = createMDXPlugin({
   extension: /\.mdx?$/,
   options: {
     providerImportSource: 'renoun/mdx/components',
-    rehypePlugins: [rehypeAddCodeBlock],
-    remarkPlugins: [remarkFrontmatter, remarkMdxFrontmatter],
+    rehypePlugins: ['@renoun/mdx/rehype/add-code-block'],
+    remarkPlugins: ['remark-frontmatter', 'remark-mdx-frontmatter'],
   },
 })
 
