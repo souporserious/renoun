@@ -3263,10 +3263,10 @@ export function identity<T>(value: T) {
       })
       const gitHostSpy = vi
         .spyOn(gitHostFileSystemModule, 'GitHostFileSystem')
-        .mockImplementation(((options: any) => {
+        .mockImplementation(function (this: any, options: any) {
           expect(options.repository).toBe('souporserious/remote')
           return remoteFs as unknown as gitHostFileSystemModule.GitHostFileSystem
-        }) as any)
+        } as any)
 
       try {
         const pkg = new Package({
