@@ -403,9 +403,6 @@ importers:
       remark-gfm:
         specifier: 4.0.1
         version: 4.0.1
-      remark-github:
-        specifier: 12.0.0
-        version: 12.0.0
       remark-mdx:
         specifier: 3.1.1
         version: 3.1.1
@@ -452,6 +449,9 @@ importers:
       rehype-parse:
         specifier: 9.0.1
         version: 9.0.1
+      remark-github:
+        specifier: 12.0.0
+        version: 12.0.0
       vfile:
         specifier: 6.0.3
         version: 6.0.3
