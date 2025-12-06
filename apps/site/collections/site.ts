@@ -8,6 +8,7 @@ const mdxSchema = {
       level: z.number(),
       children: z.custom<NonNullable<React.ReactNode>>(),
       text: z.string(),
+      summary: z.string().optional(),
     })
   ),
   metadata: z.object({

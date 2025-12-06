@@ -2716,10 +2716,8 @@ export interface DirectoryOptions<
   Types extends InferDirectoryLoaderTypes<Loaders> = any,
   LoaderTypes extends Types = any,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<
-    FileSystemEntry<LoaderTypes>,
-    LoaderTypes
-  > = DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
+    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
   /** Directory path in the workspace. */
   path?: PathLike
@@ -2820,10 +2818,8 @@ export class Directory<
   Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<
-    FileSystemEntry<LoaderTypes>,
-    LoaderTypes
-  > = DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
+    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > {
   #path: string
   #rootPath?: string
@@ -3323,23 +3319,18 @@ export class Directory<
             Extension extends keyof LoaderTypes
               ? InferDefaultModuleTypes<Extension> & LoaderTypes[Extension]
               : InferDefaultModuleTypes<Extension>,
-            LoaderTypes,
+            any,
             string,
             Extension
           >
         : Extension extends 'mdx'
-          ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+          ? MDXFile<LoaderTypes['mdx'], any, string, Extension>
           : Extension extends 'md'
-            ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
+            ? MarkdownFile<LoaderTypes['md'], any, string, Extension>
             : Extension extends 'json'
-              ? JSONFile<
-                  JSONExtensionType<LoaderTypes>,
-                  LoaderTypes,
-                  string,
-                  Extension
-                >
-              : File<LoaderTypes, Path, Extension>
-      : File<LoaderTypes>
+              ? JSONFile<JSONExtensionType<LoaderTypes>, any, string, Extension>
+              : File<any, Path, Extension>
+      : File<any>
   >
 
   async getFile<
@@ -3355,23 +3346,18 @@ export class Directory<
             Extension extends keyof LoaderTypes
               ? InferDefaultModuleTypes<Extension> & LoaderTypes[Extension]
               : InferDefaultModuleTypes<Extension>,
-            LoaderTypes,
+            any,
             string,
             Extension
           >
         : Extension extends 'mdx'
-          ? MDXFile<LoaderTypes['mdx'], LoaderTypes, string, Extension>
+          ? MDXFile<LoaderTypes['mdx'], any, string, Extension>
           : Extension extends 'md'
-            ? MarkdownFile<LoaderTypes['md'], LoaderTypes, string, Extension>
+            ? MarkdownFile<LoaderTypes['md'], any, string, Extension>
             : Extension extends 'json'
-              ? JSONFile<
-                  JSONExtensionType<LoaderTypes>,
-                  LoaderTypes,
-                  string,
-                  Extension
-                >
-              : File<LoaderTypes, Extension>
-      : File<LoaderTypes>
+              ? JSONFile<JSONExtensionType<LoaderTypes>, any, string, Extension>
+              : File<any, Extension>
+      : File<any>
   >
 
   async getFile(path: string | string[], extension?: string | string[]) {
@@ -4984,9 +4970,9 @@ export interface PackageExportOptions<
   Loaders extends DirectoryLoader,
   Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > extends Omit<
-    DirectoryOptions<Types, LoaderTypes, Loaders, Filter>,
-    'path' | 'fileSystem'
-  > {
+  DirectoryOptions<Types, LoaderTypes, Loaders, Filter>,
+  'path' | 'fileSystem'
+> {
   path?: PathLike
 }
 
@@ -5088,10 +5074,8 @@ export interface PackageExportDirectory<
   Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<
-    FileSystemEntry<LoaderTypes>,
-    LoaderTypes
-  > = DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
+    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > extends Directory<Types, LoaderTypes, Loaders, Filter> {
   getExportPath(): string
   /** @internal */
@@ -5108,10 +5092,8 @@ export class PackageExportDirectory<
   Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<
-    FileSystemEntry<LoaderTypes>,
-    LoaderTypes
-  > = DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
+    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > extends Directory<Types, LoaderTypes, Loaders, Filter> {
   #exportPath: string
   #analysis?: PackageExportAnalysis
@@ -5726,10 +5708,8 @@ export class Package<
   Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<
-    FileSystemEntry<LoaderTypes>,
-    LoaderTypes
-  > = DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
+    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
   ExportLoaders extends PackageExportLoaderMap = {},
 > {
   #name?: string

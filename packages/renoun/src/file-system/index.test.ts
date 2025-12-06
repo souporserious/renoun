@@ -3328,7 +3328,7 @@ export function identity<T>(value: T) {
       )
       expect(componentsExport?.getAnalysis()?.manifestTarget?.kind).toBe('path')
       expect(
-        componentsExport?.getAnalysis()?.manifestTarget?.absolutePath
+        (componentsExport?.getAnalysis()?.manifestTarget as any)?.absolutePath
       ).toBe('/node_modules/acme/dist/components/*.js')
 
       expect(imports).toHaveLength(2)
