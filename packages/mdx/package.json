@@ -109,7 +109,6 @@
     "remark-mdx": "3.1.1",
     "remark-parse": "11.0.0",
     "remark-rehype": "11.1.2",
-    "remark-smartypants": "3.0.2",
     "unified": "catalog:",
     "unist-util-mdx-define": "1.1.2",
     "unist-util-visit": "5.0.0",
