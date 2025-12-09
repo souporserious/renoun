@@ -5688,6 +5688,174 @@ function tryResolveNodeModulesPackage(
   }
 }
 
+export class Workspace {
+  #fileSystem: FileSystem
+  #workspaceRoot: string
+  #workspaceRelativeRoot: string
+
+  constructor(
+    options: { fileSystem?: FileSystem; rootDirectory?: PathLike } = {}
+  ) {
+    this.#fileSystem = options.fileSystem ?? new NodeFileSystem()
+    const resolvedRoot = normalizeSlashes(
+      resolveSchemePath(options.rootDirectory ?? getRootDirectory())
+    )
+
+    this.#workspaceRoot = resolvedRoot.startsWith('/')
+      ? resolvedRoot
+      : this.#fileSystem.getAbsolutePath(resolvedRoot)
+    const relativeRoot = normalizeWorkspaceRelative(resolvedRoot)
+    this.#workspaceRelativeRoot = relativeRoot || '.'
+  }
+
+  hasWorkspaces() {
+    const workspaceRoot = this.#workspaceRelativeRoot || this.#workspaceRoot
+    return buildWorkspacePatterns(this.#fileSystem, workspaceRoot).length > 0
+  }
+
+  getPackageManager(): 'pnpm' | 'yarn' | 'npm' | 'bun' | 'unknown' {
+    const candidates: Array<[string, 'pnpm' | 'yarn' | 'npm' | 'bun']> = [
+      ['pnpm-lock.yaml', 'pnpm'],
+      ['yarn.lock', 'yarn'],
+      ['package-lock.json', 'npm'],
+      ['npm-shrinkwrap.json', 'npm'],
+      ['bun.lockb', 'bun'],
+    ]
+
+    for (const [file, manager] of candidates) {
+      if (this.#findWorkspacePath(file)) {
+        return manager
+      }
+    }
+
+    return 'unknown'
+  }
+
+  getPackage(name: string) {
+    return this.getPackages().find((pkg) => pkg.getName() === name)
+  }
+
+  getPackages(): Package<InferDirectoryLoaderTypes<DirectoryLoader>>[] {
+    return this.#getWorkspacePackageEntries().map(
+      ({ name, path }) =>
+        new Package({
+          name,
+          path,
+          fileSystem: this.#fileSystem,
+        })
+    )
+  }
+
+  #getWorkspacePackageEntries() {
+    const packageEntries: { name?: string; path: string }[] = []
+    const workspaceRoot = this.#workspaceRelativeRoot || this.#workspaceRoot
+    const patterns = buildWorkspacePatterns(this.#fileSystem, workspaceRoot)
+
+    if (patterns.length === 0) {
+      const rootPackageJsonPath = this.#findWorkspacePath('package.json')
+
+      if (rootPackageJsonPath) {
+        const packageJson = readJsonFile<PackageJson>(
+          this.#fileSystem,
+          rootPackageJsonPath,
+          `package.json at "${rootPackageJsonPath}"`
+        )
+        packageEntries.push({
+          name: packageJson.name,
+          path: directoryName(rootPackageJsonPath) || '.',
+        })
+      }
+
+      return packageEntries
+    }
+
+    const matchers = patterns.map(
+      (pattern) =>
+        new Minimatch(normalizeWorkspaceRelative(pattern) || '.', { dot: true })
+    )
+    const roots = buildWorkspaceSearchRoots(patterns)
+    const visited = new Set<string>()
+
+    for (const root of roots) {
+      const queue: string[] = [normalizeWorkspaceRelative(root)]
+
+      while (queue.length > 0) {
+        const relative = queue.shift() ?? ''
+        const normalized = normalizeWorkspaceRelative(relative)
+
+        if (visited.has(normalized)) {
+          continue
+        }
+
+        visited.add(normalized)
+
+        const packageJsonPath = this.#findWorkspacePath(
+          normalized ? joinPaths(normalized, 'package.json') : 'package.json'
+        )
+
+        if (
+          matchers.some((matcher) => matcher.match(normalized || '.')) &&
+          packageJsonPath
+        ) {
+          const packageJson = readJsonFile<PackageJson>(
+            this.#fileSystem,
+            packageJsonPath,
+            `package.json at "${packageJsonPath}"`
+          )
+          const packagePath = directoryName(packageJsonPath)
+
+          packageEntries.push({
+            name: packageJson.name,
+            path: packagePath,
+          })
+        }
+
+        const directoryPath = this.#resolveWorkspacePath(normalized || '.')
+
+        for (const entry of safeReadDirectory(
+          this.#fileSystem,
+          directoryPath
+        )) {
+          if (!entry.isDirectory || WORKSPACE_DIRECTORY_SKIP.has(entry.name)) {
+            continue
+          }
+
+          const child = normalized
+            ? joinPaths(normalized, entry.name)
+            : entry.name
+          queue.push(child)
+        }
+      }
+    }
+
+    return packageEntries
+  }
+
+  #findWorkspacePath(path: string) {
+    const absolutePath = this.#resolveWorkspacePath(path)
+    if (safeFileExistsSync(this.#fileSystem, absolutePath)) {
+      return absolutePath
+    }
+
+    const relativePath = this.#resolveWorkspacePath(path, true)
+    if (
+      relativePath !== absolutePath &&
+      safeFileExistsSync(this.#fileSystem, relativePath)
+    ) {
+      return relativePath
+    }
+  }
+
+  #resolveWorkspacePath(path: string, preferRelative?: boolean) {
+    const base =
+      preferRelative || this.#workspaceRelativeRoot
+        ? this.#workspaceRelativeRoot
+        : this.#workspaceRoot
+    const normalizedBase = base === '.' ? '' : base
+    return normalizedBase ? joinPaths(normalizedBase, path) : path
+  }
+}
+
 function resolveRepositorySpecifier(
   repository?: Repository | RepositoryConfig | string
 ) {

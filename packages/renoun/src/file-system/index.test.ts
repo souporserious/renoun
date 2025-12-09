@@ -36,6 +36,7 @@ import {
   FileNotFoundError,
   ModuleExportNotFoundError,
   JSONFile,
+  Workspace,
 } from './index'
 import type { Expect, Is, IsNotAny } from './types'
 import type { Kind } from '../utils/resolve-type'
@@ -3477,5 +3478,29 @@ export function identity<T>(value: T) {
     expect(file.getSourceUrl({ repository: 'github:owner/repo@main' })).toBe(
       'https://github.com/owner/repo/blob/main/foo.ts'
     )
+  })
+
+  describe('Workspace', () => {
+    test('exposes workspace metadata', () => {
+      const fileSystem = new MemoryFileSystem({
+        'pnpm-workspace.yaml': 'packages:\n  - packages/*',
+        'pnpm-lock.yaml': '',
+        'packages/foo/package.json': JSON.stringify({ name: 'foo' }),
+        'packages/bar/package.json': JSON.stringify({ name: 'bar' }),
+      })
+
+      const workspace = new Workspace({ fileSystem, rootDirectory: '.' })
+
+      expect(workspace.hasWorkspaces()).toBe(true)
+      expect(workspace.getPackageManager()).toBe('pnpm')
+
+      const packages = workspace.getPackages()
+      const packageNames = packages
+        .map((pkg) => pkg.getName())
+        .filter((name): name is string => Boolean(name))
+
+      expect(packageNames.sort()).toEqual(['bar', 'foo'])
+      expect(workspace.getPackage('bar')?.getName()).toBe('bar')
+    })
   })
 })
