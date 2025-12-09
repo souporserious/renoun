@@ -105,8 +105,9 @@ export namespace Kind {
     value?: BigInteger
   }
 
-  export interface TupleElement<Type extends TypeExpression = TypeExpression>
-    extends Shared {
+  export interface TupleElement<
+    Type extends TypeExpression = TypeExpression,
+  > extends Shared {
     kind: 'TupleElement'
 
     /** The label of the tuple element, e.g. `x` in `[x: number]`. */
@@ -164,8 +165,9 @@ export namespace Kind {
     | MethodSignature
     | PropertySignature
 
-  export interface TypeLiteral<Member extends MemberUnion = MemberUnion>
-    extends Shared {
+  export interface TypeLiteral<
+    Member extends MemberUnion = MemberUnion,
+  > extends Shared {
     kind: 'TypeLiteral'
 
     /** The member types of the type literal. */
@@ -179,8 +181,9 @@ export namespace Kind {
     types: Type[]
   }
 
-  export interface UnionType<Type extends TypeExpression = TypeExpression>
-    extends Shared {
+  export interface UnionType<
+    Type extends TypeExpression = TypeExpression,
+  > extends Shared {
     kind: 'UnionType'
     types: Type[]
   }
@@ -259,8 +262,9 @@ export namespace Kind {
     type: Type
   }
 
-  export interface IndexSignature<Type extends TypeExpression = TypeExpression>
-    extends Shared {
+  export interface IndexSignature<
+    Type extends TypeExpression = TypeExpression,
+  > extends Shared {
     kind: 'IndexSignature'
     parameter: IndexSignatureParameter
     type: Type
@@ -386,8 +390,7 @@ export namespace Kind {
   }
 
   export interface ConstructSignature
-    extends SharedDocumentable,
-      SharedCallable {
+    extends SharedDocumentable, SharedCallable {
     kind: 'ConstructSignature'
     parameters: Parameter[]
   }
@@ -398,8 +401,7 @@ export namespace Kind {
   }
 
   export interface GetAccessorSignature
-    extends SharedDocumentable,
-      SharedCallable {
+    extends SharedDocumentable, SharedCallable {
     kind: 'GetAccessorSignature'
 
     /** The return type of the getter. */
@@ -407,8 +409,7 @@ export namespace Kind {
   }
 
   export interface SetAccessorSignature
-    extends SharedDocumentable,
-      SharedCallable {
+    extends SharedDocumentable, SharedCallable {
     kind: 'SetAccessorSignature'
 
     /** The parameter type of the setter. */
@@ -438,8 +439,7 @@ export namespace Kind {
   >
 
   export interface ComponentSignature
-    extends SharedDocumentable,
-      SharedCallable {
+    extends SharedDocumentable, SharedCallable {
     kind: 'ComponentSignature'
     parameter?: ComponentParameter
   }
@@ -462,8 +462,9 @@ export namespace Kind {
     type: TypeExpression
   }
 
-  export interface Interface<Member extends MemberUnion = MemberUnion>
-    extends SharedDocumentable {
+  export interface Interface<
+    Member extends MemberUnion = MemberUnion,
+  > extends SharedDocumentable {
     kind: 'Interface'
 
     /** The member types of the interface. */
@@ -490,8 +491,9 @@ export namespace Kind {
   }
 
   /** Represents a type alias declaration e.g. `type Partial<Type> = { [Key in keyof Type]?: Type[Key] }`. */
-  export interface TypeAlias<Type extends TypeExpression = TypeExpression>
-    extends SharedDocumentable {
+  export interface TypeAlias<
+    Type extends TypeExpression = TypeExpression,
+  > extends SharedDocumentable {
     kind: 'TypeAlias'
 
     /** The type expression. */
@@ -514,7 +516,8 @@ export namespace Kind {
   /** Represents a type operator e.g. `keyof Type` or `readonly Type`. */
   export interface TypeOperator<
     Type extends Kind.TypeExpression = Kind.TypeExpression,
-  > extends Kind.Shared {
+  >
+    extends Kind.Shared {
     kind: 'TypeOperator'
 
     /** The operator of the type operator e.g. `keyof` or `readonly`. */
@@ -1704,7 +1707,9 @@ function resolveTypeExpression(
       isJsDocTypeReference &&
       (type.isAny() || type.isUnknown() || hasTypeArguments)
     const resolutionNode = getJsDocOwner(enclosingNode) ?? enclosingNode
-
+    if (type.getText().endsWith('{ [exportName: string]: any; }>>>, {}>')) {
+      debugger
+    }
     let shouldResolveReference = shouldResolveTypeReference(
       type,
       resolutionNode
@@ -3916,8 +3921,8 @@ function resolveParameter(
     const jsDocTypeNode = jsDocParameterTag?.getTypeExpression()?.getTypeNode()
     const shouldPreferJsDocType = Boolean(
       jsDocTypeNode &&
-        parameterType &&
-        (parameterType.isAny() || parameterType.isUnknown())
+      parameterType &&
+      (parameterType.isAny() || parameterType.isUnknown())
     )
     let resolvedParameterType: Kind.TypeExpression | undefined
 
@@ -5942,11 +5947,22 @@ function containsFreeTypeParameter(
   }
   seen.add(type.compilerType.id)
 
+  // If this is an alias application (e.g. TypeAlias<Types>), check its arguments.
+  // If the arguments are concrete, we assume the resulting type is concrete
+  // without forcing the compiler to resolve the full alias body, which can
+  // trigger infinite recursion for complex cyclic types.
   const aliasArguments = type.getAliasTypeArguments()
-  for (let index = 0, length = aliasArguments.length; index < length; ++index) {
-    if (containsFreeTypeParameter(aliasArguments[index], seen)) {
-      return true
+  if (aliasArguments.length > 0) {
+    for (
+      let index = 0, length = aliasArguments.length;
+      index < length;
+      ++index
+    ) {
+      if (containsFreeTypeParameter(aliasArguments[index], seen)) {
+        return true
+      }
     }
+    return false
   }
 
   const typeArguments = type.getTypeArguments()

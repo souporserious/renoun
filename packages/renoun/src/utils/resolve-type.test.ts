@@ -22157,4 +22157,134 @@ describe('resolveType', () => {
       }
     `)
   })
+
+  test('does not fully expand extended interface reference', () => {
+    const testFile = project.createSourceFile(
+      'test-extends.ts',
+      dedent`
+        import React from 'react'
+
+        export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+          variant?: 'primary' | 'secondary' | 'danger'
+        }
+      `,
+      { overwrite: true }
+    )
+
+    const extended = testFile.getInterfaceOrThrow('ButtonProps')
+    const resolved = resolveType(extended.getType(), extended)
+
+    expect(resolved).toMatchInlineSnapshot(`
+      {
+        "extends": [
+          {
+            "kind": "TypeReference",
+            "name": "ButtonHTMLAttributes",
+            "text": "React.ButtonHTMLAttributes<HTMLButtonElement>",
+          },
+        ],
+        "filePath": "test-extends.ts",
+        "kind": "Interface",
+        "members": [
+          {
+            "filePath": "test-extends.ts",
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "variant",
+            "position": {
+              "end": {
+                "column": 47,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
+            "text": "variant?: 'primary' | 'secondary' | 'danger'",
+            "type": {
+              "kind": "UnionType",
+              "text": ""primary" | "secondary" | "danger"",
+              "types": [
+                {
+                  "filePath": "test-extends.ts",
+                  "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 22,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 13,
+                      "line": 4,
+                    },
+                  },
+                  "text": ""primary"",
+                  "value": "primary",
+                },
+                {
+                  "filePath": "test-extends.ts",
+                  "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 36,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 25,
+                      "line": 4,
+                    },
+                  },
+                  "text": ""secondary"",
+                  "value": "secondary",
+                },
+                {
+                  "filePath": "test-extends.ts",
+                  "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 47,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 39,
+                      "line": 4,
+                    },
+                  },
+                  "text": ""danger"",
+                  "value": "danger",
+                },
+              ],
+            },
+          },
+        ],
+        "name": "ButtonProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "text": "ButtonProps",
+        "typeParameters": [],
+      }
+    `)
+  })
+
+  test('resolves Workspace type without overflowing the stack', () => {
+    const project = new Project()
+    const fileSystemFile = project.addSourceFileAtPath(
+      'src/file-system/index.tsx'
+    )
+    const workspaceClass = fileSystemFile.getClassOrThrow('Workspace')
+
+    const resolved = resolveType(workspaceClass.getType(), workspaceClass)
+
+    expect(resolved).toBeDefined()
+  })
 })
