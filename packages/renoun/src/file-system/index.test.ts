@@ -333,6 +333,30 @@ describe('file system', () => {
     expect(entries).toHaveLength(2)
   })
 
+  test('getEntries supports per-call filters', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'page.mdx': '',
+      'note.txt': '',
+      'nested/page.mdx': '',
+    })
+    const directory = new Directory({ fileSystem })
+
+    const filtered = await directory.getEntries({ filter: '*.mdx' })
+
+    expect(
+      filtered.map((entry) => entry.getRelativePathToWorkspace()).sort()
+    ).toEqual(['page.mdx'])
+
+    const recursiveFiltered = await directory.getEntries({
+      filter: '**/*.mdx',
+      recursive: true,
+    })
+
+    expect(
+      recursiveFiltered.map((entry) => entry.getRelativePathToWorkspace()).sort()
+    ).toEqual(['nested', 'nested/page.mdx', 'page.mdx'])
+  })
+
   test('reuses cached snapshots for identical getEntries options', async () => {
     const fileSystem = new MemoryFileSystem({
       'index.ts': '',

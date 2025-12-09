@@ -2704,6 +2704,12 @@ type ResolveDirectoryFilterEntries<
     ? FileSystemEntry<Types>
     : Narrowed<Filter>
 
+type DirectoryEntriesRecursiveOption<Filter> = Filter extends string
+  ? Filter extends `**${string}`
+    ? boolean
+    : undefined
+  : boolean
+
 export type DirectoryFilter<
   Entry extends FileSystemEntry<any>,
   Types extends Record<string, any>,
@@ -3691,13 +3697,18 @@ export class Directory<
    * that are not excluded by Git ignore rules or the closest `tsconfig` file.
    * Additionally, `index` and `readme` files are excluded by default.
    */
-  async getEntries(options?: {
+  async getEntries<
+    const ProvidedFilter extends
+      | DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>
+      | undefined = Filter,
+  >(options?: {
+    /** Filter entries with a minimatch pattern or predicate. */
+    filter?: ProvidedFilter
+
     /** Recursively walk every subdirectory. */
-    recursive?: Filter extends string
-      ? Filter extends `**${string}`
-        ? boolean
-        : undefined
-      : boolean
+    recursive?: DirectoryEntriesRecursiveOption<
+      ProvidedFilter extends undefined ? Filter : ProvidedFilter
+    >
 
     /** Include files named the same as their immediate directory (e.g. `Button/Button.tsx`). */
     includeDirectoryNamedFiles?: boolean
@@ -3712,51 +3723,61 @@ export class Directory<
     includeTsConfigExcludedFiles?: boolean
   }): Promise<
     Array<
-      Filter extends string
-        ? Filter extends `**${string}`
-          ?
-              | Directory<LoaderTypes>
-              | FileWithExtension<LoaderTypes, ExtractFileExtension<Filter>>
-          : FileWithExtension<LoaderTypes, ExtractFileExtension<Filter>>
-        : Filter extends DirectoryFilter<infer FilteredEntry, LoaderTypes>
-          ? FilteredEntry
-          : FileSystemEntry<LoaderTypes>
+      ResolveDirectoryFilterEntries<
+        ProvidedFilter extends undefined ? Filter : ProvidedFilter,
+        LoaderTypes
+      >
     >
   > {
-    if (options?.recursive && this.#filterPattern) {
-      if (!this.#filterPattern.includes('**')) {
+    const filterOverride = options?.filter
+    const hasFilterOverride = filterOverride !== undefined
+    const directory = hasFilterOverride
+      ? this.#duplicate({ filter: filterOverride as any })
+      : this
+    const entriesOptions: {
+      recursive?: boolean
+      includeDirectoryNamedFiles?: boolean
+      includeIndexAndReadmeFiles?: boolean
+      includeGitIgnoredFiles?: boolean
+      includeTsConfigExcludedFiles?: boolean
+    } = { ...(options ?? {}) }
+
+    delete (entriesOptions as any).filter
+
+    if (entriesOptions.recursive && directory.#filterPattern) {
+      if (!directory.#filterPattern.includes('**')) {
         const lines: string[] = [
           `[renoun] Cannot use recursive option with a shallow filter pattern.`,
           `Method: Directory#getEntries`,
-          `Directory path: "${this.#path}"`,
-          `Filter pattern: "${this.#filterPattern}"`,
+          `Directory path: "${directory.#path}"`,
+          `Filter pattern: "${directory.#filterPattern}"`,
           `Hint: Use a recursive pattern (e.g. "**/*.mdx") when "recursive" is enabled.`,
         ]
-        if (this.#rootPath) {
-          lines.push(`Directory root: "${this.#rootPath}"`)
+        if (directory.#rootPath) {
+          lines.push(`Directory root: "${directory.#rootPath}"`)
         }
         throw new Error(lines.join('\n'))
       }
     }
 
-    const normalized = this.#normalizeEntriesOptions(options)
+    const normalized = directory.#normalizeEntriesOptions(entriesOptions)
     const mask = createOptionsMask(normalized)
 
-    const cachedSnapshot = this.#snapshotCache.get(mask)
+    const cachedSnapshot = directory.#snapshotCache.get(mask)
     if (cachedSnapshot) {
       if (process.env.NODE_ENV === 'development') {
-        const isStale = await this.#isSnapshotStale(cachedSnapshot)
+        const isStale = await directory.#isSnapshotStale(cachedSnapshot)
         if (!isStale) {
           return cachedSnapshot.materialize() as any
         }
-        this.#snapshotCache.delete(mask)
+        directory.#snapshotCache.delete(mask)
       } else {
         return cachedSnapshot.materialize() as any
       }
     }
 
-    const snapshot = await this.#hydrateDirectorySnapshot(
-      this,
+    const snapshot = await directory.#hydrateDirectorySnapshot(
+      directory,
       normalized,
       mask
     )
