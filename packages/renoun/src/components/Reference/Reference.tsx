@@ -2194,6 +2194,7 @@ function MembersSection({
   id?: string
 }) {
   const members = node.kind === 'Interface' ? node.members : node.type.members
+  const extensions = node.kind === 'Interface' ? node.extends ?? [] : []
   const memberDetails = renderMembersDetails({
     members,
     components,
@@ -2209,6 +2210,18 @@ function MembersSection({
       components={components}
     >
       {renderTypeParametersDetail(node.typeParameters, components, node.kind)}
+      {extensions.length ? (
+        <TypeDetail label="Extends" components={components} kind={node.kind}>
+          <components.Code>
+            {extensions.map((extension, index) => (
+              <React.Fragment key={index}>
+                {index > 0 ? ', ' : null}
+                {extension.text}
+              </React.Fragment>
+            ))}
+          </components.Code>
+        </TypeDetail>
+      ) : null}
       {memberDetails}
     </TypeSection>
   )
