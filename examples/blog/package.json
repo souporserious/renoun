@@ -15,7 +15,7 @@
     "@renoun/mdx": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "next": "catalog:",
+    "next": "15.5.7",
     "react": "catalog:",
     "react-dom": "catalog:",
     "remark-frontmatter": "5.0.0",

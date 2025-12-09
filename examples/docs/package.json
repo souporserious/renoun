@@ -17,7 +17,7 @@
     "@tailwindcss/typography": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "next": "catalog:",
+    "next": "15.5.7",
     "react": "catalog:",
     "react-aria-components": "catalog:",
     "react-dom": "catalog:",
