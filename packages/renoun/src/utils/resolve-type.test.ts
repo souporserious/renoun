@@ -22489,6 +22489,135 @@ describe('resolveType', () => {
     `)
   })
 
+  test('ignores external attribute interfaces without a filter', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+
+    project.createSourceFile(
+      'node_modules/ui/index.d.ts',
+      dedent`
+        export interface ExternalAttributes {
+          external?: string
+          ariaLabel?: string
+        }
+      `
+    )
+
+    const sourceFile = project.createSourceFile(
+      'button.ts',
+      dedent`
+        import type { ExternalAttributes } from "ui"
+
+        export interface ButtonProps extends ExternalAttributes {
+          variant?: "primary" | "secondary"
+        }
+      `
+    )
+
+    const interfaceDeclaration = sourceFile.getInterfaceOrThrow('ButtonProps')
+    const resolved = resolveType(
+      interfaceDeclaration.getType(),
+      interfaceDeclaration
+    )
+
+    expect(resolved).toMatchInlineSnapshot(`
+      {
+        "extends": [
+          {
+            "filePath": "s",
+            "kind": "TypeReference",
+            "name": "ExternalAttributes",
+            "position": {
+              "end": {
+                "column": 2,
+                "line": 4,
+              },
+              "start": {
+                "column": 1,
+                "line": 1,
+              },
+            },
+            "text": "ExternalAttributes",
+          },
+        ],
+        "filePath": "button.ts",
+        "kind": "Interface",
+        "members": [
+          {
+            "filePath": "button.ts",
+            "isOptional": true,
+            "isReadonly": false,
+            "kind": "PropertySignature",
+            "name": "variant",
+            "position": {
+              "end": {
+                "column": 36,
+                "line": 4,
+              },
+              "start": {
+                "column": 3,
+                "line": 4,
+              },
+            },
+            "text": "variant?: "primary" | "secondary"",
+            "type": {
+              "kind": "UnionType",
+              "text": ""primary" | "secondary"",
+              "types": [
+                {
+                  "filePath": "button.ts",
+                  "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 22,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 13,
+                      "line": 4,
+                    },
+                  },
+                  "text": ""primary"",
+                  "value": "primary",
+                },
+                {
+                  "filePath": "button.ts",
+                  "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 36,
+                      "line": 4,
+                    },
+                    "start": {
+                      "column": 25,
+                      "line": 4,
+                    },
+                  },
+                  "text": ""secondary"",
+                  "value": "secondary",
+                },
+              ],
+            },
+          },
+        ],
+        "name": "ButtonProps",
+        "position": {
+          "end": {
+            "column": 2,
+            "line": 5,
+          },
+          "start": {
+            "column": 1,
+            "line": 3,
+          },
+        },
+        "text": "ButtonProps",
+        "typeParameters": [],
+      }
+    `)
+  })
+
   test('type alias with Simplify utility type should expand properties', () => {
     const testFile = project.createSourceFile(
       'test.ts',

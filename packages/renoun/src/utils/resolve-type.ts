@@ -651,13 +651,70 @@ export interface FilterDescriptor {
 
 export type TypeFilter = FilterDescriptor | FilterDescriptor[]
 
+/** Normalizes a module specifier to a standard format e.g. `@types/react` -> `react`. */
+function normalizeModuleSpecifier(moduleSpecifier?: string) {
+  if (!moduleSpecifier) {
+    return undefined
+  }
+
+  const normalized = moduleSpecifier.replace(/\\/g, '/')
+
+  if (!normalized.startsWith('@types/')) {
+    return normalized
+  }
+
+  const withoutTypes = normalized.slice('@types/'.length)
+
+  // `@types/react` -> `react`
+  // `@types/mui__material` -> `@mui/material`
+  if (withoutTypes.includes('__')) {
+    const [scope, pkg] = withoutTypes.split('__')
+    return `@${scope}/${pkg}`
+  }
+
+  const [first, ...rest] = withoutTypes.split('/')
+  return [first, ...rest].filter(Boolean).join('/')
+}
+
+/** Returns the module specifier for a given file path e.g. `packages/renoun/src/utils/resolve-type.ts` -> `renoun`. */
+function getModuleSpecifierFromFilePath(filePath?: string) {
+  if (!filePath) {
+    return undefined
+  }
+
+  const normalized = filePath.replace(/\\/g, '/')
+  const parts = normalized.split('/node_modules/')
+
+  if (parts.length < 2) {
+    return undefined
+  }
+
+  const afterNodeModules = parts.pop()!
+  const [first, second] = afterNodeModules.split('/')
+
+  if (!first) {
+    return undefined
+  }
+
+  if (first.startsWith('@')) {
+    return normalizeModuleSpecifier(`${first}/${second ?? ''}`)
+  }
+
+  return normalizeModuleSpecifier(first)
+}
+
 function shouldIncludeType(
   filter: TypeFilter | undefined,
   symbol: SymbolMetadata,
-  importSpecifier?: string
+  importSpecifier?: string,
+  ownerName?: string
 ) {
+  const moduleSpecifier =
+    normalizeModuleSpecifier(importSpecifier) ||
+    normalizeModuleSpecifier(getModuleSpecifierFromFilePath(symbol.filePath))
+
   // Local project symbols are always kept
-  if (!symbol.isInNodeModules && !symbol.isExternal) {
+  if (!symbol.isInNodeModules) {
     return true
   }
 
@@ -668,8 +725,10 @@ function shouldIncludeType(
   const rules = Array.isArray(filter) ? filter : [filter]
 
   return rules.some((rule) => {
+    const ruleModule = normalizeModuleSpecifier(rule.moduleSpecifier)
+
     // ignore if the rule targets a different module
-    if (rule.moduleSpecifier && rule.moduleSpecifier !== importSpecifier) {
+    if (ruleModule && ruleModule !== moduleSpecifier) {
       return false
     }
 
@@ -678,7 +737,26 @@ function shouldIncludeType(
       return true
     }
 
-    return rule.types.some((type) => type.name === symbol.name)
+    return rule.types.some((type) => {
+      const typeName = type.name
+      const typeNameParts = typeName.split('.')
+      const baseTypeName = typeNameParts[typeNameParts.length - 1]
+      const matchesType =
+        typeName === symbol.name ||
+        typeName === ownerName ||
+        baseTypeName === symbol.name ||
+        baseTypeName === ownerName
+
+      if (!matchesType) {
+        return false
+      }
+
+      if (!type.properties?.length) {
+        return true
+      }
+
+      return symbol.name ? type.properties.includes(symbol.name) : false
+    })
   })
 }
 
@@ -1757,6 +1835,122 @@ function resolveTypeExpression(
       type,
       resolutionNode
     )
+
+    // If a filter explicitly targets this external type, inline only the
+    // allowed properties without fully resolving the external reference to
+    // avoid deep/recursive expansion (e.g. React attribute interfaces).
+    const typeSymbolMetadata = getSymbolMetadata(
+      aliasSymbol || symbol,
+      enclosingNode
+    )
+    const moduleSpecifierFromReference = tsMorph.Node.isTypeReference(
+      enclosingNode
+    )
+      ? getModuleSpecifierFromTypeReference(enclosingNode)
+      : undefined
+
+    let filterTargetsType = false
+
+    if (filter) {
+      const moduleSpecifier =
+        normalizeModuleSpecifier(moduleSpecifierFromReference) ||
+        normalizeModuleSpecifier(
+          getModuleSpecifierFromFilePath(typeSymbolMetadata.filePath)
+        )
+      const rules = Array.isArray(filter) ? filter : [filter]
+      filterTargetsType = rules.some((rule) => {
+        const ruleModule = normalizeModuleSpecifier(rule.moduleSpecifier)
+        if (ruleModule && ruleModule !== moduleSpecifier) {
+          return false
+        }
+
+        return rule.types?.some((typeRule) => {
+          const typeNameParts = typeRule.name.split('.')
+          const baseTypeName = typeNameParts[typeNameParts.length - 1]
+
+          return (
+            typeRule.name === typeSymbolMetadata.name ||
+            baseTypeName === typeSymbolMetadata.name
+          )
+        })
+      })
+    }
+
+    if (filterTargetsType && typeSymbolMetadata.isInNodeModules) {
+      const rules = (Array.isArray(filter) ? filter : [filter]).filter(
+        (rule): rule is FilterDescriptor => Boolean(rule)
+      )
+      const matchedRules = rules.filter((rule) => {
+        const ruleModule = normalizeModuleSpecifier(rule.moduleSpecifier)
+        const moduleSpecifier =
+          normalizeModuleSpecifier(moduleSpecifierFromReference) ||
+          normalizeModuleSpecifier(
+            getModuleSpecifierFromFilePath(typeSymbolMetadata.filePath)
+          )
+        if (ruleModule && ruleModule !== moduleSpecifier) {
+          return false
+        }
+        return rule.types?.some((typeRule) => {
+          const typeNameParts = typeRule.name.split('.')
+          const baseTypeName = typeNameParts[typeNameParts.length - 1]
+          return (
+            typeRule.name === typeSymbolMetadata.name ||
+            baseTypeName === typeSymbolMetadata.name
+          )
+        })
+      })
+
+      // Union of allowed properties across matched rules (undefined = allow all)
+      const props = new Set<string>()
+      let hasExplicitProps = false
+      for (const rule of matchedRules) {
+        for (const typeRule of rule.types ?? []) {
+          if (typeRule.properties?.length) {
+            hasExplicitProps = true
+            typeRule.properties.forEach((prop) => props.add(prop))
+          }
+        }
+      }
+      const allowedProperties = hasExplicitProps ? props : undefined
+
+      const members: Kind.PropertySignature[] = []
+
+      for (const property of type.getApparentProperties()) {
+        const name = property.getName()
+        if (allowedProperties && !allowedProperties.has(name)) {
+          continue
+        }
+        // Don't pass the filter here - we've already applied it at the type level
+        // and need to include inherited properties (e.g. onClick from DOMAttributes)
+        const resolvedProperty = resolvePropertySignature(
+          property,
+          symbolDeclaration ?? enclosingNode,
+          undefined,
+          defaultValues,
+          dependencies
+        )
+        if (resolvedProperty) {
+          members.push(resolvedProperty)
+        }
+      }
+
+      const indexSignatures = resolveIndexSignatures(
+        symbolDeclaration,
+        undefined
+      )
+
+      return {
+        kind: 'TypeLiteral',
+        text: typeText,
+        members: [...members, ...indexSignatures],
+      } satisfies Kind.TypeLiteral
+    }
+
+    // For local or already-visible references, allow explicit filter to force
+    // resolution.
+    if (filterTargetsType) {
+      shouldResolveReference = true
+    }
 
     // If this is a local internal mapped type alias reference,
     // force resolution so we expand the alias while preserving inner property references.
@@ -4580,7 +4774,31 @@ function resolvePropertySignature(
     | PropertySignature
     | undefined
   const declaration = propertyDeclaration || enclosingNode
-  const filterResult = shouldIncludeType(filter, symbolMetadata)
+  const rootIsInNodeModules =
+    enclosingNode?.getSourceFile().isInNodeModules() ?? false
+  const propertyIsInNodeModules =
+    propertyDeclaration?.getSourceFile().isInNodeModules() ??
+    symbolMetadata.isInNodeModules
+  const ownerName =
+    tsMorph.Node.isPropertySignature(propertyDeclaration) ||
+    tsMorph.Node.isPropertyDeclaration(propertyDeclaration)
+      ? propertyDeclaration.getParent()?.getSymbol()?.getName()
+      : undefined
+  const isExternalAttributeType =
+    propertyIsInNodeModules &&
+    typeof ownerName === 'string' &&
+    ownerName.endsWith('Attributes')
+  const filterResult = shouldIncludeType(
+    filter,
+    symbolMetadata,
+    undefined,
+    ownerName
+  )
+
+  // Avoid inlining massive DOM/React attribute interfaces unless explicitly requested.
+  if (isExternalAttributeType && !rootIsInNodeModules && !filter) {
+    return
+  }
 
   if (filterResult === false) {
     return
