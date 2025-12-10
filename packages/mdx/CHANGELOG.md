@@ -1,5 +1,13 @@
 # @renoun/mdx
 
+## 3.6.1
+
+### Patch Changes
+
+- ba4a8c0: Adds a focused `typography` remark plugin that replaces the `remark-smartypants` dependency.
+- dc0075a: Update dependencies.
+- fd580a0: Adds a focused `unwrap-images` rehype plugin that replaces the `rehype-unwrap-images` dependency.
+
 ## 3.6.0
 
 ### Minor Changes
