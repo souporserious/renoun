@@ -893,26 +893,68 @@ export function resolveType(
     let resolvedType: Kind | undefined
     const callSignatures = type.getCallSignatures()
 
-    if (
-      callSignatures.length === 0 &&
-      tsMorph.Node.isVariableDeclaration(enclosingNode)
-    ) {
-      const jsDocSignatures = resolveJsDocFunctionSignatures(
-        enclosingNode,
-        filter,
-        defaultValues,
-        dependencies
-      )
+    if (tsMorph.Node.isVariableDeclaration(enclosingNode)) {
+      let resolvedFunctionSignatures: Kind.CallSignature[] | undefined
 
-      if (jsDocSignatures) {
-        resolvedType = {
-          kind: 'Function',
-          name: symbolMetadata.name,
-          text: typeText,
-          signatures: jsDocSignatures,
-        } satisfies Kind.Function
+      // Try standard TypeScript resolution
+      // This handles granular patching via resolveCallSignatures -> resolveParameter -> getJsDocParameterTag
+      if (callSignatures.length > 0) {
+        resolvedFunctionSignatures = resolveCallSignatures(
+          callSignatures,
+          enclosingNode,
+          filter,
+          dependencies
+        )
       }
 
+      // If TS gave us nothing, try manual JSDoc parsing
+      // This catches cases where callSignatures is empty (common in plain JS)
+      if (
+        !resolvedFunctionSignatures ||
+        resolvedFunctionSignatures.length === 0
+      ) {
+        resolvedFunctionSignatures = resolveJsDocFunctionSignatures(
+          enclosingNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+      }
+
+      // 3. If we found signatures from either source, create a Function/Component
+      if (resolvedFunctionSignatures && resolvedFunctionSignatures.length > 0) {
+        if (isComponent(symbolMetadata.name, resolvedFunctionSignatures)) {
+          resolvedType = {
+            kind: 'Component',
+            name: symbolMetadata.name,
+            text: typeText,
+            signatures: resolvedFunctionSignatures.map(
+              ({ kind, parameters, isGenerator, ...resolvedCallSignature }) => {
+                if (isGenerator) {
+                  throw new Error(
+                    '[renoun] Components cannot be generator functions.'
+                  )
+                }
+
+                return {
+                  ...resolvedCallSignature,
+                  kind: 'ComponentSignature',
+                  parameter: parameters.at(0) as
+                    | Kind.ComponentParameter
+                    | undefined,
+                } satisfies Kind.ComponentSignature
+              }
+            ),
+          } satisfies Kind.Component
+        } else {
+          resolvedType = {
+            kind: 'Function',
+            name: symbolMetadata.name,
+            text: typeText,
+            signatures: resolvedFunctionSignatures,
+          } satisfies Kind.Function
+        }
+      }
       const typeNode = enclosingNode.getTypeNode()
       const jsDocTypeNode =
         !typeNode && tsMorph.Node.isVariableDeclaration(enclosingNode)
@@ -1589,7 +1631,7 @@ function resolveJsDocFunctionSignatures(
 
   for (const parameterTag of parameterTags) {
     const typeExpression = parameterTag.getTypeExpression()
-    const typeNode = typeExpression?.getTypeNode()
+    const typeNode = unwrapJsDocNullableType(typeExpression?.getTypeNode())
     const type = typeNode?.getType()
 
     if (!type || !typeNode) {
@@ -1631,7 +1673,7 @@ function resolveJsDocFunctionSignatures(
 
   if (returnTag) {
     const typeExpression = returnTag.getTypeExpression()
-    const typeNode = typeExpression?.getTypeNode()
+    const typeNode = unwrapJsDocNullableType(typeExpression?.getTypeNode())
     const type = typeNode?.getType()
 
     if (type && typeNode) {
@@ -4119,78 +4161,90 @@ function parseJsDocDefaultValue(defaultRaw: string): unknown {
   return unquoted
 }
 
+/** Finds all nodes that might hold JSDoc for a function-like node. */
+function getJsDocCandidates(node: Node): Node[] {
+  const candidates = [node]
+
+  if (
+    tsMorph.Node.isArrowFunction(node) ||
+    tsMorph.Node.isFunctionExpression(node)
+  ) {
+    const parent = node.getParent()
+    if (tsMorph.Node.isVariableDeclaration(parent)) {
+      candidates.push(parent)
+      const varList = parent.getParent()
+      if (tsMorph.Node.isVariableDeclarationList(varList)) {
+        const statement = varList.getParent()
+        if (tsMorph.Node.isVariableStatement(statement)) {
+          candidates.push(statement)
+        }
+      }
+    }
+  }
+  return candidates
+}
+
 function getJsDocParameterTag(
   parameterDeclaration: ParameterDeclaration
 ): TsMorph.JSDocParameterTag | undefined {
   const functionLike = parameterDeclaration.getParent()
-  const jsDocs = (functionLike as any)?.getJsDocs?.()
-
-  if (!jsDocs) {
-    return undefined
-  }
-
+  const candidates = getJsDocCandidates(functionLike)
   const parameterName = parameterDeclaration.getName()
 
-  for (const jsDoc of jsDocs) {
-    for (const tag of jsDoc.getTags()) {
-      if (!tsMorph.Node.isJSDocParameterTag(tag)) {
-        continue
-      }
+  for (const candidate of candidates) {
+    if (!tsMorph.Node.isJSDocable(candidate)) continue
 
-      const tagName = tag.getName()
+    for (const jsDoc of candidate.getJsDocs()) {
+      for (const tag of jsDoc.getTags()) {
+        if (!tsMorph.Node.isJSDocParameterTag(tag)) continue
 
-      if (tagName === parameterName) {
-        return tag
-      }
-
-      const rootName = tagName.split('.')[0]
-
-      if (rootName === parameterName) {
-        return tag
+        const tagName = tag.getName()
+        // Match "paramName" or "paramName.subProp"
+        if (
+          tagName === parameterName ||
+          tagName.split('.')[0] === parameterName
+        ) {
+          return tag
+        }
       }
     }
   }
-
   return undefined
 }
 
 function getJsDocReturnTag(
-  declaration: TsMorph.Node & { getJsDocs?: () => TsMorph.JSDoc[] }
+  declaration: Node
 ): TsMorph.JSDocReturnTag | undefined {
-  const jsDocs = declaration.getJsDocs?.()
+  const candidates = getJsDocCandidates(declaration)
 
-  if (!jsDocs) {
-    return undefined
-  }
+  for (const candidate of candidates) {
+    if (!tsMorph.Node.isJSDocable(candidate)) continue
 
-  for (const jsDoc of jsDocs) {
-    for (const tag of jsDoc.getTags()) {
-      if (tsMorph.Node.isJSDocReturnTag(tag)) {
-        return tag
+    for (const jsDoc of candidate.getJsDocs()) {
+      for (const tag of jsDoc.getTags()) {
+        if (tsMorph.Node.isJSDocReturnTag(tag)) {
+          return tag
+        }
       }
     }
   }
-
   return undefined
 }
 
-function getJsDocThisTag(
-  declaration: TsMorph.Node & { getJsDocs?: () => TsMorph.JSDoc[] }
-): TsMorph.JSDocThisTag | undefined {
-  const jsDocs = declaration.getJsDocs?.()
+function getJsDocThisTag(declaration: Node): TsMorph.JSDocThisTag | undefined {
+  const candidates = getJsDocCandidates(declaration)
 
-  if (!jsDocs) {
-    return undefined
-  }
+  for (const candidate of candidates) {
+    if (!tsMorph.Node.isJSDocable(candidate)) continue
 
-  for (const jsDoc of jsDocs) {
-    for (const tag of jsDoc.getTags()) {
-      if (tsMorph.Node.isJSDocThisTag(tag)) {
-        return tag
+    for (const jsDoc of candidate.getJsDocs()) {
+      for (const tag of jsDoc.getTags()) {
+        if (tsMorph.Node.isJSDocThisTag(tag)) {
+          return tag
+        }
       }
     }
   }
-
   return undefined
 }
 
@@ -4608,6 +4662,14 @@ function resolvePropertySignature(
       ...getDeclarationLocation(declaration),
     } satisfies Kind.PropertySignature
   }
+}
+
+function unwrapJsDocNullableType(typeNode?: TypeNode) {
+  if (typeNode && tsMorph.Node.isJSDocNullableType(typeNode)) {
+    return typeNode.getTypeNode()
+  }
+
+  return typeNode
 }
 
 /** Unwrap Rest and Optional type nodes. */

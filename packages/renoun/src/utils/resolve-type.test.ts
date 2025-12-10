@@ -722,6 +722,244 @@ describe('resolveType', () => {
     })
   })
 
+  test('prefers jsdoc call signatures when variable function types are any', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'code.js',
+      dedent`
+      function nodeProxy() {
+        return () => {}
+      }
+
+      class Node {}
+      class CodeNode {}
+
+      /**
+       * TSL function for creating a code node.
+       *
+       * @function
+       * @param {string} code - The native code.
+       * @param {Array<Node>} [includes=[]] - An array of includes.
+       * @param {?('js'|'wgs'|'glsl')} [language=''] - The used language.
+       * @returns {CodeNode}
+       */
+      export const code = /** @type {Function} */ (nodeProxy())
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('code')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved).toMatchInlineSnapshot(`
+      {
+        "kind": "Function",
+        "name": "code",
+        "signatures": [
+          {
+            "kind": "CallSignature",
+            "parameters": [
+              {
+                "description": "The native code.",
+                "initializer": undefined,
+                "isOptional": false,
+                "isRest": false,
+                "kind": "Parameter",
+                "name": "code",
+                "text": "code: string",
+                "type": {
+                  "filePath": "code.js",
+                  "kind": "String",
+                  "position": {
+                    "end": {
+                      "column": 18,
+                      "line": 12,
+                    },
+                    "start": {
+                      "column": 12,
+                      "line": 12,
+                    },
+                  },
+                  "text": "string",
+                  "value": undefined,
+                },
+              },
+              {
+                "description": "An array of includes.",
+                "initializer": undefined,
+                "isOptional": true,
+                "isRest": false,
+                "kind": "Parameter",
+                "name": "includes",
+                "text": "includes?: Array<Node>",
+                "type": {
+                  "filePath": "code.js",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
+                  "name": "Array",
+                  "position": {
+                    "end": {
+                      "column": 23,
+                      "line": 13,
+                    },
+                    "start": {
+                      "column": 12,
+                      "line": 13,
+                    },
+                  },
+                  "text": "Array<Node>",
+                  "typeArguments": [
+                    {
+                      "filePath": "code.js",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Node",
+                      "position": {
+                        "end": {
+                          "column": 14,
+                          "line": 5,
+                        },
+                        "start": {
+                          "column": 1,
+                          "line": 5,
+                        },
+                      },
+                      "text": "Node",
+                      "typeArguments": [],
+                    },
+                  ],
+                },
+              },
+              {
+                "description": "The used language.",
+                "initializer": undefined,
+                "isOptional": true,
+                "isRest": false,
+                "kind": "Parameter",
+                "name": "language",
+                "text": "language?: "js" | "wgs" | "glsl"",
+                "type": {
+                  "kind": "UnionType",
+                  "text": ""js" | "wgs" | "glsl"",
+                  "types": [
+                    {
+                      "filePath": "code.js",
+                      "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 18,
+                          "line": 14,
+                        },
+                        "start": {
+                          "column": 14,
+                          "line": 14,
+                        },
+                      },
+                      "text": ""js"",
+                      "value": "js",
+                    },
+                    {
+                      "filePath": "code.js",
+                      "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 24,
+                          "line": 14,
+                        },
+                        "start": {
+                          "column": 19,
+                          "line": 14,
+                        },
+                      },
+                      "text": ""wgs"",
+                      "value": "wgs",
+                    },
+                    {
+                      "filePath": "code.js",
+                      "kind": "String",
+                      "position": {
+                        "end": {
+                          "column": 31,
+                          "line": 14,
+                        },
+                        "start": {
+                          "column": 25,
+                          "line": 14,
+                        },
+                      },
+                      "text": ""glsl"",
+                      "value": "glsl",
+                    },
+                  ],
+                },
+              },
+            ],
+            "returnType": {
+              "filePath": "code.js",
+              "kind": "TypeReference",
+              "moduleSpecifier": undefined,
+              "name": "CodeNode",
+              "position": {
+                "end": {
+                  "column": 18,
+                  "line": 6,
+                },
+                "start": {
+                  "column": 1,
+                  "line": 6,
+                },
+              },
+              "text": "CodeNode",
+              "typeArguments": [],
+            },
+            "text": "(code: string, includes?: Array<Node>, language?: "js" | "wgs" | "glsl") => CodeNode",
+            "thisType": undefined,
+          },
+        ],
+        "text": "Function",
+      }
+    `)
+  })
+
+  test('falls back to jsdoc when contextual signatures are filtered out', () => {
+    const contextualFile = project.createSourceFile(
+      'contextual.js',
+      dedent`
+        import { wrap } from 'helper'
+
+        /**
+         * Adds two numbers together.
+         * @function
+         * @param {number} a - first
+         * @param {number} b - second
+         * @returns {number}
+         */
+        export const add = wrap((a, b) => a + b)
+      `,
+      { scriptKind: ts.ScriptKind.JS }
+    )
+
+    const declaration = contextualFile.getVariableDeclarationOrThrow('add')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved).toMatchObject({
+      kind: 'Function',
+      signatures: [
+        {
+          parameters: [
+            { name: 'a', type: { kind: 'Number' }, isOptional: false },
+            { name: 'b', type: { kind: 'Number' }, isOptional: false },
+          ],
+          returnType: { kind: 'Number' },
+        },
+      ],
+    })
+  })
+
   test('resolves empty object literal return types', () => {
     const emptySource = project.createSourceFile(
       'index.ts',
