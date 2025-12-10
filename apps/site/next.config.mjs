@@ -1,11 +1,20 @@
 import createMDXPlugin from '@next/mdx'
-import { remarkPlugins, rehypePlugins } from 'renoun'
 
 const withMDX = createMDXPlugin({
   extension: /\.mdx?$/,
   options: {
-    remarkPlugins,
-    rehypePlugins,
+    rehypePlugins: [
+      '@renoun/mdx/rehype/add-code-block',
+      '@renoun/mdx/rehype/add-reading-time',
+      '@renoun/mdx/rehype/unwrap-images',
+    ],
+    remarkPlugins: [
+      '@renoun/mdx/remark/add-headings',
+      '@renoun/mdx/remark/gfm',
+      '@renoun/mdx/remark/remove-immediate-paragraphs',
+      '@renoun/mdx/remark/transform-relative-links',
+      '@renoun/mdx/remark/typography',
+    ],
     jsxImportSource: 'restyle',
   },
 })
