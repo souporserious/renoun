@@ -14,6 +14,7 @@ export {
   type LinkSource,
   type LinkKind,
 } from './get-mdx-links.js'
+export { healMarkdown } from './heal-markdown.js'
 export {
   parseFrontMatter,
   type FrontMatterParseResult,
