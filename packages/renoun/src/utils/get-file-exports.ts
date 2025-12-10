@@ -68,81 +68,116 @@ export function getFileExports(
       }))
 
       for (const [name, declarations] of exportedDeclarations) {
-        for (const declaration of declarations) {
-          if (tsMorph.Node.isFunctionDeclaration(declaration)) {
-            const body = declaration.getBody()
+        const declaration = selectPreferredDeclaration(declarations)
+        let node: Node = declaration
 
-            if (body === undefined) {
-              continue
-            }
-          }
-
-          let node: Node = declaration
-
-          // export { foo } = bar
-          const exportAssignment = node.getFirstAncestorByKind(
-            tsMorph.SyntaxKind.ExportAssignment
-          )
-          if (exportAssignment && !exportAssignment.isExportEquals()) {
-            node = exportAssignment
-          }
-
-          // export const foo = 'bar'
-          if (tsMorph.Node.isVariableStatement(node)) {
-            const declarations = node.getDeclarationList().getDeclarations()
-
-            if (declarations.length > 1) {
-              throw new Error(
-                `[renoun] Multiple variable declarations found in variable statement which is not currently supported: ${node.getText()}`
-              )
-            }
-
-            node = declarations.at(0)!
-          }
-
-          // export { x } from './y'
-          if (tsMorph.Node.isExportSpecifier(node)) {
-            const exportDeclaration = node.getFirstAncestorByKind(
-              tsMorph.SyntaxKind.ExportDeclaration
-            )
-            if (exportDeclaration) {
-              node = exportDeclaration
-            }
-          }
-
-          if (!exportableKinds.has(node.getKind())) {
-            continue
-          }
-
-          const fileExport: ModuleExport = {
-            name,
-            path: node.getSourceFile().getFilePath(),
-            position: getExportPosition(node),
-            kind: node.getKind(),
-          }
-          let insertAt = exportDeclarations.length
-
-          for (let index = 0; index < insertAt; index++) {
-            const existing = exportDeclarations[index]
-            const isPathBefore =
-              fileExport.path.localeCompare(existing.path) < 0
-            const isSamePath = fileExport.path === existing.path
-            const isPositionBefore = fileExport.position < existing.position
-
-            if (isPathBefore || (isSamePath && isPositionBefore)) {
-              insertAt = index
-              break
-            }
-          }
-
-          exportDeclarations.splice(insertAt, 0, fileExport)
+        // export { foo } = bar
+        const exportAssignment = node.getFirstAncestorByKind(
+          tsMorph.SyntaxKind.ExportAssignment
+        )
+        if (exportAssignment && !exportAssignment.isExportEquals()) {
+          node = exportAssignment
         }
+
+        // export const foo = 'bar'
+        if (tsMorph.Node.isVariableStatement(node)) {
+          const declarations = node.getDeclarationList().getDeclarations()
+
+          if (declarations.length > 1) {
+            throw new Error(
+              `[renoun] Multiple variable declarations found in variable statement which is not currently supported: ${node.getText()}`
+            )
+          }
+
+          node = declarations.at(0)!
+        }
+
+        // export { x } from './y'
+        if (tsMorph.Node.isExportSpecifier(node)) {
+          const exportDeclaration = node.getFirstAncestorByKind(
+            tsMorph.SyntaxKind.ExportDeclaration
+          )
+          if (exportDeclaration) {
+            node = exportDeclaration
+          }
+        }
+
+        if (!exportableKinds.has(node.getKind())) {
+          continue
+        }
+
+        const fileExport: ModuleExport = {
+          name,
+          path: node.getSourceFile().getFilePath(),
+          position: getExportPosition(node),
+          kind: node.getKind(),
+        }
+        let insertAt = exportDeclarations.length
+
+        for (let index = 0; index < insertAt; index++) {
+          const existing = exportDeclarations[index]
+          const isPathBefore = fileExport.path.localeCompare(existing.path) < 0
+          const isSamePath = fileExport.path === existing.path
+          const isPositionBefore = fileExport.position < existing.position
+
+          if (isPathBefore || (isSamePath && isPositionBefore)) {
+            insertAt = index
+            break
+          }
+        }
+
+        exportDeclarations.splice(insertAt, 0, fileExport)
       }
 
       return exportDeclarations
     },
     { data: { filePath } }
   ) as ModuleExport[]
+}
+
+/**
+ * Selects the preferred declaration from a list of declarations.
+ *
+ * - Classes are preferred over other declarations.
+ * - Type-like declarations (interfaces, enums, type aliases) are preferred over function declarations.
+ * - Function declarations with a body are preferred over function declarations without a body.
+ * - The first declaration is preferred if no other declaration is preferred.
+ */
+function selectPreferredDeclaration(declarations: Node[]) {
+  let typeLike: Node | undefined
+  let functionWithBody: Node | undefined
+  let firstDeclaration: Node | undefined
+
+  for (const declaration of declarations) {
+    if (tsMorph.Node.isClassDeclaration(declaration)) {
+      return declaration
+    }
+
+    if (
+      tsMorph.Node.isInterfaceDeclaration(declaration) ||
+      tsMorph.Node.isEnumDeclaration(declaration) ||
+      tsMorph.Node.isTypeAliasDeclaration(declaration)
+    ) {
+      if (!typeLike) {
+        typeLike = declaration
+      }
+    }
+
+    if (
+      tsMorph.Node.isFunctionDeclaration(declaration) &&
+      declaration.getBody()
+    ) {
+      if (!functionWithBody) {
+        functionWithBody = declaration
+      }
+    }
+
+    if (!firstDeclaration) {
+      firstDeclaration = declaration
+    }
+  }
+
+  return typeLike ?? functionWithBody ?? firstDeclaration ?? declarations[0]!
 }
 
 /** Returns a specific export declaration of a file at a given position and kind. */

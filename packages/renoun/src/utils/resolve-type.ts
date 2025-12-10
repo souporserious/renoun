@@ -795,7 +795,8 @@ function toTypeReference(
     (type.isAny() ||
       type.isUnknown() ||
       isJsDocTypeReferenceNode(enclosingNode))
-  const symbolDeclaration = getPrimaryDeclaration(type.getSymbol())
+  const symbolDeclaration =
+    enclosingNode ?? getPrimaryDeclaration(type.getSymbol())
 
   if (
     referenceDefaults.length &&
@@ -870,7 +871,7 @@ export function resolveType(
       /* Finally, try to get the symbol of the apparent type */
       type.getApparentType().getSymbol()
     const symbolMetadata = getSymbolMetadata(symbol, enclosingNode)
-    const symbolDeclaration = getPrimaryDeclaration(symbol)
+    const symbolDeclaration = enclosingNode ?? getPrimaryDeclaration(symbol)
     const declaration = symbolDeclaration || enclosingNode
     const declarationLocation = declaration
       ? getDeclarationLocation(declaration)
@@ -5037,6 +5038,58 @@ function filterUndefinedFromUnion(
   } satisfies Kind.UnionType
 }
 
+function isReadonlySymbol(symbol: Symbol) {
+  for (const declaration of symbol.getDeclarations()) {
+    if (
+      tsMorph.Node.isPropertySignature(declaration) ||
+      tsMorph.Node.isPropertyDeclaration(declaration)
+    ) {
+      if (declaration.isReadonly()) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function isOptionalSymbol(symbol: Symbol) {
+  if ((symbol.getFlags() & tsMorph.SymbolFlags.Optional) !== 0) {
+    return true
+  }
+
+  for (const declaration of symbol.getDeclarations()) {
+    if (
+      tsMorph.Node.isPropertySignature(declaration) ||
+      tsMorph.Node.isPropertyDeclaration(declaration)
+    ) {
+      if (declaration.hasQuestionToken && declaration.hasQuestionToken()) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+function isPrivateSymbol(symbol: Symbol) {
+  const name = symbol.getName()
+  if (name.startsWith('#')) {
+    return true
+  }
+
+  for (const declaration of symbol.getDeclarations()) {
+    if (
+      'hasModifier' in declaration &&
+      typeof declaration.hasModifier === 'function' &&
+      declaration.hasModifier(tsMorph.SyntaxKind.PrivateKeyword)
+    ) {
+      return true
+    }
+  }
+
+  return false
+}
+
 /** Processes a class declaration into a metadata object. */
 function resolveClass(
   classDeclaration: ClassDeclaration,
@@ -5057,126 +5110,171 @@ function resolveClass(
     text: classDeclaration
       .getType()
       .getText(classDeclaration, TYPE_FORMAT_FLAGS),
-    constructor: undefined,
+    constructor: resolveClassConstructor(
+      classDeclaration,
+      filter,
+      dependencies
+    ),
     ...getJsDocMetadata(classDeclaration),
     ...getDeclarationLocation(classDeclaration),
   }
 
-  const constructorDeclarations = classDeclaration.getConstructors()
-
-  if (constructorDeclarations.length > 0) {
-    const primaryConstructorDeclaration = constructorDeclarations[0]
-    // Use the constructor type's call signatures to include all overloads,
-    // similar to how Function and ClassMethod handle overloads
-    const constructorType = primaryConstructorDeclaration.getType()
-    const constructorCallSignatures = constructorType.getCallSignatures()
-
-    let resolvedCallSignatures: Kind.CallSignature[]
-
-    // If getCallSignatures() returns signatures (including overloads), use them
-    if (constructorCallSignatures.length > 0) {
-      resolvedCallSignatures = resolveCallSignatures(
-        constructorCallSignatures,
-        primaryConstructorDeclaration,
-        filter,
-        dependencies
-      )
-    } else {
-      // Fallback: use declaration.getSignature() for cases where getCallSignatures() is empty
-      // (e.g., in JavaScript files or when type information isn't available)
-      resolvedCallSignatures = constructorDeclarations
-        .map((declaration) =>
-          resolveCallSignature(
-            declaration.getSignature(),
-            declaration,
-            filter,
-            dependencies
-          )
-        )
-        .filter((signature): signature is Kind.CallSignature =>
-          Boolean(signature)
-        )
+  // Resolve explicit members declared in the class body
+  for (const member of classDeclaration.getMembers()) {
+    // FIX: Filter out Constructors and Static Blocks first.
+    // They don't have names/modifiers in the way we check below.
+    if (
+      tsMorph.Node.isConstructorDeclaration(member) ||
+      tsMorph.Node.isClassStaticBlockDeclaration(member)
+    ) {
+      continue
     }
 
-    if (resolvedCallSignatures.length > 0) {
-      const constructor: Kind.ClassConstructor = {
-        kind: 'ClassConstructor',
-        signatures: resolvedCallSignatures,
-        text: primaryConstructorDeclaration.getText(),
-      }
-      classMetadata.constructor = constructor
+    // Now TypeScript knows 'member' is a Property, Method, or Accessor
+    // so we can safely check for private modifiers.
+    if (
+      member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword) ||
+      member.getNameNode().getKind() === tsMorph.SyntaxKind.PrivateIdentifier ||
+      member.getName().startsWith('#')
+    ) {
+      continue
     }
-  }
 
-  classDeclaration.getMembers().forEach((member) => {
     if (
       tsMorph.Node.isGetAccessorDeclaration(member) ||
       tsMorph.Node.isSetAccessorDeclaration(member)
     ) {
-      const accessorIsPrivateIdentifier =
-        member.getNameNode()?.getKind() === tsMorph.SyntaxKind.PrivateIdentifier
-
-      if (
-        !member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword) &&
-        !accessorIsPrivateIdentifier
-      ) {
-        if (!classMetadata.accessors) {
-          classMetadata.accessors = []
-        }
-        const resolvedAccessor = resolveClassAccessor(
-          member,
-          filter,
-          dependencies
-        )
-        if (resolvedAccessor) {
-          classMetadata.accessors.push(resolvedAccessor)
-        }
+      const resolved = resolveClassAccessor(member, filter, dependencies)
+      if (resolved) {
+        ;(classMetadata.accessors ??= []).push(resolved)
       }
     } else if (tsMorph.Node.isMethodDeclaration(member)) {
-      const methodIsPrivateIdentifier =
-        member.getNameNode()?.getKind() === tsMorph.SyntaxKind.PrivateIdentifier
-
-      if (
-        !member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword) &&
-        !methodIsPrivateIdentifier
-      ) {
-        if (!classMetadata.methods) {
-          classMetadata.methods = []
-        }
-        const resolvedMethod = resolveClassMethod(member, filter, dependencies)
-        if (resolvedMethod) {
-          classMetadata.methods.push(resolvedMethod)
-        }
+      const resolved = resolveClassMethod(member, filter, dependencies)
+      if (resolved) {
+        ;(classMetadata.methods ??= []).push(resolved)
       }
     } else if (tsMorph.Node.isPropertyDeclaration(member)) {
-      // Skip properties that are marked private via the `private` keyword or
-      // that use JavaScript private identifiers (e.g. `#private`).
-      const isPrivateIdentifier =
-        member.getNameNode()?.getKind() ===
-          tsMorph.SyntaxKind.PrivateIdentifier ||
-        member.getName().startsWith('#')
-
-      if (
-        !member.hasModifier(tsMorph.SyntaxKind.PrivateKeyword) &&
-        !isPrivateIdentifier
-      ) {
-        if (!classMetadata.properties) {
-          classMetadata.properties = []
-        }
-        const resolvedProperty = resolveClassProperty(
-          member,
-          filter,
-          dependencies
-        )
-        if (resolvedProperty) {
-          classMetadata.properties.push(resolvedProperty)
-        }
+      const resolved = resolveClassProperty(member, filter, dependencies)
+      if (resolved) {
+        ;(classMetadata.properties ??= []).push(resolved)
       }
     }
-  })
+  }
 
+  // Resolve members added via declaration merging (e.g. interfaces)
+  const existingMethodNames = new Set(classMetadata.methods?.map((m) => m.name))
+  const existingPropertyNames = new Set(
+    classMetadata.properties?.map((property) => property.name)
+  )
+  const existingAccessorNames = new Set(
+    classMetadata.accessors?.map((accessor) => accessor.name)
+  )
+
+  const classType = classDeclaration.getType()
+  const classSourceFile = classDeclaration.getSourceFile()
+
+  for (const prop of classType.getProperties()) {
+    if (isPrivateSymbol(prop)) continue
+
+    const propName = prop.getName()
+    if (
+      existingMethodNames.has(propName) ||
+      existingPropertyNames.has(propName) ||
+      existingAccessorNames.has(propName)
+    ) {
+      continue
+    }
+
+    const declarations = prop.getDeclarations()
+    const declaration = declarations[0]
+
+    // Only include if the declaration is in the same file (avoids inherited base members)
+    // but wasn't caught by the explicit member scan (e.g. merged interface).
+    const hasDeclarationInClassFile = declarations.some((propDeclaration) => {
+      return (
+        propDeclaration.getSourceFile().getFilePath() ===
+        classSourceFile.getFilePath()
+      )
+    })
+
+    if (!hasDeclarationInClassFile) {
+      continue
+    }
+
+    // Skip properties that are actually accessors (handled in explicit check usually)
+    if (
+      declarations.some((propDeclaration) => {
+        return (
+          tsMorph.Node.isGetAccessorDeclaration(propDeclaration) ||
+          tsMorph.Node.isSetAccessorDeclaration(propDeclaration)
+        )
+      })
+    ) {
+      continue
+    }
+
+    const propType = prop.getTypeAtLocation(classDeclaration)
+    const callSignatures = propType.getCallSignatures()
+
+    if (callSignatures.length > 0) {
+      const resolvedSignatures = resolveCallSignatures(
+        callSignatures,
+        declaration ?? classDeclaration,
+        filter,
+        dependencies
+      )
+
+      ;(classMetadata.methods ??= []).push({
+        kind: 'ClassMethod',
+        name: propName,
+        scope:
+          declaration && tsMorph.Node.isMethodDeclaration(declaration)
+            ? getScope(declaration)
+            : undefined,
+        visibility:
+          declaration && tsMorph.Node.isMethodDeclaration(declaration)
+            ? getVisibility(declaration)
+            : undefined,
+        signatures: resolvedSignatures,
+        text: propType.getText(classDeclaration, TYPE_FORMAT_FLAGS),
+      })
+      existingMethodNames.add(propName)
+    } else {
+      const resolvedPropertyType = resolveTypeExpression(
+        propType,
+        declaration ?? classDeclaration,
+        filter,
+        undefined,
+        dependencies
+      )
+
+      if (resolvedPropertyType) {
+        ;(classMetadata.properties ??= []).push({
+          kind: 'ClassProperty',
+          name: propName,
+          scope:
+            declaration && tsMorph.Node.isPropertyDeclaration(declaration)
+              ? getScope(declaration)
+              : undefined,
+          visibility:
+            declaration && tsMorph.Node.isPropertyDeclaration(declaration)
+              ? getVisibility(declaration)
+              : undefined,
+          isOptional: isOptionalSymbol(prop),
+          isReadonly: isReadonlySymbol(prop),
+          initializer: undefined,
+          text: propType.getText(classDeclaration, TYPE_FORMAT_FLAGS),
+          type: filterUndefinedFromUnion(resolvedPropertyType),
+          ...getJsDocMetadata(declaration ?? classDeclaration),
+          ...(declaration ? getDeclarationLocation(declaration) : {}),
+        })
+        existingPropertyNames.add(propName)
+      }
+    }
+  }
+
+  // Resolve extends and implements clauses
   const baseClass = classDeclaration.getExtends()
-
   if (baseClass) {
     const resolvedBaseClass = resolveTypeExpression(
       baseClass.getType(),
@@ -5196,21 +5294,17 @@ function resolveClass(
     }
   }
 
-  const implementClauses = classDeclaration.getImplements()
   const resolvedImplementClauses: Kind.TypeReference[] = []
-
-  if (implementClauses.length) {
-    for (const implementClause of implementClauses) {
-      const resolved = resolveTypeExpression(
-        implementClause.getExpression().getType(),
-        classDeclaration,
-        filter,
-        undefined,
-        dependencies
-      ) as Kind.TypeReference | undefined
-      if (resolved) {
-        resolvedImplementClauses.push(resolved)
-      }
+  for (const implementClause of classDeclaration.getImplements()) {
+    const resolved = resolveTypeExpression(
+      implementClause.getExpression().getType(),
+      classDeclaration,
+      filter,
+      undefined,
+      dependencies
+    ) as Kind.TypeReference | undefined
+    if (resolved) {
+      resolvedImplementClauses.push(resolved)
     }
   }
 
@@ -5246,13 +5340,10 @@ function resolveClass(
         dependencies
       ) as Kind.TypeReference | undefined
 
-      if (!resolved) {
-        continue
-      }
-
       if (
+        resolved &&
         !resolvedImplementClauses.some(
-          (existing) => existing.text === resolved.text
+          (implemented) => implemented.text === resolved.text
         )
       ) {
         resolvedImplementClauses.push(resolved)
@@ -5265,6 +5356,99 @@ function resolveClass(
   }
 
   return classMetadata
+}
+
+function resolveClassConstructor(
+  classDeclaration: ClassDeclaration,
+  filter?: TypeFilter,
+  dependencies?: Set<string>
+): Kind.ClassConstructor | undefined {
+  const constructorDeclarations = classDeclaration.getConstructors()
+  const constructorSignatures = classDeclaration
+    .getType()
+    .getConstructSignatures()
+
+  if (
+    constructorDeclarations.length === 0 &&
+    constructorSignatures.length === 0
+  ) {
+    return undefined
+  }
+
+  // 1. Identify the implementation (actual code) to use as the "Primary" context.
+  // This ensures resolveParameters looks at the right node for defaults.
+  const implementationConstructor =
+    constructorDeclarations.find((declaration) => !declaration.isOverload()) ??
+    constructorDeclarations[0]
+
+  const primaryConstructorDeclaration =
+    implementationConstructor ?? constructorDeclarations[0] ?? classDeclaration
+
+  // 2. Gather signatures from AST (Declarations)
+  // We prioritize these because they hold the AST nodes with initializers (e.g. `param = 0`)
+  const declarationSignatures = implementationConstructor
+    ? [
+        ...(implementationConstructor.getOverloads?.() ?? []),
+        implementationConstructor,
+      ].map((d) => d.getSignature())
+    : constructorDeclarations.map((d) => d.getSignature())
+
+  // 3. Merge AST signatures with Type signatures.
+  // We need both because Type signatures handle 'inherited' constructors
+  // or implicit ones, while AST signatures have the rich syntax data.
+  const callSignatures: Signature[] = []
+  const seenSignatureDeclarations = new Set<string>()
+
+  for (const signature of [
+    ...declarationSignatures,
+    ...constructorSignatures,
+  ]) {
+    const declaration = signature.getDeclaration()
+
+    // In some synthetic cases, declaration might be undefined; we keep the signature anyway.
+    if (!declaration) {
+      callSignatures.push(signature)
+      continue
+    }
+
+    const declarationPath = declaration.getSourceFile().getFilePath()
+    const key = `${declarationPath}:${declaration.getStart()}:${declaration.getEnd()}`
+
+    if (!seenSignatureDeclarations.has(key)) {
+      seenSignatureDeclarations.add(key)
+      callSignatures.push(signature)
+    }
+  }
+
+  // Sort signatures by position to ensure deterministic output
+  callSignatures.sort((left, right) => {
+    const leftDecl = left.getDeclaration()
+    const rightDecl = right.getDeclaration()
+    return (
+      (leftDecl ? leftDecl.getStart() : 0) -
+      (rightDecl ? rightDecl.getStart() : 0)
+    )
+  })
+
+  // 4. Resolve using the primary constructor as context
+  const resolvedSignatures = resolveCallSignatures(
+    callSignatures,
+    primaryConstructorDeclaration,
+    filter,
+    dependencies
+  )
+
+  if (resolvedSignatures.length === 0) {
+    return undefined
+  }
+
+  return {
+    kind: 'ClassConstructor',
+    signatures: resolvedSignatures,
+    text: tsMorph.Node.isClassDeclaration(primaryConstructorDeclaration)
+      ? ''
+      : primaryConstructorDeclaration.getText(),
+  }
 }
 
 /** Processes a class accessor (getter or setter) declaration into a metadata object. */
@@ -5505,18 +5689,28 @@ function getPrimaryDeclaration(symbol?: Symbol): Node | undefined {
     return undefined
   }
 
+  let classDeclaration: Node | undefined
+  let typeLikeDeclaration: Node | undefined
+  let functionWithBody: Node | undefined
   let firstDeclaration: Node | undefined
 
   for (let index = 0; index < declarations.length; ++index) {
     const declaration = declarations[index]
     const kind = declaration.getKind()
 
+    if (kind === tsMorph.SyntaxKind.ClassDeclaration) {
+      classDeclaration = declaration
+      break
+    }
+
     switch (kind) {
-      case tsMorph.SyntaxKind.TypeAliasDeclaration:
       case tsMorph.SyntaxKind.InterfaceDeclaration:
+      case tsMorph.SyntaxKind.TypeAliasDeclaration:
       case tsMorph.SyntaxKind.EnumDeclaration:
-      case tsMorph.SyntaxKind.ClassDeclaration:
-        return declaration
+        if (!typeLikeDeclaration) {
+          typeLikeDeclaration = declaration
+        }
+        break
     }
 
     switch (kind) {
@@ -5527,9 +5721,10 @@ function getPrimaryDeclaration(symbol?: Symbol): Node | undefined {
       case tsMorph.SyntaxKind.SetAccessor:
       case tsMorph.SyntaxKind.FunctionExpression:
       case tsMorph.SyntaxKind.ArrowFunction:
-        if ((declaration as any).getBody?.()) {
-          return declaration
+        if ((declaration as any).getBody?.() && !functionWithBody) {
+          functionWithBody = declaration
         }
+        break
     }
 
     if (index === 0) {
@@ -5537,7 +5732,12 @@ function getPrimaryDeclaration(symbol?: Symbol): Node | undefined {
     }
   }
 
-  return firstDeclaration
+  return (
+    classDeclaration ??
+    typeLikeDeclaration ??
+    functionWithBody ??
+    firstDeclaration
+  )
 }
 
 /**
