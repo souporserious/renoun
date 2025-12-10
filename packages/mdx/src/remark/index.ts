@@ -4,6 +4,7 @@ import remarkAddFrontMatter from './add-front-matter.js'
 import remarkAddHeadings from './add-headings.js'
 import remarkGfm from './gfm.js'
 import remarkRemoveImmediateParagraphs from './remove-immediate-paragraphs.js'
+import remarkTransformJSDocInlineTags from './transform-jsdoc-inline-tags.js'
 import remarkTransformRelativeLinks from './transform-relative-links.js'
 import remarkTypography from './typography.js'
 
@@ -12,6 +13,7 @@ export const remarkPlugins: PluggableList = [
   remarkAddHeadings,
   remarkGfm,
   remarkRemoveImmediateParagraphs,
+  remarkTransformJSDocInlineTags,
   remarkTransformRelativeLinks,
   remarkTypography,
 ]

@@ -192,6 +192,20 @@ By adding a line break before and after the content, MDX will now wrap this text
 </div>
 ```
 
+#### remark `transform-jsdoc-inline-tags`
+
+Rewrites JSDoc/TSDoc inline tags that appear inside headings and paragraphs so they render as normal links or inline code instead of verbatim tag text.
+
+- `{@link}`, `{@linkplain}`, `{@linkcode}`, and `{@tutorial}` become `link` nodes. Labels can be provided with a pipe (`{@link Foo#bar|the bar member}`) or a space (`{@link Foo#bar the bar member}`). `linkcode` wraps the label in inline code.
+- `{@code ...}` becomes inline code; `{@literal ...}` keeps the raw text without escaping.
+- Unknown inline tags remain unchanged, and HTML-only runs are left as-is to avoid breaking embedded markup.
+
+```mdx
+See {@link Foo#bar|the bar member}, {@linkcode utils.call|utils.call()}, and {@code value}.
+```
+
+Renders as normal links and inline code in the compiled MDX output, making it useful for bringing JSDoc/TSDoc inline tags into user-facing documentation.
+
 #### remark `transform-relative-links`
 
 Reformats all relative links that use ordered numbers and extensions. For example, `./01.introduction.mdx` will be transformed to `./introduction`.
