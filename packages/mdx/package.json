@@ -10,10 +10,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/souporserious/renoun.git",
-    "directory": "packages/mdx-plugins"
+    "directory": "packages/mdx"
   },
   "bugs": "https://github.com/souporserious/renoun/issues",
-  "homepage": "https://renoun.dev/mdx-plugins",
+  "homepage": "https://renoun.dev/guides/mdx",
   "keywords": [
     "markdown",
     "md",
