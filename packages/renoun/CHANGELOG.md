@@ -1,5 +1,25 @@
 # renoun
 
+## 10.15.0
+
+### Minor Changes
+
+- 61771f6: Adds `Workspace` utility for analyzing and enumerating an entire workspace's available packages.
+
+### Patch Changes
+
+- 7f051b5: Adds `filter` option to `Directory#getEntries` mirroring the `Directory` constructor filtering.
+- 740c256: Fixes resolving complex return types in `ModuleExport#getType` from infinitely recursing causing a maximum call stack error.
+- f1b6261: Fixes `Collection#getFile` so calls like `getFile('Button.mdx')` correctly infer the `mdx` extension from the path and narrow the return type to `MDXFile`.
+- ed9778d: Fixes resolving duplicate interface and classes in `ModuleExport#getType`, classes now take precedence and merge in interface members.
+- bef3a49: Adds interface extensions in the `Reference` component.
+- 54165d5: Improves `Directory#getFile` and file-system types for `JavaScriptFile` and `MDXFile` so directory schemas, sort descriptors, and abstractions can rely on strongly typed exports without widening to `any`.
+- dc0075a: Update dependencies.
+- Updated dependencies [ba4a8c0]
+- Updated dependencies [dc0075a]
+- Updated dependencies [fd580a0]
+  - @renoun/mdx@3.6.1
+
 ## 10.14.0
 
 ### Minor Changes
