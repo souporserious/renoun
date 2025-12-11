@@ -37,6 +37,7 @@ import {
   ModuleExportNotFoundError,
   JSONFile,
   Workspace,
+  type FileStructure,
 } from './index'
 import type { Expect, Is, IsNotAny } from './types'
 import type { Kind } from '../utils/resolve-type'
@@ -353,7 +354,9 @@ describe('file system', () => {
     })
 
     expect(
-      recursiveFiltered.map((entry) => entry.getRelativePathToWorkspace()).sort()
+      recursiveFiltered
+        .map((entry) => entry.getRelativePathToWorkspace())
+        .sort()
     ).toEqual(['nested', 'nested/page.mdx', 'page.mdx'])
   })
 
@@ -3525,6 +3528,76 @@ export function identity<T>(value: T) {
 
       expect(packageNames.sort()).toEqual(['bar', 'foo'])
       expect(workspace.getPackage('bar')?.getName()).toBe('bar')
+    })
+  })
+
+  describe('getStructure', () => {
+    test('workspace uses root package.json name', async () => {
+      const fileSystem = new MemoryFileSystem({
+        'package.json': JSON.stringify({ name: 'acme' }),
+      })
+
+      const workspace = new Workspace({
+        fileSystem,
+        rootDirectory: '.',
+      })
+
+      const structures = await workspace.getStructure()
+      expect(structures[0]).toMatchObject({
+        type: 'workspace',
+        name: 'acme',
+        slug: 'acme',
+      })
+    })
+
+    test('directory yields directory and file entries with metadata', async () => {
+      const fileSystem = new MemoryFileSystem({
+        'docs/index.md': [
+          '---',
+          'description: Hello Docs',
+          '---',
+          '# Title',
+          '',
+        ].join('\n'),
+      })
+      const directory = new Directory({
+        fileSystem,
+        path: 'docs',
+        basePathname: null,
+      })
+      const structures = await directory.getStructure()
+
+      expect(structures.map((entry) => entry.type)).toEqual([
+        'directory',
+        'file',
+      ])
+
+      const fileEntry = structures[1] as FileStructure
+      expect(fileEntry.relativePath).toBe('docs/index.md')
+      expect(fileEntry.extension).toBe('md')
+      expect(fileEntry.description).toBe('Hello Docs')
+    })
+
+    test('markdown file includes front matter and description', async () => {
+      const fileSystem = new MemoryFileSystem({
+        'docs/page.md': [
+          '---',
+          'description: Page Desc',
+          '---',
+          '# Heading',
+        ].join('\n'),
+      })
+      const directory = new Directory({
+        path: 'docs',
+        fileSystem,
+      })
+      const file = await directory.getFile('page')
+      const structure = await file.getStructure()
+
+      expect(structure.type).toBe('file')
+      expect(structure.frontMatter?.description).toBe('Page Desc')
+      expect(structure.description).toBe('Page Desc')
+      expect(structure.relativePath).toBe('docs/page.md')
     })
   })
 })

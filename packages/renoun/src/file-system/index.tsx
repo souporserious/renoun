@@ -28,7 +28,10 @@ import {
   type GetEditorUriOptions,
 } from '../utils/get-editor-uri.js'
 import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
-import type { GitMetadata } from '../utils/get-local-git-file-metadata.js'
+import type {
+  GitMetadata,
+  GitAuthor,
+} from '../utils/get-local-git-file-metadata.js'
 import {
   getLocalGitExportMetadata,
   type GitExportMetadata,
@@ -249,6 +252,73 @@ type ModuleExportValidator<Input = any, Output = Input> = (
 type ModuleExportValidators<Exports extends ModuleExports> = {
   [ExportName in keyof Exports]: ModuleExportValidator<Exports[ExportName]>
 }
+
+export type FileSystemStructureType =
+  | 'workspace'
+  | 'package'
+  | 'directory'
+  | 'file'
+  | 'export'
+
+interface BaseStructure {
+  type: FileSystemStructureType
+  name: string
+  title: string
+  slug: string
+  path: string
+}
+
+export interface WorkspaceStructure extends BaseStructure {
+  type: 'workspace'
+  packageManager: 'pnpm' | 'yarn' | 'npm' | 'bun' | 'unknown'
+}
+
+export interface PackageStructure extends BaseStructure {
+  type: 'package'
+  version?: string
+  description?: string
+  relativePath: string
+}
+
+export interface DirectoryStructure extends BaseStructure {
+  type: 'directory'
+  depth: number
+  relativePath: string
+}
+
+export interface FileStructure extends BaseStructure {
+  type: 'file'
+  extension: string
+  depth: number
+  relativePath: string
+  firstCommitDate?: Date
+  lastCommitDate?: Date
+  authors?: GitAuthor[]
+  frontMatter?: Record<string, unknown>
+  headings?: Headings
+  description?: string
+  exports?: ModuleExportStructure[]
+}
+
+type ModuleExportResolvedType = Awaited<
+  ReturnType<FileSystem['resolveTypeAtLocation']>
+>
+
+export interface ModuleExportStructure extends BaseStructure {
+  type: 'export'
+  relativePath?: string
+  description?: string
+  tags?: Array<{ name: string; value?: string }>
+  resolvedType?: ModuleExportResolvedType
+  firstCommitDate?: Date
+  lastCommitDate?: Date
+}
+
+export type FileSystemStructure =
+  | WorkspaceStructure
+  | PackageStructure
+  | DirectoryStructure
+  | FileStructure
 
 /** Utility type that infers the schema output from validator functions or a [Standard Schema](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec). */
 export type InferModuleExports<Exports> = {
@@ -943,6 +1013,40 @@ export class File<
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
     return [previous, next]
+  }
+
+  protected async getFileStructureBase(): Promise<FileStructure> {
+    let firstCommitDate: Date | undefined
+    let lastCommitDate: Date | undefined
+    let authors: GitAuthor[] | undefined
+
+    try {
+      ;[firstCommitDate, lastCommitDate, authors] = await Promise.all([
+        this.getFirstCommitDate().catch(() => undefined),
+        this.getLastCommitDate().catch(() => undefined),
+        this.getAuthors().catch(() => undefined),
+      ])
+    } catch {
+      // Swallow git errors to keep structure generation resilient.
+    }
+
+    return {
+      type: 'file',
+      name: this.getName(),
+      title: this.getTitle(),
+      slug: this.getSlug(),
+      path: this.getPathname(),
+      relativePath: this.getRelativePathToWorkspace(),
+      extension: this.getExtension(),
+      depth: this.getDepth(),
+      firstCommitDate,
+      lastCommitDate,
+      authors,
+    }
+  }
+
+  async getStructure(): Promise<FileStructure> {
+    return this.getFileStructureBase()
   }
 
   /** Get the source text of this file. */
@@ -1666,6 +1770,66 @@ export class ModuleExport<Value> {
       `[renoun] JavaScript file export "${this.#name}" could not be determined statically or at runtime for path "${this.#file.getAbsolutePath()}". Ensure the directory has a loader defined for resolving "${this.#file.getExtension()}" files.`
     )
   }
+
+  async getStructure(): Promise<ModuleExportStructure> {
+    let resolvedType: ModuleExportResolvedType | undefined
+    let firstCommitDate: Date | undefined
+    let lastCommitDate: Date | undefined
+
+    try {
+      resolvedType = await this.getType()
+    } catch {
+      // Ignore type resolution failures for structure generation.
+    }
+
+    try {
+      ;[firstCommitDate, lastCommitDate] = await Promise.all([
+        this.getFirstCommitDate().catch(() => undefined),
+        this.getLastCommitDate().catch(() => undefined),
+      ])
+    } catch {
+      // Ignore git errors for structure generation.
+    }
+
+    const tags = this.getTags()
+    const normalizedTags =
+      tags?.map((tag) => {
+        const text = tag.text as unknown
+        let value: string | undefined
+
+        if (Array.isArray(text)) {
+          value = text
+            .map((part: any) => (typeof part === 'string' ? part : part?.text))
+            .filter(Boolean)
+            .join('')
+            .trim()
+        } else if (typeof text === 'string') {
+          value = text
+        }
+
+        return {
+          name: tag.name,
+          value: value && value.length > 0 ? value : undefined,
+        }
+      }) ?? undefined
+
+    const slug = this.getSlug()
+    const filePath = this.#file.getPathname()
+
+    return {
+      type: 'export',
+      name: this.getName(),
+      title: this.getTitle(),
+      slug,
+      path: `${filePath}#${slug}`,
+      relativePath: `${this.#file.getRelativePathToWorkspace()}#${slug}`,
+      description: this.getDescription(),
+      tags: normalizedTags,
+      resolvedType,
+      firstCommitDate,
+      lastCommitDate,
+    }
+  }
 }
 
 /** Options for a JavaScript file in the file system. */
@@ -1951,6 +2115,24 @@ export class JavaScriptFile<
     }
 
     return this.#headings
+  }
+
+  override async getStructure(): Promise<FileStructure> {
+    const base = await this.getFileStructureBase()
+    const fileExports = await this.getExports()
+    const exports: ModuleExportStructure[] = []
+
+    for (const fileExport of fileExports) {
+      if (typeof (fileExport as any).getStructure === 'function') {
+        const exportStructure = await (fileExport as any).getStructure()
+        exports.push(exportStructure)
+      }
+    }
+
+    return {
+      ...base,
+      exports: exports.length > 0 ? exports : undefined,
+    }
   }
 
   /**
@@ -2358,6 +2540,7 @@ export class MDXFile<
     }
 
     const result = await this.#getSourceWithFrontMatter()
+
     return result.frontMatter
   }
 
@@ -2453,6 +2636,28 @@ export class MDXFile<
     }
 
     return this.#headings
+  }
+
+  override async getStructure(): Promise<FileStructure> {
+    const base = await this.getFileStructureBase()
+    const [frontMatter, headings] = await Promise.all([
+      this.getFrontMatter().catch(() => undefined),
+      this.getHeadings().catch(() => undefined),
+    ])
+    const description =
+      (frontMatter?.['description'] as string | undefined) ??
+      (headings && headings.length > 0
+        ? ((headings[0] as any).text ??
+          (headings[0] as any).children ??
+          (headings[0] as any).id)
+        : undefined)
+
+    return {
+      ...base,
+      frontMatter,
+      headings,
+      description,
+    }
   }
 
   /** Check if an export exists at runtime in the MDX file. */
@@ -2671,6 +2876,28 @@ export class MarkdownFile<
       this.#headings = getMarkdownHeadings(source)
     }
     return this.#headings
+  }
+
+  override async getStructure(): Promise<FileStructure> {
+    const base = await this.getFileStructureBase()
+    const [frontMatter, headings] = await Promise.all([
+      this.getFrontMatter().catch(() => undefined),
+      this.getHeadings().catch(() => undefined),
+    ])
+    const description =
+      (frontMatter?.['description'] as string | undefined) ??
+      (headings && headings.length > 0
+        ? ((headings[0] as any).text ??
+          (headings[0] as any).children ??
+          (headings[0] as any).id)
+        : undefined)
+
+    return {
+      ...base,
+      frontMatter,
+      headings,
+      description,
+    }
   }
 
   /** Get the runtime value of an export in the Markdown file. (Permissive signature for union compatibility.) */
@@ -3783,6 +4010,42 @@ export class Directory<
     )
 
     return snapshot.materialize() as any
+  }
+
+  async getStructure(): Promise<Array<DirectoryStructure | FileStructure>> {
+    const relativePath = this.getRelativePathToWorkspace()
+    const path = this.getPathname()
+
+    const structures: Array<DirectoryStructure | FileStructure> = [
+      {
+        type: 'directory',
+        name: this.getName(),
+        title: this.getTitle(),
+        slug: this.getSlug(),
+        path,
+        relativePath,
+        depth: this.getDepth(),
+      },
+    ]
+
+    const entries = await this.getEntries({
+      includeDirectoryNamedFiles: true,
+      includeIndexAndReadmeFiles: true,
+    })
+
+    for (const entry of entries) {
+      if (typeof (entry as any).getStructure === 'function') {
+        const entryStructure = await (entry as any).getStructure()
+        // Directories return arrays, files return single structures
+        if (Array.isArray(entryStructure)) {
+          structures.push(...entryStructure)
+        } else {
+          structures.push(entryStructure)
+        }
+      }
+    }
+
+    return structures
   }
 
   #normalizeEntriesOptions(options?: {
@@ -5044,6 +5307,8 @@ interface PackageJson {
   exports?: string | Record<string, unknown> | null
   imports?: Record<string, unknown> | null
   workspaces?: string[] | { packages?: string[] }
+  version?: string
+  description?: string
 }
 
 export type PackageEntryTargetNode =
@@ -5756,6 +6021,52 @@ export class Workspace {
     return this.getPackages().find((pkg) => pkg.getName() === name)
   }
 
+  async getStructure(): Promise<
+    Array<
+      WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
+    >
+  > {
+    let workspaceName = 'workspace'
+    const rootPackageJsonPath = this.#findWorkspacePath('package.json')
+
+    if (rootPackageJsonPath) {
+      try {
+        const packageJson = readJsonFile<{ name?: string }>(
+          this.#fileSystem,
+          rootPackageJsonPath,
+          `package.json at "${rootPackageJsonPath}"`
+        )
+        if (packageJson?.name) {
+          workspaceName = packageJson.name
+        }
+      } catch {
+        // fall back to default workspace name on read/parse errors
+      }
+    }
+
+    const workspaceSlug = createSlug(workspaceName, 'kebab')
+
+    const structures: Array<
+      WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
+    > = [
+      {
+        type: 'workspace',
+        name: workspaceName,
+        title: formatNameAsTitle(workspaceName),
+        slug: workspaceSlug,
+        path: '/',
+        packageManager: this.getPackageManager(),
+      },
+    ]
+
+    for (const pkg of this.getPackages()) {
+      const packageStructures = await pkg.getStructure()
+      structures.push(...packageStructures)
+    }
+
+    return structures
+  }
+
   getPackages(): Package<InferDirectoryLoaderTypes<DirectoryLoader>>[] {
     return this.#getWorkspacePackageEntries().map(
       ({ name, path }) =>
@@ -5993,6 +6304,49 @@ export class Package<
     }
 
     return this.#exportDirectories
+  }
+
+  async getStructure(): Promise<
+    Array<PackageStructure | DirectoryStructure | FileStructure>
+  > {
+    this.#ensurePackageJsonLoaded()
+
+    const packageJson = this.#packageJson
+    const name =
+      this.#name ??
+      packageJson?.name ??
+      formatNameAsTitle(baseName(this.#packagePath))
+    const relativePath = this.#fileSystem.getRelativePathToWorkspace(
+      this.#packagePath
+    )
+    const normalizedRelativePath =
+      relativePath === '.' ? '' : normalizeSlashes(relativePath)
+    const path =
+      normalizedRelativePath === ''
+        ? '/'
+        : `/${normalizedRelativePath.replace(/^\/+/, '')}`
+
+    const structures: Array<
+      PackageStructure | DirectoryStructure | FileStructure
+    > = [
+      {
+        type: 'package',
+        name,
+        title: formatNameAsTitle(name),
+        slug: createSlug(name, 'kebab'),
+        path,
+        version: packageJson?.version,
+        description: packageJson?.description,
+        relativePath: normalizedRelativePath || '.',
+      },
+    ]
+
+    for (const directory of this.getExports()) {
+      const directoryStructures = await directory.getStructure()
+      structures.push(...directoryStructures)
+    }
+
+    return structures
   }
 
   async getExport<Key extends keyof ExportLoaders & string>(
