@@ -18,7 +18,7 @@ import { resolveFrameworkBinFile, type Framework } from './framework.js'
 import { spawn } from 'node:child_process'
 
 interface AppCommandOptions {
-  command: 'dev' | 'build' | 'start'
+  command: 'dev' | 'build'
   args: string[]
 }
 
@@ -57,6 +57,9 @@ const IGNORED_APP_DIRECTORIES = new Set([
   '.next',
   '.turbo',
   '.output',
+  '.renoun',
+  'dist',
+  'out',
 ])
 
 const FRAMEWORK_HINTS: Record<Framework, readonly string[]> = {
@@ -165,12 +168,7 @@ export async function runAppCommand({ command, args }: AppCommandOptions) {
 
     const frameworkBinPath = resolveFrameworkBinFile(resolvedExample.framework)
 
-    const frameworkArgs = [frameworkBinPath]
-
-    if (command !== 'start') {
-      frameworkArgs.push(command)
-    }
-
+    const frameworkArgs = [frameworkBinPath, command]
     frameworkArgs.push(...forwardedArgs)
 
     subProcess = spawn(process.execPath, frameworkArgs, {
@@ -611,13 +609,10 @@ async function recursiveSymlinkDirectory(
       await mkdir(targetPath, { recursive: true })
       await recursiveSymlinkDirectory(sourcePath, targetPath)
     } else if (entry.isFile() || entry.isSymbolicLink()) {
-      if (isSourceFile(entry.name)) {
-        // COPY all source files so imports resolve from runtime directory
-        await copyFile(sourcePath, targetPath)
-      } else {
-        // Symlink non-source files (images, css, etc.) for efficiency
-        await symlink(sourcePath, targetPath, 'file')
-      }
+      // Copy ALL files to the runtime directory
+      // Symlinking non-source files (images, ico, css) causes issues with Next.js Turbopack
+      // during production build as it doesn't follow symlinks for static assets
+      await copyFile(sourcePath, targetPath)
     }
   }
 }

@@ -8,11 +8,11 @@ Running a **renoun app** lets you start from an app that lives in `node_modules`
 `@renoun/blog`, `@renoun/docs`, or a Presenter-style app—and override it with files in your own
 repo.
 
-This is what `renoun dev` / `renoun build` / `renoun start` do:
+This is what `renoun dev` / `renoun build` do:
 
-- The renoun app (template or full application) is the **root app**.
+- The renoun app is the **root app**.
 - Your files **shadow** the app’s files.
-- Renoun builds a runtime under `.renoun/`, merges both views, and launches the framework there.
+- renoun builds a runtime under `.renoun/`, merges both views, and launches the framework there.
 
 > If you already have your own Next/Vite/Waku app and just want renoun inside it, use  
 > **“Use renoun in your app”** (`renoun next dev`, `renoun vite dev`, etc.) instead.

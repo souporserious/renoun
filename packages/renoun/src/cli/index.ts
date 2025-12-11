@@ -30,11 +30,7 @@ if (firstArgument === 'validate') {
 } else if (firstArgument === 'theme') {
   await runThemeCommand(secondArgument)
   process.exit(0)
-} else if (
-  firstArgument === 'dev' ||
-  firstArgument === 'build' ||
-  firstArgument === 'start'
-) {
+} else if (firstArgument === 'dev' || firstArgument === 'build') {
   const appArgs = [secondArgument, ...restArguments].filter(
     (value): value is string => typeof value === 'string'
   )
@@ -212,14 +208,13 @@ if (firstArgument === 'validate') {
 } else if (
   // App mode, app-first form: `renoun @renoun/docs dev`
   secondArgument === 'dev' ||
-  secondArgument === 'build' ||
-  secondArgument === 'start'
+  secondArgument === 'build'
 ) {
   const appArgs = [firstArgument, ...restArguments].filter(
     (value): value is string => typeof value === 'string'
   )
   await runAppCommand({
-    command: secondArgument as 'dev' | 'build' | 'start',
+    command: secondArgument as 'dev' | 'build',
     args: appArgs,
   })
   process.exit(process.exitCode ?? 0)
