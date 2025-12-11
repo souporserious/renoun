@@ -1,5 +1,20 @@
 # renoun
 
+## 10.16.0
+
+### Minor Changes
+
+- 26ff8a4: Adds `getStructure` methods to all file-system utilities for building search indexes and RSS feeds.
+
+### Patch Changes
+
+- b794d9c: Fixes a regression where the `Reference` component would expand all properties from external attribute interfaces (e.g., `React.ButtonHTMLAttributes`) instead of keeping them as type references. External attribute interfaces are now only inlined when explicitly requested via the `filter` prop, and only the specified properties are included.
+- 2bc40cb: Fixes resolving JSDoc call signatures when inferred function types are `any` and now unwraps nullable JSDoc annotations so `ModuleExport#getType` keeps the intended literal types.
+- Updated dependencies [a10dc65]
+- Updated dependencies [cd7e2ba]
+- Updated dependencies [d1f54d4]
+  - @renoun/mdx@3.7.0
+
 ## 10.15.0
 
 ### Minor Changes

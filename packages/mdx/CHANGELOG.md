@@ -1,5 +1,16 @@
 # @renoun/mdx
 
+## 3.7.0
+
+### Minor Changes
+
+- a10dc65: Adds a remark `transform-jsdoc-inline-tags` plugin for transforming JSDoc inline tags like `{@link}`, `{@code}`, and related inline tags into links or inline code.
+- cd7e2ba: Adds `healMarkdown` utility to help complete missing markdown when streaming.
+
+### Patch Changes
+
+- d1f54d4: Adds export for `@renoun/mdx/remark/gfm` plugin. This makes it easier to access in bundlers that require serialized options.
+
 ## 3.6.1
 
 ### Patch Changes
