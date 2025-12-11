@@ -357,6 +357,30 @@ export async function collectTypeScriptMetadata(
   allowErrors?: string | boolean,
   showErrors?: boolean
 ): Promise<TypeScriptMetadata> {
+  // Skip TypeScript analysis for non-TypeScript/JavaScript files
+  // MDX and other non-JS files cause TypeScript checker errors when analyzed
+  const tsJsExtensions = [
+    '.ts',
+    '.tsx',
+    '.js',
+    '.jsx',
+    '.mts',
+    '.cts',
+    '.mjs',
+    '.cjs',
+  ]
+  const isTypeScriptFile = filePath
+    ? tsJsExtensions.some((ext) => filePath.endsWith(ext))
+    : false
+
+  if (filePath && !isTypeScriptFile) {
+    return {
+      sourceFile: undefined,
+      diagnostics: [],
+      symbolMetadata: [],
+    }
+  }
+
   const sourceFile = filePath ? project.getSourceFile(filePath) : undefined
 
   if (!sourceFile) {

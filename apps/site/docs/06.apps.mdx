@@ -1,0 +1,276 @@
+export const metadata = {
+  title: 'Run a renoun app',
+  description:
+    'Run renoun apps and templates from node_modules by shadowing files from your local project.',
+}
+
+Running a **renoun app** lets you start from an app that lives in `node_modules`—like
+`@renoun/blog`, `@renoun/docs`, or a Presenter-style app—and override it with files in your own
+repo.
+
+This is what `renoun dev` / `renoun build` / `renoun start` do:
+
+- The renoun app (template or full application) is the **root app**.
+- Your files **shadow** the app’s files.
+- Renoun builds a runtime under `.renoun/`, merges both views, and launches the framework there.
+
+> If you already have your own Next/Vite/Waku app and just want renoun inside it, use  
+> **“Use renoun in your app”** (`renoun next dev`, `renoun vite dev`, etc.) instead.
+
+---
+
+## How it works
+
+When you run `renoun dev`, the CLI orchestrates the following process:
+
+```text
+Your Project
+├── package.json
+├── posts/                      ← your content (shadows the `@renoun/blog` app)
+│   └── hello-world.mdx
+└── .renoun/                    ← renoun-managed runtime directory
+    └── @blog/                  ← `@renoun/blog` app + your shadowed files merged
+        ├── app/                ← copied from the `@renoun/blog` app
+        ├── posts/              ← symlink → your posts/
+        └── node_modules/       ← symlink → `@renoun/blog` dependencies
+```
+
+1. **Runtime preparation**
+   The CLI creates `.renoun/<app-name>` and copies the renoun app’s source files
+   (TypeScript, config, etc.) into it. Non-source files and `node_modules` are symlinked to avoid
+   duplication.
+
+2. **Shadow application**
+   Any files or directories you’ve created that match paths in the app are symlinked from the
+   runtime to your local versions, effectively **shadowing** the renoun app.
+
+3. **Framework launch**
+   The CLI spawns the framework (`next dev`, `vite dev`, `waku dev`, etc.) **inside the runtime
+   directory**. The framework sees a merged view: app code plus your overrides.
+
+4. **Path resolution**
+   Renoun sets an internal environment variable so its utilities resolve paths relative to the
+   runtime directory, ensuring your shadowed content is discovered correctly.
+
+This architecture means you never modify the renoun app in `node_modules`; you only add and edit
+files in your own project.
+
+---
+
+## Quick start
+
+1. Install the renoun runtime and a renoun app (template or full app):
+
+   ```bash
+   pnpm add renoun @renoun/blog
+   ```
+
+2. Add scripts that call into the renoun CLI:
+
+   ```json
+   {
+     "scripts": {
+       "dev": "renoun dev",
+       "build": "renoun build"
+     }
+   }
+   ```
+
+3. Create any files you want to shadow from the app, for example:
+
+   ```text
+   posts/hello-world.mdx
+   ```
+
+4. Run the renoun app:
+
+   ```bash
+   pnpm run dev
+   ```
+
+   See [`examples/app`](https://github.com/souporserious/renoun/tree/main/examples/app)
+   for a workspace demo that follows this setup and shadows the `posts/` directory from the
+   `@renoun/blog` app.
+
+The CLI copies the app into `.renoun/<package-name>` inside your project, replaces any paths
+that you shadow with symlinks to your local files, and then executes the app’s framework command
+(`next dev`, `vite dev`, or `waku dev`). The framework output appears in your terminal just like
+running the app directly.
+
+## Shadowing behavior
+
+Every file or directory that you place next to your `package.json`—excluding lockfiles and
+`node_modules`—is eligible to shadow the renoun app. During startup renoun:
+
+1. **Copies source files** (`.ts`, `.tsx`, `.js`, etc.) from the app into the runtime directory.
+   Source files are copied rather than symlinked so that bundlers resolve imports relative to the
+   runtime, not the original package location.
+
+2. **Symlinks non-source files** (images, stylesheets, configs) and `node_modules` to avoid
+   duplication and keep the runtime lightweight.
+
+3. **Applies shadows** by replacing any matching paths with symlinks to your local files. If you
+   shadow a directory (like `posts/`), the entire app directory is replaced with a symlink
+   to yours.
+
+4. **Enables hot reload** because the framework watches the symlinked files, so edits to your
+   source files trigger rebuilds immediately.
+
+This lets you focus on content and targeted overrides. For example, to replace a component shipped
+with the app, add a new file with the same relative path:
+
+```tsx
+// ui/RootProvider.tsx
+import {
+  RootProvider as BaseRootProvider,
+  type RootProviderProps,
+} from 'renoun'
+
+export function RootProvider(props: RootProviderProps) {
+  return <BaseRootProvider {...props} theme="nord" />
+}
+```
+
+The runtime symlink points to your implementation, so the framework reloads with your changes
+without extra configuration. When you shadow a directory (for example `posts/`), the entire app
+directory is replaced by your version, letting you remove or rename the app’s defaults without
+editing anything in `node_modules`.
+
+---
+
+## Ejecting a renoun app
+
+Running a renoun app from `node_modules` is great for exploring and making light customizations.
+When you’re ready to **fully own the app’s source**, you can **eject**.
+
+Ejecting turns:
+
+> “Run a renoun app from `node_modules`”
+> into
+> “Use renoun in _your_ app.”
+
+### What `renoun eject` does
+
+When you run:
+
+```bash
+renoun eject
+```
+
+renoun will:
+
+1. **Materialize the runtime into your repo**
+   - Take the current runtime at `.renoun/<app-name>`.
+   - Copy its application files (e.g. `app/`, `components/`, `ui/`, configs) into your project
+     root (or a configured target directory).
+   - Preserve paths so the app layout matches what you were already running.
+
+2. **Apply your shadows on top**
+   - Any files or directories you were shadowing (like `posts/` or `ui/RootProvider.tsx`) are
+     treated as the source of truth.
+   - If a file exists both in the runtime and your project, the **local file wins**.
+   - Shadowed directories fully replace the app’s version.
+
+   The result is a single, coherent codebase in your project that reflects exactly what you were
+   seeing while running the renoun app.
+
+3. **Remove the renoun app dependency**
+   - The ejected app no longer depends on the original renoun app package at runtime.
+   - `renoun eject` removes the specified app from your `dependencies` / `devDependencies`,
+     leaving `renoun` itself in place.
+
+4. **Prepare you to run it as your own app**
+
+   After ejecting, your app lives directly in your repo. You can switch to running it like any
+   other framework app with renoun:
+
+   ```json
+   {
+     "scripts": {
+       "dev": "renoun next dev",
+       "build": "renoun next build"
+     }
+   }
+   ```
+
+   (Swap `next` for `vite` / `waku` depending on the framework the app uses.)
+
+Now you’re using the “Use renoun in your app” flow, with the ejected codebase as _your_ app.
+
+### When to eject
+
+Stay in the **“run a renoun app”** flow (`renoun dev`) when:
+
+- You want to try a blog/docs/Presenter app quickly.
+- You’re happy with the overall structure and only need targeted overrides.
+- You want to keep upgrading the underlying app over time.
+
+Use **`renoun eject`** when:
+
+- You’re turning the app into a long-lived product with heavy customizations.
+- You want full control over routing, layout, configuration, and dependencies.
+- You’re ready to treat it as your app and run it via `renoun next dev` / `renoun vite dev` /
+  `renoun waku dev`.
+
+---
+
+## Cleaning up
+
+Stop the process with `Ctrl+C` just like any framework script. The next run recreates the runtime
+folder from scratch, ensuring you always start from a clean copy of the renoun app when using
+`renoun dev`.
+
+After ejecting, the `.renoun/` directory is still used for caches and internal state, but the
+ejected app no longer depends on the app runtime in `node_modules`.
+
+---
+
+## Security model
+
+Running renoun apps this way is designed with security in mind. Here's how the system protects your
+project:
+
+### What renoun controls
+
+The CLI uses an internal environment variable (`RENOUN_RUNTIME_DIRECTORY`) to tell renoun utilities
+where the runtime directory is. This allows file discovery to work correctly in the merged
+environment. Before trusting this variable, renoun validates it with multiple checks:
+
+| Check                        | What it prevents                                                                                          |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Real path resolution**     | Follows symlinks and resolves `../` before validation, preventing path traversal attacks                  |
+| **Containment verification** | The resolved path must contain `/.renoun/`, ensuring it's a renoun-managed directory                      |
+| **Workspace validation**     | The parent directory must contain `package.json` or `pnpm-workspace.yaml`, confirming it's a real project |
+
+If any check fails, renoun ignores the environment variable and falls back to normal path
+resolution. This means even if an attacker sets the variable, they can't redirect renoun to
+arbitrary directories.
+
+### What you control
+
+While renoun secures its internal operations, you should understand these aspects of the system:
+
+- **Renoun apps run code in your environment.** Only install templates or applications from
+  sources you trust, just as you would with any npm dependency. Renoun apps have the same access
+  as any other package in your project.
+
+- **The `.renoun/` directory is temporary.** Add it to your `.gitignore`. It's recreated fresh on
+  each run, so don't store anything important there.
+
+- **Symlinks point to your real files.** When you shadow a file, the framework reads directly from
+  your source. This is the intended behavior—it enables hot reload and live editing.
+
+### Shared environments
+
+If you're running renoun in a shared server or CI environment where other processes might set
+environment variables before the CLI starts, be aware that environment variable injection is a
+general security concern for any application. Renoun's validation mitigates this for its specific
+use case, but standard environment isolation practices still apply.
+
+### Summary
+
+Running a renoun app from `node_modules` via `renoun dev` is safe for normal development
+workflows. The security model ensures renoun only operates within your project's `.renoun/`
+directory, and the same trust model applies to renoun apps as to any npm package you install.
+If you eject, you keep all the code locally and continue building as your own app with the same
+safety guarantees.

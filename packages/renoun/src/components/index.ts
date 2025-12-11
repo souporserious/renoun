@@ -27,7 +27,7 @@ export {
   type MarkdownComponents,
 } from './Markdown.js'
 export { MDX } from './MDX.js'
-export { RootProvider } from './RootProvider.js'
+export { RootProvider, type RootProviderProps } from './RootProvider.js'
 export {
   Reference,
   type ReferenceProps,

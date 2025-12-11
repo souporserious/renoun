@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "@examples/blog",
+  "name": "@renoun/blog",
   "homepage": "https://renoun-blog.vercel.app/",
   "description": "A blog starter featuring a post index, tags, and individual article pages with MDX.",
   "scripts": {

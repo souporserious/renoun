@@ -82,8 +82,10 @@ function getRootProviderErrorMessage() {
   return `[renoun] RootProvider must wrap the html element.${instruction}`
 }
 
-interface BaseProps
-  extends Omit<Partial<ConfigurationOptions>, 'git' | 'theme'> {
+interface BaseProps extends Omit<
+  Partial<ConfigurationOptions>,
+  'git' | 'theme'
+> {
   /** The nonce to use for the provider scripts. */
   nonce?: string
 
@@ -103,23 +105,24 @@ interface BaseProps
   children: React.ReactNode
 }
 
-export type RootProviderProps<Theme extends ThemeValue | ThemeMap | undefined> =
-  BaseProps &
-    (Theme extends ThemeMap
-      ? {
-          /** Object map of theme names to theme values e.g. `{ light: 'vitesse-light', dark: 'vitesse-dark' }`. */
-          theme: ThemeMap
+export type RootProviderProps<
+  Theme extends ThemeValue | ThemeMap | undefined = undefined,
+> = BaseProps &
+  (Theme extends ThemeMap
+    ? {
+        /** Object map of theme names to theme values e.g. `{ light: 'vitesse-light', dark: 'vitesse-dark' }`. */
+        theme: ThemeMap
 
-          /** Control whether to include the theme script that manages the local storage theme state in the head of the document. */
-          includeThemeScript?: boolean
-        }
-      : {
-          /** Single theme name or [name, override]. If omitted, defaults apply. */
-          theme?: ThemeValue
+        /** Control whether to include the theme script that manages the local storage theme state in the head of the document. */
+        includeThemeScript?: boolean
+      }
+    : {
+        /** Single theme name or [name, override]. If omitted, defaults apply. */
+        theme?: ThemeValue
 
-          /** The `includeThemeScript` prop is only considered when the `theme` prop is an object map e.g. `theme={{ light: 'vitesse-light', dark: 'vitesse-dark' }}`. */
-          includeThemeScript?: never
-        })
+        /** The `includeThemeScript` prop is only considered when the `theme` prop is an object map e.g. `theme={{ light: 'vitesse-light', dark: 'vitesse-dark' }}`. */
+        includeThemeScript?: never
+      })
 
 /** A provider that configures and wraps the root of the application. */
 export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({

@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
 
 import { createServer } from '../project/server.js'
 import { getDebugLogger } from '../utils/debug.js'
 import { reorderEntries } from './reorder.js'
 import { runThemeCommand } from './theme.js'
 import { runValidateCommand } from './validate.js'
+import { runAppCommand } from './app.js'
+import { resolveFrameworkBinFile, type Framework } from './framework.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
@@ -22,35 +21,6 @@ if (firstArgument === 'help') {
   process.exit(0)
 }
 
-type Framework = 'next' | 'vite' | 'waku'
-
-const projectRequire = createRequire(join(process.cwd(), 'package.json'))
-
-function resolveFrameworkBinFile(framework: Framework): string {
-  const packageJsonPath = projectRequire.resolve(`${framework}/package.json`)
-  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
-  let binRelativePath: string | undefined
-
-  if (typeof packageJson.bin === 'string') {
-    binRelativePath = packageJson.bin
-  } else if (typeof packageJson.bin === 'object') {
-    if (packageJson.bin[framework]) {
-      binRelativePath = packageJson.bin[framework]
-    } else {
-      binRelativePath = Object.values(packageJson.bin).at(0) as
-        | string
-        | undefined
-    }
-  }
-
-  if (!binRelativePath) {
-    throw new Error(`Could not find "bin" for ${framework}`)
-  }
-
-  const packageJsonDirectory = dirname(packageJsonPath)
-  return join(packageJsonDirectory, binRelativePath.replace(/^\.\//, ''))
-}
-
 if (firstArgument === 'validate') {
   const args = [secondArgument, ...restArguments].filter(
     (value): value is string => typeof value === 'string'
@@ -60,6 +30,19 @@ if (firstArgument === 'validate') {
 } else if (firstArgument === 'theme') {
   await runThemeCommand(secondArgument)
   process.exit(0)
+} else if (
+  firstArgument === 'dev' ||
+  firstArgument === 'build' ||
+  firstArgument === 'start'
+) {
+  const appArgs = [secondArgument, ...restArguments].filter(
+    (value): value is string => typeof value === 'string'
+  )
+  await runAppCommand({
+    command: firstArgument,
+    args: appArgs,
+  })
+  process.exit(process.exitCode ?? 0)
 } else if (
   firstArgument === 'next' ||
   firstArgument === 'vite' ||
@@ -226,6 +209,20 @@ if (firstArgument === 'validate') {
     console.error('Unhandled rejection:', reason)
     cleanupAndExit(1)
   })
+} else if (
+  // App mode, app-first form: `renoun @renoun/docs dev`
+  secondArgument === 'dev' ||
+  secondArgument === 'build' ||
+  secondArgument === 'start'
+) {
+  const appArgs = [firstArgument, ...restArguments].filter(
+    (value): value is string => typeof value === 'string'
+  )
+  await runAppCommand({
+    command: secondArgument as 'dev' | 'build' | 'start',
+    args: appArgs,
+  })
+  process.exit(process.exitCode ?? 0)
 } else if (firstArgument === 'reorder') {
   try {
     await reorderEntries(secondArgument)

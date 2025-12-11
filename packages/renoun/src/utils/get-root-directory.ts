@@ -1,11 +1,69 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { cwd } from 'node:process'
+import { cwd, env } from 'node:process'
 
 const rootDirectoryCache: Map<string, string> = new Map()
 
+/**
+ * Validate that a runtime directory path is safe to use.
+ *
+ * Security checks:
+ * 1. Path must exist
+ * 2. Resolved real path (following symlinks) must contain /.renoun/
+ * 3. Must be under a valid workspace root (has package.json or pnpm-workspace.yaml)
+ *
+ * This prevents:
+ * - Path traversal attacks (/../../../etc)
+ * - Symlink attacks (symlink to sensitive directories)
+ * - Arbitrary directory injection
+ */
+function isValidRuntimeDirectory(runtimePath: string): boolean {
+  // Must exist
+  if (!existsSync(runtimePath)) {
+    return false
+  }
+
+  // Resolve to real path (follows symlinks, resolves ..)
+  let realPath: string
+  try {
+    realPath = realpathSync(runtimePath)
+  } catch {
+    return false
+  }
+
+  // Real path must contain /.renoun/ to ensure it's a renoun-managed directory
+  // This check happens AFTER resolving symlinks and path traversal
+  const normalizedRealPath = realPath.replace(/\\/g, '/')
+  if (!normalizedRealPath.includes('/.renoun/')) {
+    return false
+  }
+
+  // Verify there's a valid workspace root above the .renoun directory
+  // This ensures we're in a legitimate project, not an attacker-created directory
+  const renounDirIndex = normalizedRealPath.indexOf('/.renoun/')
+  const projectRoot = normalizedRealPath.substring(0, renounDirIndex)
+
+  const hasPackageJson = existsSync(join(projectRoot, 'package.json'))
+  const hasPnpmWorkspace = existsSync(join(projectRoot, 'pnpm-workspace.yaml'))
+
+  if (!hasPackageJson && !hasPnpmWorkspace) {
+    return false
+  }
+
+  return true
+}
+
 /** Resolve the root of the workspace, using bun, npm, pnpm, or yarn. */
 export function getRootDirectory(startDirectory: string = cwd()): string {
+  // In application mode, use the runtime directory as the root
+  // This ensures paths resolve relative to the runtime directory
+  if (
+    env.RENOUN_RUNTIME_DIRECTORY &&
+    isValidRuntimeDirectory(env.RENOUN_RUNTIME_DIRECTORY)
+  ) {
+    return env.RENOUN_RUNTIME_DIRECTORY
+  }
+
   if (rootDirectoryCache.has(startDirectory)) {
     return rootDirectoryCache.get(startDirectory)!
   }

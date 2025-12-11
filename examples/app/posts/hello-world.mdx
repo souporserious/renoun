@@ -1,0 +1,23 @@
+---
+title: Hello from app renoun
+date: 2025-01-01
+summary: A minimal MDX post that lives entirely outside the blog template.
+tags:
+  - announcement
+  - app
+---
+
+Welcome to the renoun application example! This post ships with the project rather than the
+`@renoun/blog` application, demonstrating how shadowing lets you control your content without copying the
+entire example.
+
+```tsx path="posts/hello-world.mdx"
+export const metadata = {
+  hero: {
+    tagline: 'Shadowed content rendered by renoun',
+  },
+}
+```
+
+Shadowing works for any path inside the application. Add more files to the `posts/` directory or create
+new components under `ui/` to make the experience your own.
