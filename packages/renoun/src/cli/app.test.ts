@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { realpathSync } from 'node:fs'
 import {
   cp,
   lstat,
@@ -89,7 +90,9 @@ afterEach(() => {
 
 describe('runAppCommand integration', () => {
   test('prepares runtime directory and shadows project overrides', async () => {
-    const tmpRoot = await mkdtemp(join(tmpdir(), 'renoun-app-test-'))
+    const tmpRoot = realpathSync(
+      await mkdtemp(join(tmpdir(), 'renoun-app-test-'))
+    )
     const projectRoot = join(tmpRoot, 'project')
     await mkdir(projectRoot, { recursive: true })
 

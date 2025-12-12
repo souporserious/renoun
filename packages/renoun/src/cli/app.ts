@@ -407,7 +407,8 @@ function parseAppArgs(args: string[]): ParsedAppArgs {
 
     // New behaviour: first positional argument is treated as the app package name.
     // Example: `renoun dev @renoun/docs` → appName = '@renoun/docs'
-    if (!appName && !value.startsWith('-')) {
+    // Only treat as app name if it looks like a package name (starts with @ or letter, not a number)
+    if (!appName && !value.startsWith('-') && /^[@a-zA-Z]/.test(value)) {
       appName = value
       continue
     }
