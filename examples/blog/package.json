@@ -4,8 +4,8 @@
   "homepage": "https://renoun-blog.vercel.app/",
   "description": "A blog starter featuring a post index, tags, and individual article pages with MDX.",
   "scripts": {
-    "dev": "../../packages/renoun/dist/cli/index.js next",
-    "build": "../../packages/renoun/dist/cli/index.js next build",
+    "dev": "renoun next",
+    "build": "renoun next build",
     "start": "next start"
   },
   "dependencies": {

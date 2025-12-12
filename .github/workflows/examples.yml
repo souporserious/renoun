@@ -2,14 +2,14 @@ name: Examples
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * *"
   push:
     paths:
-      - 'examples/**'
+      - "examples/**"
   workflow_dispatch:
     inputs:
       debug:
-        description: 'Turn on verbose debug output'
+        description: "Turn on verbose debug output"
         type: boolean
         default: false
 
@@ -53,6 +53,12 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - name: Create CLI stub
+        if: steps.detect.outputs.changed == 'true'
+        run: |
+          mkdir -p packages/renoun/dist/cli
+          echo '#!/usr/bin/env node' > packages/renoun/dist/cli/index.js
 
       - name: Install dependencies
         if: steps.detect.outputs.changed == 'true'

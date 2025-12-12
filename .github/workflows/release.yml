@@ -43,6 +43,12 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      - name: Create CLI stub
+        if: steps.detect.outputs.changed == 'true'
+        run: |
+          mkdir -p packages/renoun/dist/cli
+          echo '#!/usr/bin/env node' > packages/renoun/dist/cli/index.js
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 

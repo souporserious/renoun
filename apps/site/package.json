@@ -3,8 +3,8 @@
   "name": "@apps/site",
   "type": "module",
   "scripts": {
-    "dev": "../../packages/renoun/dist/cli/index.js next dev --webpack",
-    "build": "../../packages/renoun/dist/cli/index.js next build --webpack",
+    "dev": "renoun next dev --webpack",
+    "build": "renoun next build --webpack",
     "start": "serve out"
   },
   "dependencies": {

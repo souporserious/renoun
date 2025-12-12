@@ -86,6 +86,8 @@ overrides:
   external-editor>tmp: 0.2.4
   on-headers: 1.1.0
 
+pnpmfileChecksum: sha256-sd1SgxL2yaAznrbFI89I06WTvOwrjonLotL0Q6Z660w=
+
 importers:
 
   .:

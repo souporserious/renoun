@@ -4,8 +4,8 @@
   "homepage": "https://renoun-package.vercel.app/",
   "description": "A simple package example with live, interactive examples.",
   "scripts": {
-    "dev": "../../packages/renoun/dist/cli/index.js next",
-    "build": "../../packages/renoun/dist/cli/index.js next build",
+    "dev": "renoun next",
+    "build": "renoun next build",
     "start": "next start"
   },
   "dependencies": {
