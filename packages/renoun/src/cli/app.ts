@@ -403,18 +403,6 @@ function parseAppArgs(args: string[], autoDetect?: boolean): ParsedAppArgs {
     const value = args[index]
     if (!value) continue
 
-    // Legacy support: --app / -a flags (deprecated, kept for backwards compat)
-    if (value === '--app' || value === '-a') {
-      appName = args[index + 1]
-      index += 1
-      continue
-    }
-
-    if (value.startsWith('--app=')) {
-      appName = value.slice('--app='.length)
-      continue
-    }
-
     // When autoDetect is true, don't try to parse app name from positional args.
     // The first positional argument is treated as the app package name only in
     // explicit app mode (e.g., `renoun @renoun/blog dev`).
