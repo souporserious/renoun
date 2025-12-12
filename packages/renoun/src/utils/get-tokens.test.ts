@@ -282,35 +282,25 @@ describe('getTokens metadata integration', () => {
     expect(tokens[0][0]?.value).toBe('# Hello World')
   })
 
-  test('does not call metadata collector when language is js-like but path is mdx', async () => {
+  test('throws with actionable error when language is js-like but path is mdx', async () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const filePath = 'post.mdx'
     const code = 'export const metadata = { title: \"Hello\" }\n'
-
-    let metadataCollectorCalled = false
-
-    const metadataCollector = async (
-      ...args: Parameters<typeof collectTypeScriptMetadata>
-    ) => {
-      metadataCollectorCalled = true
-      return collectTypeScriptMetadata(...args)
-    }
 
     const highlighter = createStubHighlighter([
       ['export', ' ', 'const', ' ', 'metadata', ' ', '=', ' ', '{', ' ', '}'],
     ])
 
-    await getTokens({
-      project,
-      value: code,
-      language: 'tsx', // language suggests JS/TS, but path is .mdx
-      filePath,
-      highlighter,
-      theme: 'default',
-      metadataCollector,
-    })
-
-    expect(metadataCollectorCalled).toBe(false)
+    await expect(
+      getTokens({
+        project,
+        value: code,
+        language: 'tsx', // language suggests JS/TS, but path is .mdx
+        filePath,
+        highlighter,
+        theme: 'default',
+      })
+    ).rejects.toThrow('getTokens received language "tsx" for file "post.mdx"')
   })
 
   test('throws with actionable error when language does not match file extension', async () => {
