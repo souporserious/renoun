@@ -174,13 +174,15 @@ export async function getTokens({
         themeNames = ['default']
       }
 
-      const tsMetadataPromise = metadataCollector(
-        project,
-        filePath,
-        jsxOnly,
-        allowErrors,
-        showErrors
-      )
+      // Only collect TypeScript metadata for JavaScript/TypeScript languages
+      // Other languages (mdx, css, html, etc.) don't have TypeScript types
+      const tsMetadataPromise = isJavaScriptLikeLanguage
+        ? metadataCollector(project, filePath, jsxOnly, allowErrors, showErrors)
+        : Promise.resolve({
+            sourceFile: undefined,
+            diagnostics: [],
+            symbolMetadata: [],
+          } satisfies TypeScriptMetadata)
 
       const tokensPromise = getDebugLogger().trackOperation(
         'highlighter',
@@ -357,30 +359,6 @@ export async function collectTypeScriptMetadata(
   allowErrors?: string | boolean,
   showErrors?: boolean
 ): Promise<TypeScriptMetadata> {
-  // Skip TypeScript analysis for non-TypeScript/JavaScript files
-  // MDX and other non-JS files cause TypeScript checker errors when analyzed
-  const tsJsExtensions = [
-    '.ts',
-    '.tsx',
-    '.js',
-    '.jsx',
-    '.mts',
-    '.cts',
-    '.mjs',
-    '.cjs',
-  ]
-  const isTypeScriptFile = filePath
-    ? tsJsExtensions.some((ext) => filePath.endsWith(ext))
-    : false
-
-  if (filePath && !isTypeScriptFile) {
-    return {
-      sourceFile: undefined,
-      diagnostics: [],
-      symbolMetadata: [],
-    }
-  }
-
   const sourceFile = filePath ? project.getSourceFile(filePath) : undefined
 
   if (!sourceFile) {
