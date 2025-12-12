@@ -40,24 +40,7 @@ interface ParsedAppArgs {
   forwardedArgs: string[]
 }
 
-const IGNORED_PROJECT_DIRECTORIES = new Set([
-  'node_modules',
-  '.git',
-  '.next',
-  '.turbo',
-  '.output',
-  '.renoun',
-])
-
-const IGNORED_PROJECT_FILES = new Set([
-  'package.json',
-  'pnpm-lock.yaml',
-  'package-lock.json',
-  'yarn.lock',
-  'bun.lockb',
-])
-
-const IGNORED_APP_DIRECTORIES = new Set([
+const IGNORED_DIRECTORIES = new Set([
   'node_modules',
   '.git',
   '.next',
@@ -66,6 +49,14 @@ const IGNORED_APP_DIRECTORIES = new Set([
   '.renoun',
   'dist',
   'out',
+])
+
+const IGNORED_PROJECT_FILES = new Set([
+  'package.json',
+  'pnpm-lock.yaml',
+  'package-lock.json',
+  'yarn.lock',
+  'bun.lockb',
 ])
 
 const FRAMEWORK_HINTS: Record<Framework, readonly string[]> = {
@@ -660,7 +651,7 @@ async function recursiveSymlinkDirectory(
 
     if (entry.isDirectory()) {
       // Skip ignored directories entirely
-      if (IGNORED_APP_DIRECTORIES.has(entry.name)) {
+      if (IGNORED_DIRECTORIES.has(entry.name)) {
         // Special case: symlink node_modules so dependencies resolve
         if (entry.name === 'node_modules') {
           const symlinkType = process.platform === 'win32' ? 'junction' : 'dir'
@@ -949,7 +940,7 @@ class ShadowManager {
 
     const [firstSegment] = segments
 
-    if (IGNORED_PROJECT_DIRECTORIES.has(firstSegment) && isDirectory) {
+    if (IGNORED_DIRECTORIES.has(firstSegment) && isDirectory) {
       return true
     }
 

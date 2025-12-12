@@ -127,6 +127,10 @@ describe('runAppCommand integration', () => {
       '# Hello from shadow!\n'
     )
 
+    // Create a build output directory that should be ignored for shadowing
+    const outDirectory = join(projectRoot, 'out')
+    await mkdir(outDirectory, { recursive: true })
+
     const rootOverridePath = join(projectRoot, 'root-config.ts')
     await writeFile(rootOverridePath, 'export const root = true\n')
 
@@ -218,6 +222,11 @@ describe('runAppCommand integration', () => {
       expect(resolvePath(runtimeRoot, runtimeRootConfigLink)).toBe(
         rootOverridePath
       )
+
+      // Build output directory should not be shadowed into runtime
+      await expect(lstat(join(runtimeRoot, 'out'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      })
 
       const childProcess = spawnMock.mock.results[0]?.value as EventEmitter & {
         kill: ReturnType<typeof vi.fn>
