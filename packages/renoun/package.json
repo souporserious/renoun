@@ -111,8 +111,8 @@
   "scripts": {
     "build": "tsc && chmod +x dist/cli/index.js",
     "dev": "tsc -w",
-    "grammars": "node --experimental-strip-types ./scripts/grammars.ts",
-    "theme": "node --experimental-strip-types ./scripts/theme.ts",
+    "grammars": "node ./scripts/grammars.ts",
+    "theme": "node ./scripts/theme.ts",
     "test": "vitest --typecheck",
     "bench": "vitest bench"
   },
