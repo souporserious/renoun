@@ -1,4 +1,4 @@
-import { watch as watchFs } from 'node:fs'
+import { watch, existsSync, cpSync, rmSync } from 'node:fs'
 import {
   copyFile,
   lstat,
@@ -68,6 +68,13 @@ const FRAMEWORK_HINTS: Record<Framework, readonly string[]> = {
   waku: ['waku'],
 }
 
+/** Output directory name for each framework's static build */
+const FRAMEWORK_OUTPUT_DIRECTORIES: Record<Framework, string> = {
+  next: 'out',
+  vite: 'dist',
+  waku: 'dist',
+}
+
 const NEXT_CONFIG_FILES = [
   'next.config.ts',
   'next.config.mts',
@@ -76,6 +83,43 @@ const NEXT_CONFIG_FILES = [
 ]
 
 const WAKU_CONFIG_FILES = ['waku.config.ts', 'waku.config.js']
+
+/**
+ * Copies the build output from the runtime directory to the project root.
+ * This makes the static output easily accessible for deployment.
+ * Uses synchronous operations to ensure completion before process exit.
+ */
+function copyBuildOutput(options: {
+  runtimeDirectory: string
+  projectRoot: string
+  framework: Framework
+  log: (message: string) => void
+}): void {
+  const { runtimeDirectory, projectRoot, framework, log } = options
+  const outputDirName = FRAMEWORK_OUTPUT_DIRECTORIES[framework]
+  const sourceOutputDir = join(runtimeDirectory, outputDirName)
+  const targetOutputDir = join(projectRoot, outputDirName)
+
+  // Check if the output directory exists in the runtime directory
+  if (!existsSync(sourceOutputDir)) {
+    getDebugLogger().debug('No build output directory found', () => ({
+      data: { sourceOutputDir },
+    }))
+    return
+  }
+
+  // Remove existing output directory in project root if it exists
+  try {
+    rmSync(targetOutputDir, { recursive: true, force: true })
+  } catch {
+    // Ignore errors if directory doesn't exist
+  }
+
+  // Copy the output directory to the project root
+  cpSync(sourceOutputDir, targetOutputDir, { recursive: true })
+
+  log(`Build output copied to ./${outputDirName}/`)
+}
 
 export async function runAppCommand({ command, args }: AppCommandOptions) {
   const projectRoot = process.cwd()
@@ -272,7 +316,23 @@ export async function runAppCommand({ command, args }: AppCommandOptions) {
         )
       }
 
-      cleanupAndExit(code)
+      // For successful builds, copy the output directory to the project root before cleanup
+      const buildSucceeded = (exitCode ?? code ?? 0) === 0
+      if (command === 'build' && buildSucceeded) {
+        try {
+          copyBuildOutput({
+            runtimeDirectory,
+            projectRoot,
+            framework: resolvedExample.framework,
+            log,
+          })
+        } catch (error) {
+          console.error(`[renoun] Failed to copy build output: ${error}`)
+        }
+        cleanupAndExit(code)
+      } else {
+        cleanupAndExit(code)
+      }
     })
 
     subProcess.on('error', (error: Error) => {
@@ -617,16 +677,6 @@ async function recursiveSymlinkDirectory(
   }
 }
 
-/**
- * Check if a file is a source file that may have relative imports.
- * These need to be copied (not symlinked) so bundlers resolve imports
- * from the runtime directory.
- */
-function isSourceFile(filename: string): boolean {
-  const sourceExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
-  return sourceExtensions.some((ext) => filename.endsWith(ext))
-}
-
 function sanitizeAppName(name: string): string {
   return name.replace(/[^a-zA-Z0-9-_]/g, '-').replace(/-{2,}/g, '-')
 }
@@ -752,7 +802,7 @@ class ShadowManager {
   #projectRoot: string
   #runtimeRoot: string
   #shadowedPaths: Set<string> = new Set()
-  #watchers: Map<string, ReturnType<typeof watchFs>> = new Map()
+  #watchers: Map<string, ReturnType<typeof watch>> = new Map()
   #syncScheduled = false
   #isSyncing = false
   #pendingSync = false
@@ -912,7 +962,7 @@ class ShadowManager {
     }
 
     try {
-      const watcher = watchFs(directory, { persistent: false }, () => {
+      const watcher = watch(directory, { persistent: false }, () => {
         this.#scheduleSync()
       })
       this.#watchers.set(directory, watcher)
