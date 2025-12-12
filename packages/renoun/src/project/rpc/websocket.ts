@@ -285,7 +285,9 @@ export class WebSocket extends EventEmitter {
 
     this.readyState = WebSocket.OPEN
 
-    socket.on('data', (data) => this._handleData(data))
+    socket.on('data', (data) =>
+      this._handleData(Buffer.isBuffer(data) ? data : Buffer.from(data))
+    )
     socket.on('close', () => {
       this.readyState = WebSocket.CLOSED
       this.emit(
