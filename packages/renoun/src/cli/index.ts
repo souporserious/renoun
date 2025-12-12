@@ -3,12 +3,12 @@ import { spawn } from 'node:child_process'
 
 import { createServer } from '../project/server.js'
 import { getDebugLogger } from '../utils/debug.js'
+import { runAppCommand } from './app.js'
+import { resolveFrameworkBinFile, type Framework } from './framework.js'
+import { runEjectCommand } from './eject.js'
 import { reorderEntries } from './reorder.js'
 import { runThemeCommand } from './theme.js'
 import { runValidateCommand } from './validate.js'
-import { runAppCommand } from './app.js'
-import { runEjectCommand } from './eject.js'
-import { resolveFrameworkBinFile, type Framework } from './framework.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
