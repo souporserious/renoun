@@ -46,7 +46,7 @@ This is called **app mode**.
 
 You can invoke app mode in three ways:
 
-- **Auto-detected app** (no explicit package):
+- **Auto-detected app**:
 
   ```bash
   renoun dev
@@ -58,19 +58,13 @@ You can invoke app mode in three ways:
 
   and treats that as the app to run.
 
-- **Command-first explicit app**:
-
-  ```bash
-  renoun dev @renoun/blog
-  ```
-
-- **App-first explicit app** (mirrors framework syntax like `renoun next dev`):
+- **Explicit app**:
 
   ```bash
   renoun @renoun/blog dev
   ```
 
-All three forms go through the same app runtime:
+Both forms go through the same app runtime:
 
 - renoun builds a runtime under `.renoun/`,
 - copies the app’s source files into it,

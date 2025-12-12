@@ -31,12 +31,15 @@ if (firstArgument === 'validate') {
   await runThemeCommand(secondArgument)
   process.exit(0)
 } else if (firstArgument === 'dev' || firstArgument === 'build') {
-  const appArgs = [secondArgument, ...restArguments].filter(
+  // Auto-detect app mode: `renoun dev` or `renoun build`
+  // Forward all args as framework args (no app name detection in this mode)
+  const forwardedArgs = [secondArgument, ...restArguments].filter(
     (value): value is string => typeof value === 'string'
   )
   await runAppCommand({
     command: firstArgument,
-    args: appArgs,
+    args: forwardedArgs,
+    autoDetect: true,
   })
   process.exit(process.exitCode ?? 0)
 } else if (

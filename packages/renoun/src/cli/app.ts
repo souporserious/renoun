@@ -18,8 +18,14 @@ import { resolveFrameworkBinFile, type Framework } from './framework.js'
 import { spawn } from 'node:child_process'
 
 interface AppCommandOptions {
+  /** The framework command to run. */
   command: 'dev' | 'build'
+
+  /** Arguments to pass to the framework command. */
   args: string[]
+
+  /** When true, auto-detects app from dependencies. Do not parse app name from args. */
+  autoDetect?: boolean
 }
 
 interface ResolvedAppPackage {
@@ -121,9 +127,13 @@ function copyBuildOutput(options: {
   log(`Build output copied to ./${outputDirName}/`)
 }
 
-export async function runAppCommand({ command, args }: AppCommandOptions) {
+export async function runAppCommand({
+  command,
+  args,
+  autoDetect,
+}: AppCommandOptions) {
   const projectRoot = process.cwd()
-  const { appName, forwardedArgs } = parseAppArgs(args)
+  const { appName, forwardedArgs } = parseAppArgs(args, autoDetect)
   const projectPackageJsonPath = join(projectRoot, 'package.json')
   const projectPackageJson = JSON.parse(
     await readFile(projectPackageJsonPath, 'utf-8')
@@ -385,7 +395,7 @@ export async function runAppCommand({ command, args }: AppCommandOptions) {
   }
 }
 
-function parseAppArgs(args: string[]): ParsedAppArgs {
+function parseAppArgs(args: string[], autoDetect?: boolean): ParsedAppArgs {
   let appName: string | undefined
   const forwardedArgs: string[] = []
 
@@ -405,10 +415,15 @@ function parseAppArgs(args: string[]): ParsedAppArgs {
       continue
     }
 
-    // New behaviour: first positional argument is treated as the app package name.
-    // Example: `renoun dev @renoun/docs` → appName = '@renoun/docs'
-    // Only treat as app name if it looks like a package name (starts with @ or letter, not a number)
-    if (!appName && !value.startsWith('-') && /^[@a-zA-Z]/.test(value)) {
+    // When autoDetect is true, don't try to parse app name from positional args.
+    // The first positional argument is treated as the app package name only in
+    // explicit app mode (e.g., `renoun @renoun/blog dev`).
+    if (
+      !autoDetect &&
+      !appName &&
+      !value.startsWith('-') &&
+      /^[@a-zA-Z]/.test(value)
+    ) {
       appName = value
       continue
     }
