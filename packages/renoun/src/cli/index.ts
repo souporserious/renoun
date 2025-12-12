@@ -1,54 +1,33 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
 
 import { createServer } from '../project/server.js'
 import { getDebugLogger } from '../utils/debug.js'
 import { reorderEntries } from './reorder.js'
 import { runThemeCommand } from './theme.js'
 import { runValidateCommand } from './validate.js'
+import { runAppCommand } from './app.js'
+import { runEjectCommand } from './eject.js'
+import { resolveFrameworkBinFile, type Framework } from './framework.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
 if (firstArgument === 'help') {
   const usageMessage =
-    `Usage:   renoun <your-framework-args>\n` +
-    `         renoun theme <path-to-theme.json>\n` +
-    `         renoun validate [directory_path|url]\n` +
-    `Example: renoun next dev`
+    `Usage:   renoun <framework> <command>    Run a framework with renoun\n` +
+    `         renoun dev                      Run a renoun app (auto-detect)\n` +
+    `         renoun <app> dev                Run a specific renoun app\n` +
+    `         renoun eject [app]              Eject a renoun app into your project\n` +
+    `         renoun theme <path>             Prune a VS Code theme JSON file\n` +
+    `         renoun validate [path|url]      Check for broken links\n` +
+    `\n` +
+    `Examples:\n` +
+    `  renoun next dev              Run Next.js with renoun\n` +
+    `  renoun dev                   Run auto-detected renoun app\n` +
+    `  renoun @renoun/blog dev      Run @renoun/blog app\n` +
+    `  renoun eject                 Eject app into your project`
   console.log(usageMessage)
   process.exit(0)
-}
-
-type Framework = 'next' | 'vite' | 'waku'
-
-const projectRequire = createRequire(join(process.cwd(), 'package.json'))
-
-function resolveFrameworkBinFile(framework: Framework): string {
-  const packageJsonPath = projectRequire.resolve(`${framework}/package.json`)
-  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
-  let binRelativePath: string | undefined
-
-  if (typeof packageJson.bin === 'string') {
-    binRelativePath = packageJson.bin
-  } else if (typeof packageJson.bin === 'object') {
-    if (packageJson.bin[framework]) {
-      binRelativePath = packageJson.bin[framework]
-    } else {
-      binRelativePath = Object.values(packageJson.bin).at(0) as
-        | string
-        | undefined
-    }
-  }
-
-  if (!binRelativePath) {
-    throw new Error(`Could not find "bin" for ${framework}`)
-  }
-
-  const packageJsonDirectory = dirname(packageJsonPath)
-  return join(packageJsonDirectory, binRelativePath.replace(/^\.\//, ''))
 }
 
 if (firstArgument === 'validate') {
@@ -60,6 +39,18 @@ if (firstArgument === 'validate') {
 } else if (firstArgument === 'theme') {
   await runThemeCommand(secondArgument)
   process.exit(0)
+} else if (firstArgument === 'dev' || firstArgument === 'build') {
+  // Auto-detect app mode: `renoun dev` or `renoun build`
+  // Forward all args as framework args (no app name detection in this mode)
+  const forwardedArgs = [secondArgument, ...restArguments].filter(
+    (value): value is string => typeof value === 'string'
+  )
+  await runAppCommand({
+    command: firstArgument,
+    args: forwardedArgs,
+    autoDetect: true,
+  })
+  process.exit(process.exitCode ?? 0)
 } else if (
   firstArgument === 'next' ||
   firstArgument === 'vite' ||
@@ -226,6 +217,28 @@ if (firstArgument === 'validate') {
     console.error('Unhandled rejection:', reason)
     cleanupAndExit(1)
   })
+} else if (
+  // App mode, app-first form: `renoun @renoun/docs dev`
+  secondArgument === 'dev' ||
+  secondArgument === 'build'
+) {
+  const appArgs = [firstArgument, ...restArguments].filter(
+    (value): value is string => typeof value === 'string'
+  )
+  await runAppCommand({
+    command: secondArgument as 'dev' | 'build',
+    args: appArgs,
+  })
+  process.exit(process.exitCode ?? 0)
+} else if (firstArgument === 'eject') {
+  try {
+    await runEjectCommand({ appName: secondArgument })
+    process.exit(0)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(message)
+    process.exit(1)
+  }
 } else if (firstArgument === 'reorder') {
   try {
     await reorderEntries(secondArgument)

@@ -38,6 +38,54 @@ sync:
 renoun vite build -- --mode production
 ```
 
+## App commands
+
+In addition to running your own framework app, the CLI can **run renoun apps that live in
+`node_modules`** (like `@renoun/blog` or `@renoun/docs`) and let your project shadow their files.
+This is called **app mode**.
+
+You can invoke app mode in two ways:
+
+- **Auto-detected app**:
+
+  ```bash
+  renoun dev
+  ```
+
+  renoun finds the first installed dependency that:
+  - declares `renoun` in any dependency block, and
+  - installs exactly one supported framework (Next.js, Vite, or Waku),
+
+  and treats that as the app to run.
+
+- **Explicit app**:
+
+  ```bash
+  renoun @renoun/blog dev
+  ```
+
+Both forms go through the same app runtime:
+
+- renoun builds a runtime under `.renoun/`,
+- copies the app’s source files into it,
+- applies your local files as shadows,
+- and then launches the underlying framework inside that runtime.
+
+### Shadowing apps
+
+When you run an app through the CLI, your project and the app package are merged into a single
+runtime view:
+
+- **The app provides the base structure** (routes, layouts, components, default content).
+- **Your project shadows it by path**—any file or directory you create with the same relative
+  path wins over the app’s version.
+
+For example, if the app ships `posts/hello-world.mdx` under its own `app/` or `pages/` tree, you
+can override it by adding `posts/hello-world.mdx` next to your `package.json`. At runtime, the
+framework only sees your version.
+
+See [how to run a renoun app](./06.apps.mdx#how-it-works) for a deep dive into how app mode works and when to use it.
+
 ## Pruning theme files
 
 Use `renoun theme` to minimize VS Code theme JSON files. The command validates the input file,

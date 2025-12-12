@@ -174,13 +174,15 @@ export async function getTokens({
         themeNames = ['default']
       }
 
-      const tsMetadataPromise = metadataCollector(
-        project,
-        filePath,
-        jsxOnly,
-        allowErrors,
-        showErrors
-      )
+      // Only collect TypeScript metadata for JavaScript/TypeScript languages
+      // Other languages (mdx, css, html, etc.) don't have TypeScript types
+      const tsMetadataPromise = isJavaScriptLikeLanguage
+        ? metadataCollector(project, filePath, jsxOnly, allowErrors, showErrors)
+        : Promise.resolve({
+            sourceFile: undefined,
+            diagnostics: [],
+            symbolMetadata: [],
+          } satisfies TypeScriptMetadata)
 
       const tokensPromise = getDebugLogger().trackOperation(
         'highlighter',

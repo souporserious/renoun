@@ -243,4 +243,76 @@ describe('getTokens metadata integration', () => {
 
     expect(metadataCompleted).toBe(true)
   })
+
+  test('does not call metadata collector for non-JavaScript languages', async () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    const filePath = 'post.mdx'
+    const code = '# Hello World\n\nThis is **bold** text.\n'
+
+    let metadataCollectorCalled = false
+
+    const metadataCollector = async (
+      ...args: Parameters<typeof collectTypeScriptMetadata>
+    ) => {
+      metadataCollectorCalled = true
+      return collectTypeScriptMetadata(...args)
+    }
+
+    const highlighter = createStubHighlighter([
+      ['# Hello World'],
+      [],
+      ['This is ', '**bold**', ' text.'],
+    ])
+
+    const tokens = await getTokens({
+      project,
+      value: code,
+      language: 'mdx',
+      filePath,
+      highlighter,
+      theme: 'default',
+      metadataCollector,
+    })
+
+    // Verify metadata collector was NOT called for MDX
+    expect(metadataCollectorCalled).toBe(false)
+
+    // Verify tokens were still returned correctly
+    expect(tokens.length).toBe(3)
+    expect(tokens[0][0]?.value).toBe('# Hello World')
+  })
+
+  test('calls metadata collector for JavaScript-like languages', async () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    const filePath = 'test.tsx'
+    const code = 'const x = 1;\n'
+
+    project.createSourceFile(filePath, code, { overwrite: true })
+
+    let metadataCollectorCalled = false
+
+    const metadataCollector = async (
+      ...args: Parameters<typeof collectTypeScriptMetadata>
+    ) => {
+      metadataCollectorCalled = true
+      return collectTypeScriptMetadata(...args)
+    }
+
+    const highlighter = createStubHighlighter([
+      ['const', ' ', 'x', ' ', '=', ' ', '1', ';'],
+    ])
+
+    await getTokens({
+      project,
+      value: code,
+      language: 'tsx',
+      filePath,
+      highlighter,
+      theme: 'default',
+      metadataCollector,
+    })
+
+    // Verify metadata collector WAS called for TSX
+    expect(metadataCollectorCalled).toBe(true)
+  })
 })

@@ -193,6 +193,15 @@ importers:
         specifier: 'catalog:'
         version: 4.1.13
 
+  examples/app:
+    dependencies:
+      '@renoun/blog':
+        specifier: workspace:*
+        version: link:../blog
+      renoun:
+        specifier: workspace:*
+        version: link:../../packages/renoun
+
   examples/blog:
     dependencies:
       '@mdx-js/loader':

@@ -2,7 +2,13 @@
 
 This directory contains example projects showcasing different use cases and implementations of how to use renoun.
 
-## Available Examples
+### [App](./app)
+
+A minimal project that installs `@renoun/blog` and shadows the `posts/` directory locally.
+
+- Demonstrates the CLI application flow
+- Only requires `package.json` and local content
+- Ready to extend with additional overrides
 
 ### [Docs](./docs)
 
@@ -43,4 +49,4 @@ To run any example:
 
 ## Contributing
 
-Feel free to use these examples as a starting point for your own projects. Each example demonstrates different patterns and best practices for building with the renoun toolkit.
+Feel free to use these examples as a starting point for your own projects. Each example demonstrates different patterns and best practices for building with the renoun SDK.
