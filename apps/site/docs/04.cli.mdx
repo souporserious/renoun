@@ -44,7 +44,7 @@ In addition to running your own framework app, the CLI can **run renoun apps tha
 `node_modules`** (like `@renoun/blog` or `@renoun/docs`) and let your project shadow their files.
 This is called **app mode**.
 
-You can invoke app mode in three ways:
+You can invoke app mode in two ways:
 
 - **Auto-detected app**:
 
@@ -84,10 +84,7 @@ For example, if the app ships `posts/hello-world.mdx` under its own `app/` or `p
 can override it by adding `posts/hello-world.mdx` next to your `package.json`. At runtime, the
 framework only sees your version.
 
-See **“Run a renoun app”** for a deeper explanation of how shadowing works, what gets copied vs
-symlinked, and how ejecting turns a renoun app into a regular framework app you own.
-
-See **“Run a renoun app”** for a deep dive into how app mode works and when to use it.
+See [how to run a renoun app](./06.apps.mdx#how-it-works) for a deep dive into how app mode works and when to use it.
 
 ## Pruning theme files
 

@@ -7,16 +7,25 @@ import { reorderEntries } from './reorder.js'
 import { runThemeCommand } from './theme.js'
 import { runValidateCommand } from './validate.js'
 import { runAppCommand } from './app.js'
+import { runEjectCommand } from './eject.js'
 import { resolveFrameworkBinFile, type Framework } from './framework.js'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
 if (firstArgument === 'help') {
   const usageMessage =
-    `Usage:   renoun <your-framework-args>\n` +
-    `         renoun theme <path-to-theme.json>\n` +
-    `         renoun validate [directory_path|url]\n` +
-    `Example: renoun next dev`
+    `Usage:   renoun <framework> <command>    Run a framework with renoun\n` +
+    `         renoun dev                      Run a renoun app (auto-detect)\n` +
+    `         renoun <app> dev                Run a specific renoun app\n` +
+    `         renoun eject [app]              Eject a renoun app into your project\n` +
+    `         renoun theme <path>             Prune a VS Code theme JSON file\n` +
+    `         renoun validate [path|url]      Check for broken links\n` +
+    `\n` +
+    `Examples:\n` +
+    `  renoun next dev              Run Next.js with renoun\n` +
+    `  renoun dev                   Run auto-detected renoun app\n` +
+    `  renoun @renoun/blog dev      Run @renoun/blog app\n` +
+    `  renoun eject                 Eject app into your project`
   console.log(usageMessage)
   process.exit(0)
 }
@@ -221,6 +230,15 @@ if (firstArgument === 'validate') {
     args: appArgs,
   })
   process.exit(process.exitCode ?? 0)
+} else if (firstArgument === 'eject') {
+  try {
+    await runEjectCommand({ appName: secondArgument })
+    process.exit(0)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(message)
+    process.exit(1)
+  }
 } else if (firstArgument === 'reorder') {
   try {
     await reorderEntries(secondArgument)
