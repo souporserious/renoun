@@ -60,8 +60,12 @@ export function getProject(options?: ProjectOptions) {
     return existingProject
   }
 
+  const tsConfigFilePath = options?.tsConfigFilePath || 'tsconfig.json'
+  const shouldUseInMemoryFs =
+    options?.useInMemoryFileSystem || !existsSync(tsConfigFilePath)
+
   const project = new Project(
-    options?.useInMemoryFileSystem
+    shouldUseInMemoryFs
       ? {
           compilerOptions: {
             ...defaultCompilerOptions,
@@ -71,7 +75,7 @@ export function getProject(options?: ProjectOptions) {
         }
       : {
           compilerOptions: options?.compilerOptions,
-          tsConfigFilePath: options?.tsConfigFilePath || 'tsconfig.json',
+          tsConfigFilePath,
         }
   )
   let associatedProjects = directoryToProjects.get(projectDirectory)
