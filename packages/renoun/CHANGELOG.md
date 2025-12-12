@@ -1,5 +1,18 @@
 # renoun
 
+## 10.17.0
+
+### Minor Changes
+
+- c48511a: Fixes language validation to prevent mismatched language/file combinations for any file type, not just JavaScript. Previously, only JavaScript/TypeScript files were validated against their language parameters. Now all file types are validated using a comprehensive mapping derived from grammar data.
+- 375e955: Introduces the ability for the `renoun` CLI to run renoun-aware applications directly from
+  `node_modules` with file and directory shadowing using `renoun dev` and `renoun build` commands, as well as a new `renoun eject` command that will copy the files into the project.
+
+### Patch Changes
+
+- f863145: Add a changeset for the project loader fix that falls back to an in-memory ts-morph project when no tsconfig.json is available.
+- 024a127: Fixes resolving JSDoc call signatures when inferred function types are weak. The `ModuleExport#getType` utility now prefers JSDoc type annotations over inferred types when the JSDoc signature provides more useful information.
+
 ## 10.16.0
 
 ### Minor Changes
