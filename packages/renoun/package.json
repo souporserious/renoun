@@ -31,7 +31,7 @@
   ],
   "sideEffects": false,
   "bin": {
-    "renoun": "./dist/cli/index.js"
+    "renoun": "./src/cli/index.ts"
   },
   "type": "module",
   "main": "./dist/index.js",
@@ -163,5 +163,10 @@
   "engines": {
     "node": ">=20.19.0"
   },
-  "packageManager": "pnpm@10.1.0"
+  "packageManager": "pnpm@10.1.0",
+  "publishConfig": {
+    "bin": {
+      "renoun": "./dist/cli/index.js"
+    }
+  }
 }
