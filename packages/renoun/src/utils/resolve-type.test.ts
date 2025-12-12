@@ -724,30 +724,31 @@ describe('resolveType', () => {
 
   test('prefers jsdoc call signatures when variable function types are any', () => {
     const project = new Project({
-      compilerOptions: { allowJs: true, checkJs: true },
+      compilerOptions: { allowJs: true },
       useInMemoryFileSystem: true,
     })
 
     const sourceFile = project.createSourceFile(
       'code.js',
       dedent`
-      function nodeProxy() {
+      class Node {}
+      
+      class CodeNode {}
+
+      function nodeProxy(node: Node) {
         return () => {}
       }
-
-      class Node {}
-      class CodeNode {}
 
       /**
        * TSL function for creating a code node.
        *
        * @function
-       * @param {string} code - The native code.
+       * @param {String} [code=''] - The native code.
        * @param {Array<Node>} [includes=[]] - An array of includes.
-       * @param {?('js'|'wgs'|'glsl')} [language=''] - The used language.
+       * @param {('js'|'wgsl'|'glsl')} [language=''] - The used language.
        * @returns {CodeNode}
        */
-      export const code = /** @type {Function} */ (nodeProxy())
+      export const code = nodeProxy(CodeNode);
       `,
       { overwrite: true }
     )
@@ -766,22 +767,22 @@ describe('resolveType', () => {
               {
                 "description": "The native code.",
                 "initializer": undefined,
-                "isOptional": false,
+                "isOptional": true,
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "code",
-                "text": "code: string",
+                "text": "code?: string",
                 "type": {
                   "filePath": "code.js",
                   "kind": "String",
                   "position": {
                     "end": {
                       "column": 18,
-                      "line": 12,
+                      "line": 13,
                     },
                     "start": {
                       "column": 12,
-                      "line": 12,
+                      "line": 13,
                     },
                   },
                   "text": "string",
@@ -804,11 +805,11 @@ describe('resolveType', () => {
                   "position": {
                     "end": {
                       "column": 23,
-                      "line": 13,
+                      "line": 14,
                     },
                     "start": {
                       "column": 12,
-                      "line": 13,
+                      "line": 14,
                     },
                   },
                   "text": "Array<Node>",
@@ -821,11 +822,11 @@ describe('resolveType', () => {
                       "position": {
                         "end": {
                           "column": 14,
-                          "line": 5,
+                          "line": 1,
                         },
                         "start": {
                           "column": 1,
-                          "line": 5,
+                          "line": 1,
                         },
                       },
                       "text": "Node",
@@ -841,22 +842,22 @@ describe('resolveType', () => {
                 "isRest": false,
                 "kind": "Parameter",
                 "name": "language",
-                "text": "language?: "js" | "wgs" | "glsl"",
+                "text": "language?: "js" | "wgsl" | "glsl"",
                 "type": {
                   "kind": "UnionType",
-                  "text": ""js" | "wgs" | "glsl"",
+                  "text": ""js" | "wgsl" | "glsl"",
                   "types": [
                     {
                       "filePath": "code.js",
                       "kind": "String",
                       "position": {
                         "end": {
-                          "column": 18,
-                          "line": 14,
+                          "column": 17,
+                          "line": 15,
                         },
                         "start": {
-                          "column": 14,
-                          "line": 14,
+                          "column": 13,
+                          "line": 15,
                         },
                       },
                       "text": ""js"",
@@ -868,15 +869,15 @@ describe('resolveType', () => {
                       "position": {
                         "end": {
                           "column": 24,
-                          "line": 14,
+                          "line": 15,
                         },
                         "start": {
-                          "column": 19,
-                          "line": 14,
+                          "column": 18,
+                          "line": 15,
                         },
                       },
-                      "text": ""wgs"",
-                      "value": "wgs",
+                      "text": ""wgsl"",
+                      "value": "wgsl",
                     },
                     {
                       "filePath": "code.js",
@@ -884,11 +885,11 @@ describe('resolveType', () => {
                       "position": {
                         "end": {
                           "column": 31,
-                          "line": 14,
+                          "line": 15,
                         },
                         "start": {
                           "column": 25,
-                          "line": 14,
+                          "line": 15,
                         },
                       },
                       "text": ""glsl"",
@@ -906,21 +907,21 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 18,
-                  "line": 6,
+                  "line": 3,
                 },
                 "start": {
                   "column": 1,
-                  "line": 6,
+                  "line": 3,
                 },
               },
               "text": "CodeNode",
               "typeArguments": [],
             },
-            "text": "(code: string, includes?: Array<Node>, language?: "js" | "wgs" | "glsl") => CodeNode",
+            "text": "(code?: string, includes?: Array<Node>, language?: "js" | "wgsl" | "glsl") => CodeNode",
             "thisType": undefined,
           },
         ],
-        "text": "Function",
+        "text": "() => void",
       }
     `)
   })

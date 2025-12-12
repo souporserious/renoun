@@ -985,18 +985,35 @@ export function resolveType(
         )
       }
 
-      // If TS gave us nothing, try manual JSDoc parsing
-      // This catches cases where callSignatures is empty (common in plain JS)
+      // JSDoc fallback: only prefer it when the inferred signatures look low-confidence.
+      // This covers proxy/factory patterns where TS infers a generic `() => void`,
+      // but the variable has richer JSDoc `@param` / `@returns` describing the types.
       if (
-        !resolvedFunctionSignatures ||
-        resolvedFunctionSignatures.length === 0
+        !resolvedFunctionSignatures?.length ||
+        resolvedFunctionSignatures.every((signature) => {
+          const kind = signature.returnType?.kind
+          return kind === 'Any' || kind === 'Unknown' || kind === 'Void'
+        })
       ) {
-        resolvedFunctionSignatures = resolveJsDocFunctionSignatures(
+        const jsDocSignatures = resolveJsDocFunctionSignatures(
           enclosingNode,
           filter,
           defaultValues,
           dependencies
         )
+
+        if (jsDocSignatures && jsDocSignatures.length > 0) {
+          if (
+            !resolvedFunctionSignatures ||
+            resolvedFunctionSignatures.length === 0
+          ) {
+            resolvedFunctionSignatures = jsDocSignatures
+          } else if (
+            shouldPreferJsDoc(resolvedFunctionSignatures, jsDocSignatures)
+          ) {
+            resolvedFunctionSignatures = jsDocSignatures
+          }
+        }
       }
 
       // 3. If we found signatures from either source, create a Function/Component
@@ -1571,6 +1588,46 @@ export function resolveType(
   } finally {
     resolvingTypes.delete(type.compilerType.id)
   }
+}
+
+/**
+ * Returns true if the JSDoc signature provides a richer return type than the TS signature.
+ * Heuristic: Concrete Type > Void > Any/Unknown
+ */
+function shouldPreferJsDoc(
+  tsSignatures: Kind.CallSignature[],
+  jsDocSignatures: Kind.CallSignature[]
+): boolean {
+  // If TypeScript has any concrete signature, trust TypeScript.
+  // We assume if the user wrote a complex overload with a real return type,
+  // they want that to be the documentation.
+  const hasGoodTsSignature = tsSignatures.some((signature) => {
+    const kind = signature.returnType?.kind
+    return (
+      kind !== 'Void' &&
+      kind !== 'Any' &&
+      kind !== 'Unknown' &&
+      kind !== 'Undefined'
+    )
+  })
+
+  if (hasGoodTsSignature) {
+    return false
+  }
+
+  // If all TypeScript signatures are weak, check if JSDoc offers anything better.
+  // If JSDoc has even one concrete return type, we assume it is superior to the "all void" TS set.
+  const hasGoodJsDocSignature = jsDocSignatures.some((signature) => {
+    const kind = signature.returnType?.kind
+    return (
+      kind !== 'Void' &&
+      kind !== 'Any' &&
+      kind !== 'Unknown' &&
+      kind !== 'Undefined'
+    )
+  })
+
+  return hasGoodJsDocSignature
 }
 
 /** Returns the first JSDoc @type node for a variable declaration, if present. */
