@@ -12,6 +12,10 @@ import { getRootDirectory } from './get-root-directory.js'
 import { isJsxOnly } from './is-jsx-only.js'
 import { generatedFilenames } from './get-source-text-metadata.js'
 import { splitTokenByRanges } from './split-tokens-by-ranges.js'
+import {
+  validateLanguageFileCompatibility,
+  isJavaScriptTypeScriptFile,
+} from './validate-language-file-compatibility.js'
 
 const tsMorph = getTsMorph()
 const { Node, SyntaxKind } = tsMorph
@@ -122,6 +126,11 @@ export async function getTokens({
     filePath,
     value.length,
     async () => {
+      // Validate language/filePath pairing to prevent syntax highlighting issues
+      if (filePath && language !== 'plaintext') {
+        validateLanguageFileCompatibility(language, filePath)
+      }
+
       if (
         language === 'plaintext' ||
         language === 'text' ||
@@ -151,11 +160,11 @@ export async function getTokens({
         )
       }
 
-      const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
-        language
-      )
-      const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
       const finalLanguage = getLanguage(language)
+      const isTypeScriptFile = filePath
+        ? isJavaScriptTypeScriptFile(filePath)
+        : false
+      const jsxOnly = isTypeScriptFile ? isJsxOnly(value) : false
 
       let themeNames: string[] =
         typeof themeConfig === 'string'
@@ -174,15 +183,13 @@ export async function getTokens({
         themeNames = ['default']
       }
 
-      // Only collect TypeScript metadata for JavaScript/TypeScript languages
-      // Other languages (mdx, css, html, etc.) don't have TypeScript types
-      const tsMetadataPromise = isJavaScriptLikeLanguage
+      const tsMetadataPromise = isTypeScriptFile
         ? metadataCollector(project, filePath, jsxOnly, allowErrors, showErrors)
-        : Promise.resolve({
+        : Promise.resolve<TypeScriptMetadata>({
             sourceFile: undefined,
             diagnostics: [],
             symbolMetadata: [],
-          } satisfies TypeScriptMetadata)
+          })
 
       const tokensPromise = getDebugLogger().trackOperation(
         'highlighter',
