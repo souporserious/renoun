@@ -32,17 +32,17 @@
 
 - **Blog**
   - Demo: [https://blog.renoun.dev](https://blog.renoun.dev)
-  - Source: `/examples/blog`
+  - Source: [/apps/blog](/apps/blog)
   - Description: MDX-powered blog with collections and post organization
 
 - **Docs**
   - Demo: [https://docs.renoun.dev](https://docs.renoun.dev)
-  - Source: `/examples/docs`
+  - Source: [/apps/docs](/apps/docs)
   - Description: Next.js docs site with MDX, custom UI, and Tailwind CSS
 
 - **Workbench**
   - Demo: [https://workbench.renoun.dev](https://workbench.renoun.dev)
-  - Source: `/examples/package`
+  - Source: [/apps/workbench](/apps/workbench)
   - Description: Component library with MDX docs, examples, and hooks
 
 ## Why renoun?
