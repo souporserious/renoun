@@ -31,11 +31,18 @@ import type {
   Expression,
   ExpressionWithTypeArguments,
   SourceFile,
+  JSDocTypedefTag,
+  JSDocCallbackTag,
+  JSDocPropertyTag,
+  JSDocEnumTag,
+  JSDocParameterTag,
+  JSDocReturnTag,
+  JSDocThisTag,
+  JSDocTemplateTag,
+  JSDoc,
+  ts,
+  IndexedAccessTypeNode,
 } from './ts-morph.js'
-import type * as TsMorph from './ts-morph.js'
-
-const tsMorph = getTsMorph()
-
 import {
   getInitializerValueKey,
   getInitializerValue,
@@ -43,6 +50,21 @@ import {
 import { getJsDocMetadata } from './get-js-doc-metadata.js'
 import { getSymbolDescription } from './get-symbol-description.js'
 import { getRootDirectory } from './get-root-directory.js'
+
+const tsMorph = getTsMorph()
+
+/**
+ * Internal ts-morph context interface for accessing compiler internals.
+ * These are not part of the public API but are needed for low-level operations.
+ */
+interface TypeWithContext extends Type {
+  _context: {
+    compilerFactory: {
+      getType(compilerType: ts.Type): Type
+    }
+    typeChecker: ts.TypeChecker
+  }
+}
 
 export namespace Kind {
   /** Metadata present in all types. */
@@ -776,6 +798,30 @@ const jsDocTypeOwners = new WeakMap<Node, Node>()
 /** Tracks aliases currently being expanded to prevent recursive type references. */
 const resolvingAliasSymbols = new Set<Symbol>()
 
+/**
+ * Converts a Function type to a FunctionType for use in type expressions.
+ * This is needed because Kind.Function is not part of Kind.TypeExpression.
+ */
+function functionToFunctionType(
+  func: Kind.Function
+): Kind.FunctionType | undefined {
+  const signature = func.signatures[0]
+  if (!signature) return undefined
+
+  return {
+    kind: 'FunctionType',
+    text: func.text,
+    parameters: signature.parameters,
+    typeParameters: signature.typeParameters,
+    thisType: signature.thisType,
+    returnType: signature.returnType,
+    isAsync: signature.isAsync,
+    isGenerator: signature.isGenerator,
+    filePath: func.filePath,
+    position: func.position,
+  } satisfies Kind.FunctionType
+}
+
 /** Creates a shallow reference to a type. */
 function toShallowReference(
   type: Type,
@@ -1059,7 +1105,7 @@ export function resolveType(
       const variableTypeContext = typeNode ?? jsDocTypeNode ?? enclosingNode
       const variableTypeSource = typeNode
         ? typeNode.getType()
-        : jsDocTypeNode && (type.isAny() || type.isUnknown())
+        : jsDocTypeNode
           ? jsDocTypeNode.getType()
           : type
 
@@ -1178,6 +1224,22 @@ export function resolveType(
           signatures: resolvedCallSignatures,
         } satisfies Kind.Function
       }
+    } else if (tsMorph.Node.isJSDocTypedefTag(symbolDeclaration)) {
+      // Handle JSDoc typedef
+      resolvedType = resolveJSDocTypedef(
+        symbolDeclaration as JSDocTypedefTag,
+        enclosingNode,
+        filter,
+        dependencies
+      )
+    } else if (tsMorph.Node.isJSDocCallbackTag(symbolDeclaration)) {
+      // Handle JSDoc callback
+      resolvedType = resolveJSDocCallback(
+        symbolDeclaration as JSDocCallbackTag,
+        enclosingNode,
+        filter,
+        dependencies
+      )
     } else if (tsMorph.Node.isClassDeclaration(symbolDeclaration)) {
       resolvedType = resolveClass(symbolDeclaration, filter, dependencies)
       if (symbolMetadata.name) {
@@ -1574,9 +1636,13 @@ export function resolveType(
     // Skip metadata spreading for Function, ClassMethod, and ClassConstructor
     // as metadata should only be on their signatures to avoid duplication
     const shouldSkipMetadata =
-      resolvedType.kind === 'Function' ||
-      resolvedType.kind === 'ClassMethod' ||
-      resolvedType.kind === 'ClassConstructor'
+      resolvedType?.kind === 'Function' ||
+      resolvedType?.kind === 'ClassMethod' ||
+      resolvedType?.kind === 'ClassConstructor'
+
+    if (!resolvedType) {
+      return undefined
+    }
 
     return {
       ...(metadataDeclaration && !shouldSkipMetadata
@@ -1675,7 +1741,7 @@ function getJsDocTypeNode(
 
 function getJsDocEnumTag(
   declaration: VariableDeclaration
-): TsMorph.JSDocEnumTag | undefined {
+): JSDocEnumTag | undefined {
   const declarationList = declaration.getParent()
 
   if (tsMorph.Node.isVariableDeclarationList(declarationList)) {
@@ -1728,9 +1794,10 @@ function resolveJsDocFunctionSignatures(
 
   candidates.push(declaration)
 
-  let parameterTags: TsMorph.JSDocParameterTag[] = []
-  let returnTag: TsMorph.JSDocReturnTag | undefined
-  let thisTag: TsMorph.JSDocThisTag | undefined
+  let parameterTags: JSDocParameterTag[] = []
+  let returnTag: JSDocReturnTag | undefined
+  let thisTag: JSDocThisTag | undefined
+  let templateTags: JSDocTemplateTag[] = []
 
   for (const candidate of candidates) {
     if (!tsMorph.Node.isJSDocable(candidate)) {
@@ -1750,6 +1817,10 @@ function resolveJsDocFunctionSignatures(
         if (!thisTag && tsMorph.Node.isJSDocThisTag(tag)) {
           thisTag = tag
         }
+
+        if (tsMorph.Node.isJSDocTemplateTag(tag)) {
+          templateTags.push(tag)
+        }
       }
     }
   }
@@ -1766,7 +1837,14 @@ function resolveJsDocFunctionSignatures(
 
   for (const parameterTag of parameterTags) {
     const typeExpression = parameterTag.getTypeExpression()
-    const typeNode = unwrapJsDocNullableType(typeExpression?.getTypeNode())
+    const rawTypeNode = typeExpression?.getTypeNode()
+    const unwrappedRestInfo =
+      rawTypeNode && tsMorph.Node.isTypeNode(rawTypeNode)
+        ? unwrapRestAndOptional(rawTypeNode)
+        : undefined
+    const typeNode = unwrapJsDocNullableType(
+      unwrappedRestInfo?.node ?? rawTypeNode
+    )
     const type = typeNode?.getType()
 
     if (!type || !typeNode) {
@@ -1781,21 +1859,28 @@ function resolveJsDocFunctionSignatures(
       dependencies
     )
 
-    if (!resolvedType) {
+    const fallbackType =
+      resolvedType?.kind === 'Any'
+        ? resolveTypeNodeFallback(typeNode, filter, dependencies)
+        : undefined
+    const finalResolvedType = resolvedType ?? fallbackType
+
+    if (!finalResolvedType) {
       continue
     }
 
     const name = parameterTag.getName()
-    const isOptional = parameterTag.isBracketed()
-    const isRest = false
+    const isOptional =
+      parameterTag.isBracketed() || Boolean(unwrappedRestInfo?.isOptional)
+    const isRest = Boolean(unwrappedRestInfo?.isRest)
     const rawDescription = parameterTag.getCommentText()?.trim()
     const description = rawDescription?.replace(/^[-]\s*/, '')
-    const text = `${isRest ? '...' : ''}${name}${isOptional ? '?' : ''}: ${resolvedType.text}`
+    const text = `${isRest ? '...' : ''}${name}${isOptional ? '?' : ''}: ${finalResolvedType.text}`
 
     resolvedParameters.push({
       kind: 'Parameter',
       name,
-      type: resolvedType,
+      type: finalResolvedType,
       initializer: undefined,
       isOptional,
       isRest,
@@ -1819,6 +1904,12 @@ function resolveJsDocFunctionSignatures(
         defaultValues,
         dependencies
       )
+
+      if (!resolvedReturnType || resolvedReturnType.kind === 'Any') {
+        resolvedReturnType =
+          resolveTypeNodeFallback(typeNode, filter, dependencies) ??
+          resolvedReturnType
+      }
     }
   }
 
@@ -1837,6 +1928,12 @@ function resolveJsDocFunctionSignatures(
         defaultValues,
         dependencies
       )
+
+      if (!resolvedThisType || resolvedThisType.kind === 'Any') {
+        resolvedThisType =
+          resolveTypeNodeFallback(typeNode, filter, dependencies) ??
+          resolvedThisType
+      }
     }
   }
 
@@ -1848,15 +1945,41 @@ function resolveJsDocFunctionSignatures(
     .map((parameter) => parameter.text)
     .join(', ')
 
-  return [
-    {
-      kind: 'CallSignature',
-      text: `(${parametersText}) => ${resolvedReturnType.text}`,
-      parameters: resolvedParameters,
-      thisType: resolvedThisType,
-      returnType: resolvedReturnType,
-    } satisfies Kind.CallSignature,
-  ]
+  const resolvedTypeParameters =
+    templateTags.length === 0
+      ? []
+      : templateTags.flatMap((tag) =>
+          tag.getTypeParameters().map((typeParameter) => {
+            const name = typeParameter.getName()
+            const comment = tag.getCommentText()
+            return {
+              kind: 'TypeParameter',
+              name,
+              text: name,
+              description: comment,
+              tags: [
+                {
+                  name: 'template',
+                  text: comment?.replace(/^[-\s]+/, ''),
+                },
+              ],
+            } satisfies Kind.TypeParameter
+          })
+        )
+
+  const signature: Kind.CallSignature = {
+    kind: 'CallSignature',
+    text: `(${parametersText}) => ${resolvedReturnType.text}`,
+    parameters: resolvedParameters,
+    thisType: resolvedThisType,
+    returnType: resolvedReturnType,
+  }
+
+  if (resolvedTypeParameters.length > 0) {
+    signature.typeParameters = resolvedTypeParameters
+  }
+
+  return [signature]
 }
 
 /** Resolves a type expression. */
@@ -1884,10 +2007,123 @@ function resolveTypeExpression(
     const shouldBypassResolution =
       isJsDocTypeReference &&
       (type.isAny() || type.isUnknown() || hasTypeArguments)
-    const resolutionNode = getJsDocOwner(enclosingNode) ?? enclosingNode
+    let resolutionNode =
+      getJsDocOwner(enclosingNode) ?? enclosingNode ?? symbolDeclaration
+    if (!resolutionNode) {
+      resolutionNode = symbolDeclaration ?? enclosingNode
+    }
     if (type.getText().endsWith('{ [exportName: string]: any; }>>>, {}>')) {
       debugger
     }
+    // JSDoc typedef/callbacks should be fully expanded instead of kept as opaque references,
+    // but only when they don't have type arguments. Generic types with arguments should be
+    // kept as TypeReferences to preserve their structure.
+    if (!hasTypeArguments) {
+      if (tsMorph.Node.isJSDocTypedefTag(symbolDeclaration)) {
+        resolvedType = resolveJSDocTypedef(
+          symbolDeclaration as JSDocTypedefTag,
+          resolutionNode,
+          filter,
+          dependencies
+        )
+      } else if (tsMorph.Node.isJSDocCallbackTag?.(symbolDeclaration)) {
+        const callbackResult = resolveJSDocCallback(
+          symbolDeclaration as JSDocCallbackTag,
+          resolutionNode,
+          filter,
+          dependencies
+        )
+        if (callbackResult) {
+          resolvedType = functionToFunctionType(callbackResult)
+        }
+      }
+
+      if (resolvedType) {
+        return resolvedType
+      }
+
+      // Fallback: resolve JSDoc typedef/callback by name when symbol lookup fails.
+      if (!resolvedType) {
+        const typeNameText = (() => {
+          if (tsMorph.Node.isTypeReference(enclosingNode)) {
+            return enclosingNode.getTypeName().getText()
+          }
+          if (tsMorph.Node.isExpressionWithTypeArguments(enclosingNode)) {
+            return enclosingNode.getExpression().getText()
+          }
+          return symbol?.getName?.() ?? type.getSymbol()?.getName?.()
+        })()
+
+        const sourceFile = resolutionNode?.getSourceFile?.()
+        const fallbackSourceFile =
+          sourceFile ||
+          symbolDeclaration?.getSourceFile?.() ||
+          enclosingNode?.getSourceFile?.()
+        const jsDocTagByName =
+          typeNameText && fallbackSourceFile
+            ? findJsDocTypedefOrCallbackByName(typeNameText, fallbackSourceFile)
+            : undefined
+
+        if (jsDocTagByName?.kind === 'typedef') {
+          resolvedType = resolveJSDocTypedef(
+            jsDocTagByName.tag,
+            resolutionNode,
+            filter,
+            dependencies
+          )
+        } else if (jsDocTagByName?.kind === 'callback') {
+          const callbackResult = resolveJSDocCallback(
+            jsDocTagByName.tag,
+            resolutionNode,
+            filter,
+            dependencies
+          )
+          if (callbackResult) {
+            resolvedType = functionToFunctionType(callbackResult)
+          }
+        }
+
+        if (resolvedType) {
+          return resolvedType
+        }
+      }
+    }
+
+    // Preserve type arguments for heritage clauses (ExpressionWithTypeArguments).
+    if (
+      !resolvedType &&
+      tsMorph.Node.isExpressionWithTypeArguments(enclosingNode)
+    ) {
+      const resolvedTypeArguments: Kind.TypeExpression[] = []
+      for (const argNode of enclosingNode.getTypeArguments()) {
+        const argType = argNode.getType()
+        let resolvedArg = resolveTypeExpression(
+          argType,
+          argNode,
+          filter,
+          defaultValues,
+          dependencies
+        )
+
+        if (!resolvedArg) {
+          resolvedArg = toShallowReference(argType, argNode)
+        }
+
+        resolvedTypeArguments.push(resolvedArg)
+      }
+
+      resolvedType = {
+        kind: 'TypeReference',
+        name: enclosingNode.getExpression().getText(),
+        text: enclosingNode.getText(),
+        moduleSpecifier: undefined,
+        typeArguments: resolvedTypeArguments,
+        ...getDeclarationLocation(enclosingNode),
+      } satisfies Kind.TypeReference
+
+      return resolvedType
+    }
+
     let shouldResolveReference = shouldResolveTypeReference(
       type,
       resolutionNode
@@ -2029,13 +2265,25 @@ function resolveTypeExpression(
     }
 
     let aliasHasPropertyTags = false
+    let aliasHasParameterTags = false
     if (tsMorph.Node.isJSDocTypedefTag(symbolDeclaration)) {
-      for (const child of symbolDeclaration.getChildren()) {
-        if (tsMorph.Node.isJSDocPropertyTag(child)) {
-          aliasHasPropertyTags = true
-          break
-        }
+      // For typedefs, check if there are @property tags in the same JSDoc block
+      const jsDoc = symbolDeclaration.getParent()
+      if (tsMorph.Node.isJSDoc(jsDoc)) {
+        for (const tag of jsDoc.getTags()) {
+          if (tsMorph.Node.isJSDocPropertyTag(tag)) {
+            aliasHasPropertyTags = true
+            break
+          }
 
+          if (tsMorph.Node.isJSDocParameterTag(tag)) {
+            aliasHasParameterTags = true
+          }
+        }
+      }
+
+      // Also check children for nested structures
+      for (const child of symbolDeclaration.getChildren()) {
         if (
           tsMorph.Node.isJSDocTypeLiteral(child) &&
           child
@@ -2048,12 +2296,23 @@ function resolveTypeExpression(
           break
         }
       }
+    } else if (tsMorph.Node.isJSDocCallbackTag?.(symbolDeclaration)) {
+      // For callbacks, check if there are @param tags in the same JSDoc block
+      const jsDoc = symbolDeclaration.getParent()
+      if (tsMorph.Node.isJSDoc(jsDoc)) {
+        for (const tag of jsDoc.getTags()) {
+          if (tsMorph.Node.isJSDocParameterTag(tag)) {
+            aliasHasParameterTags = true
+            break
+          }
+        }
+      }
     }
 
     if (
       !shouldResolveReference &&
       isJsDocTypeReference &&
-      aliasHasPropertyTags &&
+      (aliasHasPropertyTags || aliasHasParameterTags) &&
       !hasTypeArguments
     ) {
       shouldResolveReference = true
@@ -2351,6 +2610,39 @@ function resolveTypeExpression(
         moduleSpecifier,
         ...getDeclarationLocation(locationNode),
       } satisfies Kind.TypeReference
+
+      // If we still have a TypeReference in JSDoc context, try to expand JSDoc typedefs/callbacks
+      if (isJsDocTypeReference && resolvedType.kind === 'TypeReference') {
+        const fallbackSourceFile =
+          resolutionNode?.getSourceFile?.() ||
+          symbolDeclaration?.getSourceFile?.() ||
+          enclosingNode?.getSourceFile?.()
+        const jsDocTagByName = referenceName
+          ? findJsDocTypedefOrCallbackByName(referenceName, fallbackSourceFile)
+          : undefined
+
+        if (jsDocTagByName?.kind === 'typedef') {
+          const expandedType = resolveJSDocTypedef(
+            jsDocTagByName.tag,
+            resolutionNode,
+            filter,
+            dependencies
+          )
+          if (expandedType) {
+            resolvedType = expandedType
+          }
+        } else if (jsDocTagByName?.kind === 'callback') {
+          const expandedType = resolveJSDocCallback(
+            jsDocTagByName.tag,
+            resolutionNode,
+            filter,
+            dependencies
+          )
+          if (expandedType) {
+            resolvedType = functionToFunctionType(expandedType)
+          }
+        }
+      }
     } else {
       const typeArguments = aliasSymbol
         ? type.getAliasTypeArguments()
@@ -2496,7 +2788,8 @@ function resolveTypeExpression(
         type: operandType,
       } satisfies Kind.TypeOperator
     } else if (isTypeOperatorType(type)) {
-      const compilerFactory = (type as any)._context.compilerFactory
+      const compilerFactory = (type as unknown as TypeWithContext)._context
+        .compilerFactory
       const operandType = compilerFactory.getType(type.compilerType.type)
       const resolvedOperand = resolveTypeExpression(
         operandType,
@@ -2603,7 +2896,8 @@ function resolveTypeExpression(
         indexType: resolvedIndexType,
       } satisfies Kind.IndexedAccessType
     } else if (isIndexedAccessType(type)) {
-      const compilerFactory = (type as any)._context.compilerFactory
+      const compilerFactory = (type as unknown as TypeWithContext)._context
+        .compilerFactory
       const objectType = compilerFactory.getType(type.compilerType.objectType)
       const resolvedObjectType = resolveTypeExpression(
         objectType,
@@ -2773,9 +3067,9 @@ function resolveTypeExpression(
         isDistributive: checkType.isTypeParameter(),
       } satisfies Kind.ConditionalType
     } else if (isConditionalType(type)) {
-      const compilerFactory = (type as any)._context.compilerFactory
-      const typeChecker = (type as any)._context.typeChecker
-        .compilerObject as TsMorph.ts.TypeChecker
+      const typeWithContext = type as unknown as TypeWithContext
+      const compilerFactory = typeWithContext._context.compilerFactory
+      const typeChecker = typeWithContext._context.typeChecker
       const checkType = compilerFactory.getType(type.compilerType.checkType)
       const resolvedCheckType = resolveTypeExpression(
         checkType,
@@ -3918,6 +4212,39 @@ function resolveCallSignature(
     .getTypeParameters()
     .map((parameter) => resolveTypeParameter(parameter, filter, dependencies))
     .filter((type): type is Kind.TypeParameter => Boolean(type))
+  const jsDocTemplateTags = signatureDeclaration
+    ? getJsDocTemplateTags(signatureDeclaration)
+    : []
+  if (jsDocTemplateTags.length) {
+    const jsDocTypeParameters = jsDocTemplateTags.flatMap((tag) =>
+      tag.getTypeParameters().map((typeParameter) => {
+        const name = typeParameter.getName()
+        const comment = tag.getCommentText()
+        return {
+          kind: 'TypeParameter',
+          name,
+          text: name,
+          description: comment,
+          tags: [
+            {
+              name: 'template',
+              text: comment,
+            },
+          ],
+        } satisfies Kind.TypeParameter
+      })
+    )
+
+    for (const typeParameter of jsDocTypeParameters) {
+      if (
+        !resolvedTypeParameters.some(
+          (existing) => existing.name === typeParameter.name
+        )
+      ) {
+        resolvedTypeParameters.push(typeParameter)
+      }
+    }
+  }
   const typeParametersText = resolvedTypeParameters.length
     ? `<${resolvedTypeParameters
         .map((generic) => {
@@ -4090,7 +4417,7 @@ function resolveParameter(
   dependencies?: Set<string>
 ): Kind.Parameter | undefined {
   let parameterDeclaration: ParameterDeclaration | undefined
-  let jsDocParameter: TsMorph.JSDocParameterTag | undefined
+  let jsDocParameter: JSDocParameterTag | undefined
   let parameterType: Type | undefined
   const symbol = tsMorph.Node.isNode(parameterDeclarationOrSymbol)
     ? parameterDeclarationOrSymbol.getSymbol()
@@ -4437,7 +4764,7 @@ function getJsDocCandidates(node: Node): Node[] {
 
 function getJsDocParameterTag(
   parameterDeclaration: ParameterDeclaration
-): TsMorph.JSDocParameterTag | undefined {
+): JSDocParameterTag | undefined {
   const functionLike = parameterDeclaration.getParent()
   const candidates = getJsDocCandidates(functionLike)
   const parameterName = parameterDeclaration.getName()
@@ -4463,9 +4790,7 @@ function getJsDocParameterTag(
   return undefined
 }
 
-function getJsDocReturnTag(
-  declaration: Node
-): TsMorph.JSDocReturnTag | undefined {
+function getJsDocReturnTag(declaration: Node): JSDocReturnTag | undefined {
   const candidates = getJsDocCandidates(declaration)
 
   for (const candidate of candidates) {
@@ -4482,7 +4807,7 @@ function getJsDocReturnTag(
   return undefined
 }
 
-function getJsDocThisTag(declaration: Node): TsMorph.JSDocThisTag | undefined {
+function getJsDocThisTag(declaration: Node): JSDocThisTag | undefined {
   const candidates = getJsDocCandidates(declaration)
 
   for (const candidate of candidates) {
@@ -4497,6 +4822,27 @@ function getJsDocThisTag(declaration: Node): TsMorph.JSDocThisTag | undefined {
     }
   }
   return undefined
+}
+
+function getJsDocTemplateTags(declaration: Node): JSDocTemplateTag[] {
+  const candidates = getJsDocCandidates(declaration)
+  const tags: JSDocTemplateTag[] = []
+
+  for (const candidate of candidates) {
+    if (!tsMorph.Node.isJSDocable(candidate)) {
+      continue
+    }
+
+    for (const jsDoc of candidate.getJsDocs()) {
+      for (const tag of jsDoc.getTags()) {
+        if (tsMorph.Node.isJSDocTemplateTag(tag)) {
+          tags.push(tag)
+        }
+      }
+    }
+  }
+
+  return tags
 }
 
 function getJsDocTemplateMetadata(
@@ -4525,7 +4871,7 @@ function getJsDocTemplateMetadata(
 
   const owner = parameterDeclaration.getFirstAncestor((ancestor) =>
     tsMorph.Node.isJSDocable(ancestor)
-  ) as (TsMorph.Node & { getJsDocs?: () => TsMorph.JSDoc[] }) | undefined
+  ) as (Node & { getJsDocs?: () => JSDoc[] }) | undefined
 
   if (!owner?.getJsDocs) {
     return tags.length || description
@@ -4587,9 +4933,8 @@ function getJsDocHeritageExpressions(classDeclaration: ClassDeclaration): {
       let expressionNode: ExpressionWithTypeArguments | undefined
 
       if (tsMorph.Node.isJSDocAugmentsTag(tag)) {
-        const compilerExpression = (
-          tag.compilerNode as TsMorph.ts.JSDocAugmentsTag
-        ).class
+        const compilerExpression = (tag.compilerNode as ts.JSDocAugmentsTag)
+          .class
         if (compilerExpression) {
           const node = (
             tag as any
@@ -4603,9 +4948,8 @@ function getJsDocHeritageExpressions(classDeclaration: ClassDeclaration): {
           }
         }
       } else if (tsMorph.Node.isJSDocImplementsTag(tag)) {
-        const compilerExpression = (
-          tag.compilerNode as TsMorph.ts.JSDocImplementsTag
-        ).class
+        const compilerExpression = (tag.compilerNode as ts.JSDocImplementsTag)
+          .class
         if (compilerExpression) {
           const node = (
             tag as any
@@ -4953,36 +5297,181 @@ function unwrapRestAndOptional(node: TypeNode) {
   let isRest = false
   let isOptional = false
 
-  if (currentNode.getKind() === tsMorph.SyntaxKind.RestType) {
+  if (tsMorph.Node.isRestTypeNode(currentNode)) {
     isRest = true
-    // ts-morph wrapper exposes getTypeNode() on RestType nodes; duck-type it
-    const innerTypeNode = (currentNode as any).getTypeNode?.()
-    if (innerTypeNode) {
-      currentNode = innerTypeNode
-    }
+    currentNode = currentNode.getTypeNode()
   }
 
-  if (currentNode.getKind() === tsMorph.SyntaxKind.JSDocVariadicType) {
+  if (tsMorph.Node.isJSDocVariadicType(currentNode)) {
     isRest = true
-    const innerTypeNode = (currentNode as any).getTypeNode?.()
-    if (innerTypeNode) {
-      currentNode = innerTypeNode
-    }
+    currentNode = currentNode.getTypeNode()
   }
 
-  if (currentNode.getKind() === tsMorph.SyntaxKind.OptionalType) {
+  if (tsMorph.Node.isOptionalTypeNode(currentNode)) {
     isOptional = true
+    currentNode = currentNode.getTypeNode()
   }
 
-  if (currentNode.getKind() === tsMorph.SyntaxKind.JSDocOptionalType) {
+  if (tsMorph.Node.isJSDocOptionalType(currentNode)) {
     isOptional = true
-    const innerTypeNode = (currentNode as any).getTypeNode?.()
-    if (innerTypeNode) {
-      currentNode = innerTypeNode
-    }
+    currentNode = currentNode.getTypeNode()
   }
 
   return { node: currentNode, isRest, isOptional }
+}
+
+/** Fallback resolver when TS gives `any` for JSDoc types. */
+function resolveTypeNodeFallback(
+  typeNode?: TypeNode,
+  filter?: TypeFilter,
+  dependencies?: Set<string>
+): Kind.TypeExpression | undefined {
+  if (!typeNode) return undefined
+
+  // Handle parentheses
+  if (tsMorph.Node.isParenthesizedTypeNode(typeNode)) {
+    return resolveTypeNodeFallback(typeNode.getTypeNode(), filter, dependencies)
+  }
+
+  if (tsMorph.Node.isUnionTypeNode(typeNode)) {
+    const parts = typeNode
+      .getTypeNodes()
+      .map((childTypeNode) =>
+        resolveTypeNodeFallback(childTypeNode, filter, dependencies)
+      )
+      .filter((childTypeNode): childTypeNode is Kind.TypeExpression =>
+        Boolean(childTypeNode)
+      )
+    if (parts.length) {
+      return {
+        kind: 'UnionType',
+        types: parts,
+        text: parts.map((type) => type.text).join(' | '),
+      } satisfies Kind.UnionType
+    }
+    return undefined
+  }
+
+  if (tsMorph.Node.isLiteralTypeNode(typeNode)) {
+    const literal = typeNode.getLiteral()
+    if (tsMorph.Node.isStringLiteral(literal)) {
+      return {
+        kind: 'String',
+        text: literal.getText(),
+        value: literal.getLiteralText(),
+      }
+    }
+    if (tsMorph.Node.isNumericLiteral(literal)) {
+      const value = Number(literal.getText())
+      return { kind: 'Number', text: literal.getText(), value }
+    }
+    if (literal.getKind() === tsMorph.SyntaxKind.TrueKeyword) {
+      return { kind: 'Boolean', text: 'true' }
+    }
+    if (literal.getKind() === tsMorph.SyntaxKind.FalseKeyword) {
+      return { kind: 'Boolean', text: 'false' }
+    }
+  }
+
+  if (tsMorph.Node.isStringKeyword(typeNode)) {
+    return { kind: 'String', text: 'string' }
+  }
+  if (tsMorph.Node.isNumberKeyword(typeNode)) {
+    return { kind: 'Number', text: 'number' }
+  }
+  if (tsMorph.Node.isBooleanKeyword(typeNode)) {
+    return { kind: 'Boolean', text: 'boolean' }
+  }
+  if (tsMorph.Node.isAnyKeyword(typeNode)) {
+    return { kind: 'Any', text: 'any' }
+  }
+  if (typeNode.getKind() === tsMorph.SyntaxKind.NullKeyword) {
+    return { kind: 'Null', text: 'null' }
+  }
+  if (tsMorph.Node.isUndefinedKeyword(typeNode)) {
+    return { kind: 'Undefined', text: 'undefined' }
+  }
+
+  if (tsMorph.Node.isArrayTypeNode(typeNode)) {
+    const elementNode = typeNode.getElementTypeNode()
+    const elementType =
+      resolveTypeNodeFallback(elementNode, filter, dependencies) ??
+      resolveTypeExpression(
+        elementNode.getType(),
+        elementNode,
+        filter,
+        undefined,
+        dependencies
+      )
+    if (!elementType) {
+      return undefined
+    }
+    return {
+      kind: 'TypeReference',
+      name: 'Array',
+      text: `Array<${elementType.text}>`,
+      typeArguments: [elementType],
+      ...getDeclarationLocation(typeNode),
+    } satisfies Kind.TypeReference
+  }
+
+  if (tsMorph.Node.isTypeLiteral(typeNode)) {
+    const members: Kind.PropertySignature[] = []
+    for (const member of typeNode.getMembers()) {
+      if (tsMorph.Node.isPropertySignature(member)) {
+        const memberTypeNode = member.getTypeNode()
+        let memberType =
+          memberTypeNode &&
+          resolveTypeNodeFallback(memberTypeNode, filter, dependencies)
+
+        if (!memberType) {
+          memberType = resolveTypeExpression(
+            member.getType(),
+            memberTypeNode ?? member,
+            filter,
+            undefined,
+            dependencies
+          )
+        }
+
+        if (memberType) {
+          members.push({
+            kind: 'PropertySignature',
+            name: member.getName(),
+            text: memberType.text,
+            type: memberType,
+            isOptional: member.hasQuestionToken?.() ?? false,
+            ...getDeclarationLocation(member),
+          } satisfies Kind.PropertySignature)
+        }
+      }
+    }
+
+    return {
+      kind: 'TypeLiteral',
+      text: typeNode.getText(),
+      members,
+      ...getDeclarationLocation(typeNode),
+    } satisfies Kind.TypeLiteral
+  }
+
+  if (tsMorph.Node.isTypeReference(typeNode)) {
+    return resolveTypeExpression(
+      typeNode.getType(),
+      typeNode,
+      filter,
+      undefined,
+      dependencies
+    )
+  }
+
+  return resolveTypeExpression(
+    typeNode.getType(),
+    typeNode,
+    filter,
+    undefined,
+    dependencies
+  )
 }
 
 /** Process all elements of a tuple type. */
@@ -5013,7 +5502,7 @@ function resolveTypeTupleElements(
       }
     }
   } else if (hasTypeNode(enclosingNode)) {
-    const typeNode = (enclosingNode as any).getTypeNode?.()
+    const typeNode = enclosingNode.getTypeNode()
     if (typeNode) {
       if (tsMorph.Node.isTupleTypeNode(typeNode)) {
         tupleNode = typeNode
@@ -5033,17 +5522,20 @@ function resolveTypeTupleElements(
           tupleElementNode as any
         ).getQuestionTokenNode?.()
         elementMetadata.isOptional = Boolean(questionTokenNode)
-        const dotDotDotTokenNode = (
-          tupleElementNode as any
-        ).getDotDotDotTokenNode?.()
-        elementMetadata.isRest = Boolean(dotDotDotTokenNode)
+        const dotDotDotToken = tupleElementNode.getDotDotDotToken()
+        elementMetadata.isRest = Boolean(dotDotDotToken)
 
-        let hasReadonlyModifier = false
-        const hasModifier = (tupleElementNode as any).hasModifier
-        if (typeof hasModifier === 'function') {
-          hasReadonlyModifier = hasModifier(tsMorph.SyntaxKind.ReadonlyKeyword)
-        }
-        elementMetadata.isReadonly = hasReadonlyModifier
+        // Check for readonly modifier via the compiler node's modifiers
+        // TypeScript's type definitions don't expose modifiers on NamedTupleMember,
+        // but they exist at runtime for readonly tuple members
+        const compilerNode = tupleElementNode.compilerNode as any
+        const modifiers = compilerNode.modifiers as
+          | ts.NodeArray<ts.Modifier>
+          | undefined
+        const hasReadonlyModifier = modifiers?.some((modifier: ts.Modifier) => {
+          return modifier.kind === tsMorph.ts.SyntaxKind.ReadonlyKeyword
+        })
+        elementMetadata.isReadonly = Boolean(hasReadonlyModifier)
 
         elementTypeNode = tupleElementNode.getTypeNode()
         // optional/rest can also wrap the type node: `[x: string?]`, `[...x: T[]]`
@@ -6167,21 +6659,21 @@ function isReferenceType(type: Type): boolean {
 /** Returns true if the given Type is a conditional type (e.g. `A extends B ? X : Y`). */
 function isConditionalType(
   type: Type
-): type is Type & { compilerType: TsMorph.ts.ConditionalType } {
+): type is Type & { compilerType: ts.ConditionalType } {
   return (type.compilerType.flags & tsMorph.ts.TypeFlags.Conditional) !== 0
 }
 
 /** Returns true if the given type is an indexed access type (e.g. `Type[Key]`). */
 function isIndexedAccessType(
   type: Type
-): type is Type & { compilerType: TsMorph.ts.IndexedAccessType } {
+): type is Type & { compilerType: ts.IndexedAccessType } {
   return (type.compilerType.flags & tsMorph.ts.TypeFlags.IndexedAccess) !== 0
 }
 
 /** Returns true if the given type is a type operator type (e.g. `keyof Type`). */
 function isTypeOperatorType(
   type: Type
-): type is Type & { compilerType: TsMorph.ts.IndexType } {
+): type is Type & { compilerType: ts.IndexType } {
   return (type.compilerType.flags & tsMorph.ts.TypeFlags.Index) !== 0
 }
 
@@ -6407,7 +6899,7 @@ function isTypeReferenceExported(typeReference: TypeReferenceNode): boolean {
 
 /** Gets the left most type reference of an indexed access type node. */
 function getLeftMostTypeReference(
-  node: TsMorph.IndexedAccessTypeNode
+  node: IndexedAccessTypeNode
 ): TypeReferenceNode | undefined {
   let current: TypeNode = node.getObjectTypeNode()
   while (tsMorph.Node.isIndexedAccessTypeNode(current)) {
@@ -7126,11 +7618,315 @@ function getOriginUnionTypes(type: Type): Type[] {
     )
   }
 
-  const compilerFactory = (type as any)._context.compilerFactory
+  const compilerFactory = (type as TypeWithContext)._context.compilerFactory
 
-  return origin.types.map((unionType: TsMorph.ts.Type) =>
+  return origin.types.map((unionType: ts.Type) =>
     compilerFactory.getType(unionType)
   )
+}
+
+function findJsDocTypedefOrCallbackByName(
+  name: string,
+  sourceFile: SourceFile
+):
+  | { kind: 'typedef'; tag: JSDocTypedefTag }
+  | { kind: 'callback'; tag: JSDocCallbackTag }
+  | undefined {
+  const jsDocs = sourceFile.getDescendants().filter(tsMorph.Node.isJSDoc)
+
+  for (const jsDoc of jsDocs) {
+    for (const tag of jsDoc.getTags()) {
+      if (tsMorph.Node.isJSDocTypedefTag(tag)) {
+        if (tag.getTagName() === name) {
+          return { kind: 'typedef', tag }
+        }
+      }
+
+      if (tsMorph.Node.isJSDocCallbackTag(tag)) {
+        if (tag.getTagName() === name) {
+          return { kind: 'callback', tag }
+        }
+      }
+    }
+  }
+
+  return undefined
+}
+
+function resolveJSDocTypedef(
+  typedefTag: JSDocTypedefTag,
+  _enclosingNode?: Node,
+  filter?: TypeFilter,
+  dependencies?: Set<string>
+): Kind.TypeLiteral | undefined {
+  const jsDoc = typedefTag.getParent()
+  if (!tsMorph.Node.isJSDoc(jsDoc)) {
+    return undefined
+  }
+
+  const members: Kind.PropertySignature[] = []
+
+  // Helper to process a property tag and add to members
+  const processPropertyTag = (tag: JSDocPropertyTag) => {
+    const typeExpression = tag.getTypeExpression()
+    const rawTypeNode = typeExpression?.getTypeNode()
+    const unwrappedRestInfo =
+      rawTypeNode && tsMorph.Node.isTypeNode(rawTypeNode)
+        ? unwrapRestAndOptional(rawTypeNode)
+        : undefined
+    const typeNode = unwrapJsDocNullableType(
+      unwrappedRestInfo?.node ?? rawTypeNode
+    )
+    const type = typeNode?.getType()
+
+    if (type && typeNode) {
+      let resolvedType = resolveTypeExpression(
+        type,
+        typeNode,
+        filter,
+        undefined,
+        dependencies
+      )
+
+      // Special handling for JSDoc primitive types that resolve to Any
+      if (resolvedType?.kind === 'Any') {
+        const typeText = typeNode.getText()
+        switch (typeText) {
+          case 'number':
+            resolvedType = { kind: 'Number', text: 'number' }
+            break
+          case 'string':
+            resolvedType = { kind: 'String', text: 'string' }
+            break
+          case 'boolean':
+            resolvedType = { kind: 'Boolean', text: 'boolean' }
+            break
+          case 'null':
+            resolvedType = { kind: 'Null', text: 'null' }
+            break
+          case 'undefined':
+            resolvedType = { kind: 'Undefined', text: 'undefined' }
+            break
+          case 'any':
+            resolvedType = { kind: 'Any', text: 'any' }
+            break
+          case 'void':
+            resolvedType = { kind: 'Void', text: 'void' }
+            break
+          case 'never':
+            resolvedType = { kind: 'Never', text: 'never' }
+            break
+          case 'unknown':
+            resolvedType = { kind: 'Unknown', text: 'unknown' }
+            break
+          case 'bigint':
+            resolvedType = { kind: 'BigInt', text: 'bigint' }
+            break
+          case 'symbol':
+            resolvedType = { kind: 'Symbol', text: 'symbol' }
+            break
+        }
+      }
+
+      const finalType =
+        resolvedType?.kind === 'Any'
+          ? (resolveTypeNodeFallback(typeNode, filter, dependencies) ??
+            resolvedType)
+          : resolvedType
+
+      if (finalType) {
+        members.push({
+          kind: 'PropertySignature',
+          name: tag.getName(),
+          text: finalType.text,
+          type: finalType,
+          isOptional:
+            tag.isBracketed() || Boolean(unwrappedRestInfo?.isOptional),
+          ...getJsDocMetadata(tag),
+          ...getDeclarationLocation(tag),
+        })
+      }
+    }
+  }
+
+  // Collect @property/@prop tags from the same JSDoc block
+  for (const tag of jsDoc.getTags()) {
+    // Handle both @property and @prop aliases
+    if (tsMorph.Node.isJSDocPropertyTag(tag)) {
+      processPropertyTag(tag)
+    }
+  }
+
+  // Also check children of the typedef tag for nested structures (JSDocTypeLiteral)
+  for (const child of typedefTag.getChildren()) {
+    if (tsMorph.Node.isJSDocTypeLiteral(child)) {
+      for (const literalChild of child.getChildren()) {
+        if (tsMorph.Node.isJSDocPropertyTag(literalChild)) {
+          processPropertyTag(literalChild)
+        }
+      }
+    }
+  }
+
+  // If no members were found, this is a simple type alias (e.g. @typedef {Float32Array} mat3)
+  // and should not be expanded to a TypeLiteral. Return undefined to let the normal
+  // type reference resolution handle it.
+  if (members.length === 0) {
+    return undefined
+  }
+
+  return {
+    kind: 'TypeLiteral',
+    text:
+      members.length > 0
+        ? `{ ${members.map((member) => `${member.name}${member.isOptional ? '?' : ''}: ${member.text}`).join('; ')} }`
+        : '{ }',
+    members,
+    ...getDeclarationLocation(typedefTag),
+  } satisfies Kind.TypeLiteral
+}
+
+function resolveJSDocCallback(
+  callbackTag: JSDocCallbackTag,
+  _enclosingNode?: Node,
+  filter?: TypeFilter,
+  dependencies?: Set<string>
+): Kind.Function | undefined {
+  const jsDoc = callbackTag.getParent()
+  if (!tsMorph.Node.isJSDoc(jsDoc)) {
+    return undefined
+  }
+
+  const parameters: Kind.Parameter[] = []
+  let returnType: Kind.TypeExpression | undefined
+
+  // Collect @param and @returns tags from the same JSDoc block
+  for (const tag of jsDoc.getTags()) {
+    if (tsMorph.Node.isJSDocParameterTag(tag)) {
+      const typeExpression = tag.getTypeExpression()
+      const rawTypeNode = typeExpression?.getTypeNode()
+      const unwrappedRestInfo =
+        rawTypeNode && tsMorph.Node.isTypeNode(rawTypeNode)
+          ? unwrapRestAndOptional(rawTypeNode)
+          : undefined
+      const typeNode = unwrapJsDocNullableType(
+        unwrappedRestInfo?.node ?? rawTypeNode
+      )
+      const type = typeNode?.getType()
+
+      if (type && typeNode) {
+        let resolvedType = resolveTypeExpression(
+          type,
+          typeNode,
+          filter,
+          undefined,
+          dependencies
+        )
+
+        // Special handling for JSDoc primitive types that resolve to Any
+        if (resolvedType?.kind === 'Any') {
+          const typeText = typeNode.getText()
+          switch (typeText) {
+            case 'number':
+              resolvedType = { kind: 'Number', text: 'number' }
+              break
+            case 'string':
+              resolvedType = { kind: 'String', text: 'string' }
+              break
+            case 'boolean':
+              resolvedType = { kind: 'Boolean', text: 'boolean' }
+              break
+            case 'null':
+              resolvedType = { kind: 'Null', text: 'null' }
+              break
+            case 'undefined':
+              resolvedType = { kind: 'Undefined', text: 'undefined' }
+              break
+            case 'any':
+              resolvedType = { kind: 'Any', text: 'any' }
+              break
+            case 'void':
+              resolvedType = { kind: 'Void', text: 'void' }
+              break
+            case 'never':
+              resolvedType = { kind: 'Never', text: 'never' }
+              break
+            case 'unknown':
+              resolvedType = { kind: 'Unknown', text: 'unknown' }
+              break
+            case 'bigint':
+              resolvedType = { kind: 'BigInt', text: 'bigint' }
+              break
+            case 'symbol':
+              resolvedType = { kind: 'Symbol', text: 'symbol' }
+              break
+          }
+        }
+
+        const fallbackType =
+          resolvedType?.kind === 'Any'
+            ? resolveTypeNodeFallback(typeNode, filter, dependencies)
+            : undefined
+        const finalType = resolvedType ?? fallbackType
+
+        if (finalType) {
+          parameters.push({
+            kind: 'Parameter',
+            name: tag.getName(),
+            text: finalType.text,
+            type: finalType,
+            isOptional:
+              tag.isBracketed() || Boolean(unwrappedRestInfo?.isOptional),
+            isRest: Boolean(unwrappedRestInfo?.isRest),
+            ...getJsDocMetadata(tag),
+            ...getDeclarationLocation(tag),
+          })
+        }
+      }
+    } else if (tsMorph.Node.isJSDocReturnTag(tag)) {
+      const typeExpression = tag.getTypeExpression()
+      const typeNode = unwrapJsDocNullableType(typeExpression?.getTypeNode())
+      const type = typeNode?.getType()
+
+      if (type && typeNode) {
+        returnType = resolveTypeExpression(
+          type,
+          typeNode,
+          filter,
+          undefined,
+          dependencies
+        )
+
+        if (!returnType || returnType.kind === 'Any') {
+          returnType =
+            resolveTypeNodeFallback(typeNode, filter, dependencies) ??
+            returnType
+        }
+      }
+    }
+  }
+
+  const returnTypeResolved = returnType ?? { kind: 'Any' as const, text: 'any' }
+  const parametersText = parameters
+    .map((parameter) => `${parameter.name}: ${parameter.text}`)
+    .join(', ')
+  const signatureText = `(${parametersText}) => ${returnTypeResolved.text}`
+
+  const signature: Kind.CallSignature = {
+    kind: 'CallSignature',
+    text: signatureText,
+    parameters,
+    returnType: returnTypeResolved,
+    ...getDeclarationLocation(callbackTag),
+  }
+
+  return {
+    kind: 'Function',
+    name: callbackTag.getTagName(),
+    text: `(${parameters.map((parameter) => `${parameter.name}${parameter.isOptional ? '?' : ''}: ${parameter.type.text}`).join(', ')}) => ${returnType ? returnType.text : 'any'}`,
+    signatures: [signature],
+    ...getDeclarationLocation(callbackTag),
+  } satisfies Kind.Function
 }
 
 /** Prints helpful information about a node for debugging. */
