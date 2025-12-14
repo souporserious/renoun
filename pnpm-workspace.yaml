@@ -6,7 +6,7 @@ packages:
 catalog:
   '@mdx-js/loader': 3.1.1
   '@mdx-js/react': 3.1.1
-  '@next/mdx': 16.0.10
+  '@next/mdx': canary
   '@tailwindcss/postcss': 4.1.18
   '@tailwindcss/typography': 0.5.19
   '@types/hast': 3.0.4
@@ -15,7 +15,7 @@ catalog:
   '@types/react-dom': 19.2.3
   arktype: 2.1.28
   geist: 1.5.1
-  next: 16.0.10
+  next: canary
   prettier: 3.7.4
   react: 19.2.3
   react-aria-components: 1.13.0
