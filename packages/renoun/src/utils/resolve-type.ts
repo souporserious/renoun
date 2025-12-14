@@ -1224,8 +1224,60 @@ export function resolveType(
           signatures: resolvedCallSignatures,
         } satisfies Kind.Function
       }
+    } else if (tsMorph.Node.isJSDocFunctionType(enclosingNode)) {
+      const signature = enclosingNode.getSignature()
+      const resolvedSignature = resolveCallSignature(
+        signature,
+        enclosingNode,
+        filter,
+        dependencies
+      )
+
+      if (resolvedSignature) {
+        resolvedType = {
+          kind: 'FunctionType',
+          text: typeText,
+          parameters: resolvedSignature.parameters,
+          typeParameters: resolvedSignature.typeParameters,
+          returnType: resolvedSignature.returnType,
+          thisType: resolvedSignature.thisType,
+          isAsync: resolvedSignature.isAsync,
+          isGenerator: resolvedSignature.isGenerator,
+          ...getDeclarationLocation(enclosingNode),
+        } satisfies Kind.FunctionType
+      } else {
+        // Fallback: manually resolve from the node if signature resolution fails
+        const resolvedParameters: Kind.Parameter[] = []
+        for (const param of enclosingNode.getParameters()) {
+          const resolved = resolveParameter(
+            param,
+            enclosingNode,
+            filter,
+            dependencies
+          )
+          if (resolved) resolvedParameters.push(resolved)
+        }
+
+        const returnTypeNode = enclosingNode.getReturnTypeNode()
+        const resolvedReturnType = returnTypeNode
+          ? resolveTypeExpression(
+              returnTypeNode.getType(),
+              returnTypeNode,
+              filter,
+              defaultValues,
+              dependencies
+            )
+          : undefined
+
+        resolvedType = {
+          kind: 'FunctionType',
+          text: typeText,
+          parameters: resolvedParameters,
+          returnType: resolvedReturnType,
+          ...getDeclarationLocation(enclosingNode),
+        } satisfies Kind.FunctionType
+      }
     } else if (tsMorph.Node.isJSDocTypedefTag(symbolDeclaration)) {
-      // Handle JSDoc typedef
       resolvedType = resolveJSDocTypedef(
         symbolDeclaration as JSDocTypedefTag,
         enclosingNode,
@@ -1233,7 +1285,6 @@ export function resolveType(
         dependencies
       )
     } else if (tsMorph.Node.isJSDocCallbackTag(symbolDeclaration)) {
-      // Handle JSDoc callback
       resolvedType = resolveJSDocCallback(
         symbolDeclaration as JSDocCallbackTag,
         enclosingNode,
@@ -1842,8 +1893,8 @@ function resolveJsDocFunctionSignatures(
       rawTypeNode && tsMorph.Node.isTypeNode(rawTypeNode)
         ? unwrapRestAndOptional(rawTypeNode)
         : undefined
-    const typeNode = unwrapJsDocNullableType(
-      unwrappedRestInfo?.node ?? rawTypeNode
+    const typeNode = unwrapJsDocNonNullableType(
+      unwrapJsDocNullableType(unwrappedRestInfo?.node ?? rawTypeNode)
     )
     const type = typeNode?.getType()
 
@@ -1893,7 +1944,9 @@ function resolveJsDocFunctionSignatures(
 
   if (returnTag) {
     const typeExpression = returnTag.getTypeExpression()
-    const typeNode = unwrapJsDocNullableType(typeExpression?.getTypeNode())
+    const typeNode = unwrapJsDocNonNullableType(
+      unwrapJsDocNullableType(typeExpression?.getTypeNode())
+    )
     const type = typeNode?.getType()
 
     if (type && typeNode) {
@@ -2011,9 +2064,6 @@ function resolveTypeExpression(
       getJsDocOwner(enclosingNode) ?? enclosingNode ?? symbolDeclaration
     if (!resolutionNode) {
       resolutionNode = symbolDeclaration ?? enclosingNode
-    }
-    if (type.getText().endsWith('{ [exportName: string]: any; }>>>, {}>')) {
-      debugger
     }
     // JSDoc typedef/callbacks should be fully expanded instead of kept as opaque references,
     // but only when they don't have type arguments. Generic types with arguments should be
@@ -3276,7 +3326,9 @@ function resolveTypeExpression(
             types: unionTypes,
           } satisfies Kind.UnionType
         } finally {
-          resolvingAliasSymbols.delete(aliasSymbol!)
+          if (aliasSymbol) {
+            resolvingAliasSymbols.delete(aliasSymbol)
+          }
         }
       }
     } else if (type.isIntersection()) {
@@ -3374,7 +3426,10 @@ function resolveTypeExpression(
           types: resolvedIntersectionTypes,
         } satisfies Kind.IntersectionType
       }
-    } else if (tsMorph.Node.isFunctionTypeNode(enclosingNode)) {
+    } else if (
+      tsMorph.Node.isFunctionTypeNode(enclosingNode) ||
+      tsMorph.Node.isJSDocFunctionType(enclosingNode)
+    ) {
       const signature = enclosingNode.getSignature()
       const resolvedSignature = resolveCallSignature(
         signature,
@@ -5291,6 +5346,13 @@ function unwrapJsDocNullableType(typeNode?: TypeNode) {
   return typeNode
 }
 
+function unwrapJsDocNonNullableType(typeNode?: TypeNode) {
+  if (typeNode && tsMorph.Node.isJSDocNonNullableType(typeNode)) {
+    return typeNode.getTypeNode()
+  }
+  return typeNode
+}
+
 /** Unwrap Rest and Optional type nodes. */
 function unwrapRestAndOptional(node: TypeNode) {
   let currentNode: TypeNode = node
@@ -5382,7 +5444,10 @@ function resolveTypeNodeFallback(
   if (tsMorph.Node.isBooleanKeyword(typeNode)) {
     return { kind: 'Boolean', text: 'boolean' }
   }
-  if (tsMorph.Node.isAnyKeyword(typeNode)) {
+  if (
+    tsMorph.Node.isAnyKeyword(typeNode) ||
+    tsMorph.Node.isJSDocAllType(typeNode)
+  ) {
     return { kind: 'Any', text: 'any' }
   }
   if (typeNode.getKind() === tsMorph.SyntaxKind.NullKeyword) {
@@ -5391,7 +5456,9 @@ function resolveTypeNodeFallback(
   if (tsMorph.Node.isUndefinedKeyword(typeNode)) {
     return { kind: 'Undefined', text: 'undefined' }
   }
-
+  if (tsMorph.Node.isJSDocUnknownType(typeNode)) {
+    return { kind: 'Unknown', text: 'unknown' }
+  }
   if (tsMorph.Node.isArrayTypeNode(typeNode)) {
     const elementNode = typeNode.getElementTypeNode()
     const elementType =
@@ -7674,8 +7741,8 @@ function resolveJSDocTypedef(
       rawTypeNode && tsMorph.Node.isTypeNode(rawTypeNode)
         ? unwrapRestAndOptional(rawTypeNode)
         : undefined
-    const typeNode = unwrapJsDocNullableType(
-      unwrappedRestInfo?.node ?? rawTypeNode
+    const typeNode = unwrapJsDocNonNullableType(
+      unwrapJsDocNullableType(unwrappedRestInfo?.node ?? rawTypeNode)
     )
     const type = typeNode?.getType()
 
@@ -7809,8 +7876,8 @@ function resolveJSDocCallback(
         rawTypeNode && tsMorph.Node.isTypeNode(rawTypeNode)
           ? unwrapRestAndOptional(rawTypeNode)
           : undefined
-      const typeNode = unwrapJsDocNullableType(
-        unwrappedRestInfo?.node ?? rawTypeNode
+      const typeNode = unwrapJsDocNonNullableType(
+        unwrapJsDocNullableType(unwrappedRestInfo?.node ?? rawTypeNode)
       )
       const type = typeNode?.getType()
 
