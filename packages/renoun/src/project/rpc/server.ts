@@ -2,12 +2,12 @@ import {
   WebSocketServer as WSS,
   WebSocket as WS,
   type RawData,
-} from './websocket.js'
+} from './websocket.ts'
 import type { AddressInfo } from 'node:net'
 import { randomBytes, createHash } from 'node:crypto'
 
-import { getDebugLogger } from '../../utils/debug.js'
-import { Semaphore } from '../../utils/Semaphore.js'
+import { getDebugLogger } from '../../utils/debug.ts'
+import { Semaphore } from '../../utils/Semaphore.ts'
 
 export interface WebSocketRequest {
   method: string

@@ -1,8 +1,8 @@
 import React, { useId } from 'react'
 
-import type { Headings } from '../../mdx/index.js'
-import { Script } from '../Script.js'
-import { Register } from './Register.js'
+import type { Headings } from '../../mdx/index.ts'
+import { Script } from '../Script.ts'
+import { Register } from './Register.ts'
 
 export interface TableOfContentsComponents {
   /** Root navigation element. */
@@ -70,7 +70,7 @@ const defaultComponents: TableOfContentsComponents = {
  * @internal
  */
 export function TableOfContentsScript({ nonce }: { nonce?: string }) {
-  return <Script nonce={nonce}>{import('./script.js')}</Script>
+  return <Script nonce={nonce}>{import('./script.ts')}</Script>
 }
 
 /** A table of contents that displays links to the headings in the current document. */

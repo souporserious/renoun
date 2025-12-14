@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { Script } from '../Script.js'
+import { Script } from '../Script.ts'
 
 /**
  * A script that sets the theme based on local storage before the page renders
@@ -17,7 +17,7 @@ export function ThemeScript({
 }) {
   return (
     <Script nonce={nonce} storageKey={storageKey}>
-      {import('./script.js')}
+      {import('./script.ts')}
     </Script>
   )
 }

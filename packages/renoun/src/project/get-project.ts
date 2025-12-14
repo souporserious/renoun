@@ -1,20 +1,20 @@
-import { getTsMorph } from '../utils/ts-morph.js'
-import type { Project as TsMorphProject, ts as TsMorphTS } from '../utils/ts-morph.js'
+import { getTsMorph } from '../utils/ts-morph.ts'
+import type { Project as TsMorphProject, ts as TsMorphTS } from '../utils/ts-morph.ts'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
 
-import { getDebugLogger } from '../utils/debug.js'
-import type { DebugContext } from '../utils/debug.js'
-import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
-import { resolvedTypeCache } from '../utils/resolve-type-at-location.js'
-import { invalidateProjectFileCache } from './cache.js'
+import { getDebugLogger } from '../utils/debug.ts'
+import type { DebugContext } from '../utils/debug.ts'
+import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
+import { resolvedTypeCache } from '../utils/resolve-type-at-location.ts'
+import { invalidateProjectFileCache } from './cache.ts'
 import {
   activeRefreshingProjects,
   completeRefreshingProjects,
   startRefreshingProjects,
-} from './refresh.js'
-import type { ProjectOptions } from './types.js'
+} from './refresh.ts'
+import type { ProjectOptions } from './types.ts'
 
 const { Project, ts } = getTsMorph()
 

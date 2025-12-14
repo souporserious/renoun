@@ -1,4 +1,4 @@
-import { getTsMorph } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
 import type {
   ImportDeclaration,
   Node,
@@ -6,10 +6,10 @@ import type {
   SourceFile,
   SyntaxKind,
   ts,
-} from './ts-morph.js'
+} from './ts-morph.ts'
 
-import { getPrinter } from '../project/get-printer.js'
-import { getExportPosition } from './get-export-position.js'
+import { getPrinter } from '../project/get-printer.ts'
+import { getExportPosition } from './get-export-position.ts'
 
 const tsMorph = getTsMorph()
 

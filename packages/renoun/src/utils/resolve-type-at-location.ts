@@ -1,9 +1,9 @@
-import { getTsMorph } from './ts-morph.js'
-import type { Project, SyntaxKind as TsMorphSyntaxKind } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
+import type { Project, SyntaxKind as TsMorphSyntaxKind } from './ts-morph.ts'
 
-import { getDebugLogger } from './debug.js'
-import type { Kind, TypeFilter } from './resolve-type.js'
-import { resolveType } from './resolve-type.js'
+import { getDebugLogger } from './debug.ts'
+import type { Kind, TypeFilter } from './resolve-type.ts'
+import { resolveType } from './resolve-type.ts'
 
 const { SyntaxKind } = getTsMorph()
 

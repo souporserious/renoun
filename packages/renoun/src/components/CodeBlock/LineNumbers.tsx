@@ -1,9 +1,9 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme.js'
-import { getConfig } from '../Config/ServerConfigContext.js'
-import { getResolvedContext } from './Context.js'
+import { getThemeColors } from '../../utils/get-theme.ts'
+import { getConfig } from '../Config/ServerConfigContext.tsx'
+import { getResolvedContext } from './Context.tsx'
 
 export interface LineNumbersProps {
   /** A string of comma separated lines and ranges to highlight. */

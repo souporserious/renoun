@@ -1,11 +1,11 @@
 import React, { useId } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
-import { getThemeColors } from '../../utils/get-theme.js'
-import { getConfig } from '../Config/ServerConfigContext.js'
-import { Tokens } from '../CodeBlock/Tokens.js'
-import { CopyCommand } from './CopyCommand.js'
-import { CommandClient } from './CommandClient.js'
+import { getThemeColors } from '../../utils/get-theme.ts'
+import { getConfig } from '../Config/ServerConfigContext.tsx'
+import { Tokens } from '../CodeBlock/Tokens.ts'
+import { CopyCommand } from './CopyCommand.ts'
+import { CommandClient } from './CommandClient.ts'
 
 const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun'] as const
 type PackageManager = (typeof PACKAGE_MANAGERS)[number]

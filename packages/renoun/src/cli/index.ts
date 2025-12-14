@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 
-import { createServer } from '../project/server.js'
-import { getDebugLogger } from '../utils/debug.js'
-import { runAppCommand } from './app.js'
-import { resolveFrameworkBinFile, type Framework } from './framework.js'
-import { runEjectCommand } from './eject.js'
-import { reorderEntries } from './reorder.js'
-import { runThemeCommand } from './theme.js'
-import { runValidateCommand } from './validate.js'
+import { createServer } from '../project/server.ts'
+import { getDebugLogger } from '../utils/debug.ts'
+import { runAppCommand } from './app.ts'
+import { resolveFrameworkBinFile, type Framework } from './framework.ts'
+import { runEjectCommand } from './eject.ts'
+import { reorderEntries } from './reorder.ts'
+import { runThemeCommand } from './theme.ts'
+import { runValidateCommand } from './validate.ts'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 

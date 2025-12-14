@@ -89,7 +89,7 @@ type Tests = [
   Expect<Is<ExtractFileExtension<'index.ts'>, 'ts'>>,
   Expect<Is<ExtractFileExtension<'**/*.ts'>, 'ts'>>,
   Expect<Is<ExtractFileExtension<'*.tsx'>, 'tsx'>>,
-  Expect<Is<ExtractFileExtension<'src/**/*.js'>, 'js'>>,
+  Expect<Is<ExtractFileExtension<'src/**/*.ts'>, 'ts'>>,
   Expect<Is<ExtractFileExtension<'src/**/index.ts'>, 'ts'>>,
   Expect<Is<ExtractFileExtension<'src/index.ts'>, 'ts'>>,
   Expect<Is<ExtractFileExtension<'src/index'>, string>>,

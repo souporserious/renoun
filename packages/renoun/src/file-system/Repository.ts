@@ -3,7 +3,7 @@ import {
   compareSemVer,
   satisfiesRange,
   type SemVer,
-} from './semver.js'
+} from './semver.ts'
 
 export type GitHostType = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 

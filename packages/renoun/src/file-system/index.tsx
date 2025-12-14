@@ -18,29 +18,29 @@ import {
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
-import { CodeBlock } from '../components/CodeBlock/index.js'
-import { Markdown, type MarkdownComponents } from '../components/Markdown.js'
-import { getFileExportMetadata } from '../project/client.js'
-import { formatNameAsTitle } from '../utils/format-name-as-title.js'
-import { getClosestFile } from '../utils/get-closest-file.js'
+import { CodeBlock } from '../components/CodeBlock/index.ts'
+import { Markdown, type MarkdownComponents } from '../components/Markdown.tsx'
+import { getFileExportMetadata } from '../project/client.ts'
+import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
+import { getClosestFile } from '../utils/get-closest-file.ts'
 import {
   getEditorUri,
   type GetEditorUriOptions,
-} from '../utils/get-editor-uri.js'
-import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.js'
+} from '../utils/get-editor-uri.ts'
+import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.ts'
 import type {
   GitMetadata,
   GitAuthor,
-} from '../utils/get-local-git-file-metadata.js'
+} from '../utils/get-local-git-file-metadata.ts'
 import {
   getLocalGitExportMetadata,
   type GitExportMetadata,
-} from '../utils/get-local-git-export-metadata.js'
+} from '../utils/get-local-git-export-metadata.ts'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
   type HasJavaScriptLikeExtensions,
-} from '../utils/is-javascript-like-extension.js'
+} from '../utils/is-javascript-like-extension.ts'
 import {
   baseName,
   directoryName,
@@ -55,17 +55,17 @@ import {
   relativePath,
   trimTrailingSlashes,
   type PathLike,
-} from '../utils/path.js'
-import { getRootDirectory } from '../utils/get-root-directory.js'
-import type { TypeFilter } from '../utils/resolve-type.js'
+} from '../utils/path.ts'
+import { getRootDirectory } from '../utils/get-root-directory.ts'
+import type { TypeFilter } from '../utils/resolve-type.ts'
 import type {
   FileReadableStream,
   FileSystem,
   FileSystemWriteFileContent,
   FileWritableStream,
-} from './FileSystem.js'
-import { NodeFileSystem } from './NodeFileSystem.js'
-import { GitHostFileSystem } from './GitHostFileSystem.js'
+} from './FileSystem.ts'
+import { NodeFileSystem } from './NodeFileSystem.ts'
+import { GitHostFileSystem } from './GitHostFileSystem.ts'
 import {
   Repository,
   parseGitSpecifier,
@@ -75,7 +75,7 @@ import {
   type GetReleaseOptions,
   type GetReleaseUrlOptions,
   type Release,
-} from './Repository.js'
+} from './Repository.ts'
 import {
   DirectorySnapshot,
   createDirectorySnapshot,
@@ -85,9 +85,9 @@ import {
   createRangeLimitedStream,
   StreamableBlob,
   type StreamableContent,
-} from './StreamableBlob.js'
-import type { StandardSchemaV1 } from './standard-schema.js'
-import type { ExtractFileExtension, IsNever } from './types.js'
+} from './StreamableBlob.ts'
+import type { StandardSchemaV1 } from './standard-schema.ts'
+import type { ExtractFileExtension, IsNever } from './types.ts'
 
 const mimeTypesByExtension: Record<string, string> = {
   aac: 'audio/aac',
@@ -124,16 +124,16 @@ const mimeTypesByExtension: Record<string, string> = {
   xml: 'application/xml',
 }
 
-export { FileSystem } from './FileSystem.js'
-export { GitHostFileSystem } from './GitHostFileSystem.js'
-export { MemoryFileSystem } from './MemoryFileSystem.js'
+export { FileSystem } from './FileSystem.ts'
+export { GitHostFileSystem } from './GitHostFileSystem.ts'
+export { MemoryFileSystem } from './MemoryFileSystem.ts'
 export {
   StreamableBlob,
   createRangeLimitedStream,
   type StreamableContent as StreamingContent,
-} from './StreamableBlob.js'
-export { NodeFileSystem } from './NodeFileSystem.js'
-export { Repository } from './Repository.js'
+} from './StreamableBlob.ts'
+export { NodeFileSystem } from './NodeFileSystem.ts'
+export { Repository } from './Repository.ts'
 
 function inferMediaType(extension?: string) {
   const normalizedExtension = extension?.replace(/^\./, '').toLowerCase()

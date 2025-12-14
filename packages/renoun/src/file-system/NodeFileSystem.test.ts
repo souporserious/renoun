@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { ReadableStream } from 'node:stream/web'
 import { afterAll, describe, expect, test } from 'vitest'
 
-import { getRootDirectory } from '../utils/get-root-directory.js'
+import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { NodeFileSystem } from './NodeFileSystem'
 
 async function readStream(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {

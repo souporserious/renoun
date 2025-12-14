@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
-import { runEjectCommand } from './eject.js'
+import { runEjectCommand } from './eject.ts'
 
 const BLOG_EXAMPLE_PATH = fileURLToPath(
   new URL('../../../../examples/blog', import.meta.url)

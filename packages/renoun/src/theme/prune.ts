@@ -1,4 +1,4 @@
-import { grammars as bundledGrammarMap } from '../grammars/index.js'
+import { grammars as bundledGrammarMap } from '../grammars/index.ts'
 
 export interface VSCodeTheme {
   name?: string

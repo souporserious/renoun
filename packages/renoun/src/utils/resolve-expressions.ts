@@ -1,10 +1,10 @@
-import { safeAssign } from './safe-assign.js'
-import { getTsMorph } from './ts-morph.js'
+import { safeAssign } from './safe-assign.ts'
+import { getTsMorph } from './ts-morph.ts'
 import type {
   ArrayLiteralExpression,
   Expression,
   ObjectLiteralExpression,
-} from './ts-morph.js'
+} from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 

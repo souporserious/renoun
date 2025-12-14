@@ -1,21 +1,21 @@
 import { join, posix } from 'node:path'
-import { getTsMorph } from './ts-morph.js'
-import type { Diagnostic, Project, SourceFile, ts } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
+import type { Diagnostic, Project, SourceFile, ts } from './ts-morph.ts'
 
-import type { ConfigurationOptions } from '../components/Config/types.js'
-import type { Languages as TextMateLanguages } from '../grammars/index.js'
-import type { Highlighter } from './create-highlighter.js'
-import { getDebugLogger } from './debug.js'
-import { getDiagnosticMessageText } from './get-diagnostic-message.js'
-import { getLanguage, type Languages } from './get-language.js'
-import { getRootDirectory } from './get-root-directory.js'
-import { isJsxOnly } from './is-jsx-only.js'
-import { generatedFilenames } from './get-source-text-metadata.js'
-import { splitTokenByRanges } from './split-tokens-by-ranges.js'
+import type { ConfigurationOptions } from '../components/Config/types.ts'
+import type { Languages as TextMateLanguages } from '../grammars/index.ts'
+import type { Highlighter } from './create-highlighter.ts'
+import { getDebugLogger } from './debug.ts'
+import { getDiagnosticMessageText } from './get-diagnostic-message.ts'
+import { getLanguage, type Languages } from './get-language.ts'
+import { getRootDirectory } from './get-root-directory.ts'
+import { isJsxOnly } from './is-jsx-only.ts'
+import { generatedFilenames } from './get-source-text-metadata.ts'
+import { splitTokenByRanges } from './split-tokens-by-ranges.ts'
 import {
   validateLanguageFileCompatibility,
   isJavaScriptTypeScriptFile,
-} from './validate-language-file-compatibility.js'
+} from './validate-language-file-compatibility.ts'
 
 const tsMorph = getTsMorph()
 const { Node, SyntaxKind } = tsMorph

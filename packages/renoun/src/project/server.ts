@@ -1,34 +1,34 @@
 import { watch } from 'node:fs'
 import { join } from 'node:path'
-import { getTsMorph } from '../utils/ts-morph.js'
-import type { SyntaxKind as TsMorphSyntaxKind } from '../utils/ts-morph.js'
+import { getTsMorph } from '../utils/ts-morph.ts'
+import type { SyntaxKind as TsMorphSyntaxKind } from '../utils/ts-morph.ts'
 
 import {
   createHighlighter,
   type Highlighter,
-} from '../utils/create-highlighter.js'
-import type { ConfigurationOptions } from '../components/Config/types.js'
-import { getDebugLogger } from '../utils/debug.js'
+} from '../utils/create-highlighter.ts'
+import type { ConfigurationOptions } from '../components/Config/types.ts'
+import { getDebugLogger } from '../utils/debug.ts'
 import {
   getFileExports as baseGetFileExports,
   getFileExportMetadata as baseGetFileExportMetadata,
-} from '../utils/get-file-exports.js'
-import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.js'
-import { getRootDirectory } from '../utils/get-root-directory.js'
+} from '../utils/get-file-exports.ts'
+import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.ts'
+import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
   getTokens as baseGetTokens,
   type GetTokensOptions,
-} from '../utils/get-tokens.js'
+} from '../utils/get-tokens.ts'
 import {
   getSourceTextMetadata as baseGetSourceTextMetadata,
   type GetSourceTextMetadataOptions,
-} from '../utils/get-source-text-metadata.js'
-import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
-import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
-import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.js'
-import { WebSocketServer } from './rpc/server.js'
-import { getProject } from './get-project.js'
-import type { ProjectOptions } from './types.js'
+} from '../utils/get-source-text-metadata.ts'
+import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
+import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.ts'
+import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
+import { WebSocketServer } from './rpc/server.ts'
+import { getProject } from './get-project.ts'
+import type { ProjectOptions } from './types.ts'
 
 const { SyntaxKind } = getTsMorph()
 
@@ -255,7 +255,7 @@ export async function createServer(options?: { port?: number }) {
     }) {
       const project = getProject(projectOptions)
       const { getFileExportStaticValue } = await import(
-        '../utils/get-file-export-static-value.js'
+        '../utils/get-file-export-static-value.ts'
       )
       return getFileExportStaticValue(filePath, position, kind, project)
     }

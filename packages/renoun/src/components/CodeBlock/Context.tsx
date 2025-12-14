@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 
-import { createContext, getContext } from '../../utils/context.js'
-import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
+import { createContext, getContext } from '../../utils/context.tsx'
+import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.ts'
 
 /** @internal */
 export type ContextValue =

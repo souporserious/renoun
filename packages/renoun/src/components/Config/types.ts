@@ -1,5 +1,5 @@
-import type { Languages, Themes } from '../../grammars/index.js'
-import type { Editors } from '../../utils/get-editor-uri.js'
+import type { Languages, Themes } from '../../grammars/index.ts'
+import type { Editors } from '../../utils/get-editor-uri.ts'
 
 /**
  * The theme name.

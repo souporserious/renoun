@@ -3,15 +3,15 @@ import { beforeAll, describe, test, expect, expectTypeOf, vi } from 'vitest'
 import { runInNewContext } from 'node:vm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { getRootDirectory } from '../utils/get-root-directory.js'
-import * as gitExportMetadataModule from '../utils/get-local-git-export-metadata.js'
-import * as rootDirectoryModule from '../utils/get-root-directory.js'
+import { getRootDirectory } from '../utils/get-root-directory.ts'
+import * as gitExportMetadataModule from '../utils/get-local-git-export-metadata.ts'
+import * as rootDirectoryModule from '../utils/get-root-directory.ts'
 import * as v from 'valibot'
 import { z } from 'zod'
 
 import type { basename } from '#fixtures/utils/path.ts'
 import type { MDXContent, Headings } from '../mdx'
-import { removeExtension } from '../utils/path.js'
+import { removeExtension } from '../utils/path.ts'
 import { NodeFileSystem } from './NodeFileSystem'
 import { MemoryFileSystem } from './MemoryFileSystem'
 import * as gitHostFileSystemModule from './GitHostFileSystem'
@@ -3099,10 +3099,10 @@ export function identity<T>(value: T) {
         'node_modules/acme/package.json': JSON.stringify({
           name: 'acme',
           exports: {
-            '.': './dist/index.js',
-            './components': './dist/components/index.js',
-            './components/*': './dist/components/*.js',
-            './hooks/*': './dist/hooks/*.js',
+            '.': './dist/index.ts',
+            './components': './dist/components/index.ts',
+            './components/*': './dist/components/*.ts',
+            './hooks/*': './dist/hooks/*.ts',
             './package.json': './package.json',
           },
         }),
@@ -3133,7 +3133,7 @@ export function identity<T>(value: T) {
         'node_modules/acme/package.json': JSON.stringify({
           name: 'acme',
           exports: {
-            '.': './dist/index.js',
+            '.': './dist/index.ts',
           },
         }),
         'node_modules/acme/src/index.ts': '',
@@ -3322,7 +3322,7 @@ export function identity<T>(value: T) {
               import: './dist/index.mjs',
               require: './dist/index.cjs',
             },
-            './components/*': './dist/components/*.js',
+            './components/*': './dist/components/*.ts',
           },
           imports: {
             '#internal/*': './src/internal/*.ts',
@@ -3356,7 +3356,7 @@ export function identity<T>(value: T) {
       expect(componentsExport?.getAnalysis()?.manifestTarget?.kind).toBe('path')
       expect(
         (componentsExport?.getAnalysis()?.manifestTarget as any)?.absolutePath
-      ).toBe('/node_modules/acme/dist/components/*.js')
+      ).toBe('/node_modules/acme/dist/components/*.ts')
 
       expect(imports).toHaveLength(2)
       expect(internalImport?.getAnalysis()?.manifestTarget?.kind).toBe('path')

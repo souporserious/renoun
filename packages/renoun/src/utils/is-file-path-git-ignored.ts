@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import ignore from 'fast-ignore'
 
-import { getRootDirectory } from './get-root-directory.js'
+import { getRootDirectory } from './get-root-directory.ts'
 
 let ignoreManager: ReturnType<typeof ignore>
 

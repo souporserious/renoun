@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 
-import type { ConfigurationOptions } from './types.js'
+import type { ConfigurationOptions } from './types.ts'
 
 /**
  * A context that provides the current configured client configuration.

@@ -1,12 +1,12 @@
-import { getTsMorph } from './ts-morph.js'
-import type { Node, Project, SyntaxKind } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
+import type { Node, Project, SyntaxKind } from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 
-import { getDebugLogger } from './debug.js'
-import { getDeclarationLocation } from './get-declaration-location.js'
-import { getExportPosition } from './get-export-position.js'
-import { getJsDocMetadata } from './get-js-doc-metadata.js'
+import { getDebugLogger } from './debug.ts'
+import { getDeclarationLocation } from './get-declaration-location.ts'
+import { getExportPosition } from './get-export-position.ts'
+import { getJsDocMetadata } from './get-js-doc-metadata.ts'
 
 export interface ModuleExport {
   name: string

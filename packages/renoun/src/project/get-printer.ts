@@ -1,5 +1,5 @@
-import { getTsMorph } from '../utils/ts-morph.js'
-import type { Project, ts } from '../utils/ts-morph.js'
+import { getTsMorph } from '../utils/ts-morph.ts'
+import type { Project, ts } from '../utils/ts-morph.ts'
 
 const tsMorph = getTsMorph()
 

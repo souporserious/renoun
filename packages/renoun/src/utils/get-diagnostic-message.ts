@@ -1,4 +1,4 @@
-import type { DiagnosticMessageChain } from './ts-morph.js'
+import type { DiagnosticMessageChain } from './ts-morph.ts'
 
 /** Parses a diagnostic message into a string. */
 export function getDiagnosticMessageText(

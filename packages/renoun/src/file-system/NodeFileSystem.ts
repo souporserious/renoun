@@ -19,17 +19,17 @@ import {
 } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
-import { ensureRelativePath, relativePath } from '../utils/path.js'
-import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.js'
-import { getRootDirectory } from '../utils/get-root-directory.js'
+import { ensureRelativePath, relativePath } from '../utils/path.ts'
+import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
+import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
   FileSystem,
   type FileSystemOptions,
   type FileSystemWriteFileContent,
   type FileWritableStream,
   type FileReadableStream,
-} from './FileSystem.js'
-import type { DirectoryEntry } from './types.js'
+} from './FileSystem.ts'
+import type { DirectoryEntry } from './types.ts'
 
 export class NodeFileSystem extends FileSystem {
   #tsConfigPath: string

@@ -12,9 +12,9 @@ import {
 import { createRequire } from 'node:module'
 import { basename, dirname, join, resolve } from 'node:path'
 
-import { createServer } from '../project/server.js'
-import { getDebugLogger } from '../utils/debug.js'
-import { resolveFrameworkBinFile, type Framework } from './framework.js'
+import { createServer } from '../project/server.ts'
+import { getDebugLogger } from '../utils/debug.ts'
+import { resolveFrameworkBinFile, type Framework } from './framework.ts'
 import { spawn } from 'node:child_process'
 
 interface AppCommandOptions {
@@ -75,11 +75,11 @@ const FRAMEWORK_OUTPUT_DIRECTORIES: Record<Framework, string> = {
 const NEXT_CONFIG_FILES = [
   'next.config.ts',
   'next.config.mts',
-  'next.config.js',
+  'next.config.ts',
   'next.config.mjs',
 ]
 
-const WAKU_CONFIG_FILES = ['waku.config.ts', 'waku.config.js']
+const WAKU_CONFIG_FILES = ['waku.config.ts', 'waku.config.ts']
 
 /**
  * Copies the build output from the runtime directory to the project root.

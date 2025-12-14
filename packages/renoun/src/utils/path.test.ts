@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import { joinPaths, relativePath } from './path.js'
+import { joinPaths, relativePath } from './path.ts'
 
 describe('path utilities windows support', () => {
   test('joinPaths normalizes backslashes', () => {

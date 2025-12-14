@@ -1,5 +1,5 @@
 import { Minimatch } from 'minimatch'
-import type { SyntaxKind, ts } from '../utils/ts-morph.js'
+import type { SyntaxKind, ts } from '../utils/ts-morph.ts'
 
 import {
   getFileExports,
@@ -7,8 +7,8 @@ import {
   getFileExportText,
   getFileExportStaticValue,
   resolveTypeAtLocation,
-} from '../project/client.js'
-import type { ProjectOptions } from '../project/types.js'
+} from '../project/client.ts'
+import type { ProjectOptions } from '../project/types.ts'
 import {
   directoryName,
   joinPaths,
@@ -17,10 +17,10 @@ import {
   removeAllExtensions,
   removeOrderPrefixes,
   type PathLike,
-} from '../utils/path.js'
-import { parseJsonWithComments } from '../utils/parse-json-with-comments.js'
-import type { TypeFilter } from '../utils/resolve-type.js'
-import type { DirectoryEntry } from './types.js'
+} from '../utils/path.ts'
+import { parseJsonWithComments } from '../utils/parse-json-with-comments.ts'
+import type { TypeFilter } from '../utils/resolve-type.ts'
+import type { DirectoryEntry } from './types.ts'
 
 export type FileSystemWriteFileContent =
   | string

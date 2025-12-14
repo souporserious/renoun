@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 
-import { getSharedDirectoryPath } from './get-shared-directory-path.js'
+import { getSharedDirectoryPath } from './get-shared-directory-path.ts'
 
 describe('getSharedDirectoryPath', () => {
   test('finds the first shared directory for a set of files', () => {

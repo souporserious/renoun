@@ -1,5 +1,5 @@
-import { getTsMorph } from './ts-morph.js'
-import type { Node } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
+import type { Node } from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 

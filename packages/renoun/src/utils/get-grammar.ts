@@ -1,11 +1,11 @@
-import type { ConfigurationOptions } from '../components/Config/types.js'
-import type { Languages, ScopeName } from '../grammars/index.js'
+import type { ConfigurationOptions } from '../components/Config/types.ts'
+import type { Languages, ScopeName } from '../grammars/index.ts'
 import {
   grammars,
   grammarLoaders,
   grammarRedirects,
-} from '../grammars/index.js'
-import { loadTmGrammars, loadTmGrammar } from './load-package.js'
+} from '../grammars/index.ts'
+import { loadTmGrammars, loadTmGrammar } from './load-package.ts'
 
 /**
  * Attempts to load a grammar for a given scope name.

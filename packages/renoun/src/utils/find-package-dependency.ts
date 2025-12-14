@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
 import { cwd } from 'node:process'
 
-import { getRootDirectory } from './get-root-directory.js'
+import { getRootDirectory } from './get-root-directory.ts'
 
 const dependencyCache = new Map<string, boolean>()
 

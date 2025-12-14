@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 
-import { getRootDirectory } from './get-root-directory.js'
+import { getRootDirectory } from './get-root-directory.ts'
 
 export type PathLike = string | URL
 

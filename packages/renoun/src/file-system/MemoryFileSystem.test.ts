@@ -186,12 +186,12 @@ describe('MemoryFileSystem', () => {
   test('isFilePathGitIgnored respects .gitignore patterns', () => {
     const fileSystem = new MemoryFileSystem({
       '.gitignore': 'dist/\n# comment\n*.log\n',
-      'dist/app.js': 'console.log(1)',
+      'dist/app.ts': 'console.log(1)',
       'debug.log': new Uint8Array([1, 2, 3]),
     })
 
-    expect(fileSystem.isFilePathGitIgnored('dist/app.js')).toBe(true)
-    expect(fileSystem.isFilePathGitIgnored('src/app.js')).toBe(false)
+    expect(fileSystem.isFilePathGitIgnored('dist/app.ts')).toBe(true)
+    expect(fileSystem.isFilePathGitIgnored('src/app.ts')).toBe(false)
     expect(fileSystem.isFilePathGitIgnored('debug.log')).toBe(true)
   })
 

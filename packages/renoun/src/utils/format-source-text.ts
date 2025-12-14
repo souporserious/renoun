@@ -1,5 +1,5 @@
-import { extensionName } from './path.js'
-import { loadPrettier } from './load-package.js'
+import { extensionName } from './path.ts'
+import { loadPrettier } from './load-package.ts'
 
 const extensionToParser = {
   js: 'babel',

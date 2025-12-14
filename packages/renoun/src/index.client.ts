@@ -1,3 +1,3 @@
-export { TableOfContents } from './components/TableOfContents/TableOfContents.js'
-export * from './mdx/index.js'
-export * from './hooks/index.js'
+export { TableOfContents } from './components/TableOfContents/TableOfContents.tsx'
+export * from './mdx/index.ts'
+export * from './hooks/index.ts'

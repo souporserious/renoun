@@ -1,27 +1,27 @@
 import React, { Suspense } from 'react'
 import { type CSSObject, styled } from 'restyle'
 
-import { BaseDirectoryContext } from '../Context.js'
-import { computeDirectionalStyles } from '../../utils/compute-directional-styles.js'
-import { getContext } from '../../utils/context.js'
-import { getThemeColors } from '../../utils/get-theme.js'
-import type { Languages } from '../../utils/get-language.js'
-import { getConfig } from '../Config/ServerConfigContext.js'
-import { CopyButton } from '../CopyButton/index.js'
-import type { ContextValue } from './Context.js'
-import { Context } from './Context.js'
-import { LineNumbers } from './LineNumbers.js'
-import { Pre } from './Pre.js'
-import { Tokens } from './Tokens.js'
-import type { AnnotationRenderers } from './Tokens.js'
-import { Toolbar } from './Toolbar.js'
+import { BaseDirectoryContext } from '../Context.tsx'
+import { computeDirectionalStyles } from '../../utils/compute-directional-styles.ts'
+import { getContext } from '../../utils/context.tsx'
+import { getThemeColors } from '../../utils/get-theme.ts'
+import type { Languages } from '../../utils/get-language.ts'
+import { getConfig } from '../Config/ServerConfigContext.tsx'
+import { CopyButton } from '../CopyButton/index.ts'
+import type { ContextValue } from './Context.tsx'
+import { Context } from './Context.tsx'
+import { LineNumbers } from './LineNumbers.tsx'
+import { Pre } from './Pre.tsx'
+import { Tokens } from './Tokens.tsx'
+import type { AnnotationRenderers } from './Tokens.tsx'
+import { Toolbar } from './Toolbar.tsx'
 import {
   generateFocusedLinesGradient,
   generateHighlightedLinesGradient,
   getScrollContainerStyles,
-} from './utils.js'
-import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.js'
-import { pathLikeToString, type PathLike } from '../../utils/path.js'
+} from './utils.ts'
+import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.ts'
+import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 
 export interface CodeBlockBaseProps {
   /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */

@@ -1,7 +1,7 @@
 import React from 'react'
 import { type CSSObject } from 'restyle'
 
-import { getConfig } from './Config/ServerConfigContext.js'
+import { getConfig } from './Config/ServerConfigContext.tsx'
 
 function getGitHostFromUrl(gitSource: string) {
   const url = new URL(gitSource)

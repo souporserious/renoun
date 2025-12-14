@@ -1,25 +1,25 @@
-import type { SyntaxKind } from '../utils/ts-morph.js'
+import type { SyntaxKind } from '../utils/ts-morph.ts'
 
-import type { ConfigurationOptions } from '../components/Config/types.js'
+import type { ConfigurationOptions } from '../components/Config/types.ts'
 import {
   createHighlighter,
   type Highlighter,
-} from '../utils/create-highlighter.js'
+} from '../utils/create-highlighter.ts'
 import type {
   ModuleExport,
   getFileExportMetadata as baseGetFileExportMetadata,
-} from '../utils/get-file-exports.js'
-import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.js'
+} from '../utils/get-file-exports.ts'
+import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.ts'
 import type {
   GetSourceTextMetadataOptions,
   SourceTextMetadata,
-} from '../utils/get-source-text-metadata.js'
-import type { Kind, TypeFilter } from '../utils/resolve-type.js'
-import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.js'
-import type { DistributiveOmit } from '../types.js'
-import { WebSocketClient } from './rpc/client.js'
-import { getProject } from './get-project.js'
-import type { ProjectOptions } from './types.js'
+} from '../utils/get-source-text-metadata.ts'
+import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
+import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.ts'
+import type { DistributiveOmit } from '../types.ts'
+import { WebSocketClient } from './rpc/client.ts'
+import { getProject } from './get-project.ts'
+import type { ProjectOptions } from './types.ts'
 
 let client: WebSocketClient | undefined
 
@@ -54,7 +54,7 @@ export async function getSourceTextMetadata(
   const { projectOptions, ...getSourceTextMetadataOptions } = options
   const project = getProject(projectOptions)
 
-  return import('../utils/get-source-text-metadata.js').then(
+  return import('../utils/get-source-text-metadata.ts').then(
     ({ getSourceTextMetadata }) => {
       return getSourceTextMetadata({
         ...getSourceTextMetadataOptions,
@@ -112,7 +112,7 @@ export async function getTokens(
     languages,
   })
 
-  return import('../utils/get-tokens.js').then(({ getTokens }) => {
+  return import('../utils/get-tokens.ts').then(({ getTokens }) => {
     if (currentHighlighter.current === null) {
       throw new Error('[renoun] Highlighter is not initialized in "getTokens"')
     }
@@ -156,7 +156,7 @@ export async function resolveTypeAtLocation(
     })
   }
 
-  return import('../utils/resolve-type-at-location.js').then(
+  return import('../utils/resolve-type-at-location.ts').then(
     async ({ resolveTypeAtLocation }) => {
       const project = getProject(projectOptions)
 
@@ -211,7 +211,7 @@ export async function getFileExports(
     return fileExports
   }
 
-  return import('../utils/get-file-exports.js').then(({ getFileExports }) => {
+  return import('../utils/get-file-exports.ts').then(({ getFileExports }) => {
     const project = getProject(projectOptions)
     const fileExports = getFileExports(filePath, project)
 
@@ -254,7 +254,7 @@ export async function getFileExportMetadata(
     })
   }
 
-  return import('../utils/get-file-exports.js').then(
+  return import('../utils/get-file-exports.ts').then(
     ({ getFileExportMetadata }) => {
       const project = getProject(projectOptions)
       return getFileExportMetadata(name, filePath, position, kind, project)
@@ -290,7 +290,7 @@ export async function getFileExportStaticValue(
     })
   }
 
-  return import('../utils/get-file-export-static-value.js').then(
+  return import('../utils/get-file-export-static-value.ts').then(
     ({ getFileExportStaticValue }) => {
       const project = getProject(projectOptions)
       return getFileExportStaticValue(filePath, position, kind, project)
@@ -329,7 +329,7 @@ export async function getFileExportText(
     })
   }
 
-  return import('../utils/get-file-export-text.js').then(
+  return import('../utils/get-file-export-text.ts').then(
     ({ getFileExportText }) => {
       const project = getProject(projectOptions)
       return getFileExportText({
@@ -396,7 +396,7 @@ export async function transpileSourceFile(
 
   const project = getProject(projectOptions)
 
-  return import('../utils/transpile-source-file.js').then(
+  return import('../utils/transpile-source-file.ts').then(
     ({ transpileSourceFile }) => {
       return transpileSourceFile(filePath, project)
     }

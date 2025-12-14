@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { Script } from '../Script.js'
+import { Script } from '../Script.ts'
 
 /**
  * The package manager.
@@ -31,7 +31,7 @@ export function CommandScript({
 }: CommandScriptProps) {
   return (
     <Script defaultPackageManager={defaultPackageManager} nonce={nonce}>
-      {import('./script.js')}
+      {import('./script.ts')}
     </Script>
   )
 }

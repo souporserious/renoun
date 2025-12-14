@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import { findPackageDependency } from './find-package-dependency.js'
+import { findPackageDependency } from './find-package-dependency.ts'
 
 /** Attempts to load a package if it is installed. */
 async function loadPackage<Value>(name: string, getImport: () => any) {

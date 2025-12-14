@@ -1,10 +1,10 @@
-import { getTsMorph } from './ts-morph.js'
-import type { Project, SyntaxKind } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
+import type { Project, SyntaxKind } from './ts-morph.ts'
 
-import { createProjectFileCache } from '../project/cache.js'
-import { getFileExportDeclaration } from './get-file-exports.js'
-import { getFileExportsText } from './get-file-exports-text.js'
-import { getRootDirectory } from './get-root-directory.js'
+import { createProjectFileCache } from '../project/cache.ts'
+import { getFileExportDeclaration } from './get-file-exports.ts'
+import { getFileExportsText } from './get-file-exports-text.ts'
+import { getRootDirectory } from './get-root-directory.ts'
 
 const tsMorph = getTsMorph()
 

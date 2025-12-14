@@ -2,8 +2,8 @@ import { join, sep } from 'node:path'
 
 import { describe, expect, test } from 'vitest'
 
-import { getRootDirectory } from './get-root-directory.js'
-import { normalizeBaseDirectory } from './normalize-base-directory.js'
+import { getRootDirectory } from './get-root-directory.ts'
+import { normalizeBaseDirectory } from './normalize-base-directory.ts'
 
 function normalizePath(path: string | undefined) {
   return path?.split(sep).join('/')

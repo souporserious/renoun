@@ -1,9 +1,9 @@
 import { readFileSync, watch } from 'node:fs'
 import { resolve } from 'node:path'
 
-import type { ConfigurationOptions } from '../components/Config/types.js'
-import type { TextMateThemeRaw } from './create-tokenizer.js'
-import { loadTmTheme } from './load-package.js'
+import type { ConfigurationOptions } from '../components/Config/types.ts'
+import type { TextMateThemeRaw } from './create-tokenizer.ts'
+import { loadTmTheme } from './load-package.ts'
 
 export const BASE_TOKEN_CLASS_NAME = '×'
 
@@ -112,14 +112,14 @@ export async function getTheme(
     return cachedTheme
   }
 
-  const { themes } = await import('../grammars/index.js')
+  const { themes } = await import('../grammars/index.ts')
   const themeOverrides = Array.isArray(themeConfigName)
     ? themeConfigName[1]
     : undefined
   let theme: Theme
 
   if (themePath === undefined) {
-    theme = (await import('../theme.js')).default as Theme
+    theme = (await import('../theme.ts')).default as Theme
   } else if (themePath.endsWith('.json')) {
     theme = JSON.parse(readFileSync(themePath, 'utf-8')) as Theme
   } else if (themes.includes(themePath as any)) {

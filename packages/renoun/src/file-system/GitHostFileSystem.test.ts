@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { gzipSync } from 'node:zlib'
 
-import { GitHostFileSystem } from './GitHostFileSystem.js'
-import { Directory } from './index.js'
+import { GitHostFileSystem } from './GitHostFileSystem.ts'
+import { Directory } from './index.tsx'
 
 const SUCCESS_ARCHIVE = makeTar([
   { path: 'root/file.txt', content: 'hello' },

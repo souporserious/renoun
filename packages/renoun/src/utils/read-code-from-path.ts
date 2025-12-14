@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import { normalizeBaseDirectory } from './normalize-base-directory.js'
-import { pathLikeToString, type PathLike } from './path.js'
+import { normalizeBaseDirectory } from './normalize-base-directory.ts'
+import { pathLikeToString, type PathLike } from './path.ts'
 
 /** Reads the code from a file path. */
 export async function readCodeFromPath(

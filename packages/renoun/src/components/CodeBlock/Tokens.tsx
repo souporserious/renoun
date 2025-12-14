@@ -2,20 +2,20 @@ import React, { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import { getSourceTextMetadata, getTokens } from '../../project/client.js'
-import type { Languages } from '../../utils/get-language.js'
-import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.js'
+import { getSourceTextMetadata, getTokens } from '../../project/client.ts'
+import type { Languages } from '../../utils/get-language.ts'
+import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.ts'
 import type {
   Token,
   TokenDiagnostic,
   TokenizedLines,
-} from '../../utils/get-tokens.js'
-import { getContext } from '../../utils/context.js'
+} from '../../utils/get-tokens.ts'
+import { getContext } from '../../utils/context.tsx'
 import {
   BASE_TOKEN_CLASS_NAME,
   getThemeColors,
   hasMultipleThemes,
-} from '../../utils/get-theme.js'
+} from '../../utils/get-theme.ts'
 import {
   hasAnnotationCandidates,
   parseAnnotations,
@@ -24,14 +24,14 @@ import {
   type AnnotationInstructions,
   type BlockAnnotationInstruction,
   type InlineAnnotationInstruction,
-} from '../../utils/annotations.js'
-import { getConfig } from '../Config/ServerConfigContext.js'
-import type { ConfigurationOptions } from '../Config/types.js'
-import { readCodeFromPath } from '../../utils/read-code-from-path.js'
-import { QuickInfo, QuickInfoLoading } from './QuickInfo.js'
-import { QuickInfoProvider } from './QuickInfoProvider.js'
-import { Context } from './Context.js'
-import { Symbol } from './Symbol.js'
+} from '../../utils/annotations.ts'
+import { getConfig } from '../Config/ServerConfigContext.tsx'
+import type { ConfigurationOptions } from '../Config/types.ts'
+import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
+import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
+import { QuickInfoProvider } from './QuickInfoProvider.tsx'
+import { Context } from './Context.tsx'
+import { Symbol } from './Symbol.tsx'
 
 type ThemeColors = Awaited<ReturnType<typeof getThemeColors>>
 

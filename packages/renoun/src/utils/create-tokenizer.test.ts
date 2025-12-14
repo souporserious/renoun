@@ -5,9 +5,9 @@ import {
   type RegistryOptions,
   type TextMateThemeRaw,
   type TextMateGrammarRaw,
-} from './create-tokenizer.js'
+} from './create-tokenizer.ts'
 
-import cssGrammar from '../grammars/css.js'
+import cssGrammar from '../grammars/css.ts'
 
 type ThemeName = 'light' | 'dark'
 

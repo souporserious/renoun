@@ -1,14 +1,17 @@
 import { describe, test, expect, vi } from 'vitest'
-import { getTsMorph } from './ts-morph.js'
-import type { ClassDeclaration, FunctionDeclaration } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
+import type { ClassDeclaration, FunctionDeclaration } from './ts-morph.ts'
 import dedent from 'dedent'
 
-import { resolveType } from './resolve-type.js'
+import { resolveType } from './resolve-type.ts'
 
 const { Project, SyntaxKind, ts } = getTsMorph()
 
 const project = new Project({
-  compilerOptions: { allowJs: true, checkJs: true },
+  compilerOptions: {
+    allowJs: true,
+    checkJs: true,
+  },
 })
 
 describe('resolveType', () => {

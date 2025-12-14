@@ -1,10 +1,10 @@
 import { describe, test, expect, beforeEach } from 'vitest'
-import { getTsMorph } from './ts-morph.js'
-import type { Directory } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
+import type { Directory } from './ts-morph.ts'
 
 const { Project } = getTsMorph()
 
-import { getSourceFilesOrderMap } from './get-source-files-order-map.js'
+import { getSourceFilesOrderMap } from './get-source-files-order-map.ts'
 
 describe('getSourceFilesOrderMap', () => {
   let project: Project

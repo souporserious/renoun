@@ -5,7 +5,7 @@ import {
 } from '@renoun/mdx'
 import { jsx, jsxs, Fragment } from 'react/jsx-runtime'
 
-import { useMDXComponents } from '../mdx/components.js'
+import { useMDXComponents } from '../mdx/components.tsx'
 
 export type { MarkdownComponents }
 

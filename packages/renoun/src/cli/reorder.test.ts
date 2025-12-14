@@ -22,7 +22,7 @@ vi.mock('node:fs', () => ({
   },
 }))
 
-const { reorderEntries } = await import('./reorder.js')
+const { reorderEntries } = await import('./reorder.ts')
 
 const cwdSpy = vi.spyOn(process, 'cwd')
 

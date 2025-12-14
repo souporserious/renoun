@@ -7,9 +7,9 @@ import {
   type GetReleaseUrlOptions,
   type Release,
   type ReleaseSpecifier,
-} from '../../file-system/Repository.js'
-import { getConfig } from '../Config/ServerConfigContext.js'
-import { Logo } from '../Logo.js'
+} from '../../file-system/Repository.ts'
+import { getConfig } from '../Config/ServerConfigContext.tsx'
+import { Logo } from '../Logo.ts'
 
 const VARIANT_METHODS = {
   edit: 'getEditUrl',

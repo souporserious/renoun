@@ -1,17 +1,17 @@
 import ignore from 'fast-ignore'
-import { getTsMorph } from '../utils/ts-morph.js'
+import { getTsMorph } from '../utils/ts-morph.ts'
 
-import { createSourceFile, transpileSourceFile } from '../project/client.js'
-import type { ProjectOptions } from '../project/types.js'
-import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.js'
-import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.js'
+import { createSourceFile, transpileSourceFile } from '../project/client.ts'
+import type { ProjectOptions } from '../project/types.ts'
+import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
+import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.ts'
 import {
   FileSystem,
   type FileReadableStream,
   type FileSystemWriteFileContent,
   type FileWritableStream,
-} from './FileSystem.js'
-import type { DirectoryEntry } from './types.js'
+} from './FileSystem.ts'
+import type { DirectoryEntry } from './types.ts'
 
 const tsMorph = getTsMorph()
 

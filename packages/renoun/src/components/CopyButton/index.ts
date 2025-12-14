@@ -1,1 +1,1 @@
-export { CopyButton } from './CopyButton.js'
+export { CopyButton } from './CopyButton.tsx'

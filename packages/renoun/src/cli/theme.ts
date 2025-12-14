@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import { ALLOWED_SCOPES, pruneTheme, type VSCodeTheme } from '../theme/prune.js'
+import { ALLOWED_SCOPES, pruneTheme, type VSCodeTheme } from '../theme/prune.ts'
 
 function ensureTrailingNewline(text: string): string {
   return text.endsWith('\n') ? text : `${text}\n`

@@ -1,1 +1,1 @@
-export { Refresh } from './Refresh.js'
+export { Refresh } from './Refresh.ts'

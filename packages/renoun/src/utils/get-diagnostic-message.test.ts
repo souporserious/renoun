@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'vitest'
-import { getTsMorph } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
 import dedent from 'dedent'
 
-import { getDiagnosticMessageText } from './get-diagnostic-message.js'
+import { getDiagnosticMessageText } from './get-diagnostic-message.ts'
 
 const { Project } = getTsMorph()
 

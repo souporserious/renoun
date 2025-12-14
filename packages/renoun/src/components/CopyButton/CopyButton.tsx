@@ -1,7 +1,7 @@
 import React from 'react'
 
-import { getResolvedContext } from '../CodeBlock/Context.js'
-import { CopyButtonClient } from './CopyButtonClient.js'
+import { getResolvedContext } from '../CodeBlock/Context.tsx'
+import { CopyButtonClient } from './CopyButtonClient.tsx'
 
 /**
  * Resolves a value from a `CodeBlock` ancestor or a `value` prop and renders a

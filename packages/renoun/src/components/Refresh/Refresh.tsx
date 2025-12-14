@@ -6,7 +6,7 @@ import React from 'react'
  */
 export async function Refresh() {
   if (process.env.NODE_ENV === 'development') {
-    const { RefreshClient } = await import('./RefreshClient.js')
+    const { RefreshClient } = await import('./RefreshClient.ts')
     const port = process.env.RENOUN_SERVER_PORT
     const id = process.env.RENOUN_SERVER_ID
 

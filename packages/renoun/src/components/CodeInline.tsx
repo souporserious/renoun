@@ -1,13 +1,13 @@
 import React, { Suspense } from 'react'
 import { css, styled, type CSSObject } from 'restyle'
 
-import type { Languages } from '../grammars/index.js'
-import { grammars } from '../grammars/index.js'
-import { getThemeColors } from '../utils/get-theme.js'
-import { getConfig } from './Config/ServerConfigContext.js'
-import { Tokens } from './CodeBlock/Tokens.js'
-import { getScrollContainerStyles } from './CodeBlock/utils.js'
-import { CopyButton } from './CopyButton/index.js'
+import type { Languages } from '../grammars/index.ts'
+import { grammars } from '../grammars/index.ts'
+import { getThemeColors } from '../utils/get-theme.ts'
+import { getConfig } from './Config/ServerConfigContext.tsx'
+import { Tokens } from './CodeBlock/Tokens.tsx'
+import { getScrollContainerStyles } from './CodeBlock/utils.ts'
+import { CopyButton } from './CopyButton/index.ts'
 
 export type CodeInlineProps = {
   /** Code snippet to be highlighted. */

@@ -1,4 +1,4 @@
-import { getTsMorph } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
 import type {
   Project,
   Node,
@@ -42,14 +42,14 @@ import type {
   JSDoc,
   ts,
   IndexedAccessTypeNode,
-} from './ts-morph.js'
+} from './ts-morph.ts'
 import {
   getInitializerValueKey,
   getInitializerValue,
-} from './get-initializer-value.js'
-import { getJsDocMetadata } from './get-js-doc-metadata.js'
-import { getSymbolDescription } from './get-symbol-description.js'
-import { getRootDirectory } from './get-root-directory.js'
+} from './get-initializer-value.ts'
+import { getJsDocMetadata } from './get-js-doc-metadata.ts'
+import { getSymbolDescription } from './get-symbol-description.ts'
+import { getRootDirectory } from './get-root-directory.ts'
 
 const tsMorph = getTsMorph()
 

@@ -1,15 +1,15 @@
 import React, { Suspense } from 'react'
 import { dirname, resolve } from 'node:path'
 
-import { JavaScriptFile, type ModuleExport } from '../../file-system/index.js'
+import { JavaScriptFile, type ModuleExport } from '../../file-system/index.ts'
 import {
   type Kind,
   type TypeFilter,
   type TypeOfKind,
-} from '../../utils/resolve-type.js'
-import { BaseDirectoryContext } from '../Context.js'
-import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.js'
-import { pathLikeToString, type PathLike } from '../../utils/path.js'
+} from '../../utils/resolve-type.ts'
+import { BaseDirectoryContext } from '../Context.tsx'
+import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.ts'
+import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 
 type GapSize = 'small' | 'medium' | 'large'
 
@@ -2194,7 +2194,7 @@ function MembersSection({
   id?: string
 }) {
   const members = node.kind === 'Interface' ? node.members : node.type.members
-  const extensions = node.kind === 'Interface' ? node.extends ?? [] : []
+  const extensions = node.kind === 'Interface' ? (node.extends ?? []) : []
   const memberDetails = renderMembersDetails({
     members,
     components,

@@ -5,8 +5,8 @@ import {
   BASE_TOKEN_CLASS_NAME,
   getThemeColorVariables,
   getThemeTokenVariables,
-} from '../../utils/get-theme.js'
-import type { ConfigurationOptions } from '../Config/types.js'
+} from '../../utils/get-theme.ts'
+import type { ConfigurationOptions } from '../Config/types.ts'
 
 /**
  * Injects the global CSS theme color variables used throughout `renoun/components`.

@@ -3,14 +3,14 @@ import { styled, type CSSObject } from 'restyle'
 import { rehypePlugins } from '@renoun/mdx/rehype'
 import { remarkPlugins } from '@renoun/mdx/remark'
 
-import { getTokens } from '../../project/client.js'
-import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.js'
-import type { Token, TokenDiagnostic } from '../../utils/get-tokens.js'
-import { CodeInline } from '../CodeInline.js'
-import { getConfig } from '../Config/ServerConfigContext.js'
-import { Markdown, type MarkdownProps } from '../Markdown.js'
-import { QuickInfoPopover } from './QuickInfoPopover.js'
-import { CodeBlock } from './CodeBlock.js'
+import { getTokens } from '../../project/client.ts'
+import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.ts'
+import type { Token, TokenDiagnostic } from '../../utils/get-tokens.ts'
+import { CodeInline } from '../CodeInline.tsx'
+import { getConfig } from '../Config/ServerConfigContext.tsx'
+import { Markdown, type MarkdownProps } from '../Markdown.tsx'
+import { QuickInfoPopover } from './QuickInfoPopover.tsx'
+import { CodeBlock } from './CodeBlock.tsx'
 
 const Paragraph = styled('p', {
   fontFamily: 'sans-serif',

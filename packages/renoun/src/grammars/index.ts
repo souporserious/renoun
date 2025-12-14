@@ -1,17 +1,16 @@
 // prettier-ignore
 export const grammarLoaders: Record<string, () => Promise<{ default: any }>> = {
-  'source.css': () => import('./css.js'),
-  'text.html.basic': () => import('./html.js'),
-  'source.json': () => import('./json.js'),
-  'source.mdx': () => import('./mdx.js'),
-  'source.shell': () => import('./shellscript.js'),
-  'source.tsx': () => import('./tsx.js')
+  'source.css': () => import('./css.ts'),
+  'text.html.basic': () => import('./html.ts'),
+  'source.json': () => import('./json.ts'),
+  'source.mdx': () => import('./mdx.ts'),
+  'source.shell': () => import('./shellscript.ts'),
+  'source.tsx': () => import('./tsx.ts')
 }
 
 // prettier-ignore
 export const grammarRedirects = {
   'source.ts': 'source.tsx',
-  'source.js': 'source.tsx',
   'source.js.jsx': 'source.tsx',
   'text.html.markdown': 'source.mdx'
 }
@@ -110,7 +109,7 @@ export const grammars = {
   'source.imba': ['imba'],
   'source.ini': ['ini', 'properties'],
   'source.java': ['java'],
-  'source.js': ['javascript', 'js'],
+  'source.ts': ['javascript', 'js', 'typescript', 'ts'],
   'source.jinja': ['jinja'],
   'source.jison': ['jison'],
   'source.json': ['json'],
@@ -215,7 +214,6 @@ export const grammars = {
   'source.tsx': ['tsx'],
   'source.turtle': ['turtle'],
   'text.html.twig': ['twig'],
-  'source.ts': ['typescript', 'ts'],
   'source.tsp': ['typespec', 'tsp'],
   'source.typst': ['typst', 'typ'],
   'source.v': ['v'],

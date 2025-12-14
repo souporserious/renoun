@@ -2,7 +2,7 @@ import {
   pathLikeToString,
   resolveSchemePath,
   type PathLike,
-} from './path.js'
+} from './path.ts'
 
 export function normalizeBaseDirectory(
   baseDirectory?: PathLike

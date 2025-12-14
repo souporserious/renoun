@@ -1,6 +1,6 @@
-import type { Project } from '../utils/ts-morph.js'
+import type { Project } from '../utils/ts-morph.ts'
 
-import { waitForRefreshingProjects } from './refresh.js'
+import { waitForRefreshingProjects } from './refresh.ts'
 
 const projectFileCaches = new WeakMap<
   Project,

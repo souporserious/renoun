@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest'
-import { getTsMorph } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
 
-import { getJsDocMetadata } from './get-js-doc-metadata.js'
+import { getJsDocMetadata } from './get-js-doc-metadata.ts'
 
 const { Project } = getTsMorph()
 

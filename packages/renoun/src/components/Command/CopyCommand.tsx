@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 
-import { CopyButtonClient } from '../CopyButton/CopyButtonClient.js'
+import { CopyButtonClient } from '../CopyButton/CopyButtonClient.ts'
 
 type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun'
 

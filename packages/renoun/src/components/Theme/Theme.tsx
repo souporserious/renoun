@@ -1,8 +1,8 @@
 import React from 'react'
 
-import type { ConfigurationOptions } from '../Config/types.js'
-import { ThemeContextProvider } from './ThemeContext.js'
-import { ThemeStyles } from './ThemeStyles.js'
+import type { ConfigurationOptions } from '../Config/types.ts'
+import { ThemeContextProvider } from './ThemeContext.tsx'
+import { ThemeStyles } from './ThemeStyles.ts'
 
 /**
  * A provider that sets the theme colors for the entire application.

@@ -1,8 +1,8 @@
 'use client'
 import React from 'react'
 
-import { keepElementInView } from './utils.js'
-import { useQuickInfoContext } from './QuickInfoProvider.js'
+import { keepElementInView } from './utils.ts'
+import { useQuickInfoContext } from './QuickInfoProvider.tsx'
 
 /**
  * A popover that displays quick info.

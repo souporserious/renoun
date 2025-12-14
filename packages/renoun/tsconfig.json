@@ -11,6 +11,8 @@
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
     "module": "Preserve",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "isolatedModules": true,

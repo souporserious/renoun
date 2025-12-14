@@ -3,7 +3,7 @@ import { cp, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
-import { getDebugLogger } from '../utils/debug.js'
+import { getDebugLogger } from '../utils/debug.ts'
 
 interface EjectOptions {
   /** Optional app name to eject. If not provided, auto-detects from dependencies. */

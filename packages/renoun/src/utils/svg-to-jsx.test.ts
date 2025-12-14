@@ -1,7 +1,7 @@
 import React, { type ReactElement } from 'react'
 import { describe, expect, it } from 'vitest'
 
-import { svgToJsx } from './svg-to-jsx.js'
+import { svgToJsx } from './svg-to-jsx.ts'
 
 describe('svgToJsx', () => {
   it('renames common attributes and camel-cases', () => {

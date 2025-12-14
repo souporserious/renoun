@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { getRootDirectory } from './get-root-directory.js'
+import { getRootDirectory } from './get-root-directory.ts'
 
 export interface GitExportMetadata {
   firstCommitDate?: Date

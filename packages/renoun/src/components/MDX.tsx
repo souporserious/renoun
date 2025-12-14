@@ -2,7 +2,7 @@ import * as React from 'react'
 import type { MDXComponents, PluggableList } from '@renoun/mdx'
 import { getMDXContent } from '@renoun/mdx/utils'
 
-import { useMDXComponents } from '../mdx/components.js'
+import { useMDXComponents } from '../mdx/components.tsx'
 
 export interface MDXProps {
   /** The MDX content to render. */

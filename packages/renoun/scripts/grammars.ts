@@ -19,15 +19,29 @@ const grammarLoaders = grammars
   })
   .join(',\n')
 const grammarAliases = grammars
-  .map((grammar) => {
+  .reduce((acc, grammar) => {
     const mergedAliases = new Set<string>([
       grammar.name,
       ...(grammar.aliases || []),
     ])
-    const aliasesString = Array.from(mergedAliases)
+
+    if (acc[grammar.scopeName]) {
+      // Merge aliases if scopeName already exists
+      acc[grammar.scopeName] = new Set([...acc[grammar.scopeName], ...mergedAliases])
+    } else {
+      acc[grammar.scopeName] = mergedAliases
+    }
+
+    return acc
+  }, {} as Record<string, Set<string>>)
+
+// Convert to the final format
+const grammarAliasesString = Object.entries(grammarAliases)
+  .map(([scopeName, aliases]) => {
+    const aliasesString = Array.from(aliases)
       .map((alias) => `'${alias}'`)
       .join(', ')
-    return `  '${grammar.scopeName}': [${aliasesString}]`
+    return `  '${scopeName}': [${aliasesString}]`
   })
   .join(',\n')
 
@@ -82,7 +96,7 @@ ${grammarRedirectEntries}
 
 // prettier-ignore
 export const grammars = {
-${grammarAliases}
+${grammarAliasesString}
 } as const
 
 export type Grammars = typeof grammars

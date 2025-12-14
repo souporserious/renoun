@@ -1,1 +1,1 @@
-export { useThemePicker } from './use-theme-picker.js'
+export { useThemePicker } from './use-theme-picker.ts'

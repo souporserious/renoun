@@ -1,6 +1,6 @@
-import type { ProjectOptions as TsMorphProjectOptions } from '../utils/ts-morph.js'
+import type { ProjectOptions as TsMorphProjectOptions } from '../utils/ts-morph.ts'
 
-import type { Themes } from '../grammars/index.js'
+import type { Themes } from '../grammars/index.ts'
 
 export type ProjectOptions = {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock`, `CodeInline`, and `Tokens` components. */

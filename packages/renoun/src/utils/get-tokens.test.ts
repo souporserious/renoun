@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vitest'
 
-import { collectTypeScriptMetadata, getTokens } from './get-tokens.js'
-import type { Token } from './get-tokens.js'
-import type { Highlighter } from './create-highlighter.js'
-import type { TextMateToken } from './create-tokenizer.js'
-import { getTsMorph } from './ts-morph.js'
+import { collectTypeScriptMetadata, getTokens } from './get-tokens.ts'
+import type { Token } from './get-tokens.ts'
+import type { Highlighter } from './create-highlighter.ts'
+import type { TextMateToken } from './create-tokenizer.ts'
+import { getTsMorph } from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 const { Project, ts } = tsMorph

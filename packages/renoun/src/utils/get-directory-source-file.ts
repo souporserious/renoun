@@ -1,4 +1,4 @@
-import type { Directory, SourceFile } from './ts-morph.js'
+import type { Directory, SourceFile } from './ts-morph.ts'
 
 const indexFileNames = [
   'js',

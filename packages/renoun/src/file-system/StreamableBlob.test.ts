@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { StreamableBlob, type StreamableContent } from './StreamableBlob.js'
-import { Directory, File, MemoryFileSystem } from './index.js'
+import { StreamableBlob, type StreamableContent } from './StreamableBlob.ts'
+import { Directory, File, MemoryFileSystem } from './index.tsx'
 
 function createContent(
   data: string,

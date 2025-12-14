@@ -1,9 +1,9 @@
-import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.js'
-import type { GitMetadata } from '../utils/get-local-git-file-metadata.js'
-import type { GitExportMetadata } from '../utils/get-local-git-export-metadata.js'
-import { Semaphore } from '../utils/Semaphore.js'
-import { MemoryFileSystem, type MemoryFileContent } from './MemoryFileSystem.js'
-import type { DirectoryEntry } from './types.js'
+import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.ts'
+import type { GitMetadata } from '../utils/get-local-git-file-metadata.ts'
+import type { GitExportMetadata } from '../utils/get-local-git-export-metadata.ts'
+import { Semaphore } from '../utils/Semaphore.ts'
+import { MemoryFileSystem, type MemoryFileContent } from './MemoryFileSystem.ts'
+import type { DirectoryEntry } from './types.ts'
 
 type GitHost = 'github' | 'gitlab' | 'bitbucket'
 

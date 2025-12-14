@@ -1,1 +1,1 @@
-export { Link } from './Link.js'
+export { Link } from './Link.ts'

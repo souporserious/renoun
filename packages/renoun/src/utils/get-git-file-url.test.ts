@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { getGitFileUrl } from './get-git-file-url.js'
+import { getGitFileUrl } from './get-git-file-url.ts'
 
 describe('getGitFileUrl', () => {
   describe('github tests', () => {

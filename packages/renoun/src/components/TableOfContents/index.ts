@@ -2,4 +2,4 @@ export {
   TableOfContents,
   type TableOfContentsProps,
   type TableOfContentsComponents,
-} from './TableOfContents.js'
+} from './TableOfContents.ts'

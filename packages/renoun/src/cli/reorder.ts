@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
 
-import { getDebugLogger } from '../utils/debug.js'
+import { getDebugLogger } from '../utils/debug.ts'
 
 interface ReorderableEntry {
   name: string

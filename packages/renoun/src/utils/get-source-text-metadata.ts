@@ -1,10 +1,10 @@
 import { dirname, join, posix, isAbsolute } from 'node:path'
-import type { Project } from './ts-morph.js'
+import type { Project } from './ts-morph.ts'
 
-import { waitForRefreshingProjects } from '../project/refresh.js'
-import { formatSourceText } from './format-source-text.js'
-import { getLanguage, type Languages } from './get-language.js'
-import { isJsxOnly } from './is-jsx-only.js'
+import { waitForRefreshingProjects } from '../project/refresh.ts'
+import { formatSourceText } from './format-source-text.ts'
+import { getLanguage, type Languages } from './get-language.ts'
+import { isJsxOnly } from './is-jsx-only.ts'
 
 export interface SourceTextMetadata {
   value: string

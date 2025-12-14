@@ -2,23 +2,23 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, test, vi } from 'vitest'
 
-import { parseAnnotations } from '../../utils/annotations.js'
+import { parseAnnotations } from '../../utils/annotations.ts'
 
 const mockTokens = vi.fn()
 
-vi.mock('../../project/client.js', () => ({
+vi.mock('../../project/client.ts', () => ({
   getSourceTextMetadata: vi.fn(),
   getTokens: (...args: Parameters<typeof mockTokens>) => mockTokens(...args),
 }))
 
-vi.mock('../Config/ServerConfigContext.js', () => ({
+vi.mock('../Config/ServerConfigContext.tsx', () => ({
   getConfig: async () => ({
     theme: 'default',
     languages: {},
   }),
 }))
 
-vi.mock('../../utils/get-theme.js', () => ({
+vi.mock('../../utils/get-theme.ts', () => ({
   BASE_TOKEN_CLASS_NAME: 'token',
   hasMultipleThemes: () => false,
   getThemeColors: async () => ({
@@ -36,26 +36,26 @@ vi.mock('../../utils/get-theme.js', () => ({
   }),
 }))
 
-vi.mock('../../utils/context.js', () => ({
+vi.mock('../../utils/context.ts', () => ({
   createContext: () => ({}),
   getContext: () => null,
 }))
 
-vi.mock('../Config/ConfigProvider.js', () => ({
+vi.mock('../Config/ConfigProvider.ts', () => ({
   useConfigCache: () => ({ config: {} }),
 }))
 
-vi.mock('./Context.js', () => ({
+vi.mock('./Context.tsx', () => ({
   Context: {},
 }))
 
-vi.mock('./QuickInfoProvider.js', () => ({
+vi.mock('./QuickInfoProvider.ts', () => ({
   QuickInfoProvider: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
 }))
 
-vi.mock('./Symbol.js', () => ({
+vi.mock('./Symbol.ts', () => ({
   Symbol: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
@@ -104,7 +104,7 @@ describe('Tokens', () => {
       ],
     ])
 
-    const { Tokens } = await import('./Tokens.js')
+    const { Tokens } = await import('./Tokens.tsx')
     const element = await Tokens({
       annotations,
       shouldAnalyze: false,

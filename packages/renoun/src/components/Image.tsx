@@ -3,9 +3,9 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { isAbsolute, dirname, join, posix as pathPosix } from 'node:path'
 
-import { svgToJsx } from '../utils/svg-to-jsx.js'
-import { getConfig } from './Config/ServerConfigContext.js'
-import type { SourcesConfig } from './Config/types.js'
+import { svgToJsx } from '../utils/svg-to-jsx.ts'
+import { getConfig } from './Config/ServerConfigContext.tsx'
+import type { SourcesConfig } from './Config/types.ts'
 
 const FIGMA_PROTOCOL = /^figma:/i
 const HTTP_PROTOCOL = /^(https?:)/i
@@ -595,7 +595,10 @@ function buildCacheLabel(
   const normalizedBasePathname = basePathname?.trim()
 
   const aliasSegments = normalizedAlias
-    ? normalizedAlias.split('/').map((segment) => segment.trim()).filter(Boolean)
+    ? normalizedAlias
+        .split('/')
+        .map((segment) => segment.trim())
+        .filter(Boolean)
     : []
 
   const basePathSegments = normalizedBasePathname
@@ -1089,8 +1092,10 @@ function buildFigmaQuery(
 
 type FigmaSource = `figma:${string}`
 
-interface SharedImageProps
-  extends Omit<React.ComponentProps<'img'>, 'alt' | 'src' | 'srcSet'> {
+interface SharedImageProps extends Omit<
+  React.ComponentProps<'img'>,
+  'alt' | 'src' | 'srcSet'
+> {
   /** Optional description for accessibility. */
   description?: string
 }
@@ -1317,11 +1322,7 @@ export async function Image<Source extends string>({
     cacheOptions
   )
   if (cachedImage) {
-    return renderCachedFigmaImage(
-      cachedImage,
-      props,
-      description ?? undefined
-    )
+    return renderCachedFigmaImage(cachedImage, props, description ?? undefined)
   }
 
   // Resolve by selector (e.g. "mark") → node id + metadata
@@ -1363,7 +1364,6 @@ export async function Image<Source extends string>({
     options: figmaOptions,
     version: fileVersion,
   })
-
 
   // 6) Optionally enrich description if still missing
   if (!resolvedDescription && description === undefined) {

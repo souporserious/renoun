@@ -1,14 +1,14 @@
-import { getTsMorph } from './ts-morph.js'
-import type { Expression, Project, SyntaxKind } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
+import type { Expression, Project, SyntaxKind } from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 
-import { getFileExportDeclaration } from './get-file-exports.js'
+import { getFileExportDeclaration } from './get-file-exports.ts'
 import {
   resolveLiteralExpression,
   isLiteralExpressionValue,
   type LiteralExpressionValue,
-} from './resolve-expressions.js'
+} from './resolve-expressions.ts'
 
 /** Attempt to get a statically analyzable literal value for a file export. */
 export async function getFileExportStaticValue(

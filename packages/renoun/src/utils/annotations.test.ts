@@ -4,7 +4,7 @@ import {
   hasAnnotationCandidates,
   parseAnnotations,
   remapAnnotationInstructions,
-} from './annotations.js'
+} from './annotations.ts'
 
 describe('hasAnnotationCandidates', () => {
   test('returns false when source lacks matching comment markers', () => {

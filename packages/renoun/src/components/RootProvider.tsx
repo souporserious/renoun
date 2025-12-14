@@ -2,21 +2,21 @@ import React, { Children, cloneElement, isValidElement } from 'react'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import { parseGitSpecifier } from '../file-system/Repository.js'
-import { hasMultipleThemes } from '../utils/get-theme.js'
-import { CommandScript } from './Command/CommandScript.js'
-import { ClientConfigProvider } from './Config/ClientConfigContext.js'
-import { ServerConfigContext } from './Config/ServerConfigContext.js'
-import { defaultConfig } from './Config/default-config.js'
+import { parseGitSpecifier } from '../file-system/Repository.ts'
+import { hasMultipleThemes } from '../utils/get-theme.ts'
+import { CommandScript } from './Command/CommandScript.tsx'
+import { ClientConfigProvider } from './Config/ClientConfigContext.tsx'
+import { ServerConfigContext } from './Config/ServerConfigContext.tsx'
+import { defaultConfig } from './Config/default-config.ts'
 import {
   normalizeSourcesConfig,
   type SourcesConfigInput,
-} from './Config/normalize-sources-config.js'
-import type { ConfigurationOptions, ThemeValue } from './Config/types.js'
-import { Refresh } from './Refresh/index.js'
-import { TableOfContentsScript } from './TableOfContents/TableOfContents.js'
-import { ThemeProvider } from './Theme/index.js'
-import { ThemeScript } from './Theme/ThemeScript.js'
+} from './Config/normalize-sources-config.ts'
+import type { ConfigurationOptions, ThemeValue } from './Config/types.ts'
+import { Refresh } from './Refresh/index.ts'
+import { TableOfContentsScript } from './TableOfContents/TableOfContents.ts'
+import { ThemeProvider } from './Theme/index.ts'
+import { ThemeScript } from './Theme/ThemeScript.ts'
 
 type HtmlProps = React.ComponentProps<'html'>
 type HeadProps = React.ComponentProps<'head'>

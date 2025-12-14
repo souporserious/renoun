@@ -1,8 +1,8 @@
 import React from 'react'
 
-import { getDebugLogger } from '../../utils/debug.js'
-import { defaultConfig } from './default-config.js'
-import type { ConfigurationOptions } from './types.js'
+import { getDebugLogger } from '../../utils/debug.ts'
+import { defaultConfig } from './default-config.ts'
+import type { ConfigurationOptions } from './types.ts'
 
 interface DeferredValue<ValueType> {
   hasSettled: boolean

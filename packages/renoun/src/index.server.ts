@@ -1,3 +1,3 @@
-export * from './components/index.js'
-export * from './file-system/index.js'
-export * from './mdx/index.js'
+export * from './components/index.ts'
+export * from './file-system/index.tsx'
+export * from './mdx/index.ts'

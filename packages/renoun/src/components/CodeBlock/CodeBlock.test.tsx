@@ -3,8 +3,8 @@ import { describe, it, expect } from 'vitest'
 import { PassThrough } from 'node:stream'
 import { renderToPipeableStream } from 'react-dom/server'
 
-import { MDX } from '../MDX.js'
-import { CodeBlock } from './CodeBlock.js'
+import { MDX } from '../MDX.tsx'
+import { CodeBlock } from './CodeBlock.tsx'
 
 async function renderToStringAsync(element: React.ReactElement) {
   return new Promise<string>((resolve, reject) => {

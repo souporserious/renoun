@@ -1,4 +1,4 @@
-import type { FileSystemRefreshResult } from '../utils/ts-morph.js'
+import type { FileSystemRefreshResult } from '../utils/ts-morph.ts'
 import { EventEmitter } from 'node:events'
 
 const REFRESHING_COMPLETED = 'refreshing:completed'

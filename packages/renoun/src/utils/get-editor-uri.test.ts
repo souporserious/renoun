@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getEditorUri } from './get-editor-uri.js'
+import { getEditorUri } from './get-editor-uri.ts'
 
 describe('getEditorUri', () => {
   it('defaults to vscode-compatible scheme', () => {

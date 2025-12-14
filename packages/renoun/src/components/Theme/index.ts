@@ -1,2 +1,2 @@
-export { ThemeProvider } from './Theme.js'
-export { ThemeStyles } from './ThemeStyles.js'
+export { ThemeProvider } from './Theme.ts'
+export { ThemeStyles } from './ThemeStyles.ts'

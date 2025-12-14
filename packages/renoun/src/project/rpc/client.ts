@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 
-import { getDebugLogger } from '../../utils/debug.js'
-import { safeAssign } from '../../utils/safe-assign.js'
-import type { WebSocketResponse } from './server.js'
+import { getDebugLogger } from '../../utils/debug.ts'
+import { safeAssign } from '../../utils/safe-assign.ts'
+import type { WebSocketResponse } from './server.ts'
 
 type Request = {
   resolve: (value?: any) => void

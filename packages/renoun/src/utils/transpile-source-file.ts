@@ -1,6 +1,6 @@
-import type { Project } from './ts-morph.js'
+import type { Project } from './ts-morph.ts'
 
-import { getDiagnosticMessageText } from './get-diagnostic-message.js'
+import { getDiagnosticMessageText } from './get-diagnostic-message.ts'
 
 /** Transpile a source file into JavaScript. */
 export function transpileSourceFile(filePath: string, project: Project) {

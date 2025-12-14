@@ -1,8 +1,8 @@
 'use client'
 import React, { useEffect, useId, useRef } from 'react'
 
-import { useQuickInfoContext } from './QuickInfoProvider.js'
-import { getScrollableAncestors } from './utils.js'
+import { useQuickInfoContext } from './QuickInfoProvider.tsx'
+import { getScrollableAncestors } from './utils.ts'
 
 /**
  * A symbol that can display a popover when hovered.

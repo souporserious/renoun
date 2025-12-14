@@ -1,7 +1,7 @@
 'use client'
 import React, { createContext } from 'react'
 
-import type { ConfigurationOptions } from '../Config/types.js'
+import type { ConfigurationOptions } from '../Config/types.ts'
 
 /**
  * A context that provides the current configured themes.

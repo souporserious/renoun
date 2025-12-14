@@ -1,5 +1,5 @@
-import { safeAssign } from './safe-assign.js'
-import { getTsMorph } from './ts-morph.js'
+import { safeAssign } from './safe-assign.ts'
+import { getTsMorph } from './ts-morph.ts'
 import type {
   Expression,
   ParameterDeclaration,
@@ -8,7 +8,7 @@ import type {
   ObjectBindingPattern,
   PropertyDeclaration,
   PropertySignature,
-} from './ts-morph.js'
+} from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 
@@ -16,7 +16,7 @@ import {
   resolveLiteralExpression,
   isLiteralExpressionValue,
   type LiteralExpressionValue,
-} from './resolve-expressions.js'
+} from './resolve-expressions.ts'
 
 /** Gets the key for an initializer value. */
 export function getInitializerValueKey(

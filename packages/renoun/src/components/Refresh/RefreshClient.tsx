@@ -1,7 +1,7 @@
 'use client'
 import { useEffect } from 'react'
 
-import type { WebSocketNotification } from '../../project/rpc/server.js'
+import type { WebSocketNotification } from '../../project/rpc/server.ts'
 
 declare global {
   var __WAKU_RSC_RELOAD_LISTENERS__: (() => void)[] | undefined

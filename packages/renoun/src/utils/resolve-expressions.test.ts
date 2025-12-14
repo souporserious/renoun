@@ -1,11 +1,11 @@
 import { describe, test, expect } from 'vitest'
-import { getTsMorph } from './ts-morph.js'
+import { getTsMorph } from './ts-morph.ts'
 
 import {
   resolveLiteralExpression,
   resolveArrayLiteralExpression,
   resolveObjectLiteralExpression,
-} from './resolve-expressions.js'
+} from './resolve-expressions.ts'
 
 const { Project, SyntaxKind } = getTsMorph()
 

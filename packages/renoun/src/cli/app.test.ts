@@ -61,20 +61,20 @@ const createServerMock = vi.fn(async () => ({
   cleanup: serverCleanupMock,
 }))
 
-vi.mock('../project/server.js', () => ({
+vi.mock('../project/server.ts', () => ({
   createServer: createServerMock,
 }))
 
-const resolveFrameworkBinFileMock = vi.fn(() => '/fake/framework-bin.js')
+const resolveFrameworkBinFileMock = vi.fn(() => '/fake/framework-bin.ts')
 
-vi.mock('./framework.js', () => ({
+vi.mock('./framework.ts', () => ({
   resolveFrameworkBinFile: resolveFrameworkBinFileMock,
 }))
 
-let runAppCommand: (typeof import('./app.js'))['runAppCommand']
+let runAppCommand: (typeof import('./app.ts'))['runAppCommand']
 
 beforeAll(async () => {
-  ;({ runAppCommand: runAppCommand } = await import('./app.js'))
+  ;({ runAppCommand: runAppCommand } = await import('./app.ts'))
 })
 
 let originalCwd: string
@@ -187,7 +187,7 @@ describe('runAppCommand integration', () => {
       const [command, spawnArgs, spawnOptions] = spawnMock.mock.calls[0]
       expect(command).toBe(process.execPath)
       expect(spawnArgs).toEqual([
-        '/fake/framework-bin.js',
+        '/fake/framework-bin.ts',
         'dev',
         '--port',
         '4000',

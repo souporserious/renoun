@@ -1,4 +1,4 @@
-import { grammars } from '../grammars/index.js'
+import { grammars } from '../grammars/index.ts'
 
 /** Builds a mapping from file extensions to valid language identifiers. */
 function buildExtensionToLanguagesMap() {

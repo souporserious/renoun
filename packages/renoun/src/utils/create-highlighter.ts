@@ -1,7 +1,7 @@
-import type { ConfigurationOptions } from '../components/Config/types.js'
-import { Tokenizer } from './create-tokenizer.js'
-import { getGrammar } from './get-grammar.js'
-import { getTheme } from './get-theme.js'
+import type { ConfigurationOptions } from '../components/Config/types.ts'
+import { Tokenizer } from './create-tokenizer.ts'
+import { getGrammar } from './get-grammar.ts'
+import { getTheme } from './get-theme.ts'
 
 /** Converts a string of code to an array of highlighted tokens. */
 export async function createHighlighter(
