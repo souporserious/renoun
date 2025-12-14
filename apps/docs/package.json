@@ -1,7 +1,7 @@
 {
-  "private": true,
-  "name": "@examples/docs",
-  "homepage": "https://renoun-docs.vercel.app/",
+  "name": "@renoun/docs",
+  "version": "0.0.0",
+  "homepage": "https://docs.renoun.dev",
   "description": "A documentation starter that turns MDX content into a polished, full-featured site.",
   "scripts": {
     "dev": "renoun next",

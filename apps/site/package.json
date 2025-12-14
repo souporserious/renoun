@@ -1,6 +1,7 @@
 {
   "private": true,
   "name": "@apps/site",
+  "homepage": "https://renoun.dev",
   "type": "module",
   "scripts": {
     "dev": "renoun next dev --webpack",

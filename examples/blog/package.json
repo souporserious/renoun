@@ -1,30 +1,13 @@
 {
   "private": true,
-  "name": "@renoun/blog",
-  "homepage": "https://renoun-blog.vercel.app/",
-  "description": "A blog starter featuring a post index, tags, and individual article pages with MDX.",
+  "name": "@examples/blog",
+  "description": "Minimal project that shadows posts from the @renoun/blog application.",
   "scripts": {
-    "dev": "renoun next",
-    "build": "renoun next build",
-    "start": "next start"
+    "dev": "renoun dev",
+    "build": "renoun build"
   },
   "dependencies": {
-    "@mdx-js/loader": "catalog:",
-    "@mdx-js/react": "catalog:",
-    "@next/mdx": "catalog:",
-    "@renoun/mdx": "workspace:*",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
-    "next": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "remark-frontmatter": "5.0.0",
-    "remark-mdx-frontmatter": "5.2.0",
-    "renoun": "workspace:*",
-    "restyle": "catalog:",
-    "tm-themes": "catalog:",
-    "ts-morph": "catalog:",
-    "typescript": "catalog:",
-    "zod": "catalog:"
+    "@renoun/blog": "workspace:*",
+    "renoun": "workspace:*"
   }
 }
