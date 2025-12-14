@@ -71,13 +71,21 @@ describe('compareSemVer', () => {
 
   it('treats prereleases as lower precedence than releases', () => {
     expect(compareSemVer(create('1.0.0-beta'), create('1.0.0'))).toBeLessThan(0)
-    expect(compareSemVer(create('1.0.0'), create('1.0.0-beta'))).toBeGreaterThan(0)
+    expect(
+      compareSemVer(create('1.0.0'), create('1.0.0-beta'))
+    ).toBeGreaterThan(0)
   })
 
   it('compares prerelease identifiers lexically and numerically', () => {
-    expect(compareSemVer(create('1.0.0-alpha.1'), create('1.0.0-alpha.beta'))).toBeLessThan(0)
-    expect(compareSemVer(create('1.0.0-alpha.beta'), create('1.0.0-beta'))).toBeLessThan(0)
-    expect(compareSemVer(create('1.0.0-beta'), create('1.0.0-beta.2'))).toBeLessThan(0)
+    expect(
+      compareSemVer(create('1.0.0-alpha.1'), create('1.0.0-alpha.beta'))
+    ).toBeLessThan(0)
+    expect(
+      compareSemVer(create('1.0.0-alpha.beta'), create('1.0.0-beta'))
+    ).toBeLessThan(0)
+    expect(
+      compareSemVer(create('1.0.0-beta'), create('1.0.0-beta.2'))
+    ).toBeLessThan(0)
   })
 })
 
@@ -108,7 +116,9 @@ describe('satisfiesRange', () => {
   })
 
   it('excludes prereleases without explicit equality when includePrerelease is false', () => {
-    expect(satisfiesRange(version('1.2.3-beta.1'), '>=1.2.3 <2.0.0')).toBe(false)
+    expect(satisfiesRange(version('1.2.3-beta.1'), '>=1.2.3 <2.0.0')).toBe(
+      false
+    )
   })
 
   it('includes prereleases when includePrerelease is true', () => {
@@ -122,9 +132,9 @@ describe('satisfiesRange', () => {
 
 describe('formatSemVer', () => {
   it('formats release versions without prerelease', () => {
-    expect(
-      formatSemVer({ major: 1, minor: 2, patch: 3, prerelease: [] })
-    ).toBe('1.2.3')
+    expect(formatSemVer({ major: 1, minor: 2, patch: 3, prerelease: [] })).toBe(
+      '1.2.3'
+    )
   })
 
   it('formats prerelease versions', () => {

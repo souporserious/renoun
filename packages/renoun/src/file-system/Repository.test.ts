@@ -820,9 +820,7 @@ describe('Repository', () => {
           value: { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
         })
 
-        await expect(
-          repository.getReleaseUrl({ asset: true })
-        ).resolves.toBe(
+        await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
           'https://github.com/owner/repo/releases/download/v1.2.3/cli-linux.tar.gz'
         )
       } finally {
@@ -843,9 +841,7 @@ describe('Repository', () => {
       )
       await expect(
         repository.getReleaseUrl({ compare: 'v1.2.2' })
-      ).resolves.toBe(
-        'https://github.com/owner/repo/compare/v1.2.2...v1.2.3'
-      )
+      ).resolves.toBe('https://github.com/owner/repo/compare/v1.2.2...v1.2.3')
 
       expect(mockFetch).toHaveBeenCalledTimes(1)
 
@@ -997,9 +993,7 @@ describe('Repository', () => {
           'https://github.com/owner/repo/releases/download/v1.0.0/tool-linux.tar.gz'
         )
 
-        await expect(
-          repository.getReleaseUrl({ asset: true })
-        ).resolves.toBe(
+        await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
           'https://github.com/owner/repo/releases/download/v1.0.0/tool-mac.dmg'
         )
       } finally {

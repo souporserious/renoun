@@ -1,8 +1,4 @@
-import {
-  pathLikeToString,
-  resolveSchemePath,
-  type PathLike,
-} from './path.ts'
+import { pathLikeToString, resolveSchemePath, type PathLike } from './path.ts'
 
 export function normalizeBaseDirectory(
   baseDirectory?: PathLike

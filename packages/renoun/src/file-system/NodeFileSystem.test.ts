@@ -6,7 +6,9 @@ import { afterAll, describe, expect, test } from 'vitest'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { NodeFileSystem } from './NodeFileSystem'
 
-async function readStream(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+async function readStream(
+  stream: ReadableStream<Uint8Array>
+): Promise<Uint8Array> {
   const reader = stream.getReader()
   const chunks: Uint8Array[] = []
 
@@ -53,11 +55,15 @@ describe('NodeFileSystem', () => {
     await fileSystem.writeFile(textFilePath, 'Hello World')
 
     expect(await fileSystem.readFile(textFilePath)).toBe('Hello World')
-    expect(decoder.decode(await fileSystem.readFileBinary(textFilePath))).toBe('Hello World')
+    expect(decoder.decode(await fileSystem.readFileBinary(textFilePath))).toBe(
+      'Hello World'
+    )
 
     fileSystem.writeFileSync(binaryFilePath, new Uint8Array([1, 2, 3]))
 
-    expect(Array.from(fileSystem.readFileBinarySync(binaryFilePath))).toEqual([1, 2, 3])
+    expect(Array.from(fileSystem.readFileBinarySync(binaryFilePath))).toEqual([
+      1, 2, 3,
+    ])
   })
 
   test('supports streaming writes and reads', async () => {
@@ -66,7 +72,9 @@ describe('NodeFileSystem', () => {
     await writer.write(encoder.encode('chunk-2'))
     await writer.close()
 
-    const streamContents = await readStream(fileSystem.readFileStream(streamFilePath))
+    const streamContents = await readStream(
+      fileSystem.readFileStream(streamFilePath)
+    )
 
     expect(decoder.decode(streamContents)).toBe('chunk-1 chunk-2')
     expect(await fileSystem.readFile(streamFilePath)).toBe('chunk-1 chunk-2')

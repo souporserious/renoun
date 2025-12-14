@@ -804,10 +804,10 @@ export class Repository {
         .filter((entry): entry is { release: any; version: SemVer } =>
           Boolean(
             entry.version &&
-              matchesPackage(entry.release) &&
-              satisfiesRange(entry.version, normalized, {
-                includePrerelease: true,
-              })
+            matchesPackage(entry.release) &&
+            satisfiesRange(entry.version, normalized, {
+              includePrerelease: true,
+            })
           )
         )
         .sort((a, b) => compareSemVer(b.version, a.version))

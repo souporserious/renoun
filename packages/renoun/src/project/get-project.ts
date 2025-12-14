@@ -1,5 +1,8 @@
 import { getTsMorph } from '../utils/ts-morph.ts'
-import type { Project as TsMorphProject, ts as TsMorphTS } from '../utils/ts-morph.ts'
+import type {
+  Project as TsMorphProject,
+  ts as TsMorphTS,
+} from '../utils/ts-morph.ts'
 import { join, dirname, extname, resolve } from 'node:path'
 import { existsSync, watch, statSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'

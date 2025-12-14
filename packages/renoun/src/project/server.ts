@@ -254,9 +254,8 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      const { getFileExportStaticValue } = await import(
-        '../utils/get-file-export-static-value.ts'
-      )
+      const { getFileExportStaticValue } =
+        await import('../utils/get-file-export-static-value.ts')
       return getFileExportStaticValue(filePath, position, kind, project)
     }
   )

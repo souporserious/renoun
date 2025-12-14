@@ -21,5 +21,3 @@ export function Reference(props: ReferenceProps) {
     />
   )
 }
-
-

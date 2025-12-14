@@ -3,8 +3,7 @@ import React from 'react'
 /** All appearance variants supported by `Button`. */
 export type ButtonVariant = 'primary' | 'secondary' | 'danger'
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** Visual style to apply. Defaults to `'primary'`. */
   variant?: ButtonVariant
 }

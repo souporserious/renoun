@@ -31,5 +31,3 @@ export function EntryIndex({
     </main>
   )
 }
-
-

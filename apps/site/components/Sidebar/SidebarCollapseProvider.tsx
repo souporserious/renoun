@@ -103,10 +103,7 @@ export function SidebarCollapseProvider({
 
   return (
     <SidebarCollapseDisableAnimationContext.Provider value={disableAnimation}>
-      <Collapse.Provider
-        key={providerKey}
-        defaultOpen={shouldBeOpen}
-      >
+      <Collapse.Provider key={providerKey} defaultOpen={shouldBeOpen}>
         {children}
       </Collapse.Provider>
     </SidebarCollapseDisableAnimationContext.Provider>

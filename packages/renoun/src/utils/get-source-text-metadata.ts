@@ -13,8 +13,10 @@ export interface SourceTextMetadata {
   label?: string
 }
 
-export interface GetSourceTextMetadataOptions
-  extends Omit<SourceTextMetadata, 'label'> {
+export interface GetSourceTextMetadataOptions extends Omit<
+  SourceTextMetadata,
+  'label'
+> {
   /** The project to use for the source text. */
   project: Project
 

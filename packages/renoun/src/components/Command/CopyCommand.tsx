@@ -51,7 +51,7 @@ export function CopyCommand(
         const selectedCommand = selectedTabElement?.dataset['command']
         const command: PackageManager = isPackageManager(selectedCommand)
           ? selectedCommand
-          : stored ?? 'npm'
+          : (stored ?? 'npm')
         const tabPanelElement = document.querySelector(
           `[data-command-group="${group}"][role="tabpanel"][data-command="${command}"]`
         ) as HTMLElement | null

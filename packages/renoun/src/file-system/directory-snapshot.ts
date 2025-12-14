@@ -7,9 +7,7 @@ export interface DirectorySnapshotDirectoryMetadata<
   materializedEntries: FileSystemEntry<LoaderTypes>[]
 }
 
-export class DirectorySnapshot<
-  LoaderTypes extends Record<string, any>,
-> {
+export class DirectorySnapshot<LoaderTypes extends Record<string, any>> {
   #entries: FileSystemEntry<LoaderTypes>[]
   #directories: Map<
     Directory<LoaderTypes>,

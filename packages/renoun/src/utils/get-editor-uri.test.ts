@@ -8,9 +8,7 @@ describe('getEditorUri', () => {
       getEditorUri({
         path: '/workspace/renoun/packages/renoun/src/index.ts',
       })
-    ).toBe(
-      'vscode://file//workspace/renoun/packages/renoun/src/index.ts:0:0'
-    )
+    ).toBe('vscode://file//workspace/renoun/packages/renoun/src/index.ts:0:0')
   })
 
   it('supports the cursor editor scheme', () => {
@@ -21,8 +19,6 @@ describe('getEditorUri', () => {
         line: 12,
         column: 4,
       })
-    ).toBe(
-      'cursor://file//workspace/renoun/packages/renoun/src/index.ts:12:4'
-    )
+    ).toBe('cursor://file//workspace/renoun/packages/renoun/src/index.ts:12:4')
   })
 })

@@ -12,7 +12,8 @@ const runtime = {
 
 describe('addFrontMatter', () => {
   test('exports parsed front matter', async () => {
-    const source = `---\n` +
+    const source =
+      `---\n` +
       `title: Hello, world!\n` +
       `nested:\n` +
       `  value: 123\n` +
@@ -36,7 +37,8 @@ describe('addFrontMatter', () => {
   })
 
   test('keeps author-defined frontMatter export', async () => {
-    const source = `---\n` +
+    const source =
+      `---\n` +
       `title: Generated\n` +
       `---\n\n` +
       `export const frontMatter = { title: 'Custom' }\n\n` +

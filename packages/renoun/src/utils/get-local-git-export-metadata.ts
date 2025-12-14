@@ -75,11 +75,7 @@ export async function getLocalGitExportMetadata(
   const normalizedEnd = Math.max(normalizedStart, Math.max(startLine, endLine))
 
   try {
-    const stdout = await runGitBlame(
-      filePath,
-      normalizedStart,
-      normalizedEnd
-    )
+    const stdout = await runGitBlame(filePath, normalizedStart, normalizedEnd)
 
     const lines = stdout.split('\n')
     let firstCommitDate: Date | undefined

@@ -161,8 +161,7 @@ export function parseAnnotations(
       type === 'close' || propsEnd <= tagEnd
         ? ''
         : value.slice(tagEnd, propsEnd)
-    const props =
-      type === 'close' ? {} : parseAnnotationProps(propsString)
+    const props = type === 'close' ? {} : parseAnnotationProps(propsString)
 
     const lineStart = value.lastIndexOf('\n', commentStart - 1) + 1
     const lineEndIndex = value.indexOf('\n', commentEnd)

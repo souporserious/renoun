@@ -24,15 +24,15 @@ export interface MDXContentOptions<
 }
 
 /** Compile MDX into executable content using the provided runtime configuration. */
-export async function getMDXContent<
-  FileExports extends Record<string, any>,
->({
+export async function getMDXContent<FileExports extends Record<string, any>>({
   source,
   dependencies,
   remarkPlugins,
   rehypePlugins,
   baseUrl,
-}: MDXContentOptions<FileExports>): Promise<{ default: MDXContent } & FileExports> {
+}: MDXContentOptions<FileExports>): Promise<
+  { default: MDXContent } & FileExports
+> {
   try {
     const { evaluate } = await import('@mdx-js/mdx')
     const result = await evaluate(source, {

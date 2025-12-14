@@ -15,4 +15,3 @@ describe('path utilities windows support', () => {
     ).toBe('../../utils/index.ts')
   })
 })
-

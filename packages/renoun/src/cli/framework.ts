@@ -30,4 +30,3 @@ export function resolveFrameworkBinFile(framework: Framework): string {
   const packageJsonDirectory = dirname(packageJsonPath)
   return join(packageJsonDirectory, binRelativePath.replace(/^\.\//, ''))
 }
-

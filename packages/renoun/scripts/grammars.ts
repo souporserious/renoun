@@ -18,8 +18,8 @@ const grammarLoaders = grammars
     return `  '${grammar.scopeName}': ${importString}`
   })
   .join(',\n')
-const grammarAliases = grammars
-  .reduce((acc, grammar) => {
+const grammarAliases = grammars.reduce(
+  (acc, grammar) => {
     const mergedAliases = new Set<string>([
       grammar.name,
       ...(grammar.aliases || []),
@@ -27,13 +27,18 @@ const grammarAliases = grammars
 
     if (acc[grammar.scopeName]) {
       // Merge aliases if scopeName already exists
-      acc[grammar.scopeName] = new Set([...acc[grammar.scopeName], ...mergedAliases])
+      acc[grammar.scopeName] = new Set([
+        ...acc[grammar.scopeName],
+        ...mergedAliases,
+      ])
     } else {
       acc[grammar.scopeName] = mergedAliases
     }
 
     return acc
-  }, {} as Record<string, Set<string>>)
+  },
+  {} as Record<string, Set<string>>
+)
 
 // Convert to the final format
 const grammarAliasesString = Object.entries(grammarAliases)

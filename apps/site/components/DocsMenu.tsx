@@ -1,11 +1,5 @@
 'use client'
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type FocusEvent,
-} from 'react'
+import { useEffect, useId, useRef, useState, type FocusEvent } from 'react'
 import { usePathname } from 'next/navigation'
 
 import { NavigationLink } from './NavigationLink'
