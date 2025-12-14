@@ -23,8 +23,8 @@ import {
   vi,
 } from 'vitest'
 
-const BLOG_EXAMPLE_PATH = fileURLToPath(
-  new URL('../../../../examples/blog', import.meta.url)
+const BLOG_APP_PATH = fileURLToPath(
+  new URL('../../../../apps/blog', import.meta.url)
 )
 
 const spawnMock = vi.fn(
@@ -103,7 +103,7 @@ describe('runAppCommand integration', () => {
       'blog'
     )
     await mkdir(nodeModulesExampleDir, { recursive: true })
-    await cp(BLOG_EXAMPLE_PATH, nodeModulesExampleDir, { recursive: true })
+    await cp(BLOG_APP_PATH, nodeModulesExampleDir, { recursive: true })
 
     const projectPackageJson = {
       name: 'app-integration',

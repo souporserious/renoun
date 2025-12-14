@@ -266,11 +266,11 @@ describe('file system', () => {
     process.chdir(siteDirectory)
 
     try {
-      const examples = new Directory({ path: 'workspace:examples' })
-      expect(examples.getRelativePathToWorkspace()).toBe('examples')
+      const apps = new Directory({ path: 'workspace:apps' })
+      expect(apps.getRelativePathToWorkspace()).toBe('apps')
 
-      const docs = await examples.getDirectory('docs')
-      expect(docs.getRelativePathToWorkspace()).toBe('examples/docs')
+      const docs = await apps.getDirectory('docs')
+      expect(docs.getRelativePathToWorkspace()).toBe('apps/docs')
     } finally {
       process.chdir(originalCwd)
     }

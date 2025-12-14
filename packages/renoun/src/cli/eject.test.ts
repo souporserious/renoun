@@ -15,8 +15,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { runEjectCommand } from './eject.ts'
 
-const BLOG_EXAMPLE_PATH = fileURLToPath(
-  new URL('../../../../examples/blog', import.meta.url)
+const BLOG_APP_PATH = fileURLToPath(
+  new URL('../../../../apps/blog', import.meta.url)
 )
 
 let originalCwd: string
@@ -52,7 +52,7 @@ describe('runEjectCommand', () => {
       'blog'
     )
     await mkdir(nodeModulesExampleDir, { recursive: true })
-    await cp(BLOG_EXAMPLE_PATH, nodeModulesExampleDir, { recursive: true })
+    await cp(BLOG_APP_PATH, nodeModulesExampleDir, { recursive: true })
 
     // Create project package.json with the app as a dependency
     const projectPackageJson = {
@@ -138,7 +138,7 @@ describe('runEjectCommand', () => {
       'blog'
     )
     await mkdir(nodeModulesExampleDir, { recursive: true })
-    await cp(BLOG_EXAMPLE_PATH, nodeModulesExampleDir, { recursive: true })
+    await cp(BLOG_APP_PATH, nodeModulesExampleDir, { recursive: true })
 
     // Create project package.json
     const projectPackageJson = {
