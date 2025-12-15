@@ -83,7 +83,7 @@ export async function runEjectCommand(
 
   const targetDirectory = options.targetDirectory ?? projectRoot
 
-  // Copy app files to the project, respecting existing files (shadows win)
+  // Copy app files to the project, respecting existing files (layers win)
   await copyAppFiles(appRoot, targetDirectory)
 
   // Update package.json: remove the app dependency, keep renoun
@@ -180,9 +180,9 @@ async function copyAppFiles(
       continue
     }
 
-    // Check if the target already exists (project file/directory shadows app)
+    // Check if the target already exists (project file/directory overrides app)
     if (existsSync(targetPath)) {
-      getDebugLogger().debug('Skipping (shadowed by project)', () => ({
+      getDebugLogger().debug('Skipping (overridden by project)', () => ({
         data: { path: entry.name },
       }))
       console.log(`  Keeping existing: ${entry.name}`)

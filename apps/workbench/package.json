@@ -4,14 +4,10 @@
   "homepage": "https://workbench.renoun.dev",
   "description": "Design system workbench for building, previewing, and documenting libraries.",
   "scripts": {
-    "dev": "renoun next",
-    "build": "renoun next build",
-    "start": "next start"
+    "dev": "renoun next"
   },
   "files": [
     "app/**",
-    "components/**",
-    "hooks/**",
     "ui/**",
     "public/**",
     "collections.ts",

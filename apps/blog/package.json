@@ -4,9 +4,7 @@
   "homepage": "https://blog.renoun.dev",
   "description": "A blog starter featuring a post index, tags, and individual article pages with MDX.",
   "scripts": {
-    "dev": "renoun next",
-    "build": "renoun next build",
-    "start": "next start"
+    "dev": "renoun next"
   },
   "files": [
     "app/**",

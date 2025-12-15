@@ -1,6 +1,6 @@
 # Blog
 
-This example demonstrates running the `@renoun/blog` application using the `renoun` CLI. Only a `package.json` and local content are required. The blog itself ships from the installed application while your files shadow anything you want to override.
+This example demonstrates running the `@renoun/blog` application using the `renoun` CLI. Only a `package.json` and local content are required. The blog itself ships from the installed application while your files layer on top to customize what you need.
 
 ## Getting started
 
@@ -17,12 +17,12 @@ This example demonstrates running the `@renoun/blog` application using the `reno
    ```
 
 The `renoun dev` script copies the blog template from `node_modules` into a temporary runtime and
-replaces the template `posts/` directory with the version stored in this example. Any edits you make
-locally take effect immediately thanks to the symlinks created by the CLI.
+layers the `posts/` directory from this example on top. Any edits you make locally take effect
+immediately thanks to the links created by the CLI.
 
-## Shadowed files
+## Layered files
 
-- `posts/` – Replaces the template posts so you can publish your own content.
+- `posts/` – Your content layered on top of the template.
 
-Add additional files to shadow more parts of the template, such as `ui/RootProvider.tsx` to change
+Add additional files to layer more parts of the template, such as `ui/RootProvider.tsx` to change
 the theme or `app/page.tsx` to customize layouts.

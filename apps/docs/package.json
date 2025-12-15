@@ -4,9 +4,7 @@
   "homepage": "https://docs.renoun.dev",
   "description": "A documentation starter that turns MDX content into a polished, full-featured site.",
   "scripts": {
-    "dev": "renoun next",
-    "build": "renoun next build",
-    "start": "next start"
+    "dev": "renoun next"
   },
   "files": [
     "app/**",

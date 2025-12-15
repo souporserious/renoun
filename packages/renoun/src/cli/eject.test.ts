@@ -68,7 +68,7 @@ describe('runEjectCommand', () => {
       JSON.stringify(projectPackageJson, null, 2)
     )
 
-    // Create a shadow file that should be preserved
+    // Create a layer file that should be preserved
     const postsDirectory = join(projectRoot, 'posts')
     await mkdir(postsDirectory, { recursive: true })
     await writeFile(join(postsDirectory, 'my-post.mdx'), '# My Post\n')
@@ -87,7 +87,7 @@ describe('runEjectCommand', () => {
       const appDirStat = await stat(join(projectRoot, 'app')).catch(() => null)
       expect(appDirStat?.isDirectory()).toBe(true)
 
-      // Verify shadow file was preserved (posts/ should still be our version)
+      // Verify layer file was preserved (posts/ should still be our version)
       const myPostContent = await readFile(
         join(projectRoot, 'posts', 'my-post.mdx'),
         'utf-8'

@@ -6,6 +6,7 @@ import { getDebugLogger } from '../utils/debug.ts'
 import { runAppCommand } from './app.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
 import { runEjectCommand } from './eject.ts'
+import { runOverrideCommand } from './override.ts'
 import { reorderEntries } from './reorder.ts'
 import { runThemeCommand } from './theme.ts'
 import { runValidateCommand } from './validate.ts'
@@ -18,6 +19,7 @@ if (firstArgument === 'help') {
     `         renoun dev                      Run a renoun app (auto-detect)\n` +
     `         renoun <app> dev                Run a specific renoun app\n` +
     `         renoun eject [app]              Eject a renoun app into your project\n` +
+    `         renoun override <pattern>       Copy files from app template (supports globs)\n` +
     `         renoun theme <path>             Prune a VS Code theme JSON file\n` +
     `         renoun validate [path|url]      Check for broken links\n` +
     `\n` +
@@ -25,7 +27,9 @@ if (firstArgument === 'help') {
     `  renoun next dev              Run Next.js with renoun\n` +
     `  renoun dev                   Run auto-detected renoun app\n` +
     `  renoun @renoun/blog dev      Run @renoun/blog app\n` +
-    `  renoun eject                 Eject app into your project`
+    `  renoun eject                 Eject app into your project\n` +
+    `  renoun override tsconfig.json    Copy tsconfig.json from app\n` +
+    `  renoun override "ui/*.tsx"       Copy all UI components from app`
   console.log(usageMessage)
   process.exit(0)
 }
@@ -233,6 +237,24 @@ if (firstArgument === 'validate') {
 } else if (firstArgument === 'eject') {
   try {
     await runEjectCommand({ appName: secondArgument })
+    process.exit(0)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(message)
+    process.exit(1)
+  }
+} else if (firstArgument === 'override') {
+  if (!secondArgument) {
+    console.error(
+      '[renoun] Missing pattern. Usage: renoun override <pattern>\n' +
+        'Examples:\n' +
+        '  renoun override tsconfig.json\n' +
+        '  renoun override "ui/*.tsx"'
+    )
+    process.exit(1)
+  }
+  try {
+    await runOverrideCommand({ pattern: secondArgument })
     process.exit(0)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

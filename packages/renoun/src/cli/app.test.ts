@@ -89,7 +89,7 @@ afterEach(() => {
 })
 
 describe('runAppCommand integration', () => {
-  test('prepares runtime directory and shadows project overrides', async () => {
+  test('prepares runtime directory and applies project layers', async () => {
     const tmpRoot = realpathSync(
       await mkdtemp(join(tmpdir(), 'renoun-app-test-'))
     )
@@ -123,11 +123,11 @@ describe('runAppCommand integration', () => {
     const postsDirectory = join(projectRoot, 'posts')
     await mkdir(postsDirectory, { recursive: true })
     await writeFile(
-      join(postsDirectory, 'hello-from-shadow.mdx'),
-      '# Hello from shadow!\n'
+      join(postsDirectory, 'hello-from-layer.mdx'),
+      '# Hello from layer!\n'
     )
 
-    // Create a build output directory that should be ignored for shadowing
+    // Create a build output directory that should be ignored for layering
     const outDirectory = join(projectRoot, 'out')
     await mkdir(outDirectory, { recursive: true })
 
@@ -223,7 +223,7 @@ describe('runAppCommand integration', () => {
         rootOverridePath
       )
 
-      // Build output directory should not be shadowed into runtime
+      // Build output directory should not be layered into runtime
       await expect(lstat(join(runtimeRoot, 'out'))).rejects.toMatchObject({
         code: 'ENOENT',
       })

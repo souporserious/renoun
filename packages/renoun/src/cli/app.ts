@@ -1,16 +1,17 @@
 import { watch, existsSync, cpSync, rmSync } from 'node:fs'
 import {
   copyFile,
+  link,
   lstat,
   mkdir,
   readFile,
   readdir,
-  readlink,
   rm,
+  stat,
   symlink,
 } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 import { createServer } from '../project/server.ts'
 import { getDebugLogger } from '../utils/debug.ts'
@@ -58,6 +59,31 @@ const IGNORED_PROJECT_FILES = new Set([
   'yarn.lock',
   'bun.lockb',
 ])
+
+/**
+ * Summarizes an array of file paths by grouping them by top-level directory.
+ * e.g., ["components/Box/Box.tsx", "components/Button/Button.tsx", "hooks/index.ts"]
+ * becomes "components/ (2 files), hooks/ (1 file)"
+ */
+function summarizeLayeredPaths(paths: string[]): string {
+  const groups = new Map<string, number>()
+
+  for (const path of paths) {
+    const topLevel = path.includes('/') ? path.split('/')[0] : path
+    groups.set(topLevel, (groups.get(topLevel) || 0) + 1)
+  }
+
+  return Array.from(groups.entries())
+    .map(([dir, count]) => {
+      if (count === 1) {
+        // For single files, show the full path
+        const fullPath = paths.find((p) => p === dir || p.startsWith(dir + '/'))
+        return fullPath || dir
+      }
+      return `${dir}/ (${count} files)`
+    })
+    .join(', ')
+}
 
 const FRAMEWORK_HINTS: Record<Framework, readonly string[]> = {
   next: ['next'],
@@ -155,21 +181,23 @@ export async function runAppCommand({
   )
   log(`Runtime directory ready at ${runtimeDirectory}`)
 
-  const shadowManager = new ShadowManager({
+  const layerManager = new LayerManager({
     projectRoot,
     runtimeDirectory,
   })
-  await shadowManager.start()
+  await layerManager.start()
 
-  const shadowedPaths = shadowManager.getShadowedPaths()
-  if (shadowedPaths.length > 0) {
+  const layeredPaths = layerManager.getLayeredPaths()
+  if (layeredPaths.length > 0) {
+    // Summarize layers by top-level directory for cleaner output
+    const summary = summarizeLayeredPaths(layeredPaths)
     log(
-      `Applied ${shadowedPaths.length} shadow${
-        shadowedPaths.length === 1 ? '' : 's'
-      }: ${shadowedPaths.join(', ')}`
+      `Applied ${layeredPaths.length} layer${
+        layeredPaths.length === 1 ? '' : 's'
+      }: ${summary}`
     )
   } else {
-    log('No project shadows detected; using template defaults')
+    log('No project layers detected; using template defaults')
   }
 
   const previousCwd = process.cwd()
@@ -188,7 +216,7 @@ export async function runAppCommand({
       },
     }))
 
-    shadowManager.stop()
+    layerManager.stop()
 
     if (server) {
       server.cleanup()
@@ -380,7 +408,7 @@ export async function runAppCommand({
       })
     })
   } catch (error) {
-    shadowManager.stop()
+    layerManager.stop()
     process.chdir(previousCwd)
     throw error
   }
@@ -793,10 +821,10 @@ async function validateWakuStaticExport(
   )
 }
 
-class ShadowManager {
+class LayerManager {
   #projectRoot: string
   #runtimeRoot: string
-  #shadowedPaths: Set<string> = new Set()
+  #layeredPaths: Set<string> = new Set()
   #watchers: Map<string, ReturnType<typeof watch>> = new Map()
   #syncScheduled = false
   #isSyncing = false
@@ -814,7 +842,7 @@ class ShadowManager {
   }
 
   async start() {
-    await this.#syncShadows()
+    await this.#syncLayers()
   }
 
   stop() {
@@ -824,8 +852,8 @@ class ShadowManager {
     this.#watchers.clear()
   }
 
-  getShadowedPaths(): string[] {
-    return Array.from(this.#shadowedPaths).sort()
+  getLayeredPaths(): string[] {
+    return Array.from(this.#layeredPaths).sort()
   }
 
   #scheduleSync() {
@@ -837,8 +865,8 @@ class ShadowManager {
     this.#syncScheduled = true
     setTimeout(() => {
       this.#syncScheduled = false
-      this.#syncShadows().catch((error) => {
-        getDebugLogger().error('Failed to synchronize app shadows', () => ({
+      this.#syncLayers().catch((error) => {
+        getDebugLogger().error('Failed to synchronize app layers', () => ({
           data: {
             error: error instanceof Error ? error.message : String(error),
           },
@@ -847,7 +875,7 @@ class ShadowManager {
     }, 50)
   }
 
-  async #syncShadows() {
+  async #syncLayers() {
     if (this.#isSyncing) {
       this.#pendingSync = true
       return
@@ -858,28 +886,25 @@ class ShadowManager {
 
     try {
       const absoluteDirectories = new Set<string>()
-      const directoryShadows = new Set<string>()
-      const fileShadows = new Set<string>()
+      const directoryLayers = new Set<string>()
+      const fileLayers = new Set<string>()
 
       await this.#collectProjectEntries(
         '.',
         absoluteDirectories,
-        directoryShadows,
-        fileShadows
+        directoryLayers,
+        fileLayers
       )
 
-      const validShadows = await this.#applyShadows(
-        directoryShadows,
-        fileShadows
-      )
-      this.#cleanupObsoleteShadows(validShadows)
+      const validLayers = await this.#applyLayers(fileLayers)
+      this.#cleanupObsoleteLayers(validLayers)
       this.#cleanupObsoleteWatchers(absoluteDirectories)
     } finally {
       this.#isSyncing = false
 
       if (this.#pendingSync) {
         this.#pendingSync = false
-        await this.#syncShadows()
+        await this.#syncLayers()
       }
     }
   }
@@ -887,8 +912,8 @@ class ShadowManager {
   async #collectProjectEntries(
     relativeDirectory: string,
     absoluteDirectories: Set<string>,
-    directoryShadows: Set<string>,
-    fileShadows: Set<string>
+    directoryLayers: Set<string>,
+    fileLayers: Set<string>
   ) {
     const absoluteDirectory = join(this.#projectRoot, relativeDirectory)
     absoluteDirectories.add(absoluteDirectory)
@@ -911,20 +936,20 @@ class ShadowManager {
 
       if (entry.isDirectory()) {
         if (normalizedRelativePath) {
-          directoryShadows.add(normalizedRelativePath)
+          directoryLayers.add(normalizedRelativePath)
         }
         await this.#collectProjectEntries(
           entryRelativePath,
           absoluteDirectories,
-          directoryShadows,
-          fileShadows
+          directoryLayers,
+          fileLayers
         )
         continue
       }
 
       if (entry.isFile() || entry.isSymbolicLink()) {
         if (normalizedRelativePath) {
-          fileShadows.add(normalizedRelativePath)
+          fileLayers.add(normalizedRelativePath)
         }
       }
     }
@@ -963,7 +988,7 @@ class ShadowManager {
       this.#watchers.set(directory, watcher)
     } catch (error) {
       getDebugLogger().warn(
-        'Failed to watch directory for app shadowing',
+        'Failed to watch directory for app layering',
         () => ({
           data: {
             directory,
@@ -974,51 +999,24 @@ class ShadowManager {
     }
   }
 
-  async #applyShadows(
-    directoryShadows: Set<string>,
-    fileShadows: Set<string>
-  ): Promise<Set<string>> {
+  async #applyLayers(fileLayers: Set<string>): Promise<Set<string>> {
     const validPaths = new Set<string>()
 
-    const sortedDirectories = Array.from(directoryShadows).sort((a, b) => {
-      const aDepth = a.split(/[\\/]/).length
-      const bDepth = b.split(/[\\/]/).length
-      if (aDepth === bDepth) {
-        return a.localeCompare(b)
-      }
-      return aDepth - bDepth
-    })
-
-    for (const relativePath of sortedDirectories) {
-      if (!relativePath) {
-        continue
-      }
-
-      if (this.#isShadowedByParent(relativePath, validPaths)) {
-        continue
-      }
-
-      await this.#ensureDirectoryShadow(relativePath)
-      validPaths.add(relativePath)
-    }
-
-    const sortedFiles = Array.from(fileShadows).sort((a, b) =>
+    // Use hard links for all files - Turbopack has issues with dynamic imports
+    // from symlinked directories, so we avoid directory symlinks entirely.
+    const sortedFiles = Array.from(fileLayers).sort((a, b) =>
       a.localeCompare(b)
     )
 
     for (const relativePath of sortedFiles) {
-      if (this.#isShadowedByParent(relativePath, validPaths)) {
-        continue
-      }
-
-      await this.#ensureFileShadow(relativePath)
+      await this.#ensureFileLayer(relativePath)
       validPaths.add(relativePath)
     }
 
     return validPaths
   }
 
-  async #ensureFileShadow(relativePath: string) {
+  async #ensureFileLayer(relativePath: string) {
     const sourcePath = join(this.#projectRoot, relativePath)
     const targetPath = join(this.#runtimeRoot, relativePath)
     const targetDirectory = dirname(targetPath)
@@ -1041,84 +1039,54 @@ class ShadowManager {
       }
     }
 
-    if (existingTarget) {
-      if (existingTarget.isSymbolicLink()) {
-        try {
-          const existingLink = await readlink(targetPath)
-          const resolvedExisting = resolve(dirname(targetPath), existingLink)
-          if (resolvedExisting === resolve(sourcePath)) {
-            this.#shadowedPaths.add(relativePath)
-            return
-          }
-        } catch {
-          // fall through to re-link
+    // Check if existing file is already a hard link to the source (same inode)
+    // This prevents unnecessary recreation which triggers file watchers
+    if (existingTarget && existingTarget.isFile()) {
+      try {
+        const sourceStat = await stat(sourcePath)
+        if (existingTarget.ino === sourceStat.ino) {
+          // Already a hard link to the source, skip recreation
+          this.#layeredPaths.add(relativePath)
+          return
         }
+      } catch {
+        // Fall through to recreate
       }
+    }
 
+    // Remove existing target (old symlink, stale copy, or different hard link)
+    if (existingTarget) {
       await rm(targetPath, {
         recursive: existingTarget.isDirectory(),
         force: true,
       })
     }
 
-    await symlink(sourcePath, targetPath, 'file')
-    this.#shadowedPaths.add(relativePath)
-  }
-
-  async #ensureDirectoryShadow(relativePath: string) {
-    const sourcePath = join(this.#projectRoot, relativePath)
-    const targetPath = join(this.#runtimeRoot, relativePath)
-    const targetDirectory = dirname(targetPath)
-
-    await mkdir(targetDirectory, { recursive: true })
-
-    let existingTarget: Awaited<ReturnType<typeof lstat>> | null = null
-
+    // Use hard links instead of symlinks - Turbopack has issues resolving
+    // dynamic imports when target files are symlinks. Hard links preserve
+    // file metadata (mtime, etc.) since they reference the same inode.
     try {
-      existingTarget = await lstat(targetPath)
+      await link(sourcePath, targetPath)
     } catch (error) {
-      if (
-        error instanceof Error &&
-        'code' in error &&
-        error.code === 'ENOENT'
-      ) {
-        existingTarget = null
+      // Fall back to copy if hard link fails (e.g., cross-filesystem)
+      if (error instanceof Error && 'code' in error && error.code === 'EXDEV') {
+        await copyFile(sourcePath, targetPath)
       } else {
         throw error
       }
     }
-
-    if (existingTarget) {
-      if (existingTarget.isSymbolicLink()) {
-        try {
-          const existingLink = await readlink(targetPath)
-          const resolvedExisting = resolve(dirname(targetPath), existingLink)
-          if (resolvedExisting === resolve(sourcePath)) {
-            this.#shadowedPaths.add(relativePath)
-            return
-          }
-        } catch {
-          // fall through to re-link
-        }
-      }
-
-      await rm(targetPath, { recursive: true, force: true })
-    }
-
-    const symlinkType = process.platform === 'win32' ? 'junction' : 'dir'
-    await symlink(sourcePath, targetPath, symlinkType)
-    this.#shadowedPaths.add(relativePath)
+    this.#layeredPaths.add(relativePath)
   }
 
-  #cleanupObsoleteShadows(validPaths: Set<string>) {
-    for (const path of Array.from(this.#shadowedPaths)) {
+  #cleanupObsoleteLayers(validPaths: Set<string>) {
+    for (const path of Array.from(this.#layeredPaths)) {
       if (validPaths.has(path)) {
         continue
       }
 
       const targetPath = join(this.#runtimeRoot, path)
       rm(targetPath, { force: true }).catch(() => {})
-      this.#shadowedPaths.delete(path)
+      this.#layeredPaths.delete(path)
     }
   }
 
@@ -1131,20 +1099,6 @@ class ShadowManager {
       watcher.close()
       this.#watchers.delete(directory)
     }
-  }
-
-  #isShadowedByParent(relativePath: string, shadowed: Set<string>): boolean {
-    const segments = relativePath.split('/')
-
-    while (segments.length > 1) {
-      segments.pop()
-      const candidate = segments.join('/')
-      if (shadowed.has(candidate)) {
-        return true
-      }
-    }
-
-    return false
   }
 }
 

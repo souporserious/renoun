@@ -1,63 +1,72 @@
 export const metadata = {
-  title: 'Run a renoun app',
+  title: 'Apps as Templates',
   description:
-    'Run renoun apps from package.json by shadowing files from your local project.',
+    'Use renoun apps as living templates that you extend through layering—a modern alternative to traditional scaffolding.',
 }
 
-Running a **renoun app** lets you start from an app that lives in `node_modules`—like
-`@renoun/blog`, `@renoun/docs`, or a Presenter-style app—and override it with files in your own
-repo.
+A **renoun app** is a complete, runnable application that lives in `node_modules` and serves as a
+**template** you can extend. Think of apps like `@renoun/blog`, `@renoun/docs`, or a Presenter-style
+app as **base layers** that you customize by adding your own files.
 
-This is what `renoun dev` / `renoun build` do:
+This "Apps as Templates" approach differs from traditional scaffolding:
 
-- The renoun app is the **root app**.
-- Your files **shadow** the app’s files.
-- renoun builds a runtime under `.renoun/`, merges both views, and launches the framework there.
+| Traditional Templates            | Apps as Templates                       |
+| -------------------------------- | --------------------------------------- |
+| Scaffold once → own all the code | Depend on the app → layer what you need |
+| Hard to update                   | Upgradeable via npm                     |
+| You maintain everything          | You only own your customizations        |
+
+When you run `renoun dev` or `renoun build`:
+
+- The renoun app is the **base layer**.
+- Your files **layer** on top of the app's files additively.
+- renoun builds a runtime under `.renoun/`, merges both layers, and launches the framework there.
 
 > If you already have your own Next/Vite/Waku app and just want renoun inside it, use  
-> **“Use renoun in your app”** (`renoun next dev`, `renoun vite dev`, etc.) instead.
+> **"Use renoun in your app"** (`renoun next dev`, `renoun vite dev`, etc.) instead.
 
 ---
 
 ## How it works
 
-When you run `renoun dev`, the CLI orchestrates the following process:
+The "Apps as Templates" system works like Docker's layered images—you have a base image (the app)
+and your layer on top. When you run `renoun dev`, the CLI merges these layers:
 
 ```text
-Your Project
+Your Project (your layer)
 ├── package.json
-├── posts/                      ← your content (shadows the app)
+├── posts/                      ← your content
 │   └── hello-world.mdx
-└── .renoun/app/-renoun-blog/   ← runtime directory
-    ├── ...                     ← copied from the app
-    ├── posts/                  ← symlink → your posts/
-    └── node_modules/           ← symlink → app dependencies
+└── .renoun/app/-renoun-blog/   ← merged runtime
+    ├── ...                     ← base layer (from the app)
+    ├── posts/                  ← your layer (linked to your posts/)
+    └── node_modules/           ← shared dependencies
 ```
 
 1. **Runtime preparation**
-   The CLI creates `.renoun/app/<app-name>` and copies the renoun app’s files into it.
+   The CLI creates `.renoun/app/<app-name>` and copies the base app's files into it.
    Only `node_modules` is symlinked to avoid duplication.
 
-2. **Shadow application**
-   Any files or directories you’ve created that match paths in the app are symlinked from the
-   runtime to your local versions, effectively **shadowing** the renoun app.
+2. **Layer application**
+   Your files are layered on top using an additive model—files you create are linked into the
+   runtime, merging with the base app rather than replacing it entirely.
 
 3. **Framework launch**
    The CLI spawns the framework (`next dev`, `vite dev`, `waku dev`, etc.) **inside the runtime
-   directory**. The framework sees a merged view: app code plus your overrides.
+   directory**. The framework sees the merged result: base app + your customizations.
 
 4. **Path resolution**
    renoun sets an internal environment variable so its utilities resolve paths relative to the
-   runtime directory, ensuring your shadowed content is discovered correctly.
+   runtime directory, ensuring your layered content is discovered correctly.
 
-This architecture means you never modify the renoun app in `node_modules`; you only add and edit
-files in your own project.
+This architecture means you never modify the template in `node_modules`; you only add and edit
+files in your own project. When the base app updates, you get the improvements automatically.
 
 ---
 
 ## Quick start
 
-1. Install the renoun runtime and a renoun app:
+1. Install the renoun runtime and a template app:
 
    ```bash
    pnpm add renoun @renoun/blog
@@ -74,44 +83,65 @@ files in your own project.
    }
    ```
 
-3. Create any files you want to shadow from the app, for example:
+3. Create your content—files that layer on top of the template:
 
    ```text
    posts/hello-world.mdx
    ```
 
-4. Run the renoun app:
+4. Run your customized app:
 
    ```bash
    pnpm run dev
    ```
 
-   See [`examples/app`](https://github.com/souporserious/renoun/tree/main/examples/app)
-   for a workspace demo that follows this setup and shadows the `posts/` directory from the
-   `@renoun/blog` app.
+   See [`examples/blog`](https://github.com/souporserious/renoun/tree/main/examples/blog)
+   for a complete example that extends the `@renoun/blog` template with custom posts.
 
-The CLI copies the app into `.renoun/app/<package-name>` inside your project, replaces any paths
-that you shadow with symlinks to your local files, and then executes the app’s framework command
-(`next dev`, `vite dev`, or `waku dev`). The framework output appears in your terminal just like
-running the app directly.
+The CLI merges the template into `.renoun/app/<package-name>`, layers your files on top, and
+launches the framework (`next dev`, `vite dev`, or `waku dev`). You see the combined result—your
+customizations on top of the base app.
 
-## Shadowing behavior
+## Layering your files
 
 Every file or directory that you place next to your `package.json`—excluding lockfiles and
-`node_modules`—is eligible to shadow the renoun app. During startup renoun:
+`node_modules`—becomes part of your layer. During startup renoun:
 
-1. **Copies app files** into the runtime directory. All files are copied so bundlers resolve
+1. **Copies template files** into the runtime directory. All files are copied so bundlers resolve
    imports correctly. Only `node_modules` is symlinked to avoid duplication.
 
-2. **Applies shadows** by replacing any matching paths with symlinks to your local files. If you
-   shadow a directory (like `posts/`), the entire app directory is replaced with a symlink
-   to yours.
+2. **Applies your layer** using an **additive model** that intelligently merges your files with the
+   template's files. Your content is added to the base, not replacing everything.
 
-3. **Enables hot reload** because the framework watches the symlinked files, so edits to your
+3. **Enables hot reload** because the framework watches the linked files, so edits to your
    source files trigger rebuilds immediately.
 
-This lets you focus on content and targeted overrides. For example, to replace a component shipped
-with the app, add a new file with the same relative path:
+### Additive layering
+
+The layering system uses an **additive model** rather than a replacement model. This means:
+
+- **Your files are merged** with the template's files, not replacing them entirely
+- **You can override specific files** while keeping the rest of the app intact
+- **File metadata is preserved** (modification times, etc.) since hard links reference the
+  original files
+- **No disk space duplication** since hard links point to the same data on disk
+
+For example, if you create `posts/my-post.mdx` and the template already has `posts/default.mdx`:
+
+```text
+Your Project                        Runtime Directory
+├── posts/                          ├── posts/
+│   └── my-post.mdx                 │   ├── default.mdx     ← from template
+└── ...                             │   └── my-post.mdx     ← hard link to yours
+                                    └── ...
+```
+
+Both files are visible in the runtime—your content is added alongside the template's defaults.
+This additive approach lets you extend templates without losing their default content.
+
+### Overriding files
+
+To replace a component shipped with the template, add a file with the same relative path:
 
 ```tsx
 // ui/RootProvider.tsx
@@ -125,23 +155,21 @@ export function RootProvider(props: RootProviderProps) {
 }
 ```
 
-The runtime symlink points to your implementation, so the framework reloads with your changes
-without extra configuration. When you shadow a directory (for example `posts/`), the entire app
-directory is replaced by your version, letting you remove or rename the app’s defaults without
-editing anything in `node_modules`.
+The runtime link points to your implementation, so the framework reloads with your changes
+without extra configuration. Your file takes precedence over the template's version at that path.
 
 ---
 
-## Ejecting a renoun app
+## Ejecting from a template
 
-Running a renoun app from `node_modules` is great for exploring and making light customizations.
-When you’re ready to **fully own the app’s source**, you can **eject**.
+Using a template from `node_modules` is great for exploring and making light customizations.
+When you're ready to **fully own the source**, you can **eject**.
 
 Ejecting turns:
 
-> “Run a renoun app from `node_modules`”
+> "Extend a template from `node_modules`"
 > into
-> “Use renoun in _your_ app.”
+> "Use renoun in _your_ app."
 
 ### What `renoun eject` does
 
@@ -155,21 +183,21 @@ renoun will:
 
 1. **Materialize the runtime into your repo**
    - Take the current runtime at `.renoun/app/<app-name>`.
-   - Copy its application files (e.g. `app/`, `components/`, `ui/`, configs) into your project
+   - Copy all files (e.g. `app/`, `components/`, `ui/`, configs) into your project
      root (or a configured target directory).
-   - Preserve paths so the app layout matches what you were already running.
+   - Preserve paths so the layout matches what you were already running.
 
-2. **Apply your shadows on top**
-   - Any files or directories you were shadowing (like `posts/` or `ui/RootProvider.tsx`) are
+2. **Apply your layer on top**
+   - Any files or directories you were layering (like `posts/` or `ui/RootProvider.tsx`) are
      treated as the source of truth.
-   - If a file exists both in the runtime and your project, the **local file wins**.
-   - Shadowed directories fully replace the app’s version.
+   - If a file exists both in the template and your project, the **local file wins**.
+   - Layered directories fully replace the template's version.
 
-   The result is a single, coherent codebase in your project that reflects exactly what you were
-   seeing while running the renoun app.
+   The result is a single, coherent codebase that reflects exactly what you were seeing while
+   running the app.
 
-3. **Remove the renoun app dependency**
-   - The ejected app no longer depends on the original renoun app package at runtime.
+3. **Remove the template dependency**
+   - The ejected app no longer depends on the original template package at runtime.
    - `renoun eject` removes the specified app from your `dependencies` / `devDependencies`,
      leaving `renoun` itself in place.
 
@@ -193,21 +221,21 @@ renoun will:
 
    (Swap `next` for `vite` / `waku` depending on the framework the app uses.)
 
-Now you’re using the “Use renoun in your app” flow, with the ejected codebase as _your_ app.
+Now you're using the "Use renoun in your app" flow, with the ejected codebase as _your_ app.
 
 ### When to eject
 
-Stay in the **“run a renoun app”** flow (`renoun dev`) when:
+Stay in the **"Apps as Templates"** flow (`renoun dev`) when:
 
 - You want to try a blog/docs/Presenter app quickly.
-- You’re happy with the overall structure and only need targeted overrides.
-- You want to keep upgrading the underlying app over time.
+- You're happy with the overall structure and only need targeted customizations.
+- You want to keep upgrading the underlying template over time.
 
 Use **`renoun eject`** when:
 
-- You’re turning the app into a long-lived product with heavy customizations.
+- You're turning the app into a long-lived product with heavy customizations.
 - You want full control over routing, layout, configuration, and dependencies.
-- You’re ready to treat it as your app and run it via `renoun next dev` / `renoun vite dev` /
+- You're ready to treat it as your own app and run it via `renoun next dev` / `renoun vite dev` /
   `renoun waku dev`.
 
 ---
@@ -215,7 +243,7 @@ Use **`renoun eject`** when:
 ## Cleaning up
 
 Stop the process with `Ctrl+C` just like any framework script. The next run recreates the runtime
-folder from scratch, ensuring you always start from a clean copy of the renoun app when using
+folder from scratch, ensuring you always start from a clean merge of the template when using
 `renoun dev`.
 
 After ejecting, the `.renoun/` directory is automatically removed since the ejected app no longer
@@ -225,7 +253,7 @@ needs the runtime environment.
 
 ## Security model
 
-Running renoun apps this way is designed with security in mind. Here's how the system protects your
+Running templates this way is designed with security in mind. Here's how the system protects your
 project:
 
 ### What renoun controls
@@ -248,14 +276,14 @@ arbitrary directories.
 
 While renoun secures its internal operations, you should understand these aspects of the system:
 
-- **renoun apps run code in your environment.** Only install applications from
-  sources you trust, just as you would with any npm dependency. renoun apps have the same access
+- **Template apps run code in your environment.** Only install templates from
+  sources you trust, just as you would with any npm dependency. Template apps have the same access
   as any other package in your project.
 
 - **The `.renoun/` directory is temporary.** Add it to your `.gitignore`. It's recreated fresh on
   each run, so don't store anything important there.
 
-- **Symlinks point to your real files.** When you shadow a file, the framework reads directly from
+- **Links point to your real files.** When you layer a file, the framework reads directly from
   your source. This is the intended behavior—it enables hot reload and live editing.
 
 ### Shared environments
@@ -267,8 +295,7 @@ use case, but standard environment isolation practices still apply.
 
 ### Summary
 
-Running a renoun app from `node_modules` via `renoun dev` is safe for normal development
-workflows. The security model ensures renoun only operates within your project's `.renoun/`
-directory, and the same trust model applies to renoun apps as to any npm package you install.
-If you eject, you keep all the code locally and continue building as your own app with the same
-safety guarantees.
+Using "Apps as Templates" via `renoun dev` is safe for normal development workflows. The security
+model ensures renoun only operates within your project's `.renoun/` directory, and the same trust
+model applies to template apps as to any npm package you install. If you eject, you keep all the
+code locally and continue building as your own app with the same safety guarantees.

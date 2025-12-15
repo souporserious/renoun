@@ -1,12 +1,18 @@
 {
   "name": "@examples/workbench",
-  "description": "A workbench example built with @renoun/workbench.",
+  "description": "A workbench example built with @renoun/workbench, demonstrating component shadowing.",
   "scripts": {
     "dev": "renoun dev",
     "build": "renoun build"
   },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:"
+  },
   "dependencies": {
     "@renoun/workbench": "workspace:*",
-    "renoun": "workspace:*"
+    "renoun": "workspace:*",
+    "restyle": "catalog:",
+    "next": "catalog:"
   }
 }

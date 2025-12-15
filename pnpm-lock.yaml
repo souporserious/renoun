@@ -367,6 +367,37 @@ importers:
         specifier: workspace:*
         version: link:../../packages/renoun
 
+  examples/docs:
+    dependencies:
+      '@renoun/docs':
+        specifier: workspace:*
+        version: link:../../apps/docs
+      renoun:
+        specifier: workspace:*
+        version: link:../../packages/renoun
+
+  examples/workbench:
+    dependencies:
+      '@renoun/workbench':
+        specifier: workspace:*
+        version: link:../../apps/workbench
+      next:
+        specifier: 'catalog:'
+        version: 16.1.0-canary.20(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      renoun:
+        specifier: workspace:*
+        version: link:../../packages/renoun
+      restyle:
+        specifier: 'catalog:'
+        version: 3.4.2(react@19.2.3)
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.7)
+
   packages/create-renoun:
     dependencies:
       '@antfu/install-pkg':

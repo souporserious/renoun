@@ -4,11 +4,11 @@ This directory contains example projects showcasing different use cases and impl
 
 ### [App](./app)
 
-A minimal project that installs `@renoun/blog` and shadows the `posts/` directory locally.
+A minimal project that installs `@renoun/blog` and layers the `posts/` directory on top.
 
 - Demonstrates the CLI application flow
 - Only requires `package.json` and local content
-- Ready to extend with additional overrides
+- Ready to extend with additional layers
 
 ### [Docs](./docs)
 
