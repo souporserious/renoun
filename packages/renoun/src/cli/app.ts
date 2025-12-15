@@ -142,6 +142,23 @@ function copyBuildOutput(options: {
   cpSync(sourceOutputDir, targetOutputDir, { recursive: true })
 
   log(`Build output copied to ./${outputDirName}/`)
+
+  // For Next.js, also copy `.next` directory since Vercel expects it for routes manifest
+  if (framework === 'next') {
+    const sourceNextDir = join(runtimeDirectory, '.next')
+    const targetNextDir = join(projectRoot, '.next')
+
+    if (existsSync(sourceNextDir)) {
+      try {
+        rmSync(targetNextDir, { recursive: true, force: true })
+      } catch {
+        // Ignore errors if directory doesn't exist
+      }
+
+      cpSync(sourceNextDir, targetNextDir, { recursive: true })
+      log('Build metadata copied to ./.next/')
+    }
+  }
 }
 
 export async function runAppCommand({
