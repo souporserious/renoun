@@ -71,7 +71,14 @@ export function trimTrailingSlashes(value: string): string {
 /** Normalize a path to be relative to the current working directory. */
 export function normalizePath(path: string): string {
   const normalizedSlashes = normalizeSlashes(path)
-  return normalizedSlashes.startsWith('.')
+  // Handle current directory special case
+  if (normalizedSlashes === '.') {
+    return './'
+  }
+  // Check for actual relative paths (./ or ../) not hidden files (.gitkeep)
+  const isCurrentDirectoryRelativePath = normalizedSlashes.startsWith('./')
+  const isAncestorRelativePath = normalizedSlashes.startsWith('../')
+  return isCurrentDirectoryRelativePath || isAncestorRelativePath
     ? normalizedSlashes
     : `./${normalizedSlashes}`
 }
@@ -125,7 +132,13 @@ export function removeAllExtensions(filePath: string): string {
   const lastSlashIndex = filePath.lastIndexOf('/')
   const filenNameStartOffset = 1
   const fileName = filePath.slice(lastSlashIndex + filenNameStartOffset)
-  const firstDotIndex = fileName.lastIndexOf('.')
+
+  // Find the first dot that's not at position 0 (hidden files start with .)
+  let firstDotIndex = fileName.indexOf('.')
+  if (firstDotIndex === 0) {
+    // This is a hidden file, look for the next dot
+    firstDotIndex = fileName.indexOf('.', 1)
+  }
 
   if (firstDotIndex === -1) {
     return filePath // No extension found

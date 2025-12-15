@@ -458,6 +458,69 @@ describe('file system', () => {
     expect(entries).toHaveLength(1)
   })
 
+  test('filters out hidden files by default', async () => {
+    const fileSystem = new MemoryFileSystem({
+      '.gitkeep': '',
+      '.hidden-config': '',
+      'visible.ts': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries()
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0].getName()).toBe('visible.ts')
+  })
+
+  test('filters out hidden directories by default', async () => {
+    const fileSystem = new MemoryFileSystem({
+      '.hidden-dir/file.ts': '',
+      'visible-dir/file.ts': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries({ recursive: true })
+
+    expect(entries.map((entry) => entry.getAbsolutePath())).toEqual([
+      '/visible-dir',
+      '/visible-dir/file.ts',
+    ])
+  })
+
+  test('includes hidden files when includeHiddenFiles is true', async () => {
+    const fileSystem = new MemoryFileSystem({
+      '.gitkeep': '',
+      '.hidden-config': '',
+      'visible.ts': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries({ includeHiddenFiles: true })
+
+    expect(entries).toHaveLength(3)
+    expect(entries.map((entry) => entry.getName()).sort()).toEqual([
+      '.gitkeep',
+      '.hidden-config',
+      'visible.ts',
+    ])
+  })
+
+  test('includes hidden directories when includeHiddenFiles is true', async () => {
+    const fileSystem = new MemoryFileSystem({
+      '.hidden-dir/file.ts': '',
+      'visible-dir/file.ts': '',
+    })
+    const directory = new Directory({ fileSystem })
+    const entries = await directory.getEntries({
+      recursive: true,
+      includeHiddenFiles: true,
+    })
+
+    expect(entries.map((entry) => entry.getAbsolutePath()).sort()).toEqual([
+      '/.hidden-dir',
+      '/.hidden-dir/file.ts',
+      '/visible-dir',
+      '/visible-dir/file.ts',
+    ])
+  })
+
   test('filters with schema', async () => {
     const directory = new Directory({
       path: 'fixtures/posts',

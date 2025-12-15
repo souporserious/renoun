@@ -2986,6 +2986,7 @@ const enum DirectorySnapshotOptionBit {
   IncludeIndexAndReadmeFiles = 1 << 2,
   IncludeGitIgnoredFiles = 1 << 3,
   IncludeTsConfigExcludedFiles = 1 << 4,
+  IncludeHiddenFiles = 1 << 5,
 }
 
 interface NormalizedDirectoryEntriesOptions {
@@ -2994,6 +2995,7 @@ interface NormalizedDirectoryEntriesOptions {
   includeIndexAndReadmeFiles: boolean
   includeGitIgnoredFiles: boolean
   includeTsConfigExcludedFiles: boolean
+  includeHiddenFiles: boolean
 }
 
 type DirectorySnapshotMetadataEntry<LoaderTypes extends Record<string, any>> =
@@ -3041,6 +3043,10 @@ function createOptionsMask(options: NormalizedDirectoryEntriesOptions) {
 
   if (options.includeTsConfigExcludedFiles) {
     mask |= DirectorySnapshotOptionBit.IncludeTsConfigExcludedFiles
+  }
+
+  if (options.includeHiddenFiles) {
+    mask |= DirectorySnapshotOptionBit.IncludeHiddenFiles
   }
 
   return mask
@@ -3948,6 +3954,9 @@ export class Directory<
 
     /** Include files that are excluded by the configured `tsconfig.json` file's `exclude` patterns. */
     includeTsConfigExcludedFiles?: boolean
+
+    /** Include hidden files and directories (names starting with `.`). */
+    includeHiddenFiles?: boolean
   }): Promise<
     Array<
       ResolveDirectoryFilterEntries<
@@ -3967,6 +3976,7 @@ export class Directory<
       includeIndexAndReadmeFiles?: boolean
       includeGitIgnoredFiles?: boolean
       includeTsConfigExcludedFiles?: boolean
+      includeHiddenFiles?: boolean
     } = { ...(options ?? {}) }
 
     delete (entriesOptions as any).filter
@@ -4054,6 +4064,7 @@ export class Directory<
     includeIndexAndReadmeFiles?: boolean
     includeGitIgnoredFiles?: boolean
     includeTsConfigExcludedFiles?: boolean
+    includeHiddenFiles?: boolean
   }): NormalizedDirectoryEntriesOptions {
     return {
       recursive: options?.recursive ?? false,
@@ -4062,6 +4073,7 @@ export class Directory<
       includeGitIgnoredFiles: options?.includeGitIgnoredFiles ?? false,
       includeTsConfigExcludedFiles:
         options?.includeTsConfigExcludedFiles ?? false,
+      includeHiddenFiles: options?.includeHiddenFiles ?? false,
     }
   }
 
@@ -4126,6 +4138,12 @@ export class Directory<
     >()
 
     for (const entry of rawEntries) {
+      // Skip hidden files and directories (names starting with `.`) unless explicitly included
+      const isHiddenFile = entry.name.startsWith('.')
+      if (isHiddenFile && !options.includeHiddenFiles) {
+        continue
+      }
+
       if (dependencyTimestamps) {
         try {
           const mtime = await fileSystem.getFileLastModifiedMs(entry.path)
