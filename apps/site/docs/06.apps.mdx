@@ -240,6 +240,83 @@ Use **`renoun eject`** when:
 
 ---
 
+## Building your own app template
+
+Creating an app template is straightforward—it's just a normal application with a few conventions.
+Here's how to build one that works well with renoun's override system.
+
+### Basic structure
+
+An app template is a publishable npm package containing a complete, runnable application:
+
+```text
+blog-template/
+├── app/                    # Your framework routes
+│   ├── layout.tsx
+│   └── page.tsx
+├── posts/                  # Content directories for user content
+│   └── .gitkeep            # Keep empty directories in git
+├── collections.ts          # renoun collections
+├── package.json            # Package with framework deps
+└── README.md
+```
+
+### Package setup
+
+Your `package.json` should include the framework and renoun as dependencies:
+
+```json
+{
+  "name": "@your-org/my-template",
+  "version": "1.0.0",
+  "dependencies": {
+    "renoun": "^7.0.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0"
+  }
+}
+```
+
+Users install your template alongside renoun, then run `renoun dev` to use it as their base.
+
+### Design for overrides
+
+When building a template, think about what users will want to customize:
+
+- **Content directories** (like `posts/`, `docs/`) — Users add their content here
+- **UI components** — Provide sensible defaults that users can override
+- **Configuration** — Keep config in discoverable locations
+
+User files are merged additively with your template, so your defaults show up alongside user
+content. Design your template to work well with this model.
+
+### Gotchas
+
+A few things to watch out for when building templates:
+
+**Empty directories aren't tracked by git.** If your template includes empty directories that
+users are expected to add content to (like `posts/`), add a `.gitkeep` file:
+
+```bash
+touch posts/.gitkeep
+```
+
+Without this, the directory won't exist when users install your template from npm, and their
+content won't be merged into it.
+
+**Build artifacts should be ignored.** Add `.renoun/`, `.next/`, `out/`, and `node_modules/` to
+your `.gitignore`. The eject command automatically skips these directories.
+
+**Test the eject flow.** Run `renoun eject` on your own template to verify the experience is
+smooth. Users who outgrow the template model will appreciate a clean transition.
+
+### Example
+
+See the [`@renoun/blog`](https://github.com/souporserious/renoun/tree/main/apps/blog) source for
+a complete example of a well-structured app template.
+
+---
+
 ## Cleaning up
 
 Stop the process with `Ctrl+C` just like any framework script. The next run recreates the runtime
