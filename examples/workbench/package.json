@@ -1,0 +1,12 @@
+{
+  "name": "@examples/workbench",
+  "description": "A workbench example built with @renoun/workbench.",
+  "scripts": {
+    "dev": "renoun dev",
+    "build": "renoun build"
+  },
+  "dependencies": {
+    "@renoun/workbench": "workspace:*",
+    "renoun": "workspace:*"
+  }
+}

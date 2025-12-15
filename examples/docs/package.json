@@ -1,0 +1,12 @@
+{
+  "name": "@examples/docs",
+  "description": "A documentation site example built with @renoun/docs.",
+  "scripts": {
+    "dev": "renoun dev",
+    "build": "renoun build"
+  },
+  "dependencies": {
+    "@renoun/docs": "workspace:*",
+    "renoun": "workspace:*"
+  }
+}
