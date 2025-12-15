@@ -8,6 +8,21 @@
     "build": "renoun next build",
     "start": "next start"
   },
+  "files": [
+    "app/**",
+    "docs/**",
+    "ui/**",
+    "public/**",
+    "collections.ts",
+    "mdx-components.tsx",
+    "next.config.*",
+    "postcss.config.*",
+    "tailwind.config.*",
+    "tsconfig.json"
+  ],
+  "exports": {
+    "./*": "./*"
+  },
   "dependencies": {
     "@mdx-js/loader": "catalog:",
     "@mdx-js/react": "catalog:",
