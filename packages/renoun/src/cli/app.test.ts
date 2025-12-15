@@ -6,12 +6,12 @@ import {
   mkdtemp,
   mkdir,
   readFile,
-  readlink,
   rm,
+  stat,
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve as resolvePath } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   afterEach,
@@ -205,23 +205,25 @@ describe('runAppCommand integration', () => {
       )
       expect(runtimePackageJson.name).toBe('@renoun/blog')
 
+      // With additive layering, the posts directory is a real directory
+      // (not a symlink) with individual files hard-linked inside
       const runtimePostsStat = await lstat(join(runtimeRoot, 'posts'))
-      expect(runtimePostsStat.isSymbolicLink()).toBe(true)
-      const runtimePostsLink = await readlink(join(runtimeRoot, 'posts'))
-      expect(resolvePath(runtimeRoot, runtimePostsLink)).toBe(
-        join(projectRoot, 'posts')
-      )
+      expect(runtimePostsStat.isDirectory()).toBe(true)
+      expect(runtimePostsStat.isSymbolicLink()).toBe(false)
 
-      const runtimeRootConfigStat = await lstat(
+      // The layered file inside posts should be a hard link (same inode)
+      const layeredPostPath = join(runtimeRoot, 'posts', 'hello-from-layer.mdx')
+      const projectPostPath = join(projectRoot, 'posts', 'hello-from-layer.mdx')
+      const runtimeLayeredPostStat = await stat(layeredPostPath)
+      const projectLayeredPostStat = await stat(projectPostPath)
+      expect(runtimeLayeredPostStat.ino).toBe(projectLayeredPostStat.ino)
+
+      // Root-level files should also be hard links
+      const runtimeRootConfigStat = await stat(
         join(runtimeRoot, 'root-config.ts')
       )
-      expect(runtimeRootConfigStat.isSymbolicLink()).toBe(true)
-      const runtimeRootConfigLink = await readlink(
-        join(runtimeRoot, 'root-config.ts')
-      )
-      expect(resolvePath(runtimeRoot, runtimeRootConfigLink)).toBe(
-        rootOverridePath
-      )
+      const projectRootConfigStat = await stat(rootOverridePath)
+      expect(runtimeRootConfigStat.ino).toBe(projectRootConfigStat.ino)
 
       // Build output directory should not be layered into runtime
       await expect(lstat(join(runtimeRoot, 'out'))).rejects.toMatchObject({
