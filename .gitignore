@@ -8,15 +8,18 @@ node_modules
 # testing
 coverage
 
+# cursor
+.cursor
+
 # next.js
 .next
 out
 
-# turbo
-.turbo
-
 # renoun
 .renoun
+
+# turbo
+.turbo
 
 # production
 build
