@@ -6,11 +6,9 @@
     "dev": "renoun dev",
     "build": "renoun build"
   },
-  "devDependencies": {
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:"
-  },
   "dependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@renoun/workbench": "workspace:*",
     "renoun": "workspace:*",
     "restyle": "catalog:",
