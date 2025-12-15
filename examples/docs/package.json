@@ -1,4 +1,5 @@
 {
+  "private": true,
   "name": "@examples/docs",
   "description": "A documentation site example built with @renoun/docs.",
   "scripts": {

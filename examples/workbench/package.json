@@ -1,4 +1,5 @@
 {
+  "private": true,
   "name": "@examples/workbench",
   "description": "A workbench example built with @renoun/workbench, demonstrating component shadowing.",
   "scripts": {
