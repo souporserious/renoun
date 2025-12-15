@@ -254,8 +254,8 @@ blog-template/
 ├── app/                    # Your framework routes
 │   ├── layout.tsx
 │   └── page.tsx
-├── posts/                  # Content directories for user content
-│   └── .gitkeep            # Keep empty directories in git
+├── posts/                  # Content directory for user content
+│   └── .gitkeep            # Preserves empty directory in git
 ├── collections.ts          # renoun collections
 ├── package.json            # Package with framework deps
 └── README.md
@@ -301,8 +301,9 @@ users are expected to add content to (like `posts/`), add a `.gitkeep` file:
 touch posts/.gitkeep
 ```
 
-Without this, the directory won't exist when users install your template from npm, and their
-content won't be merged into it.
+Without this, the directory won't exist when users install your template from npm. Hidden files
+like `.gitkeep` are automatically excluded from directory listings, so they won't appear as
+content entries.
 
 **Build artifacts should be ignored.** Add `.renoun/`, `.next/`, `out/`, and `node_modules/` to
 your `.gitignore`. The eject command automatically skips these directories.
