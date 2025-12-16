@@ -92,15 +92,14 @@ If you're using Turborepo, the renoun cache works alongside Turbo's caching:
 {
   "tasks": {
     "build": {
-      "cache": true,
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", ".renoun/cache/**"],
+      "dependsOn": ["^build"],
       "outputs": [".next/**", ".renoun/cache/**"]
     }
   }
 }
 ```
 
-This ensures the renoun cache is included in Turbo's cache artifacts.
+Adding `.renoun/cache/**` to `outputs` ensures Turborepo caches and restores the type resolution cache alongside your build artifacts.
 
 ## Cache Invalidation
 

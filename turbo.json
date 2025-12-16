@@ -14,7 +14,7 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "out/**"]
+      "outputs": [".next/**", ".renoun/**", "dist/**", "out/**"]
     },
     "test": {
       "dependsOn": ["^build"],
