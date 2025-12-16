@@ -5,12 +5,14 @@ export const grammarLoaders: Record<string, () => Promise<{ default: any }>> = {
   'source.json': () => import('./json.ts'),
   'source.mdx': () => import('./mdx.ts'),
   'source.shell': () => import('./shellscript.ts'),
-  'source.tsx': () => import('./tsx.ts')
+  'source.tsx': () => import('./tsx.ts'),
+  'source.yaml': () => import('./yaml.ts')
 }
 
 // prettier-ignore
 export const grammarRedirects = {
   'source.ts': 'source.tsx',
+  'source.js': 'source.tsx',
   'source.js.jsx': 'source.tsx',
   'text.html.markdown': 'source.mdx'
 }
@@ -104,12 +106,13 @@ export const grammars = {
   'text.html.basic': ['html'],
   'text.html.derivative': ['html-derivative'],
   'source.http': ['http'],
+  'source.hurl': ['hurl'],
   'source.hxml': ['hxml'],
   'source.hy': ['hy'],
   'source.imba': ['imba'],
   'source.ini': ['ini', 'properties'],
   'source.java': ['java'],
-  'source.ts': ['javascript', 'js', 'typescript', 'ts'],
+  'source.js': ['javascript', 'js', 'cjs', 'mjs'],
   'source.jinja': ['jinja'],
   'source.jison': ['jison'],
   'source.json': ['json'],
@@ -120,6 +123,7 @@ export const grammars = {
   'source.jssm': ['jssm', 'fsl'],
   'source.js.jsx': ['jsx'],
   'source.julia': ['julia', 'jl'],
+  'source.kdl': ['kdl'],
   'source.kotlin': ['kotlin', 'kt', 'kts'],
   'source.kusto': ['kusto', 'kql'],
   'text.tex.latex': ['latex'],
@@ -150,9 +154,11 @@ export const grammars = {
   'source.objc': ['objective-c', 'objc'],
   'source.objcpp': ['objective-cpp'],
   'source.ocaml': ['ocaml'],
+  'source.scad': ['openscad', 'scad'],
   'source.pascal': ['pascal'],
   'source.perl': ['perl'],
   'source.php': ['php'],
+  'source.pkl': ['pkl'],
   'source.plsql.oracle': ['plsql'],
   'source.po': ['po', 'pot', 'potx'],
   'source.polar': ['polar'],
@@ -177,6 +183,7 @@ export const grammars = {
   'source.regexp.python': ['regexp', 'regex'],
   'source.rel': ['rel'],
   'source.riscv': ['riscv'],
+  'source.rosmsg': ['rosmsg'],
   'source.rst': ['rst'],
   'source.ruby': ['ruby', 'rb'],
   'source.rust': ['rust', 'rs'],
@@ -214,6 +221,7 @@ export const grammars = {
   'source.tsx': ['tsx'],
   'source.turtle': ['turtle'],
   'text.html.twig': ['twig'],
+  'source.ts': ['typescript', 'ts', 'cts', 'mts'],
   'source.tsp': ['typespec', 'tsp'],
   'source.typst': ['typst', 'typ'],
   'source.v': ['v'],
