@@ -46,8 +46,8 @@ export interface TokensProps {
   /** Code string to highlight and render as tokens. */
   children?: string | Promise<string>
 
-  /** Name or path of the tokens to render. This will read the local file system contents from the `baseDirectory` joined with the `path` prop instead of creating a virtual file. */
-  path?: PathLike
+  /** Name or path of the tokens to render. This will read the local file system contents from the `baseDirectory` joined with the `path` prop instead of creating a virtual file. Pass `null` to explicitly disable context inheritance. */
+  path?: PathLike | null
 
   /** The base directory to use when analyzing the source code. This will read the local file system contents from the `baseDirectory` joined with the `path` prop instead of creating a virtual file. */
   baseDirectory?: PathLike
@@ -114,8 +114,8 @@ export async function Tokens({
   showErrors: showErrorsProp,
   shouldAnalyze: shouldAnalyzeProp,
   shouldFormat: shouldFormatProp,
-  path: pathProp,
-  baseDirectory: baseDirectoryProp,
+  path,
+  baseDirectory,
   renderLine,
   css = {},
   className = {},
@@ -126,9 +126,6 @@ export async function Tokens({
   const context = getContext(Context)
   const config = await getConfig()
   const theme = await getThemeColors(config.theme)
-  // Prefer props over context to avoid race conditions during concurrent rendering
-  const filePath = pathProp ?? context?.filePath
-  const baseDirectory = baseDirectoryProp ?? context?.baseDirectory
   const language = languageProp || context?.language
   const themeConfiguration = themeProp ?? config.theme
   const baseTokenClassName = hasMultipleThemes(themeConfiguration)
@@ -145,8 +142,8 @@ export async function Tokens({
   }
 
   if (value === undefined) {
-    if (filePath) {
-      value = await readCodeFromPath(filePath, baseDirectory)
+    if (path) {
+      value = await readCodeFromPath(path, baseDirectory)
     } else {
       throw new Error(
         '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `baseDirectory` props.'
@@ -181,7 +178,7 @@ export async function Tokens({
 
   if (shouldAnalyze) {
     const result = await getSourceTextMetadata({
-      filePath: filePath ? pathLikeToString(filePath) : undefined,
+      filePath: path ? pathLikeToString(path) : undefined,
       baseDirectory: baseDirectory
         ? pathLikeToString(baseDirectory)
         : undefined,
