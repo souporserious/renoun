@@ -10,11 +10,12 @@ const BUNDLED_LANGUAGES = new Set<string>([
   'mdx',
   'shellscript',
   'tsx',
+  'yaml',
 ])
 const grammarLoaders = grammars
   .filter((grammar) => BUNDLED_LANGUAGES.has(grammar.name))
   .map((grammar) => {
-    const importString = `() => import('./${grammar.name}.js')`
+    const importString = `() => import('./${grammar.name}.ts')`
     return `  '${grammar.scopeName}': ${importString}`
   })
   .join(',\n')

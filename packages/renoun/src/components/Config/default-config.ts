@@ -20,6 +20,7 @@ export const defaultConfig: ConfigurationOptions = {
     'shell',
     'json',
     'html',
+    'yaml',
   ],
   sources: {},
 }
