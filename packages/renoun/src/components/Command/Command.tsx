@@ -372,7 +372,7 @@ async function CommandAsync({
         suppressHydrationWarning
       >
         <Code css={css?.code} className={className?.code} style={style?.code}>
-          <Tokens language="sh" shouldFormat={false}>
+          <Tokens language="shell" path={null} shouldFormat={false}>
             {commandText}
           </Tokens>
         </Code>
@@ -411,7 +411,7 @@ export function Command({
   if (!variant) {
     return (
       <Code css={css?.code} className={className?.code} style={style?.code}>
-        <Tokens language="sh" shouldFormat={false}>
+        <Tokens language="shell" path={null} shouldFormat={false}>
           {String(children)}
         </Tokens>
       </Code>
