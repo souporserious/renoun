@@ -677,6 +677,8 @@ export type TypeFilter = FilterDescriptor | FilterDescriptor[]
 /** Reset internal caches. Called at the start of each type resolution. */
 export function resetTypeResolutionCaches() {
   resolveTypeExpressionCache.clear()
+  transparentUtilityTypeCache.clear()
+  primaryDeclarationCache.clear()
 }
 
 /** Normalizes a module specifier to a standard format e.g. `@types/react` -> `react`. */
@@ -803,7 +805,7 @@ const jsDocTypeOwners = new WeakMap<Node, Node>()
 
 /** Cache for resolved type expressions within a single type resolution. */
 let resolveTypeExpressionCache = new Map<
-  number,
+  string,
   Kind.TypeExpression | undefined
 >()
 
@@ -2056,9 +2058,12 @@ function resolveTypeExpression(
   dependencies?: Set<string>
 ): Kind.TypeExpression | undefined {
   // Check cache first to avoid redundant resolution
-  const typeId = type.compilerType.id
-  if (resolveTypeExpressionCache.has(typeId)) {
-    return resolveTypeExpressionCache.get(typeId)
+  // Include enclosing node position in key since same type can appear at different positions
+  const nodeStart = enclosingNode?.getStart() ?? 0
+  const nodeFilePath = enclosingNode?.getSourceFile().getFilePath() ?? ''
+  const cacheKey = `${type.compilerType.id}:${nodeFilePath}:${nodeStart}`
+  if (resolveTypeExpressionCache.has(cacheKey)) {
+    return resolveTypeExpressionCache.get(cacheKey)
   }
 
   const symbol = type.getSymbol()
@@ -3777,7 +3782,7 @@ function resolveTypeExpression(
   }
 
   // Store in cache for future lookups
-  resolveTypeExpressionCache.set(typeId, resolvedType)
+  resolveTypeExpressionCache.set(cacheKey, resolvedType)
   return resolvedType
 }
 
@@ -6589,7 +6594,7 @@ function resolvePrimitiveType(
 }
 
 /** Cache for primary declaration lookups. */
-const primaryDeclarationCache = new WeakMap<Symbol, Node | undefined>()
+const primaryDeclarationCache = new Map<Symbol, Node | undefined>()
 
 /**
  * Attempts to find the primary declaration of a symbol based on the following criteria:

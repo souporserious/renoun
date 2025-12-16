@@ -1,9 +1,9 @@
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { getTsMorph } from './ts-morph.ts'
 import type { ClassDeclaration, FunctionDeclaration } from './ts-morph.ts'
 import dedent from 'dedent'
 
-import { resolveType } from './resolve-type.ts'
+import { resolveType, resetTypeResolutionCaches } from './resolve-type.ts'
 
 const { Project, SyntaxKind, ts } = getTsMorph()
 
@@ -15,6 +15,11 @@ const project = new Project({
 })
 
 describe('resolveType', () => {
+  // Reset caches before each test to prevent cross-test pollution from type ID collisions
+  beforeEach(() => {
+    resetTypeResolutionCaches()
+  })
+
   const sourceFile = project.createSourceFile(
     'test.ts',
     `
