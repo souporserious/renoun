@@ -43,6 +43,7 @@ import type {
   ts,
   IndexedAccessTypeNode,
 } from './ts-morph.ts'
+
 import {
   getInitializerValueKey,
   getInitializerValue,
@@ -673,6 +674,11 @@ export interface FilterDescriptor {
 
 export type TypeFilter = FilterDescriptor | FilterDescriptor[]
 
+/** Reset internal caches. Called at the start of each type resolution. */
+export function resetTypeResolutionCaches() {
+  resolveTypeExpressionCache.clear()
+}
+
 /** Normalizes a module specifier to a standard format e.g. `@types/react` -> `react`. */
 function normalizeModuleSpecifier(moduleSpecifier?: string) {
   if (!moduleSpecifier) {
@@ -794,6 +800,12 @@ declare module 'ts-morph' {
 /** Tracks types currently being resolved by compiler type id (stable across wrappers). */
 const resolvingTypes = new Set<number>()
 const jsDocTypeOwners = new WeakMap<Node, Node>()
+
+/** Cache for resolved type expressions within a single type resolution. */
+let resolveTypeExpressionCache = new Map<
+  number,
+  Kind.TypeExpression | undefined
+>()
 
 /** Tracks aliases currently being expanded to prevent recursive type references. */
 const resolvingAliasSymbols = new Set<Symbol>()
@@ -2043,6 +2055,12 @@ function resolveTypeExpression(
   defaultValues?: Record<string, unknown> | unknown,
   dependencies?: Set<string>
 ): Kind.TypeExpression | undefined {
+  // Check cache first to avoid redundant resolution
+  const typeId = type.compilerType.id
+  if (resolveTypeExpressionCache.has(typeId)) {
+    return resolveTypeExpressionCache.get(typeId)
+  }
+
   const symbol = type.getSymbol()
   const aliasSymbol = type.getAliasSymbol()
   const symbolDeclaration = getPrimaryDeclaration(aliasSymbol || symbol)
@@ -3758,6 +3776,8 @@ function resolveTypeExpression(
     }
   }
 
+  // Store in cache for future lookups
+  resolveTypeExpressionCache.set(typeId, resolvedType)
   return resolvedType
 }
 
@@ -6568,6 +6588,9 @@ function resolvePrimitiveType(
   }
 }
 
+/** Cache for primary declaration lookups. */
+const primaryDeclarationCache = new WeakMap<Symbol, Node | undefined>()
+
 /**
  * Attempts to find the primary declaration of a symbol based on the following criteria:
  *   - Type-like declarations (`type`, `interface`, `enum`, `class`)
@@ -6577,6 +6600,11 @@ function resolvePrimitiveType(
 function getPrimaryDeclaration(symbol?: Symbol): Node | undefined {
   if (!symbol) {
     return undefined
+  }
+
+  // Check cache first
+  if (primaryDeclarationCache.has(symbol)) {
+    return primaryDeclarationCache.get(symbol)
   }
 
   const declarations = symbol.getDeclarations()
@@ -6628,12 +6656,16 @@ function getPrimaryDeclaration(symbol?: Symbol): Node | undefined {
     }
   }
 
-  return (
+  const result =
     classDeclaration ??
     typeLikeDeclaration ??
     functionWithBody ??
     firstDeclaration
-  )
+
+  // Store in cache
+  primaryDeclarationCache.set(symbol, result)
+
+  return result
 }
 
 /**
@@ -7223,19 +7255,28 @@ function hasIdentityMappedTypeNode(
  *
  * Pattern: `type Simplify<T> = { [K in keyof T]: T[K] } & {}`
  */
+const transparentUtilityTypeCache = new Map<number, boolean>()
+
 function isTransparentUtilityType(type: Type): boolean {
+  const typeId = type.compilerType.id
+  if (transparentUtilityTypeCache.has(typeId)) {
+    return transparentUtilityTypeCache.get(typeId)!
+  }
+
   // Try to get the alias symbol - this is the primary way to identify the type
   const aliasSymbol = type.getAliasSymbol()
 
   // Also try the regular symbol as a fallback
   const symbol = aliasSymbol || type.getSymbol()
   if (!symbol) {
+    transparentUtilityTypeCache.set(typeId, false)
     return false
   }
 
   const declaration = getPrimaryDeclaration(symbol)
 
   if (!tsMorph.Node.isTypeAliasDeclaration(declaration)) {
+    transparentUtilityTypeCache.set(typeId, false)
     return false
   }
 
@@ -7243,15 +7284,19 @@ function isTransparentUtilityType(type: Type): boolean {
 
   // Transparent utility types typically have exactly one type parameter
   if (typeParams.length !== 1) {
+    transparentUtilityTypeCache.set(typeId, false)
     return false
   }
 
   const typeNode = declaration.getTypeNode()
   if (!typeNode) {
+    transparentUtilityTypeCache.set(typeId, false)
     return false
   }
 
-  return hasIdentityMappedTypeNode(typeNode, typeParams)
+  const result = hasIdentityMappedTypeNode(typeNode, typeParams)
+  transparentUtilityTypeCache.set(typeId, result)
+  return result
 }
 
 /**

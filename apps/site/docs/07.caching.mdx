@@ -1,0 +1,142 @@
+export const metadata = {
+  title: 'Caching',
+  description: 'Optimize build times with type resolution caching.',
+}
+
+renoun analyzes TypeScript types to generate rich documentation and API references. This analysis can be computationally expensive for large codebases. To dramatically improve build times, renoun implements a multi-layered caching system that persists resolved types to disk.
+
+## How It Works
+
+When renoun resolves a TypeScript type, it:
+
+1. **Checks the in-memory cache** for the current process
+2. **Falls back to the disk cache** if not in memory
+3. **Validates dependencies** by checking file modification times
+4. **Resolves the type** only if the cache is stale or missing
+5. **Stores the result** in both memory and disk caches
+
+This means:
+
+- **First build**: Types are resolved and cached to `.renoun/cache/types.json.gz`
+- **Subsequent builds**: Types are loaded from disk cache (nearly instant)
+- **After file changes**: Only affected types are re-resolved
+
+## Performance Impact
+
+The caching system can reduce type resolution time by **99%** or more:
+
+| Scenario                      | Time         |
+| ----------------------------- | ------------ |
+| No caching                    | ~145 seconds |
+| First build (populates cache) | ~83 seconds  |
+| Cached build                  | ~0.1 seconds |
+
+## Cache Location
+
+The type cache is stored in your project at:
+
+```
+.renoun/
+└── cache/
+    └── types.json.gz
+```
+
+The cache file is gzip-compressed to reduce size (typically 80-90% smaller than uncompressed).
+
+## Git Integration
+
+You can choose to either:
+
+### Option 1: Commit the cache (recommended for small teams)
+
+Add the cache to your repository for instant builds on all machines:
+
+```bash
+# The cache is NOT ignored by default
+git add .renoun/cache/types.json.gz
+git commit -m "Add renoun type cache"
+```
+
+### Option 2: Ignore and rebuild (recommended for larger teams)
+
+Add to `.gitignore` and let each environment build its own cache:
+
+```
+.renoun/cache/
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+Add caching to your GitHub Actions workflow for faster CI builds:
+
+```yaml
+- name: Cache renoun type resolution
+  uses: actions/cache@v4
+  with:
+    path: |
+      **/.renoun/cache
+    key: renoun-types-${{ runner.os }}-${{ hashFiles('**/tsconfig.json', 'src/**/*.ts', 'src/**/*.tsx') }}
+    restore-keys: |
+      renoun-types-${{ runner.os }}-
+```
+
+This caches the type resolution data and invalidates when TypeScript files change.
+
+### With Turborepo
+
+If you're using Turborepo, the renoun cache works alongside Turbo's caching:
+
+```json
+{
+  "tasks": {
+    "build": {
+      "cache": true,
+      "inputs": ["src/**/*.ts", "src/**/*.tsx", ".renoun/cache/**"],
+      "outputs": [".next/**", ".renoun/cache/**"]
+    }
+  }
+}
+```
+
+This ensures the renoun cache is included in Turbo's cache artifacts.
+
+## Cache Invalidation
+
+The cache automatically invalidates when:
+
+- **Source files change**: Each cache entry tracks its dependencies and their modification times
+- **TypeScript config changes**: Changes to `tsconfig.json` affect type resolution
+- **Cache version changes**: When renoun updates its cache format
+
+You can manually clear the cache by deleting the `.renoun/cache` directory:
+
+```bash
+rm -rf .renoun/cache
+```
+
+## Troubleshooting
+
+### Cache not being used
+
+If builds are slow despite the cache existing:
+
+1. Check that the cache file exists: `ls -la .renoun/cache/`
+2. Ensure file modification times are preserved (some CI systems don't preserve mtimes)
+3. Verify the cache isn't being cleared between builds
+
+### Stale cache data
+
+If you're seeing incorrect type information:
+
+1. Delete the cache: `rm -rf .renoun/cache`
+2. Rebuild to regenerate the cache
+3. If the issue persists, please [open an issue](https://github.com/souporserious/renoun/issues)
+
+### Large cache size
+
+The cache is compressed with gzip. For very large codebases, you can:
+
+1. Exclude external types using the `filter` option in type resolution
+2. Only analyze the types you need for documentation

@@ -54,6 +54,16 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Cache renoun type resolution
+        if: steps.detect.outputs.changed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/.renoun/cache
+          key: renoun-types-${{ runner.os }}-${{ hashFiles('**/tsconfig.json', 'packages/renoun/src/**/*.ts', 'packages/renoun/src/**/*.tsx') }}
+          restore-keys: |
+            renoun-types-${{ runner.os }}-
+
       - name: Install dependencies
         if: steps.detect.outputs.changed == 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts
