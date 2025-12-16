@@ -429,6 +429,9 @@ async function CodeBlockAsync(
                 }}
               >
                 <Tokens
+                  path={path}
+                  baseDirectory={baseDirectory}
+                  language={language}
                   allowErrors={allowErrors}
                   showErrors={showErrors}
                   css={{
@@ -461,6 +464,9 @@ async function CodeBlockAsync(
               }}
             >
               <Tokens
+                path={path}
+                baseDirectory={baseDirectory}
+                language={language}
                 allowErrors={allowErrors}
                 showErrors={showErrors}
                 css={{

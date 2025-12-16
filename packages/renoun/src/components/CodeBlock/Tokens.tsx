@@ -28,6 +28,7 @@ import {
 import { getConfig } from '../Config/ServerConfigContext.tsx'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
+import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
 import { QuickInfoProvider } from './QuickInfoProvider.tsx'
 import { Context } from './Context.tsx'
@@ -45,6 +46,15 @@ export interface TokensProps {
   /** Code string to highlight and render as tokens. */
   children?: string | Promise<string>
 
+  /** Name or path of the tokens to render. This will read the local file system contents from the `baseDirectory` joined with the `path` prop instead of creating a virtual file. */
+  path?: PathLike
+
+  /** The base directory to use when analyzing the source code. This will read the local file system contents from the `baseDirectory` joined with the `path` prop instead of creating a virtual file. */
+  baseDirectory?: PathLike
+
+  /** Language to use for syntax highlighting. */
+  language?: Languages
+
   /** Whether to allow errors to be displayed. */
   allowErrors?: boolean | string
 
@@ -56,9 +66,6 @@ export interface TokensProps {
 
   /** Whether or not to format the source code using `prettier` if installed. */
   shouldFormat?: boolean
-
-  /** Language to use for syntax highlighting. */
-  language?: Languages
 
   /** CSS style object to apply to the tokens and popover elements. */
   css?: {
@@ -107,6 +114,8 @@ export async function Tokens({
   showErrors: showErrorsProp,
   shouldAnalyze: shouldAnalyzeProp,
   shouldFormat: shouldFormatProp,
+  path: pathProp,
+  baseDirectory: baseDirectoryProp,
   renderLine,
   css = {},
   className = {},
@@ -117,6 +126,9 @@ export async function Tokens({
   const context = getContext(Context)
   const config = await getConfig()
   const theme = await getThemeColors(config.theme)
+  // Prefer props over context to avoid race conditions during concurrent rendering
+  const filePath = pathProp ?? context?.filePath
+  const baseDirectory = baseDirectoryProp ?? context?.baseDirectory
   const language = languageProp || context?.language
   const themeConfiguration = themeProp ?? config.theme
   const baseTokenClassName = hasMultipleThemes(themeConfiguration)
@@ -133,8 +145,8 @@ export async function Tokens({
   }
 
   if (value === undefined) {
-    if (context?.filePath) {
-      value = await readCodeFromPath(context.filePath, context.baseDirectory)
+    if (filePath) {
+      value = await readCodeFromPath(filePath, baseDirectory)
     } else {
       throw new Error(
         '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `baseDirectory` props.'
@@ -169,8 +181,10 @@ export async function Tokens({
 
   if (shouldAnalyze) {
     const result = await getSourceTextMetadata({
-      filePath: context?.filePath,
-      baseDirectory: context?.baseDirectory,
+      filePath: filePath ? pathLikeToString(filePath) : undefined,
+      baseDirectory: baseDirectory
+        ? pathLikeToString(baseDirectory)
+        : undefined,
       value: processedValue,
       language,
       shouldFormat,
