@@ -111,7 +111,7 @@
   "scripts": {
     "build": "tsc && chmod +x dist/cli/index.js",
     "postbuild": "node ./scripts/patch-load-package.ts",
-    "dev": "tsc -w",
+    "dev": "node ./scripts/dev.ts",
     "grammars": "node ./scripts/grammars.ts",
     "theme": "node ./scripts/theme.ts",
     "test": "vitest --typecheck",

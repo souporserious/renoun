@@ -1,32 +1,16 @@
 {
   "private": true,
   "name": "@examples/docs",
-  "homepage": "https://renoun-docs.vercel.app/",
-  "description": "A documentation starter that turns MDX content into a polished, full-featured site.",
+  "description": "A documentation site example built with @renoun/docs.",
   "scripts": {
-    "dev": "renoun next",
-    "build": "renoun next build",
-    "start": "next start"
+    "dev": "renoun dev",
+    "build": "renoun build"
   },
   "dependencies": {
-    "@mdx-js/loader": "catalog:",
-    "@mdx-js/react": "catalog:",
-    "@next/mdx": "catalog:",
-    "@renoun/mdx": "workspace:*",
-    "@tailwindcss/postcss": "catalog:",
-    "@tailwindcss/typography": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "next": "catalog:",
-    "react": "catalog:",
-    "react-aria-components": "catalog:",
-    "react-dom": "catalog:",
+    "@renoun/docs": "workspace:*",
     "renoun": "workspace:*",
-    "tailwindcss": "catalog:",
-    "tailwindcss-react-aria-components": "2.0.1",
-    "tm-themes": "catalog:",
-    "ts-morph": "catalog:",
-    "typescript": "catalog:",
-    "zod": "catalog:"
+    "next": "catalog:"
   }
 }

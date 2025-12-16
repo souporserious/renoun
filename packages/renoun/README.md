@@ -28,13 +28,22 @@
 - 🖼️ Render code previews
 - 📦 Integrate with your favorite framework
 
-## Examples
+## Apps
 
-|         |                                            |                             |                                                         |
-| ------- | ------------------------------------------ | --------------------------- | ------------------------------------------------------- |
-| Blog    | [Demo](https://renoun-blog.vercel.app/)    | [Source](/examples/blog)    | MDX-powered blog with collections and post organization |
-| Docs    | [Demo](https://renoun-docs.vercel.app/)    | [Source](/examples/docs)    | Next.js docs site with MDX, custom UI, and Tailwind CSS |
-| Package | [Demo](https://renoun-package.vercel.app/) | [Source](/examples/package) | Component library with MDX docs, examples, and hooks    |
+- **Blog**
+  - Demo: [https://blog.renoun.dev](https://blog.renoun.dev)
+  - Source: [/apps/blog](/apps/blog)
+  - Description: MDX-powered blog with collections and post organization
+
+- **Docs**
+  - Demo: [https://docs.renoun.dev](https://docs.renoun.dev)
+  - Source: [/apps/docs](/apps/docs)
+  - Description: Next.js docs site with MDX, custom UI, and Tailwind CSS
+
+- **Workbench**
+  - Demo: [https://workbench.renoun.dev](https://workbench.renoun.dev)
+  - Source: [/apps/workbench](/apps/workbench)
+  - Description: Component library with MDX docs, examples, and hooks
 
 ## Why renoun?
 

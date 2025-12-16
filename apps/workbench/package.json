@@ -1,0 +1,41 @@
+{
+  "name": "@renoun/workbench",
+  "version": "0.0.0",
+  "homepage": "https://workbench.renoun.dev",
+  "description": "Design system workbench for building, previewing, and documenting libraries.",
+  "scripts": {
+    "dev": "renoun next"
+  },
+  "files": [
+    "app/**",
+    "ui/**",
+    "public/**",
+    "collections.ts",
+    "mdx-components.tsx",
+    "next.config.*",
+    "postcss.config.*",
+    "tailwind.config.*",
+    "tsconfig.json"
+  ],
+  "exports": {
+    "./*": "./*"
+  },
+  "dependencies": {
+    "@mdx-js/loader": "catalog:",
+    "@mdx-js/react": "catalog:",
+    "@next/mdx": "catalog:",
+    "@tailwindcss/postcss": "catalog:",
+    "@tailwindcss/typography": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "renoun": "workspace:*",
+    "restyle": "catalog:",
+    "tailwindcss": "catalog:",
+    "tm-themes": "catalog:",
+    "ts-morph": "catalog:",
+    "typescript": "catalog:"
+  }
+}

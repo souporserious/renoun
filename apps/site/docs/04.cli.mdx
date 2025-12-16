@@ -41,8 +41,8 @@ renoun vite build -- --mode production
 ## App commands
 
 In addition to running your own framework app, the CLI can **run renoun apps that live in
-`node_modules`** (like `@renoun/blog` or `@renoun/docs`) and let your project shadow their files.
-This is called **app mode**.
+`node_modules`** (like `@renoun/blog` or `@renoun/docs`) and let your project override files.
+This is called **app mode** (or "Apps as Templates").
 
 You can invoke app mode in two ways:
 
@@ -67,18 +67,18 @@ You can invoke app mode in two ways:
 Both forms go through the same app runtime:
 
 - renoun builds a runtime under `.renoun/`,
-- copies the app’s source files into it,
-- applies your local files as shadows,
+- copies the app's source files into it,
+- applies your local files as overrides on top,
 - and then launches the underlying framework inside that runtime.
 
-### Shadowing apps
+### Overriding app files
 
 When you run an app through the CLI, your project and the app package are merged into a single
 runtime view:
 
-- **The app provides the base structure** (routes, layouts, components, default content).
-- **Your project shadows it by path**—any file or directory you create with the same relative
-  path wins over the app’s version.
+- **The app provides the base** (routes, layouts, components, default content).
+- **Your project overrides by path**—any file or directory you create with the same relative
+  path takes precedence over the app's version.
 
 For example, if the app ships `posts/hello-world.mdx` under its own `app/` or `pages/` tree, you
 can override it by adding `posts/hello-world.mdx` next to your `package.json`. At runtime, the

@@ -112,6 +112,120 @@ importers:
         specifier: 4.0.15
         version: 4.0.15(@types/node@25.0.1)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.0)(tsx@4.20.3)(yaml@2.8.2)
 
+  apps/blog:
+    dependencies:
+      '@mdx-js/loader':
+        specifier: 'catalog:'
+        version: 3.1.1(webpack@5.97.1)
+      '@mdx-js/react':
+        specifier: 'catalog:'
+        version: 3.1.1(@types/react@19.2.7)(react@19.2.3)
+      '@next/mdx':
+        specifier: 'catalog:'
+        version: 16.1.0-canary.20(@mdx-js/loader@3.1.1(webpack@5.97.1))(@mdx-js/react@3.1.1(@types/react@19.2.7)(react@19.2.3))
+      '@renoun/mdx':
+        specifier: workspace:*
+        version: link:../../packages/mdx
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.7)
+      next:
+        specifier: 'catalog:'
+        version: 16.1.0-canary.20(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.3
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.3(react@19.2.3)
+      remark-frontmatter:
+        specifier: 5.0.0
+        version: 5.0.0
+      remark-mdx-frontmatter:
+        specifier: 5.2.0
+        version: 5.2.0
+      renoun:
+        specifier: workspace:*
+        version: link:../../packages/renoun
+      restyle:
+        specifier: 'catalog:'
+        version: 3.4.2(react@19.2.3)
+      tm-themes:
+        specifier: 'catalog:'
+        version: 1.10.13
+      ts-morph:
+        specifier: 'catalog:'
+        version: 27.0.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.13
+
+  apps/docs:
+    dependencies:
+      '@mdx-js/loader':
+        specifier: 'catalog:'
+        version: 3.1.1(webpack@5.97.1)
+      '@mdx-js/react':
+        specifier: 'catalog:'
+        version: 3.1.1(@types/react@19.2.7)(react@19.2.3)
+      '@next/mdx':
+        specifier: 'catalog:'
+        version: 16.1.0-canary.20(@mdx-js/loader@3.1.1(webpack@5.97.1))(@mdx-js/react@3.1.1(@types/react@19.2.7)(react@19.2.3))
+      '@renoun/mdx':
+        specifier: workspace:*
+        version: link:../../packages/mdx
+      '@tailwindcss/postcss':
+        specifier: 'catalog:'
+        version: 4.1.18
+      '@tailwindcss/typography':
+        specifier: 'catalog:'
+        version: 0.5.19(tailwindcss@4.1.18)
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.7)
+      next:
+        specifier: 'catalog:'
+        version: 16.1.0-canary.20(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.3
+      react-aria-components:
+        specifier: 'catalog:'
+        version: 1.13.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.3(react@19.2.3)
+      renoun:
+        specifier: workspace:*
+        version: link:../../packages/renoun
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.1.18
+      tailwindcss-react-aria-components:
+        specifier: 2.0.1
+        version: 2.0.1(tailwindcss@4.1.18)
+      tm-themes:
+        specifier: 'catalog:'
+        version: 1.10.13
+      ts-morph:
+        specifier: 'catalog:'
+        version: 27.0.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.13
+
   apps/site:
     dependencies:
       '@mdx-js/loader':
@@ -193,29 +307,62 @@ importers:
         specifier: 'catalog:'
         version: 4.1.13
 
-  examples/app:
+  apps/workbench:
     dependencies:
-      '@renoun/blog':
-        specifier: workspace:*
-        version: link:../blog
+      '@mdx-js/loader':
+        specifier: 'catalog:'
+        version: 3.1.1(webpack@5.97.1)
+      '@mdx-js/react':
+        specifier: 'catalog:'
+        version: 3.1.1(@types/react@19.2.7)(react@19.2.3)
+      '@next/mdx':
+        specifier: 'catalog:'
+        version: 16.1.0-canary.20(@mdx-js/loader@3.1.1(webpack@5.97.1))(@mdx-js/react@3.1.1(@types/react@19.2.7)(react@19.2.3))
+      '@tailwindcss/postcss':
+        specifier: 'catalog:'
+        version: 4.1.18
+      '@tailwindcss/typography':
+        specifier: 'catalog:'
+        version: 0.5.19(tailwindcss@4.1.18)
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.7)
+      next:
+        specifier: 'catalog:'
+        version: 16.1.0-canary.20(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.3
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.3(react@19.2.3)
       renoun:
         specifier: workspace:*
         version: link:../../packages/renoun
+      restyle:
+        specifier: 'catalog:'
+        version: 3.4.2(react@19.2.3)
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.1.18
+      tm-themes:
+        specifier: 'catalog:'
+        version: 1.10.13
+      ts-morph:
+        specifier: 'catalog:'
+        version: 27.0.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
 
   examples/blog:
     dependencies:
-      '@mdx-js/loader':
-        specifier: 'catalog:'
-        version: 3.1.1(webpack@5.97.1)
-      '@mdx-js/react':
-        specifier: 'catalog:'
-        version: 3.1.1(@types/react@19.2.7)(react@19.2.3)
-      '@next/mdx':
-        specifier: 'catalog:'
-        version: 16.1.0-canary.20(@mdx-js/loader@3.1.1(webpack@5.97.1))(@mdx-js/react@3.1.1(@types/react@19.2.7)(react@19.2.3))
-      '@renoun/mdx':
+      '@renoun/blog':
         specifier: workspace:*
-        version: link:../../packages/mdx
+        version: link:../../apps/blog
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.7
@@ -225,57 +372,15 @@ importers:
       next:
         specifier: 'catalog:'
         version: 16.1.0-canary.20(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react:
-        specifier: 'catalog:'
-        version: 19.2.3
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.2.3(react@19.2.3)
-      remark-frontmatter:
-        specifier: 5.0.0
-        version: 5.0.0
-      remark-mdx-frontmatter:
-        specifier: 5.2.0
-        version: 5.2.0
       renoun:
         specifier: workspace:*
         version: link:../../packages/renoun
-      restyle:
-        specifier: 'catalog:'
-        version: 3.4.2(react@19.2.3)
-      tm-themes:
-        specifier: 'catalog:'
-        version: 1.10.13
-      ts-morph:
-        specifier: 'catalog:'
-        version: 27.0.2
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      zod:
-        specifier: 'catalog:'
-        version: 4.1.13
 
   examples/docs:
     dependencies:
-      '@mdx-js/loader':
-        specifier: 'catalog:'
-        version: 3.1.1(webpack@5.97.1)
-      '@mdx-js/react':
-        specifier: 'catalog:'
-        version: 3.1.1(@types/react@19.2.7)(react@19.2.3)
-      '@next/mdx':
-        specifier: 'catalog:'
-        version: 16.1.0-canary.20(@mdx-js/loader@3.1.1(webpack@5.97.1))(@mdx-js/react@3.1.1(@types/react@19.2.7)(react@19.2.3))
-      '@renoun/mdx':
+      '@renoun/docs':
         specifier: workspace:*
-        version: link:../../packages/mdx
-      '@tailwindcss/postcss':
-        specifier: 'catalog:'
-        version: 4.1.18
-      '@tailwindcss/typography':
-        specifier: 'catalog:'
-        version: 0.5.19(tailwindcss@4.1.18)
+        version: link:../../apps/docs
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.7
@@ -285,54 +390,15 @@ importers:
       next:
         specifier: 'catalog:'
         version: 16.1.0-canary.20(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react:
-        specifier: 'catalog:'
-        version: 19.2.3
-      react-aria-components:
-        specifier: 'catalog:'
-        version: 1.13.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.2.3(react@19.2.3)
       renoun:
         specifier: workspace:*
         version: link:../../packages/renoun
-      tailwindcss:
-        specifier: 'catalog:'
-        version: 4.1.18
-      tailwindcss-react-aria-components:
-        specifier: 2.0.1
-        version: 2.0.1(tailwindcss@4.1.18)
-      tm-themes:
-        specifier: 'catalog:'
-        version: 1.10.13
-      ts-morph:
-        specifier: 'catalog:'
-        version: 27.0.2
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      zod:
-        specifier: 'catalog:'
-        version: 4.1.13
 
-  examples/package:
+  examples/workbench:
     dependencies:
-      '@mdx-js/loader':
-        specifier: 'catalog:'
-        version: 3.1.1(webpack@5.97.1)
-      '@mdx-js/react':
-        specifier: 'catalog:'
-        version: 3.1.1(@types/react@19.2.7)(react@19.2.3)
-      '@next/mdx':
-        specifier: 'catalog:'
-        version: 16.1.0-canary.20(@mdx-js/loader@3.1.1(webpack@5.97.1))(@mdx-js/react@3.1.1(@types/react@19.2.7)(react@19.2.3))
-      '@tailwindcss/postcss':
-        specifier: 'catalog:'
-        version: 4.1.18
-      '@tailwindcss/typography':
-        specifier: 'catalog:'
-        version: 0.5.19(tailwindcss@4.1.18)
+      '@renoun/workbench':
+        specifier: workspace:*
+        version: link:../../apps/workbench
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.7
@@ -342,30 +408,12 @@ importers:
       next:
         specifier: 'catalog:'
         version: 16.1.0-canary.20(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react:
-        specifier: 'catalog:'
-        version: 19.2.3
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.2.3(react@19.2.3)
       renoun:
         specifier: workspace:*
         version: link:../../packages/renoun
       restyle:
         specifier: 'catalog:'
         version: 3.4.2(react@19.2.3)
-      tailwindcss:
-        specifier: 'catalog:'
-        version: 4.1.18
-      tm-themes:
-        specifier: 'catalog:'
-        version: 1.10.13
-      ts-morph:
-        specifier: 'catalog:'
-        version: 27.0.2
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
 
   packages/create-renoun:
     dependencies:

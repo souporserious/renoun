@@ -6,12 +6,12 @@ import {
   mkdtemp,
   mkdir,
   readFile,
-  readlink,
   rm,
+  stat,
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve as resolvePath } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   afterEach,
@@ -23,8 +23,8 @@ import {
   vi,
 } from 'vitest'
 
-const BLOG_EXAMPLE_PATH = fileURLToPath(
-  new URL('../../../../examples/blog', import.meta.url)
+const BLOG_APP_PATH = fileURLToPath(
+  new URL('../../../../apps/blog', import.meta.url)
 )
 
 const spawnMock = vi.fn(
@@ -89,7 +89,7 @@ afterEach(() => {
 })
 
 describe('runAppCommand integration', () => {
-  test('prepares runtime directory and shadows project overrides', async () => {
+  test('prepares runtime directory and applies project overrides', async () => {
     const tmpRoot = realpathSync(
       await mkdtemp(join(tmpdir(), 'renoun-app-test-'))
     )
@@ -103,7 +103,7 @@ describe('runAppCommand integration', () => {
       'blog'
     )
     await mkdir(nodeModulesExampleDir, { recursive: true })
-    await cp(BLOG_EXAMPLE_PATH, nodeModulesExampleDir, { recursive: true })
+    await cp(BLOG_APP_PATH, nodeModulesExampleDir, { recursive: true })
 
     const projectPackageJson = {
       name: 'app-integration',
@@ -123,11 +123,11 @@ describe('runAppCommand integration', () => {
     const postsDirectory = join(projectRoot, 'posts')
     await mkdir(postsDirectory, { recursive: true })
     await writeFile(
-      join(postsDirectory, 'hello-from-shadow.mdx'),
-      '# Hello from shadow!\n'
+      join(postsDirectory, 'hello-from-override.mdx'),
+      '# Hello from override!\n'
     )
 
-    // Create a build output directory that should be ignored for shadowing
+    // Create a build output directory that should be ignored for overrides
     const outDirectory = join(projectRoot, 'out')
     await mkdir(outDirectory, { recursive: true })
 
@@ -205,25 +205,35 @@ describe('runAppCommand integration', () => {
       )
       expect(runtimePackageJson.name).toBe('@renoun/blog')
 
+      // With additive overrides, the posts directory is a real directory
+      // (not a symlink) with individual files hard-linked inside
       const runtimePostsStat = await lstat(join(runtimeRoot, 'posts'))
-      expect(runtimePostsStat.isSymbolicLink()).toBe(true)
-      const runtimePostsLink = await readlink(join(runtimeRoot, 'posts'))
-      expect(resolvePath(runtimeRoot, runtimePostsLink)).toBe(
-        join(projectRoot, 'posts')
-      )
+      expect(runtimePostsStat.isDirectory()).toBe(true)
+      expect(runtimePostsStat.isSymbolicLink()).toBe(false)
 
-      const runtimeRootConfigStat = await lstat(
+      // The overridden file inside posts should be a hard link (same inode)
+      const overriddenPostPath = join(
+        runtimeRoot,
+        'posts',
+        'hello-from-override.mdx'
+      )
+      const projectPostPath = join(
+        projectRoot,
+        'posts',
+        'hello-from-override.mdx'
+      )
+      const runtimeOverriddenPostStat = await stat(overriddenPostPath)
+      const projectOverriddenPostStat = await stat(projectPostPath)
+      expect(runtimeOverriddenPostStat.ino).toBe(projectOverriddenPostStat.ino)
+
+      // Root-level files should also be hard links
+      const runtimeRootConfigStat = await stat(
         join(runtimeRoot, 'root-config.ts')
       )
-      expect(runtimeRootConfigStat.isSymbolicLink()).toBe(true)
-      const runtimeRootConfigLink = await readlink(
-        join(runtimeRoot, 'root-config.ts')
-      )
-      expect(resolvePath(runtimeRoot, runtimeRootConfigLink)).toBe(
-        rootOverridePath
-      )
+      const projectRootConfigStat = await stat(rootOverridePath)
+      expect(runtimeRootConfigStat.ino).toBe(projectRootConfigStat.ino)
 
-      // Build output directory should not be shadowed into runtime
+      // Build output directory should not be applied as override
       await expect(lstat(join(runtimeRoot, 'out'))).rejects.toMatchObject({
         code: 'ENOENT',
       })
