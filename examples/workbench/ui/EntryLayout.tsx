@@ -26,7 +26,7 @@ type EntryLayoutProps = {
   nextEntry?: FileSystemEntry<any> | null
 }
 
-/** Custom EntryLayout component that shadows the app's default. */
+/** Custom EntryLayout component that overrides the app's default. */
 export function EntryLayout({
   header,
   children,
@@ -77,4 +77,3 @@ export function EntryLayout({
     </div>
   )
 }
-

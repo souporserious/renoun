@@ -83,7 +83,7 @@ export async function runEjectCommand(
 
   const targetDirectory = options.targetDirectory ?? projectRoot
 
-  // Copy app files to the project, respecting existing files (layers win)
+  // Copy app files to the project, respecting existing files (overrides win)
   await copyAppFiles(appRoot, targetDirectory)
 
   // Update package.json: remove the app dependency, keep renoun

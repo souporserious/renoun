@@ -1,7 +1,7 @@
 import type { FileSystemEntry } from 'renoun'
 import Link from 'next/link'
 
-/** Custom SiblingLink component that shadows the app's default with indigo accent. */
+/** Custom SiblingLink component that overrides the app's default with indigo accent. */
 export function SiblingLink({
   entry,
   direction,
@@ -91,4 +91,3 @@ export function SiblingLink({
     </Link>
   )
 }
-

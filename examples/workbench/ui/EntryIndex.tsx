@@ -1,7 +1,7 @@
 import type { FileSystemEntry } from 'renoun'
 import Link from 'next/link'
 
-/** Custom EntryIndex component that shadows the app's default. */
+/** Custom EntryIndex component that overrides the app's default. */
 export function EntryIndex({
   title,
   entries,
@@ -32,4 +32,3 @@ export function EntryIndex({
     </main>
   )
 }
-

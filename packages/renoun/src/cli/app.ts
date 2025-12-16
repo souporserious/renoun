@@ -65,7 +65,7 @@ const IGNORED_PROJECT_FILES = new Set([
  * e.g., ["components/Box/Box.tsx", "components/Button/Button.tsx", "hooks/index.ts"]
  * becomes "components/ (2 files), hooks/ (1 file)"
  */
-function summarizeLayeredPaths(paths: string[]): string {
+function summarizeOverriddenPaths(paths: string[]): string {
   const groups = new Map<string, number>()
 
   for (const path of paths) {
@@ -198,23 +198,23 @@ export async function runAppCommand({
   )
   log(`Runtime directory ready at ${runtimeDirectory}`)
 
-  const layerManager = new LayerManager({
+  const overrideManager = new OverrideManager({
     projectRoot,
     runtimeDirectory,
   })
-  await layerManager.start()
+  await overrideManager.start()
 
-  const layeredPaths = layerManager.getLayeredPaths()
-  if (layeredPaths.length > 0) {
-    // Summarize layers by top-level directory for cleaner output
-    const summary = summarizeLayeredPaths(layeredPaths)
+  const overriddenPaths = overrideManager.getOverriddenPaths()
+  if (overriddenPaths.length > 0) {
+    // Summarize overrides by top-level directory for cleaner output
+    const summary = summarizeOverriddenPaths(overriddenPaths)
     log(
-      `Applied ${layeredPaths.length} layer${
-        layeredPaths.length === 1 ? '' : 's'
+      `Applied ${overriddenPaths.length} override${
+        overriddenPaths.length === 1 ? '' : 's'
       }: ${summary}`
     )
   } else {
-    log('No project layers detected; using template defaults')
+    log('No project overrides detected; using template defaults')
   }
 
   const previousCwd = process.cwd()
@@ -233,7 +233,7 @@ export async function runAppCommand({
       },
     }))
 
-    layerManager.stop()
+    overrideManager.stop()
 
     if (server) {
       server.cleanup()
@@ -425,7 +425,7 @@ export async function runAppCommand({
       })
     })
   } catch (error) {
-    layerManager.stop()
+    overrideManager.stop()
     process.chdir(previousCwd)
     throw error
   }
@@ -838,10 +838,10 @@ async function validateWakuStaticExport(
   )
 }
 
-class LayerManager {
+class OverrideManager {
   #projectRoot: string
   #runtimeRoot: string
-  #layeredPaths: Set<string> = new Set()
+  #overriddenPaths: Set<string> = new Set()
   #watchers: Map<string, ReturnType<typeof watch>> = new Map()
   #syncScheduled = false
   #isSyncing = false
@@ -859,7 +859,7 @@ class LayerManager {
   }
 
   async start() {
-    await this.#syncLayers()
+    await this.#syncOverrides()
   }
 
   stop() {
@@ -869,8 +869,8 @@ class LayerManager {
     this.#watchers.clear()
   }
 
-  getLayeredPaths(): string[] {
-    return Array.from(this.#layeredPaths).sort()
+  getOverriddenPaths(): string[] {
+    return Array.from(this.#overriddenPaths).sort()
   }
 
   #scheduleSync() {
@@ -882,8 +882,8 @@ class LayerManager {
     this.#syncScheduled = true
     setTimeout(() => {
       this.#syncScheduled = false
-      this.#syncLayers().catch((error) => {
-        getDebugLogger().error('Failed to synchronize app layers', () => ({
+      this.#syncOverrides().catch((error) => {
+        getDebugLogger().error('Failed to synchronize app overrides', () => ({
           data: {
             error: error instanceof Error ? error.message : String(error),
           },
@@ -892,7 +892,7 @@ class LayerManager {
     }, 50)
   }
 
-  async #syncLayers() {
+  async #syncOverrides() {
     if (this.#isSyncing) {
       this.#pendingSync = true
       return
@@ -903,25 +903,25 @@ class LayerManager {
 
     try {
       const absoluteDirectories = new Set<string>()
-      const directoryLayers = new Set<string>()
-      const fileLayers = new Set<string>()
+      const directoryOverrides = new Set<string>()
+      const fileOverrides = new Set<string>()
 
       await this.#collectProjectEntries(
         '.',
         absoluteDirectories,
-        directoryLayers,
-        fileLayers
+        directoryOverrides,
+        fileOverrides
       )
 
-      const validLayers = await this.#applyLayers(fileLayers)
-      this.#cleanupObsoleteLayers(validLayers)
+      const validOverrides = await this.#applyOverrides(fileOverrides)
+      this.#cleanupObsoleteOverrides(validOverrides)
       this.#cleanupObsoleteWatchers(absoluteDirectories)
     } finally {
       this.#isSyncing = false
 
       if (this.#pendingSync) {
         this.#pendingSync = false
-        await this.#syncLayers()
+        await this.#syncOverrides()
       }
     }
   }
@@ -929,8 +929,8 @@ class LayerManager {
   async #collectProjectEntries(
     relativeDirectory: string,
     absoluteDirectories: Set<string>,
-    directoryLayers: Set<string>,
-    fileLayers: Set<string>
+    directoryOverrides: Set<string>,
+    fileOverrides: Set<string>
   ) {
     const absoluteDirectory = join(this.#projectRoot, relativeDirectory)
     absoluteDirectories.add(absoluteDirectory)
@@ -953,20 +953,20 @@ class LayerManager {
 
       if (entry.isDirectory()) {
         if (normalizedRelativePath) {
-          directoryLayers.add(normalizedRelativePath)
+          directoryOverrides.add(normalizedRelativePath)
         }
         await this.#collectProjectEntries(
           entryRelativePath,
           absoluteDirectories,
-          directoryLayers,
-          fileLayers
+          directoryOverrides,
+          fileOverrides
         )
         continue
       }
 
       if (entry.isFile() || entry.isSymbolicLink()) {
         if (normalizedRelativePath) {
-          fileLayers.add(normalizedRelativePath)
+          fileOverrides.add(normalizedRelativePath)
         }
       }
     }
@@ -1005,7 +1005,7 @@ class LayerManager {
       this.#watchers.set(directory, watcher)
     } catch (error) {
       getDebugLogger().warn(
-        'Failed to watch directory for app layering',
+        'Failed to watch directory for app overrides',
         () => ({
           data: {
             directory,
@@ -1016,24 +1016,24 @@ class LayerManager {
     }
   }
 
-  async #applyLayers(fileLayers: Set<string>): Promise<Set<string>> {
+  async #applyOverrides(fileOverrides: Set<string>): Promise<Set<string>> {
     const validPaths = new Set<string>()
 
     // Use hard links for all files - Turbopack has issues with dynamic imports
     // from symlinked directories, so we avoid directory symlinks entirely.
-    const sortedFiles = Array.from(fileLayers).sort((a, b) =>
+    const sortedFiles = Array.from(fileOverrides).sort((a, b) =>
       a.localeCompare(b)
     )
 
     for (const relativePath of sortedFiles) {
-      await this.#ensureFileLayer(relativePath)
+      await this.#ensureFileOverride(relativePath)
       validPaths.add(relativePath)
     }
 
     return validPaths
   }
 
-  async #ensureFileLayer(relativePath: string) {
+  async #ensureFileOverride(relativePath: string) {
     const sourcePath = join(this.#projectRoot, relativePath)
     const targetPath = join(this.#runtimeRoot, relativePath)
     const targetDirectory = dirname(targetPath)
@@ -1063,7 +1063,7 @@ class LayerManager {
         const sourceStat = await stat(sourcePath)
         if (existingTarget.ino === sourceStat.ino) {
           // Already a hard link to the source, skip recreation
-          this.#layeredPaths.add(relativePath)
+          this.#overriddenPaths.add(relativePath)
           return
         }
       } catch {
@@ -1092,18 +1092,18 @@ class LayerManager {
         throw error
       }
     }
-    this.#layeredPaths.add(relativePath)
+    this.#overriddenPaths.add(relativePath)
   }
 
-  #cleanupObsoleteLayers(validPaths: Set<string>) {
-    for (const path of Array.from(this.#layeredPaths)) {
+  #cleanupObsoleteOverrides(validPaths: Set<string>) {
+    for (const path of Array.from(this.#overriddenPaths)) {
       if (validPaths.has(path)) {
         continue
       }
 
       const targetPath = join(this.#runtimeRoot, path)
       rm(targetPath, { force: true }).catch(() => {})
-      this.#layeredPaths.delete(path)
+      this.#overriddenPaths.delete(path)
     }
   }
 

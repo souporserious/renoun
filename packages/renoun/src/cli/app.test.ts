@@ -89,7 +89,7 @@ afterEach(() => {
 })
 
 describe('runAppCommand integration', () => {
-  test('prepares runtime directory and applies project layers', async () => {
+  test('prepares runtime directory and applies project overrides', async () => {
     const tmpRoot = realpathSync(
       await mkdtemp(join(tmpdir(), 'renoun-app-test-'))
     )
@@ -123,11 +123,11 @@ describe('runAppCommand integration', () => {
     const postsDirectory = join(projectRoot, 'posts')
     await mkdir(postsDirectory, { recursive: true })
     await writeFile(
-      join(postsDirectory, 'hello-from-layer.mdx'),
-      '# Hello from layer!\n'
+      join(postsDirectory, 'hello-from-override.mdx'),
+      '# Hello from override!\n'
     )
 
-    // Create a build output directory that should be ignored for layering
+    // Create a build output directory that should be ignored for overrides
     const outDirectory = join(projectRoot, 'out')
     await mkdir(outDirectory, { recursive: true })
 
@@ -205,18 +205,26 @@ describe('runAppCommand integration', () => {
       )
       expect(runtimePackageJson.name).toBe('@renoun/blog')
 
-      // With additive layering, the posts directory is a real directory
+      // With additive overrides, the posts directory is a real directory
       // (not a symlink) with individual files hard-linked inside
       const runtimePostsStat = await lstat(join(runtimeRoot, 'posts'))
       expect(runtimePostsStat.isDirectory()).toBe(true)
       expect(runtimePostsStat.isSymbolicLink()).toBe(false)
 
-      // The layered file inside posts should be a hard link (same inode)
-      const layeredPostPath = join(runtimeRoot, 'posts', 'hello-from-layer.mdx')
-      const projectPostPath = join(projectRoot, 'posts', 'hello-from-layer.mdx')
-      const runtimeLayeredPostStat = await stat(layeredPostPath)
-      const projectLayeredPostStat = await stat(projectPostPath)
-      expect(runtimeLayeredPostStat.ino).toBe(projectLayeredPostStat.ino)
+      // The overridden file inside posts should be a hard link (same inode)
+      const overriddenPostPath = join(
+        runtimeRoot,
+        'posts',
+        'hello-from-override.mdx'
+      )
+      const projectPostPath = join(
+        projectRoot,
+        'posts',
+        'hello-from-override.mdx'
+      )
+      const runtimeOverriddenPostStat = await stat(overriddenPostPath)
+      const projectOverriddenPostStat = await stat(projectPostPath)
+      expect(runtimeOverriddenPostStat.ino).toBe(projectOverriddenPostStat.ino)
 
       // Root-level files should also be hard links
       const runtimeRootConfigStat = await stat(
@@ -225,7 +233,7 @@ describe('runAppCommand integration', () => {
       const projectRootConfigStat = await stat(rootOverridePath)
       expect(runtimeRootConfigStat.ino).toBe(projectRootConfigStat.ino)
 
-      // Build output directory should not be layered into runtime
+      // Build output directory should not be applied as override
       await expect(lstat(join(runtimeRoot, 'out'))).rejects.toMatchObject({
         code: 'ENOENT',
       })

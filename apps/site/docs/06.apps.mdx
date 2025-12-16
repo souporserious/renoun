@@ -1,26 +1,26 @@
 export const metadata = {
   title: 'Apps as Templates',
   description:
-    'Use renoun apps as living templates that you extend through layering—a modern alternative to traditional scaffolding.',
+    'Use renoun apps as living templates that you extend through overrides—a modern alternative to traditional scaffolding.',
 }
 
 A **renoun app** is a complete, runnable application that lives in `node_modules` and serves as a
 **template** you can extend. Think of apps like `@renoun/blog`, `@renoun/docs`, or a Presenter-style
-app as **base layers** that you customize by adding your own files.
+app as **bases** that you customize by adding your own files.
 
 This "Apps as Templates" approach differs from traditional scaffolding:
 
-| Traditional Templates            | Apps as Templates                       |
-| -------------------------------- | --------------------------------------- |
-| Scaffold once → own all the code | Depend on the app → layer what you need |
-| Hard to update                   | Upgradeable via npm                     |
-| You maintain everything          | You only own your customizations        |
+| Traditional Templates            | Apps as Templates                          |
+| -------------------------------- | ------------------------------------------ |
+| Scaffold once → own all the code | Depend on the app → override what you need |
+| Hard to update                   | Upgradeable via npm                        |
+| You maintain everything          | You only own your customizations           |
 
 When you run `renoun dev` or `renoun build`:
 
-- The renoun app is the **base layer**.
-- Your files **layer** on top of the app's files additively.
-- renoun builds a runtime under `.renoun/`, merges both layers, and launches the framework there.
+- The renoun app is the **base**.
+- Your files **override** the app's files additively.
+- renoun builds a runtime under `.renoun/`, merges both, and launches the framework there.
 
 > If you already have your own Next/Vite/Waku app and just want renoun inside it, use  
 > **"Use renoun in your app"** (`renoun next dev`, `renoun vite dev`, etc.) instead.
@@ -29,17 +29,17 @@ When you run `renoun dev` or `renoun build`:
 
 ## How it works
 
-The "Apps as Templates" system works like Docker's layered images—you have a base image (the app)
-and your layer on top. When you run `renoun dev`, the CLI merges these layers:
+The "Apps as Templates" system works like Docker's image layers—you have a base image (the app)
+and your overrides on top. When you run `renoun dev`, the CLI merges them:
 
 ```text
-Your Project (your layer)
+Your Project (your overrides)
 ├── package.json
 ├── posts/                      ← your content
 │   └── hello-world.mdx
 └── .renoun/app/-renoun-blog/   ← merged runtime
-    ├── ...                     ← base layer (from the app)
-    ├── posts/                  ← your layer (linked to your posts/)
+    ├── ...                     ← base (from the app)
+    ├── posts/                  ← your overrides (linked to your posts/)
     └── node_modules/           ← shared dependencies
 ```
 
@@ -47,8 +47,8 @@ Your Project (your layer)
    The CLI creates `.renoun/app/<app-name>` and copies the base app's files into it.
    Only `node_modules` is symlinked to avoid duplication.
 
-2. **Layer application**
-   Your files are layered on top using an additive model—files you create are linked into the
+2. **Override application**
+   Your files are applied on top using an additive model—files you create are linked into the
    runtime, merging with the base app rather than replacing it entirely.
 
 3. **Framework launch**
@@ -57,7 +57,7 @@ Your Project (your layer)
 
 4. **Path resolution**
    renoun sets an internal environment variable so its utilities resolve paths relative to the
-   runtime directory, ensuring your layered content is discovered correctly.
+   runtime directory, ensuring your overridden content is discovered correctly.
 
 This architecture means you never modify the template in `node_modules`; you only add and edit
 files in your own project. When the base app updates, you get the improvements automatically.
@@ -83,7 +83,7 @@ files in your own project. When the base app updates, you get the improvements a
    }
    ```
 
-3. Create your content—files that layer on top of the template:
+3. Create your content—files that override parts of the template:
 
    ```text
    posts/hello-world.mdx
@@ -98,27 +98,27 @@ files in your own project. When the base app updates, you get the improvements a
    See [`examples/blog`](https://github.com/souporserious/renoun/tree/main/examples/blog)
    for a complete example that extends the `@renoun/blog` template with custom posts.
 
-The CLI merges the template into `.renoun/app/<package-name>`, layers your files on top, and
+The CLI merges the template into `.renoun/app/<package-name>`, applies your overrides on top, and
 launches the framework (`next dev`, `vite dev`, or `waku dev`). You see the combined result—your
 customizations on top of the base app.
 
-## Layering your files
+## Overriding files
 
 Every file or directory that you place next to your `package.json`—excluding lockfiles and
-`node_modules`—becomes part of your layer. During startup renoun:
+`node_modules`—becomes an override. During startup renoun:
 
 1. **Copies template files** into the runtime directory. All files are copied so bundlers resolve
    imports correctly. Only `node_modules` is symlinked to avoid duplication.
 
-2. **Applies your layer** using an **additive model** that intelligently merges your files with the
+2. **Applies your overrides** using an **additive model** that intelligently merges your files with the
    template's files. Your content is added to the base, not replacing everything.
 
 3. **Enables hot reload** because the framework watches the linked files, so edits to your
    source files trigger rebuilds immediately.
 
-### Additive layering
+### Additive overrides
 
-The layering system uses an **additive model** rather than a replacement model. This means:
+The override system uses an **additive model** rather than a replacement model. This means:
 
 - **Your files are merged** with the template's files, not replacing them entirely
 - **You can override specific files** while keeping the rest of the app intact
@@ -187,11 +187,11 @@ renoun will:
      root (or a configured target directory).
    - Preserve paths so the layout matches what you were already running.
 
-2. **Apply your layer on top**
-   - Any files or directories you were layering (like `posts/` or `ui/RootProvider.tsx`) are
+2. **Apply your overrides on top**
+   - Any files or directories you were overriding (like `posts/` or `ui/RootProvider.tsx`) are
      treated as the source of truth.
    - If a file exists both in the template and your project, the **local file wins**.
-   - Layered directories fully replace the template's version.
+   - Overridden files fully replace the template's version.
 
    The result is a single, coherent codebase that reflects exactly what you were seeing while
    running the app.
@@ -361,7 +361,7 @@ While renoun secures its internal operations, you should understand these aspect
 - **The `.renoun/` directory is temporary.** Add it to your `.gitignore`. It's recreated fresh on
   each run, so don't store anything important there.
 
-- **Links point to your real files.** When you layer a file, the framework reads directly from
+- **Links point to your real files.** When you override a file, the framework reads directly from
   your source. This is the intended behavior—it enables hot reload and live editing.
 
 ### Shared environments

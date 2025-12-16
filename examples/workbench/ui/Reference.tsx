@@ -4,7 +4,7 @@ import {
   type ReferenceComponents,
 } from 'renoun'
 
-/** Custom Reference component that shadows the app's default. */
+/** Custom Reference component that overrides the app's default. */
 export function Reference(props: ReferenceProps) {
   const components = {
     DetailHeading: (headingProps) => (
@@ -22,4 +22,3 @@ export function Reference(props: ReferenceProps) {
     />
   )
 }
-
