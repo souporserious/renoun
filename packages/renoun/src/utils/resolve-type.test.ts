@@ -23031,4 +23031,79 @@ describe('resolveType', () => {
 
     expect(resolved).toBeDefined()
   })
+
+  test('resolves WeakMap with symbol type parameters', () => {
+    const testFile = project.createSourceFile(
+      'node-builder.js',
+      dedent`
+        /**
+         * A class that uses WeakMap internally
+         */
+        export class NodeBuilder {
+          constructor() {
+            /** @type {WeakMap<object, any>} */
+            this.flowsData = new WeakMap()
+          }
+        }
+      `,
+      { overwrite: true, scriptKind: ts.ScriptKind.JS }
+    )
+    const classDeclaration = testFile.getClassOrThrow('NodeBuilder')
+    const resolved = resolveType(classDeclaration.getType(), classDeclaration)
+
+    expect(resolved).toMatchObject({
+      kind: 'Class',
+      name: 'NodeBuilder',
+    })
+  })
+
+  test('resolves symbol primitive type in type aliases', () => {
+    const testFile = project.createSourceFile(
+      'symbol-types.ts',
+      dedent`
+        export type SymbolKey = symbol
+
+        export interface SymbolMap {
+          [key: symbol]: string
+        }
+
+        export type SymbolUnion = string | symbol | number
+      `,
+      { overwrite: true }
+    )
+
+    const symbolKeyAlias = testFile.getTypeAliasOrThrow('SymbolKey')
+    const resolvedSymbolKey = resolveType(
+      symbolKeyAlias.getType(),
+      symbolKeyAlias
+    )
+
+    expect(resolvedSymbolKey).toMatchObject({
+      kind: 'TypeAlias',
+      name: 'SymbolKey',
+      type: {
+        kind: 'Symbol',
+        text: 'symbol',
+      },
+    })
+
+    const symbolUnionAlias = testFile.getTypeAliasOrThrow('SymbolUnion')
+    const resolvedSymbolUnion = resolveType(
+      symbolUnionAlias.getType(),
+      symbolUnionAlias
+    )
+
+    expect(resolvedSymbolUnion).toMatchObject({
+      kind: 'TypeAlias',
+      name: 'SymbolUnion',
+      type: {
+        kind: 'UnionType',
+        types: expect.arrayContaining([
+          expect.objectContaining({ kind: 'String' }),
+          expect.objectContaining({ kind: 'Symbol' }),
+          expect.objectContaining({ kind: 'Number' }),
+        ]),
+      },
+    })
+  })
 })

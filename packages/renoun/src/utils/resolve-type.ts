@@ -6753,9 +6753,14 @@ function isSubstitutionType(type: Type): boolean {
   return (type.getFlags() & tsMorph.ts.TypeFlags.Substitution) !== 0
 }
 
-/** Determines if a type is a symbol type. */
+/** Determines if a type is a symbol type (ESSymbol or unique symbol). */
 function isSymbolType(type: Type) {
-  return type.getSymbol()?.getName() === 'Symbol'
+  const flags = type.getFlags()
+  // Check for ESSymbol (primitive symbol) or ESSymbolLike (unique symbol)
+  return (
+    (flags & tsMorph.ts.TypeFlags.ESSymbol) !== 0 ||
+    (flags & tsMorph.ts.TypeFlags.UniqueESSymbol) !== 0
+  )
 }
 
 /** True when the alias unwraps to exactly one function-shaped property. */
