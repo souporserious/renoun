@@ -21,7 +21,7 @@
   "devDependencies": {
     "@changesets/cli": "2.29.8",
     "@octokit/rest": "22.0.1",
-    "@types/node": "25.0.1",
+    "@types/node": "25.0.2",
     "prettier": "catalog:",
     "turbo": "2.6.3",
     "typescript": "catalog:",
