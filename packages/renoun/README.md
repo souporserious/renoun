@@ -30,20 +30,11 @@
 
 ## Apps
 
-- **Blog**
-  - Demo: [https://blog.renoun.dev](https://blog.renoun.dev)
-  - Source: [/apps/blog](/apps/blog)
-  - Description: MDX-powered blog with collections and post organization
+These apps are built with Next.js and showcase different ways to use renoun.
 
-- **Docs**
-  - Demo: [https://docs.renoun.dev](https://docs.renoun.dev)
-  - Source: [/apps/docs](/apps/docs)
-  - Description: Next.js docs site with MDX, custom UI, and Tailwind CSS
-
-- **Workbench**
-  - Demo: [https://workbench.renoun.dev](https://workbench.renoun.dev)
-  - Source: [/apps/workbench](/apps/workbench)
-  - Description: Component library with MDX docs, examples, and hooks
+- **Blog** — blog starter with a post index, tags, and MDX article pages ([Demo](https://blog.renoun.dev) · [Source](/examples/blog))
+- **Docs** — documentation starter that turns MDX content into a polished, full-featured site ([Demo](https://docs.renoun.dev) · [Source](/examples/docs))
+- **Workbench** — design system workbench for building, previewing, and documenting libraries ([Demo](https://workbench.renoun.dev) · [Source](/examples/workbench))
 
 ## Why renoun?
 
