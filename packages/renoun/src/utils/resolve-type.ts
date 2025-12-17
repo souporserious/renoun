@@ -1105,7 +1105,7 @@ export function resolveType(
       const variableTypeContext = typeNode ?? jsDocTypeNode ?? enclosingNode
       const variableTypeSource = typeNode
         ? typeNode.getType()
-        : jsDocTypeNode
+        : jsDocTypeNode && (type.isAny() || type.isUnknown())
           ? jsDocTypeNode.getType()
           : type
 
@@ -2093,13 +2093,17 @@ function resolveTypeExpression(
       }
 
       // Fallback: resolve JSDoc typedef/callback by name when symbol lookup fails.
-      if (!resolvedType) {
+      // Only do this when we're in a JSDoc context to avoid expensive lookups for
+      // TypeScript-native types that will never have JSDoc typedefs/callbacks.
+      if (!resolvedType && isJsDocTypeReference) {
+        // Use a local reference to avoid TypeScript's overly aggressive narrowing
+        const nodeForLookup = enclosingNode as Node | undefined
         const typeNameText = (() => {
-          if (tsMorph.Node.isTypeReference(enclosingNode)) {
-            return enclosingNode.getTypeName().getText()
+          if (tsMorph.Node.isTypeReference(nodeForLookup)) {
+            return nodeForLookup.getTypeName().getText()
           }
-          if (tsMorph.Node.isExpressionWithTypeArguments(enclosingNode)) {
-            return enclosingNode.getExpression().getText()
+          if (tsMorph.Node.isExpressionWithTypeArguments(nodeForLookup)) {
+            return nodeForLookup.getExpression().getText()
           }
           return symbol?.getName?.() ?? type.getSymbol()?.getName?.()
         })()
@@ -7692,6 +7696,59 @@ function getOriginUnionTypes(type: Type): Type[] {
   )
 }
 
+/** Cache for JSDoc typedef/callback lookups per source file. WeakMap ensures
+ * automatic cache invalidation when SourceFile objects are replaced (e.g., on file change). */
+const jsDocTagCache = new WeakMap<
+  SourceFile,
+  Map<
+    string,
+    | { kind: 'typedef'; tag: JSDocTypedefTag }
+    | { kind: 'callback'; tag: JSDocCallbackTag }
+  >
+>()
+
+/** Builds the JSDoc typedef/callback cache for a source file.
+ * Uses getStatements() instead of getDescendants() for efficiency since
+ * JSDoc typedefs/callbacks are typically on top-level statements. */
+function buildJsDocTagCache(
+  sourceFile: SourceFile
+): Map<
+  string,
+  | { kind: 'typedef'; tag: JSDocTypedefTag }
+  | { kind: 'callback'; tag: JSDocCallbackTag }
+> {
+  const cache = new Map<
+    string,
+    | { kind: 'typedef'; tag: JSDocTypedefTag }
+    | { kind: 'callback'; tag: JSDocCallbackTag }
+  >()
+
+  // Process JSDoc on top-level statements (most common case for typedefs/callbacks)
+  for (const statement of sourceFile.getStatements()) {
+    if (!tsMorph.Node.isJSDocable(statement)) continue
+
+    for (const jsDoc of statement.getJsDocs()) {
+      for (const tag of jsDoc.getTags()) {
+        if (tsMorph.Node.isJSDocTypedefTag(tag)) {
+          const tagName = tag.getTagName()
+          if (tagName) {
+            cache.set(tagName, { kind: 'typedef', tag })
+          }
+        }
+
+        if (tsMorph.Node.isJSDocCallbackTag(tag)) {
+          const tagName = tag.getTagName()
+          if (tagName) {
+            cache.set(tagName, { kind: 'callback', tag })
+          }
+        }
+      }
+    }
+  }
+
+  return cache
+}
+
 function findJsDocTypedefOrCallbackByName(
   name: string,
   sourceFile: SourceFile
@@ -7699,25 +7756,13 @@ function findJsDocTypedefOrCallbackByName(
   | { kind: 'typedef'; tag: JSDocTypedefTag }
   | { kind: 'callback'; tag: JSDocCallbackTag }
   | undefined {
-  const jsDocs = sourceFile.getDescendants().filter(tsMorph.Node.isJSDoc)
-
-  for (const jsDoc of jsDocs) {
-    for (const tag of jsDoc.getTags()) {
-      if (tsMorph.Node.isJSDocTypedefTag(tag)) {
-        if (tag.getTagName() === name) {
-          return { kind: 'typedef', tag }
-        }
-      }
-
-      if (tsMorph.Node.isJSDocCallbackTag(tag)) {
-        if (tag.getTagName() === name) {
-          return { kind: 'callback', tag }
-        }
-      }
-    }
+  let fileCache = jsDocTagCache.get(sourceFile)
+  if (!fileCache) {
+    fileCache = buildJsDocTagCache(sourceFile)
+    jsDocTagCache.set(sourceFile, fileCache)
   }
 
-  return undefined
+  return fileCache.get(name)
 }
 
 function resolveJSDocTypedef(
