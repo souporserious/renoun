@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "homepage": "https://blog.renoun.dev",
   "description": "A blog starter featuring a post index, tags, and individual article pages with MDX.",
+  "author": "souporserious",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/souporserious/renoun.git",
+    "directory": "apps/blog"
+  },
+  "bugs": "https://github.com/souporserious/renoun/issues",
   "scripts": {
     "dev": "renoun next"
   },

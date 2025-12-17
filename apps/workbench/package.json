@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "homepage": "https://workbench.renoun.dev",
   "description": "Design system workbench for building, previewing, and documenting libraries.",
+  "author": "souporserious",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/souporserious/renoun.git",
+    "directory": "apps/workbench"
+  },
+  "bugs": "https://github.com/souporserious/renoun/issues",
   "scripts": {
     "dev": "renoun next"
   },

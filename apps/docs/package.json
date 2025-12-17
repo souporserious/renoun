@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "homepage": "https://docs.renoun.dev",
   "description": "A documentation starter that turns MDX content into a polished, full-featured site.",
+  "author": "souporserious",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/souporserious/renoun.git",
+    "directory": "apps/docs"
+  },
+  "bugs": "https://github.com/souporserious/renoun/issues",
   "scripts": {
     "dev": "renoun next"
   },
