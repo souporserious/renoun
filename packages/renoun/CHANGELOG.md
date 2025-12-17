@@ -1,5 +1,25 @@
 # renoun
 
+## 10.17.0
+
+### Minor Changes
+
+- 6946fb4: Adds `createDirectory`, `rename`, and `copy` methods to the file system implementations.
+- c48511a: Fixes language validation to prevent mismatched language/file combinations for any file type, not just JavaScript. Previously, only JavaScript/TypeScript files were validated against their language parameters. Now all file types are validated using a comprehensive mapping derived from grammar data.
+- 375e955: Introduces the ability for the `renoun` CLI to run renoun-aware applications directly from
+  `node_modules` with file and directory shadowing using `renoun dev` and `renoun build` commands, as well as a new `renoun eject` command that will copy the files into the project.
+- d459768: Adds `includeHiddenFiles` option to `Directory.getEntries()`. Hidden files and directories (names starting with `.`) are now excluded by default, preventing issues like `.gitkeep` files being captured as content entries.
+- fcb68bd: Improves JSDoc type resolution with better support for `@typedef` and `@callback` tags, fallback type resolution for JSDoc types that resolve to 'any', improved handling of `@template` tags, rest parameters, union types, and optional parameters.
+- 31e3a44: Adds `JavaScriptFile#getRegions` method to help parse `// #region` and `// #endregion` sections.
+- 8ea0b77: Adds default support for `yaml` language.
+
+### Patch Changes
+
+- 751da18: Fixes `UnresolvedTypeExpressionError` when resolving JavaScript files that use `WeakMap` or other types with symbol type parameters. The `isSymbolType` function now correctly detects `ESSymbol` and `UniqueESSymbol` types using TypeScript's type flags.
+- f863145: Fall back to an in-memory `ts-morph` project when no `tsconfig.json` is available.
+- f00fcbc: Fixes leaky context in `CodeBlock` by passing `path` and `baseDirectory` props directly to `Tokens`.
+- 024a127: Fixes resolving JSDoc call signatures when inferred function types are weak. The `ModuleExport#getType` utility now prefers JSDoc type annotations over inferred types when the JSDoc signature provides more useful information.
+
 ## 10.16.0
 
 ### Minor Changes

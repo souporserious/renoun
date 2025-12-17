@@ -1,6 +1,6 @@
 {
   "name": "@renoun/workbench",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "homepage": "https://workbench.renoun.dev",
   "description": "Design system workbench for building, previewing, and documenting libraries.",
   "scripts": {
