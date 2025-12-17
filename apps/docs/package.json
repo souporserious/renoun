@@ -1,6 +1,6 @@
 {
   "name": "@renoun/docs",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "homepage": "https://docs.renoun.dev",
   "description": "A documentation starter that turns MDX content into a polished, full-featured site.",
   "scripts": {
