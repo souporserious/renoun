@@ -145,6 +145,20 @@ export abstract class FileSystem {
 
   abstract deleteFile(path: string): Promise<void>
 
+  abstract createDirectory(path: string): Promise<void>
+
+  abstract rename(
+    source: string,
+    target: string,
+    options?: { overwrite?: boolean }
+  ): Promise<void>
+
+  abstract copy(
+    source: string,
+    target: string,
+    options?: { overwrite?: boolean }
+  ): Promise<void>
+
   /** Whether compilerOptions.stripInternal is enabled in the active tsconfig. */
   shouldStripInternal(): boolean {
     if (this.#tsConfig === undefined) {

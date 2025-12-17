@@ -14,11 +14,12 @@ describe('MemoryFileSystem', () => {
       throw new Error('Expected binary entry')
     }
     expect(entry.content).not.toBe(binary)
-    expect(Array.from(entry.content)).toEqual([0, 1, 2, 3])
+    expect(entry.content).toBeInstanceOf(Uint8Array)
+    expect(Array.from(entry.content as Uint8Array)).toEqual([0, 1, 2, 3])
 
     binary[0] = 255
 
-    expect(Array.from(entry.content)).toEqual([0, 1, 2, 3])
+    expect(Array.from(entry.content as Uint8Array)).toEqual([0, 1, 2, 3])
 
     const base64 = fileSystem.readFileSync('binary.bin')
     expect(base64).toBe(Buffer.from([0, 1, 2, 3]).toString('base64'))
@@ -39,7 +40,8 @@ describe('MemoryFileSystem', () => {
       throw new Error('Expected binary entry')
     }
     expect(stored.encoding).toBe('base64')
-    expect(Array.from(stored.content)).toEqual([4, 5, 6])
+    expect(stored.content).toBeInstanceOf(Uint8Array)
+    expect(Array.from(stored.content as Uint8Array)).toEqual([4, 5, 6])
 
     const freshEntry = {
       kind: 'binary' as const,
@@ -55,7 +57,8 @@ describe('MemoryFileSystem', () => {
       throw new Error('Expected binary entry')
     }
     expect(created.encoding).toBe('binary')
-    expect(Array.from(created.content)).toEqual([7, 8, 9])
+    expect(created.content).toBeInstanceOf(Uint8Array)
+    expect(Array.from(created.content as Uint8Array)).toEqual([7, 8, 9])
     expect(created.content).not.toBe(freshEntry.content)
   })
 
@@ -210,6 +213,60 @@ describe('MemoryFileSystem', () => {
   test('throws on unsupported content provided to constructor', () => {
     expect(() => new MemoryFileSystem({ bad: 123 as unknown as any })).toThrow(
       '[renoun] Unsupported file content provided to MemoryFileSystem'
+    )
+  })
+
+  test('supports creating directories, renaming, and copying entries', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'folder/file.txt': 'original',
+      'other.bin': new Uint8Array([1, 2, 3]),
+    })
+
+    await fileSystem.createDirectory('folder/nested')
+    expect(fileSystem.fileExistsSync('folder/nested')).toBe(true)
+
+    await fileSystem.rename('folder/file.txt', 'folder/nested/file.txt')
+    expect(await fileSystem.readFile('folder/nested/file.txt')).toBe('original')
+    expect(await fileSystem.fileExists('folder/file.txt')).toBe(false)
+
+    await fileSystem.writeFile('folder/nested/other.txt', 'keep')
+    await expect(
+      fileSystem.rename('folder/nested/file.txt', 'folder/nested/other.txt')
+    ).rejects.toThrow(/target already exists/)
+
+    await fileSystem.copy('other.bin', 'folder/copy.bin')
+    const copied = await fileSystem.readFileBinary('folder/copy.bin')
+    expect(Array.from(copied)).toEqual([1, 2, 3])
+
+    await expect(
+      fileSystem.copy('other.bin', 'folder/copy.bin')
+    ).rejects.toThrow(/target already exists/)
+
+    await fileSystem.copy('other.bin', 'folder/copy.bin', { overwrite: true })
+    const overwritten = await fileSystem.readFileBinary('folder/copy.bin')
+    expect(Array.from(overwritten)).toEqual([1, 2, 3])
+  })
+
+  test('handles directory copy and prevents subtree renames', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'dir/a.txt': 'A',
+      'dir/sub/b.txt': 'B',
+    })
+
+    await fileSystem.copy('dir', 'dir-copy')
+    expect(await fileSystem.readFile('dir-copy/a.txt')).toBe('A')
+    expect(await fileSystem.readFile('dir-copy/sub/b.txt')).toBe('B')
+
+    await fileSystem.writeFile('dir-copy/sub/b.txt', 'override')
+    await expect(fileSystem.copy('dir', 'dir-copy')).rejects.toThrow(
+      /target already exists/
+    )
+
+    await fileSystem.copy('dir', 'dir-copy', { overwrite: true })
+    expect(await fileSystem.readFile('dir-copy/sub/b.txt')).toBe('B')
+
+    await expect(fileSystem.rename('dir', 'dir/sub/inner')).rejects.toThrow(
+      /subtree/
     )
   })
 })

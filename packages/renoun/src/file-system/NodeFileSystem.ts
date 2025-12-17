@@ -11,13 +11,16 @@ import {
 } from 'node:fs'
 import {
   access,
+  mkdir,
   readdir,
   readFile,
+  rename,
   rm,
   stat,
+  cp,
   writeFile,
 } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import { ensureRelativePath, relativePath } from '../utils/path.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
@@ -191,6 +194,75 @@ export class NodeFileSystem extends FileSystem {
   async deleteFile(path: string): Promise<void> {
     this.#assertWithinWorkspace(path)
     await rm(path, { force: true })
+  }
+
+  async createDirectory(path: string): Promise<void> {
+    this.#assertWithinWorkspace(path)
+    await mkdir(path, { recursive: true })
+  }
+
+  async rename(
+    source: string,
+    target: string,
+    options?: { overwrite?: boolean }
+  ): Promise<void> {
+    this.#assertWithinWorkspace(source)
+    this.#assertWithinWorkspace(target)
+
+    if (source === target) {
+      return
+    }
+
+    const overwrite = options?.overwrite ?? false
+
+    if (!overwrite && (await this.fileExists(target))) {
+      throw new Error(
+        `[renoun] Cannot rename because target already exists: ${target}`
+      )
+    }
+
+    if (overwrite) {
+      await rm(target, { recursive: true, force: true })
+    }
+
+    const targetDirectory = dirname(target)
+    if (targetDirectory && targetDirectory !== '.' && targetDirectory !== '/') {
+      await mkdir(targetDirectory, { recursive: true })
+    }
+
+    await rename(source, target)
+  }
+
+  async copy(
+    source: string,
+    target: string,
+    options?: { overwrite?: boolean }
+  ): Promise<void> {
+    this.#assertWithinWorkspace(source)
+    this.#assertWithinWorkspace(target)
+
+    const overwrite = options?.overwrite ?? false
+
+    if (!overwrite && (await this.fileExists(target))) {
+      throw new Error(
+        `[renoun] Cannot copy because target already exists: ${target}`
+      )
+    }
+
+    if (overwrite) {
+      await rm(target, { recursive: true, force: true })
+    }
+
+    const targetDirectory = dirname(target)
+    if (targetDirectory && targetDirectory !== '.' && targetDirectory !== '/') {
+      await mkdir(targetDirectory, { recursive: true })
+    }
+
+    await cp(source, target, {
+      recursive: true,
+      force: overwrite,
+      errorOnExist: !overwrite,
+    })
   }
 
   isFilePathGitIgnored(filePath: string): boolean {

@@ -28,6 +28,10 @@ export type MemoryFileBinaryEntry = {
 
 export type MemoryFileEntry = MemoryFileTextEntry | MemoryFileBinaryEntry
 
+export type MemoryDirectoryEntry = { kind: 'directory' }
+
+export type MemoryEntry = MemoryFileEntry | MemoryDirectoryEntry
+
 export type MemoryFileContent =
   | string
   | Uint8Array
@@ -38,7 +42,7 @@ export type MemoryFileContent =
 /** A file system that stores files in memory. */
 export class MemoryFileSystem extends FileSystem {
   #projectOptions: ProjectOptions
-  #files: Map<string, MemoryFileEntry>
+  #files: Map<string, MemoryEntry>
   #ignore: ReturnType<typeof ignore> | undefined
 
   constructor(files: { [path: string]: MemoryFileContent }) {
@@ -56,25 +60,17 @@ export class MemoryFileSystem extends FileSystem {
     this.#files = new Map(
       Object.entries(files).map(([path, content]) => [
         normalizePath(path),
-        this.#normalizeContent(content),
+        this.#normalizeFileContent(content),
       ])
     )
 
     // Create a TypeScript source file for each JavaScript-like file
     for (const [path, entry] of this.#files) {
-      const extension = path.split('.').at(-1)
-      if (
-        extension &&
-        isJavaScriptLikeExtension(extension) &&
-        entry.kind === 'text'
-      ) {
-        const absolutePath = this.getAbsolutePath(path)
-        createSourceFile(absolutePath, entry.content, this.#projectOptions)
-      }
+      this.#maybeCreateSourceFile(path, entry)
     }
   }
 
-  #normalizeContent(content: MemoryFileContent): MemoryFileEntry {
+  #normalizeFileContent(content: MemoryFileContent): MemoryFileEntry {
     if (typeof content === 'string') {
       return { kind: 'text', content }
     }
@@ -138,20 +134,118 @@ export class MemoryFileSystem extends FileSystem {
     )
   }
 
-  createFile(path: string, content: MemoryFileContent): void {
-    const normalizedPath = normalizePath(path)
-    const entry = this.#normalizeContent(content)
-    this.#files.set(normalizedPath, entry)
+  #maybeCreateSourceFile(path: string, entry: MemoryEntry) {
+    if (entry.kind !== 'text') {
+      return
+    }
 
-    const extension = normalizedPath.split('.').pop()
-    if (
-      extension &&
-      isJavaScriptLikeExtension(extension) &&
-      entry.kind === 'text'
-    ) {
-      const absolutePath = this.getAbsolutePath(normalizedPath)
+    const extension = path.split('.').at(-1)
+    if (extension && isJavaScriptLikeExtension(extension)) {
+      const absolutePath = this.getAbsolutePath(path)
       createSourceFile(absolutePath, entry.content, this.#projectOptions)
     }
+  }
+
+  #ensureDirectoryPlaceholders(path: string) {
+    const normalizedPath = normalizePath(path)
+    if (normalizedPath === '.' || normalizedPath === '') {
+      return
+    }
+
+    const segments = normalizedPath.split('/')
+    let current = ''
+
+    for (const segment of segments) {
+      current = current ? `${current}/${segment}` : segment
+      const existing = this.#files.get(current)
+      if (!existing) {
+        this.#files.set(current, { kind: 'directory' })
+        continue
+      }
+
+      if (existing.kind !== 'directory') {
+        throw new Error(
+          `[renoun] Cannot create directory because a file exists at ${current}`
+        )
+      }
+    }
+  }
+
+  #collectEntriesUnderPath(path: string) {
+    const normalizedPath = normalizePath(path)
+    const entries: Array<[string, MemoryEntry]> = []
+
+    for (const [entryPath, entry] of this.#files) {
+      if (
+        entryPath === normalizedPath ||
+        entryPath.startsWith(`${normalizedPath}/`)
+      ) {
+        entries.push([entryPath, entry])
+      }
+    }
+
+    return entries
+  }
+
+  #deleteTree(path: string) {
+    const normalizedPath = normalizePath(path)
+
+    for (const entryPath of Array.from(this.#files.keys())) {
+      if (
+        entryPath === normalizedPath ||
+        entryPath.startsWith(`${normalizedPath}/`)
+      ) {
+        this.#files.delete(entryPath)
+      }
+    }
+  }
+
+  #cloneEntry(entry: MemoryEntry): MemoryEntry {
+    if (entry.kind === 'directory') {
+      return { kind: 'directory' }
+    }
+
+    if (entry.kind === 'text') {
+      return { kind: 'text', content: entry.content }
+    }
+
+    if (typeof entry.content === 'string') {
+      return {
+        kind: 'binary',
+        content: entry.content,
+        encoding: entry.encoding,
+      }
+    }
+
+    return {
+      kind: 'binary',
+      content: entry.content.slice(),
+      encoding: entry.encoding,
+    }
+  }
+
+  #getParentPath(path: string): string {
+    const normalizedPath = normalizePath(path)
+    const segments = normalizedPath.split('/').filter(Boolean)
+
+    if (segments.length === 0) {
+      return '.'
+    }
+
+    segments.pop()
+    if (segments.length === 0) {
+      return '.'
+    }
+
+    return segments.join('/')
+  }
+
+  createFile(path: string, content: MemoryFileContent): void {
+    const normalizedPath = normalizePath(path)
+    this.#ensureDirectoryPlaceholders(this.#getParentPath(normalizedPath))
+    const entry = this.#normalizeFileContent(content)
+    this.#files.set(normalizedPath, entry)
+    this.#maybeCreateSourceFile(normalizedPath, entry)
   }
 
   getProjectOptions() {
@@ -179,26 +273,28 @@ export class MemoryFileSystem extends FileSystem {
     return normalized.startsWith('./') ? normalized.slice(2) : normalized
   }
 
-  getFiles(): Map<string, MemoryFileEntry> {
+  getFiles(): Map<string, MemoryEntry> {
     return this.#files
   }
 
-  getFileEntry(path: string): MemoryFileEntry | undefined {
+  getFileEntry(path: string): MemoryEntry | undefined {
     return this.#files.get(normalizePath(path))
   }
 
   readDirectorySync(path: string = '.'): DirectoryEntry[] {
     const normalizedDirectoryPath = normalizePath(path)
+    const basePath =
+      normalizedDirectoryPath === '.' ? '' : normalizedDirectoryPath
 
     const entries: DirectoryEntry[] = []
     const addedPaths = new Set<string>()
 
-    for (const filePath of this.#files.keys()) {
-      if (!filePath.startsWith(normalizedDirectoryPath)) {
+    for (const [entryPath, entry] of this.#files) {
+      if (!entryPath.startsWith(basePath)) {
         continue
       }
 
-      let relativePath = filePath.slice(normalizedDirectoryPath.length)
+      let relativePath = entryPath.slice(basePath.length)
 
       if (relativePath.startsWith('/')) {
         relativePath = relativePath.slice(1)
@@ -211,31 +307,26 @@ export class MemoryFileSystem extends FileSystem {
       }
 
       const entryName = segments.at(0)!
-      const entryPath = normalizedDirectoryPath.endsWith('/')
-        ? `${normalizedDirectoryPath}${entryName}`
-        : `${normalizedDirectoryPath}/${entryName}`
+      const normalizedEntryPath = basePath
+        ? `${basePath.replace(/\/$/, '')}/${entryName}`
+        : entryName
 
-      if (addedPaths.has(entryPath)) {
+      if (addedPaths.has(normalizedEntryPath)) {
         continue
       }
 
-      if (segments.length === 1) {
-        entries.push({
-          name: entryName,
-          path: entryPath,
-          isDirectory: false,
-          isFile: true,
-        })
-      } else {
-        entries.push({
-          name: entryName,
-          path: entryPath,
-          isDirectory: true,
-          isFile: false,
-        })
-      }
+      const isLeafDirectory =
+        segments.length > 1 ||
+        (entry.kind === 'directory' && segments.length > 0)
 
-      addedPaths.add(entryPath)
+      entries.push({
+        name: entryName,
+        path: normalizedEntryPath,
+        isDirectory: isLeafDirectory,
+        isFile: !isLeafDirectory,
+      })
+
+      addedPaths.add(normalizedEntryPath)
     }
 
     return entries
@@ -250,6 +341,10 @@ export class MemoryFileSystem extends FileSystem {
     const entry = this.#files.get(normalizedPath)
     if (!entry) {
       throw new Error(`File not found: ${normalizedPath}`)
+    }
+
+    if (entry.kind === 'directory') {
+      throw new Error(`Cannot read directory: ${normalizedPath}`)
     }
 
     if (entry.kind === 'text') {
@@ -273,6 +368,10 @@ export class MemoryFileSystem extends FileSystem {
 
     if (!entry) {
       throw new Error(`File not found: ${normalizedPath}`)
+    }
+
+    if (entry.kind === 'directory') {
+      throw new Error(`Cannot read directory: ${normalizedPath}`)
     }
 
     if (entry.kind === 'text') {
@@ -331,18 +430,10 @@ export class MemoryFileSystem extends FileSystem {
 
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {
     const normalizedPath = normalizePath(path)
-    const entry = this.#normalizeContent(content as MemoryFileContent)
+    this.#ensureDirectoryPlaceholders(this.#getParentPath(normalizedPath))
+    const entry = this.#normalizeFileContent(content as MemoryFileContent)
     this.#files.set(normalizedPath, entry)
-
-    const extension = normalizedPath.split('.').pop()
-    if (
-      extension &&
-      isJavaScriptLikeExtension(extension) &&
-      entry.kind === 'text'
-    ) {
-      const absolutePath = this.getAbsolutePath(normalizedPath)
-      createSourceFile(absolutePath, entry.content, this.#projectOptions)
-    }
+    this.#maybeCreateSourceFile(normalizedPath, entry)
   }
 
   async writeFile(
@@ -400,6 +491,117 @@ export class MemoryFileSystem extends FileSystem {
 
   async deleteFile(path: string): Promise<void> {
     this.deleteFileSync(path)
+  }
+
+  async createDirectory(path: string): Promise<void> {
+    this.#ensureDirectoryPlaceholders(path)
+  }
+
+  async rename(
+    source: string,
+    target: string,
+    options?: { overwrite?: boolean }
+  ): Promise<void> {
+    const normalizedSource = normalizePath(source)
+    const normalizedTarget = normalizePath(target)
+
+    if (normalizedSource === normalizedTarget) {
+      return
+    }
+
+    if (normalizedTarget.startsWith(`${normalizedSource}/`)) {
+      throw new Error('[renoun] Cannot rename a path into its own subtree')
+    }
+
+    const entriesToMove = this.#collectEntriesUnderPath(normalizedSource)
+
+    if (entriesToMove.length === 0) {
+      throw new Error(`File not found: ${normalizedSource}`)
+    }
+
+    const overwrite = options?.overwrite ?? false
+
+    if (!overwrite) {
+      for (const existingPath of this.#files.keys()) {
+        if (
+          existingPath === normalizedTarget ||
+          existingPath.startsWith(`${normalizedTarget}/`)
+        ) {
+          throw new Error(
+            `[renoun] Cannot rename because target already exists: ${normalizedTarget}`
+          )
+        }
+      }
+    } else {
+      this.#deleteTree(normalizedTarget)
+    }
+
+    this.#ensureDirectoryPlaceholders(this.#getParentPath(normalizedTarget))
+
+    for (const [entryPath] of entriesToMove) {
+      this.#files.delete(entryPath)
+    }
+
+    for (const [entryPath, entry] of entriesToMove) {
+      const suffix = entryPath.slice(normalizedSource.length)
+      const nextPath = suffix
+        ? `${normalizedTarget}${suffix.startsWith('/') ? '' : '/'}${suffix}`
+        : normalizedTarget
+      this.#files.set(nextPath, entry)
+      this.#maybeCreateSourceFile(nextPath, entry)
+    }
+  }
+
+  async copy(
+    source: string,
+    target: string,
+    options?: { overwrite?: boolean }
+  ): Promise<void> {
+    const normalizedSource = normalizePath(source)
+    const normalizedTarget = normalizePath(target)
+
+    if (normalizedSource === normalizedTarget) {
+      return
+    }
+
+    if (normalizedTarget.startsWith(`${normalizedSource}/`)) {
+      throw new Error('[renoun] Cannot copy a path into its own subtree')
+    }
+
+    const entriesToCopy = this.#collectEntriesUnderPath(normalizedSource)
+
+    if (entriesToCopy.length === 0) {
+      throw new Error(`File not found: ${normalizedSource}`)
+    }
+
+    const overwrite = options?.overwrite ?? false
+
+    if (!overwrite) {
+      for (const existingPath of this.#files.keys()) {
+        if (
+          existingPath === normalizedTarget ||
+          existingPath.startsWith(`${normalizedTarget}/`)
+        ) {
+          throw new Error(
+            `[renoun] Cannot copy because target already exists: ${normalizedTarget}`
+          )
+        }
+      }
+    } else {
+      this.#deleteTree(normalizedTarget)
+    }
+
+    this.#ensureDirectoryPlaceholders(this.#getParentPath(normalizedTarget))
+
+    for (const [entryPath, entry] of entriesToCopy) {
+      const suffix = entryPath.slice(normalizedSource.length)
+      const nextPath = suffix
+        ? `${normalizedTarget}${suffix.startsWith('/') ? '' : '/'}${suffix}`
+        : normalizedTarget
+      const cloned = this.#cloneEntry(entry)
+      this.#files.set(nextPath, cloned)
+      this.#maybeCreateSourceFile(nextPath, cloned)
+    }
   }
 
   isFilePathGitIgnored(filePath: string) {

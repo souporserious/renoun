@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import { beforeAll, describe, test, expect, expectTypeOf, vi } from 'vitest'
 import { runInNewContext } from 'node:vm'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import * as gitExportMetadataModule from '../utils/get-local-git-export-metadata.ts'
@@ -178,6 +178,55 @@ describe('file system', () => {
       await writer.close()
 
       expect(await fileSystem.readFile(streamFilePath)).toBe('Stream data')
+    } finally {
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('node file system supports creating, renaming, and copying paths', async () => {
+    const fileSystem = new NodeFileSystem()
+    const rootDirectory = getRootDirectory()
+    const baseTmpDirectory = join(rootDirectory, 'tmp')
+    mkdirSync(baseTmpDirectory, { recursive: true })
+    const tempDirectory = mkdtempSync(join(baseTmpDirectory, 'fs-'))
+
+    try {
+      const nestedDirectory = join(tempDirectory, 'a/b')
+      await fileSystem.createDirectory(nestedDirectory)
+      expect(statSync(nestedDirectory).isDirectory()).toBe(true)
+
+      const sourceFile = join(tempDirectory, 'a/source.txt')
+      const conflictPath = join(tempDirectory, 'conflict.txt')
+      await fileSystem.writeFile(sourceFile, 'source')
+      await fileSystem.writeFile(conflictPath, 'existing')
+
+      await expect(fileSystem.rename(sourceFile, conflictPath)).rejects.toThrow(
+        /target already exists/
+      )
+
+      await fileSystem.rename(sourceFile, conflictPath, { overwrite: true })
+      expect(await fileSystem.readFile(conflictPath)).toBe('source')
+
+      const copyTarget = join(tempDirectory, 'copy/target.txt')
+      await fileSystem.copy(conflictPath, copyTarget)
+      expect(await fileSystem.readFile(copyTarget)).toBe('source')
+
+      await expect(fileSystem.copy(conflictPath, copyTarget)).rejects.toThrow(
+        /target already exists/
+      )
+
+      await fileSystem.copy(conflictPath, copyTarget, { overwrite: true })
+      expect(await fileSystem.readFile(copyTarget)).toBe('source')
+
+      const directorySource = join(tempDirectory, 'dir')
+      const nestedFile = join(directorySource, 'inner/file.txt')
+      await fileSystem.createDirectory(join(directorySource, 'inner'))
+      await fileSystem.writeFile(nestedFile, 'dir source')
+      const directoryCopy = join(tempDirectory, 'dir-copy')
+      await fileSystem.copy(directorySource, directoryCopy)
+      expect(
+        await fileSystem.readFile(join(directoryCopy, 'inner/file.txt'))
+      ).toBe('dir source')
     } finally {
       rmSync(tempDirectory, { recursive: true, force: true })
     }
