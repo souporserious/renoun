@@ -11,6 +11,7 @@ import { z } from 'zod'
 
 import type { basename } from '#fixtures/utils/path.ts'
 import type { MDXContent, Headings } from '../mdx'
+import type { FileRegion } from '../utils/get-file-regions.ts'
 import { removeExtension } from '../utils/path.ts'
 import { NodeFileSystem } from './NodeFileSystem'
 import { MemoryFileSystem } from './MemoryFileSystem'
@@ -1727,6 +1728,50 @@ describe('file system', () => {
       },
     ])
     expectTypeOf(headings).toExtend<Headings>()
+  })
+
+  test('javascript file getRegions returns TypeScript regions', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'file.ts': `//#region alpha
+const a = 1
+//#endregion
+
+//#region beta
+function b() {}
+//#endregion`,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('file', 'ts')
+
+    expect(file).toBeInstanceOf(JavaScriptFile)
+
+    const regions = await file.getRegions()
+
+    expect(regions).toEqual([
+      {
+        autoCollapse: false,
+        bannerText: 'alpha',
+        hintSpan: { length: 40, start: 0 },
+        kind: 'region',
+        position: {
+          end: { column: 13, line: 3 },
+          start: { column: 1, line: 1 },
+        },
+        textSpan: { length: 40, start: 0 },
+      },
+      {
+        autoCollapse: false,
+        bannerText: 'beta',
+        hintSpan: { length: 43, start: 42 },
+        kind: 'region',
+        position: {
+          end: { column: 13, line: 7 },
+          start: { column: 1, line: 5 },
+        },
+        textSpan: { length: 43, start: 42 },
+      },
+    ])
+    expectTypeOf(regions).toExtend<FileRegion[]>()
   })
 
   test('schema transforms export value', async () => {

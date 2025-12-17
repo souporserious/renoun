@@ -14,6 +14,7 @@ import type {
   GetSourceTextMetadataOptions,
   SourceTextMetadata,
 } from '../utils/get-source-text-metadata.ts'
+import type { FileRegion } from '../utils/get-file-regions.ts'
 import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
 import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.ts'
 import type { DistributiveOmit } from '../types.ts'
@@ -220,6 +221,28 @@ export async function getFileExports(
     }
 
     return fileExports
+  })
+}
+
+/**
+ * Get the `//#region` spans for a file.
+ * @internal
+ */
+export async function getFileRegions(
+  filePath: string,
+  projectOptions?: ProjectOptions
+): Promise<FileRegion[]> {
+  const client = getClient()
+  if (client) {
+    return client.callMethod<
+      { filePath: string; projectOptions?: ProjectOptions },
+      FileRegion[]
+    >('getFileRegions', { filePath, projectOptions })
+  }
+
+  return import('../utils/get-file-regions.ts').then(({ getFileRegions }) => {
+    const project = getProject(projectOptions)
+    return getFileRegions(filePath, project)
   })
 }
 

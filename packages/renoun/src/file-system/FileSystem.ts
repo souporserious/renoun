@@ -6,6 +6,7 @@ import {
   getFileExportMetadata,
   getFileExportText,
   getFileExportStaticValue,
+  getFileRegions,
   resolveTypeAtLocation,
 } from '../project/client.ts'
 import type { ProjectOptions } from '../project/types.ts'
@@ -240,6 +241,10 @@ export abstract class FileSystem {
       includeDependencies,
       this.getProjectOptions()
     )
+  }
+
+  getFileRegions(filePath: string) {
+    return getFileRegions(filePath, this.getProjectOptions())
   }
 
   async getFileExportStaticValue(

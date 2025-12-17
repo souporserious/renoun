@@ -13,6 +13,7 @@ import {
   getFileExports as baseGetFileExports,
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.ts'
+import { getFileRegions as baseGetFileRegions } from '../utils/get-file-regions.ts'
 import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
@@ -179,6 +180,24 @@ export async function createServer(options?: { port?: number }) {
     }) {
       const project = getProject(projectOptions)
       return baseGetFileExports(filePath, project)
+    },
+    {
+      memoize: true,
+      concurrency: 25,
+    }
+  )
+
+  server.registerMethod(
+    'getFileRegions',
+    async function getFileRegions({
+      filePath,
+      projectOptions,
+    }: {
+      filePath: string
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      return baseGetFileRegions(filePath, project)
     },
     {
       memoize: true,

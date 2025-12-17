@@ -36,6 +36,7 @@ import {
   getLocalGitExportMetadata,
   type GitExportMetadata,
 } from '../utils/get-local-git-export-metadata.ts'
+import type { FileRegion } from '../utils/get-file-regions.ts'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
@@ -2115,6 +2116,12 @@ export class JavaScriptFile<
     }
 
     return this.#headings
+  }
+
+  /** Get the `//#region` spans in the JavaScript file. */
+  async getRegions(): Promise<FileRegion[]> {
+    const fileSystem = this.getParent().getFileSystem()
+    return fileSystem.getFileRegions(this.getAbsolutePath())
   }
 
   override async getStructure(): Promise<FileStructure> {
