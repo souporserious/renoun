@@ -10,11 +10,11 @@ npm install @renoun/screenshot
 
 ## Usage
 
-### One-Shot Convenience Methods
+### Convenience Methods
 
 The simplest way to capture screenshots:
 
-```typescript
+```ts
 import { screenshot } from '@renoun/screenshot'
 
 // Render to canvas
@@ -32,11 +32,11 @@ const url = await screenshot.url(element, { format: 'png' })
 URL.revokeObjectURL(url)
 ```
 
-### Capture Handle Pattern
+### Handle Pattern
 
 For advanced use cases where you want to render once and encode multiple ways:
 
-```typescript
+```ts
 import { screenshot } from '@renoun/screenshot'
 
 const shot = screenshot(element, {
@@ -57,7 +57,7 @@ const canvas2 = await shot
 
 You can pass a CSS selector instead of an element:
 
-```typescript
+```ts
 const blob = await screenshot.blob('#my-element', { format: 'png' })
 ```
 
@@ -65,7 +65,7 @@ const blob = await screenshot.blob('#my-element', { format: 'png' })
 
 When updating previews in a UI, remember to revoke old URLs:
 
-```typescript
+```ts
 let lastUrl: string | null = null
 
 async function updatePreview() {
