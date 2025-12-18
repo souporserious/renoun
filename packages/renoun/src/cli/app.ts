@@ -9,6 +9,7 @@ import {
   rm,
   stat,
   symlink,
+  writeFile,
 } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
@@ -17,6 +18,97 @@ import { createServer } from '../project/server.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
 import { spawn } from 'node:child_process'
+
+function mergeDependencySections(
+  appPackageJson: Record<string, unknown>,
+  projectPackageJson: Record<string, unknown>
+): Record<string, unknown> {
+  const keys = [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+  ] as const
+
+  const merged: Record<string, unknown> = {}
+
+  for (const key of keys) {
+    const projectSection = projectPackageJson[key]
+    const appSection = appPackageJson[key]
+
+    const projectRecord =
+      projectSection && typeof projectSection === 'object'
+        ? (projectSection as Record<string, unknown>)
+        : {}
+    const appRecord =
+      appSection && typeof appSection === 'object'
+        ? (appSection as Record<string, unknown>)
+        : {}
+
+    // Merge with app versions taking precedence to avoid claiming a version that
+    // isn't actually present in the runtime's `node_modules` (which comes from
+    // the app package install graph).
+    merged[key] = { ...projectRecord, ...appRecord }
+  }
+
+  return merged
+}
+
+async function writeMergedRuntimePackageJson(options: {
+  projectRoot: string
+  runtimeDirectory: string
+}): Promise<void> {
+  const { projectRoot, runtimeDirectory } = options
+
+  const runtimePackageJsonPath = join(runtimeDirectory, 'package.json')
+  const projectPackageJsonPath = join(projectRoot, 'package.json')
+
+  let runtimePackageJson: Record<string, unknown>
+  let projectPackageJson: Record<string, unknown>
+
+  try {
+    runtimePackageJson = JSON.parse(
+      await readFile(runtimePackageJsonPath, 'utf-8')
+    )
+  } catch {
+    // If the app doesn't ship a package.json for some reason, don't attempt merging.
+    getDebugLogger().debug(
+      'Skipping runtime package.json merge (no runtime package.json)',
+      () => ({
+        data: { runtimePackageJsonPath },
+      })
+    )
+    return
+  }
+
+  try {
+    projectPackageJson = JSON.parse(
+      await readFile(projectPackageJsonPath, 'utf-8')
+    )
+  } catch {
+    getDebugLogger().debug(
+      'Skipping runtime package.json merge (no project package.json)',
+      () => ({
+        data: { projectPackageJsonPath },
+      })
+    )
+    return
+  }
+
+  const mergedDeps = mergeDependencySections(runtimePackageJson, projectPackageJson)
+
+  const merged: Record<string, unknown> = {
+    ...runtimePackageJson,
+    ...mergedDeps,
+    private: true,
+  }
+
+  await writeFile(runtimePackageJsonPath, JSON.stringify(merged, null, 2) + '\n')
+
+  getDebugLogger().info('Merged project dependencies into runtime package.json', () => ({
+    data: { runtimePackageJsonPath, projectPackageJsonPath },
+  }))
+}
 
 async function getInstalledPackageVersion(options: {
   packageName: string
@@ -732,6 +824,12 @@ async function prepareRuntimeDirectory({
 
   // Create symlinks to example files instead of copying
   await symlinkAppContents(app.rootDirectory, runtimeRoot)
+
+  // Merge the user's dependencies into the runtime `package.json` so the mental
+  // model is consistent: app filesystem + project overrides + project deps.
+  // Note: this does not change the install graph; resolution still depends on
+  // `node_modules` (runtime first, then parent directories).
+  await writeMergedRuntimePackageJson({ projectRoot, runtimeDirectory: runtimeRoot })
 
   return runtimeRoot
 }
