@@ -30,7 +30,7 @@ const Table = styled('table', {
 
 const mdxProps = {
   components: {
-    pre: (props) => {
+    CodeBlock: (props) => {
       return <CodeBlock {...props} shouldAnalyze={false} />
     },
     code: (props) => {
