@@ -181,7 +181,11 @@ describe('runAppCommand integration', () => {
       expect(getIdMock).toHaveBeenCalled()
       expect(serverCleanupMock).toHaveBeenCalledTimes(1)
 
-      expect(resolveFrameworkBinFileMock).toHaveBeenCalledWith('next')
+      const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
+
+      expect(resolveFrameworkBinFileMock).toHaveBeenCalledWith('next', {
+        fromDirectory: runtimeRoot,
+      })
 
       expect(spawnMock).toHaveBeenCalledTimes(1)
       const [command, spawnArgs, spawnOptions] = spawnMock.mock.calls[0]
@@ -192,8 +196,6 @@ describe('runAppCommand integration', () => {
         '--port',
         '4000',
       ])
-
-      const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
 
       expect(spawnOptions?.cwd).toBe(runtimeRoot)
       expect(spawnOptions?.env).toMatchObject({
