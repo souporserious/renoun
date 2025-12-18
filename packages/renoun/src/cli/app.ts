@@ -18,6 +18,25 @@ import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
 import { spawn } from 'node:child_process'
 
+async function getInstalledPackageVersion(options: {
+  packageName: string
+  fromDirectory: string
+}): Promise<{ version: string; packageJsonPath: string }> {
+  const { packageName, fromDirectory } = options
+  const requireFromDirectory = createRequire(join(fromDirectory, 'package.json'))
+  const packageJsonPath = requireFromDirectory.resolve(
+    `${packageName}/package.json`
+  )
+  const raw = await readFile(packageJsonPath, 'utf-8')
+  const parsed = JSON.parse(raw) as { version?: unknown }
+  if (typeof parsed.version !== 'string' || parsed.version.length === 0) {
+    throw new Error(
+      `[renoun] Failed to determine installed version for "${packageName}" from ${packageJsonPath}`
+    )
+  }
+  return { version: parsed.version, packageJsonPath }
+}
+
 interface AppCommandOptions {
   /** The framework command to run. */
   command: 'dev' | 'build'
@@ -256,7 +275,53 @@ export async function runAppCommand({
     const port = String(await server.getPort())
     const id = server.getId()
 
-    const frameworkBinPath = resolveFrameworkBinFile(resolvedExample.framework)
+    if (resolvedExample.framework === 'next') {
+      const runtimeNext = await getInstalledPackageVersion({
+        packageName: 'next',
+        fromDirectory: runtimeDirectory,
+      })
+
+      let projectNext: Awaited<
+        ReturnType<typeof getInstalledPackageVersion>
+      > | null = null
+
+      try {
+        projectNext = await getInstalledPackageVersion({
+          packageName: 'next',
+          fromDirectory: projectRoot,
+        })
+      } catch {
+        projectNext = null
+      }
+
+      if (projectNext && projectNext.version !== runtimeNext.version) {
+        getDebugLogger().error('Next.js version mismatch detected (app mode)', () => ({
+          data: {
+            projectNext,
+            runtimeNext,
+            projectRoot,
+            runtimeDirectory,
+          },
+        }))
+        throw new Error(
+          `[renoun] Next.js version mismatch detected.\n\n` +
+            `This project resolves:\n` +
+            `  next@${projectNext.version}\n` +
+            `  (${projectNext.packageJsonPath})\n\n` +
+            `But the selected app package resolves:\n` +
+            `  next@${runtimeNext.version}\n` +
+            `  (${runtimeNext.packageJsonPath})\n\n` +
+            `Fix options:\n` +
+            `  • Align versions (recommended): install next@${runtimeNext.version} in your project.\n` +
+            `  • Or remove your project's direct "next" dependency and let the app package provide Next.\n` +
+            ``
+        )
+      }
+    }
+
+    const frameworkBinPath = resolveFrameworkBinFile(resolvedExample.framework, {
+      fromDirectory: runtimeDirectory,
+    })
 
     const frameworkArgs = [frameworkBinPath, command]
     frameworkArgs.push(...forwardedArgs)
