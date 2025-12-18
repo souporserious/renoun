@@ -22,7 +22,19 @@ import { spawn } from 'node:child_process'
 function mergeDependencySections(
   appPackageJson: Record<string, unknown>,
   projectPackageJson: Record<string, unknown>
-): Record<string, unknown> {
+): {
+  merged: Record<string, unknown>
+  conflicts: Array<{
+    name: string
+    section:
+      | 'dependencies'
+      | 'devDependencies'
+      | 'optionalDependencies'
+      | 'peerDependencies'
+    project: string
+    app: string
+  }>
+} {
   const keys = [
     'dependencies',
     'devDependencies',
@@ -31,6 +43,12 @@ function mergeDependencySections(
   ] as const
 
   const merged: Record<string, unknown> = {}
+  const conflicts: Array<{
+    name: string
+    section: (typeof keys)[number]
+    project: string
+    app: string
+  }> = []
 
   for (const key of keys) {
     const projectSection = projectPackageJson[key]
@@ -48,10 +66,25 @@ function mergeDependencySections(
     // Merge with app versions taking precedence to avoid claiming a version that
     // isn't actually present in the runtime's `node_modules` (which comes from
     // the app package install graph).
+    for (const [name, projectSpec] of Object.entries(projectRecord)) {
+      const appSpec = appRecord[name]
+      if (
+        typeof projectSpec === 'string' &&
+        typeof appSpec === 'string' &&
+        projectSpec !== appSpec
+      ) {
+        conflicts.push({
+          name,
+          section: key,
+          project: projectSpec,
+          app: appSpec,
+        })
+      }
+    }
     merged[key] = { ...projectRecord, ...appRecord }
   }
 
-  return merged
+  return { merged, conflicts }
 }
 
 async function writeMergedRuntimePackageJson(options: {
@@ -95,7 +128,10 @@ async function writeMergedRuntimePackageJson(options: {
     return
   }
 
-  const mergedDeps = mergeDependencySections(runtimePackageJson, projectPackageJson)
+  const { merged: mergedDeps, conflicts } = mergeDependencySections(
+    runtimePackageJson,
+    projectPackageJson
+  )
 
   const merged: Record<string, unknown> = {
     ...runtimePackageJson,
@@ -103,11 +139,29 @@ async function writeMergedRuntimePackageJson(options: {
     private: true,
   }
 
-  await writeFile(runtimePackageJsonPath, JSON.stringify(merged, null, 2) + '\n')
+  await writeFile(
+    runtimePackageJsonPath,
+    JSON.stringify(merged, null, 2) + '\n'
+  )
 
-  getDebugLogger().info('Merged project dependencies into runtime package.json', () => ({
-    data: { runtimePackageJsonPath, projectPackageJsonPath },
-  }))
+  getDebugLogger().info(
+    'Merged project dependencies into runtime package.json',
+    () => ({
+      data: { runtimePackageJsonPath, projectPackageJsonPath },
+    })
+  )
+
+  if (conflicts.length > 0) {
+    getDebugLogger().warn(
+      'Dependency spec mismatch between project and app (app spec wins in runtime package.json)',
+      () => ({
+        data: {
+          conflictCount: conflicts.length,
+          conflicts: conflicts.slice(0, 25),
+        },
+      })
+    )
+  }
 }
 
 async function getInstalledPackageVersion(options: {
@@ -115,7 +169,9 @@ async function getInstalledPackageVersion(options: {
   fromDirectory: string
 }): Promise<{ version: string; packageJsonPath: string }> {
   const { packageName, fromDirectory } = options
-  const requireFromDirectory = createRequire(join(fromDirectory, 'package.json'))
+  const requireFromDirectory = createRequire(
+    join(fromDirectory, 'package.json')
+  )
   const packageJsonPath = requireFromDirectory.resolve(
     `${packageName}/package.json`
   )
@@ -387,14 +443,17 @@ export async function runAppCommand({
       }
 
       if (projectNext && projectNext.version !== runtimeNext.version) {
-        getDebugLogger().error('Next.js version mismatch detected (app mode)', () => ({
-          data: {
-            projectNext,
-            runtimeNext,
-            projectRoot,
-            runtimeDirectory,
-          },
-        }))
+        getDebugLogger().error(
+          'Next.js version mismatch detected (app mode)',
+          () => ({
+            data: {
+              projectNext,
+              runtimeNext,
+              projectRoot,
+              runtimeDirectory,
+            },
+          })
+        )
         throw new Error(
           `[renoun] Next.js version mismatch detected.\n\n` +
             `This project resolves:\n` +
@@ -411,9 +470,12 @@ export async function runAppCommand({
       }
     }
 
-    const frameworkBinPath = resolveFrameworkBinFile(resolvedExample.framework, {
-      fromDirectory: runtimeDirectory,
-    })
+    const frameworkBinPath = resolveFrameworkBinFile(
+      resolvedExample.framework,
+      {
+        fromDirectory: runtimeDirectory,
+      }
+    )
 
     const frameworkArgs = [frameworkBinPath, command]
     frameworkArgs.push(...forwardedArgs)
@@ -829,7 +891,10 @@ async function prepareRuntimeDirectory({
   // model is consistent: app filesystem + project overrides + project deps.
   // Note: this does not change the install graph; resolution still depends on
   // `node_modules` (runtime first, then parent directories).
-  await writeMergedRuntimePackageJson({ projectRoot, runtimeDirectory: runtimeRoot })
+  await writeMergedRuntimePackageJson({
+    projectRoot,
+    runtimeDirectory: runtimeRoot,
+  })
 
   return runtimeRoot
 }

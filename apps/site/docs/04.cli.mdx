@@ -71,6 +71,15 @@ Both forms go through the same app runtime:
 - applies your local files as overrides on top,
 - and then launches the underlying framework inside that runtime.
 
+### Dependency resolution in app mode
+
+The runtime directory includes the app's `node_modules` (symlinked), so the template controls its
+primary dependency graph. When your overrides import packages that are only installed in your
+project, Node can still resolve them by walking up to your project's `node_modules`.
+
+To make this easier to reason about, renoun also merges your project's dependency sections into the
+runtime `package.json` (without changing the install graph).
+
 ### Overriding app files
 
 When you run an app through the CLI, your project and the app package are merged into a single
@@ -84,7 +93,8 @@ For example, if the app ships `posts/hello-world.mdx` under its own `app/` or `p
 can override it by adding `posts/hello-world.mdx` next to your `package.json`. At runtime, the
 framework only sees your version.
 
-See [how to run a renoun app](./06.apps.mdx#how-it-works) for a deep dive into how app mode works and when to use it.
+See [how to run a renoun app](./05.apps.mdx#how-it-works) for a deep dive into how app mode works
+and when to use it.
 
 ## Pruning theme files
 

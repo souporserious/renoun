@@ -54,11 +54,22 @@ Your Project (your overrides)
 
 3. **Framework launch**
    The CLI spawns the framework (`next dev`, `vite dev`, `waku dev`, etc.) **inside the runtime
-   directory**. The framework sees the merged result: base app + your customizations.
+   directory** using the framework binary resolved from the runtime's dependency graph. The
+   framework sees the merged result: base app + your customizations.
 
 4. **Path resolution**
    renoun sets an internal environment variable so its utilities resolve paths relative to the
    runtime directory, ensuring your overridden content is discovered correctly.
+
+### Dependency resolution
+
+In app mode, the runtime directory symlinks the template app's `node_modules`, so the template
+defines the primary dependency graph. Your overrides can still import packages that you installed
+only in your project because Node will walk up parent directories (eventually reaching your
+project's `node_modules`) if a package isn't found in the runtime.
+
+To make the runtime's "view" match this mental model, renoun merges your project's dependency
+sections into the runtime `package.json` (without installing anything new).
 
 This architecture means you never modify the template in `node_modules`; you only add and edit
 files in your own project. When the base app updates, you get the improvements automatically.

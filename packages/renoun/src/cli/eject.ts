@@ -208,6 +208,33 @@ async function updatePackageJson(
 ): Promise<void> {
   const updated = { ...packageJson }
 
+  const SECTION_KEYS = [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+  ] as const
+
+  function readSection(
+    value: unknown
+  ): Record<string, string> {
+    if (!value || typeof value !== 'object') return {}
+    return { ...(value as Record<string, string>) }
+  }
+
+  function getExistingVersion(name: string): {
+    section: (typeof SECTION_KEYS)[number]
+    version: string
+  } | null {
+    for (const sectionKey of SECTION_KEYS) {
+      const record = readSection(updated[sectionKey])
+      const version = record[name]
+      if (typeof version === 'string') {
+        return { section: sectionKey, version }
+      }
+    }
+    return null
+  }
+
   // Remove the app from dependencies
   const deps = updated['dependencies']
   if (deps && typeof deps === 'object') {
@@ -223,19 +250,57 @@ async function updatePackageJson(
     updated['devDependencies'] = devDepsRecord
   }
 
-  // Merge app's dependencies (except renoun which should already be installed)
-  const appDeps = appPackageJson['dependencies'] as
-    | Record<string, string>
-    | undefined
-  if (appDeps) {
-    const currentDeps =
-      (updated['dependencies'] as Record<string, string>) ?? {}
-    for (const [name, version] of Object.entries(appDeps)) {
-      if (name !== 'renoun' && !(name in currentDeps)) {
-        currentDeps[name] = version
+  // Merge app's dependency blocks into the project so the ejected app can build/run.
+  // We avoid overwriting user versions, but we warn when conflicts are detected.
+  const conflicts: Array<{
+    name: string
+    appSection: (typeof SECTION_KEYS)[number]
+    appVersion: string
+    projectSection: (typeof SECTION_KEYS)[number]
+    projectVersion: string
+  }> = []
+
+  for (const sectionKey of SECTION_KEYS) {
+    const appRecord = readSection(appPackageJson[sectionKey])
+    if (Object.keys(appRecord).length === 0) continue
+
+    const projectRecord = readSection(updated[sectionKey])
+
+    for (const [name, version] of Object.entries(appRecord)) {
+      if (name === 'renoun' || name === appName) continue
+      if (typeof version !== 'string') continue
+
+      const existing = getExistingVersion(name)
+      if (existing) {
+        if (existing.version !== version) {
+          conflicts.push({
+            name,
+            appSection: sectionKey,
+            appVersion: version,
+            projectSection: existing.section,
+            projectVersion: existing.version,
+          })
+        }
+        continue
       }
+
+      projectRecord[name] = version
     }
-    updated['dependencies'] = currentDeps
+
+    updated[sectionKey] = projectRecord
+  }
+
+  if (conflicts.length > 0) {
+    getDebugLogger().warn('Dependency version conflicts detected during eject', () => ({
+      data: {
+        conflictCount: conflicts.length,
+        conflicts: conflicts.slice(0, 25),
+      },
+    }))
+    console.log('  Note: Dependency version conflicts detected during eject.')
+    console.log(
+      '  Existing project versions were kept. If you hit runtime/build issues, align these versions.'
+    )
   }
 
   await writeFile(packageJsonPath, JSON.stringify(updated, null, 2) + '\n')
