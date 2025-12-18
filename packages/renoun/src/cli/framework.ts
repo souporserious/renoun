@@ -4,10 +4,19 @@ import { dirname, join } from 'node:path'
 
 export type Framework = 'next' | 'vite' | 'waku'
 
-const projectRequire = createRequire(join(process.cwd(), 'package.json'))
+export function resolveFrameworkBinFile(
+  framework: Framework,
+  options?: { fromDirectory?: string }
+): string {
+  // IMPORTANT: do not capture process.cwd() at module initialization.
+  // App mode (`renoun dev`) intentionally `chdir`s into a runtime directory,
+  // and we must resolve the framework from that runtime's dependency graph.
+  const fromDirectory = options?.fromDirectory ?? process.cwd()
+  const requireFromDirectory = createRequire(join(fromDirectory, 'package.json'))
 
-export function resolveFrameworkBinFile(framework: Framework): string {
-  const packageJsonPath = projectRequire.resolve(`${framework}/package.json`)
+  const packageJsonPath = requireFromDirectory.resolve(
+    `${framework}/package.json`
+  )
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
   let binRelativePath: string | undefined
 
