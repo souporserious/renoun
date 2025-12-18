@@ -26,10 +26,16 @@ export interface MarkdownProps {
 /** Compiles and renders a string of markdown content. */
 export async function Markdown({
   children,
-  components = useMDXComponents(),
+  components,
   remarkPlugins,
   rehypePlugins,
 }: MarkdownProps) {
+  const defaultComponents = useMDXComponents() as unknown as MarkdownComponents
+  const mergedComponents =
+    components === undefined
+      ? defaultComponents
+      : ({ ...defaultComponents, ...components } as MarkdownComponents)
+
   if (remarkPlugins === undefined && rehypePlugins === undefined) {
     remarkPlugins = (await import('@renoun/mdx/remark')).remarkPlugins
     rehypePlugins = (await import('@renoun/mdx/rehype')).rehypePlugins
@@ -37,7 +43,7 @@ export async function Markdown({
 
   return getMarkdownContent({
     source: children,
-    components,
+    components: mergedComponents,
     remarkPlugins,
     rehypePlugins,
     runtime: {

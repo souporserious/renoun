@@ -10,7 +10,8 @@ export interface MDXProps {
 
   /**
    * Additional components that will be available to use in the MDX content.
-   * The default components from `renoun/mdx/components` are used if not provided.
+   * The default components from `renoun/mdx/components` are always included and
+   * can be overridden by providing the same keys.
    */
   components?: MDXComponents
 
@@ -33,12 +34,18 @@ export interface MDXProps {
  */
 export async function MDX({
   children,
-  components = useMDXComponents(),
+  components,
   dependencies,
   remarkPlugins,
   rehypePlugins,
   baseUrl,
 }: MDXProps) {
+  const defaultComponents = useMDXComponents()
+  const mergedComponents =
+    components === undefined
+      ? defaultComponents
+      : ({ ...defaultComponents, ...components } as MDXComponents)
+
   if (remarkPlugins === undefined && rehypePlugins === undefined) {
     remarkPlugins = (await import('@renoun/mdx/remark')).remarkPlugins
     rehypePlugins = (await import('@renoun/mdx/rehype')).rehypePlugins
@@ -52,5 +59,5 @@ export async function MDX({
     baseUrl,
   })
 
-  return <Content components={components} />
+  return <Content components={mergedComponents} />
 }
