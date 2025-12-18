@@ -1717,11 +1717,18 @@ function FunctionSection({
   id?: string
 }) {
   const multipleSignatures = node.signatures.length > 1
+  const parentDescription = getDocumentableMetadata(node)?.description
+  const descriptionStrategy = parentDescription
+    ? multipleSignatures
+      ? 'skip-if-parent'
+      : 'never'
+    : 'inherit'
 
   return (
     <TypeSection
       kind="Function"
       title={node.name}
+      description={parentDescription}
       id={id}
       components={components}
     >
@@ -1730,7 +1737,8 @@ function FunctionSection({
           const detail = renderCallSignatureDetails(signature, components, {
             heading: multipleSignatures ? `Overload ${index + 1}` : undefined,
             showSignatureText: true,
-            descriptionStrategy: 'inherit',
+            parentDescription,
+            descriptionStrategy,
           })
 
           if (!detail) {
