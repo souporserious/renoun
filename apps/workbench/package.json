@@ -28,18 +28,26 @@
   "exports": {
     "./*": "./*"
   },
+  "peerDependencies": {
+    "next": ">=16.0.0",
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0",
+    "renoun": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "renoun": "workspace:*"
+  },
   "dependencies": {
     "@mdx-js/loader": "catalog:",
     "@mdx-js/react": "catalog:",
     "@next/mdx": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@tailwindcss/typography": "catalog:",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
-    "next": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "renoun": "workspace:*",
     "restyle": "catalog:",
     "tailwindcss": "catalog:",
     "tm-themes": "catalog:",

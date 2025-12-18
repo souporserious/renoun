@@ -132,24 +132,12 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.3(@types/react@19.2.7)
-      next:
-        specifier: 'catalog:'
-        version: 16.1.0-canary.28(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react:
-        specifier: 'catalog:'
-        version: 19.2.3
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.2.3(react@19.2.3)
       remark-frontmatter:
         specifier: 5.0.0
         version: 5.0.0
       remark-mdx-frontmatter:
         specifier: 5.2.0
         version: 5.2.0
-      renoun:
-        specifier: workspace:*
-        version: link:../../packages/renoun
       restyle:
         specifier: 'catalog:'
         version: 3.4.2(react@19.2.3)
@@ -165,6 +153,19 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.2.1
+    devDependencies:
+      next:
+        specifier: 'catalog:'
+        version: 16.1.0-canary.28(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.3
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.3(react@19.2.3)
+      renoun:
+        specifier: workspace:*
+        version: link:../../packages/renoun
 
   apps/docs:
     dependencies:
@@ -192,21 +193,9 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.3(@types/react@19.2.7)
-      next:
-        specifier: 'catalog:'
-        version: 16.1.0-canary.28(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react:
-        specifier: 'catalog:'
-        version: 19.2.3
       react-aria-components:
         specifier: 'catalog:'
         version: 1.13.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.2.3(react@19.2.3)
-      renoun:
-        specifier: workspace:*
-        version: link:../../packages/renoun
       tailwindcss:
         specifier: 'catalog:'
         version: 4.1.18
@@ -225,6 +214,19 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.2.1
+    devDependencies:
+      next:
+        specifier: 'catalog:'
+        version: 16.1.0-canary.28(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: 'catalog:'
+        version: 19.2.3
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.3(react@19.2.3)
+      renoun:
+        specifier: workspace:*
+        version: link:../../packages/renoun
 
   apps/site:
     dependencies:
@@ -324,6 +326,22 @@ importers:
       '@tailwindcss/typography':
         specifier: 'catalog:'
         version: 0.5.19(tailwindcss@4.1.18)
+      restyle:
+        specifier: 'catalog:'
+        version: 3.4.2(react@19.2.3)
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.1.18
+      tm-themes:
+        specifier: 'catalog:'
+        version: 1.10.13
+      ts-morph:
+        specifier: 'catalog:'
+        version: 27.0.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+    devDependencies:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.7
@@ -342,21 +360,6 @@ importers:
       renoun:
         specifier: workspace:*
         version: link:../../packages/renoun
-      restyle:
-        specifier: 'catalog:'
-        version: 3.4.2(react@19.2.3)
-      tailwindcss:
-        specifier: 'catalog:'
-        version: 4.1.18
-      tm-themes:
-        specifier: 'catalog:'
-        version: 1.10.13
-      ts-morph:
-        specifier: 'catalog:'
-        version: 27.0.2
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
 
   examples/blog:
     dependencies:

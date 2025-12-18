@@ -29,6 +29,20 @@
   "exports": {
     "./*": "./*"
   },
+  "peerDependencies": {
+    "next": ">=16.0.0",
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0",
+    "renoun": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "renoun": "workspace:*"
+  },
   "dependencies": {
     "@mdx-js/loader": "catalog:",
     "@mdx-js/react": "catalog:",
@@ -36,12 +50,8 @@
     "@renoun/mdx": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "next": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
     "remark-frontmatter": "5.0.0",
     "remark-mdx-frontmatter": "5.2.0",
-    "renoun": "workspace:*",
     "restyle": "catalog:",
     "tm-themes": "catalog:",
     "ts-morph": "catalog:",
