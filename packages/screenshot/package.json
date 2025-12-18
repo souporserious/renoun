@@ -26,7 +26,13 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
-    "test": "vitest --typecheck"
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@vitest/browser": "4.0.16",
+    "@vitest/browser-playwright": "4.0.16",
+    "playwright": "1.57.0",
+    "vitest": "4.0.16"
   },
   "exports": {
     ".": {
