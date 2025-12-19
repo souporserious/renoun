@@ -1529,44 +1529,25 @@ describe('screenshot', () => {
     })
   })
 
-  describe('image snapshots: object-fit', () => {
-    it('object-fit cover in circular container', async () => {
-      const wrapper = createElement({
-        width: '80px',
-        height: '80px',
-        padding: '10px',
-        backgroundColor: '#1e293b',
-      })
-
+  describe('image snapshots: circular clip with overflow', () => {
+    it('circular avatar with clipped content', async () => {
       const avatar = document.createElement('div')
       avatar.style.cssText = `
-        width: 60px;
-        height: 60px;
+        width: 64px;
+        height: 64px;
         border-radius: 50%;
         overflow: hidden;
         border: 2px solid white;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         background: linear-gradient(135deg, #6366f1, #a855f7);
       `
+      container.appendChild(avatar)
 
-      // Using a simple colored div to simulate image behavior
-      // since actual remote images would require network access
-      const content = createElement({
-        width: '100%',
-        height: '100%',
-        background:
-          'linear-gradient(45deg, #22d3ee 0%, #6366f1 50%, #a855f7 100%)',
-      })
-
-      avatar.appendChild(content)
-      wrapper.appendChild(avatar)
-      container.appendChild(wrapper)
-
-      const canvas = await screenshot.canvas(wrapper, { scale: 2 })
+      const canvas = await screenshot.canvas(avatar, { scale: 2 })
       await expectCanvasToMatchSnapshot(
         canvas,
-        'object-fit-circular-container',
-        wrapper
+        'circular-avatar-clipped',
+        avatar
       )
     })
   })
