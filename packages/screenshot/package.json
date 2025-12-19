@@ -1,7 +1,7 @@
 {
   "name": "@renoun/screenshot",
   "version": "0.0.0",
-  "description": "Screenshot utilities for renoun",
+  "description": "Screenshot DOM elements as a canvas, blob, or URL.",
   "author": "souporserious",
   "license": "MIT",
   "repository": {
@@ -14,7 +14,9 @@
   "keywords": [
     "screenshot",
     "image",
-    "capture"
+    "capture",
+    "canvas",
+    "html"
   ],
   "type": "module",
   "main": "dist/index.js",
@@ -27,12 +29,6 @@
     "build": "tsc",
     "dev": "tsc -w",
     "test": "vitest"
-  },
-  "devDependencies": {
-    "@vitest/browser": "4.0.16",
-    "@vitest/browser-playwright": "4.0.16",
-    "playwright": "1.57.0",
-    "vitest": "4.0.16"
   },
   "exports": {
     ".": {
