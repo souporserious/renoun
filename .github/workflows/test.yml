@@ -9,19 +9,22 @@ on:
 permissions:
   contents: read
 
-concurrency: test-${{ github.ref_name }}
+concurrency:
+  group: test-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 env:
   NODE_ENV: test
 
 jobs:
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
@@ -35,5 +38,47 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Run tests
-        run: pnpm test --filter="./packages/*" && pnpm run test:github
+      - name: Determine affected packages
+        id: affected
+        env:
+          # For PRs, compare against the base branch, for pushes, compare against previous commit
+          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # List affected packages
+          echo "### Affected Packages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          AFFECTED=$(pnpm turbo ls --affected --output=json 2>/dev/null || echo '{"packages":[]}')
+          echo "Affected packages JSON: $AFFECTED"
+
+          # Check if any packages are affected
+          PACKAGE_COUNT=$(echo "$AFFECTED" | jq '.packages | length')
+          echo "package_count=$PACKAGE_COUNT" >> $GITHUB_OUTPUT
+
+          # Check if screenshot package is affected (needs Playwright)
+          if echo "$AFFECTED" | jq -e '.packages[] | select(.name == "@renoun/screenshot")' > /dev/null 2>&1; then
+            echo "screenshot=true" >> $GITHUB_OUTPUT
+            echo "Screenshot package is affected - will install Playwright"
+          else
+            echo "screenshot=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [[ "$PACKAGE_COUNT" -gt 0 ]]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "$AFFECTED" | jq -r '.packages[].name' >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "_No packages affected_" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ No tests to run" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Install Playwright Browsers
+        if: steps.affected.outputs.screenshot == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run tests for affected packages
+        if: steps.affected.outputs.package_count != '0'
+        env:
+          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: pnpm turbo run test --affected
