@@ -1,5 +1,12 @@
 # create-renoun
 
+## 2.0.4
+
+### Patch Changes
+
+- b010dff: Removes logic for reformatting the dev and build scripts now that the proper CLI command is used for examples.
+- fd2236d: Update license current year.
+
 ## 2.0.3
 
 ### Patch Changes

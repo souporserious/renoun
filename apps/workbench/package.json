@@ -1,6 +1,6 @@
 {
   "name": "@renoun/workbench",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "homepage": "https://workbench.renoun.dev",
   "description": "Design system workbench for building, previewing, and documenting libraries.",
   "author": "souporserious",
@@ -32,7 +32,7 @@
     "next": ">=16.0.0",
     "react": ">=19.0.0",
     "react-dom": ">=19.0.0",
-    "renoun": ">=10.0.0"
+    "renoun": ">=10.17.1"
   },
   "devDependencies": {
     "@types/react": "catalog:",

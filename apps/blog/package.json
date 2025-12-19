@@ -1,6 +1,6 @@
 {
   "name": "@renoun/blog",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "homepage": "https://blog.renoun.dev",
   "description": "A blog starter featuring a post index, tags, and individual article pages with MDX.",
   "author": "souporserious",
@@ -33,7 +33,7 @@
     "next": ">=16.0.0",
     "react": ">=19.0.0",
     "react-dom": ">=19.0.0",
-    "renoun": ">=10.0.0"
+    "renoun": ">=10.17.1"
   },
   "devDependencies": {
     "@types/react": "catalog:",
