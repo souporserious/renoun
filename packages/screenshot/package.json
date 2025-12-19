@@ -1,0 +1,40 @@
+{
+  "name": "@renoun/screenshot",
+  "version": "0.0.0",
+  "description": "Screenshot DOM elements as a canvas, blob, or URL.",
+  "author": "souporserious",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/souporserious/renoun.git",
+    "directory": "packages/screenshot"
+  },
+  "bugs": "https://github.com/souporserious/renoun/issues",
+  "homepage": "https://renoun.dev",
+  "keywords": [
+    "screenshot",
+    "image",
+    "capture",
+    "canvas",
+    "html"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/*"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w",
+    "test": "vitest"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  }
+}
