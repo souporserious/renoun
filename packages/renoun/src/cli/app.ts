@@ -15,6 +15,8 @@ import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 
 import { createServer } from '../project/server.ts'
+import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
+import { joinPaths } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
 import { spawn } from 'node:child_process'
@@ -209,22 +211,24 @@ interface ParsedAppArgs {
 }
 
 const IGNORED_DIRECTORIES = new Set([
-  'node_modules',
   '.git',
+  '.cache',
   '.next',
-  '.turbo',
   '.output',
   '.renoun',
+  '.turbo',
+  '.vite',
   'dist',
+  'node_modules',
   'out',
 ])
 
 const IGNORED_PROJECT_FILES = new Set([
-  'package.json',
-  'pnpm-lock.yaml',
-  'package-lock.json',
-  'yarn.lock',
   'bun.lockb',
+  'package.json',
+  'package-lock.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
 ])
 
 /**
@@ -1177,7 +1181,7 @@ class OverrideManager {
         continue
       }
 
-      const normalizedRelativePath = normalizeRelativePath(entryRelativePath)
+      const normalizedRelativePath = joinPaths(entryRelativePath)
 
       if (entry.isDirectory()) {
         if (normalizedRelativePath) {
@@ -1201,24 +1205,15 @@ class OverrideManager {
   }
 
   #shouldIgnore(relativePath: string, isDirectory: boolean): boolean {
-    const normalizedPath = relativePath.replace(/^\.\//, '')
-    const segments = normalizedPath.split(/[\\/]/).filter(Boolean)
-
-    if (segments.length === 0) {
-      return false
-    }
-
-    const [firstSegment] = segments
-
-    if (IGNORED_DIRECTORIES.has(firstSegment) && isDirectory) {
+    if (relativePath === '.renoun' || relativePath.startsWith('.renoun/')) {
       return true
     }
 
-    if (IGNORED_PROJECT_FILES.has(basename(normalizedPath)) && !isDirectory) {
+    if (!isDirectory && IGNORED_PROJECT_FILES.has(basename(relativePath))) {
       return true
     }
 
-    return false
+    return isFilePathGitIgnored(join(this.#projectRoot, relativePath))
   }
 
   #ensureWatcher(directory: string) {
@@ -1345,12 +1340,4 @@ class OverrideManager {
       this.#watchers.delete(directory)
     }
   }
-}
-
-function normalizeRelativePath(path: string): string {
-  return path
-    .replace(/^[./\\]+/, '')
-    .split(/[\\/]/)
-    .filter(Boolean)
-    .join('/')
 }
