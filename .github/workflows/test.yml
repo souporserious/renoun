@@ -45,7 +45,7 @@ jobs:
       - name: Determine affected packages
         id: affected
         env:
-          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || 'main' }}
+          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           echo "TURBO_SCM_BASE: $TURBO_SCM_BASE"
           echo "### Affected Packages" >> $GITHUB_STEP_SUMMARY
@@ -83,5 +83,5 @@ jobs:
       - name: Run tests for affected packages
         if: steps.affected.outputs.package_count != '0'
         env:
-          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || 'main' }}
+          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: pnpm turbo run test --affected
