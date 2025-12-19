@@ -48,9 +48,6 @@ const shot = screenshot(element, {
 const canvas = await shot.canvas()
 const pngBlob = await shot.blob({ format: 'png' })
 const webpUrl = await shot.url({ format: 'webp', quality: 0.9 })
-
-// Direct await also returns the canvas
-const canvas2 = await shot
 ```
 
 ### CSS Selector Support
