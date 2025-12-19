@@ -26,7 +26,7 @@
     "@vitest/browser-playwright": "4.0.16",
     "playwright": "1.57.0",
     "prettier": "catalog:",
-    "turbo": "2.6.3",
+    "turbo": "2.7.0",
     "typescript": "catalog:",
     "vitest": "4.0.16"
   },

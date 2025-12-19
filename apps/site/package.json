@@ -20,7 +20,7 @@
     "@types/react-dom": "catalog:",
     "@vercel/analytics": "1.6.1",
     "@vitejs/plugin-react": "5.1.2",
-    "@vitejs/plugin-rsc": "0.5.8",
+    "@vitejs/plugin-rsc": "0.5.9",
     "arktype": "catalog:",
     "geist": "catalog:",
     "next": "catalog:",
