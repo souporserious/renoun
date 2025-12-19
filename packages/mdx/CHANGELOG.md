@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 3.7.1
+
+### Patch Changes
+
+- fd2236d: Update license current year.
+
 ## 3.7.0
 
 ### Minor Changes

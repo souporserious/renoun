@@ -1,5 +1,19 @@
 # renoun
 
+## 10.17.1
+
+### Patch Changes
+
+- 7c1c792: Ensures `MDX` and `Markdown` always includes a default `CodeBlock` component when a partial components map is provided.
+- dc1b454: Fixes `renoun eject` by merging the template app's dependencies into the project.
+- f9095ff: Throws an explicit error when app mode resolves a different Next.js version than the user project to prevent Turbopack/runtime incompatibilities.
+- af6eb45: Fixes CLI app mode by resolving the framework binary (`next`/`vite`/`waku`) from the runtime directory rather than the initial working directory.
+- 2dd3de8: Fixes missing descriptions for function references rendered by `Reference`.
+- 74943ad: Fixes missing `CodeBlock` in `QuickInfo`.
+- 746021d: Merges the user project's dependencies into the runtime `package.json` in app mode so overrides can rely on project-installed packages.
+- Updated dependencies [fd2236d]
+  - @renoun/mdx@3.7.1
+
 ## 10.17.0
 
 ### Minor Changes

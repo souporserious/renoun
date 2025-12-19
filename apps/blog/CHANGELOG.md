@@ -1,5 +1,24 @@
 # @renoun/blog
 
+## 0.2.0
+
+### Minor Changes
+
+- 74109a8: Moves core dependencies to peer dependencies.
+
+### Patch Changes
+
+- Updated dependencies [7c1c792]
+- Updated dependencies [dc1b454]
+- Updated dependencies [f9095ff]
+- Updated dependencies [af6eb45]
+- Updated dependencies [2dd3de8]
+- Updated dependencies [74943ad]
+- Updated dependencies [746021d]
+- Updated dependencies [fd2236d]
+  - renoun@10.17.1
+  - @renoun/mdx@3.7.1
+
 ## 0.1.0
 
 ### Minor Changes
