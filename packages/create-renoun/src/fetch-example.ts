@@ -122,9 +122,13 @@ node_modules
 # testing
 coverage
 
+# renoun
+.renoun
+
 # next.js
 .next
 out
+next-env.d.ts
 
 # production
 build
@@ -136,13 +140,12 @@ dist
 # debug
 npm-debug.log*
 
-# local env files
+# environment files
 .env
 .env.local
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 `,
     'utf-8'
   )
