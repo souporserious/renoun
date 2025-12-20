@@ -891,6 +891,89 @@ async function prepareRuntimeDirectory({
   // Create symlinks to example files instead of copying
   await symlinkAppContents(app.rootDirectory, runtimeRoot)
 
+  // Symlink node_modules so dependencies can be resolved from the runtime directory.
+  // The strategy differs based on how the app package is installed:
+  //
+  // 1. Local development (monorepo): app.rootDirectory has its own node_modules
+  //    from the package manager install - we symlink that.
+  //
+  // 2. pnpm: Dependencies are in a virtual store at .pnpm/<pkg>/node_modules/.
+  //    The app package's parent directory contains all its dependencies as symlinks.
+  //    We detect this by checking if app.rootDirectory is inside .pnpm/.
+  //
+  // 3. npm/yarn with hoisting: Dependencies are in the project's root node_modules.
+  //    We symlink the project's node_modules.
+  const runtimeNodeModules = join(runtimeRoot, 'node_modules')
+
+  // Remove any existing node_modules symlink (may point to app's empty node_modules)
+  try {
+    const existingStat = await lstat(runtimeNodeModules)
+    if (existingStat.isSymbolicLink() || existingStat.isDirectory()) {
+      await rm(runtimeNodeModules, { recursive: true, force: true })
+    }
+  } catch {
+    // Doesn't exist, that's fine
+  }
+
+  // Determine which node_modules to use
+  let nodeModulesSource: string | null = null
+
+  // Check if app is in pnpm's virtual store (.pnpm directory)
+  // The app's rootDirectory will be something like:
+  //   node_modules/.pnpm/@renoun+blog@x.x.x.../node_modules/@renoun/blog
+  // And the virtual store's node_modules (with all dependencies) is:
+  //   node_modules/.pnpm/@renoun+blog@x.x.x.../node_modules/
+  // For scoped packages (@scope/name), we need to go up 2 levels.
+  // For non-scoped packages, we need to go up 1 level.
+  if (app.rootDirectory.includes('.pnpm')) {
+    // Determine how many levels up we need to go
+    // Scoped packages: @scope/name -> go up 2 levels
+    // Non-scoped: name -> go up 1 level
+    const isScoped = app.name.startsWith('@')
+    const pnpmVirtualNodeModules = isScoped
+      ? dirname(dirname(app.rootDirectory))
+      : dirname(app.rootDirectory)
+
+    try {
+      await lstat(pnpmVirtualNodeModules)
+      nodeModulesSource = pnpmVirtualNodeModules
+      getDebugLogger().debug(
+        'Using pnpm virtual store node_modules for runtime',
+        () => ({
+          data: { pnpmVirtualNodeModules, isScoped },
+        })
+      )
+    } catch {
+      // Fall through to other options
+    }
+  }
+
+  // If not pnpm or pnpm detection failed, use project's node_modules
+  if (!nodeModulesSource) {
+    const projectNodeModules = join(projectRoot, 'node_modules')
+    try {
+      await lstat(projectNodeModules)
+      nodeModulesSource = projectNodeModules
+    } catch {
+      getDebugLogger().warn(
+        'No node_modules found - dependencies may not resolve',
+        () => ({
+          data: {
+            runtimeRoot,
+            projectRoot,
+            appRootDirectory: app.rootDirectory,
+          },
+        })
+      )
+    }
+  }
+
+  // Create the symlink
+  if (nodeModulesSource) {
+    const symlinkType = process.platform === 'win32' ? 'junction' : 'dir'
+    await symlink(nodeModulesSource, runtimeNodeModules, symlinkType)
+  }
+
   // Merge the user's dependencies into the runtime `package.json` so the mental
   // model is consistent: app filesystem + project overrides + project deps.
   // Note: this does not change the install graph; resolution still depends on
