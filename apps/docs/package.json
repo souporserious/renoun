@@ -36,6 +36,7 @@
     "renoun": ">=10.17.1"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "next": "catalog:",
@@ -50,8 +51,6 @@
     "@renoun/mdx": "workspace:*",
     "@tailwindcss/postcss": "catalog:",
     "@tailwindcss/typography": "catalog:",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
     "react-aria-components": "catalog:",
     "tailwindcss": "catalog:",
     "tailwindcss-react-aria-components": "2.0.1",

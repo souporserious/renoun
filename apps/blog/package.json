@@ -36,6 +36,7 @@
     "renoun": ">=10.17.1"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "next": "catalog:",
@@ -48,8 +49,6 @@
     "@mdx-js/react": "catalog:",
     "@next/mdx": "catalog:",
     "@renoun/mdx": "workspace:*",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
     "remark-frontmatter": "5.0.0",
     "remark-mdx-frontmatter": "5.2.0",
     "restyle": "catalog:",

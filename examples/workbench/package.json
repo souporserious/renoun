@@ -7,6 +7,7 @@
     "build": "renoun build"
   },
   "dependencies": {
+    "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@renoun/workbench": "workspace:*",
