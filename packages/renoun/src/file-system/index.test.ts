@@ -1748,11 +1748,20 @@ describe('file system', () => {
     ])
   })
 
-  test('javascript file getHeadings returns exports as headings', async () => {
+  test('javascript file getSections builds an outline from regions and exports', async () => {
     const fileSystem = new MemoryFileSystem({
       'button.tsx': `
+        //#region components
         export const Button = () => null
+        export const IconButton = () => null
+        //#endregion
+
         export function useButton() {}
+
+        //#region hooks
+        export function useDropdown() {}
+        export function useMenu() {}
+        //#endregion
       `,
     })
     const directory = new Directory({ fileSystem })
@@ -1760,23 +1769,21 @@ describe('file system', () => {
 
     expect(file).toBeInstanceOf(JavaScriptFile)
 
-    const headings = await file.getHeadings()
+    const sections = await file.getSections()
 
-    expect(headings).toMatchObject([
+    expect(
+      sections.map((section) => ({
+        title: section.title,
+        items: section.items.map((fileExport) => fileExport.getName()),
+      }))
+    ).toEqual([
       {
-        children: 'Button',
-        id: 'Button',
-        level: 3,
-        text: 'Button',
+        title: 'components',
+        items: ['Button', 'IconButton'],
       },
-      {
-        children: 'useButton',
-        id: 'useButton',
-        level: 3,
-        text: 'useButton',
-      },
+      { title: 'useButton', items: ['useButton'] },
+      { title: 'hooks', items: ['useDropdown', 'useMenu'] },
     ])
-    expectTypeOf(headings).toExtend<Headings>()
   })
 
   test('javascript file getRegions returns TypeScript regions', async () => {

@@ -218,6 +218,13 @@ type ModuleExports<Value = any> = {
   [exportName: string]: Value
 }
 
+export interface FileSection<Item = unknown> {
+  id: string
+  title: string
+  items: Item[]
+  sections?: FileSection<Item>[]
+}
+
 /** A runtime loader for a specific package export (no path/file arguments). */
 type PackageExportLoader<Module extends ModuleExports<any>> = (
   path: string
@@ -1854,6 +1861,7 @@ export class JavaScriptFile<
   #slugCasing?: SlugCasing
   #modulePromise?: Promise<any>
   #headings?: Headings
+  #sections?: FileSection<ModuleExport<any>>[]
 
   constructor({
     loader,
@@ -2085,7 +2093,10 @@ export class JavaScriptFile<
     return (await fileExport.getValue()) as any
   }
 
-  /** Get headings derived from the file exports. */
+  /**
+   * @deprecated Use `getSections` instead to build an outline that includes
+   * regions and exports.
+   */
   async getHeadings(): Promise<Headings> {
     if (!this.#headings) {
       // Fast path: try to derive headings from a quick static scan of the source
@@ -2116,6 +2127,86 @@ export class JavaScriptFile<
     }
 
     return this.#headings
+  }
+
+  /** Get an outline derived from regions and exports in the JavaScript file. */
+  async getSections(): Promise<FileSection<ModuleExport<any>>[]> {
+    if (!this.#sections) {
+      const [regions, fileExports] = await Promise.all([
+        this.getRegions(),
+        this.getExports(),
+      ])
+
+      const sections: Array<{
+        section: FileSection<ModuleExport<any>>
+        line: number
+      }> = []
+      const regionSections = new Map<FileRegion, FileSection<ModuleExport<any>>>()
+
+      for (const region of regions) {
+        const title = region.bannerText
+        const section: FileSection<ModuleExport<any>> = {
+          id: createSlug(title, this.#slugCasing),
+          title,
+          items: [],
+        }
+        regionSections.set(region, section)
+      }
+
+      const ungroupedExports: Array<{
+        exportItem: ModuleExport<any>
+        line: number
+      }> = []
+
+      const findRegionForLine = (line: number) =>
+        regions.find(
+          (region) =>
+            line >= region.position.start.line &&
+            line <= region.position.end.line
+        )
+
+      for (const fileExport of fileExports) {
+        const position = fileExport.getPosition()
+        const line = position?.start.line
+        const region =
+          line !== undefined ? findRegionForLine(line) : undefined
+
+        if (region) {
+          const section = regionSections.get(region)
+          if (section) {
+            section.items.push(fileExport)
+          }
+        } else {
+          ungroupedExports.push({
+            exportItem: fileExport,
+            line: line ?? Number.POSITIVE_INFINITY,
+          })
+        }
+      }
+
+      for (const region of regions) {
+        sections.push({
+          section: regionSections.get(region)!,
+          line: region.position.start.line,
+        })
+      }
+
+      for (const { exportItem, line } of ungroupedExports) {
+        sections.push({
+          section: {
+            id: exportItem.getSlug(),
+            title: exportItem.getName(),
+            items: [exportItem],
+          },
+          line,
+        })
+      }
+
+      sections.sort((a, b) => a.line - b.line)
+      this.#sections = sections.map(({ section }) => section)
+    }
+
+    return this.#sections
   }
 
   /** Get the `//#region` spans in the JavaScript file. */
