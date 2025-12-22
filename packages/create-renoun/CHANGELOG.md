@@ -1,5 +1,11 @@
 # create-renoun
 
+## 2.0.5
+
+### Patch Changes
+
+- 0a29f74: Fixes `.renoun` directory not being included in the generated `.gitignore` file.
+
 ## 2.0.4
 
 ### Patch Changes

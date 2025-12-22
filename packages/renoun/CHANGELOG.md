@@ -1,5 +1,17 @@
 # renoun
 
+## 10.17.2
+
+### Patch Changes
+
+- cf01b60: Fixes CLI app mode incorrectly stripping leading dots from dotfiles (e.g. `.gitignore` was being normalized to `gitignore`), causing `ENOENT` errors when applying project overrides.
+- dd2ed9a: Fixes CLI app mode failing to resolve dependencies like `zod` and `restyle`. The runtime directory now correctly symlinks `node_modules` based on how the app package is installed:
+  - **pnpm virtual store**: Uses the parent directory's `node_modules` from `.pnpm/<pkg>/node_modules/`
+  - **Workspace packages**: Uses the app's own `node_modules` directory
+  - **Fallback**: Uses the project's root `node_modules`
+
+- b17df90: Fixes `isFilePathGitIgnored` to properly handle Windows paths by normalizing slashes before checking patterns.
+
 ## 10.17.1
 
 ### Patch Changes
