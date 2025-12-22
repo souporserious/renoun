@@ -2,18 +2,19 @@ export type { PluggableList } from 'unified'
 export type { MDXComponents, MDXContent } from 'mdx/types.js'
 export type { MDXReadingTime } from './rehype/add-reading-time.js'
 export type {
-  Headings,
+  ContentSection,
+  AddSectionsOptions,
   HeadingComponent,
   HeadingComponentProps,
-} from './remark/add-headings.js'
+} from './remark/add-sections.js'
 export { rehypePlugins } from './rehype/index.js'
 export { remarkPlugins } from './remark/index.js'
 export {
   createSlug,
-  getMarkdownHeadings,
+  getMarkdownSections,
   getMarkdownContent,
   getMDXExportStaticValues,
-  getMDXHeadings,
+  getMDXSections,
   getMDXContent,
   getMDXLinks,
   type SlugCasing,

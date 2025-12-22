@@ -32,32 +32,27 @@ declare module 'mdast' {
 
 const MAX_SUMMARY_LENGTH = 300
 
-export interface AddHeadingsOptions {
-  /** Whether to allow the `getHeadings` export. */
-  allowGetHeadings?: boolean
-}
-
 type HeadingSection = {
   heading: Heading
   nodes: RootContent[]
 }
 
-export type Headings = {
+export type ContentSection = {
   /** The slugified heading text. */
   id: string
 
-  /** The heading level. */
-  level: number
-
   /** The stringified heading text. */
-  text: string
+  title: string
+
+  /** The heading level (1-6). */
+  depth: number
 
   /** Concise summary derived from the section content. */
   summary?: string
 
-  /** The heading JSX children. */
-  children?: React.ReactNode
-}[]
+  /** Nested child sections. */
+  children?: ContentSection[]
+}
 
 export type HeadingComponentProps<
   Tag extends React.ElementType = React.ElementType,
@@ -70,128 +65,280 @@ export type HeadingComponent<
   Tag extends React.ElementType = React.ElementType,
 > = (props: HeadingComponentProps<Tag>) => React.ReactNode
 
-export default function addHeadings(
+export type AddSectionsOptions = {
+  /**
+   * Additional JSX tag names to treat as headings.
+   * These will be included in the sections export alongside native h1-h6 headings.
+   * @example ['Heading', 'Title', 'SectionHeading']
+   */
+  headingTags?: string[]
+
+  /**
+   * JSX tag names to treat as section containers.
+   * The id and title will be extracted from attributes.
+   * @example ['Section', 'ContentSection']
+   */
+  sectionTags?: string[]
+}
+
+const DEFAULT_HEADING_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+
+type FlatSection = {
+  id: string
+  title: string
+  depth: number
+  summary?: string
+}
+
+function buildNestedSections(flatSections: FlatSection[]): ContentSection[] {
+  const result: ContentSection[] = []
+  const stack: { section: ContentSection; depth: number }[] = []
+
+  for (const flat of flatSections) {
+    const section: ContentSection = {
+      id: flat.id,
+      title: flat.title,
+      depth: flat.depth,
+    }
+
+    if (flat.summary !== undefined) {
+      section.summary = flat.summary
+    }
+
+    // Pop sections from stack that are at same or deeper level
+    while (stack.length > 0 && stack[stack.length - 1]!.depth >= flat.depth) {
+      stack.pop()
+    }
+
+    if (stack.length === 0) {
+      // This is a top-level section
+      result.push(section)
+    } else {
+      // This is a child of the last item in the stack
+      const parent = stack[stack.length - 1]!.section
+      if (!parent.children) {
+        parent.children = []
+      }
+      parent.children.push(section)
+    }
+
+    // Push this section onto the stack
+    stack.push({ section, depth: flat.depth })
+  }
+
+  return result
+}
+
+function sectionToEstree(section: ContentSection): any {
+  const properties: any[] = [
+    {
+      type: 'Property',
+      key: { type: 'Identifier', name: 'id' },
+      value: { type: 'Literal', value: section.id },
+      kind: 'init',
+    },
+    {
+      type: 'Property',
+      key: { type: 'Identifier', name: 'title' },
+      value: { type: 'Literal', value: section.title },
+      kind: 'init',
+    },
+  ]
+
+  if (section.depth !== undefined) {
+    properties.push({
+      type: 'Property',
+      key: { type: 'Identifier', name: 'depth' },
+      value: { type: 'Literal', value: section.depth },
+      kind: 'init',
+    })
+  }
+
+  if (section.summary !== undefined) {
+    properties.push({
+      type: 'Property',
+      key: { type: 'Identifier', name: 'summary' },
+      value: { type: 'Literal', value: section.summary },
+      kind: 'init',
+    })
+  }
+
+  if (section.children && section.children.length > 0) {
+    properties.push({
+      type: 'Property',
+      key: { type: 'Identifier', name: 'children' },
+      value: {
+        type: 'ArrayExpression',
+        elements: section.children.map(sectionToEstree),
+      },
+      kind: 'init',
+    })
+  }
+
+  return {
+    type: 'ObjectExpression',
+    properties,
+  }
+}
+
+export default function addSections(
   this: Processor,
-  opts: AddHeadingsOptions = {}
+  options: AddSectionsOptions = {}
 ) {
   const isMarkdown = this.data('isMarkdown') === true
-  const { allowGetHeadings = false } = opts
+  const customHeadingTags = options.headingTags ?? []
+  const sectionTags = options.sectionTags ?? []
+
+  // Build a set of all heading tag names (native + custom)
+  const headingTagSet = new Set([...DEFAULT_HEADING_TAGS, ...customHeadingTags])
+
+  // Map native heading tags to their depth
+  const headingDepthMap = new Map<string, number>([
+    ['h1', 1],
+    ['h2', 2],
+    ['h3', 3],
+    ['h4', 4],
+    ['h5', 5],
+    ['h6', 6],
+  ])
 
   return function (tree: Root, file: VFile) {
     const headingSummaries = computeHeadingSummaries(tree)
-    const headingsArray: any[] = []
+    const flatSections: FlatSection[] = []
     const headingCounts = new Map<string, number>()
-    let hasGetHeadingsExport = false
-    let hasHeadingsExport = false
-    let hasJsxImport = false
+    let hasSectionsExport = false
     let hasDefaultHeadingComponent = false
 
-    visit(tree, 'heading', (node: Heading) => {
-      const text = toString(node)
-      let slug = createSlug(text)
-
-      const summary = headingSummaries.get(node)
-
-      if (headingCounts.has(slug)) {
-        const count = headingCounts.get(slug)! + 1
-        headingCounts.set(slug, count)
-        slug = `${slug}-${count}`
-      } else {
-        headingCounts.set(slug, 1)
-      }
-
-      const properties = [
-        {
-          type: 'Property',
-          key: { type: 'Identifier', name: 'id' },
-          value: { type: 'Literal', value: slug },
-          kind: 'init',
-        },
-        {
-          type: 'Property',
-          key: { type: 'Identifier', name: 'level' },
-          value: { type: 'Literal', value: node.depth },
-          kind: 'init',
-        },
-        {
-          type: 'Property',
-          key: { type: 'Identifier', name: 'children' },
-          value: mdastNodesToJsxFragment(node.children),
-          kind: 'init',
-        },
-        {
-          type: 'Property',
-          key: { type: 'Identifier', name: 'text' },
-          value: { type: 'Literal', value: text },
-          kind: 'init',
-        },
-      ]
-
-      if (summary !== undefined) {
-        properties.push({
-          type: 'Property',
-          key: { type: 'Identifier', name: 'summary' },
-          value: { type: 'Literal', value: summary },
-          kind: 'init',
-        })
-      }
-
-      headingsArray.push({
-        type: 'ObjectExpression',
-        properties,
-      })
-
-      node.data ??= {}
-      node.data.hProperties ??= {}
-      node.data.hProperties.id = slug
-
-      if (!isMarkdown) {
-        // Hoist a single DefaultHeadingComponent at module scope for fallback
-        if (!hasDefaultHeadingComponent) {
-          const defaultDecl: any = {
-            type: 'mdxjsEsm',
-            value: '',
-            data: {
-              estree: {
-                type: 'Program',
-                sourceType: 'module',
-                body: [
+    // Helper to ensure DefaultHeadingComponent is hoisted once
+    function ensureDefaultHeadingComponent() {
+      if (hasDefaultHeadingComponent || isMarkdown) return
+      const defaultDecl: any = {
+        type: 'mdxjsEsm',
+        value: '',
+        data: {
+          estree: {
+            type: 'Program',
+            sourceType: 'module',
+            body: [
+              {
+                type: 'VariableDeclaration',
+                kind: 'const',
+                declarations: [
                   {
-                    type: 'VariableDeclaration',
-                    kind: 'const',
-                    declarations: [
-                      {
-                        type: 'VariableDeclarator',
-                        id: {
-                          type: 'Identifier',
-                          name: 'DefaultHeadingComponent',
-                        },
-                        init: createDefaultHeadingComponent(),
-                      },
-                    ],
+                    type: 'VariableDeclarator',
+                    id: {
+                      type: 'Identifier',
+                      name: 'DefaultHeadingComponent',
+                    },
+                    init: createDefaultHeadingComponent(),
                   },
                 ],
               },
-            },
-          }
-          ;(tree as any).children?.unshift(defaultDecl)
-          hasDefaultHeadingComponent = true
+            ],
+          },
+        },
+      }
+      ;(tree as any).children?.unshift(defaultDecl)
+      hasDefaultHeadingComponent = true
+    }
+
+    // Helper to generate unique slug
+    function generateSlug(baseSlug: string): string {
+      if (headingCounts.has(baseSlug)) {
+        const count = headingCounts.get(baseSlug)! + 1
+        headingCounts.set(baseSlug, count)
+        return `${baseSlug}-${count}`
+      } else {
+        headingCounts.set(baseSlug, 1)
+        return baseSlug
+      }
+    }
+
+    // Single visit to process all nodes in document order
+    visit(tree, (node: any) => {
+      // Handle markdown headings
+      if (node.type === 'heading') {
+        const headingNode = node as Heading
+        const text = toString(headingNode)
+        const slug = generateSlug(createSlug(text))
+        const summary = headingSummaries.get(headingNode)
+
+        const section: FlatSection = {
+          id: slug,
+          title: text,
+          depth: headingNode.depth,
         }
 
-        // Avoid conflicting anchors and inconsistent styling by throwing an error if a link is found inside the heading.
-        for (let index = 0; index < node.children.length; index++) {
-          const child = node.children[index]
-          if (child?.type === 'link') {
-            const message = file.message(
-              '[`@renoun/mdx/remark/add-headings`] Links inside headings are not supported. Remove the link to allow the `Heading` component to provide the section anchor.',
-              node
-            )
-            message.fatal = true
-            return
+        if (summary !== undefined) {
+          section.summary = summary
+        }
+
+        flatSections.push(section)
+
+        headingNode.data ??= {}
+        headingNode.data.hProperties ??= {}
+        headingNode.data.hProperties.id = slug
+
+        if (!isMarkdown) {
+          ensureDefaultHeadingComponent()
+
+          // Avoid conflicting anchors and inconsistent styling
+          for (let index = 0; index < headingNode.children.length; index++) {
+            const child = headingNode.children[index]
+            if (child?.type === 'link') {
+              const message = file.message(
+                '[`@renoun/mdx/remark/add-sections`] Links inside headings are not supported. Remove the link to allow the `Heading` component to provide the section anchor.',
+                headingNode
+              )
+              message.fatal = true
+              return
+            }
+          }
+
+          convertHeadingToComponent(headingNode)
+        }
+        return
+      }
+
+      // Handle JSX elements (heading and section tags)
+      if (node.type === 'mdxJsxFlowElement' && !isMarkdown) {
+        const tagName = node.name
+        if (!tagName) return
+
+        // Check if this is a heading tag (native or custom)
+        if (headingTagSet.has(tagName)) {
+          const id = getJsxAttributeValue(node, 'id')
+          const title = getJsxTextContent(node)
+
+          if (id && title) {
+            const slug = generateSlug(id)
+            const depth = headingDepthMap.get(tagName) ?? 2
+
+            flatSections.push({
+              id: slug,
+              title,
+              depth,
+            })
           }
         }
 
-        convertHeadingToComponent(node)
+        // Check if this is a section tag
+        if (sectionTags.includes(tagName)) {
+          const id = getJsxAttributeValue(node, 'id')
+          const title = getJsxAttributeValue(node, 'title')
+          const depthValue = getJsxAttributeNumericValue(node, 'depth')
+
+          if (id && title) {
+            const slug = generateSlug(id)
+            const depth = depthValue ?? 1
+
+            flatSections.push({
+              id: slug,
+              title,
+              depth,
+            })
+          }
+        }
       }
     })
 
@@ -206,51 +353,17 @@ export default function addHeadings(
         return
       }
 
-      // Record whether react/jsx-runtime jsx import exists
-      for (const statement of program.body) {
-        if (
-          statement.type === 'ImportDeclaration' &&
-          statement.source?.value === 'react/jsx-runtime'
-        ) {
-          if (Array.isArray(statement.specifiers)) {
-            for (const spec of statement.specifiers) {
-              if (
-                spec.type === 'ImportSpecifier' &&
-                spec.imported?.name === 'jsx'
-              ) {
-                hasJsxImport = true
-                break
-              }
-            }
-          }
-        }
-      }
-
       for (const statement of program.body) {
         if (statement.type !== 'ExportNamedDeclaration') continue
         if (statement.declaration) {
           const declaration = statement.declaration
-          if (
-            declaration.type === 'FunctionDeclaration' &&
-            declaration.id?.name === 'getHeadings'
-          ) {
-            hasGetHeadingsExport = true
-            break
-          }
           if (declaration.type === 'VariableDeclaration') {
             for (const declarator of declaration.declarations) {
               if (
                 declarator.id?.type === 'Identifier' &&
-                declarator.id.name === 'getHeadings'
+                declarator.id.name === 'sections'
               ) {
-                hasGetHeadingsExport = true
-                break
-              }
-              if (
-                declarator.id?.type === 'Identifier' &&
-                declarator.id.name === 'headings'
-              ) {
-                hasHeadingsExport = true
+                hasSectionsExport = true
                 break
               }
             }
@@ -258,12 +371,8 @@ export default function addHeadings(
         }
         if (Array.isArray(statement.specifiers)) {
           for (const specifier of statement.specifiers) {
-            if (specifier.exported?.name === 'getHeadings') {
-              hasGetHeadingsExport = true
-              break
-            }
-            if (specifier.exported?.name === 'headings') {
-              hasHeadingsExport = true
+            if (specifier.exported?.name === 'sections') {
+              hasSectionsExport = true
               break
             }
           }
@@ -271,126 +380,24 @@ export default function addHeadings(
       }
     })
 
-    if (hasHeadingsExport) {
+    if (hasSectionsExport) {
       const message = file.message(
-        '[renoun/mdx] Exporting "headings" directly is not supported. Use `export function getHeadings(headings) { ... }`.',
+        '[renoun/mdx] Exporting "sections" directly is not supported. The "sections" export is automatically generated from headings.',
         undefined,
-        'renoun-mdx:headings-export'
-      )
-      message.fatal = true
-      return
-    }
-
-    if (!allowGetHeadings && hasGetHeadingsExport) {
-      const message = file.message(
-        '[renoun/mdx] The `getHeadings` export is disabled in this environment.',
-        undefined,
-        'renoun-mdx:get-headings-disabled'
+        'renoun-mdx:sections-export'
       )
       message.fatal = true
       return
     }
 
     if (!isMarkdown) {
-      const generatedHeadingsArrayExpression: any = {
+      const nestedSections = buildNestedSections(flatSections)
+      const sectionsExpression: any = {
         type: 'ArrayExpression',
-        elements: headingsArray,
+        elements: nestedSections.map(sectionToEstree),
       }
 
-      const headingsExpression = hasGetHeadingsExport
-        ? {
-            // (() => { const validatedHeadingsValue = getHeadings([...]);
-            //   if (!Array.isArray(validatedHeadingsValue)) {
-            //     throw new Error('[renoun/mdx] getHeadings(headings) must return an array')
-            //   }
-            //   return validatedHeadingsValue
-            // })()
-            type: 'CallExpression',
-            callee: {
-              type: 'ArrowFunctionExpression',
-              async: false,
-              expression: false,
-              params: [],
-              body: {
-                type: 'BlockStatement',
-                body: [
-                  {
-                    type: 'VariableDeclaration',
-                    kind: 'const',
-                    declarations: [
-                      {
-                        type: 'VariableDeclarator',
-                        id: {
-                          type: 'Identifier',
-                          name: 'validatedHeadingsValue',
-                        },
-                        init: {
-                          type: 'CallExpression',
-                          callee: { type: 'Identifier', name: 'getHeadings' },
-                          optional: false,
-                          arguments: [generatedHeadingsArrayExpression],
-                        },
-                      },
-                    ],
-                  },
-                  {
-                    type: 'IfStatement',
-                    test: {
-                      type: 'UnaryExpression',
-                      operator: '!',
-                      prefix: true,
-                      argument: {
-                        type: 'CallExpression',
-                        callee: {
-                          type: 'MemberExpression',
-                          object: { type: 'Identifier', name: 'Array' },
-                          property: { type: 'Identifier', name: 'isArray' },
-                          computed: false,
-                          optional: false,
-                        },
-                        arguments: [
-                          {
-                            type: 'Identifier',
-                            name: 'validatedHeadingsValue',
-                          },
-                        ],
-                      },
-                    },
-                    consequent: {
-                      type: 'BlockStatement',
-                      body: [
-                        {
-                          type: 'ThrowStatement',
-                          argument: {
-                            type: 'NewExpression',
-                            callee: { type: 'Identifier', name: 'Error' },
-                            arguments: [
-                              {
-                                type: 'Literal',
-                                value:
-                                  '[renoun/mdx] getHeadings(headings) must return an array',
-                              },
-                            ],
-                          },
-                        },
-                      ],
-                    },
-                  },
-                  {
-                    type: 'ReturnStatement',
-                    argument: {
-                      type: 'Identifier',
-                      name: 'validatedHeadingsValue',
-                    },
-                  },
-                ],
-              },
-            },
-            arguments: [],
-          }
-        : generatedHeadingsArrayExpression
-
-      define(tree, file, { headings: headingsExpression as any })
+      define(tree, file, { sections: sectionsExpression })
     }
   }
 }
@@ -1077,4 +1084,93 @@ function makeJsxElement(tagName: string, mdastChildren: any[]): any {
     },
     children: mdastChildren.map((child) => mdastNodeToJsxChild(child)),
   }
+}
+
+/**
+ * Extract a string attribute value from a JSX element node.
+ * Handles both literal values and simple expression containers.
+ */
+function getJsxAttributeValue(node: any, name: string): string | undefined {
+  if (!node.attributes) return undefined
+
+  for (const attr of node.attributes) {
+    if (attr.type === 'mdxJsxAttribute' && attr.name === name) {
+      // Handle string literal: id="value"
+      if (typeof attr.value === 'string') {
+        return attr.value
+      }
+
+      // Handle expression container: id={"value"} or id={value}
+      if (
+        attr.value?.type === 'mdxJsxAttributeValueExpression' &&
+        attr.value.data?.estree?.body?.[0]?.expression
+      ) {
+        const expr = attr.value.data.estree.body[0].expression
+        if (expr.type === 'Literal' && typeof expr.value === 'string') {
+          return expr.value
+        }
+      }
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * Extract text content from a JSX element's children.
+ */
+function getJsxTextContent(node: any): string {
+  if (!node.children) return ''
+
+  const parts: string[] = []
+
+  for (const child of node.children) {
+    if (child.type === 'text') {
+      parts.push(child.value)
+    } else if (
+      child.type === 'mdxJsxTextElement' ||
+      child.type === 'mdxJsxFlowElement'
+    ) {
+      // Recursively get text from nested elements
+      parts.push(getJsxTextContent(child))
+    } else if (child.type === 'paragraph') {
+      parts.push(toString(child))
+    }
+  }
+
+  return parts.join('').trim()
+}
+
+/**
+ * Extract a numeric attribute value from a JSX element node.
+ * Handles both literal values (depth="1") and expression containers (depth={1}).
+ */
+function getJsxAttributeNumericValue(
+  node: any,
+  name: string
+): number | undefined {
+  if (!node.attributes) return undefined
+
+  for (const attr of node.attributes) {
+    if (attr.type === 'mdxJsxAttribute' && attr.name === name) {
+      // Handle string literal: depth="1"
+      if (typeof attr.value === 'string') {
+        const parsed = parseInt(attr.value, 10)
+        return isNaN(parsed) ? undefined : parsed
+      }
+
+      // Handle expression container: depth={1}
+      if (
+        attr.value?.type === 'mdxJsxAttributeValueExpression' &&
+        attr.value.data?.estree?.body?.[0]?.expression
+      ) {
+        const expr = attr.value.data.estree.body[0].expression
+        if (expr.type === 'Literal' && typeof expr.value === 'number') {
+          return expr.value
+        }
+      }
+    }
+  }
+
+  return undefined
 }
