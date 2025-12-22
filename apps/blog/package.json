@@ -33,7 +33,7 @@
     "next": ">=16.0.0",
     "react": ">=19.0.0",
     "react-dom": ">=19.0.0",
-    "renoun": ">=10.17.1"
+    "renoun": ">=10.17.2"
   },
   "devDependencies": {
     "@types/node": "catalog:",
