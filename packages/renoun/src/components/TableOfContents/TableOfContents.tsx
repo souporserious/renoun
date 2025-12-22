@@ -121,7 +121,9 @@ export function TableOfContents({
         {sections.map((section) => (
           <Item key={section.id}>
             <Link href={`#${section.id}`} suppressHydrationWarning>
-              {section.title}
+              {'jsx' in section && section.jsx !== undefined
+                ? section.jsx
+                : section.title}
             </Link>
             {section.children && section.children.length > 0
               ? renderSections(section.children, depth + 1)
