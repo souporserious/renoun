@@ -6,7 +6,7 @@ import {
   Link,
   type JavaScriptFile,
   type ModuleExport,
-  type Headings,
+  type TableOfContentsSection,
 } from 'renoun'
 
 import { RootCollection, HooksDirectory } from '@/collections'
@@ -33,14 +33,12 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
     }
     throw error
   })
-  const mdxHeadings = await mdxFile
-    ?.getExportValue('headings')
-    .catch((error) => {
-      if (error instanceof ModuleExportNotFoundError) {
-        return undefined
-      }
-      throw error
-    })
+  const mdxSections = await mdxFile?.getSections().catch((error) => {
+    if (error instanceof ModuleExportNotFoundError) {
+      return undefined
+    }
+    throw error
+  })
   const Content = await mdxFile?.getExportValue('default')
   const mainExport = await hookEntry
     .getExport<any>(hookEntry.getBaseName())
@@ -80,47 +78,39 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
     : []
   const isExamplesPage = slug.at(-1) === 'examples'
   const hookExports = isExamplesPage ? undefined : await hookEntry.getExports()
-  const hookHeadings = isExamplesPage ? [] : await hookEntry.getHeadings()
+  const hookSections = isExamplesPage ? [] : await hookEntry.getSections()
   const updatedAt = await hookEntry.getLastCommitDate()
   const [previousEntry, nextEntry] = await hookEntry.getSiblings({
     collection: RootCollection,
   })
 
-  let headings: Headings = []
+  let sections: TableOfContentsSection[] = []
 
-  if (mdxHeadings) {
-    headings.push(...(mdxHeadings as Headings))
+  if (mdxSections) {
+    sections.push(...mdxSections)
   }
 
   if (examplesExports.length) {
-    const parsedExports = examplesExports.map((exampleExport) => ({
-      level: 3,
-      id: exampleExport.getSlug(),
-      children: exampleExport.getTitle(),
-      text: exampleExport.getTitle(),
-    }))
-
-    headings.push(
-      {
-        level: 2,
-        id: 'examples',
-        children: 'Examples',
-        text: 'Examples',
-      },
-      ...parsedExports
+    const parsedExports: TableOfContentsSection[] = examplesExports.map(
+      (exampleExport) => ({
+        id: exampleExport.getSlug(),
+        title: exampleExport.getTitle(),
+      })
     )
+
+    sections.push({
+      id: 'examples',
+      title: 'Examples',
+      children: parsedExports,
+    })
   }
 
-  if (hookHeadings.length) {
-    headings.push(
-      {
-        level: 2,
-        id: 'api-reference',
-        children: 'API Reference',
-        text: 'API Reference',
-      },
-      ...hookHeadings
-    )
+  if (hookSections.length) {
+    sections.push({
+      id: 'api-reference',
+      title: 'API Reference',
+      children: hookSections,
+    })
   }
 
   const baseName = hookEntry.getBaseName()
@@ -236,7 +226,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
         </div>
       </div>
 
-      <TableOfContents headings={headings} />
+      <TableOfContents sections={sections} />
     </>
   )
 }

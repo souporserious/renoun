@@ -1,3 +1,5 @@
+import type { TableOfContentsSection } from 'renoun'
+
 import { FileSystemDirectory } from '@/collections'
 import { References } from '@/components/Reference'
 import { TableOfContents } from '@/components/TableOfContents'
@@ -16,9 +18,22 @@ export default async function Page() {
   }
 
   const Content = await docFile.getExportValue('default')
-  const docHeadings = await docFile.getHeadings()
+  const docSections = await docFile.getSections()
   const fileExports = await sourceFile.getExports()
-  const referenceHeadings = await sourceFile.getHeadings()
+  const referenceSections = await sourceFile.getSections()
+
+  const sections: TableOfContentsSection[] = [
+    ...docSections,
+    ...(referenceSections.length
+      ? [
+          {
+            id: 'api-reference',
+            title: 'API Reference',
+            children: referenceSections,
+          },
+        ]
+      : []),
+  ]
 
   return (
     <>
@@ -67,22 +82,7 @@ export default async function Page() {
           },
         }}
       >
-        <TableOfContents
-          headings={[
-            ...docHeadings,
-            ...(referenceHeadings.length
-              ? [
-                  {
-                    id: 'api-reference',
-                    text: 'API Reference',
-                    children: 'API Reference',
-                    level: 2,
-                  },
-                  ...referenceHeadings,
-                ]
-              : []),
-          ]}
-        />
+        <TableOfContents sections={sections} />
       </div>
     </>
   )

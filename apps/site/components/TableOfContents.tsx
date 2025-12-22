@@ -14,7 +14,7 @@ type SiteTableOfContentsProps = Omit<
   entry?: FileSystemEntry
 }
 
-export function TableOfContents({ headings, entry }: SiteTableOfContentsProps) {
+export function TableOfContents({ sections, entry }: SiteTableOfContentsProps) {
   const components: Partial<TableOfContentsComponents> = {
     Root: (props) => (
       <nav
@@ -95,7 +95,7 @@ export function TableOfContents({ headings, entry }: SiteTableOfContentsProps) {
         },
       }}
     >
-      <BaseTableOfContents headings={headings} components={components}>
+      <BaseTableOfContents sections={sections} components={components}>
         {entry ? (
           <ViewSource
             source={entry}

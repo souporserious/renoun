@@ -1,13 +1,12 @@
-import { Directory, withSchema, type Headings } from 'renoun'
+import { Directory, withSchema } from 'renoun'
 import { z } from 'zod'
 
 export const FileSystemDirectory = new Directory({
   path: '../../packages/renoun/src/file-system',
   basePathname: 'utilities',
   loader: {
-    mdx: withSchema<{
-      headings: Headings
-    }>(
+    mdx: withSchema(
+      {},
       (path) => import(`../../../packages/renoun/src/file-system/${path}.mdx`)
     ),
   },
@@ -36,14 +35,6 @@ export const ComponentsDirectory = new Directory({
     ),
     mdx: withSchema(
       {
-        headings: z.array(
-          z.object({
-            id: z.string(),
-            level: z.number(),
-            children: z.custom<NonNullable<React.ReactNode>>(),
-            text: z.string(),
-          })
-        ),
         metadata: z.object({
           title: z.string(),
           description: z.string(),
@@ -76,14 +67,6 @@ export const HooksDirectory = new Directory({
     ),
     mdx: withSchema(
       {
-        headings: z.array(
-          z.object({
-            id: z.string(),
-            level: z.number(),
-            children: z.custom<NonNullable<React.ReactNode>>(),
-            text: z.string(),
-          })
-        ),
         metadata: z.object({
           title: z.string(),
           description: z.string(),

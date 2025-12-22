@@ -35,8 +35,7 @@ export {
 } from './Reference/index.ts'
 export {
   TableOfContents,
-  type Heading,
-  type Headings,
+  type TableOfContentsSection,
   type TableOfContentsProps,
   type TableOfContentsComponents,
 } from './TableOfContents/index.ts'

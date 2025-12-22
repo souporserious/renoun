@@ -5,7 +5,7 @@ import {
   ModuleExportNotFoundError,
   type JavaScriptFile,
   type ModuleExport,
-  type Headings,
+  type TableOfContentsSection,
   Link,
 } from 'renoun'
 
@@ -37,14 +37,12 @@ export default async function Component(
       throw error
     }
   )
-  const mdxHeadings = await mdxFile
-    ?.getExportValue('headings')
-    .catch((error) => {
-      if (error instanceof ModuleExportNotFoundError) {
-        return undefined
-      }
-      throw error
-    })
+  const mdxSections = await mdxFile?.getSections().catch((error) => {
+    if (error instanceof ModuleExportNotFoundError) {
+      return undefined
+    }
+    throw error
+  })
   const Content = await mdxFile?.getExportValue('default')
   const mainExport = await componentEntry
     .getExport<any>(componentEntry.getBaseName())
@@ -120,49 +118,41 @@ export default async function Component(
   const componentExports = isExamplesPage
     ? undefined
     : await componentEntry.getExports()
-  const componentHeadings = isExamplesPage
+  const componentSections = isExamplesPage
     ? []
-    : await componentEntry.getHeadings()
+    : await componentEntry.getSections()
   const updatedAt = await componentEntry.getLastCommitDate()
   const [previousEntry, nextEntry] = await componentEntry.getSiblings({
     collection: RootCollection,
   })
 
-  let headings: Headings = []
+  let sections: TableOfContentsSection[] = []
 
-  if (mdxHeadings) {
-    headings.push(...(mdxHeadings as Headings))
+  if (mdxSections) {
+    sections.push(...mdxSections)
   }
 
   if (examplesExports.length) {
-    const parsedExports = examplesExports.map((exampleExport) => ({
-      level: 3,
-      id: exampleExport.getSlug(),
-      children: exampleExport.getTitle(),
-      text: exampleExport.getTitle(),
-    }))
-
-    headings.push(
-      {
-        level: 2,
-        id: 'examples',
-        children: 'Examples',
-        text: 'Examples',
-      },
-      ...parsedExports
+    const parsedExports: TableOfContentsSection[] = examplesExports.map(
+      (exampleExport) => ({
+        id: exampleExport.getSlug(),
+        title: exampleExport.getTitle(),
+      })
     )
+
+    sections.push({
+      id: 'examples',
+      title: 'Examples',
+      children: parsedExports,
+    })
   }
 
-  if (componentHeadings.length) {
-    headings.push(
-      {
-        level: 2,
-        id: 'api-reference',
-        children: 'API Reference',
-        text: 'API Reference',
-      },
-      ...componentHeadings
-    )
+  if (componentSections.length) {
+    sections.push({
+      id: 'api-reference',
+      title: 'API Reference',
+      children: componentSections,
+    })
   }
 
   const baseName = componentEntry.getBaseName()
@@ -295,7 +285,7 @@ export default async function Component(
         </div>
       </div>
 
-      <TableOfContents headings={headings} entry={componentEntry} />
+      <TableOfContents sections={sections} entry={componentEntry} />
     </>
   )
 }

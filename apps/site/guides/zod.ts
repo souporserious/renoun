@@ -1,16 +1,8 @@
-import { Directory, withSchema } from 'renoun'
-import { isValidElement } from 'react'
+import { Directory, withSchema, type ContentSection } from 'renoun'
 import { z } from 'zod'
 
 const mdxSchema = {
-  headings: z.array(
-    z.object({
-      id: z.string(),
-      level: z.number(),
-      children: z.custom<React.ReactElement>(isValidElement),
-      text: z.string(),
-    })
-  ),
+  sections: z.custom<ContentSection[]>(),
 }
 
 const docs = new Directory({
