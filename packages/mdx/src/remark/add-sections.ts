@@ -50,6 +50,9 @@ export type ContentSection = {
   /** Concise summary derived from the section content. */
   summary?: string
 
+  /** The heading content as JSX (preserves formatting like code, emphasis, etc.). */
+  jsx?: React.ReactNode
+
   /** Nested child sections. */
   children?: ContentSection[]
 }
@@ -88,14 +91,18 @@ type FlatSection = {
   title: string
   depth: number
   summary?: string
+  /** ESTree representation of JSX content for the section. */
+  estreeJsx?: any
 }
 
-function buildNestedSections(flatSections: FlatSection[]): ContentSection[] {
-  const result: ContentSection[] = []
-  const stack: { section: ContentSection; depth: number }[] = []
+type NestedSection = FlatSection & { children?: NestedSection[] }
+
+function buildNestedSections(flatSections: FlatSection[]): NestedSection[] {
+  const result: NestedSection[] = []
+  const stack: { section: NestedSection; depth: number }[] = []
 
   for (const flat of flatSections) {
-    const section: ContentSection = {
+    const section: NestedSection = {
       id: flat.id,
       title: flat.title,
       depth: flat.depth,
@@ -103,6 +110,10 @@ function buildNestedSections(flatSections: FlatSection[]): ContentSection[] {
 
     if (flat.summary !== undefined) {
       section.summary = flat.summary
+    }
+
+    if (flat.estreeJsx !== undefined) {
+      section.estreeJsx = flat.estreeJsx
     }
 
     // Pop sections from stack that are at same or deeper level
@@ -129,7 +140,7 @@ function buildNestedSections(flatSections: FlatSection[]): ContentSection[] {
   return result
 }
 
-function sectionToEstree(section: ContentSection): any {
+function sectionToEstree(section: NestedSection): any {
   const properties: any[] = [
     {
       type: 'Property',
@@ -159,6 +170,15 @@ function sectionToEstree(section: ContentSection): any {
       type: 'Property',
       key: { type: 'Identifier', name: 'summary' },
       value: { type: 'Literal', value: section.summary },
+      kind: 'init',
+    })
+  }
+
+  if (section.estreeJsx !== undefined) {
+    properties.push({
+      type: 'Property',
+      key: { type: 'Identifier', name: 'jsx' },
+      value: section.estreeJsx,
       kind: 'init',
     })
   }
@@ -273,6 +293,11 @@ export default function addSections(
           section.summary = summary
         }
 
+        // Capture JSX representation of heading content (preserves formatting)
+        if (!isMarkdown) {
+          section.estreeJsx = mdastNodesToJsxFragment(headingNode.children)
+        }
+
         flatSections.push(section)
 
         headingNode.data ??= {}
@@ -318,6 +343,7 @@ export default function addSections(
               id: slug,
               title,
               depth,
+              estreeJsx: jsxElementChildrenToEstree(node),
             })
           }
         }
@@ -1139,6 +1165,119 @@ function getJsxTextContent(node: any): string {
   }
 
   return parts.join('').trim()
+}
+
+/**
+ * Convert JSX element children to ESTree JSX nodes.
+ * This handles mdxJsxTextElement, text nodes, and other JSX-related nodes.
+ */
+function jsxElementChildrenToEstree(node: any): any {
+  if (!node.children || node.children.length === 0) {
+    return { type: 'Literal', value: '' }
+  }
+
+  const jsxChildren = node.children
+    .map((child: any) => jsxChildToEstree(child))
+    .filter((child: any) => child !== null)
+
+  if (jsxChildren.length === 0) {
+    return { type: 'Literal', value: '' }
+  }
+
+  if (jsxChildren.length === 1) {
+    const child = jsxChildren[0]
+    // If it's just text, return as a literal
+    if (child.type === 'JSXText') {
+      return { type: 'Literal', value: child.value }
+    }
+    return child
+  }
+
+  return {
+    type: 'JSXFragment',
+    openingFragment: {
+      type: 'JSXOpeningFragment',
+      attributes: [],
+      selfClosing: false,
+    },
+    closingFragment: { type: 'JSXClosingFragment' },
+    children: jsxChildren,
+  }
+}
+
+/**
+ * Convert a single JSX child node to ESTree.
+ */
+function jsxChildToEstree(node: any): any {
+  switch (node.type) {
+    case 'text':
+      return { type: 'JSXText', value: node.value }
+
+    case 'mdxJsxTextElement':
+    case 'mdxJsxFlowElement': {
+      const tagName = node.name
+      if (!tagName) return null
+
+      const attributes: any[] = []
+      if (node.attributes) {
+        for (const attr of node.attributes) {
+          if (attr.type === 'mdxJsxAttribute') {
+            let value: any
+            if (typeof attr.value === 'string') {
+              value = { type: 'Literal', value: attr.value }
+            } else if (attr.value?.type === 'mdxJsxAttributeValueExpression') {
+              value = {
+                type: 'JSXExpressionContainer',
+                expression: attr.value.data?.estree?.body?.[0]?.expression || {
+                  type: 'Literal',
+                  value: null,
+                },
+              }
+            } else {
+              value = null // Boolean attribute
+            }
+
+            attributes.push({
+              type: 'JSXAttribute',
+              name: { type: 'JSXIdentifier', name: attr.name },
+              value,
+            })
+          }
+        }
+      }
+
+      const children = node.children
+        ? node.children
+            .map((child: any) => jsxChildToEstree(child))
+            .filter((c: any) => c !== null)
+        : []
+
+      return {
+        type: 'JSXElement',
+        openingElement: {
+          type: 'JSXOpeningElement',
+          name: { type: 'JSXIdentifier', name: tagName },
+          attributes,
+          selfClosing: children.length === 0,
+        },
+        closingElement:
+          children.length === 0
+            ? null
+            : {
+                type: 'JSXClosingElement',
+                name: { type: 'JSXIdentifier', name: tagName },
+              },
+        children,
+      }
+    }
+
+    case 'paragraph':
+      // For paragraphs inside JSX, extract the text content
+      return { type: 'JSXText', value: toString(node) }
+
+    default:
+      return null
+  }
 }
 
 /**

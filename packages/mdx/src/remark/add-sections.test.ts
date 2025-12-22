@@ -14,6 +14,59 @@ describe('addSections', () => {
     expect(code).toContain('export const sections = [{')
     expect(code).not.toContain('export const Heading')
     expect(code).not.toContain('_missingMdxReference("Heading"')
+    expect(String(result)).toMatchInlineSnapshot(`
+      "import {Fragment as _Fragment, jsxDEV as _jsxDEV} from "react/jsx-dev-runtime";
+      export const sections = [{
+        id: "hello-world",
+        title: "Hello, world!",
+        depth: 1,
+        jsx: "Hello, world!"
+      }];
+      const DefaultHeadingComponent = ({Tag, id, children, ...rest}) => _jsxDEV(Tag, {
+        id: id,
+        ...rest,
+        children: _jsxDEV("a", {
+          href: \`#\${id}\`,
+          children: children
+        }, undefined, false, {
+          fileName: "<source.js>"
+        }, this)
+      }, undefined, false, {
+        fileName: "<source.js>"
+      }, this);
+      function _createMdxContent(props) {
+        return _jsxDEV(_Fragment, {
+          children: (() => {
+            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent;
+            return _jsxDEV(HeadingComponent, {
+              Tag: C && C.h1 || "h1",
+              id: "hello-world",
+              children: "Hello, world!"
+            }, undefined, false, {
+              fileName: "<source.js>"
+            }, this);
+          })()
+        }, undefined, false, {
+          fileName: "<source.js>",
+          lineNumber: 1,
+          columnNumber: 1
+        }, this);
+      }
+      export default function MDXContent(props = {}) {
+        const {wrapper: MDXLayout} = props.components || ({});
+        return MDXLayout ? _jsxDEV(MDXLayout, {
+          ...props,
+          children: _jsxDEV(_createMdxContent, {
+            ...props
+          }, undefined, false, {
+            fileName: "<source.js>"
+          }, this)
+        }, undefined, false, {
+          fileName: "<source.js>"
+        }, this) : _createMdxContent(props);
+      }
+      "
+    `)
   })
 
   test('code heading', async () => {
@@ -26,6 +79,57 @@ describe('addSections', () => {
     expect(code).not.toContain('export const Heading')
     expect(code).toContain('_components.code')
     expect(code).not.toContain('_missingMdxReference("Heading"')
+    expect(String(result)).toMatchInlineSnapshot(`
+      "import {Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs} from "react/jsx-runtime";
+      export const sections = [{
+        id: "hello-world",
+        title: "Hello, world!",
+        depth: 1,
+        jsx: _jsxs(_Fragment, {
+          children: ["Hello, ", _jsx("code", {
+            children: "world"
+          }), "!"]
+        })
+      }];
+      const DefaultHeadingComponent = ({Tag, id, children, ...rest}) => _jsx(Tag, {
+        id: id,
+        ...rest,
+        children: _jsx("a", {
+          href: \`#\${id}\`,
+          children: children
+        })
+      });
+      function _createMdxContent(props) {
+        const _components = {
+          code: "code",
+          ...props.components
+        };
+        return _jsx(_Fragment, {
+          children: (() => {
+            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent;
+            return _jsx(HeadingComponent, {
+              Tag: C && C.h1 || "h1",
+              id: "hello-world",
+              children: _jsxs(_Fragment, {
+                children: ["Hello, ", _jsx(_components.code, {
+                  children: "world"
+                }), "!"]
+              })
+            });
+          })()
+        });
+      }
+      export default function MDXContent(props = {}) {
+        const {wrapper: MDXLayout} = props.components || ({});
+        return MDXLayout ? _jsx(MDXLayout, {
+          ...props,
+          children: _jsx(_createMdxContent, {
+            ...props
+          })
+        }) : _createMdxContent(props);
+      }
+      "
+    `)
   })
 
   test('link heading throws error', async () => {
@@ -49,6 +153,55 @@ describe('addSections', () => {
     expect(code).not.toContain('export const Heading')
     expect(code).toContain('_components.img')
     expect(code).not.toContain('_missingMdxReference("Heading"')
+    expect(String(result)).toMatchInlineSnapshot(`
+      "import {Fragment as _Fragment, jsx as _jsx} from "react/jsx-runtime";
+      export const sections = [{
+        id: "hello-world",
+        title: "Hello, world!",
+        depth: 1,
+        jsx: _jsx("img", {
+          src: "https://example.com/image.png",
+          alt: "Hello, world!"
+        })
+      }];
+      const DefaultHeadingComponent = ({Tag, id, children, ...rest}) => _jsx(Tag, {
+        id: id,
+        ...rest,
+        children: _jsx("a", {
+          href: \`#\${id}\`,
+          children: children
+        })
+      });
+      function _createMdxContent(props) {
+        const _components = {
+          img: "img",
+          ...props.components
+        };
+        return _jsx(_Fragment, {
+          children: (() => {
+            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent;
+            return _jsx(HeadingComponent, {
+              Tag: C && C.h1 || "h1",
+              id: "hello-world",
+              children: _jsx(_components.img, {
+                src: "https://example.com/image.png",
+                alt: "Hello, world!"
+              })
+            });
+          })()
+        });
+      }
+      export default function MDXContent(props = {}) {
+        const {wrapper: MDXLayout} = props.components || ({});
+        return MDXLayout ? _jsx(MDXLayout, {
+          ...props,
+          children: _jsx(_createMdxContent, {
+            ...props
+          })
+        }) : _createMdxContent(props);
+      }
+      "
+    `)
   })
 
   test('attaches summaries for each heading when possible', async () => {
@@ -88,18 +241,21 @@ Search indexing begins by scanning your document headings and collecting the fir
                 {
                   "depth": 3,
                   "id": "choosing-excerpts",
+                  "jsx": "Choosing excerpts",
                   "summary": "Start with the first descriptive paragraph when possible • Prefer rich paragraphs over dense code samples",
                   "title": "Choosing excerpts",
                 },
               ],
               "depth": 2,
               "id": "getting-started",
+              "jsx": "Getting started",
               "summary": "Search indexing begins by scanning your document headings and collecting the first meaningful block after each section. This typically results in a concise paragraph that remains under the target length while still covering the topic with enough detail for a helpful preview.",
               "title": "Getting started",
             },
           ],
           "depth": 1,
           "id": "search-plugin",
+          "jsx": "Search Plugin",
           "summary": "Before diving in, this introduction paragraph provides some immediate context about search indexing in renoun. It explains how the plugin works, what kind of data is collected, and why concise excerpts improve the quality of the search results across the documentation site.",
           "title": "Search Plugin",
         },
@@ -215,11 +371,13 @@ export const sections = []
             {
               "depth": 2,
               "id": "details",
+              "jsx": "The Details",
               "title": "The Details",
             },
           ],
           "depth": 1,
           "id": "intro",
+          "jsx": "Introduction",
           "title": "Introduction",
         },
       ]
@@ -251,11 +409,13 @@ export const sections = []
             {
               "depth": 2,
               "id": "custom-heading",
+              "jsx": "Custom Heading Component",
               "title": "Custom Heading Component",
             },
           ],
           "depth": 1,
           "id": "markdown-heading",
+          "jsx": "Markdown Heading",
           "title": "Markdown Heading",
         },
       ]
@@ -302,6 +462,19 @@ More content
     `)
   })
 
+  test('preserves JSX formatting in JSX heading elements', async () => {
+    const result = await compile(
+      `<h1 id="intro">Hello <code>world</code>!</h1>`,
+      { remarkPlugins: [addSections] }
+    )
+
+    const code = String(result)
+    expect(code).toContain('export const sections = [{')
+    // Should contain JSX fragment with code element
+    expect(code).toContain('jsx:')
+    expect(code).toContain('_jsx("code"')
+  })
+
   test('combines markdown headings with JSX heading elements', async () => {
     const mdxSource = `# Overview
 
@@ -333,17 +506,20 @@ More content.
             {
               "depth": 2,
               "id": "jsx-section",
+              "jsx": "JSX Section",
               "title": "JSX Section",
             },
             {
               "depth": 2,
               "id": "markdown-section",
+              "jsx": "Markdown Section",
               "summary": "More content.",
               "title": "Markdown Section",
             },
           ],
           "depth": 1,
           "id": "overview",
+          "jsx": "Overview",
           "summary": "Some intro text.",
           "title": "Overview",
         },

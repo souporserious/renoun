@@ -214,14 +214,27 @@ type ModuleExports<Value = any> = {
 }
 
 export interface Section {
+  /** The slugified heading text. */
   id: string
+
+  /** The stringified heading text. */
   title: string
+
+  /** Nested child sections. */
   children?: Section[]
 }
 
 export interface ContentSection extends Section {
+  /** The heading level (1-6). */
   depth: number
+
+  /** Concise summary derived from the section content. */
   summary?: string
+
+  /** The heading content as JSX (preserves formatting like code, emphasis, etc.). */
+  jsx?: React.ReactNode
+
+  /** Nested child sections. */
   children?: ContentSection[]
 }
 

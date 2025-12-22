@@ -300,7 +300,6 @@ describe('file system', () => {
       id: 'docs',
       depth: 1,
       title: 'Docs',
-      children: 'Docs',
       summary: 'This is a test of the documentation system.',
     })
 
@@ -349,7 +348,6 @@ describe('file system', () => {
       id: 'hello-world',
       depth: 1,
       title: 'Hello World',
-      children: 'Hello World',
     })
 
     // Default export is a renderable MDX component
