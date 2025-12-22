@@ -948,7 +948,22 @@ async function prepareRuntimeDirectory({
     }
   }
 
-  // If not pnpm or pnpm detection failed, use project's node_modules
+  // If not pnpm, check if the app's own node_modules exists (workspace case)
+  // In a monorepo with workspace links, the app package has its own node_modules
+  // with all its dependencies installed.
+  if (!nodeModulesSource) {
+    const appNodeModules = join(app.rootDirectory, 'node_modules')
+    try {
+      const appNmStat = await lstat(appNodeModules)
+      if (appNmStat.isDirectory()) {
+        nodeModulesSource = appNodeModules
+      }
+    } catch {
+      // App doesn't have its own node_modules, fall through
+    }
+  }
+
+  // If still no source, fall back to project's node_modules
   if (!nodeModulesSource) {
     const projectNodeModules = join(projectRoot, 'node_modules')
     try {
