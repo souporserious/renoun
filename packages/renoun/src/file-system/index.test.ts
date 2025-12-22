@@ -10,8 +10,8 @@ import * as v from 'valibot'
 import { z } from 'zod'
 
 import type { basename } from '#fixtures/utils/path.ts'
-import type { MDXContent, ContentSection } from '../mdx'
-import type { Section } from './index'
+import type { MDXContent } from '../mdx'
+import type { Section, ContentSection } from './index'
 import type { FileRegion } from '../utils/get-file-regions.ts'
 import { removeExtension } from '../utils/path.ts'
 import { NodeFileSystem } from './NodeFileSystem'
@@ -2717,14 +2717,7 @@ export function identity<T>(value: T) {
       loader: {
         mdx: withSchema(
           {
-            sections: z.array(
-              z.object({
-                id: z.string(),
-                depth: z.number(),
-                title: z.string(),
-                children: z.custom<React.ReactNode>().optional(),
-              })
-            ),
+            sections: z.custom<ContentSection[]>(),
             metadata: z.object({
               title: z.string(),
               label: z.string().optional(),

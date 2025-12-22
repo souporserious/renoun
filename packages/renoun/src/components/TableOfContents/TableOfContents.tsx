@@ -1,8 +1,25 @@
 import React, { useId } from 'react'
 
-import type { Headings } from '../../mdx/index.ts'
 import { Script } from '../Script.ts'
 import { Register } from './Register.ts'
+
+/** A heading entry for the table of contents. */
+export interface Heading {
+  /** Unique identifier for the heading. */
+  id: string
+
+  /** The heading level (1-6). */
+  level: number
+
+  /** The plain text content of the heading. */
+  text: string
+
+  /** Optional React content to render for the heading. */
+  children?: React.ReactNode
+}
+
+/** An array of headings for the table of contents. */
+export type Headings = Heading[]
 
 export interface TableOfContentsComponents {
   /** Root navigation element. */
