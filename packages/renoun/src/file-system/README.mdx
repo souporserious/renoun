@@ -369,11 +369,11 @@ import { Package } from 'renoun'
 const renounMdx = new Package({
   name: '@renoun/mdx',
   loader: {
-    'remark/add-headings': () => import('@renoun/mdx/remark/add-headings'),
+    'remark/add-sections': () => import('@renoun/mdx/remark/add-sections'),
   },
 })
-const remarkAddHeadings = await renounMdx.getExport('remark/add-headings')
-const defaultExport = await remarkAddHeadings.getExport('default')
+const remarkAddSections = await renounMdx.getExport('remark/add-sections')
+const defaultExport = await remarkAddSections.getExport('default')
 
 await defaultExport.getType()
 await defaultExport.getValue()
@@ -385,11 +385,11 @@ import { Package } from 'renoun'
 const renounMdx = new Package({
   name: '@renoun/mdx',
   loader: {
-    'remark/add-headings': () => import('@renoun/mdx/remark/add-headings'),
+    'remark/add-sections': () => import('@renoun/mdx/remark/add-sections'),
   },
 })
-const remarkAddHeadings = await renounMdx.getExport('remark/add-headings')
-const defaultExport = await remarkAddHeadings.getExport('default')
+const remarkAddSections = await renounMdx.getExport('remark/add-sections')
+const defaultExport = await remarkAddSections.getExport('default')
 const type = await defaultExport.getType()
 const value = await defaultExport.getValue()
 ```

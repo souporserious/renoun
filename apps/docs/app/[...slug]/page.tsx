@@ -1,5 +1,3 @@
-import type { Headings } from 'renoun'
-
 import { docs, routes } from '@/collections'
 import { SiblingLinks } from '@/ui/SiblingLinks'
 import { TableOfContents } from '@/ui/TableOfContents'
@@ -11,10 +9,10 @@ export async function generateStaticParams() {
 export default async function Page(props: PageProps<'/[...slug]'>) {
   const { slug } = await props.params
   const doc = await docs.getFile(slug, 'mdx')
-  const [Content, metadata, headings, updatedAt] = await Promise.all([
+  const [Content, metadata, sections, updatedAt] = await Promise.all([
     doc.getExportValue('default'),
     doc.getExportValue('metadata'),
-    doc.getExportValue('headings'),
+    doc.getSections(),
     doc.getLastCommitDate(),
   ])
 
@@ -47,7 +45,7 @@ export default async function Page(props: PageProps<'/[...slug]'>) {
 
       <aside className="hidden lg:flex lg:flex-col lg:py-8 lg:gap-8 lg:col-start-[6] lg:col-end-[7] lg:row-start-[1] lg:row-end-[-1]">
         <SiblingLinks routes={await routes} />
-        <TableOfContents headings={headings as Headings} />
+        <TableOfContents sections={sections} />
       </aside>
     </>
   )

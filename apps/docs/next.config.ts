@@ -7,7 +7,7 @@ const withMDX = createMDXPlugin({
       '@renoun/mdx/rehype/add-reading-time',
     ],
     remarkPlugins: [
-      '@renoun/mdx/remark/add-headings',
+      '@renoun/mdx/remark/add-sections',
       '@renoun/mdx/remark/transform-relative-links',
     ],
   },

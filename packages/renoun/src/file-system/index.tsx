@@ -5308,7 +5308,7 @@ export interface PackageOptions<
   repository?: RepositoryConfig | string | Repository
   /**
    * Optional runtime loaders for individual package exports or a resolver that
-   * will be invoked with the export path (e.g. "remark/add-headings").
+   * will be invoked with the export path (e.g. "remark/add-sections").
    */
   loader?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
 }
@@ -6621,7 +6621,7 @@ export class Package<
         if (!normalizedSpecifier) continue
 
         // Map the loader to the base export subpath so that keys like
-        // "remark/add-headings" will be associated with the "./remark/*"
+        // "remark/add-sections" will be associated with the "./remark/*"
         // export directory.
         const baseSubpath =
           normalizeExportSubpath(normalizedSpecifier).split('/')[0]

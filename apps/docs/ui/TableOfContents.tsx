@@ -9,7 +9,7 @@ type DocsTableOfContentsProps = Omit<
   'children' | 'components'
 >
 
-export function TableOfContents({ headings }: DocsTableOfContentsProps) {
+export function TableOfContents({ sections }: DocsTableOfContentsProps) {
   const components: Partial<TableOfContentsComponents> = {
     Root: (props) => (
       <nav
@@ -43,5 +43,5 @@ export function TableOfContents({ headings }: DocsTableOfContentsProps) {
     ),
   }
 
-  return <BaseTableOfContents headings={headings} components={components} />
+  return <BaseTableOfContents sections={sections} components={components} />
 }
