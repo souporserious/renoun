@@ -37,13 +37,8 @@ export default async function Component(
       throw error
     }
   )
-  const mdxSections = await mdxFile?.getSections().catch((error) => {
-    if (error instanceof ModuleExportNotFoundError) {
-      return undefined
-    }
-    throw error
-  })
-  const Content = await mdxFile?.getExportValue('default')
+  const mdxSections = await mdxFile?.getSections()
+  const Content = await mdxFile?.getContent()
   const mainExport = await componentEntry
     .getExport<any>(componentEntry.getBaseName())
     .catch((error) => {

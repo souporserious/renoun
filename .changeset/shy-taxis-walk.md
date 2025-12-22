@@ -1,5 +1,5 @@
 ---
-"renoun": minor
+'renoun': minor
 ---
 
-Add `FileSection` and `JavaScriptFile#getSections` to build outlines from regions and exports.
+Adds `getSections` method for `MarkdownFile`, `MDXFile`, and `JavaScriptFile` to build outlines from regions and exports.
