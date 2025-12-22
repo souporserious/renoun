@@ -218,11 +218,11 @@ type ModuleExports<Value = any> = {
   [exportName: string]: Value
 }
 
-export interface FileSection<Item = unknown> {
+export interface Section {
   id: string
   title: string
-  items: Item[]
-  sections?: FileSection<Item>[]
+  depth?: number
+  children?: Section[]
 }
 
 /** A runtime loader for a specific package export (no path/file arguments). */
@@ -1861,7 +1861,7 @@ export class JavaScriptFile<
   #slugCasing?: SlugCasing
   #modulePromise?: Promise<any>
   #headings?: Headings
-  #sections?: FileSection<ModuleExport<any>>[]
+  #sections?: Section[]
 
   constructor({
     loader,
@@ -2130,7 +2130,7 @@ export class JavaScriptFile<
   }
 
   /** Get an outline derived from regions and exports in the JavaScript file. */
-  async getSections(): Promise<FileSection<ModuleExport<any>>[]> {
+  async getSections(): Promise<Section[]> {
     if (!this.#sections) {
       const [regions, fileExports] = await Promise.all([
         this.getRegions(),
@@ -2138,19 +2138,13 @@ export class JavaScriptFile<
       ])
 
       const sections: Array<{
-        section: FileSection<ModuleExport<any>>
+        section: Section
         line: number
       }> = []
-      const regionSections = new Map<FileRegion, FileSection<ModuleExport<any>>>()
+      const regionExportNames = new Map<FileRegion, string[]>()
 
       for (const region of regions) {
-        const title = region.bannerText
-        const section: FileSection<ModuleExport<any>> = {
-          id: createSlug(title, this.#slugCasing),
-          title,
-          items: [],
-        }
-        regionSections.set(region, section)
+        regionExportNames.set(region, [])
       }
 
       const ungroupedExports: Array<{
@@ -2168,13 +2162,12 @@ export class JavaScriptFile<
       for (const fileExport of fileExports) {
         const position = fileExport.getPosition()
         const line = position?.start.line
-        const region =
-          line !== undefined ? findRegionForLine(line) : undefined
+        const region = line !== undefined ? findRegionForLine(line) : undefined
 
         if (region) {
-          const section = regionSections.get(region)
-          if (section) {
-            section.items.push(fileExport)
+          const names = regionExportNames.get(region)
+          if (names) {
+            names.push(fileExport.getName())
           }
         } else {
           ungroupedExports.push({
@@ -2185,8 +2178,18 @@ export class JavaScriptFile<
       }
 
       for (const region of regions) {
+        const exportNames = regionExportNames.get(region) ?? []
+        const title = region.bannerText
+        const section: Section = {
+          id: createSlug(title, this.#slugCasing),
+          title,
+          children: exportNames.map((name) => ({
+            id: createSlug(name, this.#slugCasing),
+            title: name,
+          })),
+        }
         sections.push({
-          section: regionSections.get(region)!,
+          section,
           line: region.position.start.line,
         })
       }
@@ -2196,7 +2199,6 @@ export class JavaScriptFile<
           section: {
             id: exportItem.getSlug(),
             title: exportItem.getName(),
-            items: [exportItem],
           },
           line,
         })

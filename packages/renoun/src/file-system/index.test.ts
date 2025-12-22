@@ -1771,18 +1771,24 @@ describe('file system', () => {
 
     const sections = await file.getSections()
 
-    expect(
-      sections.map((section) => ({
-        title: section.title,
-        items: section.items.map((fileExport) => fileExport.getName()),
-      }))
-    ).toEqual([
+    expect(sections).toEqual([
       {
+        id: 'components',
         title: 'components',
-        items: ['Button', 'IconButton'],
+        children: [
+          { id: 'button', title: 'Button' },
+          { id: 'icon-button', title: 'IconButton' },
+        ],
       },
-      { title: 'useButton', items: ['useButton'] },
-      { title: 'hooks', items: ['useDropdown', 'useMenu'] },
+      { id: 'use-button', title: 'useButton' },
+      {
+        id: 'hooks',
+        title: 'hooks',
+        children: [
+          { id: 'use-dropdown', title: 'useDropdown' },
+          { id: 'use-menu', title: 'useMenu' },
+        ],
+      },
     ])
   })
 
