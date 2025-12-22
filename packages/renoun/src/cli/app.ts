@@ -1307,6 +1307,10 @@ class OverrideManager {
       return true
     }
 
+    if (isDirectory && IGNORED_DIRECTORIES.has(basename(relativePath))) {
+      return true
+    }
+
     if (!isDirectory && IGNORED_PROJECT_FILES.has(basename(relativePath))) {
       return true
     }
