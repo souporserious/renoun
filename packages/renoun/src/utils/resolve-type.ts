@@ -793,6 +793,11 @@ declare module 'ts-morph' {
 
 /** Tracks types currently being resolved by compiler type id (stable across wrappers). */
 const resolvingTypes = new Set<number>()
+
+/** Tracks object/interface members currently being expanded (prevents infinite recursion). */
+const resolvingObjectMembers = new Set<number>()
+
+/** Tracks JSDoc type owners to prevent infinite recursion when resolving type references. */
 const jsDocTypeOwners = new WeakMap<Node, Node>()
 
 /** Tracks aliases currently being expanded to prevent recursive type references. */
@@ -3256,9 +3261,8 @@ function resolveTypeExpression(
               const unionType = element as Type
               currentType = unionType
               const elementAliasSymbol = unionType.getAliasSymbol()
-              const unionDeclaration = getPrimaryDeclaration(
-                elementAliasSymbol || unionType.getSymbol()
-              )
+              const elementSymbol = elementAliasSymbol || unionType.getSymbol()
+              const unionDeclaration = getPrimaryDeclaration(elementSymbol)
               currentNode = hasTypeNode(unionDeclaration)
                 ? unionDeclaration.getTypeNode()!
                 : unionDeclaration
@@ -3730,18 +3734,38 @@ function resolveTypeExpression(
           tsMorph.Node.isInterfaceDeclaration(symbolDeclaration) ||
           tsMorph.Node.isObjectLiteralExpression(symbolDeclaration)
         ) {
-          const propertySignatures = resolvePropertySignatures(
-            type,
-            enclosingNode,
-            filter,
-            defaultValues,
-            dependencies
-          )
-          const indexSignatures = resolveIndexSignatures(
-            symbolDeclaration,
-            filter
-          )
-          resolvedMembers = [...propertySignatures, ...indexSignatures]
+          // Guard against recursive object types (interfaces / anonymous object wrappers).
+          // Use a dedicated "expanding members" set so we don't confuse the root `resolveType()`
+          // tracking (which also uses resolvingTypes) with true recursion.
+          const objectTypeId = type.compilerType.id
+          if (resolvingObjectMembers.has(objectTypeId)) {
+            return toShallowReference(type, symbolDeclaration ?? enclosingNode)
+          }
+
+          resolvingObjectMembers.add(objectTypeId)
+          const wasAlreadyResolvingType = resolvingTypes.has(objectTypeId)
+          if (!wasAlreadyResolvingType) {
+            resolvingTypes.add(objectTypeId)
+          }
+          try {
+            const propertySignatures = resolvePropertySignatures(
+              type,
+              enclosingNode,
+              filter,
+              defaultValues,
+              dependencies
+            )
+            const indexSignatures = resolveIndexSignatures(
+              symbolDeclaration,
+              filter
+            )
+            resolvedMembers = [...propertySignatures, ...indexSignatures]
+          } finally {
+            resolvingObjectMembers.delete(objectTypeId)
+            if (!wasAlreadyResolvingType) {
+              resolvingTypes.delete(objectTypeId)
+            }
+          }
         } else {
           throw new UnresolvedTypeExpressionError(type, enclosingNode)
         }

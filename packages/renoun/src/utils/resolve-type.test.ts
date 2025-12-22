@@ -23106,4 +23106,82 @@ describe('resolveType', () => {
       },
     })
   })
+
+  function resolveInterfaceFromSource(
+    fileName: string,
+    source: string,
+    interfaceName: string
+  ) {
+    const testFile = project.createSourceFile(fileName, source, {
+      overwrite: true,
+    })
+    const interfaceDeclaration = testFile.getInterfaceOrThrow(interfaceName)
+    return resolveType(interfaceDeclaration.getType(), interfaceDeclaration)
+  }
+
+  test.each([
+    {
+      title: 'in union types',
+      fileName: 'self-ref-union.ts',
+      interfaceName: 'TableOfContentsProps',
+      expectedProperty: 'sections',
+      source: dedent`
+        export interface Section {
+          id: string
+          title: string
+          children?: Section[]
+        }
+
+        export interface ContentSection extends Section {
+          depth: number
+          summary?: string
+          children?: ContentSection[]
+        }
+
+        export type TableOfContentsSection = Section | ContentSection
+
+        export interface TableOfContentsProps {
+          sections: TableOfContentsSection[]
+        }
+      `,
+    },
+    {
+      title: 'used directly',
+      fileName: 'self-ref-direct.ts',
+      interfaceName: 'FileStructure',
+      expectedProperty: 'sections',
+      source: dedent`
+        export interface Section {
+          id: string
+          title: string
+          children?: Section[]
+        }
+
+        export interface FileStructure {
+          type: 'file'
+          name: string
+          sections?: Section[]
+        }
+      `,
+    },
+  ])(
+    'handles self-referential interfaces $title without infinite recursion',
+    ({ fileName, source, interfaceName, expectedProperty }) => {
+      let resolved: any
+      expect(() => {
+        resolved = resolveInterfaceFromSource(fileName, source, interfaceName)
+      }).not.toThrow()
+
+      expect(resolved).toMatchObject({
+        kind: 'Interface',
+        name: interfaceName,
+        members: expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'PropertySignature',
+            name: expectedProperty,
+          }),
+        ]),
+      })
+    }
+  )
 })
