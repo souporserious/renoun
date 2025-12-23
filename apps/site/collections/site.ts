@@ -2,15 +2,6 @@ import { Directory, withSchema } from 'renoun'
 import { z } from 'zod'
 
 const mdxSchema = {
-  headings: z.array(
-    z.object({
-      id: z.string(),
-      level: z.number(),
-      children: z.custom<NonNullable<React.ReactNode>>(),
-      text: z.string(),
-      summary: z.string().optional(),
-    })
-  ),
   metadata: z.object({
     title: z.string(),
     label: z.string().optional(),

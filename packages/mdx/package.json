@@ -88,6 +88,7 @@
   },
   "devDependencies": {
     "@types/estree": "1.0.8",
+    "@types/estree-jsx": "1.0.5",
     "@types/hast": "catalog:",
     "@types/mdast": "4.0.4",
     "@types/react": "catalog:",

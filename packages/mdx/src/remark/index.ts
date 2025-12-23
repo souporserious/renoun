@@ -1,7 +1,7 @@
 import type { PluggableList } from 'unified'
 
 import remarkAddFrontMatter from './add-front-matter.js'
-import remarkAddHeadings from './add-headings.js'
+import remarkAddSections from './add-sections.js'
 import remarkGfm from './gfm.js'
 import remarkRemoveImmediateParagraphs from './remove-immediate-paragraphs.js'
 import remarkTransformJSDocInlineTags from './transform-jsdoc-inline-tags.js'
@@ -10,7 +10,7 @@ import remarkTypography from './typography.js'
 
 export const remarkPlugins: PluggableList = [
   remarkAddFrontMatter,
-  remarkAddHeadings,
+  remarkAddSections,
   remarkGfm,
   remarkRemoveImmediateParagraphs,
   remarkTransformJSDocInlineTags,

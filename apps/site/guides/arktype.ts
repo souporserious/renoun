@@ -1,16 +1,10 @@
-import { Directory, withSchema } from 'renoun'
-import { isValidElement } from 'react'
+import { Directory, withSchema, type ContentSection } from 'renoun'
 import { type } from 'arktype'
 
 const mdxSchema = {
-  headings: type({
-    id: 'string',
-    level: 'number',
-    children: type('unknown').narrow((value): value is React.ReactElement =>
-      isValidElement(value)
-    ),
-    text: 'string',
-  }).array(),
+  sections: type('unknown').narrow(
+    (value): value is ContentSection[] => Array.isArray(value)
+  ),
 }
 
 const docs = new Directory({

@@ -1,4 +1,4 @@
-import type { Collection, MDXFile, Headings } from 'renoun'
+import type { Collection, MDXFile } from 'renoun'
 
 import { TableOfContents } from '@/components/TableOfContents'
 import { SiblingLink } from './SiblingLink'
@@ -10,7 +10,6 @@ export async function DocumentEntry({
   shouldRenderUpdatedAt = true,
 }: {
   file: MDXFile<{
-    headings: Headings
     metadata: {
       title: string
       description: string
@@ -20,10 +19,10 @@ export async function DocumentEntry({
   shouldRenderTableOfContents?: boolean
   shouldRenderUpdatedAt?: boolean
 }) {
-  const [Content, metadata, headings] = await Promise.all([
-    file.getExportValue('default'),
+  const [Content, sections, metadata] = await Promise.all([
+    file.getContent(),
+    file.getSections(),
     file.getExportValue('metadata'),
-    file.getExportValue('headings'),
   ])
   const updatedAt = shouldRenderUpdatedAt
     ? await file.getLastCommitDate()
@@ -94,7 +93,7 @@ export async function DocumentEntry({
       </div>
 
       {shouldRenderTableOfContents ? (
-        <TableOfContents headings={headings} entry={file} />
+        <TableOfContents sections={sections} entry={file} />
       ) : null}
     </>
   )

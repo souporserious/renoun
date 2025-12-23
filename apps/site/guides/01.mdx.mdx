@@ -101,35 +101,36 @@ export default function Example() {
 }
 ```
 
-#### remark `add-headings`
+#### remark `add-sections`
 
-Adds an `id` to all headings and exports a `headings` variable.
+Adds an `id` to all headings and exports a `sections` variable with a nested structure based on heading depth.
 
-You can customize the exported `headings` by exporting a `getHeadings` function from your MDX file. The function receives the auto-generated `headings` and should return the array you want to expose.
+The `sections` export is an array of `ContentSection` objects with the following shape:
 
-```mdx
-export function getHeadings(headings) {
-  return [
-    ...headings,
-    {
-      id: 'custom-section',
-      level: 2,
-      text: 'Custom section',
-      children: 'Custom section',
-    },
-  ]
+```ts
+interface ContentSection {
+  /** The slugified heading text. */
+  id: string
+
+  /** The stringified heading text. */
+  title: string
+
+  /** The heading level (1-6). */
+  depth: number
+
+  /** Concise summary derived from the section content. */
+  summary?: string
+
+  /** Nested child sections. */
+  children?: ContentSection[]
 }
-
-# Hello World
 ```
 
 <Note>
 
-Exporting `headings` directly is not supported. If you need to override headings, export a `getHeadings(headings)` function as shown above.
+Exporting `sections` directly is not supported. The `sections` export is automatically generated from headings.
 
 </Note>
-
-If you're validating or typing the exported `headings` with a schema library, see the [Zod Guide](/guides/zod) and [Valibot Guide](/guides/valibot) for concrete examples of manually typing the `headings` export in your schema.
 
 ##### `Heading` component
 
@@ -162,8 +163,6 @@ export function useMDXComponents() {
 ##### Security considerations
 
 This plugin is designed for trusted MDX sources.
-
-`getHeadings` is executed as JavaScript at build/render time, so only use it with content from trusted authors. It can access your environment and perform arbitrary actions.
 
 All URLs in links and images are restricted to `http` and `https` schemes to prevent injection of `javascript:` or other unsafe protocols.
 

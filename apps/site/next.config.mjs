@@ -9,7 +9,7 @@ const withMDX = createMDXPlugin({
       '@renoun/mdx/rehype/unwrap-images',
     ],
     remarkPlugins: [
-      '@renoun/mdx/remark/add-headings',
+      '@renoun/mdx/remark/add-sections',
       '@renoun/mdx/remark/gfm',
       '@renoun/mdx/remark/remove-immediate-paragraphs',
       '@renoun/mdx/remark/transform-relative-links',

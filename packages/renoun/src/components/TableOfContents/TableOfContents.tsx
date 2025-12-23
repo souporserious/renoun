@@ -1,8 +1,11 @@
 import React, { useId } from 'react'
 
-import type { Headings } from '../../mdx/index.ts'
+import type { Section, ContentSection } from '../../file-system/index.tsx'
 import { Script } from '../Script.ts'
 import { Register } from './Register.ts'
+
+/** A section for the table of contents (either Section or ContentSection). */
+export type TableOfContentsSection = Section | ContentSection
 
 export interface TableOfContentsComponents {
   /** Root navigation element. */
@@ -38,21 +41,14 @@ export interface TableOfContentsComponents {
 }
 
 export interface TableOfContentsProps {
-  /** The headings to display within the table of contents. */
-  headings: Headings
+  /** The sections to display within the table of contents. */
+  sections: TableOfContentsSection[]
 
   /** Override the default component renderers. */
   components?: Partial<TableOfContentsComponents>
 
-  /** Optional content rendered after the heading links. */
+  /** Optional content rendered after the section links. */
   children?: React.ReactNode
-}
-
-interface TableOfContentsItem {
-  id: string
-  level: number
-  label: React.ReactNode
-  children: TableOfContentsItem[]
 }
 
 const defaultComponents: TableOfContentsComponents = {
@@ -73,70 +69,64 @@ export function TableOfContentsScript({ nonce }: { nonce?: string }) {
   return <Script nonce={nonce}>{import('./script.ts')}</Script>
 }
 
-/** A table of contents that displays links to the headings in the current document. */
+/** Check if a section has a depth property (is ContentSection). */
+function hasDepth(section: TableOfContentsSection): section is ContentSection {
+  return 'depth' in section && typeof section.depth === 'number'
+}
+
+/** Collect all section IDs recursively. */
+function collectSectionIds(
+  sections: TableOfContentsSection[],
+  ids: Set<string>
+): void {
+  for (const section of sections) {
+    ids.add(section.id)
+    if (section.children) {
+      collectSectionIds(section.children, ids)
+    }
+  }
+}
+
+/** A table of contents that displays links to the sections in the current document. */
 export function TableOfContents({
-  headings,
+  sections,
   components = {},
   children,
 }: TableOfContentsProps) {
   const rootId = useId()
-  const headingIds = new Set<string>()
+  const sectionIds = new Set<string>()
   const { Root, Title, List, Item, Link }: TableOfContentsComponents = {
     ...defaultComponents,
     ...components,
   }
-  const filteredHeadings = headings.filter((heading) => heading.level > 1)
-  const items: TableOfContentsItem[] = []
-  if (filteredHeadings.length > 0) {
-    const baseLevel = filteredHeadings[0].level
-    const parents: (TableOfContentsItem | undefined)[] = []
 
-    for (const heading of filteredHeadings) {
-      const depth = Math.max(0, heading.level - baseLevel)
-      const node: TableOfContentsItem = {
-        id: heading.id,
-        level: heading.level,
-        label: heading.children ?? heading.text,
-        children: [],
-      }
+  // Filter to only show sections with depth > 1 (skip h1) for ContentSection,
+  // or include all sections for Section (no depth property)
+  const filteredSections = sections.filter(
+    (section) => !hasDepth(section) || section.depth > 1
+  )
 
-      headingIds.add(heading.id)
+  // Collect all section IDs for scroll tracking
+  collectSectionIds(filteredSections, sectionIds)
 
-      if (depth === 0) {
-        items.push(node)
-      } else {
-        // Prefer the exact parent at depth 1, otherwise fall back to the closest existing ancestor.
-        const parent =
-          parents[depth - 1] ?? parents.slice(0, depth).reverse().find(Boolean)
-        if (parent) {
-          parent.children.push(node)
-        } else {
-          items.push(node)
-        }
-      }
-
-      // Record this node as the current item at its depth and truncate deeper parents.
-      parents[depth] = node
-      parents.length = depth + 1
-    }
-  }
-
-  function renderItems(
-    items: TableOfContentsItem[],
+  function renderSections(
+    sections: TableOfContentsSection[],
     depth = 0
   ): React.ReactNode {
-    if (items.length === 0) {
+    if (sections.length === 0) {
       return null
     }
     return (
       <List depth={depth}>
-        {items.map((item) => (
-          <Item key={item.id}>
-            <Link href={`#${item.id}`} suppressHydrationWarning>
-              {item.label}
+        {sections.map((section) => (
+          <Item key={section.id}>
+            <Link href={`#${section.id}`} suppressHydrationWarning>
+              {'jsx' in section && section.jsx !== undefined
+                ? section.jsx
+                : section.title}
             </Link>
-            {item.children.length > 0
-              ? renderItems(item.children, depth + 1)
+            {section.children && section.children.length > 0
+              ? renderSections(section.children, depth + 1)
               : null}
           </Item>
         ))}
@@ -144,16 +134,16 @@ export function TableOfContents({
     )
   }
 
-  if (filteredHeadings.length === 0 && !children) {
+  if (filteredSections.length === 0 && !children) {
     return null
   }
 
   return (
     <Root aria-labelledby={rootId}>
       <Title id={rootId} />
-      {renderItems(items)}
+      {renderSections(filteredSections)}
       {children}
-      <Register ids={Array.from(headingIds)} />
+      <Register ids={Array.from(sectionIds)} />
     </Root>
   )
 }

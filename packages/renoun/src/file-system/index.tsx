@@ -1,18 +1,13 @@
 import * as React from 'react'
-import type {
-  MDXContent,
-  MDXComponents,
-  Headings,
-  SlugCasing,
-} from '@renoun/mdx'
+import type { MDXContent, MDXComponents, SlugCasing } from '@renoun/mdx'
 import { rehypePlugins } from '@renoun/mdx/rehype'
 import { remarkPlugins } from '@renoun/mdx/remark'
 import {
   createSlug,
   getMDXExportStaticValues,
   getMDXContent,
-  getMDXHeadings,
-  getMarkdownHeadings,
+  getMDXSections,
+  getMarkdownSections,
   parseFrontMatter,
   type FrontMatterParseResult,
 } from '@renoun/mdx/utils'
@@ -218,6 +213,34 @@ type ModuleExports<Value = any> = {
   [exportName: string]: Value
 }
 
+export interface Section {
+  /**
+   * The section anchor id. Uses slugified heading text for markdown-derived sections.
+   * Uses the export name for programmatic sections (e.g. file export outlines rendered by `Reference`).
+   */
+  id: string
+
+  /** The stringified heading text. */
+  title: string
+
+  /** Nested child sections. */
+  children?: Section[]
+}
+
+export interface ContentSection extends Section {
+  /** The heading level (1-6). */
+  depth: number
+
+  /** Concise summary derived from the section content. */
+  summary?: string
+
+  /** The heading content as JSX (preserves formatting like code, emphasis, etc.). */
+  jsx?: React.ReactNode
+
+  /** Nested child sections. */
+  children?: ContentSection[]
+}
+
 /** A runtime loader for a specific package export (no path/file arguments). */
 type PackageExportLoader<Module extends ModuleExports<any>> = (
   path: string
@@ -296,7 +319,7 @@ export interface FileStructure extends BaseStructure {
   lastCommitDate?: Date
   authors?: GitAuthor[]
   frontMatter?: Record<string, unknown>
-  headings?: Headings
+  sections?: Section[]
   description?: string
   exports?: ModuleExportStructure[]
 }
@@ -1853,7 +1876,7 @@ export class JavaScriptFile<
   #loader?: ModuleLoader<Types>
   #slugCasing?: SlugCasing
   #modulePromise?: Promise<any>
-  #headings?: Headings
+  #sections?: Section[]
 
   constructor({
     loader,
@@ -2085,37 +2108,89 @@ export class JavaScriptFile<
     return (await fileExport.getValue()) as any
   }
 
-  /** Get headings derived from the file exports. */
-  async getHeadings(): Promise<Headings> {
-    if (!this.#headings) {
-      // Fast path: try to derive headings from a quick static scan of the source
-      // text without initializing any TypeScript project or reading symbol
-      // metadata. This is sufficient for simple cases and avoids the overhead of
-      // creating a TypeScript project
-      const fastNames = await this.#getFastExportNames()
-      if (fastNames && fastNames.length > 0) {
-        this.#headings = fastNames.map((name) => ({
-          id: name,
-          level: 3,
-          children: name,
-          text: name,
-        }))
-      } else {
-        // Fallback to the full export analysis
-        const fileExports = await this.getExports()
-        this.#headings = fileExports.map((fileExport) => {
-          const name = fileExport.getName()
-          return {
-            id: name,
-            level: 3,
-            children: name,
-            text: name,
+  /** Get an outline derived from regions and exports in the JavaScript file. */
+  async getSections(): Promise<Section[]> {
+    if (!this.#sections) {
+      const [regions, fileExports] = await Promise.all([
+        this.getRegions(),
+        this.getExports(),
+      ])
+
+      const sections: Array<{
+        section: Section
+        line: number
+      }> = []
+      const regionExportNames = new Map<FileRegion, string[]>()
+
+      for (const region of regions) {
+        regionExportNames.set(region, [])
+      }
+
+      const ungroupedExports: Array<{
+        exportItem: ModuleExport<any>
+        line: number
+      }> = []
+
+      const findRegionForLine = (line: number) =>
+        regions.find(
+          (region) =>
+            line >= region.position.start.line &&
+            line <= region.position.end.line
+        )
+
+      for (const fileExport of fileExports) {
+        const position = fileExport.getPosition()
+        const line = position?.start.line
+        const region = line !== undefined ? findRegionForLine(line) : undefined
+
+        if (region) {
+          const names = regionExportNames.get(region)
+          if (names) {
+            names.push(fileExport.getName())
           }
+        } else {
+          ungroupedExports.push({
+            exportItem: fileExport,
+            line: line ?? Number.POSITIVE_INFINITY,
+          })
+        }
+      }
+
+      for (const region of regions) {
+        const exportNames = regionExportNames.get(region) ?? []
+        const title = region.bannerText
+        const section: Section = {
+          id: createSlug(title, this.#slugCasing),
+          title,
+          children: exportNames.map((name) => ({
+            // `Reference` anchors use the actual export name (case-sensitive),
+            // so the TOC must link using the unslugified identifier.
+            id: name,
+            title: name,
+          })),
+        }
+        sections.push({
+          section,
+          line: region.position.start.line,
         })
       }
+
+      for (const { exportItem, line } of ungroupedExports) {
+        sections.push({
+          section: {
+            // Keep hash ids aligned with `Reference`'s rendered anchor ids.
+            id: exportItem.getName(),
+            title: exportItem.getName(),
+          },
+          line,
+        })
+      }
+
+      sections.sort((a, b) => a.line - b.line)
+      this.#sections = sections.map(({ section }) => section)
     }
 
-    return this.#headings
+    return this.#sections
   }
 
   /** Get the `//#region` spans in the JavaScript file. */
@@ -2140,81 +2215,6 @@ export class JavaScriptFile<
       ...base,
       exports: exports.length > 0 ? exports : undefined,
     }
-  }
-
-  /**
-   * Attempt to quickly extract named export identifiers from the file source
-   * using lightweight regexes. This intentionally handles the most common
-   * patterns:
-   *   - export const Name = …
-   *   - export function Name(…
-   *   - export class Name …
-   *   - export { A, B as C }  (captures A and C)
-   * It skips default exports on purpose since those are not used for headings.
-   */
-  async #getFastExportNames(): Promise<string[] | undefined> {
-    try {
-      const source = await this.getText()
-      // If the file contains any explicit re-exports, skip the fast path and
-      // defer to the full TypeScript analysis which can follow the graph.
-      const hasReExports =
-        /\bexport\s*\*\s*(?:as\s+[A-Za-z_\$][\w\$]*)?\s*from\s*['"][^'"]+['"]/.test(
-          source
-        ) || /\bexport\s*\{[^}]+\}\s*from\s*['"][^'"]+['"]/.test(source)
-      if (hasReExports) {
-        return undefined
-      }
-      const names = new Set<string>()
-
-      // export const Name = …
-      // export let Name = …
-      // export var Name = …
-      const varRegex = /\bexport\s+(?:const|let|var)\s+([A-Za-z_\$][\w\$]*)\b/g
-      for (let m; (m = varRegex.exec(source)); ) {
-        names.add(m[1])
-      }
-
-      // export function Name(…
-      const fnRegex = /\bexport\s+function\s+([A-Za-z_\$][\w\$]*)\s*\(/g
-      for (let m; (m = fnRegex.exec(source)); ) {
-        names.add(m[1])
-      }
-
-      // export class Name …
-      const classRegex = /\bexport\s+class\s+([A-Za-z_\$][\w\$]*)\b/g
-      for (let m; (m = classRegex.exec(source)); ) {
-        names.add(m[1])
-      }
-
-      // export { A, B as C }
-      const namedListRegex = /\bexport\s*\{\s*([^}]+)\s*\}/g
-      for (let m; (m = namedListRegex.exec(source)); ) {
-        const list = m[1]
-        for (const part of list.split(',')) {
-          const piece = part.trim()
-          if (!piece) continue
-          // Handle "B as C" aliasing
-          const aliasMatch = piece.match(
-            /^([A-Za-z_\$][\w\$]*)\s+as\s+([A-Za-z_\$][\w\$]*)$/
-          )
-          if (aliasMatch) {
-            names.add(aliasMatch[2])
-          } else {
-            const ident = piece.match(/^([A-Za-z_\$][\w\$]*)$/)
-            if (ident) {
-              names.add(ident[1])
-            }
-          }
-        }
-      }
-
-      if (names.size > 0) {
-        return Array.from(names)
-      }
-    } catch {
-      // Ignore and fall back to the full analysis path
-    }
-    return undefined
   }
 
   /** Check if an export exists statically in the JavaScript file. */
@@ -2482,7 +2482,7 @@ export class MDXFile<
   #loader?: ModuleLoader<{ default: MDXContent } & Types>
   #slugCasing?: SlugCasing
   #staticExportValues?: Map<string, unknown>
-  #headings?: Headings
+  #sections?: ContentSection[]
   #modulePromise?: Promise<any>
   #rawSource?: Promise<string>
   #parsedSource?: Promise<FrontMatterParseResult>
@@ -2623,11 +2623,11 @@ export class MDXFile<
     return this.getDefaultExport()
   }
 
-  /** Get headings parsed from the MDX content. */
-  async getHeadings(): Promise<Headings> {
-    if (!this.#headings) {
+  /** Get sections parsed from the MDX content based on headings. */
+  async getSections(): Promise<ContentSection[]> {
+    if (!this.#sections) {
       try {
-        this.#headings = await this.getExport('headings' as any).then(
+        this.#sections = await this.getExport('sections' as any).then(
           (fileExport) => fileExport.getValue()
         )
       } catch (error) {
@@ -2636,33 +2636,29 @@ export class MDXFile<
         }
       }
 
-      if (!this.#headings) {
+      if (!this.#sections) {
         const source = await this.getText()
-        this.#headings = getMDXHeadings(source)
+        this.#sections = getMDXSections(source) as ContentSection[]
       }
     }
 
-    return this.#headings
+    return this.#sections ?? []
   }
 
   override async getStructure(): Promise<FileStructure> {
     const base = await this.getFileStructureBase()
-    const [frontMatter, headings] = await Promise.all([
+    const [frontMatter, sections] = await Promise.all([
       this.getFrontMatter().catch(() => undefined),
-      this.getHeadings().catch(() => undefined),
+      this.getSections().catch(() => undefined),
     ])
     const description =
       (frontMatter?.['description'] as string | undefined) ??
-      (headings && headings.length > 0
-        ? ((headings[0] as any).text ??
-          (headings[0] as any).children ??
-          (headings[0] as any).id)
-        : undefined)
+      (sections && sections.length > 0 ? sections[0]!.title : undefined)
 
     return {
       ...base,
       frontMatter,
-      headings,
+      sections,
       description,
     }
   }
@@ -2756,7 +2752,7 @@ export class MarkdownFile<
   Extension extends string = ExtractFileExtension<Path>,
 > extends File<DirectoryTypes, Path, Extension> {
   #loader: ModuleLoader<{ default: MDXContent } & Types>
-  #headings?: Headings
+  #sections?: ContentSection[]
   #modulePromise?: Promise<any>
   #rawSource?: Promise<string>
   #parsedSource?: Promise<FrontMatterParseResult>
@@ -2876,33 +2872,29 @@ export class MarkdownFile<
     return this.#getModule().then((module) => module.default)
   }
 
-  /** Get headings parsed from the markdown content. */
-  async getHeadings(): Promise<Headings> {
-    if (!this.#headings) {
+  /** Get sections parsed from the markdown content based on headings. */
+  async getSections(): Promise<ContentSection[]> {
+    if (!this.#sections) {
       const source = await this.getText()
-      this.#headings = getMarkdownHeadings(source)
+      this.#sections = getMarkdownSections(source) as ContentSection[]
     }
-    return this.#headings
+    return this.#sections ?? []
   }
 
   override async getStructure(): Promise<FileStructure> {
     const base = await this.getFileStructureBase()
-    const [frontMatter, headings] = await Promise.all([
+    const [frontMatter, sections] = await Promise.all([
       this.getFrontMatter().catch(() => undefined),
-      this.getHeadings().catch(() => undefined),
+      this.getSections().catch(() => undefined),
     ])
     const description =
       (frontMatter?.['description'] as string | undefined) ??
-      (headings && headings.length > 0
-        ? ((headings[0] as any).text ??
-          (headings[0] as any).children ??
-          (headings[0] as any).id)
-        : undefined)
+      (sections && sections.length > 0 ? sections[0]!.title : undefined)
 
     return {
       ...base,
       frontMatter,
-      headings,
+      sections,
       description,
     }
   }
@@ -5322,7 +5314,7 @@ export interface PackageOptions<
   repository?: RepositoryConfig | string | Repository
   /**
    * Optional runtime loaders for individual package exports or a resolver that
-   * will be invoked with the export path (e.g. "remark/add-headings").
+   * will be invoked with the export path (e.g. "remark/add-sections").
    */
   loader?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
 }
@@ -6635,7 +6627,7 @@ export class Package<
         if (!normalizedSpecifier) continue
 
         // Map the loader to the base export subpath so that keys like
-        // "remark/add-headings" will be associated with the "./remark/*"
+        // "remark/add-sections" will be associated with the "./remark/*"
         // export directory.
         const baseSubpath =
           normalizeExportSubpath(normalizedSpecifier).split('/')[0]

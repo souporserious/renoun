@@ -1,26 +1,26 @@
 import { describe, expect, test } from 'vitest'
 import { compile, evaluate } from '@mdx-js/mdx'
 
-import addHeadings from './add-headings'
+import addSections from './add-sections'
 
-describe('addHeadings', () => {
+describe('addSections', () => {
   test('string heading', async () => {
     const result = await compile(`# Hello, world!`, {
-      remarkPlugins: [addHeadings],
+      remarkPlugins: [addSections],
       development: true,
     })
 
     const code = String(result)
-    expect(code).toContain('export const headings = [{')
+    expect(code).toContain('export const sections = [{')
     expect(code).not.toContain('export const Heading')
     expect(code).not.toContain('_missingMdxReference("Heading"')
     expect(String(result)).toMatchInlineSnapshot(`
       "import {Fragment as _Fragment, jsxDEV as _jsxDEV} from "react/jsx-dev-runtime";
-      export const headings = [{
+      export const sections = [{
         id: "hello-world",
-        level: 1,
-        children: "Hello, world!",
-        text: "Hello, world!"
+        title: "Hello, world!",
+        depth: 1,
+        jsx: "Hello, world!"
       }];
       const DefaultHeadingComponent = ({Tag, id, children, ...rest}) => _jsxDEV(Tag, {
         id: id,
@@ -71,25 +71,25 @@ describe('addHeadings', () => {
 
   test('code heading', async () => {
     const result = await compile(`# Hello, \`world\`!`, {
-      remarkPlugins: [addHeadings],
+      remarkPlugins: [addSections],
     })
 
     const code = String(result)
-    expect(code).toContain('export const headings = [{')
+    expect(code).toContain('export const sections = [{')
     expect(code).not.toContain('export const Heading')
     expect(code).toContain('_components.code')
     expect(code).not.toContain('_missingMdxReference("Heading"')
     expect(String(result)).toMatchInlineSnapshot(`
       "import {Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs} from "react/jsx-runtime";
-      export const headings = [{
+      export const sections = [{
         id: "hello-world",
-        level: 1,
-        children: _jsxs(_Fragment, {
+        title: "Hello, world!",
+        depth: 1,
+        jsx: _jsxs(_Fragment, {
           children: ["Hello, ", _jsx("code", {
             children: "world"
           }), "!"]
-        }),
-        text: "Hello, world!"
+        })
       }];
       const DefaultHeadingComponent = ({Tag, id, children, ...rest}) => _jsx(Tag, {
         id: id,
@@ -134,7 +134,7 @@ describe('addHeadings', () => {
 
   test('link heading throws error', async () => {
     const result = await compile(`# [Hello, world!](https://example.com)`, {
-      remarkPlugins: [addHeadings],
+      remarkPlugins: [addSections],
     })
     const hasError = result.messages.some((message) =>
       /Links inside headings are not supported/i.test(message.reason)
@@ -145,24 +145,24 @@ describe('addHeadings', () => {
   test('image heading', async () => {
     const result = await compile(
       `# ![Hello, world!](https://example.com/image.png)`,
-      { remarkPlugins: [addHeadings] }
+      { remarkPlugins: [addSections] }
     )
 
     const code = String(result)
-    expect(code).toContain('export const headings = [{')
+    expect(code).toContain('export const sections = [{')
     expect(code).not.toContain('export const Heading')
     expect(code).toContain('_components.img')
     expect(code).not.toContain('_missingMdxReference("Heading"')
     expect(String(result)).toMatchInlineSnapshot(`
       "import {Fragment as _Fragment, jsx as _jsx} from "react/jsx-runtime";
-      export const headings = [{
+      export const sections = [{
         id: "hello-world",
-        level: 1,
-        children: _jsx("img", {
+        title: "Hello, world!",
+        depth: 1,
+        jsx: _jsx("img", {
           src: "https://example.com/image.png",
           alt: "Hello, world!"
-        }),
-        text: "Hello, world!"
+        })
       }];
       const DefaultHeadingComponent = ({Tag, id, children, ...rest}) => _jsx(Tag, {
         id: id,
@@ -227,33 +227,37 @@ Search indexing begins by scanning your document headings and collecting the fir
     }
 
     const mdxModule = await evaluate(mdxSource, {
-      remarkPlugins: [addHeadings],
+      remarkPlugins: [addSections],
       development: false,
       ...jsxRuntime,
     })
 
-    expect(mdxModule.headings).toMatchInlineSnapshot(`
+    expect(mdxModule.sections).toMatchInlineSnapshot(`
       [
         {
-          "children": "Search Plugin",
+          "children": [
+            {
+              "children": [
+                {
+                  "depth": 3,
+                  "id": "choosing-excerpts",
+                  "jsx": "Choosing excerpts",
+                  "summary": "Start with the first descriptive paragraph when possible • Prefer rich paragraphs over dense code samples",
+                  "title": "Choosing excerpts",
+                },
+              ],
+              "depth": 2,
+              "id": "getting-started",
+              "jsx": "Getting started",
+              "summary": "Search indexing begins by scanning your document headings and collecting the first meaningful block after each section. This typically results in a concise paragraph that remains under the target length while still covering the topic with enough detail for a helpful preview.",
+              "title": "Getting started",
+            },
+          ],
+          "depth": 1,
           "id": "search-plugin",
-          "level": 1,
+          "jsx": "Search Plugin",
           "summary": "Before diving in, this introduction paragraph provides some immediate context about search indexing in renoun. It explains how the plugin works, what kind of data is collected, and why concise excerpts improve the quality of the search results across the documentation site.",
-          "text": "Search Plugin",
-        },
-        {
-          "children": "Getting started",
-          "id": "getting-started",
-          "level": 2,
-          "summary": "Search indexing begins by scanning your document headings and collecting the first meaningful block after each section. This typically results in a concise paragraph that remains under the target length while still covering the topic with enough detail for a helpful preview.",
-          "text": "Getting started",
-        },
-        {
-          "children": "Choosing excerpts",
-          "id": "choosing-excerpts",
-          "level": 3,
-          "summary": "Start with the first descriptive paragraph when possible • Prefer rich paragraphs over dense code samples",
-          "text": "Choosing excerpts",
+          "title": "Search Plugin",
         },
       ]
     `)
@@ -267,7 +271,7 @@ Search indexing begins by scanning your document headings and collecting the fir
       jsxs: () => null,
     }
     const mdxModule = await evaluate(mdxSource, {
-      remarkPlugins: [addHeadings],
+      remarkPlugins: [addSections],
       development: false,
       ...jsxRuntime,
     })
@@ -284,7 +288,7 @@ Search indexing begins by scanning your document headings and collecting the fir
 
   test('Tag resolves through props.components.h1 with fallback to "h1"', async () => {
     const result = await compile(`# Hello`, {
-      remarkPlugins: [addHeadings],
+      remarkPlugins: [addSections],
     })
     const code = String(result)
     // Ensure Tag is selected via components map first, then intrinsic element
@@ -302,7 +306,7 @@ Search indexing begins by scanning your document headings and collecting the fir
       return null
     }
     const mdxModule = await evaluate(mdxSource, {
-      remarkPlugins: [addHeadings],
+      remarkPlugins: [addSections],
       development: false,
       Fragment: Symbol.for('react.fragment'),
       jsx: jsxStub,
@@ -323,81 +327,271 @@ Search indexing begins by scanning your document headings and collecting the fir
     `)
   })
 
-  test('wraps headings with getHeadings when exported', async () => {
+  test('throws when exporting sections directly', async () => {
     const mdxSource = `
-export function getHeadings(headings) {
-  return [
-    ...headings,
-    { id: 'extra', level: 2, text: 'Extra', children: 'Extra' }
-  ]
-}
-
-# Hello
-`
-
-    // Minimal jsxRuntime stub to evaluate without React in tests
-    const jsxRuntime = {
-      Fragment: Symbol.for('react.fragment'),
-      jsx: () => null,
-      jsxs: () => null,
-    }
-
-    const result = await evaluate(mdxSource, {
-      remarkPlugins: [[addHeadings, { allowGetHeadings: true }]],
-      development: false,
-      ...jsxRuntime,
-    })
-
-    const headings = (result as any).headings as Array<any>
-
-    // Ensure the compiled module exports headings that are the result of calling getHeadings([...])
-    expect(Array.isArray(headings)).toBe(true)
-    expect(headings.length).toBe(2)
-    expect(headings[0].id).toBe('hello')
-    expect(headings[0].summary).toBeUndefined()
-    expect(headings[1].id).toBe('extra')
-  })
-
-  test('runtime validation that getHeadings must return an array', async () => {
-    const mdxSource = `
-export function getHeadings(headings) {
-  return { pwnd: true }
-}
-
-# Hello
-`
-
-    const jsxRuntime = {
-      Fragment: Symbol.for('react.fragment'),
-      jsx: () => null,
-      jsxs: () => null,
-    }
-
-    await expect(
-      evaluate(mdxSource, {
-        remarkPlugins: [[addHeadings, { allowGetHeadings: true }]],
-        development: false,
-        ...jsxRuntime,
-      })
-    ).rejects.toThrow(/getHeadings\(headings\) must return an array/)
-  })
-
-  test('throws when exporting headings directly with guidance', async () => {
-    const mdxSource = `
-export const headings = []
+export const sections = []
 
 # Hello
 `
 
     const vfile = await compile(mdxSource, {
-      remarkPlugins: [[addHeadings, { allowGetHeadings: true }]],
+      remarkPlugins: [addSections],
     })
     const messages = (vfile as any).messages as Array<any>
     const hasFatal = messages.some(
       (message) =>
         message.fatal &&
-        /Exporting \"headings\" directly is not supported/i.test(message.reason)
+        /Exporting \"sections\" directly is not supported/i.test(message.reason)
     )
     expect(hasFatal).toBe(true)
+  })
+
+  test('handles JSX heading elements with id attribute', async () => {
+    const mdxSource = `<h1 id="intro">Introduction</h1>
+
+<h2 id="details">The Details</h2>
+`
+
+    const jsxRuntime = {
+      Fragment: Symbol.for('react.fragment'),
+      jsx: () => null,
+      jsxs: () => null,
+    }
+
+    const mdxModule = await evaluate(mdxSource, {
+      remarkPlugins: [addSections],
+      development: false,
+      ...jsxRuntime,
+    })
+
+    expect(mdxModule.sections).toMatchInlineSnapshot(`
+      [
+        {
+          "children": [
+            {
+              "depth": 2,
+              "id": "details",
+              "jsx": "The Details",
+              "title": "The Details",
+            },
+          ],
+          "depth": 1,
+          "id": "intro",
+          "jsx": "Introduction",
+          "title": "Introduction",
+        },
+      ]
+    `)
+  })
+
+  test('handles custom heading tags via options', async () => {
+    const mdxSource = `# Markdown Heading
+
+<Heading id="custom-heading">Custom Heading Component</Heading>
+`
+
+    const jsxRuntime = {
+      Fragment: Symbol.for('react.fragment'),
+      jsx: () => null,
+      jsxs: () => null,
+    }
+
+    const mdxModule = await evaluate(mdxSource, {
+      remarkPlugins: [[addSections, { headingTags: ['Heading'] }]],
+      development: false,
+      ...jsxRuntime,
+    })
+
+    expect(mdxModule.sections).toMatchInlineSnapshot(`
+      [
+        {
+          "children": [
+            {
+              "depth": 2,
+              "id": "custom-heading",
+              "jsx": "Custom Heading Component",
+              "title": "Custom Heading Component",
+            },
+          ],
+          "depth": 1,
+          "id": "markdown-heading",
+          "jsx": "Markdown Heading",
+          "title": "Markdown Heading",
+        },
+      ]
+    `)
+  })
+
+  test('handles section tags via options', async () => {
+    const mdxSource = `<Section id="getting-started" title="Getting Started" depth={1}>
+Some content here
+</Section>
+
+<Section id="advanced" title="Advanced Usage" depth={2}>
+More content
+</Section>
+`
+
+    const jsxRuntime = {
+      Fragment: Symbol.for('react.fragment'),
+      jsx: () => null,
+      jsxs: () => null,
+    }
+
+    const mdxModule = await evaluate(mdxSource, {
+      remarkPlugins: [[addSections, { sectionTags: ['Section'] }]],
+      development: false,
+      ...jsxRuntime,
+    })
+
+    expect(mdxModule.sections).toMatchInlineSnapshot(`
+      [
+        {
+          "children": [
+            {
+              "depth": 2,
+              "id": "advanced",
+              "title": "Advanced Usage",
+            },
+          ],
+          "depth": 1,
+          "id": "getting-started",
+          "title": "Getting Started",
+        },
+      ]
+    `)
+  })
+
+  test('preserves JSX formatting in JSX heading elements', async () => {
+    const result = await compile(
+      `<h1 id="intro">Hello <code>world</code>!</h1>`,
+      { remarkPlugins: [addSections] }
+    )
+
+    const code = String(result)
+    expect(code).toContain('export const sections = [{')
+    // Should contain JSX fragment with code element
+    expect(code).toContain('jsx:')
+    expect(code).toContain('_jsx("code"')
+  })
+
+  test('combines markdown headings with JSX heading elements', async () => {
+    const mdxSource = `# Overview
+
+Some intro text.
+
+<h2 id="jsx-section">JSX Section</h2>
+
+## Markdown Section
+
+More content.
+`
+
+    const jsxRuntime = {
+      Fragment: Symbol.for('react.fragment'),
+      jsx: () => null,
+      jsxs: () => null,
+    }
+
+    const mdxModule = await evaluate(mdxSource, {
+      remarkPlugins: [addSections],
+      development: false,
+      ...jsxRuntime,
+    })
+
+    expect(mdxModule.sections).toMatchInlineSnapshot(`
+      [
+        {
+          "children": [
+            {
+              "depth": 2,
+              "id": "jsx-section",
+              "jsx": "JSX Section",
+              "title": "JSX Section",
+            },
+            {
+              "depth": 2,
+              "id": "markdown-section",
+              "jsx": "Markdown Section",
+              "summary": "More content.",
+              "title": "Markdown Section",
+            },
+          ],
+          "depth": 1,
+          "id": "overview",
+          "jsx": "Overview",
+          "summary": "Some intro text.",
+          "title": "Overview",
+        },
+      ]
+    `)
+  })
+
+  test('regions create nested sections and summaries', async () => {
+    const mdxSource = `# Alpha
+
+This is the alpha introduction paragraph which should be used as the summary for the Alpha heading.
+
+{/* #region Details */}
+
+This region contains additional details that should become its own section summary.
+
+{/* #endregion */}
+
+## Beta
+
+This is the beta summary paragraph.
+`
+
+    const jsxRuntime = {
+      Fragment: Symbol.for('react.fragment'),
+      jsx: () => null,
+      jsxs: () => null,
+    }
+
+    const mdxModule = await evaluate(mdxSource, {
+      remarkPlugins: [addSections],
+      development: false,
+      ...jsxRuntime,
+    })
+
+    expect(mdxModule.sections).toMatchObject([
+      {
+        id: 'alpha',
+        title: 'Alpha',
+        depth: 1,
+        summary: expect.stringContaining('alpha introduction paragraph'),
+        children: [
+          {
+            id: 'details',
+            title: 'Details',
+            depth: 2,
+            summary: expect.stringContaining('additional details'),
+          },
+          {
+            id: 'beta',
+            title: 'Beta',
+            depth: 2,
+            summary: expect.stringContaining('beta summary paragraph'),
+          },
+        ],
+      },
+    ])
+  })
+
+  test('regions cannot wrap headings', async () => {
+    const result = await compile(
+      `{/* #region Bad */}
+# Title
+{/* #endregion */}`,
+      {
+        remarkPlugins: [addSections],
+      }
+    )
+
+    const hasError = result.messages.some((message) =>
+      /Regions cannot contain headings/i.test(message.reason)
+    )
+    expect(hasError).toBe(true)
   })
 })

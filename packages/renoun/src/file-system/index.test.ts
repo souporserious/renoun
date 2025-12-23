@@ -10,7 +10,8 @@ import * as v from 'valibot'
 import { z } from 'zod'
 
 import type { basename } from '#fixtures/utils/path.ts'
-import type { MDXContent, Headings } from '../mdx'
+import type { MDXContent } from '../mdx'
+import type { Section, ContentSection } from './index'
 import type { FileRegion } from '../utils/get-file-regions.ts'
 import { removeExtension } from '../utils/path.ts'
 import { NodeFileSystem } from './NodeFileSystem'
@@ -292,14 +293,13 @@ describe('file system', () => {
       any
     >
 
-    // The default remark plugins add a generated "headings" export
-    const headings: any = await file.getExportValue('headings')
-    expect(Array.isArray(headings)).toBe(true)
-    expect(headings[0]).toMatchObject({
+    // The default remark plugins add a generated "sections" export
+    const sections: any = await file.getExportValue('sections')
+    expect(Array.isArray(sections)).toBe(true)
+    expect(sections[0]).toMatchObject({
       id: 'docs',
-      level: 1,
-      text: 'Docs',
-      children: 'Docs',
+      depth: 1,
+      title: 'Docs',
       summary: 'This is a test of the documentation system.',
     })
 
@@ -341,14 +341,13 @@ describe('file system', () => {
     const number = await file.getExportValue('number')
     expect(number).toBe(42)
 
-    // The default remark plugins add a generated "headings" export
-    const headings: any = await file.getExportValue('headings')
-    expect(Array.isArray(headings)).toBe(true)
-    expect(headings[0]).toMatchObject({
+    // The default remark plugins add a generated "sections" export
+    const sections: any = await file.getExportValue('sections')
+    expect(Array.isArray(sections)).toBe(true)
+    expect(sections[0]).toMatchObject({
       id: 'hello-world',
-      level: 1,
-      text: 'Hello World',
-      children: 'Hello World',
+      depth: 1,
+      title: 'Hello World',
     })
 
     // Default export is a renderable MDX component
@@ -901,6 +900,25 @@ describe('file system', () => {
     expect(internalExports).toHaveLength(0)
     expect(publicExports.map((fileExport) => fileExport.getName())).toEqual([
       'Link',
+    ])
+  })
+
+  test('javascript file getSections uses unslugified export names for ids (Reference anchors)', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.ts': [
+        'export const TableOfContents = () => null',
+        '',
+        'export type FooBar = { baz: string }',
+      ].join('\n'),
+    })
+    const directory = new Directory({ fileSystem })
+    const file = new JavaScriptFile({ path: 'index.ts', directory })
+
+    const sections = await file.getSections()
+
+    expect(sections).toMatchObject([
+      { id: 'TableOfContents', title: 'TableOfContents' },
+      { id: 'FooBar', title: 'FooBar' },
     ])
   })
 
@@ -1596,7 +1614,7 @@ describe('file system', () => {
     )
   })
 
-  test('markdown file default loader provides content and headings', async () => {
+  test('markdown file default loader provides content and sections', async () => {
     const fileSystem = new MemoryFileSystem({
       'index.md': '# Hello\n\n## World',
     })
@@ -1608,12 +1626,16 @@ describe('file system', () => {
     const Content = await file.getContent()
     expectTypeOf(Content).toExtend<MDXContent>()
 
-    const headings = await file.getHeadings()
-    expect(headings).toMatchObject([
-      { id: 'hello', level: 1, text: 'Hello' },
-      { id: 'world', level: 2, text: 'World' },
+    const sections = await file.getSections()
+    expect(sections).toMatchObject([
+      {
+        id: 'hello',
+        depth: 1,
+        title: 'Hello',
+        children: [{ id: 'world', depth: 2, title: 'World' }],
+      },
     ])
-    expectTypeOf(headings).toExtend<Headings>()
+    expectTypeOf(sections).toExtend<ContentSection[]>()
   })
 
   test('json file getAll and get(path) with dot notation', async () => {
@@ -1670,7 +1692,7 @@ describe('file system', () => {
     expect(entries[0]).toBeInstanceOf(JSONFile)
   })
 
-  test('markdown file caches parsed headings', async () => {
+  test('markdown file caches parsed sections', async () => {
     const fileSystem = new MemoryFileSystem({
       'index.md': '# Hello',
     })
@@ -1678,8 +1700,8 @@ describe('file system', () => {
     const file = await directory.getFile('index', 'md')
     const getTextSpy = vi.spyOn(file, 'getText')
 
-    await file.getHeadings()
-    await file.getHeadings()
+    await file.getSections()
+    await file.getSections()
 
     expect(getTextSpy).toHaveBeenCalledTimes(1)
   })
@@ -1709,7 +1731,7 @@ describe('file system', () => {
     )
   })
 
-  test('mdx file getContent/getHeadings alias exported values', async () => {
+  test('mdx file getContent/getSections alias exported values', async () => {
     const fileSystem = new MemoryFileSystem({
       'index.mdx': '# Hello\n\n## World',
     })
@@ -1721,15 +1743,19 @@ describe('file system', () => {
     const Content = await file.getContent()
     expectTypeOf(Content).toExtend<MDXContent>()
 
-    const headings = await file.getHeadings()
-    expect(headings).toMatchObject([
-      { id: 'hello', level: 1, text: 'Hello' },
-      { id: 'world', level: 2, text: 'World' },
+    const sections = await file.getSections()
+    expect(sections).toMatchObject([
+      {
+        id: 'hello',
+        depth: 1,
+        title: 'Hello',
+        children: [{ id: 'world', depth: 2, title: 'World' }],
+      },
     ])
-    expectTypeOf(headings).toExtend<Headings>()
+    expectTypeOf(sections).toExtend<ContentSection[]>()
   })
 
-  test('mdx file getHeadings falls back to parsing when export missing', async () => {
+  test('mdx file getSections falls back to parsing when export missing', async () => {
     const fileSystem = new MemoryFileSystem({
       'index.mdx': '# Hello\n\n## World',
     })
@@ -1740,19 +1766,32 @@ describe('file system', () => {
       },
     })
     const file = await directory.getFile('index', 'mdx')
-    const headings = await file.getHeadings()
+    const sections = await file.getSections()
 
-    expect(headings).toMatchObject([
-      { id: 'hello', level: 1, text: 'Hello' },
-      { id: 'world', level: 2, text: 'World' },
+    expect(sections).toMatchObject([
+      {
+        id: 'hello',
+        depth: 1,
+        title: 'Hello',
+        children: [{ id: 'world', depth: 2, title: 'World' }],
+      },
     ])
   })
 
-  test('javascript file getHeadings returns exports as headings', async () => {
+  test('javascript file getSections builds an outline from regions and exports', async () => {
     const fileSystem = new MemoryFileSystem({
       'button.tsx': `
+        //#region components
         export const Button = () => null
+        export const IconButton = () => null
+        //#endregion
+
         export function useButton() {}
+
+        //#region hooks
+        export function useDropdown() {}
+        export function useMenu() {}
+        //#endregion
       `,
     })
     const directory = new Directory({ fileSystem })
@@ -1760,23 +1799,27 @@ describe('file system', () => {
 
     expect(file).toBeInstanceOf(JavaScriptFile)
 
-    const headings = await file.getHeadings()
+    const sections = await file.getSections()
 
-    expect(headings).toMatchObject([
+    expect(sections).toEqual([
       {
-        children: 'Button',
-        id: 'Button',
-        level: 3,
-        text: 'Button',
+        id: 'components',
+        title: 'components',
+        children: [
+          { id: 'Button', title: 'Button' },
+          { id: 'IconButton', title: 'IconButton' },
+        ],
       },
+      { id: 'useButton', title: 'useButton' },
       {
-        children: 'useButton',
-        id: 'useButton',
-        level: 3,
-        text: 'useButton',
+        id: 'hooks',
+        title: 'hooks',
+        children: [
+          { id: 'useDropdown', title: 'useDropdown' },
+          { id: 'useMenu', title: 'useMenu' },
+        ],
       },
     ])
-    expectTypeOf(headings).toExtend<Headings>()
   })
 
   test('javascript file getRegions returns TypeScript regions', async () => {
@@ -2675,7 +2718,7 @@ export function identity<T>(value: T) {
     function Document(props: {
       file?: MDXFile<{
         default: MDXContent
-        headings: Headings
+        sections: ContentSection[]
         metadata: {
           title: string
           description: string
@@ -2691,14 +2734,7 @@ export function identity<T>(value: T) {
       loader: {
         mdx: withSchema(
           {
-            headings: z.array(
-              z.object({
-                id: z.string(),
-                level: z.number(),
-                text: z.string(),
-                children: z.custom<React.ReactNode>().optional(),
-              })
-            ),
+            sections: z.custom<ContentSection[]>(),
             metadata: z.object({
               title: z.string(),
               label: z.string().optional(),
@@ -3526,34 +3562,34 @@ export function identity<T>(value: T) {
 
     test('analyzes exports from a local workspace package', async () => {
       const pkg = new Package({ name: '@renoun/mdx' })
-      const addHeadingsEntry = await pkg.getExport('remark/add-headings')
+      const addSectionsEntry = await pkg.getExport('remark/add-sections')
 
-      expect(isJavaScriptFile(addHeadingsEntry)).toBe(true)
+      expect(isJavaScriptFile(addSectionsEntry)).toBe(true)
 
-      if (!isJavaScriptFile(addHeadingsEntry)) {
+      if (!isJavaScriptFile(addSectionsEntry)) {
         throw new Error('Expected JavaScript file for MDX plugin export')
       }
 
-      const addHeadingsExport = await addHeadingsEntry.getExport('default')
-      const type = await addHeadingsExport.getType()
+      const addSectionsExport = await addSectionsEntry.getExport('default')
+      const type = await addSectionsExport.getType()
 
       expect(type).toBeDefined()
       expect(type!.kind).toBeDefined()
     })
 
-    const expectRemarkAddHeadingsRuntime = async (
-      addHeadingsEntry: JavaScriptFile<any, any, any, any>
+    const expectRemarkAddSectionsRuntime = async (
+      addSectionsEntry: JavaScriptFile<any, any, any, any>
     ) => {
-      expect(isJavaScriptFile(addHeadingsEntry)).toBe(true)
+      expect(isJavaScriptFile(addSectionsEntry)).toBe(true)
 
-      if (!isJavaScriptFile(addHeadingsEntry)) {
+      if (!isJavaScriptFile(addSectionsEntry)) {
         throw new Error('Expected JavaScript file for MDX plugin export')
       }
 
-      const addHeadingsExport = await addHeadingsEntry.getExport('default')
-      const addHeadings = await addHeadingsExport.getRuntimeValue()
+      const addSectionsExport = await addSectionsEntry.getExport('default')
+      const addSections = await addSectionsExport.getRuntimeValue()
 
-      expect(typeof addHeadings).toBe('function')
+      expect(typeof addSections).toBe('function')
 
       const processor = {
         data(key: string) {
@@ -3564,9 +3600,7 @@ export function identity<T>(value: T) {
         },
       }
 
-      const transformer = addHeadings.call(processor, {
-        allowGetHeadings: true,
-      })
+      const transformer = addSections.call(processor)
       const file = {
         message: vi.fn(() => ({ fatal: false })),
       }
@@ -3598,27 +3632,27 @@ export function identity<T>(value: T) {
 
     test('executes runtime value from package export using explicit loader map', async () => {
       const loader = vi.fn<
-        () => Promise<typeof import('@renoun/mdx/remark/add-headings')>
-      >(() => import('@renoun/mdx/remark/add-headings'))
+        () => Promise<typeof import('@renoun/mdx/remark/add-sections')>
+      >(() => import('@renoun/mdx/remark/add-sections'))
       const pkg = new Package({
         name: '@renoun/mdx',
         loader: {
-          'remark/add-headings': loader,
+          'remark/add-sections': loader,
         },
       })
-      const addHeadingsEntry = await pkg.getExport('remark/add-headings')
-      const defaultExport = await addHeadingsEntry.getExport('default')
+      const addSectionsEntry = await pkg.getExport('remark/add-sections')
+      const defaultExport = await addSectionsEntry.getExport('default')
 
       type Test = Expect<IsNotAny<typeof defaultExport>>
 
       expectTypeOf(defaultExport).toExtend<
         ModuleExport<
-          (typeof import('@renoun/mdx/remark/add-headings'))['default']
+          (typeof import('@renoun/mdx/remark/add-sections'))['default']
         >
       >()
 
-      await expectRemarkAddHeadingsRuntime(addHeadingsEntry)
-      expect(loader).toHaveBeenCalledWith('/remark/add-headings')
+      await expectRemarkAddSectionsRuntime(addSectionsEntry)
+      expect(loader).toHaveBeenCalledWith('/remark/add-sections')
     })
 
     test('executes runtime value from package export using package loader resolver', async () => {
@@ -3629,21 +3663,21 @@ export function identity<T>(value: T) {
         name: '@renoun/mdx',
         loader,
       })
-      const addHeadingsEntry = await pkg.getExport<
-        typeof import('@renoun/mdx/remark/add-headings')
-      >('remark/add-headings')
-      const defaultExport = await addHeadingsEntry.getExport('default')
+      const addSectionsEntry = await pkg.getExport<
+        typeof import('@renoun/mdx/remark/add-sections')
+      >('remark/add-sections')
+      const defaultExport = await addSectionsEntry.getExport('default')
 
       type Test = Expect<IsNotAny<typeof defaultExport>>
 
       expectTypeOf(defaultExport).toExtend<
         ModuleExport<
-          (typeof import('@renoun/mdx/remark/add-headings'))['default']
+          (typeof import('@renoun/mdx/remark/add-sections'))['default']
         >
       >()
 
-      await expectRemarkAddHeadingsRuntime(addHeadingsEntry)
-      expect(loader).toHaveBeenCalledWith('/remark/add-headings')
+      await expectRemarkAddSectionsRuntime(addSectionsEntry)
+      expect(loader).toHaveBeenCalledWith('/remark/add-sections')
     })
   })
 

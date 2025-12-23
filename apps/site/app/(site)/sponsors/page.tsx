@@ -1,16 +1,17 @@
-import type { Headings } from 'renoun'
+import type { TableOfContentsSection } from 'renoun'
 
 import { TableOfContents } from '@/components/TableOfContents'
-import Sponsors, { headings } from './sponsors.mdx'
+import Sponsors, { sections } from './sponsors.mdx'
 import { tiers, SponsorTiers } from './SponsorTiers'
 
-const sponsorHeadings: Headings = tiers.map((tier) => ({
+const sponsorSections: TableOfContentsSection[] = tiers.map((tier) => ({
   id: tier.title.toLowerCase(),
-  text: tier.title,
-  level: 3,
+  title: tier.title,
 }))
 
 export default function Page() {
+  const allSections: TableOfContentsSection[] = [...sections, ...sponsorSections]
+
   return (
     <>
       <main>
@@ -19,7 +20,7 @@ export default function Page() {
         </div>
         <SponsorTiers />
       </main>
-      <TableOfContents headings={headings.concat(sponsorHeadings)} />
+      <TableOfContents sections={allSections} />
     </>
   )
 }

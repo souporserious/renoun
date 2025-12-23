@@ -1,3 +1,3 @@
 declare module '*.mdx' {
-  export const headings: import('renoun').Headings
+  export const sections: import('renoun').ContentSection[]
 }
