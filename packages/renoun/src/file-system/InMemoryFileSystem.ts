@@ -290,8 +290,17 @@ export class InMemoryFileSystem extends FileSystem {
     const addedPaths = new Set<string>()
 
     for (const [entryPath, entry] of this.#files) {
-      if (!entryPath.startsWith(basePath)) {
-        continue
+      // When basePath is empty or root ('./', '.'), include all entries.
+      // When basePath is a subdirectory, only include entries that are children
+      // of the directory (start with basePath + '/'), not sibling files that
+      // happen to share the same prefix (e.g., 'integrations.mdx' should not
+      // be included when reading the 'integrations/' directory).
+      const isRootDirectory = !basePath || basePath === './' || basePath === '.'
+      if (!isRootDirectory) {
+        const prefix = basePath.endsWith('/') ? basePath : `${basePath}/`
+        if (!entryPath.startsWith(prefix)) {
+          continue
+        }
       }
 
       let relativePath = entryPath.slice(basePath.length)
