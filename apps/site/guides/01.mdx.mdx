@@ -108,11 +108,20 @@ Adds an `id` to all headings and exports a `sections` variable with a nested str
 The `sections` export is an array of `ContentSection` objects with the following shape:
 
 ```ts
-type ContentSection = {
+interface ContentSection {
+  /** The slugified heading text. */
   id: string
+
+  /** The stringified heading text. */
   title: string
+
+  /** The heading level (1-6). */
   depth: number
+
+  /** Concise summary derived from the section content. */
   summary?: string
+
+  /** Nested child sections. */
   children?: ContentSection[]
 }
 ```
@@ -122,8 +131,6 @@ type ContentSection = {
 Exporting `sections` directly is not supported. The `sections` export is automatically generated from headings.
 
 </Note>
-
-If you're validating or typing the exported `sections` with a schema library, see the [Zod Guide](/guides/zod) and [Valibot Guide](/guides/valibot) for concrete examples of manually typing the `sections` export in your schema.
 
 ##### `Heading` component
 
