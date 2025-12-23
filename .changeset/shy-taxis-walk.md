@@ -2,7 +2,7 @@
 'renoun': minor
 ---
 
-Replaces `getHeadings` method with `getSections` for `MarkdownFile`, `MDXFile`, and `JavaScriptFile` to build outlines from regions and exports. This now includes richer metadata instead of only headings.
+Replaces `getHeadings` method with `getSections` for `MarkdownFile`, `MDXFile`, and `JavaScriptFile` to build outlines from regions, headings, and exports. This now includes richer metadata instead of only headings.
 
 ### Breaking Changes
 
