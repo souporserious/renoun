@@ -19,10 +19,10 @@ export async function DocumentEntry({
   shouldRenderTableOfContents?: boolean
   shouldRenderUpdatedAt?: boolean
 }) {
-  const [Content, metadata, sections] = await Promise.all([
-    file.getExportValue('default'),
-    file.getExportValue('metadata'),
+  const [Content, sections, metadata] = await Promise.all([
+    file.getContent(),
     file.getSections(),
+    file.getExportValue('metadata'),
   ])
   const updatedAt = shouldRenderUpdatedAt
     ? await file.getLastCommitDate()
