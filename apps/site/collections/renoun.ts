@@ -5,10 +5,9 @@ export const FileSystemDirectory = new Directory({
   path: '../../packages/renoun/src/file-system',
   basePathname: 'utilities',
   loader: {
-    mdx: withSchema(
-      {},
-      (path) => import(`../../../packages/renoun/src/file-system/${path}.mdx`)
-    ),
+    mdx: (path) => {
+      return import(`../../../packages/renoun/src/file-system/${path}.mdx`)
+    },
   },
 })
 
