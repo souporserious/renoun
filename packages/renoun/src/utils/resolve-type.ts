@@ -4388,12 +4388,23 @@ function resolveCallSignature(
     typeText = `${typeParametersText}(${parametersText}) => ${resolvedReturnType.text}`
   }
 
+  const variableDeclaration =
+    tsMorph.Node.isArrowFunction(signatureDeclaration) ||
+    tsMorph.Node.isFunctionExpression(signatureDeclaration)
+      ? signatureDeclaration.getFirstAncestorByKind(
+          tsMorph.SyntaxKind.VariableDeclaration
+        )
+      : undefined
+  const jsDocMetadata =
+    getJsDocMetadata(signatureDeclaration) ??
+    (variableDeclaration ? getJsDocMetadata(variableDeclaration) : undefined)
+
   const resolvedType: Kind.CallSignature = {
     kind: 'CallSignature',
     text: typeText,
     ...resolvedParameters,
     returnType: resolvedReturnType,
-    ...getJsDocMetadata(signatureDeclaration),
+    ...jsDocMetadata,
     ...getDeclarationLocation(signatureDeclaration),
   }
 

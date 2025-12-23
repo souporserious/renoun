@@ -20663,6 +20663,40 @@ describe('resolveType', () => {
     )
   })
 
+  test('reads JSDoc description from variable-assigned functions', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'index.js',
+      dedent`
+      /**
+       * Creates a 2x2 checkerboard pattern that can be used as procedural texture data.
+       *
+       * @param {number} value - input value
+       * @returns {number}
+       */
+      export const checker = (value) => value
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('checker')
+    const resolved = resolveType(declaration.getType(), declaration)
+    expect(resolved).toBeDefined()
+    if (!resolved || resolved.kind !== 'Function') {
+      throw new Error('Expected resolved function')
+    }
+
+    const [signature] = resolved.signatures
+
+    expect(signature?.description).toBe(
+      'Creates a 2x2 checkerboard pattern that can be used as procedural texture data.'
+    )
+  })
+
   test('resolves generic @type annotations from JSDoc', () => {
     const project = new Project({
       compilerOptions: { allowJs: true, checkJs: true },
