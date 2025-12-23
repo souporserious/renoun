@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react'
 import { dirname, resolve } from 'node:path'
 
-import { JavaScriptFile, type ModuleExport } from '../../file-system/index.ts'
+import { JavaScriptFile, type ModuleExport } from '../../file-system/index.tsx'
 import {
   type Kind,
   type TypeFilter,

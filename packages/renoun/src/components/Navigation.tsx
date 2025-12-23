@@ -5,7 +5,7 @@ import {
   type Collection,
   type Directory,
   type FileSystemEntry,
-} from '../file-system/index.ts'
+} from '../file-system/index.tsx'
 
 export interface NavigationComponents {
   Root: React.ComponentType<{
