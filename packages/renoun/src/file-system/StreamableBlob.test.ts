@@ -93,7 +93,7 @@ describe('File streaming helpers', () => {
     expect(new TextDecoder().decode(value)).toBe('0123456789')
   })
 
-  it('falls back to the raw stream when byte length cannot be inferred', async () => {
+  it('throws when byte length cannot be inferred', async () => {
     class UnknownSizeInMemoryFileSystem extends InMemoryFileSystem {
       override getFileByteLengthSync(): number | undefined {
         return undefined
@@ -103,30 +103,8 @@ describe('File streaming helpers', () => {
     const fileSystem = new UnknownSizeInMemoryFileSystem({})
     await fileSystem.writeFile('mystery.txt', 'streamed without size')
     const directory = new Directory({ fileSystem })
-    const file = new File({ directory, path: 'mystery.txt' })
-
-    const arrayBuffer = await file.arrayBuffer()
-    expect(new TextDecoder().decode(arrayBuffer)).toBe('streamed without size')
-
-    const reader = file.stream().getReader()
-    const chunks: Uint8Array[] = []
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (value) chunks.push(value)
-    }
-
-    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
-    const combined = new Uint8Array(totalLength)
-    let offset = 0
-
-    for (const chunk of chunks) {
-      combined.set(chunk, offset)
-      offset += chunk.byteLength
-    }
-
-    const decoder = new TextDecoder()
-    expect(decoder.decode(combined)).toBe('streamed without size')
+    expect(() => new File({ directory, path: 'mystery.txt' })).toThrow(
+      /Unable to determine size/
+    )
   })
 })

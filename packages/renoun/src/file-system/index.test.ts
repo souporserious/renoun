@@ -47,7 +47,7 @@ import type { Kind } from '../utils/resolve-type'
 describe('file system', () => {
   describe('File', () => {
     test('parses full file name', () => {
-      const file = new File({ path: '02.generics.exercise.ts' })
+      const file = new File({ path: '02.generics.exercise.ts', byteLength: 0 })
 
       expect(file.getOrder()).toBe('02')
       expect(file.getBaseName()).toBe('generics')
@@ -56,7 +56,7 @@ describe('file system', () => {
     })
 
     test('without order', () => {
-      const file = new File({ path: 'test.file.txt' })
+      const file = new File({ path: 'test.file.txt', byteLength: 0 })
 
       expect(file.getOrder()).toBeUndefined()
       expect(file.getBaseName()).toBe('test')
@@ -65,7 +65,7 @@ describe('file system', () => {
     })
 
     test('without modifier', () => {
-      const file = new File({ path: '1-foo.txt' })
+      const file = new File({ path: '1-foo.txt', byteLength: 0 })
 
       expect(file.getOrder()).toBe('1')
       expect(file.getBaseName()).toBe('foo')
@@ -74,7 +74,7 @@ describe('file system', () => {
     })
 
     test('handles file names with only base', () => {
-      const file = new File({ path: 'foo' })
+      const file = new File({ path: 'foo', byteLength: 0 })
 
       expect(file.getOrder()).toBeUndefined()
       expect(file.getName()).toBe('foo')
@@ -84,7 +84,7 @@ describe('file system', () => {
     })
 
     test('returns original name', () => {
-      const file = new File({ path: '01.beep.boop.bop' })
+      const file = new File({ path: '01.beep.boop.bop', byteLength: 0 })
       expect(file.getName()).toBe('01.beep.boop.bop')
     })
 
@@ -92,6 +92,7 @@ describe('file system', () => {
       const file = new File({
         directory: 'packages/renoun/src/components',
         path: 'Link/Link.tsx',
+        byteLength: 0,
       })
 
       expect(file.getRelativePathToWorkspace()).toBe(
@@ -103,6 +104,7 @@ describe('file system', () => {
       const file = new File({
         directory: new URL('../components', import.meta.url),
         path: 'Link/Link.tsx',
+        byteLength: 0,
       })
 
       expect(file.getRelativePathToWorkspace()).toBe(
@@ -118,6 +120,7 @@ describe('file system', () => {
       const file = new File({
         directory,
         path: 'Link/Link.tsx',
+        byteLength: 0,
       })
 
       expect(file.getRelativePathToWorkspace()).toBe(

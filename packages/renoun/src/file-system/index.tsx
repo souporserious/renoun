@@ -55,7 +55,6 @@ import {
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import type {
-  FileReadableStream,
   FileSystem,
   FileSystemWriteFileContent,
   FileWritableStream,
@@ -84,6 +83,17 @@ import {
 } from './StreamableBlob.ts'
 import type { StandardSchemaV1 } from './standard-schema.ts'
 import type { ExtractFileExtension, IsNever } from './types.ts'
+
+export { FileSystem } from './FileSystem.ts'
+export { GitHostFileSystem } from './GitHostFileSystem.ts'
+export { InMemoryFileSystem } from './InMemoryFileSystem.ts'
+export {
+  StreamableBlob,
+  createRangeLimitedStream,
+  type StreamableContent as StreamingContent,
+} from './StreamableBlob.ts'
+export { NodeFileSystem } from './NodeFileSystem.ts'
+export { Repository } from './Repository.ts'
 
 const mimeTypesByExtension: Record<string, string> = {
   aac: 'audio/aac',
@@ -119,17 +129,6 @@ const mimeTypesByExtension: Record<string, string> = {
   webp: 'image/webp',
   xml: 'application/xml',
 }
-
-export { FileSystem } from './FileSystem.ts'
-export { GitHostFileSystem } from './GitHostFileSystem.ts'
-export { InMemoryFileSystem } from './InMemoryFileSystem.ts'
-export {
-  StreamableBlob,
-  createRangeLimitedStream,
-  type StreamableContent as StreamingContent,
-} from './StreamableBlob.ts'
-export { NodeFileSystem } from './NodeFileSystem.ts'
-export { Repository } from './Repository.ts'
 
 function inferMediaType(extension?: string) {
   const normalizedExtension = extension?.replace(/^\./, '').toLowerCase()
@@ -574,6 +573,9 @@ async function unwrapModuleResult<T>(result: any): Promise<T> {
   return value as T
 }
 
+/** A decoder for file contents. */
+const fileTextDecoder = new TextDecoder('utf-8', { fatal: true })
+
 /** Error for when a file is not found. */
 export class FileNotFoundError extends Error {
   constructor(
@@ -648,10 +650,27 @@ export interface FileOptions<
   Types extends Record<string, any> = Record<string, any>,
   Path extends string = string,
 > {
+  /** The path to the file. */
   path: Path | URL
+
+  /** The base pathname to use for the file. */
   basePathname?: string | null
+
+  /** The slug casing to use for the file. */
   slugCasing?: SlugCasing
+
+  /** The depth of the file in the file system. */
   depth?: number
+
+  /**
+   * Known byte length for the file contents.
+   *
+   * When omitted, `File` will ask the `FileSystem` for the file size synchronously.
+   * If the size cannot be determined synchronously, the constructor will throw.
+   */
+  byteLength?: number
+
+  /** The directory to use for the file. */
   directory?:
     | PathLike
     | Directory<
@@ -667,7 +686,7 @@ export class File<
   DirectoryTypes extends Record<string, any> = Record<string, any>,
   Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
-> {
+> extends Blob {
   #name: string
   #baseName: string
   #modifierName?: string
@@ -677,34 +696,82 @@ export class File<
   #basePathname?: string | null
   #slugCasing: SlugCasing
   #directory: Directory<DirectoryTypes>
+  #byteLength: number
 
   constructor(options: FileOptions<DirectoryTypes, Path>) {
-    if (options.directory instanceof Directory) {
-      this.#directory = options.directory
-    } else if (options.directory !== undefined) {
-      this.#directory = new Directory({ path: options.directory })
-    } else {
-      this.#directory = new Directory()
+    // Parse path and extension to determine MIME type
+    const resolvedPath = resolveSchemePath(options.path)
+    const name = baseName(resolvedPath)
+    const match = name.match(
+      /^(?:(\d+)[.-])?([^.]+)(?:\.([^.]+))?(?:\.([^.]+))?$/
+    )
+    const extensionValue = (match?.[4] ?? match?.[3]) as Extension | undefined
+    const type = inferMediaType(extensionValue)
+    const directory =
+      options.directory instanceof Directory
+        ? options.directory
+        : options.directory !== undefined
+          ? new Directory({ path: options.directory })
+          : new Directory()
+
+    // Determine byte length for Blob.size compatibility.
+    // When a directory is provided with a relative path, we need to resolve the
+    // full filesystem path to look up the byte length.
+    let byteLength = options.byteLength
+
+    if (byteLength === undefined) {
+      const fileSystem = directory.getFileSystem()
+
+      // First try the resolved path directly
+      byteLength = fileSystem.getFileByteLengthSync(resolvedPath)
+
+      // If that fails and we have a directory, try combining paths
+      if (byteLength === undefined && options.directory !== undefined) {
+        const directoryPath = directory.getRelativePathToWorkspace()
+        if (directoryPath && directoryPath !== '.') {
+          const fullPath = joinPaths(directoryPath, resolvedPath)
+          byteLength = fileSystem.getFileByteLengthSync(fullPath)
+        }
+      }
     }
 
-    const resolvedPath = resolveSchemePath(options.path)
-    this.#name = baseName(resolvedPath)
+    if (byteLength === undefined) {
+      throw new Error(
+        `[renoun] Unable to determine size for file: ${resolvedPath}. Ensure the FileSystem provides a synchronous byte length or pass { byteLength } when constructing File.`
+      )
+    }
+
+    // Initialize Blob base class with empty parts and MIME type
+    super([], { type })
+
+    this.#directory = directory
+    this.#name = name
     this.#path = resolvedPath
     this.#basePathname = options.basePathname
     this.#slugCasing = options.slugCasing ?? 'kebab'
-
-    const match = this.#name.match(
-      /^(?:(\d+)[.-])?([^.]+)(?:\.([^.]+))?(?:\.([^.]+))?$/
-    )
+    this.#byteLength = byteLength
 
     if (match) {
       this.#order = match[1]
-      this.#baseName = match[2] ?? this.#name
+      this.#baseName = match[2] ?? name
       this.#modifierName = match[4] ? match[3] : undefined
       this.#extension = (match[4] ?? match[3]) as Extension
     } else {
-      this.#baseName = this.#name
+      this.#baseName = name
     }
+  }
+
+  /** The last modified time of the file in milliseconds. */
+  get lastModified(): number {
+    const fileSystem = this.#directory.getFileSystem()
+    return (
+      fileSystem.getFileLastModifiedMsSync(this.#path) ?? new Date().getTime()
+    )
+  }
+
+  /** The intrinsic name of the file. */
+  get name(): string {
+    return this.#name
   }
 
   /** The intrinsic name of the file. */
@@ -1074,107 +1141,58 @@ export class File<
   }
 
   /** Read the file contents as bytes. */
-  async bytes(): Promise<Uint8Array> {
+  override async bytes(): Promise<Uint8Array<ArrayBuffer>> {
     const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.readFileBinary(this.#path)
+    const binary = await fileSystem.readFileBinary(this.#path)
+    // Ensure ArrayBuffer-backed Uint8Array for Blob compatibility.
+    const buffer = new ArrayBuffer(binary.byteLength)
+    new Uint8Array(buffer).set(binary)
+    return new Uint8Array(buffer)
   }
 
   /** Create a readable stream for the file contents. */
-  stream(): FileReadableStream {
-    const streamingContent = this.#getStreamingContent()
-    if (streamingContent) {
-      return new StreamableBlob(streamingContent, {
-        type: this.type,
-      }).stream()
-    }
-
+  override stream(): ReadableStream<Uint8Array<ArrayBuffer>> {
     const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.readFileStream(this.#path)
-  }
-
-  /** Get the MIME type inferred from the file extension. */
-  get type(): string {
-    return inferMediaType(this.#extension)
+    return fileSystem.readFileStream(this.#path) as any
   }
 
   /** Get the file size in bytes without reading the contents. */
-  get size(): number {
-    return this.#requireStreamingContent().byteLength
+  override get size(): number {
+    return this.#byteLength
   }
 
-  /** Read the file contents as text. */
-  async text(): Promise<string> {
-    const streamingContent = this.#getStreamingContent()
-    if (streamingContent) {
-      return new StreamableBlob(streamingContent, {
-        type: this.type,
-      }).text()
-    }
-
-    const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.readFile(this.#path)
+  /** Read the file contents as text (UTF-8 decode, Blob semantics). */
+  override async text(): Promise<string> {
+    const bytes = await this.bytes()
+    return fileTextDecoder.decode(bytes)
   }
 
   /** Read the file contents as an ArrayBuffer. */
-  async arrayBuffer(): Promise<ArrayBuffer> {
-    const streamingContent = this.#getStreamingContent()
-
-    if (streamingContent) {
-      return new StreamableBlob(streamingContent, {
-        type: this.type,
-      }).arrayBuffer()
-    }
-
+  override async arrayBuffer(): Promise<ArrayBuffer> {
     const binary = await this.bytes()
-    const arrayBuffer = new ArrayBuffer(binary.byteLength)
-    new Uint8Array(arrayBuffer).set(binary)
-    return arrayBuffer
+    return binary.buffer
   }
 
   /** Slice the file contents without buffering. */
-  slice(start?: number, end?: number, contentType?: string): Blob {
-    return this.#getStreamingBlob().slice(start, end, contentType)
+  override slice(start?: number, end?: number, contentType?: string): Blob {
+    const fileSystem = this.#directory.getFileSystem()
+    const streamableContent: StreamableContent = {
+      byteLength: this.#byteLength,
+      stream: (rangeStart, rangeEnd) =>
+        createRangeLimitedStream(
+          () => fileSystem.readFileStream(this.#path),
+          rangeStart,
+          rangeEnd
+        ),
+    }
+    return new StreamableBlob(streamableContent, {
+      type: contentType ?? this.type,
+    }).slice(start, end, contentType)
   }
 
   /** Get the byte length of this file without reading the contents. */
   async getByteLength(): Promise<number> {
     return this.size
-  }
-
-  #getStreamingBlob(options?: BlobPropertyBag): Blob {
-    const content = this.#requireStreamingContent()
-    return new StreamableBlob(content, {
-      ...options,
-      type: options?.type ?? this.type,
-    })
-  }
-
-  #requireStreamingContent(): StreamableContent {
-    const content = this.#getStreamingContent()
-    if (content) {
-      return content
-    }
-
-    throw new Error(`[renoun] Unable to determine size for file: ${this.#path}`)
-  }
-
-  #getStreamingContent(): StreamableContent | undefined {
-    const fileSystem = this.#directory.getFileSystem()
-    const byteLength = fileSystem.getFileByteLengthSync(this.#path)
-
-    if (byteLength === undefined) {
-      return
-    }
-
-    return {
-      byteLength,
-      stream: (start, end) =>
-        createRangeLimitedStream(
-          () => fileSystem.readFileStream(this.#path),
-          start,
-          end
-        ),
-    }
   }
 
   /** Write content to this file. */
