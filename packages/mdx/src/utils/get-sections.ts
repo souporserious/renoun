@@ -8,7 +8,7 @@ import type { Root, Heading } from 'mdast'
 import type { ContentSection } from '../remark/add-sections.js'
 import { createSlug } from './create-slug.js'
 
-type FlatSection = {
+interface FlatSection {
   id: string
   title: string
   depth: number

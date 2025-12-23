@@ -11,12 +11,12 @@ export { rehypePlugins } from './rehype/index.js'
 export { remarkPlugins } from './remark/index.js'
 export {
   createSlug,
-  getMarkdownSections,
   getMarkdownContent,
-  getMDXExportStaticValues,
-  getMDXSections,
+  getMarkdownSections,
   getMDXContent,
+  getMDXSections,
   getMDXLinks,
+  getMDXExportStaticValues,
   type SlugCasing,
   type MarkdownComponents,
   type MarkdownContentOptions,

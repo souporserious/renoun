@@ -10,10 +10,25 @@ import type {
   RootContent,
 } from 'mdast'
 import type { Properties } from 'hast'
+import type {
+  Expression,
+  ExpressionStatement,
+  Literal,
+  Program,
+  JSXAttribute,
+  JSXElement,
+  JSXEmptyExpression,
+  JSXExpressionContainer,
+  JSXFragment,
+  JSXSpreadAttribute,
+  JSXSpreadChild,
+  JSXText,
+} from 'estree-jsx'
 import type { VFile } from 'vfile'
 import { define } from 'unist-util-mdx-define'
 import { visit } from 'unist-util-visit'
 import { toString } from 'mdast-util-to-string'
+import type { MdxJsxAttributeValueExpression, MdxjsEsm } from 'mdast-util-mdx'
 import 'mdast-util-mdx'
 
 import { createSlug } from '../utils/create-slug.js'
@@ -78,30 +93,39 @@ export type AddSectionsOptions = {
   /**
    * Additional JSX tag names to treat as headings.
    * These will be included in the sections export alongside native h1-h6 headings.
-   * @example ['Heading', 'Title', 'SectionHeading']
    */
   headingTags?: string[]
 
   /**
    * JSX tag names to treat as section containers.
    * The id and title will be extracted from attributes.
-   * @example ['Section', 'ContentSection']
    */
   sectionTags?: string[]
 }
 
 const DEFAULT_HEADING_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
 
-type FlatSection = {
+interface FlatSection {
+  /** The slugified heading text. */
   id: string
+
+  /** The stringified heading text. */
   title: string
+
+  /** The heading level (1-6). */
   depth: number
+
+  /** Concise summary derived from the section content. */
   summary?: string
+
   /** ESTree representation of JSX content for the section. */
   estreeJsx?: any
 }
 
-type NestedSection = FlatSection & { children?: NestedSection[] }
+interface NestedSection extends FlatSection {
+  /** Nested child sections. */
+  children?: NestedSection[]
+}
 
 function buildNestedSections(flatSections: FlatSection[]): NestedSection[] {
   const result: NestedSection[] = []
@@ -263,8 +287,10 @@ export default function addSections(
 
     // Helper to ensure DefaultHeadingComponent is hoisted once
     function ensureDefaultHeadingComponent() {
-      if (hasDefaultHeadingComponent || isMarkdown) return
-      const defaultDecl: any = {
+      if (hasDefaultHeadingComponent || isMarkdown) {
+        return
+      }
+      const defaultDeclaration = {
         type: 'mdxjsEsm',
         value: '',
         data: {
@@ -289,8 +315,8 @@ export default function addSections(
             ],
           },
         },
-      }
-      ;(tree as any).children?.unshift(defaultDecl)
+      } satisfies MdxjsEsm
+      tree.children?.unshift(defaultDeclaration)
       hasDefaultHeadingComponent = true
     }
 
@@ -462,11 +488,11 @@ export default function addSections(
     })
 
     visit(tree, (node) => {
-      if ((node as any).type !== 'mdxjsEsm') {
+      if (node.type !== 'mdxjsEsm') {
         return
       }
 
-      const program = (node as any)?.data?.estree
+      const program = node.data?.estree
 
       if (!program || !Array.isArray(program.body)) {
         return
@@ -490,7 +516,10 @@ export default function addSections(
         }
         if (Array.isArray(statement.specifiers)) {
           for (const specifier of statement.specifiers) {
-            if (specifier.exported?.name === 'sections') {
+            if (
+              specifier.exported?.type === 'Identifier' &&
+              specifier.exported.name === 'sections'
+            ) {
               hasSectionsExport = true
               break
             }
@@ -511,10 +540,10 @@ export default function addSections(
 
     if (!isMarkdown) {
       const nestedSections = buildNestedSections(flatSections)
-      const sectionsExpression: any = {
+      const sectionsExpression = {
         type: 'ArrayExpression',
         elements: nestedSections.map(sectionToEstree),
-      }
+      } satisfies Expression
 
       define(tree, file, { sections: sectionsExpression })
     }
@@ -548,11 +577,11 @@ function computeSectionSummaries(
     }
 
     if (
-      (child as any).type === 'html' ||
-      (child as any).type === 'mdxFlowExpression' ||
-      (child as any).type === 'mdxTextExpression'
+      child.type === 'html' ||
+      child.type === 'mdxFlowExpression' ||
+      child.type === 'mdxTextExpression'
     ) {
-      const raw = (child as any).value
+      const raw = child.value
       const start = typeof raw === 'string' ? parseRegionStart(raw) : undefined
       if (start) {
         regionStack.push({
@@ -1372,38 +1401,44 @@ function jsxElementChildrenToEstree(node: any): any {
 /**
  * Convert a single JSX child node to ESTree.
  */
-function jsxChildToEstree(node: any): any {
+function jsxChildToEstree(
+  node: RootContent | PhrasingContent
+): JsxChildNode | null {
   switch (node.type) {
     case 'text':
-      return { type: 'JSXText', value: node.value }
+      return { type: 'JSXText', value: node.value, raw: node.value }
 
     case 'mdxJsxTextElement':
     case 'mdxJsxFlowElement': {
       const tagName = node.name
       if (!tagName) return null
 
-      const attributes: any[] = []
+      const attributes: Array<JSXAttribute | JSXSpreadAttribute> = []
       if (node.attributes) {
-        for (const attr of node.attributes) {
-          if (attr.type === 'mdxJsxAttribute') {
-            let value: any
-            if (typeof attr.value === 'string') {
-              value = { type: 'Literal', value: attr.value }
-            } else if (attr.value?.type === 'mdxJsxAttributeValueExpression') {
+        for (const attribute of node.attributes) {
+          if (attribute.type === 'mdxJsxAttribute') {
+            let value: JSXAttribute['value'] = null
+            if (typeof attribute.value === 'string') {
+              value = {
+                type: 'Literal',
+                value: attribute.value,
+              }
+            } else if (
+              attribute.value?.type === 'mdxJsxAttributeValueExpression'
+            ) {
+              const expression = getMdxAttributeExpression(attribute.value)
               value = {
                 type: 'JSXExpressionContainer',
-                expression: attr.value.data?.estree?.body?.[0]?.expression || {
-                  type: 'Literal',
-                  value: null,
-                },
-              }
-            } else {
-              value = null // Boolean attribute
+                expression: (expression ??
+                  ({ type: 'Literal', value: null } satisfies Literal)) as
+                  | Expression
+                  | JSXEmptyExpression,
+              } satisfies JSXExpressionContainer
             }
 
             attributes.push({
               type: 'JSXAttribute',
-              name: { type: 'JSXIdentifier', name: attr.name },
+              name: { type: 'JSXIdentifier', name: attribute.name },
               value,
             })
           }
@@ -1412,8 +1447,8 @@ function jsxChildToEstree(node: any): any {
 
       const children = node.children
         ? node.children
-            .map((child: any) => jsxChildToEstree(child))
-            .filter((c: any) => c !== null)
+            .map((child) => jsxChildToEstree(child))
+            .filter((child): child is JsxChildNode => child !== null)
         : []
 
       return {
@@ -1432,16 +1467,38 @@ function jsxChildToEstree(node: any): any {
                 name: { type: 'JSXIdentifier', name: tagName },
               },
         children,
-      }
+      } satisfies JSXElement
     }
 
     case 'paragraph':
       // For paragraphs inside JSX, extract the text content
-      return { type: 'JSXText', value: toString(node) }
+      return {
+        type: 'JSXText',
+        value: toString(node),
+        raw: toString(node),
+      }
 
     default:
       return null
   }
+}
+
+type JsxChildNode =
+  | JSXText
+  | JSXExpressionContainer
+  | JSXSpreadChild
+  | JSXElement
+  | JSXFragment
+
+function getMdxAttributeExpression(
+  value: MdxJsxAttributeValueExpression
+): Expression | undefined {
+  const program = value.data?.estree as Program | undefined
+  const statement = program?.body?.[0]
+  if (!statement || statement.type !== 'ExpressionStatement') {
+    return undefined
+  }
+  return (statement as ExpressionStatement).expression
 }
 
 /**
@@ -1454,20 +1511,20 @@ function getJsxAttributeNumericValue(
 ): number | undefined {
   if (!node.attributes) return undefined
 
-  for (const attr of node.attributes) {
-    if (attr.type === 'mdxJsxAttribute' && attr.name === name) {
+  for (const attribute of node.attributes) {
+    if (attribute.type === 'mdxJsxAttribute' && attribute.name === name) {
       // Handle string literal: depth="1"
-      if (typeof attr.value === 'string') {
-        const parsed = parseInt(attr.value, 10)
+      if (typeof attribute.value === 'string') {
+        const parsed = parseInt(attribute.value, 10)
         return isNaN(parsed) ? undefined : parsed
       }
 
       // Handle expression container: depth={1}
       if (
-        attr.value?.type === 'mdxJsxAttributeValueExpression' &&
-        attr.value.data?.estree?.body?.[0]?.expression
+        attribute.value?.type === 'mdxJsxAttributeValueExpression' &&
+        attribute.value.data?.estree?.body?.[0]?.expression
       ) {
-        const expr = attr.value.data.estree.body[0].expression
+        const expr = attribute.value.data.estree.body[0].expression
         if (expr.type === 'Literal' && typeof expr.value === 'number') {
           return expr.value
         }
