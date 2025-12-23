@@ -9,11 +9,11 @@ export async function generateStaticParams() {
 export default async function Page(props: PageProps<'/[...slug]'>) {
   const { slug } = await props.params
   const doc = await docs.getFile(slug, 'mdx')
-  const [Content, metadata, sections, updatedAt] = await Promise.all([
-    doc.getExportValue('default'),
-    doc.getExportValue('metadata'),
+  const [Content, sections, updatedAt, metadata] = await Promise.all([
+    doc.getContent(),
     doc.getSections(),
     doc.getLastCommitDate(),
+    doc.getExportValue('metadata'),
   ])
 
   return (
