@@ -903,6 +903,25 @@ describe('file system', () => {
     ])
   })
 
+  test('javascript file getSections uses unslugified export names for ids (Reference anchors)', async () => {
+    const fileSystem = new MemoryFileSystem({
+      'index.ts': [
+        'export const TableOfContents = () => null',
+        '',
+        'export type FooBar = { baz: string }',
+      ].join('\n'),
+    })
+    const directory = new Directory({ fileSystem })
+    const file = new JavaScriptFile({ path: 'index.ts', directory })
+
+    const sections = await file.getSections()
+
+    expect(sections).toMatchObject([
+      { id: 'TableOfContents', title: 'TableOfContents' },
+      { id: 'FooBar', title: 'FooBar' },
+    ])
+  })
+
   test('directory excludes files and folders with only internal exports', async () => {
     const fileSystem = new MemoryFileSystem({
       'tsconfig.json': '{ "compilerOptions": { "stripInternal": true } }',
@@ -1787,17 +1806,17 @@ describe('file system', () => {
         id: 'components',
         title: 'components',
         children: [
-          { id: 'button', title: 'Button' },
-          { id: 'icon-button', title: 'IconButton' },
+          { id: 'Button', title: 'Button' },
+          { id: 'IconButton', title: 'IconButton' },
         ],
       },
-      { id: 'use-button', title: 'useButton' },
+      { id: 'useButton', title: 'useButton' },
       {
         id: 'hooks',
         title: 'hooks',
         children: [
-          { id: 'use-dropdown', title: 'useDropdown' },
-          { id: 'use-menu', title: 'useMenu' },
+          { id: 'useDropdown', title: 'useDropdown' },
+          { id: 'useMenu', title: 'useMenu' },
         ],
       },
     ])

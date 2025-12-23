@@ -214,7 +214,10 @@ type ModuleExports<Value = any> = {
 }
 
 export interface Section {
-  /** The slugified heading text. */
+  /**
+   * The section anchor id. Uses slugified heading text for markdown-derived sections.
+   * Uses the export name for programmatic sections (e.g. file export outlines rendered by `Reference`).
+   */
   id: string
 
   /** The stringified heading text. */
@@ -2160,7 +2163,9 @@ export class JavaScriptFile<
           id: createSlug(title, this.#slugCasing),
           title,
           children: exportNames.map((name) => ({
-            id: createSlug(name, this.#slugCasing),
+            // `Reference` anchors use the actual export name (case-sensitive),
+            // so the TOC must link using the unslugified identifier.
+            id: name,
             title: name,
           })),
         }
@@ -2173,7 +2178,8 @@ export class JavaScriptFile<
       for (const { exportItem, line } of ungroupedExports) {
         sections.push({
           section: {
-            id: exportItem.getSlug(),
+            // Keep hash ids aligned with `Reference`'s rendered anchor ids.
+            id: exportItem.getName(),
             title: exportItem.getName(),
           },
           line,
