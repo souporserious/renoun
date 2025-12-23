@@ -30,6 +30,11 @@ export function createRangeLimitedStream(
 
   return new ReadableStream<StreamableUint8Array>({
     async pull(controller) {
+      if (position >= end) {
+        await reader.cancel()
+        controller.close()
+        return
+      }
       while (position < end) {
         const { done, value } = await reader.read()
         if (done) {

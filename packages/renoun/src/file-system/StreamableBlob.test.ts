@@ -68,6 +68,17 @@ describe('File streaming helpers', () => {
     expect(await slice.text()).toBe('e')
   })
 
+  it('handles zero-length files without hanging', async () => {
+    const fileSystem = new InMemoryFileSystem({})
+    await fileSystem.writeFile('empty.txt', '')
+    const directory = new Directory({ fileSystem })
+    const file = new File({ directory, path: 'empty.txt' })
+
+    expect(file.size).toBe(0)
+    await expect(file.text()).resolves.toBe('')
+    await expect(file.arrayBuffer()).resolves.toBeInstanceOf(ArrayBuffer)
+  })
+
   it('allows slicing directly from File without explicit Blob creation', async () => {
     const fileSystem = new InMemoryFileSystem({})
     await fileSystem.writeFile('range.txt', '0123456789')
