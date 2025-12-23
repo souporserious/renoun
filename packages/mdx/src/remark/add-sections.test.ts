@@ -526,4 +526,72 @@ More content.
       ]
     `)
   })
+
+  test('regions create nested sections and summaries', async () => {
+    const mdxSource = `# Alpha
+
+This is the alpha introduction paragraph which should be used as the summary for the Alpha heading.
+
+{/* #region Details */}
+
+This region contains additional details that should become its own section summary.
+
+{/* #endregion */}
+
+## Beta
+
+This is the beta summary paragraph.
+`
+
+    const jsxRuntime = {
+      Fragment: Symbol.for('react.fragment'),
+      jsx: () => null,
+      jsxs: () => null,
+    }
+
+    const mdxModule = await evaluate(mdxSource, {
+      remarkPlugins: [addSections],
+      development: false,
+      ...jsxRuntime,
+    })
+
+    expect(mdxModule.sections).toMatchObject([
+      {
+        id: 'alpha',
+        title: 'Alpha',
+        depth: 1,
+        summary: expect.stringContaining('alpha introduction paragraph'),
+        children: [
+          {
+            id: 'details',
+            title: 'Details',
+            depth: 2,
+            summary: expect.stringContaining('additional details'),
+          },
+          {
+            id: 'beta',
+            title: 'Beta',
+            depth: 2,
+            summary: expect.stringContaining('beta summary paragraph'),
+          },
+        ],
+      },
+    ])
+  })
+
+  test('regions cannot wrap headings', async () => {
+    const result = await compile(
+      `{/* #region Bad */}
+# Title
+{/* #endregion */}`,
+      {
+        remarkPlugins: [addSections],
+      }
+    )
+
+    const hasError = result.messages.some((message) =>
+      /Regions cannot contain headings/i.test(message.reason)
+    )
+    expect(hasError).toBe(true)
+  })
 })

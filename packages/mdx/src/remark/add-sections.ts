@@ -37,6 +37,12 @@ type HeadingSection = {
   nodes: RootContent[]
 }
 
+type RegionSection = {
+  start: RootContent
+  title: string
+  nodes: RootContent[]
+}
+
 export type ContentSection = {
   /** The slugified heading text. */
   id: string
@@ -140,6 +146,27 @@ function buildNestedSections(flatSections: FlatSection[]): NestedSection[] {
   return result
 }
 
+function parseRegionStart(value: string): { title: string } | undefined {
+  // Markdown/HTML comment: <!-- #region Title -->
+  const htmlMatch = value.match(/<!--\s*#region\b([\s\S]*?)-->/i)
+  if (htmlMatch) {
+    return { title: (htmlMatch[1] ?? '').trim() }
+  }
+  // MDX/JSX comment expression: {/* #region Title */}
+  const jsxMatch = value.match(/\/\*\s*#region\b([\s\S]*?)\*\//i)
+  if (jsxMatch) {
+    return { title: (jsxMatch[1] ?? '').trim() }
+  }
+  return undefined
+}
+
+function isRegionEnd(value: string): boolean {
+  // Markdown/HTML comment: <!-- #endregion -->
+  if (/<!--\s*#endregion\b[\s\S]*?-->/i.test(value)) return true
+  // MDX/JSX comment expression: {/* #endregion */}
+  return /\/\*\s*#endregion\b[\s\S]*?\*\//i.test(value)
+}
+
 function sectionToEstree(section: NestedSection): any {
   const properties: any[] = [
     {
@@ -223,11 +250,16 @@ export default function addSections(
   ])
 
   return function (tree: Root, file: VFile) {
-    const headingSummaries = computeHeadingSummaries(tree)
+    const { headingSummaries, regionSummaries } = computeSectionSummaries(
+      tree,
+      file
+    )
     const flatSections: FlatSection[] = []
     const headingCounts = new Map<string, number>()
     let hasSectionsExport = false
     let hasDefaultHeadingComponent = false
+    let currentHeadingDepth = 0
+    const regionDepthStack: number[] = []
 
     // Helper to ensure DefaultHeadingComponent is hoisted once
     function ensureDefaultHeadingComponent() {
@@ -276,12 +308,73 @@ export default function addSections(
 
     // Single visit to process all nodes in document order
     visit(tree, (node: any) => {
+      // Handle HTML comment regions: <!-- #region Title --> ... <!-- #endregion -->
+      if (
+        node.type === 'html' ||
+        node.type === 'mdxFlowExpression' ||
+        node.type === 'mdxTextExpression'
+      ) {
+        const start =
+          typeof node.value === 'string'
+            ? parseRegionStart(node.value)
+            : undefined
+        if (start) {
+          const title = start.title || 'Region'
+          const baseDepth =
+            regionDepthStack.length > 0
+              ? regionDepthStack[regionDepthStack.length - 1]!
+              : currentHeadingDepth
+          const depth = Math.max(1, baseDepth + 1)
+          const slug = generateSlug(createSlug(title))
+          const summary = regionSummaries.get(node as RootContent)
+
+          const section: FlatSection = {
+            id: slug,
+            title,
+            depth,
+          }
+          if (summary !== undefined) {
+            section.summary = summary
+          }
+          if (!isMarkdown) {
+            section.estreeJsx = { type: 'Literal', value: title }
+          }
+
+          flatSections.push(section)
+          regionDepthStack.push(depth)
+          return
+        }
+
+        if (typeof node.value === 'string' && isRegionEnd(node.value)) {
+          if (regionDepthStack.length === 0) {
+            const message = file.message(
+              '[`@renoun/mdx/remark/add-sections`] Found a region end marker without a matching start marker. Add a region start marker before this end marker (e.g. `<!-- #region ... -->` or `{/* #region ... */}`).',
+              node
+            )
+            message.fatal = true
+            return
+          }
+          regionDepthStack.pop()
+          return
+        }
+      }
+
       // Handle markdown headings
       if (node.type === 'heading') {
+        if (regionDepthStack.length > 0) {
+          const message = file.message(
+            '[`@renoun/mdx/remark/add-sections`] Regions cannot contain headings. Move the heading outside the region or close the region before the heading.',
+            node
+          )
+          message.fatal = true
+          return
+        }
+
         const headingNode = node as Heading
         const text = toString(headingNode)
         const slug = generateSlug(createSlug(text))
         const summary = headingSummaries.get(headingNode)
+        currentHeadingDepth = headingNode.depth
 
         const section: FlatSection = {
           id: slug,
@@ -425,47 +518,118 @@ export default function addSections(
 
       define(tree, file, { sections: sectionsExpression })
     }
+
+    if (regionDepthStack.length > 0) {
+      const message = file.message(
+        '[`@renoun/mdx/remark/add-sections`] A `<!-- #region ... -->` is missing a matching `<!-- #endregion -->`.',
+        tree
+      )
+      message.fatal = true
+      return
+    }
   }
 }
 
-function computeHeadingSummaries(tree: Root): Map<Heading, string | undefined> {
-  const summaries = new Map<Heading, string | undefined>()
-  const stack: HeadingSection[] = []
+function computeSectionSummaries(
+  tree: Root,
+  file: VFile
+): {
+  headingSummaries: Map<Heading, string | undefined>
+  regionSummaries: Map<RootContent, string | undefined>
+} {
+  const headingSummaries = new Map<Heading, string | undefined>()
+  const regionSummaries = new Map<RootContent, string | undefined>()
+  const headingStack: HeadingSection[] = []
+  const regionStack: RegionSection[] = []
 
   for (const child of tree.children) {
     if (child.type === 'mdxjsEsm') {
       continue
     }
 
+    if (
+      (child as any).type === 'html' ||
+      (child as any).type === 'mdxFlowExpression' ||
+      (child as any).type === 'mdxTextExpression'
+    ) {
+      const raw = (child as any).value
+      const start = typeof raw === 'string' ? parseRegionStart(raw) : undefined
+      if (start) {
+        regionStack.push({
+          start: child,
+          title: start.title,
+          nodes: [],
+        })
+        continue
+      }
+      if (typeof raw === 'string' && isRegionEnd(raw)) {
+        const current = regionStack.pop()
+        if (!current) {
+          const message = file.message(
+            '[`@renoun/mdx/remark/add-sections`] Found a region end marker without a matching start marker. Add a region start marker before this end marker (e.g. `<!-- #region ... -->` or `{/* #region ... */}`).',
+            child
+          )
+          message.fatal = true
+          return { headingSummaries, regionSummaries }
+        }
+        regionSummaries.set(current.start, pickSummary(current.nodes))
+        continue
+      }
+    }
+
     if (child.type === 'heading') {
+      if (regionStack.length) {
+        const message = file.message(
+          '[`@renoun/mdx/remark/add-sections`] Regions cannot contain headings. Move the heading outside the region or close the region before the heading.',
+          child
+        )
+        message.fatal = true
+        return { headingSummaries, regionSummaries }
+      }
+
       const headingNode = child as Heading
 
       while (
-        stack.length &&
-        stack[stack.length - 1]!.heading.depth >= headingNode.depth
+        headingStack.length &&
+        headingStack[headingStack.length - 1]!.heading.depth >=
+          headingNode.depth
       ) {
-        const completed = stack.pop()!
-        summaries.set(completed.heading, pickSummary(completed.nodes))
+        const completed = headingStack.pop()!
+        headingSummaries.set(completed.heading, pickSummary(completed.nodes))
       }
 
-      stack.push({ heading: headingNode, nodes: [] })
+      headingStack.push({ heading: headingNode, nodes: [] })
       continue
     }
 
-    if (!stack.length) {
+    if (regionStack.length) {
+      regionStack[regionStack.length - 1]!.nodes.push(child as RootContent)
       continue
     }
 
-    const currentSection = stack[stack.length - 1]!
+    if (!headingStack.length) {
+      continue
+    }
+
+    const currentSection = headingStack[headingStack.length - 1]!
     currentSection.nodes.push(child as RootContent)
   }
 
-  while (stack.length) {
-    const completed = stack.pop()!
-    summaries.set(completed.heading, pickSummary(completed.nodes))
+  if (regionStack.length) {
+    const message = file.message(
+      '[`@renoun/mdx/remark/add-sections`] A `<!-- #region ... -->` is missing a matching `<!-- #endregion -->`.',
+      regionStack[regionStack.length - 1]!.start
+    )
+    message.fatal = true
+    return { headingSummaries, regionSummaries }
   }
 
-  return summaries
+  while (headingStack.length) {
+    const completed = headingStack.pop()!
+    headingSummaries.set(completed.heading, pickSummary(completed.nodes))
+  }
+
+  return { headingSummaries, regionSummaries }
 }
 
 type Block =
