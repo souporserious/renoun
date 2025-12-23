@@ -1571,7 +1571,7 @@ describe('file system', () => {
     const referenceExport = await file.getExport('reference')
     const arrayExport = await file.getExport('array')
     const objectExport = await file.getExport('object')
-    const getTextSpy = vi.spyOn(file, 'getText')
+    const getTextSpy = vi.spyOn(file, 'text')
 
     expect(await numberExport.getStaticValue()).toBe(42)
     expect(await stringExport.getStaticValue()).toBe('hello world')
@@ -1698,7 +1698,7 @@ describe('file system', () => {
     })
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('index', 'md')
-    const getTextSpy = vi.spyOn(file, 'getText')
+    const getTextSpy = vi.spyOn(file, 'text')
 
     await file.getSections()
     await file.getSections()
@@ -1920,7 +1920,7 @@ function b() {}
     expect(fileExport.getTags()).toMatchObject([
       { name: 'category', text: 'greetings' },
     ])
-    expect(await fileExport.getText()).toBe(statementText)
+    expect(await fileExport.text()).toBe(statementText)
     expect(fileExport.getPosition()).toMatchInlineSnapshot(`
       {
         "end": {
@@ -2530,14 +2530,14 @@ export function identity<T>(value: T) {
   })
 
   test('entry group', async () => {
-    const InMemoryFileSystem = new InMemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'posts/building-a-button-component.mdx': '# Building a Button Component',
       'posts/meta.js': 'export default { "title": "Posts" }',
     })
     type FrontMatter = { frontmatter: { title: string } }
     const posts = new Directory({
       path: 'posts',
-      fileSystem: InMemoryFileSystem,
+      fileSystem,
       loader: {
         mdx: withSchema<FrontMatter>(),
       },

@@ -149,7 +149,7 @@ const defaultLoaders: {
   [extension: string]: ModuleLoader<any>
 } = {
   md: async (_, file) => {
-    const value = await file.getText()
+    const value = await file.text()
     const frontMatter =
       'getFrontMatter' in file &&
       typeof (file as any).getFrontMatter === 'function'
@@ -1073,14 +1073,8 @@ export class File<
     return this.getFileStructureBase()
   }
 
-  /** Get the source text of this file. */
-  async getText(): Promise<string> {
-    const fileSystem = this.#directory.getFileSystem()
-    return fileSystem.readFile(this.#path)
-  }
-
-  /** Get the binary contents of this file. */
-  async getBinary(): Promise<Uint8Array> {
+  /** Read the file contents as bytes. */
+  async bytes(): Promise<Uint8Array> {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.readFileBinary(this.#path)
   }
@@ -1110,7 +1104,15 @@ export class File<
 
   /** Read the file contents as text. */
   async text(): Promise<string> {
-    return this.#getStreamingBlob().text()
+    const streamingContent = this.#getStreamingContent()
+    if (streamingContent) {
+      return new StreamableBlob(streamingContent, {
+        type: this.type,
+      }).text()
+    }
+
+    const fileSystem = this.#directory.getFileSystem()
+    return fileSystem.readFile(this.#path)
   }
 
   /** Read the file contents as an ArrayBuffer. */
@@ -1123,7 +1125,7 @@ export class File<
       }).arrayBuffer()
     }
 
-    const binary = await this.getBinary()
+    const binary = await this.bytes()
     const arrayBuffer = new ArrayBuffer(binary.byteLength)
     new Uint8Array(arrayBuffer).set(binary)
     return arrayBuffer
@@ -1304,7 +1306,7 @@ export class JSONFile<
   }
 
   async #readData(): Promise<Data> {
-    const source = await this.getText()
+    const source = await this.text()
 
     try {
       let value = JSON.parse(source) as unknown
@@ -1527,9 +1529,7 @@ export class ModuleExport<Value> {
    *
    * Note, including dependencies can be expensive to calculate, only use when necessary.
    */
-  async getText({
-    includeDependencies,
-  }: { includeDependencies?: boolean } = {}) {
+  async text({ includeDependencies }: { includeDependencies?: boolean } = {}) {
     const location = await this.#getLocation()
 
     if (location === undefined) {
@@ -2505,7 +2505,7 @@ export class MDXFile<
 
   async #getRawSource() {
     if (!this.#rawSource) {
-      this.#rawSource = super.getText()
+      this.#rawSource = super.text()
     }
     return this.#rawSource
   }
@@ -2521,7 +2521,7 @@ export class MDXFile<
     return this.#parsedSource
   }
 
-  override async getText(): Promise<string> {
+  override async text(): Promise<string> {
     const result = await this.#getSourceWithFrontMatter()
     return result.content
   }
@@ -2637,7 +2637,7 @@ export class MDXFile<
       }
 
       if (!this.#sections) {
-        const source = await this.getText()
+        const source = await this.text()
         this.#sections = getMDXSections(source) as ContentSection[]
       }
     }
@@ -2680,7 +2680,7 @@ export class MDXFile<
 
   async #getStaticExportValues() {
     if (!this.#staticExportValues) {
-      const source = await this.getText()
+      const source = await this.text()
       this.#staticExportValues = getMDXExportStaticValues(source)
     }
     return this.#staticExportValues
@@ -2772,7 +2772,7 @@ export class MarkdownFile<
 
   async #getRawSource() {
     if (!this.#rawSource) {
-      this.#rawSource = super.getText()
+      this.#rawSource = super.text()
     }
     return this.#rawSource
   }
@@ -2788,7 +2788,7 @@ export class MarkdownFile<
     return this.#parsedSource
   }
 
-  override async getText(): Promise<string> {
+  override async text(): Promise<string> {
     const result = await this.#getSourceWithFrontMatter()
     return result.content
   }
@@ -2875,7 +2875,7 @@ export class MarkdownFile<
   /** Get sections parsed from the markdown content based on headings. */
   async getSections(): Promise<ContentSection[]> {
     if (!this.#sections) {
-      const source = await this.getText()
+      const source = await this.text()
       this.#sections = getMarkdownSections(source) as ContentSection[]
     }
     return this.#sections ?? []

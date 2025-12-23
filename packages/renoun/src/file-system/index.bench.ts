@@ -525,11 +525,11 @@ describe('Export hot path and type/metadata resolution (TS)', () => {
   )
 
   bench(
-    'utils/path.ts -> getText("basename")',
+    'utils/path.ts -> text("basename")',
     async () => {
       const file = await utilsTs.getFile('path', 'ts')
       const exp = await file.getExport('basename')
-      await exp.getText()
+      await exp.text()
     },
     BENCH_OPTIONS
   )
