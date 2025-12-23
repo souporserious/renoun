@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { StreamableBlob, type StreamableContent } from './StreamableBlob.ts'
-import { Directory, File, MemoryFileSystem } from './index.tsx'
+import { Directory, File, InMemoryFileSystem } from './index.tsx'
 
 function createContent(
   data: string,
@@ -51,7 +51,7 @@ describe('streaming helpers', () => {
 
 describe('File streaming helpers', () => {
   it('wraps filesystem entries as streaming blobs', async () => {
-    const fileSystem = new MemoryFileSystem({})
+    const fileSystem = new InMemoryFileSystem({})
     await fileSystem.writeFile('example.txt', 'stream me')
     const directory = new Directory({ fileSystem })
     const file = new File({ directory, path: 'example.txt' })
@@ -69,7 +69,7 @@ describe('File streaming helpers', () => {
   })
 
   it('allows slicing directly from File without explicit Blob creation', async () => {
-    const fileSystem = new MemoryFileSystem({})
+    const fileSystem = new InMemoryFileSystem({})
     await fileSystem.writeFile('range.txt', '0123456789')
     const directory = new Directory({ fileSystem })
     const file = new File({ directory, path: 'range.txt' })
@@ -83,13 +83,13 @@ describe('File streaming helpers', () => {
   })
 
   it('falls back to the raw stream when byte length cannot be inferred', async () => {
-    class UnknownSizeMemoryFileSystem extends MemoryFileSystem {
+    class UnknownSizeInMemoryFileSystem extends InMemoryFileSystem {
       override getFileByteLengthSync(): number | undefined {
         return undefined
       }
     }
 
-    const fileSystem = new UnknownSizeMemoryFileSystem({})
+    const fileSystem = new UnknownSizeInMemoryFileSystem({})
     await fileSystem.writeFile('mystery.txt', 'streamed without size')
     const directory = new Directory({ fileSystem })
     const file = new File({ directory, path: 'mystery.txt' })

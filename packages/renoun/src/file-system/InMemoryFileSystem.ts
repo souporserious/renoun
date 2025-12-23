@@ -15,37 +15,37 @@ import type { DirectoryEntry } from './types.ts'
 
 const tsMorph = getTsMorph()
 
-export type MemoryFileTextEntry = {
+export type InMemoryFileTextEntry = {
   kind: 'text'
   content: string
 }
 
-export type MemoryFileBinaryEntry = {
+export type InMemoryFileBinaryEntry = {
   kind: 'binary'
   content: Uint8Array | string
   encoding?: 'binary' | 'base64'
 }
 
-export type MemoryFileEntry = MemoryFileTextEntry | MemoryFileBinaryEntry
+export type InMemoryFileEntry = InMemoryFileTextEntry | InMemoryFileBinaryEntry
 
-export type MemoryDirectoryEntry = { kind: 'directory' }
+export type InMemoryDirectoryEntry = { kind: 'directory' }
 
-export type MemoryEntry = MemoryFileEntry | MemoryDirectoryEntry
+export type InMemoryEntry = InMemoryFileEntry | InMemoryDirectoryEntry
 
-export type MemoryFileContent =
+export type InMemoryFileContent =
   | string
   | Uint8Array
   | ArrayBuffer
   | ArrayBufferView
-  | MemoryFileEntry
+  | InMemoryFileEntry
 
 /** A file system that stores files in memory. */
-export class MemoryFileSystem extends FileSystem {
+export class InMemoryFileSystem extends FileSystem {
   #projectOptions: ProjectOptions
-  #files: Map<string, MemoryEntry>
+  #files: Map<string, InMemoryEntry>
   #ignore: ReturnType<typeof ignore> | undefined
 
-  constructor(files: { [path: string]: MemoryFileContent }) {
+  constructor(files: { [path: string]: InMemoryFileContent }) {
     const projectId = crypto.randomUUID()
 
     super()
@@ -70,7 +70,7 @@ export class MemoryFileSystem extends FileSystem {
     }
   }
 
-  #normalizeFileContent(content: MemoryFileContent): MemoryFileEntry {
+  #normalizeFileContent(content: InMemoryFileContent): InMemoryFileEntry {
     if (typeof content === 'string') {
       return { kind: 'text', content }
     }
@@ -130,11 +130,11 @@ export class MemoryFileSystem extends FileSystem {
     }
 
     throw new Error(
-      '[renoun] Unsupported file content provided to MemoryFileSystem'
+      '[renoun] Unsupported file content provided to InMemoryFileSystem'
     )
   }
 
-  #maybeCreateSourceFile(path: string, entry: MemoryEntry) {
+  #maybeCreateSourceFile(path: string, entry: InMemoryEntry) {
     if (entry.kind !== 'text') {
       return
     }
@@ -173,7 +173,7 @@ export class MemoryFileSystem extends FileSystem {
 
   #collectEntriesUnderPath(path: string) {
     const normalizedPath = normalizePath(path)
-    const entries: Array<[string, MemoryEntry]> = []
+    const entries: Array<[string, InMemoryEntry]> = []
 
     for (const [entryPath, entry] of this.#files) {
       if (
@@ -200,7 +200,7 @@ export class MemoryFileSystem extends FileSystem {
     }
   }
 
-  #cloneEntry(entry: MemoryEntry): MemoryEntry {
+  #cloneEntry(entry: InMemoryEntry): InMemoryEntry {
     if (entry.kind === 'directory') {
       return { kind: 'directory' }
     }
@@ -240,7 +240,7 @@ export class MemoryFileSystem extends FileSystem {
     return segments.join('/')
   }
 
-  createFile(path: string, content: MemoryFileContent): void {
+  createFile(path: string, content: InMemoryFileContent): void {
     const normalizedPath = normalizePath(path)
     this.#ensureDirectoryPlaceholders(this.#getParentPath(normalizedPath))
     const entry = this.#normalizeFileContent(content)
@@ -273,11 +273,11 @@ export class MemoryFileSystem extends FileSystem {
     return normalized.startsWith('./') ? normalized.slice(2) : normalized
   }
 
-  getFiles(): Map<string, MemoryEntry> {
+  getFiles(): Map<string, InMemoryEntry> {
     return this.#files
   }
 
-  getFileEntry(path: string): MemoryEntry | undefined {
+  getFileEntry(path: string): InMemoryEntry | undefined {
     return this.#files.get(normalizePath(path))
   }
 
@@ -431,7 +431,7 @@ export class MemoryFileSystem extends FileSystem {
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {
     const normalizedPath = normalizePath(path)
     this.#ensureDirectoryPlaceholders(this.#getParentPath(normalizedPath))
-    const entry = this.#normalizeFileContent(content as MemoryFileContent)
+    const entry = this.#normalizeFileContent(content as InMemoryFileContent)
     this.#files.set(normalizedPath, entry)
     this.#maybeCreateSourceFile(normalizedPath, entry)
   }

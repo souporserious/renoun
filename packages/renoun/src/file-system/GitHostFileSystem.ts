@@ -2,7 +2,10 @@ import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.ts'
 import type { GitMetadata } from '../utils/get-local-git-file-metadata.ts'
 import type { GitExportMetadata } from '../utils/get-local-git-export-metadata.ts'
 import { Semaphore } from '../utils/Semaphore.ts'
-import { MemoryFileSystem, type MemoryFileContent } from './MemoryFileSystem.ts'
+import {
+  InMemoryFileSystem,
+  type InMemoryFileContent,
+} from './InMemoryFileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
 
 type GitHost = 'github' | 'gitlab' | 'bitbucket'
@@ -180,7 +183,7 @@ function getResetDelayMs(
   }
 }
 
-export class GitHostFileSystem extends MemoryFileSystem {
+export class GitHostFileSystem extends InMemoryFileSystem {
   #repository: string
   #ref: string
   #host: GitHost
@@ -489,7 +492,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
         }
       }
 
-      const content: MemoryFileContent = this.#isBinaryBuffer(buf)
+      const content: InMemoryFileContent = this.#isBinaryBuffer(buf)
         ? { kind: 'binary', content: buf, encoding: 'binary' }
         : new TextDecoder('utf-8').decode(buf)
 
@@ -1981,7 +1984,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
           const arrayBuffer = await response.arrayBuffer()
           const buffer = new Uint8Array(arrayBuffer)
           if (buffer.length > this.#maxFileBytes) return
-          const content: MemoryFileContent = this.#isBinaryBuffer(buffer)
+          const content: InMemoryFileContent = this.#isBinaryBuffer(buffer)
             ? { kind: 'binary', content: buffer, encoding: 'binary' }
             : new TextDecoder('utf-8').decode(buffer)
           this.createFile(path, content)
@@ -2271,7 +2274,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
 
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
     await this.#ensureInitialized()
-    return MemoryFileSystem.prototype.readDirectorySync.call(this, path)
+    return InMemoryFileSystem.prototype.readDirectorySync.call(this, path)
   }
 
   readDirectorySync(): DirectoryEntry[] {
@@ -2323,7 +2326,7 @@ export class GitHostFileSystem extends MemoryFileSystem {
         throw new Error(`[renoun] File not found: ${path}`)
       }
     }
-    return MemoryFileSystem.prototype.readFileSync.call(this, targetPath)
+    return InMemoryFileSystem.prototype.readFileSync.call(this, targetPath)
   }
 
   async readFileBinary(path: string): Promise<Uint8Array> {
@@ -2333,7 +2336,10 @@ export class GitHostFileSystem extends MemoryFileSystem {
     if (!entry) {
       throw new Error(`[renoun] File not found: ${path}`)
     }
-    return MemoryFileSystem.prototype.readFileBinarySync.call(this, targetPath)
+    return InMemoryFileSystem.prototype.readFileBinarySync.call(
+      this,
+      targetPath
+    )
   }
 
   readFileSync(): string {

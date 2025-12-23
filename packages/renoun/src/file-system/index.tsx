@@ -122,7 +122,7 @@ const mimeTypesByExtension: Record<string, string> = {
 
 export { FileSystem } from './FileSystem.ts'
 export { GitHostFileSystem } from './GitHostFileSystem.ts'
-export { MemoryFileSystem } from './MemoryFileSystem.ts'
+export { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 export {
   StreamableBlob,
   createRangeLimitedStream,

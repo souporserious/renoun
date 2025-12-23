@@ -2,7 +2,7 @@ import { bench, beforeAll, describe, it, expect, vi } from 'vitest'
 import {
   Directory,
   NodeFileSystem,
-  MemoryFileSystem,
+  InMemoryFileSystem,
   withSchema,
   isFile,
   ModuleExportNotFoundError,
@@ -50,7 +50,7 @@ let docsDevCached!: Directory<any>
 let originalEnv = process.env.NODE_ENV
 let memoryFixtures!: Directory<any>
 
-// Build a MemoryFileSystem snapshot from an on-disk directory for apples-to-apples comparisons
+// Build a InMemoryFileSystem snapshot from an on-disk directory for apples-to-apples comparisons
 async function buildMemoryFsSnapshot(rootPath: string) {
   const nodeFs = new NodeFileSystem()
   const files: Record<string, string> = {}
@@ -67,7 +67,7 @@ async function buildMemoryFsSnapshot(rootPath: string) {
   }
 
   await walk(rootPath)
-  return new MemoryFileSystem(files)
+  return new InMemoryFileSystem(files)
 }
 
 beforeAll(async () => {
@@ -155,7 +155,7 @@ beforeAll(async () => {
     includeDirectoryNamedFiles: true,
   })
 
-  // Prepare in-memory fixtures snapshot for MemoryFileSystem benchmarks
+  // Prepare in-memory fixtures snapshot for InMemoryFileSystem benchmarks
   const memoryFs = await buildMemoryFsSnapshot('fixtures')
   memoryFixtures = new Directory({
     path: 'fixtures',
@@ -165,7 +165,7 @@ beforeAll(async () => {
 })
 
 it('avoids additional readDirectory calls for identical options', async () => {
-  const fileSystem = new MemoryFileSystem({
+  const fileSystem = new InMemoryFileSystem({
     'index.ts': '',
     'components/Button/index.tsx': '',
     'components/Button/Button.tsx': '',
@@ -476,7 +476,7 @@ describe('Cached path (NODE_ENV=production)', () => {
   )
 })
 
-describe('MemoryFileSystem vs NodeFileSystem scans', () => {
+describe('InMemoryFileSystem vs NodeFileSystem scans', () => {
   bench(
     'memory: fixtures (recursive scan)',
     async () => {

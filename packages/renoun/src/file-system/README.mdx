@@ -110,7 +110,7 @@ When querying files using `getFile` or `getEntry`, the file system follows a spe
    - A `readme` file (e.g., `Button/readme.md`)
 
 ```tsx
-import { Directory, MemoryFileSystem } from 'renoun'
+import { Directory } from 'renoun'
 
 const directory = new Directory({ path: 'posts' })
 
@@ -252,10 +252,10 @@ If the underlying file system adapter cannot report a byte length, `stream()` fa
 #### Surface streaming views from renoun `File` instances
 
 ```ts
-import { Directory, File, MemoryFileSystem } from 'renoun/file-system'
+import { Directory, File, InMemoryFileSystem } from 'renoun/file-system'
 
 const directory = new Directory({
-  fileSystem: new MemoryFileSystem({
+  fileSystem: new InMemoryFileSystem({
     'video.mp4': new Uint8Array([1, 2, 3]),
   }),
 })
@@ -271,10 +271,10 @@ const type = file.type
 Streaming files work with `fetch` (including in Node runtimes that support Web streams). Nothing is buffered before the request is sent:
 
 ```ts
-import { Directory, File, MemoryFileSystem } from 'renoun/file-system'
+import { Directory, File, InMemoryFileSystem } from 'renoun/file-system'
 
 const directory = new Directory({
-  fileSystem: new MemoryFileSystem({
+  fileSystem: new InMemoryFileSystem({
     'video.mp4': new Uint8Array([1, 2, 3]),
   }),
 })

@@ -22,7 +22,7 @@ export async function resolveTypeAtLocation(
   position: number,
   kind: TsMorphSyntaxKind,
   filter?: TypeFilter,
-  isMemoryFileSystem = false
+  isInMemoryFileSystem = false
 ) {
   const typeId = `${filePath}:${position}:${kind}`
   const startTime = performance.now()
@@ -53,7 +53,7 @@ export async function resolveTypeAtLocation(
 
       const exportDeclarationType = exportDeclaration.getType()
 
-      if (isMemoryFileSystem) {
+      if (isInMemoryFileSystem) {
         // Skip dependency tracking and caching for memory file systems
         const result = resolveType(
           exportDeclarationType,

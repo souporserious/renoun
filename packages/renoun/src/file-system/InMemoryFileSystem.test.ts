@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'vitest'
 import { Buffer } from 'node:buffer'
 
-import { MemoryFileSystem } from './MemoryFileSystem'
+import { InMemoryFileSystem } from './InMemoryFileSystem'
 
-describe('MemoryFileSystem', () => {
+describe('InMemoryFileSystem', () => {
   test('stores binary file content safely and returns base64 string when read', () => {
     const binary = new Uint8Array([0, 1, 2, 3])
-    const fileSystem = new MemoryFileSystem({ 'binary.bin': binary })
+    const fileSystem = new InMemoryFileSystem({ 'binary.bin': binary })
 
     const entry = fileSystem.getFileEntry('binary.bin')
     expect(entry?.kind).toBe('binary')
@@ -32,7 +32,7 @@ describe('MemoryFileSystem', () => {
       encoding: 'base64' as const,
     }
 
-    const fileSystem = new MemoryFileSystem({ 'buffer.dat': entry })
+    const fileSystem = new InMemoryFileSystem({ 'buffer.dat': entry })
     const stored = fileSystem.getFileEntry('buffer.dat')
 
     expect(stored?.kind).toBe('binary')
@@ -63,7 +63,7 @@ describe('MemoryFileSystem', () => {
   })
 
   test('reads text files and reports existence correctly', async () => {
-    const fileSystem = new MemoryFileSystem({ 'readme.txt': 'hello' })
+    const fileSystem = new InMemoryFileSystem({ 'readme.txt': 'hello' })
 
     expect(fileSystem.fileExistsSync('readme.txt')).toBe(true)
     expect(fileSystem.readFileSync('readme.txt')).toBe('hello')
@@ -73,7 +73,7 @@ describe('MemoryFileSystem', () => {
   test('supports binary reads, streaming writes, and deletion', async () => {
     const encoder = new TextEncoder()
     const decoder = new TextDecoder()
-    const fileSystem = new MemoryFileSystem({})
+    const fileSystem = new InMemoryFileSystem({})
 
     await fileSystem.writeFile('text.txt', 'hello world')
     expect(decoder.decode(await fileSystem.readFileBinary('text.txt'))).toBe(
@@ -109,7 +109,7 @@ describe('MemoryFileSystem', () => {
     const size = 100_000
     const data = new Uint8Array(size)
     for (let i = 0; i < size; i++) data[i] = i % 256
-    const fs = new MemoryFileSystem({ 'big.bin': data })
+    const fs = new InMemoryFileSystem({ 'big.bin': data })
 
     const stream = fs.readFileStream('big.bin')
     const reader = stream.getReader()
@@ -132,7 +132,7 @@ describe('MemoryFileSystem', () => {
   })
 
   test('writeFileStream stores large data; readFileStream returns multiple chunks', async () => {
-    const fs = new MemoryFileSystem({})
+    const fs = new InMemoryFileSystem({})
     const size = 120_000
     const partA = new Uint8Array(60_000).fill(65) // 'A'
     const partB = new Uint8Array(60_000).fill(66) // 'B'
@@ -165,7 +165,7 @@ describe('MemoryFileSystem', () => {
   })
 
   test('readDirectorySync lists files and directories at a path', () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'a/b/c.txt': '1',
       'a/d.txt': '2',
       'z.txt': '3',
@@ -187,7 +187,7 @@ describe('MemoryFileSystem', () => {
   })
 
   test('isFilePathGitIgnored respects .gitignore patterns', () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       '.gitignore': 'dist/\n# comment\n*.log\n',
       'dist/app.ts': 'console.log(1)',
       'debug.log': new Uint8Array([1, 2, 3]),
@@ -199,7 +199,7 @@ describe('MemoryFileSystem', () => {
   })
 
   test('transpiles TypeScript files via transpileFile', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'src/add.ts': 'export const add = (a: number, b: number) => a + b',
     })
 
@@ -211,13 +211,15 @@ describe('MemoryFileSystem', () => {
   })
 
   test('throws on unsupported content provided to constructor', () => {
-    expect(() => new MemoryFileSystem({ bad: 123 as unknown as any })).toThrow(
-      '[renoun] Unsupported file content provided to MemoryFileSystem'
+    expect(
+      () => new InMemoryFileSystem({ bad: 123 as unknown as any })
+    ).toThrow(
+      '[renoun] Unsupported file content provided to InMemoryFileSystem'
     )
   })
 
   test('supports creating directories, renaming, and copying entries', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'folder/file.txt': 'original',
       'other.bin': new Uint8Array([1, 2, 3]),
     })
@@ -248,7 +250,7 @@ describe('MemoryFileSystem', () => {
   })
 
   test('handles directory copy and prevents subtree renames', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'dir/a.txt': 'A',
       'dir/sub/b.txt': 'B',
     })

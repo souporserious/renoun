@@ -15,7 +15,7 @@ import type { Section, ContentSection } from './index'
 import type { FileRegion } from '../utils/get-file-regions.ts'
 import { removeExtension } from '../utils/path.ts'
 import { NodeFileSystem } from './NodeFileSystem'
-import { MemoryFileSystem } from './MemoryFileSystem'
+import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 import * as gitHostFileSystemModule from './GitHostFileSystem'
 import {
   type FileSystemEntry,
@@ -234,14 +234,14 @@ describe('file system', () => {
   })
 
   test('virtual file system read directory', async () => {
-    const fileSystem = new MemoryFileSystem({ 'fixtures/utils/path.ts': '' })
+    const fileSystem = new InMemoryFileSystem({ 'fixtures/utils/path.ts': '' })
     const entries = await fileSystem.readDirectory('fixtures/utils')
     expect(entries).toHaveLength(1)
     expect(entries[0].name).toBe('path.ts')
   })
 
   test('memory file system supports binary, stream, and write operations', async () => {
-    const fileSystem = new MemoryFileSystem({})
+    const fileSystem = new InMemoryFileSystem({})
     const decoder = new TextDecoder()
     const encoder = new TextEncoder()
 
@@ -327,7 +327,7 @@ describe('file system', () => {
   })
 
   test('uses default MDX compiler when no loader is provided for in-memory file', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.mdx': ['export const number = 42', '', '# Hello World'].join('\n'),
     })
     const directory = new Directory({ fileSystem })
@@ -356,7 +356,7 @@ describe('file system', () => {
   })
 
   test('directory with virtual file system', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'fixtures/project/server.ts': '',
       'fixtures/project/types.ts': '',
     })
@@ -376,7 +376,7 @@ describe('file system', () => {
   })
 
   test('entries', async () => {
-    const fileSystem = new MemoryFileSystem({ 'foo.ts': '', 'bar.ts': '' })
+    const fileSystem = new InMemoryFileSystem({ 'foo.ts': '', 'bar.ts': '' })
     const directory = new Directory({ fileSystem })
     const entries = await directory.getEntries()
 
@@ -384,7 +384,7 @@ describe('file system', () => {
   })
 
   test('getEntries supports per-call filters', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'page.mdx': '',
       'note.txt': '',
       'nested/page.mdx': '',
@@ -410,7 +410,7 @@ describe('file system', () => {
   })
 
   test('reuses cached snapshots for identical getEntries options', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': '',
       'components/Button/index.tsx': '',
       'components/Button/Button.tsx': '',
@@ -472,7 +472,7 @@ describe('file system', () => {
   })
 
   test('virtual recursive entries', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': '',
       'components/Button/index.tsx': '',
       'components/Link.tsx': '',
@@ -496,7 +496,7 @@ describe('file system', () => {
   })
 
   test('filters out index and readme from entries by default', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.tsx': '',
       'README.mdx': '',
       'server.ts': '',
@@ -508,7 +508,7 @@ describe('file system', () => {
   })
 
   test('filters out hidden files by default', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       '.gitkeep': '',
       '.hidden-config': '',
       'visible.ts': '',
@@ -521,7 +521,7 @@ describe('file system', () => {
   })
 
   test('filters out hidden directories by default', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       '.hidden-dir/file.ts': '',
       'visible-dir/file.ts': '',
     })
@@ -535,7 +535,7 @@ describe('file system', () => {
   })
 
   test('includes hidden files when includeHiddenFiles is true', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       '.gitkeep': '',
       '.hidden-config': '',
       'visible.ts': '',
@@ -552,7 +552,7 @@ describe('file system', () => {
   })
 
   test('includes hidden directories when includeHiddenFiles is true', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       '.hidden-dir/file.ts': '',
       'visible-dir/file.ts': '',
     })
@@ -616,7 +616,7 @@ describe('file system', () => {
   })
 
   test('orders directory before its descendants by default', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'Button/Button.tsx': '',
       'Button/IconButton.tsx': '',
     })
@@ -650,7 +650,7 @@ describe('file system', () => {
   })
 
   test('supports runtime loader functions for directories', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': '',
       'guide.mdx': '# Guide',
     })
@@ -829,7 +829,7 @@ describe('file system', () => {
 
   test('filter virtual entries', async () => {
     type PostType = { frontmatter: { title: string } }
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'posts/getting-started.mdx': '# Getting Started',
       'posts/meta.json': '{ "title": "Posts" }',
     })
@@ -850,7 +850,7 @@ describe('file system', () => {
   })
 
   test('filter entries with file exports that have internal tags', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'Button.tsx': '/** @internal */ export const Button = () => {}',
       'Link.tsx': 'export const Link = () => {}',
     })
@@ -879,7 +879,7 @@ describe('file system', () => {
   })
 
   test('javascript file getExports filters @internal exports', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'tsconfig.json': '{ "compilerOptions": { "stripInternal": true } }',
       'Button.tsx': '/** @internal */ export const Button = () => {}',
       'Link.tsx': 'export const Link = () => {}',
@@ -904,7 +904,7 @@ describe('file system', () => {
   })
 
   test('javascript file getSections uses unslugified export names for ids (Reference anchors)', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': [
         'export const TableOfContents = () => null',
         '',
@@ -923,7 +923,7 @@ describe('file system', () => {
   })
 
   test('directory excludes files and folders with only internal exports', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'tsconfig.json': '{ "compilerOptions": { "stripInternal": true } }',
       '.gitignore': '**/tsconfig.json\n**/.gitignore\n',
       'Button.tsx': '/** @internal */ export const Button = () => {}',
@@ -943,7 +943,7 @@ describe('file system', () => {
   })
 
   test('string filter', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'foo.ts': '',
       'bar.tsx': '',
       'baz.mdx': '',
@@ -960,7 +960,7 @@ describe('file system', () => {
   })
 
   test('sort entries', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'foo.ts': '',
       'bar.ts': '',
     })
@@ -979,7 +979,7 @@ describe('file system', () => {
   })
 
   test('filter and sort entries', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'foo.ts': 'const order = 2',
       'bar.ts': 'const order = 1',
     })
@@ -1022,7 +1022,7 @@ describe('file system', () => {
   })
 
   test('deduplicates entries', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'Button.tsx': '',
       'Button.mdx': '',
       'CodeBlock/CodeBlock.tsx': '',
@@ -1045,7 +1045,7 @@ describe('file system', () => {
   })
 
   test('excludes entries based on tsconfig', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'Button/Button.tsx': '',
       'Button/examples/BasicUsage.tsx': '',
       'CodeBlock.tsx': '',
@@ -1134,7 +1134,7 @@ describe('file system', () => {
 
     const directory = new Directory({
       path: 'components',
-      fileSystem: new MemoryFileSystem({
+      fileSystem: new InMemoryFileSystem({
         'components/CodeBlock/CodeBlock.tsx': '',
         'components/CodeBlock/CodeBlock.mdx': '',
         'components/CodeBlock/CopyButton.tsx': '',
@@ -1147,7 +1147,7 @@ describe('file system', () => {
   })
 
   test('resolves package.json inside a directory named "package"', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'examples/package/package.json': '{"name":"@examples/package"}',
       'examples/package/app/page.tsx': '',
     })
@@ -1160,7 +1160,7 @@ describe('file system', () => {
   })
 
   test('prefers file over same-named directory when extension specified', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'foo/package.json': '{"name":"foo"}',
       'foo/package/index.ts': '',
     })
@@ -1235,11 +1235,11 @@ describe('file system', () => {
   })
 
   describe('file name with modifier', async () => {
-    let fileSystem: MemoryFileSystem
+    let fileSystem: InMemoryFileSystem
     let directory: Directory<any>
 
     beforeAll(() => {
-      fileSystem = new MemoryFileSystem({
+      fileSystem = new InMemoryFileSystem({
         'components/Reference.examples.tsx': '',
         'components/Reference.tsx': '',
       })
@@ -1294,7 +1294,7 @@ describe('file system', () => {
   })
 
   test('prioritizes base file name over file name with modifier', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'Reference.examples.tsx': '',
       'Reference.tsx': '',
     })
@@ -1315,7 +1315,7 @@ describe('file system', () => {
   })
 
   test('finds file with specific extension starting at directory', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'PackageInstall/index.ts': '',
       'PackageInstall/PackageInstall.mdx': '',
       'PackageInstall/PackageInstall.tsx': '',
@@ -1328,7 +1328,7 @@ describe('file system', () => {
   })
 
   test('removes order prefix from file name and path', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       '01.server.ts': '',
     })
     const directory = new Directory({ fileSystem })
@@ -1342,7 +1342,7 @@ describe('file system', () => {
   })
 
   test('nested ordered files', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       '01.docs/01.getting-started.mdx': '',
       '01.getting-started.mdx': '',
     })
@@ -1357,7 +1357,7 @@ describe('file system', () => {
   })
 
   test('path casing', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'Button.tsx': '',
       'Card/Card.tsx': '',
     })
@@ -1375,7 +1375,7 @@ describe('file system', () => {
   })
 
   test('deduplicate file path segments', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'Button/Button.tsx': '',
     })
     const directory = new Directory({ fileSystem })
@@ -1402,7 +1402,7 @@ describe('file system', () => {
   })
 
   test('all virtual file exports', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
     })
     const rootDirectory = new Directory({ fileSystem })
@@ -1425,7 +1425,7 @@ describe('file system', () => {
   })
 
   test('single virtual file export', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
     })
     const rootDirectory = new Directory({
@@ -1461,7 +1461,7 @@ describe('file system', () => {
   })
 
   test('file export schema', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const metadata = 1',
     })
     const directory = new Directory({
@@ -1506,7 +1506,7 @@ describe('file system', () => {
   })
 
   test('javascript file export static literal value', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': [
         'export const number = 42',
         "export const string = 'hello world'",
@@ -1544,7 +1544,7 @@ describe('file system', () => {
   })
 
   test('mdx file export static literal value', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.mdx': [
         'export const number = 42',
         "export const string = 'hello world'",
@@ -1591,7 +1591,7 @@ describe('file system', () => {
 
   test('mdx file provides chat urls with raw source', async () => {
     const source = ['# Hello', '', '## World'].join('\n')
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.mdx': source,
     })
     const directory = new Directory({ fileSystem })
@@ -1615,7 +1615,7 @@ describe('file system', () => {
   })
 
   test('markdown file default loader provides content and sections', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.md': '# Hello\n\n## World',
     })
     const directory = new Directory({ fileSystem })
@@ -1639,7 +1639,7 @@ describe('file system', () => {
   })
 
   test('json file getAll and get(path) with dot notation', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'config.json': JSON.stringify({
         a: { b: { c: 123 } },
         arr: [1, 2, 3],
@@ -1673,7 +1673,7 @@ describe('file system', () => {
   })
 
   test('isJSONFile type guard and json filter', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'data.json': '{"name":"renoun"}',
       'other.ts': '',
     })
@@ -1693,7 +1693,7 @@ describe('file system', () => {
   })
 
   test('markdown file caches parsed sections', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.md': '# Hello',
     })
     const directory = new Directory({ fileSystem })
@@ -1708,7 +1708,7 @@ describe('file system', () => {
 
   test('markdown file provides chat urls with raw source', async () => {
     const source = ['# Hello', '', '## World'].join('\n')
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.md': source,
     })
     const directory = new Directory({ fileSystem })
@@ -1732,7 +1732,7 @@ describe('file system', () => {
   })
 
   test('mdx file getContent/getSections alias exported values', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.mdx': '# Hello\n\n## World',
     })
     const directory = new Directory({ fileSystem })
@@ -1756,7 +1756,7 @@ describe('file system', () => {
   })
 
   test('mdx file getSections falls back to parsing when export missing', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.mdx': '# Hello\n\n## World',
     })
     const directory = new Directory({
@@ -1779,7 +1779,7 @@ describe('file system', () => {
   })
 
   test('javascript file getSections builds an outline from regions and exports', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'button.tsx': `
         //#region components
         export const Button = () => null
@@ -1823,7 +1823,7 @@ describe('file system', () => {
   })
 
   test('javascript file getRegions returns TypeScript regions', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'file.ts': `//#region alpha
 const a = 1
 //#endregion
@@ -1867,7 +1867,7 @@ function b() {}
   })
 
   test('schema transforms export value', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'hello-world.ts': `export const metadata = { title: 'Hello, World!', date: '2022-01-01' }`,
     })
     const directory = new Directory({
@@ -1907,7 +1907,7 @@ function b() {}
 
   test('file export metadata', async () => {
     const statementText = 'export default function hello() {}'
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': `/**\n * Say hello.\n * @category greetings\n */\n${statementText}`,
     })
     const directory = new Directory({ fileSystem })
@@ -1936,7 +1936,7 @@ function b() {}
   })
 
   test('getTags filters jsdoc template tags by default', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'identity.ts': `/**
  * Identity function.
  * @template T the value type
@@ -1959,7 +1959,7 @@ export function identity<T>(value: T) {
   })
 
   test('barrel file export metadata', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': `export { Button } from './Button.tsx'`,
       'Button.tsx': `/**\n * A button component.\n * @category components\n */\nexport function Button() {}`,
     })
@@ -1978,7 +1978,7 @@ export function identity<T>(value: T) {
       lastCommitDate: new Date('2024-01-02T00:00:00.000Z'),
     })
 
-    class GitAwareMemoryFileSystem extends MemoryFileSystem {
+    class GitAwareInMemoryFileSystem extends InMemoryFileSystem {
       async getGitExportMetadata(
         path: string,
         startLine: number,
@@ -1988,7 +1988,7 @@ export function identity<T>(value: T) {
       }
     }
 
-    const fileSystem = new GitAwareMemoryFileSystem({
+    const fileSystem = new GitAwareInMemoryFileSystem({
       'index.ts': 'export const value = 1',
     })
     const directory = new Directory({ fileSystem })
@@ -2008,7 +2008,7 @@ export function identity<T>(value: T) {
       .mockResolvedValue({ firstCommitDate, lastCommitDate: undefined })
 
     try {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'index.ts': 'export const answer = 42',
       })
       const directory = new Directory({ fileSystem })
@@ -2031,7 +2031,7 @@ export function identity<T>(value: T) {
       lastCommitDate,
     })
 
-    class GitAwareMemoryFileSystem extends MemoryFileSystem {
+    class GitAwareInMemoryFileSystem extends InMemoryFileSystem {
       async getGitExportMetadata(
         path: string,
         startLine: number,
@@ -2041,7 +2041,7 @@ export function identity<T>(value: T) {
       }
     }
 
-    const fileSystem = new GitAwareMemoryFileSystem({
+    const fileSystem = new GitAwareInMemoryFileSystem({
       'index.ts': 'export const value = 1',
     })
     const directory = new Directory({ fileSystem })
@@ -2061,7 +2061,7 @@ export function identity<T>(value: T) {
       .mockResolvedValue({ firstCommitDate: undefined, lastCommitDate })
 
     try {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'index.ts': 'export const answer = 42',
       })
       const directory = new Directory({ fileSystem })
@@ -2078,7 +2078,7 @@ export function identity<T>(value: T) {
   })
 
   test('file export type reference', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export type Metadata = { title: string }',
     })
     const directory = new Directory({ fileSystem })
@@ -2138,7 +2138,7 @@ export function identity<T>(value: T) {
   })
 
   test('loader factory returns loader map and is resolved once', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': '',
       'foo.ts': '',
     })
@@ -2167,7 +2167,7 @@ export function identity<T>(value: T) {
   })
 
   test('unwraps lazy loader functions returning a module promise', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': '',
     })
 
@@ -2184,7 +2184,7 @@ export function identity<T>(value: T) {
   })
 
   test('getExportValue', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const metadata = { title: "Hello, World!" }',
     })
     const directory = new Directory({
@@ -2209,7 +2209,7 @@ export function identity<T>(value: T) {
   })
 
   test('attempts to load index file when targeting directory path', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'fixtures/project/index.ts': 'export const project = 1',
     })
     const rootDirectory = new Directory({ fileSystem })
@@ -2219,7 +2219,7 @@ export function identity<T>(value: T) {
   })
 
   test('attempts to load readme file when targeting directory path', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'fixtures/project/README.mdx': '# Project',
     })
     const projectDirectory = new Directory({ path: 'fixtures', fileSystem })
@@ -2247,7 +2247,7 @@ export function identity<T>(value: T) {
   })
 
   test('generates sibling navigation from index as directory', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'components/index.ts': '',
       'utils/index.ts': '',
     })
@@ -2351,7 +2351,7 @@ export function identity<T>(value: T) {
   })
 
   test('uses file name for anonymous default export metadata', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': `export default function () {}`,
     })
     const directory = new Directory({ fileSystem })
@@ -2362,7 +2362,7 @@ export function identity<T>(value: T) {
   })
 
   test('isDirectory', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'Button/index.ts': '',
       'Button/Button.tsx': '',
       'Button/README.mdx': '',
@@ -2411,7 +2411,7 @@ export function identity<T>(value: T) {
 
   test('isFile', async () => {
     type Metadata = { title: string }
-    const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
+    const fileSystem = new InMemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory({
       fileSystem,
       loader: {
@@ -2430,7 +2430,7 @@ export function identity<T>(value: T) {
 
   test('isFile array', async () => {
     type Metadata = { title: string }
-    const fileSystem = new MemoryFileSystem({ 'Button.tsx': '' })
+    const fileSystem = new InMemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory({
       fileSystem,
       loader: {
@@ -2484,7 +2484,7 @@ export function identity<T>(value: T) {
       '/components/code-block/examples/basic-usage'
     )
 
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'guides/intro.mdx': '',
     })
 
@@ -2503,7 +2503,7 @@ export function identity<T>(value: T) {
   })
 
   test('prefers same-named sibling file as directory index', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'integrations.mdx': '',
       'integrations/index.mdx': '',
       'integrations/stripe.mdx': '',
@@ -2530,14 +2530,14 @@ export function identity<T>(value: T) {
   })
 
   test('entry group', async () => {
-    const memoryFileSystem = new MemoryFileSystem({
+    const InMemoryFileSystem = new InMemoryFileSystem({
       'posts/building-a-button-component.mdx': '# Building a Button Component',
       'posts/meta.js': 'export default { "title": "Posts" }',
     })
     type FrontMatter = { frontmatter: { title: string } }
     const posts = new Directory({
       path: 'posts',
-      fileSystem: memoryFileSystem,
+      fileSystem: InMemoryFileSystem,
       loader: {
         mdx: withSchema<FrontMatter>(),
       },
@@ -2590,7 +2590,7 @@ export function identity<T>(value: T) {
   })
 
   test('getSiblings in entry group', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'docs/intro.mdx': '',
       'docs/next-steps.mdx': '',
       'guides/intro.mdx': '',
@@ -2623,7 +2623,7 @@ export function identity<T>(value: T) {
   })
 
   test('multiple extensions in entry group', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'components/Button.mdx': '',
       'components/Button.tsx': '',
     })
@@ -2652,10 +2652,10 @@ export function identity<T>(value: T) {
 
   test('same base file name in entry group with root directories', async () => {
     const directoryOne = new Directory({
-      fileSystem: new MemoryFileSystem({ 'components/Button.tsx': '' }),
+      fileSystem: new InMemoryFileSystem({ 'components/Button.tsx': '' }),
     })
     const directoryTwo = new Directory({
-      fileSystem: new MemoryFileSystem({ 'docs/Button.mdx': '' }),
+      fileSystem: new InMemoryFileSystem({ 'docs/Button.mdx': '' }),
     })
     const collection = new Collection({
       entries: [directoryOne, directoryTwo],
@@ -2676,7 +2676,7 @@ export function identity<T>(value: T) {
     type TSXTypes = { metadata: { title: string } }
 
     const directoryA = new Directory({
-      fileSystem: new MemoryFileSystem({ 'Button.mdx': '' }),
+      fileSystem: new InMemoryFileSystem({ 'Button.mdx': '' }),
       loader: {
         mdx: withSchema<MDXTypes>(),
       },
@@ -2757,7 +2757,7 @@ export function identity<T>(value: T) {
 
   test('adds default MDXContent type to existing mdx loaders', async () => {
     const posts = new Directory({
-      fileSystem: new MemoryFileSystem({
+      fileSystem: new InMemoryFileSystem({
         'hello-world.mdx': `export const frontmatter = { title: 'Hello, World!' }\n\n# Hello, World!`,
       }),
       loader: {
@@ -2828,7 +2828,7 @@ export function identity<T>(value: T) {
   })
 
   test('includes parent directories when using recursive file pattern', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'docs/getting-started/index.mdx': '# Getting Started',
       'docs/advanced/examples/advanced.mdx': '# Advanced Example',
       'docs/advanced/examples/basic.mdx': '# Basic Example',
@@ -2871,7 +2871,7 @@ export function identity<T>(value: T) {
   })
 
   test('gets all files from recursive filter pattern', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'components/Box/Box.mdx': '# Box Component',
       'components/Box/examples/Basic.mdx': '# Basic Example',
       'components/Button/Button.mdx': '# Button Component',
@@ -2920,7 +2920,7 @@ export function identity<T>(value: T) {
 
   test('filter recursive pattern includes directory type in sort callback and entries', async () => {
     const directory = new Directory({
-      fileSystem: new MemoryFileSystem({}),
+      fileSystem: new InMemoryFileSystem({}),
       filter: '**/*.mdx',
     })
 
@@ -2963,7 +2963,7 @@ export function identity<T>(value: T) {
   })
 
   test('order based on exported values', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'features/ai-assistant.mdx': 'export const order = 1',
       'features/code-navigation.mdx': 'export const order = 2',
       'features/debugging.mdx': 'export const order = 3',
@@ -3007,7 +3007,7 @@ export function identity<T>(value: T) {
   })
 
   test('sort descriptor with direction', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'features/ai-assistant.mdx': 'export const order = 1',
       'features/code-navigation.mdx': 'export const order = 2',
       'features/debugging.mdx': 'export const order = 3',
@@ -3054,7 +3054,7 @@ export function identity<T>(value: T) {
   })
 
   test('sort descriptor function with sync resolver', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'zebra.ts': '',
       'alpha.ts': '',
       'beta.ts': '',
@@ -3102,7 +3102,7 @@ export function identity<T>(value: T) {
   })
 
   test('sort descriptor function with async resolver', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'file1.ts': 'export const priority = 3',
       'file2.ts': 'export const priority = 1',
       'file3.ts': 'export const priority = 2',
@@ -3144,7 +3144,7 @@ export function identity<T>(value: T) {
     }>({
       filter: '*.mdx',
       sort: 'frontmatter.date',
-      fileSystem: new MemoryFileSystem({
+      fileSystem: new InMemoryFileSystem({
         'older.mdx': `export const frontmatter = { date: new Date("2022-01-01") }`,
         'newer.mdx': `export const frontmatter = { date: new Date("2023-01-01") }`,
       }),
@@ -3156,7 +3156,7 @@ export function identity<T>(value: T) {
   })
 
   test('excludes directory-named files by default', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'components/CodeBlock/CodeBlock.tsx': '',
       'components/CodeBlock/Tokens.tsx': '',
     })
@@ -3172,7 +3172,7 @@ export function identity<T>(value: T) {
   })
 
   test('includes directory-named files when includeDirectoryNamedFiles is true', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'components/CodeBlock/CodeBlock.tsx': '',
       'components/CodeBlock/Tokens.tsx': '',
     })
@@ -3240,7 +3240,7 @@ export function identity<T>(value: T) {
   })
 
   test('query path with modifier and separate extensions', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'Button.examples.tsx': ``,
       'useHover.examples.ts': ``,
     })
@@ -3269,7 +3269,7 @@ export function identity<T>(value: T) {
   })
 
   test('default export runtime value', async () => {
-    const fileSystem = new MemoryFileSystem({
+    const fileSystem = new InMemoryFileSystem({
       'index.ts': `export default 123`,
     })
     const directory = new Directory({
@@ -3288,7 +3288,7 @@ export function identity<T>(value: T) {
 
   describe('Package', () => {
     test('getExports returns directories for package exports', () => {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'node_modules/acme/package.json': JSON.stringify({
           name: 'acme',
           exports: {
@@ -3322,7 +3322,7 @@ export function identity<T>(value: T) {
     })
 
     test('supports export overrides and custom directories', () => {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'node_modules/acme/package.json': JSON.stringify({
           name: 'acme',
           exports: {
@@ -3369,7 +3369,7 @@ export function identity<T>(value: T) {
     })
 
     test('accepts explicit path and null sourcePath', () => {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'packages/local/package.json': JSON.stringify({ name: 'local' }),
         'packages/local/index.ts': '',
       })
@@ -3394,7 +3394,7 @@ export function identity<T>(value: T) {
         .mockReturnValue('.')
 
       try {
-        const fileSystem = new MemoryFileSystem({
+        const fileSystem = new InMemoryFileSystem({
           'pnpm-workspace.yaml': 'packages:\n  - packages/*\n',
           'packages/ui/package.json': JSON.stringify({
             name: 'ui',
@@ -3421,7 +3421,7 @@ export function identity<T>(value: T) {
         .mockReturnValue('.')
 
       try {
-        const fileSystem = new MemoryFileSystem({
+        const fileSystem = new InMemoryFileSystem({
           'apps/site/node_modules/acme/package.json': JSON.stringify({
             name: 'acme',
           }),
@@ -3451,7 +3451,7 @@ export function identity<T>(value: T) {
         .mockReturnValue('.')
 
       try {
-        const fileSystem = new MemoryFileSystem({
+        const fileSystem = new InMemoryFileSystem({
           'apps/site/node_modules/acme/package.json': JSON.stringify({
             name: 'acme',
           }),
@@ -3478,7 +3478,7 @@ export function identity<T>(value: T) {
     })
 
     test('falls back to repository when available', () => {
-      const remoteFs = new MemoryFileSystem({
+      const remoteFs = new InMemoryFileSystem({
         'package.json': JSON.stringify({ name: 'remote', exports: '.' }),
         'src/index.ts': '',
       })
@@ -3507,7 +3507,7 @@ export function identity<T>(value: T) {
     })
 
     test('exposes manifest analysis for exports and imports', () => {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'node_modules/acme/package.json': JSON.stringify({
           name: 'acme',
           exports: {
@@ -3689,7 +3689,7 @@ export function identity<T>(value: T) {
   })
 
   test('allows passing repository to link methods', async () => {
-    const fileSystem = new MemoryFileSystem({ 'foo.ts': '' })
+    const fileSystem = new InMemoryFileSystem({ 'foo.ts': '' })
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('foo', 'ts')
 
@@ -3700,7 +3700,7 @@ export function identity<T>(value: T) {
 
   describe('Workspace', () => {
     test('exposes workspace metadata', () => {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'pnpm-workspace.yaml': 'packages:\n  - packages/*',
         'pnpm-lock.yaml': '',
         'packages/foo/package.json': JSON.stringify({ name: 'foo' }),
@@ -3724,7 +3724,7 @@ export function identity<T>(value: T) {
 
   describe('getStructure', () => {
     test('workspace uses root package.json name', async () => {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'package.json': JSON.stringify({ name: 'acme' }),
       })
 
@@ -3742,7 +3742,7 @@ export function identity<T>(value: T) {
     })
 
     test('directory yields directory and file entries with metadata', async () => {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'docs/index.md': [
           '---',
           'description: Hello Docs',
@@ -3770,7 +3770,7 @@ export function identity<T>(value: T) {
     })
 
     test('markdown file includes front matter and description', async () => {
-      const fileSystem = new MemoryFileSystem({
+      const fileSystem = new InMemoryFileSystem({
         'docs/page.md': [
           '---',
           'description: Page Desc',
