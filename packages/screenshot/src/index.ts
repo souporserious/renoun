@@ -4361,7 +4361,8 @@ function renderFormControl(
     style.borderTopColor && style.borderTopColor !== 'transparent'
       ? style.borderTopColor
       : 'rgba(0,0,0,0.3)'
-  const borderWidth = Math.max(1, parseCssLength(style.borderTopWidth) || 1)
+  const borderWidth = parseCssLength(style.borderTopWidth) || 0
+  const borderStyle = style.borderTopStyle
 
   const font = buildCanvasFont(style)
 
@@ -4371,11 +4372,14 @@ function renderFormControl(
     context.fill()
   })
 
+  // Only draw border if it's visible (has width and style is not 'none')
+  if (borderWidth > 0 && borderStyle && borderStyle !== 'none') {
   context.lineWidth = borderWidth
   context.strokeStyle = borderColor
   drawRoundedOrRect(() => {
     context.stroke()
   })
+  }
 
   context.font = font
   context.fillStyle = style.color || '#000'
@@ -5432,8 +5436,17 @@ function drawOutline(
   radii: BorderRadii,
   hasRadius: boolean
 ): void {
-  const outlineStyle = style.outlineStyle || 'none'
-  if (!outlineStyle || outlineStyle === 'none' || outlineStyle === 'hidden') {
+  const outlineStyleRaw = style.outlineStyle || 'none'
+  const outlineStyle = outlineStyleRaw.trim().toLowerCase()
+
+  // Skip browser default outline styles. 'auto' is used by browsers for
+  // focus rings which we cannot accurately replicate in canvas.
+  if (
+    !outlineStyle ||
+    outlineStyle === 'none' ||
+    outlineStyle === 'hidden' ||
+    outlineStyle === 'auto'
+  ) {
     return
   }
 
