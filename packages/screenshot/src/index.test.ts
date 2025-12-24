@@ -1589,6 +1589,69 @@ describe('screenshot', () => {
       // in this region because the transform was being applied twice.
       expect(greenBlueOverlap.g).toBeGreaterThan(200)
       expect(greenBlueOverlap.b).toBeGreaterThan(200)
+
+      // Compare to DOM-rendered version via snapshot
+      await expectCanvasToMatchSnapshot(
+        canvas,
+        'mix-blend-mode-overlapping-circles',
+        wrapper
+      )
+    })
+
+    it('border-radius 50% creates perfect circle (128px)', async () => {
+      // Regression test: verify that 50% border-radius creates a proper circle
+      // Using 128px specifically because 50% = 64px, not 50px
+      const wrapper = createElement({
+        width: '128px',
+        height: '128px',
+        backgroundColor: '#1e293b',
+        position: 'relative',
+      })
+
+      const circle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '128px',
+        height: '128px',
+        borderRadius: '50%',
+        backgroundColor: '#ef4444',
+      })
+
+      wrapper.appendChild(circle)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+
+      // Sample corners - they should be background color (circle should not touch corners)
+      const topLeftCorner = sampleArea(canvas, 3, 3, 2)
+      const topRightCorner = sampleArea(canvas, 124, 3, 2)
+      const bottomLeftCorner = sampleArea(canvas, 3, 124, 2)
+      const bottomRightCorner = sampleArea(canvas, 124, 124, 2)
+
+      // Corners should show background color (dark blue #1e293b ≈ rgb(30, 41, 59))
+      expect(topLeftCorner.r).toBeLessThan(100)
+      expect(topRightCorner.r).toBeLessThan(100)
+      expect(bottomLeftCorner.r).toBeLessThan(100)
+      expect(bottomRightCorner.r).toBeLessThan(100)
+
+      // Sample center - should be red
+      const center = sampleArea(canvas, 64, 64, 5)
+      expect(center.r).toBeGreaterThan(200)
+
+      // Sample midpoints of edges - should be red (circle touches edge centers)
+      const topCenter = sampleArea(canvas, 64, 2, 2)
+      const rightCenter = sampleArea(canvas, 125, 64, 2)
+      const bottomCenter = sampleArea(canvas, 64, 125, 2)
+      const leftCenter = sampleArea(canvas, 2, 64, 2)
+
+      expect(topCenter.r).toBeGreaterThan(200)
+      expect(rightCenter.r).toBeGreaterThan(200)
+      expect(bottomCenter.r).toBeGreaterThan(200)
+      expect(leftCenter.r).toBeGreaterThan(200)
+
+      // Visual comparison with DOM
+      await expectCanvasToMatchSnapshot(canvas, 'circle-128px', wrapper)
     })
   })
 

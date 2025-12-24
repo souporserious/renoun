@@ -4374,11 +4374,11 @@ function renderFormControl(
 
   // Only draw border if it's visible (has width and style is not 'none')
   if (borderWidth > 0 && borderStyle && borderStyle !== 'none') {
-  context.lineWidth = borderWidth
-  context.strokeStyle = borderColor
-  drawRoundedOrRect(() => {
-    context.stroke()
-  })
+    context.lineWidth = borderWidth
+    context.strokeStyle = borderColor
+    drawRoundedOrRect(() => {
+      context.stroke()
+    })
   }
 
   context.font = font
@@ -4826,27 +4826,55 @@ function getBorderRadii(
   const maxX = rect.width / 2
   const maxY = rect.height / 2
   const topLeft = clampRadius(
-    parseCssLength(style.borderTopLeftRadius),
+    parseBorderRadius(style.borderTopLeftRadius, rect.width, rect.height),
     maxX,
     maxY
   )
   const topRight = clampRadius(
-    parseCssLength(style.borderTopRightRadius),
+    parseBorderRadius(style.borderTopRightRadius, rect.width, rect.height),
     maxX,
     maxY
   )
   const bottomRight = clampRadius(
-    parseCssLength(style.borderBottomRightRadius),
+    parseBorderRadius(style.borderBottomRightRadius, rect.width, rect.height),
     maxX,
     maxY
   )
   const bottomLeft = clampRadius(
-    parseCssLength(style.borderBottomLeftRadius),
+    parseBorderRadius(style.borderBottomLeftRadius, rect.width, rect.height),
     maxX,
     maxY
   )
 
   return { topLeft, topRight, bottomRight, bottomLeft }
+}
+
+/**
+ * Parse a border-radius value, handling percentage values correctly.
+ * CSS border-radius percentages are relative to the corresponding dimension
+ * (width for horizontal, height for vertical). For single-value syntax,
+ * we use the minimum of both to create a uniform radius.
+ */
+function parseBorderRadius(
+  value: string | null | undefined,
+  width: number,
+  height: number
+): number {
+  if (!value) return 0
+  const trimmed = value.trim()
+  if (!trimmed) return 0
+
+  // Handle percentage values: "50%" should be 50% of the element size
+  if (trimmed.endsWith('%')) {
+    const percentage = parseFloat(trimmed)
+    if (!Number.isFinite(percentage)) return 0
+    // For a uniform border-radius, use the smaller dimension to ensure
+    // a proper circle on square elements and consistent curves on rectangles
+    return (percentage / 100) * Math.min(width, height)
+  }
+
+  // For non-percentage values, parse as regular CSS length
+  return parseCssLength(value)
 }
 
 function clampRadius(value: number, maxX: number, maxY: number): number {
