@@ -1131,6 +1131,465 @@ describe('screenshot', () => {
         wrapper
       )
     })
+
+    it('mix-blend-mode screen with two overlapping circles', async () => {
+      // Simple case: two overlapping circles with screen blend mode
+      const wrapper = createElement({
+        width: '150px',
+        height: '100px',
+        backgroundColor: '#1e293b',
+        position: 'relative',
+      })
+
+      // Red circle (left)
+      const redCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#ef4444',
+        mixBlendMode: 'screen',
+      })
+
+      // Blue circle (right, overlapping with red)
+      const blueCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '50px',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#3b82f6',
+        mixBlendMode: 'screen',
+      })
+
+      wrapper.appendChild(redCircle)
+      wrapper.appendChild(blueCircle)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+
+      // The overlap region (x: 50-100) should show magenta/pink (red + blue screen blend)
+      // Let's verify the colors at key positions:
+      // - Left (x=25): Red circle only - should be bright red
+      // - Center (x=75): Red + Blue overlap - should be magenta/pink (screen blend)
+      // - Right (x=125): Blue circle only - should be bright blue
+
+      // For screen blend: result = 1 - (1-src) * (1-dst)
+      // Red (#ef4444 ≈ rgb(239, 68, 68)) screened with dark bg should be bright red
+      // Blue (#3b82f6 ≈ rgb(59, 130, 246)) screened with dark bg should be bright blue
+      // Red + Blue screened should produce magenta (high R, low G, high B)
+
+      const leftColor = sampleArea(canvas, 25, 50, 5)
+      const rightColor = sampleArea(canvas, 125, 50, 5)
+      const overlapColor = sampleArea(canvas, 75, 50, 5)
+
+      // Left should be red-ish (high R, low G, low B)
+      expect(leftColor.r).toBeGreaterThan(200)
+      expect(leftColor.g).toBeLessThan(150)
+
+      // Right should be blue-ish (low R, medium G, high B)
+      expect(rightColor.b).toBeGreaterThan(200)
+      expect(rightColor.r).toBeLessThan(150)
+
+      // Overlap should show screen blend - both R and B should be high
+      // Screen of red and blue should produce magenta-ish (high R, medium/low G, high B)
+      expect(overlapColor.r).toBeGreaterThan(200) // Red contribution
+      expect(overlapColor.b).toBeGreaterThan(200) // Blue contribution
+      // G should be relatively low (neither red nor blue have much green)
+    })
+
+    it('mix-blend-mode screen with three overlapping circles (no transform)', async () => {
+      // Three overlapping circles, positioned explicitly without transform
+      const wrapper = createElement({
+        width: '200px',
+        height: '175px',
+        backgroundColor: '#1e293b',
+        position: 'relative',
+      })
+
+      // Red circle (top-left)
+      const redCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '128px',
+        height: '128px',
+        borderRadius: '50%',
+        backgroundColor: '#ef4444',
+        mixBlendMode: 'screen',
+      })
+
+      // Green circle (top-right, overlapping with red)
+      const greenCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '72px',
+        width: '128px',
+        height: '128px',
+        borderRadius: '50%',
+        backgroundColor: '#22c55e',
+        mixBlendMode: 'screen',
+      })
+
+      // Blue circle (bottom-center, overlapping with both)
+      const blueCircle = createElement({
+        position: 'absolute',
+        top: '47px',
+        left: '36px',
+        width: '128px',
+        height: '128px',
+        borderRadius: '50%',
+        backgroundColor: '#3b82f6',
+        mixBlendMode: 'screen',
+      })
+
+      wrapper.appendChild(redCircle)
+      wrapper.appendChild(greenCircle)
+      wrapper.appendChild(blueCircle)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+
+      // Verify overlap regions show correct blending
+      // Red + Green (yellow-ish): around x=100, y=50
+      // Red + Blue (magenta): around x=50, y=90
+      // Green + Blue (cyan): around x=130, y=90
+      // All three (white-ish): around x=100, y=80
+
+      // Sample the triple-overlap region (should be very bright, near white)
+      const tripleOverlap = sampleArea(canvas, 100, 75, 5)
+
+      // All channels should be bright due to screen blending all three colors
+      expect(tripleOverlap.r).toBeGreaterThan(220)
+      expect(tripleOverlap.g).toBeGreaterThan(220)
+      expect(tripleOverlap.b).toBeGreaterThan(220)
+    })
+
+    it('mix-blend-mode with transform (regression test)', async () => {
+      // Test that mix-blend-mode works correctly with CSS transforms
+      const wrapper = createElement({
+        width: '200px',
+        height: '150px',
+        backgroundColor: '#1e293b',
+        position: 'relative',
+      })
+
+      // Red circle (no transform)
+      const redCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '25px',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#ef4444',
+        mixBlendMode: 'screen',
+      })
+
+      // Blue circle (with transform, overlapping with red)
+      const blueCircle = createElement({
+        position: 'absolute',
+        top: '25px',
+        left: '125px',
+        transform: 'translateX(-50px)',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#3b82f6',
+        mixBlendMode: 'screen',
+      })
+
+      wrapper.appendChild(redCircle)
+      wrapper.appendChild(blueCircle)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+
+      // The overlap region should show screen blend of red + blue = magenta
+      // Blue circle after transform is at left: 125 - 50 = 75px
+      // Overlap region: x=75 to x=125, y=25 to y=100
+      // Sample at the center of overlap: x=100, y=62
+      const overlapColor = sampleArea(canvas, 100, 62, 5)
+
+      // Both R and B should be high (screen blend of red and blue)
+      expect(overlapColor.r).toBeGreaterThan(200)
+      expect(overlapColor.b).toBeGreaterThan(200)
+    })
+
+    it('mix-blend-mode with right positioning', async () => {
+      // Test blend mode with element using right: 0 positioning
+      const wrapper = createElement({
+        width: '200px',
+        height: '100px',
+        backgroundColor: '#1e293b',
+        position: 'relative',
+      })
+
+      // Red circle (using left positioning)
+      const redCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#ef4444',
+        mixBlendMode: 'screen',
+      })
+
+      // Blue circle (using right positioning)
+      const blueCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        right: '0',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#3b82f6',
+        mixBlendMode: 'screen',
+      })
+
+      wrapper.appendChild(redCircle)
+      wrapper.appendChild(blueCircle)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+
+      // Blue circle with right: 0 on 200px width = left edge at 100px
+      // Red ends at 100px, blue starts at 100px - they should be adjacent, not overlapping
+      // Let's verify: red at x=50, blue at x=150
+      const redColor = sampleArea(canvas, 50, 50, 5)
+      const blueColor = sampleArea(canvas, 150, 50, 5)
+
+      expect(redColor.r).toBeGreaterThan(200)
+      expect(blueColor.b).toBeGreaterThan(200)
+    })
+
+    it('mix-blend-mode with overlapping using right positioning', async () => {
+      // Test blend mode with overlapping elements using right: 0 positioning
+      const wrapper = createElement({
+        width: '150px',
+        height: '100px',
+        backgroundColor: '#1e293b',
+        position: 'relative',
+      })
+
+      // Red circle (using left positioning)
+      const redCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#ef4444',
+        mixBlendMode: 'screen',
+      })
+
+      // Blue circle (using right positioning, will overlap with red)
+      const blueCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        right: '0',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#3b82f6',
+        mixBlendMode: 'screen',
+      })
+
+      wrapper.appendChild(redCircle)
+      wrapper.appendChild(blueCircle)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+
+      // Blue circle with right: 0 on 150px width = left edge at 50px
+      // Red spans 0-100, Blue spans 50-150
+      // Overlap region: 50-100
+      const overlapColor = sampleArea(canvas, 75, 50, 5)
+
+      // Should have both high R and high B (screen blend of red + blue)
+      expect(overlapColor.r).toBeGreaterThan(200)
+      expect(overlapColor.b).toBeGreaterThan(200)
+    })
+
+    it('mix-blend-mode with left percentage + transform', async () => {
+      // Test the specific pattern: left: 50% + transform: translateX(-50%)
+      const wrapper = createElement({
+        width: '200px',
+        height: '100px',
+        backgroundColor: '#1e293b',
+        position: 'relative',
+      })
+
+      // Red circle (simple positioning)
+      const redCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#ef4444',
+        mixBlendMode: 'screen',
+      })
+
+      // Blue circle (using left: 50% + transform: translateX(-50%))
+      // This centers the element at x=100 (50% of 200), then shifts left by 50px (50% of 100)
+      // Result: left edge at 50px, right edge at 150px
+      const blueCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#3b82f6',
+        mixBlendMode: 'screen',
+      })
+
+      wrapper.appendChild(redCircle)
+      wrapper.appendChild(blueCircle)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+
+      // Red spans 0-100, Blue spans 50-150
+      // Overlap region: 50-100
+      const overlapColor = sampleArea(canvas, 75, 50, 5)
+
+      // Should have both high R and high B (screen blend)
+      expect(overlapColor.r).toBeGreaterThan(200)
+      expect(overlapColor.b).toBeGreaterThan(200)
+    })
+
+    it('mix-blend-mode with bottom positioning', async () => {
+      // Test blend mode with element using bottom: 0 positioning
+      const wrapper = createElement({
+        width: '100px',
+        height: '150px',
+        backgroundColor: '#1e293b',
+        position: 'relative',
+      })
+
+      // Red circle (using top positioning)
+      const redCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#ef4444',
+        mixBlendMode: 'screen',
+      })
+
+      // Blue circle (using bottom positioning, will overlap with red)
+      const blueCircle = createElement({
+        position: 'absolute',
+        bottom: '0',
+        left: '0',
+        width: '100px',
+        height: '100px',
+        borderRadius: '50%',
+        backgroundColor: '#3b82f6',
+        mixBlendMode: 'screen',
+      })
+
+      wrapper.appendChild(redCircle)
+      wrapper.appendChild(blueCircle)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+
+      // Red spans y=0-100, Blue spans y=50-150
+      // Overlap region: y=50-100
+      const overlapColor = sampleArea(canvas, 50, 75, 5)
+
+      // Should have both high R and high B (screen blend)
+      expect(overlapColor.r).toBeGreaterThan(200)
+      expect(overlapColor.b).toBeGreaterThan(200)
+    })
+
+    it('mix-blend-mode screen with multiple overlapping circles (BlendModeExample layout)', async () => {
+      // Matches the BlendModeExample from CSSExamples.tsx
+      // Layout:
+      //   Red: top-left (0-128, 0-128)
+      //   Green: top-right (128-256, 0-128)
+      //   Blue: bottom-center (64-192, 64-192)
+      // Overlaps:
+      //   Red + Blue: (64-128, 64-128)
+      //   Green + Blue: (128-192, 64-128)
+      const wrapper = createElement({
+        width: '256px',
+        height: '192px',
+        backgroundColor: '#3d4555',
+        position: 'relative',
+      })
+
+      // Red circle (top-left)
+      const redCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '128px',
+        height: '128px',
+        borderRadius: '50%',
+        backgroundColor: '#ef4444',
+        mixBlendMode: 'screen',
+      })
+
+      // Green circle (top-right)
+      const greenCircle = createElement({
+        position: 'absolute',
+        top: '0',
+        right: '0',
+        width: '128px',
+        height: '128px',
+        borderRadius: '50%',
+        backgroundColor: '#22c55e',
+        mixBlendMode: 'screen',
+      })
+
+      // Blue circle (bottom-center with transform)
+      const blueCircle = createElement({
+        position: 'absolute',
+        bottom: '0',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '128px',
+        height: '128px',
+        borderRadius: '50%',
+        backgroundColor: '#3b82f6',
+        mixBlendMode: 'screen',
+      })
+
+      wrapper.appendChild(redCircle)
+      wrapper.appendChild(greenCircle)
+      wrapper.appendChild(blueCircle)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+
+      // Sample the overlap regions
+      const redBlueOverlap = sampleArea(canvas, 96, 96, 5) // Red+Blue overlap
+      const greenBlueOverlap = sampleArea(canvas, 160, 96, 5) // Green+Blue overlap
+
+      // Verify red+blue overlap has both high R and high B (magenta)
+      expect(redBlueOverlap.r).toBeGreaterThan(200)
+      expect(redBlueOverlap.b).toBeGreaterThan(200)
+
+      // Verify green+blue overlap has both high G and high B (cyan)
+      // This was the key failing assertion before the fix - blue wasn't rendering
+      // in this region because the transform was being applied twice.
+      expect(greenBlueOverlap.g).toBeGreaterThan(200)
+      expect(greenBlueOverlap.b).toBeGreaterThan(200)
+    })
   })
 
   describe('image snapshots: SVG', () => {

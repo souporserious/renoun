@@ -3221,17 +3221,49 @@ function getLayoutRect(
     return toDocumentRect(element, fallback)
   }
 
-  // Approximate the pre-transform border-box as a rect with the element's
-  // intrinsic layout size (offsetWidth/offsetHeight) centered on the visual
-  // bounding box. For pure 2D transforms that rotate/scale around the
-  // transform-origin (center by default), the center point is preserved, so
-  // this recovers a good estimate of the untransformed box.
-  const layoutWidth =
-    (element instanceof HTMLElement ? element.offsetWidth : 0) ||
-    Math.max(0, fallback.width)
-  const layoutHeight =
-    (element instanceof HTMLElement ? element.offsetHeight : 0) ||
-    Math.max(0, fallback.height)
+  // For elements with 2D transforms, we need the true pre-transform layout
+  // position. The previous center-based approximation incorrectly assumed
+  // transforms preserve the element's center, but translations (e.g.,
+  // translateX(-50%)) shift the center. Using offset-based positioning gives
+  // the true layout rect before transforms are applied.
+  if (element instanceof HTMLElement) {
+    // Calculate position by traversing the offsetParent chain
+    let left = element.offsetLeft
+    let top = element.offsetTop
+    let current = element.offsetParent as HTMLElement | null
+
+    while (current) {
+      left += current.offsetLeft
+      top += current.offsetTop
+
+      // Add the parent's border width since offsetLeft is relative to padding edge
+      left += current.clientLeft || 0
+      top += current.clientTop || 0
+
+      const next = current.offsetParent as HTMLElement | null
+      if (!next) break
+      current = next
+    }
+
+    const width = element.offsetWidth
+    const height = element.offsetHeight
+
+    return {
+      left,
+      top,
+      width,
+      height,
+      right: left + width,
+      bottom: top + height,
+      x: left,
+      y: top,
+      toJSON: () => ({}),
+    } as DOMRect
+  }
+
+  // Fallback for non-HTMLElements: use the previous center-based approximation
+  const layoutWidth = Math.max(0, fallback.width)
+  const layoutHeight = Math.max(0, fallback.height)
 
   const centerX = fallback.left + fallback.width / 2
   const centerY = fallback.top + fallback.height / 2
