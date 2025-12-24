@@ -1098,16 +1098,13 @@ async function renderNode(
           })
 
           // 2. Compare projected center vs actual browser visual center
-          // Note, visualRect includes window scroll, rect3D might not.
-          // This delta captures ALL offsets (scroll, margin, sub-pixel).
+          // visualRect is already in document coordinates (via getVisualRect
+          // which uses toDocumentRect), so we don't add scroll again.
           const projectedCenterX = (minX + maxX) / 2
           const projectedCenterY = (minY + maxY) / 2
 
-          const scroll = getDocumentScrollOffsets(element)
-          const actualCenterX =
-            visualRect.left + scroll.x + visualRect.width / 2
-          const actualCenterY =
-            visualRect.top + scroll.y + visualRect.height / 2
+          const actualCenterX = visualRect.left + visualRect.width / 2
+          const actualCenterY = visualRect.top + visualRect.height / 2
 
           diffX = actualCenterX - projectedCenterX
           diffY = actualCenterY - projectedCenterY
@@ -1435,7 +1432,11 @@ async function renderNode(
 
                   // 5. Render
                   if (layerCanvas) {
-                    const visualRect = zElement.getBoundingClientRect()
+                    // getBoundingClientRect is viewport-relative; convert to document coords
+                    const visualRect = toDocumentRect(
+                      zElement,
+                      zElement.getBoundingClientRect()
+                    )
                     renderTextureWithPerspective(
                       context,
                       layerCanvas,
@@ -2055,52 +2056,67 @@ function computeBrowserCorners(
 ): BrowserCorner[] {
   const anyElement = element as any
 
-  // Prefer the browser's exact painted quad
+  // getBoxQuads / getBoundingClientRect return viewport coords; captureRect is document coords.
+  // Convert to document by adding scroll before subtracting captureRect.
+  const scroll = getDocumentScrollOffsets(element)
+
+  // Prefer the browser's exact painted quad.
+  // Different browsers return different coordinate spaces:
+  // - Chrome: viewport-space (need to add scroll)
+  // - Firefox/Safari: document-space (do NOT add scroll)
+  // Detect by comparing quad.p1.y to BCR.top - if close, it's viewport coords.
   if (typeof anyElement.getBoxQuads === 'function') {
     const quads = anyElement.getBoxQuads({ box: 'border' }) as DOMQuad[]
     if (quads && quads.length > 0) {
       const quad = quads[0]
+      const bcr = element.getBoundingClientRect()
+
+      // Detect coordinate space: if quad.y is close to BCR.top, it's viewport coords
+      // If quad.y is close to BCR.top + scroll, it's document coords
+      const isViewportCoords = Math.abs(quad.p1.y - bcr.top) < 50
+      const scrollAdjustX = isViewportCoords ? scroll.x : 0
+      const scrollAdjustY = isViewportCoords ? scroll.y : 0
 
       return [
         {
-          x: quad.p1.x - captureRect.left,
-          y: quad.p1.y - captureRect.top,
+          x: quad.p1.x + scrollAdjustX - captureRect.left,
+          y: quad.p1.y + scrollAdjustY - captureRect.top,
         },
         {
-          x: quad.p2.x - captureRect.left,
-          y: quad.p2.y - captureRect.top,
+          x: quad.p2.x + scrollAdjustX - captureRect.left,
+          y: quad.p2.y + scrollAdjustY - captureRect.top,
         },
         {
-          x: quad.p3.x - captureRect.left,
-          y: quad.p3.y - captureRect.top,
+          x: quad.p3.x + scrollAdjustX - captureRect.left,
+          y: quad.p3.y + scrollAdjustY - captureRect.top,
         },
         {
-          x: quad.p4.x - captureRect.left,
-          y: quad.p4.y - captureRect.top,
+          x: quad.p4.x + scrollAdjustX - captureRect.left,
+          y: quad.p4.y + scrollAdjustY - captureRect.top,
         },
       ]
     }
   }
 
-  // Fallback: axis-aligned bounding rect
+  // Fallback: axis-aligned bounding rect (viewport coordinates)
   const r = element.getBoundingClientRect()
 
   return [
     {
-      x: r.left - captureRect.left,
-      y: r.top - captureRect.top,
+      x: r.left + scroll.x - captureRect.left,
+      y: r.top + scroll.y - captureRect.top,
     },
     {
-      x: r.right - captureRect.left,
-      y: r.top - captureRect.top,
+      x: r.right + scroll.x - captureRect.left,
+      y: r.top + scroll.y - captureRect.top,
     },
     {
-      x: r.right - captureRect.left,
-      y: r.bottom - captureRect.top,
+      x: r.right + scroll.x - captureRect.left,
+      y: r.bottom + scroll.y - captureRect.top,
     },
     {
-      x: r.left - captureRect.left,
-      y: r.bottom - captureRect.top,
+      x: r.left + scroll.x - captureRect.left,
+      y: r.bottom + scroll.y - captureRect.top,
     },
   ]
 }
@@ -3024,6 +3040,31 @@ function getDocumentScrollOffsets(element: Element): { x: number; y: number } {
   return { x, y }
 }
 
+function getAncestorScrollOffsets(element: Element): { x: number; y: number } {
+  const ownerDocument = element.ownerDocument
+  if (!ownerDocument) {
+    return { x: 0, y: 0 }
+  }
+
+  const docElement = ownerDocument.documentElement
+  const body = ownerDocument.body
+
+  let x = 0
+  let y = 0
+  let current = element.parentElement
+
+  // Traverse scrollable ancestors (excluding the document scroll root, which is
+  // handled separately via pageXOffset/pageYOffset) so that offset-based layout
+  // measurements stay in the same visual coordinate space as getBoundingClientRect.
+  while (current && current !== docElement && current !== body) {
+    x += current.scrollLeft || 0
+    y += current.scrollTop || 0
+    current = current.parentElement
+  }
+
+  return { x, y }
+}
+
 function toDocumentRect(element: Element, viewportRect: DOMRect): DOMRect {
   const scroll = getDocumentScrollOffsets(element)
 
@@ -3168,6 +3209,10 @@ function getUntransformedLayoutRect(element: Element): DOMRect {
     current = next
   }
 
+  const ancestorScroll = getAncestorScrollOffsets(element)
+  left -= ancestorScroll.x
+  top -= ancestorScroll.y
+
   return {
     left,
     top,
@@ -3247,6 +3292,10 @@ function getLayoutRect(
 
     const width = element.offsetWidth
     const height = element.offsetHeight
+
+    const ancestorScroll = getAncestorScrollOffsets(element)
+    left -= ancestorScroll.x
+    top -= ancestorScroll.y
 
     return {
       left,
