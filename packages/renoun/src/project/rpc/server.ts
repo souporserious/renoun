@@ -90,8 +90,8 @@ const WEBSOCKET_SERVER_ERROR_MESSAGES: Record<
 
   INTERNAL_ERROR: ({ method, params, errorMessage }) =>
     `[renoun] Internal server error while processing method "${method}".\n\n` +
-    `Request parameters:\n${JSON.stringify(params, null, 2)}\n\n` +
     `Error details: ${errorMessage}\n\n` +
+    `Request parameters:\n${JSON.stringify(params, null, 2)}\n\n` +
     `This indicates a bug in the server implementation.\n` +
     `Please check the server logs for more details.`,
 
