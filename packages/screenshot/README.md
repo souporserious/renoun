@@ -2,11 +2,32 @@
 
 A client-side library for rendering HTML elements to canvas. Captures DOM elements with full CSS support including gradients, transforms, shadows, filters, and more.
 
+```ts
+import { screenshot } from '@renoun/screenshot'
+
+const canvas = await screenshot('body')
+```
+
 ## Installation
 
 ```bash
 npm install @renoun/screenshot
 ```
+
+## Features
+
+- CSS gradients (linear, radial, conic)
+- Box shadows and text shadows
+- Border radius and borders
+- CSS transforms including 3D with perspective
+- Backdrop filters
+- Clip paths
+- CSS masks
+- Text decorations
+- Form controls
+- SVG elements
+- Fixed position elements
+- High-DPI rendering
 
 ## Usage
 
@@ -150,21 +171,6 @@ interface ScreenshotTask extends Promise<HTMLCanvasElement> {
   url(options?: EncodeOptions): Promise<string>
 }
 ```
-
-## Features
-
-- CSS gradients (linear, radial, conic)
-- Box shadows and text shadows
-- Border radius and borders
-- CSS transforms including 3D with perspective
-- Backdrop filters
-- Clip paths
-- CSS masks
-- Text decorations
-- Form controls
-- SVG elements
-- Fixed position elements
-- High-DPI rendering
 
 ## License
 
