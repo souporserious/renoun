@@ -1684,16 +1684,47 @@ async function renderNode(
         const scale = env.scale ?? 1
         const captureRect = env.captureRect
 
+        // Parse blur radius from filter to expand sample area for feathered edges
+        const blurMatch = backdropFilterValue.match(
+          /blur\(\s*(\d*\.?\d+)px\s*\)/i
+        )
+        const blurRadiusCss = blurMatch ? parseFloat(blurMatch[1]) : 0
+        // Expand by 2x blur radius to ensure smooth feathering (blur extends ~2 std devs)
+        const bleedPx = Math.ceil(blurRadiusCss * 2 * scale)
+
         // Convert DOM-space rect into canvas pixel coordinates relative to the
         // root capture rect, taking the device pixel ratio into account. This
         // keeps backdrop sampling aligned with the actual rendered pixels when
         // using hi-DPI scaling or non-zero crop origins.
-        const sampleLeftPx = Math.round((rect.left - captureRect.left) * scale)
-        const sampleTopPx = Math.round((rect.top - captureRect.top) * scale)
-        const sampleWidthPx = Math.max(1, Math.round(rect.width * scale))
-        const sampleHeightPx = Math.max(1, Math.round(rect.height * scale))
+        const baseLeftPx = Math.round((rect.left - captureRect.left) * scale)
+        const baseTopPx = Math.round((rect.top - captureRect.top) * scale)
+        const baseWidthPx = Math.max(1, Math.round(rect.width * scale))
+        const baseHeightPx = Math.max(1, Math.round(rect.height * scale))
 
-        if (sampleWidthPx > 0 && sampleHeightPx > 0) {
+        // Expand sample area by blur bleed, clamped to canvas bounds
+        const canvasWidth = context.canvas.width
+        const canvasHeight = context.canvas.height
+        const sampleLeftPx = Math.max(0, baseLeftPx - bleedPx)
+        const sampleTopPx = Math.max(0, baseTopPx - bleedPx)
+        const sampleRightPx = Math.min(
+          canvasWidth,
+          baseLeftPx + baseWidthPx + bleedPx
+        )
+        const sampleBottomPx = Math.min(
+          canvasHeight,
+          baseTopPx + baseHeightPx + bleedPx
+        )
+        const sampleWidthPx = sampleRightPx - sampleLeftPx
+        const sampleHeightPx = sampleBottomPx - sampleTopPx
+
+        // Calculate offset within the expanded sample where the original rect starts
+        const offsetXPx = baseLeftPx - sampleLeftPx
+        const offsetYPx = baseTopPx - sampleTopPx
+
+        const samplePixels = sampleWidthPx * sampleHeightPx
+        const sampleTooLarge = samplePixels > 4_000_000 // ~4MP cap to avoid Safari main-thread hangs
+
+        if (!sampleTooLarge && sampleWidthPx > 0 && sampleHeightPx > 0) {
           const previousTransform = context.getTransform()
           // `getImageData` operates in the canvas' pixel grid and ignores the
           // current transform, but resetting to identity here makes the mapping
@@ -1718,27 +1749,85 @@ async function renderNode(
             })
 
             if (tempContext) {
+              // 1. Put the raw captured pixels into the first temp canvas
               tempContext.putImageData(backdropImageData, 0, 0)
-              tempContext.filter = scaleFilter(
-                backdropFilterValue,
-                env.scale ?? 1
-              )
-              // Draw a copy with the filter pipeline applied.
-              tempContext.drawImage(tempCanvas, 0, 0)
 
-              backdropFilterCanvas = tempCanvas
+              // OPTIMIZATION: Blur at reduced resolution for performance (esp. Safari).
+              // Blur hides high-frequency detail, so downscaling before blur is visually equivalent.
+              // More aggressive downscaling for larger blurs.
+              const blurDownscale =
+                blurRadiusCss >= 12 ? 0.125 : blurRadiusCss >= 6 ? 0.25 : 0.5
+              const smallWidth = Math.max(
+                4,
+                Math.round(sampleWidthPx * blurDownscale)
+              )
+              const smallHeight = Math.max(
+                4,
+                Math.round(sampleHeightPx * blurDownscale)
+              )
+
+              // 2. Create a SMALL canvas for downscaled source
+              const smallCanvas = document.createElement('canvas')
+              smallCanvas.width = smallWidth
+              smallCanvas.height = smallHeight
+              const smallCtx = smallCanvas.getContext('2d', {
+                colorSpace: env.colorSpace,
+              })
+
+              // 3. Create another small canvas to receive blur (avoid self-draw issues)
+              const blurredSmallCanvas = document.createElement('canvas')
+              blurredSmallCanvas.width = smallWidth
+              blurredSmallCanvas.height = smallHeight
+              const blurredSmallCtx = blurredSmallCanvas.getContext('2d', {
+                colorSpace: env.colorSpace,
+              })
+
+              // 4. Create final canvas at original resolution
+              const filteredCanvas = document.createElement('canvas')
+              filteredCanvas.width = sampleWidthPx
+              filteredCanvas.height = sampleHeightPx
+              const filteredCtx = filteredCanvas.getContext('2d', {
+                colorSpace: env.colorSpace,
+              })
+
+              if (smallCtx && blurredSmallCtx && filteredCtx) {
+                // 5. Downscale: draw source to small canvas
+                smallCtx.drawImage(tempCanvas, 0, 0, smallWidth, smallHeight)
+
+                // 6. Apply blur: draw to separate canvas with filter (avoids self-draw)
+                blurredSmallCtx.filter = scaleFilter(
+                  backdropFilterValue,
+                  scale * blurDownscale
+                )
+                blurredSmallCtx.drawImage(smallCanvas, 0, 0)
+
+                // 7. Upscale: draw blurred result back to full resolution
+                filteredCtx.drawImage(
+                  blurredSmallCanvas,
+                  0,
+                  0,
+                  sampleWidthPx,
+                  sampleHeightPx
+                )
+
+                // 8. Use the upscaled canvas as the final source
+                backdropFilterCanvas = filteredCanvas
+              } else {
+                // Fallback if context creation fails
+                backdropFilterCanvas = tempCanvas
+              }
+
               backdropFilterRect = {
-                // Store DOM-space geometry here so that when we later composite
-                // the filtered backdrop back into the main context, the existing
-                // DOM→canvas transform handles scaling and translation.
-                left: rect.left,
-                top: rect.top,
-                width: rect.width,
-                height: rect.height,
-                right: rect.left + rect.width,
-                bottom: rect.top + rect.height,
-                x: rect.left,
-                y: rect.top,
+                // Store the expanded rect position in DOM space. The offset within
+                // the canvas accounts for the bleed area we added.
+                left: rect.left - offsetXPx / scale,
+                top: rect.top - offsetYPx / scale,
+                width: sampleWidthPx / scale,
+                height: sampleHeightPx / scale,
+                right: rect.left - offsetXPx / scale + sampleWidthPx / scale,
+                bottom: rect.top - offsetYPx / scale + sampleHeightPx / scale,
+                x: rect.left - offsetXPx / scale,
+                y: rect.top - offsetYPx / scale,
                 toJSON: () => ({}),
               } as DOMRect
             }
@@ -3786,7 +3875,8 @@ async function renderElementNode(
   // element's border-box so the effect is limited to the element's visual area.
   if (backdropFilterCanvas && backdropFilterRect) {
     context.save()
-    context.globalCompositeOperation = 'destination-over'
+    // Use normal composition so the filtered backdrop replaces what's behind
+    context.globalCompositeOperation = 'source-over'
     // Clip to element bounds
     context.beginPath()
     if (hasRadius) {
@@ -4714,15 +4804,29 @@ function renderFormControl(
  * identity before applying filters, so 10px would otherwise equal 10 physical
  * pixels instead of 10 CSS pixels.
  */
+/**
+ * Scales pixel values in filter strings (e.g. "blur(10px)") by the device
+ * scale factor. Handles px, rem, and em units.
+ */
 function scaleFilter(filter: string, scale: number): string {
   if (scale === 1 || !filter || filter === 'none') return filter
 
-  // Regex to match "blur(12.5px)"
-  return filter.replace(/blur\(\s*(-?\d*\.?\d+)px\s*\)/gi, (_match, value) => {
-    const numeric = parseFloat(value)
-    if (!Number.isFinite(numeric)) return _match
-    return `blur(${numeric * scale}px)`
-  })
+  // Updated regex to optionally capture units (px, rem, em)
+  return filter.replace(
+    /blur\(\s*(-?\d*\.?\d+)(px|rem|em)?\s*\)/gi,
+    (_match, value, unit) => {
+      const numeric = parseFloat(value)
+      if (!Number.isFinite(numeric)) return _match
+
+      let pixelValue = numeric
+      // Convert relative units to pixels (assuming standard 16px base)
+      if (unit === 'rem' || unit === 'em') {
+        pixelValue = numeric * 16
+      }
+
+      return `blur(${pixelValue * scale}px)`
+    }
+  )
 }
 
 function drawBorders(
@@ -10298,6 +10402,11 @@ function normalizeLength(length: string): number {
     return 0
   }
 
+  // Handle rem/em if they reach the polyfill directly
+  if (length.match(/(rem|em)$/)) {
+    return Math.max(0, Math.round(value * 16))
+  }
+
   return Math.max(0, Math.round(value))
 }
 
@@ -10337,7 +10446,10 @@ function adjustRgb(
   context.putImageData(imageData, 0, 0)
 }
 
-/** Approximate box blur for RGBA data. */
+/**
+ * Optimized Box Blur using a Sliding Accumulator.
+ * Complexity: O(Width * Height), independent of radius.
+ */
 function applyBoxBlur(context: CanvasRenderingContext2D, radius: number): void {
   const canvas = context.canvas
   const width = canvas.width
@@ -10348,94 +10460,156 @@ function applyBoxBlur(context: CanvasRenderingContext2D, radius: number): void {
   const imageData = context.getImageData(0, 0, width, height)
   const data = imageData.data
 
-  // Pre-multiply alpha
-  // This prevents transparent pixels (0,0,0,0) from dragging down the color intensity
-  // of their neighbors, fixing the "dark fringe" or "gray halo" artifact.
-  for (let pixelIndex = 0; pixelIndex < data.length; pixelIndex += 4) {
-    const alpha = data[pixelIndex + 3]
+  // 1. Pre-multiply alpha to prevent "dark fringe" artifacts
+  for (let i = 0; i < data.length; i += 4) {
+    const alpha = data[i + 3]
     if (alpha !== 255) {
       const a = alpha / 255
-      data[pixelIndex] = data[pixelIndex] * a
-      data[pixelIndex + 1] = data[pixelIndex + 1] * a
-      data[pixelIndex + 2] = data[pixelIndex + 2] * a
+      data[i] = data[i] * a
+      data[i + 1] = data[i + 1] * a
+      data[i + 2] = data[i + 2] * a
     }
   }
 
+  // Intermediate buffer for ping-ponging
   const buffer = new Uint8ClampedArray(data.length)
 
+  const kernelSize = radius * 2 + 1
+  const iKernelSize = 1.0 / kernelSize
+
   // 3 passes approximates a Gaussian blur
-  for (let passIndex = 0; passIndex < 3; passIndex++) {
-    // Horizontal pass
+  for (let pass = 0; pass < 3; pass++) {
+    // --- Horizontal Pass: Read data -> Write buffer ---
     for (let y = 0; y < height; y++) {
+      const rowOffset = y * width * 4
+
+      let rSum = 0,
+        gSum = 0,
+        bSum = 0,
+        aSum = 0
+
+      // Initialize accumulator for the first pixel (x=0)
+      const firstPixelOffset = rowOffset
+      const rFirst = data[firstPixelOffset]
+      const gFirst = data[firstPixelOffset + 1]
+      const bFirst = data[firstPixelOffset + 2]
+      const aFirst = data[firstPixelOffset + 3]
+
+      // Add 'left' side (all clamped to first pixel)
+      const leftSamples = radius + 1
+      rSum += rFirst * leftSamples
+      gSum += gFirst * leftSamples
+      bSum += bFirst * leftSamples
+      aSum += aFirst * leftSamples
+
+      // Add 'right' side
+      for (let i = 1; i <= radius; i++) {
+        const clampX = Math.min(width - 1, i)
+        const offset = rowOffset + clampX * 4
+        rSum += data[offset]
+        gSum += data[offset + 1]
+        bSum += data[offset + 2]
+        aSum += data[offset + 3]
+      }
+
+      // Slide the window across the row
       for (let x = 0; x < width; x++) {
-        let red = 0
-        let green = 0
-        let blue = 0
-        let alpha = 0
-        let count = 0
+        // 1. Write average to output buffer
+        const outOffset = rowOffset + x * 4
+        buffer[outOffset] = rSum * iKernelSize
+        buffer[outOffset + 1] = gSum * iKernelSize
+        buffer[outOffset + 2] = bSum * iKernelSize
+        buffer[outOffset + 3] = aSum * iKernelSize
 
-        for (let offset = -radius; offset <= radius; offset++) {
-          const sampleX = x + offset
-          // Clamp to edge instead of skipping. Skipping shrinks the visual weight at edges.
-          // Clamping repeats the edge pixel, which preserves total energy.
-          const clampedX = Math.min(width - 1, Math.max(0, sampleX))
-          const sampleIndex = (y * width + clampedX) * 4
+        // 2. Subtract the pixel leaving the window (x - radius)
+        const leavingX = Math.max(0, x - radius)
+        const leavingOffset = rowOffset + leavingX * 4
 
-          red += data[sampleIndex]
-          green += data[sampleIndex + 1]
-          blue += data[sampleIndex + 2]
-          alpha += data[sampleIndex + 3]
-          count++
-        }
+        rSum -= data[leavingOffset]
+        gSum -= data[leavingOffset + 1]
+        bSum -= data[leavingOffset + 2]
+        aSum -= data[leavingOffset + 3]
 
-        const outputIndex = (y * width + x) * 4
-        buffer[outputIndex] = red / count
-        buffer[outputIndex + 1] = green / count
-        buffer[outputIndex + 2] = blue / count
-        buffer[outputIndex + 3] = alpha / count
+        // 3. Add the pixel entering the window (x + radius + 1)
+        const enteringX = Math.min(width - 1, x + radius + 1)
+        const enteringOffset = rowOffset + enteringX * 4
+
+        rSum += data[enteringOffset]
+        gSum += data[enteringOffset + 1]
+        bSum += data[enteringOffset + 2]
+        aSum += data[enteringOffset + 3]
       }
     }
 
-    // Vertical pass
+    // --- Vertical Pass: Read buffer -> Write data ---
     for (let x = 0; x < width; x++) {
+      const colOffset = x * 4
+
+      let rSum = 0,
+        gSum = 0,
+        bSum = 0,
+        aSum = 0
+
+      // Initialize accumulator for the first pixel (y=0)
+      const firstPixelOffset = colOffset
+      const rFirst = buffer[firstPixelOffset]
+      const gFirst = buffer[firstPixelOffset + 1]
+      const bFirst = buffer[firstPixelOffset + 2]
+      const aFirst = buffer[firstPixelOffset + 3]
+
+      const topSamples = radius + 1
+      rSum += rFirst * topSamples
+      gSum += gFirst * topSamples
+      bSum += bFirst * topSamples
+      aSum += aFirst * topSamples
+
+      for (let i = 1; i <= radius; i++) {
+        const clampY = Math.min(height - 1, i)
+        const offset = clampY * width * 4 + colOffset
+        rSum += buffer[offset]
+        gSum += buffer[offset + 1]
+        bSum += buffer[offset + 2]
+        aSum += buffer[offset + 3]
+      }
+
       for (let y = 0; y < height; y++) {
-        let red = 0
-        let green = 0
-        let blue = 0
-        let alpha = 0
-        let count = 0
+        // 1. Write average back to data
+        const outOffset = y * width * 4 + colOffset
 
-        for (let offset = -radius; offset <= radius; offset++) {
-          const sampleY = y + offset
-          const clampedY = Math.min(height - 1, Math.max(0, sampleY))
-          const sampleIndex = (clampedY * width + x) * 4
+        data[outOffset] = rSum * iKernelSize
+        data[outOffset + 1] = gSum * iKernelSize
+        data[outOffset + 2] = bSum * iKernelSize
+        data[outOffset + 3] = aSum * iKernelSize
 
-          red += buffer[sampleIndex]
-          green += buffer[sampleIndex + 1]
-          blue += buffer[sampleIndex + 2]
-          alpha += buffer[sampleIndex + 3]
-          count++
-        }
+        // 2. Subtract pixel leaving top
+        const leavingY = Math.max(0, y - radius)
+        const leavingOffset = leavingY * width * 4 + colOffset
 
-        const outputIndex = (y * width + x) * 4
-        data[outputIndex] = red / count
-        data[outputIndex + 1] = green / count
-        data[outputIndex + 2] = blue / count
-        data[outputIndex + 3] = alpha / count
+        rSum -= buffer[leavingOffset]
+        gSum -= buffer[leavingOffset + 1]
+        bSum -= buffer[leavingOffset + 2]
+        aSum -= buffer[leavingOffset + 3]
+
+        // 3. Add pixel entering bottom
+        const enteringY = Math.min(height - 1, y + radius + 1)
+        const enteringOffset = enteringY * width * 4 + colOffset
+
+        rSum += buffer[enteringOffset]
+        gSum += buffer[enteringOffset + 1]
+        bSum += buffer[enteringOffset + 2]
+        aSum += buffer[enteringOffset + 3]
       }
     }
   }
 
-  // Un-multiply alpha
-  // Restore the color channels to their standard representation.
-  for (let pixelIndex = 0; pixelIndex < data.length; pixelIndex += 4) {
-    const alpha = data[pixelIndex + 3]
+  // 4. Un-multiply alpha to restore standard RGBA
+  for (let i = 0; i < data.length; i += 4) {
+    const alpha = data[i + 3]
     if (alpha !== 0 && alpha !== 255) {
       const a = alpha / 255
-      // Clamp needed because blur math might push tiny bits over boundaries
-      data[pixelIndex] = Math.min(255, data[pixelIndex] / a)
-      data[pixelIndex + 1] = Math.min(255, data[pixelIndex + 1] / a)
-      data[pixelIndex + 2] = Math.min(255, data[pixelIndex + 2] / a)
+      data[i] = Math.min(255, data[i] / a)
+      data[i + 1] = Math.min(255, data[i + 1] / a)
+      data[i + 2] = Math.min(255, data[i + 2] / a)
     }
   }
 

@@ -2189,4 +2189,102 @@ describe('screenshot', () => {
       await expectCanvasToMatchSnapshot(canvas, 'conic-gradient-ring', ring)
     })
   })
+
+  describe('image snapshots: backdrop-filter', () => {
+    it('glassmorphism card with backdrop blur', async () => {
+      // Container with colorful background elements
+      const wrapper = document.createElement('div')
+      wrapper.style.cssText = `
+        position: relative;
+        width: 320px;
+        height: 200px;
+        background: #1e293b;
+        border-radius: 16px;
+        overflow: hidden;
+      `
+
+      // Gradient background blob
+      const gradientBlob = document.createElement('div')
+      gradientBlob.style.cssText = `
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to right, #ec4899, #a855f7, #6366f1);
+        border-radius: 16px;
+        filter: blur(16px);
+        opacity: 0.6;
+      `
+
+      // Yellow accent circle
+      const yellowCircle = document.createElement('div')
+      yellowCircle.style.cssText = `
+        position: absolute;
+        top: 16px;
+        left: 32px;
+        width: 80px;
+        height: 80px;
+        background-color: #facc15;
+        border-radius: 50%;
+        filter: blur(4px);
+        opacity: 0.8;
+      `
+
+      // Cyan accent circle
+      const cyanCircle = document.createElement('div')
+      cyanCircle.style.cssText = `
+        position: absolute;
+        bottom: 32px;
+        right: 16px;
+        width: 64px;
+        height: 64px;
+        background-color: #22d3ee;
+        border-radius: 50%;
+        filter: blur(4px);
+        opacity: 0.8;
+      `
+
+      // Glass card with backdrop-filter
+      const glassCard = document.createElement('div')
+      glassCard.style.cssText = `
+        position: relative;
+        margin: 40px;
+        border-radius: 16px;
+        padding: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+      `
+
+      const title = document.createElement('h3')
+      title.style.cssText = `
+        color: white;
+        font-weight: bold;
+        font-size: 18px;
+        margin: 0 0 8px 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      `
+      title.textContent = 'Glass Card'
+
+      const text = document.createElement('p')
+      text.style.cssText = `
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 14px;
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      `
+      text.textContent = 'Backdrop blur with transparency'
+
+      glassCard.appendChild(title)
+      glassCard.appendChild(text)
+
+      wrapper.appendChild(gradientBlob)
+      wrapper.appendChild(yellowCircle)
+      wrapper.appendChild(cyanCircle)
+      wrapper.appendChild(glassCard)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 2 })
+      await expectCanvasToMatchSnapshot(canvas, 'glassmorphism-card', wrapper)
+    })
+  })
 })
