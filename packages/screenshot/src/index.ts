@@ -969,6 +969,7 @@ async function renderNode(
     const rect = env.flatten3DTransforms
       ? getUntransformedLayoutRect(element)
       : getLayoutRect(element, style)
+
     if (rect.width === 0 || rect.height === 0) {
       return
     }
@@ -1869,7 +1870,9 @@ async function renderNode(
         }
       }
 
-      if (hasTransform) {
+      // For SVG elements, skip transform application since we'll use visual position directly
+      const isSvgElement = element instanceof SVGSVGElement
+      if (hasTransform && !isSvgElement) {
         applyElementTransform(context, element, rect)
       }
 
@@ -3399,31 +3402,94 @@ function getLayoutRect(
     } as DOMRect
   }
 
-  // Fallback for non-HTMLElements: use the previous center-based approximation
-  const layoutWidth = Math.max(0, fallback.width)
-  const layoutHeight = Math.max(0, fallback.height)
+  // For non-HTMLElements (e.g., SVG), we can't use offsetLeft/offsetTop.
+  // Use getBoundingClientRect (which returns the visual position after transforms)
+  // and invert the transform to get the layout position.
+  const width = Math.max(0, fallback.width)
+  const height = Math.max(0, fallback.height)
 
-  const centerX = fallback.left + fallback.width / 2
-  const centerY = fallback.top + fallback.height / 2
+  // Use getBoundingClientRect and invert the transform
+  const visualRect = toDocumentRect(element, fallback)
+  const transformString = finalStyle?.transform || 'none'
 
-  const leftViewport = centerX - layoutWidth / 2
-  const topViewport = centerY - layoutHeight / 2
-  const width = Math.max(0, layoutWidth)
-  const height = Math.max(0, layoutHeight)
-
-  const viewportRect: DOMRect = {
-    left: leftViewport,
-    top: topViewport,
+  // For SVG elements, use the visual position directly (from getBoundingClientRect)
+  // since we skip transform application in the render function for SVGs.
+  // This is simpler and more reliable than inverting and re-applying transforms.
+  if (element instanceof SVGSVGElement) {
+    return {
+      left: visualRect.left,
+      top: visualRect.top,
     width,
     height,
-    right: leftViewport + width,
-    bottom: topViewport + height,
-    x: leftViewport,
-    y: topViewport,
+      right: visualRect.left + width,
+      bottom: visualRect.top + height,
+      x: visualRect.left,
+      y: visualRect.top,
+    toJSON: () => ({}),
+  } as DOMRect
+  }
+
+  if (!transformString || transformString === 'none') {
+    // No transform - visual rect IS the layout rect
+    return {
+      left: visualRect.left,
+      top: visualRect.top,
+      width,
+      height,
+      right: visualRect.left + width,
+      bottom: visualRect.top + height,
+      x: visualRect.left,
+      y: visualRect.top,
+      toJSON: () => ({}),
+    } as DOMRect
+  }
+
+  // Parse the transform to extract translation values
+  const tempRect: DOMRect = {
+    left: 0,
+    top: 0,
+    width,
+    height,
+    right: width,
+    bottom: height,
+    x: 0,
+    y: 0,
     toJSON: () => ({}),
   } as DOMRect
 
-  return toDocumentRect(element, viewportRect)
+  const transforms = parseTransformFunctions(transformString, tempRect)
+
+  let tx = 0
+  let ty = 0
+
+  for (const tf of transforms) {
+    switch (tf.type) {
+      case 'translate':
+        tx += tf.x
+        ty += tf.y
+        break
+      case 'matrix':
+        tx += tf.translateX
+        ty += tf.translateY
+        break
+    }
+  }
+
+  // Invert the translation to get the layout position
+  const layoutLeft = visualRect.left - tx
+  const layoutTop = visualRect.top - ty
+
+  return {
+    left: layoutLeft,
+    top: layoutTop,
+    width,
+    height,
+    right: layoutLeft + width,
+    bottom: layoutTop + height,
+    x: layoutLeft,
+    y: layoutTop,
+    toJSON: () => ({}),
+  } as DOMRect
 }
 
 function getVisualRect(element: Element): DOMRect {
@@ -4390,23 +4456,88 @@ async function renderSvgElement(
   // Clone and modify attributes to force high-res rasterization
   const clone = element.cloneNode(true) as SVGSVGElement
 
-  // 1. Set explicit width/height in pixels matching the high-DPI size
+  // Strip class/style that can encode layout positioning, but preserve
+  // paint-related styling by inlining computed paint properties back onto the clone.
+  //
+  // This prevents internal offsets when the SVG is serialized and rasterized as an
+  // image, while keeping colors/strokes/fills identical to the live DOM.
+  const paintProps = [
+    'color',
+    'fill',
+    'fill-opacity',
+    'stroke',
+    'stroke-opacity',
+    'stroke-width',
+    'stroke-linecap',
+    'stroke-linejoin',
+    'stroke-miterlimit',
+    'stroke-dasharray',
+    'stroke-dashoffset',
+    'opacity',
+    'vector-effect',
+    'paint-order',
+    'shape-rendering',
+  ] as const
+
+  const originalElements: Element[] = [
+    element,
+    ...Array.from(element.querySelectorAll('*')),
+  ]
+  const clonedElements: Element[] = [
+    clone,
+    ...Array.from(clone.querySelectorAll('*')),
+  ]
+  const count = Math.min(originalElements.length, clonedElements.length)
+
+  for (let index = 0; index < count; index++) {
+    const originalElement = originalElements[index]
+    const clonedElement = clonedElements[index]
+
+    // Strip potentially layout-affecting CSS hooks.
+    clonedElement.removeAttribute('class')
+    clonedElement.removeAttribute('style')
+
+    const computed = window.getComputedStyle(originalElement)
+    for (const prop of paintProps) {
+      const value = computed.getPropertyValue(prop)
+      if (value) {
+        ;(clonedElement as HTMLElement | SVGElement).style.setProperty(
+          prop,
+          value
+        )
+      }
+    }
+  }
+
+  // 1. Set explicit width/height in device pixels
   clone.setAttribute('width', String(targetWidth))
   clone.setAttribute('height', String(targetHeight))
   clone.style.width = `${targetWidth}px`
   clone.style.height = `${targetHeight}px`
 
-  // 2. Ensure viewBox matches the original CSS layout size (unscaled).
-  if (!clone.hasAttribute('viewBox')) {
+  // 2. Preserve the original viewBox (so internal coordinates stay correct). If
+  // missing, fall back to the element's layout box.
+  const cloneViewBox =
+    element.getAttribute('viewBox') ?? clone.getAttribute('viewBox')
+  if (cloneViewBox) {
+    clone.setAttribute('viewBox', cloneViewBox)
+  } else {
     clone.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`)
   }
+  // Keep normal aspect ratio behavior to avoid stretching/clipping.
+  clone.setAttribute('preserveAspectRatio', 'xMidYMid meet')
 
   // 3. Ensure namespace is present
   if (!clone.getAttribute('xmlns')) {
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   }
 
-  // 4. Copy computed font styles to all <text> elements so they survive serialization.
+  // 4. Set overflow to visible to prevent stroke clipping at viewBox boundaries.
+  // SVG strokes can extend beyond the element bounds (especially with strokeWidth > 1)
+  // and would otherwise be clipped by the default overflow: hidden behavior.
+  clone.setAttribute('overflow', 'visible')
+
+  // 5. Copy computed font styles to all <text> elements so they survive serialization.
   // When an SVG is serialized to a blob and rendered as an image, it loses access
   // to the page's CSS context, so fonts fall back to browser defaults.
   const originalTextElements = element.querySelectorAll('text')
@@ -10201,7 +10332,7 @@ const FILTERS: { [name: string]: Filter } = {
         ),
         clampColor(
           red * (0.213 - 0.213 * cos + 0.143 * sin) +
-            green * (0.715 + 0.285 * cos + 0.140 * sin) +
+            green * (0.715 + 0.285 * cos + 0.14 * sin) +
             blue * (0.072 - 0.072 * cos - 0.283 * sin)
         ),
         clampColor(
