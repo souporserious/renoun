@@ -10128,12 +10128,94 @@ const FILTERS: { [name: string]: Filter } = {
     ])
   },
 
-  // The following filters are treated as no-ops in this lightweight
-  // implementation. They can be expanded later if needed.
+  saturate(context, value = '1') {
+    const amount = normalizeNumberPercentage(value)
+    if (!Number.isFinite(amount) || amount === 1) return
+
+    adjustRgb(context, (red, green, blue, alpha) => {
+      // Convert to grayscale using luminance weights
+      const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+      return [
+        clampColor(luminance + (red - luminance) * amount),
+        clampColor(luminance + (green - luminance) * amount),
+        clampColor(luminance + (blue - luminance) * amount),
+        alpha,
+      ]
+    })
+  },
+
+  sepia(context, value = '1') {
+    const amount = normalizeNumberPercentage(value)
+    if (!Number.isFinite(amount) || amount <= 0) return
+
+    // Standard sepia matrix coefficients
+    adjustRgb(context, (red, green, blue, alpha) => {
+      const sepiaRed = 0.393 * red + 0.769 * green + 0.189 * blue
+      const sepiaGreen = 0.349 * red + 0.686 * green + 0.168 * blue
+      const sepiaBlue = 0.272 * red + 0.534 * green + 0.131 * blue
+
+      return [
+        clampColor(red + (sepiaRed - red) * amount),
+        clampColor(green + (sepiaGreen - green) * amount),
+        clampColor(blue + (sepiaBlue - blue) * amount),
+        alpha,
+      ]
+    })
+  },
+
+  'hue-rotate'(context, value = '0deg') {
+    // Parse angle value (supports deg, rad, turn, grad)
+    let angle = 0
+    const match = value.match(/^(-?\d*\.?\d+)(deg|rad|turn|grad)?$/i)
+    if (match) {
+      const num = parseFloat(match[1])
+      const unit = (match[2] || 'deg').toLowerCase()
+      switch (unit) {
+        case 'rad':
+          angle = num
+          break
+        case 'turn':
+          angle = num * 2 * Math.PI
+          break
+        case 'grad':
+          angle = num * (Math.PI / 200)
+          break
+        default: // deg
+          angle = num * (Math.PI / 180)
+      }
+    }
+
+    if (angle === 0) return
+
+    // Hue rotation matrix coefficients
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+
+    adjustRgb(context, (red, green, blue, alpha) => {
+      // Hue rotation matrix per CSS filter spec
+      return [
+        clampColor(
+          red * (0.213 + 0.787 * cos - 0.213 * sin) +
+            green * (0.715 - 0.715 * cos - 0.715 * sin) +
+            blue * (0.072 - 0.072 * cos + 0.928 * sin)
+        ),
+        clampColor(
+          red * (0.213 - 0.213 * cos + 0.143 * sin) +
+            green * (0.715 + 0.285 * cos + 0.140 * sin) +
+            blue * (0.072 - 0.072 * cos - 0.283 * sin)
+        ),
+        clampColor(
+          red * (0.213 - 0.213 * cos - 0.787 * sin) +
+            green * (0.715 - 0.715 * cos + 0.715 * sin) +
+            blue * (0.072 + 0.928 * cos + 0.072 * sin)
+        ),
+        alpha,
+      ]
+    })
+  },
+
+  // drop-shadow requires more complex implementation with convolution
   'drop-shadow': () => {},
-  saturate: () => {},
-  sepia: () => {},
-  'hue-rotate': () => {},
 }
 
 function installCanvasFilterPolyfillIfNeeded(): void {
