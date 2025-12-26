@@ -4654,6 +4654,24 @@ function renderFormControl(
   context.font = font
   context.fillStyle = style.color || '#000'
 
+  const getPlaceholderPaint = (): { color: string | null; opacity: number } => {
+    const ownerDocument = element.ownerDocument
+    const view = ownerDocument?.defaultView
+    if (!view) return { color: null, opacity: 1 }
+    try {
+      // Prefer the pseudo-element style if supported by the browser.
+      const pseudo = view.getComputedStyle(element, '::placeholder')
+      const color =
+        pseudo?.color && pseudo.color !== 'inherit' ? pseudo.color : null
+      const opacityRaw = pseudo?.opacity
+      const opacity =
+        opacityRaw && opacityRaw !== 'normal' ? parseFloat(opacityRaw) : 1
+      return { color, opacity: Number.isFinite(opacity) ? opacity : 1 }
+    } catch {
+      return { color: null, opacity: 1 }
+    }
+  }
+
   const paddingLeft = parseCssLength(style.paddingLeft) || 4
   const paddingRight = parseCssLength(style.paddingRight) || 4
   const paddingTop = parseCssLength(style.paddingTop) || 2
@@ -4760,8 +4778,20 @@ function renderFormControl(
       type === 'tel' ||
       type === 'password'
     ) {
-      const value = input.value || input.placeholder || ''
-      drawLabelLeft(value)
+      const isPlaceholder = !input.value && !!input.placeholder
+      const text = input.value || input.placeholder || ''
+      if (isPlaceholder) {
+        const placeholder = getPlaceholderPaint()
+        const prevFill = context.fillStyle
+        const prevAlpha = context.globalAlpha
+        if (placeholder.color) context.fillStyle = placeholder.color
+        context.globalAlpha = prevAlpha * (placeholder.opacity ?? 1)
+        drawLabelLeft(text)
+        context.fillStyle = prevFill
+        context.globalAlpha = prevAlpha
+      } else {
+        drawLabelLeft(text)
+      }
       context.restore()
       return true
     }
@@ -4809,8 +4839,20 @@ function renderFormControl(
 
     // Number input: show value with up/down indicators
     if (type === 'number') {
-      const value = input.value || input.placeholder || ''
-      drawLabelLeft(value)
+      const isPlaceholder = !input.value && !!input.placeholder
+      const text = input.value || input.placeholder || ''
+      if (isPlaceholder) {
+        const placeholder = getPlaceholderPaint()
+        const prevFill = context.fillStyle
+        const prevAlpha = context.globalAlpha
+        if (placeholder.color) context.fillStyle = placeholder.color
+        context.globalAlpha = prevAlpha * (placeholder.opacity ?? 1)
+        drawLabelLeft(text)
+        context.fillStyle = prevFill
+        context.globalAlpha = prevAlpha
+      } else {
+        drawLabelLeft(text)
+      }
 
       // Draw up/down arrows on the right
       const arrowSize = Math.min(rect.height / 6, 4)
@@ -4849,8 +4891,20 @@ function renderFormControl(
       type === 'month' ||
       type === 'week'
     ) {
-      const value = input.value || input.placeholder || ''
-      drawLabelLeft(value)
+      const isPlaceholder = !input.value && !!input.placeholder
+      const text = input.value || input.placeholder || ''
+      if (isPlaceholder) {
+        const placeholder = getPlaceholderPaint()
+        const prevFill = context.fillStyle
+        const prevAlpha = context.globalAlpha
+        if (placeholder.color) context.fillStyle = placeholder.color
+        context.globalAlpha = prevAlpha * (placeholder.opacity ?? 1)
+        drawLabelLeft(text)
+        context.fillStyle = prevFill
+        context.globalAlpha = prevAlpha
+      } else {
+        drawLabelLeft(text)
+      }
       context.restore()
       return true
     }
@@ -4894,8 +4948,20 @@ function renderFormControl(
 
   if (isTextArea) {
     const textarea = element
-    const value = textarea.value || textarea.placeholder || ''
-    drawLabelLeft(value)
+    const isPlaceholder = !textarea.value && !!textarea.placeholder
+    const text = textarea.value || textarea.placeholder || ''
+    if (isPlaceholder) {
+      const placeholder = getPlaceholderPaint()
+      const prevFill = context.fillStyle
+      const prevAlpha = context.globalAlpha
+      if (placeholder.color) context.fillStyle = placeholder.color
+      context.globalAlpha = prevAlpha * (placeholder.opacity ?? 1)
+      drawLabelLeft(text)
+      context.fillStyle = prevFill
+      context.globalAlpha = prevAlpha
+    } else {
+      drawLabelLeft(text)
+    }
     context.restore()
     return true
   }
