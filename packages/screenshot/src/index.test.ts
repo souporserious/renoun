@@ -2,9 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { page } from 'vitest/browser'
 import { screenshot } from './index.js'
 
-// =============================================================================
 // TESTING & DEBUGGING
-// =============================================================================
 //
 // RUN TESTS:
 //   pnpm test
@@ -23,11 +21,8 @@ import { screenshot } from './index.js'
 //   This shows DOM (expected) vs Canvas (actual), making it easy to debug
 //   failures in CI without needing to reproduce locally.
 //
-// =============================================================================
 
-// =============================================================================
 // Test Utilities
-// =============================================================================
 
 interface RGBA {
   r: number
@@ -321,9 +316,7 @@ async function expectCanvasToMatchSnapshot(
   }
 }
 
-// =============================================================================
 // Tests
-// =============================================================================
 
 describe('screenshot', () => {
   let container: HTMLDivElement
@@ -338,9 +331,7 @@ describe('screenshot', () => {
     container.remove()
   })
 
-  // ===========================================================================
   // API Tests
-  // ===========================================================================
 
   describe('API', () => {
     describe('screenshot.canvas()', () => {
@@ -491,9 +482,7 @@ describe('screenshot', () => {
     })
   })
 
-  // ===========================================================================
   // Visual Accuracy Tests - Solid Colors
-  // ===========================================================================
 
   describe('visual accuracy: solid colors', () => {
     it('renders solid red correctly', async () => {
@@ -570,10 +559,6 @@ describe('screenshot', () => {
     })
   })
 
-  // ===========================================================================
-  // Visual Accuracy Tests - Gradients
-  // ===========================================================================
-
   describe('visual accuracy: gradients', () => {
     it('renders horizontal linear gradient', async () => {
       const element = createElement({
@@ -634,10 +619,6 @@ describe('screenshot', () => {
     })
   })
 
-  // ===========================================================================
-  // Visual Accuracy Tests - Borders
-  // ===========================================================================
-
   describe('visual accuracy: borders', () => {
     it('renders solid border correctly', async () => {
       const element = createElement({
@@ -678,10 +659,6 @@ describe('screenshot', () => {
     })
   })
 
-  // ===========================================================================
-  // Visual Accuracy Tests - Border Radius
-  // ===========================================================================
-
   describe('visual accuracy: border radius', () => {
     it('renders rounded corners (transparent corners)', async () => {
       const element = createElement({
@@ -704,10 +681,6 @@ describe('screenshot', () => {
       expect(cornerColor.a).toBeLessThan(50)
     })
   })
-
-  // ===========================================================================
-  // Visual Accuracy Tests - Nested Elements
-  // ===========================================================================
 
   describe('visual accuracy: nested elements', () => {
     it('renders child element on top of parent', async () => {
@@ -776,10 +749,6 @@ describe('screenshot', () => {
     })
   })
 
-  // ===========================================================================
-  // Visual Accuracy Tests - Transforms
-  // ===========================================================================
-
   describe('visual accuracy: transforms', () => {
     it('renders scaled element', async () => {
       const wrapper = createElement({
@@ -832,10 +801,6 @@ describe('screenshot', () => {
     })
   })
 
-  // ===========================================================================
-  // Cropping and Dimensions Tests
-  // ===========================================================================
-
   describe('cropping and dimensions', () => {
     it('crops to specified width and height', async () => {
       const element = createElement({
@@ -880,10 +845,6 @@ describe('screenshot', () => {
     })
   })
 
-  // ===========================================================================
-  // Scale Tests
-  // ===========================================================================
-
   describe('scale accuracy', () => {
     it('maintains color accuracy at 2x scale', async () => {
       const element = createElement({
@@ -902,10 +863,6 @@ describe('screenshot', () => {
       expectColor(color, { r: 128, g: 64, b: 192, a: 255 }, 5)
     })
   })
-
-  // ===========================================================================
-  // Background Color Option Tests
-  // ===========================================================================
 
   describe('backgroundColor option', () => {
     it('uses custom background color', async () => {
@@ -942,10 +899,6 @@ describe('screenshot', () => {
       expect(color.a).toBe(0)
     })
   })
-
-  // ===========================================================================
-  // Image Snapshot Tests - Complex CSS Features
-  // ===========================================================================
 
   describe('image snapshots: gradients', () => {
     it('multi-stop gradient', async () => {
@@ -2285,6 +2238,239 @@ describe('screenshot', () => {
 
       const canvas = await screenshot.canvas(wrapper, { scale: 2 })
       await expectCanvasToMatchSnapshot(canvas, 'glassmorphism-card', wrapper)
+    })
+  })
+
+  describe('image snapshots: form controls with positioned icons', () => {
+    it('SVG icon positioned with translateY(-50%) inside form input', async () => {
+      // This tests the fix for SVG elements with CSS transforms.
+      // Previously, SVG elements fell back to a broken center-based approximation
+      // when calculating layout rects, causing icons to be mispositioned.
+      const wrapper = createElement({
+        width: '280px',
+        padding: '16px',
+        backgroundColor: '#1e293b',
+        borderRadius: '12px',
+      })
+
+      const inputContainer = createElement({
+        position: 'relative',
+        width: '100%',
+      })
+
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.placeholder = 'Email Address'
+      input.style.cssText = `
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px 16px;
+        padding-left: 44px;
+        font-size: 14px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background-color: rgba(15, 23, 42, 0.6);
+        color: #f1f5f9;
+        outline: none;
+      `
+
+      // Create an inline SVG icon positioned with translateY(-50%)
+      const svgNS = 'http://www.w3.org/2000/svg'
+      const svg = document.createElementNS(svgNS, 'svg')
+      svg.setAttribute('width', '18')
+      svg.setAttribute('height', '18')
+      svg.setAttribute('viewBox', '0 0 24 24')
+      svg.setAttribute('fill', 'none')
+      svg.setAttribute('stroke', 'rgba(148, 163, 184, 0.5)')
+      svg.setAttribute('stroke-width', '2')
+      svg.setAttribute('stroke-linecap', 'round')
+      svg.setAttribute('stroke-linejoin', 'round')
+      svg.style.cssText = `
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+      `
+
+      // Email icon path (envelope)
+      const path = document.createElementNS(svgNS, 'path')
+      path.setAttribute(
+        'd',
+        'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
+      )
+      svg.appendChild(path)
+
+      inputContainer.appendChild(input)
+      inputContainer.appendChild(svg)
+      wrapper.appendChild(inputContainer)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 2 })
+
+      // Verify the icon is rendered in the correct position
+      // The icon should be centered vertically within the input field
+      // The screenshot shows the icon correctly positioned at left ~14px, vertically centered
+
+      // Sample the area where the icon stroke should be visible
+      // Canvas is at 2x scale, so CSS coordinates need to be multiplied by 2
+      // Icon is at CSS left: 14px + 16px wrapper padding = 30px, vertically centered
+      // Looking at the envelope icon, the stroke should be visible around (30*2, 30*2) = (60, 60)
+      const iconArea = sampleArea(canvas, 60, 58, 6)
+
+      // The icon stroke is rgba(148, 163, 184, 0.5) blended with dark background
+      // We just verify something is rendered there (not pure black or pure background)
+      // Background alone would be very dark (~15, 23, 42)
+      // Icon stroke adds some lightness
+      expect(iconArea.a).toBe(255) // Fully opaque
+
+      // Visual comparison - this is the main verification that positioning is correct
+      await expectCanvasToMatchSnapshot(
+        canvas,
+        'form-input-with-icon-translatey',
+        wrapper
+      )
+    })
+
+    it('SVG icon with rem units via stylesheet', async () => {
+      // This tests CSS via stylesheet (more like CSS-in-JS) instead of inline styles
+      const style = document.createElement('style')
+      style.textContent = `
+        .test-wrapper {
+          width: 280px;
+          padding: 16px;
+          background-color: #1e293b;
+          border-radius: 12px;
+        }
+        .test-container {
+          position: relative;
+          width: 100%;
+        }
+        .test-input {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 12px 16px;
+          padding-left: 44px;
+          font-size: 14px;
+          border-radius: 8px;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          background-color: rgba(15, 23, 42, 0.6);
+          color: #f1f5f9;
+          outline: none;
+        }
+        .test-icon {
+          position: absolute;
+          left: 1rem;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 18px;
+          height: 18px;
+          pointer-events: none;
+        }
+      `
+      document.head.appendChild(style)
+
+      const wrapper = document.createElement('div')
+      wrapper.className = 'test-wrapper'
+
+      const inputContainer = document.createElement('div')
+      inputContainer.className = 'test-container'
+
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.placeholder = 'Email Address'
+      input.className = 'test-input'
+
+      const svgNS = 'http://www.w3.org/2000/svg'
+      const svg = document.createElementNS(svgNS, 'svg')
+      svg.setAttribute('viewBox', '0 0 24 24')
+      svg.setAttribute('fill', 'none')
+      svg.setAttribute('stroke', 'rgba(148, 163, 184, 0.5)')
+      svg.setAttribute('stroke-width', '2')
+      svg.setAttribute('stroke-linecap', 'round')
+      svg.setAttribute('stroke-linejoin', 'round')
+      svg.setAttribute('class', 'test-icon')
+
+      const path = document.createElementNS(svgNS, 'path')
+      path.setAttribute(
+        'd',
+        'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
+      )
+      svg.appendChild(path)
+
+      inputContainer.appendChild(input)
+      inputContainer.appendChild(svg)
+      wrapper.appendChild(inputContainer)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 2 })
+
+      // Visual comparison - the icon should be at 1rem (16px) from input container left
+      await expectCanvasToMatchSnapshot(
+        canvas,
+        'form-input-with-icon-rem-stylesheet',
+        wrapper
+      )
+
+      // Cleanup
+      document.head.removeChild(style)
+    })
+
+    it('captures ::placeholder text color for inputs', async () => {
+      const style = document.createElement('style')
+      style.textContent = `
+        .ph-wrapper {
+          width: 320px;
+          padding: 16px;
+          background-color: #0f172a;
+        }
+        .ph-input {
+          width: 280px;
+          box-sizing: border-box;
+          padding: 12px 16px;
+          font-size: 14px;
+          border-radius: 8px;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          background-color: rgba(15, 23, 42, 0.6);
+          color: #f1f5f9;
+          outline: none;
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .ph-input::placeholder {
+          color: rgba(148, 163, 184, 0.6);
+        }
+      `
+      document.head.appendChild(style)
+
+      const wrapper = document.createElement('div')
+      wrapper.className = 'ph-wrapper'
+
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.placeholder = 'Email Address'
+      input.className = 'ph-input'
+
+      wrapper.appendChild(input)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 2 })
+
+      // Sample a pixel in the placeholder text area (left padding 16px + wrapper padding 16px).
+      // At 2x scale, sample around x ~ (16+16+2)*2 = ~68, y ~ (16+12+7)*2 = ~70.
+      const placeholderSample = sampleArea(canvas, 70, 70, 4)
+      // Ensure it's not the normal input text color (near-white). Placeholder should be darker/greyer.
+      expect(placeholderSample.a).toBe(255)
+      expect(placeholderSample.r).toBeLessThan(235)
+      expect(placeholderSample.g).toBeLessThan(235)
+      expect(placeholderSample.b).toBeLessThan(240)
+
+      await expectCanvasToMatchSnapshot(
+        canvas,
+        'input-placeholder-color',
+        wrapper
+      )
+
+      document.head.removeChild(style)
     })
   })
 })
