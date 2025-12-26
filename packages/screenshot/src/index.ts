@@ -4613,6 +4613,16 @@ function renderFormControl(
     return false
   }
 
+  // For buttons with custom background images (gradients, images), let the normal
+  // rendering pipeline handle them to preserve the gradient backgrounds and proper
+  // text rendering via child text nodes. Only intercept buttons with plain backgrounds.
+  if (isButton) {
+    const backgroundImage = style.backgroundImage
+    if (backgroundImage && backgroundImage !== 'none') {
+      return false
+    }
+  }
+
   const drawRoundedOrRect = (callback: () => void) => {
     context.beginPath()
     if (hasRadius) {
