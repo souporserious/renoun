@@ -9111,6 +9111,21 @@ async function renderTextNode(
           )
         }
 
+        // Measure actual canvas text width - this can differ from DOM measurements
+        // especially for bold fonts where canvas may render wider than DOM reports
+        const measuredWidth = tempContext.measureText(fullText).width
+        if (measuredWidth > textWidth) {
+          // Resize canvas to accommodate the actual text width
+          const newCanvasWidth = Math.max(1, Math.ceil(measuredWidth * scale))
+          tempCanvas.width = newCanvasWidth
+          // Restore context state after resize
+          tempContext.imageSmoothingEnabled = true
+          tempContext.scale(scale, scale)
+          tempContext.font = context.font
+          tempContext.textBaseline = 'alphabetic'
+          tempContext.textAlign = 'left'
+        }
+
         // Use the highest bottom for the most accurate baseline
         const baselineY = maxBottomForBaseline - approximateDescent
 
