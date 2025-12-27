@@ -4662,24 +4662,232 @@ function renderFormControl(
   }
 
   context.font = font
-  context.fillStyle = style.color || '#000'
 
-  const getPlaceholderPaint = (): { color: string | null; opacity: number } => {
+  const getTextFillToken = (decl: CSSStyleDeclaration): string | null => {
+    const raw =
+      (decl as any).webkitTextFillColor ||
+      decl.getPropertyValue('-webkit-text-fill-color')
+    const token = (raw ?? '').trim()
+    if (!token) return null
+    if (
+      token === 'currentcolor' ||
+      token === 'inherit' ||
+      token === 'initial'
+    ) {
+      return null
+    }
+    return token
+  }
+
+  const elementTextColor = resolveCanvasColor(
+    getTextFillToken(style) || style.color || '#000',
+    style,
+    '#000'
+  )
+
+  context.fillStyle = elementTextColor
+
+  const getPlaceholderPaint = (): { color: string; opacity: number } => {
     const ownerDocument = element.ownerDocument
     const view = ownerDocument?.defaultView
-    if (!view) return { color: null, opacity: 1 }
-    try {
-      // Prefer the pseudo-element style if supported by the browser.
-      const pseudo = view.getComputedStyle(element, '::placeholder')
+
+    // Default placeholder color: a neutral gray that works on both light and dark backgrounds.
+    // This is similar to browser defaults when no ::placeholder styles are specified.
+    const defaultPlaceholderColor = 'rgba(128, 128, 128, 0.6)'
+
+    if (!view) return { color: defaultPlaceholderColor, opacity: 1 }
+
+    const elementColor = elementTextColor
+
+    // Safari doesn't properly expose ::placeholder styles via getComputedStyle.
+    // So we scan the actual stylesheets to find matching placeholder rules.
+    const findPlaceholderColorFromStylesheets = (): string | null => {
+      const placeholderPseudos = [
+        '::placeholder',
+        '::-webkit-input-placeholder',
+        ':-webkit-input-placeholder',
+        '::-moz-placeholder',
+        '::-ms-input-placeholder',
+        ':-ms-input-placeholder',
+      ]
+
+      let foundColor: string | null = null
+      let foundSpecificity = -1
+
+      try {
+        const sheets = ownerDocument.styleSheets
+        for (let index = 0; index < sheets.length; index++) {
+          const sheet = sheets[index]
+          let rules: CSSRuleList
+          try {
+            rules = sheet.cssRules || sheet.rules
+          } catch {
+            // Cross-origin stylesheets throw SecurityError
+            continue
+          }
+          if (!rules) continue
+
+          for (let j = 0; j < rules.length; j++) {
+            const rule = rules[j]
+            if (!(rule instanceof CSSStyleRule)) continue
+
+            const selectorText = rule.selectorText
+            if (!selectorText) continue
+
+            // Check if this rule targets a placeholder pseudo-element
+            let matchesPseudo = false
+            for (const pseudo of placeholderPseudos) {
+              if (selectorText.includes(pseudo)) {
+                matchesPseudo = true
+                break
+              }
+            }
+            if (!matchesPseudo) continue
+
+            // Extract the base selector (before the pseudo-element)
+            let baseSelector = selectorText
+            for (const pseudo of placeholderPseudos) {
+              baseSelector = baseSelector.replace(pseudo, '')
+            }
+            baseSelector = baseSelector.trim()
+
+            // Check if element matches the base selector
+            let matches = false
+            if (!baseSelector || baseSelector === '') {
+              // Universal placeholder rule (just "::placeholder")
+              matches = true
+            } else {
+              try {
+                matches = element.matches(baseSelector)
+              } catch {
+                // Invalid selector
+                continue
+              }
+            }
+
+            if (!matches) continue
+
+            // Get color from this rule
+            const ruleStyle = rule.style
       const color =
-        pseudo?.color && pseudo.color !== 'inherit' ? pseudo.color : null
-      const opacityRaw = pseudo?.opacity
-      const opacity =
-        opacityRaw && opacityRaw !== 'normal' ? parseFloat(opacityRaw) : 1
-      return { color, opacity: Number.isFinite(opacity) ? opacity : 1 }
-    } catch {
-      return { color: null, opacity: 1 }
+              ruleStyle.getPropertyValue('-webkit-text-fill-color') ||
+              ruleStyle.getPropertyValue('color')
+            const opacity = ruleStyle.getPropertyValue('opacity')
+
+            if (color && color !== 'inherit' && color !== 'initial') {
+              // Simple specificity: longer selectors are more specific
+              const specificity = selectorText.length
+              if (specificity > foundSpecificity) {
+                let resolvedColor = resolveCanvasColor(
+                  color,
+                  style,
+                  elementColor
+                )
+
+                // Apply opacity if present
+                if (opacity && opacity !== '1') {
+                  const opacityVal = parseFloat(opacity)
+                  if (Number.isFinite(opacityVal) && opacityVal < 1) {
+                    const parsed = parseCssColor(resolvedColor)
+                    if (parsed) {
+                      const combinedAlpha = clamp01(parsed.alpha * opacityVal)
+                      const [r, g, b] = parsed.values
+                      resolvedColor =
+                        normalizeCssColor(
+                          `rgba(${r}, ${g}, ${b}, ${combinedAlpha})`
+                        ) ?? resolvedColor
+                    }
+                  }
+                }
+
+                foundColor = resolvedColor
+                foundSpecificity = specificity
+              }
+            }
+          }
+        }
+      } catch {
+        // Stylesheet access can fail in various edge cases
+      }
+
+      return foundColor
     }
+
+    // First, try getComputedStyle with various pseudo selectors.
+    // This is fast and works correctly in Chrome/Firefox.
+    const pseudoSelectors = [
+      '::placeholder',
+      '::-webkit-input-placeholder',
+      ':-webkit-input-placeholder',
+      '::-webkit-textarea-placeholder',
+      ':-webkit-textarea-placeholder',
+      '::-moz-placeholder',
+      '::-ms-input-placeholder',
+      ':-ms-input-placeholder',
+    ]
+
+    for (const selector of pseudoSelectors) {
+      try {
+        const pseudo = view.getComputedStyle(element, selector)
+        if (!pseudo) continue
+
+        const pseudoFill = getTextFillToken(pseudo)
+        const rawColor = (pseudoFill || pseudo.color || '').trim()
+        const resolvedColor =
+          rawColor && rawColor !== 'inherit' && rawColor !== 'initial'
+            ? resolveCanvasColor(rawColor, style, elementColor)
+            : null
+
+        const opacityRaw = (pseudo.opacity ?? '').trim()
+        const opacityParsed =
+        opacityRaw && opacityRaw !== 'normal' ? parseFloat(opacityRaw) : 1
+        let opacity = Number.isFinite(opacityParsed) ? opacityParsed : 1
+
+        // Heuristic: if the pseudo resolves to the same paint as the element's
+        // normal text (common Safari failure mode where it returns element styles
+        // instead of pseudo styles), keep searching other vendor pseudos.
+        if (resolvedColor && resolvedColor === elementColor && opacity === 1) {
+          continue
+        }
+
+        // Some browsers (notably Safari) may expose placeholder alpha in BOTH:
+        // - the computed color itself (rgba(..., a))
+        // - the computed opacity property
+        // If we apply both, we double-multiply alpha and the placeholder becomes too faint.
+        if (resolvedColor) {
+          const parsed = parseCssColor(resolvedColor)
+          if (parsed && parsed.alpha < 1 && opacity !== 1) {
+            const combinedAlpha = clamp01(parsed.alpha * opacity)
+            const [r, g, b] = parsed.values
+            const combinedColor = normalizeCssColor(
+              `rgba(${r}, ${g}, ${b}, ${combinedAlpha})`
+            )
+            return { color: combinedColor ?? resolvedColor, opacity: 1 }
+          }
+        }
+
+        if (resolvedColor && resolvedColor !== elementColor) {
+          return { color: resolvedColor, opacity }
+        }
+
+        if (opacity !== 1) {
+          return { color: elementColor, opacity }
+        }
+    } catch {
+        // Ignore unsupported pseudo selectors
+      }
+    }
+
+    // Fallback: Safari doesn't properly expose ::placeholder styles via
+    // getComputedStyle, so scan the actual stylesheets to find matching rules.
+    // This is more expensive, so we only do it when getComputedStyle fails.
+    const stylesheetColor = findPlaceholderColorFromStylesheets()
+    if (stylesheetColor) {
+      return { color: stylesheetColor, opacity: 1 }
+    }
+
+    // Final fallback: use a neutral gray placeholder color.
+    return { color: defaultPlaceholderColor, opacity: 1 }
   }
 
   const paddingLeft = parseCssLength(style.paddingLeft) || 4
@@ -4794,8 +5002,8 @@ function renderFormControl(
         const placeholder = getPlaceholderPaint()
         const prevFill = context.fillStyle
         const prevAlpha = context.globalAlpha
-        if (placeholder.color) context.fillStyle = placeholder.color
-        context.globalAlpha = prevAlpha * (placeholder.opacity ?? 1)
+        context.fillStyle = placeholder.color
+        context.globalAlpha = prevAlpha * placeholder.opacity
         drawLabelLeft(text)
         context.fillStyle = prevFill
         context.globalAlpha = prevAlpha
@@ -4855,8 +5063,8 @@ function renderFormControl(
         const placeholder = getPlaceholderPaint()
         const prevFill = context.fillStyle
         const prevAlpha = context.globalAlpha
-        if (placeholder.color) context.fillStyle = placeholder.color
-        context.globalAlpha = prevAlpha * (placeholder.opacity ?? 1)
+        context.fillStyle = placeholder.color
+        context.globalAlpha = prevAlpha * placeholder.opacity
         drawLabelLeft(text)
         context.fillStyle = prevFill
         context.globalAlpha = prevAlpha
@@ -4907,8 +5115,8 @@ function renderFormControl(
         const placeholder = getPlaceholderPaint()
         const prevFill = context.fillStyle
         const prevAlpha = context.globalAlpha
-        if (placeholder.color) context.fillStyle = placeholder.color
-        context.globalAlpha = prevAlpha * (placeholder.opacity ?? 1)
+        context.fillStyle = placeholder.color
+        context.globalAlpha = prevAlpha * placeholder.opacity
         drawLabelLeft(text)
         context.fillStyle = prevFill
         context.globalAlpha = prevAlpha
