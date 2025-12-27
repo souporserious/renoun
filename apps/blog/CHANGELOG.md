@@ -1,5 +1,19 @@
 # @renoun/blog
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [ddcd84d]
+- Updated dependencies [f4a8a1a]
+- Updated dependencies [80d942e]
+- Updated dependencies [c3ca525]
+- Updated dependencies [bd93336]
+- Updated dependencies [22b7a51]
+- Updated dependencies [0653ce6]
+- Updated dependencies [1075233]
+  - renoun@11.0.0
+
 ## 0.2.0
 
 ### Minor Changes
