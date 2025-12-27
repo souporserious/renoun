@@ -2472,5 +2472,150 @@ describe('screenshot', () => {
 
       document.head.removeChild(style)
     })
+
+    it('captures WebKit placeholder paint (-webkit-text-fill-color via ::-webkit-input-placeholder)', async () => {
+      const style = document.createElement('style')
+      style.textContent = `
+        .phw-wrapper {
+          width: 320px;
+          padding: 16px;
+          background-color: #0f172a;
+        }
+        .phw-input {
+          width: 280px;
+          box-sizing: border-box;
+          padding: 12px 16px;
+          font-size: 14px;
+          border-radius: 8px;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          background-color: rgba(15, 23, 42, 0.6);
+          color: #f1f5f9;
+          outline: none;
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .phw-input::-webkit-input-placeholder {
+          color: rgba(80, 200, 120, 0.85);
+          -webkit-text-fill-color: rgba(80, 200, 120, 0.85);
+        }
+      `
+      document.head.appendChild(style)
+
+      const wrapper = document.createElement('div')
+      wrapper.className = 'phw-wrapper'
+
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.placeholder = 'Email Address'
+      input.className = 'phw-input'
+
+      wrapper.appendChild(input)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 2 })
+
+      // Sample a pixel in the placeholder text area (similar to the other placeholder test).
+      const sample = sampleArea(canvas, 70, 70, 4)
+      expect(sample.a).toBe(255)
+      // Expect it to be noticeably greenish (placeholder fill is green, not white/grey).
+      expect(sample.g).toBeGreaterThan(sample.r + 10)
+      expect(sample.g).toBeGreaterThan(sample.b + 10)
+
+      await expectCanvasToMatchSnapshot(
+        canvas,
+        'input-placeholder-color-webkit-text-fill',
+        wrapper
+      )
+
+      document.head.removeChild(style)
+    })
+  })
+
+  describe('cropping and dimensions: includeOverflow', () => {
+    it('expands capture rect for transformed children when overflow is visible', async () => {
+      const wrapper = createElement({
+        width: '120px',
+        height: '120px',
+        position: 'relative',
+        overflow: 'visible',
+        backgroundColor: '#0f172a',
+      })
+
+      const child = createElement({
+        position: 'absolute',
+        left: '10px',
+        top: '10px',
+        width: '100px',
+        height: '100px',
+        borderRadius: '9999px',
+        backgroundColor: 'rgb(59, 130, 246)', // blue
+        transform: 'scale(1.8)',
+        transformOrigin: 'center',
+      })
+
+      wrapper.appendChild(child)
+      container.appendChild(wrapper)
+
+      // Without overflow expansion, this would be clipped to 120x120.
+      const canvas = await screenshot.canvas(wrapper, { scale: 2 })
+
+      expect(canvas.width).toBeGreaterThan(120 * 2)
+      expect(canvas.height).toBeGreaterThan(120 * 2)
+
+      // Sample a pixel near the right edge of the expanded area. It should be blue-ish.
+      const sample = sampleArea(canvas, canvas.width - 10, canvas.height / 2, 3)
+      expect(sample.a).toBe(255)
+      expect(sample.b).toBeGreaterThan(sample.r)
+
+      await expectCanvasToMatchSnapshot(
+        canvas,
+        'overflow-expands-capture',
+        wrapper
+      )
+    })
+
+    it('does not clip when an animated scale would grow after capture', async () => {
+      const wrapper = document.createElement('div')
+      wrapper.style.cssText = `
+        width: 120px;
+        height: 120px;
+        position: relative;
+        overflow: visible;
+        background: #0f172a;
+      `
+      const ring = document.createElement('div')
+      ring.style.cssText = `
+        position: absolute;
+        inset: 10px;
+        border-radius: 9999px;
+        background: rgba(217, 70, 239, 0.35);
+      `
+      wrapper.appendChild(ring)
+      container.appendChild(wrapper)
+
+      // Drive the animation deterministically (avoids runner/browser flakiness with
+      // CSS keyframes + negative animation-delay).
+      const animation = ring.animate(
+        [{ transform: 'scale(1)' }, { transform: 'scale(1.8)' }],
+        { duration: 1000, fill: 'both' }
+      )
+      animation.currentTime = 1000
+      animation.pause()
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+      void ring.getBoundingClientRect()
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 2 })
+
+      // At scale(1.8) the ring expands beyond 120x120, so the canvas should be larger.
+      expect(canvas.width).toBeGreaterThan(120 * 2)
+      expect(canvas.height).toBeGreaterThan(120 * 2)
+
+      await expectCanvasToMatchSnapshot(
+        canvas,
+        'overflow-animated-scale',
+        wrapper
+      )
+    })
   })
 })

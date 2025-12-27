@@ -727,6 +727,60 @@ async function renderToCanvas(
   const colorSpace = isP3 ? 'display-p3' : 'srgb'
 
   const rootRect = element.getBoundingClientRect()
+  const shouldExpandOverflow =
+    options.x == null &&
+    options.y == null &&
+    options.width == null &&
+    options.height == null
+
+  const expandedRootRect = (() => {
+    if (!shouldExpandOverflow) return rootRect
+
+    try {
+      const descendants = Array.from(element.querySelectorAll('*'))
+      if (!descendants.length) return rootRect
+
+      let minLeft = rootRect.left
+      let minTop = rootRect.top
+      let maxRight = rootRect.right
+      let maxBottom = rootRect.bottom
+
+      for (let i = 0; i < descendants.length; i++) {
+        const node = descendants[i]
+        const rect = node.getBoundingClientRect()
+        if (!rect || rect.width === 0 || rect.height === 0) continue
+        if (rect.left < minLeft) minLeft = rect.left
+        if (rect.top < minTop) minTop = rect.top
+        if (rect.right > maxRight) maxRight = rect.right
+        if (rect.bottom > maxBottom) maxBottom = rect.bottom
+      }
+
+      const width = Math.max(0, maxRight - minLeft)
+      const height = Math.max(0, maxBottom - minTop)
+      if (
+        !Number.isFinite(width) ||
+        !Number.isFinite(height) ||
+        width === 0 ||
+        height === 0
+      ) {
+        return rootRect
+      }
+
+      return {
+        left: minLeft,
+        top: minTop,
+        width,
+        height,
+        right: maxRight,
+        bottom: maxBottom,
+        x: minLeft,
+        y: minTop,
+        toJSON: () => ({}),
+      } as DOMRect
+    } catch {
+      return rootRect
+    }
+  })()
   const scrollX =
     defaultView.pageXOffset ??
     ownerDocument.documentElement?.scrollLeft ??
@@ -743,15 +797,15 @@ async function renderToCanvas(
   // relative to the layout viewport (for example, when the URL bar shows /
   // hides in mobile Safari). All downstream layout helpers (`getLayoutRect`,
   // `getVisualRect`) are expressed in the same coordinate space.
-  const x = (options.x ?? 0) + rootRect.left + scrollX
-  const y = (options.y ?? 0) + rootRect.top + scrollY
+  const x = (options.x ?? 0) + expandedRootRect.left + scrollX
+  const y = (options.y ?? 0) + expandedRootRect.top + scrollY
   const width = Math.max(
     1,
-    Math.ceil(options.width ?? rootRect.width - (options.x ?? 0))
+    Math.ceil(options.width ?? expandedRootRect.width - (options.x ?? 0))
   )
   const height = Math.max(
     1,
-    Math.ceil(options.height ?? rootRect.height - (options.y ?? 0))
+    Math.ceil(options.height ?? expandedRootRect.height - (options.y ?? 0))
   )
 
   const canvas = options.canvas ?? ownerDocument.createElement('canvas')
@@ -1494,12 +1548,41 @@ async function renderNode(
       if (ownerDocument && targetCanvas) {
         const scale = env.scale ?? 1
 
-        // Allocate an offscreen buffer that tightly fits the element's layout
-        // rect in canvas pixel space. This keeps the amount of filtered /
-        // masked pixel work proportional to the element's size instead of the
-        // full capture area.
-        const offscreenWidth = Math.max(1, Math.ceil(rect.width * scale))
-        const offscreenHeight = Math.max(1, Math.ceil(rect.height * scale))
+        // For elements with transforms, use the visual rect (from BCR) to size
+        // the offscreen buffer. This ensures scaled content isn't clipped.
+        // For untransformed elements, use the layout rect.
+        let offscreenRect = rect
+        if (hasTransform && element instanceof HTMLElement) {
+          const visualRect = element.getBoundingClientRect()
+          const scrollX = view?.scrollX ?? 0
+          const scrollY = view?.scrollY ?? 0
+          // Only use visual rect if it's larger (element is scaled up)
+          if (
+            visualRect.width > rect.width ||
+            visualRect.height > rect.height
+          ) {
+            offscreenRect = {
+              left: visualRect.left + scrollX,
+              top: visualRect.top + scrollY,
+              width: visualRect.width,
+              height: visualRect.height,
+              right: visualRect.right + scrollX,
+              bottom: visualRect.bottom + scrollY,
+              x: visualRect.left + scrollX,
+              y: visualRect.top + scrollY,
+              toJSON: () => ({}),
+            } as DOMRect
+          }
+        }
+
+        const offscreenWidth = Math.max(
+          1,
+          Math.ceil(offscreenRect.width * scale)
+        )
+        const offscreenHeight = Math.max(
+          1,
+          Math.ceil(offscreenRect.height * scale)
+        )
 
         const offscreen = createCanvasLayer(
           ownerDocument,
@@ -1516,13 +1599,14 @@ async function renderNode(
 
           // Map DOM-space coordinates into the local offscreen buffer so the
           // element's rect is anchored at (0, 0) in pixel space.
+          // Use offscreenRect to properly position scaled content.
           offscreenContext.setTransform(
             scale,
             0,
             0,
             scale,
-            -rect.left * scale,
-            -rect.top * scale
+            -offscreenRect.left * scale,
+            -offscreenRect.top * scale
           )
 
           // Guard this element so that the recursive render does not attempt to
@@ -1594,14 +1678,18 @@ async function renderNode(
           }
 
           // Draw the composited layer back into the main canvas at the element's
-          // layout position in pixel space so we don't re-apply the DOM→canvas
+          // visual position in pixel space so we don't re-apply the DOM→canvas
           // transform a second time. The offscreen buffer already contains fully
-          // transformed pixels.
+          // transformed pixels. Use offscreenRect to properly position scaled content.
           try {
             const scale = env.scale ?? 1
             const captureRect = env.captureRect
-            const destX = Math.round((rect.left - captureRect.left) * scale)
-            const destY = Math.round((rect.top - captureRect.top) * scale)
+            const destX = Math.round(
+              (offscreenRect.left - captureRect.left) * scale
+            )
+            const destY = Math.round(
+              (offscreenRect.top - captureRect.top) * scale
+            )
 
             context.setTransform(1, 0, 0, 1, 0, 0)
             context.drawImage(offscreen, destX, destY)
@@ -3419,14 +3507,14 @@ function getLayoutRect(
     return {
       left: visualRect.left,
       top: visualRect.top,
-    width,
-    height,
+      width,
+      height,
       right: visualRect.left + width,
       bottom: visualRect.top + height,
       x: visualRect.left,
       y: visualRect.top,
-    toJSON: () => ({}),
-  } as DOMRect
+      toJSON: () => ({}),
+    } as DOMRect
   }
 
   if (!transformString || transformString === 'none') {
@@ -4769,7 +4857,7 @@ function renderFormControl(
 
             // Get color from this rule
             const ruleStyle = rule.style
-      const color =
+            const color =
               ruleStyle.getPropertyValue('-webkit-text-fill-color') ||
               ruleStyle.getPropertyValue('color')
             const opacity = ruleStyle.getPropertyValue('opacity')
@@ -4840,7 +4928,7 @@ function renderFormControl(
 
         const opacityRaw = (pseudo.opacity ?? '').trim()
         const opacityParsed =
-        opacityRaw && opacityRaw !== 'normal' ? parseFloat(opacityRaw) : 1
+          opacityRaw && opacityRaw !== 'normal' ? parseFloat(opacityRaw) : 1
         let opacity = Number.isFinite(opacityParsed) ? opacityParsed : 1
 
         // Heuristic: if the pseudo resolves to the same paint as the element's
@@ -4873,7 +4961,7 @@ function renderFormControl(
         if (opacity !== 1) {
           return { color: elementColor, opacity }
         }
-    } catch {
+      } catch {
         // Ignore unsupported pseudo selectors
       }
     }
