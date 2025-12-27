@@ -72,7 +72,6 @@ export function ScreenshotStack({
   const [isHovered, setIsHovered] = useState(false)
   const [isFocusWithin, setIsFocusWithin] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [direction, setDirection] = useState(0) // -1 for left, 1 for right
   const [openingAnimation, setOpeningAnimation] = useState<{
     x: number
     y: number
@@ -81,6 +80,10 @@ export function ScreenshotStack({
   const [removing, setRemoving] = useState<{ url: string; dir: number } | null>(
     null
   )
+  // Track the hover state when drag started to keep animation target stable
+  const [hoverWhenDragStarted, setHoverWhenDragStarted] = useState<
+    boolean | null
+  >(null)
 
   // Notify parent when modal state changes
   useEffect(() => {
@@ -104,25 +107,16 @@ export function ScreenshotStack({
   }, [])
 
   const goToPrevious = useCallback(() => {
-    setDirection(-1)
-    setOpeningAnimation(null) // Clear so we use slide animation
     setCurrentIndex((prev) => (prev > 0 ? prev - 1 : screenshots.length - 1))
   }, [screenshots.length])
 
   const goToNext = useCallback(() => {
-    setDirection(1)
-    setOpeningAnimation(null) // Clear so we use slide animation
     setCurrentIndex((prev) => (prev < screenshots.length - 1 ? prev + 1 : 0))
   }, [screenshots.length])
 
-  const goToIndex = useCallback(
-    (index: number) => {
-      setDirection(index > currentIndex ? 1 : -1)
-      setOpeningAnimation(null) // Clear so we use slide animation
-      setCurrentIndex(index)
-    },
-    [currentIndex]
-  )
+  const goToIndex = useCallback((index: number) => {
+    setCurrentIndex(index)
+  }, [])
 
   // Keyboard navigation
   useEffect(() => {
@@ -235,195 +229,218 @@ export function ScreenshotStack({
           }}
         >
           <AnimatePresence initial={false}>
-          {/* Code block placeholder - shown when no screenshots */}
-          {!hasScreenshots && codeBlockPlaceholder && (
-            <motion.div
-              key="code-block"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ 
-                duration: 0.3, 
-                delay: 0.1,
-                ease: [0.4, 0, 0.2, 1],
-              }}
-              style={{
-                position: 'absolute',
-                width: '100%',
-              }}
-            >
-              {codeBlockPlaceholder}
-            </motion.div>
-          )}
+            {/* Code block placeholder - shown when no screenshots */}
+            {!hasScreenshots && codeBlockPlaceholder && (
+              <motion.div
+                key="code-block"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{
+                  duration: 0.3,
+                  delay: 0.1,
+                  ease: [0.4, 0, 0.2, 1],
+                }}
+                style={{
+                  position: 'absolute',
+                  width: '100%',
+                }}
+              >
+                {codeBlockPlaceholder}
+              </motion.div>
+            )}
 
-          {/* Screenshot stack - animated as a group */}
-          {hasScreenshots && (
-            <motion.div
-              key="screenshot-stack"
-              initial={{ opacity: 1 }}
-              animate={{ opacity: 1 }}
-              exit={{ 
-                opacity: 0,
-                scale: 0.95,
-              }}
-              transition={{ 
-                duration: 0.25,
-                ease: [0.4, 0, 0.2, 1],
-              }}
-              style={{
-                position: 'absolute',
-                inset: 0,
-              }}
-            >
-              <AnimatePresence>
-                {screenshots.map((item, index) => {
-                  const transform = transforms[index]
+            {/* Screenshot stack - animated as a group */}
+            {hasScreenshots && (
+              <motion.div
+                key="screenshot-stack"
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 1 }}
+                exit={{
+                  opacity: 0,
+                  scale: 0.95,
+                }}
+                transition={{
+                  duration: 0.25,
+                  ease: [0.4, 0, 0.2, 1],
+                }}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                }}
+              >
+                <AnimatePresence>
+                  {screenshots.map((item, index) => {
+                    const transform = transforms[index]
 
-                  // Only compute fly-in animation for the newest screenshot (index 0)
-                  // and only if we have valid source rect data
-                  const isNewest = index === 0
-                  let initialX = 0
-                  let initialY = -40
-                  let initialScale = 0.8
+                    // Only compute fly-in animation for the newest screenshot (index 0)
+                    // and only if we have valid source rect data
+                    const isNewest = index === 0
+                    let initialX = 0
+                    let initialY = -40
+                    let initialScale = 0.8
 
-                  if (isNewest && containerRect && item.sourceRect) {
-                    const stackCenterX = containerRect.left + containerRect.width / 2
-                    const stackCenterY = containerRect.top + containerRect.height / 2
-                    const sourceCenterX =
-                      item.sourceRect.left + item.sourceRect.width / 2
-                    const sourceCenterY =
-                      item.sourceRect.top + item.sourceRect.height / 2
+                    if (isNewest && containerRect && item.sourceRect) {
+                      const stackCenterX =
+                        containerRect.left + containerRect.width / 2
+                      const stackCenterY =
+                        containerRect.top + containerRect.height / 2
+                      const sourceCenterX =
+                        item.sourceRect.left + item.sourceRect.width / 2
+                      const sourceCenterY =
+                        item.sourceRect.top + item.sourceRect.height / 2
 
-                    initialX = sourceCenterX - stackCenterX
-                    initialY = sourceCenterY - stackCenterY
-                    initialScale = Math.min(
-                      item.sourceRect.width / CARD_WIDTH,
-                      item.sourceRect.height / CARD_HEIGHT,
-                      1.5
-                    )
-                  }
+                      initialX = sourceCenterX - stackCenterX
+                      initialY = sourceCenterY - stackCenterY
+                      initialScale = Math.min(
+                        item.sourceRect.width / CARD_WIDTH,
+                        item.sourceRect.height / CARD_HEIGHT,
+                        1.5
+                      )
+                    }
 
-                  // When hovered, align cards with slight vertical offset
-                  const hoverY = index * 4
-                  const hoverScale = 1 - index * 0.02
+                    // When hovered, align cards with slight vertical offset
+                    const hoverY = index * 4
+                    const hoverScale = 1 - index * 0.02
 
-                  return (
-                    <motion.div
-                      key={item.url}
-                      ref={(el) => {
-                        if (el) cardRefs.current.set(index, el)
-                        else cardRefs.current.delete(index)
-                      }}
-                      drag={index === 0 && !!onRemove && !removing ? 'x' : false}
-                      dragElastic={0.35}
-                      dragMomentum={false}
-                      dragSnapToOrigin={index === 0 && !!onRemove && !removing}
-                      whileDrag={{
-                        scale: 1.02,
-                      }}
-                      onDragStart={() => {
-                        isDraggingRef.current = true
-                      }}
-                      onDragEnd={(_, info) => {
-                        // Let click events settle after drag ends
-                        setTimeout(() => {
-                          isDraggingRef.current = false
-                        }, 0)
-
-                        if (!onRemove) return
-                        if (index !== 0) return
-                        if (removing) return
-
-                        const offsetX = info.offset.x
-                        const velocityX = info.velocity.x
-                        const shouldRemove =
-                          Math.abs(offsetX) > 80 || Math.abs(velocityX) > 700
-
-                        if (!shouldRemove) return
-
-                        const dir =
-                          offsetX !== 0 ? Math.sign(offsetX) : Math.sign(velocityX)
-                        setRemoving({ url: item.url, dir: dir === 0 ? 1 : dir })
-                      }}
-                      initial={{
-                        opacity: 0,
-                        x: initialX,
-                        y: initialY,
-                        rotate: 0,
-                        scale: initialScale,
-                      }}
-                      animate={{
-                        opacity:
-                          removing?.url === item.url
-                            ? 0
-                            : isHovered
-                              ? 1
-                              : transform.opacity,
-                        x:
-                          removing?.url === item.url
-                            ? removing.dir * 280
-                            : isHovered
-                              ? 0
-                              : transform.x,
-                        y: isHovered ? hoverY : transform.y,
-                        rotate:
-                          removing?.url === item.url
-                            ? removing.dir * 10
-                            : isHovered
-                              ? 0
-                              : transform.rotate,
-                        scale: isHovered ? hoverScale : transform.scale,
-                      }}
-                      exit={{
-                        opacity: 0,
-                        transition: { duration: 0.15 },
-                      }}
-                      transition={{
-                        type: 'spring',
-                        stiffness: 300,
-                        damping: 25,
-                      }}
-                      onAnimationComplete={() => {
-                        if (removing?.url === item.url) {
-                          onRemove?.(item.url)
-                          setRemoving(null)
-                        }
-                      }}
-                      style={{
-                        position: 'absolute',
-                        left: '50%',
-                        top: '50%',
-                        marginLeft: `-${CARD_WIDTH / 2}px`,
-                        marginTop: `-${CARD_HEIGHT / 2}px`,
-                        borderRadius: '0.5rem',
-                        overflow: 'hidden',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        backgroundColor: 'var(--color-surface)',
-                        boxShadow: '0 20px 40px -8px rgba(0, 0, 0, 0.5)',
-                        width: `${CARD_WIDTH}px`,
-                        height: `${CARD_HEIGHT}px`,
-                        zIndex: transform.zIndex,
-                        touchAction: index === 0 && !!onRemove ? 'pan-y' : undefined,
-                      }}
-                    >
-                      <img
-                        src={item.url}
-                        alt={`Screenshot ${index + 1}`}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          pointerEvents: 'none',
+                    return (
+                      <motion.div
+                        key={item.url}
+                        ref={(el) => {
+                          if (el) cardRefs.current.set(index, el)
+                          else cardRefs.current.delete(index)
                         }}
-                      />
-                    </motion.div>
-                  )
-                })}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                        drag={
+                          index === 0 && !!onRemove && !removing ? 'x' : false
+                        }
+                        dragElastic={0.5}
+                        dragMomentum={false}
+                        whileDrag={{
+                          scale: 1.02,
+                          cursor: 'grabbing',
+                        }}
+                        onDragStart={() => {
+                          isDraggingRef.current = true
+                          // Capture hover state when drag starts to keep target stable
+                          setHoverWhenDragStarted(isHovered)
+                        }}
+                        onDragEnd={(_, info) => {
+                          isDraggingRef.current = false
+                          // Always clear the frozen hover state - this triggers a re-render
+                          // which makes the animate prop take over and snap back (or animate out)
+                          setHoverWhenDragStarted(null)
 
+                          if (!onRemove) return
+                          if (index !== 0) return
+                          if (removing) return
+
+                          const offsetX = info.offset.x
+                          const velocityX = info.velocity.x
+                          // iOS-like flick detection: lower velocity threshold (300px/s)
+                          // or distance threshold (80px)
+                          const shouldRemove =
+                            Math.abs(offsetX) > 80 || Math.abs(velocityX) > 300
+
+                          if (shouldRemove) {
+                            // Determine direction: prefer velocity direction for flicks,
+                            // fall back to offset direction
+                            const dir =
+                              Math.abs(velocityX) > 100
+                                ? Math.sign(velocityX)
+                                : Math.sign(offsetX)
+                            setRemoving({
+                              url: item.url,
+                              dir: dir === 0 ? 1 : dir,
+                            })
+                          }
+                        }}
+                        initial={{
+                          opacity: 0,
+                          x: initialX,
+                          y: initialY,
+                          rotate: 0,
+                          scale: initialScale,
+                        }}
+                        animate={(() => {
+                          // Removal animation takes priority
+                          if (removing?.url === item.url) {
+                            return {
+                              opacity: 0,
+                              x: removing.dir * 300,
+                              y: 0,
+                              rotate: removing.dir * 12,
+                              scale: 0.95,
+                            }
+                          }
+
+                          // Use stable hover value during drag to prevent animation target changes
+                          // Only for the top card (index 0) which is draggable
+                          const effectiveHover =
+                            index === 0 && hoverWhenDragStarted !== null
+                              ? hoverWhenDragStarted
+                              : isHovered
+
+                          return {
+                            opacity: effectiveHover ? 1 : transform.opacity,
+                            x: effectiveHover ? 0 : transform.x,
+                            y: effectiveHover ? hoverY : transform.y,
+                            rotate: effectiveHover ? 0 : transform.rotate,
+                            scale: effectiveHover
+                              ? hoverScale
+                              : transform.scale,
+                          }
+                        })()}
+                        exit={{
+                          opacity: 0,
+                          transition: { duration: 0.15 },
+                        }}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 300,
+                          damping: 25,
+                        }}
+                        onAnimationComplete={() => {
+                          // Only handle removal completion
+                          if (removing?.url === item.url) {
+                            onRemove?.(item.url)
+                            setRemoving(null)
+                          }
+                        }}
+                        style={{
+                          position: 'absolute',
+                          left: '50%',
+                          top: '50%',
+                          marginLeft: `-${CARD_WIDTH / 2}px`,
+                          marginTop: `-${CARD_HEIGHT / 2}px`,
+                          borderRadius: '0.5rem',
+                          overflow: 'hidden',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          backgroundColor: 'var(--color-surface)',
+                          boxShadow: '0 20px 40px -8px rgba(0, 0, 0, 0.5)',
+                          width: `${CARD_WIDTH}px`,
+                          height: `${CARD_HEIGHT}px`,
+                          zIndex: transform.zIndex,
+                          touchAction:
+                            index === 0 && !!onRemove ? 'pan-y' : undefined,
+                        }}
+                      >
+                        <img
+                          src={item.url}
+                          alt={`Screenshot ${index + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                      </motion.div>
+                    )
+                  })}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -436,7 +453,7 @@ export function ScreenshotStack({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ 
+                transition={{
                   duration: 0.4,
                   ease: [0.4, 0, 0.2, 1],
                 }}
@@ -503,6 +520,7 @@ export function ScreenshotStack({
                         e.stopPropagation()
                         goToPrevious()
                       }}
+                      aria-label="Previous screenshot"
                       css={{
                         position: 'absolute',
                         left: '1.5rem',
@@ -518,20 +536,36 @@ export function ScreenshotStack({
                         borderRadius: '50%',
                         color: 'white',
                         cursor: 'pointer',
-                        fontSize: '1.5rem',
-                        transition: 'background-color 150ms ease',
+                        transition:
+                          'background-color 150ms ease, transform 100ms ease',
                         ':hover': {
                           backgroundColor: 'rgba(255, 255, 255, 0.2)',
                         },
+                        ':active': {
+                          transform: 'translateY(-50%) scale(0.9)',
+                          backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                        },
                       }}
                     >
-                      ‹
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="15 18 9 12 15 6" />
+                      </svg>
                     </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
                         goToNext()
                       }}
+                      aria-label="Next screenshot"
                       css={{
                         position: 'absolute',
                         right: '1.5rem',
@@ -547,75 +581,81 @@ export function ScreenshotStack({
                         borderRadius: '50%',
                         color: 'white',
                         cursor: 'pointer',
-                        fontSize: '1.5rem',
-                        transition: 'background-color 150ms ease',
+                        transition:
+                          'background-color 150ms ease, transform 100ms ease',
                         ':hover': {
                           backgroundColor: 'rgba(255, 255, 255, 0.2)',
                         },
+                        ':active': {
+                          transform: 'translateY(-50%) scale(0.9)',
+                          backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                        },
                       }}
                     >
-                      ›
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
                     </button>
                   </>
                 )}
 
-                {/* Image carousel */}
-                <AnimatePresence mode="popLayout">
-                  <motion.div
-                    key={screenshots[currentIndex]?.url}
-                    initial={
-                      currentIndex === 0 && openingAnimation
-                        ? {
-                            scale: 0.2,
-                            x: openingAnimation.x,
-                            y: openingAnimation.y,
-                            opacity: 1,
-                          }
-                        : { opacity: 0, x: direction * 80 }
-                    }
-                    animate={{
-                      scale: 1,
-                      x: 0,
-                      y: 0,
-                      opacity: 1,
+                {/* Image display - instant swap for easy comparison */}
+                <motion.div
+                  key="modal-image-container"
+                  initial={
+                    openingAnimation
+                      ? {
+                          scale: 0.2,
+                          x: openingAnimation.x,
+                          y: openingAnimation.y,
+                          opacity: 1,
+                        }
+                      : { opacity: 0 }
+                  }
+                  animate={{
+                    scale: 1,
+                    x: 0,
+                    y: 0,
+                    opacity: 1,
+                  }}
+                  exit={{
+                    opacity: 0,
+                  }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 200,
+                    damping: 28,
+                    mass: 1,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    borderRadius: '0.5rem',
+                    overflow: 'hidden',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                  }}
+                >
+                  <img
+                    src={screenshots[currentIndex]?.url}
+                    alt={`Screenshot ${currentIndex + 1}`}
+                    css={{
+                      // Ensure arrows never overlap the image: reserve horizontal "gutters"
+                      // on both sides where the controls can live.
+                      maxWidth: `min(90vw, calc(100vw - ${MODAL_NAV_GUTTER_PX * 2}px))`,
+                      maxHeight: '80vh',
+                      objectFit: 'contain',
+                      display: 'block',
                     }}
-                    exit={
-                      currentIndex === 0 && openingAnimation
-                        ? {
-                            scale: 0.2,
-                            x: openingAnimation.x,
-                            y: openingAnimation.y,
-                            opacity: 0,
-                          }
-                        : { opacity: 0, x: direction * -80 }
-                    }
-                    transition={{
-                      type: 'spring',
-                      stiffness: 200,
-                      damping: 28,
-                      mass: 1,
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                      borderRadius: '0.5rem',
-                      overflow: 'hidden',
-                      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                    }}
-                  >
-                    <img
-                      src={screenshots[currentIndex]?.url}
-                      alt={`Screenshot ${currentIndex + 1}`}
-                      css={{
-                        // Ensure arrows never overlap the image: reserve horizontal "gutters"
-                        // on both sides where the controls can live.
-                        maxWidth: `min(90vw, calc(100vw - ${MODAL_NAV_GUTTER_PX * 2}px))`,
-                        maxHeight: '80vh',
-                        objectFit: 'contain',
-                        display: 'block',
-                      }}
-                    />
-                  </motion.div>
-                </AnimatePresence>
+                  />
+                </motion.div>
 
                 {/* Thumbnail strip */}
                 {screenshots.length > 1 && (

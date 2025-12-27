@@ -295,7 +295,7 @@ function LeftPanel({
         <div>
           <h1
             css={{
-              fontSize: 'clamp(1.75rem, 2.5vw, 2.5rem)',
+              fontSize: 'var(--font-size-heading-2)',
               fontWeight: 'var(--font-weight-heading)',
               color: 'var(--color-foreground)',
               letterSpacing: '-0.02em',
