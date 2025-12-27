@@ -1,5 +1,36 @@
 # renoun
 
+## 11.0.0
+
+### Major Changes
+
+- 22b7a51: Replaces `getHeadings` method with `getSections` for `MarkdownFile`, `MDXFile`, and `JavaScriptFile` to build outlines from regions, headings, and exports. This now includes richer metadata instead of only headings.
+
+  ### Breaking Changes
+
+  The `getHeadings` method for `MarkdownFile`, `MDXFile`, and `JavaScriptFile` has been renamed to `getSections`. The shape is slightly different now that it produces a nested list of section metadata.
+
+- 0653ce6: Improves `File` interoperability by extending the native `Blob` class, making it compatible with web APIs and tooling that expect `Blob` instances. This enables `instanceof Blob` checks and seamless integration with `fetch`, `FormData`, and other web primitives.
+
+  ### Breaking Changes
+
+  The following methods have been renamed/removed:
+  - `File#getText()` → `File#text()`
+  - `File#getBinary()` → `File#bytes()` (or `File#arrayBuffer()`)
+  - `ModuleExport#getText()` → `ModuleExport#text()`
+
+### Minor Changes
+
+- 1075233: Renames `MemoryFileSystem` to `InMemoryFileSystem`.
+
+### Patch Changes
+
+- ddcd84d: Fixes `Reference` descriptions for variable-assigned function exports documented with JSDoc.
+- f4a8a1a: Fixes app command failing when the project's `node_modules` directory contains nested `node_modules` directories. The `OverrideManager` was attempting to hard link files inside `node_modules`, which causing errors.
+- 80d942e: Fixes a bug in `InMemoryFileSystem.readDirectorySync` where sibling files with a shared prefix were incorrectly included when reading a subdirectory.
+- c3ca525: Fixes infinite recursion when resolving self-referential interfaces in `ModuleExport#getType`.
+- bd93336: Fixes `StreamableBlob` implementation hanging for zero-length files.
+
 ## 10.17.2
 
 ### Patch Changes
