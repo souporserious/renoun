@@ -727,6 +727,8 @@ async function renderToCanvas(
   const colorSpace = isP3 ? 'display-p3' : 'srgb'
 
   const rootRect = element.getBoundingClientRect()
+  const rootStyle = defaultView.getComputedStyle(element as HTMLElement)
+  const rootClipsOverflow = isClippingOverflow(rootStyle)
   const shouldExpandOverflow =
     options.x == null &&
     options.y == null &&
@@ -735,6 +737,7 @@ async function renderToCanvas(
 
   const expandedRootRect = (() => {
     if (!shouldExpandOverflow) return rootRect
+    if (rootClipsOverflow) return rootRect
 
     try {
       const descendants = Array.from(element.querySelectorAll('*'))
@@ -749,10 +752,19 @@ async function renderToCanvas(
         const node = descendants[i]
         const rect = node.getBoundingClientRect()
         if (!rect || rect.width === 0 || rect.height === 0) continue
-        if (rect.left < minLeft) minLeft = rect.left
-        if (rect.top < minTop) minTop = rect.top
-        if (rect.right > maxRight) maxRight = rect.right
-        if (rect.bottom > maxBottom) maxBottom = rect.bottom
+
+        const style = defaultView.getComputedStyle(node)
+        const expand = computeShadowExpansion(style)
+
+        const left = rect.left + expand.left
+        const top = rect.top + expand.top
+        const right = rect.right + expand.right
+        const bottom = rect.bottom + expand.bottom
+
+        if (left < minLeft) minLeft = left
+        if (top < minTop) minTop = top
+        if (right > maxRight) maxRight = right
+        if (bottom > maxBottom) maxBottom = bottom
       }
 
       const width = Math.max(0, maxRight - minLeft)
@@ -797,17 +809,25 @@ async function renderToCanvas(
   // relative to the layout viewport (for example, when the URL bar shows /
   // hides in mobile Safari). All downstream layout helpers (`getLayoutRect`,
   // `getVisualRect`) are expressed in the same coordinate space.
-  const x = (options.x ?? 0) + expandedRootRect.left + scrollX
-  const y = (options.y ?? 0) + expandedRootRect.top + scrollY
-  const width = Math.max(
+  const rawX = (options.x ?? 0) + expandedRootRect.left + scrollX
+  const rawY = (options.y ?? 0) + expandedRootRect.top + scrollY
+  // Snap capture origin to the device pixel grid to avoid subpixel blurring
+  const snapToDevice = (value: number) => {
+    return Math.round(value * deviceScale) / deviceScale
+  }
+  const x = snapToDevice(rawX)
+  const y = snapToDevice(rawY)
+  const rawWidth = Math.max(
     1,
     Math.ceil(options.width ?? expandedRootRect.width - (options.x ?? 0))
   )
-  const height = Math.max(
+  const rawHeight = Math.max(
     1,
     Math.ceil(options.height ?? expandedRootRect.height - (options.y ?? 0))
   )
-
+  // Snap dimensions to device pixels to keep text crisp
+  const width = snapToDevice(rawWidth)
+  const height = snapToDevice(rawHeight)
   const canvas = options.canvas ?? ownerDocument.createElement('canvas')
 
   // Physical pixel size
@@ -849,8 +869,8 @@ async function renderToCanvas(
     height,
     right: x + width,
     bottom: y + height,
-    x: 0,
-    y: 0,
+    x,
+    y,
     toJSON: () => ({}),
   } as DOMRect
 
@@ -872,6 +892,80 @@ async function renderToCanvas(
   context.restore()
 
   return canvas
+}
+
+function isClippingOverflow(style: CSSStyleDeclaration): boolean {
+  const ox = style.overflowX || style.overflow
+  const oy = style.overflowY || style.overflow
+  const clips = (value: string | null) =>
+    value !== null &&
+    value !== '' &&
+    value !== 'visible' &&
+    value !== 'unset' &&
+    value !== 'initial'
+  return clips(ox) || clips(oy)
+}
+
+function computeShadowExpansion(style: CSSStyleDeclaration): {
+  left: number
+  top: number
+  right: number
+  bottom: number
+} {
+  let expandLeft = 0
+  let expandTop = 0
+  let expandRight = 0
+  let expandBottom = 0
+
+  const parseShadow = (shadow: string) => {
+    const tokens = shadow.match(/-?\d*\.?\d+px/g)
+    if (!tokens || tokens.length < 2) return null
+    const [ox, oy, blur = '0px', spread = '0px'] = tokens
+    return {
+      offsetX: parseFloat(ox),
+      offsetY: parseFloat(oy),
+      blur: Math.max(0, parseFloat(blur)),
+      spread: parseFloat(spread),
+    }
+  }
+
+  const apply = (
+    offsetX: number,
+    offsetY: number,
+    blur: number,
+    spread: number
+  ) => {
+    const ext = Math.max(0, blur) + spread
+    const left = offsetX - ext
+    const right = offsetX + ext
+    const top = offsetY - ext
+    const bottom = offsetY + ext
+    if (left < expandLeft) expandLeft = left
+    if (top < expandTop) expandTop = top
+    if (right > expandRight) expandRight = right
+    if (bottom > expandBottom) expandBottom = bottom
+  }
+
+  const shadows = style.boxShadow?.split(',') ?? []
+  for (const raw of shadows) {
+    const shadow = parseShadow(raw)
+    if (!shadow) continue
+    apply(shadow.offsetX, shadow.offsetY, shadow.blur, shadow.spread)
+  }
+
+  const textShadows = style.textShadow?.split(',') ?? []
+  for (const raw of textShadows) {
+    const shadow = parseShadow(raw)
+    if (!shadow) continue
+    apply(shadow.offsetX, shadow.offsetY, shadow.blur, 0)
+  }
+
+  return {
+    left: Math.min(0, expandLeft),
+    top: Math.min(0, expandTop),
+    right: Math.max(0, expandRight),
+    bottom: Math.max(0, expandBottom),
+  }
 }
 
 /**
@@ -9010,6 +9104,20 @@ async function renderTextNode(
     return
   }
 
+  const scale = env.scale ?? 1
+  const snap = (v: number) => Math.round(v * scale) / scale
+  const snapRect = (r: DOMRect): DOMRect => ({
+    left: snap(r.left),
+    top: snap(r.top),
+    width: snap(r.width),
+    height: snap(r.height),
+    right: snap(r.right),
+    bottom: snap(r.bottom),
+    x: snap(r.x),
+    y: snap(r.y),
+    toJSON: () => ({}),
+  })
+
   const writingMode = style.writingMode || 'horizontal-tb'
   const writingModeString = String(writingMode)
   const isVerticalWritingMode =
@@ -9024,6 +9132,18 @@ async function renderTextNode(
   }
 
   context.save()
+
+  // Snap current transform translation to device pixels for crisp text
+  const transform = context.getTransform()
+  context.setTransform(
+    transform.a,
+    transform.b,
+    transform.c,
+    transform.d,
+    snap(transform.e),
+    snap(transform.f)
+  )
+
   context.font = buildCanvasFont(style)
   context.textBaseline = 'alphabetic'
   // Always use 'left' for textAlign since we calculate exact X positions
@@ -9104,7 +9224,11 @@ async function renderTextNode(
 
       const transformed = applyTextTransform(textContent, style.textTransform)
       if (transformed) {
-        context.fillText(transformed, drawX, baselineY)
+        const scale = env.scale ?? 1
+        const snap = (value: number) => Math.round(value * scale) / scale
+        const snappedX = snap(drawX)
+        const snappedY = snap(baselineY)
+        context.fillText(transformed, snappedX, snappedY)
       }
 
       range.detach?.()
@@ -9288,7 +9412,7 @@ async function renderTextNode(
     textAlignValue === 'right' ||
     textAlignValue === 'end'
   ) {
-    const parentRect = getLayoutRect(parent)
+    const parentRect = snapRect(getLayoutRect(parent))
 
     // Group runs by line (same Y position within threshold)
     interface LineGroup {
