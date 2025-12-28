@@ -2619,3 +2619,53 @@ describe('screenshot', () => {
     })
   })
 })
+
+describe('snapshot analysis', () => {
+  it('renders snapshots at specific animation times', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+
+    const wrapper = document.createElement('div')
+    wrapper.style.cssText = `
+      width: 120px;
+      height: 120px;
+      position: relative;
+      background: transparent;
+    `
+    const box = document.createElement('div')
+    box.style.cssText = `
+      width: 80px;
+      height: 80px;
+      position: absolute;
+      inset: 20px;
+      background: rgb(16, 185, 129);
+    `
+    wrapper.appendChild(box)
+    container.appendChild(wrapper)
+
+    const animation = box.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: 1000,
+      fill: 'both',
+    })
+    animation.pause()
+    animation.currentTime = 0
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    )
+
+    const snap = await screenshot.analyze(wrapper)
+
+    const animatedElements = Object.values(snap.elements).filter(
+      (el) => el.animations.length > 0
+    )
+    expect(animatedElements.length).toBeGreaterThan(0)
+
+    const canvasStart = await screenshot.render(snap, { animationTime: 0 })
+    const canvasEnd = await screenshot.render(snap, { animationTime: 1000 })
+
+    expect(canvasStart.width).toBeGreaterThan(0)
+    expect(canvasEnd.width).toBeGreaterThan(0)
+
+    container.remove()
+  })
+})

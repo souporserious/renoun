@@ -1,3 +1,6 @@
+import { interpolateStyles } from './interpolate'
+import { analyzeSubtree, type DOMSnapshot } from './snapshot'
+
 const graphemeSegmenter = new Intl.Segmenter(undefined, {
   granularity: 'grapheme',
 })
@@ -1067,6 +1070,141 @@ screenshot.url = async function (
 }
 
 export { screenshot }
+
+interface SnapshotRenderOptions extends RenderOptions {
+  animationTime?: number
+}
+
+screenshot.analyze = async function (
+  target: Element | string,
+  options?: RenderOptions
+): Promise<DOMSnapshot> {
+  const element: Element | null =
+    typeof target === 'string' ? document.querySelector(target) : target
+  if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+    throw new Error('Invalid element provided to screenshot.analyze')
+  }
+  await prepareResources(element as HTMLElement)
+  return analyzeSubtree(element as HTMLElement, { scale: options?.scale })
+}
+
+screenshot.render = async function (
+  snapshot: DOMSnapshot,
+  options: SnapshotRenderOptions = {}
+): Promise<HTMLCanvasElement> {
+  const ownerDocument = document
+  const container = ownerDocument.createElement('div')
+  Object.assign(container.style, {
+    position: 'fixed',
+    left: '-99999px',
+    top: '-99999px',
+    pointerEvents: 'none',
+    isolation: 'isolate',
+  })
+
+  const resourceMap = new Map<string, string>()
+  for (const res of snapshot.resources) {
+    if (res.type === 'image') {
+      resourceMap.set(res.url, res.dataUrl)
+    }
+  }
+
+  const builtNodes = new Map<string, Node>()
+  const buildNode = (elementId: string): Node => {
+    if (builtNodes.has(elementId)) return builtNodes.get(elementId)!
+    const snap = snapshot.elements[elementId]
+    if (!snap) throw new Error(`Missing element snapshot ${elementId}`)
+
+    if (snap.tagName === '#text') {
+      const text = ownerDocument.createTextNode(snap.textContent ?? '')
+      builtNodes.set(elementId, text)
+      return text
+    }
+
+    const el = ownerDocument.createElement(snap.tagName)
+    builtNodes.set(elementId, el)
+
+    if (snap.attributes) {
+      for (const [name, value] of Object.entries(snap.attributes)) {
+        try {
+          el.setAttribute(name, value)
+        } catch {
+          // ignore invalid attributes
+        }
+      }
+    }
+
+    // Apply base styles
+    for (const [prop, value] of Object.entries(snap.styles)) {
+      try {
+        ;(el as HTMLElement).style.setProperty(prop, value)
+      } catch {
+        // ignore invalid
+      }
+    }
+
+    // Apply animated overrides
+    const overrides = interpolateStyles(
+      snap.styles,
+      snap.animations,
+      options.animationTime
+    )
+    for (const [prop, value] of Object.entries(overrides)) {
+      try {
+        ;(el as HTMLElement).style.setProperty(prop, value)
+      } catch {
+        // ignore invalid
+      }
+    }
+
+    // Absolute positioning based on captured rect
+    const rect = snap.boundingRect
+    const rootRect = snapshot.captureRect
+    const left = rect.left - rootRect.left
+    const top = rect.top - rootRect.top
+    ;(el as HTMLElement).style.position = 'absolute'
+    ;(el as HTMLElement).style.left = `${left}px`
+    ;(el as HTMLElement).style.top = `${top}px`
+    ;(el as HTMLElement).style.width = `${rect.width}px`
+    ;(el as HTMLElement).style.height = `${rect.height}px`
+
+    // Images: swap to captured data URL if available
+    if (snap.tagName === 'img') {
+      const src =
+        snap.attributes?.['src'] ||
+        snap.attributes?.['srcset'] ||
+        snap.attributes?.['data-src']
+      if (src && resourceMap.has(src)) {
+        ;(el as HTMLImageElement).src = resourceMap.get(src)!
+      }
+    }
+
+    // Children
+    for (const childId of snap.childIds) {
+      const childNode = buildNode(childId)
+      el.appendChild(childNode)
+    }
+
+    return el
+  }
+
+  const root = buildNode(snapshot.rootId) as HTMLElement
+  root.style.position = 'relative'
+  root.style.width = `${snapshot.captureRect.width}px`
+  root.style.height = `${snapshot.captureRect.height}px`
+  container.appendChild(root)
+  ownerDocument.body.appendChild(container)
+
+  try {
+    const canvas = await renderToCanvas(root, {
+      ...options,
+      scale: options.scale ?? snapshot.scale,
+    })
+    return canvas
+  } finally {
+    container.remove()
+  }
+}
 
 async function renderDomTree(
   root: HTMLElement,
@@ -10956,18 +11094,18 @@ function installCanvasFilterPolyfillIfNeeded(): void {
   // that throws if invoked with the wrong receiver, so we must avoid reading
   // `proto.filter` directly.
   if (!isFirefoxForPolyfill) {
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(prototype, 'filter')
-    if (
-      descriptor &&
-      (typeof descriptor.value === 'string' ||
-        typeof descriptor.get === 'function')
-    ) {
-      return
-    }
-  } catch {
-    // Ignore and fall through to our polyfill if we can't safely inspect
-    // the property.
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, 'filter')
+      if (
+        descriptor &&
+        (typeof descriptor.value === 'string' ||
+          typeof descriptor.get === 'function')
+      ) {
+        return
+      }
+    } catch {
+      // Ignore and fall through to our polyfill if we can't safely inspect
+      // the property.
     }
   }
 
