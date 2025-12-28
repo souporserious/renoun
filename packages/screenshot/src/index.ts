@@ -4693,22 +4693,11 @@ function renderFormControl(
   hasRadius: boolean
 ): boolean {
   const isInput = element instanceof HTMLInputElement
-  const isButton = element instanceof HTMLButtonElement
   const isTextArea = element instanceof HTMLTextAreaElement
   const isSelect = element instanceof HTMLSelectElement
 
-  if (!isInput && !isButton && !isTextArea && !isSelect) {
+  if (!isInput && !isTextArea && !isSelect) {
     return false
-  }
-
-  // For buttons with custom background images (gradients, images), let the normal
-  // rendering pipeline handle them to preserve the gradient backgrounds and proper
-  // text rendering via child text nodes. Only intercept buttons with plain backgrounds.
-  if (isButton) {
-    const backgroundImage = style.backgroundImage
-    if (backgroundImage && backgroundImage !== 'none') {
-      return false
-    }
   }
 
   const drawRoundedOrRect = (callback: () => void) => {
@@ -5008,15 +4997,10 @@ function renderFormControl(
   }
 
   if (
-    isButton ||
-    (isInput &&
-      ['button', 'submit', 'reset'].includes(
-        (element as HTMLInputElement).type
-      ))
+    isInput &&
+    ['button', 'submit', 'reset'].includes((element as HTMLInputElement).type)
   ) {
-    const label =
-      (isButton ? element.textContent : (element as HTMLInputElement).value) ||
-      ''
+    const label = (element as HTMLInputElement).value || ''
     drawLabelCentered(label.trim())
     context.restore()
     return true
