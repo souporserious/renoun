@@ -10736,6 +10736,11 @@ const FILTERS: { [name: string]: Filter } = {
   'drop-shadow': () => {},
 }
 
+// Firefox detection for filter polyfill - Firefox's native canvas filter has bugs
+// with display-p3 colorSpace (e.g., sepia produces blue instead of brown)
+const isFirefoxForPolyfill =
+  typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent)
+
 function installCanvasFilterPolyfillIfNeeded(): void {
   if (typeof window === 'undefined') {
     // Server / non-DOM environment
@@ -10752,9 +10757,12 @@ function installCanvasFilterPolyfillIfNeeded(): void {
 
   const prototype = Canvas2D.prototype
 
-  // Native support present – nothing to do. Some browsers (Chrome) expose
-  // `filter` as an accessor with a native getter that throws if invoked with
-  // the wrong receiver, so we must avoid reading `proto.filter` directly.
+  // Native support present – nothing to do, unless we're in Firefox where the
+  // native filter implementation has bugs with display-p3 colorSpace.
+  // Some browsers (Chrome) expose `filter` as an accessor with a native getter
+  // that throws if invoked with the wrong receiver, so we must avoid reading
+  // `proto.filter` directly.
+  if (!isFirefoxForPolyfill) {
   try {
     const descriptor = Object.getOwnPropertyDescriptor(prototype, 'filter')
     if (
@@ -10767,6 +10775,7 @@ function installCanvasFilterPolyfillIfNeeded(): void {
   } catch {
     // Ignore and fall through to our polyfill if we can't safely inspect
     // the property.
+    }
   }
 
   const defaultFilter = 'none'
@@ -10835,9 +10844,10 @@ function installCanvasFilterPolyfillIfNeeded(): void {
     tempCanvas.width = size.width + padding * 2
     tempCanvas.height = size.height + padding * 2
 
-    // Force sRGB to match main canvas
-    const colorSpace = 'srgb'
-    const tempContext = tempCanvas.getContext('2d', { colorSpace })
+    // Use the same colorSpace as the source context for consistent color handling
+    const tempContext = tempCanvas.getContext('2d', {
+      colorSpace: this.getContextAttributes?.()?.colorSpace || 'srgb',
+    })
     if (!tempContext) {
       originalDrawImage.call(this, image, ...args)
       return
