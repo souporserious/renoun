@@ -72,4 +72,4 @@ jobs:
         if: steps.affected.outputs.package_count != '0'
         env:
           TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: pnpm turbo run test --affected --filter='!@renoun/screenshot'
+        run: pnpm turbo run test --filter="...[$TURBO_SCM_BASE]" --filter="!@renoun/screenshot"
