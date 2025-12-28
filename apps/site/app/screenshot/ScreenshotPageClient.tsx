@@ -72,6 +72,25 @@ const examples = [
 
 const cameraCursor = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><path d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/><circle cx='12' cy='13' r='3'/></svg>") 12 12, pointer`
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mql = window.matchMedia(query)
+    const handleChange = (event: MediaQueryListEvent) =>
+      setMatches(event.matches)
+
+    // Set initial match state
+    setMatches(mql.matches)
+
+    mql.addEventListener('change', handleChange)
+    return () => mql.removeEventListener('change', handleChange)
+  }, [query])
+
+  return matches
+}
+
 export interface ScreenshotItem {
   url: string
   sourceRect: DOMRect
@@ -84,6 +103,7 @@ interface ScreenshotPageClientProps {
 export function ScreenshotPageClient({
   codeBlockPlaceholder,
 }: ScreenshotPageClientProps) {
+  const isDesktop = useMediaQuery('(min-width: 60rem)')
   const [screenshots, setScreenshots] = useState<ScreenshotItem[]>([])
   const [isCapturing, setIsCapturing] = useState(false)
   const [isGalleryOpen, setIsGalleryOpen] = useState(false)
@@ -113,7 +133,7 @@ export function ScreenshotPageClient({
           backgroundColor: 'hsl(215deg 47% 10%)',
         })
         screenshotUrlsRef.current.push(url)
-        setScreenshots((prev) => [{ url, sourceRect }, ...prev].slice(0, 5))
+        setScreenshots((prev) => [{ url, sourceRect }, ...prev])
       } catch (error) {
         console.error('Screenshot capture failed:', error)
       } finally {
@@ -148,6 +168,7 @@ export function ScreenshotPageClient({
         }}
       >
         <MobileLayout
+          enableFlying={!isDesktop}
           screenshots={screenshots}
           isCapturing={isCapturing}
           isCaptureMode={isCaptureMode}
@@ -213,6 +234,7 @@ export function ScreenshotPageClient({
               onModalOpenChange={setIsGalleryOpen}
               onRemoveScreenshot={handleRemoveScreenshot}
               codeBlockPlaceholder={codeBlockPlaceholder}
+              enableFlying={isDesktop}
             />
           </div>
         </div>
@@ -250,6 +272,7 @@ function LeftPanel({
   onModalOpenChange,
   onRemoveScreenshot,
   codeBlockPlaceholder,
+  enableFlying,
 }: {
   screenshots: ScreenshotItem[]
   isCapturing: boolean
@@ -258,6 +281,7 @@ function LeftPanel({
   onModalOpenChange: (isOpen: boolean) => void
   onRemoveScreenshot: (url: string) => void
   codeBlockPlaceholder: React.ReactNode
+  enableFlying?: boolean
 }) {
   return (
     <div
@@ -295,7 +319,7 @@ function LeftPanel({
         <div>
           <h1
             css={{
-              fontSize: 'var(--font-size-heading-2)',
+              fontSize: '2rem',
               fontWeight: 'var(--font-weight-heading)',
               color: 'var(--color-foreground)',
               letterSpacing: '-0.02em',
@@ -338,6 +362,7 @@ function LeftPanel({
           onModalOpenChange={onModalOpenChange}
           onRemove={onRemoveScreenshot}
           codeBlockPlaceholder={codeBlockPlaceholder}
+          enableFlying={enableFlying}
           openOnClick
         />
       </div>
@@ -428,6 +453,7 @@ function MobileLayout({
   onModalOpenChange,
   onRemoveScreenshot,
   codeBlockPlaceholder,
+  enableFlying,
 }: {
   screenshots: ScreenshotItem[]
   isCapturing: boolean
@@ -439,6 +465,7 @@ function MobileLayout({
   onModalOpenChange: (isOpen: boolean) => void
   onRemoveScreenshot: (url: string) => void
   codeBlockPlaceholder: React.ReactNode
+  enableFlying?: boolean
 }) {
   const hasScreenshots = screenshots.length > 0
 
@@ -521,6 +548,7 @@ function MobileLayout({
             screenshots={screenshots}
             onModalOpenChange={onModalOpenChange}
             codeBlockPlaceholder={codeBlockPlaceholder}
+            enableFlying={enableFlying}
           />
         )}
 
@@ -643,6 +671,7 @@ function MobileLayout({
               onModalOpenChange={onModalOpenChange}
               onRemove={onRemoveScreenshot}
               variant="floating"
+              enableFlying={enableFlying}
               openOnClick
             />
           </div>

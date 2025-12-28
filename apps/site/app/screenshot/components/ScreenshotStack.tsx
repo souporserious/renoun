@@ -16,6 +16,7 @@ interface ScreenshotStackProps {
   codeBlockPlaceholder?: React.ReactNode
   variant?: 'inline' | 'floating'
   openOnClick?: boolean
+  enableFlying?: boolean
 }
 
 function seededRandom(seed: number) {
@@ -27,6 +28,10 @@ function seededRandom(seed: number) {
 const CARD_WIDTH = 240
 const CARD_HEIGHT = 160
 const MODAL_NAV_GUTTER_PX = 112 // 3rem button + ~1.5rem gap + breathing room (each side)
+const MAX_STACK_CARDS = 5 // Only render this many cards in the stack view
+
+// Animation phases for new screenshots
+type AnimationPhase = 'liftoff' | 'fly' | 'settled'
 
 function generateTransformForScreenshot(
   screenshotUrl: string,
@@ -38,14 +43,21 @@ function generateTransformForScreenshot(
     .reduce((acc, char) => acc + char.charCodeAt(0), 0)
   const seed = hash + index * 1337
 
-  // Subtle rotation, more for back cards
-  const rotation = (seededRandom(seed) - 0.5) * 12
-  // Slight horizontal offset for natural scatter
-  const offsetX = (seededRandom(seed + 1) - 0.5) * 30
-  // Stack going slightly up/back
-  const offsetY = index * 8
+  // Keep the stack centered but with a touch more dynamism
+  const rotationRange = index === 0 ? 10 : 14
+  const offsetRangeX = index === 0 ? 12 : 18
+  const offsetRangeY = index === 0 ? 8 : 12
+
+  // Generate random rotation with subtle alternating offset to prevent parallels
+  const baseRotation = (seededRandom(seed) - 0.5) * rotationRange
+  // Add a small alternating nudge (±1.5°) to break up accidental parallels
+  const nudge = (index % 2 === 0 ? 1 : -1) * 1.5
+  const rotation = baseRotation + nudge
+
+  const offsetX = (seededRandom(seed + 1) - 0.5) * offsetRangeX
+  const offsetY = (seededRandom(seed + 2) - 0.5) * offsetRangeY
   // Back cards slightly smaller (realistic perspective)
-  const scale = 1 - index * 0.015
+  const scale = 1 - index * 0.012
 
   return {
     x: offsetX,
@@ -57,6 +69,152 @@ function generateTransformForScreenshot(
   }
 }
 
+// Single flying screenshot component - handles one screenshot at a time
+function FlyingScreenshot({
+  item,
+  containerRect,
+  onComplete,
+  targetTransform,
+}: {
+  item: ScreenshotItem
+  containerRect: DOMRect
+  onComplete: (url: string) => void
+  targetTransform?: {
+    x: number
+    y: number
+    rotate: number
+    scale: number
+  }
+}) {
+  const [phase, setPhase] = useState<'liftoff' | 'fly'>('liftoff')
+  const [imageLoaded, setImageLoaded] = useState(false)
+
+  const { url, sourceRect } = item
+
+  // Preload the image to avoid flash of unstyled content
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => setImageLoaded(true)
+    img.src = url
+    // If it's already cached, onload fires synchronously
+    if (img.complete) setImageLoaded(true)
+  }, [url])
+
+  // Calculate the actual source dimensions
+  const sourceWidth = sourceRect.width
+  const sourceHeight = sourceRect.height
+
+  // Calculate positions in screen coordinates
+  const stackCenterX = containerRect.left + containerRect.width / 2
+  const stackCenterY = containerRect.top + containerRect.height / 2
+
+  // Source position (center of the captured element)
+  const sourceCenterX = sourceRect.left + sourceRect.width / 2
+  const sourceCenterY = sourceRect.top + sourceRect.height / 2
+
+  const targetX = stackCenterX + (targetTransform?.x ?? 0)
+  const targetY = stackCenterY + (targetTransform?.y ?? 0)
+  const targetRotate = targetTransform?.rotate ?? 0
+  const targetScale = targetTransform?.scale ?? 1
+
+  // Don't render until image is loaded to prevent flash
+  if (!imageLoaded) {
+    return null
+  }
+
+  return (
+    <motion.div
+      initial={{
+        opacity: 0,
+        x: sourceCenterX,
+        y: sourceCenterY,
+        width: sourceWidth,
+        height: sourceHeight,
+        marginLeft: -sourceWidth / 2,
+        marginTop: -sourceHeight / 2,
+        scale: 1,
+        rotate: 0,
+      }}
+      exit={{
+        opacity: 1,
+        transition: { duration: 0.001, ease: 'linear' },
+      }}
+      animate={
+        phase === 'liftoff'
+          ? {
+              opacity: 1,
+              x: sourceCenterX,
+              y: sourceCenterY - 40,
+              width: sourceWidth,
+              height: sourceHeight,
+              marginLeft: -sourceWidth / 2,
+              marginTop: -sourceHeight / 2,
+              scale: 1.02,
+              rotate: -1,
+            }
+          : {
+              opacity: 1,
+              x: targetX,
+              y: targetY,
+              width: CARD_WIDTH,
+              height: CARD_HEIGHT,
+              marginLeft: -CARD_WIDTH / 2,
+              marginTop: -CARD_HEIGHT / 2,
+              scale: targetScale,
+              rotate: targetRotate,
+            }
+      }
+      transition={
+        phase === 'liftoff'
+          ? {
+              type: 'spring',
+              stiffness: 640,
+              damping: 24,
+              mass: 0.6,
+              opacity: { duration: 0.05, ease: 'linear' },
+            }
+          : {
+              type: 'spring',
+              stiffness: 180,
+              damping: 24,
+              mass: 1,
+            }
+      }
+      onAnimationComplete={() => {
+        if (phase === 'liftoff') {
+          setPhase('fly')
+        } else {
+          onComplete(url)
+        }
+      }}
+      style={{
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        borderRadius: '0.5rem',
+        overflow: 'hidden',
+        backgroundColor: 'var(--color-surface)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        boxShadow: '0 30px 50px -12px rgba(0, 0, 0, 0.6)',
+        zIndex: 9998,
+        pointerEvents: 'none',
+        transformOrigin: 'center center',
+      }}
+    >
+      <img
+        src={url}
+        alt="Flying screenshot"
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          pointerEvents: 'none',
+        }}
+      />
+    </motion.div>
+  )
+}
+
 export function ScreenshotStack({
   screenshots,
   onModalOpenChange,
@@ -64,6 +222,7 @@ export function ScreenshotStack({
   codeBlockPlaceholder,
   variant = 'inline',
   openOnClick = false,
+  enableFlying = true,
 }: ScreenshotStackProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map())
@@ -84,11 +243,73 @@ export function ScreenshotStack({
   const [hoverWhenDragStarted, setHoverWhenDragStarted] = useState<
     boolean | null
   >(null)
+  // Persist transforms per screenshot so their positions never reshuffle
+  const transformCacheRef = useRef<
+    Map<
+      string,
+      {
+        x: number
+        y: number
+        rotate: number
+        scale: number
+        opacity: number
+      }
+    >
+  >(new Map())
+
+  // Track which URLs have "landed" (completed fly animation)
+  // Initialize with all existing URLs so only NEW screenshots fly
+  const [landedUrls, setLandedUrls] = useState<Set<string>>(
+    () => new Set(screenshots.map((s) => s.url))
+  )
+
+  // Track the previous screenshot count to detect new additions
+  const prevCountRef = useRef(screenshots.length)
+
+  // Only render/transform screenshots that have landed to keep the stack stable
+  const stackScreenshots = useMemo(
+    () => screenshots.filter((s) => landedUrls.has(s.url)),
+    [screenshots, landedUrls]
+  )
+
+  // The flying screenshot is ONLY the newest one (index 0) IF:
+  // 1. A new screenshot was just added (count increased)
+  // 2. It hasn't landed yet
+  const flyingScreenshot = useMemo(() => {
+    if (!enableFlying) return null
+    const first = screenshots[0]
+    // Only fly if this is a genuinely new screenshot
+    if (first && first.sourceRect && !landedUrls.has(first.url)) {
+      return first
+    }
+    return null
+  }, [enableFlying, screenshots, landedUrls])
+
+  const [activeFlyingUrl, setActiveFlyingUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (flyingScreenshot?.url) {
+      setActiveFlyingUrl(flyingScreenshot.url)
+    }
+  }, [flyingScreenshot?.url])
+
+  // When screenshot count increases, the new one will automatically fly
+  // because it won't be in landedUrls
+  useEffect(() => {
+    prevCountRef.current = screenshots.length
+  }, [screenshots.length])
 
   // Notify parent when modal state changes
   useEffect(() => {
     onModalOpenChange?.(isModalOpen)
   }, [isModalOpen, onModalOpenChange])
+
+  // If flying is disabled (e.g., hidden breakpoint), immediately mark all screenshots landed
+  useEffect(() => {
+    if (!enableFlying) {
+      setLandedUrls(new Set(screenshots.map((s) => s.url)))
+    }
+  }, [enableFlying, screenshots])
 
   useEffect(() => {
     if (containerRef.current) {
@@ -167,10 +388,41 @@ export function ScreenshotStack({
   }, [])
 
   const transforms = useMemo(() => {
-    return screenshots.map((item, i) =>
-      generateTransformForScreenshot(item.url, i, screenshots.length)
-    )
-  }, [screenshots])
+    return stackScreenshots.slice(0, MAX_STACK_CARDS).map((item) => {
+      const cached = transformCacheRef.current.get(item.url)
+      if (cached) return cached
+      const t = generateTransformForScreenshot(
+        item.url,
+        transformCacheRef.current.size,
+        MAX_STACK_CARDS
+      )
+      transformCacheRef.current.set(item.url, t)
+      return t
+    })
+  }, [stackScreenshots])
+
+  // Landing pose for the incoming screenshot: use its persistent transform
+  const landingTransform = useMemo(() => {
+    if (!flyingScreenshot) return null
+    const cached = transformCacheRef.current.get(flyingScreenshot.url)
+    const base =
+      cached ??
+      generateTransformForScreenshot(
+        flyingScreenshot.url,
+        transformCacheRef.current.size,
+        MAX_STACK_CARDS
+      )
+    if (!cached) transformCacheRef.current.set(flyingScreenshot.url, base)
+    const effectiveHover =
+      hoverWhenDragStarted !== null ? hoverWhenDragStarted : isHovered
+
+    return {
+      x: effectiveHover ? 0 : base.x,
+      y: effectiveHover ? 0 : base.y,
+      rotate: effectiveHover ? 0 : base.rotate,
+      scale: effectiveHover ? 1 : base.scale,
+    }
+  }, [flyingScreenshot, hoverWhenDragStarted, isHovered])
 
   const hasScreenshots = screenshots.length > 0
 
@@ -270,179 +522,185 @@ export function ScreenshotStack({
                 }}
               >
                 <AnimatePresence>
-                  {screenshots.map((item, index) => {
-                    const transform = transforms[index]
+                  {stackScreenshots
+                    .slice(0, MAX_STACK_CARDS)
+                    .map((item, index) => {
+                      const transform = transforms[index]
+                      const isTopCard = index === 0
 
-                    // Only compute fly-in animation for the newest screenshot (index 0)
-                    // and only if we have valid source rect data
-                    const isNewest = index === 0
-                    let initialX = 0
-                    let initialY = -40
-                    let initialScale = 0.8
+                      // Only render cards that have completed their fly-in
+                      const hasLanded = landedUrls.has(item.url)
+                      if (!hasLanded || !transform) {
+                        return null
+                      }
 
-                    if (isNewest && containerRect && item.sourceRect) {
-                      const stackCenterX =
-                        containerRect.left + containerRect.width / 2
-                      const stackCenterY =
-                        containerRect.top + containerRect.height / 2
-                      const sourceCenterX =
-                        item.sourceRect.left + item.sourceRect.width / 2
-                      const sourceCenterY =
-                        item.sourceRect.top + item.sourceRect.height / 2
+                      // Check if this screenshot is currently flying in (rendered via portal)
+                      const isFlying = activeFlyingUrl === item.url
+                      if (isFlying) {
+                        // Don't render in the stack - it's being rendered via portal
+                        return null
+                      }
 
-                      initialX = sourceCenterX - stackCenterX
-                      initialY = sourceCenterY - stackCenterY
-                      initialScale = Math.min(
-                        item.sourceRect.width / CARD_WIDTH,
-                        item.sourceRect.height / CARD_HEIGHT,
-                        1.5
-                      )
-                    }
+                      // When hovered, align cards with slight vertical offset
+                      const hoverY = index * 4
+                      const hoverScale = 1 - index * 0.02
+                      const baseOpacity = isTopCard ? 1 : transform.opacity
 
-                    // When hovered, align cards with slight vertical offset
-                    const hoverY = index * 4
-                    const hoverScale = 1 - index * 0.02
-
-                    return (
-                      <motion.div
-                        key={item.url}
-                        ref={(el) => {
-                          if (el) cardRefs.current.set(index, el)
-                          else cardRefs.current.delete(index)
-                        }}
-                        drag={
-                          index === 0 && !!onRemove && !removing ? 'x' : false
-                        }
-                        dragElastic={0.5}
-                        dragMomentum={false}
-                        whileDrag={{
-                          scale: 1.02,
-                          cursor: 'grabbing',
-                        }}
-                        onDragStart={() => {
-                          isDraggingRef.current = true
-                          // Capture hover state when drag starts to keep target stable
-                          setHoverWhenDragStarted(isHovered)
-                        }}
-                        onDragEnd={(_, info) => {
-                          isDraggingRef.current = false
-                          // Always clear the frozen hover state - this triggers a re-render
-                          // which makes the animate prop take over and snap back (or animate out)
-                          setHoverWhenDragStarted(null)
-
-                          if (!onRemove) return
-                          if (index !== 0) return
-                          if (removing) return
-
-                          const offsetX = info.offset.x
-                          const velocityX = info.velocity.x
-                          // iOS-like flick detection: lower velocity threshold (300px/s)
-                          // or distance threshold (80px)
-                          const shouldRemove =
-                            Math.abs(offsetX) > 80 || Math.abs(velocityX) > 300
-
-                          if (shouldRemove) {
-                            // Determine direction: prefer velocity direction for flicks,
-                            // fall back to offset direction
-                            const dir =
-                              Math.abs(velocityX) > 100
-                                ? Math.sign(velocityX)
-                                : Math.sign(offsetX)
-                            setRemoving({
-                              url: item.url,
-                              dir: dir === 0 ? 1 : dir,
-                            })
-                          }
-                        }}
-                        initial={{
-                          opacity: 0,
-                          x: initialX,
-                          y: initialY,
-                          rotate: 0,
-                          scale: initialScale,
-                        }}
-                        animate={(() => {
-                          // Removal animation takes priority
-                          if (removing?.url === item.url) {
-                            return {
-                              opacity: 0,
-                              x: removing.dir * 300,
-                              y: 0,
-                              rotate: removing.dir * 12,
-                              scale: 0.95,
-                            }
-                          }
-
-                          // Use stable hover value during drag to prevent animation target changes
-                          // Only for the top card (index 0) which is draggable
-                          const effectiveHover =
-                            index === 0 && hoverWhenDragStarted !== null
-                              ? hoverWhenDragStarted
-                              : isHovered
-
+                      // Calculate animate target for settled cards
+                      const getAnimateTarget = () => {
+                        // Removal animation takes priority
+                        if (removing?.url === item.url) {
                           return {
-                            opacity: effectiveHover ? 1 : transform.opacity,
-                            x: effectiveHover ? 0 : transform.x,
-                            y: effectiveHover ? hoverY : transform.y,
-                            rotate: effectiveHover ? 0 : transform.rotate,
-                            scale: effectiveHover
-                              ? hoverScale
-                              : transform.scale,
+                            opacity: 0,
+                            x: removing.dir * 300,
+                            y: 0,
+                            rotate: removing.dir * 12,
+                            scale: 0.95,
                           }
-                        })()}
-                        exit={{
-                          opacity: 0,
-                          transition: { duration: 0.15 },
-                        }}
-                        transition={{
-                          type: 'spring',
-                          stiffness: 300,
-                          damping: 25,
-                        }}
-                        onAnimationComplete={() => {
-                          // Only handle removal completion
-                          if (removing?.url === item.url) {
-                            onRemove?.(item.url)
-                            setRemoving(null)
-                          }
-                        }}
-                        style={{
-                          position: 'absolute',
-                          left: '50%',
-                          top: '50%',
-                          marginLeft: `-${CARD_WIDTH / 2}px`,
-                          marginTop: `-${CARD_HEIGHT / 2}px`,
-                          borderRadius: '0.5rem',
-                          overflow: 'hidden',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
-                          backgroundColor: 'var(--color-surface)',
-                          boxShadow: '0 20px 40px -8px rgba(0, 0, 0, 0.5)',
-                          width: `${CARD_WIDTH}px`,
-                          height: `${CARD_HEIGHT}px`,
-                          zIndex: transform.zIndex,
-                          touchAction:
-                            index === 0 && !!onRemove ? 'pan-y' : undefined,
-                        }}
-                      >
-                        <img
-                          src={item.url}
-                          alt={`Screenshot ${index + 1}`}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            pointerEvents: 'none',
+                        }
+
+                        // Settled: animate to stack position
+                        const effectiveHover =
+                          index === 0 && hoverWhenDragStarted !== null
+                            ? hoverWhenDragStarted
+                            : isHovered
+
+                        return {
+                          opacity: effectiveHover ? 1 : baseOpacity,
+                          x: effectiveHover ? 0 : transform.x,
+                          y: effectiveHover ? hoverY : transform.y,
+                          rotate: effectiveHover ? 0 : transform.rotate,
+                          scale: effectiveHover ? hoverScale : transform.scale,
+                        }
+                      }
+
+                      return (
+                        <motion.div
+                          key={item.url}
+                          ref={(el) => {
+                            if (el) cardRefs.current.set(index, el)
+                            else cardRefs.current.delete(index)
                           }}
-                        />
-                      </motion.div>
-                    )
-                  })}
+                          drag={
+                            index === 0 && !!onRemove && !removing ? 'x' : false
+                          }
+                          dragElastic={0.5}
+                          dragMomentum={false}
+                          whileDrag={{
+                            scale: 1.02,
+                            cursor: 'grabbing',
+                          }}
+                          onDragStart={() => {
+                            isDraggingRef.current = true
+                            setHoverWhenDragStarted(isHovered)
+                          }}
+                          onDragEnd={(_, info) => {
+                            isDraggingRef.current = false
+                            setHoverWhenDragStarted(null)
+
+                            if (!onRemove) return
+                            if (index !== 0) return
+                            if (removing) return
+
+                            const offsetX = info.offset.x
+                            const velocityX = info.velocity.x
+                            const shouldRemove =
+                              Math.abs(offsetX) > 80 ||
+                              Math.abs(velocityX) > 300
+
+                            if (shouldRemove) {
+                              const dir =
+                                Math.abs(velocityX) > 100
+                                  ? Math.sign(velocityX)
+                                  : Math.sign(offsetX)
+                              setRemoving({
+                                url: item.url,
+                                dir: dir === 0 ? 1 : dir,
+                              })
+                            }
+                          }}
+                          initial={false}
+                          animate={getAnimateTarget()}
+                          exit={{
+                            opacity: 0,
+                            transition: { duration: 0.15 },
+                          }}
+                          transition={{
+                            type: 'spring',
+                            stiffness: 300,
+                            damping: 25,
+                          }}
+                          onAnimationComplete={() => {
+                            if (removing?.url === item.url) {
+                              onRemove?.(item.url)
+                              setRemoving(null)
+                            }
+                          }}
+                          style={{
+                            position: 'absolute',
+                            left: '50%',
+                            top: '50%',
+                            marginLeft: `-${CARD_WIDTH / 2}px`,
+                            marginTop: `-${CARD_HEIGHT / 2}px`,
+                            borderRadius: '0.5rem',
+                            overflow: 'hidden',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            backgroundColor: 'var(--color-surface)',
+                            boxShadow: '0 20px 40px -8px rgba(0, 0, 0, 0.5)',
+                            width: `${CARD_WIDTH}px`,
+                            height: `${CARD_HEIGHT}px`,
+                            zIndex: stackScreenshots.length - index,
+                            touchAction:
+                              index === 0 && !!onRemove ? 'pan-y' : undefined,
+                          }}
+                        >
+                          <img
+                            src={item.url}
+                            alt={`Screenshot ${index + 1}`}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                        </motion.div>
+                      )
+                    })}
                 </AnimatePresence>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Flying screenshot - rendered via portal to appear above all content */}
+      {enableFlying &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence
+            mode="wait"
+            onExitComplete={() => setActiveFlyingUrl(null)}
+          >
+            {flyingScreenshot && containerRect && (
+              <FlyingScreenshot
+                key={flyingScreenshot.url}
+                item={flyingScreenshot}
+                containerRect={containerRect}
+                targetTransform={landingTransform ?? undefined}
+                onComplete={(completedUrl) => {
+                  // Mark this URL as landed - use the URL passed from FlyingScreenshot
+                  // not from closure, to avoid stale closure issues
+                  setLandedUrls((prev) => new Set([...prev, completedUrl]))
+                  setActiveFlyingUrl((current) =>
+                    current === completedUrl ? null : current
+                  )
+                }}
+              />
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
       {/* Modal Viewer - rendered via portal to avoid stacking context issues */}
       {typeof document !== 'undefined' &&
@@ -507,6 +765,7 @@ export function ScreenshotStack({
                     color: 'rgba(255, 255, 255, 0.7)',
                     fontSize: '0.875rem',
                     fontWeight: 500,
+                    fontVariantNumeric: 'tabular-nums',
                   }}
                 >
                   {currentIndex + 1} / {screenshots.length}
@@ -665,47 +924,68 @@ export function ScreenshotStack({
                       bottom: '1.5rem',
                       left: '50%',
                       transform: 'translateX(-50%)',
-                      display: 'flex',
-                      gap: '0.5rem',
+                      maxWidth: 'calc(100vw - 3rem)',
+                      overflowX: 'auto',
+                      overflowY: 'hidden',
+                      // Hide scrollbar but keep functionality
+                      scrollbarWidth: 'none',
+                      msOverflowStyle: 'none',
+                      '::-webkit-scrollbar': {
+                        display: 'none',
+                      },
                     }}
                   >
-                    {screenshots.map((item, index) => (
-                      <button
-                        key={item.url}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          goToIndex(index)
-                        }}
-                        css={{
-                          width: '3rem',
-                          height: '2rem',
-                          padding: 0,
-                          border:
-                            index === currentIndex
-                              ? '2px solid white'
-                              : '2px solid transparent',
-                          borderRadius: '0.25rem',
-                          overflow: 'hidden',
-                          cursor: 'pointer',
-                          opacity: index === currentIndex ? 1 : 0.5,
-                          transition:
-                            'opacity 150ms ease, border-color 150ms ease',
-                          ':hover': {
-                            opacity: 1,
-                          },
-                        }}
-                      >
-                        <img
-                          src={item.url}
-                          alt={`Thumbnail ${index + 1}`}
-                          css={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
+                    <div
+                      css={{
+                        display: 'flex',
+                        gap: '0.5rem',
+                        padding: '0.25rem',
+                        // Start from center, grow to the right
+                        justifyContent: 'flex-start',
+                      }}
+                    >
+                      {screenshots.map((item, index) => (
+                        <button
+                          key={item.url}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            goToIndex(index)
                           }}
-                        />
-                      </button>
-                    ))}
+                          css={{
+                            flexShrink: 0,
+                            width: '3rem',
+                            height: '2rem',
+                            padding: 0,
+                            border:
+                              index === currentIndex
+                                ? '2px solid white'
+                                : '2px solid transparent',
+                            borderRadius: '0.25rem',
+                            overflow: 'hidden',
+                            cursor: 'pointer',
+                            opacity: index === currentIndex ? 1 : 0.5,
+                            transition:
+                              'opacity 150ms ease, border-color 150ms ease, transform 100ms ease',
+                            ':hover': {
+                              opacity: 1,
+                            },
+                            ':active': {
+                              transform: 'scale(0.95)',
+                            },
+                          }}
+                        >
+                          <img
+                            src={item.url}
+                            alt={`Thumbnail ${index + 1}`}
+                            css={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                            }}
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </motion.div>
