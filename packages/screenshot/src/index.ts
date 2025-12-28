@@ -6505,13 +6505,54 @@ async function renderBackgroundImage(
     }
     context.clip()
 
+    // For gradients, apply background-size and background-position.
+    // Gradients have an intrinsic size equal to their positioning area by default.
+    // When background-size is specified, compute the actual draw dimensions.
+    // When background-position is specified (e.g., via CSS animations), offset the gradient.
+    const gradientIntrinsicWidth = boxWidth
+    const gradientIntrinsicHeight = boxHeight
+
+    const [gradientDrawWidth, gradientDrawHeight] = computeBackgroundSize(
+      sizeValue,
+      boxWidth,
+      boxHeight,
+      gradientIntrinsicWidth,
+      gradientIntrinsicHeight
+    )
+
+    const [gradientOffsetX, gradientOffsetY] = computeBackgroundPosition(
+      positionValue,
+      boxWidth,
+      boxHeight,
+      gradientDrawWidth,
+      gradientDrawHeight
+    )
+
+    // Create a gradient box that:
+    // 1. Is sized according to background-size (may be larger than visible area)
+    // 2. Is positioned according to background-position offset
+    // The gradient will extend beyond the clip region, but clip() ensures only the
+    // visible portion is rendered. This correctly shows the "slice" of the gradient
+    // that should be visible at the current animation frame.
+    const gradientBox: DOMRect = {
+      left: boxLeft + gradientOffsetX,
+      top: boxTop + gradientOffsetY,
+      width: gradientDrawWidth,
+      height: gradientDrawHeight,
+      right: boxLeft + gradientOffsetX + gradientDrawWidth,
+      bottom: boxTop + gradientOffsetY + gradientDrawHeight,
+      x: boxLeft + gradientOffsetX,
+      y: boxTop + gradientOffsetY,
+      toJSON: () => ({}),
+    } as DOMRect
+
     const handledGradient = renderCssGradientLayer(
       context,
       layer,
-      boxForOrigin,
+      gradientBox,
       boxForClip,
-      boxWidth,
-      boxHeight,
+      gradientDrawWidth,
+      gradientDrawHeight,
       style,
       env
     )
@@ -6893,13 +6934,51 @@ async function renderMaskImageLayers(
     }
     context.clip()
 
+    // For gradients, apply mask-size and mask-position.
+    // Gradients have an intrinsic size equal to their positioning area by default.
+    const maskGradientIntrinsicWidth = boxWidth
+    const maskGradientIntrinsicHeight = boxHeight
+
+    const [maskGradientDrawWidth, maskGradientDrawHeight] =
+      computeBackgroundSize(
+        sizeValue,
+        boxWidth,
+        boxHeight,
+        maskGradientIntrinsicWidth,
+        maskGradientIntrinsicHeight
+      )
+
+    const [maskGradientOffsetX, maskGradientOffsetY] =
+      computeBackgroundPosition(
+        positionValue,
+        boxWidth,
+        boxHeight,
+        maskGradientDrawWidth,
+        maskGradientDrawHeight
+      )
+
+    // Create a box for the gradient at its positioned/scaled size.
+    // The gradient pattern is calculated based on this box, but fillRect
+    // uses boxForClip to ensure the visible area is covered.
+    const maskGradientBox: DOMRect = {
+      left: boxLeft + maskGradientOffsetX,
+      top: boxTop + maskGradientOffsetY,
+      width: maskGradientDrawWidth,
+      height: maskGradientDrawHeight,
+      right: boxLeft + maskGradientOffsetX + maskGradientDrawWidth,
+      bottom: boxTop + maskGradientOffsetY + maskGradientDrawHeight,
+      x: boxLeft + maskGradientOffsetX,
+      y: boxTop + maskGradientOffsetY,
+      toJSON: () => ({}),
+    } as DOMRect
+
     const handledGradient = renderCssGradientLayer(
       context,
       layer,
-      boxForOrigin,
+      maskGradientBox,
       boxForClip,
-      boxWidth,
-      boxHeight,
+      maskGradientDrawWidth,
+      maskGradientDrawHeight,
       style,
       env
     )
@@ -7076,6 +7155,7 @@ function renderCssGradientLayer(
       context,
       linear,
       boxForOrigin,
+      boxForClip,
       boxWidth,
       boxHeight,
       style,
@@ -7394,6 +7474,7 @@ function renderLinearGradient(
   context: CanvasRenderingContext2D,
   gradient: LinearGradientParseResult,
   boxForOrigin: DOMRect,
+  boxForClip: DOMRect,
   boxWidth: number,
   boxHeight: number,
   style: CSSStyleDeclaration,
@@ -7490,11 +7571,12 @@ function renderLinearGradient(
         }
 
         context.fillStyle = pattern
+        // Fill the clip area, not the gradient origin box
         context.fillRect(
-          boxForOrigin.left,
-          boxForOrigin.top,
-          boxForOrigin.width,
-          boxForOrigin.height
+          boxForClip.left,
+          boxForClip.top,
+          boxForClip.width,
+          boxForClip.height
         )
         return
       }
@@ -7502,6 +7584,8 @@ function renderLinearGradient(
   }
 
   // Non-repeating standard gradient logic (Fallback)
+  // Calculate gradient line based on the positioned/sized gradient box (boxForOrigin)
+  // but fill the visible clip area (boxForClip)
   const vector = getLinearGradientDirectionVector(gradient.orientation)
   const cx = boxForOrigin.left + boxWidth * 0.5
   const cy = boxForOrigin.top + boxHeight * 0.5
@@ -7534,11 +7618,12 @@ function renderLinearGradient(
   }
 
   context.fillStyle = canvasGradient
+  // Fill the clip area to ensure coverage, gradient pattern extends based on boxForOrigin
   context.fillRect(
-    boxForOrigin.left,
-    boxForOrigin.top,
-    boxForOrigin.width,
-    boxForOrigin.height
+    boxForClip.left,
+    boxForClip.top,
+    boxForClip.width,
+    boxForClip.height
   )
 }
 
