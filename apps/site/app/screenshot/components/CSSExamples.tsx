@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, useSpring, useTransform } from 'motion/react'
 
 export function Transform3DExample() {
-  const [isHovered, setIsHovered] = useState(false)
+  const isDragging = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Spring-animated values for smooth motion
   const rotateXSpring = useSpring(0, { stiffness: 150, damping: 20 })
@@ -14,8 +16,38 @@ export function Transform3DExample() {
   const rotateX = useTransform(rotateXSpring, (v) => `${v}deg`)
   const rotateY = useTransform(rotateYSpring, (v) => `${v}deg`)
 
+  useEffect(() => {
+    return () => {
+      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current)
+    }
+  }, [])
+
+  const updateRotation = (clientX: number, clientY: number) => {
+    if (!containerRef.current) return
+    // Cancel any pending reset when user interacts
+    if (resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current)
+      resetTimeoutRef.current = null
+    }
+    const rect = containerRef.current.getBoundingClientRect()
+    const x = (clientX - rect.left - rect.width / 2) / 8
+    const y = -(clientY - rect.top - rect.height / 2) / 8
+    rotateYSpring.set(x)
+    rotateXSpring.set(y)
+  }
+
+  const resetRotation = () => {
+    // Delay reset slightly to prevent flash during screenshot capture
+    resetTimeoutRef.current = setTimeout(() => {
+      rotateYSpring.set(0)
+      rotateXSpring.set(0)
+      resetTimeoutRef.current = null
+    }, 150)
+  }
+
   return (
     <div
+      ref={containerRef}
       css={{
         perspective: '800px',
         width: '100%',
@@ -27,17 +59,29 @@ export function Transform3DExample() {
         justifyContent: 'center',
       }}
       onMouseMove={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect()
-        const x = (e.clientX - rect.left - rect.width / 2) / 8
-        const y = -(e.clientY - rect.top - rect.height / 2) / 8
-        rotateYSpring.set(x)
-        rotateXSpring.set(y)
+        updateRotation(e.clientX, e.clientY)
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => {
-        setIsHovered(false)
-        rotateYSpring.set(0)
-        rotateXSpring.set(0)
+      onPointerDown={(event) => {
+        // Only handle touch (not mouse, which uses mouseMove)
+        if (event.pointerType === 'touch') {
+          isDragging.current = true
+          updateRotation(event.clientX, event.clientY)
+        }
+      }}
+      onPointerMove={(event) => {
+        if (event.pointerType === 'touch' && isDragging.current) {
+          updateRotation(event.clientX, event.clientY)
+        }
+      }}
+      onPointerUp={(event) => {
+        if (event.pointerType === 'touch') {
+          isDragging.current = false
+        }
+      }}
+      onPointerCancel={(event) => {
+        if (event.pointerType === 'touch') {
+          isDragging.current = false
+        }
       }}
     >
       <motion.div
@@ -764,7 +808,6 @@ export function FormExample() {
             cursor: 'pointer',
             fontSize: '0.8125rem',
             color: 'rgba(148, 163, 184, 0.8)',
-            lineHeight: 1.4,
           }}
           onClick={stopPropagation}
         >
@@ -772,7 +815,6 @@ export function FormExample() {
             css={{
               position: 'relative',
               flexShrink: 0,
-              marginTop: '0.125rem',
             }}
           >
             <input
@@ -782,15 +824,15 @@ export function FormExample() {
               css={{
                 position: 'absolute',
                 opacity: 0,
-                width: '1.125rem',
-                height: '1.125rem',
+                width: '1lh',
+                height: '1lh',
                 cursor: 'pointer',
               }}
             />
             <div
               css={{
-                width: '1.125rem',
-                height: '1.125rem',
+                width: '1lh',
+                height: '1lh',
                 borderRadius: '0.25rem',
                 border: '1.5px solid',
                 borderColor: agreed ? '#6366f1' : 'rgba(148, 163, 184, 0.3)',

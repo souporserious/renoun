@@ -35,7 +35,7 @@ const examples = [
   {
     id: 'animations',
     title: 'CSS Animations',
-    description: 'Keyframes and animation states captured',
+    description: 'Keyframes and animation states',
     component: 'AnimationExample',
   },
   {
@@ -289,7 +289,6 @@ function LeftPanel({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        paddingTop: '2rem',
         paddingBottom: '3rem',
       }}
     >
@@ -299,6 +298,7 @@ function LeftPanel({
         css={{
           display: 'flex',
           alignItems: 'center',
+          minHeight: 'var(--header-height)',
           marginBottom: '2rem',
         }}
       >
@@ -350,10 +350,10 @@ function LeftPanel({
         </div>
 
         <div css={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <FeatureItem>Full 2D/3D transform support</FeatureItem>
-          <FeatureItem>Text clipping &amp; gradients</FeatureItem>
-          <FeatureItem>Backdrop filters &amp; blend modes</FeatureItem>
-          <FeatureItem>All modern CSS features</FeatureItem>
+          <FeatureItem>Captures 2D/3D transforms</FeatureItem>
+          <FeatureItem>Supports text gradients and clipping</FeatureItem>
+          <FeatureItem>Renders backdrop filters and blend modes</FeatureItem>
+          <FeatureItem>Implements modern CSS features</FeatureItem>
         </div>
 
         {/* Screenshots or code block - directly under features */}
@@ -422,7 +422,7 @@ function LeftPanel({
             padding: '0.875rem 1.5rem',
             backgroundColor: 'transparent',
             color: 'var(--color-foreground)',
-            fontSize: '0.9rem',
+            fontSize: 'var(--font-size-button-2)',
             fontWeight: 'var(--font-weight-button)',
             border: '1px solid rgba(255, 255, 255, 0.2)',
             borderRadius: '0.375rem',
@@ -527,30 +527,12 @@ function MobileLayout({
           with pixel-perfect accuracy.
         </p>
 
-        <div
-          css={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '0.5rem',
-            fontSize: '0.875rem',
-          }}
-        >
-          <FeatureItem>2D/3D transforms</FeatureItem>
-          <FeatureItem>Text clipping</FeatureItem>
-          <FeatureItem>Backdrop filters</FeatureItem>
-          <FeatureItem>All CSS features</FeatureItem>
+        <div css={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <FeatureItem>Captures 2D/3D transforms</FeatureItem>
+          <FeatureItem>Supports text gradients and clipping</FeatureItem>
+          <FeatureItem>Renders backdrop filters and blend modes</FeatureItem>
+          <FeatureItem>Implements modern CSS features</FeatureItem>
         </div>
-
-        {/* Show the inline placeholder before any screenshots exist.
-            Once screenshots exist, the stack is docked bottom-left for easy access. */}
-        {!hasScreenshots && (
-          <ScreenshotStack
-            screenshots={screenshots}
-            onModalOpenChange={onModalOpenChange}
-            codeBlockPlaceholder={codeBlockPlaceholder}
-            enableFlying={enableFlying}
-          />
-        )}
 
         <div css={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <button
@@ -565,7 +547,7 @@ function MobileLayout({
               backgroundColor: 'var(--color-surface-accent)',
               color: '#0c0900',
               fontFamily: 'var(--font-family-mono, monospace)',
-              fontSize: '0.875rem',
+              fontSize: 'var(--font-size-button-2)',
               fontWeight: 'var(--font-weight-button)',
               border: 'none',
               borderRadius: '0.375rem',
@@ -597,7 +579,7 @@ function MobileLayout({
               padding: '0.875rem 1.5rem',
               backgroundColor: 'transparent',
               color: 'var(--color-foreground)',
-              fontSize: '0.875rem',
+              fontSize: 'var(--font-size-button-2)',
               fontWeight: 'var(--font-weight-button)',
               border: '1px solid rgba(255, 255, 255, 0.2)',
               borderRadius: '0.375rem',
@@ -618,65 +600,34 @@ function MobileLayout({
               title={example.title}
               description={example.description}
               componentId={example.component}
-              onCapture={isCaptureMode ? onCaptureElement : undefined}
+              onCapture={onCaptureElement}
             />
           ))}
         </div>
       </div>
 
-      {/* Docked screenshot stack (mobile) */}
-      {hasScreenshots && (
-        <div
-          css={{
-            position: 'fixed',
-            left: 'calc(1rem + env(safe-area-inset-left))',
-            bottom: 'calc(1rem + env(safe-area-inset-bottom))',
-            zIndex: 60,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.5rem',
-            pointerEvents: 'none',
-          }}
-        >
-          <div
-            css={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              width: 'fit-content',
-              padding: '0.375rem 0.625rem',
-              borderRadius: '9999px',
-              backgroundColor: 'rgba(0, 0, 0, 0.6)',
-              color: 'rgba(255, 255, 255, 0.9)',
-              fontSize: '0.8125rem',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-              pointerEvents: 'auto',
-            }}
-          >
-            <span css={{ opacity: 0.9 }}>Screenshots</span>
-            <span
-              css={{
-                fontFamily: 'var(--font-family-mono, monospace)',
-                fontSize: '0.75rem',
-                opacity: 0.8,
-              }}
-            >
-              {screenshots.length}
-            </span>
-          </div>
-          <div css={{ pointerEvents: 'auto' }}>
-            <ScreenshotStack
-              screenshots={screenshots}
-              onModalOpenChange={onModalOpenChange}
-              onRemove={onRemoveScreenshot}
-              variant="floating"
-              enableFlying={enableFlying}
-              openOnClick
-            />
-          </div>
-        </div>
-      )}
+      {/* Screenshot stack: always fixed on mobile for consistent animation target */}
+      <div
+        css={{
+          position: 'fixed',
+          left: 'calc(1rem + env(safe-area-inset-left))',
+          bottom: 'calc(1rem + env(safe-area-inset-bottom))',
+          zIndex: 60,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem',
+          pointerEvents: hasScreenshots ? 'auto' : 'none',
+        }}
+      >
+        <ScreenshotStack
+          screenshots={screenshots}
+          onModalOpenChange={onModalOpenChange}
+          onRemove={onRemoveScreenshot}
+          enableFlying={enableFlying}
+          variant="floating"
+          openOnClick={hasScreenshots}
+        />
+      </div>
 
       <button
         onClick={() => onCaptureModeChange(!isCaptureMode)}
@@ -689,8 +640,8 @@ function MobileLayout({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: '3.5rem',
-          height: '3.5rem',
+          width: '4rem',
+          height: '4rem',
           padding: 0,
           backgroundColor: isCaptureMode
             ? 'rgba(255, 255, 255, 0.12)'
@@ -699,14 +650,12 @@ function MobileLayout({
           border: 'none',
           borderRadius: '50%',
           cursor: 'pointer',
-          boxShadow: isCaptureMode
-            ? '0 8px 24px rgba(0, 0, 0, 0.4)'
-            : '0 8px 24px rgba(247, 201, 72, 0.3)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
           backdropFilter: isCaptureMode ? 'blur(8px)' : undefined,
           WebkitBackdropFilter: isCaptureMode ? 'blur(8px)' : undefined,
         }}
       >
-        {isCapturing ? <CheckIcon size={24} /> : <CameraIcon size={24} />}
+        {isCapturing ? <CheckIcon size={28} /> : <CameraIcon size={28} />}
       </button>
 
       {isCaptureMode && (

@@ -47,7 +47,14 @@ export function ExampleCard({
   const [isCapturing, setIsCapturing] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
 
-  const handleClick = async () => {
+  const handlePointerUp = async (e: React.PointerEvent) => {
+    // Don't capture if clicking on interactive elements (buttons, inputs, etc.)
+    const target = e.target as HTMLElement
+    const interactiveSelectors = 'button, input, select, textarea, a, [role="button"], [tabindex]'
+    if (target.closest(interactiveSelectors)) {
+      return
+    }
+    
     if (contentRef.current && onCapture) {
       setIsCapturing(true)
       try {
@@ -72,7 +79,7 @@ export function ExampleCard({
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={handleClick}
+      onPointerUp={onCapture ? handlePointerUp : undefined}
     >
       <div
         css={{

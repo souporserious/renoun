@@ -4,8 +4,8 @@ import { ScreenshotPageClient } from './ScreenshotPageClient'
 const codeExample = `import { screenshot } from '@renoun/screenshot'
 
 const url = await screenshot.url(document.body, {
-  scale: 2,
   format: 'png',
+  scale: 2,
 })`
 
 export default function ScreenshotPage() {
@@ -20,6 +20,8 @@ export default function ScreenshotPage() {
               width: '100%',
               margin: 0,
               padding: '1rem',
+              fontSize: '0.75rem',
+              lineHeight: '1.5',
             },
           }}
         >

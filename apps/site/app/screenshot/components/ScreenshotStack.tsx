@@ -1,8 +1,18 @@
 'use client'
 
-import { useMemo, useRef, useEffect, useState, useCallback } from 'react'
+import {
+  useMemo,
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  useLayoutEffect,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'motion/react'
+import { styled } from 'restyle'
+
+const StyledMotionDiv = styled(motion.div)
 
 export interface ScreenshotItem {
   url: string
@@ -27,11 +37,11 @@ function seededRandom(seed: number) {
 // Fixed size for all screenshots - no variation
 const CARD_WIDTH = 240
 const CARD_HEIGHT = 160
+// Smaller card size for floating variant (mobile)
+const CARD_WIDTH_FLOATING = 96
+const CARD_HEIGHT_FLOATING = 64
 const MODAL_NAV_GUTTER_PX = 112 // 3rem button + ~1.5rem gap + breathing room (each side)
 const MAX_STACK_CARDS = 5 // Only render this many cards in the stack view
-
-// Animation phases for new screenshots
-type AnimationPhase = 'liftoff' | 'fly' | 'settled'
 
 function generateTransformForScreenshot(
   screenshotUrl: string,
@@ -65,7 +75,7 @@ function generateTransformForScreenshot(
     rotate: rotation,
     scale,
     zIndex: total - index,
-    opacity: Math.max(0.6, 1 - index * 0.1),
+    opacity: 1, // All cards fully opaque
   }
 }
 
@@ -75,6 +85,9 @@ function FlyingScreenshot({
   containerRect,
   onComplete,
   targetTransform,
+  cardWidth,
+  cardHeight,
+  variant,
 }: {
   item: ScreenshotItem
   containerRect: DOMRect
@@ -85,20 +98,13 @@ function FlyingScreenshot({
     rotate: number
     scale: number
   }
+  cardWidth: number
+  cardHeight: number
+  variant: 'inline' | 'floating'
 }) {
   const [phase, setPhase] = useState<'liftoff' | 'fly'>('liftoff')
-  const [imageLoaded, setImageLoaded] = useState(false)
 
   const { url, sourceRect } = item
-
-  // Preload the image to avoid flash of unstyled content
-  useEffect(() => {
-    const img = new Image()
-    img.onload = () => setImageLoaded(true)
-    img.src = url
-    // If it's already cached, onload fires synchronously
-    if (img.complete) setImageLoaded(true)
-  }, [url])
 
   // Calculate the actual source dimensions
   const sourceWidth = sourceRect.width
@@ -116,11 +122,6 @@ function FlyingScreenshot({
   const targetY = stackCenterY + (targetTransform?.y ?? 0)
   const targetRotate = targetTransform?.rotate ?? 0
   const targetScale = targetTransform?.scale ?? 1
-
-  // Don't render until image is loaded to prevent flash
-  if (!imageLoaded) {
-    return null
-  }
 
   return (
     <motion.div
@@ -156,10 +157,10 @@ function FlyingScreenshot({
               opacity: 1,
               x: targetX,
               y: targetY,
-              width: CARD_WIDTH,
-              height: CARD_HEIGHT,
-              marginLeft: -CARD_WIDTH / 2,
-              marginTop: -CARD_HEIGHT / 2,
+              width: cardWidth,
+              height: cardHeight,
+              marginLeft: -cardWidth / 2,
+              marginTop: -cardHeight / 2,
               scale: targetScale,
               rotate: targetRotate,
             }
@@ -191,7 +192,7 @@ function FlyingScreenshot({
         position: 'fixed',
         left: 0,
         top: 0,
-        borderRadius: '0.5rem',
+        borderRadius: variant === 'floating' ? '0.375rem' : '0.5rem',
         overflow: 'hidden',
         backgroundColor: 'var(--color-surface)',
         border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -224,12 +225,13 @@ export function ScreenshotStack({
   openOnClick = false,
   enableFlying = true,
 }: ScreenshotStackProps) {
+  const cardWidth = variant === 'floating' ? CARD_WIDTH_FLOATING : CARD_WIDTH
+  const cardHeight = variant === 'floating' ? CARD_HEIGHT_FLOATING : CARD_HEIGHT
   const containerRef = useRef<HTMLDivElement>(null)
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const [containerRect, setContainerRect] = useState<DOMRect | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
-  const [isFocusWithin, setIsFocusWithin] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [openingAnimation, setOpeningAnimation] = useState<{
     x: number
@@ -263,24 +265,23 @@ export function ScreenshotStack({
     () => new Set(screenshots.map((s) => s.url))
   )
 
-  // Track the previous screenshot count to detect new additions
-  const prevCountRef = useRef(screenshots.length)
-
   // Only render/transform screenshots that have landed to keep the stack stable
   const stackScreenshots = useMemo(
     () => screenshots.filter((s) => landedUrls.has(s.url)),
     [screenshots, landedUrls]
   )
 
-  // The flying screenshot is ONLY the newest one (index 0) IF:
-  // 1. A new screenshot was just added (count increased)
-  // 2. It hasn't landed yet
+  // The flying screenshot is ONLY the newest one (index 0) IF it hasn't landed yet
   const flyingScreenshot = useMemo(() => {
     if (!enableFlying) return null
     const first = screenshots[0]
-    // Only fly if this is a genuinely new screenshot
+    // Only fly if this is a genuinely new screenshot and within visible stack
     if (first && first.sourceRect && !landedUrls.has(first.url)) {
-      return first
+      // Check if it will be visible in the stack
+      const visibleIndex = screenshots.slice(0, MAX_STACK_CARDS).findIndex(s => s.url === first.url)
+      if (visibleIndex !== -1) {
+        return first
+      }
     }
     return null
   }, [enableFlying, screenshots, landedUrls])
@@ -292,12 +293,6 @@ export function ScreenshotStack({
       setActiveFlyingUrl(flyingScreenshot.url)
     }
   }, [flyingScreenshot?.url])
-
-  // When screenshot count increases, the new one will automatically fly
-  // because it won't be in landedUrls
-  useEffect(() => {
-    prevCountRef.current = screenshots.length
-  }, [screenshots.length])
 
   // Notify parent when modal state changes
   useEffect(() => {
@@ -311,7 +306,8 @@ export function ScreenshotStack({
     }
   }, [enableFlying, screenshots])
 
-  useEffect(() => {
+  // Update container rect on mount and when screenshots change
+  useLayoutEffect(() => {
     if (containerRef.current) {
       setContainerRect(containerRef.current.getBoundingClientRect())
     }
@@ -377,14 +373,10 @@ export function ScreenshotStack({
     }
   }, [screenshots.length])
 
-  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
+  const handleBackdropClick = useCallback((event: React.MouseEvent) => {
+    if (event.target === event.currentTarget) {
       setIsModalOpen(false)
     }
-  }, [])
-
-  const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false)
   }, [])
 
   const transforms = useMemo(() => {
@@ -432,23 +424,17 @@ export function ScreenshotStack({
       <div
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        onFocusCapture={() => setIsFocusWithin(true)}
-        onBlurCapture={(e) => {
-          // Only clear when focus leaves the wrapper entirely
-          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-          setIsFocusWithin(false)
-        }}
         onClick={() => {
           if (!openOnClick) return
           if (isDraggingRef.current) return
           if (removing) return
           handleStackClick()
         }}
-        onKeyDown={(e) => {
+        onKeyDown={(event) => {
           if (!openOnClick) return
           if (!hasScreenshots) return
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
             handleStackClick()
           }
         }}
@@ -473,11 +459,11 @@ export function ScreenshotStack({
           ref={containerRef}
           css={{
             position: 'relative',
-            height: '10rem',
+            height: variant === 'floating' ? `${cardHeight + 24}px` : '10rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: variant === 'floating' ? `${CARD_WIDTH}px` : '100%',
+            width: variant === 'floating' ? `${cardWidth + 24}px` : '100%',
           }}
         >
           <AnimatePresence initial={false}>
@@ -544,7 +530,8 @@ export function ScreenshotStack({
                       // When hovered, align cards with slight vertical offset
                       const hoverY = index * 4
                       const hoverScale = 1 - index * 0.02
-                      const baseOpacity = isTopCard ? 1 : transform.opacity
+                      // All cards should be fully opaque
+                      const baseOpacity = 1
 
                       // Calculate animate target for settled cards
                       const getAnimateTarget = () => {
@@ -580,6 +567,12 @@ export function ScreenshotStack({
                           ref={(el) => {
                             if (el) cardRefs.current.set(index, el)
                             else cardRefs.current.delete(index)
+                          }}
+                          onClick={() => {
+                            if (!openOnClick) return
+                            if (isDraggingRef.current) return
+                            if (removing) return
+                            handleStackClick()
                           }}
                           drag={
                             index === 0 && !!onRemove && !removing ? 'x' : false
@@ -623,7 +616,12 @@ export function ScreenshotStack({
                           animate={getAnimateTarget()}
                           exit={{
                             opacity: 0,
-                            transition: { duration: 0.15 },
+                            scale: 0.85,
+                            y: 20,
+                            transition: {
+                              duration: 0.25,
+                              ease: [0.4, 0, 0.2, 1],
+                            },
                           }}
                           transition={{
                             type: 'spring',
@@ -640,15 +638,19 @@ export function ScreenshotStack({
                             position: 'absolute',
                             left: '50%',
                             top: '50%',
-                            marginLeft: `-${CARD_WIDTH / 2}px`,
-                            marginTop: `-${CARD_HEIGHT / 2}px`,
-                            borderRadius: '0.5rem',
+                            marginLeft: `-${cardWidth / 2}px`,
+                            marginTop: `-${cardHeight / 2}px`,
+                            borderRadius:
+                              variant === 'floating' ? '0.375rem' : '0.5rem',
                             overflow: 'hidden',
                             border: '1px solid rgba(255, 255, 255, 0.2)',
                             backgroundColor: 'var(--color-surface)',
-                            boxShadow: '0 20px 40px -8px rgba(0, 0, 0, 0.5)',
-                            width: `${CARD_WIDTH}px`,
-                            height: `${CARD_HEIGHT}px`,
+                            boxShadow:
+                              variant === 'floating'
+                                ? '0 8px 16px -4px rgba(0, 0, 0, 0.5)'
+                                : '0 20px 40px -8px rgba(0, 0, 0, 0.5)',
+                            width: `${cardWidth}px`,
+                            height: `${cardHeight}px`,
                             zIndex: stackScreenshots.length - index,
                             touchAction:
                               index === 0 && !!onRemove ? 'pan-y' : undefined,
@@ -689,13 +691,15 @@ export function ScreenshotStack({
                 containerRect={containerRect}
                 targetTransform={landingTransform ?? undefined}
                 onComplete={(completedUrl) => {
-                  // Mark this URL as landed - use the URL passed from FlyingScreenshot
-                  // not from closure, to avoid stale closure issues
+                  // Mark this URL as landed
                   setLandedUrls((prev) => new Set([...prev, completedUrl]))
                   setActiveFlyingUrl((current) =>
                     current === completedUrl ? null : current
                   )
                 }}
+                cardWidth={cardWidth}
+                cardHeight={cardHeight}
+                variant={variant}
               />
             )}
           </AnimatePresence>,
@@ -707,7 +711,7 @@ export function ScreenshotStack({
         createPortal(
           <AnimatePresence>
             {isModalOpen && (
-              <motion.div
+              <StyledMotionDiv
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -727,14 +731,23 @@ export function ScreenshotStack({
                   backdropFilter: 'blur(8px)',
                   WebkitBackdropFilter: 'blur(8px)',
                 }}
+                css={{
+                  // Mobile: flex column layout for bottom nav
+                  '@media (max-width: 768px)': {
+                    flexDirection: 'column',
+                    justifyContent: 'flex-start',
+                    paddingTop: '3.5rem',
+                    paddingBottom: '5rem',
+                  },
+                }}
               >
                 {/* Close button */}
                 <button
                   onClick={() => setIsModalOpen(false)}
                   css={{
                     position: 'absolute',
-                    top: '1.5rem',
-                    right: '1.5rem',
+                    top: '1rem',
+                    right: '1rem',
                     width: '2.5rem',
                     height: '2.5rem',
                     display: 'flex',
@@ -747,8 +760,14 @@ export function ScreenshotStack({
                     cursor: 'pointer',
                     fontSize: '1.5rem',
                     transition: 'background-color 150ms ease',
+                    zIndex: 10,
                     ':hover': {
                       backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    },
+                    '@media (max-width: 768px)': {
+                      width: '3rem',
+                      height: '3rem',
+                      fontSize: '1.75rem',
                     },
                   }}
                 >
@@ -759,21 +778,39 @@ export function ScreenshotStack({
                 <div
                   css={{
                     position: 'absolute',
-                    top: '1.5rem',
+                    top: '1rem',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     color: 'rgba(255, 255, 255, 0.7)',
                     fontSize: '0.875rem',
                     fontWeight: 500,
                     fontVariantNumeric: 'tabular-nums',
+                    zIndex: 10,
                   }}
                 >
                   {currentIndex + 1} / {screenshots.length}
                 </div>
 
-                {/* Navigation arrows */}
+                {/* Navigation arrows - sides on desktop, bottom on mobile */}
                 {screenshots.length > 1 && (
-                  <>
+                  <div
+                    css={{
+                      // Desktop: position arrows on sides
+                      '@media (min-width: 769px)': {
+                        display: 'contents',
+                      },
+                      // Mobile: bottom bar
+                      '@media (max-width: 768px)': {
+                        position: 'absolute',
+                        bottom: '1rem',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        display: 'flex',
+                        gap: '1rem',
+                        zIndex: 10,
+                      },
+                    }}
+                  >
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
@@ -781,10 +818,6 @@ export function ScreenshotStack({
                       }}
                       aria-label="Previous screenshot"
                       css={{
-                        position: 'absolute',
-                        left: '1.5rem',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
                         width: '3rem',
                         height: '3rem',
                         display: 'flex',
@@ -801,14 +834,29 @@ export function ScreenshotStack({
                           backgroundColor: 'rgba(255, 255, 255, 0.2)',
                         },
                         ':active': {
-                          transform: 'translateY(-50%) scale(0.9)',
+                          transform: 'scale(0.9)',
                           backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                        },
+                        // Mobile: bigger buttons
+                        '@media (max-width: 768px)': {
+                          width: '3.5rem',
+                          height: '3.5rem',
+                        },
+                        // Desktop: absolute positioning on sides
+                        '@media (min-width: 769px)': {
+                          position: 'absolute',
+                          left: '1.5rem',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          ':active': {
+                            transform: 'translateY(-50%) scale(0.9)',
+                          },
                         },
                       }}
                     >
                       <svg
-                        width="20"
-                        height="20"
+                        width="24"
+                        height="24"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -826,10 +874,6 @@ export function ScreenshotStack({
                       }}
                       aria-label="Next screenshot"
                       css={{
-                        position: 'absolute',
-                        right: '1.5rem',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
                         width: '3rem',
                         height: '3rem',
                         display: 'flex',
@@ -846,14 +890,29 @@ export function ScreenshotStack({
                           backgroundColor: 'rgba(255, 255, 255, 0.2)',
                         },
                         ':active': {
-                          transform: 'translateY(-50%) scale(0.9)',
+                          transform: 'scale(0.9)',
                           backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                        },
+                        // Mobile: bigger buttons
+                        '@media (max-width: 768px)': {
+                          width: '3.5rem',
+                          height: '3.5rem',
+                        },
+                        // Desktop: absolute positioning on sides
+                        '@media (min-width: 769px)': {
+                          position: 'absolute',
+                          right: '1.5rem',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          ':active': {
+                            transform: 'translateY(-50%) scale(0.9)',
+                          },
                         },
                       }}
                     >
                       <svg
-                        width="20"
-                        height="20"
+                        width="24"
+                        height="24"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -864,12 +923,25 @@ export function ScreenshotStack({
                         <polyline points="9 18 15 12 9 6" />
                       </svg>
                     </button>
-                  </>
+                  </div>
                 )}
 
-                {/* Image display - instant swap for easy comparison */}
-                <motion.div
+                {/* Image display with swipe support */}
+                <StyledMotionDiv
                   key="modal-image-container"
+                  drag={screenshots.length > 1 ? 'x' : false}
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.2}
+                  onDragEnd={(_, info) => {
+                    const threshold = 50
+                    const velocity = info.velocity.x
+                    const offset = info.offset.x
+                    if (offset < -threshold || velocity < -500) {
+                      goToNext()
+                    } else if (offset > threshold || velocity > 500) {
+                      goToPrevious()
+                    }
+                  }}
                   initial={
                     openingAnimation
                       ? {
@@ -900,23 +972,46 @@ export function ScreenshotStack({
                     borderRadius: '0.5rem',
                     overflow: 'hidden',
                     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                    cursor: screenshots.length > 1 ? 'grab' : 'default',
+                  }}
+                  css={{
+                    ':active': {
+                      cursor: screenshots.length > 1 ? 'grabbing' : 'default',
+                    },
+                    // Mobile: expand to fill viewport
+                    '@media (max-width: 768px)': {
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                      borderRadius: '0 !important',
+                      boxShadow: 'none !important',
+                    },
                   }}
                 >
                   <img
                     src={screenshots[currentIndex]?.url}
                     alt={`Screenshot ${currentIndex + 1}`}
+                    draggable={false}
                     css={{
-                      // Ensure arrows never overlap the image: reserve horizontal "gutters"
-                      // on both sides where the controls can live.
+                      // Desktop: constrained with gutters for arrows
                       maxWidth: `min(90vw, calc(100vw - ${MODAL_NAV_GUTTER_PX * 2}px))`,
                       maxHeight: '80vh',
                       objectFit: 'contain',
                       display: 'block',
+                      // Mobile: full viewport
+                      '@media (max-width: 768px)': {
+                        maxWidth: '100vw',
+                        maxHeight: '100%',
+                        width: '100%',
+                        height: 'auto',
+                      },
                     }}
                   />
-                </motion.div>
+                </StyledMotionDiv>
 
-                {/* Thumbnail strip */}
+                {/* Thumbnail strip - hidden on mobile */}
                 {screenshots.length > 1 && (
                   <div
                     css={{
@@ -931,6 +1026,10 @@ export function ScreenshotStack({
                       scrollbarWidth: 'none',
                       msOverflowStyle: 'none',
                       '::-webkit-scrollbar': {
+                        display: 'none',
+                      },
+                      // Hide on mobile
+                      '@media (max-width: 768px)': {
                         display: 'none',
                       },
                     }}
@@ -988,7 +1087,7 @@ export function ScreenshotStack({
                     </div>
                   </div>
                 )}
-              </motion.div>
+              </StyledMotionDiv>
             )}
           </AnimatePresence>,
           document.body
