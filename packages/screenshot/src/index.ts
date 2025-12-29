@@ -705,7 +705,7 @@ async function renderToCanvas(
   // full document element list when we actually need to consider fixed
   // elements; this avoids an expensive `querySelectorAll('*')` on callers
   // that explicitly opt out of fixed overlays.
-  const includeFixed = options.includeFixed ?? 'intersecting'
+  const includeFixed = options.includeFixed ?? 'none'
 
   // Precompute list of all elements for operations that need to scan the full
   // DOM (for example, locating `position: fixed` elements) to avoid multiple
@@ -10956,18 +10956,18 @@ function installCanvasFilterPolyfillIfNeeded(): void {
   // that throws if invoked with the wrong receiver, so we must avoid reading
   // `proto.filter` directly.
   if (!isFirefoxForPolyfill) {
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(prototype, 'filter')
-    if (
-      descriptor &&
-      (typeof descriptor.value === 'string' ||
-        typeof descriptor.get === 'function')
-    ) {
-      return
-    }
-  } catch {
-    // Ignore and fall through to our polyfill if we can't safely inspect
-    // the property.
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, 'filter')
+      if (
+        descriptor &&
+        (typeof descriptor.value === 'string' ||
+          typeof descriptor.get === 'function')
+      ) {
+        return
+      }
+    } catch {
+      // Ignore and fall through to our polyfill if we can't safely inspect
+      // the property.
     }
   }
 
