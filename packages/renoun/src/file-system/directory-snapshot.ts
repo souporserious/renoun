@@ -1,27 +1,17 @@
-import type { Directory, FileSystemEntry } from './index'
-
-export interface DirectorySnapshotDirectoryMetadata<
-  LoaderTypes extends Record<string, any>,
-> {
+export interface DirectorySnapshotDirectoryMetadata<Entry = unknown> {
   hasVisibleDescendant: boolean
-  materializedEntries: FileSystemEntry<LoaderTypes>[]
+  materializedEntries: Entry[]
 }
 
-export class DirectorySnapshot<LoaderTypes extends Record<string, any>> {
-  #entries: FileSystemEntry<LoaderTypes>[]
-  #directories: Map<
-    Directory<LoaderTypes>,
-    DirectorySnapshotDirectoryMetadata<LoaderTypes>
-  >
-  #materialized?: FileSystemEntry<LoaderTypes>[]
+export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
+  #entries: Entry[]
+  #directories: Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>
+  #materialized?: Entry[]
   #dependencies?: Map<string, number>
 
   constructor(options: {
-    entries: FileSystemEntry<LoaderTypes>[]
-    directories: Map<
-      Directory<LoaderTypes>,
-      DirectorySnapshotDirectoryMetadata<LoaderTypes>
-    >
+    entries: Entry[]
+    directories: Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>
     shouldIncludeSelf: boolean
     hasVisibleDescendant: boolean
     dependencies?: Map<string, number>
@@ -36,7 +26,7 @@ export class DirectorySnapshot<LoaderTypes extends Record<string, any>> {
   readonly shouldIncludeSelf: boolean
   hasVisibleDescendant: boolean
 
-  materialize(): FileSystemEntry<LoaderTypes>[] {
+  materialize(): Entry[] {
     if (!this.#materialized) {
       this.#materialized = this.#entries.slice()
     }
@@ -45,8 +35,8 @@ export class DirectorySnapshot<LoaderTypes extends Record<string, any>> {
   }
 
   getDirectoryMetadata(
-    directory: Directory<LoaderTypes>
-  ): DirectorySnapshotDirectoryMetadata<LoaderTypes> | undefined {
+    directory: DirectoryType
+  ): DirectorySnapshotDirectoryMetadata<Entry> | undefined {
     return this.#directories.get(directory)
   }
 
@@ -56,25 +46,20 @@ export class DirectorySnapshot<LoaderTypes extends Record<string, any>> {
 }
 
 export function createDirectorySnapshot<
-  LoaderTypes extends Record<string, any>,
+  DirectoryType = unknown,
+  Entry = unknown,
 >(options: {
-  entries: FileSystemEntry<LoaderTypes>[]
-  directories?: Map<
-    Directory<LoaderTypes>,
-    DirectorySnapshotDirectoryMetadata<LoaderTypes>
-  >
+  entries: Entry[]
+  directories?: Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>
   shouldIncludeSelf: boolean
   hasVisibleDescendant: boolean
   dependencies?: Map<string, number>
-}): DirectorySnapshot<LoaderTypes> {
-  return new DirectorySnapshot({
+}): DirectorySnapshot<DirectoryType, Entry> {
+  return new DirectorySnapshot<DirectoryType, Entry>({
     entries: options.entries,
     directories:
       options.directories ??
-      new Map<
-        Directory<LoaderTypes>,
-        DirectorySnapshotDirectoryMetadata<LoaderTypes>
-      >(),
+      new Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>(),
     shouldIncludeSelf: options.shouldIncludeSelf,
     hasVisibleDescendant: options.hasVisibleDescendant,
     dependencies: options.dependencies,

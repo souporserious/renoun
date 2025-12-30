@@ -75,7 +75,7 @@ import {
   DirectorySnapshot,
   createDirectorySnapshot,
   type DirectorySnapshotDirectoryMetadata,
-} from './directory-snapshot'
+} from './directory-snapshot.ts'
 import {
   createRangeLimitedStream,
   StreamableBlob,
@@ -2077,11 +2077,7 @@ export class JavaScriptFile<
       )
     }
 
-    throw new ModuleExportNotFoundError(
-      this.absolutePath,
-      name,
-      'JavaScript'
-    )
+    throw new ModuleExportNotFoundError(this.absolutePath, name, 'JavaScript')
   }
 
   /** Get a named export from the JavaScript file. */
@@ -2269,6 +2265,7 @@ export class MDXModuleExport<Value> {
   #name: string
   #file: MDXFile<any>
   #loader?: ModuleLoader<any>
+  #getModuleFn?: () => Promise<any>
   #slugCasing: SlugCasing
   #staticPromise?: Promise<Value>
   #runtimePromise?: Promise<Value>
@@ -2277,12 +2274,14 @@ export class MDXModuleExport<Value> {
     name: string,
     file: MDXFile<any>,
     loader?: ModuleLoader<any>,
-    slugCasing?: SlugCasing
+    slugCasing?: SlugCasing,
+    getModuleFn?: () => Promise<any>
   ) {
     this.#name = name
     this.#file = file
     this.#loader = loader
     this.#slugCasing = slugCasing ?? 'kebab'
+    this.#getModuleFn = getModuleFn
   }
 
   getName() {
@@ -2449,6 +2448,10 @@ export class MDXModuleExport<Value> {
   }
 
   #getModule() {
+    if (this.#getModuleFn) {
+      return this.#getModuleFn()
+    }
+
     if (this.#loader === undefined) {
       const parentPath = this.#file.getParent().workspacePath
 
@@ -2588,7 +2591,8 @@ export class MDXFile<
           name,
           this as MDXFile<any>,
           this.#loader,
-          this.#slugCasing
+          this.#slugCasing,
+          () => this.#getModule()
         )
         this.#exports.set(name, mdxExport)
       }
@@ -2612,7 +2616,9 @@ export class MDXFile<
 
     const fileExport = new MDXModuleExport<
       ({ default: MDXContent } & Types)[ExportName]
-    >(name, this as MDXFile<any>, this.#loader, this.#slugCasing)
+    >(name, this as MDXFile<any>, this.#loader, this.#slugCasing, () =>
+      this.#getModule()
+    )
 
     this.#exports.set(name, fileExport)
 
@@ -2729,22 +2735,33 @@ export class MDXFile<
         )
       }
 
-      executeModuleLoader = () => (loader.runtime as any)(path, this)
+      executeModuleLoader = () =>
+        unwrapModuleResult((loader.runtime as any)(path, this))
     } else {
       throw new Error(
         `[renoun] This loader is missing an mdx runtime for the parent Directory at ${this.getParent().workspacePath}.`
       )
     }
 
-    if (process.env.NODE_ENV === 'production') {
-      if (this.#modulePromise) {
-        return this.#modulePromise
-      }
-      this.#modulePromise = executeModuleLoader()
+    // In production we cache the resolved module for speed.
+    // In development we only dedupe in-flight loads to avoid races, but we
+    // clear the cache once the promise settles to preserve HMR behavior.
+    if (this.#modulePromise) {
       return this.#modulePromise
     }
 
-    return executeModuleLoader()
+    const promise = executeModuleLoader()
+    this.#modulePromise = promise
+
+    if (process.env.NODE_ENV !== 'production') {
+      promise.finally(() => {
+        if (this.#modulePromise === promise) {
+          this.#modulePromise = undefined
+        }
+      })
+    }
+
+    return promise
   }
 }
 
@@ -3031,7 +3048,10 @@ interface DirectoryEntryMetadata<LoaderTypes extends Record<string, any>> {
   entry: Directory<LoaderTypes>
   includeInFinal: boolean
   passesFilterSelf: boolean
-  snapshot: DirectorySnapshot<LoaderTypes>
+  snapshot: DirectorySnapshot<
+    Directory<LoaderTypes>,
+    FileSystemEntry<LoaderTypes>
+  >
 }
 
 function createOptionsMask(options: NormalizedDirectoryEntriesOptions) {
@@ -3220,9 +3240,7 @@ export class Directory<
         if (!fileSystem.shouldStripInternal()) {
           return true
         }
-        const allExports = await fileSystem.getFileExports(
-          entry.absolutePath
-        )
+        const allExports = await fileSystem.getFileExports(entry.absolutePath)
         if (allExports.length === 0) {
           return true
         }
@@ -3410,8 +3428,7 @@ export class Directory<
   ): Promise<FileSystemEntry<LoaderTypes>> {
     // Fast path try direct path lookup without hydrating the directory.
     if (segments.length > 0) {
-      const directoryWorkspacePath = directory
-        .workspacePath
+      const directoryWorkspacePath = directory.workspacePath
         .replace(/^\.\/?/, '')
         .replace(/\/$/, '')
       const targetPath =
@@ -3525,10 +3542,7 @@ export class Directory<
       // plain "Button" (no modifier segment)
       if (remainingSegments.length === 0 && matchesExtension) {
         // Prefer the base file, fall back to file‑with‑modifier if nothing else
-        if (
-          !fallback ||
-          (fallback instanceof File && fallback.kind)
-        ) {
+        if (!fallback || (fallback instanceof File && fallback.kind)) {
           fallback = entry
         }
       }
@@ -3749,9 +3763,7 @@ export class Directory<
         throw new FileNotFoundError(rawPath, allExtensions, {
           directoryPath: entry.workspacePath,
           rootPath: entry.getRootPath(),
-          nearestCandidates: directoryEntries.map((entry) =>
-            entry.baseName
-          ),
+          nearestCandidates: directoryEntries.map((entry) => entry.baseName),
         })
       }
     }
@@ -3785,10 +3797,7 @@ export class Directory<
       let entry: FileSystemEntry<LoaderTypes> | undefined
 
       for (const currentEntry of allEntries) {
-        const baseSegment = createSlug(
-          currentEntry.baseName,
-          this.#slugCasing
-        )
+        const baseSegment = createSlug(currentEntry.baseName, this.#slugCasing)
 
         if (
           currentEntry instanceof Directory &&
@@ -3902,7 +3911,10 @@ export class Directory<
     }
   }
 
-  #snapshotCache = new Map<number, DirectorySnapshot<LoaderTypes>>()
+  #snapshotCache = new Map<
+    number,
+    DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
+  >()
   #pathLookup = new Map<string, FileSystemEntry<LoaderTypes>>()
 
   /**
@@ -4093,13 +4105,18 @@ export class Directory<
     directory: Directory<LoaderTypes>,
     options: NormalizedDirectoryEntriesOptions,
     mask: number
-  ): Promise<DirectorySnapshot<LoaderTypes>> {
+  ): Promise<
+    DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
+  > {
     const { snapshot } = await this.#buildSnapshot(directory, options, mask)
     return snapshot
   }
 
   async #isSnapshotStale(
-    snapshot: DirectorySnapshot<LoaderTypes>
+    snapshot: DirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >
   ): Promise<boolean> {
     const dependencies = snapshot.getDependencies()
     if (!dependencies || dependencies.size === 0) {
@@ -4126,7 +4143,10 @@ export class Directory<
     options: NormalizedDirectoryEntriesOptions,
     mask: number
   ): Promise<{
-    snapshot: DirectorySnapshot<LoaderTypes>
+    snapshot: DirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >
     shouldIncludeSelf: boolean
   }> {
     const cached = directory.#snapshotCache.get(mask)
@@ -4146,7 +4166,7 @@ export class Directory<
     const finalKeys = new Set<string>()
     const directoriesMap = new Map<
       Directory<LoaderTypes>,
-      DirectorySnapshotDirectoryMetadata<LoaderTypes>
+      DirectorySnapshotDirectoryMetadata<FileSystemEntry<LoaderTypes>>
     >()
 
     for (const entry of rawEntries) {
@@ -4410,7 +4430,10 @@ export class Directory<
       }
     }
 
-    const snapshot = createDirectorySnapshot<LoaderTypes>({
+    const snapshot = createDirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >({
       entries: entriesResult,
       directories: directoriesMap,
       shouldIncludeSelf,
