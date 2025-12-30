@@ -32,6 +32,31 @@ export default withMDX({
 })
 ```
 
+## Customizing heading and section rendering
+
+Headings are rendered through a `Heading` component so you can control anchors or styling via the MDX components provider. You can also provide a `Section` component to wrap each heading in a custom element (for example to attach context providers or use semantic `<section>` tags). By default, `Section` renders a `React.Fragment`.
+
+```tsx
+import type { MDXComponents } from 'mdx/types'
+
+const components: MDXComponents = {
+  Heading: ({ Tag, id, children }) => (
+    <Tag id={id} className="heading-anchor">
+      <a href={`#${id}`}>{children}</a>
+    </Tag>
+  ),
+  Section: ({ id, depth, title, children }) => (
+    <section id={id} aria-label={title} data-depth={depth}>
+      {children}
+    </section>
+  ),
+}
+
+export default function Page({ Component, pageProps }) {
+  return <Component {...pageProps} components={components} />
+}
+```
+
 ## License
 
 [MIT](/LICENSE.md) © [souporserious](https://souporserious.com/)

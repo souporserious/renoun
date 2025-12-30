@@ -37,11 +37,18 @@ describe('addSections', () => {
       function _createMdxContent(props) {
         return _jsxDEV(_Fragment, {
           children: (() => {
-            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent;
-            return _jsxDEV(HeadingComponent, {
-              Tag: C && C.h1 || "h1",
+            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent, SectionComponent = C && C.Section || _Fragment;
+            return _jsxDEV(SectionComponent, {
               id: "hello-world",
-              children: "Hello, world!"
+              depth: 1,
+              title: "Hello, world!",
+              children: _jsxDEV(HeadingComponent, {
+                Tag: C && C.h1 || "h1",
+                id: "hello-world",
+                children: "Hello, world!"
+              }, undefined, false, {
+                fileName: "<source.js>"
+              }, this)
             }, undefined, false, {
               fileName: "<source.js>"
             }, this);
@@ -106,14 +113,19 @@ describe('addSections', () => {
         };
         return _jsx(_Fragment, {
           children: (() => {
-            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent;
-            return _jsx(HeadingComponent, {
-              Tag: C && C.h1 || "h1",
+            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent, SectionComponent = C && C.Section || _Fragment;
+            return _jsx(SectionComponent, {
               id: "hello-world",
-              children: _jsxs(_Fragment, {
-                children: ["Hello, ", _jsx(_components.code, {
-                  children: "world"
-                }), "!"]
+              depth: 1,
+              title: "Hello, world!",
+              children: _jsx(HeadingComponent, {
+                Tag: C && C.h1 || "h1",
+                id: "hello-world",
+                children: _jsxs(_Fragment, {
+                  children: ["Hello, ", _jsx(_components.code, {
+                    children: "world"
+                  }), "!"]
+                })
               })
             });
           })()
@@ -179,13 +191,18 @@ describe('addSections', () => {
         };
         return _jsx(_Fragment, {
           children: (() => {
-            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent;
-            return _jsx(HeadingComponent, {
-              Tag: C && C.h1 || "h1",
+            const C = typeof _components !== "undefined" && _components || (props.components || ({})), HeadingComponent = C.Heading || DefaultHeadingComponent, SectionComponent = C && C.Section || _Fragment;
+            return _jsx(SectionComponent, {
               id: "hello-world",
-              children: _jsx(_components.img, {
-                src: "https://example.com/image.png",
-                alt: "Hello, world!"
+              depth: 1,
+              title: "Hello, world!",
+              children: _jsx(HeadingComponent, {
+                Tag: C && C.h1 || "h1",
+                id: "hello-world",
+                children: _jsx(_components.img, {
+                  src: "https://example.com/image.png",
+                  alt: "Hello, world!"
+                })
               })
             });
           })()
@@ -323,6 +340,43 @@ Search indexing begins by scanning your document headings and collecting the fir
         "Tag": "h1",
         "children": "Hello",
         "id": "hello",
+      }
+    `)
+  })
+
+  test('wraps headings with Section component when provided', async () => {
+    const mdxSource = `# Hello`
+    const calls: Array<any> = []
+
+    function SectionOverride() {
+      return null
+    }
+
+    const jsxStub = (type: any, props: any) => {
+      calls.push({ type, props })
+      return null
+    }
+
+    const mdxModule = await evaluate(mdxSource, {
+      remarkPlugins: [addSections],
+      development: false,
+      Fragment: Symbol.for('react.fragment'),
+      jsx: jsxStub,
+      jsxs: jsxStub,
+    })
+
+    mdxModule.default({ components: { Section: SectionOverride } })
+
+    const sectionInvocation = calls.find(
+      (component) => component.type === SectionOverride
+    )
+
+    expect(sectionInvocation?.props).toMatchInlineSnapshot(`
+      {
+        "children": null,
+        "depth": 1,
+        "id": "hello",
+        "title": "Hello",
       }
     `)
   })

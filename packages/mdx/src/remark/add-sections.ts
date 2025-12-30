@@ -89,6 +89,17 @@ export type HeadingComponent<
   Tag extends React.ElementType = React.ElementType,
 > = (props: HeadingComponentProps<Tag>) => React.ReactNode
 
+export type SectionComponentProps = {
+  id: string
+  depth: number
+  title: string
+  children: React.ReactNode
+}
+
+export type SectionComponent = (
+  props: SectionComponentProps
+) => React.ReactNode
+
 export type AddSectionsOptions = {
   /**
    * Additional JSX tag names to treat as headings.
@@ -439,7 +450,7 @@ export default function addSections(
             }
           }
 
-          convertHeadingToComponent(headingNode)
+          convertHeadingToComponent(headingNode, text)
         }
         return
       }
@@ -821,7 +832,7 @@ function countWords(value: string) {
   return value.trim().split(/\s+/).length
 }
 
-function convertHeadingToComponent(node: Heading) {
+function convertHeadingToComponent(node: Heading, title: string) {
   const tagName = `h${node.depth}`
   const properties = node.data?.hProperties ?? {}
 
@@ -874,7 +885,7 @@ function convertHeadingToComponent(node: Heading) {
     })
   }
 
-  const jsxElement = {
+  const headingElement = {
     type: 'JSXElement',
     openingElement: {
       type: 'JSXOpeningElement',
@@ -902,6 +913,37 @@ function convertHeadingToComponent(node: Heading) {
       name: { type: 'JSXIdentifier', name: 'HeadingComponent' },
     },
     children: [jsxChildNode],
+  }
+
+  const sectionElement = {
+    type: 'JSXElement',
+    openingElement: {
+      type: 'JSXOpeningElement',
+      name: { type: 'JSXIdentifier', name: 'SectionComponent' },
+      attributes: [
+        {
+          type: 'JSXAttribute',
+          name: { type: 'JSXIdentifier', name: 'id' },
+          value: { type: 'Literal', value: properties.id },
+        },
+        {
+          type: 'JSXAttribute',
+          name: { type: 'JSXIdentifier', name: 'depth' },
+          value: { type: 'Literal', value: node.depth },
+        },
+        {
+          type: 'JSXAttribute',
+          name: { type: 'JSXIdentifier', name: 'title' },
+          value: { type: 'Literal', value: title },
+        },
+      ],
+      selfClosing: false,
+    },
+    closingElement: {
+      type: 'JSXClosingElement',
+      name: { type: 'JSXIdentifier', name: 'SectionComponent' },
+    },
+    children: [headingElement],
   }
 
   const iife = {
@@ -975,11 +1017,33 @@ function convertHeadingToComponent(node: Heading) {
                   },
                 },
               },
+              {
+                // const SectionComponent = C.Section || _Fragment
+                type: 'VariableDeclarator',
+                id: { type: 'Identifier', name: 'SectionComponent' },
+                init: {
+                  type: 'LogicalExpression',
+                  operator: '||',
+                  left: {
+                    type: 'LogicalExpression',
+                    operator: '&&',
+                    left: { type: 'Identifier', name: 'C' },
+                    right: {
+                      type: 'MemberExpression',
+                      object: { type: 'Identifier', name: 'C' },
+                      property: { type: 'Identifier', name: 'Section' },
+                      computed: false,
+                      optional: false,
+                    },
+                  },
+                  right: { type: 'Identifier', name: '_Fragment' },
+                },
+              },
             ],
           },
           {
             type: 'ReturnStatement',
-            argument: jsxElement,
+            argument: sectionElement,
           },
         ],
       },

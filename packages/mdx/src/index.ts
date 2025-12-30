@@ -6,6 +6,8 @@ export type {
   AddSectionsOptions,
   HeadingComponent,
   HeadingComponentProps,
+  SectionComponent,
+  SectionComponentProps,
 } from './remark/add-sections.js'
 export { rehypePlugins } from './rehype/index.js'
 export { remarkPlugins } from './remark/index.js'
