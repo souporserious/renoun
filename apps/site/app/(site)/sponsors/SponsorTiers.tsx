@@ -23,113 +23,128 @@ export const tiers = [
   },
 ] as const
 
-export function SponsorTiers() {
+type SponsorTier = (typeof tiers)[number] & {
+  href: string
+  sponsors: { username: string; avatarUrl: string }[]
+}
+
+const SPONSOR_BASE_URL = 'https://github.com/sponsors/souporserious'
+
+function renderTierSections(tiers: SponsorTier[]) {
   return (
-    <Sponsors tiers={tiers}>
-      {(tiers) => {
+    <div
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '3rem',
+      }}
+    >
+      {tiers.map((tier) => {
+        const id = tier.title.toLowerCase()
+
+        if (tier.sponsors.length === 0) {
+          return (
+            <section
+              key={tier.title}
+              id={id}
+              css={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem',
+              }}
+            >
+              <h3>
+                {tier.icon} {tier.title}
+              </h3>
+              <div
+                css={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '1rem',
+                  minHeight: '16rem',
+                  backgroundColor: 'var(--color-surface-secondary)',
+                }}
+              >
+                <p>
+                  Become the first <strong>{tier.title}</strong> sponsor
+                </p>
+                <SponsorLink tier={tier.title} href={tier.href} />
+              </div>
+            </section>
+          )
+        }
+
         return (
-          <div
+          <section
+            key={tier.title}
+            id={id}
             css={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '3rem',
+              gap: '1rem',
             }}
           >
-            {tiers.map((tier) => {
-              const id = tier.title.toLowerCase()
-
-              if (tier.sponsors.length === 0) {
-                return (
-                  <section
-                    key={tier.title}
-                    id={id}
-                    css={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '1rem',
-                    }}
-                  >
-                    <h3>
-                      {tier.icon} {tier.title}
-                    </h3>
-                    <div
-                      css={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '1rem',
-                        minHeight: '16rem',
-                        backgroundColor: 'var(--color-surface-secondary)',
-                      }}
-                    >
-                      <p>
-                        Become the first <strong>{tier.title}</strong> sponsor
-                      </p>
-                      <SponsorLink tier={tier.title} href={tier.href} />
-                    </div>
-                  </section>
-                )
-              }
-
-              return (
-                <section
-                  key={tier.title}
-                  id={id}
-                  css={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '1rem',
-                  }}
-                >
-                  <div
-                    css={{
-                      display: 'flex',
-                      gap: '1rem',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <h3 css={{ margin: '0 !important' }}>
-                      {tier.icon} {tier.title}
-                    </h3>
-                    <SponsorLink
-                      tier={tier.title}
-                      href={tier.href}
-                      variant="small"
+            <div
+              css={{
+                display: 'flex',
+                gap: '1rem',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <h3 css={{ margin: '0 !important' }}>
+                {tier.icon} {tier.title}
+              </h3>
+              <SponsorLink tier={tier.title} href={tier.href} variant="small" />
+            </div>
+            <ul
+              css={{
+                listStyle: 'none',
+                display: 'flex',
+                flexWrap: 'wrap',
+                minHeight: '16rem',
+                padding: '1rem',
+                margin: 0,
+                gap: '1rem',
+                backgroundColor: 'var(--color-surface-secondary)',
+              }}
+            >
+              {tier.sponsors.map((sponsor) => (
+                <li key={sponsor.username}>
+                  <a href={`https://github.com/${sponsor.username}`}>
+                    <img
+                      src={sponsor.avatarUrl}
+                      alt={`${sponsor.username}'s avatar`}
+                      title={sponsor.username}
+                      css={{ width: '4rem', borderRadius: '100%' }}
                     />
-                  </div>
-                  <ul
-                    css={{
-                      listStyle: 'none',
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      minHeight: '16rem',
-                      padding: '1rem',
-                      margin: 0,
-                      gap: '1rem',
-                      backgroundColor: 'var(--color-surface-secondary)',
-                    }}
-                  >
-                    {tier.sponsors.map((sponsor) => (
-                      <li key={sponsor.username}>
-                        <a href={`https://github.com/${sponsor.username}`}>
-                          <img
-                            src={sponsor.avatarUrl}
-                            alt={`${sponsor.username}'s avatar`}
-                            title={sponsor.username}
-                            css={{ width: '4rem', borderRadius: '100%' }}
-                          />
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )
-            })}
-          </div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
         )
-      }}
+      })}
+    </div>
+  )
+}
+
+export function SponsorTiers() {
+  if (!process.env.GITHUB_SPONSORS_TOKEN) {
+    const fallbackTiers: SponsorTier[] = tiers.map((tier) => ({
+      ...tier,
+      href: `${SPONSOR_BASE_URL}?amount=${tier.amount}`,
+      sponsors: [],
+    }))
+
+    return renderTierSections(fallbackTiers)
+  }
+
+  return (
+    <Sponsors tiers={tiers}>
+      {(resolvedTiers) => renderTierSections(resolvedTiers as SponsorTier[])}
     </Sponsors>
   )
 }

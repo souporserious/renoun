@@ -1,21 +1,11 @@
+import { GeistMono } from 'geist/font/mono'
+import { GeistSans } from 'geist/font/sans'
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { Geist, Geist_Mono } from 'next/font/google'
 import { RootProvider } from 'renoun'
 
 import { Sidebar } from '@/ui/Sidebar'
 
 import './layout.css'
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-})
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-})
 
 export const metadata: Metadata = {
   title: 'Package',
@@ -46,7 +36,7 @@ export default function RootLayout({
         className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
       >
         <body
-          className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
+          className={`${GeistSans.variable} ${GeistMono.variable} min-h-screen antialiased`}
         >
           <Sidebar />
 

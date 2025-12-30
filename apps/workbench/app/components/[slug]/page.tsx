@@ -66,10 +66,10 @@ export default async function Component(
   const lastCommitDate = await componentEntry.getLastCommitDate()
   const parentDirectory = componentEntry.getParent()
   const title = ['index', 'readme'].includes(
-    componentEntry.getBaseName().toLowerCase()
+    componentEntry.baseName.toLowerCase()
   )
-    ? parentDirectory.getBaseName()
-    : componentEntry.getBaseName()
+    ? parentDirectory.baseName
+    : componentEntry.baseName
   const [previousEntry, nextEntry] = await componentEntry.getSiblings({
     collection: RootCollection,
   })

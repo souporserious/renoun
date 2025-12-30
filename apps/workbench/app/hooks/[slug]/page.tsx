@@ -27,10 +27,10 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
   const lastCommitDate = await hookEntry.getLastCommitDate()
   const parentDirectory = hookEntry.getParent()
   const title = ['index', 'readme'].includes(
-    hookEntry.getBaseName().toLowerCase()
+    hookEntry.baseName.toLowerCase()
   )
-    ? parentDirectory.getBaseName()
-    : hookEntry.getBaseName()
+    ? parentDirectory.baseName
+    : hookEntry.baseName
   const [previousEntry, nextEntry] = await hookEntry.getSiblings({
     collection: RootCollection,
   })

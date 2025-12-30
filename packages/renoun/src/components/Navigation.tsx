@@ -33,7 +33,7 @@ const defaultComponents: NavigationComponents = {
   Root: ({ children }) => <nav>{children}</nav>,
   List: ({ children }) => <ul>{children}</ul>,
   Item: ({ children }) => <li>{children}</li>,
-  Link: ({ entry, pathname }) => <a href={pathname}>{entry.getName()}</a>,
+  Link: ({ entry, pathname }) => <a href={pathname}>{entry.name}</a>,
 }
 
 export interface NavigationProps {

@@ -33,7 +33,7 @@ export default async function Hooks() {
               .then((fileExports) => fileExports[0])
             baseName = firstExport.getName()
           } else {
-            baseName = entry.getBaseName()
+            baseName = entry.baseName
           }
           return <Card key={pathname} href={pathname} label={baseName} />
         })}

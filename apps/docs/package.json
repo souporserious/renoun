@@ -51,6 +51,7 @@
     "@renoun/mdx": "workspace:*",
     "@tailwindcss/postcss": "catalog:",
     "@tailwindcss/typography": "catalog:",
+    "geist": "catalog:",
     "react-aria-components": "catalog:",
     "tailwindcss": "catalog:",
     "tailwindcss-react-aria-components": "2.0.1",

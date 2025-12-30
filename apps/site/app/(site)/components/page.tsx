@@ -31,7 +31,7 @@ export default async function Components() {
           <Card
             key={entry.getPathname()}
             href={entry.getPathname()}
-            label={entry.getBaseName()}
+            label={entry.baseName}
           />
         ))}
       </Row>

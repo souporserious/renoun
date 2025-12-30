@@ -23,7 +23,7 @@ export function EntryIndex({
               className="block rounded-lg border border-indigo-200 dark:border-indigo-800 p-4 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-800/50 no-underline transition-colors"
             >
               <h2 className="m-0 text-base font-medium">
-                {entry.getBaseName()}
+                {entry.baseName}
               </h2>
             </Link>
           </li>

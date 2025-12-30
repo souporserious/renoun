@@ -316,7 +316,15 @@ async function CommandAsync({
   components: componentsProp,
 }: CommandAsyncProps) {
   if (shouldValidate) {
-    await validatePackages(variant, subject)
+    try {
+      await validatePackages(variant, subject)
+    } catch (error) {
+      console.warn(
+        `[renoun] Skipping package validation for "${subject}" due to: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
   }
 
   const config = await getConfig()

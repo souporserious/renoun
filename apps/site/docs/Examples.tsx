@@ -107,7 +107,7 @@ export async function Examples() {
         const { name, description, homepage } = packageSchema.parse(
           await packageJson.get()
         )
-        const relativePath = entry.getRelativePathToRoot()
+        const relativePath = entry.relativePath
         const repositoryPath = relativePath.startsWith('examples')
           ? relativePath
           : ['examples', relativePath].filter(Boolean).join('/')

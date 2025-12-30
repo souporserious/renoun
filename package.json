@@ -24,6 +24,7 @@
     "@types/node": "catalog:",
     "@vitest/browser": "4.0.16",
     "@vitest/browser-playwright": "4.0.16",
+    "geist": "catalog:",
     "playwright": "1.57.0",
     "prettier": "catalog:",
     "turbo": "2.7.0",

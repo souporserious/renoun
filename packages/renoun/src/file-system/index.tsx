@@ -166,10 +166,10 @@ const defaultLoaders: {
     let source: string
 
     try {
-      source = await fileSystem.readFile(file.getRelativePathToWorkspace())
+      source = await fileSystem.readFile(file.workspacePath)
     } catch (relativeError) {
       try {
-        source = await fileSystem.readFile(file.getAbsolutePath())
+        source = await fileSystem.readFile(file.absolutePath)
       } catch {
         throw relativeError
       }
@@ -727,7 +727,7 @@ export class File<
 
       // If that fails and we have a directory, try combining paths
       if (byteLength === undefined && options.directory !== undefined) {
-        const directoryPath = directory.getRelativePathToWorkspace()
+        const directoryPath = directory.workspacePath
         if (directoryPath && directoryPath !== '.') {
           const fullPath = joinPaths(directoryPath, resolvedPath)
           byteLength = fileSystem.getFileByteLengthSync(fullPath)
@@ -774,18 +774,13 @@ export class File<
     return this.#name
   }
 
-  /** The intrinsic name of the file. */
-  getName(): string {
-    return this.#name
-  }
-
   /** The base name of the file e.g. `index` in `index.ts`. */
-  getBaseName(): string {
+  get baseName(): string {
     return this.#baseName
   }
 
   /** The modifier name of the file if defined e.g. `test` in `index.test.ts`. */
-  getModifierName(): string | undefined {
+  get kind(): string | undefined {
     return this.#modifierName
   }
 
@@ -795,12 +790,12 @@ export class File<
   }
 
   /** The order of the file if defined. */
-  getOrder(): string | undefined {
+  get order(): string | undefined {
     return this.#order
   }
 
   /** The extension of the file if defined. */
-  getExtension(): Extension {
+  get extension(): Extension {
     return this.#extension as Extension
   }
 
@@ -811,7 +806,7 @@ export class File<
 
   /** Get the slug of the file. */
   getSlug() {
-    return createSlug(this.getBaseName(), this.#slugCasing)
+    return createSlug(this.baseName, this.#slugCasing)
   }
 
   /**
@@ -848,7 +843,7 @@ export class File<
       }
 
       // Remove trailing 'index' or 'readme' if present
-      if (['index', 'readme'].includes(this.getBaseName().toLowerCase())) {
+      if (['index', 'readme'].includes(this.baseName.toLowerCase())) {
         parsedSegments.pop()
       }
 
@@ -868,14 +863,14 @@ export class File<
     return this.getPathname(options).split('/').filter(Boolean)
   }
 
-  /** Get the file path relative to the root directory. */
-  getRelativePathToRoot() {
+  /** The file path relative to the root directory. */
+  get relativePath() {
     const rootPath = this.#directory.getRootPath()
     return rootPath ? relativePath(rootPath, this.#path) : this.#path
   }
 
-  /** Get the file path relative to the workspace root. */
-  getRelativePathToWorkspace() {
+  /** The file path relative to the workspace root. */
+  get workspacePath() {
     const fileSystem = this.#directory.getFileSystem()
     const rawPath = this.#path
 
@@ -891,7 +886,7 @@ export class File<
 
     // Base workspace-relative path for this file, ignoring any Directory prefix.
     const workspacePathForFile = fileSystem.getRelativePathToWorkspace(rawPath)
-    const directoryWorkspacePath = this.#directory.getRelativePathToWorkspace()
+    const directoryWorkspacePath = this.#directory.workspacePath
 
     // If the directory is at the workspace root ("" or ".") or its workspace
     // path is unknown, the base workspace path is already correct.
@@ -935,8 +930,8 @@ export class File<
     return joinPaths(scope, finalPath, rawPath)
   }
 
-  /** Get the absolute file system path. */
-  getAbsolutePath() {
+  /** The absolute file system path. */
+  get absolutePath() {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.getAbsolutePath(this.#path)
   }
@@ -1032,7 +1027,7 @@ export class File<
   /** Get the URI to the file source code for the configured editor. */
   getEditorUri(options?: Omit<GetEditorUriOptions, 'path'>) {
     return getEditorUri({
-      path: this.getAbsolutePath(),
+      path: this.absolutePath,
       line: options?.line,
       column: options?.column,
       editor: options?.editor,
@@ -1087,7 +1082,7 @@ export class File<
     ]
   > {
     const isIndexOrReadme = ['index', 'readme'].includes(
-      this.getBaseName().toLowerCase()
+      this.baseName.toLowerCase()
     )
     if (isIndexOrReadme) {
       return this.#directory.getSiblings() as any
@@ -1123,12 +1118,12 @@ export class File<
 
     return {
       type: 'file',
-      name: this.getName(),
+      name: this.name,
       title: this.getTitle(),
       slug: this.getSlug(),
       path: this.getPathname(),
-      relativePath: this.getRelativePathToWorkspace(),
-      extension: this.getExtension(),
+      relativePath: this.workspacePath,
+      extension: this.extension,
       depth: this.getDepth(),
       firstCommitDate,
       lastCommitDate,
@@ -1348,7 +1343,7 @@ export class JSONFile<
                 .join('\n')
 
               throw new Error(
-                `[renoun] Schema validation failed for JSON file at path: "${this.getAbsolutePath()}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
+                `[renoun] Schema validation failed for JSON file at path: "${this.absolutePath}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
               )
             }
 
@@ -1359,7 +1354,7 @@ export class JSONFile<
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] Schema validation failed to parse JSON at file path: "${this.getAbsolutePath()}"\n\nThe following error occurred:\n${error.message}`
+              `[renoun] Schema validation failed to parse JSON at file path: "${this.absolutePath}"\n\nThe following error occurred:\n${error.message}`
             )
           }
         }
@@ -1369,7 +1364,7 @@ export class JSONFile<
     } catch (error) {
       const reason = error instanceof Error ? ` ${error.message}` : ''
       throw new Error(
-        `[renoun] Failed to parse JSON file at path "${this.getAbsolutePath()}".${reason}`
+        `[renoun] Failed to parse JSON file at path "${this.absolutePath}".${reason}`
       )
     }
   }
@@ -1504,7 +1499,7 @@ export class ModuleExport<Value> {
   /** Get the name of the export. Default exports will use the file name or declaration name if available. */
   getName() {
     if (this.#metadata === undefined) {
-      return this.#name === 'default' ? this.#file.getName() : this.#name
+      return this.#name === 'default' ? this.#file.name : this.#name
     }
     return this.#metadata?.name || this.#name
   }
@@ -1552,7 +1547,7 @@ export class ModuleExport<Value> {
 
     if (location === undefined) {
       throw new Error(
-        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.relativePath}".`
       )
     }
 
@@ -1607,7 +1602,7 @@ export class ModuleExport<Value> {
 
   /** Get the URI to the file export source code for the configured editor. */
   getEditorUri(options?: Omit<GetEditorUriOptions, 'path'>) {
-    const path = this.#file.getAbsolutePath()
+    const path = this.#file.absolutePath
 
     if (this.#metadata?.location) {
       const location = this.#metadata.location
@@ -1682,7 +1677,7 @@ export class ModuleExport<Value> {
 
     if (location === undefined) {
       throw new Error(
-        `[renoun] Export cannot not be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
+        `[renoun] Export cannot not be statically analyzed at file path "${this.#file.relativePath}".`
       )
     }
 
@@ -1712,7 +1707,7 @@ export class ModuleExport<Value> {
 
     if (location === undefined) {
       throw new Error(
-        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.relativePath}".`
       )
     }
 
@@ -1725,7 +1720,7 @@ export class ModuleExport<Value> {
 
     if (staticValue === undefined) {
       throw new Error(
-        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.relativePath}".`
       )
     }
 
@@ -1734,14 +1729,14 @@ export class ModuleExport<Value> {
 
   #getModule() {
     if (this.#loader === undefined) {
-      const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+      const parentPath = this.#file.getParent().workspacePath
 
       throw new Error(
         `[renoun] A loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
-    const path = removeExtension(this.#file.getRelativePathToRoot())
+    const path = removeExtension(this.#file.relativePath)
 
     if (isLoader(this.#loader)) {
       return unwrapModuleResult<any>(this.#loader(path, this.#file))
@@ -1751,7 +1746,7 @@ export class ModuleExport<Value> {
       return unwrapModuleResult<any>(this.#loader.runtime(path, this.#file))
     }
 
-    const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+    const parentPath = this.#file.getParent().workspacePath
 
     throw new Error(
       `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
@@ -1785,7 +1780,7 @@ export class ModuleExport<Value> {
 
     if (fileModuleExport === undefined) {
       throw new Error(
-        `[renoun] JavaScript file export "${this.#name}" not found in ${this.#file.getAbsolutePath()}`
+        `[renoun] JavaScript file export "${this.#name}" not found in ${this.#file.absolutePath}`
       )
     }
 
@@ -1809,7 +1804,7 @@ export class ModuleExport<Value> {
     }
 
     throw new Error(
-      `[renoun] JavaScript file export "${this.#name}" could not be determined statically or at runtime for path "${this.#file.getAbsolutePath()}". Ensure the directory has a loader defined for resolving "${this.#file.getExtension()}" files.`
+      `[renoun] JavaScript file export "${this.#name}" could not be determined statically or at runtime for path "${this.#file.absolutePath}". Ensure the directory has a loader defined for resolving "${this.#file.extension}" files.`
     )
   }
 
@@ -1864,7 +1859,7 @@ export class ModuleExport<Value> {
       title: this.getTitle(),
       slug,
       path: `${filePath}#${slug}`,
-      relativePath: `${this.#file.getRelativePathToWorkspace()}#${slug}`,
+      relativePath: `${this.#file.workspacePath}#${slug}`,
       description: this.getDescription(),
       tags: normalizedTags,
       resolvedType,
@@ -1903,7 +1898,7 @@ export class JavaScriptFile<
     super(fileOptions)
 
     if (loader === undefined) {
-      const extension = this.getExtension()
+      const extension = this.extension
 
       if (extension) {
         this.#loader = defaultLoaders[extension]
@@ -1917,14 +1912,14 @@ export class JavaScriptFile<
 
   #getModule() {
     if (this.#loader === undefined) {
-      const parentPath = this.getParent().getRelativePathToRoot()
+      const parentPath = this.getParent().relativePath
 
       throw new Error(
         `[renoun] A loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
-    const path = removeExtension(this.getRelativePathToRoot())
+    const path = removeExtension(this.relativePath)
     const loader = this.#loader
     let executeModuleLoader: () => Promise<any>
 
@@ -1932,7 +1927,7 @@ export class JavaScriptFile<
       executeModuleLoader = () => unwrapModuleResult(loader(path, this))
     } else if (isLoaderWithSchema(loader)) {
       if (!loader.runtime) {
-        const parentPath = this.getParent().getRelativePathToWorkspace()
+        const parentPath = this.getParent().workspacePath
 
         throw new Error(
           `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
@@ -1942,7 +1937,7 @@ export class JavaScriptFile<
         unwrapModuleResult((loader.runtime as any)(path, this))
     } else {
       throw new Error(
-        `[renoun] This loader is missing a runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
+        `[renoun] This loader is missing a runtime for the parent Directory at ${this.getParent().workspacePath}.`
       )
     }
 
@@ -1959,7 +1954,7 @@ export class JavaScriptFile<
 
   /** Parse and validate an export value using the configured schema if available. */
   parseExportValue(name: string, value: any): any {
-    const extension = this.getExtension()
+    const extension = this.extension
 
     if (!extension || !this.#loader) {
       return value
@@ -1987,7 +1982,7 @@ export class JavaScriptFile<
                 .join('\n')
 
               throw new Error(
-                `[renoun] Schema validation failed for export "${name}" at file path: "${this.getAbsolutePath()}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
+                `[renoun] Schema validation failed for export "${name}" at file path: "${this.absolutePath}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
               )
             }
 
@@ -1998,7 +1993,7 @@ export class JavaScriptFile<
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] Schema validation failed to parse export "${name}" at file path: "${this.getAbsolutePath()}"\n\nThe following error occurred:\n${error.message}`
+              `[renoun] Schema validation failed to parse export "${name}" at file path: "${this.absolutePath}"\n\nThe following error occurred:\n${error.message}`
             )
           }
         }
@@ -2011,7 +2006,7 @@ export class JavaScriptFile<
   /** Get all export names and positions from the JavaScript file. */
   async #getExports() {
     const fileSystem = this.getParent().getFileSystem()
-    return fileSystem.getFileExports(this.getAbsolutePath())
+    return fileSystem.getFileExports(this.absolutePath)
   }
 
   /** Get all exports from the JavaScript file. */
@@ -2078,12 +2073,12 @@ export class JavaScriptFile<
 
     if (this.#loader === undefined) {
       throw new Error(
-        `[renoun] JavaScript file export "${name}" could not be determined statically or at runtime for path "${this.getAbsolutePath()}". Ensure the directory has a loader defined for resolving "${this.getExtension()}" files.`
+        `[renoun] JavaScript file export "${name}" could not be determined statically or at runtime for path "${this.absolutePath}". Ensure the directory has a loader defined for resolving "${this.extension}" files.`
       )
     }
 
     throw new ModuleExportNotFoundError(
-      this.getAbsolutePath(),
+      this.absolutePath,
       name,
       'JavaScript'
     )
@@ -2214,7 +2209,7 @@ export class JavaScriptFile<
   /** Get the `//#region` spans in the JavaScript file. */
   async getRegions(): Promise<FileRegion[]> {
     const fileSystem = this.getParent().getFileSystem()
-    return fileSystem.getFileRegions(this.getAbsolutePath())
+    return fileSystem.getFileRegions(this.absolutePath)
   }
 
   override async getStructure(): Promise<FileStructure> {
@@ -2360,7 +2355,7 @@ export class MDXModuleExport<Value> {
                 .join('\n')
 
               throw new Error(
-                `[renoun] Schema validation failed for export "${name}" at file path: "${this.#file.getAbsolutePath()}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
+                `[renoun] Schema validation failed for export "${name}" at file path: "${this.#file.absolutePath}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
               )
             }
 
@@ -2371,7 +2366,7 @@ export class MDXModuleExport<Value> {
         } catch (error) {
           if (error instanceof Error) {
             throw new Error(
-              `[renoun] Schema validation failed to parse export "${name}" at file path: "${this.#file.getAbsolutePath()}"\n\nThe following error occurred:\n${error.message}`
+              `[renoun] Schema validation failed to parse export "${name}" at file path: "${this.#file.absolutePath}"\n\nThe following error occurred:\n${error.message}`
             )
           }
         }
@@ -2397,7 +2392,7 @@ export class MDXModuleExport<Value> {
 
     if (value === undefined) {
       throw new Error(
-        `[renoun] Export cannot be statically analyzed at file path "${this.#file.getRelativePathToRoot()}".`
+        `[renoun] Export cannot be statically analyzed at file path "${this.#file.relativePath}".`
       )
     }
 
@@ -2431,7 +2426,7 @@ export class MDXModuleExport<Value> {
 
     if (fileModuleExport === undefined) {
       throw new Error(
-        `[renoun] MDX file export "${this.#name}" not found in ${this.#file.getAbsolutePath()}`
+        `[renoun] MDX file export "${this.#name}" not found in ${this.#file.absolutePath}`
       )
     }
 
@@ -2455,14 +2450,14 @@ export class MDXModuleExport<Value> {
 
   #getModule() {
     if (this.#loader === undefined) {
-      const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+      const parentPath = this.#file.getParent().workspacePath
 
       throw new Error(
         `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
-    const path = removeExtension(this.#file.getRelativePathToRoot())
+    const path = removeExtension(this.#file.relativePath)
 
     if (isLoader(this.#loader)) {
       return unwrapModuleResult<any>(this.#loader(path, this.#file))
@@ -2472,7 +2467,7 @@ export class MDXModuleExport<Value> {
       return unwrapModuleResult<any>(this.#loader.runtime(path, this.#file))
     }
 
-    const parentPath = this.#file.getParent().getRelativePathToWorkspace()
+    const parentPath = this.#file.getParent().workspacePath
 
     throw new Error(
       `[renoun] An mdx runtime loader for the parent Directory at ${parentPath} is not defined.`
@@ -2612,7 +2607,7 @@ export class MDXFile<
     const fileModule = await this.#getModule()
 
     if (!(name in fileModule)) {
-      throw new ModuleExportNotFoundError(this.getAbsolutePath(), name, 'MDX')
+      throw new ModuleExportNotFoundError(this.absolutePath, name, 'MDX')
     }
 
     const fileExport = new MDXModuleExport<
@@ -2712,14 +2707,14 @@ export class MDXFile<
 
   #getModule() {
     if (this.#loader === undefined) {
-      const parentPath = this.getParent().getRelativePathToRoot()
+      const parentPath = this.getParent().relativePath
 
       throw new Error(
         `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
       )
     }
 
-    const path = removeExtension(this.getRelativePathToRoot())
+    const path = removeExtension(this.relativePath)
     const loader = this.#loader
     let executeModuleLoader: () => Promise<any>
 
@@ -2727,7 +2722,7 @@ export class MDXFile<
       executeModuleLoader = () => unwrapModuleResult(loader(path, this))
     } else if (isLoaderWithSchema(loader)) {
       if (!loader.runtime) {
-        const parentPath = this.getParent().getRelativePathToWorkspace()
+        const parentPath = this.getParent().workspacePath
 
         throw new Error(
           `[renoun] An mdx runtime loader for the parent Directory at ${parentPath} is not defined.`
@@ -2737,7 +2732,7 @@ export class MDXFile<
       executeModuleLoader = () => (loader.runtime as any)(path, this)
     } else {
       throw new Error(
-        `[renoun] This loader is missing an mdx runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
+        `[renoun] This loader is missing an mdx runtime for the parent Directory at ${this.getParent().workspacePath}.`
       )
     }
 
@@ -2850,7 +2845,7 @@ export class MarkdownFile<
   }
 
   #getModule() {
-    const path = removeExtension(this.getRelativePathToRoot())
+    const path = removeExtension(this.relativePath)
     const loader = this.#loader
     let executeModuleLoader: () => Promise<any>
 
@@ -2860,7 +2855,7 @@ export class MarkdownFile<
       }
     } else if (isLoaderWithSchema(loader)) {
       if (!loader.runtime) {
-        const parentPath = this.getParent().getRelativePathToWorkspace()
+        const parentPath = this.getParent().workspacePath
         throw new Error(
           `[renoun] A markdown runtime loader for the parent Directory at ${parentPath} is not defined.`
         )
@@ -2870,7 +2865,7 @@ export class MarkdownFile<
       }
     } else {
       throw new Error(
-        `[renoun] This loader is missing a markdown runtime for the parent Directory at ${this.getParent().getRelativePathToWorkspace()}.`
+        `[renoun] This loader is missing a markdown runtime for the parent Directory at ${this.getParent().workspacePath}.`
       )
     }
 
@@ -2925,7 +2920,7 @@ export class MarkdownFile<
     const fileModule = await this.#getModule()
     if (!(name in fileModule)) {
       throw new ModuleExportNotFoundError(
-        this.getAbsolutePath(),
+        this.absolutePath,
         name as any,
         'Markdown'
       )
@@ -3161,7 +3156,7 @@ export class Directory<
               return pattern.recursive
             }
             if (entry instanceof File) {
-              return extensions.has(entry.getExtension())
+              return extensions.has(entry.extension)
             }
             return true
           }
@@ -3196,7 +3191,7 @@ export class Directory<
         return true
       }
 
-      return this.#filter.match(entry.getRelativePathToRoot())
+      return this.#filter.match(entry.relativePath)
     }
 
     // Cache decisions for non-Minimatch predicates (can be async/expensive)
@@ -3218,7 +3213,7 @@ export class Directory<
     entry: FileSystemEntry<LoaderTypes>
   ): Promise<boolean> {
     if (entry instanceof JavaScriptFile) {
-      const extension = entry.getExtension()
+      const extension = entry.extension
 
       if (extension === 'ts' || extension === 'tsx') {
         const fileSystem = entry.getParent().getFileSystem()
@@ -3226,7 +3221,7 @@ export class Directory<
           return true
         }
         const allExports = await fileSystem.getFileExports(
-          entry.getAbsolutePath()
+          entry.absolutePath
         )
         if (allExports.length === 0) {
           return true
@@ -3416,7 +3411,7 @@ export class Directory<
     // Fast path try direct path lookup without hydrating the directory.
     if (segments.length > 0) {
       const directoryWorkspacePath = directory
-        .getRelativePathToWorkspace()
+        .workspacePath
         .replace(/^\.\/?/, '')
         .replace(/\/$/, '')
       const targetPath =
@@ -3429,7 +3424,7 @@ export class Directory<
         // to ensure sibling files are preferred (e.g., "integrations.mdx" over "integrations/").
         if (!remainingSegments.length) {
           if (hit instanceof File) {
-            if (allExtensions && !allExtensions.includes(hit.getExtension())) {
+            if (allExtensions && !allExtensions.includes(hit.extension)) {
               // Fall through to regular resolution when extension doesn't match.
             } else {
               return hit
@@ -3443,7 +3438,7 @@ export class Directory<
             return this.#findEntry(hit, remainingSegments, allExtensions)
           }
           if (hit instanceof File) {
-            if (allExtensions && !allExtensions.includes(hit.getExtension())) {
+            if (allExtensions && !allExtensions.includes(hit.extension)) {
               // Fall through to regular resolution when extension doesn't match.
             } else {
               return hit
@@ -3474,14 +3469,14 @@ export class Directory<
       let matchingFileWithModifier: File<LoaderTypes> | undefined
       for (const entry of entries) {
         if (!(entry instanceof File)) continue
-        const baseSlug = createSlug(entry.getBaseName(), this.#slugCasing)
+        const baseSlug = createSlug(entry.baseName, this.#slugCasing)
         if (baseSlug !== currentSegment) continue
         // If extensions were specified, only consider matching files.
-        if (allExtensions && !allExtensions.includes(entry.getExtension())) {
+        if (allExtensions && !allExtensions.includes(entry.extension)) {
           continue
         }
         // Prefer files without modifiers over files with modifiers.
-        if (!entry.getModifierName()) {
+        if (!entry.kind) {
           matchingFile = entry
         } else if (!matchingFileWithModifier) {
           matchingFileWithModifier = entry
@@ -3496,7 +3491,7 @@ export class Directory<
     }
 
     for (const entry of entries) {
-      const baseSlug = createSlug(entry.getBaseName(), this.#slugCasing)
+      const baseSlug = createSlug(entry.baseName, this.#slugCasing)
 
       if (entry instanceof Directory && baseSlug === currentSegment) {
         if (remainingSegments.length === 0) {
@@ -3511,9 +3506,9 @@ export class Directory<
         continue
       }
 
-      const modifier = entry.getModifierName()
+      const modifier = entry.kind
       const matchesExtension = allExtensions
-        ? allExtensions.includes(entry.getExtension())
+        ? allExtensions.includes(entry.extension)
         : true
 
       // e.g. "Button/examples" → modifier must match the tail segment
@@ -3532,7 +3527,7 @@ export class Directory<
         // Prefer the base file, fall back to file‑with‑modifier if nothing else
         if (
           !fallback ||
-          (fallback instanceof File && fallback.getModifierName())
+          (fallback instanceof File && fallback.kind)
         ) {
           fallback = entry
         }
@@ -3548,9 +3543,9 @@ export class Directory<
     }
 
     throw new FileNotFoundError(segments.join('/'), allExtensions, {
-      directoryPath: directory.getRelativePathToWorkspace(),
+      directoryPath: directory.workspacePath,
       rootPath: directory.getRootPath(),
-      nearestCandidates: entries.map((entry) => entry.getBaseName()),
+      nearestCandidates: entries.map((entry) => entry.baseName),
     })
   }
 
@@ -3631,8 +3626,8 @@ export class Directory<
       cachedFile instanceof File &&
       (!extension ||
         (Array.isArray(extension)
-          ? extension.includes(cachedFile.getExtension())
-          : extension === cachedFile.getExtension()))
+          ? extension.includes(cachedFile.extension)
+          : extension === cachedFile.extension))
     ) {
       return cachedFile
     }
@@ -3677,7 +3672,7 @@ export class Directory<
 
     if (segments.length === 0) {
       throw new FileNotFoundError(rawPath, allExtensions, {
-        directoryPath: this.getRelativePathToWorkspace(),
+        directoryPath: this.workspacePath,
         rootPath: this.getRootPath(),
       })
     }
@@ -3708,15 +3703,15 @@ export class Directory<
           continue
         }
 
-        const baseName = directoryEntry.getBaseName()
-        const extension = directoryEntry.getExtension()
+        const baseName = directoryEntry.baseName
+        const extension = directoryEntry.extension
         const hasValidExtension = allExtensions
           ? allExtensions.includes(extension)
           : true
 
         // Check for file that shares the directory name
-        if (baseName === entry.getBaseName() && hasValidExtension) {
-          if (!directoryEntry.getModifierName()) {
+        if (baseName === entry.baseName && hasValidExtension) {
+          if (!directoryEntry.kind) {
             // Prefer file without modifier (e.g. Link.tsx)
             sameNameNoModifier = directoryEntry
           } else if (!sameNameWithModifier) {
@@ -3752,10 +3747,10 @@ export class Directory<
         entry = anyMatchingFile
       } else {
         throw new FileNotFoundError(rawPath, allExtensions, {
-          directoryPath: entry.getRelativePathToWorkspace(),
+          directoryPath: entry.workspacePath,
           rootPath: entry.getRootPath(),
           nearestCandidates: directoryEntries.map((entry) =>
-            entry.getBaseName()
+            entry.baseName
           ),
         })
       }
@@ -3766,7 +3761,7 @@ export class Directory<
     }
 
     throw new FileNotFoundError(rawPath, allExtensions, {
-      directoryPath: this.getRelativePathToWorkspace(),
+      directoryPath: this.workspacePath,
       rootPath: this.getRootPath(),
     })
   }
@@ -3791,7 +3786,7 @@ export class Directory<
 
       for (const currentEntry of allEntries) {
         const baseSegment = createSlug(
-          currentEntry.getBaseName(),
+          currentEntry.baseName,
           this.#slugCasing
         )
 
@@ -3806,7 +3801,7 @@ export class Directory<
 
       if (!entry || !(entry instanceof Directory)) {
         throw new FileNotFoundError(path, undefined, {
-          directoryPath: this.getRelativePathToWorkspace(),
+          directoryPath: this.workspacePath,
           rootPath: this.getRootPath(),
         })
       }
@@ -3855,7 +3850,7 @@ export class Directory<
   ): Promise<FileSystemEntry<LoaderTypes>> {
     try {
       const directory = await this.getDirectory(path)
-      const directoryBaseName = directory.getBaseName()
+      const directoryBaseName = directory.baseName
       let sameNamedSibling: File<LoaderTypes> | undefined
 
       try {
@@ -3864,7 +3859,7 @@ export class Directory<
           const sibling = await parentDirectory.getFile(directoryBaseName)
           if (
             sibling instanceof File &&
-            sibling.getBaseName() === directoryBaseName
+            sibling.baseName === directoryBaseName
           ) {
             sameNamedSibling = sibling as File<LoaderTypes>
           }
@@ -3887,7 +3882,7 @@ export class Directory<
       })
 
       for (const entry of entries) {
-        const entryBaseName = entry.getBaseName()
+        const entryBaseName = entry.baseName
         if (
           entry instanceof File &&
           (entryBaseName === directoryBaseName ||
@@ -3923,7 +3918,7 @@ export class Directory<
     this.#pathLookup.set(normalizedPath, entry)
     // Also index by workspace-relative filesystem path so lookups by raw path
     // (e.g. "fixtures/docs/index") can short-circuit hydration.
-    const workspacePath = entry.getRelativePathToWorkspace()
+    const workspacePath = entry.workspacePath
     const normalizedWorkspacePath = workspacePath
       .replace(/^\.\/?/, '')
       .replace(/\/$/, '')
@@ -4040,13 +4035,13 @@ export class Directory<
   }
 
   async getStructure(): Promise<Array<DirectoryStructure | FileStructure>> {
-    const relativePath = this.getRelativePathToWorkspace()
+    const relativePath = this.workspacePath
     const path = this.getPathname()
 
     const structures: Array<DirectoryStructure | FileStructure> = [
       {
         type: 'directory',
-        name: this.getName(),
+        name: this.name,
         title: this.getTitle(),
         slug: this.getSlug(),
         path,
@@ -4270,7 +4265,7 @@ export class Directory<
         entry.name.toLowerCase().startsWith(name)
       )
       const isDirectoryNamedFile =
-        removeAllExtensions(entry.name) === directory.getBaseName()
+        removeAllExtensions(entry.name) === directory.baseName
 
       let includeInFinal = true
 
@@ -4400,12 +4395,12 @@ export class Directory<
       })
 
       if (options.recursive) {
-        const directoryBaseName = directoryEntry.getBaseName()
+        const directoryBaseName = directoryEntry.baseName
         for (const childEntry of childrenEntries) {
           const isDirectoryNamedFile =
             childEntry instanceof File &&
             childEntry.getParent() === directoryEntry &&
-            childEntry.getBaseName() === directoryBaseName &&
+            childEntry.baseName === directoryBaseName &&
             !options.includeDirectoryNamedFiles
 
           if (!isDirectoryNamedFile) {
@@ -4477,22 +4472,22 @@ export class Directory<
 
   /** Get the slug of this directory. */
   getSlug() {
-    return createSlug(this.getBaseName(), this.#slugCasing)
+    return createSlug(this.baseName, this.#slugCasing)
   }
 
-  /** Get the base name of this directory. */
-  getName() {
-    return this.getBaseName()
+  /** The directory name. */
+  get name() {
+    return this.baseName
   }
 
-  /** Get the base name of this directory. */
-  getBaseName() {
+  /** The base name of this directory. */
+  get baseName() {
     return removeOrderPrefixes(baseName(this.#path))
   }
 
   /** The directory name formatted as a title. */
   getTitle() {
-    return formatNameAsTitle(this.getName())
+    return formatNameAsTitle(this.name)
   }
 
   /** Get a URL-friendly path to this directory. */
@@ -4525,19 +4520,19 @@ export class Directory<
     return this.getPathname(options).split('/').filter(Boolean)
   }
 
-  /** Get the relative path of this directory to the root directory. */
-  getRelativePathToRoot() {
+  /** The relative path of this directory to the root directory. */
+  get relativePath() {
     const rootPath = this.getRootPath()
     return rootPath ? relativePath(rootPath, this.#path) : this.#path
   }
 
-  /** Get the relative path of the directory to the workspace. */
-  getRelativePathToWorkspace() {
+  /** The relative path of the directory to the workspace. */
+  get workspacePath() {
     return this.getFileSystem().getRelativePathToWorkspace(this.#path)
   }
 
-  /** Get the absolute path of this directory. */
-  getAbsolutePath() {
+  /** The absolute path of this directory. */
+  get absolutePath() {
     return this.getFileSystem().getAbsolutePath(this.#path)
   }
 
@@ -4547,7 +4542,7 @@ export class Directory<
     options?: Omit<GetDirectoryUrlOptions, 'path'>
   ) {
     return this.getRepository(repository).getDirectoryUrl({
-      path: this.getRelativePathToWorkspace(),
+      path: this.workspacePath,
       ...options,
     })
   }
@@ -4591,7 +4586,7 @@ export class Directory<
   /** Get the URI to the directory source code for the configured editor. */
   getEditorUri(options?: Pick<GetEditorUriOptions, 'editor'>) {
     return getEditorUri({
-      path: this.getAbsolutePath(),
+      path: this.absolutePath,
       editor: options?.editor,
     })
   }
@@ -4660,7 +4655,7 @@ export class Directory<
     if (entry instanceof File && this.hasEntry(entry)) {
       if (extension) {
         for (const fileExtension of extensions) {
-          if (entry.getExtension() === fileExtension) {
+          if (entry.extension === fileExtension) {
             return true
           }
         }
@@ -4719,7 +4714,7 @@ export class Collection<
 
     async function findEntries(entries: FileSystemEntry<any>[]) {
       for (const entry of entries) {
-        const lowerCaseBaseName = entry.getBaseName().toLowerCase()
+        const lowerCaseBaseName = entry.baseName.toLowerCase()
         const shouldSkipIndexOrReadme = options?.includeIndexAndReadmeFiles
           ? false
           : ['index', 'readme'].some((name) =>
@@ -4764,7 +4759,7 @@ export class Collection<
     const rootPath = normalizedPath.at(0)
 
     for (const entry of this.#entries) {
-      const baseName = entry.getBaseName()
+      const baseName = entry.baseName
       const isRootDirectory = baseName === '.'
 
       if (isRootDirectory || baseName === rootPath) {
@@ -4836,7 +4831,7 @@ export class Collection<
       typeof rootPath === 'string' ? removeAllExtensions(rootPath) : rootPath
 
     for (const entry of this.#entries) {
-      const baseName = entry.getBaseName()
+      const baseName = entry.baseName
       const isRootDirectory = baseName === '.'
 
       if (isRootDirectory || baseName === rootBaseName) {
@@ -4862,7 +4857,7 @@ export class Collection<
               ? extension
               : [extension]
 
-            if (fileExtensions.includes(entry.getExtension() as Extension)) {
+            if (fileExtensions.includes(entry.extension as Extension)) {
               return entry as any
             }
           }
@@ -4884,7 +4879,7 @@ export class Collection<
     const rootPath = normalizedPath.at(0)
 
     for (const entry of this.#entries) {
-      const baseName = entry.getBaseName()
+      const baseName = entry.baseName
       const isRootDirectory = baseName === '.'
 
       if (isRootDirectory || baseName === rootPath) {
@@ -4960,7 +4955,7 @@ export function isFile<
   extension?: Extension
 ): entry is FileWithExtension<Types, Extension> {
   if (entry instanceof File) {
-    const fileExtension = entry.getExtension()
+    const fileExtension = entry.extension
 
     if (extension instanceof Array) {
       for (const possibleExtension of extension) {
@@ -5127,7 +5122,7 @@ export type SortDescriptor<Entry extends FileSystemEntry<any>> =
   | SortDescriptorObject<EntryTypes<Entry>, Entry>
 
 function keyName(entry: FileSystemEntry<any>) {
-  return entry.getBaseName().toLowerCase()
+  return entry.baseName.toLowerCase()
 }
 
 /** Builds a key extractor for an `export.x.y` path. */
@@ -5763,7 +5758,7 @@ function resolveSearchStartDirectory(
   directory?: Directory<any, any, any> | PathLike
 ) {
   if (isDirectoryInstance(directory)) {
-    return normalizeSlashes(directory.getAbsolutePath())
+    return normalizeSlashes(directory.absolutePath)
   }
 
   if (directory) {
