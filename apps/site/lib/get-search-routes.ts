@@ -31,7 +31,7 @@ async function getEntryMetadata(entry: FileSystemEntry<any>) {
 }
 
 async function getFileLabel(entry: FileSystemEntry<any>) {
-  const name = entry.getBaseName()
+  const name = entry.baseName
   if (name.includes('-') && isJavaScriptFile(entry)) {
     try {
       const fileExports: any[] = await (entry as any).getExports()
@@ -45,7 +45,7 @@ async function getFileLabel(entry: FileSystemEntry<any>) {
 }
 
 function getDirectoryLabel(entry: FileSystemEntry<any>) {
-  return entry.getBaseName()
+  return entry.baseName
 }
 
 async function getRouteTitle(entry: FileSystemEntry<any>) {
@@ -55,14 +55,12 @@ async function getRouteTitle(entry: FileSystemEntry<any>) {
   else if (metadata?.title) title = metadata.title
   else if (isDirectory(entry)) title = getDirectoryLabel(entry)
   else if (isJavaScriptFile(entry)) title = await getFileLabel(entry)
-  else title = entry.getBaseName()
-  let order = metadata?.order ?? (entry as any).getOrder?.()
+  else title = entry.baseName
+  let order = metadata?.order ?? (entry as any).order
   if (order === undefined) {
     try {
       const file = await resolveFileFromEntry(entry)
-      if (file && typeof (file as any).getOrder === 'function') {
-        order = (file as any).getOrder()
-      }
+      if (file) order = (file as any).order
     } catch {
       // ignore inability to resolve file
     }
@@ -110,7 +108,7 @@ async function getApiRoutes(
   if (!isJavaScriptFile(entry)) return []
 
   // Skip modifier files such as *.examples.tsx which do not render reference sections.
-  if (typeof entry.getModifierName === 'function' && entry.getModifierName()) {
+  if ('kind' in entry && entry.kind) {
     return []
   }
 

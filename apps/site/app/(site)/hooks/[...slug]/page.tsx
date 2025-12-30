@@ -36,7 +36,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
   const mdxSections = await mdxFile?.getSections()
   const Content = await mdxFile?.getContent()
   const mainExport = await hookEntry
-    .getExport<any>(hookEntry.getBaseName())
+    .getExport<any>(hookEntry.baseName)
     .catch((error) => {
       if (error instanceof ModuleExportNotFoundError) {
         return undefined
@@ -108,7 +108,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
     })
   }
 
-  const baseName = hookEntry.getBaseName()
+  const baseName = hookEntry.baseName
   const title = baseName.includes('-')
     ? hookExports?.length
       ? hookExports[0].getName()

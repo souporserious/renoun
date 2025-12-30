@@ -40,7 +40,7 @@ export default async function Component(
   const mdxSections = await mdxFile?.getSections()
   const Content = await mdxFile?.getContent()
   const mainExport = await componentEntry
-    .getExport<any>(componentEntry.getBaseName())
+    .getExport<any>(componentEntry.baseName)
     .catch((error) => {
       if (error instanceof ModuleExportNotFoundError) {
         return undefined
@@ -80,7 +80,7 @@ export default async function Component(
       })
       exampleFiles = entries.filter(
         (entry): entry is JavaScriptFile<any> =>
-          isFile(entry, 'tsx') && entry.getModifierName() === 'examples'
+          isFile(entry, 'tsx') && entry.kind === 'examples'
       )
     } catch {
       // If no directory exists for this slug, there are no co-located examples
@@ -94,7 +94,7 @@ export default async function Component(
     : []
   // Optionally pick up a co-located layout/default export from a *.examples file
   const layoutCandidate = exampleFiles?.find(
-    (file) => file.getModifierName() === 'examples'
+    (file) => file.kind === 'examples'
   )
   const layoutExport = layoutCandidate
     ? await layoutCandidate.getExport('default').catch((error) => {
@@ -150,7 +150,7 @@ export default async function Component(
     })
   }
 
-  const baseName = componentEntry.getBaseName()
+  const baseName = componentEntry.baseName
   // If base name is kebab case, use the first export name as the title
   const title = baseName.includes('-')
     ? componentExports?.length

@@ -29,7 +29,7 @@ export async function DocumentEntry({
     : null
   let [previousEntry, nextEntry] = await file.getSiblings({ collection })
 
-  if (previousEntry?.getBaseName() === 'docs') {
+  if (previousEntry?.baseName === 'docs') {
     previousEntry = undefined
   }
 

@@ -49,6 +49,7 @@
     "@next/mdx": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@tailwindcss/typography": "catalog:",
+    "geist": "catalog:",
     "restyle": "catalog:",
     "tailwindcss": "catalog:",
     "tm-themes": "catalog:",

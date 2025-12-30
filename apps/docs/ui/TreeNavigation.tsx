@@ -76,7 +76,7 @@ export function TreeNavigation({
       if (variant === 'title') {
         label = metadata?.label || metadata?.title || entry.getTitle()
       } else {
-        label = isDirectory(entry) ? entry.getBaseName() : entry.getBaseName()
+        label = isDirectory(entry) ? entry.baseName : entry.baseName
       }
 
       return (

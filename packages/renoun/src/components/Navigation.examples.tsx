@@ -31,7 +31,7 @@ export function BasicUsage() {
         Link: ({ entry, depth, pathname, ...props }) => {
           return (
             <a {...props} href={pathname}>
-              {entry.getName()}
+              {entry.name}
             </a>
           )
         },

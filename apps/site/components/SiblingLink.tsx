@@ -35,7 +35,7 @@ export async function SiblingLink({
         throw error
       })
     : undefined
-  let baseName = entry.getBaseName()
+  let baseName = entry.baseName
   let javaScriptFile = isJavaScriptFile(file)
     ? file
     : isJavaScriptFile(entry)

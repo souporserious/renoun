@@ -129,7 +129,7 @@ async function getEntryMetadata(entry: FileSystemEntry<any>) {
 }
 
 async function getFileLabel(entry: FileSystemEntry<any>) {
-  const name = entry.getBaseName()
+  const name = entry.baseName
 
   // If the file name is kebab-case, use the first export as the label if possible.
   if (name.includes('-') && isJavaScriptFile(entry)) {
@@ -146,5 +146,5 @@ async function getFileLabel(entry: FileSystemEntry<any>) {
 }
 
 function getDirectoryLabel(entry: Directory<any>) {
-  return entry.getBaseName()
+  return entry.baseName
 }
