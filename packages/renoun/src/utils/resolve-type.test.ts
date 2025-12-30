@@ -20399,6 +20399,27 @@ describe('resolveType', () => {
     `)
   })
 
+  test('resolves intrinsic object type without ObjectKeyword node', () => {
+    const sourceFile = project.createSourceFile(
+      'intrinsic-object.ts',
+      dedent`
+        export declare function make<Type extends object>(): Type
+        export const value = make()
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('value')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved?.kind).toBe('Variable')
+    if (resolved?.kind !== 'Variable') {
+      throw new Error('Expected variable declaration')
+    }
+    expect(resolved.type.kind).toBe('Object')
+    expect(resolved.type.text).toBe('object')
+  })
+
   test('resolves parameters for JSDoc callback types', () => {
     const project = new Project({
       compilerOptions: { allowJs: true, checkJs: true },

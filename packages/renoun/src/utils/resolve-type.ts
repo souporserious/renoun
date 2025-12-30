@@ -3779,6 +3779,13 @@ function resolveTypeExpression(
         resolvedType = {
           kind: 'Object',
           text: typeText,
+          ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
+        } satisfies Kind.Object
+      } else if (isIntrinsicObjectType(type, enclosingNode)) {
+        resolvedType = {
+          kind: 'Object',
+          text: 'object',
+          ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
         } satisfies Kind.Object
       } else {
         throw new UnresolvedTypeExpressionError(type, enclosingNode)
@@ -6605,6 +6612,37 @@ function resolvePrimitiveType(
     ...resolvedType,
     ...(enclosingNode ? getDeclarationLocation(enclosingNode) : {}),
   }
+}
+
+function isIntrinsicObjectType(type: Type, enclosingNode?: Node): boolean {
+  // Prefer the compiler's intrinsicName when available.
+  // `object` is represented as an intrinsic non-primitive type.
+  const compilerType = type.compilerType as any
+  if (typeof compilerType?.intrinsicName === 'string') {
+    return compilerType.intrinsicName === 'object'
+  }
+
+  const flags = type.getFlags()
+  const isNonPrimitive = Boolean(flags & tsMorph.ts.TypeFlags.NonPrimitive)
+
+  if (!isNonPrimitive) {
+    return false
+  }
+
+  // Avoid misclassifying structured object types.
+  // Intrinsic `object` has no members and no symbol.
+  if (type.getSymbol() || type.getAliasSymbol()) {
+    return false
+  }
+
+  if (type.getProperties().length > 0) {
+    return false
+  }
+
+  // As a last-resort sanity check, ensure the emitted keyword matches.
+  // This should be stable across TS versions.
+  const text = type.getText(enclosingNode, TYPE_FORMAT_FLAGS)
+  return text === 'object'
 }
 
 /**
