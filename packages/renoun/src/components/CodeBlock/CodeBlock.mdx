@@ -2,48 +2,30 @@ Supports both static code strings and custom rendering via `Tokens`, `LineNumber
 
 In development, the component uses a Suspense fallback to render immediately while asynchronous syntax highlighting and analysis load in the background. In production, it renders the fully-resolved code block directly.
 
-## Style Overrides
+## Component Overrides
 
-The `CodeBlock` component can be styled using the, `css`, `className`, and `style` props to target specific descendant components. In most cases, its a good idea to create your own component that wraps the `CodeBlock` component and applies the style overrides you need:
+The `CodeBlock` component supports a `components` prop to override any of the internal elements (such as `Container`, `Toolbar`, `Pre`, `LineNumbers`, `Tokens`, `CopyButton`, and `Code`). In most cases, its a good idea to create your own component that wraps the `CodeBlock` component and applies the overrides you need:
 
 ```tsx
-import {
-  type CodeBlockProps,
-  CodeBlock as DefaultCodeBlock,
-  Tokens,
-} from 'renoun'
+import { type CodeBlockProps, CodeBlock as DefaultCodeBlock, Toolbar } from 'renoun'
 import styles from './CodeBlock.module.css'
 
 export function CodeBlock(props: CodeBlockProps) {
   return (
     <DefaultCodeBlock
       {...props}
-      css={{
-        // Clear the default styles
-        container: {
-          boxShadow: undefined,
-          borderRadius: undefined,
-        },
-        ...props.css,
-      }}
-      className={{
-        container: styles.container,
-        token: styles.token,
-        ...props.className,
+      components={{
+        Container: (containerProps) => (
+          <div {...containerProps} className={styles.container} />
+        ),
+        Toolbar: (toolbarProps) => (
+          <Toolbar {...toolbarProps} className={styles.toolbar} />
+        ),
       }}
     />
   )
 }
 ```
-
-<Note>
-
-Not every component's styles can be overridden. See the following section for
-fully customizing the rendering of the `CodeBlock` component.
-
-</Note>
-
-## Component Overrides
 
 If you need more customization, the `CodeBlock` component can be fully overridden by importing it from `renoun` and extending it as needed:
 

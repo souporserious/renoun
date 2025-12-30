@@ -115,19 +115,21 @@ export const MDXComponents = {
     return (
       <Command
         variant={variant}
-        css={{
-          container: {
-            fontSize: 'var(--font-size-code-2)',
-            lineHeight: 'var(--line-height-code-2)',
-            width: 'calc(100% + 2rem)',
-            margin: '0 -1rem',
+        components={{
+          Container: {
+            css: {
+              fontSize: 'var(--font-size-code-2)',
+              lineHeight: 'var(--line-height-code-2)',
+              width: 'calc(100% + 2rem)',
+              margin: '0 -1rem',
+            },
+            className: GeistMono.className,
           },
-          tabPanel: {
-            padding: '0.75rem 1rem',
+          TabPanel: {
+            css: {
+              padding: '0.75rem 1rem',
+            },
           },
-        }}
-        className={{
-          container: GeistMono.className,
         }}
       >
         {children}

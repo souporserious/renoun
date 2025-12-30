@@ -15,13 +15,14 @@ export default function ScreenshotPage() {
         <CodeBlock
           allowErrors
           language="tsx"
-          css={{
-            container: {
-              width: '100%',
-              margin: 0,
-              padding: '1rem',
-              fontSize: '0.75rem',
-              lineHeight: '1.5',
+          components={{
+            Container: {
+              css: {
+                width: '100%',
+                margin: 0,
+                fontSize: '0.75rem',
+                lineHeight: '1.5',
+              },
             },
           }}
         >

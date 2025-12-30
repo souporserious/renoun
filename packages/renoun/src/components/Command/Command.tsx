@@ -4,6 +4,10 @@ import { styled, type CSSObject } from 'restyle'
 import { getThemeColors } from '../../utils/get-theme.ts'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
 import { Tokens } from '../CodeBlock/Tokens.ts'
+import {
+  normalizeSlotComponents,
+  type SlotComponentOrProps,
+} from '../../utils/slot-components.ts'
 import { CopyCommand } from './CopyCommand.ts'
 import { CommandClient } from './CommandClient.ts'
 
@@ -194,35 +198,8 @@ export interface CommandProps {
   /** Whether the command should validate the npm package before rendering. */
   shouldValidate?: boolean
 
-  /** Override styles for each part of the component. */
-  css?: {
-    container?: CSSObject
-    tabs?: CSSObject
-    tabButton?: CSSObject
-    tabPanel?: CSSObject
-    copyButton?: CSSObject
-    code?: CSSObject
-  }
-
-  /** Override class names for each part of the component. */
-  className?: {
-    container?: string
-    tabs?: string
-    tabButton?: string
-    tabPanel?: string
-    copyButton?: string
-    code?: string
-  }
-
-  /** Inline style overrides for each part of the component. */
-  style?: {
-    container?: React.CSSProperties
-    tabs?: React.CSSProperties
-    tabButton?: React.CSSProperties
-    tabPanel?: React.CSSProperties
-    copyButton?: React.CSSProperties
-    code?: React.CSSProperties
-  }
+  /** Override the components and/or props for each slot. */
+  components?: Partial<CommandComponentOverrides>
 }
 
 interface CommandAsyncProps extends Omit<CommandProps, 'children'> {
@@ -279,6 +256,46 @@ const StyledCopyCommand = styled(CopyCommand, {
   marginLeft: 'auto',
 })
 
+type ContainerProps = React.ComponentProps<'div'> & { css?: CSSObject }
+type TabsProps = React.ComponentProps<'div'> & { css?: CSSObject }
+type TabButtonProps = React.ComponentProps<'button'> & { css?: CSSObject }
+type TabPanelProps = React.ComponentProps<'pre'> & { css?: CSSObject }
+type CodeProps = React.ComponentProps<'code'> & { css?: CSSObject }
+type CopyButtonProps = React.ComponentProps<typeof CopyCommand>
+
+export type CommandComponents = {
+  Container: React.ComponentType<ContainerProps>
+  Tabs: React.ComponentType<TabsProps>
+  TabButton: React.ComponentType<TabButtonProps>
+  TabPanel: React.ComponentType<TabPanelProps>
+  CopyButton: React.ComponentType<CopyButtonProps>
+  Code: React.ComponentType<CodeProps>
+}
+
+export type CommandComponentOverrides = {
+  Container: SlotComponentOrProps<ContainerProps>
+  Tabs: SlotComponentOrProps<TabsProps>
+  TabButton: SlotComponentOrProps<TabButtonProps>
+  TabPanel: SlotComponentOrProps<TabPanelProps>
+  CopyButton: SlotComponentOrProps<CopyButtonProps>
+  Code: SlotComponentOrProps<CodeProps>
+}
+
+function normalizeComponents(
+  overrides: Partial<CommandComponentOverrides> | undefined
+): CommandComponents {
+  const defaultComponents: CommandComponents = {
+    Container,
+    Tabs,
+    TabButton,
+    TabPanel,
+    CopyButton: StyledCopyCommand,
+    Code,
+  }
+
+  return normalizeSlotComponents(defaultComponents, overrides as any)
+}
+
 function getChildrenText(children: React.ReactNode): string {
   const parts: string[] = []
   React.Children.forEach(children, (child) => {
@@ -296,9 +313,7 @@ async function CommandAsync({
   variant,
   command: subject,
   shouldValidate,
-  css,
-  className,
-  style,
+  components: componentsProp,
 }: CommandAsyncProps) {
   if (shouldValidate) {
     await validatePackages(variant, subject)
@@ -307,21 +322,28 @@ async function CommandAsync({
   const config = await getConfig()
   const theme = await getThemeColors(config.theme)
 
+  const components = normalizeComponents(componentsProp)
+  const {
+    Container: ContainerComponent,
+    Tabs: TabsComponent,
+    TabButton: TabButtonComponent,
+    TabPanel: TabPanelComponent,
+    CopyButton: CopyButtonComponent,
+    Code: CodeComponent,
+  } = components
+
   const tabs = (
-    <Tabs
+    <TabsComponent
       role="tablist"
       aria-orientation="horizontal"
       data-command-group={id}
       css={{
         boxShadow: `inset 0 -1px 0 0 ${theme.panel.border}`,
-        ...css?.tabs,
       }}
-      className={className?.tabs}
-      style={style?.tabs}
     >
       {PACKAGE_MANAGERS.map((packageManager) => {
         return (
-          <TabButton
+          <TabButtonComponent
             key={packageManager}
             role="tab"
             id={`${id}-${packageManager}-tab`}
@@ -331,33 +353,27 @@ async function CommandAsync({
             data-command-group={id}
             css={{
               color: theme.activityBar.foreground,
-              ...css?.tabButton,
             }}
-            className={className?.tabButton}
-            style={style?.tabButton}
             suppressHydrationWarning
           >
             {packageManager}
-          </TabButton>
+          </TabButtonComponent>
         )
       })}
-      <StyledCopyCommand
+      <CopyButtonComponent
         css={{
           marginRight: '1ch',
           backgroundColor: theme.activityBar.background,
           color: theme.activityBar.foreground,
-          ...css?.copyButton,
         }}
-        className={className?.copyButton}
-        style={style?.copyButton}
       />
-    </Tabs>
+    </TabsComponent>
   )
 
   const tabPanels = PACKAGE_MANAGERS.map((packageManager) => {
     const commandText = buildCommand(packageManager, variant, subject)
     return (
-      <TabPanel
+      <TabPanelComponent
         key={packageManager}
         role="tabpanel"
         id={`${id}-${packageManager}-panel`}
@@ -366,36 +382,30 @@ async function CommandAsync({
         data-command={packageManager}
         data-command-tab-panel={commandText}
         data-command-group={id}
-        css={css?.tabPanel}
-        className={className?.tabPanel}
-        style={style?.tabPanel}
         suppressHydrationWarning
       >
-        <Code css={css?.code} className={className?.code} style={style?.code}>
+        <CodeComponent>
           <Tokens language="shell" path={null} shouldFormat={false}>
             {commandText}
           </Tokens>
-        </Code>
-      </TabPanel>
+        </CodeComponent>
+      </TabPanelComponent>
     )
   })
 
   return (
-    <Container
+    <ContainerComponent
       data-command-group={id}
       css={{
         backgroundColor: theme.background,
         color: theme.foreground,
         boxShadow: `0 0 0 1px ${theme.panel.border}`,
-        ...css?.container,
       }}
-      className={className?.container}
-      style={style?.container}
     >
       {tabs}
       {tabPanels}
       <CommandClient />
-    </Container>
+    </ContainerComponent>
   )
 }
 
@@ -403,18 +413,19 @@ async function CommandAsync({
 export function Command({
   children,
   variant,
-  css,
-  className,
-  style,
+  components: componentsProp,
   shouldValidate = true,
 }: CommandProps) {
+  const components = normalizeComponents(componentsProp)
+  const { Code: CodeComponent } = components
+
   if (!variant) {
     return (
-      <Code css={css?.code} className={className?.code} style={style?.code}>
+      <CodeComponent>
         <Tokens language="shell" path={null} shouldFormat={false}>
           {String(children)}
         </Tokens>
-      </Code>
+      </CodeComponent>
     )
   }
 
@@ -426,9 +437,7 @@ export function Command({
       id={id}
       command={command}
       variant={variant}
-      css={css}
-      className={className}
-      style={style}
+      components={componentsProp}
       shouldValidate={shouldValidate}
     />
   )

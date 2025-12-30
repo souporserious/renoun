@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react'
-import { type CSSObject, styled } from 'restyle'
+import { styled, type CSSObject } from 'restyle'
 
 import { BaseDirectoryContext } from '../Context.tsx'
 import { computeDirectionalStyles } from '../../utils/compute-directional-styles.ts'
@@ -10,11 +10,11 @@ import { getConfig } from '../Config/ServerConfigContext.tsx'
 import { CopyButton } from '../CopyButton/index.ts'
 import type { ContextValue } from './Context.tsx'
 import { Context } from './Context.tsx'
-import { LineNumbers } from './LineNumbers.tsx'
+import { LineNumbers, type LineNumbersProps } from './LineNumbers.tsx'
 import { Pre } from './Pre.tsx'
-import { Tokens } from './Tokens.tsx'
+import { Tokens, type TokensProps } from './Tokens.tsx'
 import type { AnnotationRenderers } from './Tokens.tsx'
-import { Toolbar } from './Toolbar.tsx'
+import { Toolbar, type ToolbarProps } from './Toolbar.tsx'
 import {
   generateFocusedLinesGradient,
   generateHighlightedLinesGradient,
@@ -22,6 +22,10 @@ import {
 } from './utils.ts'
 import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
+import {
+  normalizeSlotComponents,
+  type SlotComponentOrProps,
+} from '../../utils/slot-components.ts'
 
 export interface CodeBlockBaseProps {
   /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
@@ -66,38 +70,32 @@ export interface CodeBlockBaseProps {
   /** Annotation renderers used to transform inline or block annotations. */
   annotations?: AnnotationRenderers
 
-  /** CSS styles to apply to code block elements. */
-  css?: {
-    container?: CSSObject
-    toolbar?: CSSObject
-    lineNumbers?: CSSObject
-    token?: CSSObject
-    popover?: CSSObject
-    error?: CSSObject
-    copyButton?: CSSObject
-  }
+  /** Override the default component renderers. */
+  components?: Partial<CodeBlockComponentOverrides>
+}
 
-  /** Class names to apply to code block elements. */
-  className?: {
-    container?: string
-    toolbar?: string
-    lineNumbers?: string
-    token?: string
-    popover?: string
-    error?: string
-    copyButton?: string
-  }
+export interface CodeBlockComponentOverrides {
+  Container: SlotComponentOrProps<
+    React.ComponentProps<'div'> & { css?: CSSObject }
+  >
+  Toolbar: SlotComponentOrProps<ToolbarProps>
+  Pre: SlotComponentOrProps<React.ComponentProps<'pre'> & { css?: CSSObject }>
+  LineNumbers: SlotComponentOrProps<LineNumbersProps>
+  Code: SlotComponentOrProps<React.ComponentProps<'code'> & { css?: CSSObject }>
+  Tokens: SlotComponentOrProps<TokensProps>
+  CopyButton: SlotComponentOrProps<React.ComponentProps<typeof CopyButton>>
+}
 
-  /** Styles to apply to code block elements. */
-  style?: {
-    container?: React.CSSProperties
-    toolbar?: React.CSSProperties
-    lineNumbers?: React.CSSProperties
-    token?: React.CSSProperties
-    popover?: React.CSSProperties
-    error?: React.CSSProperties
-    copyButton?: React.CSSProperties
-  }
+export interface CodeBlockComponents {
+  Container: React.ComponentType<
+    React.ComponentProps<'div'> & { css?: CSSObject }
+  >
+  Toolbar: React.ComponentType<ToolbarProps>
+  Pre: React.ComponentType<React.ComponentProps<'pre'> & { css?: CSSObject }>
+  LineNumbers: React.ComponentType<LineNumbersProps>
+  Code: React.ComponentType<React.ComponentProps<'code'> & { css?: CSSObject }>
+  Tokens: React.ComponentType<TokensProps>
+  CopyButton: React.ComponentType<React.ComponentProps<typeof CopyButton>>
 }
 
 export type CodeBlockProps =
@@ -113,6 +111,16 @@ export type CodeBlockProps =
       path: PathLike
     })
 
+const StyledContainer = styled('div')
+
+const Code = styled('code', {
+  gridRow: '1 / -1',
+  display: 'block',
+  width: 'max-content',
+  minWidth: 'stretch',
+  backgroundColor: 'transparent',
+})
+
 /**
  * Displays syntax-highlighted source code with optional line numbers, toolbar,
  * copy-to-clipboard button, and error diagnostics.
@@ -121,6 +129,22 @@ export const CodeBlock =
   process.env.NODE_ENV === 'development'
     ? CodeBlockWithFallback
     : CodeBlockAsync
+
+const defaultComponents: CodeBlockComponents = {
+  Container: StyledContainer,
+  Toolbar,
+  Pre,
+  LineNumbers,
+  Code,
+  Tokens,
+  CopyButton,
+}
+
+function normalizeComponents(
+  overrides: Partial<CodeBlockComponentOverrides> | undefined
+): CodeBlockComponents {
+  return normalizeSlotComponents(defaultComponents, overrides as any)
+}
 
 /**
  * CodeBlock component used during development that wraps the async version in a
@@ -151,18 +175,17 @@ function CodeBlockWithFallback(
     )
   }
 
-  const containerPadding = computeDirectionalStyles(
-    'padding',
-    '0.5lh',
-    restProps.css?.container,
-    restProps.style?.container
-  )
+  const containerPadding = computeDirectionalStyles('padding', '0.5lh')
   const shouldRenderToolbar = Boolean(
     restProps.showToolbar === undefined
       ? restProps.path || restProps.allowCopy
       : restProps.showToolbar
   )
-  const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
+
+  const components: CodeBlockComponents = {
+    ...normalizeComponents(restProps.components),
+  }
+  const Container = components.Container
 
   return (
     <Suspense
@@ -173,22 +196,13 @@ function CodeBlockWithFallback(
               ? {
                   borderRadius: 5,
                   boxShadow: '0 0 0 1px #666',
-                  ...restProps.css?.container,
                   padding: 0,
                 }
-              : {}
+              : undefined
           }
-          className={
-            shouldRenderToolbar ? restProps.className?.container : undefined
-          }
-          style={shouldRenderToolbar ? restProps.style?.container : undefined}
         >
           {shouldRenderToolbar && (
-            <FallbackToolbar
-              css={{ padding: containerPadding.all, ...restProps.css?.toolbar }}
-              className={restProps.className?.toolbar}
-              style={restProps.style?.toolbar}
-            />
+            <FallbackToolbar css={{ padding: containerPadding.all }} />
           )}
           <FallbackPre
             css={{
@@ -207,13 +221,8 @@ function CodeBlockWithFallback(
               color: shouldRenderToolbar ? undefined : 'inherit',
               borderRadius: shouldRenderToolbar ? 'inherit' : 5,
               boxShadow: shouldRenderToolbar ? undefined : '0 0 0 1px #666',
-              ...(shouldRenderToolbar ? {} : restProps.css?.container),
               padding: 0,
             }}
-            className={
-              shouldRenderToolbar ? undefined : restProps.className?.container
-            }
-            style={shouldRenderToolbar ? undefined : restProps.style?.container}
           >
             {restProps.showLineNumbers && (
               <FallbackLineNumbers
@@ -224,10 +233,7 @@ function CodeBlockWithFallback(
                   width: '4ch',
                   backgroundPosition: 'inherit',
                   backgroundImage: 'inherit',
-                  ...restProps.css?.lineNumbers,
                 }}
-                className={restProps.className?.lineNumbers}
-                style={restProps.style?.lineNumbers}
               >
                 {Array.from(
                   { length: restProps.children.split('\n').length },
@@ -278,17 +284,13 @@ async function CodeBlockAsync(
     shouldAnalyze,
     shouldFormat,
     children,
-    className,
-    css,
-    style,
     annotations,
+    components: componentsProp = {},
   } = normalizeCodeBlockProps(props)
-  const containerPadding = computeDirectionalStyles(
-    'padding',
-    '0.5lh',
-    css?.container,
-    style?.container
-  )
+  const components: CodeBlockComponents = {
+    ...normalizeComponents(componentsProp),
+  }
+  const containerPadding = computeDirectionalStyles('padding', '0.5lh')
   const baseDirectoryContext = getContext(BaseDirectoryContext)
   const baseDirectory = normalizeBaseDirectory(
     baseDirectoryProp ?? baseDirectoryContext
@@ -336,180 +338,179 @@ async function CodeBlockAsync(
   const focusedLinesGradient = focusedLines
     ? generateFocusedLinesGradient(focusedLines)
     : undefined
-  const Container = shouldRenderToolbar ? StyledContainer : React.Fragment
-  const containerProps = shouldRenderToolbar
-    ? {
-        css: {
+  const Container = components.Container
+  const containerProps = {
+    css: shouldRenderToolbar
+      ? ({
           borderRadius: 5,
           boxShadow: `0 0 0 1px ${theme.panel.border}`,
           backgroundColor: theme.background,
           color: theme.foreground,
-          ...css?.container,
           padding: 0,
-        } satisfies CSSObject,
-        className: className?.container,
-        style: style?.container,
-      }
-    : {}
-  const focusedLinesStyles = focusedLines
-    ? {
-        '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
-        '--m1': 'rgba(0, 0, 0, 1)',
-        maskPosition: `0 ${containerPadding.top}`,
-        maskImage: focusedLinesGradient,
-      }
-    : {}
+        } satisfies CSSObject)
+      : undefined,
+  }
+  const focusedLinesStyles = (
+    focusedLines
+      ? {
+          '--m0': `rgba(0, 0, 0, ${unfocusedLinesOpacity})`,
+          '--m1': 'rgba(0, 0, 0, 1)',
+          maskPosition: `0 ${containerPadding.top}`,
+          maskImage: focusedLinesGradient,
+        }
+      : {}
+  ) as React.CSSProperties
+  const preStyles = {
+    WebkitTextSizeAdjust: 'none',
+    textSizeAdjust: 'none',
+    position: 'relative',
+    whiteSpace: 'pre',
+    wordWrap: 'break-word',
+    display: 'grid',
+    gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
+    gridAutoRows: 'max-content',
+    margin: 0,
+    backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
+    color: shouldRenderToolbar ? undefined : theme.foreground,
+    borderRadius: shouldRenderToolbar ? 'inherit' : 5,
+    boxShadow: shouldRenderToolbar
+      ? undefined
+      : `0 0 0 1px ${theme.panel.border}`,
+    ...(highlightedLines
+      ? {
+          '--h0': `rgba(0, 0, 0, 0)`,
+          '--h1': theme.editor.rangeHighlightBackground,
+          backgroundPosition: `0 ${containerPadding.top}`,
+          backgroundImage: highlightedLinesGradient,
+        }
+      : {}),
+    padding: 0,
+  } as React.CSSProperties
+  const scrollContainerStyles = getScrollContainerStyles({
+    color: theme.scrollbarSlider.hoverBackground,
+  })
+  const preProps =
+    components.Pre === Pre
+      ? { css: { ...preStyles, ...scrollContainerStyles } }
+      : { style: preStyles }
+
+  const toolbarProps =
+    components.Toolbar === Toolbar
+      ? ({
+          css: { padding: containerPadding.all },
+        } satisfies Partial<ToolbarProps>)
+      : ({
+          style: { padding: containerPadding.all },
+        } satisfies Partial<ToolbarProps>)
+
+  const lineNumbersLayout = {
+    padding: containerPadding.all,
+    gridColumn: 1,
+    gridRow: '1 / -1',
+    width: '4ch',
+    backgroundPosition: 'inherit',
+    backgroundImage: 'inherit',
+  }
+  const lineNumbersProps =
+    components.LineNumbers === LineNumbers
+      ? ({ css: lineNumbersLayout } satisfies Partial<LineNumbersProps>)
+      : ({ style: lineNumbersLayout } satisfies Partial<LineNumbersProps>)
+
+  const copyButtonLayout = {
+    placeSelf: 'start end',
+    gridColumn: showLineNumbers ? 2 : 1,
+    gridRow: '1 / -1',
+    position: 'sticky',
+    top: containerPadding.top,
+    right: containerPadding.horizontal,
+    boxShadow: `inset 0 0 0 1px ${theme.panel.border}`,
+    backgroundColor: theme.activityBar.background,
+    color: theme.activityBar.foreground,
+    borderRadius: 5,
+  }
+  const copyButtonProps =
+    components.CopyButton === CopyButton
+      ? ({ css: copyButtonLayout } as React.ComponentProps<typeof CopyButton>)
+      : ({ style: copyButtonLayout } as React.ComponentProps<typeof CopyButton>)
 
   return (
     <Context value={contextValue}>
       <Container {...containerProps}>
         {shouldRenderToolbar ? (
-          <Toolbar
+          <components.Toolbar
             allowCopy={allowCopy === undefined ? Boolean(path) : allowCopy}
-            css={{ padding: containerPadding.all, ...css?.toolbar }}
-            className={className?.toolbar}
-            style={style?.toolbar}
+            {...toolbarProps}
           />
         ) : null}
-        <Pre
-          css={{
-            WebkitTextSizeAdjust: 'none',
-            textSizeAdjust: 'none',
-            position: 'relative',
-            whiteSpace: 'pre',
-            wordWrap: 'break-word',
-            display: 'grid',
-            gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
-            gridAutoRows: 'max-content',
-            margin: 0,
-            backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
-            color: shouldRenderToolbar ? undefined : theme.foreground,
-            borderRadius: shouldRenderToolbar ? 'inherit' : 5,
-            boxShadow: shouldRenderToolbar
-              ? undefined
-              : `0 0 0 1px ${theme.panel.border}`,
-            ...getScrollContainerStyles({
-              color: theme.scrollbarSlider.hoverBackground,
-            }),
-            ...(highlightedLines
-              ? {
-                  '--h0': `rgba(0, 0, 0, 0)`,
-                  '--h1': theme.editor.rangeHighlightBackground,
-                  backgroundPosition: `0 ${containerPadding.top}`,
-                  backgroundImage: highlightedLinesGradient,
-                }
-              : {}),
-            ...(shouldRenderToolbar ? {} : css?.container),
-            padding: 0,
-          }}
-          className={shouldRenderToolbar ? undefined : className?.container}
-          style={shouldRenderToolbar ? undefined : style?.container}
-        >
+        <components.Pre {...preProps}>
           {showLineNumbers ? (
             <>
-              <LineNumbers
-                className={className?.lineNumbers}
-                css={{
-                  padding: containerPadding.all,
-                  gridColumn: 1,
-                  gridRow: '1 / -1',
-                  width: '4ch',
-                  backgroundPosition: 'inherit',
-                  backgroundImage: 'inherit',
-                  ...css?.lineNumbers,
-                }}
-                style={style?.lineNumbers}
-              />
-              <Code
-                css={{
-                  gridColumn: 2,
-                  padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
-                  paddingInlineStart: 0,
-                  ...focusedLinesStyles,
-                }}
+              <components.LineNumbers {...lineNumbersProps} />
+              <components.Code
+                {...(components.Code === Code
+                  ? {
+                      css: {
+                        gridColumn: 2,
+                        padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
+                        paddingInlineStart: 0,
+                        ...(focusedLinesStyles as any),
+                      } satisfies CSSObject,
+                    }
+                  : {
+                      style: {
+                        gridColumn: 2,
+                        padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
+                        paddingInlineStart: 0,
+                        ...focusedLinesStyles,
+                      },
+                    })}
               >
-                <Tokens
+                <components.Tokens
                   path={path}
                   baseDirectory={baseDirectory}
                   language={language}
                   allowErrors={allowErrors}
                   showErrors={showErrors}
-                  css={{
-                    token: css?.token,
-                    popover: css?.popover,
-                    error: css?.error,
-                  }}
-                  className={{
-                    token: className?.token,
-                    popover: className?.popover,
-                    error: className?.error,
-                  }}
-                  style={{
-                    token: style?.token,
-                    popover: style?.popover,
-                    error: style?.error,
-                  }}
                   annotations={annotations}
                 >
                   {value}
-                </Tokens>
-              </Code>
+                </components.Tokens>
+              </components.Code>
             </>
           ) : (
-            <Code
-              css={{
-                gridColumn: 1,
-                padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
-                ...focusedLinesStyles,
-              }}
+            <components.Code
+              {...(components.Code === Code
+                ? {
+                    css: {
+                      gridColumn: 1,
+                      padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
+                      ...(focusedLinesStyles as any),
+                    } satisfies CSSObject,
+                  }
+                : {
+                    style: {
+                      gridColumn: 1,
+                      padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
+                      ...focusedLinesStyles,
+                    },
+                  })}
             >
-              <Tokens
+              <components.Tokens
                 path={path}
                 baseDirectory={baseDirectory}
                 language={language}
                 allowErrors={allowErrors}
                 showErrors={showErrors}
-                css={{
-                  token: css?.token,
-                  popover: css?.popover,
-                  error: css?.error,
-                }}
-                className={{
-                  token: className?.token,
-                  popover: className?.popover,
-                  error: className?.error,
-                }}
-                style={{
-                  token: style?.token,
-                  popover: style?.popover,
-                  error: style?.error,
-                }}
                 annotations={annotations}
               >
                 {value}
-              </Tokens>
-            </Code>
+              </components.Tokens>
+            </components.Code>
           )}
           {allowCopy !== false && !shouldRenderToolbar ? (
-            <CopyButton
-              css={{
-                placeSelf: 'start end',
-                gridColumn: showLineNumbers ? 2 : 1,
-                gridRow: '1 / -1',
-                position: 'sticky',
-                top: containerPadding.top,
-                right: containerPadding.horizontal,
-                boxShadow: `inset 0 0 0 1px ${theme.panel.border}`,
-                backgroundColor: theme.activityBar.background,
-                color: theme.activityBar.foreground,
-                borderRadius: 5,
-                ...css?.copyButton,
-              }}
-              className={className?.copyButton}
-              style={style?.copyButton}
-            />
+            <components.CopyButton {...copyButtonProps} />
           ) : null}
-        </Pre>
+        </components.Pre>
       </Container>
     </Context>
   )
@@ -521,7 +522,10 @@ const languageLength = languageKey.length
 function isPreElementProps(
   props: CodeBlockProps | React.ComponentProps<'pre'>
 ): props is React.ComponentProps<'pre'> {
-  const value = props.className
+  const value =
+    'className' in props
+      ? (props as React.ComponentProps<'pre'>).className
+      : undefined
   return typeof value === 'string' || Array.isArray(value)
 }
 
@@ -568,16 +572,6 @@ function normalizeCodeBlockProps(
     path,
   } as CodeBlockProps
 }
-
-const StyledContainer = styled('div')
-
-const Code = styled('code', {
-  gridRow: '1 / -1',
-  display: 'block',
-  width: 'max-content',
-  minWidth: 'stretch',
-  backgroundColor: 'transparent',
-})
 
 const FallbackToolbar = styled('div', {
   fontSize: 'inherit',

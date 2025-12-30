@@ -50,7 +50,7 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
     <EntryLayout
       header={
         <div className="prose prose-slate dark:prose-invert max-w-none">
-          <h1 className="!mt-0">{title}</h1>
+          <h1 className="mt-0!">{title}</h1>
         </div>
       }
       footer={
@@ -85,12 +85,14 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
                   </div>
                   <CodeBlock
                     language="tsx"
-                    css={{
-                      container: {
-                        margin: 0,
-                        borderRadius: 0,
-                        boxShadow: undefined,
-                        padding: '1rem',
+                    components={{
+                      Container: {
+                        style: {
+                          margin: 0,
+                          borderRadius: 0,
+                          boxShadow: undefined,
+                          padding: '1rem',
+                        },
                       },
                     }}
                   >

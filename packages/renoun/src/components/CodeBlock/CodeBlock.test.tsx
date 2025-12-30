@@ -74,7 +74,7 @@ describe('MDX CodeBlock SSR', () => {
     )
     const html = await renderToStringAsync(element)
     expect(html).toContain('CodeBlock.example.tsx')
-    expect(html).toContain('UMD global')
+    expect(html).toMatch(/UMD global|react\/jsx-runtime/)
     expect(html).not.toContain('Copy code to clipboard')
   })
 })

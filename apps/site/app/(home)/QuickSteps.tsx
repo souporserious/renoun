@@ -181,10 +181,12 @@ export function QuickSteps() {
               </figcaption>
               <CodeBlock
                 language="tsx"
-                css={{
-                  container: {
-                    alignSelf: 'start',
-                    marginTop: '2.6rem',
+                components={{
+                  Container: {
+                    css: {
+                      alignSelf: 'start',
+                      marginTop: '2.6rem',
+                    },
                   },
                 }}
                 {...step.codeBlockProps}
