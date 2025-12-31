@@ -203,9 +203,9 @@ export function Reference(props: ReferenceProps) {
         }}
       />
     ),
-    TableSubRow: ({ children }) => (
+    TableSubRow: ({ children, colSpan }) => (
       <tr>
-        <td colSpan={3} css={{ padding: 0 }}>
+        <td colSpan={colSpan ?? 3} css={{ padding: 0 }}>
           <Collapse.Content>
             <div css={{ padding: '1rem 0' }}>{children}</div>
           </Collapse.Content>

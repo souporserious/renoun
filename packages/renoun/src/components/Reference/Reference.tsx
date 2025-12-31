@@ -105,10 +105,16 @@ export interface ReferenceComponents {
     children?: React.ReactNode
   }>
   TableSubRow: React.ComponentType<{
+    /** The number of columns the cell should span. */
+    colSpan?: number
+
     /** The content of the sub-row. */
     children: React.ReactNode
   }>
   TableHeader: React.ComponentType<{
+    /** The number of columns the cell should span. */
+    colSpan?: number
+
     /** The content of the header cell. */
     children?: React.ReactNode
   }>
@@ -169,19 +175,28 @@ const defaultComponents: InternalReferenceComponents = {
   Signatures: 'div',
   Table: 'table',
   TableHead: 'thead',
-  TableHeader: ({ children }) => (
-    <th style={{ textAlign: 'left' }}>{children}</th>
+  TableHeader: ({ children, colSpan }) => (
+    <th colSpan={colSpan} style={{ textAlign: 'left' }}>
+      {children}
+    </th>
   ),
   TableBody: 'tbody',
   TableData: ({ colSpan, children }) => <td colSpan={colSpan}>{children}</td>,
   TableRow: ({ children }) => <tr>{children}</tr>,
-  TableSubRow: ({ children }) => (
+  TableSubRow: ({ children, colSpan }) => (
     <tr>
-      <td colSpan={3}>{children}</td>
+      <td colSpan={colSpan ?? 3}>{children}</td>
     </tr>
   ),
   TableRowGroup: ({ children }) => children,
 }
+
+type TableHeaderCell =
+  | React.ReactNode
+  | {
+      children: React.ReactNode
+      colSpan?: number
+    }
 
 function getNodeAnchorId(node: Kind): string | undefined {
   if ('name' in node && typeof node.name === 'string' && node.name) {
@@ -482,19 +497,49 @@ function TypeTable<RowType>({
   components,
 }: {
   rows: readonly RowType[]
-  headers?: readonly React.ReactNode[]
+  headers?: readonly TableHeaderCell[]
   renderRow: (row: RowType, hasSubRow: boolean) => React.ReactNode
   renderSubRow?: (row: RowType, index: number) => React.ReactNode
   components: InternalReferenceComponents
 }) {
+  const columnCount = headers
+    ? headers.reduce<number>((count, header) => {
+        if (
+          header &&
+          typeof header === 'object' &&
+          !React.isValidElement(header) &&
+          'children' in header
+        ) {
+          return count + (header.colSpan ?? 1)
+        }
+
+        return count + 1
+      }, 0)
+    : 3
+
   return (
     <components.Table>
       {headers ? (
         <components.TableHead>
           <components.TableRow>
             {headers.map((header, index) => (
-              <components.TableHeader key={index}>
-                {header}
+              <components.TableHeader
+                key={index}
+                colSpan={
+                  header &&
+                  typeof header === 'object' &&
+                  !React.isValidElement(header) &&
+                  'children' in header
+                    ? header.colSpan
+                    : undefined
+                }
+              >
+                {header &&
+                typeof header === 'object' &&
+                !React.isValidElement(header) &&
+                'children' in header
+                  ? header.children
+                  : header}
               </components.TableHeader>
             ))}
           </components.TableRow>
@@ -512,7 +557,9 @@ function TypeTable<RowType>({
                 {renderRow(row, hasSubRow)}
               </components.TableRow>
               {subRow ? (
-                <components.TableSubRow>{subRow}</components.TableSubRow>
+                <components.TableSubRow colSpan={columnCount}>
+                  {subRow}
+                </components.TableSubRow>
               ) : null}
             </components.TableRowGroup>
           )
@@ -641,11 +688,8 @@ function renderClassPropertyRow(
         {property.name}
         {property.isOptional ? '?' : ''}
       </components.TableData>
-      <components.TableData index={1} hasSubRow={hasSubRow}>
+      <components.TableData index={1} hasSubRow={hasSubRow} colSpan={2}>
         <components.Code>{property.type.text}</components.Code>
-      </components.TableData>
-      <components.TableData index={2} hasSubRow={hasSubRow}>
-        {renderClassMemberModifiers(property, components)}
       </components.TableData>
       <components.TableData index={3} hasSubRow={hasSubRow}>
         <InitializerValue
@@ -674,7 +718,7 @@ function renderMethodRow(
       <components.TableData index={0} hasSubRow={hasSubRow}>
         {method.name}
       </components.TableData>
-      <components.TableData index={1} hasSubRow={hasSubRow}>
+      <components.TableData index={1} hasSubRow={hasSubRow} colSpan={2}>
         <components.Code>
           {getCallSignatureText(signature)}
           {overloadCount > 0
@@ -682,19 +726,55 @@ function renderMethodRow(
             : ''}
         </components.Code>
       </components.TableData>
-      <components.TableData index={2} hasSubRow={hasSubRow}>
-        {renderClassMemberModifiers(method, components)}
-      </components.TableData>
     </>
   )
 }
 
+function getClassMemberModifiers(member: {
+  visibility?: string
+  scope?: string
+  isReadonly?: boolean
+  isOverride?: boolean
+}): string[] {
+  const modifiers: string[] = []
+
+  if (member.visibility) {
+    modifiers.push(member.visibility)
+  }
+
+  if (member.scope) {
+    modifiers.push(member.scope)
+  }
+
+  if (member.isReadonly) {
+    modifiers.push('readonly')
+  }
+
+  if (member.isOverride) {
+    modifiers.push('override')
+  }
+
+  return modifiers
+}
+
 function renderMethodSubRow(
   method: {
+    kind?: Kind['kind']
+    text?: string
+    visibility?: string
+    scope?: string
+    isReadonly?: boolean
+    isOverride?: boolean
     signatures: TypeOfKind<'CallSignature'>[]
   },
   components: InternalReferenceComponents
 ) {
+  const modifiers = getClassMemberModifiers(method)
+
+  if (typeof method.text === 'string' && /\?\s*\(/.test(method.text)) {
+    modifiers.unshift('optional')
+  }
+
   const multipleSignatures = method.signatures.length > 1
   const signatureDetails: React.ReactNode[] = []
 
@@ -712,18 +792,61 @@ function renderMethodSubRow(
     }
   })
 
-  if (signatureDetails.length === 0) {
+  const items: React.ReactNode[] = []
+
+  if (modifiers.length > 0) {
+    items.push(
+      <TypeDetail
+        key="modifiers"
+        label="Modifiers"
+        components={components}
+        kind={method.kind ?? 'MethodSignature'}
+      >
+        <components.Code>{modifiers.join(', ')}</components.Code>
+      </TypeDetail>
+    )
+  }
+
+  if (signatureDetails.length > 0) {
+    items.push(
+      <components.Column key="signatures" gap="large">
+        {signatureDetails}
+      </components.Column>
+    )
+  }
+
+  if (items.length === 0) {
     return null
   }
 
-  return <components.Column gap="large">{signatureDetails}</components.Column>
+  return <components.Column gap="large">{items}</components.Column>
 }
 
 function renderClassPropertySubRow(
   property: NonNullable<TypeOfKind<'Class'>['properties']>[number],
   components: InternalReferenceComponents
 ) {
-  return renderDocumentation(property, components)
+  const modifiers = getClassMemberModifiers(property)
+  const documentation = renderDocumentation(property, components)
+
+  if (modifiers.length === 0 && !documentation) {
+    return null
+  }
+
+  return (
+    <components.Column gap="medium">
+      {modifiers.length > 0 ? (
+        <TypeDetail
+          label="Modifiers"
+          components={components}
+          kind={property.kind}
+        >
+          <components.Code>{modifiers.join(', ')}</components.Code>
+        </TypeDetail>
+      ) : null}
+      {documentation}
+    </components.Column>
+  )
 }
 
 function renderAccessorRow(
@@ -741,11 +864,8 @@ function renderAccessorRow(
       <components.TableData index={0} hasSubRow={hasSubRow}>
         {accessor.kind === 'ClassGetAccessor' ? 'get' : 'set'} {accessor.name}
       </components.TableData>
-      <components.TableData index={1} hasSubRow={hasSubRow}>
+      <components.TableData index={1} hasSubRow={hasSubRow} colSpan={2}>
         <components.Code>{accessorTypeText}</components.Code>
-      </components.TableData>
-      <components.TableData index={2} hasSubRow={hasSubRow}>
-        {renderClassMemberModifiers(accessor, components)}
       </components.TableData>
     </>
   )
@@ -755,6 +875,7 @@ function renderAccessorSubRow(
   accessor: NonNullable<TypeOfKind<'Class'>['accessors']>[number],
   components: InternalReferenceComponents
 ) {
+  const modifiers = getClassMemberModifiers(accessor)
   const documentation = renderDocumentation(accessor, components)
   const parameterDetail =
     accessor.kind === 'ClassSetAccessor' ? (
@@ -774,48 +895,25 @@ function renderAccessorSubRow(
       </TypeDetail>
     ) : null
 
-  if (!documentation && !parameterDetail) {
+  if (modifiers.length === 0 && !documentation && !parameterDetail) {
     return null
   }
 
   return (
     <components.Column gap="medium">
+      {modifiers.length > 0 ? (
+        <TypeDetail
+          label="Modifiers"
+          components={components}
+          kind={accessor.kind}
+        >
+          <components.Code>{modifiers.join(', ')}</components.Code>
+        </TypeDetail>
+      ) : null}
       {documentation}
       {parameterDetail}
     </components.Column>
   )
-}
-
-function renderClassMemberModifiers(
-  member:
-    | NonNullable<TypeOfKind<'Class'>['accessors']>[number]
-    | NonNullable<TypeOfKind<'Class'>['properties']>[number]
-    | NonNullable<TypeOfKind<'Class'>['methods']>[number],
-  components: InternalReferenceComponents
-) {
-  const modifiers: string[] = []
-
-  if (member.visibility) {
-    modifiers.push(member.visibility)
-  }
-
-  if (member.scope) {
-    modifiers.push(member.scope)
-  }
-
-  if ('isReadonly' in member && member.isReadonly) {
-    modifiers.push('readonly')
-  }
-
-  if ('isOverride' in member && member.isOverride) {
-    modifiers.push('override')
-  }
-
-  if (modifiers.length === 0) {
-    return <components.Code>—</components.Code>
-  }
-
-  return <components.Code>{modifiers.join(' ')}</components.Code>
 }
 
 type DocumentableMetadata = {
@@ -1392,7 +1490,7 @@ function ClassSection({
         <TypeDetail label="Accessors" components={components} kind={node.kind}>
           <TypeTable
             rows={node.accessors}
-            headers={['Accessor', 'Type', 'Modifiers']}
+            headers={['Accessor', { children: 'Type', colSpan: 2 }]}
             renderRow={(accessor, hasSubRow) =>
               renderAccessorRow(accessor, components, hasSubRow)
             }
@@ -1408,7 +1506,11 @@ function ClassSection({
         <TypeDetail label="Properties" components={components} kind={node.kind}>
           <TypeTable
             rows={node.properties}
-            headers={['Property', 'Type', 'Modifiers', 'Default Value']}
+            headers={[
+              'Property',
+              { children: 'Type', colSpan: 2 },
+              'Default Value',
+            ]}
             renderRow={(property, hasSubRow) =>
               renderClassPropertyRow(property, components, hasSubRow)
             }
@@ -1424,7 +1526,7 @@ function ClassSection({
         <TypeDetail label="Methods" components={components} kind={node.kind}>
           <TypeTable
             rows={node.methods}
-            headers={['Method', 'Type', 'Modifiers']}
+            headers={['Method', { children: 'Type', colSpan: 2 }]}
             renderRow={(method, hasSubRow) =>
               renderMethodRow(method, components, hasSubRow)
             }
