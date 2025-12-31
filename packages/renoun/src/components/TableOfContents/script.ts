@@ -138,6 +138,8 @@ export default function ({
       const lastIndex = targetElements.length - 1
       const lastTarget = targetElements[lastIndex]
       const lastLink = lastTarget ? linkFor.get(lastTarget) : null
+      let scrollTimeout: number | null = null
+      let scrollDelay = 100
 
       function update(): void {
         if (isScrollingIntoView) return
@@ -187,22 +189,28 @@ export default function ({
             bestIndex !== lastIndex &&
             lastLink
           ) {
-            const viewport = getClosestViewport(lastLink)
-            if (viewport !== document.body) {
-              viewport.scrollTo({
-                top: viewport.scrollHeight,
-                behavior: smoothScrollBehavior,
-              })
-            }
+            if (scrollTimeout) clearTimeout(scrollTimeout)
+            scrollTimeout = window.setTimeout(() => {
+              const viewport = getClosestViewport(lastLink)
+              if (viewport !== document.body) {
+                viewport.scrollTo({
+                  top: viewport.scrollHeight,
+                  behavior: smoothScrollBehavior,
+                })
+              }
+            }, scrollDelay)
           }
         } else if (previousActiveLink) {
-          const viewport = getClosestViewport(previousActiveLink)
-          if (viewport !== document.body) {
-            previousActiveLink.scrollIntoView({
-              behavior: smoothScrollBehavior,
-              block: 'nearest',
-            })
-          }
+          if (scrollTimeout) clearTimeout(scrollTimeout)
+          scrollTimeout = window.setTimeout(() => {
+            const viewport = getClosestViewport(previousActiveLink!)
+            if (viewport !== document.body) {
+              previousActiveLink!.scrollIntoView({
+                behavior: smoothScrollBehavior,
+                block: 'nearest',
+              })
+            }
+          }, scrollDelay)
         }
         previousLastSectionInView = lastSectionInView
       }
