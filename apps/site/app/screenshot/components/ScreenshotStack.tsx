@@ -11,6 +11,8 @@ import {
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { styled } from 'restyle'
+// @ts-expect-error
+import { lockScrollbars } from 'lock-scrollbars'
 
 const StyledMotionDiv = styled(motion.div)
 
@@ -231,6 +233,7 @@ export function ScreenshotStack({
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const [containerRect, setContainerRect] = useState<DOMRect | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const unlockScrollbarsRef = useRef<null | (() => void)>(null)
   const [isHovered, setIsHovered] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [openingAnimation, setOpeningAnimation] = useState<{
@@ -298,6 +301,21 @@ export function ScreenshotStack({
   useEffect(() => {
     onModalOpenChange?.(isModalOpen)
   }, [isModalOpen, onModalOpenChange])
+
+  // Lock scrollbars while modal is open
+  useEffect(() => {
+    if (!isModalOpen) {
+      unlockScrollbarsRef.current?.()
+      unlockScrollbarsRef.current = null
+      return
+    }
+
+    unlockScrollbarsRef.current = lockScrollbars()
+    return () => {
+      unlockScrollbarsRef.current?.()
+      unlockScrollbarsRef.current = null
+    }
+  }, [isModalOpen])
 
   // If flying is disabled (e.g., hidden breakpoint), immediately mark all screenshots landed
   useEffect(() => {
