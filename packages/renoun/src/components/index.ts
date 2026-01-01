@@ -7,11 +7,6 @@ export {
   type TokensProps,
   type ToolbarProps,
 } from './CodeBlock/index.ts'
-export {
-  CodeInline,
-  parseCodeProps,
-  type CodeInlineProps,
-} from './CodeInline.ts'
 export { Copyright } from './Copyright.ts'
 export {
   Command,

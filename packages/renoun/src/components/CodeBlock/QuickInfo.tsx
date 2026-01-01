@@ -6,7 +6,6 @@ import { remarkPlugins } from '@renoun/mdx/remark'
 import { getTokens } from '../../project/client.ts'
 import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.ts'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.ts'
-import { CodeInline } from '../CodeInline.tsx'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
 import { Markdown, type MarkdownProps } from '../Markdown.tsx'
 import { QuickInfoPopover } from './QuickInfoPopover.tsx'
@@ -32,20 +31,6 @@ const mdxProps = {
   components: {
     CodeBlock: (props) => {
       return <CodeBlock {...props} shouldAnalyze={false} />
-    },
-    code: (props) => {
-      return (
-        <CodeInline
-          children={props.children as string}
-          shouldAnalyze={false}
-          css={{
-            display: 'inline',
-            fontSize: '0.9em',
-            whiteSpace: 'pre-wrap',
-            top: 2,
-          }}
-        />
-      )
     },
     p: Paragraph,
     table: Table,

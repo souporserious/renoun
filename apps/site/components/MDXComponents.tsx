@@ -1,5 +1,4 @@
 import {
-  CodeInline,
   Command,
   type CommandVariant,
   type MDXComponents as MDXComponentsType,
@@ -179,16 +178,16 @@ export const MDXComponents = {
   },
   code: (props) => {
     return (
-      <CodeInline
-        {...props}
-        paddingY="0"
+      <code
         css={{
           lineHeight: 1.15,
           overflowX: 'auto',
           color: '#82AAFF',
         }}
         className={GeistMono.className}
-      />
+      >
+        {props.children as string}
+      </code>
     )
   },
 } satisfies MDXComponentsType

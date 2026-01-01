@@ -1,9 +1,4 @@
-import {
-  CodeInline,
-  Markdown as DefaultMarkdown,
-  parseCodeProps,
-  type MarkdownProps,
-} from 'renoun'
+import { Markdown as DefaultMarkdown, type MarkdownProps } from 'renoun'
 import { GeistMono } from 'geist/font/mono'
 
 import { CodeBlock } from './CodeBlock'
@@ -15,8 +10,8 @@ export function Markdown(props: MarkdownProps) {
       components={{
         CodeBlock,
         code: (codeProps) => (
-          <CodeInline
-            {...parseCodeProps(codeProps)}
+          <code
+            {...codeProps}
             css={{
               lineHeight: 'var(--line-height-code-2)',
               color: 'var(--color-foreground-interactive)',
