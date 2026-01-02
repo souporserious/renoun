@@ -3,19 +3,14 @@ import {
   Directory,
   NodeFileSystem,
   InMemoryFileSystem,
-  withSchema,
   isFile,
   ModuleExportNotFoundError,
 } from './index'
 
-const mdxLoader = withSchema<{ frontmatter: { title: string } }>(
-  (path) => import(`#fixtures/${path}.mdx`)
-)
-const tsDocsLoader = withSchema<{ metadata: { title: string } }>(
-  (path) => import(`#fixtures/${path}.ts`)
-)
-const tsAnyLoader = withSchema<any>((path) => import(`#fixtures/${path}.ts`))
-const tsxLoader = withSchema<any>((path) => import(`#fixtures/${path}.tsx`))
+const mdxLoader = (path: string) => import(`#fixtures/${path}.mdx`)
+const tsDocsLoader = (path: string) => import(`#fixtures/${path}.ts`)
+const tsAnyLoader = (path: string) => import(`#fixtures/${path}.ts`)
+const tsxLoader = (path: string) => import(`#fixtures/${path}.tsx`)
 
 // Provide consistent, CI-aware benchmark options for stability across runs
 const isCI =

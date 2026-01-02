@@ -133,7 +133,7 @@ export async function Tokens({
     : undefined
   let value
 
-  if (children) {
+  if (children !== undefined && children !== null) {
     if (typeof children === 'string') {
       value = children
     } else {
@@ -142,7 +142,7 @@ export async function Tokens({
   }
 
   if (value === undefined) {
-    if (path) {
+    if (path !== undefined && path !== null) {
       value = await readCodeFromPath(path, baseDirectory)
     } else {
       throw new Error(

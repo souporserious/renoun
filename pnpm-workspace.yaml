@@ -29,6 +29,7 @@ catalog:
   typescript: 5.9.3
   unified: 11.0.5
   valibot: 1.2.0
+  vite: 7.3.0
   zod: 4.2.1
 
 minimumReleaseAge: 1440

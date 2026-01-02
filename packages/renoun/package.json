@@ -149,6 +149,7 @@
     "tm-grammars": "catalog:",
     "tm-themes": "catalog:",
     "valibot": "catalog:",
+    "vite": "catalog:",
     "zod": "catalog:"
   },
   "dependencies": {

@@ -81,6 +81,9 @@ catalogs:
     valibot:
       specifier: 1.2.0
       version: 1.2.0
+    vite:
+      specifier: 7.3.0
+      version: 7.3.0
     zod:
       specifier: 4.2.1
       version: 4.2.1
@@ -110,7 +113,7 @@ importers:
         version: 4.0.16(playwright@1.57.0)(vite@7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.2))(vitest@4.0.16)
       geist:
         specifier: 'catalog:'
-        version: 1.5.1(next@16.1.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+        version: 1.5.1(next@16.1.1(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       playwright:
         specifier: 1.57.0
         version: 1.57.0
@@ -207,7 +210,7 @@ importers:
         version: 0.5.19(tailwindcss@4.1.18)
       geist:
         specifier: 'catalog:'
-        version: 1.5.1(next@16.1.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+        version: 1.5.1(next@16.1.1(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       react-aria-components:
         specifier: 'catalog:'
         version: 1.14.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -298,7 +301,7 @@ importers:
         version: 2.1.29
       geist:
         specifier: 'catalog:'
-        version: 1.5.1(next@16.1.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+        version: 1.5.1(next@16.1.1(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       lock-scrollbars:
         specifier: ^0.4.1
         version: 0.4.1
@@ -336,7 +339,7 @@ importers:
         specifier: 'catalog:'
         version: 1.2.0(typescript@5.9.3)
       vite:
-        specifier: 7.3.0
+        specifier: 'catalog:'
         version: 7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.2)
       zod:
         specifier: 'catalog:'
@@ -361,7 +364,7 @@ importers:
         version: 0.5.19(tailwindcss@4.1.18)
       geist:
         specifier: 'catalog:'
-        version: 1.5.1(next@16.1.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+        version: 1.5.1(next@16.1.1(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       restyle:
         specifier: 'catalog:'
         version: 3.4.2(react@19.2.3)
@@ -608,7 +611,7 @@ importers:
         version: 1.7.1
       geist:
         specifier: 'catalog:'
-        version: 1.5.1(next@16.1.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+        version: 1.5.1(next@16.1.1(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       prettier:
         specifier: 'catalog:'
         version: 3.7.4
@@ -630,6 +633,9 @@ importers:
       valibot:
         specifier: 'catalog:'
         version: 1.2.0(typescript@5.9.3)
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.3)(yaml@2.8.2)
       zod:
         specifier: 'catalog:'
         version: 4.2.1
@@ -7705,7 +7711,7 @@ snapshots:
 
   function-bind@1.1.2: {}
 
-  geist@1.5.1(next@16.1.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)):
+  geist@1.5.1(next@16.1.1(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)):
     dependencies:
       next: 16.1.1(@babel/core@7.28.5)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
 

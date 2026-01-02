@@ -1,4 +1,4 @@
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import { z } from 'zod'
 
 export const FileSystemDirectory = new Directory({
@@ -17,30 +17,27 @@ export const ComponentsDirectory = new Directory({
   path: '../../packages/renoun/src/components',
   filter: '**/*.{ts,tsx}',
   repository: 'souporserious/renoun',
+  schema: {
+    mdx: {
+      metadata: z.object({
+        title: z.string(),
+        description: z.string(),
+      }),
+    },
+  },
   loader: {
-    ts: withSchema<ComponentSchema>(
-      (path) =>
-        import(
-          /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
-          `../../../packages/renoun/src/components/${path}.ts`
-        )
-    ),
-    tsx: withSchema<ComponentSchema>(
-      (path) =>
-        import(
-          /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
-          `../../../packages/renoun/src/components/${path}.tsx`
-        )
-    ),
-    mdx: withSchema(
-      {
-        metadata: z.object({
-          title: z.string(),
-          description: z.string(),
-        }),
-      },
-      (path) => import(`../../../packages/renoun/src/components/${path}.mdx`)
-    ),
+    ts: (path) =>
+      import(
+        /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
+        `../../../packages/renoun/src/components/${path}.ts`
+      ) as Promise<ComponentSchema>,
+    tsx: (path) =>
+      import(
+        /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
+        `../../../packages/renoun/src/components/${path}.tsx`
+      ) as Promise<ComponentSchema>,
+    mdx: (path) =>
+      import(`../../../packages/renoun/src/components/${path}.mdx`),
   },
 })
 
@@ -49,29 +46,25 @@ type HookSchema = Record<string, unknown>
 export const HooksDirectory = new Directory({
   path: '../../packages/renoun/src/hooks',
   filter: '**/*.{ts,tsx}',
+  schema: {
+    mdx: {
+      metadata: z.object({
+        title: z.string(),
+        description: z.string(),
+      }),
+    },
+  },
   loader: {
-    ts: withSchema<HookSchema>(
-      (path) =>
-        import(
-          /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
-          `../../../packages/renoun/src/hooks/${path}.ts`
-        )
-    ),
-    tsx: withSchema<HookSchema>(
-      (path) =>
-        import(
-          /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
-          `../../../packages/renoun/src/hooks/${path}.tsx`
-        )
-    ),
-    mdx: withSchema(
-      {
-        metadata: z.object({
-          title: z.string(),
-          description: z.string(),
-        }),
-      },
-      (path) => import(`../../../packages/renoun/src/hooks/${path}.mdx`)
-    ),
+    ts: (path) =>
+      import(
+        /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
+        `../../../packages/renoun/src/hooks/${path}.ts`
+      ) as Promise<HookSchema>,
+    tsx: (path) =>
+      import(
+        /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
+        `../../../packages/renoun/src/hooks/${path}.tsx`
+      ) as Promise<HookSchema>,
+    mdx: (path) => import(`../../../packages/renoun/src/hooks/${path}.mdx`),
   },
 })

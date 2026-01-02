@@ -8,24 +8,24 @@ const steps = [
   {
     title: 'Collect',
     content: `Collect, organize, and validate structured data using powerful file system utilities.`,
-    code: `import { Directory, withSchema } from 'renoun'
+    code: `import { Directory } from 'renoun'
 import { z } from 'zod'
 
 export const posts = new Directory({
   path: 'posts',
   filter: '*.mdx',
+  schema: {
+    mdx: {
+      frontmatter: z.object({
+        title: z.string(),
+        date: z.coerce.date(),
+        summary: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }),
+    },
+  },
   loader: {
-    mdx: withSchema(
-      {
-        frontmatter: z.object({
-          title: z.string(),
-          date: z.coerce.date(),
-          summary: z.string().optional(),
-          tags: z.array(z.string()).optional(),
-        }),
-      },
-      (path) => import(\`./posts/\${path\}.mdx\`)
-    ),
+    mdx: (path) => import(\`./posts/\${path\}.mdx\`),
   },
   sort: 'frontmatter.date',
 })`,

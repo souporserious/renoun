@@ -1,16 +1,17 @@
-import { Directory, withSchema, type ContentSection } from 'renoun'
+import { Directory, type ContentSection } from 'renoun'
 import { type } from 'arktype'
 
 const mdxSchema = {
-  sections: type('unknown').narrow(
-    (value): value is ContentSection[] => Array.isArray(value)
+  sections: type('unknown').narrow((value): value is ContentSection[] =>
+    Array.isArray(value)
   ),
 }
 
 const docs = new Directory({
   path: 'docs',
   filter: '*.mdx',
+  schema: { mdx: mdxSchema },
   loader: {
-    mdx: withSchema(mdxSchema, (path) => import(`@/docs/${path}.mdx`)),
+    mdx: (path) => import(`@/docs/${path}.mdx`),
   },
 })

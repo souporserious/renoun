@@ -54,20 +54,22 @@ export default async function Page({ slug }: { slug: string }) {
 You can query the entries within the directory to help with generating navigations and index pages. For example, we can filter to only `mdx` file extensions to generate an index page of links to all posts using the `getEntries` method:
 
 ```tsx
-import { Directory, withSchema } from 'renoun'
-
-interface PostType {
-  frontmatter: {
-    title: string
-    date: Date
-  }
-}
+import { Directory } from 'renoun'
+import { z } from 'zod'
 
 const posts = new Directory({
   path: 'posts',
   filter: '*.mdx',
+  schema: {
+    mdx: {
+      frontmatter: z.object({
+        title: z.string(),
+        date: z.coerce.date(),
+      }),
+    },
+  },
   loader: {
-    mdx: withSchema<PostType>((path) => import(`./posts/${path}.mdx`)),
+    mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
 
@@ -125,27 +127,27 @@ const file = await directory.getFile('Reference')
 
 ### Type checking file exports
 
-To improve type safety, you can utilize the `withSchema` helper to specify the schema for the file’s exports:
+To improve type safety, you can define a `schema` for exports (runtime validation) and optionally type the loader (compile-time):
 
 ```tsx
-import { Directory, withSchema } from 'renoun'
-
-interface PostType {
-  frontmatter: {
-    title: string
-    date: Date
-  }
-}
+import { Directory } from 'renoun'
+import { z } from 'zod'
 
 const posts = new Directory({
   path: 'posts',
+  schema: {
+    mdx: {
+      frontmatter: z.object({
+        title: z.string(),
+        date: z.coerce.date(),
+      }),
+    },
+  },
   loader: {
-    mdx: withSchema<PostType>((path) => import(`./posts/${path}.mdx`)),
+    mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
 ```
-
-Now when we call `JavaScript#getExportValue` and `JavaScriptExport#getRuntimeValue` we will have stronger type checking and autocomplete.
 
 ### Working with globbed module maps
 
@@ -153,7 +155,7 @@ When using bundler utilities like [`import.meta.glob`](https://vite.dev/guide/fe
 
 ```tsx
 /// <reference types="vite/client" />
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 
 interface PostType {
   frontmatter: {
@@ -164,12 +166,7 @@ interface PostType {
 
 const posts = new Directory({
   path: 'posts',
-  loader: () => {
-    const mdxModules = import.meta.glob('./posts/**/*.mdx')
-    return {
-      mdx: withSchema<PostType>((path) => mdxModules[`./posts/${path}.mdx`]),
-    }
-  },
+  loader: import.meta.glob<PostType>('./posts/*.mdx'),
 })
 ```
 
@@ -180,34 +177,36 @@ The loader factory executes once and returns the extension-to-loader map, so the
 You can also apply schema validation using libraries that follow the [Standard Schema Spec](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec) like [Zod](https://zod.dev/), [Valibot](https://valibot.dev/), or [Arktype](https://github.com/arktypeio/arktype) to ensure file exports conform to a specific schema:
 
 ```tsx
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import { z } from 'zod'
 
 const posts = new Directory({
   path: 'posts',
+  schema: {
+    mdx: {
+      frontmatter: z.object({
+        title: z.string(),
+        date: z.date(),
+      }),
+    },
+  },
   loader: {
-    mdx: withSchema(
-      {
-        frontmatter: z.object({
-          title: z.string(),
-          date: z.date(),
-        }),
-      },
-      (path) => import(`./posts/${path}.mdx`)
-    ),
+    mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
 ```
 
 <Note>
-  The schema must be an object of schema definitions where the key is the export
-  name and the value is the schema definition.
+
+The `schema` option can be either a Standard Schema (validates the full module
+export object) or an export schema map (validates individual exports).
+
 </Note>
 
 Alternatively, you can define a schema yourself using both TypeScript types and custom validation functions:
 
 ```tsx
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 
 interface PostType {
   frontmatter: {
@@ -218,24 +217,22 @@ interface PostType {
 
 const posts = new Directory({
   path: 'posts',
-  loader: {
-    mdx: withSchema<PostType>(
-      {
-        frontmatter: (value) => {
-          if (typeof value.title !== 'string') {
-            throw new Error('Title is required')
-          }
+  schema: {
+    mdx: {
+      frontmatter: (value: any) => {
+        if (typeof value.title !== 'string') {
+          throw new Error('Title is required')
+        }
 
-          if (!(value.date instanceof Date)) {
-            throw new Error('Date is required')
-          }
+        if (!(value.date instanceof Date)) {
+          throw new Error('Date is required')
+        }
 
-          return value
-        },
+        return value
       },
-      (path) => import(`./posts/${path}.mdx`)
-    ),
+    },
   },
+  loader: (path) => import(`./posts/${path}`),
 })
 ```
 
