@@ -887,21 +887,36 @@ describe('file system', () => {
   })
 
   test('filter virtual entries', async () => {
+    interface PostType {
+      metadata: { title: string }
+    }
     const fileSystem = new InMemoryFileSystem({
       'posts/getting-started.mdx': '# Getting Started',
       'posts/meta.json': '{ "title": "Posts" }',
     })
-    const posts = new Directory({
+    const posts = new Directory<{ mdx: PostType }>({
       fileSystem,
       path: 'posts',
-      filter: (entry) => isFile(entry, 'mdx'),
     })
     const files = await posts.getEntries({
       filter: (entry) => isFile(entry, 'mdx'),
     })
 
-    files satisfies MDXFile[]
+    type FilesTypeTest = Expect<IsNotAny<typeof files>>
+
+    files satisfies MDXFile<PostType>[]
+
     expect(files).toHaveLength(1)
+
+    const file = files[0]!
+    expect(file).toBeInstanceOf(MDXFile)
+
+    const metadata = await file.getExportValue('metadata')
+
+    // @ts-expect-error
+    file.getExportValue('undefined').catch(() => {})
+
+    type Test = Expect<IsNotAny<typeof metadata>>
   })
 
   test('filter entries with file exports that have internal tags', async () => {

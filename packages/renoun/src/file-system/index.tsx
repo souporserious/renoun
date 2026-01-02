@@ -633,9 +633,6 @@ export type LoadersWithRuntimeKeys<Loaders> = Extract<
   'js' | 'jsx' | 'ts' | 'tsx' | 'md' | 'mdx'
 >
 
-/** Determines if the loader is a resolver. */
-// (No `isLoader` helper needed now that loaders are always runtime functions.)
-
 /** Unwraps a loader result that may be a value, a promise, or a lazy factory. */
 async function unwrapModuleResult<T>(result: any): Promise<T> {
   let value = result
@@ -2689,16 +2686,20 @@ export class MDXModuleExport<Value> {
     const fileModule = await this.#getModule()
 
     if (this.#name in fileModule === false) {
-      throw new Error(
-        `[renoun] MDX file export "${String(this.#name)}" does not have a runtime value.`
+      throw new ModuleExportNotFoundError(
+        this.#file.absolutePath,
+        String(this.#name),
+        'MDX'
       )
     }
 
     const fileModuleExport = fileModule[this.#name]
 
     if (fileModuleExport === undefined) {
-      throw new Error(
-        `[renoun] MDX file export "${this.#name}" not found in ${this.#file.absolutePath}`
+      throw new ModuleExportNotFoundError(
+        this.#file.absolutePath,
+        String(this.#name),
+        'MDX'
       )
     }
 
@@ -2976,6 +2977,25 @@ export class MDXFile<
     const ExportName extends 'default' | Extract<keyof Types, string>,
   >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]>
   async getExportValue(name: string): Promise<any> {
+    if (name === 'frontmatter') {
+      // Prefer an explicit `frontmatter` export if it exists.
+      try {
+        const exportValue = await this.getExport('frontmatter' as any).then(
+          (fileExport) => fileExport.getValue()
+        )
+        if (exportValue !== undefined) {
+          return exportValue
+        }
+      } catch (error) {
+        if (!(error instanceof ModuleExportNotFoundError)) {
+          throw error
+        }
+      }
+
+      // Fall back to derived front matter (from `frontMatter` export or parsed source).
+      return (await this.getFrontMatter()) ?? {}
+    }
+
     const fileExport = await this.getExport(name as any)
     return (await fileExport.getValue()) as any
   }
@@ -3295,9 +3315,15 @@ export interface DirectoryOptions<
   Loaders extends DirectoryLoader = DirectoryLoader,
   Schema extends DirectorySchema | undefined = DirectorySchema | undefined,
   Filter extends
-    | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
     | undefined =
-    | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
     | undefined,
 > {
   /** Directory path in the workspace. */
@@ -3415,9 +3441,15 @@ export class Directory<
   Loaders extends DirectoryLoader = DirectoryLoader,
   Schema extends DirectorySchema | undefined = DirectorySchema | undefined,
   Filter extends
-    | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
     | undefined =
-    | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
     | undefined,
 > {
   #path: string
@@ -4402,7 +4434,10 @@ export class Directory<
    */
   async getEntries<
     const ProvidedFilter extends
-      | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
+      | DirectoryFilter<
+          FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+          ApplyDirectorySchema<LoaderTypes, Schema>
+        >
       | undefined = Filter,
   >(options?: {
     /** Filter entries with a minimatch pattern or predicate. */
