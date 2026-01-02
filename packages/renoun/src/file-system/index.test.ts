@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+/// <reference types="vite/client" />
 import {
   afterAll,
   beforeAll,
@@ -891,7 +891,11 @@ describe('file system', () => {
       metadata: { title: string }
     }
     const fileSystem = new InMemoryFileSystem({
-      'posts/getting-started.mdx': '# Getting Started',
+      'posts/getting-started.mdx': [
+        `export const metadata = { title: 'Getting Started' }`,
+        '',
+        '# Getting Started',
+      ].join('\n'),
       'posts/meta.json': '{ "title": "Posts" }',
     })
     const posts = new Directory<{ mdx: PostType }>({
@@ -3864,6 +3868,36 @@ export function identity<T>(value: T) {
       expect(structure.frontMatter?.description).toBe('Page Desc')
       expect(structure.description).toBe('Page Desc')
       expect(structure.relativePath).toBe('docs/page.md')
+    })
+  })
+
+  test('glob loader inference', async () => {
+    interface PostType {
+      frontmatter: {
+        title: string
+        date: Date
+      }
+    }
+
+    const directory = new Directory<{ mdx: PostType }>({
+      path: 'fixtures/posts',
+      loader: import.meta.glob<PostType>('../../posts/*.mdx'),
+    })
+    const file = await directory.getFile('getting-started.mdx')
+
+    type Test = Expect<IsNotAny<typeof file>>
+
+    file satisfies MDXFile<PostType>
+
+    const value = await file.getExportValue('frontmatter')
+
+    type ValueTypeTest = Expect<IsNotAny<typeof value>>
+
+    value satisfies PostType['frontmatter']
+
+    expect(value).toEqual({
+      title: 'Getting Started',
+      date: new Date('12-24-2024'),
     })
   })
 })

@@ -516,17 +516,17 @@ type InferDirectoryLoaderTypes<Loader extends DirectoryLoader> =
             ? RuntimeTypes
             : UnknownModuleExports
       >
-    : Loader extends ModuleLoaders
-      ? InferModuleLoadersTypes<Loader>
-      : Loader extends GlobModuleMap<infer GlobTypes>
-        ? Record<
-            string,
-            IsAny<GlobTypes> extends true
-              ? UnknownModuleExports
-              : GlobTypes extends ModuleExports
-                ? GlobTypes
-                : UnknownModuleExports
-          >
+    : Loader extends GlobModuleMap<infer GlobTypes>
+      ? Record<
+          string,
+          IsAny<GlobTypes> extends true
+            ? UnknownModuleExports
+            : GlobTypes extends ModuleExports
+              ? GlobTypes
+              : UnknownModuleExports
+        >
+      : Loader extends ModuleLoaders
+        ? InferModuleLoadersTypes<Loader>
         : never
 
 type IsAny<Type> = 0 extends 1 & Type ? true : false

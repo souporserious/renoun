@@ -166,7 +166,7 @@ interface PostType {
 
 const posts = new Directory({
   path: 'posts',
-  loader: import.meta.glob<PostType>('./posts/**/*.mdx'),
+  loader: import.meta.glob<PostType>('./posts/*.mdx'),
 })
 ```
 
