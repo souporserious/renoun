@@ -26,16 +26,16 @@ export const ComponentsDirectory = new Directory({
     },
   },
   loader: {
-    ts: (path) =>
+    ts: (path): Promise<ComponentSchema> =>
       import(
         /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
         `../../../packages/renoun/src/components/${path}.ts`
-      ) as Promise<ComponentSchema>,
-    tsx: (path) =>
+      ),
+    tsx: (path): Promise<ComponentSchema> =>
       import(
         /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
         `../../../packages/renoun/src/components/${path}.tsx`
-      ) as Promise<ComponentSchema>,
+      ),
     mdx: (path) =>
       import(`../../../packages/renoun/src/components/${path}.mdx`),
   },
@@ -55,16 +55,16 @@ export const HooksDirectory = new Directory({
     },
   },
   loader: {
-    ts: (path) =>
+    ts: (path): Promise<HookSchema> =>
       import(
         /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
         `../../../packages/renoun/src/hooks/${path}.ts`
-      ) as Promise<HookSchema>,
-    tsx: (path) =>
+      ),
+    tsx: (path): Promise<HookSchema> =>
       import(
         /* webpackInclude: /(?:\.examples|\/examples\/).*\.tsx?$/ */
         `../../../packages/renoun/src/hooks/${path}.tsx`
-      ) as Promise<HookSchema>,
+      ),
     mdx: (path) => import(`../../../packages/renoun/src/hooks/${path}.mdx`),
   },
 })
