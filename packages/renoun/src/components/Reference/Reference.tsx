@@ -12,6 +12,11 @@ import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 
 type GapSize = 'small' | 'medium' | 'large'
+type ClassAccessor = NonNullable<TypeOfKind<'Class'>['accessors']>[number]
+type AccessorKind =
+  | ClassAccessor['kind']
+  | Kind.GetAccessorSignature['kind']
+  | Kind.SetAccessorSignature['kind']
 
 export interface ReferenceComponents {
   Section: React.ComponentType<{
@@ -131,6 +136,13 @@ export interface ReferenceComponents {
     /** The content of the cell. */
     children?: React.ReactNode
   }>
+  AccessorName: React.ComponentType<{
+    /** The accessor's identifier. */
+    name?: string
+
+    /** Whether the accessor is a getter or setter. */
+    kind: AccessorKind
+  }>
 }
 
 type InternalReferenceComponents = {
@@ -189,6 +201,14 @@ const defaultComponents: InternalReferenceComponents = {
     </tr>
   ),
   TableRowGroup: ({ children }) => children,
+  AccessorName: ({ kind, name = '(anonymous)' }) => (
+    <>
+      {kind === 'ClassGetAccessor' || kind === 'GetAccessorSignature'
+        ? 'get'
+        : 'set'}{' '}
+      {name}
+    </>
+  ),
 }
 
 type TableHeaderCell =
@@ -850,7 +870,7 @@ function renderClassPropertySubRow(
 }
 
 function renderAccessorRow(
-  accessor: NonNullable<TypeOfKind<'Class'>['accessors']>[number],
+  accessor: ClassAccessor,
   components: InternalReferenceComponents,
   hasSubRow: boolean
 ) {
@@ -862,7 +882,7 @@ function renderAccessorRow(
   return (
     <>
       <components.TableData index={0} hasSubRow={hasSubRow}>
-        {accessor.kind === 'ClassGetAccessor' ? 'get' : 'set'} {accessor.name}
+        <components.AccessorName kind={accessor.kind} name={accessor.name} />
       </components.TableData>
       <components.TableData index={1} hasSubRow={hasSubRow} colSpan={2}>
         <components.Code>{accessorTypeText}</components.Code>
@@ -872,7 +892,7 @@ function renderAccessorRow(
 }
 
 function renderAccessorSubRow(
-  accessor: NonNullable<TypeOfKind<'Class'>['accessors']>[number],
+  accessor: ClassAccessor,
   components: InternalReferenceComponents
 ) {
   const modifiers = getClassMemberModifiers(accessor)
@@ -2164,9 +2184,10 @@ function renderMembersDetails({
           renderRow={(accessor, hasSubRow) => (
             <>
               <components.TableData index={0} hasSubRow={hasSubRow}>
-                {accessor.kind === 'GetAccessorSignature'
-                  ? `get ${accessor.name}`
-                  : `set ${accessor.name}`}
+                <components.AccessorName
+                  kind={accessor.kind}
+                  name={accessor.name}
+                />
               </components.TableData>
               <components.TableData index={1} hasSubRow={hasSubRow}>
                 <components.Code>

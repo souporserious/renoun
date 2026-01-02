@@ -280,6 +280,9 @@ export function Reference(props: ReferenceProps) {
         </td>
       )
     },
+    AccessorName: ({ name }) => (
+      <span css={{ color: 'var(--color-foreground-secondary)' }}>{name}</span>
+    ),
     Code: (props) => (
       <code
         {...props}
