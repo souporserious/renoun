@@ -3879,9 +3879,9 @@ export function identity<T>(value: T) {
       }
     }
 
-    const directory = new Directory<{ mdx: PostType }>({
+    const directory = new Directory({
       path: 'fixtures/posts',
-      loader: import.meta.glob<PostType>('../../posts/*.mdx'),
+      loader: import.meta.glob<PostType>('../../fixtures/posts/*.mdx'),
     })
     const file = await directory.getFile('getting-started.mdx')
 
@@ -3889,7 +3889,8 @@ export function identity<T>(value: T) {
 
     file satisfies MDXFile<PostType>
 
-    const value = await file.getExportValue('frontmatter')
+    const fileExport = await file.getExport('frontmatter')
+    const value = await fileExport.getRuntimeValue()
 
     type ValueTypeTest = Expect<IsNotAny<typeof value>>
 

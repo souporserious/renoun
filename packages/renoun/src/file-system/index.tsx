@@ -212,6 +212,15 @@ type ModuleExports<Value = unknown> = {
   [exportName: string]: Value
 }
 
+type NormalizeModuleTypes<Types> =
+  IsAny<Types> extends true
+    ? UnknownModuleExports
+    : Types extends ModuleExports
+      ? Types
+      : Types extends object
+        ? Types
+        : UnknownModuleExports
+
 export interface Section {
   /**
    * The section anchor id. Uses slugified heading text for markdown-derived sections.
@@ -502,29 +511,15 @@ type ResolveDirectoryTypes<
   Loaders extends DirectoryLoader,
   Schema extends DirectorySchema | undefined,
 > = ApplyDirectorySchema<
-  MergeRecord<InferDirectoryTypesFromLoaders<Loaders>, LoaderTypes>,
+  MergeRecord<LoaderTypes, InferDirectoryTypesFromLoaders<Loaders>>,
   Schema
 >
 
 type InferDirectoryLoaderTypes<Loader extends DirectoryLoader> =
   Loader extends ModuleRuntimeLoader<infer RuntimeTypes>
-    ? Record<
-        string,
-        IsAny<RuntimeTypes> extends true
-          ? UnknownModuleExports
-          : RuntimeTypes extends ModuleExports
-            ? RuntimeTypes
-            : UnknownModuleExports
-      >
+    ? Record<string, NormalizeModuleTypes<RuntimeTypes>>
     : Loader extends GlobModuleMap<infer GlobTypes>
-      ? Record<
-          string,
-          IsAny<GlobTypes> extends true
-            ? UnknownModuleExports
-            : GlobTypes extends ModuleExports
-              ? GlobTypes
-              : UnknownModuleExports
-        >
+      ? Record<string, NormalizeModuleTypes<GlobTypes>>
       : Loader extends ModuleLoaders
         ? InferModuleLoadersTypes<Loader>
         : never
@@ -534,13 +529,7 @@ type IsAny<Type> = 0 extends 1 & Type ? true : false
 /** Infer the type of a loader based on its runtime return type. */
 type InferModuleLoaderTypes<Loader extends ModuleLoader> =
   Loader extends ModuleRuntimeLoader<infer Types>
-    ? /**
-       * If the loader is "any", we return the types as a record to prevent
-       * from widening the type to "any" when merging default module types.
-       */
-      IsAny<Types> extends true
-      ? UnknownModuleExports
-      : Types
+    ? NormalizeModuleTypes<Types>
     : never
 
 function isRuntimeLoader(loader: any): loader is ModuleRuntimeLoader<any> {
