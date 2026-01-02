@@ -138,7 +138,7 @@ async function getFileLabel(entry: FileSystemEntry<any>) {
       .then((fileExports) => fileExports[0])
 
     if (firstExport) {
-      return firstExport.getName()
+      return firstExport.name
     }
   }
 

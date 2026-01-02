@@ -1094,7 +1094,7 @@ export class File<
   }
 
   /** The base file name formatted as a title. */
-  getTitle() {
+  get title() {
     return formatNameAsTitle(this.#baseName)
   }
 
@@ -1109,7 +1109,7 @@ export class File<
   }
 
   /** Get the depth of the file starting from the root directory. */
-  getDepth() {
+  get depth() {
     return this.getPathnameSegments().length - 2
   }
 
@@ -1119,7 +1119,7 @@ export class File<
   }
 
   /** Get the slug of the file. */
-  getSlug() {
+  get slug() {
     return createSlug(this.baseName, this.#slugCasing)
   }
 
@@ -1433,12 +1433,12 @@ export class File<
     return {
       type: 'file',
       name: this.name,
-      title: this.getTitle(),
-      slug: this.getSlug(),
+      title: this.title,
+      slug: this.slug,
       path: this.getPathname(),
       relativePath: this.workspacePath,
       extension: this.extension,
-      depth: this.getDepth(),
+      depth: this.depth,
       firstCommitDate,
       lastCommitDate,
       authors,
@@ -1807,12 +1807,12 @@ export class ModuleExport<Value> {
   }
 
   /** Get the slug of the file export. */
-  getSlug() {
-    return createSlug(this.getName(), this.#slugCasing)
+  get slug() {
+    return createSlug(this.name, this.#slugCasing)
   }
 
   /** Get the name of the export. Default exports will use the file name or declaration name if available. */
-  getName() {
+  get name() {
     if (this.#metadata === undefined) {
       return this.#name === 'default' ? this.#file.name : this.#name
     }
@@ -1820,12 +1820,12 @@ export class ModuleExport<Value> {
   }
 
   /** The export name formatted as a title. */
-  getTitle() {
-    return formatNameAsTitle(this.getName())
+  get title() {
+    return formatNameAsTitle(this.name)
   }
 
   /** Get the JSDoc description for the export. */
-  getDescription() {
+  get description() {
     return this.#metadata?.jsDocMetadata?.description
   }
 
@@ -2176,17 +2176,17 @@ export class ModuleExport<Value> {
         }
       }) ?? undefined
 
-    const slug = this.getSlug()
+    const slug = this.slug
     const filePath = this.#file.getPathname()
 
     return {
       type: 'export',
-      name: this.getName(),
-      title: this.getTitle(),
+      name: this.name,
+      title: this.title,
       slug,
       path: `${filePath}#${slug}`,
       relativePath: `${this.#file.workspacePath}#${slug}`,
-      description: this.getDescription(),
+      description: this.description,
       tags: normalizedTags,
       resolvedType,
       firstCommitDate,
@@ -2457,7 +2457,7 @@ export class JavaScriptFile<
         if (region) {
           const names = regionExportNames.get(region)
           if (names) {
-            names.push(fileExport.getName())
+            names.push(fileExport.name)
           }
         } else {
           ungroupedExports.push({
@@ -2490,8 +2490,8 @@ export class JavaScriptFile<
         sections.push({
           section: {
             // Keep hash ids aligned with `Reference`'s rendered anchor ids.
-            id: exportItem.getName(),
-            title: exportItem.getName(),
+            id: exportItem.name,
+            title: exportItem.name,
           },
           line,
         })
@@ -2586,16 +2586,16 @@ export class MDXModuleExport<Value> {
     this.#getModuleFn = getModuleFn
   }
 
-  getName() {
+  get name() {
     return this.#name
   }
 
-  getTitle() {
-    return formatNameAsTitle(this.getName())
+  get title() {
+    return formatNameAsTitle(this.name)
   }
 
-  getSlug() {
-    return createSlug(this.getName(), this.#slugCasing)
+  get slug() {
+    return createSlug(this.name, this.#slugCasing)
   }
 
   getEditorUri(options?: Omit<GetEditorUriOptions, 'path'>) {
@@ -3519,8 +3519,8 @@ export class Directory<
       this.#basePathname =
         options.basePathname === undefined
           ? this.#directory
-            ? this.#directory.getSlug()
-            : this.getSlug()
+            ? this.#directory.slug
+            : this.slug
           : options.basePathname
       this.#tsConfigPath =
         options.tsConfigPath ??
@@ -3772,7 +3772,7 @@ export class Directory<
   }
 
   /** Get the depth of the directory starting from the root directory. */
-  getDepth() {
+  get depth() {
     return this.getPathnameSegments().length - 2
   }
 
@@ -4575,11 +4575,11 @@ export class Directory<
       {
         type: 'directory',
         name: this.name,
-        title: this.getTitle(),
-        slug: this.getSlug(),
+        title: this.title,
+        slug: this.slug,
         path,
         relativePath,
-        depth: this.getDepth(),
+        depth: this.depth,
       },
     ]
 
@@ -5014,7 +5014,7 @@ export class Directory<
   }
 
   /** Get the slug of this directory. */
-  getSlug() {
+  get slug() {
     return createSlug(this.baseName, this.#slugCasing)
   }
 
@@ -5029,7 +5029,7 @@ export class Directory<
   }
 
   /** The directory name formatted as a title. */
-  getTitle() {
+  get title() {
     return formatNameAsTitle(this.name)
   }
 
@@ -6590,7 +6590,7 @@ export class Workspace {
   }
 
   getPackage(name: string) {
-    return this.getPackages().find((pkg) => pkg.getName() === name)
+    return this.getPackages().find((pkg) => pkg.name === name)
   }
 
   async getStructure(): Promise<
@@ -6859,7 +6859,7 @@ export class Package<
         : this.#resolveWithinPackage(options.sourcePath ?? 'src')
   }
 
-  getName() {
+  get name() {
     return this.#name
   }
 

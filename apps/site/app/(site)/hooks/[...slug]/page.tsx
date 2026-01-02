@@ -43,7 +43,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
       }
       throw error
     })
-  const description = mainExport ? mainExport.getDescription() : null
+  const description = mainExport ? mainExport.description : null
   const examplesEntry = await HooksDirectory.getEntry([
     ...slug,
     'examples',
@@ -88,8 +88,8 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
   if (examplesExports.length) {
     const parsedExports: TableOfContentsSection[] = examplesExports.map(
       (exampleExport) => ({
-        id: exampleExport.getSlug(),
-        title: exampleExport.getTitle(),
+        id: exampleExport.slug,
+        title: exampleExport.title,
       })
     )
 
@@ -111,7 +111,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
   const baseName = hookEntry.baseName
   const title = baseName.includes('-')
     ? hookExports?.length
-      ? hookExports[0].getName()
+      ? hookExports[0].name
       : baseName
     : baseName
 
@@ -149,7 +149,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
               }}
             >
               {examplesExports.map((fileExport) => (
-                <li key={fileExport.getName()}>
+                <li key={fileExport.name}>
                   <Preview fileExport={fileExport} />
                 </li>
               ))}
@@ -231,8 +231,8 @@ async function Preview({
 }: {
   fileExport: ModuleExport<React.ComponentType>
 }) {
-  const title = fileExport.getTitle()
-  const description = fileExport.getDescription()
+  const title = fileExport.title
+  const description = fileExport.description
   return (
     <CodePreview
       fileExport={fileExport}

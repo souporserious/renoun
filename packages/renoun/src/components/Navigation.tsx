@@ -105,7 +105,7 @@ async function Item({
   components: NavigationComponents
 }) {
   const pathname = entry.getPathname()
-  const depth = entry.getDepth() + 1
+  const depth = entry.depth + 1
 
   if (isFile(entry)) {
     return (

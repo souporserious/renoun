@@ -7,7 +7,7 @@ import { Reference } from '@/ui/Reference'
 
 export async function generateStaticParams() {
   const entries = await HooksDirectory.getEntries()
-  return entries.map((entry) => ({ slug: entry.getSlug() }))
+  return entries.map((entry) => ({ slug: entry.slug }))
 }
 
 export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
@@ -37,7 +37,7 @@ export default async function HookPage(props: PageProps<'/hooks/[slug]'>) {
   const fileExports = mainEntry ? await mainEntry.getExports() : []
   const exampleTags = fileExports
     .map((example) => ({
-      name: example.getName(),
+      name: example.name,
       tags: example.getTags() ?? [],
     }))
     .flatMap(({ name, tags }) =>

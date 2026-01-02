@@ -1014,7 +1014,7 @@ describe('file system', () => {
     const publicExports = await publicFile.getExports()
 
     expect(internalExports).toHaveLength(0)
-    expect(publicExports.map((fileExport) => fileExport.getName())).toEqual([
+    expect(publicExports.map((fileExport) => fileExport.name)).toEqual([
       'Link',
     ])
   })
@@ -1515,7 +1515,7 @@ describe('file system', () => {
     const fileExports = await file.getExports()
     const fileExport = fileExports.at(0)!
 
-    expect(fileExport.getName()).toMatch('createServer')
+    expect(fileExport.name).toMatch('createServer')
   })
 
   test('all virtual file exports', async () => {
@@ -1525,7 +1525,7 @@ describe('file system', () => {
     const rootDirectory = new Directory({ fileSystem })
     const file = await rootDirectory.getFile('use-hover', 'ts')
     const fileExports = (await file.getExports()).map((fileExport) => ({
-      name: fileExport.getName(),
+      name: fileExport.name,
     }))
 
     expect(fileExports).toMatchObject([{ name: 'useHover' }])
@@ -1536,7 +1536,7 @@ describe('file system', () => {
     const file = await directory.getFile('components/CodeBlock', 'tsx')
     const fileExports = await file.getExports()
 
-    expect(fileExports.map((fileExport) => fileExport.getName())).toStrictEqual(
+    expect(fileExports.map((fileExport) => fileExport.name)).toStrictEqual(
       ['CodeBlock']
     )
   })
@@ -2042,8 +2042,8 @@ function b() {}
     const fileExport = await file.getExport('default')
 
     expect(fileExport).toBeInstanceOf(ModuleExport)
-    expect(fileExport.getName()).toBe('hello')
-    expect(fileExport.getDescription()).toBe('Say hello.')
+    expect(fileExport.name).toBe('hello')
+    expect(fileExport.description).toBe('Say hello.')
     expect(fileExport.getTags()).toMatchObject([
       { name: 'category', text: 'greetings' },
     ])
@@ -2095,7 +2095,7 @@ export function identity<T>(value: T) {
     const fileExport = await file.getExport('Button')
 
     expect(fileExport).toBeInstanceOf(ModuleExport)
-    expect(fileExport.getName()).toBe('Button')
+    expect(fileExport.name).toBe('Button')
   })
 
   test('getFirstCommitDate uses git metadata provider when available', async () => {
@@ -2420,7 +2420,7 @@ export function identity<T>(value: T) {
     ): Promise<TreeEntry> {
       const name = entry.name
       const path = entry.getPathname()
-      const depth = entry.getDepth()
+      const depth = entry.depth
 
       if (isFile(entry)) {
         return { name, path, depth }
@@ -2500,7 +2500,7 @@ export function identity<T>(value: T) {
     const file = await directory.getFile('index', 'ts')
     const fileExport = await file.getExport('default')
 
-    expect(fileExport.getName()).toBe(file.baseName)
+    expect(fileExport.name).toBe(file.baseName)
   })
 
   test('isDirectory', async () => {
@@ -3506,7 +3506,7 @@ export function identity<T>(value: T) {
       expect(exports).toHaveLength(1)
       expect(exports[0].getExportPath()).toBe('.')
       expect(exports[0].absolutePath).toBe('/packages/local')
-      expect(pkg.getName()).toBe('local')
+      expect(pkg.name).toBe('local')
     })
 
     test('prefers workspace packages before node_modules', () => {
@@ -3831,11 +3831,11 @@ export function identity<T>(value: T) {
 
       const packages = workspace.getPackages()
       const packageNames = packages
-        .map((pkg) => pkg.getName())
+        .map((pkg) => pkg.name)
         .filter((name): name is string => Boolean(name))
 
       expect(packageNames.sort()).toEqual(['bar', 'foo'])
-      expect(workspace.getPackage('bar')?.getName()).toBe('bar')
+      expect(workspace.getPackage('bar')?.name).toBe('bar')
     })
   })
 

@@ -36,7 +36,7 @@ async function getFileLabel(entry: FileSystemEntry<any>) {
     try {
       const fileExports: any[] = await (entry as any).getExports()
       const firstExport = fileExports[0]
-      if (firstExport) return firstExport.getName()
+      if (firstExport) return firstExport.name
     } catch {
       // ignore export resolution errors
     }
@@ -127,13 +127,16 @@ async function getApiRoutes(
       continue
     }
 
-    const exportName = fileExport.getName?.()
+    const exportName = (fileExport as any).name ?? fileExport.name
     if (!exportName) continue
 
     const keywords = new Set<string>()
     keywords.add(exportName)
-    if (typeof fileExport.getSlug === 'function') {
-      keywords.add(fileExport.getSlug())
+    const slug =
+      (fileExport as any).slug ??
+      ('slug' in fileExport ? fileExport.slug : undefined)
+    if (slug) {
+      keywords.add(slug)
     }
     keywords.add(parentTitle)
     keywords.add('api')

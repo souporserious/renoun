@@ -13,7 +13,7 @@ import { Reference } from '@/ui/Reference'
 
 export async function generateStaticParams() {
   const entries = await ComponentsDirectory.getEntries()
-  return entries.map((entry) => ({ slug: entry.getSlug() }))
+  return entries.map((entry) => ({ slug: entry.slug }))
 }
 
 export default async function Component(
@@ -113,7 +113,7 @@ export default async function Component(
 
               return fileExports.map((fileExport) => {
                 return (
-                  <li key={fileExport.getName()}>
+                  <li key={fileExport.name}>
                     <Preview fileExport={fileExport} />
                   </li>
                 )
@@ -127,8 +127,8 @@ export default async function Component(
 }
 
 async function Preview({ fileExport }: { fileExport: ModuleExport<any> }) {
-  const name = fileExport.getName()
-  const description = fileExport.getDescription()
+  const name = fileExport.name
+  const description = fileExport.description
   const Value = await fileExport.getRuntimeValue()
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase

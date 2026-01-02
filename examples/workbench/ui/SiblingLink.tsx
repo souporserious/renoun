@@ -10,7 +10,7 @@ export function SiblingLink({
   direction: 'previous' | 'next'
 }) {
   const isPrevious = direction === 'previous'
-  const label = entry.getTitle()
+  const label = entry.title
 
   return (
     <Link

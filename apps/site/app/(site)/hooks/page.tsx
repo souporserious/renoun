@@ -31,7 +31,7 @@ export default async function Hooks() {
             const firstExport = await entry
               .getExports()
               .then((fileExports) => fileExports[0])
-            baseName = firstExport.getName()
+            baseName = firstExport.name
           } else {
             baseName = entry.baseName
           }

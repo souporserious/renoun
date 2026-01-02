@@ -27,7 +27,7 @@ export function References({
       }}
     >
       {fileExports.map((fileExport) => (
-        <Reference key={fileExport.getName()} source={fileExport} />
+        <Reference key={fileExport.name} source={fileExport} />
       ))}
     </div>
   )

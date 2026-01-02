@@ -181,9 +181,9 @@ export default async function Page(props: PageProps<'/components/[...slug]'>) {
 
   return fileExports.map((fileExport) => {
     return (
-      <div key={fileExport.getName()}>
-        <h2>{fileExport.getName()}</h2>
-        <p>{fileExport.getDescription()}</p>
+      <div key={fileExport.name}>
+        <h2>{fileExport.name}</h2>
+        <p>{fileExport.description}</p>
       </div>
     )
   })
@@ -220,7 +220,7 @@ export default async function Page() {
 
           return (
             <li key={pathname}>
-              <Link href={pathname}>{post.getTitle()}</Link>
+              <Link href={pathname}>{post.title}</Link>
             </li>
           )
         })}

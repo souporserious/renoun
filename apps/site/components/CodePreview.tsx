@@ -15,8 +15,8 @@ export async function CodePreview({
   header?: React.ReactNode
   fullBleed?: boolean
 }) {
-  const name = fileExport.getName()
-  const slug = fileExport.getSlug()
+  const name = fileExport.name
+  const slug = fileExport.slug
   const Value = await fileExport.getRuntimeValue()
   const Layout: any = layoutExport ? await layoutExport.getRuntimeValue() : null
   const isUppercase = name[0] === name[0].toUpperCase()

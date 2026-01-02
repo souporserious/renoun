@@ -47,7 +47,7 @@ export default async function Component(
       }
       throw error
     })
-  const description = mainExport ? mainExport.getDescription() : null
+  const description = mainExport ? mainExport.description : null
   const examplesEntry = await ComponentsDirectory.getEntry([
     ...slug,
     'examples',
@@ -93,9 +93,7 @@ export default async function Component(
       ).flat()
     : []
   // Optionally pick up a co-located layout/default export from a *.examples file
-  const layoutCandidate = exampleFiles?.find(
-    (file) => file.kind === 'examples'
-  )
+  const layoutCandidate = exampleFiles?.find((file) => file.kind === 'examples')
   const layoutExport = layoutCandidate
     ? await layoutCandidate.getExport('default').catch((error) => {
         if (error instanceof ModuleExportNotFoundError) {
@@ -130,8 +128,8 @@ export default async function Component(
   if (examplesExports.length) {
     const parsedExports: TableOfContentsSection[] = examplesExports.map(
       (exampleExport) => ({
-        id: exampleExport.getSlug(),
-        title: exampleExport.getTitle(),
+        id: exampleExport.slug,
+        title: exampleExport.title,
       })
     )
 
@@ -154,7 +152,7 @@ export default async function Component(
   // If base name is kebab case, use the first export name as the title
   const title = baseName.includes('-')
     ? componentExports?.length
-      ? componentExports[0].getName()
+      ? componentExports[0].name
       : baseName
     : baseName
 
@@ -208,7 +206,7 @@ export default async function Component(
               }}
             >
               {examplesExports.map((fileExport) => (
-                <li key={fileExport.getName()}>
+                <li key={fileExport.name}>
                   <Preview
                     fileExport={fileExport}
                     layoutExport={layoutExport}
@@ -292,8 +290,8 @@ async function Preview({
   fileExport: ModuleExport<React.ComponentType>
   layoutExport?: ModuleExport<any>
 }) {
-  const title = fileExport.getTitle()
-  const description = fileExport.getDescription()
+  const title = fileExport.title
+  const description = fileExport.description
   return (
     <CodePreview
       fileExport={fileExport}

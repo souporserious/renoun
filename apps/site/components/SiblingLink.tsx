@@ -49,7 +49,7 @@ export async function SiblingLink({
       const firstExport = fileExports[0]
 
       if (firstExport) {
-        baseName = firstExport.getName()
+        baseName = firstExport.name
       }
     }
   }
@@ -106,7 +106,7 @@ export async function SiblingLink({
         ) : null}
         <span>
           {variant === 'title'
-            ? metadata?.label || metadata?.title || entry.getTitle()
+            ? metadata?.label || metadata?.title || entry.title
             : baseName}
         </span>
         {direction === 'next' ? (
