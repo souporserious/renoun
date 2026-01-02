@@ -7758,13 +7758,16 @@ function getOriginUnionTypes(type: Type): Type[] {
   const origin = compilerType.origin
 
   if (!origin || (origin.flags & tsMorph.ts.TypeFlags.Intersection) !== 0) {
-    return type.getUnionTypes()
+    const unionTypes = type.getUnionTypes()
+    return unionTypes.length > 0 ? unionTypes : [type]
   }
 
   if ((origin.flags & tsMorph.ts.TypeFlags.Union) === 0) {
-    throw new Error(
-      '[getOriginUnionTypes] Origin type is not a union: ' + type.getText()
-    )
+    // Some types (notably `keyof ...`) can present as a union while their
+    // `origin` is a non-union TypeOperator/alias wrapper. In those cases we
+    // fall back to ts-morph's union extraction
+    const unionTypes = type.getUnionTypes()
+    return unionTypes.length > 0 ? unionTypes : [type]
   }
 
   const compilerFactory = (type as TypeWithContext)._context.compilerFactory

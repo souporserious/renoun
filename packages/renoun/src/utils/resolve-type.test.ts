@@ -2,10 +2,19 @@ import { describe, test, expect, vi } from 'vitest'
 import { getTsMorph } from './ts-morph.ts'
 import type { ClassDeclaration, FunctionDeclaration } from './ts-morph.ts'
 import dedent from 'dedent'
+import { fileURLToPath } from 'node:url'
 
 import { resolveType } from './resolve-type.ts'
 
 const { Project, SyntaxKind, ts } = getTsMorph()
+
+const renounTsConfigFilePath = fileURLToPath(
+  new URL('../../tsconfig.json', import.meta.url)
+)
+
+const renounFileSystemIndexPath = fileURLToPath(
+  new URL('../file-system/index.tsx', import.meta.url)
+)
 
 const project = new Project({
   compilerOptions: {
@@ -13,6 +22,10 @@ const project = new Project({
     checkJs: true,
   },
 })
+
+function getProjectTestFilePath(project: InstanceType<typeof Project>) {
+  return `${project.getFileSystem().getCurrentDirectory()}/test.ts`
+}
 
 describe('resolveType', () => {
   const sourceFile = project.createSourceFile(
@@ -482,6 +495,30 @@ describe('resolveType', () => {
         "text": "ArrayNode",
       }
     `)
+  })
+
+  test('does not throw for `keyof` types with non-union origin', () => {
+    const file = project.createSourceFile(
+      'origin-keyof.ts',
+      dedent`
+        export interface DefaultModuleTypes {
+          md: { default: string }
+          mdx: { default: string }
+          json: { value: number }
+        }
+
+        export type Keys = keyof DefaultModuleTypes
+      `
+    )
+
+    const alias = file.getTypeAliasOrThrow('Keys')
+
+    expect(() => resolveType(alias.getType(), alias)).not.toThrow()
+
+    const resolved = resolveType(alias.getType(), alias)
+
+    expect(resolved).toBeDefined()
+    expect(resolved).toMatchObject({ kind: 'TypeAlias', name: 'Keys' })
   })
 
   test('process generic properties', () => {
@@ -6392,10 +6429,10 @@ describe('resolveType', () => {
   test('complex library generic types', () => {
     const project = new Project({
       compilerOptions: { strictNullChecks: false },
-      tsConfigFilePath: 'tsconfig.json',
+      tsConfigFilePath: renounTsConfigFilePath,
     })
     const sourceFile = project.createSourceFile(
-      'test.ts',
+      getProjectTestFilePath(project),
       dedent`
         import styled from 'styled-components'
         export const Text = styled.span<{ fontSize: number; fontWeight?: number }>({})
@@ -10308,10 +10345,10 @@ describe('resolveType', () => {
   test('library call expression generic types', () => {
     const project = new Project({
       compilerOptions: { strictNullChecks: false },
-      tsConfigFilePath: 'tsconfig.json',
+      tsConfigFilePath: renounTsConfigFilePath,
     })
     const sourceFile = project.createSourceFile(
-      'test.ts',
+      getProjectTestFilePath(project),
       dedent`
         import styled from 'styled-components'
   
@@ -10552,10 +10589,10 @@ describe('resolveType', () => {
   test('library call expression generic types with props reference', () => {
     const project = new Project({
       compilerOptions: { strictNullChecks: false },
-      tsConfigFilePath: 'tsconfig.json',
+      tsConfigFilePath: renounTsConfigFilePath,
     })
     const sourceFile = project.createSourceFile(
-      'test.ts',
+      getProjectTestFilePath(project),
       dedent`
         import styled from 'styled-components'
   
@@ -10738,9 +10775,11 @@ describe('resolveType', () => {
   })
 
   test('library tagged template literal generic types', () => {
-    const project = new Project({ tsConfigFilePath: 'tsconfig.json' })
+    const project = new Project({
+      tsConfigFilePath: renounTsConfigFilePath,
+    })
     const sourceFile = project.createSourceFile(
-      'test.ts',
+      getProjectTestFilePath(project),
       dedent`
         import * as React from 'react'
         import styled from 'styled-components'
@@ -23076,9 +23115,9 @@ describe('resolveType', () => {
   })
 
   test('resolves Workspace type without overflowing the stack', () => {
-    const project = new Project()
+    const project = new Project({ tsConfigFilePath: renounTsConfigFilePath })
     const fileSystemFile = project.addSourceFileAtPath(
-      'src/file-system/index.tsx'
+      renounFileSystemIndexPath
     )
     const workspaceClass = fileSystemFile.getClassOrThrow('Workspace')
 
