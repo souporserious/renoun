@@ -179,24 +179,24 @@ Alongside file loading, renoun can validate module exports to ensure that source
 Below is an example demonstrating how to validate a `metadata` object exported from a module using [Zod](https://zod.dev/):
 
 ```ts path="posts.ts"
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import { z } from 'zod'
 
 export const posts = new Directory({
   path: 'posts',
   filter: '*.mdx',
+  schema: {
+    mdx: {
+      metadata: z.object({
+        title: z.string(),
+        date: z.coerce.date(),
+        summary: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }),
+    },
+  },
   loader: {
-    mdx: withSchema(
-      {
-        metadata: {
-          title: z.string(),
-          date: z.coerce.date(),
-          summary: z.string().optional(),
-          tags: z.array(z.string()).optional(),
-        },
-      },
-      (path) => import(`./posts/${path}.mdx`)
-    ),
+    mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
 ```
@@ -216,24 +216,24 @@ const { title, date, summary, tags } = metadata
 Now that we have a schema for the metadata, we can access it from the MDX file using the `getExportValue` method:
 
 ```tsx highlightedLines="29-30"
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import { z } from 'zod'
 
 export const posts = new Directory({
   path: 'posts',
   filter: '*.mdx',
+  schema: {
+    mdx: {
+      metadata: z.object({
+        title: z.string(),
+        date: z.coerce.date(),
+        summary: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }),
+    },
+  },
   loader: {
-    mdx: withSchema(
-      {
-        metadata: {
-          title: z.string(),
-          date: z.coerce.date(),
-          summary: z.string().optional(),
-          tags: z.array(z.string()).optional(),
-        },
-      },
-      (path) => import(`./posts/${path}.mdx`)
-    ),
+    mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
 
@@ -250,7 +250,7 @@ export default async function Page({
   return (
     <>
       <h1>{metadata.title.toString()}</h1>
-      <p>{metadata.summary.toString()}</p>
+      <p>{metadata.summary?.toString()}</p>
       <Content />
     </>
   )

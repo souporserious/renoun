@@ -1,8 +1,17 @@
 import type { ComponentType } from 'react'
-import { beforeAll, describe, test, expect, expectTypeOf, vi } from 'vitest'
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  test,
+  expect,
+  expectTypeOf,
+  vi,
+} from 'vitest'
 import { runInNewContext } from 'node:vm'
 import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import * as gitExportMetadataModule from '../utils/get-local-git-export-metadata.ts'
 import * as rootDirectoryModule from '../utils/get-root-directory.ts'
@@ -34,7 +43,6 @@ import {
   isJSONFile,
   resolveFileFromEntry,
   createSort,
-  withSchema,
   FileNotFoundError,
   ModuleExportNotFoundError,
   JSONFile,
@@ -45,6 +53,19 @@ import type { Expect, Is, IsNotAny } from './types'
 import type { Kind } from '../utils/resolve-type'
 
 describe('file system', () => {
+  const initialCwd = process.cwd()
+  const packageRoot = fileURLToPath(new URL('../../', import.meta.url))
+  const fixtureSort = (entry: FileSystemEntry<any>) =>
+    `${entry instanceof Directory ? 0 : 1}-${entry.name.toLowerCase()}`
+
+  beforeAll(() => {
+    process.chdir(packageRoot)
+  })
+
+  afterAll(() => {
+    process.chdir(initialCwd)
+  })
+
   describe('File', () => {
     test('parses full file name', () => {
       const file = new File({ path: '02.generics.exercise.ts', byteLength: 0 })
@@ -285,7 +306,7 @@ describe('file system', () => {
 
     type Tests = [Expect<Is<typeof Content, MDXContent>>]
 
-    expectTypeOf(Content).toExtend<MDXContent>()
+    Content satisfies MDXContent
   })
 
   test('uses default MDX compiler when no loader is provided', async () => {
@@ -396,9 +417,9 @@ describe('file system', () => {
 
     const filtered = await directory.getEntries({ filter: '*.mdx' })
 
-    expect(
-      filtered.map((entry) => entry.workspacePath).sort()
-    ).toEqual(['page.mdx'])
+    expect(filtered.map((entry) => entry.workspacePath).sort()).toEqual([
+      'page.mdx',
+    ])
 
     const recursiveFiltered = await directory.getEntries({
       filter: '**/*.mdx',
@@ -406,10 +427,22 @@ describe('file system', () => {
     })
 
     expect(
-      recursiveFiltered
-        .map((entry) => entry.workspacePath)
-        .sort()
+      recursiveFiltered.map((entry) => entry.workspacePath).sort()
     ).toEqual(['nested', 'nested/page.mdx', 'page.mdx'])
+  })
+
+  test('getEntries infers from directory filter', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'page.mdx': '',
+      'note.txt': '',
+    })
+    const directory = new Directory({ fileSystem, filter: '*.mdx' })
+
+    const entries = await directory.getEntries()
+
+    entries satisfies MDXFile[]
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toBeInstanceOf(MDXFile)
   })
 
   test('reuses cached snapshots for identical getEntries options', async () => {
@@ -486,8 +519,7 @@ describe('file system', () => {
       includeIndexAndReadmeFiles: true,
     })
 
-    expect(entries.map((entry) => entry.absolutePath))
-      .toMatchInlineSnapshot(`
+    expect(entries.map((entry) => entry.absolutePath)).toMatchInlineSnapshot(`
         [
           "/index.ts",
           "/components",
@@ -576,16 +608,13 @@ describe('file system', () => {
   test('filters with schema', async () => {
     const directory = new Directory({
       path: 'fixtures/posts',
-      loader: {
-        mdx: withSchema(
-          {
-            frontmatter: z.object({
-              title: z.string(),
-              date: z.coerce.date(),
-            }),
-          },
-          (path) => import(`#fixtures/posts/${path}.mdx`)
-        ),
+      schema: {
+        mdx: {
+          frontmatter: z.object({
+            title: z.string(),
+            date: z.coerce.date(),
+          }),
+        },
       },
       filter: async (entry) => {
         if (isFile(entry, 'mdx')) {
@@ -618,6 +647,35 @@ describe('file system', () => {
     expect(entries).toHaveLength(1)
   })
 
+  test('supports file-level schema on MarkdownFile', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'README.md': '# Hello\n',
+    })
+    const directory = new Directory({ fileSystem })
+
+    const file = new MarkdownFile({
+      path: 'README.md',
+      directory,
+      schema: {
+        frontmatter: z.object({
+          title: z.string(),
+          date: z.coerce.date(),
+        }),
+      },
+      loader: async () => ({
+        default: (() => null) as any,
+        frontMatter: { title: 'Hello', date: '2024-12-24' },
+      }),
+    })
+
+    const frontMatter = await file.getExportValue('frontMatter')
+
+    type Test = Expect<IsNotAny<typeof frontMatter>>
+
+    frontMatter satisfies { title: string; date: Date }
+    expect(frontMatter.date).toBeInstanceOf(Date)
+  })
+
   test('orders directory before its descendants by default', async () => {
     const fileSystem = new InMemoryFileSystem({
       'Button/Button.tsx': '',
@@ -633,12 +691,14 @@ describe('file system', () => {
   })
 
   test('loaders', async () => {
-    const directory = new Directory({
+    const directory = new Directory<{
+      ts: {
+        basename: typeof basename
+      }
+    }>({
       path: 'fixtures/utils',
       loader: {
-        ts: withSchema<{
-          basename: typeof basename
-        }>((path) => import(`#fixtures/utils/${path}.ts`)),
+        ts: (path) => import(`#fixtures/utils/${path}.ts`),
       },
     })
     const file = await directory.getFile('path', 'ts')
@@ -686,14 +746,14 @@ describe('file system', () => {
     )
   })
 
-  describe('withSchema', () => {
+  describe('schema', () => {
     test('types only', async () => {
-      const directory = new Directory({
+      const directory = new Directory<{
+        ts: { metadata?: { title: string } }
+      }>({
         path: 'fixtures/docs',
         loader: {
-          ts: withSchema<{ metadata?: { title: string } }>(
-            (path) => import(`#fixtures/docs/${path}.ts`)
-          ),
+          ts: (path) => import(`#fixtures/docs/${path}.ts`),
         },
       })
       const value = await (
@@ -708,18 +768,18 @@ describe('file system', () => {
     test('custom validator', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loader: {
-          ts: withSchema<{ metadata: { title: string } }>(
-            {
-              metadata: (value) => {
-                if (typeof value.title === 'string') {
-                  return value
-                }
-                throw new Error('Expected a title')
-              },
+        schema: {
+          ts: {
+            metadata: (value: { title: string }) => {
+              if (typeof value.title === 'string') {
+                return value
+              }
+              throw new Error('Expected a title')
             },
-            (path) => import(`#fixtures/docs/${path}.ts`)
-          ),
+          },
+        },
+        loader: {
+          ts: (path) => import(`#fixtures/docs/${path}.ts`),
         },
       })
       const value = await (
@@ -734,15 +794,15 @@ describe('file system', () => {
     test('inferred validator', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
-        loader: {
-          ts: withSchema(
-            {
-              metadata: (value: { title: string }) => {
-                return value
-              },
+        schema: {
+          ts: {
+            metadata: (value: { title: string }) => {
+              return value
             },
-            (path) => import(`#fixtures/docs/${path}.ts`)
-          ),
+          },
+        },
+        loader: {
+          ts: (path) => import(`#fixtures/docs/${path}.ts`),
         },
       })
       const value = await (
@@ -757,16 +817,16 @@ describe('file system', () => {
     test('valibot', async () => {
       const directory = new Directory({
         path: 'fixtures/docs',
+        schema: {
+          ts: {
+            metadata: v.object({
+              title: v.string(),
+              date: v.date(),
+            }),
+          },
+        },
         loader: {
-          ts: withSchema(
-            {
-              metadata: v.object({
-                title: v.string(),
-                date: v.date(),
-              }),
-            },
-            (path) => import(`#fixtures/docs/${path}.ts`)
-          ),
+          ts: (path) => import(`#fixtures/docs/${path}.ts`),
         },
       })
       const value = await (
@@ -782,15 +842,15 @@ describe('file system', () => {
       const directory = new Directory({
         path: 'fixtures/docs',
         loader: {
-          ts: withSchema(
-            {
-              metadata: z.object({
-                title: z.string(),
-                date: z.date().optional(),
-              }),
-            },
-            (path) => import(`#fixtures/docs/${path}.ts`)
-          ),
+          ts: (path) => import(`#fixtures/docs/${path}.ts`),
+        },
+        schema: {
+          ts: {
+            metadata: z.object({
+              title: z.string(),
+              date: z.date().optional(),
+            }),
+          },
         },
       })
       const value = await (
@@ -804,34 +864,29 @@ describe('file system', () => {
   })
 
   test('filter entries', async () => {
-    type PostType = { frontmatter: { title: string } }
     const posts = new Directory({
       path: 'fixtures/posts',
-      loader: {
-        mdx: withSchema<PostType>(
-          {
-            frontmatter: (value) => {
-              if (typeof value.title === 'string') {
-                return value
-              }
-              throw new Error('Expected a title')
-            },
+      schema: {
+        mdx: {
+          frontmatter: (value) => {
+            if (typeof value.title === 'string') {
+              return value
+            }
+            throw new Error('Expected a title')
           },
-          (path) => import(`#fixtures/posts/${path}.mdx`)
-        ),
+        },
       },
       filter: (entry) => isFile(entry, 'mdx'),
     })
-    const files = await posts.getEntries()
+    const files = await posts.getEntries({
+      filter: (entry) => isFile(entry, 'mdx'),
+    })
 
-    expectTypeOf(files).toExtend<
-      MDXFile<{ default: MDXContent } & PostType>[]
-    >()
+    files satisfies MDXFile[]
     expect(files).toHaveLength(1)
   })
 
   test('filter virtual entries', async () => {
-    type PostType = { frontmatter: { title: string } }
     const fileSystem = new InMemoryFileSystem({
       'posts/getting-started.mdx': '# Getting Started',
       'posts/meta.json': '{ "title": "Posts" }',
@@ -839,16 +894,13 @@ describe('file system', () => {
     const posts = new Directory({
       fileSystem,
       path: 'posts',
-      loader: {
-        mdx: withSchema<PostType>(),
-      },
       filter: (entry) => isFile(entry, 'mdx'),
     })
-    const files = await posts.getEntries()
+    const files = await posts.getEntries({
+      filter: (entry) => isFile(entry, 'mdx'),
+    })
 
-    expectTypeOf(files).toExtend<
-      MDXFile<{ default: MDXContent } & PostType>[]
-    >()
+    files satisfies MDXFile[]
     expect(files).toHaveLength(1)
   })
 
@@ -953,11 +1005,10 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      filter: '*.mdx',
     })
-    const entries = await directory.getEntries()
+    const entries = await directory.getEntries({ filter: '*.mdx' })
 
-    expectTypeOf(entries).toExtend<MDXFile[]>()
+    entries satisfies MDXFile[]
 
     expect(entries).toHaveLength(1)
   })
@@ -990,18 +1041,20 @@ describe('file system', () => {
       'foo.ts': () => Promise.resolve({ order: 2 }),
       'bar.ts': () => Promise.resolve({ order: 1 }),
     }
-    const directory = new Directory({
+    const directory = new Directory<{
+      ts: { order: number }
+    }>({
       fileSystem,
       loader: {
-        ts: withSchema<{ order: number }>((path) => {
+        ts: (path) => {
           const importPath = `${path}.ts` as keyof typeof imports
           return imports[importPath]()
-        }),
+        },
       },
       filter: '*.ts',
       sort: 'order',
     })
-    const entries = await directory.getEntries()
+    const entries = await directory.getEntries({ filter: '*.ts' })
 
     expect(entries.map((entry) => entry.name)).toMatchInlineSnapshot(`
       [
@@ -1020,7 +1073,7 @@ describe('file system', () => {
     })
     const entries = await docs.getEntries({ recursive: true })
 
-    expect(entries.every((entry) => entry.extension === 'mdx')).toBe(true)
+    expect(entries.every((entry) => isFile(entry, 'mdx'))).toBe(true)
     expect(entries).toHaveLength(4)
   })
 
@@ -1431,16 +1484,24 @@ describe('file system', () => {
     const fileSystem = new InMemoryFileSystem({
       'use-hover.ts': 'export const useHover = () => {}',
     })
-    const rootDirectory = new Directory({
+    const rootDirectory = new Directory<{
+      ts: {
+        useHover: () => void
+      }
+    }>({
       fileSystem,
       loader: {
-        ts: withSchema<{ useHover: Function }>(() => {
+        ts: () => {
           return Promise.resolve({ useHover: () => {} })
-        }),
+        },
       },
     })
     const file = await rootDirectory.getFile('use-hover', 'ts')
-    const fileExport = await file.getExport('useHover')
+    const fileExport = (await (
+      file as JavaScriptFile<{
+        useHover: () => void
+      }>
+    ).getExport('useHover')) as ModuleExport<() => void>
     const value = await fileExport.getRuntimeValue()
 
     expectTypeOf(value).toExtend<Function>()
@@ -1448,12 +1509,14 @@ describe('file system', () => {
   })
 
   test('file export value types', async () => {
-    const projectDirectory = new Directory({
+    const projectDirectory = new Directory<{
+      ts: {
+        createServer: (...args: unknown[]) => unknown
+      }
+    }>({
       path: 'fixtures/project',
       loader: {
-        ts: withSchema<{ createServer: () => void }>(
-          (path) => import(`#fixtures/project/${path}.ts`)
-        ),
+        ts: (path) => import(`#fixtures/project/${path}.ts`),
       },
     })
     const file = await projectDirectory.getFile('server', 'ts')
@@ -1469,33 +1532,33 @@ describe('file system', () => {
     })
     const directory = new Directory({
       fileSystem,
-      loader: {
-        ts: withSchema<{ metadata: { title: string } }>(
-          {
-            metadata: (value) => {
-              type Test = Expect<IsNotAny<typeof value>>
+      schema: {
+        ts: {
+          metadata: (value) => {
+            type Test = Expect<IsNotAny<typeof value>>
 
-              value satisfies { title: string }
+            value satisfies Record<string, unknown>
 
-              if (typeof value.title === 'string') {
-                return value
-              }
+            if (typeof value.title === 'string') {
+              return value
+            }
 
-              throw new Error('Expected a title')
-            },
+            throw new Error('Expected a title')
           },
-          async (path) => {
-            const transpiledCode = await fileSystem.transpileFile(path)
-            const module = { exports: {} }
+        },
+      },
+      loader: {
+        ts: async (path) => {
+          const transpiledCode = await fileSystem.transpileFile(path)
+          const module = { exports: {} }
 
-            runInNewContext(
-              `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
-              { module }
-            )
+          runInNewContext(
+            `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+            { module }
+          )
 
-            return module.exports as { metadata: { title: string } }
-          }
-        ),
+          return module.exports as { metadata: { title: string } }
+        },
       },
     })
     const file = await directory.getFile('index', 'ts')
@@ -1875,26 +1938,26 @@ function b() {}
     })
     const directory = new Directory({
       fileSystem,
-      loader: {
+      schema: {
         ts: {
-          schema: {
-            metadata: z.object({
-              title: z.string(),
-              date: z.coerce.date(),
-            }),
-          },
-          runtime: async (path) => {
-            const filePath = `${path}.ts`
-            const transpiledCode = await fileSystem.transpileFile(filePath)
-            const module = { exports: {} }
+          metadata: z.object({
+            title: z.string(),
+            date: z.coerce.date(),
+          }),
+        },
+      },
+      loader: {
+        ts: async (path) => {
+          const filePath = `${path}.ts`
+          const transpiledCode = await fileSystem.transpileFile(filePath)
+          const module = { exports: {} }
 
-            runInNewContext(
-              `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
-              { module }
-            )
+          runInNewContext(
+            `(function(module, exports) { ${transpiledCode} })(module, module.exports);`,
+            { module }
+          )
 
-            return module.exports
-          },
+          return module.exports
         },
       },
     })
@@ -2095,7 +2158,11 @@ export function identity<T>(value: T) {
   })
 
   test('getRuntimeValue resolves export runtime value from extension module', async () => {
-    const directory = new Directory({
+    const directory = new Directory<{
+      ts: {
+        basename: (path: string, extension: string) => string
+      }
+    }>({
       path: 'fixtures/utils',
       loader: {
         ts: (path) => import(`#fixtures/utils/${path}.ts`),
@@ -2103,12 +2170,12 @@ export function identity<T>(value: T) {
     })
     const file = await directory.getFile('path', 'ts')
 
-    expectTypeOf(file).toExtend<JavaScriptFile<any>>()
+    file satisfies JavaScriptFile<any>
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = await file.getExport('basename')
 
-    expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
+    expect(fileExport).toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(ModuleExport)
 
     const basename = await fileExport.getRuntimeValue()
@@ -2118,7 +2185,11 @@ export function identity<T>(value: T) {
   })
 
   test('getRuntimeValue resolves export runtime value from loader', async () => {
-    const directory = new Directory({
+    const directory = new Directory<{
+      ts: {
+        basename: (path: string, extension: string) => string
+      }
+    }>({
       path: 'fixtures/utils',
       loader: {
         ts: (path) => import(`#fixtures/utils/${path}.ts`),
@@ -2126,12 +2197,12 @@ export function identity<T>(value: T) {
     })
     const file = await directory.getFile('path', 'ts')
 
-    expectTypeOf(file).toExtend<JavaScriptFile<any>>()
+    file satisfies JavaScriptFile<any>
     expect(file).toBeInstanceOf(JavaScriptFile)
 
     const fileExport = await file.getExport('basename')
 
-    expectTypeOf(fileExport).toHaveProperty('getRuntimeValue')
+    expect(fileExport).toHaveProperty('getRuntimeValue')
     expect(fileExport).toBeInstanceOf(ModuleExport)
 
     const basename = await fileExport.getRuntimeValue()
@@ -2232,7 +2303,10 @@ export function identity<T>(value: T) {
   })
 
   test('generates sibling navigation from file', async () => {
-    const projectDirectory = new Directory({ path: 'fixtures/project' })
+    const projectDirectory = new Directory({
+      path: 'fixtures/project',
+      sort: fixtureSort,
+    })
     const file = await projectDirectory.getFile('server', 'ts')
     const [previousEntry, nextEntry] = await file.getSiblings()
 
@@ -2241,7 +2315,10 @@ export function identity<T>(value: T) {
   })
 
   test('generates sibling navigation from directory', async () => {
-    const projectDirectory = new Directory({ path: 'fixtures/project' })
+    const projectDirectory = new Directory({
+      path: 'fixtures/project',
+      sort: fixtureSort,
+    })
     const directory = await projectDirectory.getDirectory('rpc')
     const [previousEntry, nextEntry] = await directory.getSiblings()
 
@@ -2267,6 +2344,7 @@ export function identity<T>(value: T) {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
       basePathname: 'project',
+      sort: fixtureSort,
     })
 
     type TreeEntry = {
@@ -2373,16 +2451,11 @@ export function identity<T>(value: T) {
     const directory = new Directory({
       fileSystem,
       loader: {
-        tsx: withSchema<{
-          default: ComponentType
-        }>,
-        mdx: withSchema<{
-          frontmatter: { title: string }
-        }>(() => {
+        mdx: () => {
           return Promise.resolve<any>({
             default: () => {},
           })
-        }),
+        },
       },
     })
     const entry = await directory.getEntry('Button')
@@ -2391,7 +2464,7 @@ export function identity<T>(value: T) {
     expect(isFile(entry)).toBe(true)
 
     if (isDirectory(entry)) {
-      expectTypeOf(entry).toExtend<Directory<any>>()
+      entry satisfies Directory<any>
     }
 
     const normalizedDirectory = isFile(entry) ? entry.getParent() : entry
@@ -2402,14 +2475,7 @@ export function identity<T>(value: T) {
 
     expect(isDirectory(file)).toBe(false)
 
-    expectTypeOf(file).toExtend<
-      MDXFile<{
-        default: MDXContent
-        frontmatter: {
-          title: string
-        }
-      }>
-    >()
+    file satisfies MDXFile
   })
 
   test('isFile', async () => {
@@ -2417,9 +2483,6 @@ export function identity<T>(value: T) {
     const fileSystem = new InMemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory({
       fileSystem,
-      loader: {
-        tsx: withSchema<Metadata>(),
-      },
     })
     const file = await directory.getFile('Button')
     const hasTsxExtension = isFile(file, 'tsx')
@@ -2427,7 +2490,7 @@ export function identity<T>(value: T) {
     expect(hasTsxExtension).toBe(true)
 
     if (hasTsxExtension) {
-      expectTypeOf(file).toExtend<JavaScriptFile<Metadata>>()
+      file satisfies JavaScriptFile
     }
   })
 
@@ -2436,10 +2499,6 @@ export function identity<T>(value: T) {
     const fileSystem = new InMemoryFileSystem({ 'Button.tsx': '' })
     const directory = new Directory({
       fileSystem,
-      loader: {
-        ts: withSchema<Metadata>(),
-        tsx: withSchema<Metadata>(),
-      },
     })
     const file = await directory.getFile('Button')
     const hasTsLikeExtension = isFile(file, ['ts', 'tsx'])
@@ -2447,7 +2506,7 @@ export function identity<T>(value: T) {
     expect(hasTsLikeExtension).toBe(true)
 
     if (hasTsLikeExtension) {
-      expectTypeOf(file).toExtend<JavaScriptFile<Metadata>>()
+      file satisfies JavaScriptFile
     }
 
     const hasCssExtension = isFile(file, ['css'])
@@ -2455,7 +2514,7 @@ export function identity<T>(value: T) {
     expect(hasCssExtension).toBe(false)
 
     if (hasCssExtension) {
-      expectTypeOf(file).toExtend<File>()
+      file satisfies File
     }
   })
 
@@ -2537,19 +2596,12 @@ export function identity<T>(value: T) {
       'posts/building-a-button-component.mdx': '# Building a Button Component',
       'posts/meta.js': 'export default { "title": "Posts" }',
     })
-    type FrontMatter = { frontmatter: { title: string } }
     const posts = new Directory({
       path: 'posts',
       fileSystem,
-      loader: {
-        mdx: withSchema<FrontMatter>(),
-      },
     })
     const docs = new Directory({
       path: 'fixtures/docs',
-      loader: {
-        mdx: withSchema<FrontMatter>(),
-      },
     })
     const group = new Collection({
       entries: [posts, docs],
@@ -2571,7 +2623,7 @@ export function identity<T>(value: T) {
     const jsFile = await group.getFile('posts/meta', 'js')
 
     expect(jsFile).toBeInstanceOf(JavaScriptFile)
-    expectTypeOf(jsFile).toExtend<JavaScriptFile<any>>()
+    jsFile satisfies JavaScriptFile<any>
 
     const mdxFile = await group.getFile(
       'posts/building-a-button-component',
@@ -2579,9 +2631,7 @@ export function identity<T>(value: T) {
     )
 
     expect(mdxFile).toBeInstanceOf(MDXFile)
-    expectTypeOf(mdxFile).toExtend<
-      MDXFile<{ default: MDXContent } & InferModuleExports<FrontMatter>>
-    >()
+    mdxFile satisfies MDXFile<{ default: MDXContent }>
 
     const file = await group.getFile(['posts', 'meta'], 'js')
     const [previousEntry, nextEntry] = await file.getSiblings({
@@ -2675,32 +2725,23 @@ export function identity<T>(value: T) {
   })
 
   test('has entry', async () => {
-    type MDXTypes = { frontmatter: { title: string } }
-    type TSXTypes = { metadata: { title: string } }
-
     const directoryA = new Directory({
       fileSystem: new InMemoryFileSystem({ 'Button.mdx': '' }),
-      loader: {
-        mdx: withSchema<MDXTypes>(),
-      },
     })
     const directoryB = new Directory({
       path: 'fixtures/components',
-      loader: {
-        tsx: withSchema<TSXTypes>(),
-      },
     })
     const group = new Collection({
       entries: [directoryA, directoryB],
     })
 
-    expectTypeOf(await group.getFile('Button.mdx')).toExtend<
-      MDXFile<{ default: MDXContent } & MDXTypes>
-    >()
+    ;(await group.getFile('Button.mdx')) satisfies MDXFile<{
+      default: MDXContent
+    }>
 
     const file = await group.getFile('Button', 'mdx')
 
-    expectTypeOf(file).toExtend<MDXFile<{ default: MDXContent } & MDXTypes>>()
+    file satisfies MDXFile<{ default: MDXContent }>
 
     const entry = await group.getEntry('Button')
 
@@ -2711,9 +2752,7 @@ export function identity<T>(value: T) {
     type Test = Expect<IsNotAny<typeof entry>>
 
     if (directoryA.hasFile(entry, 'mdx')) {
-      expectTypeOf(entry).toExtend<
-        MDXFile<{ default: MDXContent } & MDXTypes>
-      >()
+      entry satisfies MDXFile<{ default: MDXContent }>
     }
   })
 
@@ -2734,19 +2773,29 @@ export function identity<T>(value: T) {
 
     const directory = new Directory({
       path: 'fixtures/docs',
+      schema: {
+        mdx: {
+          sections: z.custom<ContentSection[]>(),
+          metadata: z.object({
+            title: z.string(),
+            label: z.string().optional(),
+            description: z.string(),
+            tags: z.array(z.string()).optional(),
+          }),
+        },
+      },
       loader: {
-        mdx: withSchema(
-          {
-            sections: z.custom<ContentSection[]>(),
-            metadata: z.object({
-              title: z.string(),
-              label: z.string().optional(),
-              description: z.string(),
-              tags: z.array(z.string()).optional(),
-            }),
-          },
-          (path) => Promise.resolve<any>({})
-        ),
+        mdx: (_path) =>
+          Promise.resolve({
+            default: (() => null) as unknown as MDXContent,
+            sections: [] as ContentSection[],
+            metadata: {
+              title: '',
+              label: undefined,
+              description: '',
+              tags: undefined,
+            },
+          }),
       },
       filter: (entry) => isFile(entry, 'mdx'),
     })
@@ -2759,21 +2808,26 @@ export function identity<T>(value: T) {
   })
 
   test('adds default MDXContent type to existing mdx loaders', async () => {
-    const posts = new Directory({
+    const posts = new Directory<{
+      mdx: {
+        frontMatter: {
+          title: string
+        }
+      }
+    }>({
       fileSystem: new InMemoryFileSystem({
         'hello-world.mdx': `export const frontmatter = { title: 'Hello, World!' }\n\n# Hello, World!`,
       }),
       loader: {
-        mdx: withSchema<{ frontmatter: { title: string } }>(() => {
-          return {
+        mdx: (_path) =>
+          Promise.resolve({
             default: async () => {
               return null
             },
-            frontmatter: {
+            frontMatter: {
               title: 'Hello, World!',
             },
-          } as any
-        }),
+          } as any),
       },
     })
     const file = await posts.getFile('hello-world', 'mdx')
@@ -2782,13 +2836,16 @@ export function identity<T>(value: T) {
       const fileExport = await file.getExport('default')
       const fileExportValue = await fileExport.getRuntimeValue()
 
-      expectTypeOf(fileExportValue).toExtend<MDXContent>()
+      fileExportValue satisfies MDXContent
 
       const Content = await file.getExportValue('default')
-      const frontmatter = await file.getExportValue('frontmatter')
+      const frontMatter = await file.getExportValue('frontMatter')
 
-      expectTypeOf(Content).toExtend<MDXContent>()
-      expectTypeOf(frontmatter).toExtend<{ title: string }>()
+      Content satisfies MDXContent
+      if (frontMatter === undefined) {
+        throw new Error('Expected frontMatter')
+      }
+      frontMatter satisfies { title: string }
 
       type Tests = [
         Expect<IsNotAny<typeof fileExportValue>>,
@@ -2805,7 +2862,7 @@ export function identity<T>(value: T) {
 
     await expect(
       directory.getEntries({
-        // @ts-expect-error
+        // @ts-expect-error - shallow filter patterns cannot be used with recursive option
         recursive: true,
       })
     ).rejects.toThrowErrorMatchingInlineSnapshot(`
@@ -2907,6 +2964,7 @@ export function identity<T>(value: T) {
     const directory = new Directory({
       path: 'fixtures/docs',
       filter: '**/*.mdx',
+      sort: fixtureSort,
     })
     const entries = await directory.getEntries({ recursive: true })
     const paths = entries.map((entry) => entry.getPathname())
@@ -2935,19 +2993,24 @@ export function identity<T>(value: T) {
         expectTypeOf(entry).toExtend<Directory<any>>()
       } else {
         expect(entry).toBeInstanceOf(MDXFile)
-        expectTypeOf(entry).toExtend<MDXFile<{ default: MDXContent }>>()
+        if (!isFile(entry, 'mdx')) {
+          throw new Error('Expected an MDX file')
+        }
+        entry satisfies MDXFile<{ default: MDXContent }>
       }
     }
   })
 
   test('sort descriptor', async () => {
-    new Directory({
+    new Directory<{
+      mdx: {
+        frontmatter: {
+          title: string
+        }
+      }
+    }>({
       loader: {
-        mdx: withSchema<{
-          frontmatter: {
-            title: string
-          }
-        }>((path) => import(`#fixtures/posts/${path}.mdx`)),
+        mdx: (path) => import(`#fixtures/posts/${path}.mdx`),
       },
       filter: '**/*.mdx',
       // @ts-expect-error
@@ -3080,24 +3143,22 @@ export function identity<T>(value: T) {
   })
 
   test('sort descriptor with recursive filter', async () => {
-    new Directory({
+    new Directory<{
+      mdx: { metadata: { order: number } }
+    }>({
       filter: '**/*.mdx',
       loader: {
-        mdx: withSchema(
-          { metadata: z.object({ order: z.number() }) },
-          (path) => import(`./docs/${path}.mdx`)
-        ),
+        mdx: (path) => import(`./docs/${path}.mdx`),
       },
       sort: 'metadata.order',
     })
 
-    new Directory({
+    new Directory<{
+      mdx: { metadata: { order: number } }
+    }>({
       filter: '**/*.mdx',
       loader: {
-        mdx: withSchema(
-          { metadata: z.object({ order: z.number() }) },
-          (path) => import(`./docs/${path}.mdx`)
-        ),
+        mdx: (path) => import(`./docs/${path}.mdx`),
       },
       // @ts-expect-error - should throw error since date is not a typed property
       sort: 'metadata.date',
@@ -3110,10 +3171,12 @@ export function identity<T>(value: T) {
       'file2.ts': 'export const priority = 1',
       'file3.ts': 'export const priority = 2',
     })
-    const directory = new Directory({
+    const directory = new Directory<{
+      ts: { priority: number }
+    }>({
       fileSystem,
       loader: {
-        ts: withSchema<{ priority: number }>((path) => {
+        ts: (path) => {
           switch (path) {
             case 'file1':
               return Promise.resolve({ priority: 3 })
@@ -3123,12 +3186,16 @@ export function identity<T>(value: T) {
               return Promise.resolve({ priority: 2 })
           }
           return Promise.resolve({ priority: 0 })
-        }),
+        },
       },
       sort: createSort(
-        (entry) => {
+        async (entry) => {
           if (isFile(entry, 'ts')) {
-            return entry.getExportValue('priority')
+            return await (
+              entry as JavaScriptFile<{
+                priority: number
+              }>
+            ).getExportValue('priority')
           }
           return 0
         },
@@ -3278,9 +3345,7 @@ export function identity<T>(value: T) {
     const directory = new Directory({
       fileSystem,
       loader: {
-        ts: withSchema<{ default: number }>(() =>
-          Promise.resolve({ default: 123 })
-        ),
+        ts: (_path) => Promise.resolve({ default: 123 }),
       },
     })
     const file = await directory.getFile('index', 'ts')
@@ -3318,9 +3383,7 @@ export function identity<T>(value: T) {
       ])
       expect(exports[0]).toBeInstanceOf(Directory)
       expect(exports[0].absolutePath).toBe('/node_modules/acme/src')
-      expect(exports[1].absolutePath).toBe(
-        '/node_modules/acme/src/components'
-      )
+      expect(exports[1].absolutePath).toBe('/node_modules/acme/src/components')
       expect(exports[2].absolutePath).toBe('/node_modules/acme/src/hooks')
     })
 
@@ -3365,9 +3428,7 @@ export function identity<T>(value: T) {
         (entry) => entry.getExportPath() === './guides'
       )
 
-      expect(components?.absolutePath).toBe(
-        '/node_modules/acme/src/custom'
-      )
+      expect(components?.absolutePath).toBe('/node_modules/acme/src/custom')
       expect(guides?.absolutePath).toBe('/node_modules/acme/docs')
     })
 
@@ -3440,9 +3501,7 @@ export function identity<T>(value: T) {
         })
 
         const exports = pkg.getExports()
-        expect(exports[0].absolutePath).toBe(
-          '/apps/site/node_modules/acme/src'
-        )
+        expect(exports[0].absolutePath).toBe('/apps/site/node_modules/acme/src')
       } finally {
         getRootSpy.mockRestore()
       }
@@ -3472,9 +3531,7 @@ export function identity<T>(value: T) {
         })
 
         const exports = pkg.getExports()
-        expect(exports[0].absolutePath).toBe(
-          '/apps/site/node_modules/acme/src'
-        )
+        expect(exports[0].absolutePath).toBe('/apps/site/node_modules/acme/src')
       } finally {
         getRootSpy.mockRestore()
       }

@@ -1,4 +1,4 @@
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import { z } from 'zod'
 
 const mdxSchema = {
@@ -13,15 +13,17 @@ const mdxSchema = {
 export const DocsDirectory = new Directory({
   path: 'docs',
   filter: '*.mdx',
+  schema: { mdx: mdxSchema },
   loader: {
-    mdx: withSchema(mdxSchema, (path) => import(`@/docs/${path}.mdx`)),
+    mdx: (path) => import(`@/docs/${path}.mdx`),
   },
 })
 
 export const GuidesDirectory = new Directory({
   path: 'guides',
   filter: '*.mdx',
+  schema: { mdx: mdxSchema },
   loader: {
-    mdx: withSchema(mdxSchema, (path) => import(`@/guides/${path}.mdx`)),
+    mdx: (path) => import(`@/guides/${path}.mdx`),
   },
 })

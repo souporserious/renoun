@@ -1,31 +1,31 @@
-import { Directory, resolveFileFromEntry, withSchema } from 'renoun'
+import { Directory, resolveFileFromEntry } from 'renoun'
 import { z } from 'zod'
 
 export const docs = new Directory({
   path: 'docs',
   basePathname: null,
   filter: '**/*.mdx',
-  loader: {
-    mdx: withSchema(
-      {
-        headings: z.array(
-          z.object({
-            id: z.string(),
-            level: z.number(),
-            text: z.string(),
-            summary: z.string().optional(),
-            children: z.custom<NonNullable<React.ReactNode>>().optional(),
-          })
-        ),
-        metadata: z.object({
-          title: z.string(),
-          order: z.number(),
+  schema: {
+    mdx: {
+      headings: z.array(
+        z.object({
+          id: z.string(),
+          level: z.number(),
+          text: z.string(),
           summary: z.string().optional(),
-          tags: z.array(z.string()).optional(),
-        }),
-      },
-      (path) => import(`./docs/${path}.mdx`)
-    ),
+          children: z.custom<NonNullable<React.ReactNode>>().optional(),
+        })
+      ),
+      metadata: z.object({
+        title: z.string(),
+        order: z.number(),
+        summary: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }),
+    },
+  },
+  loader: {
+    mdx: (path) => import(`./docs/${path}.mdx`),
   },
   sort: 'metadata.order',
 })

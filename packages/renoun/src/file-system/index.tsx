@@ -82,7 +82,7 @@ import {
   type StreamableContent,
 } from './StreamableBlob.ts'
 import type { StandardSchemaV1 } from './standard-schema.ts'
-import type { ExtractFileExtension, IsNever } from './types.ts'
+import type { ExtractFileExtension } from './types.ts'
 
 export { FileSystem } from './FileSystem.ts'
 export { GitHostFileSystem } from './GitHostFileSystem.ts'
@@ -208,7 +208,7 @@ type ModuleRuntimeLoader<Value> = (
 ) => ModuleRuntimeResult<Value>
 
 /** A record of named exports in a module. */
-type ModuleExports<Value = any> = {
+type ModuleExports<Value = unknown> = {
   [exportName: string]: Value
 }
 
@@ -267,14 +267,15 @@ type SourceReleaseUrlOptions = GetReleaseUrlOptions & {
 }
 
 /** A function that validates and returns a specific type. */
-type ModuleExportValidator<Input = any, Output = Input> = (
-  value: Input
-) => Output
+type BivariantCallback<Args extends any[], Return> = {
+  bivarianceHack(...args: Args): Return
+}['bivarianceHack']
 
-/** Utility type that maps a record of exports to a record of validators. */
-type ModuleExportValidators<Exports extends ModuleExports> = {
-  [ExportName in keyof Exports]: ModuleExportValidator<Exports[ExportName]>
-}
+/** A function that validates and returns a specific type. */
+type ModuleExportValidator<
+  Input = Record<string, unknown>,
+  Output = Input,
+> = BivariantCallback<[value: Input], Output>
 
 export type FileSystemStructureType =
   | 'workspace'
@@ -352,80 +353,103 @@ export type InferModuleExports<Exports> = {
       : Exports[ExportName]
 }
 
-/** A module loader with an optional schema and runtime. */
-interface ModuleLoaderWithSchema<
-  Types extends ModuleExports,
-  /**
-   * This is used exclusively for type inference in `InferModuleLoader` to prevent
-   * unwrapping the provided types and allow passing them through as-is. Without this
-   * flag, TypeScript would infer the provided types as a `ModuleExportValidator`
-   * and unwrap them.
-   */
-  _IsRuntimeOnly extends boolean = false,
-> {
-  schema: Types
-  runtime?: ModuleRuntimeLoader<InferModuleExports<Types>>
+type Merge<A, B> = Omit<A, keyof B> & B
+
+type MergeRecord<A, B> = {
+  [K in keyof A | keyof B]: K extends keyof B
+    ? K extends keyof A
+      ? Merge<A[K], B[K]>
+      : B[K]
+    : K extends keyof A
+      ? A[K]
+      : never
 }
 
-/** Provides type inference for the module loader. */
-export function withSchema<
-  Types extends ModuleExports,
->(): ModuleLoaderWithSchema<Types>
+type KnownSchemaExtension = 'js' | 'jsx' | 'ts' | 'tsx' | 'md' | 'mdx' | 'json'
 
-/** A function that resolves the module runtime. */
-export function withSchema<Types extends ModuleExports>(
-  runtime: ModuleRuntimeLoader<NoInfer<Types> | unknown>
-): ModuleLoaderWithSchema<Types, true>
+type IsSchemaByExtension<Schema> =
+  Schema extends Record<string, any>
+    ? Extract<keyof Schema, KnownSchemaExtension> extends never
+      ? false
+      : true
+    : false
 
-/**
- * A schema that follows the Standard Schema Spec like Zod, Valibot, and Arktype
- * or custom validation functions to ensure file exports conform to a specific schema.
- */
-export function withSchema<
-  Types extends ModuleExports = never,
-  Schema extends ModuleExports = ModuleExports,
->(
-  schema: IsNever<Types> extends true
-    ? Schema
-    : Partial<ModuleExportValidators<NoInfer<Types>>>,
-  runtime: ModuleRuntimeLoader<
-    IsNever<Types> extends true ? NoInfer<Schema> : NoInfer<Types>
-  >
-): ModuleLoaderWithSchema<
-  IsNever<Types> extends true ? Schema : ModuleExportValidators<NoInfer<Types>>
+type NormalizeFrontMatterAlias<Exports> =
+  Exports extends Record<string, any>
+    ? Merge<
+        Merge<
+          Exports,
+          Exports extends { frontMatter: infer FrontMatterType }
+            ? { frontmatter: FrontMatterType }
+            : {}
+        >,
+        Exports extends { frontmatter: infer FrontMatterType }
+          ? { frontMatter: FrontMatterType }
+          : {}
+      >
+    : Exports
+
+type InferDirectorySchemaOptionTypes<Option> = Option extends StandardSchemaV1
+  ? StandardSchemaV1.InferOutput<Option> extends Record<string, any>
+    ? NormalizeFrontMatterAlias<StandardSchemaV1.InferOutput<Option>>
+    : {}
+  : Option extends Record<string, any>
+    ? InferModuleExports<Option> extends Record<string, any>
+      ? NormalizeFrontMatterAlias<InferModuleExports<Option>>
+      : {}
+    : {}
+
+type InferDirectorySchemaTypes<Schema> = [Schema] extends [undefined]
+  ? {}
+  : [Schema] extends [DirectorySchema]
+    ? DirectorySchema extends Schema
+      ? {}
+      : IsSchemaByExtension<Schema> extends true
+        ? {
+            [Extension in Extract<
+              keyof Schema,
+              string
+            >]: InferDirectorySchemaOptionTypes<Schema[Extension]>
+          }
+        : Record<string, InferDirectorySchemaOptionTypes<Schema>>
+    : {}
+
+type ApplyDirectorySchema<
+  LoaderTypes extends Record<string, any>,
+  Schema extends DirectorySchema | undefined,
+> = MergeRecord<LoaderTypes, InferDirectorySchemaTypes<Schema>>
+
+type ApplyFileSchemaOption<
+  Types extends Record<string, any>,
+  SchemaOption extends DirectorySchemaOption | undefined,
+> = MergeRecord<
+  Types,
+  SchemaOption extends DirectorySchemaOption
+    ? InferDirectorySchemaOptionTypes<SchemaOption>
+    : {}
 >
 
-export function withSchema(schemaOrRuntime?: any, maybeRuntime?: any) {
-  return maybeRuntime
-    ? { schema: schemaOrRuntime, runtime: maybeRuntime }
-    : schemaOrRuntime
-}
+// (Intentionally no `InferDirectoryTypes` export: schema is applied via
+// `ApplyDirectorySchema` to avoid changing the meaning of the first generic.)
 
 /**
- * Type signature for the "withSchema" helper function.
+ * Directory-level schema configuration.
  *
- * This prevents TypeScript from unifying `(path: string) => Promise<...>` with `withSchema(...)`,
- * we define a distinct "helper function" shape that only matches the uninvoked `withSchema<...>`.
+ * - A Standard Schema validates the *module object* (e.g. `z.object({ frontMatter: ... })`).
+ * - A schema map validates *individual exports* (e.g. `{ frontMatter: z.object(...) }`).
+ * - Both forms can also be provided per extension via `{ mdx: ..., ts: ... }`.
  */
-type WithSchema<Types extends ModuleExports> = {
-  (runtime: ModuleRuntimeLoader<Types>): ModuleLoaderWithSchema<Types>
+export type DirectorySchemaOption =
+  | StandardSchemaV1
+  | Record<string, StandardSchemaV1 | ModuleExportValidator>
 
-  <Schema extends ModuleExports>(
-    schema: Schema,
-    runtime: ModuleRuntimeLoader<Schema>
-  ): ModuleLoaderWithSchema<Schema>
-}
+export type DirectorySchema =
+  | DirectorySchemaOption
+  | Partial<Record<string, DirectorySchemaOption>>
 
-/**
- * Union of all possible loader types:
- * - A direct loader `function (path) => Promise<...>`
- * - An already-invoked `withSchema(...) object { schema?: ..., runtime?: ... }`
- * - The raw `withSchema<...>` factory function
- */
+/** A module loader runtime function. */
 type ModuleLoader<Exports extends ModuleExports = ModuleExports> =
-  | ModuleRuntimeLoader<Exports>
-  | WithSchema<Exports>
-  | ModuleLoaderWithSchema<Exports>
+  ModuleRuntimeLoader<Exports>
 
 interface GitMetadataProvider {
   getGitFileMetadata(path: string): Promise<GitMetadata>
@@ -462,41 +486,62 @@ export type ModuleLoaders = {
   [extension: string]: ModuleLoader
 }
 
-type DirectoryLoader = ModuleLoaders | ModuleRuntimeLoader<any>
+/** A Vite-style module map returned by `import.meta.glob(...)`. */
+type GlobModuleMap<Types = any> = Partial<Record<string, () => Promise<Types>>>
+
+type DirectoryLoader = ModuleLoaders | ModuleRuntimeLoader<any> | GlobModuleMap
+
+type UnknownModuleExports = { [exportName: string]: unknown }
+
+type InferDirectoryTypesFromLoaders<Loaders extends DirectoryLoader> =
+  // If `Loaders` is still the default `DirectoryLoader` union, don't infer.
+  DirectoryLoader extends Loaders ? {} : InferDirectoryLoaderTypes<Loaders>
+
+type ResolveDirectoryTypes<
+  LoaderTypes extends Record<string, any>,
+  Loaders extends DirectoryLoader,
+  Schema extends DirectorySchema | undefined,
+> = ApplyDirectorySchema<
+  MergeRecord<InferDirectoryTypesFromLoaders<Loaders>, LoaderTypes>,
+  Schema
+>
 
 type InferDirectoryLoaderTypes<Loader extends DirectoryLoader> =
   Loader extends ModuleRuntimeLoader<infer RuntimeTypes>
     ? Record<
         string,
         IsAny<RuntimeTypes> extends true
-          ? { [exportName: string]: any }
+          ? UnknownModuleExports
           : RuntimeTypes extends ModuleExports
             ? RuntimeTypes
-            : { [exportName: string]: any }
+            : UnknownModuleExports
       >
     : Loader extends ModuleLoaders
       ? InferModuleLoadersTypes<Loader>
-      : never
+      : Loader extends GlobModuleMap<infer GlobTypes>
+        ? Record<
+            string,
+            IsAny<GlobTypes> extends true
+              ? UnknownModuleExports
+              : GlobTypes extends ModuleExports
+                ? GlobTypes
+                : UnknownModuleExports
+          >
+        : never
 
 type IsAny<Type> = 0 extends 1 & Type ? true : false
 
-/** Infer the type of a loader based on its schema or runtime. */
+/** Infer the type of a loader based on its runtime return type. */
 type InferModuleLoaderTypes<Loader extends ModuleLoader> =
-  Loader extends WithSchema<infer Schema>
-    ? Schema
-    : Loader extends ModuleLoaderWithSchema<infer Schema, infer IsRuntimeOnly>
-      ? IsRuntimeOnly extends true
-        ? Schema
-        : InferModuleExports<Schema>
-      : Loader extends ModuleRuntimeLoader<infer Types>
-        ? /**
-           * If the loader is "any", we return the types as a record to prevent
-           * from widening the type to "any" when merging default module types.
-           */
-          IsAny<Types> extends true
-          ? { [exportName: string]: any }
-          : Types
-        : never
+  Loader extends ModuleRuntimeLoader<infer Types>
+    ? /**
+       * If the loader is "any", we return the types as a record to prevent
+       * from widening the type to "any" when merging default module types.
+       */
+      IsAny<Types> extends true
+      ? UnknownModuleExports
+      : Types
+    : never
 
 function isRuntimeLoader(loader: any): loader is ModuleRuntimeLoader<any> {
   return typeof loader === 'function' && loader.length > 0
@@ -505,7 +550,7 @@ function isRuntimeLoader(loader: any): loader is ModuleRuntimeLoader<any> {
 /**
  * Front matter parsed from the markdown file. When using the default
  * loaders this is populated automatically (if present), and custom
- * loaders can further narrow this shape via `withSchema`.
+ * loaders can further narrow this shape via `schema`.
  */
 export type FrontMatter = Record<string, unknown>
 
@@ -513,17 +558,37 @@ export type FrontMatter = Record<string, unknown>
 export interface DefaultModuleTypes {
   md: {
     default: MDXContent
+    frontmatter?: FrontMatter
     frontMatter?: FrontMatter
   }
   mdx: {
     default: MDXContent
+    frontmatter?: FrontMatter
     frontMatter?: FrontMatter
   }
   json: JSONObject
 }
 
+type NormalizeFrontMatterExtensions<ExtensionTypes> =
+  ExtensionTypes extends Record<string, any>
+    ? MergeRecord<
+        ExtensionTypes,
+        {
+          md: 'md' extends keyof ExtensionTypes
+            ? NormalizeFrontMatterAlias<ExtensionTypes['md']>
+            : never
+          mdx: 'mdx' extends keyof ExtensionTypes
+            ? NormalizeFrontMatterAlias<ExtensionTypes['mdx']>
+            : never
+        }
+      >
+    : ExtensionTypes
+
 /** Merge default module types with custom types. */
-export type WithDefaultTypes<Types> = DefaultModuleTypes & Types
+export type WithDefaultTypes<Types> =
+  IsAny<Types> extends true
+    ? DefaultModuleTypes
+    : NormalizeFrontMatterExtensions<MergeRecord<DefaultModuleTypes, Types>>
 
 /** Infer default extension types for a file extension. */
 type InferDefaultModuleTypes<Extension extends string> =
@@ -531,10 +596,34 @@ type InferDefaultModuleTypes<Extension extends string> =
     ? DefaultModuleTypes[Extension]
     : ModuleExports
 
+type JavaScriptFileExtensionTypes<
+  Extension extends string,
+  DirectoryTypes extends Record<string, any>,
+> = Extension extends keyof DirectoryTypes
+  ? Extension extends keyof DefaultModuleTypes
+    ? InferDefaultModuleTypes<Extension> &
+        DirectoryTypes[Extension] extends Record<string, any>
+      ? InferDefaultModuleTypes<Extension> & DirectoryTypes[Extension]
+      : ModuleExports
+    : DirectoryTypes[Extension] extends Record<string, any>
+      ? DirectoryTypes[Extension]
+      : ModuleExports
+  : InferDefaultModuleTypes<Extension>
+
+type ExtensionElement<Extension> = Extension extends readonly (infer E)[]
+  ? Extract<E, string>
+  : Extract<Extension, string>
+
 /** Infer extension types for all loaders in a module. */
 export type InferModuleLoadersTypes<Loaders extends ModuleLoaders> = {
   [Extension in keyof Loaders]: Extension extends keyof DefaultModuleTypes
-    ? DefaultModuleTypes[Extension] & InferModuleLoaderTypes<Loaders[Extension]>
+    ? Merge<
+        Merge<
+          DefaultModuleTypes[Extension],
+          InferModuleLoaderTypes<Loaders[Extension]>
+        >,
+        Extension extends 'md' | 'mdx' ? { default: MDXContent } : {}
+      >
     : InferModuleLoaderTypes<Loaders[Extension]>
 }
 
@@ -545,18 +634,7 @@ export type LoadersWithRuntimeKeys<Loaders> = Extract<
 >
 
 /** Determines if the loader is a resolver. */
-function isLoader(
-  loader: ModuleLoader<any>
-): loader is ModuleRuntimeLoader<any> {
-  return typeof loader === 'function'
-}
-
-/** Determines if the loader is a resolver with a schema. */
-function isLoaderWithSchema<Schema extends ModuleExports>(
-  loader: ModuleLoader<Schema>
-): loader is ModuleLoaderWithSchema<Schema> {
-  return 'schema' in loader && 'runtime' in loader
-}
+// (No `isLoader` helper needed now that loaders are always runtime functions.)
 
 /** Unwraps a loader result that may be a value, a promise, or a lazy factory. */
 async function unwrapModuleResult<T>(result: any): Promise<T> {
@@ -571,6 +649,239 @@ async function unwrapModuleResult<T>(result: any): Promise<T> {
     value = await (value as () => any)()
   }
   return value as T
+}
+
+const KNOWN_SCHEMA_EXTENSIONS = new Set([
+  'js',
+  'jsx',
+  'ts',
+  'tsx',
+  'md',
+  'mdx',
+  'json',
+])
+
+function isStandardSchema(value: unknown): value is StandardSchemaV1 {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    '~standard' in (value as any) &&
+    typeof (value as any)['~standard']?.validate === 'function'
+  )
+}
+
+function isGlobModuleMap(value: unknown): value is GlobModuleMap<any> {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const record = value as Record<string, unknown>
+  const keys = Object.keys(record)
+  if (keys.length === 0) {
+    return false
+  }
+
+  // Disambiguate from extension-to-loader maps like `{ mdx: (path) => import(...) }`.
+  // Glob maps use file-like keys (usually starting with `./`, `../`, `/`, or containing `/`).
+  if (keys.every((key) => KNOWN_SCHEMA_EXTENSIONS.has(key))) {
+    return false
+  }
+
+  const looksLikeFilePathKey = (key: string) =>
+    key.startsWith('./') ||
+    key.startsWith('../') ||
+    key.startsWith('/') ||
+    key.includes('/') ||
+    key.includes('\\')
+
+  if (!keys.some(looksLikeFilePathKey)) {
+    return false
+  }
+
+  // Vite glob values are typically `() => Promise<Module>`.
+  return keys.every((key) => {
+    const entry = record[key]
+    return typeof entry === 'function' && (entry as Function).length === 0
+  })
+}
+
+function resolveDirectorySchemaOption(
+  schema: DirectorySchema | undefined,
+  extension: string | undefined
+): DirectorySchemaOption | undefined {
+  if (!schema) {
+    return undefined
+  }
+
+  // A single Standard Schema applies to all extensions.
+  if (isStandardSchema(schema)) {
+    return schema
+  }
+
+  // Disambiguate:
+  // - `{ mdx: z.object(...) }` => per-extension
+  // - `{ metadata: z.object(...) }` => per-export schema map
+  if (extension && typeof schema === 'object') {
+    const record = schema as Record<string, any>
+    const keys = Object.keys(record)
+    const looksLikeExtensionMap = keys.some((key) =>
+      KNOWN_SCHEMA_EXTENSIONS.has(key)
+    )
+
+    if (looksLikeExtensionMap) {
+      const option = record[extension]
+      return option as DirectorySchemaOption | undefined
+    }
+  }
+
+  return schema as DirectorySchemaOption
+}
+
+function validateStandardSchema(
+  schema: StandardSchemaV1,
+  value: unknown,
+  context: { filePath: string; exportName?: string }
+): unknown {
+  const result = schema['~standard'].validate(
+    value
+  ) as StandardSchemaV1.Result<any>
+
+  if (result.issues) {
+    const issuesMessage = result.issues
+      .map((issue) =>
+        issue.path
+          ? `  - ${issue.path.join('.')}: ${issue.message}`
+          : `  - ${issue.message}`
+      )
+      .join('\n')
+
+    const exportSuffix = context.exportName
+      ? ` for export "${context.exportName}"`
+      : ''
+
+    throw new Error(
+      `[renoun] Schema validation failed${exportSuffix} at file path: "${context.filePath}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
+    )
+  }
+
+  return result.value
+}
+
+function normalizeExportSchemaKey(name: string) {
+  // Back-compat / ergonomic alias: allow `frontmatter` in schemas.
+  if (name === 'frontmatter') {
+    return 'frontMatter'
+  }
+  return name
+}
+
+function validateExportValueWithExportSchemaMap(
+  schemaMap: Record<string, StandardSchemaV1 | ModuleExportValidator<any, any>>,
+  name: string,
+  value: unknown,
+  filePath: string
+) {
+  const key = normalizeExportSchemaKey(name)
+  const aliasKey =
+    key === 'frontMatter'
+      ? 'frontmatter'
+      : key === 'frontmatter'
+        ? 'frontMatter'
+        : undefined
+
+  const parser =
+    schemaMap[key] ??
+    (aliasKey ? schemaMap[aliasKey] : undefined) ??
+    schemaMap[name]
+  if (!parser) {
+    return value
+  }
+
+  try {
+    if (isStandardSchema(parser)) {
+      return validateStandardSchema(parser, value, {
+        filePath,
+        exportName: key,
+      })
+    }
+    return parser(value)
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(
+        `[renoun] Schema validation failed to parse export "${key}" at file path: "${filePath}"\n\nThe following error occurred:\n${error.message}`
+      )
+    }
+    throw error
+  }
+}
+
+function applyModuleSchemaToModule(
+  schema: StandardSchemaV1,
+  moduleValue: any,
+  filePath: string
+) {
+  // Provide an ergonomic alias for `frontmatter` while preserving `frontMatter`.
+  const schemaInput =
+    moduleValue && typeof moduleValue === 'object'
+      ? {
+          ...moduleValue,
+          frontmatter: (moduleValue as any).frontMatter,
+        }
+      : moduleValue
+
+  const parsed = validateStandardSchema(schema, schemaInput, { filePath })
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error(
+      `[renoun] Schema validation returned a non-object value at file path: "${filePath}". Directory schemas must validate a module export object.`
+    )
+  }
+
+  // Merge parsed keys back into the module object so transforms (e.g. `z.date()`) take effect.
+  for (const [key, value] of Object.entries(parsed as Record<string, any>)) {
+    if (key === 'frontmatter') {
+      ;(moduleValue as any).frontMatter = value
+      continue
+    }
+    ;(moduleValue as any)[key] = value
+  }
+
+  return moduleValue
+}
+
+function createGlobRuntimeLoader(
+  glob: GlobModuleMap<any>
+): ModuleRuntimeLoader<any> {
+  return async (_path: string, file: any) => {
+    const relative = normalizeSlashes(file.relativePath).replace(/^\.\/?/, '')
+    const candidates = [relative, `./${relative}`, `/${relative}`]
+
+    let importer: (() => Promise<any>) | undefined
+
+    for (const candidate of candidates) {
+      importer = glob[candidate]
+      if (importer) {
+        break
+      }
+    }
+
+    if (!importer) {
+      // Fall back to suffix match (helps when glob keys include an absolute-ish prefix).
+      const matchKey = Object.keys(glob).find((key) =>
+        normalizeSlashes(key).endsWith(relative)
+      )
+      if (matchKey) {
+        importer = glob[matchKey]
+      }
+    }
+
+    if (!importer) {
+      throw new Error(
+        `[renoun] import.meta.glob loader could not resolve module for file "${relative}". Ensure the glob includes this file and that the key matches the file path.`
+      )
+    }
+
+    return importer()
+  }
 }
 
 /** A decoder for file contents. */
@@ -649,6 +960,7 @@ export interface FilePathnameOptions {
 export interface FileOptions<
   Types extends Record<string, any> = Record<string, any>,
   Path extends string = string,
+  SchemaOption extends DirectorySchemaOption | undefined = undefined,
 > {
   /** The path to the file. */
   path: Path | URL
@@ -662,6 +974,9 @@ export interface FileOptions<
   /** The depth of the file in the file system. */
   depth?: number
 
+  /** Optional schema for this file (overrides the parent directory schema). */
+  schema?: SchemaOption
+
   /**
    * Known byte length for the file contents.
    *
@@ -673,12 +988,7 @@ export interface FileOptions<
   /** The directory to use for the file. */
   directory?:
     | PathLike
-    | Directory<
-        Types,
-        WithDefaultTypes<Types>,
-        DirectoryLoader,
-        DirectoryFilter<FileSystemEntry<Types>, Types>
-      >
+    | Directory<Types, WithDefaultTypes<Types>, DirectoryLoader, undefined>
 }
 
 /** A file in the file system. */
@@ -697,8 +1007,9 @@ export class File<
   #slugCasing: SlugCasing
   #directory: Directory<DirectoryTypes>
   #byteLength: number
+  #schema?: DirectorySchemaOption
 
-  constructor(options: FileOptions<DirectoryTypes, Path>) {
+  constructor(options: FileOptions<DirectoryTypes, Path, any>) {
     // Parse path and extension to determine MIME type
     const resolvedPath = resolveSchemePath(options.path)
     const name = baseName(resolvedPath)
@@ -750,6 +1061,7 @@ export class File<
     this.#basePathname = options.basePathname
     this.#slugCasing = options.slugCasing ?? 'kebab'
     this.#byteLength = byteLength
+    this.#schema = options.schema
 
     if (match) {
       this.#order = match[1]
@@ -802,6 +1114,11 @@ export class File<
   /** Get the depth of the file starting from the root directory. */
   getDepth() {
     return this.getPathnameSegments().length - 2
+  }
+
+  /** Get the schema configuration for this file if defined. */
+  getSchema() {
+    return this.#schema
   }
 
   /** Get the slug of the file. */
@@ -1230,7 +1547,7 @@ export interface JSONFileOptions<
   Data extends Record<string, any> = JSONObject,
   DirectoryTypes extends Record<string, any> = Record<string, any>,
   Path extends string = string,
-> extends FileOptions<DirectoryTypes, Path> {
+> extends FileOptions<DirectoryTypes, Path, any> {
   schema?: StandardSchemaV1<Data> | ((value: unknown) => Data)
 }
 
@@ -1314,8 +1631,9 @@ export class JSONFile<
   #schema?: StandardSchemaV1<Data> | ((value: unknown) => Data)
 
   constructor(fileOptions: JSONFileOptions<Data, DirectoryTypes, Path>) {
-    super(fileOptions)
-    this.#schema = fileOptions.schema
+    const { schema, ...rest } = fileOptions
+    super(rest as any)
+    this.#schema = schema
   }
 
   async #readData(): Promise<Data> {
@@ -1738,19 +2056,30 @@ export class ModuleExport<Value> {
 
     const path = removeExtension(this.#file.relativePath)
 
-    if (isLoader(this.#loader)) {
-      return unwrapModuleResult<any>(this.#loader(path, this.#file))
-    }
+    const loader = this.#loader
 
-    if (isLoaderWithSchema(this.#loader) && this.#loader.runtime) {
-      return unwrapModuleResult<any>(this.#loader.runtime(path, this.#file))
-    }
+    return (async () => {
+      const moduleValue = await unwrapModuleResult<any>(
+        loader(path, this.#file)
+      )
 
-    const parentPath = this.#file.getParent().workspacePath
+      const schemaOption =
+        this.#file.getSchema() ??
+        resolveDirectorySchemaOption(
+          this.#file.getParent().getSchema(),
+          this.#file.extension
+        )
 
-    throw new Error(
-      `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
-    )
+      if (schemaOption && isStandardSchema(schemaOption)) {
+        return applyModuleSchemaToModule(
+          schemaOption,
+          moduleValue,
+          this.#file.absolutePath
+        )
+      }
+
+      return moduleValue
+    })()
   }
 
   /**
@@ -1880,7 +2209,7 @@ export interface JavaScriptFileOptions<
 
 /** A JavaScript file in the file system. */
 export class JavaScriptFile<
-  Types extends InferDefaultModuleTypes<Path>,
+  Types extends InferDefaultModuleTypes<Path> = any,
   DirectoryTypes extends Record<string, any> = Record<string, any>,
   const Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
@@ -1923,22 +2252,24 @@ export class JavaScriptFile<
     const loader = this.#loader
     let executeModuleLoader: () => Promise<any>
 
-    if (isLoader(loader)) {
-      executeModuleLoader = () => unwrapModuleResult(loader(path, this))
-    } else if (isLoaderWithSchema(loader)) {
-      if (!loader.runtime) {
-        const parentPath = this.getParent().workspacePath
+    executeModuleLoader = async () => {
+      const moduleValue = await unwrapModuleResult(loader(path, this))
+      const schemaOption =
+        this.getSchema() ??
+        resolveDirectorySchemaOption(
+          this.getParent().getSchema(),
+          this.extension
+        )
 
-        throw new Error(
-          `[renoun] A runtime loader for the parent Directory at ${parentPath} is not defined.`
+      if (schemaOption && isStandardSchema(schemaOption)) {
+        return applyModuleSchemaToModule(
+          schemaOption,
+          moduleValue,
+          this.absolutePath
         )
       }
-      executeModuleLoader = () =>
-        unwrapModuleResult((loader.runtime as any)(path, this))
-    } else {
-      throw new Error(
-        `[renoun] This loader is missing a runtime for the parent Directory at ${this.getParent().workspacePath}.`
-      )
+
+      return moduleValue
     }
 
     if (process.env.NODE_ENV === 'production') {
@@ -1960,47 +2291,21 @@ export class JavaScriptFile<
       return value
     }
 
-    if (isLoaderWithSchema(this.#loader)) {
-      let parseValue = (this.#loader as ModuleLoaderWithSchema<any>).schema[
-        name
-      ]
+    const schemaOption =
+      this.getSchema() ??
+      resolveDirectorySchemaOption(this.getParent().getSchema(), extension)
 
-      if (parseValue) {
-        try {
-          if ('~standard' in parseValue) {
-            const result = parseValue['~standard'].validate(
-              value
-            ) as StandardSchemaV1.Result<any>
-
-            if (result.issues) {
-              const issuesMessage = result.issues
-                .map((issue) =>
-                  issue.path
-                    ? `  - ${issue.path.join('.')}: ${issue.message}`
-                    : `  - ${issue.message}`
-                )
-                .join('\n')
-
-              throw new Error(
-                `[renoun] Schema validation failed for export "${name}" at file path: "${this.absolutePath}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
-              )
-            }
-
-            value = result.value
-          } else {
-            value = parseValue(value)
-          }
-        } catch (error) {
-          if (error instanceof Error) {
-            throw new Error(
-              `[renoun] Schema validation failed to parse export "${name}" at file path: "${this.absolutePath}"\n\nThe following error occurred:\n${error.message}`
-            )
-          }
-        }
-      }
+    // Module-level schemas are applied when loading the module.
+    if (!schemaOption || isStandardSchema(schemaOption)) {
+      return value
     }
 
-    return value
+    return validateExportValueWithExportSchemaMap(
+      schemaOption,
+      name,
+      value,
+      this.absolutePath
+    )
   }
 
   /** Get all export names and positions from the JavaScript file. */
@@ -2051,7 +2356,7 @@ export class JavaScriptFile<
   }
 
   /** Get a JavaScript file export by name. */
-  async getExport<ExportName extends Extract<keyof Types, string>>(
+  async getExport<const ExportName extends Extract<keyof Types, string>>(
     name: ExportName
   ): Promise<ModuleExport<Types[ExportName]>> {
     if (await this.hasExport(name)) {
@@ -2081,7 +2386,7 @@ export class JavaScriptFile<
   }
 
   /** Get a named export from the JavaScript file. */
-  async getNamedExport<ExportName extends Extract<keyof Types, string>>(
+  async getNamedExport<const ExportName extends Extract<keyof Types, string>>(
     name: ExportName
   ): Promise<ModuleExport<Types[ExportName]>> {
     return this.getExport(name)
@@ -2109,7 +2414,7 @@ export class JavaScriptFile<
   }
 
   /** Get the runtime value of an export in the JavaScript file. */
-  async getExportValue<ExportName extends Extract<keyof Types, string>>(
+  async getExportValue<const ExportName extends Extract<keyof Types, string>>(
     name: ExportName
   ): Promise<Types[ExportName]>
   async getExportValue(name: string): Promise<any> {
@@ -2326,53 +2631,21 @@ export class MDXModuleExport<Value> {
 
   /** Parse and validate an export value using the configured schema if available. */
   parseExportValue(name: string, value: any): any {
-    const extension = 'mdx'
+    const schemaOption =
+      this.#file.getSchema() ??
+      resolveDirectorySchemaOption(this.#file.getParent().getSchema(), 'mdx')
 
-    if (!extension || !this.#loader) {
+    // Module-level schemas are applied when loading the module.
+    if (!schemaOption || isStandardSchema(schemaOption)) {
       return value
     }
 
-    if (isLoaderWithSchema(this.#loader)) {
-      let parseValue = (this.#loader as ModuleLoaderWithSchema<any>).schema[
-        name
-      ]
-
-      if (parseValue) {
-        try {
-          if ('~standard' in parseValue) {
-            const result = parseValue['~standard'].validate(
-              value
-            ) as StandardSchemaV1.Result<any>
-
-            if (result.issues) {
-              const issuesMessage = result.issues
-                .map((issue) =>
-                  issue.path
-                    ? `  - ${issue.path.join('.')}: ${issue.message}`
-                    : `  - ${issue.message}`
-                )
-                .join('\n')
-
-              throw new Error(
-                `[renoun] Schema validation failed for export "${name}" at file path: "${this.#file.absolutePath}"\n\nThe following issues need to be fixed:\n${issuesMessage}`
-              )
-            }
-
-            value = result.value
-          } else {
-            value = parseValue(value)
-          }
-        } catch (error) {
-          if (error instanceof Error) {
-            throw new Error(
-              `[renoun] Schema validation failed to parse export "${name}" at file path: "${this.#file.absolutePath}"\n\nThe following error occurred:\n${error.message}`
-            )
-          }
-        }
-      }
-    }
-
-    return value
+    return validateExportValueWithExportSchemaMap(
+      schemaOption,
+      name,
+      value,
+      this.#file.absolutePath
+    )
   }
 
   /** Attempt to return a literal value for this export if it can be determined statically. */
@@ -2462,19 +2735,27 @@ export class MDXModuleExport<Value> {
 
     const path = removeExtension(this.#file.relativePath)
 
-    if (isLoader(this.#loader)) {
-      return unwrapModuleResult<any>(this.#loader(path, this.#file))
-    }
+    const loader = this.#loader
 
-    if (isLoaderWithSchema(this.#loader) && this.#loader.runtime) {
-      return unwrapModuleResult<any>(this.#loader.runtime(path, this.#file))
-    }
+    return (async () => {
+      const moduleValue = await unwrapModuleResult<any>(
+        loader(path, this.#file)
+      )
 
-    const parentPath = this.#file.getParent().workspacePath
+      const schemaOption =
+        this.#file.getSchema() ??
+        resolveDirectorySchemaOption(this.#file.getParent().getSchema(), 'mdx')
 
-    throw new Error(
-      `[renoun] An mdx runtime loader for the parent Directory at ${parentPath} is not defined.`
-    )
+      if (schemaOption && isStandardSchema(schemaOption)) {
+        return applyModuleSchemaToModule(
+          schemaOption,
+          moduleValue,
+          this.#file.absolutePath
+        )
+      }
+
+      return moduleValue
+    })()
   }
 }
 
@@ -2601,7 +2882,9 @@ export class MDXFile<
     return Array.from(this.#exports.values())
   }
 
-  async getExport<ExportName extends 'default' | Extract<keyof Types, string>>(
+  async getExport<
+    const ExportName extends 'default' | Extract<keyof Types, string>,
+  >(
     name: ExportName
   ): Promise<MDXModuleExport<({ default: MDXContent } & Types)[ExportName]>> {
     if (this.#exports.has(name)) {
@@ -2626,7 +2909,7 @@ export class MDXFile<
   }
 
   /** Get a named export from the MDX file. */
-  async getNamedExport<ExportName extends Extract<keyof Types, string>>(
+  async getNamedExport<const ExportName extends Extract<keyof Types, string>>(
     name: ExportName
   ): Promise<MDXModuleExport<Types[ExportName]>> {
     return this.getExport(name)
@@ -2690,7 +2973,7 @@ export class MDXFile<
 
   /** Get the runtime value of an export in the MDX file. */
   async getExportValue<
-    ExportName extends 'default' | Extract<keyof Types, string>,
+    const ExportName extends 'default' | Extract<keyof Types, string>,
   >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]>
   async getExportValue(name: string): Promise<any> {
     const fileExport = await this.getExport(name as any)
@@ -2724,23 +3007,21 @@ export class MDXFile<
     const loader = this.#loader
     let executeModuleLoader: () => Promise<any>
 
-    if (isLoader(loader)) {
-      executeModuleLoader = () => unwrapModuleResult(loader(path, this))
-    } else if (isLoaderWithSchema(loader)) {
-      if (!loader.runtime) {
-        const parentPath = this.getParent().workspacePath
+    executeModuleLoader = async () => {
+      const moduleValue = await unwrapModuleResult(loader(path, this))
+      const schemaOption =
+        this.getSchema() ??
+        resolveDirectorySchemaOption(this.getParent().getSchema(), 'mdx')
 
-        throw new Error(
-          `[renoun] An mdx runtime loader for the parent Directory at ${parentPath} is not defined.`
+      if (schemaOption && isStandardSchema(schemaOption)) {
+        return applyModuleSchemaToModule(
+          schemaOption,
+          moduleValue,
+          this.absolutePath
         )
       }
 
-      executeModuleLoader = () =>
-        unwrapModuleResult((loader.runtime as any)(path, this))
-    } else {
-      throw new Error(
-        `[renoun] This loader is missing an mdx runtime for the parent Directory at ${this.getParent().workspacePath}.`
-      )
+      return moduleValue
     }
 
     // In production we cache the resolved module for speed.
@@ -2770,7 +3051,8 @@ export interface MarkdownFileOptions<
   Types extends Record<string, any>,
   DirectoryTypes extends Record<string, any>,
   Path extends string,
-> extends FileOptions<DirectoryTypes, Path> {
+  SchemaOption extends DirectorySchemaOption | undefined = undefined,
+> extends FileOptions<DirectoryTypes, Path, SchemaOption> {
   loader?: ModuleLoader<{ default: MDXContent } & Types>
 }
 
@@ -2780,6 +3062,7 @@ export class MarkdownFile<
   DirectoryTypes extends Record<string, any> = Record<string, any>,
   const Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
+  SchemaOption extends DirectorySchemaOption | undefined = undefined,
 > extends File<DirectoryTypes, Path, Extension> {
   #loader: ModuleLoader<{ default: MDXContent } & Types>
   #sections?: ContentSection[]
@@ -2794,7 +3077,8 @@ export class MarkdownFile<
   }: MarkdownFileOptions<
     { default: MDXContent } & Types,
     DirectoryTypes,
-    Path
+    Path,
+    SchemaOption
   >) {
     super(fileOptions)
     this.#loader = loader ?? defaultLoaders.md
@@ -2864,26 +3148,22 @@ export class MarkdownFile<
   #getModule() {
     const path = removeExtension(this.relativePath)
     const loader = this.#loader
-    let executeModuleLoader: () => Promise<any>
 
-    if (isLoader(loader)) {
-      executeModuleLoader = () => {
-        return unwrapModuleResult(loader(path, this))
-      }
-    } else if (isLoaderWithSchema(loader)) {
-      if (!loader.runtime) {
-        const parentPath = this.getParent().workspacePath
-        throw new Error(
-          `[renoun] A markdown runtime loader for the parent Directory at ${parentPath} is not defined.`
+    const executeModuleLoader = async () => {
+      const moduleValue = await unwrapModuleResult(loader(path, this))
+      const schemaOption =
+        this.getSchema() ??
+        resolveDirectorySchemaOption(this.getParent().getSchema(), 'md')
+
+      if (schemaOption && isStandardSchema(schemaOption)) {
+        return applyModuleSchemaToModule(
+          schemaOption,
+          moduleValue,
+          this.absolutePath
         )
       }
-      executeModuleLoader = () => {
-        return unwrapModuleResult((loader.runtime as any)(path, this))
-      }
-    } else {
-      throw new Error(
-        `[renoun] This loader is missing a markdown runtime for the parent Directory at ${this.getParent().workspacePath}.`
-      )
+
+      return moduleValue
     }
 
     if (process.env.NODE_ENV === 'production') {
@@ -2930,9 +3210,42 @@ export class MarkdownFile<
   }
 
   /** Get the runtime value of an export in the Markdown file. (Permissive signature for union compatibility.) */
+  parseExportValue(name: string, value: any): any {
+    const schemaOption =
+      this.getSchema() ??
+      resolveDirectorySchemaOption(this.getParent().getSchema(), 'md')
+
+    // Module-level schemas are applied when loading the module.
+    if (!schemaOption || isStandardSchema(schemaOption)) {
+      return value
+    }
+
+    return validateExportValueWithExportSchemaMap(
+      schemaOption,
+      name,
+      value,
+      this.absolutePath
+    )
+  }
+
   async getExportValue<
-    ExportName extends 'default' | Extract<keyof Types, string>,
-  >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]>
+    const ExportName extends
+      | 'default'
+      | Extract<
+          keyof ApplyFileSchemaOption<
+            { default: MDXContent } & Types,
+            SchemaOption
+          >,
+          string
+        >,
+  >(
+    name: ExportName
+  ): Promise<
+    ApplyFileSchemaOption<
+      { default: MDXContent } & Types,
+      SchemaOption
+    >[ExportName]
+  >
   async getExportValue(name: string): Promise<any> {
     const fileModule = await this.#getModule()
     if (!(name in fileModule)) {
@@ -2942,7 +3255,7 @@ export class MarkdownFile<
         'Markdown'
       )
     }
-    return fileModule[name]
+    return this.parseExportValue(name, fileModule[name])
   }
 }
 
@@ -2966,6 +3279,8 @@ type DirectoryEntriesRecursiveOption<Filter> = Filter extends string
     : undefined
   : boolean
 
+type NoInferType<T> = [T][T extends any ? 0 : never]
+
 export type DirectoryFilter<
   Entry extends FileSystemEntry<any>,
   Types extends Record<string, any>,
@@ -2975,11 +3290,15 @@ export type DirectoryFilter<
   | string
 
 export interface DirectoryOptions<
-  Types extends InferDirectoryLoaderTypes<Loaders> = any,
-  LoaderTypes extends Types = any,
+  Types extends Record<string, any> = {},
+  LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
-    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  Schema extends DirectorySchema | undefined = DirectorySchema | undefined,
+  Filter extends
+    | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
+    | undefined =
+    | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
+    | undefined,
 > {
   /** Directory path in the workspace. */
   path?: PathLike
@@ -2987,7 +3306,10 @@ export interface DirectoryOptions<
   /** Filter entries with a minimatch pattern or predicate. */
   filter?: Filter
 
-  /** Extension loaders with or without `withSchema`. */
+  /** Directory schema (global or per-extension). */
+  schema?: Schema
+
+  /** Extension loaders, a runtime loader, or an `import.meta.glob(...)` map. */
   loader?: Loaders | (() => Loaders)
 
   /** Base route prepended to descendant `getPathname()` results. */
@@ -3003,7 +3325,9 @@ export interface DirectoryOptions<
   fileSystem?: FileSystem
 
   /** Sort callback applied at *each* directory depth. */
-  sort?: SortDescriptor<ResolveDirectoryFilterEntries<Filter, LoaderTypes>>
+  sort?: SortDescriptor<
+    FileSystemEntry<ApplyDirectorySchema<LoaderTypes, NoInferType<Schema>>>
+  >
 
   /** The repository used to generate source URLs. */
   repository?: Repository | RepositoryConfig | string
@@ -3086,17 +3410,22 @@ function createOptionsMask(options: NormalizedDirectoryEntriesOptions) {
 
 /** A directory containing files and subdirectories in the file system. */
 export class Directory<
-  Types extends InferDirectoryLoaderTypes<Loaders>,
+  Types extends Record<string, any> = {},
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
-    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
+  Schema extends DirectorySchema | undefined = DirectorySchema | undefined,
+  Filter extends
+    | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
+    | undefined =
+    | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
+    | undefined,
 > {
   #path: string
   #rootPath?: string
   #basePathname?: string | null
   #tsConfigPath?: string
   #slugCasing: SlugCasing
+  #schema?: DirectorySchema
   #loader?: Loaders | (() => Loaders)
   #resolvedLoaders?: ModuleLoaders | ModuleRuntimeLoader<any>
   #directory?: Directory<any, any, any>
@@ -3106,15 +3435,22 @@ export class Directory<
   #filterPattern?: string
   #filter?:
     | ((
-        entry: FileSystemEntry<LoaderTypes>
-      ) => entry is FileSystemEntry<LoaderTypes>)
-    | ((entry: FileSystemEntry<LoaderTypes>) => Promise<boolean> | boolean)
+        entry: FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
+      ) => entry is FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>)
+    | ((
+        entry: FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
+      ) => Promise<boolean> | boolean)
     | Minimatch
-  #filterCache?: WeakMap<FileSystemEntry<LoaderTypes>, boolean>
+  #filterCache?: WeakMap<
+    FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+    boolean
+  >
   #simpleFilter?: { recursive: boolean; extensions: Set<string> }
   #sort?: any
 
-  constructor(options?: DirectoryOptions<Types, LoaderTypes, Loaders, Filter>) {
+  constructor(
+    options?: DirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
+  ) {
     if (options === undefined) {
       this.#path = '.'
       this.#slugCasing = 'kebab'
@@ -3144,6 +3480,7 @@ export class Directory<
       } else {
         this.#path = '.'
       }
+      this.#schema = options.schema
       this.#loader = options.loader
       this.#basePathname =
         options.basePathname === undefined
@@ -3253,18 +3590,20 @@ export class Directory<
   }
 
   /** Duplicate the directory with the same initial options. */
-  #duplicate(options?: DirectoryOptions<any, any, any>) {
+  #duplicate(options?: DirectoryOptions<any, any, any, any, any>) {
     const directory = new Directory<
-      LoaderTypes,
+      Types,
       LoaderTypes,
       Loaders,
-      DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>
+      Schema,
+      Filter
     >({
       path: this.#path,
       fileSystem: this.#fileSystem,
       basePathname: this.#basePathname,
       tsConfigPath: this.#tsConfigPath,
       slugCasing: this.#slugCasing,
+      schema: this.#schema,
       loader: this.#loader,
       filter: this.#filter as any,
       sort: this.#sort,
@@ -3296,14 +3635,32 @@ export class Directory<
 
       if (!this.#resolvedLoaders) {
         const resolved = (this.#loader as () => Loaders)()
-        this.#resolvedLoaders = isRuntimeLoader(resolved)
-          ? (resolved as any)
-          : resolved
+
+        if (isGlobModuleMap(resolved)) {
+          this.#resolvedLoaders = createGlobRuntimeLoader(resolved)
+        } else {
+          this.#resolvedLoaders = isRuntimeLoader(resolved)
+            ? (resolved as any)
+            : (resolved as any)
+        }
       }
 
       return this.#resolvedLoaders
     }
+
+    if (isGlobModuleMap(this.#loader)) {
+      if (!this.#resolvedLoaders) {
+        this.#resolvedLoaders = createGlobRuntimeLoader(this.#loader)
+      }
+      return this.#resolvedLoaders
+    }
+
     return this.#loader as ModuleLoaders
+  }
+
+  /** Get the schema configuration for this directory. */
+  getSchema() {
+    return this.#schema
   }
 
   /** Get the file system for this directory. */
@@ -3387,7 +3744,7 @@ export class Directory<
             LoaderTypes,
             WithDefaultTypes<LoaderTypes>,
             ModuleLoaders,
-            DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>
+            undefined
           >,
           basePathname: directory.#basePathname,
           slugCasing: directory.#slugCasing,
@@ -3581,47 +3938,136 @@ export class Directory<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
         ? JavaScriptFile<
-            Extension extends keyof LoaderTypes
-              ? InferDefaultModuleTypes<Extension> & LoaderTypes[Extension]
-              : InferDefaultModuleTypes<Extension>,
+            JavaScriptFileExtensionTypes<
+              Extension,
+              ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>
+            >,
             any,
             string,
             Extension
           >
         : Extension extends 'mdx'
-          ? MDXFile<LoaderTypes['mdx'], any, string, Extension>
+          ? MDXFile<
+              ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['mdx'] &
+                Record<string, any>,
+              any,
+              string,
+              Extension
+            >
           : Extension extends 'md'
-            ? MarkdownFile<LoaderTypes['md'], any, string, Extension>
+            ? MarkdownFile<
+                ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['md'] &
+                  Record<string, any>,
+                any,
+                string,
+                Extension
+              >
             : Extension extends 'json'
-              ? JSONFile<JSONExtensionType<LoaderTypes>, any, string, Extension>
+              ? JSONFile<
+                  JSONExtensionType<
+                    ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>
+                  > &
+                    Record<string, any>,
+                  any,
+                  string,
+                  Extension
+                >
               : File<any, Path, Extension>
       : File<any>
   >
 
   async getFile<
-    ExtensionType extends keyof LoaderTypes | string,
-    const Extension extends ExtensionType | Extension[],
+    const Extension extends keyof ResolveDirectoryTypes<
+      LoaderTypes,
+      Loaders,
+      Schema
+    > &
+      string,
   >(
     path: string | string[],
-    extension?: Extension | Extension[]
+    extension: Extension
   ): Promise<
-    Extension extends string
-      ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<
-            Extension extends keyof LoaderTypes
-              ? InferDefaultModuleTypes<Extension> & LoaderTypes[Extension]
-              : InferDefaultModuleTypes<Extension>,
+    IsJavaScriptLikeExtension<Extension> extends true
+      ? JavaScriptFile<
+          JavaScriptFileExtensionTypes<
+            Extension,
+            ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>
+          >,
+          any,
+          string,
+          Extension
+        >
+      : Extension extends 'mdx'
+        ? MDXFile<
+            ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['mdx'] &
+              Record<string, any>,
             any,
             string,
             Extension
           >
-        : Extension extends 'mdx'
-          ? MDXFile<LoaderTypes['mdx'], any, string, Extension>
-          : Extension extends 'md'
-            ? MarkdownFile<LoaderTypes['md'], any, string, Extension>
-            : Extension extends 'json'
-              ? JSONFile<JSONExtensionType<LoaderTypes>, any, string, Extension>
-              : File<any, Extension>
+        : Extension extends 'md'
+          ? MarkdownFile<
+              ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['md'] &
+                Record<string, any>,
+              any,
+              string,
+              Extension
+            >
+          : Extension extends 'json'
+            ? JSONFile<
+                JSONExtensionType<
+                  ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>
+                > &
+                  Record<string, any>,
+                any,
+                string,
+                Extension
+              >
+            : File<any, Extension>
+  >
+
+  async getFile<const Extension extends string | readonly string[]>(
+    path: string | string[],
+    extension?: Extension
+  ): Promise<
+    ExtensionElement<Extension> extends infer Ext extends string
+      ? IsJavaScriptLikeExtension<Ext> extends true
+        ? JavaScriptFile<
+            JavaScriptFileExtensionTypes<
+              Ext,
+              ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>
+            >,
+            any,
+            string,
+            Ext
+          >
+        : Ext extends 'mdx'
+          ? MDXFile<
+              ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['mdx'] &
+                Record<string, any>,
+              any,
+              string,
+              Ext
+            >
+          : Ext extends 'md'
+            ? MarkdownFile<
+                ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['md'] &
+                  Record<string, any>,
+                any,
+                string,
+                Ext
+              >
+            : Ext extends 'json'
+              ? JSONFile<
+                  JSONExtensionType<
+                    ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>
+                  > &
+                    Record<string, any>,
+                  any,
+                  string,
+                  Ext
+                >
+              : File<any, Ext>
       : File<any>
   >
 
@@ -3956,7 +4402,7 @@ export class Directory<
    */
   async getEntries<
     const ProvidedFilter extends
-      | DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>
+      | DirectoryFilter<any, ApplyDirectorySchema<LoaderTypes, Schema>>
       | undefined = Filter,
   >(options?: {
     /** Filter entries with a minimatch pattern or predicate. */
@@ -3985,10 +4431,20 @@ export class Directory<
     Array<
       ResolveDirectoryFilterEntries<
         ProvidedFilter extends undefined ? Filter : ProvidedFilter,
-        LoaderTypes
+        ApplyDirectorySchema<LoaderTypes, Schema>
       >
     >
-  > {
+  >
+
+  async getEntries(options?: {
+    filter?: any
+    recursive?: any
+    includeDirectoryNamedFiles?: boolean
+    includeIndexAndReadmeFiles?: boolean
+    includeGitIgnoredFiles?: boolean
+    includeTsConfigExcludedFiles?: boolean
+    includeHiddenFiles?: boolean
+  }): Promise<any> {
     const filterOverride = options?.filter
     const hasFilterOverride = filterOverride !== undefined
     const directory = hasFilterOverride
@@ -4249,7 +4705,7 @@ export class Directory<
           LoaderTypes,
           WithDefaultTypes<LoaderTypes>,
           ModuleLoaders,
-          DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>
+          undefined
         >,
         basePathname: directory.#basePathname,
         slugCasing: directory.#slugCasing,
@@ -4701,10 +5157,12 @@ type UnionToIntersection<Union> = (
 /** Helper type to extract loader types from entries. */
 type LoadersFromEntries<Entries extends FileSystemEntry<any>[]> =
   UnionToIntersection<
-    Entries[number] extends Directory<any, any, infer Loaders>
-      ? Loaders extends ModuleLoaders
-        ? Loaders
-        : {}
+    Entries[number] extends Directory<any, infer LoaderTypes, any, any>
+      ? {
+          [Extension in keyof LoaderTypes & string]: ModuleRuntimeLoader<
+            LoaderTypes[Extension]
+          >
+        }
       : {}
   >
 
@@ -4846,6 +5304,12 @@ export class Collection<
           : File<Types>
         : File<Types>
   > {
+    const normalizedExtension: string | string[] | undefined = Array.isArray(
+      extension
+    )
+      ? (extension.filter((e) => typeof e === 'string') as unknown as string[])
+      : extension
+
     const normalizedPath = Array.isArray(path)
       ? path.map(normalizeSlashes)
       : normalizeSlashes(path).split('/').filter(Boolean)
@@ -4862,7 +5326,7 @@ export class Collection<
           const directoryFile = await entry
             .getFile(
               isRootDirectory ? normalizedPath : normalizedPath.slice(1),
-              extension
+              normalizedExtension
             )
             .catch((error) => {
               if (error instanceof FileNotFoundError) {
@@ -5323,9 +5787,8 @@ export interface PackageExportOptions<
   Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader,
-  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
 > extends Omit<
-  DirectoryOptions<Types, LoaderTypes, Loaders, Filter>,
+  DirectoryOptions<Types, LoaderTypes, Loaders, undefined>,
   'path' | 'fileSystem'
 > {
   path?: PathLike
@@ -5335,7 +5798,6 @@ export interface PackageOptions<
   Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader,
-  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
   ExportLoaders extends PackageExportLoaderMap = {},
 > {
   name?: string
@@ -5343,10 +5805,7 @@ export interface PackageOptions<
   directory?: PathLike | Directory<any, any, any>
   sourcePath?: PathLike | null
   fileSystem?: FileSystem
-  exports?: Record<
-    string,
-    PackageExportOptions<Types, LoaderTypes, Loaders, Filter>
-  >
+  exports?: Record<string, PackageExportOptions<Types, LoaderTypes, Loaders>>
   repository?: RepositoryConfig | string | Repository
   /**
    * Optional runtime loaders for individual package exports or a resolver that
@@ -5431,9 +5890,7 @@ export interface PackageExportDirectory<
   Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
-    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
-> extends Directory<Types, LoaderTypes, Loaders, Filter> {
+> extends Directory<Types, LoaderTypes, Loaders, undefined> {
   getExportPath(): string
   /** @internal */
   getAnalysis(): PackageExportAnalysis | undefined
@@ -5449,15 +5906,13 @@ export class PackageExportDirectory<
   Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
-    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
-> extends Directory<Types, LoaderTypes, Loaders, Filter> {
+> extends Directory<Types, LoaderTypes, Loaders, undefined> {
   #exportPath: string
   #analysis?: PackageExportAnalysis
 
   constructor(
     exportPath: string,
-    options: DirectoryOptions<Types, LoaderTypes, Loaders, Filter>,
+    options: DirectoryOptions<Types, LoaderTypes, Loaders, undefined>,
     analysis?: PackageExportAnalysis
   ) {
     super(options)
@@ -6279,8 +6734,6 @@ export class Package<
   Types extends InferDirectoryLoaderTypes<Loaders>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
-  Filter extends DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes> =
-    DirectoryFilter<FileSystemEntry<LoaderTypes>, LoaderTypes>,
   ExportLoaders extends PackageExportLoaderMap = {},
 > {
   #name?: string
@@ -6293,20 +6746,15 @@ export class Package<
   #exportLoaders?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
   #exportOverrides?: Record<
     string,
-    PackageExportOptions<Types, LoaderTypes, Loaders, Filter>
+    PackageExportOptions<Types, LoaderTypes, Loaders>
   >
-  #exportDirectories?: PackageExportDirectory<
-    Types,
-    LoaderTypes,
-    Loaders,
-    Filter
-  >[]
+  #exportDirectories?: PackageExportDirectory<Types, LoaderTypes, Loaders>[]
   #importEntries?: PackageImportEntry[]
   #exportManifestEntries?: Map<string, PackageManifestEntry>
   #importManifestEntries?: Map<string, PackageManifestEntry>
 
   constructor(
-    options: PackageOptions<Types, LoaderTypes, Loaders, Filter, ExportLoaders>
+    options: PackageOptions<Types, LoaderTypes, Loaders, ExportLoaders>
   ) {
     if (!options?.name && !options?.path) {
       throw new Error(
@@ -6351,7 +6799,7 @@ export class Package<
     return this.#name
   }
 
-  getExports(): PackageExportDirectory<Types, LoaderTypes, Loaders, Filter>[] {
+  getExports(): PackageExportDirectory<Types, LoaderTypes, Loaders>[] {
     if (!this.#exportDirectories) {
       this.#exportDirectories = this.#buildExportDirectories()
     }
@@ -6436,7 +6884,7 @@ export class Package<
     }
     let match:
       | {
-          directory: PackageExportDirectory<Types, LoaderTypes, Loaders, Filter>
+          directory: PackageExportDirectory<Types, LoaderTypes, Loaders>
           relativePath: string
           baseLength: number
           relativeLength: number
@@ -6624,12 +7072,8 @@ export class Package<
   }
 
   #buildExportDirectories() {
-    const directories: PackageExportDirectory<
-      Types,
-      LoaderTypes,
-      Loaders,
-      Filter
-    >[] = []
+    const directories: PackageExportDirectory<Types, LoaderTypes, Loaders>[] =
+      []
     const packageExportKeys = this.#resolvePackageExportKeys()
     const overrideKeys = this.#exportOverrides
       ? Object.keys(this.#exportOverrides)
@@ -6723,12 +7167,7 @@ export class Package<
             ? '.'
             : normalizeSlashes(relativeFromPackage),
       }
-      const directory = new PackageExportDirectory<
-        Types,
-        LoaderTypes,
-        Loaders,
-        Filter
-      >(
+      const directory = new PackageExportDirectory<Types, LoaderTypes, Loaders>(
         exportKey,
         {
           ...overrideOptions,

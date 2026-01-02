@@ -281,7 +281,9 @@ export function ScreenshotStack({
     // Only fly if this is a genuinely new screenshot and within visible stack
     if (first && first.sourceRect && !landedUrls.has(first.url)) {
       // Check if it will be visible in the stack
-      const visibleIndex = screenshots.slice(0, MAX_STACK_CARDS).findIndex(s => s.url === first.url)
+      const visibleIndex = screenshots
+        .slice(0, MAX_STACK_CARDS)
+        .findIndex((s) => s.url === first.url)
       if (visibleIndex !== -1) {
         return first
       }

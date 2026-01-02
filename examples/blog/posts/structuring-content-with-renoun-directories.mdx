@@ -19,23 +19,23 @@ Group related content into directories that mirror the reading experience you wa
 Each directory can define its own schema, sort order, and loader.
 
 ```ts
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import { z } from 'zod'
 
 const tutorials = new Directory({
   path: 'tutorials',
   filter: '*.mdx',
+  schema: {
+    mdx: {
+      frontmatter: z.object({
+        title: z.string(),
+        date: z.coerce.date(),
+        duration: z.string(),
+      }),
+    },
+  },
   loader: {
-    mdx: withSchema(
-      {
-        frontmatter: z.object({
-          title: z.string(),
-          date: z.coerce.date(),
-          duration: z.string(),
-        }),
-      },
-      (path) => import(`./tutorials/${path}.mdx`)
-    ),
+    mdx: (path) => import(`./tutorials/${path}.mdx`),
   },
 })
 ```

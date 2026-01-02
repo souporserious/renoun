@@ -1,4 +1,4 @@
-import { Directory, withSchema, type ContentSection } from 'renoun'
+import { Directory, type ContentSection } from 'renoun'
 import * as v from 'valibot'
 
 const mdxSchema = v.object({
@@ -8,7 +8,8 @@ const mdxSchema = v.object({
 const docs = new Directory({
   path: 'docs',
   filter: '*.mdx',
+  schema: { mdx: mdxSchema },
   loader: {
-    mdx: withSchema(mdxSchema, (path) => import(`@/docs/${path}.mdx`)),
+    mdx: (path) => import(`@/docs/${path}.mdx`),
   },
 })

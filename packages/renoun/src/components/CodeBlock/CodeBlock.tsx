@@ -28,6 +28,9 @@ import {
 } from '../../utils/slot-components.ts'
 
 export interface CodeBlockBaseProps {
+  /** Render as inline code instead of a block `<pre>` container. This mimics the old `CodeInline` component behavior. */
+  inline?: boolean
+
   /** Name or path of the code block. Ordered file names will be stripped from the name e.g. `01.index.tsx` becomes `index.tsx`. */
   path?: PathLike
 
@@ -63,6 +66,21 @@ export interface CodeBlockBaseProps {
 
   /** Whether or not to analyze the source code for type errors and provide quick information on hover. */
   shouldAnalyze?: boolean
+
+  /** Horizontal padding to apply when `inline` is enabled. */
+  paddingX?: string
+
+  /** Vertical padding to apply when `inline` is enabled. */
+  paddingY?: string
+
+  /** CSS styles to apply to the inline wrapping `code` element when `inline` is enabled. */
+  css?: CSSObject
+
+  /** Class name to apply to the inline wrapping `code` element when `inline` is enabled. */
+  className?: string
+
+  /** Style to apply to the inline wrapping `code` element when `inline` is enabled. */
+  style?: React.CSSProperties
 
   /** Whether or not to format the source code using `prettier` if installed. */
   shouldFormat?: boolean
@@ -153,16 +171,74 @@ function normalizeComponents(
 function CodeBlockWithFallback(
   props: CodeBlockProps | React.ComponentProps<'pre'>
 ) {
+  const normalizedProps = normalizeCodeBlockProps(props)
   const {
-    shouldAnalyze = true,
+    inline,
+    shouldAnalyze: shouldAnalyzeProp,
     unfocusedLinesOpacity = 0.6,
     baseDirectory: baseDirectoryProp,
+    paddingX,
+    paddingY,
+    css: cssProp,
+    className,
+    style,
     ...restProps
-  } = normalizeCodeBlockProps(props)
+  } = normalizedProps
+  const shouldAnalyze =
+    shouldAnalyzeProp === undefined
+      ? inline
+        ? false
+        : true
+      : shouldAnalyzeProp
   const baseDirectoryContext = getContext(BaseDirectoryContext)
   const baseDirectory = normalizeBaseDirectory(
     baseDirectoryProp ?? baseDirectoryContext
   )
+
+  if (inline) {
+    const resolvedPaddingX = paddingX ?? '0.25em'
+    const resolvedPaddingY = paddingY ?? '0.1em'
+
+    return (
+      <Suspense
+        fallback={
+          <InlineFallback
+            css={{
+              display: restProps.allowCopy ? 'inline-flex' : 'inline-block',
+              alignItems: restProps.allowCopy ? 'center' : undefined,
+              verticalAlign: 'text-bottom',
+              padding: `${resolvedPaddingY} ${resolvedPaddingX}`,
+              paddingRight: restProps.allowCopy
+                ? `calc(1ch + 1lh + ${resolvedPaddingX})`
+                : undefined,
+              gap: restProps.allowCopy ? '1ch' : undefined,
+              borderRadius: 5,
+              whiteSpace: 'nowrap',
+              position: 'relative',
+              ...cssProp,
+            }}
+            className={className}
+            style={style}
+          >
+            {restProps.children as any}
+          </InlineFallback>
+        }
+      >
+        <CodeBlockAsync
+          inline
+          paddingX={resolvedPaddingX}
+          paddingY={resolvedPaddingY}
+          shouldAnalyze={shouldAnalyze}
+          unfocusedLinesOpacity={unfocusedLinesOpacity}
+          baseDirectory={baseDirectory}
+          css={cssProp}
+          className={className}
+          style={style}
+          {...restProps}
+        />
+      </Suspense>
+    )
+  }
 
   if (typeof restProps.children !== 'string') {
     return (
@@ -270,6 +346,7 @@ async function CodeBlockAsync(
   props: CodeBlockProps | React.ComponentProps<'pre'>
 ) {
   const {
+    inline,
     path: pathProp,
     baseDirectory: baseDirectoryProp,
     language,
@@ -283,10 +360,85 @@ async function CodeBlockAsync(
     showToolbar,
     shouldAnalyze,
     shouldFormat,
+    paddingX,
+    paddingY,
+    css: cssProp,
+    className,
+    style,
     children,
     annotations,
     components: componentsProp = {},
   } = normalizeCodeBlockProps(props)
+
+  if (inline) {
+    if (typeof children !== 'string') {
+      throw new Error(
+        `[renoun] CodeBlock with \"inline\" enabled only supports string children.`
+      )
+    }
+
+    const config = await getConfig()
+    const theme = await getThemeColors(config.theme)
+    const resolvedPaddingX = paddingX ?? '0.25em'
+    const resolvedPaddingY = paddingY ?? '0.1em'
+    const shouldAnalyzeInline = shouldAnalyze ?? false
+
+    const childrenToRender = language ? (
+      <Tokens
+        language={language}
+        allowErrors={allowErrors}
+        showErrors={showErrors}
+        shouldAnalyze={shouldAnalyzeInline}
+      >
+        {children}
+      </Tokens>
+    ) : (
+      children
+    )
+
+    return (
+      <InlineCode
+        css={{
+          display: allowCopy ? 'inline-grid' : 'inline',
+          alignItems: allowCopy ? 'center' : undefined,
+          verticalAlign: 'text-bottom',
+          padding: `${resolvedPaddingY} ${resolvedPaddingX} 0`,
+          gap: allowCopy ? '1ch' : undefined,
+          color: theme.foreground,
+          backgroundColor: theme.background,
+          boxShadow: `0 0 0 1px ${theme.panel.border}`,
+          borderRadius: 5,
+          position: 'relative',
+          overflowY: 'hidden',
+          ...getScrollContainerStyles({
+            color: theme.scrollbarSlider.hoverBackground,
+          }),
+          ...cssProp,
+        }}
+        className={className}
+        style={style}
+      >
+        {allowCopy ? (
+          <InlineContainer>{childrenToRender}</InlineContainer>
+        ) : (
+          childrenToRender
+        )}
+        {allowCopy ? (
+          <CopyButton
+            value={typeof allowCopy === 'string' ? allowCopy : children}
+            css={{
+              position: 'sticky',
+              right: 0,
+              gridArea: '1 / 2',
+              marginLeft: 'auto',
+              color: theme.activityBar.foreground,
+            }}
+          />
+        ) : null}
+      </InlineCode>
+    )
+  }
+
   const components: CodeBlockComponents = {
     ...normalizeComponents(componentsProp),
   }
@@ -572,6 +724,22 @@ function normalizeCodeBlockProps(
     path,
   } as CodeBlockProps
 }
+
+const InlineCode = styled('code')
+
+const InlineContainer = styled('span', {
+  gridArea: '1 / 1',
+  width: 'max-content',
+})
+
+const InlineFallback = styled('code', {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '1ch',
+  whiteSpace: 'nowrap',
+  overflowX: 'scroll',
+  overflowY: 'hidden',
+})
 
 const FallbackToolbar = styled('div', {
   fontSize: 'inherit',

@@ -6,7 +6,7 @@ export const metadata = {
 }
 
 ```ts
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import { type } from 'arktype'
 
 const frontmatterSchema = type({
@@ -19,11 +19,11 @@ const frontmatterSchema = type({
 const posts = new Directory({
   path: 'posts',
   filter: '*.mdx',
+  schema: {
+    mdx: { frontmatter: frontmatterSchema },
+  },
   loader: {
-    mdx: withSchema(
-      { frontmatter: frontmatterSchema },
-      (path) => import(`./posts/${path}.mdx`)
-    ),
+    mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
 ```
@@ -63,10 +63,10 @@ const frontmatterSchema = type({
 
 ### Apply to a Directory
 
-We can now apply the ArkType `frontmatterSchema` to your `Directory` using the `withSchema` helper:
+We can now apply the ArkType `frontmatterSchema` to your `Directory` using the `schema` option:
 
 ```ts highlightedLines="1,11-20"
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import { type } from 'arktype'
 
 const frontmatterSchema = type({
@@ -79,11 +79,11 @@ const frontmatterSchema = type({
 const posts = new Directory({
   path: 'posts',
   filter: '*.mdx',
+  schema: {
+    mdx: { frontmatter: frontmatterSchema },
+  },
   loader: {
-    mdx: withSchema(
-      { frontmatter: frontmatterSchema },
-      (path) => import(`./posts/${path}.mdx`)
-    ),
+    mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
 ```

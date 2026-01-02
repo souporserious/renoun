@@ -6,7 +6,7 @@ export const metadata = {
 }
 
 ```ts
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import * as v from 'valibot'
 
 const frontmatterSchema = v.object({
@@ -19,11 +19,11 @@ const frontmatterSchema = v.object({
 const posts = new Directory({
   path: 'posts',
   filter: '*.mdx',
+  schema: {
+    mdx: { frontmatter: frontmatterSchema },
+  },
   loader: {
-    mdx: withSchema(
-      { frontmatter: frontmatterSchema },
-      (path) => import(`./posts/${path}.mdx`)
-    ),
+    mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
 ```
@@ -66,7 +66,7 @@ const frontmatterSchema = v.object({
 We can now apply the Valibot `frontmatterSchema` to your collection using the `schema` option in the `collection` utility:
 
 ```ts highlightedLines="1,11-20"
-import { Directory, withSchema } from 'renoun'
+import { Directory } from 'renoun'
 import * as v from 'valibot'
 
 const frontmatterSchema = v.object({
@@ -79,11 +79,11 @@ const frontmatterSchema = v.object({
 const posts = new Directory({
   path: 'posts',
   filter: '*.mdx',
+  schema: {
+    mdx: { frontmatter: frontmatterSchema },
+  },
   loader: {
-    mdx: withSchema(
-      { frontmatter: frontmatterSchema },
-      (path) => import(`./posts/${path}.mdx`)
-    ),
+    mdx: (path) => import(`./posts/${path}.mdx`),
   },
 })
 ```
