@@ -866,7 +866,18 @@ function createGlobRuntimeLoader(
       )
     }
 
-    return importer()
+    try {
+      return await importer()
+    } catch (error) {
+      // If the importer exists but fails to parse fall back to a default loader for that extension when available.
+      const fallback = file?.extension
+        ? defaultLoaders[file.extension]
+        : undefined
+      if (fallback) {
+        return fallback(_path, file)
+      }
+      throw error
+    }
   }
 }
 
@@ -3453,6 +3464,7 @@ export class Directory<
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
   #repositoryOption?: Repository | RepositoryConfig | string
+  #hasExplicitLoader = false
   #filterPattern?: string
   #filter?:
     | ((
@@ -3503,6 +3515,7 @@ export class Directory<
       }
       this.#schema = options.schema
       this.#loader = options.loader
+      this.#hasExplicitLoader = options.loader !== undefined
       this.#basePathname =
         options.basePathname === undefined
           ? this.#directory
@@ -3640,6 +3653,7 @@ export class Directory<
     directory.#rootPath = this.getRootPath()
     directory.#pathLookup = this.#pathLookup
     directory.#resolvedLoaders = this.#resolvedLoaders
+    directory.#hasExplicitLoader = this.#hasExplicitLoader
 
     return directory
   }
@@ -3656,6 +3670,12 @@ export class Directory<
 
       if (!this.#resolvedLoaders) {
         const resolved = (this.#loader as () => Loaders)()
+
+        if (resolved === undefined && this.#hasExplicitLoader) {
+          throw new Error(
+            `[renoun] A loader was provided for directory "${this.#path}" but it did not resolve. Ensure the loader factory returns a loader or remove the loader option.`
+          )
+        }
 
         if (isGlobModuleMap(resolved)) {
           this.#resolvedLoaders = createGlobRuntimeLoader(resolved)
@@ -3676,7 +3696,29 @@ export class Directory<
       return this.#resolvedLoaders
     }
 
-    return this.#loader as ModuleLoaders
+    const loaderMap = this.#loader as ModuleLoaders
+
+    if (this.#hasExplicitLoader && Object.keys(loaderMap).length === 0) {
+      throw new Error(
+        `[renoun] A loader was provided for directory "${this.#path}" but it resolved to an empty loader map. Ensure your loader map includes extensions or remove the loader option.`
+      )
+    }
+
+    return loaderMap
+  }
+
+  #resolveLoaderForExtension(
+    extension: string
+  ): ModuleLoader<any> | ModuleRuntimeLoader<any> | undefined {
+    const loaders = this.#getLoaders()
+
+    if (loaders === undefined) return undefined
+
+    if (typeof loaders === 'function') {
+      return loaders
+    }
+
+    return loaders[extension]
   }
 
   /** Get the schema configuration for this directory. */
@@ -3771,10 +3813,9 @@ export class Directory<
           slugCasing: directory.#slugCasing,
         } as const
         const extension = extensionName(entry.name).slice(1)
-        const loaders = directory.#getLoaders()
-        const loader = (
-          typeof loaders === 'function' ? loaders : loaders?.[extension]
-        ) as ModuleLoader<LoaderTypes[any]> | undefined
+        const loader = directory.#resolveLoaderForExtension(extension) as
+          | ModuleLoader<LoaderTypes[any]>
+          | undefined
 
         const file =
           extension === 'md'
@@ -4736,10 +4777,9 @@ export class Directory<
       } as const
 
       const extension = extensionName(entry.name).slice(1)
-      const loaders = directory.#getLoaders()
-      const loader = (
-        typeof loaders === 'function' ? loaders : loaders?.[extension]
-      ) as ModuleLoader<LoaderTypes[any]> | undefined
+      const loader = directory.#resolveLoaderForExtension(extension) as
+        | ModuleLoader<LoaderTypes[any]>
+        | undefined
 
       const file =
         extension === 'md'

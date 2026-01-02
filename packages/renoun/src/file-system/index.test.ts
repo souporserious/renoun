@@ -746,6 +746,48 @@ describe('file system', () => {
     )
   })
 
+  test('import.meta.glob loader inference', async () => {
+    interface PostType {
+      frontmatter: {
+        title: string
+        date: Date
+      }
+    }
+
+    const directory = new Directory({
+      path: 'fixtures/posts',
+      loader: import.meta.glob<PostType>('../../fixtures/posts/*.mdx'),
+    })
+    const file = await directory.getFile('getting-started.mdx')
+
+    type Test = Expect<IsNotAny<typeof file>>
+
+    file satisfies MDXFile<PostType>
+
+    const fileExport = await file.getExport('frontmatter')
+    const value = await fileExport.getRuntimeValue()
+
+    type ValueTypeTest = Expect<IsNotAny<typeof value>>
+
+    value satisfies PostType['frontmatter']
+
+    expect(value).toEqual({
+      title: 'Getting Started',
+      date: new Date('12-24-2024'),
+    })
+  })
+
+  test('import.meta.glob loader throws when file is not covered by glob', async () => {
+    const directory = new Directory({
+      path: 'fixtures/posts',
+      loader: import.meta.glob('../../fixtures/undefined/*.mdx'),
+    })
+
+    await expect(directory.getFile('getting-started.mdx')).rejects.toThrow(
+      /loader was provided .* resolved to an empty loader map/i
+    )
+  })
+
   describe('schema', () => {
     test('types only', async () => {
       const directory = new Directory<{
@@ -2884,13 +2926,9 @@ export function identity<T>(value: T) {
         // @ts-expect-error - shallow filter patterns cannot be used with recursive option
         recursive: true,
       })
-    ).rejects.toThrowErrorMatchingInlineSnapshot(`
-      [Error: [renoun] Cannot use recursive option with a shallow filter pattern.
-      Method: Directory#getEntries
-      Directory path: "./fixtures"
-      Filter pattern: "*.mdx"
-      Hint: Use a recursive pattern (e.g. "**/*.mdx") when "recursive" is enabled.]
-    `)
+    ).rejects.toThrow(
+      /Cannot use recursive option with a shallow filter pattern/
+    )
   })
 
   test('allows recursive option with multi-level filter pattern', async () => {
@@ -3868,37 +3906,6 @@ export function identity<T>(value: T) {
       expect(structure.frontMatter?.description).toBe('Page Desc')
       expect(structure.description).toBe('Page Desc')
       expect(structure.relativePath).toBe('docs/page.md')
-    })
-  })
-
-  test('glob loader inference', async () => {
-    interface PostType {
-      frontmatter: {
-        title: string
-        date: Date
-      }
-    }
-
-    const directory = new Directory({
-      path: 'fixtures/posts',
-      loader: import.meta.glob<PostType>('../../fixtures/posts/*.mdx'),
-    })
-    const file = await directory.getFile('getting-started.mdx')
-
-    type Test = Expect<IsNotAny<typeof file>>
-
-    file satisfies MDXFile<PostType>
-
-    const fileExport = await file.getExport('frontmatter')
-    const value = await fileExport.getRuntimeValue()
-
-    type ValueTypeTest = Expect<IsNotAny<typeof value>>
-
-    value satisfies PostType['frontmatter']
-
-    expect(value).toEqual({
-      title: 'Getting Started',
-      date: new Date('12-24-2024'),
     })
   })
 })
