@@ -286,15 +286,15 @@ type ModuleExportValidator<
   Output = Input,
 > = BivariantCallback<[value: Input], Output>
 
-export type FileSystemStructureType =
-  | 'workspace'
-  | 'package'
-  | 'directory'
-  | 'file'
-  | 'export'
+export type FileSystemStructureKind =
+  | 'Workspace'
+  | 'Package'
+  | 'Directory'
+  | 'File'
+  | 'ModuleExport'
 
 interface BaseStructure {
-  type: FileSystemStructureType
+  kind: FileSystemStructureKind
   name: string
   title: string
   slug: string
@@ -302,25 +302,25 @@ interface BaseStructure {
 }
 
 export interface WorkspaceStructure extends BaseStructure {
-  type: 'workspace'
+  kind: 'Workspace'
   packageManager: 'pnpm' | 'yarn' | 'npm' | 'bun' | 'unknown'
 }
 
 export interface PackageStructure extends BaseStructure {
-  type: 'package'
+  kind: 'Package'
   version?: string
   description?: string
   relativePath: string
 }
 
 export interface DirectoryStructure extends BaseStructure {
-  type: 'directory'
+  kind: 'Directory'
   depth: number
   relativePath: string
 }
 
 export interface FileStructure extends BaseStructure {
-  type: 'file'
+  kind: 'File'
   extension: string
   depth: number
   relativePath: string
@@ -338,7 +338,7 @@ type ModuleExportResolvedType = Awaited<
 >
 
 export interface ModuleExportStructure extends BaseStructure {
-  type: 'export'
+  kind: 'ModuleExport'
   relativePath?: string
   description?: string
   tags?: Array<{ name: string; value?: string }>
@@ -1368,7 +1368,7 @@ export class File<
     }
 
     return {
-      type: 'file',
+      kind: 'File',
       name: this.name,
       title: this.title,
       slug: this.slug,
@@ -2117,7 +2117,7 @@ export class ModuleExport<Value> {
     const filePath = this.#file.getPathname()
 
     return {
-      type: 'export',
+      kind: 'ModuleExport',
       name: this.name,
       title: this.title,
       slug,
@@ -3319,7 +3319,7 @@ type DirectorySnapshotMetadataEntry<LoaderTypes extends Record<string, any>> =
   | DirectoryEntryMetadata<LoaderTypes>
 
 interface FileEntryMetadata<LoaderTypes extends Record<string, any>> {
-  type: 'file'
+  kind: 'File'
   entry: FileSystemEntry<LoaderTypes>
   includeInFinal: boolean
   isGitIgnored: boolean
@@ -3331,7 +3331,7 @@ interface FileEntryMetadata<LoaderTypes extends Record<string, any>> {
 }
 
 interface DirectoryEntryMetadata<LoaderTypes extends Record<string, any>> {
-  type: 'directory'
+  kind: 'Directory'
   entry: Directory<LoaderTypes>
   includeInFinal: boolean
   passesFilterSelf: boolean
@@ -4510,7 +4510,7 @@ export class Directory<
 
     const structures: Array<DirectoryStructure | FileStructure> = [
       {
-        type: 'directory',
+        kind: 'Directory',
         name: this.name,
         title: this.title,
         slug: this.slug,
@@ -4684,7 +4684,7 @@ export class Directory<
               : true
 
         const metadata: DirectoryEntryMetadata<LoaderTypes> = {
-          type: 'directory',
+          kind: 'Directory',
           entry: subdirectory,
           includeInFinal: true,
           passesFilterSelf,
@@ -4771,7 +4771,7 @@ export class Directory<
       }
 
       const metadata: FileEntryMetadata<LoaderTypes> = {
-        type: 'file',
+        kind: 'File',
         entry: file,
         includeInFinal,
         isGitIgnored,
@@ -4809,7 +4809,7 @@ export class Directory<
     if (!shouldIncludeSelf) {
       for (const metadata of finalMetadata) {
         if (
-          metadata.type === 'directory' &&
+          metadata.kind === 'Directory' &&
           metadata.snapshot.shouldIncludeSelf
         ) {
           shouldIncludeSelf = true
@@ -4821,7 +4821,7 @@ export class Directory<
     const immediateMetadata: DirectorySnapshotMetadataEntry<LoaderTypes>[] = []
 
     for (const metadata of finalMetadata) {
-      if (metadata.type === 'file') {
+      if (metadata.kind === 'File') {
         if (metadata.shouldIncludeFile && metadata.includeInFinal) {
           immediateMetadata.push(metadata)
         }
@@ -4845,7 +4845,7 @@ export class Directory<
     const entriesResult: FileSystemEntry<LoaderTypes>[] = []
 
     for (const metadata of immediateMetadata) {
-      if (metadata.type === 'file') {
+      if (metadata.kind === 'File') {
         entriesResult.push(metadata.entry)
         continue
       }
@@ -5833,33 +5833,33 @@ export type PackageEntryTargetNode =
   | PackageEntryUnknownTarget
 
 export interface PackageEntryPathTarget {
-  kind: 'path'
+  kind: 'Path'
   relativePath: string
   absolutePath: string
   isPattern: boolean
 }
 
 export interface PackageEntrySpecifierTarget {
-  kind: 'specifier'
+  kind: 'Specifier'
   specifier: string
 }
 
 export interface PackageEntryConditionTarget {
-  kind: 'conditions'
+  kind: 'Conditions'
   entries: { condition: string; target: PackageEntryTargetNode }[]
 }
 
 export interface PackageEntryArrayTarget {
-  kind: 'array'
+  kind: 'Array'
   targets: PackageEntryTargetNode[]
 }
 
 export interface PackageEntryNullTarget {
-  kind: 'null'
+  kind: 'Null'
 }
 
 export interface PackageEntryUnknownTarget {
-  kind: 'unknown'
+  kind: 'Unknown'
   value: unknown
 }
 
@@ -5999,7 +5999,7 @@ function analyzePackageTarget(
   fileSystem: FileSystem
 ): PackageEntryTargetNode {
   if (target === null) {
-    return { kind: 'null' }
+    return { kind: 'Null' }
   }
 
   if (typeof target === 'string') {
@@ -6008,7 +6008,7 @@ function analyzePackageTarget(
 
   if (Array.isArray(target)) {
     return {
-      kind: 'array',
+      kind: 'Array',
       targets: target.map((entry) =>
         analyzePackageTarget(entry, type, packagePath, fileSystem)
       ),
@@ -6017,7 +6017,7 @@ function analyzePackageTarget(
 
   if (isPlainObject(target)) {
     return {
-      kind: 'conditions',
+      kind: 'Conditions',
       entries: Object.entries(target).map(([condition, value]) => ({
         condition,
         target: analyzePackageTarget(value, type, packagePath, fileSystem),
@@ -6025,7 +6025,7 @@ function analyzePackageTarget(
     }
   }
 
-  return { kind: 'unknown', value: target }
+  return { kind: 'Unknown', value: target }
 }
 
 function analyzePackageTargetString(
@@ -6041,7 +6041,7 @@ function analyzePackageTargetString(
     const resolvedAbsolutePath = fileSystem.getAbsolutePath(absolutePath)
 
     return {
-      kind: 'path',
+      kind: 'Path',
       relativePath: target,
       absolutePath: resolvedAbsolutePath,
       isPattern: target.includes('*'),
@@ -6049,7 +6049,7 @@ function analyzePackageTargetString(
   }
 
   return {
-    kind: 'specifier',
+    kind: 'Specifier',
     specifier: target,
   } satisfies PackageEntrySpecifierTarget
 }
@@ -6559,7 +6559,7 @@ export class Workspace {
       WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
     > = [
       {
-        type: 'workspace',
+        kind: 'Workspace',
         name: workspaceName,
         title: formatNameAsTitle(workspaceName),
         slug: workspaceSlug,
@@ -6832,7 +6832,7 @@ export class Package<
       PackageStructure | DirectoryStructure | FileStructure
     > = [
       {
-        type: 'package',
+        kind: 'Package',
         name,
         title: formatNameAsTitle(name),
         slug: createSlug(name, 'kebab'),

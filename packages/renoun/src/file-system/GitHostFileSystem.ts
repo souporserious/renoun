@@ -493,7 +493,7 @@ export class GitHostFileSystem extends InMemoryFileSystem {
       }
 
       const content: InMemoryFileContent = this.#isBinaryBuffer(buf)
-        ? { kind: 'binary', content: buf, encoding: 'binary' }
+        ? { kind: 'Binary', content: buf, encoding: 'binary' }
         : new TextDecoder('utf-8').decode(buf)
 
       this.createFile(relativePath, content)
@@ -1985,7 +1985,7 @@ export class GitHostFileSystem extends InMemoryFileSystem {
           const buffer = new Uint8Array(arrayBuffer)
           if (buffer.length > this.#maxFileBytes) return
           const content: InMemoryFileContent = this.#isBinaryBuffer(buffer)
-            ? { kind: 'binary', content: buffer, encoding: 'binary' }
+            ? { kind: 'Binary', content: buffer, encoding: 'binary' }
             : new TextDecoder('utf-8').decode(buffer)
           this.createFile(path, content)
         } catch (error) {

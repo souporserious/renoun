@@ -9,7 +9,7 @@ const tsMorph = getTsMorph()
 export interface FileRegion {
   bannerText: string
   autoCollapse: boolean
-  kind?: ts.OutliningSpanKind
+  kind?: 'Region'
   textSpan: ts.TextSpan
   hintSpan: ts.TextSpan
   position: DeclarationPosition
@@ -47,7 +47,7 @@ export function getFileRegions(
           return {
             bannerText: span.bannerText,
             autoCollapse: span.autoCollapse,
-            kind: span.kind,
+            kind: 'Region',
             textSpan: span.textSpan,
             hintSpan: span.hintSpan,
             position: {

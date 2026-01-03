@@ -1014,9 +1014,7 @@ describe('file system', () => {
     const publicExports = await publicFile.getExports()
 
     expect(internalExports).toHaveLength(0)
-    expect(publicExports.map((fileExport) => fileExport.name)).toEqual([
-      'Link',
-    ])
+    expect(publicExports.map((fileExport) => fileExport.name)).toEqual(['Link'])
   })
 
   test('javascript file getSections uses unslugified export names for ids (Reference anchors)', async () => {
@@ -1536,9 +1534,9 @@ describe('file system', () => {
     const file = await directory.getFile('components/CodeBlock', 'tsx')
     const fileExports = await file.getExports()
 
-    expect(fileExports.map((fileExport) => fileExport.name)).toStrictEqual(
-      ['CodeBlock']
-    )
+    expect(fileExports.map((fileExport) => fileExport.name)).toStrictEqual([
+      'CodeBlock',
+    ])
   })
 
   test('single virtual file export', async () => {
@@ -1971,7 +1969,7 @@ function b() {}
         autoCollapse: false,
         bannerText: 'alpha',
         hintSpan: { length: 40, start: 0 },
-        kind: 'region',
+        kind: 'Region',
         position: {
           end: { column: 13, line: 3 },
           start: { column: 1, line: 1 },
@@ -1982,7 +1980,7 @@ function b() {}
         autoCollapse: false,
         bannerText: 'beta',
         hintSpan: { length: 43, start: 42 },
-        kind: 'region',
+        kind: 'Region',
         position: {
           end: { column: 13, line: 7 },
           start: { column: 1, line: 5 },
@@ -3659,20 +3657,20 @@ export function identity<T>(value: T) {
         (entry) => entry.getImportPath() === '#pkg'
       )
 
-      expect(rootExport?.getAnalysis()?.manifestTarget?.kind).toBe('conditions')
+      expect(rootExport?.getAnalysis()?.manifestTarget?.kind).toBe('Conditions')
       expect(rootExport?.getAnalysis()?.derivedAbsolutePath).toBe(
         '/node_modules/acme/src'
       )
-      expect(componentsExport?.getAnalysis()?.manifestTarget?.kind).toBe('path')
+      expect(componentsExport?.getAnalysis()?.manifestTarget?.kind).toBe('Path')
       expect(
         (componentsExport?.getAnalysis()?.manifestTarget as any)?.absolutePath
       ).toBe('/node_modules/acme/dist/components/*.ts')
 
       expect(imports).toHaveLength(2)
-      expect(internalImport?.getAnalysis()?.manifestTarget?.kind).toBe('path')
-      expect(pkgImport?.getAnalysis()?.manifestTarget?.kind).toBe('specifier')
+      expect(internalImport?.getAnalysis()?.manifestTarget?.kind).toBe('Path')
+      expect(pkgImport?.getAnalysis()?.manifestTarget?.kind).toBe('Specifier')
       expect(pkgImport?.getAnalysis()?.manifestTarget).toEqual({
-        kind: 'specifier',
+        kind: 'Specifier',
         specifier: 'lodash',
       })
     })
@@ -3852,7 +3850,7 @@ export function identity<T>(value: T) {
 
       const structures = await workspace.getStructure()
       expect(structures[0]).toMatchObject({
-        type: 'workspace',
+        kind: 'Workspace',
         name: 'acme',
         slug: 'acme',
       })
@@ -3875,9 +3873,9 @@ export function identity<T>(value: T) {
       })
       const structures = await directory.getStructure()
 
-      expect(structures.map((entry) => entry.type)).toEqual([
-        'directory',
-        'file',
+      expect(structures.map((entry) => entry.kind)).toEqual([
+        'Directory',
+        'File',
       ])
 
       const fileEntry = structures[1] as FileStructure
@@ -3902,7 +3900,7 @@ export function identity<T>(value: T) {
       const file = await directory.getFile('page')
       const structure = await file.getStructure()
 
-      expect(structure.kind).toBe('file')
+      expect(structure.kind).toBe('File')
       expect(structure.frontmatter?.description).toBe('Page Desc')
       expect(structure.description).toBe('Page Desc')
       expect(structure.relativePath).toBe('docs/page.md')

@@ -15,20 +15,22 @@ import type { DirectoryEntry } from './types.ts'
 
 const tsMorph = getTsMorph()
 
-export type InMemoryFileTextEntry = {
-  kind: 'text'
+export interface InMemoryFileTextEntry {
+  kind: 'Text'
   content: string
 }
 
-export type InMemoryFileBinaryEntry = {
-  kind: 'binary'
+export interface InMemoryFileBinaryEntry {
+  kind: 'Binary'
   content: Uint8Array | string
   encoding?: 'binary' | 'base64'
 }
 
 export type InMemoryFileEntry = InMemoryFileTextEntry | InMemoryFileBinaryEntry
 
-export type InMemoryDirectoryEntry = { kind: 'directory' }
+export interface InMemoryDirectoryEntry {
+  kind: 'Directory'
+}
 
 export type InMemoryEntry = InMemoryFileEntry | InMemoryDirectoryEntry
 
@@ -72,21 +74,21 @@ export class InMemoryFileSystem extends FileSystem {
 
   #normalizeFileContent(content: InMemoryFileContent): InMemoryFileEntry {
     if (typeof content === 'string') {
-      return { kind: 'text', content }
+      return { kind: 'Text', content }
     }
 
     if (content instanceof Uint8Array) {
-      return { kind: 'binary', content: content.slice() }
+      return { kind: 'Binary', content: content.slice() }
     }
 
     if (content instanceof ArrayBuffer) {
-      return { kind: 'binary', content: new Uint8Array(content) }
+      return { kind: 'Binary', content: new Uint8Array(content) }
     }
 
     if (ArrayBuffer.isView(content)) {
       const { buffer, byteOffset, byteLength } = content
       return {
-        kind: 'binary',
+        kind: 'Binary',
         content: new Uint8Array(
           buffer.slice(byteOffset, byteOffset + byteLength)
         ),
@@ -94,16 +96,16 @@ export class InMemoryFileSystem extends FileSystem {
     }
 
     if (content && typeof content === 'object') {
-      if (content.kind === 'text') {
-        return { kind: 'text', content: content.content }
+      if (content.kind === 'Text') {
+        return { kind: 'Text', content: content.content }
       }
 
-      if (content.kind === 'binary') {
+      if (content.kind === 'Binary') {
         if (content.encoding === 'base64') {
           // Provided as base64 string
           if (typeof content.content === 'string') {
             return {
-              kind: 'binary',
+              kind: 'Binary',
               content: base64ToBytes(content.content),
               encoding: 'base64',
             }
@@ -112,7 +114,7 @@ export class InMemoryFileSystem extends FileSystem {
           // Provided as bytes but marked base64
           if (content.content instanceof Uint8Array) {
             return {
-              kind: 'binary',
+              kind: 'Binary',
               content: content.content.slice(),
               encoding: 'base64',
             }
@@ -121,7 +123,7 @@ export class InMemoryFileSystem extends FileSystem {
         // Treat as raw binary
         else if (content.content instanceof Uint8Array) {
           return {
-            kind: 'binary',
+            kind: 'Binary',
             content: content.content.slice(),
             encoding: content.encoding,
           }
@@ -135,7 +137,7 @@ export class InMemoryFileSystem extends FileSystem {
   }
 
   #maybeCreateSourceFile(path: string, entry: InMemoryEntry) {
-    if (entry.kind !== 'text') {
+    if (entry.kind !== 'Text') {
       return
     }
 
@@ -159,11 +161,11 @@ export class InMemoryFileSystem extends FileSystem {
       current = current ? `${current}/${segment}` : segment
       const existing = this.#files.get(current)
       if (!existing) {
-        this.#files.set(current, { kind: 'directory' })
+        this.#files.set(current, { kind: 'Directory' })
         continue
       }
 
-      if (existing.kind !== 'directory') {
+      if (existing.kind !== 'Directory') {
         throw new Error(
           `[renoun] Cannot create directory because a file exists at ${current}`
         )
@@ -201,24 +203,24 @@ export class InMemoryFileSystem extends FileSystem {
   }
 
   #cloneEntry(entry: InMemoryEntry): InMemoryEntry {
-    if (entry.kind === 'directory') {
-      return { kind: 'directory' }
+    if (entry.kind === 'Directory') {
+      return { kind: 'Directory' }
     }
 
-    if (entry.kind === 'text') {
-      return { kind: 'text', content: entry.content }
+    if (entry.kind === 'Text') {
+      return { kind: 'Text', content: entry.content }
     }
 
     if (typeof entry.content === 'string') {
       return {
-        kind: 'binary',
+        kind: 'Binary',
         content: entry.content,
         encoding: entry.encoding,
       }
     }
 
     return {
-      kind: 'binary',
+      kind: 'Binary',
       content: entry.content.slice(),
       encoding: entry.encoding,
     }
@@ -326,7 +328,7 @@ export class InMemoryFileSystem extends FileSystem {
 
       const isLeafDirectory =
         segments.length > 1 ||
-        (entry.kind === 'directory' && segments.length > 0)
+        (entry.kind === 'Directory' && segments.length > 0)
 
       entries.push({
         name: entryName,
@@ -352,11 +354,11 @@ export class InMemoryFileSystem extends FileSystem {
       throw new Error(`File not found: ${normalizedPath}`)
     }
 
-    if (entry.kind === 'directory') {
+    if (entry.kind === 'Directory') {
       throw new Error(`Cannot read directory: ${normalizedPath}`)
     }
 
-    if (entry.kind === 'text') {
+    if (entry.kind === 'Text') {
       return entry.content
     }
 
@@ -379,11 +381,11 @@ export class InMemoryFileSystem extends FileSystem {
       throw new Error(`File not found: ${normalizedPath}`)
     }
 
-    if (entry.kind === 'directory') {
+    if (entry.kind === 'Directory') {
       throw new Error(`Cannot read directory: ${normalizedPath}`)
     }
 
-    if (entry.kind === 'text') {
+    if (entry.kind === 'Text') {
       return new TextEncoder().encode(entry.content)
     }
 

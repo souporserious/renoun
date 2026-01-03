@@ -239,8 +239,8 @@ function attributesToProps(
   return props
 }
 
-type ElementNode = {
-  kind: 'element'
+interface ElementNode {
+  kind: 'Element'
   name: string
   props: Record<string, unknown>
   children: Array<ElementNode | { kind: 'text'; value: string }>
@@ -292,7 +292,7 @@ export function svgToJsx(
       const elementName = token.name
       const elementProps = attributesToProps(token.attributes, resolvedOptions)
       const elementNode: ElementNode = {
-        kind: 'element',
+        kind: 'Element',
         name: elementName,
         props: elementProps,
         children: [],

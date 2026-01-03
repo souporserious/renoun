@@ -9,8 +9,8 @@ describe('InMemoryFileSystem', () => {
     const fileSystem = new InMemoryFileSystem({ 'binary.bin': binary })
 
     const entry = fileSystem.getFileEntry('binary.bin')
-    expect(entry?.kind).toBe('binary')
-    if (!entry || entry.kind !== 'binary') {
+    expect(entry?.kind).toBe('Binary')
+    if (!entry || entry.kind !== 'Binary') {
       throw new Error('Expected binary entry')
     }
     expect(entry.content).not.toBe(binary)
@@ -27,7 +27,7 @@ describe('InMemoryFileSystem', () => {
 
   test('normalizes provided binary entries and preserves encoding metadata', () => {
     const entry = {
-      kind: 'binary' as const,
+      kind: 'Binary' as const,
       content: new Uint8Array([4, 5, 6]),
       encoding: 'base64' as const,
     }
@@ -35,8 +35,8 @@ describe('InMemoryFileSystem', () => {
     const fileSystem = new InMemoryFileSystem({ 'buffer.dat': entry })
     const stored = fileSystem.getFileEntry('buffer.dat')
 
-    expect(stored?.kind).toBe('binary')
-    if (!stored || stored.kind !== 'binary') {
+    expect(stored?.kind).toBe('Binary')
+    if (!stored || stored.kind !== 'Binary') {
       throw new Error('Expected binary entry')
     }
     expect(stored.encoding).toBe('base64')
@@ -44,7 +44,7 @@ describe('InMemoryFileSystem', () => {
     expect(Array.from(stored.content as Uint8Array)).toEqual([4, 5, 6])
 
     const freshEntry = {
-      kind: 'binary' as const,
+      kind: 'Binary' as const,
       content: new Uint8Array([7, 8, 9]),
       encoding: 'binary' as const,
     }
@@ -52,8 +52,8 @@ describe('InMemoryFileSystem', () => {
     fileSystem.createFile('fresh.dat', freshEntry)
     const created = fileSystem.getFileEntry('fresh.dat')
 
-    expect(created?.kind).toBe('binary')
-    if (!created || created.kind !== 'binary') {
+    expect(created?.kind).toBe('Binary')
+    if (!created || created.kind !== 'Binary') {
       throw new Error('Expected binary entry')
     }
     expect(created.encoding).toBe('binary')
