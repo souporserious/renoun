@@ -37,10 +37,9 @@ export function WithCustomComponents() {
           <code
             {...props}
             style={{
-              backgroundColor: '#f3f4f6',
+              backgroundColor: 'oklab(0.3 -0.01 -0.04)',
               padding: '0.2rem 0.4rem',
               borderRadius: '0.25rem',
-              fontFamily: 'monospace',
             }}
           />
         ),
