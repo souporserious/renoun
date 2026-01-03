@@ -24,7 +24,13 @@
     "documentation",
     "docgen",
     "react",
-    "design systems"
+    "design system",
+    "file system",
+    "structured data",
+    "cli",
+    "grammars",
+    "ui",
+    "vscode"
   ],
   "files": [
     "dist/*"
