@@ -201,7 +201,7 @@ export const posts = new Directory({
 })
 ```
 
-Here we define a schema for the front matter of our MDX files and use it to validate each file in the `posts` directory. This ensures that each file adheres to the schema and provides type safety when accessing the `metadata` export:
+Here we define a schema for the frontmatter of our MDX files and use it to validate each file in the `posts` directory. This ensures that each file adheres to the schema and provides type safety when accessing the `metadata` export:
 
 ```tsx
 import { posts } from './posts.ts'
@@ -257,7 +257,7 @@ export default async function Page({
 }
 ```
 
-If you are using front matter, you can use the [remark-frontmatter](https://www.npmjs.com/package/remark-frontmatter) and [remark-mdx-frontmatter](https://www.npmjs.com/package/remark-mdx-frontmatter) packages to parse the front matter and export it as a JavaScript object.
+If you are using frontmatter, you can use the [remark-frontmatter](https://www.npmjs.com/package/remark-frontmatter) and [remark-mdx-frontmatter](https://www.npmjs.com/package/remark-mdx-frontmatter) packages to parse the frontmatter and export it as a JavaScript object.
 
 ## Enhancing with Components
 

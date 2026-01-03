@@ -72,12 +72,12 @@ Ensures that images are not wrapped in paragraph tags.
 
 In addition to the community plugins listed above, renoun adds specific custom plugins to further extend the capabilities of MDX content.
 
-#### remark `add-front-matter`
+#### remark `add-frontmatter`
 
-Extracts YAML front matter into a `frontMatter` export and removes it from the rendered content. This makes the metadata availab
+Extracts YAML frontmatter into a `frontmatter` export and removes it from the rendered content. This makes the metadata availab
 le at build time without relying on additional remark plugins.
 
-Front matter is also exposed on the `vfile.data.frontMatter` property during compilation, so custom remark plugins can reuse th
+Frontmatter is also exposed on the `vfile.data.frontmatter` property during compilation, so custom remark plugins can reuse th
 e parsed metadata without re-parsing the source document.
 
 ```mdx
@@ -89,12 +89,12 @@ title: Hello, world!
 ```
 
 ```tsx allowErrors showErrors={false}
-import Page, { frontMatter } from './hello-world.mdx'
+import Page, { frontmatter } from './hello-world.mdx'
 
 export default function Example() {
   return (
     <>
-      <h1>{frontMatter.title}</h1>
+      <h1>{frontmatter.title}</h1>
       <Page />
     </>
   )
@@ -324,36 +324,36 @@ export default function Page() {
 <Note>
 
 The `add-front-matter` plugin is included in `remarkPlugins` and will continue to run as long as you spread the defaults. If yo
-u replace the array entirely, re-add the plugin so that `frontMatter` exports stay in sync with your Markdown and MDX files.
+u replace the array entirely, re-add the plugin so that `frontmatter` exports stay in sync with your Markdown and MDX files.
 
 </Note>
 
-## Front matter utilities
+## Frontmatter utilities
 
-When renoun reads Markdown or MDX files from the file system it automatically removes any YAML front matter from the rendered
-content and makes the metadata available as both a `frontMatter` export and a helper on the file instance. This keeps the
+When renoun reads Markdown or MDX files from the file system it automatically removes any YAML frontmatter from the rendered
+content and makes the metadata available as both a `frontmatter` export and a helper on the file instance. This keeps the
 rendered content clean while still giving you access to the document metadata when you need it. The helper first looks for an
-exported `frontMatter` value—such as the one provided by the `add-front-matter` plugin—and falls back to parsing the raw file
+exported `frontmatter` value—such as the one provided by the `add-frontmatter` plugin—and falls back to parsing the raw file
 when a module export is not available.
 
 ```ts
 import { MDXFile } from 'renoun'
 
 const doc = new MDXFile({ path: 'docs/getting-started.mdx' })
-const frontMatter = await doc.getFrontMatter()
+const frontmatter = await doc.getFrontmatter()
 
-console.log(frontMatter?.title) // → "MDX"
+console.log(frontmatter?.title) // → "MDX"
 ```
 
-Front matter is also exported from Markdown and MDX modules, so you can import it directly alongside your content:
+Frontmatter is also exported from Markdown and MDX modules, so you can import it directly alongside your content:
 
 ```tsx allowErrors showErrors={false}
-import GettingStarted, { frontMatter } from './docs/getting-started.mdx'
+import GettingStarted, { frontmatter } from './docs/getting-started.mdx'
 
 export default function Page() {
   return (
     <>
-      <h1>{frontMatter?.title}</h1>
+      <h1>{frontmatter?.title}</h1>
       <GettingStarted />
     </>
   )

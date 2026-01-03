@@ -1,11 +1,11 @@
 import { safeAssign } from './safe-assign.js'
 
-export interface FrontMatterParseResult {
+export interface FrontmatterParseResult {
   content: string
-  frontMatter?: Record<string, unknown>
+  frontmatter?: Record<string, unknown>
 }
 
-export function parseFrontMatter(source: string): FrontMatterParseResult {
+export function parseFrontmatter(source: string): FrontmatterParseResult {
   if (!source) {
     return { content: source }
   }
@@ -24,8 +24,8 @@ export function parseFrontMatter(source: string): FrontMatterParseResult {
     return { content: source }
   }
 
-  const frontMatterStart = skipNewline(source, firstLineEnd)
-  let cursor = frontMatterStart
+  const frontmatterStart = skipNewline(source, firstLineEnd)
+  let cursor = frontmatterStart
   let closingLineStart = -1
 
   while (cursor <= source.length) {
@@ -48,16 +48,16 @@ export function parseFrontMatter(source: string): FrontMatterParseResult {
     return { content: source }
   }
 
-  const frontMatterRaw = source.slice(frontMatterStart, closingLineStart)
+  const frontmatterRaw = source.slice(frontmatterStart, closingLineStart)
   const contentStart = skipNewline(
     source,
     findLineEnd(source, closingLineStart)
   )
   const content = stripLeadingBlankLines(source.slice(contentStart))
 
-  const parsed = parseFrontMatterBlock(frontMatterRaw)
+  const parsed = parseFrontmatterBlock(frontmatterRaw)
 
-  return parsed === undefined ? { content } : { content, frontMatter: parsed }
+  return parsed === undefined ? { content } : { content, frontmatter: parsed }
 }
 
 function stripLeadingBlankLines(value: string): string {
@@ -73,7 +73,7 @@ interface LineToken {
   content: string
 }
 
-function parseFrontMatterBlock(
+function parseFrontmatterBlock(
   raw: string
 ): Record<string, unknown> | undefined {
   const normalized = raw.replace(/\r\n?/g, '\n')

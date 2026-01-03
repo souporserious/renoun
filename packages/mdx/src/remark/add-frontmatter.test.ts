@@ -3,15 +3,15 @@ import { evaluate } from '@mdx-js/mdx'
 import * as jsxRuntime from 'react/jsx-runtime'
 import * as jsxDevRuntime from 'react/jsx-dev-runtime'
 
-import addFrontMatter from './add-front-matter'
+import addFrontmatter from './add-frontmatter'
 
 const runtime = {
   ...jsxRuntime,
   ...jsxDevRuntime,
 }
 
-describe('addFrontMatter', () => {
-  test('exports parsed front matter', async () => {
+describe('addFrontmatter', () => {
+  test('exports parsed frontmatter', async () => {
     const source =
       `---\n` +
       `title: Hello, world!\n` +
@@ -23,43 +23,43 @@ describe('addFrontMatter', () => {
       `---\n\n` +
       `# Hello\n`
 
-    const { frontMatter } = await evaluate(source, {
-      remarkPlugins: [addFrontMatter],
+    const { frontmatter } = await evaluate(source, {
+      remarkPlugins: [addFrontmatter],
       development: true,
       ...runtime,
     })
 
-    expect(frontMatter).toEqual({
+    expect(frontmatter).toEqual({
       title: 'Hello, world!',
       nested: { value: 123 },
       list: ['alpha', 'beta'],
     })
   })
 
-  test('keeps author-defined frontMatter export', async () => {
+  test('keeps author-defined frontmatter export', async () => {
     const source =
       `---\n` +
       `title: Generated\n` +
       `---\n\n` +
-      `export const frontMatter = { title: 'Custom' }\n\n` +
+      `export const frontmatter = { title: 'Custom' }\n\n` +
       `# Hello\n`
 
-    const { frontMatter } = await evaluate(source, {
-      remarkPlugins: [addFrontMatter],
+    const { frontmatter } = await evaluate(source, {
+      remarkPlugins: [addFrontmatter],
       development: true,
       ...runtime,
     })
 
-    expect(frontMatter).toEqual({ title: 'Custom' })
+    expect(frontmatter).toEqual({ title: 'Custom' })
   })
 
-  test('ignores documents without front matter', async () => {
-    const { frontMatter } = await evaluate('# Hello', {
-      remarkPlugins: [addFrontMatter],
+  test('ignores documents without frontmatter', async () => {
+    const { frontmatter } = await evaluate('# Hello', {
+      remarkPlugins: [addFrontmatter],
       development: true,
       ...runtime,
     })
 
-    expect(frontMatter).toBeUndefined()
+    expect(frontmatter).toBeUndefined()
   })
 })

@@ -8,8 +8,8 @@ import {
   getMDXContent,
   getMDXSections,
   getMarkdownSections,
-  parseFrontMatter,
-  type FrontMatterParseResult,
+  parseFrontmatter,
+  type FrontmatterParseResult,
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
@@ -149,16 +149,16 @@ const defaultLoaders: {
 } = {
   md: async (_, file) => {
     const value = await file.text()
-    const frontMatter =
-      'getFrontMatter' in file &&
-      typeof (file as any).getFrontMatter === 'function'
-        ? await (file as any).getFrontMatter()
+    const frontmatter =
+      'getFrontmatter' in file &&
+      typeof (file as any).getFrontmatter === 'function'
+        ? await (file as any).getFrontmatter()
         : undefined
     return {
       default: () => (
         <Markdown components={markdownComponents}>{value}</Markdown>
       ),
-      frontMatter,
+      frontmatter,
     }
   },
   mdx: async (_, file) => {
@@ -176,21 +176,21 @@ const defaultLoaders: {
     }
     const {
       default: Content,
-      frontMatter: exportedFrontMatter,
+      frontmatter: exportedFrontmatter,
       ...mdxExports
     } = await getMDXContent({
       source,
       remarkPlugins,
       rehypePlugins,
     })
-    let frontMatter = exportedFrontMatter as Record<string, unknown> | undefined
+    let frontmatter = exportedFrontmatter as Record<string, unknown> | undefined
 
-    if (frontMatter === undefined) {
-      frontMatter = parseFrontMatter(source).frontMatter
+    if (frontmatter === undefined) {
+      frontmatter = parseFrontmatter(source).frontmatter
     }
     return {
       default: () => <Content components={markdownComponents} />,
-      frontMatter,
+      frontmatter,
       ...mdxExports,
     }
   },
@@ -327,7 +327,7 @@ export interface FileStructure extends BaseStructure {
   firstCommitDate?: Date
   lastCommitDate?: Date
   authors?: GitAuthor[]
-  frontMatter?: Record<string, unknown>
+  frontmatter?: Record<string, unknown>
   sections?: Section[]
   description?: string
   exports?: ModuleExportStructure[]
@@ -383,28 +383,13 @@ type IsSchemaByExtension<Schema> =
       : true
     : false
 
-type NormalizeFrontMatterAlias<Exports> =
-  Exports extends Record<string, any>
-    ? Merge<
-        Merge<
-          Exports,
-          Exports extends { frontMatter: infer FrontMatterType }
-            ? { frontmatter: FrontMatterType }
-            : {}
-        >,
-        Exports extends { frontmatter: infer FrontMatterType }
-          ? { frontMatter: FrontMatterType }
-          : {}
-      >
-    : Exports
-
 type InferDirectorySchemaOptionTypes<Option> = Option extends StandardSchemaV1
   ? StandardSchemaV1.InferOutput<Option> extends Record<string, any>
-    ? NormalizeFrontMatterAlias<StandardSchemaV1.InferOutput<Option>>
+    ? StandardSchemaV1.InferOutput<Option>
     : {}
   : Option extends Record<string, any>
     ? InferModuleExports<Option> extends Record<string, any>
-      ? NormalizeFrontMatterAlias<InferModuleExports<Option>>
+      ? InferModuleExports<Option>
       : {}
     : {}
 
@@ -444,8 +429,8 @@ type ApplyFileSchemaOption<
 /**
  * Directory-level schema configuration.
  *
- * - A Standard Schema validates the *module object* (e.g. `z.object({ frontMatter: ... })`).
- * - A schema map validates *individual exports* (e.g. `{ frontMatter: z.object(...) }`).
+ * - A Standard Schema validates the *module object* (e.g. `z.object({ frontmatter: ... })`).
+ * - A schema map validates *individual exports* (e.g. `{ frontmatter: z.object(...) }`).
  * - Both forms can also be provided per extension via `{ mdx: ..., ts: ... }`.
  */
 export type DirectorySchemaOption =
@@ -537,47 +522,30 @@ function isRuntimeLoader(loader: any): loader is ModuleRuntimeLoader<any> {
 }
 
 /**
- * Front matter parsed from the markdown file. When using the default
+ * Frontmatter parsed from the markdown file. When using the default
  * loaders this is populated automatically (if present), and custom
  * loaders can further narrow this shape via `schema`.
  */
-export type FrontMatter = Record<string, unknown>
+export type Frontmatter = Record<string, unknown>
 
 /** Default module types for common file extensions. */
 export interface DefaultModuleTypes {
   md: {
     default: MDXContent
-    frontmatter?: FrontMatter
-    frontMatter?: FrontMatter
+    frontmatter?: Frontmatter
   }
   mdx: {
     default: MDXContent
-    frontmatter?: FrontMatter
-    frontMatter?: FrontMatter
+    frontmatter?: Frontmatter
   }
   json: JSONObject
 }
-
-type NormalizeFrontMatterExtensions<ExtensionTypes> =
-  ExtensionTypes extends Record<string, any>
-    ? MergeRecord<
-        ExtensionTypes,
-        {
-          md: 'md' extends keyof ExtensionTypes
-            ? NormalizeFrontMatterAlias<ExtensionTypes['md']>
-            : never
-          mdx: 'mdx' extends keyof ExtensionTypes
-            ? NormalizeFrontMatterAlias<ExtensionTypes['mdx']>
-            : never
-        }
-      >
-    : ExtensionTypes
 
 /** Merge default module types with custom types. */
 export type WithDefaultTypes<Types> =
   IsAny<Types> extends true
     ? DefaultModuleTypes
-    : NormalizeFrontMatterExtensions<MergeRecord<DefaultModuleTypes, Types>>
+    : MergeRecord<DefaultModuleTypes, Types>
 
 /** Infer default extension types for a file extension. */
 type InferDefaultModuleTypes<Extension extends string> =
@@ -753,32 +721,14 @@ function validateStandardSchema(
   return result.value
 }
 
-function normalizeExportSchemaKey(name: string) {
-  // Back-compat / ergonomic alias: allow `frontmatter` in schemas.
-  if (name === 'frontmatter') {
-    return 'frontMatter'
-  }
-  return name
-}
-
 function validateExportValueWithExportSchemaMap(
   schemaMap: Record<string, StandardSchemaV1 | ModuleExportValidator<any, any>>,
   name: string,
   value: unknown,
   filePath: string
 ) {
-  const key = normalizeExportSchemaKey(name)
-  const aliasKey =
-    key === 'frontMatter'
-      ? 'frontmatter'
-      : key === 'frontmatter'
-        ? 'frontMatter'
-        : undefined
-
-  const parser =
-    schemaMap[key] ??
-    (aliasKey ? schemaMap[aliasKey] : undefined) ??
-    schemaMap[name]
+  const key = name
+  const parser = schemaMap[key]
   if (!parser) {
     return value
   }
@@ -806,16 +756,7 @@ function applyModuleSchemaToModule(
   moduleValue: any,
   filePath: string
 ) {
-  // Provide an ergonomic alias for `frontmatter` while preserving `frontMatter`.
-  const schemaInput =
-    moduleValue && typeof moduleValue === 'object'
-      ? {
-          ...moduleValue,
-          frontmatter: (moduleValue as any).frontMatter,
-        }
-      : moduleValue
-
-  const parsed = validateStandardSchema(schema, schemaInput, { filePath })
+  const parsed = validateStandardSchema(schema, moduleValue, { filePath })
   if (!parsed || typeof parsed !== 'object') {
     throw new Error(
       `[renoun] Schema validation returned a non-object value at file path: "${filePath}". Directory schemas must validate a module export object.`
@@ -824,10 +765,6 @@ function applyModuleSchemaToModule(
 
   // Merge parsed keys back into the module object so transforms (e.g. `z.date()`) take effect.
   for (const [key, value] of Object.entries(parsed as Record<string, any>)) {
-    if (key === 'frontmatter') {
-      ;(moduleValue as any).frontMatter = value
-      continue
-    }
     ;(moduleValue as any)[key] = value
   }
 
@@ -2783,8 +2720,8 @@ export class MDXFile<
   #sections?: ContentSection[]
   #modulePromise?: Promise<any>
   #rawSource?: Promise<string>
-  #parsedSource?: Promise<FrontMatterParseResult>
-  #resolvingFrontMatter?: boolean
+  #parsedSource?: Promise<FrontmatterParseResult>
+  #resolvingFrontmatter?: boolean
 
   constructor({
     loader,
@@ -2808,11 +2745,11 @@ export class MDXFile<
     return this.#rawSource
   }
 
-  async #getSourceWithFrontMatter() {
+  async #getSourceWithFrontmatter() {
     if (!this.#parsedSource) {
       this.#parsedSource = (async () => {
         const source = await this.#getRawSource()
-        return parseFrontMatter(source)
+        return parseFrontmatter(source)
       })()
     }
 
@@ -2820,33 +2757,33 @@ export class MDXFile<
   }
 
   override async text(): Promise<string> {
-    const result = await this.#getSourceWithFrontMatter()
+    const result = await this.#getSourceWithFrontmatter()
     return result.content
   }
 
-  async getFrontMatter(): Promise<Record<string, unknown> | undefined> {
-    if (!this.#resolvingFrontMatter) {
+  async getFrontmatter(): Promise<Record<string, unknown> | undefined> {
+    if (!this.#resolvingFrontmatter) {
       try {
-        this.#resolvingFrontMatter = true
-        const frontMatter = (await this.getExportValue(
-          'frontMatter' as any
+        this.#resolvingFrontmatter = true
+        const frontmatter = (await this.getExportValue(
+          'frontmatter' as any
         )) as Record<string, unknown> | undefined
 
-        if (frontMatter !== undefined) {
-          return frontMatter
+        if (frontmatter !== undefined) {
+          return frontmatter
         }
       } catch (error) {
         if (!(error instanceof ModuleExportNotFoundError)) {
           throw error
         }
       } finally {
-        this.#resolvingFrontMatter = false
+        this.#resolvingFrontmatter = false
       }
     }
 
-    const result = await this.#getSourceWithFrontMatter()
+    const result = await this.#getSourceWithFrontmatter()
 
-    return result.frontMatter
+    return result.frontmatter
   }
 
   async getChatGPTUrl(): Promise<string> {
@@ -2950,17 +2887,17 @@ export class MDXFile<
 
   override async getStructure(): Promise<FileStructure> {
     const base = await this.getFileStructureBase()
-    const [frontMatter, sections] = await Promise.all([
-      this.getFrontMatter().catch(() => undefined),
+    const [frontmatter, sections] = await Promise.all([
+      this.getFrontmatter().catch(() => undefined),
       this.getSections().catch(() => undefined),
     ])
     const description =
-      (frontMatter?.['description'] as string | undefined) ??
+      (frontmatter?.['description'] as string | undefined) ??
       (sections && sections.length > 0 ? sections[0]!.title : undefined)
 
     return {
       ...base,
-      frontMatter,
+      frontmatter,
       sections,
       description,
     }
@@ -2992,8 +2929,8 @@ export class MDXFile<
         }
       }
 
-      // Fall back to derived front matter (from `frontMatter` export or parsed source).
-      return (await this.getFrontMatter()) ?? {}
+      // Fall back to derived frontmatter (from `frontmatter` export or parsed source).
+      return (await this.getFrontmatter()) ?? {}
     }
 
     const fileExport = await this.getExport(name as any)
@@ -3088,8 +3025,8 @@ export class MarkdownFile<
   #sections?: ContentSection[]
   #modulePromise?: Promise<any>
   #rawSource?: Promise<string>
-  #parsedSource?: Promise<FrontMatterParseResult>
-  #resolvingFrontMatter?: boolean
+  #parsedSource?: Promise<FrontmatterParseResult>
+  #resolvingFrontmatter?: boolean
 
   constructor({
     loader,
@@ -3111,11 +3048,11 @@ export class MarkdownFile<
     return this.#rawSource
   }
 
-  async #getSourceWithFrontMatter() {
+  async #getSourceWithFrontmatter() {
     if (!this.#parsedSource) {
       this.#parsedSource = (async () => {
         const source = await this.#getRawSource()
-        return parseFrontMatter(source)
+        return parseFrontmatter(source)
       })()
     }
 
@@ -3123,32 +3060,32 @@ export class MarkdownFile<
   }
 
   override async text(): Promise<string> {
-    const result = await this.#getSourceWithFrontMatter()
+    const result = await this.#getSourceWithFrontmatter()
     return result.content
   }
 
-  async getFrontMatter(): Promise<Record<string, unknown> | undefined> {
-    if (!this.#resolvingFrontMatter) {
+  async getFrontmatter(): Promise<Record<string, unknown> | undefined> {
+    if (!this.#resolvingFrontmatter) {
       try {
-        this.#resolvingFrontMatter = true
-        const frontMatter = (await this.getExportValue(
-          'frontMatter' as any
+        this.#resolvingFrontmatter = true
+        const frontmatter = (await this.getExportValue(
+          'frontmatter' as any
         )) as Record<string, unknown> | undefined
 
-        if (frontMatter !== undefined) {
-          return frontMatter
+        if (frontmatter !== undefined) {
+          return frontmatter
         }
       } catch (error) {
         if (!(error instanceof ModuleExportNotFoundError)) {
           throw error
         }
       } finally {
-        this.#resolvingFrontMatter = false
+        this.#resolvingFrontmatter = false
       }
     }
 
-    const result = await this.#getSourceWithFrontMatter()
-    return result.frontMatter
+    const result = await this.#getSourceWithFrontmatter()
+    return result.frontmatter
   }
 
   async getChatGPTUrl(): Promise<string> {
@@ -3213,17 +3150,17 @@ export class MarkdownFile<
 
   override async getStructure(): Promise<FileStructure> {
     const base = await this.getFileStructureBase()
-    const [frontMatter, sections] = await Promise.all([
-      this.getFrontMatter().catch(() => undefined),
+    const [frontmatter, sections] = await Promise.all([
+      this.getFrontmatter().catch(() => undefined),
       this.getSections().catch(() => undefined),
     ])
     const description =
-      (frontMatter?.['description'] as string | undefined) ??
+      (frontmatter?.['description'] as string | undefined) ??
       (sections && sections.length > 0 ? sections[0]!.title : undefined)
 
     return {
       ...base,
-      frontMatter,
+      frontmatter,
       sections,
       description,
     }

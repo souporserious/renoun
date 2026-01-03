@@ -4901,7 +4901,7 @@ describe('resolveType', () => {
   
         type ExportedType = Metadata & { slug: string }
   
-        type ModuleData<Type extends { frontMatter: Record<string, any> }> = {
+        type ModuleData<Type extends { frontmatter: Record<string, any> }> = {
           exportedTypes: Array<ExportedType>
         }
         `,
@@ -5114,7 +5114,7 @@ describe('resolveType', () => {
                   "isOptional": false,
                   "isReadonly": false,
                   "kind": "PropertySignature",
-                  "name": "frontMatter",
+                  "name": "frontmatter",
                   "position": {
                     "end": {
                       "column": 64,
@@ -5125,7 +5125,7 @@ describe('resolveType', () => {
                       "line": 5,
                     },
                   },
-                  "text": "frontMatter: Record<string, any>",
+                  "text": "frontmatter: Record<string, any>",
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
@@ -5178,7 +5178,7 @@ describe('resolveType', () => {
                   },
                 },
               ],
-              "text": "{ frontMatter: Record<string, any>; }",
+              "text": "{ frontmatter: Record<string, any>; }",
             },
             "defaultType": undefined,
             "filePath": "test.ts",
@@ -5194,7 +5194,7 @@ describe('resolveType', () => {
                 "line": 5,
               },
             },
-            "text": "Type extends { frontMatter: Record<string, any> }",
+            "text": "Type extends { frontmatter: Record<string, any> }",
           },
         ],
       }
@@ -5924,9 +5924,9 @@ describe('resolveType', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`
-        type ModuleData<Type extends { frontMatter: Record<string, any> }> = 'frontMatter' extends keyof Type
+        type ModuleData<Type extends { frontmatter: Record<string, any> }> = 'frontmatter' extends keyof Type
             ? Type
-            : { frontMatter: Record<string, any> }
+            : { frontmatter: Record<string, any> }
         `,
       { overwrite: true }
     )
@@ -5963,8 +5963,8 @@ describe('resolveType', () => {
                 "line": 1,
               },
             },
-            "text": ""frontMatter"",
-            "value": "frontMatter",
+            "text": ""frontmatter"",
+            "value": "frontmatter",
           },
           "extendsType": {
             "kind": "TypeOperator",
@@ -5997,7 +5997,7 @@ describe('resolveType', () => {
                 "isOptional": false,
                 "isReadonly": false,
                 "kind": "PropertySignature",
-                "name": "frontMatter",
+                "name": "frontmatter",
                 "position": {
                   "end": {
                     "column": 41,
@@ -6008,7 +6008,7 @@ describe('resolveType', () => {
                     "line": 3,
                   },
                 },
-                "text": "frontMatter: Record<string, any>",
+                "text": "frontmatter: Record<string, any>",
                 "type": {
                   "filePath": "test.ts",
                   "kind": "TypeReference",
@@ -6061,7 +6061,7 @@ describe('resolveType', () => {
                 },
               },
             ],
-            "text": "{ frontMatter: Record<string, any>; }",
+            "text": "{ frontmatter: Record<string, any>; }",
           },
           "isDistributive": false,
           "kind": "ConditionalType",
@@ -6095,7 +6095,7 @@ describe('resolveType', () => {
                   "isOptional": false,
                   "isReadonly": false,
                   "kind": "PropertySignature",
-                  "name": "frontMatter",
+                  "name": "frontmatter",
                   "position": {
                     "end": {
                       "column": 64,
@@ -6106,7 +6106,7 @@ describe('resolveType', () => {
                       "line": 1,
                     },
                   },
-                  "text": "frontMatter: Record<string, any>",
+                  "text": "frontmatter: Record<string, any>",
                   "type": {
                     "filePath": "test.ts",
                     "kind": "TypeReference",
@@ -6159,7 +6159,7 @@ describe('resolveType', () => {
                   },
                 },
               ],
-              "text": "{ frontMatter: Record<string, any>; }",
+              "text": "{ frontmatter: Record<string, any>; }",
             },
             "defaultType": undefined,
             "filePath": "test.ts",
@@ -6175,7 +6175,7 @@ describe('resolveType', () => {
                 "line": 1,
               },
             },
-            "text": "Type extends { frontMatter: Record<string, any> }",
+            "text": "Type extends { frontmatter: Record<string, any> }",
           },
         ],
       }

@@ -16,6 +16,6 @@ export {
 } from './get-mdx-links.js'
 export { healMarkdown } from './heal-markdown.js'
 export {
-  parseFrontMatter,
-  type FrontMatterParseResult,
-} from './parse-front-matter.js'
+  parseFrontmatter,
+  type FrontmatterParseResult,
+} from './parse-frontmatter.js'

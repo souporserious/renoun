@@ -664,16 +664,16 @@ describe('file system', () => {
       },
       loader: async () => ({
         default: (() => null) as any,
-        frontMatter: { title: 'Hello', date: '2024-12-24' },
+        frontmatter: { title: 'Hello', date: '2024-12-24' },
       }),
     })
 
-    const frontMatter = await file.getExportValue('frontMatter')
+    const frontmatter = await file.getExportValue('frontmatter')
 
-    type Test = Expect<IsNotAny<typeof frontMatter>>
+    type Test = Expect<IsNotAny<typeof frontmatter>>
 
-    frontMatter satisfies { title: string; date: Date }
-    expect(frontMatter.date).toBeInstanceOf(Date)
+    frontmatter satisfies { title: string; date: Date }
+    expect(frontmatter.date).toBeInstanceOf(Date)
   })
 
   test('orders directory before its descendants by default', async () => {
@@ -2871,7 +2871,7 @@ export function identity<T>(value: T) {
   test('adds default MDXContent type to existing mdx loaders', async () => {
     const posts = new Directory<{
       mdx: {
-        frontMatter: {
+        frontmatter: {
           title: string
         }
       }
@@ -2885,7 +2885,7 @@ export function identity<T>(value: T) {
             default: async () => {
               return null
             },
-            frontMatter: {
+            frontmatter: {
               title: 'Hello, World!',
             },
           } as any),
@@ -2900,13 +2900,13 @@ export function identity<T>(value: T) {
       fileExportValue satisfies MDXContent
 
       const Content = await file.getExportValue('default')
-      const frontMatter = await file.getExportValue('frontMatter')
+      const frontmatter = await file.getExportValue('frontmatter')
 
       Content satisfies MDXContent
-      if (frontMatter === undefined) {
-        throw new Error('Expected frontMatter')
+      if (frontmatter === undefined) {
+        throw new Error('Expected frontmatter')
       }
-      frontMatter satisfies { title: string }
+      frontmatter satisfies { title: string }
 
       type Tests = [
         Expect<IsNotAny<typeof fileExportValue>>,
@@ -3886,7 +3886,7 @@ export function identity<T>(value: T) {
       expect(fileEntry.description).toBe('Hello Docs')
     })
 
-    test('markdown file includes front matter and description', async () => {
+    test('markdown file includes frontmatter and description', async () => {
       const fileSystem = new InMemoryFileSystem({
         'docs/page.md': [
           '---',
@@ -3902,8 +3902,8 @@ export function identity<T>(value: T) {
       const file = await directory.getFile('page')
       const structure = await file.getStructure()
 
-      expect(structure.type).toBe('file')
-      expect(structure.frontMatter?.description).toBe('Page Desc')
+      expect(structure.kind).toBe('file')
+      expect(structure.frontmatter?.description).toBe('Page Desc')
       expect(structure.description).toBe('Page Desc')
       expect(structure.relativePath).toBe('docs/page.md')
     })

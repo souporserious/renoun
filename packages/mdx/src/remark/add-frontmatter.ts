@@ -5,9 +5,9 @@ import type { VFile } from 'vfile'
 import { valueToEstree } from 'estree-util-value-to-estree'
 import 'mdast-util-mdx'
 
-import { parseFrontMatter } from '../utils/parse-front-matter.js'
+import { parseFrontmatter } from '../utils/parse-frontmatter.js'
 
-function hasFrontMatterExport(tree: Root): boolean {
+function hasFrontmatterExport(tree: Root): boolean {
   for (const node of tree.children) {
     if (node.type !== 'mdxjsEsm') {
       continue
@@ -28,7 +28,7 @@ function hasFrontMatterExport(tree: Root): boolean {
         for (const declaration of statement.declaration.declarations) {
           if (
             declaration.id.type === 'Identifier' &&
-            declaration.id.name === 'frontMatter'
+            declaration.id.name === 'frontmatter'
           ) {
             return true
           }
@@ -39,14 +39,14 @@ function hasFrontMatterExport(tree: Root): boolean {
         for (const specifier of statement.specifiers) {
           if (
             specifier.exported.type === 'Identifier' &&
-            specifier.exported.name === 'frontMatter'
+            specifier.exported.name === 'frontmatter'
           ) {
             return true
           }
 
           if (
             specifier.exported.type === 'Literal' &&
-            String(specifier.exported.value) === 'frontMatter'
+            String(specifier.exported.value) === 'frontmatter'
           ) {
             return true
           }
@@ -58,15 +58,15 @@ function hasFrontMatterExport(tree: Root): boolean {
   return false
 }
 
-export default function addFrontMatter(this: Processor) {
+export default function addFrontmatter(this: Processor) {
   return function (tree: Root, file: VFile) {
     if (typeof file.value !== 'string') {
       return
     }
 
-    const { content, frontMatter } = parseFrontMatter(file.value)
+    const { content, frontmatter } = parseFrontmatter(file.value)
 
-    if (!frontMatter) {
+    if (!frontmatter) {
       return
     }
 
@@ -78,9 +78,9 @@ export default function addFrontMatter(this: Processor) {
       tree.children.shift()
     }
 
-    if (hasFrontMatterExport(tree)) {
+    if (hasFrontmatterExport(tree)) {
       file.data ||= {}
-      ;(file.data as any).frontMatter = frontMatter
+      ;(file.data as any).frontmatter = frontmatter
       return
     }
 
@@ -96,8 +96,8 @@ export default function addFrontMatter(this: Processor) {
             declarations: [
               {
                 type: 'VariableDeclarator',
-                id: { type: 'Identifier', name: 'frontMatter' },
-                init: valueToEstree(frontMatter),
+                id: { type: 'Identifier', name: 'frontmatter' },
+                init: valueToEstree(frontmatter),
               },
             ],
           },
@@ -119,6 +119,6 @@ export default function addFrontMatter(this: Processor) {
     tree.children.unshift(exportNode as any)
 
     file.data ||= {}
-    ;(file.data as any).frontMatter = frontMatter
+    ;(file.data as any).frontmatter = frontmatter
   }
 }

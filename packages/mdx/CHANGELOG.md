@@ -39,7 +39,7 @@
 ### Minor Changes
 
 - c415977: Extends generated `heading` export metadata to include a `summary` field in the `@renoun/mdx/remark/add-headings` plugin.
-- 2f4ba21: Adds a new `@renoun/mdx/remark/add-front-matter` plugin that will trim the front matter and export it from the file. This also exposes a `getFrontMatter` method for `MarkdownFile` and `MDXFile` utilities.
+- 2f4ba21: Adds a new `@renoun/mdx/remark/add-front-matter` plugin that will trim the frontmatter and export it from the file. This also exposes a `getFrontmatter` method for `MarkdownFile` and `MDXFile` utilities.
 
 ### Patch Changes
 
@@ -235,7 +235,7 @@
   }
   ```
 
-  A more simplified approach can be used for front matter by exporting a `frontmatter` or `metadata` object from the MDX file directly:
+  A more simplified approach can be used for frontmatter by exporting a `frontmatter` or `metadata` object from the MDX file directly:
 
   ```tsx
   export const frontmatter = {
