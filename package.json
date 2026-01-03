@@ -16,7 +16,8 @@
     "test:github": "vitest run .github",
     "format": "prettier --write '**/**/*.{js,ts,tsx,json,css}'",
     "release": "pnpm publish -r --provenance --access public --publish-branch main && pnpm changeset tag",
-    "clean": "node -e \"(function rm(directory) { ['.next', '.renoun', '.turbo', 'node_modules', 'dist'].includes(path.basename(directory)) ? fs.rmSync(directory, { recursive: true, force: true }) : fs.existsSync(directory) && fs.statSync(directory).isDirectory() && fs.readdirSync(directory).forEach(filePath => rm(path.join(directory, filePath))); })('.');\""
+    "clean": "node -e \"(function rm(directory) { ['.next', '.renoun', '.turbo', 'node_modules', 'dist'].includes(path.basename(directory)) ? fs.rmSync(directory, { recursive: true, force: true }) : fs.existsSync(directory) && fs.statSync(directory).isDirectory() && fs.readdirSync(directory).forEach(filePath => rm(path.join(directory, filePath))); })('.');\"",
+    "validate": "node ./packages/renoun/dist/cli/index.js validate"
   },
   "devDependencies": {
     "@changesets/cli": "2.29.8",
