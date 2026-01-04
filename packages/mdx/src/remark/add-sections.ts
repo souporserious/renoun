@@ -47,18 +47,18 @@ declare module 'mdast' {
 
 const MAX_SUMMARY_LENGTH = 300
 
-type HeadingSection = {
+interface HeadingSection {
   heading: Heading
   nodes: RootContent[]
 }
 
-type RegionSection = {
+interface RegionSection {
   start: RootContent
   title: string
   nodes: RootContent[]
 }
 
-export type ContentSection = {
+export interface ContentSection {
   /** The slugified heading text. */
   id: string
 
@@ -85,20 +85,20 @@ export type HeadingComponentProps<
   id: string
 } & React.ComponentPropsWithoutRef<Tag>
 
-export type HeadingComponent<
+export interface HeadingComponent<
   Tag extends React.ElementType = React.ElementType,
-> = (props: HeadingComponentProps<Tag>) => React.ReactNode
+> {
+  (props: HeadingComponentProps<Tag>): React.ReactNode
+}
 
-export type SectionComponentProps = {
+export interface SectionComponentProps {
   id: string
   depth: number
   title: string
   children: React.ReactNode
 }
 
-export type SectionComponent = (
-  props: SectionComponentProps
-) => React.ReactNode
+export type SectionComponent = (props: SectionComponentProps) => React.ReactNode
 
 export type AddSectionsOptions = {
   /**
