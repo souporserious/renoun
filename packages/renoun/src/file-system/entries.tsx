@@ -531,7 +531,7 @@ export class File<
   DirectoryTypes extends Record<string, any> = Record<string, any>,
   Path extends string = string,
   Extension extends string = ExtractFileExtension<Path>,
-> extends Blob {
+> {
   #name: string
   #baseName: string
   #modifierName?: string
@@ -543,6 +543,7 @@ export class File<
   #directory: Directory<DirectoryTypes>
   #byteLength: number
   #schema?: DirectorySchemaOption
+  #type: string
 
   constructor(options: FileOptions<DirectoryTypes, Path, any>) {
     // Parse path and extension to determine MIME type
@@ -587,9 +588,6 @@ export class File<
       )
     }
 
-    // Initialize Blob base class with empty parts and MIME type
-    super([], { type })
-
     this.#directory = directory
     this.#name = name
     this.#path = resolvedPath
@@ -597,6 +595,7 @@ export class File<
     this.#slugCasing = options.slugCasing ?? 'kebab'
     this.#byteLength = byteLength
     this.#schema = options.schema
+    this.#type = type
 
     if (match) {
       this.#order = match[1]
@@ -786,6 +785,11 @@ export class File<
   get absolutePath() {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.getAbsolutePath(this.#path)
+  }
+
+  /** MIME type inferred from file extension. */
+  get type(): string {
+    return this.#type
   }
 
   /** Get a URL to the file for the configured remote git repository. */
@@ -988,7 +992,7 @@ export class File<
   }
 
   /** Read the file contents as bytes. */
-  override async bytes(): Promise<Uint8Array<ArrayBuffer>> {
+  async bytes(): Promise<Uint8Array<ArrayBuffer>> {
     const fileSystem = this.#directory.getFileSystem()
     const binary = await fileSystem.readFileBinary(this.#path)
     // Ensure ArrayBuffer-backed Uint8Array for Blob compatibility.
@@ -998,30 +1002,30 @@ export class File<
   }
 
   /** Create a readable stream for the file contents. */
-  override stream(): ReadableStream<Uint8Array<ArrayBuffer>> {
+  stream(): ReadableStream<Uint8Array<ArrayBuffer>> {
     const fileSystem = this.#directory.getFileSystem()
     return fileSystem.readFileStream(this.#path) as any
   }
 
   /** Get the file size in bytes without reading the contents. */
-  override get size(): number {
+  get size(): number {
     return this.#byteLength
   }
 
   /** Read the file contents as text (UTF-8 decode, Blob semantics). */
-  override async text(): Promise<string> {
+  async text(): Promise<string> {
     const bytes = await this.bytes()
     return fileTextDecoder.decode(bytes)
   }
 
   /** Read the file contents as an ArrayBuffer. */
-  override async arrayBuffer(): Promise<ArrayBuffer> {
+  async arrayBuffer(): Promise<ArrayBuffer> {
     const binary = await this.bytes()
     return binary.buffer
   }
 
   /** Slice the file contents without buffering. */
-  override slice(start?: number, end?: number, contentType?: string): Blob {
+  slice(start?: number, end?: number, contentType?: string): Blob {
     const fileSystem = this.#directory.getFileSystem()
     const streamableContent: StreamableContent = {
       byteLength: this.#byteLength,
