@@ -354,7 +354,7 @@ type ExtensionElement<Extension> = Extension extends readonly (infer E)[]
   : Extract<Extension, string>
 
 /** Infer extension types for all loaders in a module. */
-export type InferModuleLoadersTypes<Loaders extends ModuleLoaders> = {
+type InferModuleLoadersTypes<Loaders extends ModuleLoaders> = {
   [Extension in keyof Loaders]: Extension extends keyof DefaultModuleTypes
     ? Merge<
         Merge<
@@ -367,7 +367,7 @@ export type InferModuleLoadersTypes<Loaders extends ModuleLoaders> = {
 }
 
 /** Extract keys from runtime‑capable loaders. */
-export type LoadersWithRuntimeKeys<Loaders> = Extract<
+type LoadersWithRuntimeKeys<Loaders> = Extract<
   keyof Loaders,
   'js' | 'jsx' | 'ts' | 'tsx' | 'md' | 'mdx'
 >
