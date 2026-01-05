@@ -12,8 +12,8 @@ const renounTsConfigFilePath = fileURLToPath(
   new URL('../../tsconfig.json', import.meta.url)
 )
 
-const renounFileSystemIndexPath = fileURLToPath(
-  new URL('../file-system/index.tsx', import.meta.url)
+const renounFileSystemWorkspacePath = fileURLToPath(
+  new URL('../file-system/Workspace.ts', import.meta.url)
 )
 
 const project = new Project({
@@ -23117,7 +23117,7 @@ describe('resolveType', () => {
   test('resolves Workspace type without overflowing the stack', () => {
     const project = new Project({ tsConfigFilePath: renounTsConfigFilePath })
     const fileSystemFile = project.addSourceFileAtPath(
-      renounFileSystemIndexPath
+      renounFileSystemWorkspacePath
     )
     const workspaceClass = fileSystemFile.getClassOrThrow('Workspace')
 

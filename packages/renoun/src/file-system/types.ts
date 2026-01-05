@@ -1,3 +1,90 @@
+import type { GitAuthor } from '../utils/get-local-git-file-metadata.ts'
+import type { FileSystem } from './FileSystem.ts'
+
+export type { ContentSection } from '@renoun/mdx'
+
+/** Represents a section within a file. */
+export interface Section {
+  /**
+   * The section anchor id. Uses slugified heading text for markdown-derived sections.
+   * Uses the export name for programmatic sections (e.g. file export outlines rendered by `Reference`).
+   */
+  id: string
+
+  /** The stringified heading text. */
+  title: string
+
+  /** Nested child sections. */
+  children?: Section[]
+}
+
+export type FileSystemStructureKind =
+  | 'Workspace'
+  | 'Package'
+  | 'Directory'
+  | 'File'
+  | 'ModuleExport'
+
+interface BaseStructure {
+  kind: FileSystemStructureKind
+  name: string
+  title: string
+  slug: string
+  path: string
+}
+
+export interface WorkspaceStructure extends BaseStructure {
+  kind: 'Workspace'
+  packageManager: 'pnpm' | 'yarn' | 'npm' | 'bun' | 'unknown'
+}
+
+export interface PackageStructure extends BaseStructure {
+  kind: 'Package'
+  version?: string
+  description?: string
+  relativePath: string
+}
+
+export interface DirectoryStructure extends BaseStructure {
+  kind: 'Directory'
+  depth: number
+  relativePath: string
+}
+
+export interface FileStructure extends BaseStructure {
+  kind: 'File'
+  extension: string
+  depth: number
+  relativePath: string
+  firstCommitDate?: Date
+  lastCommitDate?: Date
+  authors?: GitAuthor[]
+  frontmatter?: Record<string, unknown>
+  sections?: Section[]
+  description?: string
+  exports?: ModuleExportStructure[]
+}
+
+export type ModuleExportResolvedType = Awaited<
+  ReturnType<FileSystem['resolveTypeAtLocation']>
+>
+
+export interface ModuleExportStructure extends BaseStructure {
+  kind: 'ModuleExport'
+  relativePath?: string
+  description?: string
+  tags?: Array<{ name: string; value?: string }>
+  resolvedType?: ModuleExportResolvedType
+  firstCommitDate?: Date
+  lastCommitDate?: Date
+}
+
+export type FileSystemStructure =
+  | WorkspaceStructure
+  | PackageStructure
+  | DirectoryStructure
+  | FileStructure
+
 export type Expect<Type extends true> = Type
 
 export type Not<_ extends false> = true
