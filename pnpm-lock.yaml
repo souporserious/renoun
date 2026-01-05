@@ -21,9 +21,6 @@ catalogs:
     '@tailwindcss/typography':
       specifier: 0.5.19
       version: 0.5.19
-    '@types/hast':
-      specifier: 3.0.4
-      version: 3.0.4
     '@types/mdx':
       specifier: 2.0.13
       version: 2.0.13
@@ -540,7 +537,7 @@ importers:
         specifier: 1.0.5
         version: 1.0.5
       '@types/hast':
-        specifier: 'catalog:'
+        specifier: 3.0.4
         version: 3.0.4
       '@types/mdast':
         specifier: 4.0.4
