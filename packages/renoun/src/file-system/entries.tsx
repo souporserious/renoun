@@ -9,7 +9,6 @@ import {
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
-import { defaultLoaders } from './loaders.ts'
 import { getFileExportMetadata } from '../project/client.ts'
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
 import { getClosestFile } from '../utils/get-closest-file.ts'
@@ -52,14 +51,6 @@ import type {
   FileSystemWriteFileContent,
   FileWritableStream,
 } from './FileSystem.ts'
-import type {
-  DirectoryStructure,
-  FileStructure,
-  ModuleExportResolvedType,
-  ModuleExportStructure,
-  ContentSection,
-  Section,
-} from './types.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
   Repository,
@@ -71,15 +62,22 @@ import {
   type Release,
 } from './Repository.ts'
 import {
+  createRangeLimitedStream,
+  StreamableBlob,
+  type StreamableContent,
+} from './StreamableBlob.ts'
+import {
   DirectorySnapshot,
   createDirectorySnapshot,
   type DirectorySnapshotDirectoryMetadata,
 } from './directory-snapshot.ts'
 import {
-  createRangeLimitedStream,
-  StreamableBlob,
-  type StreamableContent,
-} from './StreamableBlob.ts'
+  defaultLoaders,
+  isGlobModuleMap,
+  isRuntimeLoader,
+  unwrapModuleResult,
+  type GlobModuleMap,
+} from './loaders.ts'
 import { inferMediaType } from './mime.ts'
 import {
   applyModuleSchemaToModule,
@@ -91,13 +89,15 @@ import {
   type ModuleExportValidator,
 } from './schema.ts'
 import type { StandardSchemaV1 } from './standard-schema.ts'
-import type { ExtractFileExtension } from './types.ts'
-import {
-  isGlobModuleMap,
-  isRuntimeLoader,
-  type GlobModuleMap,
-  unwrapModuleResult,
-} from './loaders.ts'
+import type {
+  DirectoryStructure,
+  ExtractFileExtension,
+  FileStructure,
+  ModuleExportResolvedType,
+  ModuleExportStructure,
+  ContentSection,
+  Section,
+} from './types.ts'
 
 const typedDefaultLoaders = defaultLoaders as unknown as {
   md: ModuleLoader<any>
