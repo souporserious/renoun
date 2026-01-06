@@ -3621,7 +3621,7 @@ export function identity<T>(value: T) {
       }
     })
 
-    test('exposes manifest analysis for exports and imports', () => {
+    test('exposes exports/imports and basic metadata', async () => {
       const fileSystem = new InMemoryFileSystem({
         'node_modules/acme/package.json': JSON.stringify({
           name: 'acme',
@@ -3657,22 +3657,19 @@ export function identity<T>(value: T) {
         (entry) => entry.getImportPath() === '#pkg'
       )
 
-      expect(rootExport?.getAnalysis()?.manifestTarget?.kind).toBe('Conditions')
-      expect(rootExport?.getAnalysis()?.derivedAbsolutePath).toBe(
-        '/node_modules/acme/src'
-      )
-      expect(componentsExport?.getAnalysis()?.manifestTarget?.kind).toBe('Path')
-      expect(
-        (componentsExport?.getAnalysis()?.manifestTarget as any)?.absolutePath
-      ).toBe('/node_modules/acme/dist/components/*.ts')
+      expect(rootExport?.getSource()).toBe('manifest')
+      expect(rootExport?.isPattern()).toBe(false)
+      expect(componentsExport?.getSource()).toBe('manifest')
+      expect(componentsExport?.isPattern()).toBe(true)
 
       expect(imports).toHaveLength(2)
-      expect(internalImport?.getAnalysis()?.manifestTarget?.kind).toBe('Path')
-      expect(pkgImport?.getAnalysis()?.manifestTarget?.kind).toBe('Specifier')
-      expect(pkgImport?.getAnalysis()?.manifestTarget).toEqual({
-        kind: 'Specifier',
-        specifier: 'lodash',
-      })
+      expect(internalImport?.getSource()).toBe('manifest')
+      expect(internalImport?.isPattern()).toBe(true)
+      expect(pkgImport?.getSource()).toBe('manifest')
+      expect(pkgImport?.isPattern()).toBe(false)
+
+      const resolvedComponent = await pkg.getExport('components/Button')
+      expect(isJavaScriptFile(resolvedComponent)).toBe(true)
     })
 
     test('analyzes exports from a local workspace package', async () => {

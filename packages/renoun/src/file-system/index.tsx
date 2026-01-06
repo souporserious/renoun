@@ -12,12 +12,6 @@ export type {
 } from './types.ts'
 
 export type {
-  DirectorySchema,
-  DirectorySchemaOption,
-  ModuleExportValidator,
-} from './schema.ts'
-
-export type {
   ModuleLoaders,
   Frontmatter,
   DefaultModuleTypes,
@@ -66,31 +60,11 @@ export {
   createSort,
 } from './entries.tsx'
 
+export type { PackageExportOptions, PackageOptions } from './Package.ts'
 export {
-  DirectorySnapshot,
-  createDirectorySnapshot,
-  type DirectorySnapshotDirectoryMetadata,
-} from './directory-snapshot.ts'
-
-export type {
-  PackageExportOptions,
-  PackageOptions,
-  PackageEntryTargetNode,
-  PackageEntryPathTarget,
-  PackageEntrySpecifierTarget,
-  PackageEntryConditionTarget,
-  PackageEntryArrayTarget,
-  PackageEntryNullTarget,
-  PackageEntryUnknownTarget,
-  PackageEntryAnalysisBase,
-  PackageExportAnalysis,
-  PackageImportAnalysis,
-} from './Package.ts'
-
-export {
-  PackageExportDirectory,
   Package,
   PackageImportEntry,
+  PackageExportDirectory,
 } from './Package.ts'
 
 export { Workspace } from './Workspace.ts'
@@ -100,8 +74,3 @@ export { GitHostFileSystem } from './GitHostFileSystem.ts'
 export { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 export { NodeFileSystem } from './NodeFileSystem.ts'
 export { Repository } from './Repository.ts'
-export {
-  StreamableBlob,
-  createRangeLimitedStream,
-  type StreamableContent as StreamingContent,
-} from './StreamableBlob.ts'

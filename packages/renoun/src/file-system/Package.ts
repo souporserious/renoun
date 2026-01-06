@@ -410,64 +410,8 @@ export interface PackageOptions<
   loader?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
 }
 
-export type PackageEntryTargetNode =
-  | PackageEntryPathTarget
-  | PackageEntrySpecifierTarget
-  | PackageEntryConditionTarget
-  | PackageEntryArrayTarget
-  | PackageEntryNullTarget
-  | PackageEntryUnknownTarget
-
-export interface PackageEntryPathTarget {
-  kind: 'Path'
-  relativePath: string
-  absolutePath: string
-  isPattern: boolean
-}
-
-export interface PackageEntrySpecifierTarget {
-  kind: 'Specifier'
-  specifier: string
-}
-
-export interface PackageEntryConditionTarget {
-  kind: 'Conditions'
-  entries: { condition: string; target: PackageEntryTargetNode }[]
-}
-
-export interface PackageEntryArrayTarget {
-  kind: 'Array'
-  targets: PackageEntryTargetNode[]
-}
-
-export interface PackageEntryNullTarget {
-  kind: 'Null'
-}
-
-export interface PackageEntryUnknownTarget {
-  kind: 'Unknown'
-  value: unknown
-}
-
 type PackageEntryType = 'exports' | 'imports'
-
-export interface PackageEntryAnalysisBase {
-  key: string
-  type: PackageEntryType
-  source: 'manifest' | 'override'
-  isPattern: boolean
-  manifestTarget?: PackageEntryTargetNode
-}
-
-export interface PackageExportAnalysis extends PackageEntryAnalysisBase {
-  type: 'exports'
-  derivedAbsolutePath: string
-  derivedRelativePath: string
-}
-
-export interface PackageImportAnalysis extends PackageEntryAnalysisBase {
-  type: 'imports'
-}
+type PackageEntrySource = 'manifest' | 'override'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -478,8 +422,8 @@ export interface PackageExportDirectory<
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
 > extends Directory<Types, LoaderTypes, any, undefined> {
   getExportPath(): string
-  /** @internal */
-  getAnalysis(): PackageExportAnalysis | undefined
+  getSource(): PackageEntrySource
+  isPattern(): boolean
 }
 
 function isDirectoryInstance(
@@ -493,25 +437,31 @@ export class PackageExportDirectory<
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
 > extends Directory<Types, LoaderTypes, any, undefined> {
   #exportPath: string
-  #analysis?: PackageExportAnalysis
+  #source: PackageEntrySource
+  #isPattern: boolean
 
   constructor(
     exportPath: string,
     options: DirectoryOptions<Types, LoaderTypes, any, undefined>,
-    analysis?: PackageExportAnalysis
+    source: PackageEntrySource,
+    isPattern: boolean
   ) {
     super(options)
     this.#exportPath = exportPath
-    this.#analysis = analysis
+    this.#source = source
+    this.#isPattern = isPattern
   }
 
   getExportPath() {
     return this.#exportPath
   }
 
-  /** @internal */
-  getAnalysis() {
-    return this.#analysis
+  getSource() {
+    return this.#source
+  }
+
+  isPattern() {
+    return this.#isPattern
   }
 }
 
@@ -519,14 +469,11 @@ interface PackageManifestEntry {
   key: string
   type: PackageEntryType
   isPattern: boolean
-  target: PackageEntryTargetNode
 }
 
 function createManifestEntryMap(
   field: PackageJson['exports'] | PackageJson['imports'],
-  type: PackageEntryType,
-  packagePath: string,
-  fileSystem: FileSystem
+  type: PackageEntryType
 ) {
   const entries = new Map<string, PackageManifestEntry>()
 
@@ -539,7 +486,6 @@ function createManifestEntryMap(
       key: '.',
       type,
       isPattern: false,
-      target: analyzePackageTarget(field, type, packagePath, fileSystem),
     })
     return entries
   }
@@ -548,7 +494,7 @@ function createManifestEntryMap(
     return entries
   }
 
-  for (const [key, value] of Object.entries(field)) {
+  for (const [key] of Object.entries(field)) {
     if (type === 'exports' && !isValidExportKey(key)) {
       continue
     }
@@ -561,7 +507,6 @@ function createManifestEntryMap(
       key,
       type,
       isPattern: key.includes('*'),
-      target: analyzePackageTarget(value, type, packagePath, fileSystem),
     })
   }
 
@@ -574,68 +519,6 @@ function isValidExportKey(key: string) {
 
 function isValidImportKey(key: string) {
   return key.startsWith('#')
-}
-
-function analyzePackageTarget(
-  target: unknown,
-  type: PackageEntryType,
-  packagePath: string,
-  fileSystem: FileSystem
-): PackageEntryTargetNode {
-  if (target === null) {
-    return { kind: 'Null' }
-  }
-
-  if (typeof target === 'string') {
-    return analyzePackageTargetString(target, packagePath, fileSystem)
-  }
-
-  if (Array.isArray(target)) {
-    return {
-      kind: 'Array',
-      targets: target.map((entry) =>
-        analyzePackageTarget(entry, type, packagePath, fileSystem)
-      ),
-    }
-  }
-
-  if (isPlainObject(target)) {
-    return {
-      kind: 'Conditions',
-      entries: Object.entries(target).map(([condition, value]) => ({
-        condition,
-        target: analyzePackageTarget(value, type, packagePath, fileSystem),
-      })),
-    }
-  }
-
-  return { kind: 'Unknown', value: target }
-}
-
-function analyzePackageTargetString(
-  target: string,
-  packagePath: string,
-  fileSystem: FileSystem
-): PackageEntryPathTarget | PackageEntrySpecifierTarget {
-  if (target.startsWith('./') || target.startsWith('../')) {
-    const normalizedTarget = normalizeSlashes(target.replace(/^\.\/+/, ''))
-    const absolutePath = normalizedTarget
-      ? joinPaths(packagePath, normalizedTarget)
-      : packagePath
-    const resolvedAbsolutePath = fileSystem.getAbsolutePath(absolutePath)
-
-    return {
-      kind: 'Path',
-      relativePath: target,
-      absolutePath: resolvedAbsolutePath,
-      isPattern: target.includes('*'),
-    } satisfies PackageEntryPathTarget
-  }
-
-  return {
-    kind: 'Specifier',
-    specifier: target,
-  } satisfies PackageEntrySpecifierTarget
 }
 
 function normalizePackagePath(path: PathLike) {
@@ -817,7 +700,6 @@ export class Package<
   #sourceRootPath: string
   #fileSystem: FileSystem
   #packageJson?: PackageJson
-  #packageAbsolutePath?: string
   #repository?: Repository | RepositoryConfig | string
   #exportLoaders?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
   #exportOverrides?: Record<string, PackageExportOptions<Types, LoaderTypes>>
@@ -965,11 +847,11 @@ export class Package<
 
     for (const directory of directories) {
       const exportPath = directory.getExportPath()
-      const analysis = directory.getAnalysis()
       const baseSubpath = normalizeExportSubpath(exportPath)
       const manifestPattern = patternBases.has(baseSubpath)
       const isPattern =
-        (analysis?.isPattern ?? isWildcardExport(exportPath)) || manifestPattern
+        (directory.isPattern() ?? isWildcardExport(exportPath)) ||
+        manifestPattern
       const relativePath = resolvePackageExportRelativePath(
         normalizedSpecifier,
         exportPath,
@@ -1012,13 +894,7 @@ export class Package<
 
       this.#importEntries = Array.from(manifestEntries.values()).map(
         (entry) =>
-          new PackageImportEntry({
-            key: entry.key,
-            type: 'imports',
-            source: 'manifest',
-            isPattern: entry.isPattern,
-            manifestTarget: entry.target,
-          })
+          new PackageImportEntry(entry.key, entry.isPattern, 'manifest')
       )
     }
 
@@ -1040,16 +916,6 @@ export class Package<
         this.#name = packageJson.name
       }
     }
-  }
-
-  #getPackageAbsolutePath() {
-    if (!this.#packageAbsolutePath) {
-      this.#packageAbsolutePath = this.#fileSystem.getAbsolutePath(
-        this.#packagePath
-      )
-    }
-
-    return this.#packageAbsolutePath
   }
 
   #readPackageJson(): PackageJson {
@@ -1092,9 +958,7 @@ export class Package<
       if (!this.#exportManifestEntries) {
         this.#exportManifestEntries = createManifestEntryMap(
           this.#packageJson!.exports,
-          'exports',
-          this.#packagePath,
-          this.#fileSystem
+          'exports'
         )
       }
 
@@ -1104,9 +968,7 @@ export class Package<
     if (!this.#importManifestEntries) {
       this.#importManifestEntries = createManifestEntryMap(
         this.#packageJson!.imports,
-        'imports',
-        this.#packagePath,
-        this.#fileSystem
+        'imports'
       )
     }
 
@@ -1215,23 +1077,8 @@ export class Package<
           : this.#resolveDerivedPath(exportKey)
       )
       const manifestEntry = manifestEntries.get(exportKey)
-      const derivedAbsolutePath =
-        this.#fileSystem.getAbsolutePath(directoryPath)
-      const packageAbsolutePath = this.#getPackageAbsolutePath()
-      const relativeFromPackage =
-        relativePath(packageAbsolutePath, derivedAbsolutePath) || '.'
-      const analysis: PackageExportAnalysis = {
-        key: exportKey,
-        type: 'exports',
-        source: manifestEntry ? 'manifest' : 'override',
-        isPattern: manifestEntry?.isPattern ?? isWildcardExport(exportKey),
-        manifestTarget: manifestEntry?.target,
-        derivedAbsolutePath,
-        derivedRelativePath:
-          relativeFromPackage === ''
-            ? '.'
-            : normalizeSlashes(relativeFromPackage),
-      }
+      const source: PackageEntrySource = manifestEntry ? 'manifest' : 'override'
+      const isPattern = manifestEntry?.isPattern ?? isWildcardExport(exportKey)
       const directory = new PackageExportDirectory(
         exportKey,
         {
@@ -1244,7 +1091,8 @@ export class Package<
             normalizedExportLoaders.get(normalizedExportSubpath) ??
             resolveResolverLoaderForSubpath(normalizedExportSubpath),
         },
-        analysis
+        source,
+        isPattern
       )
       directories.push(directory)
     }
@@ -1354,18 +1202,26 @@ export class Package<
 }
 
 export class PackageImportEntry {
-  #analysis: PackageImportAnalysis
+  #key: string
+  #isPattern: boolean
+  #source: PackageEntrySource
 
-  constructor(analysis: PackageImportAnalysis) {
-    this.#analysis = analysis
+  constructor(key: string, isPattern: boolean, source: PackageEntrySource) {
+    this.#key = key
+    this.#isPattern = isPattern
+    this.#source = source
   }
 
   getImportPath() {
-    return this.#analysis.key
+    return this.#key
   }
 
-  getAnalysis() {
-    return this.#analysis
+  getSource() {
+    return this.#source
+  }
+
+  isPattern() {
+    return this.#isPattern
   }
 }
 
