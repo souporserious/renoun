@@ -13,13 +13,13 @@ import {
 } from '../utils/path.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
+import { Package } from './Package.ts'
 import type {
   DirectoryStructure,
   FileStructure,
   PackageStructure,
   WorkspaceStructure,
 } from './types.ts'
-import { Package } from './Package.ts'
 
 interface PackageJson {
   name?: string
@@ -391,7 +391,3 @@ export class Workspace {
     return normalizedBase ? joinPaths(normalizedBase, path) : path
   }
 }
-
-// Backwards-compatible re-exports: historically `Workspace.ts` also hosted
-// `Package` and related types.
-export * from './Package.ts'
