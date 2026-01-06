@@ -1013,7 +1013,7 @@ export class File<
   }
 
   /** Read the file contents as text (UTF-8 decode, Blob semantics). */
-  async text(): Promise<string> {
+  async getText(): Promise<string> {
     const bytes = await this.bytes()
     return fileTextDecoder.decode(bytes)
   }
@@ -1176,7 +1176,7 @@ export class JSONFile<
   }
 
   async #readData(): Promise<Data> {
-    const source = await this.text()
+    const source = await this.getText()
 
     try {
       let value = JSON.parse(source) as unknown
@@ -1399,7 +1399,9 @@ export class ModuleExport<Value> {
    *
    * Note, including dependencies can be expensive to calculate, only use when necessary.
    */
-  async text({ includeDependencies }: { includeDependencies?: boolean } = {}) {
+  async getText({
+    includeDependencies,
+  }: { includeDependencies?: boolean } = {}) {
     const location = await this.#getLocation()
 
     if (location === undefined) {
@@ -2345,7 +2347,7 @@ export class MDXFile<
 
   async #getRawSource() {
     if (!this.#rawSource) {
-      this.#rawSource = super.text()
+      this.#rawSource = super.getText()
     }
     return this.#rawSource
   }
@@ -2361,7 +2363,7 @@ export class MDXFile<
     return this.#parsedSource
   }
 
-  override async text(): Promise<string> {
+  override async getText(): Promise<string> {
     const result = await this.#getSourceWithFrontmatter()
     return result.content
   }
@@ -2482,7 +2484,7 @@ export class MDXFile<
       }
 
       if (!this.#sections) {
-        const source = await this.text()
+        const source = await this.getText()
         this.#sections = getMDXSections(source) as ContentSection[]
       }
     }
@@ -2544,7 +2546,7 @@ export class MDXFile<
 
   async #getStaticExportValues() {
     if (!this.#staticExportValues) {
-      const source = await this.text()
+      const source = await this.getText()
       this.#staticExportValues = getMDXExportStaticValues(source)
     }
     return this.#staticExportValues
@@ -2648,7 +2650,7 @@ export class MarkdownFile<
 
   async #getRawSource() {
     if (!this.#rawSource) {
-      this.#rawSource = super.text()
+      this.#rawSource = super.getText()
     }
     return this.#rawSource
   }
@@ -2664,7 +2666,7 @@ export class MarkdownFile<
     return this.#parsedSource
   }
 
-  override async text(): Promise<string> {
+  override async getText(): Promise<string> {
     const result = await this.#getSourceWithFrontmatter()
     return result.content
   }
@@ -2747,7 +2749,7 @@ export class MarkdownFile<
   /** Get sections parsed from the markdown content based on headings. */
   async getSections(): Promise<ContentSection[]> {
     if (!this.#sections) {
-      const source = await this.text()
+      const source = await this.getText()
       this.#sections = getMarkdownSections(source) as ContentSection[]
     }
     return this.#sections ?? []

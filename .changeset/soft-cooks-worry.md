@@ -2,12 +2,8 @@
 'renoun': major
 ---
 
-Improves `File` interoperability by extending the native `Blob` class, making it compatible with web APIs and tooling that expect `Blob` instances. This enables `instanceof Blob` checks and seamless integration with `fetch`, `FormData`, and other web primitives.
+Improves `File` interoperability by implementing native `Blob` methods, making it compatible with Node.js APIs and tooling that expect a `Blob` interface.
 
 ### Breaking Changes
 
-The following methods have been renamed/removed:
-
-- `File#getText()` → `File#text()`
-- `File#getBinary()` → `File#bytes()` (or `File#arrayBuffer()`)
-- `ModuleExport#getText()` → `ModuleExport#text()`
+`File#getBinary` method has been renamed to `File#bytes` to align with the `Blob` interface. Additionally, `File#arrayBuffer` has been added to provide standard functionality for retrieving file data as an `ArrayBuffer`.

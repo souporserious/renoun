@@ -353,7 +353,7 @@ describe('Module resolution on fixtures (real MDX)', () => {
   bench(
     'utils/path.ts -> basename() runtime call (real TS import)',
     async () => {
-      const file = await utilsTs.getFile('path', 'ts')
+      const file = await utilsTs.getFile('path.ts')
       const basename = await file.getExportValue('basename')
       basename('fixtures/utils/path.ts', '.ts')
       basename('/a/b/c/file.test.tsx', '.tsx')
@@ -523,8 +523,8 @@ describe('Export hot path and type/metadata resolution (TS)', () => {
     'utils/path.ts -> text("basename")',
     async () => {
       const file = await utilsTs.getFile('path', 'ts')
-      const exp = await file.getExport('basename')
-      await exp.text()
+      const fileExport = await file.getExport('basename')
+      await fileExport.getText()
     },
     BENCH_OPTIONS
   )

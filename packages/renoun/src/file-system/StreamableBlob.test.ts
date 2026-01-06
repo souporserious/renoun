@@ -75,7 +75,7 @@ describe('File streaming helpers', () => {
     const file = new File({ directory, path: 'empty.txt' })
 
     expect(file.size).toBe(0)
-    await expect(file.text()).resolves.toBe('')
+    await expect(file.getText()).resolves.toBe('')
     await expect(file.arrayBuffer()).resolves.toBeInstanceOf(ArrayBuffer)
   })
 

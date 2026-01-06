@@ -1696,7 +1696,7 @@ describe('file system', () => {
     const referenceExport = await file.getExport('reference')
     const arrayExport = await file.getExport('array')
     const objectExport = await file.getExport('object')
-    const getTextSpy = vi.spyOn(file, 'text')
+    const getTextSpy = vi.spyOn(file, 'getText')
 
     expect(await numberExport.getStaticValue()).toBe(42)
     expect(await stringExport.getStaticValue()).toBe('hello world')
@@ -1823,7 +1823,7 @@ describe('file system', () => {
     })
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('index', 'md')
-    const getTextSpy = vi.spyOn(file, 'text')
+    const getTextSpy = vi.spyOn(file, 'getText')
 
     await file.getSections()
     await file.getSections()
@@ -2045,7 +2045,7 @@ function b() {}
     expect(fileExport.getTags()).toMatchObject([
       { name: 'category', text: 'greetings' },
     ])
-    expect(await fileExport.text()).toBe(statementText)
+    expect(await fileExport.getText()).toBe(statementText)
     expect(fileExport.getPosition()).toMatchInlineSnapshot(`
       {
         "end": {

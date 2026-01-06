@@ -21,7 +21,7 @@ export async function CodePreview({
   const Layout: any = layoutExport ? await layoutExport.getRuntimeValue() : null
   const isUppercase = name[0] === name[0].toUpperCase()
   const isComponent = typeof Value === 'function' && isUppercase
-  const code = await fileExport.text({ includeDependencies: true })
+  const code = await fileExport.getText({ includeDependencies: true })
 
   return (
     <section

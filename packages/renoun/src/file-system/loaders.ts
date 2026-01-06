@@ -88,7 +88,7 @@ export const markdownComponents = {
 export const defaultLoaders: Record<string, (path: string, file: any) => any> =
   {
     md: async (_path: string, file: any) => {
-      const value = await file.text()
+      const value = await file.getText()
       const frontmatter =
         'getFrontmatter' in file && typeof file.getFrontmatter === 'function'
           ? await file.getFrontmatter()
