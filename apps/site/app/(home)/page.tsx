@@ -9,101 +9,177 @@ export default function Page() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '4rem',
+        gap: '2.5rem',
         padding: '0 1.75rem 7rem',
         textAlign: 'center',
 
         '@media (min-width: 60rem)': {
-          // Place into the content track of the subgrid (3rd column in span)
-          gridColumn: '3 / 4',
-          padding: '2rem 0 9rem',
+          // Span the full subgrid so the hero doesn't get cramped
+          gridColumn: '1 / -1',
+          padding: '2rem 2.5rem 9rem',
         },
       }}
     >
       <section
         css={{
+          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '2.75rem',
-          maxWidth: '56rem',
+          gap: '2rem',
+          maxWidth: '88rem',
         }}
       >
-        <header
+        <div
           css={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.25rem',
-            maxWidth: '48rem',
+            display: 'grid',
+            gap: '2.5rem',
+            alignItems: 'center',
+            width: '100%',
+            padding: '2rem 0',
+
+            '@media (min-width: 60rem)': {
+              gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)',
+              gap: '4rem',
+              padding: '4rem 0',
+            },
           }}
         >
           <h1
             css={{
-              fontSize: 'clamp(3rem, 6vw, 4.75rem)',
-              lineHeight: 1.05,
-              letterSpacing: '-0.025em',
+              fontSize: 'clamp(3.2rem, 8vw, 6rem)',
+              lineHeight: 1.03,
+              letterSpacing: '-0.03em',
               margin: 0,
+              textWrap: 'balance',
+              textAlign: 'center',
+
+              '@media (min-width: 60rem)': {
+                textAlign: 'left',
+              },
             }}
           >
-            Documentation
-            <br />
-            Done Differently
+            Your Repo Has
+            <br />a Lot to Say
           </h1>
-        </header>
 
-        <div
-          css={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.75rem',
-            fontSize: 'clamp(1.6rem, 5vw, 2.4rem)',
-            lineHeight: 'clamp(2.2rem, 6.5vw, 3rem)',
-            color: 'hsla(210, 100%, 90%, 0.85)',
-            textAlign: 'left',
-            '@media (min-width: 60rem)': {
-              fontSize: 'var(--font-size-heading-2)',
-              lineHeight: 'var(--line-height-heading-2)',
-            },
-          }}
-        >
-          <p>
-            You’re in one of two states, your docs are out of sync, or your docs
-            are non-existent.
-          </p>
-          <p>
-            This has been the plight of my software engineering career. It
-            doesn’t matter if it’s a personal project I’m trying to ship or
-            working with my team to release a new design-system site that
-            actually communicates our brand ethos.
-          </p>
-          <p>
-            The problem? You’re forced into tools outside your own code, tools
-            that don’t run at 60 fps or reflect the level of polish you build
-            into your product.
-          </p>
-          <p>
-            Current offerings are too domain-specific and often bolt on a
-            separate build step or have incentives outside of building great
-            docs, which we all know is a problem.
-          </p>
-          <p>
-            I never understood why I had to write the source code and then write
-            the same thing again for documentation. It goes against the first
-            thing you learn as an engineer, don’t repeat yourself.
-          </p>
-          <p>
-            I built renoun to fix this, to let you focus on the quality and
-            craft you pour into your product every day, and showcase that same
-            quality through your documentation.
-          </p>
-          <p>
-            Documentation is the soul of your company, it shouldn’t feel like
-            every other product because you’re not every other product, you’re
-            renoun.
-          </p>
+          <div
+            css={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              alignItems: 'center',
+              maxWidth: '38rem',
+              justifySelf: 'center',
+
+              '@media (min-width: 60rem)': {
+                alignItems: 'flex-start',
+                textAlign: 'left',
+                justifySelf: 'end',
+              },
+            }}
+          >
+            <p
+              css={{
+                fontSize: 'clamp(1.6rem, 4.4vw, 2.1rem)',
+                lineHeight: 'clamp(2.2rem, 6vw, 2.9rem)',
+                textWrap: 'pretty',
+                color: 'hsla(210, 100%, 90%, 0.85)',
+                margin: 0,
+
+                '@media (min-width: 60rem)': {
+                  fontSize: 'var(--font-size-heading-2)',
+                  lineHeight: 'var(--line-height-heading-2)',
+                },
+              }}
+            >
+              Turn your JavaScript, TypeScript, Markdown, and MDX into reusable
+              structured data for blogs, docs, and presentations so your content
+              always matches what’s in your codebase.
+            </p>
+
+            <div
+              css={{
+                display: 'flex',
+                gap: '1rem',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                width: '100%',
+                flexDirection: 'row',
+                alignItems: 'center',
+
+                '@media (min-width: 60rem)': {
+                  justifyContent: 'flex-start',
+                  alignItems: 'flex-start',
+                },
+              }}
+            >
+              <a
+                href="/docs/getting-started"
+                css={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  padding: '0.9rem 1.5rem',
+                  backgroundColor: 'var(--color-surface-accent)',
+                  color: '#0c0900',
+                  border: '1px solid transparent',
+                  borderRadius: '0.75rem',
+                  fontSize: 'var(--font-size-button-1)',
+                  fontWeight: 'var(--font-weight-button)',
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                  width: 'fit-content',
+                  transition: 'transform 150ms ease, box-shadow 200ms ease',
+
+                  ':hover': {
+                    transform: 'translateY(-1px)',
+                    boxShadow:
+                      '0 14px 28px color-mix(in srgb, var(--color-surface-accent) 25%, transparent)',
+                  },
+                  ':focus-visible': {
+                    outline: 'none',
+                    boxShadow:
+                      '0 0 0 3px color-mix(in srgb, var(--color-background) 20%, transparent), 0 0 0 6px color-mix(in srgb, var(--color-surface-accent) 55%, transparent)',
+                  },
+                }}
+              >
+                Get Started
+              </a>
+
+              <a
+                href="/docs/examples"
+                css={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0.9rem 1.5rem',
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-foreground)',
+                  border: '1px solid var(--color-surface-accent)',
+                  borderRadius: '0.75rem',
+                  fontSize: 'var(--font-size-button-1)',
+                  fontWeight: 'var(--font-weight-button)',
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                  width: 'fit-content',
+                  transition: 'background-color 0.2s',
+
+                  ':hover': {
+                    backgroundColor:
+                      'var(--color-surface-interactive-highlighted)',
+                  },
+                }}
+              >
+                Explore Examples
+              </a>
+            </div>
+          </div>
         </div>
-        <JoinButton />
       </section>
+
+      <JoinButton />
     </div>
   )
 }
