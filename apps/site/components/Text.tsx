@@ -51,6 +51,13 @@ const textVariants = {
     letterSpacing: 'normal',
     textWrap: 'pretty',
   },
+  'body-2': {
+    fontSize: 'var(--font-size-body-2)',
+    fontWeight: 'var(--font-weight-body)',
+    lineHeight: 'var(--line-height-body-2)',
+    letterSpacing: 'normal',
+    textWrap: 'pretty',
+  },
 }
 
 export type TextVariants = keyof typeof textVariants
@@ -67,7 +74,6 @@ const elements = {
   'heading-3': 'h3',
   'body-1': 'p',
   'body-2': 'p',
-  mark: 'mark',
 } as const
 
 const TextAncestorContext = createContext(false)
