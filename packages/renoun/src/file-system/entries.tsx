@@ -1074,13 +1074,13 @@ export class File<
   }
 }
 
-export type JSONPrimitive = string | number | boolean | null
+type JSONPrimitive = string | number | boolean | null
 
-export type JSONValue = JSONPrimitive | JSONValue[] | JSONObject
-
-export type JSONObject = {
+interface JSONObject {
   [Key: string]: JSONValue
 }
+
+export type JSONValue = JSONPrimitive | JSONValue[] | JSONObject
 
 export interface JSONFileOptions<
   Data extends Record<string, any> = JSONObject,
@@ -1133,12 +1133,12 @@ type JSONPathSegments<Path extends string> =
       ? []
       : [Path]
 
-export type JSONPathValue<
+type JSONPathValue<Data, Path extends string> = JSONPathValueWithSegments<
   Data,
-  Path extends string,
-> = JSONPathValueWithSegments<Data, JSONPathSegments<Path>>
+  JSONPathSegments<Path>
+>
 
-export type JSONPropertyPath<Data> =
+type JSONPropertyPath<Data> =
   // allow numeric segments in arrays, and recurse into element type
   IsArray<Data> extends true
     ? `${number}` | `${number}.${JSONPropertyPath<Element<Data>>}`
