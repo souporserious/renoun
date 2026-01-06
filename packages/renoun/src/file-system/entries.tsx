@@ -534,7 +534,7 @@ export class File<
 > {
   #name: string
   #baseName: string
-  #modifierName?: string
+  #kind?: string
   #order?: string
   #extension?: Extension
   #path: string
@@ -600,7 +600,7 @@ export class File<
     if (match) {
       this.#order = match[1]
       this.#baseName = match[2] ?? name
-      this.#modifierName = match[4] ? match[3] : undefined
+      this.#kind = match[4] ? match[3] : undefined
       this.#extension = (match[4] ?? match[3]) as Extension
     } else {
       this.#baseName = name
@@ -627,7 +627,7 @@ export class File<
 
   /** The modifier name of the file if defined e.g. `test` in `index.test.ts`. */
   get kind(): string | undefined {
-    return this.#modifierName
+    return this.#kind
   }
 
   /** The base file name formatted as a title. */
