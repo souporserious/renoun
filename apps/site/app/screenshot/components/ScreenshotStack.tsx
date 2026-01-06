@@ -304,20 +304,17 @@ export function ScreenshotStack({
     onModalOpenChange?.(isModalOpen)
   }, [isModalOpen, onModalOpenChange])
 
-  // Lock scrollbars while modal is open
-  useEffect(() => {
-    if (!isModalOpen) {
-      unlockScrollbarsRef.current?.()
-      unlockScrollbarsRef.current = null
-      return
-    }
-
-    unlockScrollbarsRef.current = lockScrollbars()
-    return () => {
+  // Lock scrollbars while modal is open - uses callback ref to ensure element exists
+  const handleModalRef = useCallback((node: HTMLDivElement | null) => {
+    if (node) {
+      // Modal mounted - lock scrollbars
+      unlockScrollbarsRef.current = lockScrollbars(node)
+    } else {
+      // Modal unmounted - unlock scrollbars
       unlockScrollbarsRef.current?.()
       unlockScrollbarsRef.current = null
     }
-  }, [isModalOpen])
+  }, [])
 
   // If flying is disabled (e.g., hidden breakpoint), immediately mark all screenshots landed
   useEffect(() => {
@@ -732,6 +729,7 @@ export function ScreenshotStack({
           <AnimatePresence>
             {isModalOpen && (
               <StyledMotionDiv
+                ref={handleModalRef}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
