@@ -9,8 +9,9 @@ First, thank you for considering contributing to **renoun**! Your contributions 
   - [Reporting Issues](#reporting-issues)
   - [Suggesting Enhancements](#suggesting-enhancements)
   - [Submitting Pull Requests](#submitting-pull-requests)
-- [Contributor License Agreement (CLA)](#contributor-license-agreement-cla)
+- [License](#license)
 - [Getting Help](#getting-help)
+- [Debugging](#debugging)
 
 ---
 
@@ -74,19 +75,9 @@ git push origin your-feature-name
 
 ---
 
-## Contributor License Agreement (CLA)
+## License
 
-In order to clarify the intellectual property license granted with Contributions from any person, we require contributors to sign a [Contributor License Agreement (CLA)](CLA.md) before their contributions can be merged.
-
-### How to Sign the CLA
-
-1. **Review the CLA**: Read through the [Contributor License Agreement](/CLA.md) to understand the terms.
-
-2. **Sign the CLA**: This project uses the [CLA Assistant GitHub Action](https://github.com/contributor-assistant/github-action) which allows you to sign the CLA directly through GitHub when you open a pull request.
-
-3. **Wait for Confirmation**: Once the CLA is reviewed and approved, your contributions will be eligible for merging.
-
-**Important**: Pull requests without a signed CLA will not be reviewed or merged.
+Contributions are accepted under the project's [MIT license](/LICENSE.md). By submitting code, you confirm you have the right to do so and that your contribution will be licensed under MIT.
 
 ---
 
