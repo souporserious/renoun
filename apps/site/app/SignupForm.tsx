@@ -30,8 +30,8 @@ export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
         (formData.get('email') as string | null)?.trim() ?? ''
 
       if (!trimmedEmail) {
-        setState('idle')
-        router.push('/docs/getting-started')
+        setMessage('Please enter your email address.')
+        setState('error')
         return
       }
 
@@ -79,8 +79,8 @@ export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
         flexDirection: 'column',
         alignItems: 'stretch',
         width: '100%',
-        gap: '1.5rem',
-        maxWidth: '40rem',
+        gap: '0.75rem',
+        maxWidth: '34rem',
       }}
       onSubmit={handleSubmit}
     >
@@ -91,8 +91,8 @@ export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
           borderRadius: '999px',
           background: 'var(--color-surface-interactive)',
           boxShadow: 'inset 0 0 0 1px var(--color-separator)',
-          transition: 'box-shadow 200ms ease, transform 200ms ease',
-          padding: '0.4rem',
+          transition: 'box-shadow 200ms ease',
+          padding: '0.3rem',
           ...(state === 'loading' && {
             boxShadow:
               'inset 0 0 0 1px rgba(247, 201, 72, 0.7), 0 0 0 6px rgba(247, 201, 72, 0.12)',
@@ -105,14 +105,18 @@ export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
           id="email"
           aria-label="Email address"
           placeholder="Enter your email address"
+          required
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(event) => {
+            setEmail(event.target.value)
+            if (message) setMessage(null)
+          }}
           autoFocus={autoFocus}
           css={{
-            fontSize: '1.1rem',
+            fontSize: '0.95rem',
             flex: 1,
-            minHeight: '3.75rem',
-            padding: '0 1.5rem',
+            minHeight: '3rem',
+            padding: '0 1.1rem',
             border: 'none',
             borderRadius: '999px',
             backgroundColor: 'transparent',
@@ -132,29 +136,28 @@ export function SignupForm({ autoFocus = false }: SignupFormProps = {}) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '0 1.5rem',
+            padding: '0 1.1rem',
             margin: 0,
             border: 'none',
             borderRadius: '999px',
             backgroundColor: 'var(--color-surface-accent)',
             color: '#111',
             cursor: 'pointer',
-            transition: 'transform 150ms ease, box-shadow 200ms ease',
-            minWidth: '3.5rem',
-            ':hover': {
-              transform: 'translateX(2px)',
-              boxShadow: '0 12px 24px rgba(247, 201, 72, 0.25)',
+            transition: 'background-color 0.2s',
+            minWidth: '3rem',
+            fontSize: '0.9rem',
+            ':hover:not(:disabled)': {
+              backgroundColor:
+                'color-mix(in srgb, var(--color-surface-accent) 92%, var(--color-background))',
             },
             ':disabled': {
-              cursor: 'progress',
-              transform: 'none',
-              boxShadow: 'none',
+              cursor: 'not-allowed',
             },
           }}
         >
           <svg
-            width="24"
-            height="24"
+            width="22"
+            height="22"
             viewBox="0 0 18 18"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"

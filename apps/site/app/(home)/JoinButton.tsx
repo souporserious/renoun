@@ -38,7 +38,7 @@ export function JoinButton() {
             lineHeight: 'var(--line-height-body-2)',
           }}
         >
-          Get product updates by email.
+          Get updates by email.
         </p>
         <p
           css={{
@@ -48,8 +48,7 @@ export function JoinButton() {
             lineHeight: 'var(--line-height-body-2)',
           }}
         >
-          Enter your email to subscribe. You’ll be redirected to Getting Started
-          after confirming.
+          Learn how to get the most out of the renoun SDK.
         </p>
       </div>
 

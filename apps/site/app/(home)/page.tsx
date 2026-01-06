@@ -1,3 +1,4 @@
+import { Mark } from '@/components/Mark'
 import { JoinButton } from './JoinButton'
 
 export default function Page() {
@@ -34,12 +35,11 @@ export default function Page() {
           css={{
             display: 'grid',
             gap: '2.5rem',
-            alignItems: 'center',
             width: '100%',
             padding: '2rem 0',
 
             '@media (min-width: 60rem)': {
-              gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)',
+              gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)',
               gap: '4rem',
               padding: '4rem 0',
             },
@@ -94,18 +94,19 @@ export default function Page() {
               }}
             >
               Turn your JavaScript, TypeScript, Markdown, and MDX into reusable
-              structured data for blogs, docs, and presentations so your content
-              always matches what’s in your codebase.
+              structured data for blogs, docs, and presentations{' '}
+              <Mark>
+                so your content always matches what's in your codebase.
+              </Mark>
             </p>
 
             <div
               css={{
                 display: 'flex',
-                gap: '1rem',
+                gap: '0.75rem',
                 flexWrap: 'wrap',
                 justifyContent: 'center',
                 width: '100%',
-                flexDirection: 'row',
                 alignItems: 'center',
 
                 '@media (min-width: 60rem)': {
@@ -121,27 +122,30 @@ export default function Page() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.5rem',
-                  padding: '0.9rem 1.5rem',
+                  padding: '0.75rem 1.75rem',
                   backgroundColor: 'var(--color-surface-accent)',
                   color: '#0c0900',
-                  border: '1px solid transparent',
-                  borderRadius: '0.75rem',
+                  border: '1px solid var(--color-surface-accent)',
+                  borderRadius: '999px',
                   fontSize: 'var(--font-size-button-1)',
-                  fontWeight: 'var(--font-weight-button)',
+                  fontWeight: 700,
                   textDecoration: 'none',
                   whiteSpace: 'nowrap',
                   width: 'fit-content',
-                  transition: 'transform 150ms ease, box-shadow 200ms ease',
+                  transition: 'opacity 0.15s',
 
                   ':hover': {
-                    transform: 'translateY(-1px)',
-                    boxShadow:
-                      '0 14px 28px color-mix(in srgb, var(--color-surface-accent) 25%, transparent)',
+                    opacity: 0.85,
+                    color: '#0c0900',
+                    textDecoration: 'none',
+                  },
+                  ':active': {
+                    opacity: 0.75,
+                    color: '#0c0900',
                   },
                   ':focus-visible': {
-                    outline: 'none',
-                    boxShadow:
-                      '0 0 0 3px color-mix(in srgb, var(--color-background) 20%, transparent), 0 0 0 6px color-mix(in srgb, var(--color-surface-accent) 55%, transparent)',
+                    outline: '2px solid var(--color-surface-accent)',
+                    outlineOffset: '2px',
                   },
                 }}
               >
@@ -154,21 +158,31 @@ export default function Page() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '0.9rem 1.5rem',
-                  backgroundColor: 'transparent',
+                  padding: '0.75rem 1.75rem',
+                  backgroundColor: 'var(--color-surface-interactive)',
                   color: 'var(--color-foreground)',
                   border: '1px solid var(--color-surface-accent)',
-                  borderRadius: '0.75rem',
+                  borderRadius: '999px',
                   fontSize: 'var(--font-size-button-1)',
-                  fontWeight: 'var(--font-weight-button)',
+                  fontWeight: 600,
                   textDecoration: 'none',
                   whiteSpace: 'nowrap',
                   width: 'fit-content',
-                  transition: 'background-color 0.2s',
+                  transition: 'background-color 0.15s',
 
                   ':hover': {
                     backgroundColor:
                       'var(--color-surface-interactive-highlighted)',
+                    color: 'var(--color-foreground)',
+                    textDecoration: 'none',
+                  },
+                  ':active': {
+                    backgroundColor: 'hsl(212deg 40% 18%)',
+                    color: 'var(--color-foreground)',
+                  },
+                  ':focus-visible': {
+                    outline: '2px solid var(--color-surface-accent)',
+                    outlineOffset: '2px',
                   },
                 }}
               >
