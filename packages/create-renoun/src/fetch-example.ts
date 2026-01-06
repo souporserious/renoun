@@ -1,5 +1,5 @@
 import { confirm, text, isCancel, spinner, log } from '@clack/prompts'
-import { basename, join } from 'node:path'
+import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import {
   createWriteStream,
   existsSync,
@@ -153,11 +153,26 @@ npm-debug.log*
   const introInstallInstructions =
     workingDirectory === process.cwd()
       ? `Run ${color.bold(`${packageManager ?? 'npm'} install`)} to install the dependencies and get started.`
-      : `Change to the directory (cd ${color.bold(
-          workingDirectory
-        )}) and run ${color.bold(
-          `${packageManager ?? 'npm'} install`
-        )} to install the dependencies and get started.`
+      : (() => {
+          const cwd = process.cwd()
+          const relativeWorkingDirectory = relative(cwd, workingDirectory)
+          const canUseRelativePath =
+            relativeWorkingDirectory !== '' &&
+            relativeWorkingDirectory !== '.' &&
+            !isAbsolute(relativeWorkingDirectory) &&
+            relativeWorkingDirectory !== '..' &&
+            !relativeWorkingDirectory.startsWith(`..${sep}`)
+
+          const cdPath = canUseRelativePath
+            ? relativeWorkingDirectory
+            : workingDirectory
+
+          return `Change directories (cd ${color.bold(
+            `"${cdPath}"`
+          )}) and run ${color.bold(
+            `${packageManager ?? 'npm'} install`
+          )} to install the dependencies and get started.`
+        })()
 
   log.success(
     `Example ${color.bold(
