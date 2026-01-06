@@ -1585,6 +1585,49 @@ describe('file system', () => {
     expectTypeOf(value).toExtend<Function>()
   })
 
+  test('isComponent falls back to name heuristic', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'components.tsx': [
+        'export const Button = () => null',
+        'export const notAComponent = () => null',
+      ].join('\n'),
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('components', 'tsx')
+
+    const Button = await file.getExport('Button')
+    const notAComponent = await file.getExport('notAComponent')
+
+    // No runtime loader exists here; this should rely on the export name.
+    expect(Button.isComponent()).toBe(true)
+    expect(notAComponent.isComponent()).toBe(false)
+  })
+
+  test('isComponent uses runtime value when available', async () => {
+    const Button = () => null
+    ;(Button as any).displayName = 'Button'
+
+    const fileSystem = new InMemoryFileSystem({
+      'components.tsx': 'export const button = () => null\n',
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        tsx: async () => ({ button: Button }),
+      },
+    })
+    const file = await directory.getFile('components', 'tsx')
+    const fileExport = await file.getExport('button')
+
+    // Before runtime resolution, the heuristic sees a lowercase export name.
+    expect(fileExport.isComponent()).toBe(false)
+
+    await fileExport.getRuntimeValue()
+
+    // After resolving runtime, the cached determination should be used.
+    expect(fileExport.isComponent()).toBe(true)
+  })
+
   test('file export schema', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const metadata = 1',

@@ -1279,6 +1279,63 @@ export class ModuleExportNotFoundError extends Error {
   }
 }
 
+/** Check if the first character of a string is uppercase. */
+function isUppercaseFirstCharacter(value: string) {
+  const firstChar = value[0]
+  return firstChar ? firstChar === firstChar.toUpperCase() : false
+}
+
+/** Check if a value is a React component wrapper type at runtime. */
+function isReactComponentWrapperRuntimeValue(value: unknown) {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const $$typeof = (value as any).$$typeof
+
+  if (typeof $$typeof !== 'symbol') {
+    return false
+  }
+
+  // React element instances are not component types.
+  if ($$typeof === Symbol.for('react.element')) {
+    return false
+  }
+
+  // Common component wrapper types.
+  if (
+    $$typeof === Symbol.for('react.memo') ||
+    $$typeof === Symbol.for('react.forward_ref') ||
+    $$typeof === Symbol.for('react.lazy') ||
+    $$typeof === Symbol.for('react.provider')
+  ) {
+    return true
+  }
+
+  return false
+}
+
+/** Check if a value is a React component at runtime. */
+function isReactComponentRuntimeValue(value: unknown, exportName: string) {
+  if (isReactComponentWrapperRuntimeValue(value)) {
+    return true
+  }
+
+  if (typeof value !== 'function') {
+    return false
+  }
+
+  const displayName = (value as any).displayName
+  const functionName =
+    typeof displayName === 'string' ? displayName : value.name
+  const nameLooksLikeComponent =
+    isUppercaseFirstCharacter(exportName) ||
+    (typeof functionName === 'string' &&
+      isUppercaseFirstCharacter(functionName))
+
+  return nameLooksLikeComponent
+}
+
 /** A JavaScript module export. */
 export class ModuleExport<Value> {
   #name: string
@@ -1288,6 +1345,7 @@ export class ModuleExport<Value> {
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
   #staticPromise?: Promise<Value>
   #runtimePromise?: Promise<Value>
+  #isComponent: boolean | undefined
 
   constructor(
     name: string,
@@ -1630,7 +1688,12 @@ export class ModuleExport<Value> {
   async getRuntimeValue(): Promise<Value> {
     if (process.env.NODE_ENV === 'production') {
       if (!this.#runtimePromise) {
-        this.#runtimePromise = this.#getRuntimeValue()
+        this.#runtimePromise = this.#getRuntimeValue().then((value) => {
+          if (this.#isComponent === undefined) {
+            this.#isComponent = isReactComponentRuntimeValue(value, this.name)
+          }
+          return value
+        })
       }
       return this.#runtimePromise
     }
@@ -1654,7 +1717,27 @@ export class ModuleExport<Value> {
       )
     }
 
-    return this.#file.parseExportValue(this.#name, fileModuleExport)
+    const value = this.#file.parseExportValue(this.#name, fileModuleExport)
+    if (this.#isComponent === undefined) {
+      this.#isComponent = isReactComponentRuntimeValue(value, this.name)
+    }
+    return value
+  }
+
+  /**
+   * Determine whether this export is a React component type.
+   *
+   * Uses cached runtime values when available (e.g. after calling
+   * `getRuntimeValue()`), and falls back to a conservative name heuristic
+   * otherwise.
+   */
+  isComponent() {
+    if (this.#isComponent !== undefined) {
+      return this.#isComponent
+    }
+
+    // Fallback heuristic (no module evaluation).
+    return isUppercaseFirstCharacter(this.name)
   }
 
   /** Get the value of this export, preferring a static value and falling back to runtime if available. */
