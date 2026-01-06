@@ -651,7 +651,7 @@ export class File<
   }
 
   /** Get the schema configuration for this file if defined. */
-  getSchema() {
+  get schema() {
     return this.#schema
   }
 
@@ -1663,7 +1663,7 @@ export class ModuleExport<Value> {
       )
 
       const schemaOption =
-        this.#file.getSchema() ??
+        this.#file.schema ??
         resolveDirectorySchemaOption(
           this.#file.getParent().getSchema(),
           this.#file.extension
@@ -1879,7 +1879,7 @@ export class JavaScriptFile<
     executeModuleLoader = async () => {
       const moduleValue = await unwrapModuleResult(loader(path, this))
       const schemaOption =
-        this.getSchema() ??
+        this.schema ??
         resolveDirectorySchemaOption(
           this.getParent().getSchema(),
           this.extension
@@ -1916,7 +1916,7 @@ export class JavaScriptFile<
     }
 
     const schemaOption =
-      this.getSchema() ??
+      this.schema ??
       resolveDirectorySchemaOption(this.getParent().getSchema(), extension)
 
     // Module-level schemas are applied when loading the module.
@@ -2256,7 +2256,7 @@ export class MDXModuleExport<Value> {
   /** Parse and validate an export value using the configured schema if available. */
   parseExportValue(name: string, value: any): any {
     const schemaOption =
-      this.#file.getSchema() ??
+      this.#file.schema ??
       resolveDirectorySchemaOption(this.#file.getParent().getSchema(), 'mdx')
 
     // Module-level schemas are applied when loading the module.
@@ -2371,7 +2371,7 @@ export class MDXModuleExport<Value> {
       )
 
       const schemaOption =
-        this.#file.getSchema() ??
+        this.#file.schema ??
         resolveDirectorySchemaOption(this.#file.getParent().getSchema(), 'mdx')
 
       if (schemaOption && isStandardSchema(schemaOption)) {
@@ -2657,7 +2657,7 @@ export class MDXFile<
     executeModuleLoader = async () => {
       const moduleValue = await unwrapModuleResult(loader(path, this))
       const schemaOption =
-        this.getSchema() ??
+        this.schema ??
         resolveDirectorySchemaOption(this.getParent().getSchema(), 'mdx')
 
       if (schemaOption && isStandardSchema(schemaOption)) {
@@ -2799,7 +2799,7 @@ export class MarkdownFile<
     const executeModuleLoader = async () => {
       const moduleValue = await unwrapModuleResult(loader(path, this))
       const schemaOption =
-        this.getSchema() ??
+        this.schema ??
         resolveDirectorySchemaOption(this.getParent().getSchema(), 'md')
 
       if (schemaOption && isStandardSchema(schemaOption)) {
@@ -2859,7 +2859,7 @@ export class MarkdownFile<
   /** Get the runtime value of an export in the Markdown file. (Permissive signature for union compatibility.) */
   parseExportValue(name: string, value: any): any {
     const schemaOption =
-      this.getSchema() ??
+      this.schema ??
       resolveDirectorySchemaOption(this.getParent().getSchema(), 'md')
 
     // Module-level schemas are applied when loading the module.
