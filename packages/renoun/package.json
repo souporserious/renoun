@@ -6,7 +6,7 @@
     "name": "souporserious",
     "email": "support@souporserious.com"
   },
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/souporserious/renoun.git",

@@ -2,7 +2,7 @@
   "name": "renoun",
   "type": "module",
   "private": true,
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "MIT",
   "scripts": {
     "build": "turbo run build",
     "build:site": "pnpm build --filter=@apps/site",

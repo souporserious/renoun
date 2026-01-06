@@ -68,6 +68,4 @@ See the [Contributing Guide](/CONTRIBUTING.md) for details on how to contribute 
 
 ## License
 
-The renoun source code is provided under the non-commercial [renoun license](/LICENSE.md) ideal for blogs, documentation sites, and educational content. If you plan to integrate renoun into a commercial product or service, reach out to sales@souporserious.com to discuss options.
-
-© [souporserious LLC](https://souporserious.com/)
+[MIT](/LICENSE.md) © [souporserious](https://souporserious.com/)

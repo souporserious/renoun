@@ -152,8 +152,8 @@ export async function SiteLayout({
             }}
           >
             <DocsMenu />
+            <NavigationLink href="/docs/examples">Examples</NavigationLink>
             <NavigationLink href="/sponsors">Sponsors</NavigationLink>
-            <NavigationLink href="/license">License</NavigationLink>
           </div>
 
           <div
