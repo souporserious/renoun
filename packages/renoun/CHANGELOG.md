@@ -1,5 +1,138 @@
 # renoun
 
+## 11.0.0
+
+### Major Changes
+
+- 4463fdd: Refactors `File`, `Directory`, and `ModuleExport` to expose sync metadata as properties (`name`, `baseName`, `kind`, `order`, `extension`, `slug`, `description`).
+
+  ### Breaking Changes
+
+  To update your code, replace calls to the following methods:
+  - `getName()` → `name`
+  - `getBaseName()` → `baseName`
+  - `getModifierName()` → `kind`
+  - `getTitle()` → `title`
+  - `getOrder()` → `order`
+  - `getExtension()` → `extension`
+  - `getSlug()` → `slug`
+  - `getDescription()` → `description`
+
+- bfae6c3: Refactors `CodeBlock` and `Command` to use a `components` prop override API and removes the `css`, `className`, and `style` props.
+
+  ### Breaking Changes
+
+  `CodeBlock` and `Command` no longer accept `css`, `className`, or `style` props. Use the new `components` prop to override internal components or their props:
+
+  ```diff
+  <CodeBlock
+  --  css={{
+  --    container: {
+  --      marginTop: '1rem',
+  --    },
+  --  }}
+  +  components={{
+  +    Container: {
+  +      css: {
+  +        marginTop: '1rem',
+  +      },
+  +    }
+  +  }}
+  />
+  ```
+
+- 25a1e46: Simplifies defining `Directory` schemas by removing the `withSchema` loader utility and moving to a `schema` option instead.
+
+  ### Breaking Changes
+
+  The `withSchema` utility has been removed in favor of configuring schema validation using the new `schema` option.
+
+  Before:
+
+  ```ts
+  import { Directory, withSchema } from 'renoun'
+  import { z } from 'zod'
+
+  export const posts = new Directory({
+    path: 'posts',
+    filter: '*.mdx',
+    loader: {
+      mdx: withSchema(
+        {
+          metadata: z.object({
+            title: z.string(),
+            date: z.coerce.date(),
+          }),
+        },
+        (path) => import(`./posts/${path}.mdx`)
+      ),
+    },
+  })
+  ```
+
+  After:
+
+  ```ts
+  import { Directory } from 'renoun'
+  import { z } from 'zod'
+
+  export const posts = new Directory({
+    path: 'posts',
+    filter: '*.mdx',
+    schema: {
+      mdx: {
+        metadata: z.object({
+          title: z.string(),
+          date: z.coerce.date(),
+        }),
+      },
+    },
+    loader: {
+      mdx: (path) => import(`./posts/${path}.mdx`),
+    },
+  })
+  ```
+
+- 22b7a51: Replaces `getHeadings` method with `getSections` for `MarkdownFile`, `MDXFile`, and `JavaScriptFile` to build outlines from regions, headings, and exports. This now includes richer metadata instead of only headings.
+
+  ### Breaking Changes
+
+  The `getHeadings` method for `MarkdownFile`, `MDXFile`, and `JavaScriptFile` has been renamed to `getSections`. The shape is slightly different now that it produces a nested list of section metadata.
+
+- 33da000: Removes the `CodeInline` component.
+
+  ### Breaking Changes
+
+  Update any call sites of `CodeInline` to use a `code` element directly.
+
+- 0653ce6: Improves `File` interoperability by implementing native `Blob` methods, making it compatible with Node.js APIs and tooling that expect a `Blob` interface.
+
+  ### Breaking Changes
+
+  `File#getBinary` method has been renamed to `File#bytes` to align with the `Blob` interface. Additionally, `File#arrayBuffer` has been added to provide standard functionality for retrieving file data as an `ArrayBuffer`.
+
+### Minor Changes
+
+- 434b954: Adds `ModuleExport#isComponent` method to detect if the export is a React component.
+- 1075233: Renames `MemoryFileSystem` to `InMemoryFileSystem`.
+- d4027ab: Adds an `AccessorName` slot to `Reference` component with an optional `name` prop.
+
+### Patch Changes
+
+- 198a45a: Updates license to MIT.
+- 3489eed: Improves `renoun validate` by discovering framework projects from the workspace configuration (pnpm/yarn/npm workspaces) allowing validation across monorepo packages.
+- ddcd84d: Fixes `Reference` descriptions for variable-assigned function exports documented with JSDoc.
+- f4a8a1a: Fixes app command failing when the project's `node_modules` directory contains nested `node_modules` directories. The `OverrideManager` was attempting to hard link files inside `node_modules`, which causing errors.
+- 80d942e: Fixes a bug in `InMemoryFileSystem.readDirectorySync` where sibling files with a shared prefix were incorrectly included when reading a subdirectory.
+- c3ca525: Fixes infinite recursion when resolving self-referential interfaces in `ModuleExport#getType`.
+- d8a54f6: Fixes `ModuleExport#getType` crashing on TypeScript intrinsic `object` types that appear without an `ObjectKeyword` node.
+- b99863f: Fixes an error in `ModuleExport#getType` when resolving `keyof`-based types whose origin is not a union.
+- bd93336: Fixes `StreamableBlob` implementation hanging for zero-length files.
+- 23e1637: Update `Reference` tables to remove the Modifiers column, widen the type/signature column, and show member modifiers inside the collapsed details. Adds optional `colSpan` support for `TableHeader` and `TableSubRow` component overrides.
+- 0b94c14: Debounces `TableOfContents` active link scrolling to prevent excessive updates causing jitter.
+- Updated dependencies [82721e2]
+  - @renoun/mdx@3.8.0
+
 ## 10.17.2
 
 ### Patch Changes

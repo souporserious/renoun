@@ -1,5 +1,12 @@
 # @renoun/blog
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [82721e2]
+  - @renoun/mdx@3.8.0
+
 ## 0.2.0
 
 ### Minor Changes

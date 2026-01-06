@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 3.8.0
+
+### Minor Changes
+
+- 82721e2: Allows overriding a `Section` component (default `Fragment`) when rendering headings so consumers can wrap sections with custom elements or providers.
+
 ## 3.7.1
 
 ### Patch Changes
