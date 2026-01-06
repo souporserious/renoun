@@ -1,7 +1,8 @@
 {
   "private": true,
   "name": "@examples/workbench",
-  "description": "A workbench example built with @renoun/workbench, demonstrating component shadowing.",
+  "homepage": "https://workbench.renoun.dev",
+  "description": "A component workbench for design systems.",
   "scripts": {
     "dev": "renoun dev",
     "build": "renoun build"

@@ -139,6 +139,12 @@ export async function Examples() {
           <StyledContent>
             <h3>{example.title}</h3>
             <StyledFooter>
+              <StyledFooterLink
+                href={example.repositoryHref}
+                aria-label={`${example.title} source code on GitHub`}
+              >
+                Source
+              </StyledFooterLink>
               {example.homepage && (
                 <StyledFooterLink
                   href={example.homepage}
@@ -147,12 +153,6 @@ export async function Examples() {
                   Demo
                 </StyledFooterLink>
               )}
-              <StyledFooterLink
-                href={example.repositoryHref}
-                aria-label={`${example.title} source code on GitHub`}
-              >
-                Source
-              </StyledFooterLink>
             </StyledFooter>
             <p>{example.description}</p>
           </StyledContent>

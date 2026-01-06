@@ -1,7 +1,8 @@
 {
   "private": true,
   "name": "@examples/blog",
-  "description": "Minimal project that shadows posts from the @renoun/blog application.",
+  "homepage": "https://blog.renoun.dev",
+  "description": "Minimal blog application with posts.",
   "scripts": {
     "dev": "renoun dev",
     "build": "renoun build"

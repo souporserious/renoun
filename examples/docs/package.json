@@ -1,7 +1,8 @@
 {
   "private": true,
   "name": "@examples/docs",
-  "description": "A documentation site example built with @renoun/docs.",
+  "homepage": "https://docs.renoun.dev",
+  "description": "A documentation site using MDX.",
   "scripts": {
     "dev": "renoun dev",
     "build": "renoun build"
