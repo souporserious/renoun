@@ -1,7 +1,7 @@
 {
   "name": "renoun",
   "version": "10.17.2",
-  "description": "The renoun toolkit keeps documentation polished, in sync, and on brand.",
+  "description": "Turn JavaScript, TypeScript, Markdown, and MDX into reusable structured data for blogs, docs, and presentations.",
   "author": {
     "name": "souporserious",
     "email": "support@souporserious.com"

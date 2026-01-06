@@ -5,9 +5,9 @@
       <img src="/packages/renoun/images/logo-light.png" alt="renoun" width="180"/>
     </picture>
   </a>
-  <h2>The Documentation Toolkit for React</h2>
+  <h2>Query Structured Data from Your Codebase</h2>
   <p>
-    The renoun toolkit uses your React framework to keep<br>documentation polished, in sync, and on brand.
+     Turn your JavaScript, TypeScript, Markdown, and MDX<br>into reusable structured data for blogs, docs, and presentations<br>so your content always matches what’s in your codebase.
   </p>
 </div>
 
@@ -28,9 +28,9 @@
 - 🖼️ Render code previews
 - 📦 Integrate with your favorite framework
 
-## Apps
+## Applications as Templates
 
-These apps are built with Next.js and showcase different ways to use renoun.
+The easiest way to get started using renoun is with one of the application starters:
 
 - **Blog** — blog starter with a post index, tags, and MDX article pages ([Demo](https://blog.renoun.dev) · [Source](/examples/blog))
 - **Docs** — documentation starter that turns MDX content into a polished, full-featured site ([Demo](https://docs.renoun.dev) · [Source](/examples/docs))
@@ -38,7 +38,7 @@ These apps are built with Next.js and showcase different ways to use renoun.
 
 ## Why renoun?
 
-Maintaining consistent technical documentation at scale is hard, especially for design systems. The renoun toolkit simplifies this by providing a React‑first solution to author, validate, and render documentation that stays in sync with your code every step of the way.
+Maintaining consistent technical blogs, documentation, and presentations at scale is hard. The renoun SDK simplifies this by providing a set of tools and React‑first solutions to author, validate, and render content that stays in sync with your code every step of the way.
 
 ## Install
 

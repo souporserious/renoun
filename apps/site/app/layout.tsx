@@ -4,8 +4,8 @@ import { RootProvider, Script } from 'renoun'
 import { GeistSans } from 'geist/font/sans'
 
 export const metadata = {
-  title: 'renoun - The Documentation Toolkit for React',
-  description: `The renoun toolkit uses your React framework to keep documentation polished, in sync, and on brand.`,
+  title: 'renoun - Query Structured Data from Your Codebase',
+  description: `Turn your JavaScript, TypeScript, Markdown, and MDX into reusable structured data for blogs, docs, and presentations.`,
 } satisfies Metadata
 
 export default function RootLayout({
