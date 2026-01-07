@@ -10925,8 +10925,280 @@ const FILTERS: { [name: string]: Filter } = {
     })
   },
 
-  // drop-shadow requires more complex implementation with convolution
-  'drop-shadow': () => {},
+  'drop-shadow'(context, ...args) {
+    // drop-shadow(<offset-x> <offset-y> <blur-radius>? <color>?)
+    // Parse the arguments - they come as separate strings from the filter parser
+    // Rejoin them to parse as a single value string
+    const valueString = args.join(' ').trim()
+    if (!valueString) return
+
+    // Parse drop-shadow parameters: offset-x, offset-y, blur-radius (optional), color (optional)
+    // The color can appear at the beginning or end
+    const parsed = parseDropShadowParams(valueString)
+    if (!parsed) return
+
+    const { offsetX, offsetY, blurRadius, color } = parsed
+
+    // If all effects are zero/none, skip processing
+    if (offsetX === 0 && offsetY === 0 && blurRadius === 0) return
+
+    const canvas = context.canvas
+    const width = canvas.width
+    const height = canvas.height
+
+    if (!width || !height) return
+
+    // Get the original image data
+    const originalImageData = context.getImageData(0, 0, width, height)
+    const originalData = new Uint8ClampedArray(originalImageData.data)
+
+    // Create shadow from alpha channel with the shadow color
+    const shadowImageData = context.createImageData(width, height)
+    const shadowData = shadowImageData.data
+
+    // Extract shadow color components
+    const shadowR = color.r
+    const shadowG = color.g
+    const shadowB = color.b
+    const shadowA = color.a
+
+    // Create shadow: use original alpha, apply shadow color
+    for (let index = 0; index < originalData.length; index += 4) {
+      const alpha = originalData[index + 3]
+      if (alpha > 0) {
+        // Premultiply the shadow color with the source alpha and shadow alpha
+        const combinedAlpha = (alpha / 255) * shadowA
+        shadowData[index] = shadowR
+        shadowData[index + 1] = shadowG
+        shadowData[index + 2] = shadowB
+        shadowData[index + 3] = Math.round(combinedAlpha * 255)
+      }
+    }
+
+    // Put shadow data to canvas for blurring
+    context.putImageData(shadowImageData, 0, 0)
+
+    // Apply blur to shadow if needed
+    if (blurRadius > 0) {
+      applyBoxBlur(context, blurRadius)
+    }
+
+    // Get the blurred shadow
+    const blurredShadowData = context.getImageData(0, 0, width, height)
+
+    // Clear the canvas
+    context.clearRect(0, 0, width, height)
+
+    // Create the final composited image
+    // We need to offset the shadow and composite the original on top
+    const imageData = context.createImageData(width, height)
+    const data = imageData.data
+
+    // Draw the offset shadow first
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        // Source position in the shadow (before offset)
+        const sourceX = x - offsetX
+        const sourceY = y - offsetY
+        const destinationIndex = (y * width + x) * 4
+
+        // Check if source position is within bounds
+        if (
+          sourceX >= 0 &&
+          sourceX < width &&
+          sourceY >= 0 &&
+          sourceY < height
+        ) {
+          const sourceIndex = (sourceY * width + sourceX) * 4
+          data[destinationIndex] = blurredShadowData.data[sourceIndex]
+          data[destinationIndex + 1] = blurredShadowData.data[sourceIndex + 1]
+          data[destinationIndex + 2] = blurredShadowData.data[sourceIndex + 2]
+          data[destinationIndex + 3] = blurredShadowData.data[sourceIndex + 3]
+        }
+      }
+    }
+
+    // Composite the original image on top of the shadow using source-over blending
+    for (let index = 0; index < originalData.length; index += 4) {
+      const sourceR = originalData[index]
+      const sourceG = originalData[index + 1]
+      const sourceB = originalData[index + 2]
+      const sourceA = originalData[index + 3] / 255
+
+      const destinationR = data[index]
+      const destinationG = data[index + 1]
+      const destinationB = data[index + 2]
+      const destinationA = data[index + 3] / 255
+
+      // Standard Porter-Duff source-over compositing
+      const outA = sourceA + destinationA * (1 - sourceA)
+
+      if (outA > 0) {
+        data[index] = Math.round(
+          (sourceR * sourceA + destinationR * destinationA * (1 - sourceA)) /
+            outA
+        )
+        data[index + 1] = Math.round(
+          (sourceG * sourceA + destinationG * destinationA * (1 - sourceA)) /
+            outA
+        )
+        data[index + 2] = Math.round(
+          (sourceB * sourceA + destinationB * destinationA * (1 - sourceA)) /
+            outA
+        )
+        data[index + 3] = Math.round(outA * 255)
+      }
+    }
+
+    context.putImageData(imageData, 0, 0)
+  },
+}
+
+/** Parse drop-shadow filter parameters */
+function parseDropShadowParams(value: string): {
+  offsetX: number
+  offsetY: number
+  blurRadius: number
+  color: { r: number; g: number; b: number; a: number }
+} | null {
+  // Default shadow color is black
+  const defaultColor = { r: 0, g: 0, b: 0, a: 1 }
+
+  // Try to extract and parse a color from the value string
+  // Color can be at the start or end
+  let colorMatch: { r: number; g: number; b: number; a: number } | null = null
+  let remainingValue = value
+
+  // Try parsing color from the beginning (e.g., "red 1px 2px 3px")
+  const colorAtStartPatterns = [
+    // Named colors or hex at start
+    /^([a-z]+|#[0-9a-f]{3,8})\s+/i,
+    // rgb/rgba/hsl/hsla at start
+    /^(rgba?\([^)]+\)|hsla?\([^)]+\))\s+/i,
+  ]
+
+  for (const pattern of colorAtStartPatterns) {
+    const match = value.match(pattern)
+    if (match) {
+      const parsed = parseCssColor(match[1])
+      if (parsed) {
+        const rgb = cssColorToRgb(parsed)
+        colorMatch = { ...rgb, a: parsed.alpha }
+        remainingValue = value.slice(match[0].length).trim()
+        break
+      }
+    }
+  }
+
+  // If no color at start, try at end
+  if (!colorMatch) {
+    // Try rgb/rgba/hsl/hsla at end
+    const funcColorAtEnd = remainingValue.match(
+      /(rgba?\([^)]+\)|hsla?\([^)]+\))$/i
+    )
+    if (funcColorAtEnd) {
+      const parsed = parseCssColor(funcColorAtEnd[1])
+      if (parsed) {
+        const rgb = cssColorToRgb(parsed)
+        colorMatch = { ...rgb, a: parsed.alpha }
+        remainingValue = remainingValue.slice(0, funcColorAtEnd.index).trim()
+      }
+    } else {
+      // Try hex or named color at end
+      const simpleColorAtEnd = remainingValue.match(
+        /\s+([a-z]+|#[0-9a-f]{3,8})$/i
+      )
+      if (simpleColorAtEnd) {
+        const parsed = parseCssColor(simpleColorAtEnd[1])
+        if (parsed) {
+          const rgb = cssColorToRgb(parsed)
+          colorMatch = { ...rgb, a: parsed.alpha }
+          remainingValue = remainingValue
+            .slice(0, simpleColorAtEnd.index)
+            .trim()
+        }
+      }
+    }
+  }
+
+  // Parse the length values (offset-x, offset-y, blur-radius)
+  const lengthPattern = /(-?\d*\.?\d+)(px|em|rem)?/gi
+  const lengths: number[] = []
+  let match: RegExpExecArray | null
+
+  while ((match = lengthPattern.exec(remainingValue)) !== null) {
+    const num = parseFloat(match[1])
+    if (Number.isFinite(num)) {
+      let value = num
+      // Handle em/rem (approximate as 16px)
+      if (match[2] === 'em' || match[2] === 'rem') {
+        value = num * 16
+      }
+      lengths.push(Math.round(value))
+    }
+  }
+
+  if (lengths.length < 2) {
+    return null // Need at least offset-x and offset-y
+  }
+
+  const offsetX = lengths[0]
+  const offsetY = lengths[1]
+  const blurRadius = lengths.length >= 3 ? Math.max(0, lengths[2]) : 0
+
+  return {
+    offsetX,
+    offsetY,
+    blurRadius,
+    color: colorMatch || defaultColor,
+  }
+}
+
+/** Convert ParsedCssColor to RGB values (0-255) */
+function cssColorToRgb(color: ParsedCssColor): {
+  r: number
+  g: number
+  b: number
+} {
+  if (color.type === 'rgb') {
+    return {
+      r: color.values[0],
+      g: color.values[1],
+      b: color.values[2],
+    }
+  }
+
+  // HSL to RGB conversion
+  const h = color.values[0] / 360
+  const s = color.values[1] / 100
+  const l = color.values[2] / 100
+
+  let r: number, g: number, b: number
+
+  if (s === 0) {
+    r = g = b = l
+  } else {
+    const hue2rgb = (p: number, q: number, t: number): number => {
+      if (t < 0) t += 1
+      if (t > 1) t -= 1
+      if (t < 1 / 6) return p + (q - p) * 6 * t
+      if (t < 1 / 2) return q
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+      return p
+    }
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+    const p = 2 * l - q
+    r = hue2rgb(p, q, h + 1 / 3)
+    g = hue2rgb(p, q, h)
+    b = hue2rgb(p, q, h - 1 / 3)
+  }
+
+  return {
+    r: Math.round(r * 255),
+    g: Math.round(g * 255),
+    b: Math.round(b * 255),
+  }
 }
 
 // Firefox detection for filter polyfill - Firefox's native canvas filter has bugs
