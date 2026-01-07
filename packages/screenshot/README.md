@@ -28,6 +28,7 @@ npm install @renoun/screenshot
 - SVG elements
 - Fixed position elements
 - High-DPI rendering
+- Ignore elements via a configurable selector
 
 ## Usage
 
@@ -93,6 +94,20 @@ async function updatePreview() {
 }
 ```
 
+### Ignoring Elements
+
+To skip elements from the rendered output, add the `data-screenshot-ignore` attribute:
+
+```html
+<button data-screenshot-ignore>Download</button>
+```
+
+You can also customize the ignore selector via options:
+
+```ts
+await screenshot(element, { ignoreSelector: 'input' })
+```
+
 ## API
 
 ### `screenshot(target, options?)`
@@ -153,6 +168,13 @@ interface RenderOptions {
    * - `all` – include all fixed elements in the viewport.
    */
   includeFixed?: 'none' | 'intersecting' | 'all'
+
+  /**
+   * CSS selector used to skip elements from rendering.
+   * Defaults to `[data-screenshot-ignore]`. Set to `null` or an empty string
+   * to disable selector-based skipping.
+   */
+  ignoreSelector?: string | null
 }
 
 interface EncodeOptions {

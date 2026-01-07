@@ -509,6 +509,13 @@ export interface RenderOptions {
    * - `all` – include all fixed elements that overlap the viewport.
    */
   includeFixed?: 'none' | 'intersecting' | 'all'
+
+  /**
+   * CSS selector used to skip elements from rendering.
+   * Defaults to `[data-screenshot-ignore]`. Set to `null` or an empty string
+   * to disable selector-based skipping.
+   */
+  ignoreSelector?: string | null
 }
 
 /** Options for encoding a canvas to an image format. */
@@ -599,6 +606,11 @@ interface RenderEnvironment {
    * The color space to use for the canvas. Defaults to using match media query to determine the color space.
    */
   colorSpace: PredefinedColorSpace
+
+  /**
+   * CSS selector used to skip elements from rendering, if provided.
+   */
+  ignoreSelector?: string
 }
 
 // Cache for element computed styles. Many helpers (layout, stacking, fixed
@@ -631,6 +643,11 @@ function getStyle(element: Element): CSSStyleDeclaration | null {
 
   styleCache.set(element, computed)
   return computed
+}
+
+function isIgnoredElement(element: Element, ignoreSelector?: string): boolean {
+  if (!ignoreSelector) return false
+  return element.matches(ignoreSelector)
 }
 
 function createCanvasLayer(
@@ -674,6 +691,8 @@ function encodeCanvasToBlob(
   })
 }
 
+const DEFAULT_IGNORE_SELECTOR = '[data-screenshot-ignore]'
+
 /**
  * Core render function that renders an element to a canvas.
  * This is the internal implementation used by all public APIs.
@@ -706,6 +725,10 @@ async function renderToCanvas(
   // elements; this avoids an expensive `querySelectorAll('*')` on callers
   // that explicitly opt out of fixed overlays.
   const includeFixed = options.includeFixed ?? 'none'
+  const ignoreSelector =
+    options.ignoreSelector === null || options.ignoreSelector === ''
+      ? undefined
+      : (options.ignoreSelector ?? DEFAULT_IGNORE_SELECTOR)
 
   // Precompute list of all elements for operations that need to scan the full
   // DOM (for example, locating `position: fixed` elements) to avoid multiple
@@ -881,6 +904,7 @@ async function renderToCanvas(
     includeFixed,
     allElements,
     colorSpace,
+    ignoreSelector: ignoreSelector ?? undefined,
   }
 
   await renderDomTree(element as HTMLElement, context, env)
@@ -1091,6 +1115,10 @@ async function renderNode(
 
     // Skip elements that are being rendered separately (Z-layer elements)
     if (env.skipElements?.has(element)) {
+      return
+    }
+
+    if (isIgnoredElement(element, env.ignoreSelector)) {
       return
     }
 
@@ -3256,6 +3284,7 @@ async function renderFixedPositionElements(
   for (let index = 0; index < allLength; index++) {
     const element = all[index]
     if (root.contains(element)) continue
+    if (isIgnoredElement(element, env.ignoreSelector)) continue
     const style = getStyle(element)
     if (!style || style.position !== 'fixed') continue
 
