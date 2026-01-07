@@ -4,7 +4,7 @@ import { RootProvider, Script } from 'renoun'
 import { GeistSans } from 'geist/font/sans'
 
 export const metadata = {
-  title: 'renoun - Query Structured Data from Your Codebase',
+  title: 'renoun - Query and Render Your Codebase',
   description: `Turn your JavaScript, TypeScript, Markdown, and MDX into reusable structured data for blogs, docs, and presentations.`,
 } satisfies Metadata
 

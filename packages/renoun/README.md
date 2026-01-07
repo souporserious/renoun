@@ -5,7 +5,7 @@
       <img src="/packages/renoun/images/logo-light.png" alt="renoun" width="180"/>
     </picture>
   </a>
-  <h2>Query Structured Data from Your Codebase</h2>
+  <h2>Query and Render Your Codebase</h2>
   <p>
      Turn your JavaScript, TypeScript, Markdown, and MDX<br>into reusable structured data for blogs, docs, and presentations<br>so your content always matches what’s in your codebase.
   </p>
