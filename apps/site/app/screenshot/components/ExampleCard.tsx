@@ -50,11 +50,12 @@ export function ExampleCard({
   const handlePointerUp = async (e: React.PointerEvent) => {
     // Don't capture if clicking on interactive elements (buttons, inputs, etc.)
     const target = e.target as HTMLElement
-    const interactiveSelectors = 'button, input, select, textarea, a, [role="button"], [tabindex]'
+    const interactiveSelectors =
+      'button, input, select, textarea, a, [role="button"], [tabindex]'
     if (target.closest(interactiveSelectors)) {
       return
     }
-    
+
     if (contentRef.current && onCapture) {
       setIsCapturing(true)
       try {
@@ -120,6 +121,17 @@ export function ExampleCard({
         }}
       >
         <div
+          aria-hidden
+          css={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(30, 35, 45, 0.2)',
+            opacity: isHovered ? 1 : 0,
+            transition: 'opacity 300ms ease',
+            pointerEvents: 'none',
+          }}
+        />
+        <div
           ref={contentRef}
           css={{
             padding: '2rem',
@@ -127,13 +139,10 @@ export function ExampleCard({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: isHovered
-              ? 'rgba(30, 35, 45, 0.6)'
-              : 'rgba(30, 35, 45, 0.4)',
-            transition: 'background-color 300ms ease',
             position: 'relative',
             overflow: 'hidden',
             isolation: 'isolate',
+            zIndex: 1,
           }}
         >
           {Component && <Component />}

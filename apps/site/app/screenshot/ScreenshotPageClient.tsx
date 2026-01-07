@@ -130,7 +130,6 @@ export function ScreenshotPageClient({
         const url = await screenshot.url(element, {
           scale: 2,
           format: 'png',
-          backgroundColor: 'hsl(215deg 47% 10%)',
         })
         screenshotUrlsRef.current.push(url)
         setScreenshots((prev) => [{ url, sourceRect }, ...prev])
