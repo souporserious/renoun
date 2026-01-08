@@ -4708,9 +4708,9 @@ async function renderSvgElement(
       cloned.removeAttribute('style')
 
       const computed = window.getComputedStyle(original)
-    for (const prop of paintProps) {
-      const value = computed.getPropertyValue(prop)
-      if (value) {
+      for (const prop of paintProps) {
+        const value = computed.getPropertyValue(prop)
+        if (value) {
           ;(cloned as HTMLElement | SVGElement).style.setProperty(prop, value)
         }
       }
@@ -9376,6 +9376,7 @@ async function renderTextNode(
         const snappedX = snap(drawX)
         const snappedY = snap(baselineY)
         context.fillText(transformed, snappedX, snappedY)
+        drawTextDecorations(context, style, docRect, scale)
       }
 
       range.detach?.()
@@ -9980,7 +9981,7 @@ async function renderTextNode(
 
     isFirstRunOnLine = false
 
-    drawTextDecorations(context, style, rect)
+    drawTextDecorations(context, style, rect, scale)
   }
 
   context.restore()
@@ -9989,15 +9990,28 @@ async function renderTextNode(
 function drawTextDecorations(
   context: CanvasRenderingContext2D,
   style: CSSStyleDeclaration,
-  rect: DOMRect
+  rect: DOMRect,
+  scale: number = 1
 ): void {
-  const decorationLine = style.textDecorationLine
+  // Check both the longhand textDecorationLine and the shorthand textDecoration
+  // The shorthand may contain values like "underline" directly in some browsers
+  let decorationLine = style.textDecorationLine
+  if (!decorationLine || decorationLine === 'none') {
+    // Fall back to the shorthand property which may contain "underline", "line-through", etc.
+    const shorthand = style.textDecoration
+    if (shorthand && shorthand !== 'none') {
+      decorationLine = shorthand
+    }
+  }
   if (!decorationLine || decorationLine === 'none') return
 
   const color = style.textDecorationColor || style.color || '#000'
-  const thickness = 1
-  const left = rect.left
-  const width = rect.width
+  const thickness = Math.max(1, Math.round(scale)) / scale // At least 1 device pixel
+
+  // Snap coordinates to device pixels for crisp rendering (consistent with text)
+  const snap = (value: number) => Math.round(value * scale) / scale
+  const left = snap(rect.left)
+  const width = snap(rect.width)
 
   context.save()
   context.fillStyle = color
@@ -10010,38 +10024,38 @@ function drawTextDecorations(
   if (!isVertical) {
     // Horizontal text: draw lines along the x-axis.
     if (decorationLine.includes('underline')) {
-      const decorationY = rect.bottom - thickness
+      const decorationY = snap(rect.bottom - thickness)
       context.fillRect(left, decorationY, width, thickness)
     }
 
     if (decorationLine.includes('overline')) {
-      const decorationY = rect.top
+      const decorationY = snap(rect.top)
       context.fillRect(left, decorationY, width, thickness)
     }
 
     if (decorationLine.includes('line-through')) {
-      const decorationY = rect.top + rect.height / 2 - thickness / 2
+      const decorationY = snap(rect.top + rect.height / 2 - thickness / 2)
       context.fillRect(left, decorationY, width, thickness)
     }
   } else {
     // Vertical text: approximate decorations as vertical bars along the y-axis.
-    const top = rect.top
-    const height = rect.height
+    const top = snap(rect.top)
+    const height = snap(rect.height)
 
     if (decorationLine.includes('underline')) {
       // Logical "end" side: approximate as right edge.
-      const decorationX = rect.right - thickness
+      const decorationX = snap(rect.right - thickness)
       context.fillRect(decorationX, top, thickness, height)
     }
 
     if (decorationLine.includes('overline')) {
       // Logical "start" side: approximate as left edge.
-      const decorationX = rect.left
+      const decorationX = snap(rect.left)
       context.fillRect(decorationX, top, thickness, height)
     }
 
     if (decorationLine.includes('line-through')) {
-      const decorationX = rect.left + rect.width / 2 - thickness / 2
+      const decorationX = snap(rect.left + rect.width / 2 - thickness / 2)
       context.fillRect(decorationX, top, thickness, height)
     }
   }
@@ -10197,8 +10211,8 @@ function buildCanvasFont(style: CSSStyleDeclaration): string {
     const weight = parseInt(fontWeight, 10)
     if (!Number.isFinite(weight) || weight < 1 || weight > 1000) {
       fontWeight = 'normal'
+    }
   }
-}
 
   // Get font size - must include unit
   let fontSize = style.fontSize || '16px'
