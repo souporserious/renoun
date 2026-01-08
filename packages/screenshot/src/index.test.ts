@@ -1817,6 +1817,135 @@ describe('screenshot', () => {
       const canvas = await screenshot.canvas(card, { scale: 2 })
       await expectCanvasToMatchSnapshot(canvas, 'stat-card', card)
     })
+
+    it('svg chart with links', async () => {
+      container.style.width = '360px'
+
+      const host = document.createElement('div')
+      host.innerHTML = `
+<aside id="category" style="-webkit-text-size-adjust: 100%;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.7142857142857142;
+    font-variant-numeric: tabular-nums;
+    text-wrap-style: pretty;
+    font-family: system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol;
+    letter-spacing: -0.03em;
+    font-feature-settings: 'kern';
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    color: #041330;
+    box-sizing: inherit;">
+  <header>
+    <h3>Logistics</h3>
+    <a
+      tabindex="0"
+      data-screenshot-ignore="true"
+      href="#"
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+        <path
+          fill-rule="evenodd"
+          d="M19.95 12.375a1.278 1.278 0 0 0 0-.75 1.035 1.035 0 0 0-.225-.3L12.75 4.35c-.375-.375-1.05-.375-1.425 0s-.375 1.05 0 1.425L16.65 11.1H5.025a.993.993 0 0 0-.975.975c0 .525.45.975.975.975h11.55l-5.325 5.325c-.375.375-.375 1.05 0 1.425s1.05.375 1.425 0l6.975-6.975c.15-.225.225-.3.3-.45Z"
+          clip-rule="evenodd"
+        ></path>
+      </svg>
+    </a>
+    <div>
+      <button tabindex="0" type="button" data-screenshot-ignore="true">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+          <path d="M8.528 4.021a6 6 0 0 1 6.224 4.265A1 1 0 0 0 15.71 9h1.79a3.5 3.5 0 0 1 1.945 6.41 1 1 0 0 0 1.11 1.663A5.5 5.5 0 0 0 17.5 7h-1.082a8.001 8.001 0 1 0-13.133 8.598 1 1 0 1 0 1.43-1.399A6 6 0 0 1 8.528 4.021Z"></path>
+          <path d="M8.707 16.293a1 1 0 0 0-1.414 1.414l3.997 3.997A.993.993 0 0 0 12 22a.996.996 0 0 0 .71-.296l3.997-3.997a1 1 0 0 0-1.414-1.414L13 18.586V12a1 1 0 1 0-2 0v6.586l-2.293-2.293Z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <p
+    style="-webkit-text-size-adjust: 100%;
+      color: #4F596E;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.7142857142857142;
+      font-variant-numeric: tabular-nums;
+      text-wrap-style: pretty;
+      margin-bottom: 16px;
+      max-width: 62ch;
+      min-height: 2lh;">
+    Emissions from transportation of products between your suppliers, facilities, and customers.
+  </p>
+
+  <section>
+    <header>
+      <div tabindex="0">
+        <h4>Subcategory % of footprint</h4>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" data-screenshot-ignore="true" width="16" height="16">
+          <path d="M12 11a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0v-4a1 1 0 0 1 1-1Zm0-4a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2H12Z"></path>
+          <path fill-rule="evenodd" d="M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12Zm11-9a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" clip-rule="evenodd"></path>
+        </svg>
+      </div>
+    </header>
+
+    <div>
+      <svg viewBox="0 0 160 160" overflow="visible" width="160" height="160">
+        <g>
+          <path d="M4.898587196589413e-15,-80A80,80,0,1,1,-3.0692875537643505,79.94110002941107L-2.148501287635045,55.95877002058776A56,56,0,1,0,3.429011037612589e-15,-56Z"
+            transform="translate(80, 80)"
+            role="presentation"
+            shape-rendering="auto"
+            style="fill: rgb(3, 44, 165); cursor: auto; padding: 8px; stroke: rgb(236, 239, 241); stroke-width: 1;"></path>
+          <path d="M-3.0692875537643505,79.94110002941107A80,80,0,0,1,-1.4695761589768237e-14,-80L-1.0287033112837767e-14,-56A56,56,0,0,0,-2.148501287635045,55.95877002058776Z"
+            transform="translate(80, 80)"
+            role="presentation"
+            shape-rendering="auto"
+            style="fill: rgb(18, 70, 224); cursor: auto; padding: 8px; stroke: rgb(236, 239, 241); stroke-width: 1;"></path>
+        </g>
+        <text x="80" y="86.39">
+          <tspan text-anchor="middle" style="font-size: 18px; font-family: inherit; font-weight: 600; fill: currentcolor;">
+            4,383 tCO₂e
+          </tspan>
+        </text>
+      </svg>
+    </div>
+
+    <div>
+      <table>
+        <tbody>
+          <tr>
+            <td>
+              <div></div>
+              <a href="#">Upstream</a>
+            </td>
+            <td>14%</td>
+          </tr>
+          <tr>
+            <td>
+              <div></div>
+              <a href="#">Downstream</a>
+            </td>
+            <td>14%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</aside>
+      `.trim()
+
+      const aside = host.querySelector('#category') as HTMLElement | null
+      expect(aside).not.toBeNull()
+
+      // Stabilize layout: <aside> is block-level and would otherwise expand to the full viewport width.
+      aside!.style.width = '360px'
+
+      container.appendChild(aside!)
+
+      const canvas = await screenshot.canvas(aside!, {
+        scale: 1,
+        backgroundColor: '#ffffff',
+      })
+      await expectCanvasToMatchSnapshot(canvas, 'svg-chart-with-links', aside!)
+    })
   })
 
   describe('image snapshots: text shadow', () => {
