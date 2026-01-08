@@ -4670,11 +4670,11 @@ async function renderSvgElement(
   // Clone and modify attributes to force high-res rasterization
   const clone = element.cloneNode(true) as SVGSVGElement
 
-  // Strip class/style that can encode layout positioning, but preserve
-  // paint-related styling by inlining computed paint properties back onto the clone.
-  //
-  // This prevents internal offsets when the SVG is serialized and rasterized as an
-  // image, while keeping colors/strokes/fills identical to the live DOM.
+  // We grab the node lists immediately so they match 1:1 before we add the <style> tag
+  const originalElements = Array.from(element.querySelectorAll('*'))
+  const clonedElements = Array.from(clone.querySelectorAll('*'))
+  const count = Math.min(originalElements.length, clonedElements.length)
+
   const paintProps = [
     'color',
     'fill',
@@ -4691,45 +4691,60 @@ async function renderSvgElement(
     'vector-effect',
     'paint-order',
     'shape-rendering',
+    'font-family',
+    'font-size',
+    'font-weight',
+    'font-style',
+    'letter-spacing',
   ] as const
 
-  const originalElements: Element[] = [
-    element,
-    ...Array.from(element.querySelectorAll('*')),
-  ]
-  const clonedElements: Element[] = [
-    clone,
-    ...Array.from(clone.querySelectorAll('*')),
-  ]
-  const count = Math.min(originalElements.length, clonedElements.length)
-
   for (let index = 0; index < count; index++) {
-    const originalElement = originalElements[index]
-    const clonedElement = clonedElements[index]
+    const original = originalElements[index]
+    const cloned = clonedElements[index]
 
-    // Strip potentially layout-affecting CSS hooks.
-    clonedElement.removeAttribute('class')
-    clonedElement.removeAttribute('style')
+    if (original instanceof Element && cloned instanceof Element) {
+      // Remove class/style to ensure we don't have conflicting CSS rules
+      cloned.removeAttribute('class')
+      cloned.removeAttribute('style')
 
-    const computed = window.getComputedStyle(originalElement)
+      const computed = window.getComputedStyle(original)
     for (const prop of paintProps) {
       const value = computed.getPropertyValue(prop)
       if (value) {
-        ;(clonedElement as HTMLElement | SVGElement).style.setProperty(
-          prop,
-          value
-        )
+          ;(cloned as HTMLElement | SVGElement).style.setProperty(prop, value)
+        }
       }
     }
   }
 
-  // 1. Set explicit width/height in device pixels
+  // Now that we've finished the node-to-node copy, we can safely modify the clone's tree
+  const styleElement = document.createElement('style')
+  let cssText = ''
+  try {
+    for (const sheet of Array.from(document.styleSheets)) {
+      try {
+        if (sheet.href && !sheet.href.startsWith(location.origin)) continue
+        for (const rule of Array.from(sheet.cssRules)) {
+          cssText += rule.cssText + '\n'
+        }
+      } catch (error) {
+        // Ignore errors from cross-origin stylesheets
+      }
+    }
+  } catch (error) {
+    // Ignore errors from accessing document.styleSheets
+  }
+
+  styleElement.textContent = cssText
+  clone.insertBefore(styleElement, clone.firstChild)
+
+  // Final Attributes
   clone.setAttribute('width', String(targetWidth))
   clone.setAttribute('height', String(targetHeight))
   clone.style.width = `${targetWidth}px`
   clone.style.height = `${targetHeight}px`
 
-  // 2. Preserve the original viewBox (so internal coordinates stay correct). If
+  // Preserve the original viewBox (so internal coordinates stay correct). If
   // missing, fall back to the element's layout box.
   const cloneViewBox =
     element.getAttribute('viewBox') ?? clone.getAttribute('viewBox')
@@ -4741,50 +4756,12 @@ async function renderSvgElement(
   // Keep normal aspect ratio behavior to avoid stretching/clipping.
   clone.setAttribute('preserveAspectRatio', 'xMidYMid meet')
 
-  // 3. Ensure namespace is present
+  // Ensure namespace is present
   if (!clone.getAttribute('xmlns')) {
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   }
 
-  // 4. Set overflow to visible to prevent stroke clipping at viewBox boundaries.
-  // SVG strokes can extend beyond the element bounds (especially with strokeWidth > 1)
-  // and would otherwise be clipped by the default overflow: hidden behavior.
-  clone.setAttribute('overflow', 'visible')
-
-  // 5. Copy computed font styles to all <text> elements so they survive serialization.
-  // When an SVG is serialized to a blob and rendered as an image, it loses access
-  // to the page's CSS context, so fonts fall back to browser defaults.
-  const originalTextElements = element.querySelectorAll('text')
-  const clonedTextElements = clone.querySelectorAll('text')
-
-  for (let index = 0; index < originalTextElements.length; index++) {
-    const originalText = originalTextElements[index]
-    const clonedText = clonedTextElements[index]
-    if (!originalText || !clonedText) continue
-
-    const computed = window.getComputedStyle(originalText)
-
-    // Apply font properties as inline attributes to ensure they're preserved
-    if (!clonedText.hasAttribute('font-family')) {
-      clonedText.setAttribute('font-family', computed.fontFamily)
-    }
-    if (!clonedText.hasAttribute('font-size')) {
-      clonedText.setAttribute('font-size', computed.fontSize)
-    }
-    if (!clonedText.hasAttribute('font-weight')) {
-      clonedText.setAttribute('font-weight', computed.fontWeight)
-    }
-    if (!clonedText.hasAttribute('font-style')) {
-      clonedText.setAttribute('font-style', computed.fontStyle)
-    }
-    if (
-      !clonedText.hasAttribute('letter-spacing') &&
-      computed.letterSpacing !== 'normal'
-    ) {
-      clonedText.setAttribute('letter-spacing', computed.letterSpacing)
-    }
-  }
-
+  // Render
   const serializer = new XMLSerializer()
   const svgText = serializer.serializeToString(clone)
   const blob = new Blob([svgText], { type: 'image/svg+xml' })
@@ -10062,10 +10039,45 @@ function parseTextAlign(
 
 function buildCanvasFont(style: CSSStyleDeclaration): string {
   const fontStyle = style.fontStyle || 'normal'
-  const fontVariant = style.fontVariant || 'normal'
-  const fontWeight = style.fontWeight || 'normal'
-  const fontSize = style.fontSize || '16px'
-  const fontFamily = style.fontFamily || 'sans-serif'
+
+  // Canvas font-variant only accepts 'normal' or 'small-caps'
+  // CSS font-variant can have many values like 'tabular-nums', 'small-caps', etc.
+  const rawVariant = style.fontVariant || 'normal'
+  const fontVariant = rawVariant.includes('small-caps')
+    ? 'small-caps'
+    : 'normal'
+
+  // Normalize font weight - Canvas accepts numeric or keyword values
+  let fontWeight = style.fontWeight || 'normal'
+  // Ensure it's a valid value
+  if (
+    fontWeight !== 'normal' &&
+    fontWeight !== 'bold' &&
+    fontWeight !== 'bolder' &&
+    fontWeight !== 'lighter'
+  ) {
+    const weight = parseInt(fontWeight, 10)
+    if (!Number.isFinite(weight) || weight < 1 || weight > 1000) {
+      fontWeight = 'normal'
+  }
+}
+
+  // Get font size - must include unit
+  let fontSize = style.fontSize || '16px'
+  // Ensure it has a unit (Canvas requires it)
+  if (/^\d+(\.\d+)?$/.test(fontSize)) {
+    fontSize = fontSize + 'px'
+  }
+
+  // Get font family - handle complex fallback chains
+  let fontFamily = style.fontFamily || 'sans-serif'
+  // Canvas can handle quoted font names, but ensure the string is valid
+  // Remove any problematic characters that might break the font string like
+  fontFamily = fontFamily.replace(/[\r\n]/g, ' ')
+
+  // Build the font string - Canvas is strict about the format
+  // Format: [style] [variant] [weight] [size] [family]
+  // Note: line-height is not included (unlike CSS font shorthand)
   return `${fontStyle} ${fontVariant} ${fontWeight} ${fontSize} ${fontFamily}`
 }
 
@@ -11586,7 +11598,7 @@ function applyBoxBlur(context: CanvasRenderingContext2D, radius: number): void {
 
   // 3 passes approximates a Gaussian blur
   for (let pass = 0; pass < 3; pass++) {
-    // --- Horizontal Pass: Read data -> Write buffer ---
+    // Horizontal Pass: Read data -> Write buffer
     for (let y = 0; y < height; y++) {
       const rowOffset = y * width * 4
 
@@ -11648,7 +11660,7 @@ function applyBoxBlur(context: CanvasRenderingContext2D, radius: number): void {
       }
     }
 
-    // --- Vertical Pass: Read buffer -> Write data ---
+    // Vertical Pass: Read buffer -> Write data
     for (let x = 0; x < width; x++) {
       const colOffset = x * 4
 
