@@ -1,5 +1,6 @@
-import { confirm, text, isCancel, spinner, log } from '@clack/prompts'
+import { confirm, text, isCancel, spinner, log, select } from '@clack/prompts'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
+import { spawn } from 'node:child_process'
 import {
   createWriteStream,
   existsSync,
@@ -57,7 +58,7 @@ export async function fetchExample(exampleSlug: string, message: string = '') {
 
     if (isYes) {
       try {
-        rmdirSync(workingDirectory, { recursive: true })
+        rmdirSync(workingDirectory)
         mkdirSync(workingDirectory, { recursive: true })
         log.info(`Overwritten the directory ${color.bold(workingDirectory)}.`)
       } catch (error) {
@@ -102,8 +103,9 @@ export async function fetchExample(exampleSlug: string, message: string = '') {
     throw error
   }
 
-  const { detectPackageManager } = await import('@antfu/install-pkg')
-  const packageManager = await detectPackageManager(workingDirectory)
+  const { detectPackageManager, installPackage } =
+    await import('@antfu/install-pkg')
+  const detectedPackageManager = await detectPackageManager(workingDirectory)
 
   try {
     await reformatPackageJson(workingDirectory)
@@ -150,9 +152,57 @@ npm-debug.log*
     'utf-8'
   )
 
-  const introInstallInstructions =
+  const normalizedDetectedPackageManager = detectedPackageManager?.startsWith(
+    'yarn'
+  )
+    ? 'yarn'
+    : detectedPackageManager
+
+  const packageManagerChoices = [
+    normalizedDetectedPackageManager,
+    'pnpm',
+    'npm',
+    'yarn',
+    'bun',
+  ].filter((value, index, array): value is string => {
+    return Boolean(value) && array.indexOf(value) === index
+  })
+
+  const packageManager = await select({
+    message: 'Which package manager should we use to install dependencies?',
+    options: packageManagerChoices.map((value) => ({ label: value, value })),
+  })
+
+  if (isCancel(packageManager)) {
+    throw new Error('Dependency installation cancelled.')
+  }
+
+  const installLoader = spinner()
+  installLoader.start(
+    `Installing dependencies with ${color.bold(packageManager)}...`
+  )
+
+  try {
+    if (packageManager === 'yarn') {
+      await runCommand('yarn', ['install'], workingDirectory)
+    } else {
+      await installPackage([], { cwd: workingDirectory, packageManager })
+    }
+    installLoader.stop('Dependencies installed successfully.')
+  } catch (error) {
+    installLoader.stop('Failed to install dependencies.')
+    if (error instanceof Error) {
+      throw new Error(`Failed to install dependencies: ${error.message}`)
+    }
+    throw error
+  }
+
+  const devCommand =
+    packageManager === 'npm' ? 'npm run dev' : `${packageManager} dev`
+
+  const introNextSteps =
     workingDirectory === process.cwd()
-      ? `Run ${color.bold(`${packageManager ?? 'npm'} install`)} to install the dependencies and get started.`
+      ? `Run ${color.bold(devCommand)} to get started.`
       : (() => {
           const cwd = process.cwd()
           const relativeWorkingDirectory = relative(cwd, workingDirectory)
@@ -169,18 +219,32 @@ npm-debug.log*
 
           return `Change directories (cd ${color.bold(
             `"${cdPath}"`
-          )}) and run ${color.bold(
-            `${packageManager ?? 'npm'} install`
-          )} to install the dependencies and get started.`
+          )}) and run ${color.bold(devCommand)} to get started.`
         })()
 
   log.success(
     `Example ${color.bold(
       directoryName
-    )} fetched and configured successfully! ${introInstallInstructions}`
+    )} fetched and configured successfully! ${introNextSteps}`
   )
 
   return true
+}
+
+function runCommand(command: string, args: string[], cwd: string) {
+  return new Promise<void>((resolve, reject) => {
+    const childProcess = spawn(command, args, {
+      cwd,
+      stdio: 'inherit',
+      shell: false,
+    })
+
+    childProcess.on('error', reject)
+    childProcess.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`${command} exited with code ${code}`))
+    })
+  })
 }
 
 /** Fetches the contents of a directory in a GitHub repository and downloads them to the local file system. */
