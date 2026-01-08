@@ -4698,6 +4698,22 @@ async function renderSvgElement(
     'letter-spacing',
   ] as const
 
+  // Strip layout styles (like transform: translateY(-50%)) from the
+  // root clone because the drawImage rect already accounts for them. Keeping
+  // them would cause the internal SVG content to shift a second time (double transform).
+  // However, we must copy paint properties (like color) so 'currentColor' works.
+  clone.removeAttribute('class')
+  clone.removeAttribute('style')
+
+  const rootComputed = window.getComputedStyle(element)
+  for (const prop of paintProps) {
+    const value = rootComputed.getPropertyValue(prop)
+    if (value) {
+      clone.style.setProperty(prop, value)
+    }
+  }
+
+  // Now process descendants
   for (let index = 0; index < count; index++) {
     const original = originalElements[index]
     const cloned = clonedElements[index]
