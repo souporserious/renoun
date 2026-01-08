@@ -10090,7 +10090,7 @@ function computeBackgroundPosition(
   drawWidth: number,
   drawHeight: number
 ): [number, number] {
-  const tokens = value.split(/\s+/).filter(Boolean)
+  const tokens = gradientSplit(value.trim(), /\s+/).filter(Boolean)
 
   // Fast path for the common 1–2 token cases like "center" or "10% 20%".
   if (tokens.length <= 2) {
@@ -10121,6 +10121,7 @@ function computeBackgroundPosition(
   }
 
   const isLengthOrPercent = (token: string): boolean =>
+    token.startsWith('calc(') ||
     /^-?\d*\.?\d+(%|px|em|rem|vw|vh|vmin|vmax|cm|mm|in|pt|pc)?$/.test(token)
 
   const horizontalKeywords = new Set(['left', 'center', 'right'])
@@ -10176,11 +10177,33 @@ function computeBackgroundPosition(
   return [offsetX, offsetY]
 }
 
+function resolveCalcLengthForBackgroundPosition(
+  token: string,
+  percentBase: number
+): number | null {
+  try {
+    const ast = parseCalcForQuads(tokenizeCalcForQuads(token))
+    return evalCalcForQuads(ast, { percentBase })
+  } catch {
+    return null
+  }
+}
+
 function computeBackgroundPositionComponent(
   token: string,
   boxSize: number,
   drawSize: number
 ): number {
+  if (token.startsWith('calc(')) {
+    const resolved = resolveCalcLengthForBackgroundPosition(
+      token,
+      boxSize - drawSize
+    )
+    if (resolved !== null) {
+      return resolved
+    }
+  }
+
   if (token.endsWith('%')) {
     const percent = parseFloat(token)
     if (Number.isFinite(percent)) {
@@ -10212,6 +10235,18 @@ function computeBackgroundAxisOffset(
 
   if (!offsetToken) {
     return base
+  }
+
+  if (offsetToken.startsWith('calc(')) {
+    const resolved = resolveCalcLengthForBackgroundPosition(
+      offsetToken,
+      boxSize - drawSize
+    )
+    if (resolved !== null) {
+      return keyword === 'right' || keyword === 'bottom'
+        ? base - resolved
+        : base + resolved
+    }
   }
 
   // Percentages for offsets are interpreted relative to the free space.
@@ -12204,9 +12239,15 @@ function tokenizeCalcForQuads(input: string): CalcToken[] {
         continue
       }
 
-      if (input.slice(index, index + 2) === 'px') {
-        index += 2
-        tokens.push({ type: 'dimension', value: parseFloat(num), unit: 'px' })
+      if (/[a-zA-Z]/.test(input[index] || '')) {
+        const unitStart = index
+        while (/[a-zA-Z]/.test(input[index])) index++
+        const unit = input.slice(unitStart, index)
+        tokens.push({
+          type: 'dimension',
+          value: parseFloat(num),
+          unit,
+        })
         continue
       }
 
@@ -12267,6 +12308,12 @@ function parseCalcForQuads(tokens: CalcToken[]): CalcAstNode {
     const t = peek()
     if (!t) throw new Error('Unexpected end in calc()')
 
+    if (t.type === '+' || t.type === '-') {
+      const op = consume().type
+      const node = parseFactor()
+      return { type: 'unary', op, right: node }
+    }
+
     if (t.type === 'number') {
       consume()
       return { type: 'number', value: t.value as number }
@@ -12321,6 +12368,11 @@ function evalCalcForQuads(
 
     case 'percentage':
       return env.percentBase * (ast.value! / 100)
+
+    case 'unary': {
+      const value = evalCalcForQuads(ast.right!, env)
+      return ast.op === '-' ? -value : value
+    }
 
     case 'binary': {
       const l = evalCalcForQuads(ast.left!, env)
