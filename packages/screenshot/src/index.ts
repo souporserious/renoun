@@ -9235,12 +9235,31 @@ async function renderPseudoElement(
   context.restore()
 }
 
+// Helper to resolve background color for skip-ink underlines
+function getEffectiveBackgroundColor(element: Element | null): string {
+  let current = element
+  while (current) {
+    if (current instanceof Element) {
+      const style = getStyle(current)
+      if (style && style.backgroundColor) {
+        const parsed = parseCssColor(style.backgroundColor)
+        // Return color only if it's opaque enough to be useful as a mask
+        if (parsed && parsed.alpha > 0.1) {
+          return style.backgroundColor
+        }
+      }
+    }
+    current = current.parentElement
+  }
+  return '#ffffff'
+}
+
 async function renderTextNode(
   node: Text,
   context: CanvasRenderingContext2D,
   env: RenderEnvironment
 ): Promise<void> {
-  const textContent = node.textContent
+  let textContent = node.textContent
   if (!textContent) return
 
   const parent = node.parentElement
@@ -9251,32 +9270,53 @@ async function renderTextNode(
     return
   }
 
+  const whiteSpace = style.whiteSpace || 'normal'
+
+  // Collapse whitespace sequences
+  if (isCollapsingWhiteSpace(whiteSpace) && whiteSpace !== 'pre-line') {
+    textContent = textContent.replace(/\s+/g, ' ')
+  }
+
+  // Handle leading/trailing whitespace
+  if (isCollapsingWhiteSpace(whiteSpace) && whiteSpace !== 'pre-line') {
+    const raw = node.textContent || ''
+    const leadingMatch = raw.match(/^\s+/)
+    if (leadingMatch) {
+      const range = parent.ownerDocument.createRange()
+      range.setStart(node, 0)
+      range.setEnd(node, leadingMatch[0].length)
+      const rects = range.getClientRects()
+      if (!rects.length || rects[0].width === 0) {
+        textContent = textContent.trimStart()
+      }
+      range.detach?.()
+    }
+    const trailingMatch = raw.match(/\s+$/)
+    if (trailingMatch) {
+      const range = parent.ownerDocument.createRange()
+      const len = raw.length
+      range.setStart(node, len - trailingMatch[0].length)
+      range.setEnd(node, len)
+      const rects = range.getClientRects()
+      if (!rects.length || rects[0].width === 0) {
+        textContent = textContent.trimEnd()
+      }
+      range.detach?.()
+    }
+  }
+
+  if (!textContent.trim() && isCollapsingWhiteSpace(whiteSpace)) {
+    return
+  }
+
   const scale = env.scale ?? 1
   const snap = (v: number) => Math.round(v * scale) / scale
-  const snapRect = (r: DOMRect): DOMRect => ({
-    left: snap(r.left),
-    top: snap(r.top),
-    width: snap(r.width),
-    height: snap(r.height),
-    right: snap(r.right),
-    bottom: snap(r.bottom),
-    x: snap(r.x),
-    y: snap(r.y),
-    toJSON: () => ({}),
-  })
 
   const writingMode = style.writingMode || 'horizontal-tb'
   const writingModeString = String(writingMode)
   const isVerticalWritingMode =
     typeof writingModeString === 'string' &&
     /\b(vertical-|sideways-|tb-rl|tb-lr)/.test(writingModeString)
-
-  const whiteSpace = style.whiteSpace || 'normal'
-
-  // Skip pure whitespace nodes only in collapsing white-space modes.
-  if (!textContent.trim() && isCollapsingWhiteSpace(whiteSpace)) {
-    return
-  }
 
   context.save()
 
@@ -9293,48 +9333,34 @@ async function renderTextNode(
 
   context.font = buildCanvasFont(style)
   context.textBaseline = 'alphabetic'
-  // Always use 'left' for textAlign since we calculate exact X positions
   context.textAlign = 'left'
 
-  // Parse text-align for position adjustments
   const textAlignValue = parseTextAlign(style.textAlign)
-
-  // Check for background-clip: text
   const hasTextClip = hasBackgroundClipText(style)
   const backgroundImage = hasTextClip ? style.backgroundImage : null
 
-  // Set default fill style (will be overridden if using text clip)
   context.fillStyle = resolveCanvasColor(style.color || '#000', style, '#000')
 
   const textShadows = parseShadowList(style.textShadow, style.color || '#000')
   const strokeWidth = parseCssLength(style.webkitTextStrokeWidth || '0')
   const strokeColor = style.webkitTextStrokeColor || style.color || '#000'
 
-  // Fast path for simple horizontal text without advanced effects. For these
-  // cases we can rely on a single DOM range to provide geometry, avoiding the
-  // per-grapheme Range + rect work used by the full pipeline.
+  const effectiveBgColor = getEffectiveBackgroundColor(parent)
   const needsFancyText =
     hasTextClip || strokeWidth > 0 || textShadows.length > 1
 
+  // Optimized path: Horizontal single-line
   if (!isVerticalWritingMode && !needsFancyText) {
     const range = parent.ownerDocument.createRange()
     range.selectNodeContents(node)
     const rects = range.getClientRects()
 
-    // Treat the simple path as valid only when the DOM reports a single visual
-    // line for this text node. Multi-line text falls back to the full
-    // grapheme-based pipeline so wrapping and alignment remain correct.
     let firstRect: DOMRect | null = null
     let nonEmptyCount = 0
-    const rectsLength = rects.length
-    for (let index = 0; index < rectsLength; index++) {
-      const candidate = rects[index]
-      if (!candidate || candidate.width === 0 || candidate.height === 0) {
-        continue
-      }
-      nonEmptyCount++
-      if (!firstRect) {
-        firstRect = candidate as DOMRect
+    for (let i = 0; i < rects.length; i++) {
+      if (rects[i].width > 0 && rects[i].height > 0) {
+        nonEmptyCount++
+        if (!firstRect) firstRect = rects[i] as DOMRect
       }
     }
 
@@ -9354,69 +9380,98 @@ async function renderTextNode(
         context.textAlign = 'left'
       }
 
-      const fontSize =
-        parseCssLength(style.fontSize) ||
-        parseCssLength(style.font) || // rough fallback
-        16
-
+      const fontSize = parseCssLength(style.fontSize) || 16
       let baselineY = docRect.bottom
-      try {
-        if (fontSize > 0 && Number.isFinite(fontSize)) {
-          const approximateDescent = fontSize * 0.22
-          baselineY = docRect.bottom - approximateDescent
-        }
-      } catch {
-        // Ignore failures and fall back to using rect.bottom.
-      }
+        if (fontSize > 0) baselineY = docRect.bottom - fontSize * 0.22
 
       const transformed = applyTextTransform(textContent, style.textTransform)
+
+      // Apply CSS letter-spacing if supported
+      if (style.letterSpacing && style.letterSpacing !== 'normal') {
+        try {
+          context.letterSpacing = style.letterSpacing
+        } catch (e) {}
+      }
+
       if (transformed) {
-        const scale = env.scale ?? 1
-        const snap = (value: number) => Math.round(value * scale) / scale
         const snappedX = snap(drawX)
         const snappedY = snap(baselineY)
-        context.fillText(transformed, snappedX, snappedY)
-        drawTextDecorations(context, style, docRect, scale)
+
+        // Add a tiny buffer to text constraint to prevent micro-squashing from rounding
+        const textMaxWidth = docRect.width + 0.5
+        // Use strict width for underline to prevent visual overhang
+        const strictMaxWidth = docRect.width
+
+        const trimmedText = transformed.trimEnd()
+
+        // Measure strictly left-aligned for accurate ink width
+        context.save()
+        context.textAlign = 'left'
+        const metrics = context.measureText(trimmedText)
+        context.restore()
+
+        let measuredInkWidth = metrics.width
+        if ('actualBoundingBoxRight' in metrics) {
+          measuredInkWidth = metrics.actualBoundingBoxRight
+        }
+
+        // Coordinate Snapping Strategy:
+        // Calculate the exact start and end pixels, snap them to the grid,
+        // and derive the width from the difference. This prevents 1px gaps/overhangs.
+        const absStart = drawX
+        const absEnd = drawX + measuredInkWidth
+        const snappedStart = snap(absStart)
+        const snappedEnd = snap(absEnd)
+
+        let renderWidth = Math.max(0, snappedEnd - snappedStart)
+        renderWidth = Math.min(renderWidth, strictMaxWidth)
+
+        drawTextDecorations(
+          context,
+          style,
+          { ...docRect, width: renderWidth, left: snappedX, top: snappedY },
+          scale,
+          transformed,
+          snappedX,
+          snappedY,
+          effectiveBgColor,
+          textAlignValue,
+          textMaxWidth
+        )
+
+        context.fillText(transformed, snappedX, snappedY, textMaxWidth)
       }
 
       range.detach?.()
       context.restore()
       return
     }
-
     range.detach?.()
-    // Fall through to the full grapheme-based pipeline for multi-line text.
   }
 
-  const originalSegments = segmentGraphemes(textContent)
-
-  // First collect grapheme rects, then group them into larger visual runs so
-  // we can draw whole shaped segments at once. This improves support for
-  // complex scripts and ligatures compared to per-grapheme rendering.
-  interface GraphemeRect {
-    text: string
-    rect: DOMRect
-  }
-  const graphemeRects: GraphemeRect[] = []
+  // Complex path: Multi-line, Vertical, or Gradients
+  const rawTextContent = node.textContent || ''
+  const segments = segmentGraphemes(rawTextContent)
+  const graphemeRects: { text: string; rect: DOMRect }[] = []
 
   const range = parent.ownerDocument.createRange()
   let offset = 0
-  const originalSegmentsLength = originalSegments.length
-  for (let index = 0; index < originalSegmentsLength; index++) {
-    const segment = originalSegments[index]
+
+  for (const segment of segments) {
     range.setStart(node, offset)
     range.setEnd(node, offset + segment.length)
     const rects = range.getClientRects()
     const rect = firstNonEmptyRect(rects)
-    if (rect) {
-      // `getClientRects()` returns viewport-relative geometry. Convert to
-      // document coordinates so all text layout uses the same coordinate
-      // space as the rest of the renderer (which operates in document
-      // coordinates and then normalizes via the root capture transform).
-      const docRect = toDocumentRect(parent, rect)
-      graphemeRects.push({ text: segment, rect: docRect })
-    }
     offset += segment.length
+
+    if (rect) {
+      const docRect = toDocumentRect(parent, rect)
+      let textToDraw = segment
+      if (isCollapsingWhiteSpace(whiteSpace) && !textToDraw.trim()) {
+        textToDraw = ' '
+      }
+      graphemeRects.push({ text: textToDraw, rect: docRect })
+    }
   }
   range.detach?.()
 
@@ -9425,79 +9480,13 @@ async function renderTextNode(
     return
   }
 
-  const hasReliableTextGeometry = hasReliableGraphemeGeometry(graphemeRects)
-
-  interface TextRun {
-    graphemes: GraphemeRect[]
-    rect: DOMRect
-  }
-  const runs: TextRun[] = []
-
-  let currentRun: TextRun | null = null
-  const sameLineThreshold = 0.5
-
-  const graphemeRectsLength = graphemeRects.length
-  for (let index = 0; index < graphemeRectsLength; index++) {
-    const item = graphemeRects[index]
-    if (!currentRun) {
-      currentRun = { graphemes: [item], rect: item.rect }
-    } else {
-      const prev = currentRun.rect
-      let sameLine: boolean
-
-      if (isVerticalWritingMode) {
-        // For vertical writing modes (vertical-rl, vertical-lr, sideways-*),
-        // lines advance primarily along the X axis instead of Y. Group
-        // graphemes whose X positions are nearly equal into the same visual
-        // line so that \"VERTICAL\"-style labels are treated as a single
-        // vertical run instead of independent stacked letters.
-        sameLine =
-          Math.abs(prev.left - item.rect.left) <= sameLineThreshold ||
-          Math.abs(prev.right - item.rect.right) <= sameLineThreshold
-      } else {
-        sameLine = Math.abs(prev.bottom - item.rect.bottom) <= sameLineThreshold
-      }
-
-      if (sameLine) {
-        currentRun.graphemes.push(item)
-        const left = Math.min(prev.left, item.rect.left)
-        const right = Math.max(prev.right, item.rect.right)
-        const top = Math.min(prev.top, item.rect.top)
-        const bottom = Math.max(prev.bottom, item.rect.bottom)
-        currentRun.rect = {
-          left,
-          top,
-          width: right - left,
-          height: bottom - top,
-          right,
-          bottom,
-          x: 0,
-          y: 0,
-          toJSON: () => ({}),
-        } as DOMRect
-      } else {
-        runs.push(currentRun)
-        currentRun = { graphemes: [item], rect: item.rect }
-      }
-    }
-  }
-
-  if (currentRun) {
-    runs.push(currentRun)
-  }
-
-  // Fast-path approximation for vertical writing modes: treat the text node as
-  // a single rotated block, using the DOM-provided geometry to position the
-  // label. This matches the \"VERTICAL\" card demo closely without
-  // re-implementing full vertical line layout.
+  // Vertical text
   if (isVerticalWritingMode) {
-    // Compute the overall bounding box for this text node from all grapheme
-    // rects so we keep the same visual footprint as the browser layout.
     let minLeft = Infinity
     let minTop = Infinity
     let maxRight = -Infinity
     let maxBottom = -Infinity
-    for (let index = 0; index < graphemeRectsLength; index++) {
+    for (let index = 0; index < graphemeRects.length; index++) {
       const rect = graphemeRects[index].rect
       if (rect.left < minLeft) minLeft = rect.left
       if (rect.top < minTop) minTop = rect.top
@@ -9516,11 +9505,7 @@ async function renderTextNode(
 
       const fullText = applyTextTransform(textContent, style.textTransform)
       if (fullText) {
-        const fontSize =
-          parseCssLength(style.fontSize) ||
-          parseCssLength(style.font) || // rough fallback
-          16
-
+        const fontSize = parseCssLength(style.fontSize) || 16
         const rotateClockwise =
           writingModeString.indexOf('vertical-rl') !== -1 ||
           writingModeString.indexOf('tb-rl') !== -1
@@ -9531,177 +9516,121 @@ async function renderTextNode(
         context.textAlign = 'center'
         context.textBaseline = 'middle'
 
-        // Approximate vertical baseline by nudging slightly so the visual
-        // center matches the DOM result.
+        if (style.letterSpacing && style.letterSpacing !== 'normal') {
+          try {
+            context.letterSpacing = style.letterSpacing
+          } catch (e) {}
+        }
+
         const baselineOffset = fontSize * 0.05
         const drawX = 0
         const drawY = baselineOffset
+
+        const trimmedText = fullText.trimEnd()
+        const metrics = context.measureText(trimmedText)
+        let measuredInkWidth = metrics.width
+        if ('actualBoundingBoxRight' in metrics) {
+          measuredInkWidth =
+            metrics.actualBoundingBoxRight +
+            Math.abs(metrics.actualBoundingBoxLeft)
+        }
+
+        // Apply coordinate snapping for vertical text width
+        // In the rotated space, 'width' is effectively the height on screen
+        const absStart = -measuredInkWidth / 2
+        const absEnd = measuredInkWidth / 2
+        const snappedStart = snap(absStart)
+        const snappedEnd = snap(absEnd)
+        const renderWidth = snappedEnd - snappedStart
+
+        drawTextDecorations(
+          context,
+          style,
+          {
+            left: snappedStart,
+            top: drawY - fontSize / 2,
+            width: renderWidth,
+            height: fontSize,
+          } as DOMRect,
+          scale,
+          fullText,
+          drawX,
+          drawY,
+          effectiveBgColor,
+          'center'
+        )
 
         context.fillText(fullText, drawX, drawY)
         context.restore()
       }
     }
-
     context.restore()
     return
   }
 
-  const letterSpacing = parseSpacingLength(style.letterSpacing)
-  const wordSpacing = parseSpacingLength(style.wordSpacing)
-  const textIndent = parseSpacingLength(style.textIndent)
+  // Runs for gradient/complex text
+  interface TextRun {
+    graphemes: typeof graphemeRects
+    rect: DOMRect
+  }
+  const runs: TextRun[] = []
+  let currentRun: TextRun | null = null
+  const sameLineThreshold = 0.5
 
-  const useSyntheticLayout =
-    (!hasReliableTextGeometry || env.flatten3DTransforms) &&
-    !isVerticalWritingMode
+  for (const item of graphemeRects) {
+    if (!currentRun) {
+      currentRun = { graphemes: [item], rect: item.rect }
+    } else {
+      const prev = currentRun.rect
+      const sameLine =
+        Math.abs(prev.bottom - item.rect.bottom) <= sameLineThreshold
 
-  // Group runs by line and apply text-align per line
-  if (
-    textAlignValue === 'center' ||
-    textAlignValue === 'right' ||
-    textAlignValue === 'end'
-  ) {
-    const parentRect = snapRect(getLayoutRect(parent))
-
-    // Group runs by line (same Y position within threshold)
-    interface LineGroup {
-      runs: TextRun[]
-      lineTop: number
-      lineBottom: number
-      lineLeft: number
-      lineRight: number
-    }
-    const lineGroups: LineGroup[] = []
-    const lineThreshold = 0.5
-
-    for (let index = 0; index < runs.length; index++) {
-      const run = runs[index]
-      const runY = run.rect.top + run.rect.height / 2
-
-      // Find existing line group for this Y position
-      let foundGroup: LineGroup | null = null
-      for (let groupIndex = 0; groupIndex < lineGroups.length; groupIndex++) {
-        const group = lineGroups[groupIndex]
-        const groupY = group.lineTop + (group.lineBottom - group.lineTop) / 2
-        if (Math.abs(groupY - runY) <= lineThreshold) {
-          foundGroup = group
-          break
-        }
-      }
-
-      if (foundGroup) {
-        foundGroup.runs.push(run)
-        foundGroup.lineLeft = Math.min(foundGroup.lineLeft, run.rect.left)
-        foundGroup.lineRight = Math.max(foundGroup.lineRight, run.rect.right)
-        foundGroup.lineTop = Math.min(foundGroup.lineTop, run.rect.top)
-        foundGroup.lineBottom = Math.max(foundGroup.lineBottom, run.rect.bottom)
+      if (sameLine) {
+        currentRun.graphemes.push(item)
+        const left = Math.min(prev.left, item.rect.left)
+        const right = Math.max(prev.right, item.rect.right)
+        const top = Math.min(prev.top, item.rect.top)
+        const bottom = Math.max(prev.bottom, item.rect.bottom)
+        currentRun.rect = {
+          left,
+          top,
+          width: right - left,
+          height: bottom - top,
+          right,
+          bottom,
+        } as DOMRect
       } else {
-        lineGroups.push({
-          runs: [run],
-          lineTop: run.rect.top,
-          lineBottom: run.rect.bottom,
-          lineLeft: run.rect.left,
-          lineRight: run.rect.right,
-        })
-      }
-    }
-
-    // Apply text-align offset to each line
-    for (let index = 0; index < lineGroups.length; index++) {
-      const group = lineGroups[index]
-      const lineWidth = group.lineRight - group.lineLeft
-      const containerLeft = parentRect.left
-      const containerRight = parentRect.right
-      const containerWidth = containerRight - containerLeft
-
-      let offsetX = 0
-      if (textAlignValue === 'center') {
-        // Center: align line center to container center
-        const lineCenter = group.lineLeft + lineWidth / 2
-        const containerCenter = containerLeft + containerWidth / 2
-        offsetX = containerCenter - lineCenter
-      } else if (textAlignValue === 'right' || textAlignValue === 'end') {
-        // Right/End: align line right edge to container right edge
-        offsetX = containerRight - group.lineRight
-      }
-
-      // Apply offset to all graphemes in all runs of this line
-      for (let runIndex = 0; runIndex < group.runs.length; runIndex++) {
-        const run = group.runs[runIndex]
-        for (
-          let graphemeIndex = 0;
-          graphemeIndex < run.graphemes.length;
-          graphemeIndex++
-        ) {
-          const grapheme = run.graphemes[graphemeIndex]
-          const oldRect = grapheme.rect
-          grapheme.rect = new DOMRect(
-            oldRect.left + offsetX,
-            oldRect.top,
-            oldRect.width,
-            oldRect.height
-          )
-        }
-        // Update run rect
-        const oldRunRect = run.rect
-        run.rect = new DOMRect(
-          oldRunRect.left + offsetX,
-          oldRunRect.top,
-          oldRunRect.width,
-          oldRunRect.height
-        )
+        runs.push(currentRun)
+        currentRun = { graphemes: [item], rect: item.rect }
       }
     }
   }
+  if (currentRun) runs.push(currentRun)
 
-  // Handle background-clip: text separately - draw all text at once for perfect kerning
+  // Background clip: text (Gradient text support)
   if (hasTextClip && backgroundImage && backgroundImage !== 'none') {
     context.save()
 
-    // Flatten all graphemes across all runs
-    const allGraphemes: GraphemeRect[] = []
-    const runsLength = runs.length
-    for (let index = 0; index < runsLength; index++) {
-      const run = runs[index]
-      const graphemesLength = run.graphemes.length
-      for (
-        let graphemeIndex = 0;
-        graphemeIndex < graphemesLength;
-        graphemeIndex++
-      ) {
-        allGraphemes.push(run.graphemes[graphemeIndex])
-      }
-    }
-
-    if (allGraphemes.length === 0) {
-      context.restore()
-      return
-    }
-
-    const parentRect = getLayoutRect(parent)
-
-    // Compute overall text bounds - combine into single loop
     let minLeft = Infinity
     let minTop = Infinity
     let maxRight = -Infinity
     let maxBottom = -Infinity
-    const allGraphemesLength = allGraphemes.length
-    for (let index = 0; index < allGraphemesLength; index++) {
-      const grapheme = allGraphemes[index]
-      const rect = grapheme.rect
-      if (rect.left < minLeft) minLeft = rect.left
-      if (rect.top < minTop) minTop = rect.top
-      if (rect.right > maxRight) maxRight = rect.right
-      if (rect.bottom > maxBottom) maxBottom = rect.bottom
+
+    // Calculate bounding box of all text
+    for (const run of runs) {
+      if (run.rect.left < minLeft) minLeft = run.rect.left
+      if (run.rect.top < minTop) minTop = run.rect.top
+      if (run.rect.right > maxRight) maxRight = run.rect.right
+      if (run.rect.bottom > maxBottom) maxBottom = run.rect.bottom
+    }
+
+    if (!Number.isFinite(minLeft)) {
+      context.restore()
+      return
     }
 
     const textWidth = Math.max(1, maxRight - minLeft)
     const textHeight = Math.max(1, maxBottom - minTop)
-
-    const relativeLeft = minLeft - parentRect.left
-    const relativeTop = minTop - parentRect.top
-
-    const scale = env.scale ?? 1
-
     const canvasWidth = Math.max(1, Math.ceil(textWidth * scale))
     const canvasHeight = Math.max(1, Math.ceil(textHeight * scale))
 
@@ -9712,11 +9641,10 @@ async function renderTextNode(
     const tempContext = tempCanvas.getContext('2d', {
       colorSpace: env.colorSpace,
     })
+
     if (tempContext) {
       tempContext.imageSmoothingEnabled = true
       tempContext.scale(scale, scale)
-
-      // Use the exact same font settings as the main context
       tempContext.font = context.font
       tempContext.textBaseline = 'alphabetic'
       tempContext.textAlign = 'left'
@@ -9724,91 +9652,47 @@ async function renderTextNode(
       const fontSize = parseCssLength(style.fontSize) || 16
       const approximateDescent = fontSize * 0.22
 
-      // Detect if this is effectively a single visual line
-      let minTopForVariation = Infinity
-      let maxTopForVariation = -Infinity
-      let maxBottomForBaseline = -Infinity
-      for (let index = 0; index < allGraphemesLength; index++) {
-        const rect = allGraphemes[index].rect
-        if (rect.top < minTopForVariation) minTopForVariation = rect.top
-        if (rect.top > maxTopForVariation) maxTopForVariation = rect.top
-        if (rect.bottom > maxBottomForBaseline)
-          maxBottomForBaseline = rect.bottom
-      }
-      const topVariation = maxTopForVariation - minTopForVariation
-      const isSingleVisualLine = topVariation < fontSize * 0.6
+      // Draw text mask (black)
+      tempContext.fillStyle = '#000'
+      for (const run of runs) {
+        const baselineY = run.rect.bottom - approximateDescent
 
-      if (isSingleVisualLine) {
-        // BEST QUALITY PATH – draw the entire text as one string (perfect kerning, ligatures)
-        let fullText = ''
-        for (let index = 0; index < allGraphemesLength; index++) {
-          fullText += applyTextTransform(
-            allGraphemes[index].text,
-            style.textTransform
+        // Draw character by character to maintain precise DOM layout
+        for (const item of run.graphemes) {
+          const txt = applyTextTransform(item.text, style.textTransform)
+          tempContext.fillText(
+            txt,
+            item.rect.left - minLeft,
+            baselineY - minTop
           )
         }
-
-        // Measure actual canvas text width - this can differ from DOM measurements
-        // especially for bold fonts where canvas may render wider than DOM reports
-        const measuredWidth = tempContext.measureText(fullText).width
-        if (measuredWidth > textWidth) {
-          // Resize canvas to accommodate the actual text width
-          const newCanvasWidth = Math.max(1, Math.ceil(measuredWidth * scale))
-          tempCanvas.width = newCanvasWidth
-          // Restore context state after resize
-          tempContext.imageSmoothingEnabled = true
-          tempContext.scale(scale, scale)
-          tempContext.font = context.font
-          tempContext.textBaseline = 'alphabetic'
-          tempContext.textAlign = 'left'
-        }
-
-        // Use the highest bottom for the most accurate baseline
-        const baselineY = maxBottomForBaseline - approximateDescent
-
-        tempContext.fillStyle = '#000'
-        tempContext.fillText(fullText, 0, baselineY - minTop)
-      } else {
-        // FALLBACK for real multi-line text – draw per grapheme
-        tempContext.fillStyle = '#000'
-        for (let index = 0; index < allGraphemesLength; index++) {
-          const item = allGraphemes[index]
-          const transformed = applyTextTransform(item.text, style.textTransform)
-          if (transformed) {
-            const baselineY = item.rect.bottom - approximateDescent
-            tempContext.fillText(
-              transformed,
-              item.rect.left - minLeft,
-              baselineY - minTop
-            )
-          }
-        }
       }
 
-      // Apply the background gradient - only parts overlapping the text mask remain
+      // Composite background
       tempContext.globalCompositeOperation = 'source-in'
 
       const localEnv: RenderEnvironment = {
         rootElement: parent,
-        captureRect: parentRect,
+        captureRect: getLayoutRect(parent),
         includeFixed: 'none',
         allElements: env.allElements,
         colorSpace: env.colorSpace,
         scale,
       }
 
+      // Offset rect to align with temp canvas 0,0
       await renderBackgroundImage(
         tempContext,
         style,
         {
-          left: -relativeLeft,
-          top: -relativeTop,
-          width: parentRect.width,
-          height: parentRect.height,
-          right: -relativeLeft + parentRect.width,
-          bottom: -relativeTop + parentRect.height,
-          x: -relativeLeft,
-          y: -relativeTop,
+          left: -(minLeft - localEnv.captureRect.left),
+          top: -(minTop - localEnv.captureRect.top),
+          width: localEnv.captureRect.width,
+          height: localEnv.captureRect.height,
+          right: 0,
+          bottom: 0,
+          x: 0,
+          y: 0,
           toJSON: () => ({}),
         } as DOMRect,
         { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 },
@@ -9816,7 +9700,7 @@ async function renderTextNode(
         localEnv
       )
 
-      // Draw the masked result back at device-pixel precision
+      // Draw result back
       const prevTransform = context.getTransform()
       context.setTransform(1, 0, 0, 1, 0, 0)
       const captureRect = env.captureRect
@@ -9827,161 +9711,80 @@ async function renderTextNode(
     }
 
     context.restore()
-    // Skip normal text rendering - the gradient is now the fill
     context.restore()
     return
   }
 
-  // Normal text rendering path (no background-clip: text)
-  let isFirstRunOnLine = true
+  // Standard fallback
+  for (const run of runs) {
+    let runText = ''
+    for (const g of run.graphemes)
+      runText += applyTextTransform(g.text, style.textTransform)
 
-  const runsLength = runs.length
-  for (let index = 0; index < runsLength; index++) {
-    const run = runs[index]
-    const rect = run.rect
+    const trimmedRunText = runText.trimEnd()
 
-    const fontSize =
-      parseCssLength(style.fontSize) ||
-      parseCssLength(style.font) || // very rough fallback
-      16
+    context.save()
+    context.textAlign = 'left'
+    const runMetrics = context.measureText(trimmedRunText)
+    context.restore()
 
-    let baselineY = rect.bottom
+    const fontSize = parseCssLength(style.fontSize) || 16
+    let baselineY = run.rect.bottom
+      if (fontSize > 0) baselineY = run.rect.bottom - fontSize * 0.22
 
-    // Derive a baseline from the DOM line box and the computed font size.
-    try {
-      if (fontSize > 0 && Number.isFinite(fontSize)) {
-        const approximateDescent = fontSize * 0.22
-
-        if (useSyntheticLayout) {
-          // In synthetic layout (flattened 3D), 'rect' is unreliable because it comes
-          // from getClientRects() which returns 3D-projected (squashed) coordinates.
-          // We must recalculate the true 2D layout position of the parent element.
-          const trueParentRect = getUntransformedLayoutRect(parent)
-
-          // Anchor to the bottom of the content box, simulating standard baseline alignment.
-          // This matches how the browser positioned the <span> inside the flex container.
-          const borderBottom = parseCssLength(style.borderBottomWidth)
-          const paddingBottom = parseCssLength(style.paddingBottom)
-
-          baselineY =
-            trueParentRect.bottom -
-            borderBottom -
-            paddingBottom -
-            approximateDescent
-        } else {
-          baselineY = rect.bottom - approximateDescent
-        }
-      }
-    } catch {
-      // Ignore metric failures
+    let measuredInkWidth = runMetrics.width
+    if ('actualBoundingBoxRight' in runMetrics) {
+      measuredInkWidth = runMetrics.actualBoundingBoxRight
     }
 
-    let cursorX =
-      rect.left +
-      (useSyntheticLayout && isFirstRunOnLine && textIndent > 0
-        ? textIndent
-        : 0)
+    const absStart = run.rect.left
+    const absEnd = run.rect.left + measuredInkWidth
+    const snappedStart = snap(absStart)
+    const snappedEnd = snap(absEnd)
+    let decorationWidth = Math.max(0, snappedEnd - snappedStart)
+    decorationWidth = Math.min(decorationWidth, run.rect.width)
 
-    if (useSyntheticLayout) {
-      // Re-calculate start X based on the untransformed parent to avoid 3D skew
-      const trueParentRect = getUntransformedLayoutRect(parent)
-      cursorX =
-        trueParentRect.left +
-        parseCssLength(style.borderLeftWidth) +
-        parseCssLength(style.paddingLeft)
-    }
+    drawTextDecorations(
+      context,
+      style,
+      { ...run.rect, width: decorationWidth },
+      scale,
+      runText,
+      run.rect.left,
+      baselineY,
+      effectiveBgColor,
+      'left'
+    )
 
-    const approximateCharWidth =
-      fontSize > 0 && Number.isFinite(fontSize) ? fontSize * 0.6 : 10
+    // Draw glyphs
+    for (const item of run.graphemes) {
+      const txt = applyTextTransform(item.text, style.textTransform)
+      if (!txt) continue
 
-    const graphemesLength = run.graphemes.length
-    for (
-      let graphemeIndex = 0;
-      graphemeIndex < graphemesLength;
-      graphemeIndex++
-    ) {
-      const item = run.graphemes[graphemeIndex]
-      const graphemeRect = item.rect
-      let textX = graphemeRect.left
-      const drawText = applyTextTransform(item.text, style.textTransform)
-      if (!drawText) continue
+      const drawX = item.rect.left
+      const drawY = baselineY
 
-      if (useSyntheticLayout) {
-        textX = cursorX
-      }
-
-      const textY = baselineY
-
-      if (textShadows.length) {
-        const textShadowsLength = textShadows.length
-        for (
-          let shadowIndex = 0;
-          shadowIndex < textShadowsLength;
-          shadowIndex++
-        ) {
-          const shadow = textShadows[shadowIndex]
-          if (shadow.inset) continue
-          context.save()
-          context.shadowColor = resolveCanvasColor(
-            shadow.color,
-            style,
-            style.color || '#000'
-          )
-          context.shadowBlur = shadow.blur
-          context.shadowOffsetX = shadow.offsetX
-          context.shadowOffsetY = shadow.offsetY
-          context.fillText(drawText, textX, textY)
-          context.restore()
-        }
+      for (const shadow of textShadows) {
+        if (shadow.inset) continue
+        context.save()
+        context.shadowColor = resolveCanvasColor(shadow.color, style, '#000')
+        context.shadowBlur = shadow.blur
+        context.shadowOffsetX = shadow.offsetX
+        context.shadowOffsetY = shadow.offsetY
+        context.fillText(txt, drawX, drawY)
+        context.restore()
       }
 
       if (strokeWidth > 0) {
         context.save()
         context.lineWidth = strokeWidth * 2
-        context.strokeStyle = resolveCanvasColor(
-          strokeColor,
-          style,
-          style.color || '#000'
-        )
-        context.strokeText(drawText, textX, textY)
+        context.strokeStyle = resolveCanvasColor(strokeColor, style, '#000')
+        context.strokeText(txt, drawX, drawY)
         context.restore()
       }
 
-      // Normal text fill
-      context.fillText(drawText, textX, textY)
-
-      if (useSyntheticLayout) {
-        const text = drawText
-        const isWordSeparator = /\s/u.test(text)
-
-        let width = 0
-        try {
-          const measure = context.measureText(text)
-          if (measure && typeof measure.width === 'number') {
-            width = measure.width
-          } else {
-            width = approximateCharWidth * text.length
-          }
-        } catch {
-          width = approximateCharWidth * text.length
-        }
-
-        let advance = width + letterSpacing
-        if (isWordSeparator && wordSpacing !== 0) {
-          advance += wordSpacing
-        }
-
-        if (!Number.isFinite(advance) || advance <= 0) {
-          advance = approximateCharWidth
-        }
-
-        cursorX += advance
-      }
+      context.fillText(txt, drawX, drawY)
     }
-
-    isFirstRunOnLine = false
-
-    drawTextDecorations(context, style, rect, scale)
   }
 
   context.restore()
@@ -9991,73 +9794,74 @@ function drawTextDecorations(
   context: CanvasRenderingContext2D,
   style: CSSStyleDeclaration,
   rect: DOMRect,
-  scale: number = 1
+  scale: number,
+  text: string,
+  drawX: number,
+  drawY: number,
+  backgroundColor: string,
+  textAlign: string = 'left',
+  maxWidth?: number
 ): void {
-  // Check both the longhand textDecorationLine and the shorthand textDecoration
-  // The shorthand may contain values like "underline" directly in some browsers
   let decorationLine = style.textDecorationLine
   if (!decorationLine || decorationLine === 'none') {
-    // Fall back to the shorthand property which may contain "underline", "line-through", etc.
     const shorthand = style.textDecoration
-    if (shorthand && shorthand !== 'none') {
-      decorationLine = shorthand
-    }
+    if (shorthand && shorthand !== 'none') decorationLine = shorthand
   }
   if (!decorationLine || decorationLine === 'none') return
 
   const color = style.textDecorationColor || style.color || '#000'
-  const thickness = Math.max(1, Math.round(scale)) / scale // At least 1 device pixel
+  const thickness = Math.max(1, Math.round(scale)) / scale
+  const snap = (v: number) => Math.round(v * scale) / scale
 
-  // Snap coordinates to device pixels for crisp rendering (consistent with text)
-  const snap = (value: number) => Math.round(value * scale) / scale
-  const left = snap(rect.left)
-  const width = snap(rect.width)
+  const width = rect.width
+
+  let startX = drawX
+  if (textAlign === 'center') startX -= width / 2
+  else if (textAlign === 'right') startX -= width
 
   context.save()
   context.fillStyle = color
+  context.strokeStyle = backgroundColor
+  context.lineWidth = thickness * 2.5
+  context.lineJoin = 'round'
+  context.lineCap = 'round'
 
-  const writingMode = style.writingMode || 'horizontal-tb'
-  const mode = String(writingMode)
-  const isVertical =
-    typeof mode === 'string' && /\b(vertical-|sideways-|tb-rl|tb-lr)/.test(mode)
-
-  if (!isVertical) {
-    // Horizontal text: draw lines along the x-axis.
-    if (decorationLine.includes('underline')) {
-      const decorationY = snap(rect.bottom - thickness)
-      context.fillRect(left, decorationY, width, thickness)
+  // Helper to "erase" the line behind descenders
+  const drawSkipInkMask = () => {
+    if (backgroundColor !== 'transparent') {
+      context.globalCompositeOperation = 'source-over'
+      // Pass maxWidth to match compression if applied
+      if (maxWidth !== undefined) {
+        context.strokeText(text, drawX, drawY, maxWidth)
+      } else {
+        context.strokeText(text, drawX, drawY)
+      }
     }
+  }
 
-    if (decorationLine.includes('overline')) {
-      const decorationY = snap(rect.top)
-      context.fillRect(left, decorationY, width, thickness)
-    }
+  if (decorationLine.includes('underline')) {
+    const offset = thickness * 2
+    const decorationY = snap(drawY + offset)
 
-    if (decorationLine.includes('line-through')) {
-      const decorationY = snap(rect.top + rect.height / 2 - thickness / 2)
-      context.fillRect(left, decorationY, width, thickness)
-    }
-  } else {
-    // Vertical text: approximate decorations as vertical bars along the y-axis.
-    const top = snap(rect.top)
-    const height = snap(rect.height)
+    context.beginPath()
+    context.rect(startX, decorationY, width, thickness)
+    context.fill()
 
-    if (decorationLine.includes('underline')) {
-      // Logical "end" side: approximate as right edge.
-      const decorationX = snap(rect.right - thickness)
-      context.fillRect(decorationX, top, thickness, height)
-    }
+    drawSkipInkMask()
+  }
 
-    if (decorationLine.includes('overline')) {
-      // Logical "start" side: approximate as left edge.
-      const decorationX = snap(rect.left)
-      context.fillRect(decorationX, top, thickness, height)
-    }
+  if (decorationLine.includes('overline')) {
+    const decorationY = snap(rect.top)
+    context.beginPath()
+    context.rect(startX, decorationY, width, thickness)
+    context.fill()
+  }
 
-    if (decorationLine.includes('line-through')) {
-      const decorationX = snap(rect.left + rect.width / 2 - thickness / 2)
-      context.fillRect(decorationX, top, thickness, height)
-    }
+  if (decorationLine.includes('line-through')) {
+    const decorationY = snap(drawY - rect.height / 3)
+    context.beginPath()
+    context.rect(startX, decorationY, width, thickness)
+    context.fill()
   }
 
   context.restore()
@@ -10093,39 +9897,6 @@ function parseCssLength(value: string | null | undefined): number {
 
   const number = parseFloat(trimmed)
   return Number.isFinite(number) ? number : 0
-}
-
-function hasReliableGraphemeGeometry(graphemes: { rect: DOMRect }[]): boolean {
-  if (graphemes.length <= 1) {
-    return true
-  }
-
-  const first = graphemes[0].rect
-  const epsilon = 0.5
-
-  for (let index = 1; index < graphemes.length; index++) {
-    const rect = graphemes[index].rect
-    const sameLeft = Math.abs(rect.left - first.left) < epsilon
-    const sameTop = Math.abs(rect.top - first.top) < epsilon
-    const sameRight = Math.abs(rect.right - first.right) < epsilon
-    const sameBottom = Math.abs(rect.bottom - first.bottom) < epsilon
-
-    if (!sameLeft || !sameTop || !sameRight || !sameBottom) {
-      return true
-    }
-  }
-
-  return false
-}
-
-function parseSpacingLength(value: string | null | undefined): number {
-  if (!value) return 0
-  const trimmed = value.trim()
-  if (!trimmed || trimmed === 'normal') {
-    return 0
-  }
-  const parsed = parseCssLength(trimmed)
-  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function parseLineHeight(
