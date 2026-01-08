@@ -4155,8 +4155,8 @@ async function renderElementNode(
   // element's border-box so the effect is limited to the element's visual area.
   if (backdropFilterCanvas && backdropFilterRect) {
     context.save()
-    // Use normal composition so the filtered backdrop replaces what's behind
-    context.globalCompositeOperation = 'source-over'
+    // Use 'copy' to replace existing pixels with backdrop-filtered ones
+    context.globalCompositeOperation = 'copy'
     // Clip to element bounds
     context.beginPath()
     if (hasRadius) {
