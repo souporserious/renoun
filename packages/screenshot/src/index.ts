@@ -900,11 +900,11 @@ async function renderToCanvas(
   const env: RenderEnvironment = {
     rootElement: element as HTMLElement,
     scale: deviceScale,
+    ignoreSelector: ignoreSelector ?? undefined,
     captureRect,
     includeFixed,
     allElements,
     colorSpace,
-    ignoreSelector: ignoreSelector ?? undefined,
   }
 
   await renderDomTree(element as HTMLElement, context, env)
@@ -2206,7 +2206,11 @@ async function renderNode(
       )
     }
 
-    const children = Array.from(element.childNodes)
+    // Skip rendering children for SVGSVGElement - the SVG is rasterized as a
+    // complete image via renderSvgElement, so rendering its children separately
+    // would cause duplicate/overlapping content (especially text).
+    const skipChildrenForSvg = element instanceof SVGSVGElement
+    const children = skipChildrenForSvg ? [] : Array.from(element.childNodes)
     const normalChildren: Node[] = []
     const negativeZ: { node: Element; z: number; order: number }[] = []
     const positiveZ: { node: Element; z: number; order: number }[] = []
@@ -3093,7 +3097,6 @@ function getParentPerspective(element: Element): {
       ) {
         const distance = parseCssLength(perspectiveRaw)
         if (Number.isFinite(distance) && distance !== 0) {
-          // FIX: Use getUntransformedLayoutRect.
           // We must calculate the perspective origin relative to the
           // element's *layout* box, not its projected/transformed visual box.
           const rect = getUntransformedLayoutRect(ancestor)
@@ -3497,7 +3500,7 @@ function getUntransformedLayoutRect(element: Element): DOMRect {
     left += current.offsetLeft
     top += current.offsetTop
 
-    // CRITICAL FIX: Add the parent's border width.
+    // Add the parent's border width.
     // offsetLeft is relative to the padding edge, but we need coordinates
     // relative to the document/viewport origin (which includes the border).
     left += current.clientLeft || 0
