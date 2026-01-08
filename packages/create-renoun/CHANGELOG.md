@@ -1,5 +1,15 @@
 # create-renoun
 
+## 2.1.0
+
+### Minor Changes
+
+- a3cda07: Adds prompt for installing dependencies automatically to streamline running the dev script.
+
+### Patch Changes
+
+- 290cd50: Improves the post-create instructions to use a relative `cd` path (for example, `cd "docs"`) when possible.
+
 ## 2.0.5
 
 ### Patch Changes
