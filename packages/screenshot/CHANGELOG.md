@@ -1,5 +1,23 @@
 # @renoun/screenshot
 
+## 0.2.0
+
+### Minor Changes
+
+- 3ac6706: Adds support for configurable ignore selectors (defaults to `data-screenshot-ignore`) to skip elements during rendering.
+
+### Patch Changes
+
+- 8f1c164: Fixes `calc` expressions when resolving background-position offsets.
+- 4d99456: Injects fonts when serializing SVG data to ensure text renders correctly.
+- 9919123: Prevents SVG text from being rendered twice by skipping child traversal when the SVG is rasterized as a whole.
+- 014da03: Fixes rendering for default-styled buttons.
+- f284fde: Implements `drop-shadow` filter polyfill for unsupported browsers.
+- 2965dae: Improves text rendering quality by using proper text metrics and handling white-space the same as the DOM.
+- ce7157b: Fixes oversaturated backdrop filter.
+- ba3d259: Fixes default user agent text-decoration underline styles.
+- d679ee5: Fixes svg transforms being applied twice.
+
 ## 0.1.1
 
 ### Patch Changes
