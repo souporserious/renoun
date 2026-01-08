@@ -9382,7 +9382,7 @@ async function renderTextNode(
 
       const fontSize = parseCssLength(style.fontSize) || 16
       let baselineY = docRect.bottom
-        if (fontSize > 0) baselineY = docRect.bottom - fontSize * 0.22
+      if (fontSize > 0) baselineY = docRect.bottom - fontSize * 0.22
 
       const transformed = applyTextTransform(textContent, style.textTransform)
 
@@ -9730,7 +9730,7 @@ async function renderTextNode(
 
     const fontSize = parseCssLength(style.fontSize) || 16
     let baselineY = run.rect.bottom
-      if (fontSize > 0) baselineY = run.rect.bottom - fontSize * 0.22
+    if (fontSize > 0) baselineY = run.rect.bottom - fontSize * 0.22
 
     let measuredInkWidth = runMetrics.width
     if ('actualBoundingBoxRight' in runMetrics) {
@@ -9840,7 +9840,7 @@ function drawTextDecorations(
   }
 
   if (decorationLine.includes('underline')) {
-    const offset = thickness * 2
+    const offset = thickness * 1.5
     const decorationY = snap(drawY + offset)
 
     context.beginPath()
