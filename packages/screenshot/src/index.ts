@@ -4787,6 +4787,81 @@ async function renderSvgElement(
   }
 }
 
+/**
+ * Detect if a button element has default browser styling (not custom styled).
+ * Browsers apply specific default styles to buttons that we can detect:
+ * - border-style: outset (the key indicator)
+ * - background-color: buttonface or similar system gray
+ * - border-width: 2px (typical default)
+ * - border-color matching the outset 3D effect colors
+ */
+function detectDefaultButtonStyles(style: CSSStyleDeclaration): boolean {
+  const borderStyle = style.borderTopStyle
+
+  // Primary indicator: outset border style is unique to default browser buttons
+  // Custom-styled buttons almost always use 'solid', 'none', or other styles
+  if (borderStyle === 'outset' || borderStyle === 'inset') {
+    return true
+  }
+
+  // Check for system colors in background which indicate default styling
+  const bgColor = style.backgroundColor?.toLowerCase() || ''
+  const isSystemBgColor =
+    bgColor === 'buttonface' ||
+    bgColor === '-webkit-control-background' ||
+    bgColor === 'threedface' ||
+    // Common resolved values for buttonface across browsers
+    bgColor === 'rgb(239, 239, 239)' ||
+    bgColor === 'rgb(240, 240, 240)' ||
+    bgColor === 'rgba(239, 239, 239, 1)' ||
+    bgColor === 'rgba(240, 240, 240, 1)'
+
+  // Check for system border colors
+  const borderColor = style.borderTopColor?.toLowerCase() || ''
+  const isSystemBorderColor =
+    borderColor === 'buttonborder' ||
+    borderColor === 'threeddarkshadow' ||
+    borderColor === 'threedhighlight' ||
+    borderColor === 'threedlightshadow' ||
+    borderColor === 'threedshadow' ||
+    // Common resolved black for outset borders
+    borderColor === 'rgb(0, 0, 0)' ||
+    borderColor === 'rgba(0, 0, 0, 1)'
+
+  // Check border width - default is typically 2px
+  const borderWidth = parseCssLength(style.borderTopWidth)
+  const isDefaultBorderWidth = borderWidth === 2
+
+  // If we see system background color with default border width, it's likely default
+  if (isSystemBgColor && isDefaultBorderWidth) {
+    return true
+  }
+
+  // If we see system border color with system background, it's likely default
+  if (isSystemBgColor && isSystemBorderColor) {
+    return true
+  }
+
+  // Check appearance property as a fallback hint
+  const appearance = style.appearance || (style as any).webkitAppearance || ''
+  const hasNativeAppearance =
+    appearance === 'auto' ||
+    appearance === 'button' ||
+    appearance === 'push-button'
+
+  // If native appearance is set AND we have default-looking border width, treat as default
+  if (
+    hasNativeAppearance &&
+    isDefaultBorderWidth &&
+    borderStyle !== 'solid' &&
+    borderStyle !== 'none'
+  ) {
+    return true
+  }
+
+  return false
+}
+
 function renderFormControl(
   element: HTMLElement,
   context: CanvasRenderingContext2D,
@@ -4798,8 +4873,12 @@ function renderFormControl(
   const isInput = element instanceof HTMLInputElement
   const isTextArea = element instanceof HTMLTextAreaElement
   const isSelect = element instanceof HTMLSelectElement
+  const isButton = element instanceof HTMLButtonElement
+  const isInputButton =
+    isInput &&
+    ['button', 'submit', 'reset'].includes((element as HTMLInputElement).type)
 
-  if (!isInput && !isTextArea && !isSelect) {
+  if (!isInput && !isTextArea && !isSelect && !isButton) {
     return false
   }
 
@@ -4811,6 +4890,65 @@ function renderFormControl(
       context.rect(rect.left, rect.top, rect.width, rect.height)
     }
     callback()
+  }
+
+  // For buttons, detect if they have default browser styling vs custom styling
+  if (isButton || isInputButton) {
+    const hasDefaultButtonStyles = detectDefaultButtonStyles(style)
+
+    if (hasDefaultButtonStyles) {
+      // Render a native-looking button that matches modern browser defaults
+      const buttonRadius = 4
+      const buttonRadii = {
+        topLeft: buttonRadius,
+        topRight: buttonRadius,
+        bottomRight: buttonRadius,
+        bottomLeft: buttonRadius,
+      }
+
+      // Light gradient background for native button look
+      const gradient = context.createLinearGradient(
+        rect.left,
+        rect.top,
+        rect.left,
+        rect.bottom
+      )
+      gradient.addColorStop(0, '#f8f8f8')
+      gradient.addColorStop(1, '#e8e8e8')
+
+      context.save()
+      context.beginPath()
+      pathRoundedRect(context, rect, buttonRadii)
+      context.fillStyle = gradient
+      context.fill()
+
+      // Draw border
+      context.strokeStyle = '#a0a0a0'
+      context.lineWidth = 1
+      context.stroke()
+      context.restore()
+
+      // Draw button text (centered)
+      const text = isButton
+        ? element.textContent
+        : (element as HTMLInputElement).value
+      if (text) {
+        const font = buildCanvasFont(style)
+        context.save()
+        context.font = font
+        context.fillStyle = style.color || '#000'
+        context.textAlign = 'center'
+        context.textBaseline = 'middle'
+        context.fillText(
+          text.trim(),
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2
+        )
+        context.restore()
+      }
+
+      return true
+    }
   }
 
   const backgroundColor =
