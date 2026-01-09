@@ -2446,9 +2446,14 @@ export class MDXFile<
     return this.#parsedSource
   }
 
-  override async getText(): Promise<string> {
-    const result = await this.#getSourceWithFrontmatter()
-    return result.content
+  override async getText(options?: {
+    includeFrontmatter?: boolean
+  }): Promise<string> {
+    if (options?.includeFrontmatter) {
+      const result = await this.#getSourceWithFrontmatter()
+      return result.content
+    }
+    return this.#getRawSource()
   }
 
   async getFrontmatter(): Promise<Record<string, unknown> | undefined> {
@@ -2749,9 +2754,14 @@ export class MarkdownFile<
     return this.#parsedSource
   }
 
-  override async getText(): Promise<string> {
-    const result = await this.#getSourceWithFrontmatter()
-    return result.content
+  override async getText(options?: {
+    includeFrontmatter?: boolean
+  }): Promise<string> {
+    if (options?.includeFrontmatter) {
+      const result = await this.#getSourceWithFrontmatter()
+      return result.content
+    }
+    return this.#getRawSource()
   }
 
   async getFrontmatter(): Promise<Record<string, unknown> | undefined> {
