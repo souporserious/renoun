@@ -1578,19 +1578,19 @@ async function renderNode(
                     layerWidth,
                     layerHeight
                   )
-                  const layerCtx = layerCanvas.getContext('2d', {
+                  const layerContext = layerCanvas.getContext('2d', {
                     colorSpace: env.colorSpace,
                   })
 
-                  if (layerCtx) {
-                    layerCtx.imageSmoothingEnabled = true
-                    layerCtx.imageSmoothingQuality = 'high'
+                  if (layerContext) {
+                    layerContext.imageSmoothingEnabled = true
+                    layerContext.imageSmoothingQuality = 'high'
 
                     // TEXTURE ORIGIN: Match Precise Document Position
                     // renderNode -> renderTextNode uses getClientRects() (Document Coords).
                     // By setting origin to -childPreciseDoc.left, we align the canvas
                     // exactly to where renderTextNode will draw.
-                    layerCtx.setTransform(
+                    layerContext.setTransform(
                       textureScale,
                       0,
                       0,
@@ -1603,7 +1603,7 @@ async function renderNode(
                     try {
                       // Draw WHILE transforms are disabled.
                       // This ensures renderTextNode sees the same coordinates we just measured.
-                      await renderNode(zElement, layerCtx, {
+                      await renderNode(zElement, layerContext, {
                         ...env,
                         flatten3DTransforms: true,
                         scale: textureScale,
@@ -2073,7 +2073,7 @@ async function renderNode(
               const smallCanvas = document.createElement('canvas')
               smallCanvas.width = smallWidth
               smallCanvas.height = smallHeight
-              const smallCtx = smallCanvas.getContext('2d', {
+              const smallContext = smallCanvas.getContext('2d', {
                 colorSpace: env.colorSpace,
               })
 
@@ -2081,7 +2081,7 @@ async function renderNode(
               const blurredSmallCanvas = document.createElement('canvas')
               blurredSmallCanvas.width = smallWidth
               blurredSmallCanvas.height = smallHeight
-              const blurredSmallCtx = blurredSmallCanvas.getContext('2d', {
+              const blurredSmallContext = blurredSmallCanvas.getContext('2d', {
                 colorSpace: env.colorSpace,
               })
 
@@ -2089,23 +2089,29 @@ async function renderNode(
               const filteredCanvas = document.createElement('canvas')
               filteredCanvas.width = sampleWidthPx
               filteredCanvas.height = sampleHeightPx
-              const filteredCtx = filteredCanvas.getContext('2d', {
+              const filteredContext = filteredCanvas.getContext('2d', {
                 colorSpace: env.colorSpace,
               })
 
-              if (smallCtx && blurredSmallCtx && filteredCtx) {
+              if (smallContext && blurredSmallContext && filteredContext) {
                 // 5. Downscale: draw source to small canvas
-                smallCtx.drawImage(tempCanvas, 0, 0, smallWidth, smallHeight)
+                smallContext.drawImage(
+                  tempCanvas,
+                  0,
+                  0,
+                  smallWidth,
+                  smallHeight
+                )
 
                 // 6. Apply blur: draw to separate canvas with filter (avoids self-draw)
-                blurredSmallCtx.filter = scaleFilter(
+                blurredSmallContext.filter = scaleFilter(
                   backdropFilterValue,
                   scale * blurDownscale
                 )
-                blurredSmallCtx.drawImage(smallCanvas, 0, 0)
+                blurredSmallContext.drawImage(smallCanvas, 0, 0)
 
                 // 7. Upscale: draw blurred result back to full resolution
-                filteredCtx.drawImage(
+                filteredContext.drawImage(
                   blurredSmallCanvas,
                   0,
                   0,
@@ -4513,14 +4519,14 @@ async function renderListMarker(
       return
     }
 
-    context.font = buildCanvasFont(baseStyle)
+    applyCanvasFont(context, baseStyle)
     context.textBaseline = 'alphabetic'
     context.textAlign = listStylePosition === 'inside' ? 'left' : 'right'
 
     const textX = markerX
     const textY = baselineY
 
-    context.fillText(markerText, textX, textY)
+    fillText(context, markerText, textX, textY)
     context.restore()
     return
   }
@@ -4574,7 +4580,7 @@ async function renderListMarker(
     return
   }
 
-  context.font = buildCanvasFont(baseStyle)
+  applyCanvasFont(context, baseStyle)
   context.textBaseline = 'alphabetic'
 
   if (listStylePosition === 'inside') {
@@ -4586,7 +4592,7 @@ async function renderListMarker(
   const textX = listStylePosition === 'inside' ? markerX : markerX
   const textY = baselineY
 
-  context.fillText(markerText, textX, textY)
+  fillText(context, markerText, textX, textY)
 
   context.restore()
 }
@@ -4787,6 +4793,10 @@ async function renderSvgElement(
     'font-size',
     'font-weight',
     'font-style',
+    'font-variant',
+    'font-variant-numeric',
+    'font-feature-settings',
+    'font-kerning',
     'letter-spacing',
   ] as const
 
@@ -4831,7 +4841,6 @@ async function renderSvgElement(
   try {
     for (const sheet of Array.from(document.styleSheets)) {
       try {
-        if (sheet.href && !sheet.href.startsWith(location.origin)) continue
         for (const rule of Array.from(sheet.cssRules)) {
           cssText += rule.cssText + '\n'
         }
@@ -5041,13 +5050,13 @@ function renderFormControl(
         ? element.textContent
         : (element as HTMLInputElement).value
       if (text) {
-        const font = buildCanvasFont(style)
         context.save()
-        context.font = font
+        applyCanvasFont(context, style)
         context.fillStyle = style.color || '#000'
         context.textAlign = 'center'
         context.textBaseline = 'middle'
-        context.fillText(
+        fillText(
+          context,
           text.trim(),
           rect.left + rect.width / 2,
           rect.top + rect.height / 2
@@ -5070,8 +5079,6 @@ function renderFormControl(
   const borderWidth = parseCssLength(style.borderTopWidth) || 0
   const borderStyle = style.borderTopStyle
 
-  const font = buildCanvasFont(style)
-
   context.save()
   context.fillStyle = backgroundColor
   drawRoundedOrRect(() => {
@@ -5087,7 +5094,7 @@ function renderFormControl(
     })
   }
 
-  context.font = font
+  applyCanvasFont(context, style)
 
   const getTextFillToken = (decl: CSSStyleDeclaration): string | null => {
     const raw =
@@ -5332,7 +5339,7 @@ function renderFormControl(
   // stays stable regardless of whether the user types "a", "g", or "T".
   // If we measured the specific text content, the text would jump up/down
   // as you typed characters with/without descenders.
-  context.font = font // Ensure font is set before measuring
+  applyCanvasFont(context, style)
   const metrics = context.measureText('M')
 
   // 1. Prefer fontBoundingBox (standard metrics, stable)
@@ -5358,7 +5365,7 @@ function renderFormControl(
     context.textAlign = 'center'
     context.textBaseline = 'alphabetic'
     const textX = (contentLeft + contentRight) / 2
-    context.fillText(text, textX, baselineY)
+    fillText(context, text, textX, baselineY)
   }
 
   const drawLabelLeft = (text: string) => {
@@ -5366,7 +5373,7 @@ function renderFormControl(
     context.textAlign = 'left'
     context.textBaseline = 'alphabetic'
     const textX = contentLeft
-    context.fillText(text, textX, baselineY)
+    fillText(context, text, textX, baselineY)
   }
 
   if (
@@ -5590,7 +5597,7 @@ function renderFormControl(
       context.textAlign = 'left'
       context.textBaseline = 'middle'
       context.fillStyle = style.color || '#000'
-      context.fillText(value, swatchX + swatchSize + 8, contentCenterY)
+      fillText(context, value, swatchX + swatchSize + 8, contentCenterY)
 
       context.restore()
       return true
@@ -6640,14 +6647,14 @@ function drawOuterBoxShadows(
     shadowCanvas.width = Math.ceil(drawWidth * scale)
     shadowCanvas.height = Math.ceil(drawHeight * scale)
 
-    const shadowCtx = shadowCanvas.getContext('2d', {
+    const shadowContext = shadowCanvas.getContext('2d', {
       colorSpace: env.colorSpace,
     })
-    if (!shadowCtx) continue
+    if (!shadowContext) continue
 
     // 5. Apply Scaling to the offscreen context
     // This allows us to draw using logical CSS units while getting hi-res output
-    shadowCtx.scale(scale, scale)
+    shadowContext.scale(scale, scale)
 
     // Local drawing coordinates (relative to the offscreen canvas origin)
     const localX = padding
@@ -6657,31 +6664,31 @@ function drawOuterBoxShadows(
 
     // A. Draw the "Casting Shape" (Element + Spread)
     // We use opaque black to generate the correct alpha map for the blur.
-    shadowCtx.save()
-    shadowCtx.shadowColor = color
-    shadowCtx.shadowBlur = blurRadius
+    shadowContext.save()
+    shadowContext.shadowColor = color
+    shadowContext.shadowBlur = blurRadius
     // Note: We draw at (0,0) offset inside the shadow layer because we already
     // positioned the canvas itself to account for the shadow offset.
-    shadowCtx.shadowOffsetX = 0
-    shadowCtx.shadowOffsetY = 0
-    shadowCtx.fillStyle = '#000000'
+    shadowContext.shadowOffsetX = 0
+    shadowContext.shadowOffsetY = 0
+    shadowContext.fillStyle = '#000000'
 
-    shadowCtx.beginPath()
-    drawRoundedRect(shadowCtx, localX, localY, spreadWidth, spreadHeight, {
+    shadowContext.beginPath()
+    drawRoundedRect(shadowContext, localX, localY, spreadWidth, spreadHeight, {
       topLeft: tl,
       topRight: tr,
       bottomRight: br,
       bottomLeft: bl,
     })
-    shadowCtx.fill()
-    shadowCtx.restore()
+    shadowContext.fill()
+    shadowContext.restore()
 
     // B. Cut out the "Element Shape" (Border Box)
     // CSS spec requires the shadow to be clipped under the element itself
     // to prevent "double darkening" of semi-transparent backgrounds.
-    shadowCtx.globalCompositeOperation = 'destination-out'
-    shadowCtx.fillStyle = '#000000'
-    shadowCtx.beginPath()
+    shadowContext.globalCompositeOperation = 'destination-out'
+    shadowContext.fillStyle = '#000000'
+    shadowContext.beginPath()
 
     // Calculate where the element sits relative to our local spread shape
     // (It is 'spread' distance inward from the spread shape)
@@ -6691,21 +6698,21 @@ function drawOuterBoxShadows(
     const elementH = spreadHeight - spread * 2
 
     drawRoundedRect(
-      shadowCtx,
+      shadowContext,
       elementLocalX,
       elementLocalY,
       elementW,
       elementH,
       borderRadius
     )
-    shadowCtx.fill()
+    shadowContext.fill()
 
     // C. Colorize the result
     // Replace the opaque black casting shape with the actual shadow color.
     // 'source-in' keeps the alpha of what we drew but replaces the color.
-    shadowCtx.globalCompositeOperation = 'source-in'
-    shadowCtx.fillStyle = color
-    shadowCtx.fillRect(0, 0, drawWidth, drawHeight)
+    shadowContext.globalCompositeOperation = 'source-in'
+    shadowContext.fillStyle = color
+    shadowContext.fillRect(0, 0, drawWidth, drawHeight)
 
     // 6. Composite back to main canvas
     // We draw the offscreen image (which is sized in device pixels) into the
@@ -7872,11 +7879,13 @@ function renderLinearGradient(
     const patternCanvas = document.createElement('canvas')
     patternCanvas.width = Math.ceil(cycleLength)
     patternCanvas.height = 1
-    const pCtx = patternCanvas.getContext('2d', { colorSpace: env.colorSpace })
+    const pContext = patternCanvas.getContext('2d', {
+      colorSpace: env.colorSpace,
+    })
 
-    if (pCtx) {
+    if (pContext) {
       // Draw the single cycle horizontally
-      const gradientObj = pCtx.createLinearGradient(0, 0, cycleLength, 0)
+      const gradientObj = pContext.createLinearGradient(0, 0, cycleLength, 0)
 
       for (const stop of stops) {
         // Map stop offset to 0..1 for this cycle
@@ -7888,8 +7897,8 @@ function renderLinearGradient(
         gradientObj.addColorStop(t, color)
       }
 
-      pCtx.fillStyle = gradientObj
-      pCtx.fillRect(0, 0, cycleLength, 1)
+      pContext.fillStyle = gradientObj
+      pContext.fillRect(0, 0, cycleLength, 1)
 
       // 3. Create pattern and rotate it
       const pattern = context.createPattern(patternCanvas, 'repeat')
@@ -9334,8 +9343,7 @@ async function renderPseudoElement(
 
   // Render text content
   if (text && text.length > 0) {
-    const font = buildCanvasFont(pseudoStyle)
-    context.font = font
+    applyCanvasFont(context, pseudoStyle)
     context.fillStyle = resolveCanvasColor(
       pseudoStyle.color || parentStyle.color || '#000',
       pseudoStyle,
@@ -9356,11 +9364,11 @@ async function renderPseudoElement(
     if (position === 'before') {
       context.textAlign = 'left'
       context.textBaseline = 'alphabetic'
-      context.fillText(transformedText, xLeft, yBase)
+      fillText(context, transformedText, xLeft, yBase)
     } else {
       context.textAlign = 'right'
       context.textBaseline = 'alphabetic'
-      context.fillText(transformedText, xRight, yBase)
+      fillText(context, transformedText, xRight, yBase)
     }
   }
 
@@ -9463,7 +9471,7 @@ async function renderTextNode(
     snap(transform.f)
   )
 
-  context.font = buildCanvasFont(style)
+  applyCanvasFont(context, style)
   context.textBaseline = 'alphabetic'
   context.textAlign = 'left'
 
@@ -9520,9 +9528,7 @@ async function renderTextNode(
 
       // Apply CSS letter-spacing if supported
       if (style.letterSpacing && style.letterSpacing !== 'normal') {
-        try {
-          context.letterSpacing = style.letterSpacing
-        } catch (e) {}
+        context.letterSpacing = style.letterSpacing
       }
 
       if (transformed) {
@@ -9571,7 +9577,7 @@ async function renderTextNode(
           textMaxWidth
         )
 
-        context.fillText(transformed, snappedX, snappedY, textMaxWidth)
+        fillText(context, transformed, snappedX, snappedY, textMaxWidth)
       }
 
       range.detach?.()
@@ -9649,9 +9655,7 @@ async function renderTextNode(
         context.textBaseline = 'middle'
 
         if (style.letterSpacing && style.letterSpacing !== 'normal') {
-          try {
-            context.letterSpacing = style.letterSpacing
-          } catch (e) {}
+          context.letterSpacing = style.letterSpacing
         }
 
         const baselineOffset = fontSize * 0.05
@@ -9692,7 +9696,7 @@ async function renderTextNode(
           'center'
         )
 
-        context.fillText(fullText, drawX, drawY)
+        fillText(context, fullText, drawX, drawY)
         context.restore()
       }
     }
@@ -9792,7 +9796,8 @@ async function renderTextNode(
         // Draw character by character to maintain precise DOM layout
         for (const item of run.graphemes) {
           const txt = applyTextTransform(item.text, style.textTransform)
-          tempContext.fillText(
+          fillText(
+            tempContext,
             txt,
             item.rect.left - minLeft,
             baselineY - minTop
@@ -9903,7 +9908,7 @@ async function renderTextNode(
         context.shadowBlur = shadow.blur
         context.shadowOffsetX = shadow.offsetX
         context.shadowOffsetY = shadow.offsetY
-        context.fillText(txt, drawX, drawY)
+        fillText(context, txt, drawX, drawY)
         context.restore()
       }
 
@@ -9911,11 +9916,11 @@ async function renderTextNode(
         context.save()
         context.lineWidth = strokeWidth * 2
         context.strokeStyle = resolveCanvasColor(strokeColor, style, '#000')
-        context.strokeText(txt, drawX, drawY)
+        strokeText(context, txt, drawX, drawY)
         context.restore()
       }
 
-      context.fillText(txt, drawX, drawY)
+      fillText(context, txt, drawX, drawY)
     }
   }
 
@@ -9954,7 +9959,8 @@ function drawTextDecorations(
   context.save()
   context.fillStyle = color
   context.strokeStyle = backgroundColor
-  context.lineWidth = thickness * 2.5
+  // This gives a stroke radius of 1.5 * thickness, exactly matching the underline offset.
+  context.lineWidth = thickness * 3
   context.lineJoin = 'round'
   context.lineCap = 'round'
 
@@ -9964,9 +9970,9 @@ function drawTextDecorations(
       context.globalCompositeOperation = 'source-over'
       // Pass maxWidth to match compression if applied
       if (maxWidth !== undefined) {
-        context.strokeText(text, drawX, drawY, maxWidth)
+        strokeText(context, text, drawX, drawY, maxWidth)
       } else {
-        context.strokeText(text, drawX, drawY)
+        strokeText(context, text, drawX, drawY)
       }
     }
   }
@@ -10134,6 +10140,149 @@ function buildCanvasFont(style: CSSStyleDeclaration): string {
   // Format: [style] [variant] [weight] [size] [family]
   // Note: line-height is not included (unlike CSS font shorthand)
   return `${fontStyle} ${fontVariant} ${fontWeight} ${fontSize} ${fontFamily}`
+}
+
+function computeTabularDigitWidth(context: CanvasRenderingContext2D): number {
+  let maxWidth = 0
+  for (let index = 0; index <= 9; index++) {
+    const width = context.measureText(String(index)).width
+    if (width > maxWidth) maxWidth = width
+  }
+  return maxWidth
+}
+
+type CanvasFontContext = CanvasRenderingContext2D & {
+  __tabularNumsWidth?: number
+}
+
+function applyCanvasFont(
+  context: CanvasRenderingContext2D,
+  style: CSSStyleDeclaration
+): void {
+  context.font = buildCanvasFont(style)
+
+  const textStyleContext = context as CanvasFontContext
+
+  const textRendering = style.textRendering || 'auto'
+  if ('textRendering' in context) {
+    context.textRendering = textRendering as CanvasTextRendering
+  }
+
+  const kerning = style.fontKerning
+  if (kerning && 'fontKerning' in context) {
+    const kerningValues: CanvasFontKerning[] = ['auto', 'normal', 'none']
+    if (kerningValues.includes(kerning as CanvasFontKerning)) {
+      textStyleContext.fontKerning = kerning as CanvasFontKerning
+    }
+  }
+
+  const variantCaps = style.fontVariantCaps
+  if (variantCaps && 'fontVariantCaps' in context) {
+    const capsValues: CanvasFontVariantCaps[] = [
+      'normal',
+      'small-caps',
+      'all-small-caps',
+      'petite-caps',
+      'all-petite-caps',
+      'unicase',
+      'titling-caps',
+    ]
+    if (capsValues.includes(variantCaps as CanvasFontVariantCaps)) {
+      textStyleContext.fontVariantCaps = variantCaps as CanvasFontVariantCaps
+    }
+  }
+
+  const letterSpacing = style.letterSpacing
+  if (letterSpacing && 'letterSpacing' in context) {
+    textStyleContext.letterSpacing = letterSpacing
+  }
+
+  const numeric = style.fontVariantNumeric || 'normal'
+  if (numeric.includes('tabular-nums')) {
+    textStyleContext.__tabularNumsWidth = computeTabularDigitWidth(context)
+  } else {
+    textStyleContext.__tabularNumsWidth = undefined
+  }
+}
+
+function fillText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth?: number
+): void {
+  const fontContext = context as CanvasFontContext
+  const tabularWidth = fontContext.__tabularNumsWidth
+
+  if (tabularWidth !== undefined) {
+    const graphemes = segmentGraphemes(text)
+    const letterSpacing = parseFloat(context.letterSpacing) || 0
+    let currentX = x
+
+    for (let index = 0; index < graphemes.length; index++) {
+      const grapheme = graphemes[index]
+      const isLast = index === graphemes.length - 1
+      const spacing = isLast ? 0 : letterSpacing
+
+      if (/^\d$/.test(grapheme)) {
+        const digitWidth = context.measureText(grapheme).width
+        const offset = (tabularWidth - digitWidth) / 2
+        context.fillText(grapheme, currentX + offset, y)
+        currentX += tabularWidth + spacing
+      } else {
+        context.fillText(grapheme, currentX, y)
+        currentX += context.measureText(grapheme).width + spacing
+      }
+    }
+    return
+  }
+
+  if (maxWidth !== undefined) {
+    context.fillText(text, x, y, maxWidth)
+  } else {
+    context.fillText(text, x, y)
+  }
+}
+
+function strokeText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth?: number
+): void {
+  const fontContext = context as CanvasFontContext
+  const tabularWidth = fontContext.__tabularNumsWidth
+
+  if (tabularWidth !== undefined) {
+    const graphemes = segmentGraphemes(text)
+    const letterSpacing = parseFloat(context.letterSpacing) || 0
+    let currentX = x
+
+    for (let index = 0; index < graphemes.length; index++) {
+      const grapheme = graphemes[index]
+      const isLast = index === graphemes.length - 1
+      const spacing = isLast ? 0 : letterSpacing
+
+      if (/^\d$/.test(grapheme)) {
+        const digitWidth = context.measureText(grapheme).width
+        const offset = (tabularWidth - digitWidth) / 2
+        context.strokeText(grapheme, currentX + offset, y)
+        currentX += tabularWidth + spacing
+      } else {
+        context.strokeText(grapheme, currentX, y)
+        currentX += context.measureText(grapheme).width + spacing
+      }
+    }
+    return
+  }
+
+  if (maxWidth !== undefined) {
+    context.strokeText(text, x, y, maxWidth)
+  } else {
+    context.strokeText(text, x, y)
+  }
 }
 
 function computeBackgroundSize(

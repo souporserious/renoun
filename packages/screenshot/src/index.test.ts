@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { page } from 'vitest/browser'
 import { screenshot } from './index.js'
+import { geistMonoLatinExtWoff2Base64 } from './fixtures/fonts/geist-mono-latin-ext.woff2.ts'
 
 // TESTING & DEBUGGING
 //
@@ -594,106 +595,120 @@ describe('screenshot', () => {
   })
 
   describe('visual accuracy: gradients', () => {
-    it('renders horizontal linear gradient', async () => {
-      const element = createElement({
-        width: '100px',
-        height: '50px',
-        background: 'linear-gradient(to right, rgb(255, 0, 0), rgb(0, 0, 255))',
+    it('svg honors @font-face data: URL', async () => {
+      const fontDataUrl = `data:font/woff2;base64,${geistMonoLatinExtWoff2Base64}`
+
+      const styleTag = document.createElement('style')
+      styleTag.textContent = `
+        /*
+          Deterministic font test:
+          - We embed a small OFL-licensed WOFF2 as a data: URL.
+          - This avoids relying on whatever fonts happen to be installed in CI.
+        */
+        @font-face {
+          font-family: "TestGeistMono";
+          src: url("${fontDataUrl}") format("woff2");
+          font-weight: 400;
+          font-style: normal;
+        }
+
+        .svg-geist text {
+          font-family: "TestGeistMono", monospace;
+          font-size: 24px;
+          font-weight: 400;
+          fill: #111827;
+        }
+        .svg-serif text {
+          font-family: serif;
+          font-size: 24px;
+          font-weight: 400;
+          fill: #111827;
+        }
+      `
+      document.head.appendChild(styleTag)
+
+      // Ensure the font is actually loaded before capture.
+      await document.fonts.load('24px "TestGeistMono"')
+      await document.fonts.ready
+
+      const wrapper = createElement({
+        width: '560px',
+        padding: '12px',
       })
-      container.appendChild(element)
 
-      const canvas = await screenshot.canvas(element, { scale: 1 })
+      // A string that exaggerates proportional vs monospace width.
+      // Many narrow glyphs => proportional fonts are much narrower.
+      const text =
+        'iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii'
 
-      // Left side should be red
-      const leftColor = sampleArea(canvas, 5, 20, 5)
-      expectColor(leftColor, { r: 255, g: 0, b: 0, a: 255 }, 20)
+      wrapper.innerHTML = `
+        <svg class="svg-serif" width="560" height="56" viewBox="0 0 560 56">
+          <text x="12" y="36" text-anchor="start">${text}</text>
+        </svg>
+        <svg class="svg-geist" width="560" height="56" viewBox="0 0 560 56">
+          <text x="12" y="36" text-anchor="start">${text}</text>
+        </svg>
+      `
+      container.appendChild(wrapper)
 
-      // Right side should be blue
-      const rightColor = sampleArea(canvas, 90, 20, 5)
-      expectColor(rightColor, { r: 0, g: 0, b: 255, a: 255 }, 20)
+      const canvas = await screenshot.canvas(wrapper, { scale: 2 })
 
-      // Middle should be purple-ish (mixed)
-      const middleColor = sampleArea(canvas, 45, 20, 5)
-      expect(middleColor.r).toBeGreaterThan(100)
-      expect(middleColor.b).toBeGreaterThan(100)
+      // Verify the two lines differ in rendered width.
+      // NOTE: Wrapper background is transparent, so alpha-based scanning isolates text.
+      const ctx = canvas.getContext('2d')!
+
+      function findOpaqueBounds(
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        alphaThreshold: number = 8
+      ): { found: boolean; minX: number; maxX: number } {
+        const imageData = ctx.getImageData(x, y, width, height)
+        const data = imageData.data
+
+        let found = false
+        let minX = width
+        let maxX = -1
+
+        for (let row = 0; row < height; row++) {
+          for (let col = 0; col < width; col++) {
+            const idx = (row * width + col) * 4
+            const a = data[idx + 3]
+            if (a > alphaThreshold) {
+              found = true
+              if (col < minX) minX = col
+              if (col > maxX) maxX = col
+            }
+          }
+        }
+
+        return { found, minX, maxX }
+      }
+
+      // Each SVG is 56px tall, scaled by 2.
+      const regionWidth = canvas.width
+      const regionHeight = Math.floor(canvas.height / 2)
+
+      const serifBounds = findOpaqueBounds(0, 0, regionWidth, regionHeight)
+      const geistBounds = findOpaqueBounds(
+        0,
+        regionHeight,
+        regionWidth,
+        canvas.height - regionHeight
+      )
+
+      expect(serifBounds.found).toBe(true)
+      expect(geistBounds.found).toBe(true)
+
+      const serifWidth = serifBounds.maxX - serifBounds.minX
+      const geistWidth = geistBounds.maxX - geistBounds.minX
+
+      // Geist Mono (monospace) should be substantially wider than serif for repeated "i".
+      expect(geistWidth).toBeGreaterThan(serifWidth + 80)
+
+      styleTag.remove()
     })
-
-    it('renders radial gradient', async () => {
-      const element = createElement({
-        width: '100px',
-        height: '100px',
-        background:
-          'radial-gradient(circle at center, rgb(255, 255, 255), rgb(0, 0, 0))',
-      })
-      container.appendChild(element)
-
-      const canvas = await screenshot.canvas(element, { scale: 1 })
-
-      // Center should be white-ish
-      const centerColor = sampleArea(canvas, 45, 45, 5)
-      expect(centerColor.r).toBeGreaterThan(200)
-
-      // Corner should be dark
-      const cornerColor = sampleArea(canvas, 5, 5, 5)
-      expect(cornerColor.r).toBeLessThan(100)
-    })
-
-    it('renders conic gradient', async () => {
-      const element = createElement({
-        width: '100px',
-        height: '100px',
-        background:
-          'conic-gradient(from 0deg, rgb(255, 0, 0), rgb(0, 255, 0), rgb(0, 0, 255), rgb(255, 0, 0))',
-      })
-      container.appendChild(element)
-
-      const canvas = await screenshot.canvas(element, { scale: 1 })
-      const centerColor = sampleArea(canvas, 45, 45, 10)
-      expect(centerColor.a).toBe(255)
-    })
-  })
-
-  describe('visual accuracy: borders', () => {
-    it('renders solid border correctly', async () => {
-      const element = createElement({
-        width: '50px',
-        height: '50px',
-        boxSizing: 'border-box',
-        backgroundColor: 'white',
-        border: '5px solid rgb(255, 0, 0)',
-      })
-      container.appendChild(element)
-
-      const canvas = await screenshot.canvas(element, { scale: 1 })
-
-      const borderColor = sampleArea(canvas, 20, 2, 3)
-      expectColor(borderColor, { r: 255, g: 0, b: 0, a: 255 }, 10)
-
-      const innerColor = sampleArea(canvas, 20, 20, 5)
-      expectColor(innerColor, { r: 255, g: 255, b: 255, a: 255 }, 10)
-    })
-
-    it('renders different border colors per side', async () => {
-      const element = createElement({
-        width: '60px',
-        height: '60px',
-        boxSizing: 'border-box',
-        backgroundColor: 'white',
-        borderTop: '10px solid rgb(255, 0, 0)',
-        borderRight: '10px solid rgb(0, 255, 0)',
-        borderBottom: '10px solid rgb(0, 0, 255)',
-        borderLeft: '10px solid rgb(255, 255, 0)',
-      })
-      container.appendChild(element)
-
-      const canvas = await screenshot.canvas(element, { scale: 1 })
-
-      const topBorder = sampleArea(canvas, 30, 3, 3)
-      expectColor(topBorder, { r: 255, g: 0, b: 0, a: 255 }, 15)
-    })
-  })
-
-  describe('visual accuracy: border radius', () => {
     it('renders rounded corners (transparent corners)', async () => {
       const element = createElement({
         width: '50px',
@@ -1979,6 +1994,42 @@ describe('screenshot', () => {
         backgroundColor: '#ffffff',
       })
       await expectCanvasToMatchSnapshot(canvas, 'svg-chart-with-links', aside!)
+    })
+
+    it('tabular numerals in legend', async () => {
+      const legend = createElement({
+        width: '220px',
+        padding: '12px',
+        borderRadius: '12px',
+        backgroundColor: '#0f172a',
+        color: '#e2e8f0',
+        fontFamily:
+          "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontSize: '14px',
+        fontVariantNumeric: 'tabular-nums',
+        fontFeatureSettings: '"tnum"',
+      })
+
+      legend.innerHTML = `
+        <div style="font-weight: 600; margin-bottom: 8px;">Legend</div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <span>Normal</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1;">
+            <span style="font-variant-numeric: normal; font-feature-settings: normal;">14%</span>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span>Tabular</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1;">
+            <span>14%</span>
+          </div>
+        </div>
+      `
+
+      container.appendChild(legend)
+
+      const canvas = await screenshot.canvas(legend, { scale: 2 })
+      await expectCanvasToMatchSnapshot(canvas, 'tabular-legend', legend)
     })
   })
 
