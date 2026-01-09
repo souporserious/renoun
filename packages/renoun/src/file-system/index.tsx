@@ -62,6 +62,7 @@ export {
   PackageImportEntry,
   PackageExportDirectory,
 } from './Package.ts'
+export { PackageManager } from './PackageManager.ts'
 
 export { Workspace } from './Workspace.ts'
 

@@ -1,3 +1,4 @@
+import type { PackageManagerName } from '../../file-system/PackageManager.ts'
 import type { Languages, Themes } from '../../grammars/index.ts'
 import type { Editors } from '../../utils/get-editor-uri.ts'
 
@@ -44,7 +45,7 @@ export type GitConfig = {
   branch: string
 
   /** The git host to use. This option disables the host detection from `git.source` which is helpful for self-hosted instances. */
-  host: 'github' | 'gitlab' | 'bitbucket' | 'pierre'
+  host: GitHost
 
   /** The owner of the repository. */
   owner: string
@@ -106,7 +107,7 @@ export interface ConfigurationOptions {
   siteUrl?: string
 
   /** The default package manager used by the `Install` component. */
-  defaultPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun'
+  defaultPackageManager?: PackageManagerName
 
   /** The default editor used when constructing editor URIs. */
   editor?: Editors

@@ -13,6 +13,12 @@ import {
 } from '../utils/path.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
+import {
+  LOCKFILE_CANDIDATES,
+  PackageManager,
+  type PackageManagerName,
+  parsePackageManagerField,
+} from './PackageManager.ts'
 import { Package } from './Package.ts'
 import type {
   DirectoryStructure,
@@ -28,6 +34,7 @@ interface PackageJson {
   workspaces?: string[] | { packages?: string[] }
   version?: string
   description?: string
+  packageManager?: string
 }
 
 const WORKSPACE_DIRECTORY_SKIP = new Set([
@@ -203,22 +210,45 @@ export class Workspace {
     return buildWorkspacePatterns(this.#fileSystem, workspaceRoot).length > 0
   }
 
-  getPackageManager(): 'pnpm' | 'yarn' | 'npm' | 'bun' | 'unknown' {
-    const candidates: Array<[string, 'pnpm' | 'yarn' | 'npm' | 'bun']> = [
-      ['pnpm-lock.yaml', 'pnpm'],
-      ['yarn.lock', 'yarn'],
-      ['package-lock.json', 'npm'],
-      ['npm-shrinkwrap.json', 'npm'],
-      ['bun.lockb', 'bun'],
-    ]
+  getPackageManager(): PackageManagerName {
+    const rootPackageJsonPath = this.#findWorkspacePath('package.json')
+    if (rootPackageJsonPath) {
+      try {
+        const packageJson = readJsonFile<PackageJson>(
+          this.#fileSystem,
+          rootPackageJsonPath,
+          `package.json at "${rootPackageJsonPath}"`
+        )
 
-    for (const [file, manager] of candidates) {
-      if (this.#findWorkspacePath(file)) {
+        if (typeof packageJson.packageManager === 'string') {
+          const parsed = parsePackageManagerField(packageJson.packageManager)
+          if (parsed) {
+            return parsed.name
+          }
+        }
+      } catch {
+        // ignore read/parse errors and fall back to lockfiles
+      }
+    }
+
+    for (const [filename, manager] of LOCKFILE_CANDIDATES) {
+      if (this.#findWorkspacePath(filename)) {
         return manager
       }
     }
 
-    return 'unknown'
+    // If we're using the Node file system, fall back to checking availability
+    // on the current machine (and otherwise default to npm).
+    if (this.#fileSystem instanceof NodeFileSystem) {
+      const packageManager = new PackageManager({
+        cwd: this.#workspaceRoot,
+        traverse: true,
+        fallbackToAvailable: true,
+      })
+      return packageManager.name
+    }
+
+    return 'npm'
   }
 
   getPackage(name: string) {
