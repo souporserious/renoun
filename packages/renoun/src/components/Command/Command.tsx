@@ -1,39 +1,23 @@
 import React, { useId } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
+import {
+  PACKAGE_MANAGERS,
+  PackageManager,
+  type CommandVariant as PackageManagerCommandVariant,
+  type PackageManagerName,
+} from '../../file-system/PackageManager.ts'
 import { getThemeColors } from '../../utils/get-theme.ts'
-import { getConfig } from '../Config/ServerConfigContext.tsx'
-import { Tokens } from '../CodeBlock/Tokens.ts'
 import {
   normalizeSlotComponents,
   type SlotComponentOrProps,
 } from '../../utils/slot-components.ts'
+import { Tokens } from '../CodeBlock/Tokens.ts'
+import { getConfig } from '../Config/ServerConfigContext.tsx'
 import { CopyCommand } from './CopyCommand.ts'
 import { CommandClient } from './CommandClient.ts'
 
-const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun'] as const
-type PackageManager = (typeof PACKAGE_MANAGERS)[number]
-
-export type CommandVariant =
-  | 'install'
-  | 'install-dev'
-  | 'run'
-  | 'exec'
-  | 'create'
-
-const installBase = {
-  npm: 'npm install',
-  pnpm: 'pnpm add',
-  yarn: 'yarn add',
-  bun: 'bun add',
-} as const
-
-const installDevFlags = {
-  npm: '--save-dev',
-  pnpm: '--save-dev',
-  yarn: '--dev',
-  bun: '--dev',
-} as const
+export type CommandVariant = PackageManagerCommandVariant
 
 const EXACT_VERSION_PATTERN = /^(\d+\.\d+\.\d+)(?:[-+].+)?$/
 const DIST_TAG_PATTERN = /^[a-zA-Z][\w.-]*$/
@@ -130,62 +114,11 @@ async function validatePackages(variant: CommandVariant, subject: string) {
 }
 
 function buildCommand(
-  packageManager: PackageManager,
+  packageManager: PackageManagerName,
   variant: CommandVariant,
   subject: string
 ): string {
-  if (variant === 'install' || variant === 'install-dev') {
-    const base = installBase[packageManager]
-    const flag =
-      variant === 'install-dev' ? installDevFlags[packageManager] : ''
-    const body = [base, flag, subject].filter(Boolean).join(' ')
-    return body
-  }
-
-  if (variant === 'run') {
-    if (packageManager === 'npm') {
-      const body = ['npm run', subject].filter(Boolean).join(' ')
-      return body
-    }
-    if (packageManager === 'pnpm') {
-      const body = ['pnpm', subject].filter(Boolean).join(' ')
-      return body
-    }
-    if (packageManager === 'yarn') {
-      const body = ['yarn', subject].filter(Boolean).join(' ')
-      return body
-    }
-    const body = ['bun run', subject].filter(Boolean).join(' ')
-    return body
-  }
-
-  if (variant === 'exec') {
-    const runner =
-      packageManager === 'npm'
-        ? 'npx'
-        : packageManager === 'pnpm'
-          ? 'pnpm dlx'
-          : packageManager === 'yarn'
-            ? 'yarn dlx'
-            : 'bunx'
-    const body = [runner, subject].filter(Boolean).join(' ')
-    return body
-  }
-
-  if (variant === 'create') {
-    const runner =
-      packageManager === 'npm'
-        ? 'npm create'
-        : packageManager === 'pnpm'
-          ? 'pnpm create'
-          : packageManager === 'yarn'
-            ? 'yarn create'
-            : 'bun create'
-    const body = [runner, subject].filter(Boolean).join(' ')
-    return body
-  }
-
-  return subject
+  return new PackageManager(packageManager).command(variant, subject)
 }
 
 export interface CommandProps {

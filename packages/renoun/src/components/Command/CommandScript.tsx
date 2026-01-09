@@ -1,12 +1,7 @@
 import React from 'react'
 
+import { type PackageManager } from '../../file-system/PackageManager.shared.ts'
 import { Script } from '../Script.ts'
-
-/**
- * The package manager.
- * @internal
- */
-export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun'
 
 /**
  * The props for the `CommandScript` component.

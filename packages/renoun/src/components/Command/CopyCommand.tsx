@@ -1,18 +1,12 @@
 'use client'
 import React from 'react'
 
+import {
+  isPackageManager,
+  PACKAGE_MANAGER_STORAGE_KEY,
+  type PackageManager,
+} from '../../file-system/PackageManager.shared.ts'
 import { CopyButtonClient } from '../CopyButton/CopyButtonClient.ts'
-
-type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun'
-
-const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun'] as const
-
-function isPackageManager(value: unknown): value is PackageManager {
-  return (
-    typeof value === 'string' &&
-    (PACKAGE_MANAGERS as readonly string[]).includes(value)
-  )
-}
 
 function getStoredPackageManager(): PackageManager | null {
   if (typeof window === 'undefined') {
@@ -20,7 +14,7 @@ function getStoredPackageManager(): PackageManager | null {
   }
 
   try {
-    const stored = window.localStorage?.getItem('package-manager')
+    const stored = window.localStorage?.getItem(PACKAGE_MANAGER_STORAGE_KEY)
     return isPackageManager(stored) ? stored : null
   } catch {
     return null

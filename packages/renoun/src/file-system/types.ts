@@ -1,7 +1,8 @@
+export type { ContentSection } from '@renoun/mdx'
+
 import type { GitAuthor } from '../utils/get-local-git-file-metadata.ts'
 import type { FileSystem } from './FileSystem.ts'
-
-export type { ContentSection } from '@renoun/mdx'
+import type { PackageManagerName } from './PackageManager.ts'
 
 /** Represents a section within a file. */
 export interface Section {
@@ -35,7 +36,7 @@ interface BaseStructure {
 
 export interface WorkspaceStructure extends BaseStructure {
   kind: 'Workspace'
-  packageManager: 'pnpm' | 'yarn' | 'npm' | 'bun' | 'unknown'
+  packageManager: PackageManagerName
 }
 
 export interface PackageStructure extends BaseStructure {
@@ -90,6 +91,15 @@ export type Expect<Type extends true> = Type
 export type Not<_ extends false> = true
 
 export type Is<Type, Expected> = Type extends Expected ? true : false
+
+export type IsExact<Type, Expected> =
+  (<T>() => T extends Type ? 1 : 2) extends <T>() => T extends Expected ? 1 : 2
+    ? (<T>() => T extends Expected ? 1 : 2) extends <T>() => T extends Type
+        ? 1
+        : 2
+      ? true
+      : false
+    : false
 
 export type IsNot<Type, Expected> = Type extends Expected ? false : true
 
