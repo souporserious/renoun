@@ -742,6 +742,16 @@ async function renderToCanvas(
   await prepareResources(element as HTMLElement)
 
   const deviceScale = options.scale ?? defaultView.devicePixelRatio ?? 1
+  // Force 4x supersampling by default to keep text crisp.
+  let textSupersampling = 4
+
+  // Safety cap if deviceScale is high (e.g. 3 or 4), reduce supersampling
+  // so the total multiplier doesn't exceed ~8x
+  if (deviceScale * textSupersampling > 8) {
+    textSupersampling = Math.max(1, Math.floor(8 / deviceScale))
+  }
+
+  const internalScale = deviceScale * textSupersampling
 
   // Auto-detect the best available color space.
   // If the device supports P3 (e.g., MacBooks, iPhones), we use it to match the DOM.
@@ -852,6 +862,7 @@ async function renderToCanvas(
   const width = snapToDevice(rawWidth)
   const height = snapToDevice(rawHeight)
   const canvas = options.canvas ?? ownerDocument.createElement('canvas')
+  const needsDownscale = textSupersampling > 1
 
   // Physical pixel size
   canvas.width = Math.max(1, Math.floor(width * deviceScale))
@@ -859,7 +870,17 @@ async function renderToCanvas(
   canvas.style.width = `${width}px`
   canvas.style.height = `${height}px`
 
-  const context = canvas.getContext('2d', { colorSpace })
+  // Create internal canvas at higher resolution if supersampling
+  const renderCanvas = needsDownscale
+    ? ownerDocument.createElement('canvas')
+    : canvas
+
+  if (needsDownscale) {
+    renderCanvas.width = Math.max(1, Math.floor(width * internalScale))
+    renderCanvas.height = Math.max(1, Math.floor(height * internalScale))
+  }
+
+  const context = renderCanvas.getContext('2d', { colorSpace })
   if (!context) {
     throw new Error('2D canvas context not available')
   }
@@ -872,7 +893,10 @@ async function renderToCanvas(
     context.save()
     context.setTransform(1, 0, 0, 1, 0, 0)
     context.fillStyle = backgroundColor
-    context.fillRect(0, 0, canvas.width, canvas.height)
+    // Important: when text supersampling is enabled, we render to an internal
+    // higher-resolution canvas. Fill the active context canvas, not the
+    // output canvas, or most of the render buffer will remain transparent.
+    context.fillRect(0, 0, renderCanvas.width, renderCanvas.height)
     context.restore()
   }
 
@@ -880,8 +904,9 @@ async function renderToCanvas(
   // - one canvas unit == one CSS pixel
   // - origin at the crop rectangle's top-left corner
   // Apply the hi-DPI transform once so that subsequent drawing uses CSS units.
-  context.setTransform(deviceScale, 0, 0, deviceScale, 0, 0)
+  context.setTransform(internalScale, 0, 0, internalScale, 0, 0)
   context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
   context.save()
   context.translate(-x, -y)
 
@@ -899,7 +924,11 @@ async function renderToCanvas(
 
   const env: RenderEnvironment = {
     rootElement: element as HTMLElement,
-    scale: deviceScale,
+    // Important, `scale` must match the scale applied to the active render
+    // context. When text supersampling is enabled, we render to a higher-
+    // resolution internal canvas, and all offscreen buffers / filters need to
+    // match that resolution to avoid being composited at a smaller size.
+    scale: internalScale,
     ignoreSelector: ignoreSelector ?? undefined,
     captureRect,
     includeFixed,
@@ -914,6 +943,69 @@ async function renderToCanvas(
   }
 
   context.restore()
+
+  // At the end of render, replace the single drawImage with multi-pass downscaling:
+  if (needsDownscale) {
+    const outputContext = canvas.getContext('2d', { colorSpace })
+    if (outputContext) {
+      // Multi-pass downscale for better quality (halve dimensions each pass)
+      let currentCanvas = renderCanvas
+      let currentWidth = renderCanvas.width
+      let currentHeight = renderCanvas.height
+
+      const targetWidth = canvas.width
+      const targetHeight = canvas.height
+
+      // Step down by 2x each pass until we're within 2x of target
+      while (
+        currentWidth > targetWidth * 2 ||
+        currentHeight > targetHeight * 2
+      ) {
+        const nextWidth = Math.max(targetWidth, Math.floor(currentWidth / 2))
+        const nextHeight = Math.max(targetHeight, Math.floor(currentHeight / 2))
+
+        const stepCanvas = ownerDocument.createElement('canvas')
+        stepCanvas.width = nextWidth
+        stepCanvas.height = nextHeight
+
+        const stepContext = stepCanvas.getContext('2d', { colorSpace })
+        if (stepContext) {
+          stepContext.imageSmoothingEnabled = true
+          stepContext.imageSmoothingQuality = 'high'
+          stepContext.drawImage(
+            currentCanvas,
+            0,
+            0,
+            currentWidth,
+            currentHeight,
+            0,
+            0,
+            nextWidth,
+            nextHeight
+          )
+        }
+
+        currentCanvas = stepCanvas
+        currentWidth = nextWidth
+        currentHeight = nextHeight
+      }
+
+      // Final pass to output
+      outputContext.imageSmoothingEnabled = true
+      outputContext.imageSmoothingQuality = 'high'
+      outputContext.drawImage(
+        currentCanvas,
+        0,
+        0,
+        currentWidth,
+        currentHeight,
+        0,
+        0,
+        targetWidth,
+        targetHeight
+      )
+    }
+  }
 
   return canvas
 }
