@@ -5234,23 +5234,47 @@ function renderFormControl(
   const contentTop = rect.top + paddingTop
   const contentBottom = rect.bottom - paddingBottom
   const contentCenterY = (contentTop + contentBottom) / 2
+  const fontSize = parseCssLength(style.fontSize) || 16
+
+  // We measure a representative character ('M') to ensure the baseline
+  // stays stable regardless of whether the user types "a", "g", or "T".
+  // If we measured the specific text content, the text would jump up/down
+  // as you typed characters with/without descenders.
+  context.font = font // Ensure font is set before measuring
+  const metrics = context.measureText('M')
+
+  // 1. Prefer fontBoundingBox (standard metrics, stable)
+  // 2. Fallback to actualBoundingBox of 'M' (approximates Cap Height centering)
+  // 3. Last resort fallback (heuristic)
+  const ascent =
+    metrics.fontBoundingBoxAscent ||
+    metrics.actualBoundingBoxAscent ||
+    fontSize * 0.8
+  const descent =
+    metrics.fontBoundingBoxDescent ||
+    metrics.actualBoundingBoxDescent ||
+    fontSize * 0.2
+
+  // Center formula:
+  // We want the visual middle of the text (ascent/2 roughly) to align with contentCenterY.
+  // More precisely: baseline + (descent - ascent) / 2 = center
+  // Therefore: baseline = center + (ascent - descent) / 2
+  const baselineY = contentCenterY + (ascent - descent) / 2
 
   const drawLabelCentered = (text: string) => {
     if (!text) return
     context.textAlign = 'center'
-    context.textBaseline = 'middle'
+    context.textBaseline = 'alphabetic'
     const textX = (contentLeft + contentRight) / 2
-    const textY = contentCenterY
-    context.fillText(text, textX, textY)
+    context.fillText(text, textX, baselineY)
   }
 
   const drawLabelLeft = (text: string) => {
     if (!text) return
     context.textAlign = 'left'
-    context.textBaseline = 'middle'
+    context.textBaseline = 'alphabetic'
     const textX = contentLeft
-    const textY = contentCenterY
-    context.fillText(text, textX, textY)
+    context.fillText(text, textX, baselineY)
   }
 
   if (
