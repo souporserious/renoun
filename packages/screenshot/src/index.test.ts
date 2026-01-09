@@ -69,6 +69,40 @@ function sampleArea(
   }
 }
 
+function findMaxGreenDelta(
+  canvas: HTMLCanvasElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): { maxDelta: number; sample: RGBA } {
+  const ctx = canvas.getContext('2d')!
+  const clampedX = Math.max(0, Math.min(x, canvas.width - 1))
+  const clampedY = Math.max(0, Math.min(y, canvas.height - 1))
+  const clampedW = Math.max(1, Math.min(width, canvas.width - clampedX))
+  const clampedH = Math.max(1, Math.min(height, canvas.height - clampedY))
+
+  const imageData = ctx.getImageData(clampedX, clampedY, clampedW, clampedH)
+  const data = imageData.data
+
+  let maxDelta = -Infinity
+  let sample: RGBA = { r: 0, g: 0, b: 0, a: 0 }
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]
+    const g = data[i + 1]
+    const b = data[i + 2]
+    const a = data[i + 3]
+    const delta = g - Math.max(r, b)
+    if (delta > maxDelta) {
+      maxDelta = delta
+      sample = { r, g, b, a }
+    }
+  }
+
+  return { maxDelta, sample }
+}
+
 /** Check if a color matches expected values within tolerance */
 function colorsMatch(
   actual: RGBA,
@@ -2642,12 +2676,28 @@ describe('screenshot', () => {
 
       const canvas = await screenshot.canvas(wrapper, { scale: 2 })
 
-      // Sample a pixel in the placeholder text area (similar to the other placeholder test).
-      const sample = sampleArea(canvas, 70, 70, 4)
+      // NOTE:
+      // Sampling a single fixed pixel is brittle across Chromium/font rendering changes.
+      // Instead, scan a small region where the placeholder glyphs should be and assert
+      // that at least one pixel is noticeably greenish.
+      const rect = wrapper.getBoundingClientRect()
+      const effectiveScale = canvas.width / rect.width
+      // Wrapper padding (16) + input padding-left (16) puts placeholder text around x~32.
+      // Wrapper padding (16) + input padding-top (12) puts baseline around y~28.
+      const regionX = Math.round(28 * effectiveScale)
+      const regionY = Math.round(24 * effectiveScale)
+      const regionW = Math.round(220 * effectiveScale)
+      const regionH = Math.round(48 * effectiveScale)
+
+      const { maxDelta, sample } = findMaxGreenDelta(
+        canvas,
+        regionX,
+        regionY,
+        regionW,
+        regionH
+      )
       expect(sample.a).toBe(255)
-      // Expect it to be noticeably greenish (placeholder fill is green, not white/grey).
-      expect(sample.g).toBeGreaterThan(sample.r + 10)
-      expect(sample.g).toBeGreaterThan(sample.b + 10)
+      expect(maxDelta).toBeGreaterThan(12)
 
       await expectCanvasToMatchSnapshot(
         canvas,
