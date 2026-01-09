@@ -273,6 +273,29 @@ type DirectoryLoader = ModuleLoaders | ModuleRuntimeLoader<any> | GlobModuleMap
 
 type UnknownModuleExports = { [exportName: string]: unknown }
 
+type LooseExportName<Type> =
+  string extends Extract<keyof Type, string> ? string : never
+
+type HasConcreteSchema<Schema extends DirectorySchema | undefined> = [
+  Schema,
+] extends [DirectorySchema]
+  ? DirectorySchema extends Schema
+    ? false
+    : true
+  : false
+
+type WithUnknownExportsIfNoConcreteSchema<
+  Schema extends DirectorySchema | undefined,
+  Types,
+> =
+  Types extends Record<string, any>
+    ? HasConcreteSchema<Schema> extends true
+      ? Types
+      : Types & UnknownModuleExports
+    : HasConcreteSchema<Schema> extends true
+      ? {}
+      : UnknownModuleExports
+
 type InferDirectoryTypesFromLoaders<Loaders extends DirectoryLoader> =
   // If `Loaders` is still the default `DirectoryLoader` union, don't infer.
   DirectoryLoader extends Loaders ? {} : InferDirectoryLoaderTypes<Loaders>
@@ -2041,7 +2064,7 @@ export class JavaScriptFile<
   async getExportValue<const ExportName extends Extract<keyof Types, string>>(
     name: ExportName
   ): Promise<Types[ExportName]>
-  async getExportValue(name: string): Promise<any> {
+  async getExportValue(name: LooseExportName<Types>): Promise<any> {
     const fileExport = await this.getExport(name as any)
     return (await fileExport.getValue()) as any
   }
@@ -2608,7 +2631,9 @@ export class MDXFile<
   async getExportValue<
     const ExportName extends 'default' | Extract<keyof Types, string>,
   >(name: ExportName): Promise<({ default: MDXContent } & Types)[ExportName]>
-  async getExportValue(name: string): Promise<any> {
+  async getExportValue(
+    name: LooseExportName<{ default: MDXContent } & Types>
+  ): Promise<any> {
     if (name === 'frontmatter') {
       // Prefer an explicit `frontmatter` export if it exists.
       try {
@@ -2903,7 +2928,11 @@ export class MarkdownFile<
       SchemaOption
     >[ExportName]
   >
-  async getExportValue(name: string): Promise<any> {
+  async getExportValue(
+    name: LooseExportName<
+      ApplyFileSchemaOption<{ default: MDXContent } & Types, SchemaOption>
+    >
+  ): Promise<any> {
     const fileModule = await this.#getModule()
     if (!(name in fileModule)) {
       throw new ModuleExportNotFoundError(
@@ -3647,16 +3676,20 @@ export class Directory<
           >
         : Extension extends 'mdx'
           ? MDXFile<
-              ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['mdx'] &
-                Record<string, any>,
+              WithUnknownExportsIfNoConcreteSchema<
+                Schema,
+                ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['mdx']
+              >,
               any,
               string,
               Extension
             >
           : Extension extends 'md'
             ? MarkdownFile<
-                ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['md'] &
-                  Record<string, any>,
+                WithUnknownExportsIfNoConcreteSchema<
+                  Schema,
+                  ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['md']
+                >,
                 any,
                 string,
                 Extension
@@ -3698,16 +3731,20 @@ export class Directory<
         >
       : Extension extends 'mdx'
         ? MDXFile<
-            ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['mdx'] &
-              Record<string, any>,
+            WithUnknownExportsIfNoConcreteSchema<
+              Schema,
+              ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['mdx']
+            >,
             any,
             string,
             Extension
           >
         : Extension extends 'md'
           ? MarkdownFile<
-              ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['md'] &
-                Record<string, any>,
+              WithUnknownExportsIfNoConcreteSchema<
+                Schema,
+                ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['md']
+              >,
               any,
               string,
               Extension
@@ -3742,16 +3779,20 @@ export class Directory<
           >
         : Ext extends 'mdx'
           ? MDXFile<
-              ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['mdx'] &
-                Record<string, any>,
+              WithUnknownExportsIfNoConcreteSchema<
+                Schema,
+                ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['mdx']
+              >,
               any,
               string,
               Ext
             >
           : Ext extends 'md'
             ? MarkdownFile<
-                ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['md'] &
-                  Record<string, any>,
+                WithUnknownExportsIfNoConcreteSchema<
+                  Schema,
+                  ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>['md']
+                >,
                 any,
                 string,
                 Ext

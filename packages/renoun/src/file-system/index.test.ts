@@ -49,7 +49,7 @@ import {
   Workspace,
   type FileStructure,
 } from './index'
-import type { Expect, Is, IsNotAny } from './types'
+import type { Expect, Is, IsExact, IsNotAny } from './types'
 import type { Kind } from '../utils/resolve-type'
 
 describe('file system', () => {
@@ -3945,5 +3945,51 @@ export function identity<T>(value: T) {
       expect(structure.description).toBe('Page Desc')
       expect(structure.relativePath).toBe('docs/page.md')
     })
+  })
+
+  test('getExportValue is strongly typed from schema', async () => {
+    const directory = new Directory({
+      fileSystem: new InMemoryFileSystem({
+        'test.mdx': `export const frontmatter = { title: 'Title' }\n\n# Hello`,
+      }),
+      schema: {
+        mdx: {
+          frontmatter: z.object({
+            title: z.string().optional(),
+            description: z.string().optional(),
+          }),
+        },
+      },
+      loader: {
+        mdx: (_path) => {
+          return Promise.resolve({
+            frontmatter: {
+              title: 'Title',
+              description: undefined,
+            },
+          })
+        },
+      },
+    })
+
+    const file = await directory.getFile('test.mdx')
+    const frontmatter = await file.getExportValue('frontmatter')
+
+    type TypeTest = Expect<
+      IsExact<
+        typeof frontmatter,
+        {
+          title?: string | undefined
+          description?: string | undefined
+        }
+      >
+    >
+
+    expect(frontmatter.title).toBe('Title')
+
+    if (false as boolean) {
+      // @ts-expect-error
+      await file.getExportValue('frontmatters')
+    }
   })
 })
