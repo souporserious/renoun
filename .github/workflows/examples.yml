@@ -58,6 +58,9 @@ jobs:
         if: steps.detect.outputs.changed == 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Audit dependencies
+        run: pnpm audit --prod --audit-level=high
+
       - name: Build
         if: steps.detect.outputs.changed == 'true'
         env:
