@@ -1,6 +1,6 @@
 {
   "name": "@renoun/screenshot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Screenshot DOM elements as a canvas, blob, or URL.",
   "author": "souporserious",
   "license": "MIT",
