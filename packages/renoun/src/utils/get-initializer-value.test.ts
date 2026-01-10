@@ -9,7 +9,7 @@ import { getInitializerValue } from './get-initializer-value.ts'
 describe('getInitializerValue', () => {
   const project = new Project()
 
-  test('function parameters', () => {
+  test.concurrent('function parameters', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `const createCounter = (initialCount = 0, options: { incrementAmount: number } = { incrementAmount: 1 }) => {}`,
@@ -25,7 +25,7 @@ describe('getInitializerValue', () => {
     expect(defaultValues).toEqual([0, { incrementAmount: 1 }])
   })
 
-  test('renamed property default values', () => {
+  test.concurrent('renamed property default values', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `function useCounter({ initialCount: renamedInitialCount = 0 }: { initialCount: number }) {}`,
@@ -38,7 +38,7 @@ describe('getInitializerValue', () => {
     expect(getInitializerValue(parameter)).toEqual({ initialCount: 0 })
   })
 
-  test('template string default values', () => {
+  test.concurrent('template string default values', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const a = 1; const b = 2; const createCounter = (initialCount = `${a + b}`) => {}',
@@ -54,7 +54,7 @@ describe('getInitializerValue', () => {
     expect(defaultValue).toEqual('3')
   })
 
-  test('function parameter default values', () => {
+  test.concurrent('function parameter default values', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `const createCounter = (initialCount = () => 0) => {}`,
@@ -70,7 +70,7 @@ describe('getInitializerValue', () => {
     expect(defaultValue).toEqual('() => 0')
   })
 
-  test('destructured properties', () => {
+  test.concurrent('destructured properties', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `const createCounter = ({ initialCount = 0 }) => {}`,
@@ -88,7 +88,7 @@ describe('getInitializerValue', () => {
     expect(defaultValue).toEqual({ initialCount: 0 })
   })
 
-  test('function body default values', () => {
+  test.concurrent('function body default values', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `const Text = (props) => { const { initialCount, incrementAmount = 1 } = props }`,
@@ -104,7 +104,7 @@ describe('getInitializerValue', () => {
     expect(defaultValue).toEqual({ incrementAmount: 1 })
   })
 
-  test('function parameter and body default values', () => {
+  test.concurrent('function parameter and body default values', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`

@@ -3,7 +3,7 @@ import { describe, test, expect } from 'vitest'
 import { splitTokenByRanges } from './split-tokens-by-ranges.ts'
 
 describe('splitTokenByRanges', () => {
-  test('multiple symbols in a token', () => {
+  test.concurrent('multiple symbols in a token', () => {
     const token = {
       value: '{ CodeBlock, Toolbar, Tokens }',
       start: 0,

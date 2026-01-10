@@ -6,7 +6,7 @@ const { Project } = getTsMorph()
 import { getDirectorySourceFile } from './get-directory-source-file'
 
 describe('getDirectorySourceFile', () => {
-  test('returns index file', () => {
+  test.concurrent('returns index file', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const directory = project.createDirectory('Button')
     const sourceFile = directory.createSourceFile('index.ts')
@@ -15,7 +15,7 @@ describe('getDirectorySourceFile', () => {
     expect(result).toBe(sourceFile)
   })
 
-  test('returns README file', () => {
+  test.concurrent('returns README file', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const directory = project.createDirectory('Button')
     const sourceFile = directory.createSourceFile('README.md')
@@ -24,7 +24,7 @@ describe('getDirectorySourceFile', () => {
     expect(result).toBe(sourceFile)
   })
 
-  test('returns file with the same name as the directory', () => {
+  test.concurrent('returns file with the same name as the directory', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const directory = project.createDirectory('Button')
     const sourceFile = directory.createSourceFile('Button.mdx')
@@ -33,7 +33,7 @@ describe('getDirectorySourceFile', () => {
     expect(result).toBe(sourceFile)
   })
 
-  test('gives priority to the directory-named file over index or README', () => {
+  test.concurrent('gives priority to the directory-named file over index or README', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const directory = project.createDirectory('Button')
     directory.createSourceFile('index.ts')
@@ -44,7 +44,7 @@ describe('getDirectorySourceFile', () => {
     expect(result).toBe(sourceFile)
   })
 
-  test('returns undefined if no files match the valid extensions', () => {
+  test.concurrent('returns undefined if no files match the valid extensions', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const directory = project.createDirectory('Button')
     directory.createSourceFile('index.js')
@@ -54,7 +54,7 @@ describe('getDirectorySourceFile', () => {
     expect(result).toBeUndefined()
   })
 
-  test('returns the first matching file if multiple valid files exist', () => {
+  test.concurrent('returns the first matching file if multiple valid files exist', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const directory = project.createDirectory('Button')
     const indexFile = directory.createSourceFile('index.ts')
@@ -64,7 +64,7 @@ describe('getDirectorySourceFile', () => {
     expect(result).toBe(indexFile)
   })
 
-  test('handles case-sensitive file names correctly', () => {
+  test.concurrent('handles case-sensitive file names correctly', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const directory = project.createDirectory('Button')
     const readmeFile = directory.createSourceFile('readme.md')
@@ -73,7 +73,7 @@ describe('getDirectorySourceFile', () => {
     expect(result).toBe(readmeFile)
   })
 
-  test('returns undefined for an empty directory', () => {
+  test.concurrent('returns undefined for an empty directory', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const directory = project.createDirectory('Button')
     const result = getDirectorySourceFile(directory, ['ts', 'md'])

@@ -4,7 +4,7 @@ import { compile, evaluate } from '@mdx-js/mdx'
 import addSections from './add-sections'
 
 describe('addSections', () => {
-  test('string heading', async () => {
+  test.concurrent('string heading', async () => {
     const result = await compile(`# Hello, world!`, {
       remarkPlugins: [addSections],
       development: true,
@@ -76,7 +76,7 @@ describe('addSections', () => {
     `)
   })
 
-  test('code heading', async () => {
+  test.concurrent('code heading', async () => {
     const result = await compile(`# Hello, \`world\`!`, {
       remarkPlugins: [addSections],
     })
@@ -144,7 +144,7 @@ describe('addSections', () => {
     `)
   })
 
-  test('link heading throws error', async () => {
+  test.concurrent('link heading throws error', async () => {
     const result = await compile(`# [Hello, world!](https://example.com)`, {
       remarkPlugins: [addSections],
     })
@@ -154,7 +154,7 @@ describe('addSections', () => {
     expect(hasError).toBe(true)
   })
 
-  test('image heading', async () => {
+  test.concurrent('image heading', async () => {
     const result = await compile(
       `# ![Hello, world!](https://example.com/image.png)`,
       { remarkPlugins: [addSections] }
@@ -221,7 +221,7 @@ describe('addSections', () => {
     `)
   })
 
-  test('attaches summaries for each heading when possible', async () => {
+  test.concurrent('attaches summaries for each heading when possible', async () => {
     const mdxSource = `# Search Plugin
 
 Before diving in, this introduction paragraph provides some immediate context about search indexing in renoun. It explains how the plugin works, what kind of data is collected, and why concise excerpts improve the quality of the search results across the documentation site.
@@ -280,7 +280,7 @@ Search indexing begins by scanning your document headings and collecting the fir
     `)
   })
 
-  test('Heading can be overridden via MDX components provider', async () => {
+  test.concurrent('Heading can be overridden via MDX components provider', async () => {
     const mdxSource = `# Hello`
     const jsxRuntime = {
       Fragment: Symbol.for('react.fragment'),
@@ -303,7 +303,7 @@ Search indexing begins by scanning your document headings and collecting the fir
     ).not.toThrow()
   })
 
-  test('Tag resolves through props.components.h1 with fallback to "h1"', async () => {
+  test.concurrent('Tag resolves through props.components.h1 with fallback to "h1"', async () => {
     const result = await compile(`# Hello`, {
       remarkPlugins: [addSections],
     })
@@ -312,7 +312,7 @@ Search indexing begins by scanning your document headings and collecting the fir
     expect(code).toContain('Tag: C && C.h1 || "h1"')
   })
 
-  test('uses provided Heading component and passes expected props (snapshot)', async () => {
+  test.concurrent('uses provided Heading component and passes expected props (snapshot)', async () => {
     const mdxSource = `# Hello`
     const calls: Array<any> = []
     function HeadingOverride() {
@@ -344,7 +344,7 @@ Search indexing begins by scanning your document headings and collecting the fir
     `)
   })
 
-  test('wraps headings with Section component when provided', async () => {
+  test.concurrent('wraps headings with Section component when provided', async () => {
     const mdxSource = `# Hello`
     const calls: Array<any> = []
 
@@ -381,7 +381,7 @@ Search indexing begins by scanning your document headings and collecting the fir
     `)
   })
 
-  test('throws when exporting sections directly', async () => {
+  test.concurrent('throws when exporting sections directly', async () => {
     const mdxSource = `
 export const sections = []
 
@@ -400,7 +400,7 @@ export const sections = []
     expect(hasFatal).toBe(true)
   })
 
-  test('handles JSX heading elements with id attribute', async () => {
+  test.concurrent('handles JSX heading elements with id attribute', async () => {
     const mdxSource = `<h1 id="intro">Introduction</h1>
 
 <h2 id="details">The Details</h2>
@@ -438,7 +438,7 @@ export const sections = []
     `)
   })
 
-  test('handles custom heading tags via options', async () => {
+  test.concurrent('handles custom heading tags via options', async () => {
     const mdxSource = `# Markdown Heading
 
 <Heading id="custom-heading">Custom Heading Component</Heading>
@@ -476,7 +476,7 @@ export const sections = []
     `)
   })
 
-  test('handles section tags via options', async () => {
+  test.concurrent('handles section tags via options', async () => {
     const mdxSource = `<Section id="getting-started" title="Getting Started" depth={1}>
 Some content here
 </Section>
@@ -516,7 +516,7 @@ More content
     `)
   })
 
-  test('preserves JSX formatting in JSX heading elements', async () => {
+  test.concurrent('preserves JSX formatting in JSX heading elements', async () => {
     const result = await compile(
       `<h1 id="intro">Hello <code>world</code>!</h1>`,
       { remarkPlugins: [addSections] }
@@ -529,7 +529,7 @@ More content
     expect(code).toContain('_jsx("code"')
   })
 
-  test('combines markdown headings with JSX heading elements', async () => {
+  test.concurrent('combines markdown headings with JSX heading elements', async () => {
     const mdxSource = `# Overview
 
 Some intro text.
@@ -581,7 +581,7 @@ More content.
     `)
   })
 
-  test('regions create nested sections and summaries', async () => {
+  test.concurrent('regions create nested sections and summaries', async () => {
     const mdxSource = `# Alpha
 
 This is the alpha introduction paragraph which should be used as the summary for the Alpha heading.
@@ -633,7 +633,7 @@ This is the beta summary paragraph.
     ])
   })
 
-  test('regions cannot wrap headings', async () => {
+  test.concurrent('regions cannot wrap headings', async () => {
     const result = await compile(
       `{/* #region Bad */}
 # Title

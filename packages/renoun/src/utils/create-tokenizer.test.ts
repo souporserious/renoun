@@ -79,7 +79,7 @@ const registryOptions: RegistryOptions<ThemeName> = {
 }
 
 describe('Tokenizer', () => {
-  test('tokenizes multiple themes without altering merged output', async () => {
+  test.concurrent('tokenizes multiple themes without altering merged output', async () => {
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const source = '/* comment line 1\ncomment line 2 */'
 
@@ -125,7 +125,7 @@ describe('Tokenizer', () => {
     expect(secondLineComment?.style.color).toBeUndefined()
   })
 
-  test('streams tokenized lines without changing output', async () => {
+  test.concurrent('streams tokenized lines without changing output', async () => {
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const source = '/* comment line 1*/\n/* comment line 2 */'
 
@@ -140,7 +140,7 @@ describe('Tokenizer', () => {
     expect(streamed).toEqual(nonStreamed)
   })
 
-  test('retrieves grammar state and reuses it across tokenization runs', async () => {
+  test.concurrent('retrieves grammar state and reuses it across tokenization runs', async () => {
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const firstChunk = '/* comment line 1'
     const secondChunk = 'comment line 2 */'

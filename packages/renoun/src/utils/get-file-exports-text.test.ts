@@ -70,7 +70,7 @@ class Animal {
 `.trim()
 
 describe('getFileExportsText', () => {
-  test('extracts all exports and their dependencies from a file', () => {
+  test.concurrent('extracts all exports and their dependencies from a file', () => {
     const project = new Project({ useInMemoryFileSystem: true })
 
     project.createSourceFile('test.tsx', sourceFileText)
@@ -145,7 +145,7 @@ describe('getFileExportsText', () => {
     `)
   })
 
-  test('supports anonymous default function export', () => {
+  test.concurrent('supports anonymous default function export', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     project.createSourceFile(
       'anon.ts',
@@ -163,7 +163,7 @@ describe('getFileExportsText', () => {
     expect(defaultExport.text).toContain('export default function')
   })
 
-  test('supports anonymous default class export', () => {
+  test.concurrent('supports anonymous default class export', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     project.createSourceFile(
       'anon-class.ts',
@@ -181,7 +181,7 @@ describe('getFileExportsText', () => {
     expect(defaultExport.text).toContain('export default class')
   })
 
-  test('supports default arrow function export', () => {
+  test.concurrent('supports default arrow function export', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     project.createSourceFile(
       'anon-arrow.ts',
@@ -198,7 +198,7 @@ describe('getFileExportsText', () => {
     expect(defaultExport.text).toContain('export default () => 42')
   })
 
-  test('supports default exported object literal expression', () => {
+  test.concurrent('supports default exported object literal expression', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     project.createSourceFile(
       'anon-object.ts',
@@ -216,7 +216,7 @@ describe('getFileExportsText', () => {
     expect(defaultExport.text).toContain('export default { value }')
   })
 
-  test('supports named default function export', () => {
+  test.concurrent('supports named default function export', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     project.createSourceFile(
       'named-default-fn.ts',
@@ -233,7 +233,7 @@ describe('getFileExportsText', () => {
     expect(defaultExport.text).toContain('export default function Page()')
   })
 
-  test('supports named default class export', () => {
+  test.concurrent('supports named default class export', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     project.createSourceFile(
       'named-default-class.ts',
@@ -250,7 +250,7 @@ describe('getFileExportsText', () => {
     expect(defaultExport.text).toContain('export default class Component')
   })
 
-  test('inserts newlines between reconstructed statements to prevent invalid concatenation', () => {
+  test.concurrent('inserts newlines between reconstructed statements to prevent invalid concatenation', () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const text = `
 const code = \`

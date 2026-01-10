@@ -11,7 +11,7 @@ const runtime = {
 }
 
 describe('addFrontmatter', () => {
-  test('exports parsed frontmatter', async () => {
+  test.concurrent('exports parsed frontmatter', async () => {
     const source =
       `---\n` +
       `title: Hello, world!\n` +
@@ -36,7 +36,7 @@ describe('addFrontmatter', () => {
     })
   })
 
-  test('keeps author-defined frontmatter export', async () => {
+  test.concurrent('keeps author-defined frontmatter export', async () => {
     const source =
       `---\n` +
       `title: Generated\n` +
@@ -53,7 +53,7 @@ describe('addFrontmatter', () => {
     expect(frontmatter).toEqual({ title: 'Custom' })
   })
 
-  test('ignores documents without frontmatter', async () => {
+  test.concurrent('ignores documents without frontmatter', async () => {
     const { frontmatter } = await evaluate('# Hello', {
       remarkPlugins: [addFrontmatter],
       development: true,

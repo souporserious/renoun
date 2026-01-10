@@ -7,19 +7,19 @@ import {
 } from './annotations.ts'
 
 describe('hasAnnotationCandidates', () => {
-  test('returns false when source lacks matching comment markers', () => {
+  test.concurrent('returns false when source lacks matching comment markers', () => {
     const source = ['const value = 1', '/* not an annotation */'].join('\n')
     expect(hasAnnotationCandidates(source, ['highlight'])).toBe(false)
   })
 
-  test('returns true when at least one annotation tag is present', () => {
+  test.concurrent('returns true when at least one annotation tag is present', () => {
     const source = "console./*highlight*/log('hi')/**highlight*/"
     expect(hasAnnotationCandidates(source, ['highlight'])).toBe(true)
   })
 })
 
 describe('parseAnnotations', () => {
-  test('extracts inline annotations and removes annotations', () => {
+  test.concurrent('extracts inline annotations and removes annotations', () => {
     const source = 'console./*highlight color=\'yellow\'**/ log("x")'
     const result = parseAnnotations(source, ['highlight'])
 
@@ -33,7 +33,7 @@ describe('parseAnnotations', () => {
     expect(result.block).toHaveLength(0)
   })
 
-  test('extracts block annotations and removes decorated lines', () => {
+  test.concurrent('extracts block annotations and removes decorated lines', () => {
     const source = [
       'function sum(a, b) {',
       '  /*note title="add"*/',
@@ -57,7 +57,7 @@ describe('parseAnnotations', () => {
 })
 
 describe('remapAnnotationInstructions', () => {
-  test('repositions inline annotations after formatting', () => {
+  test.concurrent('repositions inline annotations after formatting', () => {
     const source = 'console./*highlight color=\'yellow\'**/ log("x")'
     const parsed = parseAnnotations(source, ['highlight'])
 
@@ -72,7 +72,7 @@ describe('remapAnnotationInstructions', () => {
     expect(remapped.inline[0].index).toBe('console.'.length)
   })
 
-  test('repositions block annotations after formatting changes whitespace', () => {
+  test.concurrent('repositions block annotations after formatting changes whitespace', () => {
     const source = 'const value = { /*note*/a:1/**note*/ }'
     const parsed = parseAnnotations(source, ['note'])
 
@@ -88,7 +88,7 @@ describe('remapAnnotationInstructions', () => {
     expect(formatted.slice(instruction.start, instruction.end)).toBe('a: 1')
   })
 
-  test('parses quoted rgba string value in block annotation', () => {
+  test.concurrent('parses quoted rgba string value in block annotation', () => {
     const source = `const a = /*highlight color='rgba(255, 255, 0, 0.5)' */1/**highlight*/`
     const result = parseAnnotations(source, ['highlight'])
     expect(result.block).toHaveLength(1)
@@ -100,7 +100,7 @@ describe('remapAnnotationInstructions', () => {
     expect(result.value.slice(instruction.start, instruction.end)).toBe('1')
   })
 
-  test('requires "/**tag*/" to close a block, not "/*tag*/"', () => {
+  test.concurrent('requires "/**tag*/" to close a block, not "/*tag*/"', () => {
     const wrong = '/*warn*/[]/*warn*/'
     expect(() => parseAnnotations(wrong, ['warn'])).toThrowError(
       /Unclosed annotation/i
@@ -115,7 +115,7 @@ describe('remapAnnotationInstructions', () => {
     )
   })
 
-  test('supports nested blocks', () => {
+  test.concurrent('supports nested blocks', () => {
     const source = [
       '/*a*/',
       'one',
@@ -132,7 +132,7 @@ describe('remapAnnotationInstructions', () => {
     expect(tags).toContain('b')
   })
 
-  test('handles consecutive lines with inline selections', () => {
+  test.concurrent('handles consecutive lines with inline selections', () => {
     const source = [
       "console./*highlight color='rgba(255,213,0,0.35)'*/warn/**highlight*/('Warning')",
       "console./*highlight color='rgba(255,0,0,0.35)'*/log/**highlight*/('Error')",
@@ -146,7 +146,7 @@ describe('remapAnnotationInstructions', () => {
     expect(result.block[1]!.tag).toBe('highlight')
   })
 
-  test('precisely captures selection boundaries on a single line', () => {
+  test.concurrent('precisely captures selection boundaries on a single line', () => {
     const source = 'console.log(/*hi*/level/**hi*/)'
     const result = parseAnnotations(source, ['hi'])
     expect(result.value).toBe('console.log(level)')
@@ -156,7 +156,7 @@ describe('remapAnnotationInstructions', () => {
     expect(selected).toBe('level')
   })
 
-  test('parses self-closing inline annotations and keeps position', () => {
+  test.concurrent('parses self-closing inline annotations and keeps position', () => {
     const source = "console./*hi**/warn('Warning')"
     const result = parseAnnotations(source, ['hi'])
     expect(result.value).toBe("console.warn('Warning')")
@@ -165,7 +165,7 @@ describe('remapAnnotationInstructions', () => {
     expect(result.inline[0]!.index).toBe('console.'.length)
   })
 
-  test('parses self-closing inline annotations with props', () => {
+  test.concurrent('parses self-closing inline annotations with props', () => {
     const source = "console./*hi color='yellow' **/log('Error')"
     const result = parseAnnotations(source, ['hi'])
     expect(result.value).toBe("console.log('Error')")
@@ -173,7 +173,7 @@ describe('remapAnnotationInstructions', () => {
     expect(result.inline[0]!.props).toEqual({ color: 'yellow' })
   })
 
-  test('remaps block selection for bracket-only targets to non-empty range', () => {
+  test.concurrent('remaps block selection for bracket-only targets to non-empty range', () => {
     const source = 'useEffect(() => {}, /*warn*/[]/**warn*/)' // select []
     const parsed = parseAnnotations(source, ['warn'])
     expect(parsed.block).toHaveLength(1)

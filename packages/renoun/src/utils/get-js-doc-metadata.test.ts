@@ -8,7 +8,7 @@ const { Project } = getTsMorph()
 describe('getJsDocMetadata', () => {
   const project = new Project()
 
-  test('function description and tags', () => {
+  test.concurrent('function description and tags', () => {
     const description = 'Returns a div element.'
     const tag = '@deprecated use another component instead.'
     const sourceFile = project.createSourceFile(
@@ -33,7 +33,7 @@ describe('getJsDocMetadata', () => {
     `)
   })
 
-  test('multiline function description', () => {
+  test.concurrent('multiline function description', () => {
     const description = `Returns a div element.\n\nThis is a multiline description.`
     const sourceFile = project.createSourceFile(
       'test.ts',
@@ -47,7 +47,7 @@ describe('getJsDocMetadata', () => {
     expect(metadata?.description).toBe(description)
   })
 
-  test('variable declaration description', () => {
+  test.concurrent('variable declaration description', () => {
     const description = 'A div element.'
     const sourceFile = project.createSourceFile(
       'test.ts',

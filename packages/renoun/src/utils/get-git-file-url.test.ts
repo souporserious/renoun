@@ -3,7 +3,7 @@ import { getGitFileUrl } from './get-git-file-url.ts'
 
 describe('getGitFileUrl', () => {
   describe('github tests', () => {
-    test('simple w/ starting slash for the filePath', () => {
+    test.concurrent('simple w/ starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -17,7 +17,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/o starting slash for the filePath', () => {
+    test.concurrent('simple w/o starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         'directory-name/file-name',
         undefined,
@@ -31,7 +31,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/ line and w/o column', () => {
+    test.concurrent('simple w/ line and w/o column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -45,7 +45,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/o line and w/ column', () => {
+    test.concurrent('simple w/o line and w/ column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -59,7 +59,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/ line and column', () => {
+    test.concurrent('simple w/ line and column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -75,7 +75,7 @@ describe('getGitFileUrl', () => {
   })
 
   describe('gitlab tests', () => {
-    test('simple w/ starting slash for the filePath', () => {
+    test.concurrent('simple w/ starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -89,7 +89,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/o starting slash for the filePath', () => {
+    test.concurrent('simple w/o starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         'directory-name/file-name',
         undefined,
@@ -103,7 +103,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/ line and w/o column', () => {
+    test.concurrent('simple w/ line and w/o column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -117,7 +117,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/o line and w/ column', () => {
+    test.concurrent('simple w/o line and w/ column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -131,7 +131,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/ line and column', () => {
+    test.concurrent('simple w/ line and column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -147,7 +147,7 @@ describe('getGitFileUrl', () => {
   })
 
   describe('bitbucket tests', () => {
-    test('simple w/ starting slash for the filePath', () => {
+    test.concurrent('simple w/ starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -161,7 +161,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/o starting slash for the filePath', () => {
+    test.concurrent('simple w/o starting slash for the filePath', () => {
       const generated = getGitFileUrl(
         'directory-name/file-name',
         undefined,
@@ -175,7 +175,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/ line and w/o column', () => {
+    test.concurrent('simple w/ line and w/o column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -189,7 +189,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/o line and w/ column', () => {
+    test.concurrent('simple w/o line and w/ column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -203,7 +203,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('simple w/ line and column', () => {
+    test.concurrent('simple w/ line and column', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         10,
@@ -219,7 +219,7 @@ describe('getGitFileUrl', () => {
   })
 
   describe('Self-hosted', () => {
-    test('github', () => {
+    test.concurrent('github', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -235,7 +235,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('gitlab', () => {
+    test.concurrent('gitlab', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,
@@ -251,7 +251,7 @@ describe('getGitFileUrl', () => {
       expect(generated).toEqual(expected)
     })
 
-    test('bitbucket', () => {
+    test.concurrent('bitbucket', () => {
       const generated = getGitFileUrl(
         '/directory-name/file-name',
         undefined,

@@ -12,7 +12,7 @@ const { Project, SyntaxKind } = getTsMorph()
 const project = new Project()
 
 describe('resolveLiteralExpression', () => {
-  test('null literals', () => {
+  test.concurrent('null literals', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const test = null;',
@@ -25,7 +25,7 @@ describe('resolveLiteralExpression', () => {
     expect(resolveLiteralExpression(nullLiteral!)).toBeNull()
   })
 
-  test('boolean literals', () => {
+  test.concurrent('boolean literals', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const test = true;',
@@ -38,7 +38,7 @@ describe('resolveLiteralExpression', () => {
     expect(resolveLiteralExpression(trueLiteral!)).toBe(true)
   })
 
-  test('numeric literals', () => {
+  test.concurrent('numeric literals', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const test = 123;',
@@ -51,7 +51,7 @@ describe('resolveLiteralExpression', () => {
     expect(resolveLiteralExpression(numericLiteral!)).toBe(123)
   })
 
-  test('string literals', () => {
+  test.concurrent('string literals', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const test = "test";',
@@ -64,7 +64,7 @@ describe('resolveLiteralExpression', () => {
     expect(resolveLiteralExpression(stringLiteral!)).toBe('test')
   })
 
-  test('object literal expressions', () => {
+  test.concurrent('object literal expressions', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const test = { property: "test" };',
@@ -79,7 +79,7 @@ describe('resolveLiteralExpression', () => {
     })
   })
 
-  test('array literal expressions', () => {
+  test.concurrent('array literal expressions', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const test = [1, 2, 3];',
@@ -92,7 +92,7 @@ describe('resolveLiteralExpression', () => {
     expect(resolveLiteralExpression(arrayLiteral!)).toEqual([1, 2, 3])
   })
 
-  test('identifiers', () => {
+  test.concurrent('identifiers', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const test = 123; const anotherTest = test;',
@@ -105,7 +105,7 @@ describe('resolveLiteralExpression', () => {
     expect(resolveLiteralExpression(identifier)).toBe(123)
   })
 
-  test('identifiers across files', () => {
+  test.concurrent('identifiers across files', () => {
     project.createSourceFile('foo.ts', 'export const foo = 123;', {
       overwrite: true,
     })
@@ -121,7 +121,7 @@ describe('resolveLiteralExpression', () => {
     expect(resolveLiteralExpression(identifier)).toBe(123)
   })
 
-  test('as const values', () => {
+  test.concurrent('as const values', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const test = 123 as const;',
@@ -136,7 +136,7 @@ describe('resolveLiteralExpression', () => {
 })
 
 describe('resolveArrayLiteralExpression', () => {
-  test('array literal expressions', () => {
+  test.concurrent('array literal expressions', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const array = [1, 2, 3];',
@@ -150,7 +150,7 @@ describe('resolveArrayLiteralExpression', () => {
     expect(array).toEqual([1, 2, 3])
   })
 
-  test('nested array literal expressions', () => {
+  test.concurrent('nested array literal expressions', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const array = [[1], [2], [3]];',
@@ -166,7 +166,7 @@ describe('resolveArrayLiteralExpression', () => {
 })
 
 describe('resolveObjectLiteralExpression', () => {
-  test('property assignments', () => {
+  test.concurrent('property assignments', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const object = { property: "test" };',
@@ -180,7 +180,7 @@ describe('resolveObjectLiteralExpression', () => {
     expect(object).toEqual({ property: 'test' })
   })
 
-  test('nested property assignments', () => {
+  test.concurrent('nested property assignments', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const object = { nested: { property: "test" } };',
@@ -194,7 +194,7 @@ describe('resolveObjectLiteralExpression', () => {
     expect(object).toEqual({ nested: { property: 'test' } })
   })
 
-  test('spread assignments', () => {
+  test.concurrent('spread assignments', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const spread = { spread: "test" };\nconst object = { ...spread };',
@@ -208,7 +208,7 @@ describe('resolveObjectLiteralExpression', () => {
     expect(object).toEqual({ spread: 'test' })
   })
 
-  test('spread assignments without identifier', () => {
+  test.concurrent('spread assignments without identifier', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       'const object = { ...{ spread: "test" } };',

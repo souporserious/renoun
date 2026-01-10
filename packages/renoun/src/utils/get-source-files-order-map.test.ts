@@ -28,7 +28,7 @@ describe('getSourceFilesOrderMap', () => {
     rootDirectory.createDirectory('utils').createSourceFile('helpers.ts', '')
   })
 
-  test('should return the correct order for files and directories', () => {
+  test.concurrent('should return the correct order for files and directories', () => {
     const orderMap = getSourceFilesOrderMap(rootDirectory)
     const expectedOrderMap = new Map([
       ['/src', '00'],

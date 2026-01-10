@@ -13,7 +13,7 @@ async function compileWithPlugin(value: string) {
 }
 
 describe('remarkTypography', () => {
-  test('applies smart punctuation', async () => {
+  test.concurrent('applies smart punctuation', async () => {
     const result = await compileWithPlugin(
       '"Hello, world" -- said the author... and then paused.'
     )
@@ -23,7 +23,7 @@ describe('remarkTypography', () => {
     )
   })
 
-  test('handles punctuation across nodes', async () => {
+  test.concurrent('handles punctuation across nodes', async () => {
     const result = await compileWithPlugin(
       '"Hello, **world**" and a link to [site](https://example.com).'
     )
@@ -35,7 +35,7 @@ describe('remarkTypography', () => {
     expect(result).toContain('” and a link to')
   })
 
-  test('preserves inline code', async () => {
+  test.concurrent('preserves inline code', async () => {
     const result = await compileWithPlugin('"Hello" `--` ... "code"')
 
     expect(result).toContain('“Hello” ')
@@ -43,7 +43,7 @@ describe('remarkTypography', () => {
     expect(result).toContain(' … “code”')
   })
 
-  test('handles multiple paragraphs', async () => {
+  test.concurrent('handles multiple paragraphs', async () => {
     const result = await compileWithPlugin(
       '"First paragraph."\n\n"Second paragraph with **bold** text."'
     )
@@ -53,7 +53,7 @@ describe('remarkTypography', () => {
     expect(result).toContain('text.”')
   })
 
-  test('ignores typography inside style and script blocks', async () => {
+  test.concurrent('ignores typography inside style and script blocks', async () => {
     const result = await compileWithPlugin(
       '<style>"Raw style"</style>\n\n<script>"Raw script"</script>\n\n"Outside"'
     )
@@ -69,13 +69,13 @@ describe('remarkTypography', () => {
     expect(result).toContain('“Outside”')
   })
 
-  test('treats double quotes after a word as opening when starting a new phrase', async () => {
+  test.concurrent('treats double quotes after a word as opening when starting a new phrase', async () => {
     const result = await compileWithPlugin('He said "Hi!" This is "quoted".')
 
     expect(result).toContain('He said “Hi!” This is “quoted”.')
   })
 
-  test('handles single-quoted phrases after verbs and in lists', async () => {
+  test.concurrent('handles single-quoted phrases after verbs and in lists', async () => {
     const result = await compileWithPlugin(
       "He said 'hello.' She wrote 'a', 'b', and 'c'."
     )
@@ -83,7 +83,7 @@ describe('remarkTypography', () => {
     expect(result).toContain('He said ‘hello.’ She wrote ‘a’, ‘b’, and ‘c’.')
   })
 
-  test('treats leading apostrophes and decades as apostrophes', async () => {
+  test.concurrent('treats leading apostrophes and decades as apostrophes', async () => {
     const result = await compileWithPlugin(
       "'Twas the night, 'tis the season, and '90s kids."
     )
@@ -91,25 +91,25 @@ describe('remarkTypography', () => {
     expect(result).toContain('’Twas the night, ’tis the season, and ’90s kids.')
   })
 
-  test('handles empty double quotes as an opening–closing pair', async () => {
+  test.concurrent('handles empty double quotes as an opening–closing pair', async () => {
     const result = await compileWithPlugin('"" and "foo" ""')
 
     expect(result).toContain('“” and “foo” “”')
   })
 
-  test('handles no-space style before opening quotes', async () => {
+  test.concurrent('handles no-space style before opening quotes', async () => {
     const result = await compileWithPlugin('He said,"Hello."')
 
     expect(result).toContain('He said,“Hello.”')
   })
 
-  test('handles single-quoted phrases with internal punctuation', async () => {
+  test.concurrent('handles single-quoted phrases with internal punctuation', async () => {
     const result = await compileWithPlugin("He said 'hello, world'.")
 
     expect(result).toContain('He said ’hello, world’.')
   })
 
-  test('ignores typography inside code and pre blocks (inline and flow)', async () => {
+  test.concurrent('ignores typography inside code and pre blocks (inline and flow)', async () => {
     const result = await compileWithPlugin(
       '<code>"Raw code"</code>\n\n<pre>"Raw pre"</pre>\n\n"Outside"'
     )

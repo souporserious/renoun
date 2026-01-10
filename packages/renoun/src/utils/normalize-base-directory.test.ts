@@ -10,11 +10,11 @@ function normalizePath(path: string | undefined) {
 }
 
 describe('normalizeBaseDirectory', () => {
-  test('returns undefined when base directory is not provided', () => {
+  test.concurrent('returns undefined when base directory is not provided', () => {
     expect(normalizeBaseDirectory()).toBeUndefined()
   })
 
-  test('normalizes file URL objects to a directory pathname', () => {
+  test.concurrent('normalizes file URL objects to a directory pathname', () => {
     const directory = normalizeBaseDirectory(
       new URL('file:///tmp/example/project/src/file.ts')
     )
@@ -22,7 +22,7 @@ describe('normalizeBaseDirectory', () => {
     expect(directory).toBe('/tmp/example/project/src')
   })
 
-  test('normalizes file URL strings to a directory pathname', () => {
+  test.concurrent('normalizes file URL strings to a directory pathname', () => {
     const directory = normalizeBaseDirectory(
       'file:///tmp/example/project/src/file.ts'
     )
@@ -30,7 +30,7 @@ describe('normalizeBaseDirectory', () => {
     expect(directory).toBe('/tmp/example/project/src')
   })
 
-  test('resolves workspace scheme inputs against the repository root', () => {
+  test.concurrent('resolves workspace scheme inputs against the repository root', () => {
     const rootDirectory = getRootDirectory()
     const directory = normalizeBaseDirectory(
       'workspace:/packages/renoun/src/utils/file.ts'
@@ -41,11 +41,11 @@ describe('normalizeBaseDirectory', () => {
     )
   })
 
-  test('returns plain relative paths unchanged', () => {
+  test.concurrent('returns plain relative paths unchanged', () => {
     expect(normalizeBaseDirectory('./docs/examples/')).toBe('./docs/examples/')
   })
 
-  test('uses import.meta.url inputs to resolve the containing directory', () => {
+  test.concurrent('uses import.meta.url inputs to resolve the containing directory', () => {
     const directory = normalizeBaseDirectory(import.meta.url)
     const expected = new URL('.', import.meta.url)
 

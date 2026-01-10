@@ -8,7 +8,7 @@ const { Project } = getTsMorph()
 describe('getMainExportDeclaration', () => {
   const project = new Project()
 
-  test('gets name from function declaration', () => {
+  test.concurrent('gets name from function declaration', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `export function Foo() {}`,
@@ -20,7 +20,7 @@ describe('getMainExportDeclaration', () => {
     expect(name).toBe('Foo')
   })
 
-  test('gets name from variable declaration', () => {
+  test.concurrent('gets name from variable declaration', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `export const Foo = () => {}`,
@@ -32,7 +32,7 @@ describe('getMainExportDeclaration', () => {
     expect(name).toBe('Foo')
   })
 
-  test('gets name from class declaration', () => {
+  test.concurrent('gets name from class declaration', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `export class Foo {}`,

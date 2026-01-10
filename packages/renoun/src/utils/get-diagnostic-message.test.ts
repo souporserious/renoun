@@ -9,7 +9,7 @@ const { Project } = getTsMorph()
 describe('getDiagnosticMessageText', () => {
   const project = new Project()
 
-  test('returns a formatted message for simple diagnostics', () => {
+  test.concurrent('returns a formatted message for simple diagnostics', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       `const addNumbers = (a: number, b: number) => a + b; addNumbers(5, "5");`
@@ -23,7 +23,7 @@ describe('getDiagnosticMessageText', () => {
     )
   })
 
-  test('returns a formatted message for chained diagnostics', () => {
+  test.concurrent('returns a formatted message for chained diagnostics', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
       dedent`

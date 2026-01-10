@@ -12,7 +12,7 @@ function transform(value: string) {
 }
 
 describe('transformJSDocInlineTags', () => {
-  test('converts jsdoc links with default labels', () => {
+  test.concurrent('converts jsdoc links with default labels', () => {
     const tree = transform('See {@link Foo} for more info.')
     const paragraph = tree.children[0] as Paragraph
 
@@ -28,7 +28,7 @@ describe('transformJSDocInlineTags', () => {
     ])
   })
 
-  test('supports fragments and custom labels', () => {
+  test.concurrent('supports fragments and custom labels', () => {
     const tree = transform(
       'Refer to {@link Foo#bar|the bar member} or {@link Baz#qux}.'
     )
@@ -53,7 +53,7 @@ describe('transformJSDocInlineTags', () => {
     ])
   })
 
-  test('handles multiple links inside a single text node', () => {
+  test.concurrent('handles multiple links inside a single text node', () => {
     const tree = transform('{@link Foo}|{@link Bar|bar}|{@link Baz}')
     const paragraph = tree.children[0] as Paragraph
 
@@ -81,7 +81,7 @@ describe('transformJSDocInlineTags', () => {
     ])
   })
 
-  test('supports link variants and tutorial references', () => {
+  test.concurrent('supports link variants and tutorial references', () => {
     const tree = transform(
       'See {@linkplain Foo} and {@linkcode bar.baz|call()}; tutorial: {@tutorial intro#setup}.'
     )
@@ -113,7 +113,7 @@ describe('transformJSDocInlineTags', () => {
     ])
   })
 
-  test('converts code and literal inline tags', () => {
+  test.concurrent('converts code and literal inline tags', () => {
     const tree = transform(
       'Return {@code value} and keep {@literal <b>raw</b>} markup.'
     )

@@ -79,7 +79,7 @@ function unwrapFragmentChildren(node: unknown): ReactNode {
 }
 
 describe('getMarkdownContent', () => {
-  test('compiles basic markdown into JSX', async () => {
+  test.concurrent('compiles basic markdown into JSX', async () => {
     const element = await getMarkdownContent({
       source: '# Hello',
       runtime,
@@ -95,7 +95,7 @@ describe('getMarkdownContent', () => {
     expect((child.props as PropsWithChildren).children).toBe('Hello')
   })
 
-  test('uses custom components when provided', async () => {
+  test.concurrent('uses custom components when provided', async () => {
     const H1 = (props: Record<string, unknown>) => jsx('h2', props)
 
     const element = await getMarkdownContent({
@@ -116,7 +116,7 @@ describe('getMarkdownContent', () => {
     expect((child.props as PropsWithChildren).children).toBe('Hello')
   })
 
-  test('sanitizes unsafe URL protocols in markdown links', async () => {
+  test.concurrent('sanitizes unsafe URL protocols in markdown links', async () => {
     const element = await getMarkdownContent({
       source: '[x](javascript:alert(1))',
       runtime,
@@ -134,7 +134,7 @@ describe('getMarkdownContent', () => {
     expect((link.props as PropsWithChildren).children).toBe('x')
   })
 
-  test('stringifies raw HTML instead of rendering it', async () => {
+  test.concurrent('stringifies raw HTML instead of rendering it', async () => {
     const element = await getMarkdownContent({
       source: 'Hello <span>world</span>',
       runtime,
@@ -151,7 +151,7 @@ describe('getMarkdownContent', () => {
     expect(nodeText(children)).toBe('Hello <span>world</span>')
   })
 
-  test('applies remarkPlugins and rehypePlugins', async () => {
+  test.concurrent('applies remarkPlugins and rehypePlugins', async () => {
     const remarkAppendParagraph = () => {
       return (tree: MdastRoot) => {
         const tailText: Text = { type: 'text', value: 'TAIL' }
@@ -197,7 +197,7 @@ describe('getMarkdownContent', () => {
     expect((second.props as PropsWithChildren).children).toBe('TAIL')
   })
 
-  test('works with rehype plugin addCodeBlock', async () => {
+  test.concurrent('works with rehype plugin addCodeBlock', async () => {
     type CodeBlockProps = React.ComponentPropsWithoutRef<'pre'> & {
       shouldFormat?: boolean
       language?: string

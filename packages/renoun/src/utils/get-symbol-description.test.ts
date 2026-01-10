@@ -8,7 +8,7 @@ import { getSymbolDescription } from './get-symbol-description.ts'
 describe('getSymbolDescription', () => {
   const project = new Project()
 
-  test('parses a symbol with JSDoc', () => {
+  test.concurrent('parses a symbol with JSDoc', () => {
     const description = 'Provides the initial count.'
     const sourceFile = project.createSourceFile(
       'test.ts',
@@ -22,7 +22,7 @@ describe('getSymbolDescription', () => {
     expect(getSymbolDescription(symbol)).toEqual(description)
   })
 
-  test('parses a symbol with a leading comment', () => {
+  test.concurrent('parses a symbol with a leading comment', () => {
     const description = 'Provides the initial count.'
     const sourceFile = project.createSourceFile(
       'test.ts',
@@ -36,7 +36,7 @@ describe('getSymbolDescription', () => {
     expect(getSymbolDescription(symbol)).toEqual(description)
   })
 
-  test('parses a function declaration', () => {
+  test.concurrent('parses a function declaration', () => {
     const description = 'Increments the count.'
     const sourceFile = project.createSourceFile(
       'test.ts',

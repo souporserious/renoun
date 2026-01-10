@@ -3,7 +3,7 @@ import { describe, expect, test } from 'vitest'
 import { parseFrontmatter } from './parse-frontmatter.js'
 
 describe('parseFrontmatter', () => {
-  test('returns original content when no frontmatter is present', () => {
+  test.concurrent('returns original content when no frontmatter is present', () => {
     const source = '# Hello world'
     const result = parseFrontmatter(source)
 
@@ -11,7 +11,7 @@ describe('parseFrontmatter', () => {
     expect(result.frontmatter).toBeUndefined()
   })
 
-  test('parses top-level scalar values', () => {
+  test.concurrent('parses top-level scalar values', () => {
     const source = `---\ntitle: Hello world\ndescription: Test file\n---\n\n# Hello`
     const result = parseFrontmatter(source)
 
@@ -22,7 +22,7 @@ describe('parseFrontmatter', () => {
     })
   })
 
-  test('parses arrays and nested objects', () => {
+  test.concurrent('parses arrays and nested objects', () => {
     const source = `---\ntags:\n  - docs\n  - mdx\nauthor:\n  name: Docs Bot\n  links:\n    - label: Website\n      url: https://renoun.dev\n    - label: GitHub\n      url: https://github.com/souporserious/renoun\n---\n\nContent`
     const result = parseFrontmatter(source)
 
@@ -42,7 +42,7 @@ describe('parseFrontmatter', () => {
     })
   })
 
-  test('parses inline collections and primitive types', () => {
+  test.concurrent('parses inline collections and primitive types', () => {
     const source = `---\narray: [one, two, three]\nflags: { featured: true, count: 3 }\n---\nbody`
     const result = parseFrontmatter(source)
 
@@ -53,7 +53,7 @@ describe('parseFrontmatter', () => {
     })
   })
 
-  test('returns empty frontmatter for empty block', () => {
+  test.concurrent('returns empty frontmatter for empty block', () => {
     const source = `---\n---\ncontent`
     const result = parseFrontmatter(source)
 

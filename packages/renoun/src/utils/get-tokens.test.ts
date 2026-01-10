@@ -67,7 +67,7 @@ function waitForDuration(ms: number) {
 }
 
 describe('getTokens metadata integration', () => {
-  test('attaches diagnostics and quick info when source has errors', async () => {
+  test.concurrent('attaches diagnostics and quick info when source has errors', async () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const filePath = 'test.ts'
     const code = 'const value = missing;\nvalue;\n'
@@ -97,7 +97,7 @@ describe('getTokens metadata integration', () => {
     expect(secondValueToken?.quickInfo?.documentationText).toBeDefined()
   })
 
-  test('preserves symbol quick info for jsx-only snippets', async () => {
+  test.concurrent('preserves symbol quick info for jsx-only snippets', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,
       compilerOptions: {
@@ -159,7 +159,7 @@ describe('getTokens metadata integration', () => {
     expect(componentToken?.quickInfo?.displayText).toContain('Component')
   })
 
-  test('starts highlighter without waiting for TypeScript metadata to resolve', async () => {
+  test.concurrent('starts highlighter without waiting for TypeScript metadata to resolve', async () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const filePath = 'parallel.ts'
     const code = 'const value = 1;\n'
@@ -244,7 +244,7 @@ describe('getTokens metadata integration', () => {
     expect(metadataCompleted).toBe(true)
   })
 
-  test('does not call metadata collector for non-JavaScript languages', async () => {
+  test.concurrent('does not call metadata collector for non-JavaScript languages', async () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const filePath = 'post.mdx'
     const code = '# Hello World\n\nThis is **bold** text.\n'
@@ -282,7 +282,7 @@ describe('getTokens metadata integration', () => {
     expect(tokens[0][0]?.value).toBe('# Hello World')
   })
 
-  test('throws with actionable error when language is js-like but path is mdx', async () => {
+  test.concurrent('throws with actionable error when language is js-like but path is mdx', async () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const filePath = 'post.mdx'
     const code = 'export const metadata = { title: \"Hello\" }\n'
@@ -303,7 +303,7 @@ describe('getTokens metadata integration', () => {
     ).rejects.toThrow('getTokens received language "tsx" for file "post.mdx"')
   })
 
-  test('throws with actionable error when language does not match file extension', async () => {
+  test.concurrent('throws with actionable error when language does not match file extension', async () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const filePath = 'post.mdx'
     const code = 'export const metadata = { title: "Hello" }\n'
@@ -324,7 +324,7 @@ describe('getTokens metadata integration', () => {
     ).rejects.toThrow('getTokens received language "tsx" for file "post.mdx"')
   })
 
-  test('calls metadata collector for JavaScript-like languages', async () => {
+  test.concurrent('calls metadata collector for JavaScript-like languages', async () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const filePath = 'test.tsx'
     const code = 'const x = 1;\n'
