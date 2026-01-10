@@ -10217,22 +10217,19 @@ function fillText(
 
   if (tabularWidth !== undefined) {
     const graphemes = segmentGraphemes(text)
-    const letterSpacing = parseFloat(context.letterSpacing) || 0
     let currentX = x
 
     for (let index = 0; index < graphemes.length; index++) {
       const grapheme = graphemes[index]
-      const isLast = index === graphemes.length - 1
-      const spacing = isLast ? 0 : letterSpacing
 
       if (/^\d$/.test(grapheme)) {
         const digitWidth = context.measureText(grapheme).width
         const offset = (tabularWidth - digitWidth) / 2
         context.fillText(grapheme, currentX + offset, y)
-        currentX += tabularWidth + spacing
+        currentX += tabularWidth
       } else {
         context.fillText(grapheme, currentX, y)
-        currentX += context.measureText(grapheme).width + spacing
+        currentX += context.measureText(grapheme).width
       }
     }
     return
@@ -10257,22 +10254,19 @@ function strokeText(
 
   if (tabularWidth !== undefined) {
     const graphemes = segmentGraphemes(text)
-    const letterSpacing = parseFloat(context.letterSpacing) || 0
     let currentX = x
 
     for (let index = 0; index < graphemes.length; index++) {
       const grapheme = graphemes[index]
-      const isLast = index === graphemes.length - 1
-      const spacing = isLast ? 0 : letterSpacing
 
       if (/^\d$/.test(grapheme)) {
         const digitWidth = context.measureText(grapheme).width
         const offset = (tabularWidth - digitWidth) / 2
         context.strokeText(grapheme, currentX + offset, y)
-        currentX += tabularWidth + spacing
+        currentX += tabularWidth
       } else {
         context.strokeText(grapheme, currentX, y)
-        currentX += context.measureText(grapheme).width + spacing
+        currentX += context.measureText(grapheme).width
       }
     }
     return
