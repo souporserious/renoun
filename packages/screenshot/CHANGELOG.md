@@ -1,5 +1,16 @@
 # @renoun/screenshot
 
+## 0.3.0
+
+### Minor Changes
+
+- f71c9f7: Adds text supersampling to keep text rendering crisp.
+
+### Patch Changes
+
+- e60ee2f: Ensures SVG rasterization and canvas text rendering honor font feature settings like tabular numbers and load webfonts from accessible stylesheets.
+- f0835bc: Fixes input vertical baseline.
+
 ## 0.2.0
 
 ### Minor Changes

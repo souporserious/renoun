@@ -1,5 +1,28 @@
 # renoun
 
+## 11.1.0
+
+### Minor Changes
+
+- 6568551: Adds `includeFrontmatter` option to `Markdown` and `MDXFile` `getText` methods.
+- a6c17c9: Adds a new `PackageManager` utility (reads package.json `packageManager`, lockfiles, and can optionally fall back to what's installed on the machine:
+
+  ```ts
+  import { PackageManager } from 'renoun'
+
+  const packageManager = new PackageManager()
+
+  // Build commands that match the detected package manager.
+  const install = packageManager.install(['react', 'react-dom'])
+  const installDev = packageManager.install('typescript', { dev: true })
+
+  packageManager.run('dev') // 'pnpm dev' (if pnpm is detected)
+  ```
+
+### Patch Changes
+
+- 36e189a: Fixes `getExportValue` typing so export names are strongly inferred from a directory `schema` when provided.
+
 ## 11.0.0
 
 ### Major Changes
