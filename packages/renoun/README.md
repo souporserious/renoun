@@ -17,20 +17,32 @@
 
 <br />
 
+```tsx
+import { Directory } from 'renoun'
+
+const posts = new Directory({
+  path: 'posts',
+  loader: (path) => import(`./posts/${path}.mdx`),
+})
+
+async function Page({ slug }: { slug: string }) {
+  const post = await posts.getFile(slug, 'mdx')
+  const Content = await post.getContent()
+
+  return <Content />
+}
+```
+
 ## Features
 
-- 📝 Author MDX content
-- 📊 Query and analyze file system metadata
-- 🛟 Validate module exports
-- 📘 Generate up‑to‑date API references
-- 🌈 Highlight code accurately
-- ✅ Type‑check code blocks
-- 🖼️ Render code previews
-- 📦 Integrate with your favorite framework
+- Query files (MDX/MD/TS) like data
+- Generate navigations/indexes from the file system
+- Load and render module exports
+- Validate frontmatter/exports with schemas
 
-## Applications as Templates
+## Templates
 
-The easiest way to get started using renoun is with one of the application starters:
+The easiest way to get started using renoun is with an application template:
 
 - **Blog** — blog starter with a post index, tags, and MDX article pages ([Demo](https://blog.renoun.dev) · [Source](/examples/blog))
 - **Docs** — documentation starter that turns MDX content into a polished, full-featured site ([Demo](https://docs.renoun.dev) · [Source](/examples/docs))
@@ -38,29 +50,7 @@ The easiest way to get started using renoun is with one of the application start
 
 ## Why renoun?
 
-Maintaining consistent technical blogs, documentation, and presentations at scale is hard. The renoun SDK simplifies this by providing a set of tools and React‑first solutions to author, validate, and render content that stays in sync with your code every step of the way.
-
-## Install
-
-### Automated
-
-To create a new project or add to an existing project, run the following command in your terminal:
-
-```bash
-npx create-renoun@latest
-```
-
-This will prompt you to select an [example](/examples/) to install.
-
-### Manual
-
-To install renoun manually, run the following command in your terminal:
-
-```bash
-npm install renoun
-```
-
-After installing the package, you can start creating content using your [favorite framework](https://www.renoun.dev/guides).
+Maintaining technical blogs, docs, and presentations is hard because the source of truth is split between content files, code, and examples causing drift. The renoun SDK turns your codebase into structured, queryable data (files, exports, types, and MDX) so you can render indexes, navigations, API references, and pages directly from what’s in the repo, keeping everything in sync as it changes.
 
 ## Contributing
 
