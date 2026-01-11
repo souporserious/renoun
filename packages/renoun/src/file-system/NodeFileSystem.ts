@@ -7,6 +7,7 @@ import {
   createReadStream,
   createWriteStream,
   statSync,
+  realpathSync,
   type Dirent,
 } from 'node:fs'
 import {
@@ -20,7 +21,7 @@ import {
   cp,
   writeFile,
 } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import { ensureRelativePath, relativePath } from '../utils/path.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
@@ -63,6 +64,39 @@ export class NodeFileSystem extends FileSystem {
           'Accessing files outside of the workspace is not allowed.'
       )
     }
+
+    const realWorkspaceRoot = realpathSync(rootDirectory)
+    const realTargetPath = this.#resolveRealPath(absolutePath)
+    const realRelative = relative(realWorkspaceRoot, realTargetPath)
+
+    if (realRelative.startsWith('..') || realRelative.startsWith('../')) {
+      throw new Error(
+        `[renoun] Attempted to access a path outside of the workspace root via symlink.\n` +
+          `  Workspace root:       ${rootDirectory}\n` +
+          `  Workspace real path:  ${realWorkspaceRoot}\n` +
+          `  Provided path:        ${path}\n` +
+          `  Resolved path:        ${absolutePath}\n` +
+          `  Real target path:     ${realTargetPath}\n` +
+          'Accessing files outside of the workspace is not allowed.'
+      )
+    }
+  }
+
+  #resolveRealPath(path: string): string {
+    const segmentsToAppend: string[] = []
+    let currentPath = path
+
+    while (!existsSync(currentPath)) {
+      const parentPath = dirname(currentPath)
+      if (parentPath === currentPath) {
+        break
+      }
+      segmentsToAppend.unshift(basename(currentPath))
+      currentPath = parentPath
+    }
+
+    const realExistingPath = realpathSync(currentPath)
+    return resolve(realExistingPath, ...segmentsToAppend)
   }
 
   getAbsolutePath(path: string): string {

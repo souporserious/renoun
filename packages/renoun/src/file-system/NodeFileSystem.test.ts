@@ -1,6 +1,11 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
-import type { ReadableStream } from 'node:stream/web'
 import { afterAll, describe, expect, test } from 'vitest'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -45,6 +50,7 @@ describe('NodeFileSystem', () => {
   const baseTmpDirectory = join(rootDirectory, 'tmp-tests')
   mkdirSync(baseTmpDirectory, { recursive: true })
   const tempDirectory = mkdtempSync(join(baseTmpDirectory, 'node-fs-'))
+  const outsideDirectories: string[] = []
   const fileSystem = new NodeFileSystem()
 
   const textFilePath = join(tempDirectory, 'text.txt')
@@ -88,7 +94,26 @@ describe('NodeFileSystem', () => {
     expect(await fileSystem.fileExists(binaryFilePath)).toBe(false)
   })
 
+  test('prevents path traversal via symlinks escaping the workspace', async () => {
+    const outsideDirectory = mkdtempSync(join(rootDirectory, '..', 'node-fs-'))
+    outsideDirectories.push(outsideDirectory)
+
+    const outsideFilePath = join(outsideDirectory, 'secret.txt')
+    writeFileSync(outsideFilePath, 'classified data')
+
+    const traversalDirectory = join(tempDirectory, 'escape')
+    symlinkSync(outsideDirectory, traversalDirectory, 'dir')
+
+    const traversalPath = join(traversalDirectory, 'secret.txt')
+    await expect(fileSystem.readFile(traversalPath)).rejects.toThrow(
+      /outside of the workspace root/i
+    )
+  })
+
   afterAll(() => {
     rmSync(tempDirectory, { recursive: true, force: true })
+    for (const directory of outsideDirectories) {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })
