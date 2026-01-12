@@ -14,7 +14,7 @@ import type {
   GetSourceTextMetadataOptions,
   SourceTextMetadata,
 } from '../utils/get-source-text-metadata.ts'
-import type { FileRegion } from '../utils/get-file-regions.ts'
+import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
 import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.ts'
 import type { DistributiveOmit } from '../types.ts'
@@ -225,25 +225,27 @@ export async function getFileExports(
 }
 
 /**
- * Get the `//#region` spans for a file.
+ * Get outlining spans for a file.
  * @internal
  */
-export async function getFileRegions(
+export async function getOutlineRanges(
   filePath: string,
   projectOptions?: ProjectOptions
-): Promise<FileRegion[]> {
+): Promise<OutlineRange[]> {
   const client = getClient()
   if (client) {
     return client.callMethod<
       { filePath: string; projectOptions?: ProjectOptions },
-      FileRegion[]
-    >('getFileRegions', { filePath, projectOptions })
+      OutlineRange[]
+    >('getOutlineRanges', { filePath, projectOptions })
   }
 
-  return import('../utils/get-file-regions.ts').then(({ getFileRegions }) => {
-    const project = getProject(projectOptions)
-    return getFileRegions(filePath, project)
-  })
+  return import('../utils/get-outline-ranges.ts').then(
+    ({ getOutlineRanges }) => {
+      const project = getProject(projectOptions)
+      return getOutlineRanges(filePath, project)
+    }
+  )
 }
 
 /**

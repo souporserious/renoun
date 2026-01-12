@@ -6,7 +6,7 @@ import {
   getFileExportMetadata,
   getFileExportText,
   getFileExportStaticValue,
-  getFileRegions,
+  getOutlineRanges,
   resolveTypeAtLocation,
 } from '../project/client.ts'
 import type { ProjectOptions } from '../project/types.ts'
@@ -257,8 +257,8 @@ export abstract class FileSystem {
     )
   }
 
-  getFileRegions(filePath: string) {
-    return getFileRegions(filePath, this.getProjectOptions())
+  getOutlineRanges(filePath: string) {
+    return getOutlineRanges(filePath, this.getProjectOptions())
   }
 
   async getFileExportStaticValue(

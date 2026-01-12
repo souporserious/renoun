@@ -25,7 +25,7 @@ import {
   getLocalGitExportMetadata,
   type GitExportMetadata,
 } from '../utils/get-local-git-export-metadata.ts'
-import type { FileRegion } from '../utils/get-file-regions.ts'
+import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
@@ -2072,16 +2072,17 @@ export class JavaScriptFile<
   /** Get an outline derived from regions and exports in the JavaScript file. */
   async getSections(): Promise<Section[]> {
     if (!this.#sections) {
-      const [regions, fileExports] = await Promise.all([
-        this.getRegions(),
+      const [outlineRanges, fileExports] = await Promise.all([
+        this.getOutlineRanges(),
         this.getExports(),
       ])
 
+      const regions = outlineRanges.filter((range) => range.kind === 'region')
       const sections: Array<{
         section: Section
         line: number
       }> = []
-      const regionExportNames = new Map<FileRegion, string[]>()
+      const regionExportNames = new Map<OutlineRange, string[]>()
 
       for (const region of regions) {
         regionExportNames.set(region, [])
@@ -2154,10 +2155,10 @@ export class JavaScriptFile<
     return this.#sections
   }
 
-  /** Get the `//#region` spans in the JavaScript file. */
-  async getRegions(): Promise<FileRegion[]> {
+  /** Get the outlining spans in the JavaScript file. */
+  async getOutlineRanges(): Promise<OutlineRange[]> {
     const fileSystem = this.getParent().getFileSystem()
-    return fileSystem.getFileRegions(this.absolutePath)
+    return fileSystem.getOutlineRanges(this.absolutePath)
   }
 
   override async getStructure(): Promise<FileStructure> {

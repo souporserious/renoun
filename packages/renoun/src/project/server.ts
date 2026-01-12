@@ -13,7 +13,7 @@ import {
   getFileExports as baseGetFileExports,
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.ts'
-import { getFileRegions as baseGetFileRegions } from '../utils/get-file-regions.ts'
+import { getOutlineRanges as baseGetOutlineRanges } from '../utils/get-outline-ranges.ts'
 import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
@@ -188,8 +188,8 @@ export async function createServer(options?: { port?: number }) {
   )
 
   server.registerMethod(
-    'getFileRegions',
-    async function getFileRegions({
+    'getOutlineRanges',
+    async function getOutlineRanges({
       filePath,
       projectOptions,
     }: {
@@ -197,7 +197,7 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileRegions(filePath, project)
+      return baseGetOutlineRanges(filePath, project)
     },
     {
       memoize: true,

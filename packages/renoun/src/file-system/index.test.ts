@@ -21,7 +21,7 @@ import { z } from 'zod'
 import type { basename } from '#fixtures/utils/path.ts'
 import type { MDXContent } from '../mdx'
 import type { Section, ContentSection } from './index'
-import type { FileRegion } from '../utils/get-file-regions.ts'
+import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import { removeExtension } from '../utils/path.ts'
 import { NodeFileSystem } from './NodeFileSystem'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
@@ -1990,7 +1990,7 @@ describe('file system', () => {
     ])
   })
 
-  test('javascript file getRegions returns TypeScript regions', async () => {
+  test('javascript file getOutlineRanges returns TypeScript regions', async () => {
     const fileSystem = new InMemoryFileSystem({
       'file.ts': `//#region alpha
 const a = 1
@@ -2005,14 +2005,14 @@ function b() {}
 
     expect(file).toBeInstanceOf(JavaScriptFile)
 
-    const regions = await file.getRegions()
+    const ranges = await file.getOutlineRanges()
 
-    expect(regions).toEqual([
+    expect(ranges).toEqual([
       {
         autoCollapse: false,
         bannerText: 'alpha',
         hintSpan: { length: 40, start: 0 },
-        kind: 'Region',
+        kind: 'region',
         position: {
           end: { column: 13, line: 3 },
           start: { column: 1, line: 1 },
@@ -2023,15 +2023,38 @@ function b() {}
         autoCollapse: false,
         bannerText: 'beta',
         hintSpan: { length: 43, start: 42 },
-        kind: 'Region',
+        kind: 'region',
         position: {
           end: { column: 13, line: 7 },
           start: { column: 1, line: 5 },
         },
         textSpan: { length: 43, start: 42 },
       },
+      {
+        autoCollapse: true,
+        bannerText: '...',
+        hintSpan: {
+          length: 15,
+          start: 57,
+        },
+        kind: 'code',
+        position: {
+          end: {
+            column: 16,
+            line: 6,
+          },
+          start: {
+            column: 13,
+            line: 6,
+          },
+        },
+        textSpan: {
+          length: 3,
+          start: 69,
+        },
+      },
     ])
-    expectTypeOf(regions).toExtend<FileRegion[]>()
+    expectTypeOf(ranges).toExtend<OutlineRange[]>()
   })
 
   test('schema transforms export value', async () => {
