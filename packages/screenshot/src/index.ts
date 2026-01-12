@@ -9420,22 +9420,22 @@ async function renderTextNode(
   // Handle leading/trailing whitespace
   if (isCollapsingWhiteSpace(whiteSpace) && whiteSpace !== 'pre-line') {
     const raw = node.textContent || ''
-    const leadingMatch = raw.match(/^\s+/)
-    if (leadingMatch) {
+    const leadingWhitespaceLength = getLeadingWhitespaceLength(raw)
+    if (leadingWhitespaceLength > 0) {
       const range = parent.ownerDocument.createRange()
       range.setStart(node, 0)
-      range.setEnd(node, leadingMatch[0].length)
+      range.setEnd(node, leadingWhitespaceLength)
       const rects = range.getClientRects()
       if (!rects.length || rects[0].width === 0) {
         textContent = textContent.trimStart()
       }
       range.detach?.()
     }
-    const trailingMatch = raw.match(/\s+$/)
-    if (trailingMatch) {
+    const trailingWhitespaceLength = getTrailingWhitespaceLength(raw)
+    if (trailingWhitespaceLength > 0) {
       const range = parent.ownerDocument.createRange()
       const len = raw.length
-      range.setStart(node, len - trailingMatch[0].length)
+      range.setStart(node, len - trailingWhitespaceLength)
       range.setEnd(node, len)
       const rects = range.getClientRects()
       if (!rects.length || rects[0].width === 0) {
@@ -10688,6 +10688,42 @@ function isCollapsingWhiteSpace(whiteSpace: string): boolean {
     default:
       return false
   }
+}
+
+function isWhitespaceCodePoint(code: number): boolean {
+  return (
+    code === 0x0009 ||
+    code === 0x000a ||
+    code === 0x000b ||
+    code === 0x000c ||
+    code === 0x000d ||
+    code === 0x0020 ||
+    code === 0x00a0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  )
+}
+
+function getLeadingWhitespaceLength(value: string): number {
+  let index = 0
+  while (index < value.length && isWhitespaceCodePoint(value.charCodeAt(index))) {
+    index += 1
+  }
+  return index
+}
+
+function getTrailingWhitespaceLength(value: string): number {
+  let index = value.length - 1
+  while (index >= 0 && isWhitespaceCodePoint(value.charCodeAt(index))) {
+    index -= 1
+  }
+  return value.length - 1 - index
 }
 
 function applyTextTransform(
