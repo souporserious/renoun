@@ -1990,7 +1990,7 @@ describe('file system', () => {
     ])
   })
 
-  test('javascript file getOutlineRanges returns TypeScript regions', async () => {
+  test('javascript file getOutlineRanges returns TypeScript outlining spans', async () => {
     const fileSystem = new InMemoryFileSystem({
       'file.ts': `//#region alpha
 const a = 1
@@ -2052,6 +2052,51 @@ function b() {}
           length: 3,
           start: 69,
         },
+      },
+    ])
+    expectTypeOf(ranges).toExtend<OutlineRange[]>()
+  })
+
+  test('javascript file getFoldingRanges returns folding ranges', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'file.ts': `//#region alpha
+const a = 1
+//#endregion
+
+//#region beta
+function b() {}
+//#endregion`,
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('file', 'ts')
+
+    expect(file).toBeInstanceOf(JavaScriptFile)
+
+    const ranges = await file.getFoldingRanges()
+
+    // Unlike outlining spans, IDE folding typically excludes single-line "code" spans.
+    expect(ranges).toEqual([
+      {
+        autoCollapse: false,
+        bannerText: 'alpha',
+        hintSpan: { length: 40, start: 0 },
+        kind: 'region',
+        position: {
+          end: { column: 13, line: 3 },
+          start: { column: 1, line: 1 },
+        },
+        textSpan: { length: 40, start: 0 },
+      },
+      {
+        autoCollapse: false,
+        bannerText: 'beta',
+        hintSpan: { length: 43, start: 42 },
+        kind: 'region',
+        position: {
+          end: { column: 13, line: 7 },
+          start: { column: 1, line: 5 },
+        },
+        textSpan: { length: 43, start: 42 },
       },
     ])
     expectTypeOf(ranges).toExtend<OutlineRange[]>()

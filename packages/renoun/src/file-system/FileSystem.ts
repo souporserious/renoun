@@ -261,6 +261,15 @@ export abstract class FileSystem {
     return getOutlineRanges(filePath, this.getProjectOptions())
   }
 
+  async getFoldingRanges(filePath: string) {
+    return this.getOutlineRanges(filePath).then((outlineRanges) => {
+      // filter out single-line ranges
+      return outlineRanges.filter(
+        (range) => range.position.end.line > range.position.start.line
+      )
+    })
+  }
+
   async getFileExportStaticValue(
     filePath: string,
     position: number,

@@ -25,7 +25,10 @@ import {
   getLocalGitExportMetadata,
   type GitExportMetadata,
 } from '../utils/get-local-git-export-metadata.ts'
-import type { OutlineRange } from '../utils/get-outline-ranges.ts'
+import {
+  isPositionWithinOutlineRange,
+  type OutlineRange,
+} from '../utils/get-outline-ranges.ts'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
@@ -2093,17 +2096,18 @@ export class JavaScriptFile<
         line: number
       }> = []
 
-      const findRegionForLine = (line: number) =>
-        regions.find(
-          (region) =>
-            line >= region.position.start.line &&
-            line <= region.position.end.line
-        )
+      const findRegionForPosition = (position: {
+        line: number
+        column: number
+      }) =>
+        regions.find((region) => isPositionWithinOutlineRange(region, position))
 
       for (const fileExport of fileExports) {
         const position = fileExport.getPosition()
-        const line = position?.start.line
-        const region = line !== undefined ? findRegionForLine(line) : undefined
+        const start = position?.start
+        const region = start
+          ? findRegionForPosition({ line: start.line, column: start.column })
+          : undefined
 
         if (region) {
           const names = regionExportNames.get(region)
@@ -2113,7 +2117,7 @@ export class JavaScriptFile<
         } else {
           ungroupedExports.push({
             exportItem: fileExport,
-            line: line ?? Number.POSITIVE_INFINITY,
+            line: start?.line ?? Number.POSITIVE_INFINITY,
           })
         }
       }
@@ -2155,10 +2159,16 @@ export class JavaScriptFile<
     return this.#sections
   }
 
-  /** Get the outlining spans in the JavaScript file. */
+  /** Get the outlining ranges in the JavaScript file. */
   async getOutlineRanges(): Promise<OutlineRange[]> {
     const fileSystem = this.getParent().getFileSystem()
     return fileSystem.getOutlineRanges(this.absolutePath)
+  }
+
+  /** Get foldable ranges in the JavaScript file (IDE-style folding). */
+  async getFoldingRanges(): Promise<OutlineRange[]> {
+    const fileSystem = this.getParent().getFileSystem()
+    return fileSystem.getFoldingRanges(this.absolutePath)
   }
 
   override async getStructure(): Promise<FileStructure> {

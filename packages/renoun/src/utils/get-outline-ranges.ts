@@ -1,7 +1,6 @@
-import type { Project, ts } from './ts-morph.ts'
-
 import { getDebugLogger } from './debug.ts'
 import type { DeclarationPosition } from './get-declaration-location.ts'
+import type { Project, ts } from './ts-morph.ts'
 
 export interface OutlineRange {
   bannerText: string
@@ -12,7 +11,7 @@ export interface OutlineRange {
   position: DeclarationPosition
 }
 
-/** Returns the TypeScript outlining spans for a file. */
+/** Returns the TypeScript outlining ranges for a file. */
 export function getOutlineRanges(
   filePath: string,
   project: Project
@@ -50,4 +49,37 @@ export function getOutlineRanges(
     },
     { data: { filePath } }
   ) as OutlineRange[]
+}
+
+/** Returns whether a position is within an outlining range. */
+export function isPositionWithinOutlineRange(
+  range: {
+    position: {
+      start: { line: number; column: number }
+      end: { line: number; column: number }
+    }
+  },
+  position: {
+    line: number
+    column: number
+  }
+): boolean {
+  if (position.line < range.position.start.line) return false
+  if (position.line > range.position.end.line) return false
+
+  if (
+    position.line === range.position.start.line &&
+    position.column < range.position.start.column
+  ) {
+    return false
+  }
+
+  if (
+    position.line === range.position.end.line &&
+    position.column >= range.position.end.column
+  ) {
+    return false
+  }
+
+  return true
 }

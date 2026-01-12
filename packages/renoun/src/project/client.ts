@@ -225,7 +225,7 @@ export async function getFileExports(
 }
 
 /**
- * Get outlining spans for a file.
+ * Get outlining ranges for a file.
  * @internal
  */
 export async function getOutlineRanges(
