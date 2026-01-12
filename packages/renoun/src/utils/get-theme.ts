@@ -4,21 +4,9 @@ import { resolve } from 'node:path'
 import type { ConfigurationOptions } from '../components/Config/types.ts'
 import type { TextMateThemeRaw } from './create-tokenizer.ts'
 import { loadTmTheme } from './load-package.ts'
+import { validateTheme, type Theme } from './theme-schema.ts'
 
 export const BASE_TOKEN_CLASS_NAME = '×'
-
-interface Theme {
-  colors: {
-    foreground?: string
-    background?: string
-    [key: string]: any
-  }
-  tokenColors?: any
-  semanticTokenColors?: Record<string, any>
-  settings?: any[]
-  type?: 'light' | 'dark'
-  [key: string]: any
-}
 
 /** Resolves the theme config name from the `RootProvider` config. */
 function getThemeConfigName(
@@ -135,6 +123,18 @@ export async function getTheme(
     throw new Error(
       `[renoun] The theme "${themePath}" is not a valid JSON file or a bundled theme.`
     )
+  }
+
+  // Validate loaded theme and overrides before processing.
+  try {
+    validateTheme(theme)
+    if (themeOverrides) {
+      validateTheme(themeOverrides)
+    }
+  } catch (error) {
+    throw new Error(`[renoun] The theme "${themePath}" failed validation`, {
+      cause: error,
+    })
   }
 
   const finalTheme = normalizeTheme(
@@ -439,7 +439,7 @@ function inferThemeType(theme: Theme): 'light' | 'dark' {
   }
 
   const editorBg = theme.colors['editor.background']
-  const bg = editorBg || theme.colors.background || undefined
+  const bg = editorBg || theme.colors['background'] || undefined
 
   if (typeof bg !== 'string') {
     return 'dark'
@@ -560,8 +560,12 @@ function mergeThemeColors(baseTheme: Theme, overrides: Theme) {
       mergedSemanticTokenColors[scope] = overrideValue
     } else if (typeof baseValue === 'string') {
       mergedSemanticTokenColors[scope] = overrideValue ?? baseValue
-    } else if (typeof baseValue === 'object') {
-      mergedSemanticTokenColors[scope] = { ...baseValue, ...overrideValue }
+    } else if (typeof baseValue === 'object' && baseValue !== null) {
+      if (typeof overrideValue === 'object' && overrideValue !== null) {
+        mergedSemanticTokenColors[scope] = { ...baseValue, ...overrideValue }
+      } else {
+        mergedSemanticTokenColors[scope] = overrideValue ?? baseValue
+      }
     } else {
       mergedSemanticTokenColors[scope] = overrideValue ?? baseValue
     }
@@ -582,23 +586,23 @@ function applyForegroundBackground(theme: Theme) {
 
   if (globalSetting?.settings) {
     if (globalSetting.settings.foreground) {
-      theme.colors.foreground = globalSetting.settings.foreground
+      theme.colors['foreground'] = globalSetting.settings.foreground
     }
     if (globalSetting.settings.background) {
-      theme.colors.background = globalSetting.settings.background
+      theme.colors['background'] = globalSetting.settings.background
     }
   }
   if (!theme.colors['editor.background']) {
-    theme.colors['editor.background'] = theme.colors.background || '#000000'
+    theme.colors['editor.background'] = theme.colors['background'] || '#000000'
   }
   if (!theme.colors['editor.foreground']) {
-    theme.colors['editor.foreground'] = theme.colors.foreground || '#ffffff'
+    theme.colors['editor.foreground'] = theme.colors['foreground'] || '#ffffff'
   }
-  if (!theme.colors.background) {
-    theme.colors.background = theme.colors['editor.background']
+  if (!theme.colors['background']) {
+    theme.colors['background'] = theme.colors['editor.background']
   }
-  if (!theme.colors.foreground) {
-    theme.colors.foreground = theme.colors['editor.foreground']
+  if (!theme.colors['foreground']) {
+    theme.colors['foreground'] = theme.colors['editor.foreground']
   }
 
   if (!globalSetting) {
@@ -607,8 +611,8 @@ function applyForegroundBackground(theme: Theme) {
     }
     theme.settings.unshift({
       settings: {
-        foreground: theme.colors.foreground,
-        background: theme.colors.background,
+        foreground: theme.colors['foreground'],
+        background: theme.colors['background'],
       },
     })
   }
@@ -616,11 +620,11 @@ function applyForegroundBackground(theme: Theme) {
 
 /** Applies fallback chains for color keys as specified in `themeFallbacks`. */
 function applyFallbacks(
-  colors: Record<string, string>,
+  colors: Record<string, string | null>,
   type: 'light' | 'dark'
 ) {
   for (const [key, chain] of Object.entries(themeFallbacks)) {
-    if (colors[key]) continue
+    if (colors[key] != null) continue
 
     let fallbackValue: string | undefined
     for (const item of chain) {
