@@ -19,3 +19,11 @@ export {
   parseFrontmatter,
   type FrontmatterParseResult,
 } from './parse-frontmatter.js'
+
+export {
+  getStructure,
+  getMarkdownStructure,
+  getMDXStructure,
+  type GetStructureOptions,
+  type GetStructureResult,
+} from './get-structure.js'

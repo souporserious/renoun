@@ -2,10 +2,11 @@ import type { MDXContent, SlugCasing } from '@renoun/mdx'
 import {
   createSlug,
   getMDXExportStaticValues,
-  getMDXSections,
-  getMarkdownSections,
+  getMDXStructure,
+  getMarkdownStructure,
   parseFrontmatter,
   type FrontmatterParseResult,
+  type GetStructureResult,
 } from '@renoun/mdx/utils'
 import { Minimatch } from 'minimatch'
 
@@ -2431,6 +2432,7 @@ export class MDXFile<
   #slugCasing?: SlugCasing
   #staticExportValues?: Map<string, unknown>
   #sections?: ContentSection[]
+  #derivedStructure?: Promise<GetStructureResult>
   #modulePromise?: Promise<any>
   #rawSource?: Promise<string>
   #parsedSource?: Promise<FrontmatterParseResult>
@@ -2456,6 +2458,16 @@ export class MDXFile<
       this.#rawSource = super.getText()
     }
     return this.#rawSource
+  }
+
+  async #getDerivedStructure() {
+    if (!this.#derivedStructure) {
+      this.#derivedStructure = (async () => {
+        const source = await this.getText()
+        return getMDXStructure({ source, format: 'text' })
+      })()
+    }
+    return this.#derivedStructure
   }
 
   async #getSourceWithFrontmatter() {
@@ -2595,8 +2607,8 @@ export class MDXFile<
       }
 
       if (!this.#sections) {
-        const source = await this.getText()
-        this.#sections = getMDXSections(source) as ContentSection[]
+        const derived = await this.#getDerivedStructure()
+        this.#sections = derived.sections
       }
     }
 
@@ -2609,9 +2621,22 @@ export class MDXFile<
       this.getFrontmatter().catch(() => undefined),
       this.getSections().catch(() => undefined),
     ])
+
+    // If we had to derive sections, we likely have extracted plain-text content too.
+    const derived = this.#derivedStructure
+      ? await this.#derivedStructure
+      : undefined
+    const derivedDescription = derived?.content
+      ? derived.content
+          .split(/\r?\n/)
+          .map((line: string) => line.trim())
+          .filter(Boolean)[0]
+      : undefined
+
     const description =
       (frontmatter?.['description'] as string | undefined) ??
-      (sections && sections.length > 0 ? sections[0]!.title : undefined)
+      (sections && sections.length > 0 ? sections[0]!.title : undefined) ??
+      derivedDescription
 
     return {
       ...base,
@@ -2743,6 +2768,7 @@ export class MarkdownFile<
 > extends File<DirectoryTypes, Path, Extension> {
   #loader: ModuleLoader<{ default: MDXContent } & Types>
   #sections?: ContentSection[]
+  #derivedStructure?: Promise<GetStructureResult>
   #modulePromise?: Promise<any>
   #rawSource?: Promise<string>
   #parsedSource?: Promise<FrontmatterParseResult>
@@ -2766,6 +2792,16 @@ export class MarkdownFile<
       this.#rawSource = super.getText()
     }
     return this.#rawSource
+  }
+
+  async #getDerivedStructure() {
+    if (!this.#derivedStructure) {
+      this.#derivedStructure = (async () => {
+        const source = await this.getText()
+        return getMarkdownStructure({ source, format: 'text' })
+      })()
+    }
+    return this.#derivedStructure
   }
 
   async #getSourceWithFrontmatter() {
@@ -2867,8 +2903,8 @@ export class MarkdownFile<
   /** Get sections parsed from the markdown content based on headings. */
   async getSections(): Promise<ContentSection[]> {
     if (!this.#sections) {
-      const source = await this.getText()
-      this.#sections = getMarkdownSections(source) as ContentSection[]
+      const derived = await this.#getDerivedStructure()
+      this.#sections = derived.sections
     }
     return this.#sections ?? []
   }
@@ -2879,9 +2915,21 @@ export class MarkdownFile<
       this.getFrontmatter().catch(() => undefined),
       this.getSections().catch(() => undefined),
     ])
+
+    const derived = this.#derivedStructure
+      ? await this.#derivedStructure
+      : undefined
+    const derivedDescription = derived?.content
+      ? derived.content
+          .split(/\r?\n/)
+          .map((line: string) => line.trim())
+          .filter(Boolean)[0]
+      : undefined
+
     const description =
       (frontmatter?.['description'] as string | undefined) ??
-      (sections && sections.length > 0 ? sections[0]!.title : undefined)
+      (sections && sections.length > 0 ? sections[0]!.title : undefined) ??
+      derivedDescription
 
     return {
       ...base,
