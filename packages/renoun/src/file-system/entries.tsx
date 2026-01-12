@@ -49,6 +49,7 @@ import {
 } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
+import { Semaphore } from '../utils/Semaphore.ts'
 import type {
   FileSystem,
   FileSystemWriteFileContent,
@@ -4379,174 +4380,214 @@ export class Directory<
       DirectorySnapshotDirectoryMetadata<FileSystemEntry<LoaderTypes>>
     >()
 
-    for (const entry of rawEntries) {
-      // Skip hidden files and directories (names starting with `.`) unless explicitly included
-      const isHiddenFile = entry.name.startsWith('.')
-      if (isHiddenFile && !options.includeHiddenFiles) {
-        continue
-      }
+    type DirectoryBuildResult =
+      | {
+          kind: 'directory'
+          key: string
+          metadata: DirectoryEntryMetadata<LoaderTypes>
+        }
+      | {
+          kind: 'file'
+          key: string
+          metadata: FileEntryMetadata<LoaderTypes>
+          includeInFinal: boolean
+        }
+      | { kind: 'skip' }
 
-      if (dependencyTimestamps) {
+    const concurrency = Math.min(8, rawEntries.length || 1)
+    const gate = new Semaphore(concurrency)
+
+    const entryResults = await Promise.all(
+      rawEntries.map(async (entry): Promise<DirectoryBuildResult> => {
+        const release = await gate.acquire()
         try {
-          const mtime = await fileSystem.getFileLastModifiedMs(entry.path)
-          if (mtime !== undefined) {
-            dependencyTimestamps.set(entry.path, mtime)
+          // Skip hidden files and directories (names starting with `.`) unless explicitly included
+          const isHiddenFile = entry.name.startsWith('.')
+          if (isHiddenFile && !options.includeHiddenFiles) {
+            return { kind: 'skip' }
           }
-        } catch {
-          // Ignore errors when reading timestamps; fall back to snapshot invalidation
-          // via explicit cache clearing (e.g. write/delete operations).
+
+          if (dependencyTimestamps) {
+            try {
+              const mtime = await fileSystem.getFileLastModifiedMs(entry.path)
+              if (mtime !== undefined) {
+                dependencyTimestamps.set(entry.path, mtime)
+              }
+            } catch {
+              // Ignore errors when reading timestamps; fall back to snapshot invalidation
+              // via explicit cache clearing (e.g. write/delete operations).
+            }
+          }
+
+          const isGitIgnored = fileSystem.isFilePathGitIgnored(entry.path)
+
+          if (isGitIgnored && !options.includeGitIgnoredFiles) {
+            return { kind: 'skip' }
+          }
+
+          const isTsConfigExcluded = fileSystem.isFilePathExcludedFromTsConfig(
+            entry.path,
+            entry.isDirectory
+          )
+
+          if (entry.isDirectory) {
+            if (isTsConfigExcluded && !options.includeTsConfigExcludedFiles) {
+              return { kind: 'skip' }
+            }
+
+            const subdirectory = directory.#duplicate({ path: entry.path })
+
+            const { snapshot: childSnapshot } = await this.#buildSnapshot(
+              subdirectory,
+              options,
+              mask
+            )
+
+            const passesFilterSelf =
+              directory.#simpleFilter?.recursive === true
+                ? true
+                : directory.#filter
+                  ? await directory.#passesFilter(subdirectory)
+                  : true
+
+            const metadata: DirectoryEntryMetadata<LoaderTypes> = {
+              kind: 'Directory',
+              entry: subdirectory,
+              includeInFinal: true,
+              passesFilterSelf,
+              snapshot: childSnapshot,
+            }
+
+            return { kind: 'directory', key: entry.path, metadata }
+          }
+
+          if (!entry.isFile) {
+            return { kind: 'skip' }
+          }
+
+          const sharedOptions = {
+            path: entry.path,
+            directory: directory as Directory<
+              LoaderTypes,
+              WithDefaultTypes<LoaderTypes>,
+              ModuleLoaders,
+              undefined
+            >,
+            basePathname: directory.#basePathname,
+            slugCasing: directory.#slugCasing,
+          } as const
+
+          const extension = extensionName(entry.name).slice(1)
+          const loader = directory.#resolveLoaderForExtension(extension) as
+            | ModuleLoader<LoaderTypes[any]>
+            | undefined
+
+          const file =
+            extension === 'md'
+              ? new MarkdownFile({ ...sharedOptions, loader })
+              : extension === 'mdx'
+                ? new MDXFile({ ...sharedOptions, loader })
+                : extension === 'json'
+                  ? new JSONFile(sharedOptions)
+                  : isJavaScriptLikeExtension(extension)
+                    ? new JavaScriptFile({ ...sharedOptions, loader })
+                    : new File(sharedOptions)
+
+          const passesFilter = directory.#filter
+            ? await directory.#passesFilter(file)
+            : true
+
+          if (!passesFilter) {
+            return { kind: 'skip' }
+          }
+
+          const shouldIncludeFile = await directory.#shouldIncludeFile(file)
+          const isIndexOrReadme = ['index', 'readme'].some((name) =>
+            entry.name.toLowerCase().startsWith(name)
+          )
+          const isDirectoryNamedFile =
+            removeAllExtensions(entry.name) === directory.baseName
+
+          let includeInFinal = true
+
+          if (!options.includeIndexAndReadmeFiles && isIndexOrReadme) {
+            includeInFinal = false
+          }
+
+          if (!options.includeTsConfigExcludedFiles && isTsConfigExcluded) {
+            includeInFinal = false
+          }
+
+          if (
+            !options.includeDirectoryNamedFiles &&
+            !options.recursive &&
+            isDirectoryNamedFile
+          ) {
+            includeInFinal = false
+          }
+
+          if (!options.includeGitIgnoredFiles && isGitIgnored) {
+            includeInFinal = false
+          }
+
+          if (!shouldIncludeFile) {
+            includeInFinal = false
+          }
+
+          const metadata: FileEntryMetadata<LoaderTypes> = {
+            kind: 'File',
+            entry: file,
+            includeInFinal,
+            isGitIgnored,
+            isIndexOrReadme,
+            isTsConfigExcluded,
+            isDirectoryNamedFile,
+            passesFilter,
+            shouldIncludeFile,
+          }
+
+          return {
+            kind: 'file',
+            key: options.includeDirectoryNamedFiles
+              ? entry.path
+              : removeAllExtensions(entry.path),
+            metadata,
+            includeInFinal,
+          }
+        } finally {
+          release()
         }
-      }
+      })
+    )
 
-      const isGitIgnored = fileSystem.isFilePathGitIgnored(entry.path)
-
-      if (isGitIgnored && !options.includeGitIgnoredFiles) {
+    for (const result of entryResults) {
+      if (result.kind === 'skip') {
         continue
       }
 
-      const isTsConfigExcluded = fileSystem.isFilePathExcludedFromTsConfig(
-        entry.path,
-        entry.isDirectory
-      )
-
-      if (entry.isDirectory) {
-        if (isTsConfigExcluded && !options.includeTsConfigExcludedFiles) {
+      if (result.kind === 'directory') {
+        if (finalKeys.has(result.key)) {
           continue
         }
-
-        const key = entry.path
-        if (finalKeys.has(key)) {
-          continue
-        }
-
-        const subdirectory = directory.#duplicate({ path: entry.path })
-        directory.#addPathLookup(subdirectory)
-
-        const { snapshot: childSnapshot } = await this.#buildSnapshot(
-          subdirectory,
-          options,
-          mask
-        )
-
-        const passesFilterSelf =
-          directory.#simpleFilter?.recursive === true
-            ? true
-            : directory.#filter
-              ? await directory.#passesFilter(subdirectory)
-              : true
-
-        const metadata: DirectoryEntryMetadata<LoaderTypes> = {
-          kind: 'Directory',
-          entry: subdirectory,
-          includeInFinal: true,
-          passesFilterSelf,
-          snapshot: childSnapshot,
-        }
-
-        finalKeys.add(key)
-        finalMetadata.push(metadata)
-
+        finalKeys.add(result.key)
+        finalMetadata.push(result.metadata)
+        directory.#addPathLookup(result.metadata.entry)
         continue
       }
 
-      if (!entry.isFile) {
+      fileMetadata.push(result.metadata)
+
+      if (!result.includeInFinal) {
         continue
       }
 
-      const sharedOptions = {
-        path: entry.path,
-        directory: directory as Directory<
-          LoaderTypes,
-          WithDefaultTypes<LoaderTypes>,
-          ModuleLoaders,
-          undefined
-        >,
-        basePathname: directory.#basePathname,
-        slugCasing: directory.#slugCasing,
-      } as const
-
-      const extension = extensionName(entry.name).slice(1)
-      const loader = directory.#resolveLoaderForExtension(extension) as
-        | ModuleLoader<LoaderTypes[any]>
-        | undefined
-
-      const file =
-        extension === 'md'
-          ? new MarkdownFile({ ...sharedOptions, loader })
-          : extension === 'mdx'
-            ? new MDXFile({ ...sharedOptions, loader })
-            : extension === 'json'
-              ? new JSONFile(sharedOptions)
-              : isJavaScriptLikeExtension(extension)
-                ? new JavaScriptFile({ ...sharedOptions, loader })
-                : new File(sharedOptions)
-
-      const passesFilter = directory.#filter
-        ? await directory.#passesFilter(file)
-        : true
-
-      if (!passesFilter) {
+      if (finalKeys.has(result.key)) {
         continue
       }
 
-      const shouldIncludeFile = await directory.#shouldIncludeFile(file)
-      const isIndexOrReadme = ['index', 'readme'].some((name) =>
-        entry.name.toLowerCase().startsWith(name)
-      )
-      const isDirectoryNamedFile =
-        removeAllExtensions(entry.name) === directory.baseName
-
-      let includeInFinal = true
-
-      if (!options.includeIndexAndReadmeFiles && isIndexOrReadme) {
-        includeInFinal = false
-      }
-
-      if (!options.includeTsConfigExcludedFiles && isTsConfigExcluded) {
-        includeInFinal = false
-      }
-
-      if (
-        !options.includeDirectoryNamedFiles &&
-        !options.recursive &&
-        isDirectoryNamedFile
-      ) {
-        includeInFinal = false
-      }
-
-      if (!options.includeGitIgnoredFiles && isGitIgnored) {
-        includeInFinal = false
-      }
-
-      if (!shouldIncludeFile) {
-        includeInFinal = false
-      }
-
-      const metadata: FileEntryMetadata<LoaderTypes> = {
-        kind: 'File',
-        entry: file,
-        includeInFinal,
-        isGitIgnored,
-        isIndexOrReadme,
-        isTsConfigExcluded,
-        isDirectoryNamedFile,
-        passesFilter,
-        shouldIncludeFile,
-      }
-
-      fileMetadata.push(metadata)
-
-      if (includeInFinal) {
-        const key = options.includeDirectoryNamedFiles
-          ? entry.path
-          : removeAllExtensions(entry.path)
-
-        if (!finalKeys.has(key)) {
-          finalKeys.add(key)
-          finalMetadata.push(metadata)
-          directory.#addPathLookup(file)
-        }
-      }
+      finalKeys.add(result.key)
+      finalMetadata.push(result.metadata)
+      directory.#addPathLookup(result.metadata.entry)
     }
 
     let shouldIncludeSelf = false

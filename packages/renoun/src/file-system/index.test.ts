@@ -507,6 +507,35 @@ describe('file system', () => {
     ).resolves.toBeDefined()
   })
 
+  test('recursive entries handle async filters across nested directories', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/intro.mdx': '',
+      'docs/guide.mdx': '',
+      'docs/notes.txt': '',
+      'api/reference.mdx': '',
+      'api/internal.txt': '',
+    })
+    const directory = new Directory({
+      fileSystem,
+      filter: async (entry) => {
+        await new Promise((resolve) => setTimeout(resolve, 1))
+        return entry instanceof Directory || isFile(entry, 'mdx')
+      },
+    })
+
+    const entries = await directory.getEntries({ recursive: true })
+
+    expect(entries.map((entry) => entry.absolutePath).sort()).toEqual(
+      [
+        '/api',
+        '/api/reference.mdx',
+        '/docs',
+        '/docs/guide.mdx',
+        '/docs/intro.mdx',
+      ].sort()
+    )
+  })
+
   test('virtual recursive entries', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': '',
