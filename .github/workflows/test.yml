@@ -47,9 +47,21 @@ jobs:
 
       - name: Determine affected packages
         id: affected
-        env:
-          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
+          # Determine the base commit for comparison
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            TURBO_SCM_BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            # For push events, check if the "before" commit exists (handles force pushes)
+            BEFORE_SHA="${{ github.event.before }}"
+            if git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+              TURBO_SCM_BASE="$BEFORE_SHA"
+            else
+              echo "⚠️ Previous commit $BEFORE_SHA not found (likely force push), using HEAD~1"
+              TURBO_SCM_BASE="HEAD~1"
+            fi
+          fi
+          export TURBO_SCM_BASE
           echo "TURBO_SCM_BASE: $TURBO_SCM_BASE"
           echo "### Affected Packages" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -60,6 +72,7 @@ jobs:
           # Count affected packages, excluding screenshot (handled by separate workflow)
           PACKAGE_COUNT=$(echo "$AFFECTED" | jq '[.packages.items[] | select(.name != "@renoun/screenshot")] | length')
           echo "package_count=$PACKAGE_COUNT" >> $GITHUB_OUTPUT
+          echo "turbo_scm_base=$TURBO_SCM_BASE" >> $GITHUB_OUTPUT
 
           if [[ "$PACKAGE_COUNT" -gt 0 ]]; then
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
@@ -74,5 +87,5 @@ jobs:
       - name: Run tests for affected packages
         if: steps.affected.outputs.package_count != '0'
         env:
-          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          TURBO_SCM_BASE: ${{ steps.affected.outputs.turbo_scm_base }}
         run: pnpm turbo run test --filter="...[$TURBO_SCM_BASE]" --filter="!@renoun/screenshot"
