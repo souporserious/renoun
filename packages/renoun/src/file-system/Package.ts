@@ -36,6 +36,10 @@ import {
 
 interface PackageJson {
   name?: string
+  main?: string
+  module?: string
+  types?: string
+  typings?: string
   exports?: string | Record<string, unknown> | null
   imports?: Record<string, unknown> | null
   workspaces?: string[] | { packages?: string[] }
@@ -690,6 +694,528 @@ function isPathLikeValue(value: unknown): value is PathLike {
   return typeof URL !== 'undefined' && value instanceof URL
 }
 
+/** How the source file(s) were resolved for an export. */
+export type ExportSourceResolveKind =
+  | 'override'
+  | 'declarationMap'
+  | 'sourceMap'
+  | 'heuristic'
+  | 'typesField'
+  | 'legacyField'
+  | 'unresolved'
+  | 'unsupportedPattern'
+
+/** Result of resolving an export to its source file(s). */
+export interface ResolvedExportSource {
+  /** Export subpath key: ".", "./foo", "./components/Button" */
+  exportKey: string
+
+  /** Built file we started from, relative to package root */
+  builtTarget?: string
+
+  /** Resolved source files (relative to package root) */
+  sources: string[]
+
+  /** How we got these sources */
+  kind: ExportSourceResolveKind
+
+  /** Optional extra notes (e.g. no maps, no candidates, etc.) */
+  reason?: string
+}
+
+/** Options for resolving export sources. */
+export interface ResolveExportSourcesOptions {
+  /**
+   * Manual mapping when inference is impossible or the package doesn't publish maps/sources.
+   * Keys are export keys ('.', './foo', './components/Button').
+   * Values are paths relative to package root (string or list of strings).
+   */
+  overrides?: Record<string, string | string[]>
+
+  /**
+   * Which conditional export targets to prefer when choosing a built file from `exports`.
+   * You can provide a fixed list, or a function per exportKey.
+   *
+   * Examples:
+   *   ['types', 'import', 'default', 'require']
+   *   (exportKey) => exportKey === '.' ? ['types', 'default'] : ['import', 'default']
+   */
+  conditions?: string[] | ((exportKey: string) => string[])
+
+  /**
+   * Candidate source roots for heuristic mapping.
+   * Defaults to ['src', 'lib', 'source'].
+   */
+  sourceRoots?: string[]
+
+  /**
+   * Optional rule-based rewrites for common build layouts.
+   * These are applied to the built target *before* heuristic guessing.
+   *
+   * Examples:
+   *   { from: /^dist\/esm\//, to: '' }
+   *   { from: 'dist/', to: '' }
+   */
+  rewrites?: Array<{ from: string | RegExp; to: string }>
+}
+
+type FlatExportMap = Record<string, string>
+
+const DEFAULT_EXPORT_CONDITIONS = [
+  'types',
+  'import',
+  'module',
+  'default',
+  'require',
+] as const
+
+/**
+ * Flatten the "exports" field into a map of export subpath → chosen built file.
+ * Picks a single "primary" target for each export key based on conditions preference.
+ */
+function flattenExportsField(
+  pkg: PackageJson,
+  config: ResolveExportSourcesOptions = {}
+): FlatExportMap {
+  const result: FlatExportMap = {}
+  const exp = pkg.exports
+
+  if (!exp) return result
+
+  // "exports": "./dist/index.js"
+  if (typeof exp === 'string') {
+    result['.'] = exp
+    return result
+  }
+
+  // "exports": { ... }
+  if (typeof exp === 'object' && exp !== null) {
+    for (const [key, value] of Object.entries(exp)) {
+      if (typeof value === 'string') {
+        result[key] = value
+      } else if (typeof value === 'object' && value !== null) {
+        const chosen = chooseConditionalExportTarget(
+          value as Record<string, any>,
+          getConditionsForExportKey(config, key)
+        )
+        if (chosen) {
+          result[key] = chosen
+        }
+      }
+    }
+  }
+
+  return result
+}
+
+function getConditionsForExportKey(
+  config: ResolveExportSourcesOptions,
+  exportKey: string
+): string[] {
+  const c = config.conditions
+  if (typeof c === 'function') return c(exportKey)
+  if (Array.isArray(c) && c.length > 0) return c
+  return [...DEFAULT_EXPORT_CONDITIONS]
+}
+
+function chooseConditionalExportTarget(
+  record: Record<string, any>,
+  conditions: string[]
+): string | null {
+  for (const cond of conditions) {
+    const v = record[cond]
+    if (typeof v === 'string') return v
+  }
+
+  // Fall back to any string-ish field if none matched our preference list.
+  for (const v of Object.values(record)) {
+    if (typeof v === 'string') return v
+  }
+
+  return null
+}
+
+function normalizeOverrideSources(
+  overrides: ResolveExportSourcesOptions['overrides'],
+  exportKey: string
+): string[] {
+  if (!overrides) return []
+  const v = overrides[exportKey]
+  if (!v) return []
+  return Array.isArray(v) ? v : [v]
+}
+
+function applyRewrites(
+  input: string,
+  rewrites?: ResolveExportSourcesOptions['rewrites']
+): string {
+  if (!rewrites || rewrites.length === 0) return input
+  let out = input
+  for (const rule of rewrites) {
+    if (typeof rule.from === 'string') {
+      out = out.startsWith(rule.from)
+        ? rule.to + out.slice(rule.from.length)
+        : out
+    } else {
+      out = out.replace(rule.from, rule.to)
+    }
+  }
+  return out
+}
+
+/**
+ * Try to resolve original TS source via .d.ts.map.
+ */
+function resolveFromDeclarationMaps(
+  fileSystem: FileSystem,
+  packageRoot: string,
+  pkg: PackageJson,
+  exportKey: string,
+  builtTarget: string
+): string[] | null {
+  // 1. Try root ts types (pkg.types / pkg.typings) for "." export.
+  if (exportKey === '.' && (pkg.types || pkg.typings)) {
+    const resolvedTypePath = String(pkg.types ?? pkg.typings)
+    const fromTypes = resolveSourcesFromDtsMap(
+      fileSystem,
+      packageRoot,
+      resolvedTypePath
+    )
+    if (fromTypes.length > 0) return fromTypes
+  }
+
+  // 2. Try d.ts adjacent to builtTarget (dist/index.mjs -> dist/index.d.ts.map)
+  const dtsFilePath = replaceExtensionForSourceResolve(builtTarget, '.d.ts')
+  const fromSibling = resolveSourcesFromDtsMap(
+    fileSystem,
+    packageRoot,
+    dtsFilePath
+  )
+  if (fromSibling.length > 0) return fromSibling
+
+  return null
+}
+
+function resolveSourcesFromDtsMap(
+  fileSystem: FileSystem,
+  packageRoot: string,
+  dtsRelPath: string
+): string[] {
+  const dtsPath = joinPaths(packageRoot, dtsRelPath)
+  if (!safeFileExistsSync(fileSystem, dtsPath)) return []
+
+  const mapRel = dtsRelPath + '.map'
+  const mapPath = joinPaths(packageRoot, mapRel)
+  if (!safeFileExistsSync(fileSystem, mapPath)) return []
+
+  let mapJson: any
+  try {
+    mapJson = JSON.parse(readTextFile(fileSystem, mapPath))
+  } catch {
+    return []
+  }
+
+  const sources: string[] = Array.isArray(mapJson.sources)
+    ? mapJson.sources
+    : []
+
+  const mapDirRel = directoryName(dtsRelPath)
+  const resolved: string[] = []
+
+  for (const s of sources) {
+    if (typeof s !== 'string') continue
+    const candidateRel = normalizeSlashes(joinPaths(mapDirRel, s))
+    const candidatePath = joinPaths(packageRoot, candidateRel)
+    if (safeFileExistsSync(fileSystem, candidatePath)) {
+      resolved.push(candidateRel)
+    }
+  }
+
+  return resolved
+}
+
+/**
+ * Try to resolve sources via JS source map next to builtTarget:
+ *   dist/index.mjs -> dist/index.mjs.map
+ */
+function resolveFromJsSourceMap(
+  fileSystem: FileSystem,
+  packageRoot: string,
+  builtTarget: string
+): string[] {
+  const mapRel = builtTarget + '.map'
+  const mapPath = joinPaths(packageRoot, mapRel)
+  if (!safeFileExistsSync(fileSystem, mapPath)) return []
+
+  let mapJson: any
+  try {
+    mapJson = JSON.parse(readTextFile(fileSystem, mapPath))
+  } catch {
+    return []
+  }
+
+  const sources: string[] = Array.isArray(mapJson.sources)
+    ? mapJson.sources
+    : []
+
+  const mapDirRel = directoryName(builtTarget)
+  const resolved: string[] = []
+
+  for (const s of sources) {
+    if (typeof s !== 'string') continue
+    const candidateRel = normalizeSlashes(joinPaths(mapDirRel, s))
+    const candidatePath = joinPaths(packageRoot, candidateRel)
+    if (safeFileExistsSync(fileSystem, candidatePath)) {
+      resolved.push(candidateRel)
+    }
+  }
+
+  return resolved
+}
+
+/**
+ * Heuristic mapping:
+ *   "dist/foo/bar.js" → "src/foo/bar.ts" / "src/foo/bar.tsx" / etc.
+ *
+ * This uses:
+ * - optional `rewrites` to normalize build layouts (dist/esm → <root>)
+ * - `sourceRoots` for candidate roots
+ * - a small set of common build root folder names
+ */
+function guessSourceFromBuilt(
+  fileSystem: FileSystem,
+  packageRoot: string,
+  builtTarget: string,
+  config: ResolveExportSourcesOptions = {}
+): string | null {
+  const roots =
+    config.sourceRoots && config.sourceRoots.length > 0
+      ? config.sourceRoots
+      : ['src', 'lib', 'source']
+
+  const builtRoots = new Set([
+    'dist',
+    'build',
+    'out',
+    'lib',
+    'esm',
+    'cjs',
+    'umd',
+    'bundle',
+    'bundles',
+    '.',
+  ])
+
+  const normalizedBuilt = normalizeSlashes(builtTarget).replace(/^\.\//, '')
+  const rewrittenBuilt = applyRewrites(
+    normalizedBuilt,
+    config.rewrites
+  ).replace(/^\.\//, '')
+
+  // Candidate “inside paths” we try mapping under sourceRoots.
+  // We try:
+  //   1) rewrittenBuilt as-is
+  //   2) if it looks like <builtRoot>/<rest>, we also try <rest>
+  const insideCandidates: string[] = []
+  if (rewrittenBuilt) insideCandidates.push(rewrittenBuilt)
+
+  const firstSegment = rewrittenBuilt.split('/')[0]
+  if (firstSegment && builtRoots.has(firstSegment)) {
+    const rest = rewrittenBuilt.split('/').slice(1).join('/')
+    if (rest) insideCandidates.push(rest)
+  }
+
+  // Also consider original if rewrites changed it (some rewrites may be too aggressive)
+  if (rewrittenBuilt !== normalizedBuilt && normalizedBuilt) {
+    insideCandidates.push(normalizedBuilt)
+    const firstSeg2 = normalizedBuilt.split('/')[0]
+    if (firstSeg2 && builtRoots.has(firstSeg2)) {
+      const rest2 = normalizedBuilt.split('/').slice(1).join('/')
+      if (rest2) insideCandidates.push(rest2)
+    }
+  }
+
+  const extensions = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx']
+
+  for (const insidePath of dedupeStrings(insideCandidates)) {
+    const insideDir = insidePath ? directoryName(insidePath) : ''
+    const builtFile = insidePath
+      ? baseName(insidePath)
+      : baseName(rewrittenBuilt || normalizedBuilt)
+
+    const bareName = stripKnownExtensions(builtFile)
+
+    for (const root of roots) {
+      for (const extension of extensions) {
+        const candidateInside =
+          insideDir && insideDir !== '.'
+            ? joinPaths(insideDir, bareName + extension)
+            : bareName + extension
+
+        const candidateRel = joinPaths(root, candidateInside)
+        const candidatePath = joinPaths(packageRoot, candidateRel)
+
+        if (safeFileExistsSync(fileSystem, candidatePath)) {
+          return candidateRel
+        }
+
+        // If insidePath is just "foo.js", also try `${root}/foo.ts` directly (already covered)
+        // Keep a small extra fallback: `${root}/${bareName}/index.ts(x)` for barrel-ish layouts.
+        const indexFilePath = joinPaths(root, bareName, 'index' + extension)
+        if (
+          safeFileExistsSync(fileSystem, joinPaths(packageRoot, indexFilePath))
+        ) {
+          return indexFilePath
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+function dedupeStrings(values: string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    const key = value.trim()
+    if (!key) continue
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(key)
+  }
+  return out
+}
+
+function stripKnownExtensions(file: string): string {
+  const extensions = [
+    '.d.ts',
+    '.d.mts',
+    '.d.cts',
+    '.ts',
+    '.tsx',
+    '.mts',
+    '.cts',
+    '.js',
+    '.jsx',
+    '.mjs',
+    '.cjs',
+  ]
+
+  for (const extension of extensions) {
+    if (file.endsWith(extension)) {
+      return file.slice(0, -extension.length)
+    }
+  }
+
+  // last-resort strip
+  return file.replace(/\.[^.]+$/, '')
+}
+
+function replaceExtensionForSourceResolve(
+  file: string,
+  newExt: string
+): string {
+  const base = stripKnownExtensions(baseName(file))
+  const directory = directoryName(file)
+  return directory === '.' ? base + newExt : joinPaths(directory, base + newExt)
+}
+
+/** Handle legacy main/module/types for packages without "exports". */
+function resolveLegacyEntrypoints(
+  fileSystem: FileSystem,
+  packageRoot: string,
+  packageJson: PackageJson,
+  config: ResolveExportSourcesOptions
+): ResolvedExportSource[] {
+  const results: ResolvedExportSource[] = []
+
+  const add = (exportKey: string, target: string | undefined) => {
+    if (!target) return
+
+    // manual overrides still win
+    const overrideSources = normalizeOverrideSources(
+      config.overrides,
+      exportKey
+    )
+    if (overrideSources.length > 0) {
+      results.push({
+        exportKey,
+        builtTarget: target,
+        sources: overrideSources,
+        kind: 'override',
+      })
+      return
+    }
+
+    // try d.ts map (types)
+    if (exportKey === '.' && (packageJson.types || packageJson.typings)) {
+      const typeFilePath = String(packageJson.types ?? packageJson.typings)
+      const fromTypes = resolveSourcesFromDtsMap(
+        fileSystem,
+        packageRoot,
+        typeFilePath
+      )
+      if (fromTypes.length > 0) {
+        results.push({
+          exportKey,
+          builtTarget: target,
+          sources: fromTypes,
+          kind: 'typesField',
+        })
+        return
+      }
+    }
+
+    // try JS source map
+    const fromJsMap = resolveFromJsSourceMap(fileSystem, packageRoot, target)
+    if (fromJsMap.length > 0) {
+      results.push({
+        exportKey,
+        builtTarget: target,
+        sources: fromJsMap,
+        kind: 'sourceMap',
+      })
+      return
+    }
+
+    // fallback heuristic
+    const heuristicSource = guessSourceFromBuilt(
+      fileSystem,
+      packageRoot,
+      target,
+      config
+    )
+    if (heuristicSource) {
+      results.push({
+        exportKey,
+        builtTarget: target,
+        sources: [heuristicSource],
+        kind: 'legacyField',
+      })
+      return
+    }
+
+    results.push({
+      exportKey,
+      builtTarget: target,
+      sources: [],
+      kind: 'unresolved',
+      reason: 'No maps or heuristic matches for legacy main/module field.',
+    })
+  }
+
+  add(
+    '.',
+    packageJson.main ||
+      packageJson.module ||
+      packageJson.types ||
+      packageJson.typings
+  )
+
+  return results
+}
+
 export class Package<
   Types extends Record<string, any> = Record<string, any>,
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
@@ -758,6 +1284,156 @@ export class Package<
     }
 
     return this.#exportDirectories
+  }
+
+  /**
+   * Resolve package exports to their original source files.
+   *
+   * This method attempts to reverse-engineer built files back to their source
+   * files using the following strategies (in order):
+   *
+   * 1. **Manual overrides** - User-provided mappings
+   * 2. **Declaration maps** - `.d.ts.map` files pointing to original TS/TSX
+   * 3. **Source maps** - `.js.map` / `.mjs.map` files pointing to sources
+   * 4. **Heuristics** - Pattern-based guessing (optionally aided by `rewrites`)
+   */
+  resolveExportSources(
+    config: ResolveExportSourcesOptions = {}
+  ): ResolvedExportSource[] {
+    this.#ensurePackageJsonLoaded()
+    const pkg = this.#packageJson!
+
+    const exportTargets = flattenExportsField(pkg, config)
+    const results: ResolvedExportSource[] = []
+
+    // 1. Resolve entries from "exports"
+    for (const [exportKey, builtTarget] of Object.entries(exportTargets)) {
+      // Wildcards are tricky – mark as unsupported for now.
+      if (exportKey.includes('*') || builtTarget.includes('*')) {
+        results.push({
+          exportKey,
+          builtTarget,
+          sources: [],
+          kind: 'unsupportedPattern',
+          reason: 'Wildcard exports are not supported by this resolver yet.',
+        })
+        continue
+      }
+
+      // 1) Manual overrides win.
+      const overrideSources = normalizeOverrideSources(
+        config.overrides,
+        exportKey
+      )
+      if (overrideSources.length > 0) {
+        results.push({
+          exportKey,
+          builtTarget,
+          sources: overrideSources,
+          kind: 'override',
+        })
+        continue
+      }
+
+      // 2) Try declaration maps first (TS-centric).
+      const fromDtsMap = resolveFromDeclarationMaps(
+        this.#fileSystem,
+        this.#packagePath,
+        pkg,
+        exportKey,
+        builtTarget
+      )
+      if (fromDtsMap) {
+        results.push({
+          exportKey,
+          builtTarget,
+          sources: fromDtsMap,
+          kind: 'declarationMap',
+        })
+        continue
+      }
+
+      // 3) Try JS source maps.
+      const fromJsMap = resolveFromJsSourceMap(
+        this.#fileSystem,
+        this.#packagePath,
+        builtTarget
+      )
+      if (fromJsMap.length > 0) {
+        results.push({
+          exportKey,
+          builtTarget,
+          sources: fromJsMap,
+          kind: 'sourceMap',
+        })
+        continue
+      }
+
+      // 4) Heuristic mapping dist/lib → src/lib (optionally aided by rewrites).
+      const heuristicSource = guessSourceFromBuilt(
+        this.#fileSystem,
+        this.#packagePath,
+        builtTarget,
+        config
+      )
+      if (heuristicSource) {
+        results.push({
+          exportKey,
+          builtTarget,
+          sources: [heuristicSource],
+          kind: 'heuristic',
+        })
+        continue
+      }
+
+      // We didn't find anything useful.
+      results.push({
+        exportKey,
+        builtTarget,
+        sources: [],
+        kind: 'unresolved',
+        reason:
+          'No declaration/source maps found, and heuristic guesses did not match any existing file.',
+      })
+    }
+
+    // 2. Legacy main/module/types if there is no "exports"
+    if (!pkg.exports) {
+      const legacy = resolveLegacyEntrypoints(
+        this.#fileSystem,
+        this.#packagePath,
+        pkg,
+        config
+      )
+      results.push(...legacy)
+    }
+
+    return results
+  }
+
+  /** Resolve a single export key to its source file(s). */
+  resolveExportSource(
+    /** The export key to resolve (e.g., ".", "./utils", "./components/Button"). */
+    exportKey: string,
+
+    /** Options for source resolution. */
+    options: ResolveExportSourcesOptions = {}
+  ): ResolvedExportSource | undefined {
+    const allSources = this.resolveExportSources(options)
+    return allSources.find((source) => source.exportKey === exportKey)
+  }
+
+  /**
+   * Get the source file path for the main export (".").
+   *
+   * This is a convenience method that returns the first source file
+   * for the main package export.
+   */
+  getMainSourcePath(
+    options: ResolveExportSourcesOptions = {}
+  ): string | undefined {
+    const mainExport = this.resolveExportSource('.', options)
+    return mainExport?.sources[0]
   }
 
   async getStructure(): Promise<

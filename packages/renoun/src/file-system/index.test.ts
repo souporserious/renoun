@@ -3931,6 +3931,168 @@ export function identity<T>(value: T) {
       await expectRemarkAddSectionsRuntime(addSectionsEntry)
       expect(loader).toHaveBeenCalledWith('/remark/add-sections')
     })
+
+    describe('resolveExportSources', () => {
+      test('uses manual overrides before maps/heuristics', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+            types: './dist/index.d.ts',
+          }),
+          'node_modules/acme/dist/index.d.ts': 'export {}',
+          'node_modules/acme/dist/index.d.ts.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'node_modules/acme/src/index.ts': 'export const x = 1',
+        })
+
+        const pkg = new Package({ name: 'acme', fileSystem })
+        const sources = pkg.resolveExportSources({
+          overrides: {
+            '.': 'src/override.ts',
+          },
+        })
+
+        expect(sources).toContainEqual({
+          exportKey: '.',
+          builtTarget: './dist/index.mjs',
+          sources: ['src/override.ts'],
+          kind: 'override',
+        })
+      })
+
+      test('resolves sources from declaration maps (pkg.types/.d.ts.map)', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+            types: './dist/index.d.ts',
+          }),
+          'node_modules/acme/dist/index.d.ts': 'export {}',
+          'node_modules/acme/dist/index.d.ts.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'node_modules/acme/src/index.ts': 'export const x = 1',
+        })
+
+        const pkg = new Package({ name: 'acme', fileSystem })
+        const resolved = pkg.resolveExportSource('.')
+
+        expect(resolved).toMatchObject({
+          exportKey: '.',
+          builtTarget: './dist/index.mjs',
+          sources: ['src/index.ts'],
+          kind: 'declarationMap',
+        })
+        expect(pkg.getMainSourcePath()).toBe('src/index.ts')
+      })
+
+      test('resolves sources from JS source maps next to built target', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+          }),
+          'node_modules/acme/dist/index.mjs.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'node_modules/acme/src/index.ts': 'export const x = 1',
+        })
+
+        const pkg = new Package({ name: 'acme', fileSystem })
+        const resolved = pkg.resolveExportSource('.')
+
+        expect(resolved).toMatchObject({
+          exportKey: '.',
+          builtTarget: './dist/index.mjs',
+          sources: ['src/index.ts'],
+          kind: 'sourceMap',
+        })
+      })
+
+      test('falls back to heuristic mapping (with rewrites) when no maps exist', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/esm/index.mjs',
+            },
+          }),
+          'node_modules/acme/src/index.ts': 'export const x = 1',
+        })
+
+        const pkg = new Package({ name: 'acme', fileSystem })
+        const resolved = pkg.resolveExportSource('.', {
+          rewrites: [{ from: /^dist\/esm\//, to: '' }],
+        })
+
+        expect(resolved).toMatchObject({
+          exportKey: '.',
+          builtTarget: './dist/esm/index.mjs',
+          sources: ['src/index.ts'],
+          kind: 'heuristic',
+        })
+      })
+
+      test('marks wildcard exports as unsupportedPattern', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            exports: {
+              './components/*': './dist/components/*.js',
+            },
+          }),
+        })
+
+        const pkg = new Package({ name: 'acme', fileSystem })
+        const all = pkg.resolveExportSources()
+
+        expect(all).toContainEqual({
+          exportKey: './components/*',
+          builtTarget: './dist/components/*.js',
+          sources: [],
+          kind: 'unsupportedPattern',
+          reason: 'Wildcard exports are not supported by this resolver yet.',
+        })
+      })
+
+      test('supports legacy main/types resolution when exports is missing', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            main: './dist/index.js',
+            types: './dist/index.d.ts',
+          }),
+          'node_modules/acme/dist/index.d.ts': 'export {}',
+          'node_modules/acme/dist/index.d.ts.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'node_modules/acme/src/index.ts': 'export const x = 1',
+        })
+
+        const pkg = new Package({ name: 'acme', fileSystem })
+        const all = pkg.resolveExportSources()
+        const main = all.find((e) => e.exportKey === '.')
+
+        expect(main).toMatchObject({
+          exportKey: '.',
+          builtTarget: './dist/index.js',
+          sources: ['src/index.ts'],
+          kind: 'typesField',
+        })
+      })
+    })
   })
 
   test('throws when repository is not configured', () => {
