@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { page } from 'vitest/browser'
 import { screenshot } from './index.js'
-import { geistMonoLatinExtWoff2Base64 } from './fixtures/fonts/geist-mono-latin-ext.woff2.ts'
+import { geistMonoLatinExtWoff2Base64 } from '../fixtures/fonts/geist-mono-latin-ext.woff2.ts'
 
 // TESTING & DEBUGGING
 //
