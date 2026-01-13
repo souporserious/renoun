@@ -410,9 +410,13 @@ describe('parseTheme', () => {
 
     const rules = parseTheme(theme)
     expect(rules.length).toBeGreaterThan(0)
-    expect(rules.every((r) => r instanceof ParsedThemeRule)).toBe(true)
+    expect(
+      rules.every((r: ParsedThemeRule) => r instanceof ParsedThemeRule)
+    ).toBe(true)
 
-    const commentRule = rules.find((r) => r.scope === 'comment')
+    const commentRule = rules.find(
+      (r: ParsedThemeRule) => r.scope === 'comment'
+    )
     expect(commentRule?.foreground).toBe('#008000')
   })
 
@@ -427,7 +431,7 @@ describe('parseTheme', () => {
     }
 
     const rules = parseTheme(theme)
-    const testRule = rules.find((r) => r.scope === 'test')
+    const testRule = rules.find((r: ParsedThemeRule) => r.scope === 'test')
     expect(testRule?.fontStyle).toBe(15) // 1 + 2 + 4 + 8
   })
 
@@ -443,8 +447,8 @@ describe('parseTheme', () => {
 
     const rules = parseTheme(theme)
     expect(rules.length).toBe(2)
-    expect(rules.some((r) => r.scope === 'comment')).toBe(true)
-    expect(rules.some((r) => r.scope === 'string')).toBe(true)
+    expect(rules.some((r: ParsedThemeRule) => r.scope === 'comment')).toBe(true)
+    expect(rules.some((r: ParsedThemeRule) => r.scope === 'string')).toBe(true)
   })
 
   test('parses parent scopes from space-separated scope', () => {

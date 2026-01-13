@@ -1,14 +1,14 @@
+import { toRegExp } from 'oniguruma-to-es'
+
+import type { Languages, ScopeName } from '../grammars/index.ts'
+import { grammars } from '../grammars/index.ts'
 import type {
   IGrammar,
   IRawGrammar,
   IRawTheme,
   StateStack,
-} from 'vscode-textmate'
-import TextMate from 'vscode-textmate'
-import { toRegExp } from 'oniguruma-to-es'
-
-import type { Languages, ScopeName } from '../grammars/index.ts'
-import { grammars } from '../grammars/index.ts'
+} from './textmate.ts'
+import { INITIAL, Registry as TextMateRegistryImpl } from './textmate.ts'
 
 /** The options for the TextMate registry. */
 export interface RegistryOptions<Theme extends string> {
@@ -87,7 +87,7 @@ export interface TokenizeOptions {
    * - If an array is provided, each entry is used as the state for the
    *   corresponding theme index.
    */
-  grammarState?: GrammarState
+  grammarState?: StateStack | GrammarState
 
   /** The maximum time in milliseconds to spend tokenizing a single line. */
   timeLimit?: number
@@ -222,14 +222,14 @@ interface GrammarMetadata extends IRawGrammar {
 
 export class Registry<Theme extends string> {
   #options: RegistryOptions<Theme>
-  #registry: TextMateRegistry<ScopeName>
+  #registry: TextMateRegistryImpl
   #theme: TextMateThemeRaw | undefined
 
   constructor(options: RegistryOptions<Theme>) {
     this.#options = options
-    this.#registry = new TextMate.Registry({
+    this.#registry = new TextMateRegistryImpl({
       onigLib,
-      loadGrammar: this.fetchGrammar,
+      loadGrammar: (scopeName) => this.fetchGrammar(scopeName as ScopeName),
     })
   }
 
@@ -362,7 +362,7 @@ export class Tokenizer<Theme extends string> {
     } of themeInitializationResults) {
       themeGrammars[themeIndex] = grammar
       themeColorMaps[themeIndex] = registry.getThemeColors()
-      states[themeIndex] = grammarStates?.[themeIndex] ?? TextMate.INITIAL
+      states[themeIndex] = grammarStates?.[themeIndex] ?? INITIAL
     }
 
     for (const lineText of lines) {
@@ -387,7 +387,7 @@ export class Tokenizer<Theme extends string> {
           const previousState = states[themeIndex]
 
           return Promise.resolve().then(() => {
-            const lineResult = grammar.tokenizeLine2(
+            const lineResult = grammar.tokenizeLine(
               lineText,
               previousState,
               timeLimit
@@ -554,9 +554,8 @@ function normalizeTokenizeOptions<Theme extends string>(
 
   if (Array.isArray(grammarState)) {
     const grammarStates = themes.map(
-      (state, index) => grammarState[index] ?? state
+      (_, index) => grammarState[index] ?? INITIAL
     )
-
     return { grammarStates, timeLimit }
   }
 

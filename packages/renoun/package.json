@@ -165,8 +165,7 @@
     "minimatch": "10.1.1",
     "oniguruma-to-es": "4.3.4",
     "restyle": "catalog:",
-    "ts-morph": "catalog:",
-    "vscode-textmate": "9.3.0"
+    "ts-morph": "catalog:"
   },
   "engines": {
     "node": ">=20.19.0"

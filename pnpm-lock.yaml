@@ -587,9 +587,6 @@ importers:
       ts-morph:
         specifier: 'catalog:'
         version: 27.0.2
-      vscode-textmate:
-        specifier: 9.3.0
-        version: 9.3.0
     devDependencies:
       '@mdx-js/rollup':
         specifier: 3.1.1
@@ -4644,9 +4641,6 @@ packages:
         optional: true
       jsdom:
         optional: true
-
-  vscode-textmate@9.3.0:
-    resolution: {integrity: sha512-zHiZZOdb9xqj5/X1C4a29sbgT2HngdWxPLSl3PyHRQF+5visI4uNM020OHiLJjsMxUssyk/pGVAg/9LCIobrVg==}
 
   watchpack@2.5.0:
     resolution: {integrity: sha512-e6vZvY6xboSwLz2GD36c16+O/2Z6fKvIf4pOXptw2rY9MVwE/TXc6RGqxD3I3x0a28lwBY7DE+76uTPSsBrrCA==}
@@ -9540,8 +9534,6 @@ snapshots:
       - terser
       - tsx
       - yaml
-
-  vscode-textmate@9.3.0: {}
 
   watchpack@2.5.0:
     dependencies:

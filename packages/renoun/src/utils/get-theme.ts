@@ -510,13 +510,12 @@ export function normalizeTheme(
   }
 
   // Normalize theme settings.
-  if (!theme.settings) {
-    if (theme.tokenColors) {
-      theme.settings = theme.tokenColors
-      delete theme.tokenColors
-    } else {
-      theme.settings = []
-    }
+  // Always set settings to tokenColors if present, regardless of frozen state.
+  if (theme.tokenColors) {
+    theme.settings = theme.tokenColors
+    // Do not attempt to delete tokenColors; theme may be frozen.
+  } else if (!theme.settings) {
+    theme.settings = []
   }
 
   applyForegroundBackground(theme)
