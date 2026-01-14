@@ -283,11 +283,13 @@ export class Registry<Theme extends string> {
 }
 
 const FontStyle = {
+  NotSet: -1,
+  None: 0,
   Italic: 1,
   Bold: 2,
   Underline: 4,
   Strikethrough: 8,
-}
+} as const
 
 export class Tokenizer<Theme extends string> {
   #baseColors: Map<string, string> = new Map()

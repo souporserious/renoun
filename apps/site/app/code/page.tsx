@@ -1,4 +1,5 @@
-import { CodeBlock } from '@/components/CodeBlock'
+import { CodeBlock as DefaultCodeBlock, type CodeBlockProps } from 'renoun'
+import { GeistMono } from 'geist/font/mono'
 
 const codeA = `npm install renoun`
 const codeB = `
@@ -22,6 +23,30 @@ export default async function Page({
 }
 `.trim()
 
+function CodeBlock({
+  backgroundColor,
+  ...restProps
+}: CodeBlockProps & { backgroundColor?: string }) {
+  return (
+    <DefaultCodeBlock
+      {...restProps}
+      allowCopy={false}
+      allowErrors
+      showErrors
+      components={{
+        Container: {
+          className: GeistMono.className,
+          style: {
+            padding: '10rem',
+            borderRadius: '0',
+            backgroundColor,
+          },
+        },
+      }}
+    />
+  )
+}
+
 export default function Page() {
   return (
     <div
@@ -32,7 +57,7 @@ export default function Page() {
         padding: '4rem',
       }}
     >
-      <CodeBlock language="tsx" children={codeB} />
+      {/* <CodeBlock language="tsx" children={codeB} backgroundColor="#381c22" /> */}
       <CodeBlock language="shell" children={codeA} />
     </div>
   )

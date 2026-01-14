@@ -159,7 +159,7 @@ class TextMateLogger {
 
 export const tmLogger = new TextMateLogger()
 
-export const UseOnigurumaFindOptions = false as const
+export const UseOnigurumaFindOptions = true as const
 
 export function disposeOnigString(onigString: any) {
   if (typeof onigString?.dispose === 'function') onigString.dispose()
@@ -433,7 +433,7 @@ export function toOptionalTokenType(value: any) {
 }
 
 class JSONState {
-  pos = 0
+  position = 0
   len: number
   line = 1
   char = 0
@@ -460,11 +460,11 @@ class JSONToken {
 function parseJSONError(state: JSONState, message: string) {
   throw new Error(
     'Near offset ' +
-      state.pos +
+      state.position +
       ': ' +
       message +
       ' ~~~' +
-      state.source.substr(state.pos, 50) +
+      state.source.substr(state.position, 50) +
       '~~~'
   )
 }
@@ -479,48 +479,48 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
 
   let ch: number
   const src = state.source
-  let pos = state.pos
+  let position = state.position
   const len = state.len
   let line = state.line
   let column = state.char
 
   while (true) {
-    if (pos >= len) return false
-    ch = src.charCodeAt(pos)
+    if (position >= len) return false
+    ch = src.charCodeAt(position)
     if (ch !== 32 && ch !== 9 && ch !== 13) {
       if (ch !== 10) break
-      pos++
+      position++
       line++
       column = 0
     } else {
-      pos++
+      position++
       column++
     }
   }
 
-  token.offset = pos
+  token.offset = position
   token.line = line
   token.char = column
 
   if (ch === 34) {
     // string
     token.type = 1
-    pos++
+    position++
     column++
     while (true) {
-      if (pos >= len) return false
-      ch = src.charCodeAt(pos)
-      pos++
+      if (position >= len) return false
+      ch = src.charCodeAt(position)
+      position++
       column++
       if (ch === 92) {
-        pos++
+        position++
         column++
       } else if (ch === 34) {
         break
       }
     }
     token.value = src
-      .substring(token.offset + 1, pos - 1)
+      .substring(token.offset + 1, position - 1)
       .replace(/\\u([0-9A-Fa-f]{4})/g, (_m, hex) =>
         String.fromCodePoint(parseInt(hex, 16))
       )
@@ -549,85 +549,85 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
       })
   } else if (ch === 91) {
     token.type = 2 // [
-    pos++
+    position++
     column++
   } else if (ch === 123) {
     token.type = 3 // {
-    pos++
+    position++
     column++
   } else if (ch === 93) {
     token.type = 4 // ]
-    pos++
+    position++
     column++
   } else if (ch === 125) {
     token.type = 5 // }
-    pos++
+    position++
     column++
   } else if (ch === 58) {
     token.type = 6 // :
-    pos++
+    position++
     column++
   } else if (ch === 44) {
     token.type = 7 // ,
-    pos++
+    position++
     column++
   } else if (ch === 110) {
     token.type = 8 // null
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 117) return false
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 108) return false
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 108) return false
-    pos++
+    position++
     column++
   } else if (ch === 116) {
     token.type = 9 // true
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 114) return false
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 117) return false
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 101) return false
-    pos++
+    position++
     column++
   } else if (ch === 102) {
     token.type = 10 // false
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 97) return false
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 108) return false
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 115) return false
-    pos++
+    position++
     column++
-    ch = src.charCodeAt(pos)
+    ch = src.charCodeAt(position)
     if (ch !== 101) return false
-    pos++
+    position++
     column++
   } else {
     token.type = 11 // number
     while (true) {
-      if (pos >= len) return false
-      ch = src.charCodeAt(pos)
+      if (position >= len) return false
+      ch = src.charCodeAt(position)
       if (
         ch !== 46 &&
         !(ch >= 48 && ch <= 57) &&
@@ -638,15 +638,15 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
       ) {
         break
       }
-      pos++
+      position++
       column++
     }
   }
 
-  token.len = pos - token.offset
+  token.len = position - token.offset
   if (token.value === null) token.value = src.substr(token.offset, token.len)
 
-  state.pos = pos
+  state.position = position
   state.line = line
   state.char = column
   return true
@@ -3027,16 +3027,16 @@ export class RegExpSource {
     // Find positions of \A and \G anchors
     const source = this.source
     const length = source.length
-    const anchorPositions: Array<{ pos: number; type: 'A' | 'G' }> = []
+    const anchorPositions: Array<{ position: number; type: 'A' | 'G' }> = []
 
     for (let index = 0; index < length - 1; index++) {
       if (source.charCodeAt(index) === 92) {
         // backslash
         const next = source.charCodeAt(index + 1)
         if (next === 65)
-          anchorPositions.push({ pos: index + 1, type: 'A' }) // 'A'
+          anchorPositions.push({ position: index + 1, type: 'A' }) // 'A'
         else if (next === 71)
-          anchorPositions.push({ pos: index + 1, type: 'G' }) // 'G'
+          anchorPositions.push({ position: index + 1, type: 'G' }) // 'G'
         index++ // skip next char
       }
     }
@@ -3050,12 +3050,12 @@ export class RegExpSource {
     const build = (replaceA: string, replaceG: string): string => {
       const parts: string[] = []
       let lastEnd = 0
-      for (const { pos, type } of anchorPositions) {
-        // FIX: pos is the index of 'A' or 'G'. pos - 1 is the index of '\'.
-        // We substring up to pos - 1 to exclude the backslash.
-        parts.push(source.substring(lastEnd, pos - 1))
+      for (const { position, type } of anchorPositions) {
+        // FIX: position is the index of 'A' or 'G'. position - 1 is the index of '\'.
+        // We substring up to position - 1 to exclude the backslash.
+        parts.push(source.substring(lastEnd, position - 1))
         parts.push(type === 'A' ? replaceA : replaceG)
-        lastEnd = pos + 1
+        lastEnd = position + 1
       }
       parts.push(source.substring(lastEnd))
       return parts.join('')
@@ -3065,9 +3065,9 @@ export class RegExpSource {
       // Use \uFFFF for "fail" (matches a char that likely doesn't exist)
       // Use '' (empty string) for "pass" (removes the anchor constraint)
       A0_G0: build('\uFFFF', '\uFFFF'),
-      A0_G1: build('\uFFFF', ''),
+      A0_G1: build('\uFFFF', '\\G'), // <--- FIX: Preserves \G
       A1_G0: build('', '\uFFFF'),
-      A1_G1: build('', ''),
+      A1_G1: build('', '\\G'),
     }
   }
 
@@ -3523,7 +3523,7 @@ export function _tokenizeString(
   grammar: Grammar,
   onigLine: any, // OnigString
   isFirstLine: boolean,
-  linePos: number,
+  linePosition: number,
   stack: StateStackImplementation,
   lineTokens: LineTokens,
   lineFonts: LineFonts,
@@ -3537,14 +3537,20 @@ export function _tokenizeString(
 
   const lineLength = onigLine.content.length
   let done = false
-  let anchorPos = -1
+  let anchorPosition = -1
+
+  // Loop guard for “endless loop - case 3”.
+  // Track states we’ve seen at the current linePosition. If we revisit the exact same
+  // (stack, anchorPosition) at the same position, we’re in a cycle and must advance.
+  let _loopGuardLinePosition = -1
+  const _loopGuardSeen = new Map<any, Set<number>>()
 
   if (checkWhileConditions) {
     const res = (function applyWhileRules(
       grammar: Grammar,
       lineText: string,
       isFirstLine: boolean,
-      linePos: number,
+      linePosition: number,
       stack: StateStackImplementation,
       lineTokens: LineTokens,
       lineFonts: LineFonts
@@ -3557,7 +3563,9 @@ export function _tokenizeString(
         lineFonts.produce(state, pos)
       }
 
-      let anchorPosition = stack.beginRuleCapturedEOL ? 0 : -1
+      let anchorPosition = stack.beginRuleCapturedEOL
+        ? 0
+        : stack.getAnchorPosition()
       const whileRules: Array<{
         rule: BeginWhileRule
         stack: StateStackImplementation
@@ -3574,12 +3582,12 @@ export function _tokenizeString(
           grammar,
           entry.stack.endRule,
           isFirstLine,
-          linePos === anchorPosition
+          linePosition === anchorPosition
         )
 
         const match = ruleScanner.findNextMatchSync(
           lineText,
-          linePos,
+          linePosition,
           findOptions
         )
         if (DebugFlags.inDebugMode) {
@@ -3619,33 +3627,62 @@ export function _tokenizeString(
           produceFromStack(entry.stack, match.captureIndices[0].end)
 
           anchorPosition = match.captureIndices[0].end
-          if (match.captureIndices[0].end > linePos) {
-            linePos = match.captureIndices[0].end
+          if (match.captureIndices[0].end > linePosition) {
+            linePosition = match.captureIndices[0].end
             isFirstLine = false
           }
         }
       }
 
-      return { stack, linePos, anchorPosition, isFirstLine }
+      return { stack, linePosition, anchorPosition, isFirstLine }
     })(
       grammar,
       onigLine.content,
       isFirstLine,
-      linePos,
+      linePosition,
       stack,
       lineTokens,
       lineFonts
     )
 
     stack = res.stack
-    linePos = res.linePos
+    linePosition = res.linePosition
     isFirstLine = res.isFirstLine
-    anchorPos = res.anchorPosition
+    anchorPosition = res.anchorPosition
   }
 
   const startTime = Date.now()
 
   while (!done) {
+    // --- endless loop (case 3) guard ---
+    if (linePosition !== _loopGuardLinePosition) {
+      _loopGuardSeen.clear()
+      _loopGuardLinePosition = linePosition
+    }
+
+    let _anchors = _loopGuardSeen.get(stack)
+    if (!_anchors) {
+      _anchors = new Set<number>()
+      _loopGuardSeen.set(stack, _anchors)
+    } else if (_anchors.has(anchorPosition)) {
+      // We are cycling at the same position. Force progress by consuming 1 char.
+      // This preserves normal \G behavior for valid grammars and only kicks in
+      // when we’re genuinely stuck.
+      if (linePosition < lineLength) {
+        linePosition += 1
+        anchorPosition = -1
+        produce(stack, linePosition)
+        continue
+      }
+
+      // End of line; finish.
+      produce(stack, lineLength)
+      done = true
+      break
+    }
+    _anchors.add(anchorPosition)
+    // --- end guard ---
+
     if (timeLimitMs !== 0 && Date.now() - startTime > timeLimitMs)
       return new TokenizeStringResult(stack, true)
     scanNext()
@@ -3657,8 +3694,8 @@ export function _tokenizeString(
     if (DebugFlags.inDebugMode) {
       console.log('')
       console.log(
-        `@@scanNext ${linePos}: |${onigLine.content
-          .substr(linePos)
+        `@@scanNext ${linePosition}: |${onigLine.content
+          .substr(linePosition)
           .replace(/\n$/, '\\n')}|`
       )
     }
@@ -3667,17 +3704,17 @@ export function _tokenizeString(
       grammar: Grammar,
       onigLine: any,
       isFirstLine: boolean,
-      linePos: number,
+      linePosition: number,
       stack: StateStackImplementation,
-      anchorPos: number
+      anchorPosition: number
     ) {
       const ruleMatch = (function matchRule(
         grammar: Grammar,
         onigLine: any,
         isFirstLine: boolean,
-        linePos: number,
+        linePosition: number,
         stack: StateStackImplementation,
-        anchorPos: number
+        anchorPosition: number
       ) {
         const currentRule = stack.getRule(grammar)
         const { ruleScanner, findOptions } = prepareRuleSearch(
@@ -3685,14 +3722,14 @@ export function _tokenizeString(
           grammar,
           stack.endRule,
           isFirstLine,
-          linePos === anchorPos
+          linePosition === anchorPosition
         )
 
         let start = 0
         if (DebugFlags.inDebugMode) start = performance.now()
         const match = ruleScanner.findNextMatchSync(
           onigLine,
-          linePos,
+          linePosition,
           findOptions
         )
 
@@ -3703,7 +3740,7 @@ export function _tokenizeString(
               `Rule ${currentRule.debugName} (${currentRule.id}) matching took ${elapsed} against '${onigLine}'`
             )
           console.log(
-            `  scanning for (linePos: ${linePos}, anchorPosition: ${anchorPos})`
+            `  scanning for (linePosition: ${linePosition}, anchorPosition: ${anchorPosition})`
           )
           console.log(ruleScanner.toString())
           if (match)
@@ -3718,7 +3755,7 @@ export function _tokenizeString(
               matchedRuleId: match.ruleId,
             }
           : null
-      })(grammar, onigLine, isFirstLine, linePos, stack, anchorPos)
+      })(grammar, onigLine, isFirstLine, linePosition, stack, anchorPosition)
 
       const injections = grammar.getInjections()
       if (injections.length === 0) return ruleMatch
@@ -3728,9 +3765,9 @@ export function _tokenizeString(
         grammar: Grammar,
         onigLine: any,
         isFirstLine: boolean,
-        linePos: number,
+        linePosition: number,
         stack: StateStackImplementation,
-        anchorPos: number
+        anchorPosition: number
       ) {
         let bestRuleId: number | undefined
         let bestStart = Number.MAX_VALUE
@@ -3748,11 +3785,11 @@ export function _tokenizeString(
             grammar,
             null,
             isFirstLine,
-            linePos === anchorPos
+            linePosition === anchorPosition
           )
           const match = ruleScanner.findNextMatchSync(
             onigLine,
-            linePos,
+            linePosition,
             findOptions
           )
           if (!match) continue
@@ -3771,7 +3808,7 @@ export function _tokenizeString(
           bestCaptures = match.captureIndices
           bestRuleId = match.ruleId
           bestPriority = injection.priority
-          if (bestStart === linePos && bestPriority === 1) break
+          if (bestStart === linePosition && bestPriority === 1) break
         }
 
         return bestCaptures
@@ -3781,7 +3818,15 @@ export function _tokenizeString(
               matchedRuleId: bestRuleId!,
             }
           : null
-      })(injections, grammar, onigLine, isFirstLine, linePos, stack, anchorPos)
+      })(
+        injections,
+        grammar,
+        onigLine,
+        isFirstLine,
+        linePosition,
+        stack,
+        anchorPosition
+      )
 
       if (!injectionMatch) return ruleMatch
       if (!ruleMatch) return injectionMatch
@@ -3792,7 +3837,7 @@ export function _tokenizeString(
         (injectionMatch.priorityMatch && injStart === ruleStart)
         ? injectionMatch
         : ruleMatch
-    })(grammar, onigLine, isFirstLine, linePos, stack, anchorPos)
+    })(grammar, onigLine, isFirstLine, linePosition, stack, anchorPosition)
 
     if (!match) {
       if (DebugFlags.inDebugMode) console.log('  no more matches.')
@@ -3806,7 +3851,7 @@ export function _tokenizeString(
 
     const advanced =
       !!(captureIndices && captureIndices.length > 0) &&
-      captureIndices[0].end > linePos
+      captureIndices[0].end > linePosition
 
     if (matchedRuleId === endRuleId) {
       const rule = stack.getRule(grammar) as BeginEndRule
@@ -3827,34 +3872,8 @@ export function _tokenizeString(
       )
       produce(stack, captureIndices[0].end)
 
-      // ==================== UPDATED FIX ====================
-      // Infinite Loop Protection:
-      // We only intervene if:
-      // 1. The End rule matched zero characters (end === linePos)
-      // 2. AND the rule started at this exact position (enterPos === linePos)
-      if (
-        captureIndices[0].end === linePos &&
-        stack.getEnterPos() === linePos
-      ) {
-        if (DebugFlags.inDebugMode) {
-          console.error(
-            `[Infinite Loop Protection] Zero-width rule scope detected (RuleId: ${rule.id}). Breaking anchor to prevent loop.`
-          )
-        }
-
-        // CRITICAL FIX: Do NOT advance linePos (this eats characters).
-        // Instead, poison the anchorPos. This prevents the \G rule from
-        // matching again at this specific position, breaking the loop
-        // while preserving the text for the next rule.
-        anchorPos = -1
-
-        stack = stack.parent!
-        return // Exit scanNext; loop continues with same linePos but invalid anchor
-      }
-      // =====================================================
-
       stack = stack.parent!
-      anchorPos = captureIndices[0].end
+      anchorPosition = captureIndices[0].end
     } else {
       const rule = grammar.getRule(matchedRuleId)
 
@@ -3868,8 +3887,8 @@ export function _tokenizeString(
       )
       stack = stack.push(
         matchedRuleId,
-        linePos,
-        anchorPos,
+        linePosition,
+        anchorPosition,
         captureIndices[0].end === lineLength,
         null,
         pushedNameScopes,
@@ -3894,7 +3913,7 @@ export function _tokenizeString(
         )
         produce(stack, captureIndices[0].end)
 
-        anchorPos = captureIndices[0].end
+        anchorPosition = captureIndices[0].end
 
         const contentName = rule.getContentName(
           onigLine.content,
@@ -3940,7 +3959,7 @@ export function _tokenizeString(
         )
         produce(stack, captureIndices[0].end)
 
-        anchorPos = captureIndices[0].end
+        anchorPosition = captureIndices[0].end
 
         const contentName = rule.getContentName(
           onigLine.content,
@@ -4007,8 +4026,8 @@ export function _tokenizeString(
       }
     }
 
-    if (captureIndices[0].end > linePos) {
-      linePos = captureIndices[0].end
+    if (captureIndices[0].end > linePosition) {
+      linePosition = captureIndices[0].end
       isFirstLine = false
     }
   }
@@ -4259,7 +4278,7 @@ export class LineTokens {
   // output is [startIndex0, metadata0, startIndex1, metadata1, ...]
   private tokens: number[] = []
   private tokensLen = 0
-  private lastPos = 0
+  private lastPosition = 0
   private lastMetadata = 0
 
   private emitBinaryTokens: boolean
@@ -4269,19 +4288,19 @@ export class LineTokens {
 
   reset() {
     this.tokensLen = 0
-    this.lastPos = 0
+    this.lastPosition = 0
     this.lastMetadata = 0
   }
 
-  produce(stack: StateStackImplementation, endPos: number) {
-    this.produceFromScopes(stack.contentNameScopesList, endPos)
+  produce(stack: StateStackImplementation, endPosition: number) {
+    this.produceFromScopes(stack.contentNameScopesList, endPosition)
   }
 
-  produceFromScopes(scopes: AttributedScopeStack, endPos: number) {
-    if (endPos <= this.lastPos) {
+  produceFromScopes(scopes: AttributedScopeStack, endPosition: number) {
+    if (endPosition < this.lastPosition) {
       tmLogger.trace(
         'tokenize',
-        `produceFromScopes skipped (endPos ${endPos} <= lastPos ${this.lastPos})`
+        `produceFromScopes skipped (endPos ${endPosition} <= lastPos ${this.lastPosition})`
       )
       return
     }
@@ -4292,7 +4311,7 @@ export class LineTokens {
 
     tmLogger.debug(
       'tokenize',
-      `produceFromScopes: pos ${this.lastPos}-${endPos}`,
+      `produceFromScopes: position ${this.lastPosition}-${endPosition}`,
       {
         scopeNames: scopes.getScopeNames(),
         metadata,
@@ -4308,26 +4327,26 @@ export class LineTokens {
         // Grow by 32 slots at a time to reduce reallocations
         this.tokens.length = this.tokens.length + 32
       }
-      this.tokens[this.tokensLen++] = this.lastPos
+      this.tokens[this.tokensLen++] = this.lastPosition
       this.tokens[this.tokensLen++] = metadata
 
       tmLogger.trace(
         'tokenize',
         `Emitted token at index ${this.tokensLen - 2}`,
         {
-          startPos: this.lastPos,
+          startPos: this.lastPosition,
           metadata,
           foregroundId: foreground,
         }
       )
     }
-    this.lastPos = endPos
+    this.lastPosition = endPosition
     this.lastMetadata = metadata
   }
 
   finalize(lineLength: number) {
     // Ensure last token ends at lineLength by just updating lastPos.
-    this.lastPos = lineLength
+    this.lastPosition = lineLength
     // Trim to actual size
     const result = this.tokens.slice(0, this.tokensLen)
     return this.emitBinaryTokens ? new Uint32Array(result) : result
@@ -4343,23 +4362,23 @@ export class LineFonts {
     fontSize: string | null
     lineHeight: number | null
   }> = []
-  private lastPos = 0
+  private lastPosition = 0
 
   reset() {
     this.spans = []
-    this.lastPos = 0
+    this.lastPosition = 0
   }
 
-  produce(stack: StateStackImplementation, endPos: number) {
-    this.produceFromScopes(stack.contentNameScopesList, endPos)
+  produce(stack: StateStackImplementation, endPosition: number) {
+    this.produceFromScopes(stack.contentNameScopesList, endPosition)
   }
 
-  produceFromScopes(_scopes: AttributedScopeStack, endPos: number) {
-    if (endPos <= this.lastPos) return
+  produceFromScopes(_scopes: AttributedScopeStack, endPosition: number) {
+    if (endPosition <= this.lastPosition) return
     // In this simplified version, style attributes are not carried on AttributedScopeStack.
     // If you've extended token metadata to include font family/size/lineHeight, wire it here.
     // For now we just keep a single span boundary list (empty by default).
-    this.lastPos = endPos
+    this.lastPosition = endPosition
   }
 
   finalize(_lineLength: number) {
@@ -4370,8 +4389,8 @@ export class LineFonts {
 export class StateStackImplementation {
   parent: StateStackImplementation | null
   ruleId: number
-  private _enterPos: number
-  private _anchorPos: number
+  private _enterPosition: number
+  private _anchorPosition: number
   beginRuleCapturedEOL: boolean
   endRule: string | null
   nameScopesList: AttributedScopeStack
@@ -4380,8 +4399,8 @@ export class StateStackImplementation {
   constructor(
     parent: StateStackImplementation | null,
     ruleId: number,
-    enterPos: number,
-    anchorPos: number,
+    enterPosition: number,
+    anchorPosition: number,
     beginRuleCapturedEOL: boolean,
     endRule: string | null,
     nameScopesList: AttributedScopeStack,
@@ -4389,8 +4408,8 @@ export class StateStackImplementation {
   ) {
     this.parent = parent
     this.ruleId = ruleId
-    this._enterPos = enterPos
-    this._anchorPos = anchorPos
+    this._enterPosition = enterPosition
+    this._anchorPosition = anchorPosition
     this.beginRuleCapturedEOL = beginRuleCapturedEOL
     this.endRule = endRule
     this.nameScopesList = nameScopesList
@@ -4402,7 +4421,7 @@ export class StateStackImplementation {
       null,
       rootRuleId,
       0,
-      -1,
+      0,
       false,
       null,
       rootScopes,
@@ -4410,20 +4429,20 @@ export class StateStackImplementation {
     )
   }
 
-  getEnterPos() {
-    return this._enterPos
+  getEnterPosition() {
+    return this._enterPosition
   }
 
-  getAnchorPos() {
-    return this._anchorPos
+  getAnchorPosition() {
+    return this._anchorPosition
   }
 
   withContentNameScopesList(scopes: AttributedScopeStack) {
     return new StateStackImplementation(
       this.parent,
       this.ruleId,
-      this._enterPos,
-      this._anchorPos,
+      this._enterPosition,
+      this._anchorPosition,
       this.beginRuleCapturedEOL,
       this.endRule,
       this.nameScopesList,
@@ -4435,8 +4454,8 @@ export class StateStackImplementation {
     return new StateStackImplementation(
       this.parent,
       this.ruleId,
-      this._enterPos,
-      this._anchorPos,
+      this._enterPosition,
+      this._anchorPosition,
       this.beginRuleCapturedEOL,
       endRule,
       this.nameScopesList,
@@ -4477,8 +4496,8 @@ export class StateStackImplementation {
     return (
       this.ruleId === other.ruleId &&
       this.endRule === other.endRule &&
-      this._enterPos === other._enterPos &&
-      this._anchorPos === other._anchorPos
+      this._enterPosition === other._enterPosition &&
+      this._anchorPosition === other._anchorPosition
     )
   }
 
