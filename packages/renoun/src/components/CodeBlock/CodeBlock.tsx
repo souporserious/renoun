@@ -24,6 +24,7 @@ import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 import {
   normalizeSlotComponents,
+  isComponentOverride,
   type SlotComponentOrProps,
 } from '../../utils/slot-components.ts'
 
@@ -140,9 +141,62 @@ const defaultComponents: CodeBlockComponents = {
   CopyButton,
 }
 
+const codeBlockComponentKeys = [
+  'Container',
+  'Toolbar',
+  'Pre',
+  'LineNumbers',
+  'Code',
+  'Tokens',
+  'CopyButton',
+] as const
+
+const codeBlockComponentKeySet = new Set<string>(codeBlockComponentKeys)
+
+function validateComponentsProp(
+  overrides: Partial<CodeBlockComponentOverrides> | undefined
+) {
+  if (overrides === undefined) return
+
+  if (
+    overrides === null ||
+    typeof overrides !== 'object' ||
+    Array.isArray(overrides)
+  ) {
+    throw new Error(
+      `[renoun] The "components" prop for CodeBlock must be an object with keys: ${codeBlockComponentKeys.join(
+        ', '
+      )}.`
+    )
+  }
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (!codeBlockComponentKeySet.has(key)) {
+      throw new Error(
+        `[renoun] Unknown CodeBlock component override "${key}". Valid keys are: ${codeBlockComponentKeys.join(
+          ', '
+        )}.`
+      )
+    }
+
+    if (value === undefined) continue
+
+    if (
+      value === null ||
+      (!isComponentOverride(value) &&
+        (typeof value !== 'object' || Array.isArray(value)))
+    ) {
+      throw new Error(
+        `[renoun] Invalid CodeBlock component override for "${key}". Expected a React component or props object.`
+      )
+    }
+  }
+}
+
 function normalizeComponents(
   overrides: Partial<CodeBlockComponentOverrides> | undefined
 ): CodeBlockComponents {
+  validateComponentsProp(overrides)
   return normalizeSlotComponents(defaultComponents, overrides as any)
 }
 
