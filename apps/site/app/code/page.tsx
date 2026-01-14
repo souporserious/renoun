@@ -1,0 +1,39 @@
+import { CodeBlock } from '@/components/CodeBlock'
+
+const codeA = `npm install renoun`
+const codeB = `
+import { Directory } from 'renoun'
+
+const posts = new Directory({
+  path: 'posts',
+  filter: '*.mdx',
+})
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const slug = (await params).slug
+  const post = await posts.getFile(slug, 'mdx')
+  const Content = await post.getExportValue('default')
+
+  return <Content />
+}
+`.trim()
+
+export default function Page() {
+  return (
+    <div
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2rem',
+        padding: '4rem',
+      }}
+    >
+      <CodeBlock language="tsx" children={codeB} />
+      <CodeBlock language="shell" children={codeA} />
+    </div>
+  )
+}

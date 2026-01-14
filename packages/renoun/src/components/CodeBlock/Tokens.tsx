@@ -1,4 +1,4 @@
-import React, { Fragment, Suspense } from 'react'
+import React, { Fragment } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
@@ -29,7 +29,7 @@ import { getConfig } from '../Config/ServerConfigContext.tsx'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
-import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
+// import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
 import { QuickInfoProvider } from './QuickInfoProvider.tsx'
 import { Context } from './Context.tsx'
 import { Symbol } from './Symbol.tsx'
@@ -408,22 +408,23 @@ function renderToken({
         key={`${lineIndex}-${tokenIndex}`}
         highlightColor={theme.editor.hoverHighlightBackground}
         popover={
-          <Suspense
-            fallback={
-              <QuickInfoLoading
-                css={cssProp?.popover}
-                className={className?.popover}
-                style={style?.popover}
-              />
-            }
-          >
-            <QuickInfo
-              quickInfo={token.quickInfo}
-              css={cssProp?.popover}
-              className={className?.popover}
-              style={style?.popover}
-            />
-          </Suspense>
+          null
+          // <Suspense
+          //   fallback={
+          //     <QuickInfoLoading
+          //       css={cssProp?.popover}
+          //       className={className?.popover}
+          //       style={style?.popover}
+          //     />
+          //   }
+          // >
+          //   <QuickInfo
+          //     quickInfo={token.quickInfo}
+          //     css={cssProp?.popover}
+          //     className={className?.popover}
+          //     style={style?.popover}
+          //   />
+          // </Suspense>
         }
         className={tokenClassName}
         style={style?.token}
