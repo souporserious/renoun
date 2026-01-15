@@ -73,6 +73,50 @@ describe('textmate utilities', () => {
   })
 })
 
+describe('theme parsing: css var colors', () => {
+  test('parseTheme accepts var(--x, #hex) for foreground/background', () => {
+    const rules = parseTheme({
+      name: 'Test',
+      type: 'dark',
+      settings: [
+        {
+          settings: {
+            foreground: 'var(--fg, #aabbcc)',
+            background: 'var(--bg, #112233)',
+          },
+        },
+        {
+          scope: 'keyword',
+          settings: {
+            foreground: 'var(--kw, #FF00ff)',
+          },
+        },
+      ],
+    } as any)
+
+    expect(rules.length).toBeGreaterThan(0)
+    const defaultRule = rules.find((r) => r.scope === '')
+    expect(defaultRule).toBeDefined()
+    expect(defaultRule!.foreground).toBe('var(--fg, #aabbcc)')
+    expect(defaultRule!.background).toBe('var(--bg, #112233)')
+    const kwRule = rules.find((r) => r.scope === 'keyword')
+    expect(kwRule).toBeDefined()
+    expect(kwRule!.foreground).toBe('var(--kw, #FF00ff)')
+  })
+
+  test('ColorMap normalizes css var fallback hex to stable uppercase id', () => {
+    const cm = new ColorMap(null)
+    const a = cm.getId('var(--fg, #aabbcc)')
+    const b = cm.getId('var(--fg, #AABBCC)')
+    const c = cm.getId('var(--fg, #AaBbCc)')
+    expect(a).toBe(b)
+    expect(a).toBe(c)
+
+    const map = cm.getColorMap()
+    expect(map[a]).toBe('var(--fg, #AABBCC)')
+  })
+})
+
 describe('RegexSource capture replacement', () => {
   test('hasCaptures detects capture templates (and handles null)', () => {
     expect(RegexSource.hasCaptures(null)).toBe(false)

@@ -287,6 +287,23 @@ export function isValidHexColor(color: string) {
   )
 }
 
+function isValidCssVarWithHexColorDefault(potentialCssVar: string): boolean {
+  const match = /var\((--.*),\s?(#[0-9a-f]+)\)/i.exec(potentialCssVar)
+  if (match !== null) {
+    const hex = match[2]
+    return isValidHexColor(hex)
+  }
+  return false
+}
+
+function colorValueToId(cssValue: string): string {
+  const match = /var\((--.*),\s?(#[0-9a-f]+)\)/i.exec(cssValue)
+  if (match !== null) {
+    return `var(${match[1]}, ${match[2].toUpperCase()})`
+  }
+  return cssValue.toUpperCase()
+}
+
 // Pre-compiled regex for escaping - avoid re-creation
 const ESCAPE_REGEXP_CHARS = /[\-\\\{\}\*\+\?\|\^\$\.\,\[\]\(\)\#\s]/g
 const ESCAPE_REGEXP_TEST = /[\-\\\{\}\*\+\?\|\^\$\.\,\[\]\(\)\#\s]/
@@ -1641,25 +1658,29 @@ export function parseTheme(theme: IRawTheme | undefined) {
     }
 
     let foreground: string | null = null
-    if (
-      typeof entry.settings.foreground === 'string' &&
-      isValidHexColor(entry.settings.foreground)
-    ) {
-      foreground = entry.settings.foreground
-    } else if (entry.settings.foreground) {
-      tmLogger.warn('theme-parse', `Invalid foreground color rejected`, {
-        scope: entry.scope,
-        foreground: entry.settings.foreground,
-        isValidHex: isValidHexColor(entry.settings.foreground),
-      })
+    if (typeof entry.settings.foreground === 'string') {
+      if (
+        isValidHexColor(entry.settings.foreground) ||
+        isValidCssVarWithHexColorDefault(entry.settings.foreground)
+      ) {
+        foreground = entry.settings.foreground
+      } else if (entry.settings.foreground) {
+        tmLogger.warn('theme-parse', `Invalid foreground color rejected`, {
+          scope: entry.scope,
+          foreground: entry.settings.foreground,
+          isValidHex: isValidHexColor(entry.settings.foreground),
+        })
+      }
     }
 
     let background: string | null = null
-    if (
-      typeof entry.settings.background === 'string' &&
-      isValidHexColor(entry.settings.background)
-    ) {
-      background = entry.settings.background
+    if (typeof entry.settings.background === 'string') {
+      if (
+        isValidHexColor(entry.settings.background) ||
+        isValidCssVarWithHexColorDefault(entry.settings.background)
+      ) {
+        background = entry.settings.background
+      }
     }
 
     let fontFamily: string | null = ''
@@ -1786,20 +1807,20 @@ export class ColorMap {
       tmLogger.trace('color-map', 'getId(null) -> 0')
       return 0
     }
-    // Check both original and uppercase to avoid toUpperCase call when already cached
+    const normalized = colorValueToId(color)
+    // Check both original and normalized to avoid extra processing when already cached
     let id = this._color2id[color]
     if (id !== undefined) {
       tmLogger.trace('color-map', `getId("${color}") -> ${id} (cached)`)
       return id
     }
-    const upper = color.toUpperCase()
-    id = this._color2id[upper]
+    id = this._color2id[normalized]
     if (id !== undefined) {
       // Cache the original case too for faster future lookups
       this._color2id[color] = id
       tmLogger.trace(
         'color-map',
-        `getId("${color}") -> ${id} (uppercase cached)`
+        `getId("${color}") -> ${id} (normalized cached)`
       )
       return id
     }
@@ -1814,9 +1835,9 @@ export class ColorMap {
       throw new Error(`Missing color in color map - ${color}`)
     }
     id = ++this._lastColorId
-    this._color2id[upper] = id
+    this._color2id[normalized] = id
     this._color2id[color] = id
-    this._id2color[id] = upper
+    this._id2color[id] = normalized
     tmLogger.debug('color-map', `getId("${color}") -> ${id} (new)`, {
       totalColors: this._lastColorId,
     })
