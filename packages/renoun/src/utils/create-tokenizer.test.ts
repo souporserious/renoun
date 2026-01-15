@@ -272,6 +272,53 @@ echo "Hello World"`
     // TODO: Add proper test when we have a mock grammar loader
   })
 
+  test('tokenizes TSX inside MDX fenced code blocks', async () => {
+    // MDX grammar depends on auxiliary grammars (frontmatter, etc). For this test,
+    // we only care about the TSX fence, so stub any unknown grammars as empty.
+    const requestedScopes: string[] = []
+    const mdxRegistryOptions: RegistryOptions<ThemeName> = {
+      async getGrammar(scopeName) {
+        requestedScopes.push(scopeName)
+        try {
+          return await registryOptions.getGrammar(scopeName)
+        } catch {
+          return {
+            scopeName,
+            patterns: [],
+            repository: {},
+          } as TextMateGrammarRaw
+        }
+      },
+      getTheme: registryOptions.getTheme,
+    }
+
+    const tokenizer = new Tokenizer<ThemeName>(mdxRegistryOptions)
+    const normalize = (c: string | undefined) => (c || '').toUpperCase()
+
+    const mdx = [
+      '# Title',
+      '',
+      '```tsx',
+      "import React from 'react'",
+      'export const x = 1',
+      '```',
+      '',
+    ].join('\n')
+
+    const tokens = await tokenizer.tokenize(mdx, 'mdx', ['light'])
+    const flatTokens = tokens.flatMap((line) => line)
+
+    expect(requestedScopes).toContain('source.mdx')
+    expect(requestedScopes).toContain('source.tsx')
+
+    const importToken = flatTokens.find((token) =>
+      token.value.includes('import')
+    )
+    expect(importToken).toBeDefined()
+    expect(normalize(importToken!.style.color)).toBe('#A492EA')
+    expect(importToken!.style.fontStyle).toBe('italic')
+  })
+
   test('tokenizes shell code interleaved with other languages', async () => {
     // Simulate real usage where multiple languages are tokenized
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)

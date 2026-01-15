@@ -3416,6 +3416,30 @@ function processRulePatterns(
       ? mergeObjects({}, ctx.repository, rule.repository)
       : ctx.repository
 
+    // Captures can contain nested `patterns` (retokenizeCapturedWithRuleId).
+    // These nested patterns may reference external grammars (e.g. fenced code blocks
+    // in markdown/mdx). We must traverse them, otherwise dependencies won't be loaded.
+    const captureSets = [
+      rule.captures,
+      rule.beginCaptures,
+      rule.endCaptures,
+      rule.whileCaptures,
+    ]
+    for (const captures of captureSets) {
+      if (!captures) continue
+      for (const key in captures) {
+        if (key === '$textmateLocation') continue
+        const captureRule = captures[key]
+        if (captureRule && Array.isArray(captureRule.patterns)) {
+          processRulePatterns(
+            [captureRule],
+            { ...ctx, repository: mergedRepo },
+            collector
+          )
+        }
+      }
+    }
+
     if (Array.isArray(rule.patterns)) {
       processRulePatterns(
         rule.patterns,
@@ -3638,13 +3662,16 @@ export function _tokenizeString(
       }
 
       for (let entry = whileRules.pop(); entry; entry = whileRules.pop()) {
-        const { ruleScanner, findOptions } = prepareRuleSearch(
-          entry.rule,
+        // BeginWhileRule's `while` condition is a different regexp than its `begin`.
+        // Use the while-compiled scanner here; otherwise we would always check the begin pattern
+        // and incorrectly pop while-rules (breaking fenced code blocks, etc).
+        const ruleScanner = entry.rule.compileWhileAG(
           grammar,
           entry.stack.endRule,
           isFirstLine,
           linePosition === anchorPosition
         )
+        const findOptions = 0
 
         const match = ruleScanner.findNextMatchSync(
           lineText,
