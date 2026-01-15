@@ -1,1 +1,1 @@
-export { CopyButton } from './CopyButton.tsx'
+export { CopyButton, type CopyButtonProps } from './CopyButton.tsx'
