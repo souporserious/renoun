@@ -4252,22 +4252,31 @@ export class AttributedScopeStack {
   parent: AttributedScopeStack | null
   scopeName: string | null
   tokenAttributes: number
+  styleAttributes: StyleAttributes | null
 
   constructor(
     parent: AttributedScopeStack | null,
     scopeName: string | null,
-    tokenAttributes: number
+    tokenAttributes: number,
+    styleAttributes: StyleAttributes | null
   ) {
     this.parent = parent
     this.scopeName = scopeName
     this.tokenAttributes = tokenAttributes
+    this.styleAttributes = styleAttributes
   }
 
   static createRoot(
     scopeName: string,
-    tokenAttributes: number
+    tokenAttributes: number,
+    styleAttributes: StyleAttributes | null
   ): AttributedScopeStack {
-    return new AttributedScopeStack(null, scopeName, tokenAttributes >>> 0)
+    return new AttributedScopeStack(
+      null,
+      scopeName,
+      tokenAttributes >>> 0,
+      styleAttributes
+    )
   }
 
   pushAttributed(
@@ -4289,16 +4298,25 @@ export class AttributedScopeStack {
     // Fast path: most scope names don't have spaces
     const spaceIdx = scopeName.indexOf(' ')
     if (spaceIdx === -1) {
-      const attributes = grammar.getMetadataForScope(scopeName, this)
-      const result = new AttributedScopeStack(this, scopeName, attributes)
+      const metadata = grammar.getMetadataForScope(scopeName, this)
+      const result = new AttributedScopeStack(
+        this,
+        scopeName,
+        metadata.tokenAttributes,
+        metadata.styleAttributes
+      )
 
       tmLogger.debug(
         'scope-stack',
         `Created new AttributedScopeStack for "${scopeName}"`,
         {
-          tokenAttributes: attributes,
-          foregroundId: EncodedTokenAttributes.getForeground(attributes),
-          fontStyle: EncodedTokenAttributes.getFontStyle(attributes),
+          tokenAttributes: metadata.tokenAttributes,
+          foregroundId: EncodedTokenAttributes.getForeground(
+            metadata.tokenAttributes
+          ),
+          fontStyle: EncodedTokenAttributes.getFontStyle(
+            metadata.tokenAttributes
+          ),
         }
       )
 
@@ -4306,22 +4324,31 @@ export class AttributedScopeStack {
     }
     // Slow path: scopeName has multiple space-separated scopes
     tmLogger.trace('scope-stack', `Processing multi-scope: "${scopeName}"`)
-    let cur: AttributedScopeStack = this
+    let currentStack: AttributedScopeStack = this
     let start = 0
-    const len = scopeName.length
-    while (start < len) {
+    const scopeNameLength = scopeName.length
+    while (start < scopeNameLength) {
       // Skip leading spaces
-      while (start < len && scopeName.charCodeAt(start) === 32) start++
-      if (start >= len) break
+      while (start < scopeNameLength && scopeName.charCodeAt(start) === 32)
+        start++
+      if (start >= scopeNameLength) break
       // Find end of this scope
       let end = start + 1
-      while (end < len && scopeName.charCodeAt(end) !== 32) end++
-      const p = scopeName.substring(start, end)
-      const attributes = grammar.getMetadataForScope(p, cur)
-      cur = new AttributedScopeStack(cur, p, attributes)
+      while (end < scopeNameLength && scopeName.charCodeAt(end) !== 32) end++
+      const currentScopeName = scopeName.substring(start, end)
+      const metadata = grammar.getMetadataForScope(
+        currentScopeName,
+        currentStack
+      )
+      currentStack = new AttributedScopeStack(
+        currentStack,
+        currentScopeName,
+        metadata.tokenAttributes,
+        metadata.styleAttributes
+      )
       start = end + 1
     }
-    return cur
+    return currentStack
   }
 
   getScopeNames(): string[] {
@@ -4428,26 +4455,94 @@ export class LineFonts {
     lineHeight: number | null
   }> = []
   private lastPosition = 0
+  private _lastFontFamily: string | null = null
+  private _lastFontSize: string | null = null
+  private _lastLineHeight: number | null = null
 
   reset() {
     this.spans = []
     this.lastPosition = 0
+    this._lastFontFamily = null
+    this._lastFontSize = null
+    this._lastLineHeight = null
   }
 
   produce(stack: StateStackImplementation, endPosition: number) {
     this.produceFromScopes(stack.contentNameScopesList, endPosition)
   }
 
-  produceFromScopes(_scopes: AttributedScopeStack, endPosition: number) {
+  produceFromScopes(scopes: AttributedScopeStack, endPosition: number) {
     if (endPosition <= this.lastPosition) return
-    // In this simplified version, style attributes are not carried on AttributedScopeStack.
-    // If you've extended token metadata to include font family/size/lineHeight, wire it here.
-    // For now we just keep a single span boundary list (empty by default).
+
+    const fontFamily = this.getFontFamily(scopes)
+    const fontSize = this.getFontSize(scopes)
+    const lineHeight = this.getLineHeight(scopes)
+
+    // If none are set anywhere in the parent chain, do nothing.
+    if (!fontFamily && !fontSize && !lineHeight) {
+      this.lastPosition = endPosition
+      return
+    }
+
+    if (
+      fontFamily !== this._lastFontFamily ||
+      fontSize !== this._lastFontSize ||
+      lineHeight !== this._lastLineHeight
+    ) {
+      this.spans.push({
+        start: this.lastPosition,
+        fontFamily: fontFamily || null,
+        fontSize: fontSize || null,
+        lineHeight: lineHeight || null,
+      })
+      this._lastFontFamily = fontFamily || null
+      this._lastFontSize = fontSize || null
+      this._lastLineHeight = lineHeight || null
+    }
+
     this.lastPosition = endPosition
   }
 
   finalize(_lineLength: number) {
     return this.spans
+  }
+
+  private getFontFamily(scopesList: AttributedScopeStack): string | null {
+    return this.getAttribute(scopesList, (styleAttributes) => {
+      return styleAttributes.fontFamily
+    })
+  }
+
+  private getFontSize(scopesList: AttributedScopeStack): string | null {
+    return this.getAttribute(scopesList, (styleAttributes) => {
+      return styleAttributes.fontSize
+    })
+  }
+
+  private getLineHeight(scopesList: AttributedScopeStack): number | null {
+    return this.getAttribute(scopesList, (styleAttributes) => {
+      return styleAttributes.lineHeight
+    })
+  }
+
+  private getAttribute<T>(
+    scopesList: AttributedScopeStack | null,
+    getAttr: (styleAttributes: StyleAttributes) => T
+  ): T | null {
+    if (!scopesList) {
+      return null
+    }
+
+    const styleAttributes = scopesList.styleAttributes
+    if (styleAttributes) {
+      const attribute = getAttr(styleAttributes)
+      // Treat falsy values ('' / 0 / null) as "not set", keep walking parents.
+      if (attribute) {
+        return attribute
+      }
+    }
+
+    return this.getAttribute(scopesList.parent, getAttr)
   }
 }
 
@@ -4784,7 +4879,7 @@ export class Grammar {
   getMetadataForScope(
     scope: string,
     parentScopes: AttributedScopeStack | null
-  ) {
+  ): { tokenAttributes: number; styleAttributes: StyleAttributes | null } {
     tmLogger.debug('metadata', `getMetadataForScope("${scope}")`, {
       parentScopeNames: parentScopes ? parentScopes.getScopeNames() : [],
     })
@@ -4858,7 +4953,7 @@ export class Grammar {
       },
     })
 
-    return encoded >>> 0
+    return { tokenAttributes: encoded >>> 0, styleAttributes: themeMatch }
   }
 
   tokenizeLine(
@@ -4874,9 +4969,11 @@ export class Grammar {
       scopeName: this.scopeName,
     })
 
+    const rootMeta = this.getMetadataForScope(this.scopeName, null)
     const rootScopes = AttributedScopeStack.createRoot(
       this.scopeName,
-      this.getMetadataForScope(this.scopeName, null)
+      rootMeta.tokenAttributes,
+      rootMeta.styleAttributes
     )
 
     let stack: StateStackImplementation

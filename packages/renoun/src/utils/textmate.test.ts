@@ -5,9 +5,10 @@ import {
   BasicScopeAttributes,
   BasicScopeAttributesProvider,
   CachedFn,
+  AttributedScopeStack,
   ColorMap,
-  DebugFlags,
   EncodedTokenAttributes,
+  LineFonts,
   ParsedThemeRule,
   RegexSource,
   RelativeReference,
@@ -114,6 +115,32 @@ describe('theme parsing: css var colors', () => {
 
     const map = cm.getColorMap()
     expect(map[a]).toBe('var(--fg, #AABBCC)')
+  })
+})
+
+describe('LineFonts', () => {
+  test('inherits fontFamily/fontSize/lineHeight from parent scopes', () => {
+    const parent = new AttributedScopeStack(
+      null,
+      'parent',
+      0,
+      new StyleAttributes(0, 0, 0, 'Inter', '14px', 20)
+    )
+    const child = new AttributedScopeStack(null, 'child', 0, null)
+    // Simulate scope chain: child -> parent
+    ;(child as any).parent = parent
+
+    const lineFonts = new LineFonts()
+    lineFonts.reset()
+    lineFonts.produceFromScopes(child, 3)
+    const spans = lineFonts.finalize(3)
+    expect(spans.length).toBe(1)
+    expect(spans[0]).toEqual({
+      start: 0,
+      fontFamily: 'Inter',
+      fontSize: '14px',
+      lineHeight: 20,
+    })
   })
 })
 
