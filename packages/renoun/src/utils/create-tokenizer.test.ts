@@ -695,4 +695,54 @@ export default function Page() {
     expect(npmToken!.style.color?.toUpperCase()).toBe('#82AAFF')
     expect(npmToken!.style.fontStyle).toBe('italic')
   })
+
+  test('missing end should close immediately (not match \\uFFFF sentinel)', async () => {
+    const registryOptions: RegistryOptions<'light'> = {
+      async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
+        if (scopeName !== 'source.shell') {
+          throw new Error(`Missing grammar for scope: ${scopeName}`)
+        }
+
+        return {
+          scopeName: 'source.shell',
+          patterns: [
+            {
+              begin: 'a',
+              // Intentionally omit `end` to validate missing-end behavior.
+              name: 'meta.block.test',
+              contentName: 'meta.content.test',
+              patterns: [],
+            },
+          ],
+          repository: {},
+        }
+      },
+      async getTheme() {
+        return {
+          name: 'Light',
+          type: 'light',
+          colors: { foreground: '#111111' },
+          settings: [
+            { settings: { foreground: '#111111', background: '#ffffff' } },
+            {
+              scope: ['meta.content.test'],
+              settings: { foreground: '#ff0000' },
+            },
+          ],
+        }
+      },
+    }
+
+    const tokenizer = new Tokenizer<'light'>(registryOptions)
+    const tokens = await tokenizer.tokenize('aXYZ', 'shell', ['light'])
+
+    const xyz = tokens[0].find((token) => token.value === 'XYZ')
+    expect(xyz).toBeDefined()
+    // If missing `end` accidentally becomes '\\uFFFF' and the engine appends a sentinel,
+    // the content would extend to EOL and \"XYZ\" would become red. We expect default.
+    const anyRed = tokens[0].some(
+      (token) => token.style.color?.toUpperCase() === '#FF0000'
+    )
+    expect(anyRed).toBe(false)
+  })
 })

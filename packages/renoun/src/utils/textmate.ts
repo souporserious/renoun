@@ -1,5 +1,7 @@
+const IN_DEBUG_MODE = false as const
+
 export const DebugFlags = {
-  inDebugMode: false,
+  inDebugMode: IN_DEBUG_MODE,
 } as const
 
 export type LogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug' | 'trace'
@@ -13,7 +15,7 @@ export interface DiagnosticEntry {
 }
 
 class TextMateLogger {
-  private enabled: boolean = DebugFlags.inDebugMode
+  private _enabled: boolean = DebugFlags.inDebugMode
   private level: LogLevel = 'trace'
   private logs: DiagnosticEntry[] = []
   private maxLogs = 10000
@@ -38,8 +40,13 @@ class TextMateLogger {
     trace: 5,
   }
 
+  // Fast check for hot paths - avoids function call overhead
+  get enabled() {
+    return this._enabled
+  }
+
   setEnabled(enabled: boolean) {
-    this.enabled = enabled
+    this._enabled = enabled
   }
 
   setLevel(level: LogLevel) {
@@ -51,7 +58,7 @@ class TextMateLogger {
   }
 
   private shouldLog(level: LogLevel, category: string): boolean {
-    if (!this.enabled) return false
+    if (!this._enabled) return false
     if (this.levelPriority[level] > this.levelPriority[this.level]) return false
     if (
       this.enabledCategories.size > 0 &&
@@ -62,10 +69,11 @@ class TextMateLogger {
   }
 
   log(level: LogLevel, category: string, message: string, data?: any) {
+    if (!this._enabled) return
     if (!this.shouldLog(level, category)) return
 
     const entry: DiagnosticEntry = {
-      timestamp: Date.now(),
+      timestamp: performance.now(),
       level,
       category,
       message,
@@ -99,23 +107,29 @@ class TextMateLogger {
     }
   }
 
+  // Fast no-op methods when disabled - inline the check to avoid argument evaluation
   error(category: string, message: string, data?: any) {
+    if (!this._enabled) return
     this.log('error', category, message, data)
   }
 
   warn(category: string, message: string, data?: any) {
+    if (!this._enabled) return
     this.log('warn', category, message, data)
   }
 
   info(category: string, message: string, data?: any) {
+    if (!this._enabled) return
     this.log('info', category, message, data)
   }
 
   debug(category: string, message: string, data?: any) {
+    if (!this._enabled) return
     this.log('debug', category, message, data)
   }
 
   trace(category: string, message: string, data?: any) {
+    if (!this._enabled) return
     this.log('trace', category, message, data)
   }
 
@@ -127,8 +141,8 @@ class TextMateLogger {
     this.logs = []
   }
 
-  // Dump a summary of recent issues
   dumpSummary() {
+    if (!this._enabled) return
     console.log('\n========== TEXTMATE DIAGNOSTIC SUMMARY ==========')
     console.log(`Total log entries: ${this.logs.length}`)
 
@@ -143,12 +157,11 @@ class TextMateLogger {
     console.log('\nEntries by category:', byCategory)
     console.log('Entries by level:', byLevel)
 
-    // Show any errors or warnings
     const problems = this.logs.filter(
       (e) => e.level === 'error' || e.level === 'warn'
     )
     if (problems.length > 0) {
-      console.log(`\n⚠️  Found ${problems.length} problems:`)
+      console.log(`\nFound ${problems.length} problems:`)
       for (const p of problems.slice(-20)) {
         console.log(`  [${p.level}][${p.category}] ${p.message}`)
       }
@@ -1459,6 +1472,8 @@ export class Theme {
 export class ScopeStack {
   parent: ScopeStack | null
   scopeName: string
+  private _segments: string[] | null = null
+
   constructor(parent: ScopeStack | null, scopeName: string) {
     this.parent = parent
     this.scopeName = scopeName
@@ -1483,7 +1498,9 @@ export class ScopeStack {
     return new ScopeStack(this, scope)
   }
 
-  getSegments() {
+  // Cached - segments are immutable since ScopeStack is immutable
+  getSegments(): string[] {
+    if (this._segments !== null) return this._segments
     let cur: ScopeStack | null = this
     const segments: string[] = []
     while (cur) {
@@ -1491,6 +1508,7 @@ export class ScopeStack {
       cur = cur.parent
     }
     segments.reverse()
+    this._segments = segments
     return segments
   }
 
@@ -2518,7 +2536,7 @@ export class BeginEndRule extends Rule {
     super(location, id, name, contentName)
     this._begin = new RegExpSource(begin, this.id)
     this.beginCaptures = beginCaptures
-    this._end = new RegExpSource(end || '\uFFFF', -1)
+    this._end = new RegExpSource(end || '', -1)
     this.endHasBackReferences = this._end.hasBackReferences
     this.endCaptures = endCaptures
     this.applyEndPatternLast = applyEndPatternLast || false
@@ -2698,7 +2716,7 @@ export class BeginWhileRule extends Rule {
       )
     }
     if (this._while.hasBackReferences) {
-      this._cachedCompiledWhilePatterns.setSource(0, end || '\uFFFF')
+      this._cachedCompiledWhilePatterns.setSource(0, end || '')
     }
     return this._cachedCompiledWhilePatterns
   }
@@ -3496,20 +3514,25 @@ export class TokenizeStringResult {
   }
 }
 
-// Forward declaration for nameMatcher
+// Match all identifiers in order within the scope stack
 function nameMatcher(names: string[], scopeSegments: string[]): boolean {
-  // Match all identifiers in order within the scope stack.
-  if (scopeSegments.length < names.length) return false
-  let lastIndex = 0
-  return names.every((name) => {
-    for (let i = lastIndex; i < scopeSegments.length; i++) {
-      if (scopeMatches(scopeSegments[i], name)) {
-        lastIndex = i + 1
-        return true
+  const namesLen = names.length
+  const segmentsLen = scopeSegments.length
+  if (segmentsLen < namesLen) return false
+
+  let segmentIndex = 0
+  for (let nameIndex = 0; nameIndex < namesLen; nameIndex++) {
+    const name = names[nameIndex]
+    let found = false
+    while (segmentIndex < segmentsLen) {
+      if (scopeMatches(scopeSegments[segmentIndex++], name)) {
+        found = true
+        break
       }
     }
-    return false
-  })
+    if (!found) return false
+  }
+  return true
 }
 
 function createGrammarInjection(
@@ -3668,7 +3691,7 @@ export function _tokenizeString(
     anchorPosition = res.anchorPosition
   }
 
-  const startTime = Date.now()
+  const startTime = performance.now()
 
   while (!done) {
     // --- endless loop (case 3) guard ---
@@ -3700,7 +3723,7 @@ export function _tokenizeString(
     _anchors.add(anchorPosition)
     // --- end guard ---
 
-    if (timeLimitMs !== 0 && Date.now() - startTime > timeLimitMs)
+    if (timeLimitMs !== 0 && performance.now() - startTime > timeLimitMs)
       return new TokenizeStringResult(stack, true)
     scanNext()
   }
@@ -3866,7 +3889,7 @@ export function _tokenizeString(
     const captureIndices = match.captureIndices
     const matchedRuleId = match.matchedRuleId
 
-    const advanced =
+    const hasAdvanced =
       !!(captureIndices && captureIndices.length > 0) &&
       captureIndices[0].end > linePosition
 
@@ -3894,7 +3917,7 @@ export function _tokenizeString(
       anchorPosition = popped.getAnchorPosition()
 
       // endless loop guard (case 1): pushed & popped without advancing
-      if (!advanced && popped.getEnterPosition() === linePosition) {
+      if (!hasAdvanced && popped.getEnterPosition() === linePosition) {
         if (DebugFlags.inDebugMode) {
           console.error(
             '[1] - Grammar is in an endless loop - Grammar pushed & popped a rule without advancing'
@@ -3966,7 +3989,7 @@ export function _tokenizeString(
           )
         }
 
-        if (!advanced && parentState.hasSameRuleAs(stack)) {
+        if (!hasAdvanced && parentState.hasSameRuleAs(stack)) {
           if (DebugFlags.inDebugMode)
             console.error(
               '[2] - Grammar is in an endless loop - Grammar pushed the same rule without advancing'
@@ -4012,7 +4035,7 @@ export function _tokenizeString(
           )
         }
 
-        if (!advanced && parentState.hasSameRuleAs(stack)) {
+        if (!hasAdvanced && parentState.hasSameRuleAs(stack)) {
           if (DebugFlags.inDebugMode)
             console.error(
               '[3] - Grammar is in an endless loop - Grammar pushed the same rule without advancing'
@@ -4045,7 +4068,7 @@ export function _tokenizeString(
 
         stack = stack.pop()!
 
-        if (!advanced) {
+        if (!hasAdvanced) {
           if (DebugFlags.inDebugMode)
             console.error(
               '[4] - Grammar is in an endless loop - Grammar is not advancing, nor is it pushing/popping'
