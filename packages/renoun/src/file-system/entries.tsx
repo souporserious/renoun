@@ -1788,6 +1788,22 @@ export class ModuleExport<Value> {
     )
   }
 
+  /**
+   * Get the value of this export, returning the provided default value when the export is not found.
+   */
+  async getValueWithDefault<DefaultValue extends Value>(
+    defaultValue: DefaultValue
+  ): Promise<Value> {
+    try {
+      return await this.getValue()
+    } catch (error) {
+      if (error instanceof ModuleExportNotFoundError) {
+        return defaultValue
+      }
+      throw error
+    }
+  }
+
   async getStructure(): Promise<ModuleExportStructure> {
     let resolvedType: ModuleExportResolvedType | undefined
     let firstCommitDate: Date | undefined
