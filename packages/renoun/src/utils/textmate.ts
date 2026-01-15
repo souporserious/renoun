@@ -5020,7 +5020,10 @@ export class Grammar {
       )
     }
 
-    const onigLine = this.createOnigString(lineText)
+    // Append newline to lineText - this is required by TextMate grammars for
+    // proper regex matching (e.g. $ anchors, lookaheads that expect line endings).
+    const lineTextWithNewline = lineText + '\n'
+    const onigLine = this.createOnigString(lineTextWithNewline)
 
     // Performance: Reuse pooled instances instead of creating new ones
     const lineTokens = this._lineTokensPool

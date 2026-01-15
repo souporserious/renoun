@@ -845,6 +845,82 @@ export default function Page() {
     expect(jsxCommentToken!.style.fontStyle).toBe('italic')
   })
 
+  test('textmate theme: JSX single-line tags with attributes are styled', async () => {
+    const textmateRegistryOptions: RegistryOptions<'dark'> = {
+      async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
+        if (scopeName === 'source.tsx') return tsxGrammar
+        throw new Error(`Missing grammar for scope: ${scopeName}`)
+      },
+      async getTheme() {
+        const theme = textmateTheme as unknown as TextMateThemeRaw
+        return {
+          ...theme,
+          settings: theme.tokenColors || theme.settings || [],
+        }
+      },
+    }
+
+    const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
+
+    // Single-line JSX with attributes works correctly
+    const tsx = `<div css={1}></div>`
+    const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+    const flatTokens = tokens.flatMap((line) => line)
+
+    // div tag should be styled (entity.name.tag.tsx -> #CAECE6)
+    const divToken = flatTokens.find((token) => token.value === 'div')
+    expect(divToken).toBeDefined()
+    expect(divToken!.isBaseColor).toBe(false)
+    expect(divToken!.style.color?.toUpperCase()).toBe('#CAECE6')
+
+    // css attribute should be styled (entity.other.attribute-name -> #C5E478 + italic)
+    const cssAttributeToken = flatTokens.find((token) => token.value === 'css')
+    expect(cssAttributeToken).toBeDefined()
+    expect(cssAttributeToken!.isBaseColor).toBe(false)
+    expect(cssAttributeToken!.style.color?.toUpperCase()).toBe('#C5E478')
+    expect(cssAttributeToken!.style.fontStyle).toBe('italic')
+  })
+
+  // Test that multi-line JSX with > on a different line is correctly tokenized.
+  // This requires the tokenizer to append \n to each line.
+  test('textmate theme: multi-line JSX with > on different line', async () => {
+    const textmateRegistryOptions: RegistryOptions<'dark'> = {
+      async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
+        if (scopeName === 'source.tsx') return tsxGrammar
+        throw new Error(`Missing grammar for scope: ${scopeName}`)
+      },
+      async getTheme() {
+        const theme = textmateTheme as unknown as TextMateThemeRaw
+        return {
+          ...theme,
+          settings: theme.tokenColors || theme.settings || [],
+        }
+      },
+    }
+
+    const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
+
+    // Multi-line JSX where > is on a different line
+    const tsx = `<div
+  css={1}
+></div>`
+    const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+    const flatTokens = tokens.flatMap((line) => line)
+
+    // div tag should be styled correctly
+    const divTokens = flatTokens.filter((token) => token.value === 'div')
+    expect(divTokens.length).toBe(2) // Opening and closing
+    expect(divTokens[0]!.isBaseColor).toBe(false)
+    expect(divTokens[0]!.style.color?.toUpperCase()).toBe('#CAECE6')
+
+    // css attribute should be styled
+    const cssToken = flatTokens.find((token) => token.value === 'css')
+    expect(cssToken).toBeDefined()
+    expect(cssToken!.isBaseColor).toBe(false)
+    expect(cssToken!.style.color?.toUpperCase()).toBe('#C5E478')
+    expect(cssToken!.style.fontStyle).toBe('italic')
+  })
+
   test('missing end should close immediately (not match \\uFFFF sentinel)', async () => {
     const registryOptions: RegistryOptions<'light'> = {
       async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
