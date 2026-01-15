@@ -1,5 +1,5 @@
 export const DebugFlags = {
-  inDebugMode: true,
+  inDebugMode: false,
 } as const
 
 export type LogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug' | 'trace'
@@ -158,8 +158,6 @@ class TextMateLogger {
 }
 
 export const tmLogger = new TextMateLogger()
-
-export const UseOnigurumaFindOptions = true as const
 
 export function disposeOnigString(onigString: any) {
   if (typeof onigString?.dispose === 'function') onigString.dispose()
@@ -1420,16 +1418,30 @@ export class Theme {
     })
 
     if (match) {
-      const attrs = match.getStyleAttributes()
+      // If the matched rule has scopeDepth 0, it's the root/default rule.
+      // This means there's no SPECIFIC theme rule for this scope.
+      // We should return null so the parent's styling is inherited.
+      if (match.scopeDepth === 0) {
+        tmLogger.debug(
+          'theme-match',
+          `Only root rule matched for "${scopeName}" (scopeDepth=0), returning null for inheritance`,
+          {
+            scopeStack: scopeSegments,
+          }
+        )
+        return null
+      }
+
+      const attributes = match.getStyleAttributes()
       tmLogger.debug('theme-match', `Match found for "${scopeName}"`, {
-        foregroundId: attrs.foregroundId,
-        fontStyle: attrs.fontStyle,
+        foregroundId: attributes.foregroundId,
+        fontStyle: attributes.fontStyle,
         rule: {
           parentScopes: match.parentScopes,
           scopeDepth: match.scopeDepth,
         },
       })
-      return attrs
+      return attributes
     } else {
       tmLogger.debug(
         'theme-match',
@@ -1504,6 +1516,7 @@ export class ScopeStack {
 }
 
 function scopeMatches(actual: string, expected: string) {
+  if (!actual) return false
   if (expected === actual) return true
   const expLen = expected.length
   return (
@@ -3024,50 +3037,50 @@ export class RegExpSource {
   }
 
   private _buildAnchorCache() {
-    // Find positions of \A and \G anchors
+    // keep the backslash, and replace the next character to either preserve
+    // the anchor ('A'/'G') or make it fail ('\uFFFF').
+    const A0_G0: string[] = []
+    const A0_G1: string[] = []
+    const A1_G0: string[] = []
+    const A1_G1: string[] = []
+
     const source = this.source
-    const length = source.length
-    const anchorPositions: Array<{ position: number; type: 'A' | 'G' }> = []
+    for (let position = 0; position < source.length; position++) {
+      const char = source.charAt(position)
+      A0_G0[position] = char
+      A0_G1[position] = char
+      A1_G0[position] = char
+      A1_G1[position] = char
 
-    for (let index = 0; index < length - 1; index++) {
-      if (source.charCodeAt(index) === 92) {
-        // backslash
-        const next = source.charCodeAt(index + 1)
-        if (next === 65)
-          anchorPositions.push({ position: index + 1, type: 'A' }) // 'A'
-        else if (next === 71)
-          anchorPositions.push({ position: index + 1, type: 'G' }) // 'G'
-        index++ // skip next char
+      if (char === '\\' && position + 1 < source.length) {
+        const nextChar = source.charAt(position + 1)
+        if (nextChar === 'A') {
+          // A0 => fail \A, A1 => allow \A
+          A0_G0[position + 1] = '\uFFFF'
+          A0_G1[position + 1] = '\uFFFF'
+          A1_G0[position + 1] = 'A'
+          A1_G1[position + 1] = 'A'
+        } else if (nextChar === 'G') {
+          // G0 => fail \G, G1 => allow \G
+          A0_G0[position + 1] = '\uFFFF'
+          A0_G1[position + 1] = 'G'
+          A1_G0[position + 1] = '\uFFFF'
+          A1_G1[position + 1] = 'G'
+        } else {
+          A0_G0[position + 1] = nextChar
+          A0_G1[position + 1] = nextChar
+          A1_G0[position + 1] = nextChar
+          A1_G1[position + 1] = nextChar
+        }
+        position++
       }
-    }
-
-    // If no anchors, all variants are the same
-    if (anchorPositions.length === 0) {
-      return { A0_G0: source, A0_G1: source, A1_G0: source, A1_G1: source }
-    }
-
-    // Build each variant by replacing anchors appropriately
-    const build = (replaceA: string, replaceG: string): string => {
-      const parts: string[] = []
-      let lastEnd = 0
-      for (const { position, type } of anchorPositions) {
-        // FIX: position is the index of 'A' or 'G'. position - 1 is the index of '\'.
-        // We substring up to position - 1 to exclude the backslash.
-        parts.push(source.substring(lastEnd, position - 1))
-        parts.push(type === 'A' ? replaceA : replaceG)
-        lastEnd = position + 1
-      }
-      parts.push(source.substring(lastEnd))
-      return parts.join('')
     }
 
     return {
-      // Use \uFFFF for "fail" (matches a char that likely doesn't exist)
-      // Use '' (empty string) for "pass" (removes the anchor constraint)
-      A0_G0: build('\uFFFF', '\uFFFF'),
-      A0_G1: build('\uFFFF', '\\G'), // <--- FIX: Preserves \G
-      A1_G0: build('', '\uFFFF'),
-      A1_G1: build('', '\\G'),
+      A0_G0: A0_G0.join(''),
+      A0_G1: A0_G1.join(''),
+      A1_G0: A1_G0.join(''),
+      A1_G1: A1_G1.join(''),
     }
   }
 
@@ -3485,16 +3498,20 @@ export class TokenizeStringResult {
 
 // Forward declaration for nameMatcher
 function nameMatcher(names: string[], scopeSegments: string[]): boolean {
-  const scopes = new Set(scopeSegments)
-  for (const name of names) {
-    for (const scope of scopes) {
-      if (scopeMatches(scope, name)) return true
+  // Match all identifiers in order within the scope stack.
+  if (scopeSegments.length < names.length) return false
+  let lastIndex = 0
+  return names.every((name) => {
+    for (let i = lastIndex; i < scopeSegments.length; i++) {
+      if (scopeMatches(scopeSegments[i], name)) {
+        lastIndex = i + 1
+        return true
+      }
     }
-  }
-  return false
+    return false
+  })
 }
 
-// Forward declaration for createGrammarInjection
 function createGrammarInjection(
   injections: any[],
   selector: string,
@@ -3813,7 +3830,7 @@ export function _tokenizeString(
 
         return bestCaptures
           ? {
-              priorityMatch: bestPriority === 1,
+              priorityMatch: bestPriority === -1,
               captureIndices: bestCaptures,
               matchedRuleId: bestRuleId!,
             }
@@ -3872,8 +3889,23 @@ export function _tokenizeString(
       )
       produce(stack, captureIndices[0].end)
 
+      const popped = stack
       stack = stack.parent!
-      anchorPosition = captureIndices[0].end
+      anchorPosition = popped.getAnchorPosition()
+
+      // endless loop guard (case 1): pushed & popped without advancing
+      if (!advanced && popped.getEnterPosition() === linePosition) {
+        if (DebugFlags.inDebugMode) {
+          console.error(
+            '[1] - Grammar is in an endless loop - Grammar pushed & popped a rule without advancing'
+          )
+        }
+        // Assume this was a grammar author mistake; restore and stop
+        stack = popped
+        produce(stack, lineLength)
+        done = true
+        return
+      }
     } else {
       const rule = grammar.getRule(matchedRuleId)
 
@@ -4040,23 +4072,12 @@ function prepareRuleSearch(
   isFirstLine: any,
   atAnchor: any
 ) {
-  if (UseOnigurumaFindOptions) {
-    return {
-      ruleScanner: rule.compile(grammar, endRule),
-      findOptions: getFindOptions(isFirstLine, atAnchor),
-    }
-  }
+  // Use the anchor-resolving (AG) path since our JS-based OnigScanner
+  // doesn't support Oniguruma's FindOption flags (\A/\G semantics).
   return {
     ruleScanner: rule.compileAG(grammar, endRule, isFirstLine, atAnchor),
     findOptions: 0,
   }
-}
-
-function getFindOptions(isFirstLine: any, atAnchor: any) {
-  let options = 0
-  if (!isFirstLine) options |= 1
-  if (!atAnchor) options |= 4
-  return options
 }
 
 export class LocalStackElement {
@@ -4224,16 +4245,16 @@ export class AttributedScopeStack {
     // Fast path: most scope names don't have spaces
     const spaceIdx = scopeName.indexOf(' ')
     if (spaceIdx === -1) {
-      const attrs = grammar.getMetadataForScope(scopeName, this)
-      const result = new AttributedScopeStack(this, scopeName, attrs)
+      const attributes = grammar.getMetadataForScope(scopeName, this)
+      const result = new AttributedScopeStack(this, scopeName, attributes)
 
       tmLogger.debug(
         'scope-stack',
         `Created new AttributedScopeStack for "${scopeName}"`,
         {
-          tokenAttributes: attrs,
-          foregroundId: EncodedTokenAttributes.getForeground(attrs),
-          fontStyle: EncodedTokenAttributes.getFontStyle(attrs),
+          tokenAttributes: attributes,
+          foregroundId: EncodedTokenAttributes.getForeground(attributes),
+          fontStyle: EncodedTokenAttributes.getFontStyle(attributes),
         }
       )
 
@@ -4252,8 +4273,8 @@ export class AttributedScopeStack {
       let end = start + 1
       while (end < len && scopeName.charCodeAt(end) !== 32) end++
       const p = scopeName.substring(start, end)
-      const attrs = grammar.getMetadataForScope(p, cur)
-      cur = new AttributedScopeStack(cur, p, attrs)
+      const attributes = grammar.getMetadataForScope(p, cur)
+      cur = new AttributedScopeStack(cur, p, attributes)
       start = end + 1
     }
     return cur
@@ -4435,6 +4456,26 @@ export class StateStackImplementation {
 
   getAnchorPosition() {
     return this._anchorPosition
+  }
+
+  /**
+   * Reset enter/anchor positions to -1.
+   * Must be called at the start of tokenizing each new line (except the first).
+   * This ensures the endless loop guard works correctly by comparing
+   * positions within the current line only.
+   */
+  reset(): void {
+    StateStackImplementation._resetPositions(this)
+  }
+
+  private static _resetPositions(
+    stateStack: StateStackImplementation | null
+  ): void {
+    while (stateStack) {
+      stateStack._enterPosition = -1
+      stateStack._anchorPosition = -1
+      stateStack = stateStack.parent
+    }
   }
 
   withContentNameScopesList(scopes: AttributedScopeStack) {
@@ -4726,23 +4767,40 @@ export class Grammar {
       fullStack: full?.getSegments(),
     })
 
-    const style = theme.match(full!) || theme.getDefaults()
+    // Get the theme match result - may be null if no match
+    const themeMatch = theme.match(full!)
+
+    // Get parent's existing token attributes to inherit from
+    const existingAttributes = parentScopes ? parentScopes.tokenAttributes : 0
+
+    // If there's a theme match, use its values; otherwise use 0/-1 to preserve parent values
+    // Note: -1 is the "NotSet" value for fontStyle which preserves existing
+    let fontStyle = -1
+    let foreground = 0
+    let background = 0
+
+    if (themeMatch !== null) {
+      fontStyle = themeMatch.fontStyle
+      foreground = themeMatch.foregroundId
+      background = themeMatch.backgroundId
+    }
 
     tmLogger.debug('metadata', `Theme match result for "${scope}"`, {
-      foregroundId: style.foregroundId,
-      fontStyle: style.fontStyle,
-      backgroundId: style.backgroundId,
-      usedDefaults: !theme.match(full!),
+      foregroundId: foreground,
+      fontStyle: fontStyle,
+      backgroundId: background,
+      usedDefaults: themeMatch === null,
+      inheritingFromParent: themeMatch === null && parentScopes !== null,
     })
 
     const encoded = EncodedTokenAttributes.set(
-      0,
+      existingAttributes, // Use parent's attributes as base (0 if no parent)
       basic.languageId,
       tokenType,
       containsBalanced,
-      style.fontStyle,
-      style.foregroundId,
-      style.backgroundId
+      fontStyle, // -1 (NotSet) preserves existing
+      foreground, // 0 preserves existing
+      background // 0 preserves existing
     )
 
     tmLogger.trace('metadata', `Encoded token attributes for "${scope}"`, {
@@ -4777,9 +4835,14 @@ export class Grammar {
       this.getMetadataForScope(this.scopeName, null)
     )
 
-    const stack =
-      prevState ||
-      StateStackImplementation.create(
+    let stack: StateStackImplementation
+    if (prevState) {
+      // Reset enter/anchor positions for the new line
+      // This is critical for the endless loop guard to work correctly
+      prevState.reset()
+      stack = prevState
+    } else {
+      stack = StateStackImplementation.create(
         RuleFactory.getCompiledRuleId(
           this.repository['$self'],
           this,
@@ -4787,6 +4850,7 @@ export class Grammar {
         ),
         rootScopes
       )
+    }
 
     const onigLine = this.createOnigString(lineText)
 

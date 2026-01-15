@@ -23,24 +23,16 @@ export default async function Page({
 }
 `.trim()
 
-function CodeBlock({
-  backgroundColor,
-  ...restProps
-}: CodeBlockProps & { backgroundColor?: string }) {
+function CodeBlock(props: CodeBlockProps) {
   return (
     <DefaultCodeBlock
-      {...restProps}
+      {...props}
       allowCopy={false}
       allowErrors
       showErrors
       components={{
         Container: {
           className: GeistMono.className,
-          style: {
-            padding: '10rem',
-            borderRadius: '0',
-            backgroundColor,
-          },
         },
       }}
     />
@@ -57,7 +49,7 @@ export default function Page() {
         padding: '4rem',
       }}
     >
-      {/* <CodeBlock language="tsx" children={codeB} backgroundColor="#381c22" /> */}
+      <CodeBlock language="tsx" children={codeB} />
       <CodeBlock language="shell" children={codeA} />
     </div>
   )

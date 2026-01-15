@@ -19,7 +19,6 @@ import {
   TokenizeStringResult,
   TopLevelReference,
   TopLevelRepositoryReference,
-  UseOnigurumaFindOptions,
   basename,
   clone,
   containsRTL,
@@ -508,16 +507,6 @@ describe('parseTheme', () => {
     const rules = parseTheme(theme)
     expect(rules[0].foreground).toBe(null)
     expect(rules[0].background).toBe(null)
-  })
-})
-
-describe('Debug flags and constants', () => {
-  test('DebugFlags has expected structure', () => {
-    expect(DebugFlags.inDebugMode).toBe(false)
-  })
-
-  test('UseOnigurumaFindOptions is false', () => {
-    expect(UseOnigurumaFindOptions).toBe(false)
   })
 })
 
