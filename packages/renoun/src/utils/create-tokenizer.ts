@@ -445,7 +445,7 @@ export class Tokenizer<Theme extends string> {
 
         // Merge style bits from all tokens that overlap this boundary range
         const style: Partial<TextMateTokenStyle> = {}
-        let isBaseColor = true
+        let hasAnyNonBaseColor = false
         let hasTextStyles = false
 
         for (const token of allTokens) {
@@ -471,9 +471,9 @@ export class Tokenizer<Theme extends string> {
               textDecoration += 'line-through'
             }
 
-            if (baseColor.toLowerCase() !== color.toLowerCase()) {
-              isBaseColor = false
-            }
+            const themeIsBaseColor =
+              !color || baseColor.toLowerCase() === color.toLowerCase()
+            if (!themeIsBaseColor) hasAnyNonBaseColor = true
 
             if (fontFlags !== 0) {
               hasTextStyles = true
@@ -481,12 +481,12 @@ export class Tokenizer<Theme extends string> {
 
             if (useCssVariables) {
               const themeKey = '--' + token.themeIndex
-              if (color && !isBaseColor) style[themeKey + 'fg'] = color
+              if (color && !themeIsBaseColor) style[themeKey + 'fg'] = color
               if (fontStyle) style[themeKey + 'fs'] = fontStyle
               if (fontWeight) style[themeKey + 'fw'] = fontWeight
               if (textDecoration) style[themeKey + 'td'] = textDecoration
             } else {
-              if (color && !isBaseColor) style.color = color
+              if (color && !themeIsBaseColor) style.color = color
               if (fontStyle) style.fontStyle = fontStyle
               if (fontWeight) style.fontWeight = fontWeight
               if (textDecoration) style.textDecoration = textDecoration
@@ -500,7 +500,7 @@ export class Tokenizer<Theme extends string> {
           end: rangeEnd,
           style: style as TextMateTokenStyle,
           hasTextStyles,
-          isBaseColor,
+          isBaseColor: !hasAnyNonBaseColor,
           isWhiteSpace: /^\s*$/.test(value),
         })
       }

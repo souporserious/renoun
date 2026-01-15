@@ -401,6 +401,55 @@ echo "Hello World"`
     expect(secondLineComment?.style.color).toBeUndefined()
   })
 
+  test('multi-theme output sets per-theme css vars independent of token iteration order', async () => {
+    // Theme A: tags are base color
+    // Theme B: tags are non-base color
+    const themes: Record<'a' | 'b', TextMateThemeRaw> = {
+      a: {
+        name: 'A',
+        type: 'dark',
+        colors: { foreground: '#111111' },
+        settings: [
+          { settings: { foreground: '#111111', background: '#000000' } },
+          { scope: ['entity.name.tag'], settings: { foreground: '#111111' } },
+        ],
+      },
+      b: {
+        name: 'B',
+        type: 'dark',
+        colors: { foreground: '#222222' },
+        settings: [
+          { settings: { foreground: '#222222', background: '#000000' } },
+          { scope: ['entity.name.tag'], settings: { foreground: '#FF00FF' } },
+        ],
+      },
+    }
+
+    const registryOptions: RegistryOptions<'a' | 'b'> = {
+      async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
+        if (scopeName === 'source.tsx') return tsxGrammar
+        throw new Error(`Missing grammar for scope: ${scopeName}`)
+      },
+      async getTheme(theme) {
+        return themes[theme]
+      },
+    }
+
+    const tokenizer = new Tokenizer<'a' | 'b'>(registryOptions)
+    const tsx = `export default function X() { return <div /> }`
+    const tokens = await tokenizer.tokenize(tsx, 'tsx', ['a', 'b'])
+    const flatTokens = tokens.flatMap((line) => line)
+
+    const divToken = flatTokens.find((token) => token.value === 'div')
+    expect(divToken).toBeDefined()
+    // In multi-theme mode we should emit CSS vars (not inline color).
+    expect(divToken!.style.color).toBeUndefined()
+    // Theme A: base -> no fg var
+    expect((divToken!.style as any)['--0fg']).toBeUndefined()
+    // Theme B: non-base -> fg var set
+    expect((divToken!.style as any)['--1fg']).toBe('#FF00FF')
+  })
+
   test('tokenizes TypeScript with keyword and string scopes', async () => {
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const source = `import { Directory } from 'renoun'`
@@ -741,6 +790,59 @@ export default function Page() {
     expect(npmToken!.isBaseColor).toBe(false)
     expect(npmToken!.style.color?.toUpperCase()).toBe('#82AAFF')
     expect(npmToken!.style.fontStyle).toBe('italic')
+  })
+
+  test('textmate theme: JSX tags and JSX comments should be styled in TSX', async () => {
+    const textmateRegistryOptions: RegistryOptions<'dark'> = {
+      async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
+        if (scopeName === 'source.tsx') return tsxGrammar
+        throw new Error(`Missing grammar for scope: ${scopeName}`)
+      },
+      async getTheme() {
+        const theme = textmateTheme as unknown as TextMateThemeRaw
+        return {
+          ...theme,
+          settings: theme.tokenColors || theme.settings || [],
+        }
+      },
+    }
+
+    const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
+
+    const tsx = `export default function RootLayout() {
+  return (
+    <RootProvider>
+      {/* JSX comment */}
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}`
+
+    const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+    const flatTokens = tokens.flatMap((line) => line)
+
+    // Component tag names should be styled (entity.name.tag.custom -> #F78C6C in the bundled theme).
+    const rootProviderToken = flatTokens.find((t) => t.value === 'RootProvider')
+    expect(rootProviderToken).toBeDefined()
+    expect(rootProviderToken!.isBaseColor).toBe(false)
+    expect(rootProviderToken!.style.color?.toUpperCase()).toBe('#F78C6C')
+
+    // Native HTML tag names should be styled (entity.name.tag -> #CAECE6 in the bundled theme).
+    const htmlTagToken = flatTokens.find((t) => t.value === 'html')
+    expect(htmlTagToken).toBeDefined()
+    expect(htmlTagToken!.isBaseColor).toBe(false)
+    expect(htmlTagToken!.style.color?.toUpperCase()).toBe('#CAECE6')
+
+    // JSX comments should be styled like comments (italic + #637777 in the bundled theme).
+    const jsxCommentToken = flatTokens.find((t) =>
+      t.value.includes('JSX comment')
+    )
+    expect(jsxCommentToken).toBeDefined()
+    expect(jsxCommentToken!.isBaseColor).toBe(false)
+    expect(jsxCommentToken!.style.color?.toUpperCase()).toBe('#637777')
+    expect(jsxCommentToken!.style.fontStyle).toBe('italic')
   })
 
   test('missing end should close immediately (not match \\uFFFF sentinel)', async () => {
