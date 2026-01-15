@@ -7,7 +7,7 @@ import { getContext } from '../../utils/context.tsx'
 import { getThemeColors } from '../../utils/get-theme.ts'
 import type { Languages } from '../../utils/get-language.ts'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
-import { CopyButton } from '../CopyButton/index.ts'
+import { CopyButton, type CopyButtonProps } from '../CopyButton/index.ts'
 import type { ContextValue } from './Context.tsx'
 import { Context } from './Context.tsx'
 import { LineNumbers, type LineNumbersProps } from './LineNumbers.tsx'
@@ -84,7 +84,7 @@ export interface CodeBlockComponentOverrides {
   LineNumbers: SlotComponentOrProps<LineNumbersProps>
   Code: SlotComponentOrProps<React.ComponentProps<'code'> & { css?: CSSObject }>
   Tokens: SlotComponentOrProps<TokensProps>
-  CopyButton: SlotComponentOrProps<React.ComponentProps<typeof CopyButton>>
+  CopyButton: SlotComponentOrProps<CopyButtonProps>
 }
 
 export interface CodeBlockComponents {
@@ -96,7 +96,7 @@ export interface CodeBlockComponents {
   LineNumbers: React.ComponentType<LineNumbersProps>
   Code: React.ComponentType<React.ComponentProps<'code'> & { css?: CSSObject }>
   Tokens: React.ComponentType<TokensProps>
-  CopyButton: React.ComponentType<React.ComponentProps<typeof CopyButton>>
+  CopyButton: React.ComponentType<CopyButtonProps>
 }
 
 export type CodeBlockProps =
@@ -414,78 +414,66 @@ async function CodeBlockAsync(
         }
       : {}
   ) as React.CSSProperties
-  const preStyles = {
-    WebkitTextSizeAdjust: 'none',
-    textSizeAdjust: 'none',
-    position: 'relative',
-    whiteSpace: 'pre',
-    wordWrap: 'break-word',
-    display: 'grid',
-    gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
-    gridAutoRows: 'max-content',
-    margin: 0,
-    backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
-    color: shouldRenderToolbar ? undefined : theme.foreground,
-    borderRadius: shouldRenderToolbar ? 'inherit' : 5,
-    boxShadow: shouldRenderToolbar
-      ? undefined
-      : `0 0 0 1px ${theme.panel.border}`,
-    ...(highlightedLines
-      ? {
-          '--h0': `rgba(0, 0, 0, 0)`,
-          '--h1': theme.editor.rangeHighlightBackground,
-          backgroundPosition: `0 ${containerPadding.top}`,
-          backgroundImage: highlightedLinesGradient,
-        }
-      : {}),
-    padding: 0,
-  } as React.CSSProperties
-  const scrollContainerStyles = getScrollContainerStyles({
-    color: theme.scrollbarSlider.hoverBackground,
-  })
-  const preProps =
-    components.Pre === Pre
-      ? { css: { ...preStyles, ...scrollContainerStyles } }
-      : { style: preStyles }
-
-  const toolbarProps =
-    components.Toolbar === Toolbar
-      ? ({
-          css: { padding: containerPadding.all },
-        } satisfies Partial<ToolbarProps>)
-      : ({
-          style: { padding: containerPadding.all },
-        } satisfies Partial<ToolbarProps>)
-
-  const lineNumbersLayout = {
-    padding: containerPadding.all,
-    gridColumn: 1,
-    gridRow: '1 / -1',
-    width: '4ch',
-    backgroundPosition: 'inherit',
-    backgroundImage: 'inherit',
-  }
-  const lineNumbersProps =
-    components.LineNumbers === LineNumbers
-      ? ({ css: lineNumbersLayout } satisfies Partial<LineNumbersProps>)
-      : ({ style: lineNumbersLayout } satisfies Partial<LineNumbersProps>)
-
-  const copyButtonLayout = {
-    placeSelf: 'start end',
-    gridColumn: showLineNumbers ? 2 : 1,
-    gridRow: '1 / -1',
-    position: 'sticky',
-    top: containerPadding.top,
-    right: containerPadding.horizontal,
-    boxShadow: `inset 0 0 0 1px ${theme.panel.border}`,
-    backgroundColor: theme.activityBar.background,
-    color: theme.activityBar.foreground,
-    borderRadius: 5,
-  }
-  const copyButtonProps =
-    components.CopyButton === CopyButton
-      ? ({ css: copyButtonLayout } as React.ComponentProps<typeof CopyButton>)
-      : ({ style: copyButtonLayout } as React.ComponentProps<typeof CopyButton>)
+  const preProps = {
+    css: {
+      WebkitTextSizeAdjust: 'none',
+      textSizeAdjust: 'none',
+      position: 'relative',
+      whiteSpace: 'pre',
+      wordWrap: 'break-word',
+      display: 'grid',
+      gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
+      gridAutoRows: 'max-content',
+      margin: 0,
+      backgroundColor: shouldRenderToolbar ? 'inherit' : theme.background,
+      color: shouldRenderToolbar ? undefined : theme.foreground,
+      borderRadius: shouldRenderToolbar ? 'inherit' : 5,
+      boxShadow: shouldRenderToolbar
+        ? undefined
+        : `0 0 0 1px ${theme.panel.border}`,
+      ...(highlightedLines
+        ? {
+            '--h0': `rgba(0, 0, 0, 0)`,
+            '--h1': theme.editor.rangeHighlightBackground,
+            backgroundPosition: `0 ${containerPadding.top}`,
+            backgroundImage: highlightedLinesGradient,
+          }
+        : {}),
+      padding: 0,
+      ...getScrollContainerStyles({
+        color: theme.scrollbarSlider.hoverBackground,
+      }),
+    },
+  } satisfies { css: CSSObject }
+  const toolbarProps = {
+    css: {
+      padding: containerPadding.all,
+    },
+  } satisfies Partial<ToolbarProps>
+  const lineNumbersProps = {
+    css: {
+      padding: containerPadding.all,
+      gridColumn: 1,
+      gridRow: '1 / -1',
+      width: '4ch',
+      backgroundPosition: 'inherit',
+      backgroundImage: 'inherit',
+    },
+  } satisfies Partial<LineNumbersProps>
+  const copyButtonProps = {
+    css: {
+      placeSelf: 'start end',
+      gridColumn: showLineNumbers ? 2 : 1,
+      gridRow: '1 / -1',
+      position: 'sticky',
+      top: containerPadding.top,
+      right: containerPadding.horizontal,
+      boxShadow: `inset 0 0 0 1px ${theme.panel.border}`,
+      backgroundColor: theme.activityBar.background,
+      color: theme.activityBar.foreground,
+      borderRadius: 5,
+    },
+  } satisfies Partial<CopyButtonProps>
 
   return (
     <Context value={contextValue}>
@@ -501,23 +489,12 @@ async function CodeBlockAsync(
             <>
               <components.LineNumbers {...lineNumbersProps} />
               <components.Code
-                {...(components.Code === Code
-                  ? {
-                      css: {
-                        gridColumn: 2,
-                        padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
-                        paddingInlineStart: 0,
-                        ...(focusedLinesStyles as any),
-                      } satisfies CSSObject,
-                    }
-                  : {
-                      style: {
-                        gridColumn: 2,
-                        padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
-                        paddingInlineStart: 0,
-                        ...focusedLinesStyles,
-                      },
-                    })}
+                css={{
+                  gridColumn: 2,
+                  padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
+                  paddingInlineStart: 0,
+                  ...(focusedLinesStyles as any),
+                }}
               >
                 <components.Tokens
                   path={path}
@@ -533,21 +510,11 @@ async function CodeBlockAsync(
             </>
           ) : (
             <components.Code
-              {...(components.Code === Code
-                ? {
-                    css: {
-                      gridColumn: 1,
-                      padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
-                      ...(focusedLinesStyles as any),
-                    } satisfies CSSObject,
-                  }
-                : {
-                    style: {
-                      gridColumn: 1,
-                      padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
-                      ...focusedLinesStyles,
-                    },
-                  })}
+              css={{
+                gridColumn: 1,
+                padding: `${containerPadding.vertical} ${containerPadding.horizontal}`,
+                ...(focusedLinesStyles as any),
+              }}
             >
               <components.Tokens
                 path={path}
