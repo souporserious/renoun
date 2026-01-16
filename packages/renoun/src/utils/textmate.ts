@@ -1473,6 +1473,43 @@ export class Theme {
       })
       return attributes
     } else {
+      // Fallback: walk parent scopes to inherit the nearest styled ancestor.
+      let parentScope: ScopeStack | null = scope.parent
+      while (parentScope) {
+        const currentParentScope = parentScope
+        const parentCandidates = this._cachedMatchRoot.get(
+          currentParentScope.scopeName
+        )
+        if (parentCandidates) {
+          const parentMatch = parentCandidates.find((rule: any) => {
+            if (rule.parentScopes.length === 0) return true
+            let parent = currentParentScope.parent
+            const scopes = rule.parentScopes
+            for (let index = 0; index < scopes.length; index++) {
+              let selector = scopes[index]
+              let immediate = false
+              if (selector === '>') {
+                selector = scopes[++index]
+                immediate = true
+              }
+              while (parent && !scopeMatches(parent.scopeName, selector)) {
+                if (immediate) return false
+                parent = parent.parent
+              }
+              if (!parent) return false
+              parent = parent.parent
+            }
+            return true
+          })
+
+          if (parentMatch) {
+            return parentMatch.getStyleAttributes()
+          }
+        }
+
+        parentScope = currentParentScope.parent
+      }
+
       tmLogger.debug(
         'theme-match',
         `No match found for "${scopeName}", returning null`,
