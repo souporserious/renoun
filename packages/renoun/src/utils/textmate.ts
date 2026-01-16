@@ -4428,6 +4428,56 @@ export class AttributedScopeStack {
     this._cachedScopeNames = out
     return out
   }
+
+  /**
+   * Compute the extension (from a base stack) needed to reach this stack.
+   * Returns `undefined` if the provided base is not an ancestor.
+   */
+  getExtensionIfDefined(
+    base: AttributedScopeStack | null
+  ): AttributedScopeStackFrame[] | undefined {
+    const frames: AttributedScopeStackFrame[] = []
+    let current: AttributedScopeStack | null = this
+    while (current && current !== base) {
+      if (!current.scopeName) {
+        current = current.parent
+        continue
+      }
+      frames.push({
+        scopeNames: [current.scopeName],
+        encodedTokenAttributes: current.tokenAttributes,
+      })
+      current = current.parent
+    }
+    if (current !== base) return undefined
+    return frames.reverse()
+  }
+
+  /**
+   * Reconstruct a scope stack by applying the provided frames on top of `base`.
+   */
+  static fromExtension(
+    base: AttributedScopeStack | null,
+    frames: AttributedScopeStackFrame[]
+  ): AttributedScopeStack | null {
+    let current = base
+    for (const frame of frames) {
+      for (const scopeName of frame.scopeNames) {
+        current = new AttributedScopeStack(
+          current,
+          scopeName,
+          frame.encodedTokenAttributes >>> 0,
+          null
+        )
+      }
+    }
+    return current
+  }
+}
+
+export interface AttributedScopeStackFrame {
+  encodedTokenAttributes: number
+  scopeNames: string[]
 }
 
 export class LineTokens {
@@ -4745,6 +4795,54 @@ export class StateStackImplementation {
     )
   }
 
+  /**
+   * Serialize this frame relative to its parent.
+   */
+  toStateStackFrame(): StateStackFrame {
+    return {
+      ruleId: this.ruleId,
+      enterPos: this._enterPosition,
+      anchorPos: this._anchorPosition,
+      beginRuleCapturedEOL: this.beginRuleCapturedEOL,
+      endRule: this.endRule,
+      nameScopesList:
+        this.nameScopesList.getExtensionIfDefined(
+          this.parent?.nameScopesList ?? null
+        ) ?? [],
+      contentNameScopesList:
+        this.contentNameScopesList.getExtensionIfDefined(this.nameScopesList) ??
+        [],
+    }
+  }
+
+  /**
+   * Recreate a stack frame from serialized data.
+   */
+  static pushFrame(
+    self: StateStackImplementation | null,
+    frame: StateStackFrame
+  ): StateStackImplementation {
+    const namesScopeList = AttributedScopeStack.fromExtension(
+      self?.nameScopesList ?? null,
+      frame.nameScopesList
+    )!
+    const contentNameScopesList = AttributedScopeStack.fromExtension(
+      namesScopeList,
+      frame.contentNameScopesList
+    )!
+
+    return new StateStackImplementation(
+      self,
+      frame.ruleId,
+      frame.enterPos ?? -1,
+      frame.anchorPos ?? -1,
+      frame.beginRuleCapturedEOL,
+      frame.endRule,
+      namesScopeList,
+      contentNameScopesList
+    )
+  }
+
   getRule(grammar: Grammar): Rule {
     return grammar.getRule(this.ruleId)
   }
@@ -4822,6 +4920,16 @@ export type ITokenizeLineResult = {
   stoppedEarly: boolean
   // Optional: font info
   fonts?: any
+}
+
+export interface StateStackFrame {
+  ruleId: number
+  enterPos?: number
+  anchorPos?: number
+  beginRuleCapturedEOL: boolean
+  endRule: string | null
+  nameScopesList: AttributedScopeStackFrame[]
+  contentNameScopesList: AttributedScopeStackFrame[]
 }
 
 export class Grammar {
@@ -5363,6 +5471,34 @@ export function createGrammar(
     onigLib,
     registry
   )
+}
+
+/**
+ * Serialize an entire state stack to an array of frames.
+ */
+export function serializeStateStack(
+  stack: StateStackImplementation | null
+): StateStackFrame[] {
+  const frames: StateStackFrame[] = []
+  let cur = stack
+  while (cur) {
+    frames.push(cur.toStateStackFrame())
+    cur = cur.parent
+  }
+  return frames.reverse()
+}
+
+/**
+ * Deserialize a state stack from an array of frames.
+ */
+export function deserializeStateStack(
+  frames: StateStackFrame[]
+): StateStackImplementation | null {
+  let stack: StateStackImplementation | null = null
+  for (const frame of frames) {
+    stack = StateStackImplementation.pushFrame(stack, frame)
+  }
+  return stack
 }
 
 // ==================== DIAGNOSTIC HELPERS ====================
