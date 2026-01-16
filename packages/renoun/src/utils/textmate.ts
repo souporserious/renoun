@@ -1,8 +1,4 @@
-const IN_DEBUG_MODE = false as const
-
-export const DebugFlags = {
-  inDebugMode: IN_DEBUG_MODE,
-} as const
+const IN_DEBUG_MODE = false
 
 export type LogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug' | 'trace'
 
@@ -15,7 +11,7 @@ export interface DiagnosticEntry {
 }
 
 class TextMateLogger {
-  private _enabled: boolean = DebugFlags.inDebugMode
+  private _enabled: boolean = IN_DEBUG_MODE
   private level: LogLevel = 'trace'
   private logs: DiagnosticEntry[] = []
   private maxLogs = 10000
@@ -1208,11 +1204,11 @@ export function parseRawGrammar(
   filename: string | null = null
 ) {
   if (filename !== null && /\.json$/.test(filename)) {
-    return DebugFlags.inDebugMode
+    return IN_DEBUG_MODE
       ? parseJSON(sourceText, filename, true)
       : JSON.parse(sourceText)
   }
-  return DebugFlags.inDebugMode
+  return IN_DEBUG_MODE
     ? parseWithLocation(sourceText, filename!, '$textmateLocation')
     : parsePLIST(sourceText)
 }
@@ -1378,148 +1374,92 @@ export class Theme {
 
   match(scope: ScopeStack) {
     if (scope === null) {
-      tmLogger.trace(
-        'theme-match',
-        'match() called with null scope, returning defaults'
-      )
+      if (IN_DEBUG_MODE) {
+        tmLogger.trace(
+          'theme-match',
+          'match() called with null scope, returning defaults'
+        )
+      }
       return this._defaults
     }
 
     const scopeName = scope.scopeName
     const scopeSegments = scope.getSegments()
 
-    tmLogger.trace('theme-match', `Matching scope: ${scopeName}`, {
-      fullScopeStack: scopeSegments,
-    })
+    if (IN_DEBUG_MODE) {
+      tmLogger.trace('theme-match', `Matching scope: ${scopeName}`, {
+        fullScopeStack: scopeSegments,
+      })
+    }
 
     const candidateRules = this._cachedMatchRoot.get(scopeName)
-    tmLogger.trace(
-      'theme-match',
-      `Found ${candidateRules.length} candidate rules for "${scopeName}"`,
-      {
-        candidates: candidateRules.map((r: any) => ({
-          parentScopes: r.parentScopes,
-          foreground: r.foreground,
-          scopeDepth: r.scopeDepth,
-        })),
-      }
-    )
-
-    const match = candidateRules.find((rule: any) => {
-      if (rule.parentScopes.length === 0) {
-        tmLogger.trace(
-          'theme-match',
-          `Rule matches (no parent scope requirements)`,
-          {
-            foreground: rule.foreground,
-          }
-        )
-        return true
-      }
-
-      let parent = scope.parent
-      const parentScopes = rule.parentScopes
-      for (let index = 0; index < parentScopes.length; index++) {
-        let selector = parentScopes[index]
-        let immediate = false
-        if (selector === '>') {
-          if (index === parentScopes.length - 1) return false
-          selector = parentScopes[++index]
-          immediate = true
-        }
-        while (parent && !scopeMatches(parent.scopeName, selector)) {
-          if (immediate) return false
-          parent = parent.parent
-        }
-        if (!parent) {
-          tmLogger.trace(
-            'theme-match',
-            `Rule rejected: parent scope "${selector}" not found in stack`
-          )
-          return false
-        }
-        parent = parent.parent
-      }
-      tmLogger.trace('theme-match', `Rule matches with parent scopes`, {
-        parentScopes: rule.parentScopes,
-        foreground: rule.foreground,
-      })
-      return true
-    })
-
-    if (match) {
-      // If the matched rule has scopeDepth 0, it's the root/default rule.
-      // This means there's no SPECIFIC theme rule for this scope.
-      // We should return null so the parent's styling is inherited.
-      if (match.scopeDepth === 0) {
-        tmLogger.debug(
-          'theme-match',
-          `Only root rule matched for "${scopeName}" (scopeDepth=0), returning null for inheritance`,
-          {
-            scopeStack: scopeSegments,
-          }
-        )
-        return null
-      }
-
-      const attributes = match.getStyleAttributes()
-      tmLogger.debug('theme-match', `Match found for "${scopeName}"`, {
-        foregroundId: attributes.foregroundId,
-        fontStyle: attributes.fontStyle,
-        rule: {
-          parentScopes: match.parentScopes,
-          scopeDepth: match.scopeDepth,
-        },
-      })
-      return attributes
-    } else {
-      // Fallback: walk parent scopes to inherit the nearest styled ancestor.
-      let parentScope: ScopeStack | null = scope.parent
-      while (parentScope) {
-        const currentParentScope = parentScope
-        const parentCandidates = this._cachedMatchRoot.get(
-          currentParentScope.scopeName
-        )
-        if (parentCandidates) {
-          const parentMatch = parentCandidates.find((rule: any) => {
-            if (rule.parentScopes.length === 0) return true
-            let parent = currentParentScope.parent
-            const scopes = rule.parentScopes
-            for (let index = 0; index < scopes.length; index++) {
-              let selector = scopes[index]
-              let immediate = false
-              if (selector === '>') {
-                selector = scopes[++index]
-                immediate = true
-              }
-              while (parent && !scopeMatches(parent.scopeName, selector)) {
-                if (immediate) return false
-                parent = parent.parent
-              }
-              if (!parent) return false
-              parent = parent.parent
-            }
-            return true
-          })
-
-          if (parentMatch) {
-            return parentMatch.getStyleAttributes()
-          }
-        }
-
-        parentScope = currentParentScope.parent
-      }
-
-      tmLogger.debug(
+    if (IN_DEBUG_MODE) {
+      tmLogger.trace(
         'theme-match',
-        `No match found for "${scopeName}", returning null`,
+        `Found ${candidateRules.length} candidate rules for "${scopeName}"`,
         {
-          scopeStack: scopeSegments,
-          candidateCount: candidateRules.length,
+          candidates: candidateRules.map((r: any) => ({
+            parentScopes: r.parentScopes,
+            foreground: r.foreground,
+            scopeDepth: r.scopeDepth,
+          })),
         }
       )
+    }
+
+    const match = candidateRules.find((rule: any) =>
+      scopePathMatchesParentScopes(scope.parent, rule.parentScopes)
+    )
+
+    if (match) {
+      // Treat the root/default rule as "no explicit style" so callers can
+      // correctly inherit from previously-applied (more specific) scopes.
+      // The defaults are handled via `scope === null` / `Theme.getDefaults()`.
+      if (match.scopeDepth === 0) {
+        return null
+      }
+      const attributes = match.getStyleAttributes()
+      if (IN_DEBUG_MODE) {
+        tmLogger.debug('theme-match', `Match found for "${scopeName}"`, {
+          foregroundId: attributes.foregroundId,
+          fontStyle: attributes.fontStyle,
+          rule: {
+            parentScopes: match.parentScopes,
+            scopeDepth: match.scopeDepth,
+          },
+        })
+      }
+      return attributes
+    }
+
+    if (IN_DEBUG_MODE) {
+      tmLogger.debug('theme-match', `No match found for "${scopeName}"`, {
+        scopeStack: scopeSegments,
+        candidateCount: candidateRules.length,
+      })
+    }
+    return null
+  }
+
+  /**
+   * Fast-path theme matching using AttributedScopeStack (no ScopeStack allocations).
+   * Semantics mirror Theme.match(scope: ScopeStack).
+   */
+  matchAttributed(
+    scopeName: string,
+    parent: AttributedScopeStack | null
+  ): StyleAttributes | null {
+    const candidateRules = this._cachedMatchRoot.get(scopeName)
+    const match = candidateRules.find((rule: any) =>
+      scopePathMatchesParentScopesAttributed(parent, rule.parentScopes)
+    )
+    if (!match) {
       return null
     }
+    if (match.scopeDepth === 0) {
+      return null
+    }
+    return match.getStyleAttributes()
   }
 }
 
@@ -1578,12 +1518,12 @@ export class ScopeStack {
 
   getExtensionIfDefined(base: ScopeStack | null) {
     const extension: string[] = []
-    let cur: ScopeStack | null = this
-    while (cur && cur !== base) {
-      extension.push(cur.scopeName)
-      cur = cur.parent
+    let current: ScopeStack | null = this
+    while (current && current !== base) {
+      extension.push(current.scopeName)
+      current = current.parent
     }
-    return cur === base ? extension.reverse() : undefined
+    return current === base ? extension.reverse() : undefined
   }
 }
 
@@ -1596,6 +1536,95 @@ function scopeMatches(actual: string, expected: string) {
     actual.charCodeAt(expLen) === 46 && // 46 = '.'
     actual.lastIndexOf(expected, 0) === 0
   ) // faster startsWith
+}
+
+function scopePathMatchesParentScopes(
+  scopePath: ScopeStack | null,
+  parentScopes: readonly string[]
+): boolean {
+  if (parentScopes.length === 0) {
+    return true
+  }
+
+  for (let index = 0; index < parentScopes.length; index++) {
+    let scopePattern = parentScopes[index]
+    let scopeMustMatch = false
+
+    if (scopePattern === '>') {
+      if (index === parentScopes.length - 1) {
+        return false
+      }
+      scopePattern = parentScopes[++index]
+      scopeMustMatch = true
+    }
+
+    while (scopePath) {
+      if (scopeMatches(scopePath.scopeName, scopePattern)) {
+        break
+      }
+      if (scopeMustMatch) {
+        return false
+      }
+      scopePath = scopePath.parent
+    }
+
+    if (!scopePath) {
+      return false
+    }
+    scopePath = scopePath.parent
+  }
+
+  return true
+}
+
+function scopePathMatchesParentScopesAttributed(
+  scopePath: AttributedScopeStack | null,
+  parentScopes: readonly string[]
+): boolean {
+  if (parentScopes.length === 0) {
+    return true
+  }
+
+  for (let index = 0; index < parentScopes.length; index++) {
+    let scopePattern = parentScopes[index]
+    let scopeMustMatch = false
+
+    if (scopePattern === '>') {
+      if (index === parentScopes.length - 1) {
+        return false
+      }
+      scopePattern = parentScopes[++index]
+      scopeMustMatch = true
+    }
+
+    while (scopePath) {
+      if (
+        scopePath.scopeName &&
+        scopeMatches(scopePath.scopeName, scopePattern)
+      ) {
+        break
+      }
+      if (scopeMustMatch) {
+        return false
+      }
+      scopePath = scopePath.parent
+    }
+
+    if (!scopePath) {
+      return false
+    }
+    scopePath = scopePath.parent
+  }
+
+  return true
+}
+
+const _scopeInternTable = new Map<string, string>()
+function internScope(scope: string): string {
+  const existing = _scopeInternTable.get(scope)
+  if (existing) return existing
+  _scopeInternTable.set(scope, scope)
+  return scope
 }
 
 export class StyleAttributes {
@@ -3715,13 +3744,13 @@ export function _tokenizeString(
           linePosition,
           findOptions
         )
-        if (DebugFlags.inDebugMode) {
+        if (IN_DEBUG_MODE) {
           console.log('  scanning for while rule')
           console.log(ruleScanner.toString())
         }
 
         if (!match) {
-          if (DebugFlags.inDebugMode)
+          if (IN_DEBUG_MODE)
             console.log(
               '  popping ' +
                 entry.rule.debugName +
@@ -3816,7 +3845,7 @@ export function _tokenizeString(
   return new TokenizeStringResult(stack, false)
 
   function scanNext() {
-    if (DebugFlags.inDebugMode) {
+    if (IN_DEBUG_MODE) {
       console.log('')
       console.log(
         `@@scanNext ${linePosition}: |${onigLine.content
@@ -3851,14 +3880,14 @@ export function _tokenizeString(
         )
 
         let start = 0
-        if (DebugFlags.inDebugMode) start = performance.now()
+        if (IN_DEBUG_MODE) start = performance.now()
         const match = ruleScanner.findNextMatchSync(
           onigLine,
           linePosition,
           findOptions
         )
 
-        if (DebugFlags.inDebugMode) {
+        if (IN_DEBUG_MODE) {
           const elapsed = performance.now() - start
           if (elapsed > 5)
             console.warn(
@@ -3919,7 +3948,7 @@ export function _tokenizeString(
           )
           if (!match) continue
 
-          if (DebugFlags.inDebugMode) {
+          if (IN_DEBUG_MODE) {
             console.log(`  matched injection: ${injection.debugSelector}`)
             console.log(ruleScanner.toString())
           }
@@ -3965,7 +3994,7 @@ export function _tokenizeString(
     })(grammar, onigLine, isFirstLine, linePosition, stack, anchorPosition)
 
     if (!match) {
-      if (DebugFlags.inDebugMode) console.log('  no more matches.')
+      if (IN_DEBUG_MODE) console.log('  no more matches.')
       produce(stack, lineLength)
       done = true
       return
@@ -3980,7 +4009,7 @@ export function _tokenizeString(
 
     if (matchedRuleId === endRuleId) {
       const rule = stack.getRule(grammar) as BeginEndRule
-      if (DebugFlags.inDebugMode)
+      if (IN_DEBUG_MODE)
         console.log('  popping ' + rule.debugName + ' - ' + rule.debugEndRegExp)
 
       produce(stack, captureIndices[0].start)
@@ -4003,7 +4032,7 @@ export function _tokenizeString(
 
       // endless loop guard (case 1): pushed & popped without advancing
       if (!hasAdvanced && popped.getEnterPosition() === linePosition) {
-        if (DebugFlags.inDebugMode) {
+        if (IN_DEBUG_MODE) {
           console.error(
             '[1] - Grammar is in an endless loop - Grammar pushed & popped a rule without advancing'
           )
@@ -4036,7 +4065,7 @@ export function _tokenizeString(
       )
 
       if (rule instanceof BeginEndRule) {
-        if (DebugFlags.inDebugMode)
+        if (IN_DEBUG_MODE)
           console.log(
             '  pushing ' + rule.debugName + ' - ' + rule.debugBeginRegExp
           )
@@ -4075,7 +4104,7 @@ export function _tokenizeString(
         }
 
         if (!hasAdvanced && parentState.hasSameRuleAs(stack)) {
-          if (DebugFlags.inDebugMode)
+          if (IN_DEBUG_MODE)
             console.error(
               '[2] - Grammar is in an endless loop - Grammar pushed the same rule without advancing'
             )
@@ -4085,7 +4114,7 @@ export function _tokenizeString(
           return
         }
       } else if (rule instanceof BeginWhileRule) {
-        if (DebugFlags.inDebugMode) console.log('  pushing ' + rule.debugName)
+        if (IN_DEBUG_MODE) console.log('  pushing ' + rule.debugName)
 
         handleCaptures(
           grammar,
@@ -4121,7 +4150,7 @@ export function _tokenizeString(
         }
 
         if (!hasAdvanced && parentState.hasSameRuleAs(stack)) {
-          if (DebugFlags.inDebugMode)
+          if (IN_DEBUG_MODE)
             console.error(
               '[3] - Grammar is in an endless loop - Grammar pushed the same rule without advancing'
             )
@@ -4131,7 +4160,7 @@ export function _tokenizeString(
           return
         }
       } else {
-        if (DebugFlags.inDebugMode)
+        if (IN_DEBUG_MODE)
           console.log(
             '  matched ' +
               rule.debugName +
@@ -4154,7 +4183,7 @@ export function _tokenizeString(
         stack = stack.pop()!
 
         if (!hasAdvanced) {
-          if (DebugFlags.inDebugMode)
+          if (IN_DEBUG_MODE)
             console.error(
               '[4] - Grammar is in an endless loop - Grammar is not advancing, nor is it pushing/popping'
             )
@@ -4348,16 +4377,20 @@ export class AttributedScopeStack {
     grammar: Grammar
   ): AttributedScopeStack {
     if (!scopeName) {
-      tmLogger.trace(
-        'scope-stack',
-        'pushAttributed called with null/empty scope, returning this'
-      )
+      if (IN_DEBUG_MODE) {
+        tmLogger.trace(
+          'scope-stack',
+          'pushAttributed called with null/empty scope, returning this'
+        )
+      }
       return this
     }
 
-    tmLogger.debug('scope-stack', `pushAttributed("${scopeName}")`, {
-      currentStack: this.getScopeNames(),
-    })
+    if (IN_DEBUG_MODE) {
+      tmLogger.debug('scope-stack', `pushAttributed("${scopeName}")`, {
+        currentStack: this.getScopeNames(),
+      })
+    }
 
     // Fast path: most scope names don't have spaces
     const spaceIdx = scopeName.indexOf(' ')
@@ -4370,24 +4403,28 @@ export class AttributedScopeStack {
         metadata.styleAttributes
       )
 
-      tmLogger.debug(
-        'scope-stack',
-        `Created new AttributedScopeStack for "${scopeName}"`,
-        {
-          tokenAttributes: metadata.tokenAttributes,
-          foregroundId: EncodedTokenAttributes.getForeground(
-            metadata.tokenAttributes
-          ),
-          fontStyle: EncodedTokenAttributes.getFontStyle(
-            metadata.tokenAttributes
-          ),
-        }
-      )
+      if (IN_DEBUG_MODE) {
+        tmLogger.debug(
+          'scope-stack',
+          `Created new AttributedScopeStack for "${scopeName}"`,
+          {
+            tokenAttributes: metadata.tokenAttributes,
+            foregroundId: EncodedTokenAttributes.getForeground(
+              metadata.tokenAttributes
+            ),
+            fontStyle: EncodedTokenAttributes.getFontStyle(
+              metadata.tokenAttributes
+            ),
+          }
+        )
+      }
 
       return result
     }
     // Slow path: scopeName has multiple space-separated scopes
-    tmLogger.trace('scope-stack', `Processing multi-scope: "${scopeName}"`)
+    if (IN_DEBUG_MODE) {
+      tmLogger.trace('scope-stack', `Processing multi-scope: "${scopeName}"`)
+    }
     let currentStack: AttributedScopeStack = this
     let start = 0
     const scopeNameLength = scopeName.length
@@ -4399,7 +4436,7 @@ export class AttributedScopeStack {
       // Find end of this scope
       let end = start + 1
       while (end < scopeNameLength && scopeName.charCodeAt(end) !== 32) end++
-      const currentScopeName = scopeName.substring(start, end)
+      const currentScopeName = internScope(scopeName.substring(start, end))
       const metadata = grammar.getMetadataForScope(
         currentScopeName,
         currentStack
@@ -4427,6 +4464,16 @@ export class AttributedScopeStack {
     out.reverse()
     this._cachedScopeNames = out
     return out
+  }
+
+  equals(other: AttributedScopeStack | null): boolean {
+    if (this === other) return true
+    if (!other) return false
+    if (this.scopeName !== other.scopeName) return false
+    if (this.tokenAttributes !== other.tokenAttributes) return false
+    return this.parent
+      ? this.parent.equals(other.parent)
+      : other.parent === null
   }
 
   /**
@@ -4757,6 +4804,21 @@ export class StateStackImplementation {
     )
   }
 
+  equals(other: StateStackImplementation | null): boolean {
+    if (this === other) return true
+    if (!other) return false
+    return (
+      this.ruleId === other.ruleId &&
+      this._enterPosition === other._enterPosition &&
+      this._anchorPosition === other._anchorPosition &&
+      this.beginRuleCapturedEOL === other.beginRuleCapturedEOL &&
+      this.endRule === other.endRule &&
+      this.nameScopesList.equals(other.nameScopesList) &&
+      this.contentNameScopesList.equals(other.contentNameScopesList) &&
+      (this.parent ? this.parent.equals(other.parent) : other.parent === null)
+    )
+  }
+
   push(
     ruleId: number,
     enterPos: number,
@@ -4945,6 +5007,18 @@ export class Grammar {
   private _balancedBracketMatchers: {
     matcher: (names: string[]) => boolean
   }[] = []
+  private _metadataCache = new WeakMap<
+    AttributedScopeStack,
+    Map<
+      string,
+      { tokenAttributes: number; styleAttributes: StyleAttributes | null }
+    >
+  >()
+  private _metadataCacheRoot = new Map<
+    string,
+    { tokenAttributes: number; styleAttributes: StyleAttributes | null }
+  >()
+  private _cachedThemeForMetadata: Theme | null = null
 
   // Performance: Pooled instances to reduce allocations
   private _lineTokensPool: LineTokens = new LineTokens(true)
@@ -5052,34 +5126,64 @@ export class Grammar {
     scope: string,
     parentScopes: AttributedScopeStack | null
   ): { tokenAttributes: number; styleAttributes: StyleAttributes | null } {
-    tmLogger.debug('metadata', `getMetadataForScope("${scope}")`, {
-      parentScopeNames: parentScopes ? parentScopes.getScopeNames() : [],
-    })
+    const theme = this._registry.getTheme()
+
+    // Reset caches if theme changed (style attributes depend on theme).
+    if (this._cachedThemeForMetadata !== theme) {
+      this._cachedThemeForMetadata = theme
+      this._metadataCache = new WeakMap()
+      this._metadataCacheRoot = new Map()
+    }
+
+    const cacheBucket =
+      parentScopes === null
+        ? this._metadataCacheRoot
+        : (this._metadataCache.get(parentScopes) ??
+          (() => {
+            const m = new Map<
+              string,
+              {
+                tokenAttributes: number
+                styleAttributes: StyleAttributes | null
+              }
+            >()
+            this._metadataCache.set(parentScopes, m)
+            return m
+          })())
+
+    const cached = cacheBucket.get(scope)
+    if (cached) {
+      return cached
+    }
+
+    const parentScopeNames = parentScopes ? parentScopes.getScopeNames() : []
+    if (IN_DEBUG_MODE) {
+      tmLogger.debug('metadata', `getMetadataForScope("${scope}")`, {
+        parentScopeNames,
+      })
+    }
 
     const basic =
       this._basicScopeAttributesProvider.getBasicScopeAttributes(scope)
     const tokenType = this._tokenTypeMatchers.match(scope) ?? basic.tokenType
     const containsBalanced = this._balancedBracketMatchers.some((m) =>
-      m.matcher(
-        (parentScopes ? parentScopes.getScopeNames() : []).concat([scope])
-      )
+      m.matcher(parentScopeNames.concat([scope]))
     )
 
-    // Theme matching: convert to ScopeStack for Theme.match
-    const theme = this._registry.getTheme()
-    const parentScopeNames = parentScopes ? parentScopes.getScopeNames() : []
-    const ss = ScopeStack.push(null, parentScopeNames)
-    const full = ss
-      ? ScopeStack.push(ss, [scope])
-      : ScopeStack.push(null, [scope])
-
-    tmLogger.trace('metadata', `Built ScopeStack for theme matching`, {
-      scope,
-      fullStack: full?.getSegments(),
-    })
-
     // Get the theme match result - may be null if no match
-    const themeMatch = theme.match(full!)
+    let themeMatch = theme.matchAttributed(scope, parentScopes)
+    // Fallback to upstream ScopeStack-based matching if fast path found nothing.
+    if (!themeMatch) {
+      const ss = ScopeStack.push(null, parentScopeNames)
+      const full = ss
+        ? ScopeStack.push(ss, [scope])
+        : ScopeStack.push(null, [scope])
+      themeMatch = full ? theme.match(full) : null
+    }
+    // If still no match and this is the root scope, use theme defaults.
+    if (!themeMatch && parentScopes === null) {
+      themeMatch = theme.getDefaults()
+    }
 
     // Get parent's existing token attributes to inherit from
     const existingAttributes = parentScopes ? parentScopes.tokenAttributes : 0
@@ -5091,18 +5195,31 @@ export class Grammar {
     let background = 0
 
     if (themeMatch !== null) {
+      const defaults = theme.getDefaults()
       fontStyle = themeMatch.fontStyle
-      foreground = themeMatch.foregroundId
-      background = themeMatch.backgroundId
+      // Preserve inherited foreground/background when the theme match resolves to the defaults
+      // and we are already inside a parent scope stack.
+      foreground =
+        parentScopes !== null &&
+        themeMatch.foregroundId === defaults.foregroundId
+          ? 0
+          : themeMatch.foregroundId
+      background =
+        parentScopes !== null &&
+        themeMatch.backgroundId === defaults.backgroundId
+          ? 0
+          : themeMatch.backgroundId
     }
 
-    tmLogger.debug('metadata', `Theme match result for "${scope}"`, {
-      foregroundId: foreground,
-      fontStyle: fontStyle,
-      backgroundId: background,
-      usedDefaults: themeMatch === null,
-      inheritingFromParent: themeMatch === null && parentScopes !== null,
-    })
+    if (IN_DEBUG_MODE) {
+      tmLogger.debug('metadata', `Theme match result for "${scope}"`, {
+        foregroundId: foreground,
+        fontStyle: fontStyle,
+        backgroundId: background,
+        usedDefaults: themeMatch === null,
+        inheritingFromParent: themeMatch === null && parentScopes !== null,
+      })
+    }
 
     const encoded = EncodedTokenAttributes.set(
       existingAttributes, // Use parent's attributes as base (0 if no parent)
@@ -5114,18 +5231,25 @@ export class Grammar {
       background // 0 preserves existing
     )
 
-    tmLogger.trace('metadata', `Encoded token attributes for "${scope}"`, {
-      encoded: encoded >>> 0,
-      decoded: {
-        languageId: EncodedTokenAttributes.getLanguageId(encoded),
-        tokenType: EncodedTokenAttributes.getTokenType(encoded),
-        fontStyle: EncodedTokenAttributes.getFontStyle(encoded),
-        foreground: EncodedTokenAttributes.getForeground(encoded),
-        background: EncodedTokenAttributes.getBackground(encoded),
-      },
-    })
+    if (IN_DEBUG_MODE) {
+      tmLogger.trace('metadata', `Encoded token attributes for "${scope}"`, {
+        encoded: encoded >>> 0,
+        decoded: {
+          languageId: EncodedTokenAttributes.getLanguageId(encoded),
+          tokenType: EncodedTokenAttributes.getTokenType(encoded),
+          fontStyle: EncodedTokenAttributes.getFontStyle(encoded),
+          foreground: EncodedTokenAttributes.getForeground(encoded),
+          background: EncodedTokenAttributes.getBackground(encoded),
+        },
+      })
+    }
 
-    return { tokenAttributes: encoded >>> 0, styleAttributes: themeMatch }
+    const result = {
+      tokenAttributes: encoded >>> 0,
+      styleAttributes: themeMatch,
+    }
+    cacheBucket.set(scope, result)
+    return result
   }
 
   tokenizeLine(
@@ -5133,13 +5257,15 @@ export class Grammar {
     prevState: StateStackImplementation | null,
     timeLimitMs = 0
   ): ITokenizeLineResult {
-    tmLogger.info('tokenize', `tokenizeLine called`, {
-      lineText:
-        lineText.substring(0, 100) + (lineText.length > 100 ? '...' : ''),
-      lineLength: lineText.length,
-      hasPrevState: !!prevState,
-      scopeName: this.scopeName,
-    })
+    if (IN_DEBUG_MODE) {
+      tmLogger.info('tokenize', `tokenizeLine called`, {
+        lineText:
+          lineText.substring(0, 100) + (lineText.length > 100 ? '...' : ''),
+        lineLength: lineText.length,
+        hasPrevState: !!prevState,
+        scopeName: this.scopeName,
+      })
+    }
 
     const rootMeta = this.getMetadataForScope(this.scopeName, null)
     const rootScopes = AttributedScopeStack.createRoot(
