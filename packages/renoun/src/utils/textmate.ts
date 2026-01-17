@@ -1314,9 +1314,9 @@ export class Theme {
         new ThemeTrieElementRule(
           0,
           null,
-          defaultFontStyle,
-          cm.getId(defaultForeground),
-          cm.getId(defaultBackground),
+          -1,
+          0,
+          0,
           defaultFontFamily,
           defaultFontSize,
           defaultLineHeight
@@ -1412,12 +1412,6 @@ export class Theme {
     )
 
     if (match) {
-      // Treat the root/default rule as "no explicit style" so callers can
-      // correctly inherit from previously-applied (more specific) scopes.
-      // The defaults are handled via `scope === null` / `Theme.getDefaults()`.
-      if (match.scopeDepth === 0) {
-        return null
-      }
       const attributes = match.getStyleAttributes()
       if (IN_DEBUG_MODE) {
         tmLogger.debug('theme-match', `Match found for "${scopeName}"`, {
@@ -1454,9 +1448,6 @@ export class Theme {
       scopePathMatchesParentScopesAttributed(parent, rule.parentScopes)
     )
     if (!match) {
-      return null
-    }
-    if (match.scopeDepth === 0) {
       return null
     }
     return match.getStyleAttributes()
@@ -4257,7 +4248,9 @@ function handleCaptures(
     if (captureRuleId === null) continue
 
     const capture = captureIndices[index]
-    if (!capture || capture.length === 0) continue
+    if (!capture || capture.length <= 0) continue
+    // Ignore non-participating capture groups.
+    if (capture.start < 0 || capture.end < 0) continue
     if (capture.start > lineEnd) break
 
     // Look up the actual CaptureRule from the rule ID
@@ -4550,7 +4543,7 @@ export class LineTokens {
   }
 
   produceFromScopes(scopes: AttributedScopeStack, endPosition: number) {
-    if (endPosition < this.lastPosition) {
+    if (endPosition <= this.lastPosition) {
       tmLogger.trace(
         'tokenize',
         `produceFromScopes skipped (endPos ${endPosition} <= lastPos ${this.lastPosition})`
@@ -4562,11 +4555,12 @@ export class LineTokens {
     const foreground = EncodedTokenAttributes.getForeground(metadata)
     const fontStyle = EncodedTokenAttributes.getFontStyle(metadata)
 
+    const scopeNames = scopes.getScopeNames()
     tmLogger.debug(
       'tokenize',
       `produceFromScopes: position ${this.lastPosition}-${endPosition}`,
       {
-        scopeNames: scopes.getScopeNames(),
+        scopeNames,
         metadata,
         foregroundId: foreground,
         fontStyle,
@@ -5170,9 +5164,8 @@ export class Grammar {
       m.matcher(parentScopeNames.concat([scope]))
     )
 
-    // Get the theme match result - may be null if no match
+    // Theme matching using AttributedScopeStack as fast path, with a fallback to ScopeStack
     let themeMatch = theme.matchAttributed(scope, parentScopes)
-    // Fallback to upstream ScopeStack-based matching if fast path found nothing.
     if (!themeMatch) {
       const ss = ScopeStack.push(null, parentScopeNames)
       const full = ss
@@ -5195,20 +5188,9 @@ export class Grammar {
     let background = 0
 
     if (themeMatch !== null) {
-      const defaults = theme.getDefaults()
       fontStyle = themeMatch.fontStyle
-      // Preserve inherited foreground/background when the theme match resolves to the defaults
-      // and we are already inside a parent scope stack.
-      foreground =
-        parentScopes !== null &&
-        themeMatch.foregroundId === defaults.foregroundId
-          ? 0
-          : themeMatch.foregroundId
-      background =
-        parentScopes !== null &&
-        themeMatch.backgroundId === defaults.backgroundId
-          ? 0
-          : themeMatch.backgroundId
+      foreground = themeMatch.foregroundId
+      background = themeMatch.backgroundId
     }
 
     if (IN_DEBUG_MODE) {
