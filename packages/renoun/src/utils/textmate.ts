@@ -2,6 +2,8 @@
  * This file contains substantial portions derived from `vscode-textmate` (https://github.com/microsoft/vscode-textmate).
  * Copyright (c) Microsoft Corporation.
  */
+import { toRegExp } from 'oniguruma-to-es'
+
 const IN_DEBUG_MODE = false
 
 export type LogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug' | 'trace'
@@ -173,7 +175,15 @@ class TextMateLogger {
 export const tmLogger = new TextMateLogger()
 
 export function disposeOnigString(onigString: any) {
-  if (typeof onigString?.dispose === 'function') onigString.dispose()
+  // Only call dispose if it's an object with a dispose method (for native Onig)
+  if (
+    onigString &&
+    typeof onigString === 'object' &&
+    typeof onigString.dispose === 'function'
+  ) {
+    onigString.dispose()
+  }
+  // Strings don't need disposal - this is now a no-op for JS mode
 }
 
 export function clone<T = any>(value: T): T {
@@ -378,6 +388,77 @@ export function containsRTL(value: string) {
   }
   return _containsRTLRegex.test(value)
 }
+
+/** Font style bit flags */
+export const FontStyle = {
+  None: 0,
+  Italic: 1,
+  Bold: 2,
+  Underline: 4,
+  Strikethrough: 8,
+} as const
+
+/**
+ * Zero-allocation token metadata decoder.
+ * All methods are pure functions operating on the raw metadata integer.
+ */
+export const TokenMetadata = {
+  /** Extract foreground color ID (9 bits, positions 15-23) */
+  getForegroundId(metadata: number): number {
+    return (metadata >>> 15) & 0b1_1111_1111
+  },
+
+  /** Extract background color ID (8 bits, positions 24-31) */
+  getBackgroundId(metadata: number): number {
+    return (metadata >>> 24) & 0b1111_1111
+  },
+
+  /** Extract font style flags (4 bits, positions 11-14) */
+  getFontStyle(metadata: number): number {
+    return (metadata >>> 11) & 0b1111
+  },
+
+  /** Extract token type (2 bits, positions 8-9) */
+  getTokenType(metadata: number): number {
+    return (metadata & 0x300) >>> 8
+  },
+
+  /** Extract language ID (8 bits, positions 0-7) */
+  getLanguageId(metadata: number): number {
+    return metadata & 0b1111_1111
+  },
+
+  /** Check if contains balanced brackets flag */
+  containsBalancedBrackets(metadata: number): boolean {
+    return (metadata & 0b1_0000_0000) !== 0
+  },
+
+  isItalic(metadata: number): boolean {
+    return (this.getFontStyle(metadata) & FontStyle.Italic) !== 0
+  },
+
+  isBold(metadata: number): boolean {
+    return (this.getFontStyle(metadata) & FontStyle.Bold) !== 0
+  },
+
+  isUnderline(metadata: number): boolean {
+    return (this.getFontStyle(metadata) & FontStyle.Underline) !== 0
+  },
+
+  isStrikethrough(metadata: number): boolean {
+    return (this.getFontStyle(metadata) & FontStyle.Strikethrough) !== 0
+  },
+
+  /** Get color from colorMap using metadata */
+  getColor(metadata: number, colorMap: readonly string[]): string {
+    return colorMap[this.getForegroundId(metadata)] ?? ''
+  },
+
+  /** Get background color from colorMap using metadata */
+  getBackgroundColor(metadata: number, colorMap: readonly string[]): string {
+    return colorMap[this.getBackgroundId(metadata)] ?? ''
+  },
+} as const
 
 export const EncodedTokenAttributes = {
   toBinaryStr(value: number) {
@@ -3299,33 +3380,165 @@ export class RegExpSourceList {
   }
 }
 
+// Helper functions to read from flat capture buffers
+function getCaptureStart(
+  captureIndices: Int32Array | Array<{ start: number; end: number }>,
+  index: number
+): number {
+  if (captureIndices instanceof Int32Array) {
+    return captureIndices[index * 2]
+  }
+  return (
+    (captureIndices as Array<{ start: number; end: number }>)[index]?.start ??
+    -1
+  )
+}
+
+function getCaptureEnd(
+  captureIndices: Int32Array | Array<{ start: number; end: number }>,
+  index: number
+): number {
+  if (captureIndices instanceof Int32Array) {
+    return captureIndices[index * 2 + 1]
+  }
+  return (
+    (captureIndices as Array<{ start: number; end: number }>)[index]?.end ?? -1
+  )
+}
+
+function getCaptureCount(
+  captureIndices: Int32Array | Array<{ start: number; end: number }>
+): number {
+  if (captureIndices instanceof Int32Array) {
+    return captureIndices.length / 2
+  }
+  return captureIndices.length
+}
+
 export class CompiledRule {
-  scanner: any
+  private regexes: RegExp[]
+  private captureBuffer = new Int32Array(64)
+  private matchResult = {
+    ruleId: 0,
+    captureIndices: this.captureBuffer,
+    captureCount: 0,
+  }
   public regExps: string[]
   public rules: number[]
-  constructor(grammar: any, regExps: string[], rules: number[]) {
-    this.regExps = regExps
+
+  constructor(_grammar: any, regExpSources: string[], rules: number[]) {
+    this.regExps = regExpSources
     this.rules = rules
-    this.scanner = grammar.createOnigScanner(regExps)
+
+    this.regexes = regExpSources.map((source) => {
+      try {
+        return toRegExp(source, {
+          global: true,
+          hasIndices: true,
+          lazyCompileLength: 3000,
+          rules: {
+            allowOrphanBackrefs: true,
+            asciiWordBoundaries: true,
+            captureGroup: true,
+            recursionLimit: 5,
+            singleline: true,
+          },
+          target: 'auto',
+        })
+      } catch {
+        return new RegExp('(?!)', 'g') // Never matches
+      }
+    })
   }
+
   dispose() {
-    if (typeof this.scanner.dispose === 'function') this.scanner.dispose()
+    // RegExp objects don't need disposal
   }
+
   toString() {
     const lines: string[] = []
-    for (let index = 0; index < this.rules.length; index++) {
-      lines.push('   - ' + this.rules[index] + ': ' + this.regExps[index])
+    for (let i = 0; i < this.rules.length; i++) {
+      lines.push('   - ' + this.rules[i] + ': ' + this.regExps[i])
     }
     return lines.join('\n')
   }
-  findNextMatchSync(onigString: any, start: any, options: any) {
-    const match = this.scanner.findNextMatchSync(onigString, start, options)
-    return match
-      ? {
-          ruleId: this.rules[match.index],
-          captureIndices: match.captureIndices,
+
+  findNextMatchSync(text: string, startPosition: number, _options?: number) {
+    if (startPosition < 0) startPosition = 0
+
+    let bestMatch: RegExpExecArray | null = null
+    let bestPatternIndex = -1
+
+    for (let i = 0; i < this.regexes.length; i++) {
+      const regex = this.regexes[i]
+      regex.lastIndex = startPosition
+      const match = regex.exec(text)
+
+      if (match && (bestMatch === null || match.index < bestMatch.index)) {
+        bestMatch = match
+        bestPatternIndex = i
+        if (match.index === startPosition) break
+      }
+    }
+
+    if (!bestMatch) return null
+
+    const indices = bestMatch.indices
+    const captureCount = indices ? indices.length : bestMatch.length
+
+    // Ensure buffer is large enough
+    if (captureCount * 2 > this.captureBuffer.length) {
+      this.captureBuffer = new Int32Array(captureCount * 2)
+      this.matchResult.captureIndices = this.captureBuffer
+    }
+
+    if (indices) {
+      // Fast path: regex engine provides indices directly
+      for (let i = 0; i < captureCount; i++) {
+        const pair = indices[i]
+        const offset = i * 2
+        if (pair) {
+          this.captureBuffer[offset] = pair[0]
+          this.captureBuffer[offset + 1] = pair[1]
+        } else {
+          this.captureBuffer[offset] = -1
+          this.captureBuffer[offset + 1] = -1
         }
-      : null
+      }
+    } else {
+      // Slow path: compute indices manually
+      const fullMatchIndex = bestMatch.index
+      const fullMatchText = bestMatch[0]
+
+      this.captureBuffer[0] = fullMatchIndex
+      this.captureBuffer[1] = fullMatchIndex + fullMatchText.length
+
+      let currentOffset = 0
+      for (let i = 1; i < bestMatch.length; i++) {
+        const groupText = bestMatch[i]
+        const bufferOffset = i * 2
+
+        if (groupText == null) {
+          this.captureBuffer[bufferOffset] = -1
+          this.captureBuffer[bufferOffset + 1] = -1
+        } else {
+          const groupIndex = fullMatchText.indexOf(groupText, currentOffset)
+          if (groupIndex >= 0) {
+            const start = fullMatchIndex + groupIndex
+            this.captureBuffer[bufferOffset] = start
+            this.captureBuffer[bufferOffset + 1] = start + groupText.length
+            currentOffset = groupIndex + groupText.length
+          } else {
+            this.captureBuffer[bufferOffset] = -1
+            this.captureBuffer[bufferOffset + 1] = -1
+          }
+        }
+      }
+    }
+
+    this.matchResult.ruleId = this.rules[bestPatternIndex]
+    this.matchResult.captureCount = captureCount
+    return this.matchResult
   }
 }
 
@@ -3667,7 +3880,7 @@ function createGrammarInjection(
 
 export function _tokenizeString(
   grammar: Grammar,
-  onigLine: any, // OnigString
+  lineText: string,
   isFirstLine: boolean,
   linePosition: number,
   stack: StateStackImplementation,
@@ -3681,7 +3894,7 @@ export function _tokenizeString(
     lineFonts.produce(state, pos)
   }
 
-  const lineLength = onigLine.content.length
+  const lineLength = lineText.length
   let done = false
   let anchorPosition = -1
 
@@ -3761,8 +3974,10 @@ export function _tokenizeString(
           break
         }
 
-        if (match.captureIndices && match.captureIndices.length) {
-          produceFromStack(entry.stack, match.captureIndices[0].start)
+        if (match.captureIndices && match.captureCount > 0) {
+          const captureStart = getCaptureStart(match.captureIndices, 0)
+          const captureEnd = getCaptureEnd(match.captureIndices, 0)
+          produceFromStack(entry.stack, captureStart)
           handleCaptures(
             grammar,
             lineText,
@@ -3771,13 +3986,14 @@ export function _tokenizeString(
             lineTokens,
             lineFonts,
             entry.rule.whileCaptures,
-            match.captureIndices
+            match.captureIndices,
+            match.captureCount
           )
-          produceFromStack(entry.stack, match.captureIndices[0].end)
+          produceFromStack(entry.stack, captureEnd)
 
-          anchorPosition = match.captureIndices[0].end
-          if (match.captureIndices[0].end > linePosition) {
-            linePosition = match.captureIndices[0].end
+          anchorPosition = captureEnd
+          if (captureEnd > linePosition) {
+            linePosition = captureEnd
             isFirstLine = false
           }
         }
@@ -3786,7 +4002,7 @@ export function _tokenizeString(
       return { stack, linePosition, anchorPosition, isFirstLine }
     })(
       grammar,
-      onigLine.content,
+      lineText,
       isFirstLine,
       linePosition,
       stack,
@@ -3843,7 +4059,7 @@ export function _tokenizeString(
     if (IN_DEBUG_MODE) {
       console.log('')
       console.log(
-        `@@scanNext ${linePosition}: |${onigLine.content
+        `@@scanNext ${linePosition}: |${lineText
           .substr(linePosition)
           .replace(/\n$/, '\\n')}|`
       )
@@ -3851,7 +4067,7 @@ export function _tokenizeString(
 
     const match = (function matchRuleOrInjection(
       grammar: Grammar,
-      onigLine: any,
+      lineText: string,
       isFirstLine: boolean,
       linePosition: number,
       stack: StateStackImplementation,
@@ -3859,7 +4075,7 @@ export function _tokenizeString(
     ) {
       const ruleMatch = (function matchRule(
         grammar: Grammar,
-        onigLine: any,
+        lineText: string,
         isFirstLine: boolean,
         linePosition: number,
         stack: StateStackImplementation,
@@ -3877,7 +4093,7 @@ export function _tokenizeString(
         let start = 0
         if (IN_DEBUG_MODE) start = performance.now()
         const match = ruleScanner.findNextMatchSync(
-          onigLine,
+          lineText,
           linePosition,
           findOptions
         )
@@ -3886,25 +4102,29 @@ export function _tokenizeString(
           const elapsed = performance.now() - start
           if (elapsed > 5)
             console.warn(
-              `Rule ${currentRule.debugName} (${currentRule.id}) matching took ${elapsed} against '${onigLine}'`
+              `Rule ${currentRule.debugName} (${currentRule.id}) matching took ${elapsed} against '${lineText}'`
             )
           console.log(
             `  scanning for (linePosition: ${linePosition}, anchorPosition: ${anchorPosition})`
           )
           console.log(ruleScanner.toString())
-          if (match)
+          if (match) {
+            const captureStart = getCaptureStart(match.captureIndices, 0)
+            const captureEnd = getCaptureEnd(match.captureIndices, 0)
             console.log(
-              `matched rule id: ${match.ruleId} from ${match.captureIndices[0].start} to ${match.captureIndices[0].end}`
+              `matched rule id: ${match.ruleId} from ${captureStart} to ${captureEnd}`
             )
+          }
         }
 
         return match
           ? {
               captureIndices: match.captureIndices,
+              captureCount: match.captureCount,
               matchedRuleId: match.ruleId,
             }
           : null
-      })(grammar, onigLine, isFirstLine, linePosition, stack, anchorPosition)
+      })(grammar, lineText, isFirstLine, linePosition, stack, anchorPosition)
 
       const injections = grammar.getInjections()
       if (injections.length === 0) return ruleMatch
@@ -3912,7 +4132,7 @@ export function _tokenizeString(
       const injectionMatch = (function matchInjections(
         injections: any[],
         grammar: Grammar,
-        onigLine: any,
+        lineText: string,
         isFirstLine: boolean,
         linePosition: number,
         stack: StateStackImplementation,
@@ -3920,7 +4140,8 @@ export function _tokenizeString(
       ) {
         let bestRuleId: number | undefined
         let bestStart = Number.MAX_VALUE
-        let bestCaptures: any = null
+        let bestCaptures: Int32Array | null = null
+        let bestCaptureCount = 0
         let bestPriority = 0
 
         const scopeNames = stack.contentNameScopesList.getScopeNames()
@@ -3937,7 +4158,7 @@ export function _tokenizeString(
             linePosition === anchorPosition
           )
           const match = ruleScanner.findNextMatchSync(
-            onigLine,
+            lineText,
             linePosition,
             findOptions
           )
@@ -3948,13 +4169,14 @@ export function _tokenizeString(
             console.log(ruleScanner.toString())
           }
 
-          const start = match.captureIndices[0].start
+          const start = getCaptureStart(match.captureIndices, 0)
           if (start > bestStart) continue
           if (start === bestStart && injection.priority <= bestPriority)
             continue
 
           bestStart = start
           bestCaptures = match.captureIndices
+          bestCaptureCount = match.captureCount
           bestRuleId = match.ruleId
           bestPriority = injection.priority
           if (bestStart === linePosition && bestPriority === 1) break
@@ -3964,13 +4186,14 @@ export function _tokenizeString(
           ? {
               priorityMatch: bestPriority === -1,
               captureIndices: bestCaptures,
+              captureCount: bestCaptureCount,
               matchedRuleId: bestRuleId!,
             }
           : null
       })(
         injections,
         grammar,
-        onigLine,
+        lineText,
         isFirstLine,
         linePosition,
         stack,
@@ -3980,13 +4203,13 @@ export function _tokenizeString(
       if (!injectionMatch) return ruleMatch
       if (!ruleMatch) return injectionMatch
 
-      const ruleStart = ruleMatch.captureIndices[0].start
-      const injStart = injectionMatch.captureIndices[0].start
+      const ruleStart = getCaptureStart(ruleMatch.captureIndices, 0)
+      const injStart = getCaptureStart(injectionMatch.captureIndices, 0)
       return injStart < ruleStart ||
         (injectionMatch.priorityMatch && injStart === ruleStart)
         ? injectionMatch
         : ruleMatch
-    })(grammar, onigLine, isFirstLine, linePosition, stack, anchorPosition)
+    })(grammar, lineText, isFirstLine, linePosition, stack, anchorPosition)
 
     if (!match) {
       if (IN_DEBUG_MODE) console.log('  no more matches.')
@@ -3996,30 +4219,32 @@ export function _tokenizeString(
     }
 
     const captureIndices = match.captureIndices
+    const captureCount = match.captureCount ?? getCaptureCount(captureIndices)
     const matchedRuleId = match.matchedRuleId
 
-    const hasAdvanced =
-      !!(captureIndices && captureIndices.length > 0) &&
-      captureIndices[0].end > linePosition
+    const captureStart = getCaptureStart(captureIndices, 0)
+    const captureEnd = getCaptureEnd(captureIndices, 0)
+    const hasAdvanced = captureCount > 0 && captureEnd > linePosition
 
     if (matchedRuleId === endRuleId) {
       const rule = stack.getRule(grammar) as BeginEndRule
       if (IN_DEBUG_MODE)
         console.log('  popping ' + rule.debugName + ' - ' + rule.debugEndRegExp)
 
-      produce(stack, captureIndices[0].start)
+      produce(stack, captureStart)
       stack = stack.withContentNameScopesList(stack.nameScopesList)
       handleCaptures(
         grammar,
-        onigLine.content,
+        lineText,
         isFirstLine,
         stack,
         lineTokens,
         lineFonts,
         rule.endCaptures,
-        captureIndices
+        captureIndices,
+        captureCount
       )
-      produce(stack, captureIndices[0].end)
+      produce(stack, captureEnd)
 
       const popped = stack
       stack = stack.parent!
@@ -4041,10 +4266,10 @@ export function _tokenizeString(
     } else {
       const rule = grammar.getRule(matchedRuleId)
 
-      produce(stack, captureIndices[0].start)
+      produce(stack, captureStart)
 
       const parentState = stack
-      const name = rule.getName(onigLine.content, captureIndices)
+      const name = rule.getName(lineText, captureIndices)
       const pushedNameScopes = stack.contentNameScopesList.pushAttributed(
         name,
         grammar
@@ -4053,7 +4278,7 @@ export function _tokenizeString(
         matchedRuleId,
         linePosition,
         anchorPosition,
-        captureIndices[0].end === lineLength,
+        captureEnd === lineLength,
         null,
         pushedNameScopes,
         pushedNameScopes
@@ -4067,22 +4292,20 @@ export function _tokenizeString(
 
         handleCaptures(
           grammar,
-          onigLine.content,
+          lineText,
           isFirstLine,
           stack,
           lineTokens,
           lineFonts,
           rule.beginCaptures,
-          captureIndices
+          captureIndices,
+          captureCount
         )
-        produce(stack, captureIndices[0].end)
+        produce(stack, captureEnd)
 
-        anchorPosition = captureIndices[0].end
+        anchorPosition = captureEnd
 
-        const contentName = rule.getContentName(
-          onigLine.content,
-          captureIndices
-        )
+        const contentName = rule.getContentName(lineText, captureIndices)
         const pushedContentScopes = pushedNameScopes.pushAttributed(
           contentName,
           grammar
@@ -4091,10 +4314,7 @@ export function _tokenizeString(
 
         if (rule.endHasBackReferences) {
           stack = stack.withEndRule(
-            rule.getEndWithResolvedBackReferences(
-              onigLine.content,
-              captureIndices
-            )
+            rule.getEndWithResolvedBackReferences(lineText, captureIndices)
           )
         }
 
@@ -4113,22 +4333,20 @@ export function _tokenizeString(
 
         handleCaptures(
           grammar,
-          onigLine.content,
+          lineText,
           isFirstLine,
           stack,
           lineTokens,
           lineFonts,
           rule.beginCaptures,
-          captureIndices
+          captureIndices,
+          captureCount
         )
-        produce(stack, captureIndices[0].end)
+        produce(stack, captureEnd)
 
-        anchorPosition = captureIndices[0].end
+        anchorPosition = captureEnd
 
-        const contentName = rule.getContentName(
-          onigLine.content,
-          captureIndices
-        )
+        const contentName = rule.getContentName(lineText, captureIndices)
         const pushedContentScopes = pushedNameScopes.pushAttributed(
           contentName,
           grammar
@@ -4137,10 +4355,7 @@ export function _tokenizeString(
 
         if (rule.whileHasBackReferences) {
           stack = stack.withEndRule(
-            rule.getWhileWithResolvedBackReferences(
-              onigLine.content,
-              captureIndices
-            )
+            rule.getWhileWithResolvedBackReferences(lineText, captureIndices)
           )
         }
 
@@ -4165,15 +4380,16 @@ export function _tokenizeString(
 
         handleCaptures(
           grammar,
-          onigLine.content,
+          lineText,
           isFirstLine,
           stack,
           lineTokens,
           lineFonts,
           (rule as MatchRule).captures,
-          captureIndices
+          captureIndices,
+          captureCount
         )
-        produce(stack, captureIndices[0].end)
+        produce(stack, captureEnd)
 
         stack = stack.pop()!
 
@@ -4190,8 +4406,8 @@ export function _tokenizeString(
       }
     }
 
-    if (captureIndices[0].end > linePosition) {
-      linePosition = captureIndices[0].end
+    if (captureEnd > linePosition) {
+      linePosition = captureEnd
       isFirstLine = false
     }
   }
@@ -4229,7 +4445,8 @@ function handleCaptures(
   lineTokens: LineTokens,
   lineFonts: LineFonts,
   captureRules: any[],
-  captureIndices: any[]
+  captureIndices: Int32Array | Array<{ start: number; end: number }>,
+  captureCount: number
 ) {
   const produceFromScopes = (scopes: AttributedScopeStack, pos: number) => {
     lineTokens.produceFromScopes(scopes, pos)
@@ -4242,16 +4459,29 @@ function handleCaptures(
 
   if (!captureRules || captureRules.length === 0) return
 
-  const len = Math.min(captureRules.length, captureIndices.length)
+  const len = Math.min(captureRules.length, captureCount)
   const localStack: LocalStackElement[] = []
   let localStackLen = 0
-  const lineEnd = captureIndices[0].end
+  const lineEnd = getCaptureEnd(captureIndices, 0)
+
+  // Convert flat buffer to array format for Rule.getName/getContentName compatibility
+  // They use RegexSource.replaceCaptures which expects {start, end, length} objects
+  const captureArray: Array<{ start: number; end: number; length: number }> = []
+  for (let i = 0; i < captureCount; i++) {
+    const start = getCaptureStart(captureIndices, i)
+    const end = getCaptureEnd(captureIndices, i)
+    captureArray.push({
+      start,
+      end,
+      length: end >= start ? end - start : 0,
+    })
+  }
 
   for (let index = 0; index < len; index++) {
     const captureRuleId = captureRules[index]
     if (captureRuleId === null) continue
 
-    const capture = captureIndices[index]
+    const capture = captureArray[index]
     if (!capture || capture.length <= 0) continue
     // Ignore non-participating capture groups.
     if (capture.start < 0 || capture.end < 0) continue
@@ -4273,12 +4503,12 @@ function handleCaptures(
     else produceFromStack(stack, capture.start)
 
     if (captureRule.retokenizeCapturedWithRuleId) {
-      const name = captureRule.getName(lineText, captureIndices)
+      const name = captureRule.getName(lineText, captureArray)
       const nameScopes = stack.contentNameScopesList.pushAttributed(
         name,
         grammar
       )
-      const contentName = captureRule.getContentName(lineText, captureIndices)
+      const contentName = captureRule.getContentName(lineText, captureArray)
       const contentScopes = nameScopes.pushAttributed(contentName, grammar)
 
       const nestedStack = stack.push(
@@ -4291,12 +4521,9 @@ function handleCaptures(
         contentScopes
       )
 
-      const nestedOnig = grammar.createOnigString(
-        lineText.substring(0, capture.end)
-      )
       _tokenizeString(
         grammar,
-        nestedOnig,
+        lineText.substring(0, capture.end),
         isFirstLine && capture.start === 0,
         capture.start,
         nestedStack,
@@ -4305,11 +4532,10 @@ function handleCaptures(
         false,
         0
       )
-      disposeOnigString(nestedOnig)
       continue
     }
 
-    const name = captureRule.getName(lineText, captureIndices)
+    const name = captureRule.getName(lineText, captureArray)
     if (name !== null) {
       const top =
         localStackLen > 0
@@ -4975,11 +5201,12 @@ export type OnigLib = {
 }
 
 export type ITokenizeLineResult = {
-  tokens: Uint32Array | number[]
+  /** Raw token data: [startPos0, metadata0, startPos1, metadata1, ...] */
+  tokens: Uint32Array
+  /** Grammar state for next line */
   ruleStack: StateStackImplementation
+  /** True if tokenization was stopped due to time limit */
   stoppedEarly: boolean
-  // Optional: font info
-  fonts?: any
 }
 
 export interface StateStackFrame {
@@ -5026,7 +5253,6 @@ export class Grammar {
   private _rawGrammar: IRawGrammar
   private _languageId: number
   private _grammarRepository: GrammarRepository
-  private _onigLib: OnigLib
   private _registry: SyncRegistry
 
   constructor(
@@ -5037,14 +5263,12 @@ export class Grammar {
     tokenTypes: Record<string, number> | null,
     balancedBracketSelectors: string[] | null,
     grammarRepository: GrammarRepository,
-    onigLib: OnigLib,
     registry: SyncRegistry
   ) {
     this.scopeName = scopeName
     this._rawGrammar = rawGrammar
     this._languageId = languageId
     this._grammarRepository = grammarRepository
-    this._onigLib = onigLib
     this._registry = registry
 
     this.repository = mergeObjects({}, this._rawGrammar.repository || {})
@@ -5094,13 +5318,6 @@ export class Grammar {
     const rule = factory(id)
     this._ruleId2rule[id] = rule
     return id
-  }
-  createOnigScanner(sources: string[]) {
-    return this._onigLib.createOnigScanner(sources)
-  }
-
-  createOnigString(str: string) {
-    return this._onigLib.createOnigString(str)
   }
 
   getInjections() {
@@ -5280,7 +5497,6 @@ export class Grammar {
     // Append newline to lineText - this is required by TextMate grammars for
     // proper regex matching (e.g. $ anchors, lookaheads that expect line endings).
     const lineTextWithNewline = lineText + '\n'
-    const onigLine = this.createOnigString(lineTextWithNewline)
 
     // Performance: Reuse pooled instances instead of creating new ones
     const lineTokens = this._lineTokensPool
@@ -5292,7 +5508,7 @@ export class Grammar {
     const isFirstLine = !prevState
     const result = _tokenizeString(
       this,
-      onigLine,
+      lineTextWithNewline,
       isFirstLine,
       0,
       stack,
@@ -5301,7 +5517,6 @@ export class Grammar {
       true,
       timeLimitMs
     )
-    disposeOnigString(onigLine)
 
     const finalTokens = lineTokens.finalize(lineText.length)
 
@@ -5327,10 +5542,9 @@ export class Grammar {
     })
 
     return {
-      tokens: finalTokens,
+      tokens: finalTokens as Uint32Array,
       ruleStack: result.stack,
       stoppedEarly: result.stoppedEarly,
-      fonts: lineFonts.finalize(lineText.length),
     }
   }
 
@@ -5371,13 +5585,11 @@ export type IGrammar = Grammar
 export const INITIAL: StateStack = null
 
 export type RegistryOptions = {
-  onigLib: Promise<OnigLib> | OnigLib
   loadGrammar: (scopeName: string) => Promise<IRawGrammar | null>
 }
 
 export class Registry {
   private _syncRegistry = new SyncRegistry()
-  private _onigLibPromise: Promise<OnigLib>
   private _loadGrammar: (scopeName: string) => Promise<IRawGrammar | null>
 
   private _rawGrammars = new Map<string, IRawGrammar>()
@@ -5390,7 +5602,6 @@ export class Registry {
   private _compilingGrammars = new Map<string, Promise<Grammar | null>>()
 
   constructor(options: RegistryOptions) {
-    this._onigLibPromise = Promise.resolve(options.onigLib)
     this._loadGrammar = options.loadGrammar
   }
 
@@ -5465,22 +5676,11 @@ export class Registry {
       this._hasTheme = true
     }
 
-    const onigLib = await this._onigLibPromise
-
-    const grammar = createGrammar(
-      scopeName,
-      rawGrammar,
-      0,
-      null,
-      null,
-      null,
-      {
-        registry: this._syncRegistry,
-        lookup: (s: string) => this._syncRegistry.lookup(s),
-        injections: (s: string) => this._syncRegistry.injections(s),
-      },
-      onigLib
-    ) as Grammar
+    const grammar = createGrammar(scopeName, rawGrammar, 0, null, null, null, {
+      registry: this._syncRegistry,
+      lookup: (s: string) => this._syncRegistry.lookup(s),
+      injections: (s: string) => this._syncRegistry.injections(s),
+    }) as Grammar
 
     this._compiledGrammars.set(scopeName, grammar)
     return grammar
@@ -5557,8 +5757,7 @@ export function createGrammar(
   embeddedLanguages: any,
   tokenTypes: any,
   balancedBracketSelectors: any,
-  grammarRepository: any,
-  onigLib: any
+  grammarRepository: any
 ) {
   // Expect grammarRepository to satisfy GrammarRepository plus provide a SyncRegistry theme access.
   // If you already have a SyncRegistry instance, pass it as grammarRepository.registry.
@@ -5580,7 +5779,6 @@ export function createGrammar(
     tokenTypes,
     balancedBracketSelectors,
     repo,
-    onigLib,
     registry
   )
 }

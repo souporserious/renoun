@@ -5,6 +5,7 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.ts'
+import { TokenMetadata, FontStyle } from '../utils/textmate.ts'
 import type {
   ModuleExport,
   getFileExportMetadata as baseGetFileExportMetadata,
@@ -158,7 +159,8 @@ function decodeBinaryChunk(
   while (position < chunk.length) {
     const count = chunk[position++] ?? 0
     const endPosition = position + count
-    const lineTokenData = chunk.slice(position, endPosition)
+    // Use subarray() instead of slice() to avoid copying
+    const lineTokenData = chunk.subarray(position, endPosition)
     position = endPosition
 
     const lineText = lines[lineIndex] ?? ''
@@ -172,15 +174,16 @@ function decodeBinaryChunk(
           ? lineTokenData[index + 2]
           : lineText.length
 
-      const colorBits = (metadata & 0b00000000111111111000000000000000) >>> 15
-      const color = colorMap[colorBits] || ''
-      const fontFlags = (metadata >>> 11) & 0b1111
+      // Use TokenMetadata decoder instead of manual bit math
+      const colorId = TokenMetadata.getForegroundId(metadata)
+      const color = colorMap[colorId] || ''
+      const fontFlags = TokenMetadata.getFontStyle(metadata)
 
-      const fontStyle = fontFlags & 1 ? 'italic' : ''
-      const fontWeight = fontFlags & 2 ? 'bold' : ''
+      const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
+      const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
       let textDecoration = ''
-      if (fontFlags & 4) textDecoration = 'underline'
-      if (fontFlags & 8) {
+      if (fontFlags & FontStyle.Underline) textDecoration = 'underline'
+      if (fontFlags & FontStyle.Strikethrough) {
         textDecoration = textDecoration
           ? `${textDecoration} line-through`
           : 'line-through'
@@ -207,7 +210,6 @@ function decodeBinaryChunk(
         isSymbol: false,
         style,
       })
-
     }
 
     decoded.push(lineTokens)

@@ -3,50 +3,53 @@ import { describe, expect, test } from 'vitest'
 import { collectTypeScriptMetadata, getTokens } from './get-tokens.ts'
 import type { Token } from './get-tokens.ts'
 import type { Highlighter } from './create-highlighter.ts'
-import type { TextMateToken } from './create-tokenizer.ts'
 import { getTsMorph } from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 const { Project, ts } = tsMorph
 
-function createTextMateToken(value: string): TextMateToken {
-  const isWhiteSpace = /^\s+$/.test(value)
-  return {
-    value,
-    start: 0,
-    end: value.length,
-    style: {
-      color: '',
-      backgroundColor: '',
-      fontStyle: '',
-      fontWeight: '',
-      textDecoration: '',
-    },
-    hasTextStyles: false,
-    isBaseColor: true,
-    isWhiteSpace,
-  }
-}
-
 function createStubHighlighter(lines: string[][]): Highlighter {
-  const tokenLines = lines.map((line) => line.map(createTextMateToken))
   return {
-    async tokenize(
-      _source: string,
-      _language: any,
-      _themes: string[]
-    ): Promise<typeof tokenLines> {
-      return tokenLines
-    },
-    async *stream(
-      _source: string,
-      _language: any,
-      _themes: string[]
-    ): AsyncGenerator<(typeof tokenLines)[number]> {
-      for (const line of tokenLines) {
-        yield line
+    async getContext(_theme: string) {
+      return {
+        colorMap: ['#000000'],
+        baseColor: '#000000',
       }
     },
+    async *streamRaw(
+      source: string,
+      _language: any,
+      _theme: string
+    ): AsyncGenerator<{
+      tokens: Uint32Array
+      lineText: string
+      ruleStack: any
+      stoppedEarly: boolean
+    }> {
+      const sourceLines = source.split(/\r?\n/)
+      for (let lineIndex = 0; lineIndex < sourceLines.length; lineIndex++) {
+        const lineText = sourceLines[lineIndex]
+        const lineTokens = lines[lineIndex] ?? [lineText]
+        const tokens = new Uint32Array(lineTokens.length * 2)
+        let offset = 0
+        let tokenIndex = 0
+        for (const tokenText of lineTokens) {
+          tokens[tokenIndex++] = offset
+          tokens[tokenIndex++] = 0 // metadata (base/default)
+          offset += tokenText.length
+        }
+        yield {
+          tokens,
+          lineText,
+          ruleStack: null,
+          stoppedEarly: false,
+        }
+      }
+    },
+    ensureTheme: async () => {},
+    getColorMap: () => ['#000000'],
+    getBaseColor: () => '#000000',
+    getGrammarState: () => [],
   } as Highlighter
 }
 
@@ -182,37 +185,47 @@ describe('getTokens metadata integration', () => {
 
     const highlighterStarted = createDeferred<void>()
 
-    const tokenLines = [
-      [
-        createTextMateToken('const'),
-        createTextMateToken(' '),
-        createTextMateToken('value'),
-        createTextMateToken(' '),
-        createTextMateToken('='),
-        createTextMateToken(' '),
-        createTextMateToken('1'),
-        createTextMateToken(';'),
-      ],
-    ]
+    const tokenLines = [['const', ' ', 'value', ' ', '=', ' ', '1', ';']]
     const highlighter = {
-      async tokenize(
-        _source: string,
-        _language: any,
-        _themes: string[]
-      ): Promise<typeof tokenLines> {
+      async getContext() {
         highlighterStarted.resolve()
-        return tokenLines
+        return { colorMap: ['#000000'], baseColor: '#000000' }
       },
-      async *stream(
-        _source: string,
+      async *streamRaw(
+        source: string,
         _language: any,
-        _themes: string[]
-      ): AsyncGenerator<(typeof tokenLines)[number]> {
+        _theme: string
+      ): AsyncGenerator<{
+        tokens: Uint32Array
+        lineText: string
+        ruleStack: any
+        stoppedEarly: boolean
+      }> {
         highlighterStarted.resolve()
-        for (const line of tokenLines) {
-          yield line
+        const sourceLines = source.split(/\r?\n/)
+        for (let lineIndex = 0; lineIndex < sourceLines.length; lineIndex++) {
+          const lineText = sourceLines[lineIndex]
+          const lineTokens = tokenLines[lineIndex] ?? [lineText]
+          const tokens = new Uint32Array(lineTokens.length * 2)
+          let offset = 0
+          let tokenIndex = 0
+          for (const tokenText of lineTokens) {
+            tokens[tokenIndex++] = offset
+            tokens[tokenIndex++] = 0
+            offset += tokenText.length
+          }
+          yield {
+            tokens,
+            lineText,
+            ruleStack: null,
+            stoppedEarly: false,
+          }
         }
       },
+      ensureTheme: async () => {},
+      getColorMap: () => ['#000000'],
+      getBaseColor: () => '#000000',
+      getGrammarState: () => [],
     } as Highlighter
 
     const tokensPromise = getTokens({
@@ -278,7 +291,7 @@ describe('getTokens metadata integration', () => {
     expect(metadataCollectorCalled).toBe(false)
 
     // Verify tokens were still returned correctly
-    expect(tokens.length).toBe(3)
+    expect(tokens.length).toBe(4)
     expect(tokens[0][0]?.value).toBe('# Hello World')
   })
 

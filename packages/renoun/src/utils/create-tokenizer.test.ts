@@ -5,8 +5,16 @@ import {
   type RegistryOptions,
   type TextMateThemeRaw,
   type TextMateGrammarRaw,
+  type RawTokenizeResult,
+  type TokenizeOptions,
 } from './create-tokenizer.ts'
-import { ScopeStack, Theme, parseTheme } from './textmate.ts'
+import {
+  ScopeStack,
+  Theme,
+  parseTheme,
+  TokenMetadata,
+  FontStyle,
+} from './textmate.ts'
 
 import cssGrammar from '../grammars/css.ts'
 import shellGrammar from '../grammars/shellscript.ts'
@@ -149,6 +157,202 @@ const registryOptions: RegistryOptions<ThemeName> = {
   },
 }
 
+// Helper to decode raw tokens into the old token format for test compatibility
+type DecodedToken = {
+  value: string
+  start: number
+  end: number
+  hasTextStyles: boolean
+  isBaseColor: boolean
+  isWhiteSpace: boolean
+  style: {
+    color?: string
+    fontStyle?: string
+    fontWeight?: string
+    textDecoration?: string
+    [key: `--${string}`]: string
+  }
+}
+
+async function decodeRawTokens<T extends string>(
+  tokenizer: Tokenizer<T>,
+  source: string,
+  language: any,
+  themes: T[],
+  options?: TokenizeOptions
+): Promise<DecodedToken[][]> {
+  const lines = source.split(/\r?\n/)
+  const isMultiTheme = themes.length > 1
+
+  // Collect per-theme results via streamRaw to avoid accessing private APIs.
+  const perThemeResults: RawTokenizeResult[][] = []
+  for (const themeName of themes) {
+    const themeResults: RawTokenizeResult[] = []
+    for await (const result of tokenizer.streamRaw(
+      source,
+      language,
+      themeName,
+      options
+    )) {
+      themeResults.push(result)
+    }
+    perThemeResults.push(themeResults)
+  }
+
+  if (isMultiTheme) {
+    // Multi-theme: merge boundaries using per-theme token streams.
+    const contexts = await Promise.all(
+      themes.map((theme) => tokenizer.getContext(theme))
+    )
+    const mergedLines: DecodedToken[][] = []
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const lineText = lines[lineIndex] ?? ''
+      const allTokens: Array<{
+        start: number
+        end: number
+        metadata: number
+        themeIndex: number
+      }> = []
+
+      for (let themeIndex = 0; themeIndex < themes.length; themeIndex++) {
+        const result = perThemeResults[themeIndex]?.[lineIndex]
+        if (!result) continue
+        const tokens = result.tokens
+
+        for (let i = 0; i < tokens.length; i += 2) {
+          const start = tokens[i]
+          const end = i + 2 < tokens.length ? tokens[i + 2] : lineText.length
+          allTokens.push({
+            start,
+            end,
+            metadata: tokens[i + 1],
+            themeIndex,
+          })
+        }
+      }
+
+      const boundarySet = new Set<number>()
+      for (const token of allTokens) {
+        boundarySet.add(token.start)
+        boundarySet.add(token.end)
+      }
+      const boundaries = Array.from(boundarySet).sort((a, b) => a - b)
+      const mergedLineTokens: DecodedToken[] = []
+
+      for (let i = 0; i < boundaries.length - 1; i++) {
+        const rangeStart = boundaries[i]
+        const rangeEnd = boundaries[i + 1]
+        if (rangeStart >= rangeEnd) continue
+
+        const value = lineText.slice(rangeStart, rangeEnd)
+        const style: Record<string, string> = {}
+        let hasAnyNonBaseColor = false
+        let hasTextStyles = false
+
+        for (const token of allTokens) {
+          if (token.start < rangeEnd && token.end > rangeStart) {
+            const context = contexts[token.themeIndex]
+            const colorId = TokenMetadata.getForegroundId(token.metadata)
+            const color = context.colorMap[colorId] || ''
+            const baseColor = context.baseColor
+            const fontFlags = TokenMetadata.getFontStyle(token.metadata)
+            const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
+            const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
+            let textDecoration = ''
+            if (fontFlags & FontStyle.Underline) textDecoration = 'underline'
+            if (fontFlags & FontStyle.Strikethrough) {
+              textDecoration = textDecoration
+                ? `${textDecoration} line-through`
+                : 'line-through'
+            }
+
+            const themeIsBaseColor =
+              !color || baseColor.toLowerCase() === color.toLowerCase()
+            if (!themeIsBaseColor) hasAnyNonBaseColor = true
+            if (fontFlags !== 0) hasTextStyles = true
+
+            const themeKey = `--${token.themeIndex}`
+            if (color && !themeIsBaseColor) style[themeKey + 'fg'] = color
+            if (fontStyle) style[themeKey + 'fs'] = fontStyle
+            if (fontWeight) style[themeKey + 'fw'] = fontWeight
+            if (textDecoration) style[themeKey + 'td'] = textDecoration
+          }
+        }
+
+        mergedLineTokens.push({
+          value,
+          start: rangeStart,
+          end: rangeEnd,
+          hasTextStyles,
+          isBaseColor: !hasAnyNonBaseColor,
+          isWhiteSpace: /^\s*$/.test(value),
+          style,
+        })
+      }
+
+      mergedLines.push(mergedLineTokens)
+    }
+
+    return mergedLines
+  }
+
+  // Single theme: decode directly from streamRaw results.
+  const themeName = themes[0]
+  const context = await tokenizer.getContext(themeName)
+  const tokens: DecodedToken[][] = []
+
+  for (const result of perThemeResults[0] ?? []) {
+    const lineText = result.lineText
+    const lineTokens: DecodedToken[] = []
+
+    for (let i = 0; i < result.tokens.length; i += 2) {
+      const start = result.tokens[i]
+      const end =
+        i + 2 < result.tokens.length ? result.tokens[i + 2] : lineText.length
+      if (end <= start) continue
+
+      const metadata = result.tokens[i + 1]
+      const colorId = TokenMetadata.getForegroundId(metadata)
+      const color = context.colorMap[colorId] || ''
+      const baseColor = context.baseColor
+      const fontFlags = TokenMetadata.getFontStyle(metadata)
+      const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
+      const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
+      let textDecoration = ''
+      if (fontFlags & FontStyle.Underline) textDecoration = 'underline'
+      if (fontFlags & FontStyle.Strikethrough) {
+        textDecoration = textDecoration
+          ? `${textDecoration} line-through`
+          : 'line-through'
+      }
+
+      const themeIsBaseColor =
+        !color || baseColor.toLowerCase() === color.toLowerCase()
+
+      const style: Record<string, string> = {}
+      if (color && !themeIsBaseColor) style.color = color
+      if (fontStyle) style.fontStyle = fontStyle
+      if (fontWeight) style.fontWeight = fontWeight
+      if (textDecoration) style.textDecoration = textDecoration
+
+      const tokenValue = lineText.slice(start, end)
+      lineTokens.push({
+        value: tokenValue,
+        start,
+        end,
+        hasTextStyles: fontFlags !== 0,
+        isBaseColor: themeIsBaseColor,
+        isWhiteSpace: /^\s*$/.test(tokenValue),
+        style,
+      })
+    }
+    tokens.push(lineTokens)
+  }
+
+  return tokens
+}
+
 describe('Tokenizer', () => {
   test('highlights TSX and shellscript (keywords/comments/strings) with theme rules', async () => {
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
@@ -156,8 +360,8 @@ describe('Tokenizer', () => {
     const normalize = (c: string | undefined) => (c || '').toUpperCase()
 
     const findToken = (
-      lines: Awaited<ReturnType<Tokenizer<ThemeName>['tokenize']>>,
-      predicate: (token: (typeof lines)[number][number]) => boolean
+      lines: DecodedToken[][],
+      predicate: (token: DecodedToken) => boolean
     ) => {
       for (const line of lines)
         for (const token of line) if (predicate(token)) return token
@@ -167,7 +371,7 @@ describe('Tokenizer', () => {
     // TSX: keyword + comment
     const tsx = `export const x = "hi"
 // comment`
-    const tsxTokens = await tokenizer.tokenize(tsx, 'tsx', ['light'])
+    const tsxTokens = await decodeRawTokens(tokenizer, tsx, 'tsx', ['light'])
 
     const tsxKeyword = findToken(
       tsxTokens,
@@ -189,7 +393,9 @@ describe('Tokenizer', () => {
     // shell: comment + string
     const shell = `# comment
 echo "Hello World"`
-    const shellTokens = await tokenizer.tokenize(shell, 'shell', ['light'])
+    const shellTokens = await decodeRawTokens(tokenizer, shell, 'shell', [
+      'light',
+    ])
 
     const shComment = findToken(
       shellTokens,
@@ -213,7 +419,7 @@ echo "Hello World"`
 
     const source = `export const x = 1
 // comment text`
-    const tokens = await tokenizer.tokenize(source, 'tsx', ['light'])
+    const tokens = await decodeRawTokens(tokenizer, source, 'tsx', ['light'])
 
     // Second line should be a single comment scope; every token should carry the comment color.
     const commentLine = tokens[1]
@@ -260,27 +466,21 @@ echo "Hello World"`
     const updated = `const a = 2;
 // comment`
 
-    const baseline = await tokenizer.tokenizeIncremental(
-      original,
-      'tsx',
-      ['light'],
-      { changedStartLine: 0 }
-    )
+    const baselineTokens = await decodeRawTokens(tokenizer, original, 'tsx', [
+      'light',
+    ])
+    const grammarState = tokenizer.getGrammarState()
 
-    const incremental = await tokenizer.tokenizeIncremental(
+    const incrementalTokens = await decodeRawTokens(
+      tokenizer,
       updated,
       'tsx',
       ['light'],
-      {
-        previousLines: original.split(/\r?\n/),
-        previousTokens: baseline.tokens,
-        previousLineStates: baseline.lineStates,
-        changedStartLine: 0,
-      }
+      { grammarState }
     )
 
-    const full = await tokenizer.tokenize(updated, 'tsx', ['light'])
-    expect(incremental.tokens).toEqual(full)
+    const full = await decodeRawTokens(tokenizer, updated, 'tsx', ['light'])
+    expect(incrementalTokens).toEqual(full)
   })
 
   test('tokenizes shell code across multiple Tokenizer instances without rule ID conflicts', async () => {
@@ -295,9 +495,11 @@ echo "Hello World"`
     const tokenizer3 = new Tokenizer<ThemeName>(registryOptions)
 
     // Tokenize with each tokenizer - this should not throw "Unknown ruleId"
-    const tokens1 = await tokenizer1.tokenize(source, 'shell', ['light'])
-    const tokens2 = await tokenizer2.tokenize(source, 'shell', ['dark'])
-    const tokens3 = await tokenizer3.tokenize(source, 'shell', [
+    const tokens1 = await decodeRawTokens(tokenizer1, source, 'shell', [
+      'light',
+    ])
+    const tokens2 = await decodeRawTokens(tokenizer2, source, 'shell', ['dark'])
+    const tokens3 = await decodeRawTokens(tokenizer3, source, 'shell', [
       'light',
       'dark',
     ])
@@ -345,7 +547,7 @@ echo "Hello World"`
     // Run all tokenizations concurrently
     const results = await Promise.all(
       snippets.map((source) =>
-        tokenizer.tokenize(source, 'shell', ['light', 'dark'])
+        decodeRawTokens(tokenizer, source, 'shell', ['light', 'dark'])
       )
     )
 
@@ -394,7 +596,7 @@ echo "Hello World"`
       '',
     ].join('\n')
 
-    const tokens = await tokenizer.tokenize(mdx, 'mdx', ['light'])
+    const tokens = await decodeRawTokens(tokenizer, mdx, 'mdx', ['light'])
     const flatTokens = tokens.flatMap((line) => line)
 
     expect(requestedScopes).toContain('source.mdx')
@@ -425,7 +627,7 @@ echo "Hello World"`
     // Run all in parallel to stress test concurrent grammar loading
     const results = await Promise.all(
       requests.map((req) =>
-        tokenizer.tokenize(req.source, req.lang, ['light', 'dark'])
+        decodeRawTokens(tokenizer, req.source, req.lang, ['light', 'dark'])
       )
     )
 
@@ -434,7 +636,8 @@ echo "Hello World"`
     }
 
     // Now tokenize shell again after all grammars are loaded
-    const shellTokens = await tokenizer.tokenize(
+    const shellTokens = await decodeRawTokens(
+      tokenizer,
       'npm install renoun',
       'shell',
       ['light', 'dark']
@@ -448,12 +651,16 @@ echo "Hello World"`
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const source = '/* comment line 1\ncomment line 2 */'
 
-    const multiThemeTokens = await tokenizer.tokenize(source, 'css', [
+    const multiThemeTokens = await decodeRawTokens(tokenizer, source, 'css', [
       'light',
       'dark',
     ])
-    const lightOnlyTokens = await tokenizer.tokenize(source, 'css', ['light'])
-    const darkOnlyTokens = await tokenizer.tokenize(source, 'css', ['dark'])
+    const lightOnlyTokens = await decodeRawTokens(tokenizer, source, 'css', [
+      'light',
+    ])
+    const darkOnlyTokens = await decodeRawTokens(tokenizer, source, 'css', [
+      'dark',
+    ])
 
     const tokenValues = (lines: typeof multiThemeTokens) =>
       lines.map((line) => line.map((token) => token.value))
@@ -526,7 +733,12 @@ echo "Hello World"`
 
     const tokenizer = new Tokenizer<'a' | 'b'>(registryOptions)
     const tsx = `export default function X() { return <div /> }`
-    const tokens = await tokenizer.tokenize(tsx, 'tsx', ['a', 'b'])
+    const tokens = await decodeRawTokens(
+      tokenizer as Tokenizer<'a' | 'b'>,
+      tsx,
+      'tsx',
+      ['a', 'b']
+    )
     const flatTokens = tokens.flatMap((line) => line)
 
     const divToken = flatTokens.find((token) => token.value === 'div')
@@ -534,16 +746,16 @@ echo "Hello World"`
     // In multi-theme mode we should emit CSS vars (not inline color).
     expect(divToken!.style.color).toBeUndefined()
     // Theme A: base -> no fg var
-    expect((divToken!.style as any)['--0fg']).toBeUndefined()
+    expect(divToken!.style['--0fg']).toBeUndefined()
     // Theme B: non-base -> fg var set
-    expect((divToken!.style as any)['--1fg']).toBe('#FF00FF')
+    expect(divToken!.style['--1fg']).toBe('#FF00FF')
   })
 
   test('tokenizes TypeScript with keyword and string scopes', async () => {
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const source = `import { Directory } from 'renoun'`
 
-    const tokens = await tokenizer.tokenize(source, 'tsx', ['light'])
+    const tokens = await decodeRawTokens(tokenizer, source, 'tsx', ['light'])
     const flatTokens = tokens.flatMap((line) => line)
 
     // Find the 'import' keyword token
@@ -583,7 +795,7 @@ export default async function Page({
   return <Content />
 }`
 
-    const tokens = await tokenizer.tokenize(source, 'tsx', ['light'])
+    const tokens = await decodeRawTokens(tokenizer, source, 'tsx', ['light'])
 
     // Collect all text by joining lines with newlines
     const allText = tokens
@@ -637,7 +849,7 @@ export default async function Page({
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const source = 'npm install renoun'
 
-    const tokens = await tokenizer.tokenize(source, 'shell', ['light'])
+    const tokens = await decodeRawTokens(tokenizer, source, 'shell', ['light'])
     const flatTokens = tokens.flatMap((line) => line)
 
     // Verify we got all the text
@@ -657,11 +869,22 @@ export default async function Page({
     const source = '/* comment line 1*/\n/* comment line 2 */'
 
     const streamed: string[][] = []
-    for await (const line of tokenizer.stream(source, 'css', ['light'])) {
-      streamed.push(line.map((token) => token.value))
+    for await (const result of tokenizer.streamRaw(source, 'css', 'light')) {
+      const lineTokens: string[] = []
+      for (let i = 0; i < result.tokens.length; i += 2) {
+        const start = result.tokens[i]
+        const end =
+          i + 2 < result.tokens.length
+            ? result.tokens[i + 2]
+            : result.lineText.length
+        // Raw stream includes a final sentinel token at lineLength; skip zero-length slices.
+        if (end <= start) continue
+        lineTokens.push(result.lineText.slice(start, end))
+      }
+      streamed.push(lineTokens)
     }
 
-    const tokens = await tokenizer.tokenize(source, 'css', ['light'])
+    const tokens = await decodeRawTokens(tokenizer, source, 'css', ['light'])
     const nonStreamed = tokens.map((line) => line.map((token) => token.value))
 
     expect(streamed).toEqual(nonStreamed)
@@ -672,12 +895,15 @@ export default async function Page({
     const firstChunk = '/* comment line 1'
     const secondChunk = 'comment line 2 */'
 
-    const firstTokens = await tokenizer.tokenize(firstChunk, 'css', ['light'])
+    const firstTokens = await decodeRawTokens(tokenizer, firstChunk, 'css', [
+      'light',
+    ])
     const grammarState = tokenizer.getGrammarState()
 
     expect(grammarState).toBeDefined()
 
-    const secondTokens = await tokenizer.tokenize(
+    const secondTokens = await decodeRawTokens(
+      tokenizer,
       secondChunk,
       'css',
       ['light'],
@@ -688,7 +914,8 @@ export default async function Page({
       line.map((token) => token.value)
     )
 
-    const fullTokens = await tokenizer.tokenize(
+    const fullTokens = await decodeRawTokens(
+      tokenizer,
       `${firstChunk}\n${secondChunk}`,
       'css',
       ['light']
@@ -710,16 +937,22 @@ export default async function Page({
         /* nested comment
       }
     `
-    await tokenizer.tokenize(cssSource, 'css', ['light', 'dark'])
+    await decodeRawTokens(tokenizer, cssSource, 'css', ['light', 'dark'])
     const cssGrammarState = tokenizer.getGrammarState()
 
     // Now try to use CSS grammar state with shell tokenization
     // This should not crash with "Unknown ruleId" but either work or throw a clear error
     try {
       const shellSource = 'npm install renoun'
-      await tokenizer.tokenize(shellSource, 'shell', ['light', 'dark'], {
-        grammarState: cssGrammarState,
-      })
+      await decodeRawTokens(
+        tokenizer,
+        shellSource,
+        'shell',
+        ['light', 'dark'],
+        {
+          grammarState: cssGrammarState,
+        }
+      )
       // If we get here, the tokenizer handled the mismatch gracefully
     } catch (error) {
       // The error should be informative, not a cryptic "Unknown ruleId"
@@ -772,7 +1005,7 @@ export default async function Page({
       
       export default MyComponent;
     `
-    await tokenizer1.tokenize(tsxSource, 'tsx', ['light', 'dark'])
+    await decodeRawTokens(tokenizer1, tsxSource, 'tsx', ['light', 'dark'])
     const tsxGrammarState = tokenizer1.getGrammarState()
 
     // Log the grammar state to understand its structure
@@ -785,9 +1018,15 @@ export default async function Page({
     // on a completely different tokenizer
     try {
       const shellSource = 'npm install renoun'
-      await tokenizer2.tokenize(shellSource, 'shell', ['light', 'dark'], {
-        grammarState: tsxGrammarState,
-      })
+      await decodeRawTokens(
+        tokenizer2,
+        shellSource,
+        'shell',
+        ['light', 'dark'],
+        {
+          grammarState: tsxGrammarState,
+        }
+      )
       // If we get here, the tokenizer handled the mismatch gracefully
     } catch (error) {
       // The error should be informative if it throws
@@ -826,7 +1065,7 @@ export default async function Page({
 export default function Page() {
   const b = 2
 }`
-    const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+    const tokens = await decodeRawTokens(tokenizer, tsx, 'tsx', ['dark'])
 
     // Find both const tokens
     const constTokens: Array<{
@@ -872,7 +1111,7 @@ export default function Page() {
 
     const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
     const shell = 'npm install renoun'
-    const tokens = await tokenizer.tokenize(shell, 'shell', ['dark'])
+    const tokens = await decodeRawTokens(tokenizer, shell, 'shell', ['dark'])
 
     // npm should be styled as a command (inheriting from entity.name.function)
     const npmToken = tokens[0].find((token) => token.value === 'npm')
@@ -911,7 +1150,7 @@ export default function Page() {
   )
 }`
 
-    const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+    const tokens = await decodeRawTokens(tokenizer, tsx, 'tsx', ['dark'])
     const flatTokens = tokens.flatMap((line) => line)
 
     // Component tag names should be styled (entity.name.tag.custom -> #F78C6C in the bundled theme).
@@ -957,7 +1196,7 @@ export default function Page() {
 
     // Single-line JSX with attributes works correctly
     const tsx = `<div css={1}></div>`
-    const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+    const tokens = await decodeRawTokens(tokenizer, tsx, 'tsx', ['dark'])
     const flatTokens = tokens.flatMap((line) => line)
 
     // div tag should be styled (entity.name.tag.tsx -> #CAECE6)
@@ -997,7 +1236,7 @@ export default function Page() {
     const tsx = `<div
   css={1}
 ></div>`
-    const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+    const tokens = await decodeRawTokens(tokenizer, tsx, 'tsx', ['dark'])
     const flatTokens = tokens.flatMap((line) => line)
 
     // div tag should be styled correctly
@@ -1052,7 +1291,7 @@ export default function Page() {
     }
 
     const tokenizer = new Tokenizer<'light'>(registryOptions)
-    const tokens = await tokenizer.tokenize('aXYZ', 'shell', ['light'])
+    const tokens = await decodeRawTokens(tokenizer, 'aXYZ', 'shell', ['light'])
     // console.log(tokens[0].map((token) => ({ v: token.value, c: token.style.color, base: token.isBaseColor })))
 
     const xyz = tokens[0].find((token) => token.value.includes('XYZ'))
@@ -1066,17 +1305,19 @@ export default function Page() {
   })
 })
 
-test('streamRaw emits Uint32Array per line', async () => {
+test('streamRaw emits RawTokenizeResult per line', async () => {
   const tokenizer = new Tokenizer<ThemeName>(registryOptions)
   const source = `// hello
 const x = 1`
-  const chunks: Uint32Array[] = []
-  for await (const chunk of tokenizer.streamRaw(source, 'tsx', ['dark'])) {
+  const chunks: RawTokenizeResult[] = []
+  for await (const chunk of tokenizer.streamRaw(source, 'tsx', 'dark')) {
     chunks.push(chunk)
   }
 
   expect(chunks.length).toBe(2)
-  expect(chunks[0]).toBeInstanceOf(Uint32Array)
+  expect(chunks[0].tokens).toBeInstanceOf(Uint32Array)
+  expect(chunks[0].lineText).toBe('// hello')
+  expect(chunks[1].lineText).toBe('const x = 1')
   expect(tokenizer.getGrammarState().length).toBe(1)
 })
 
@@ -1091,10 +1332,12 @@ test('streamRaw + decodeBinaryChunk preserves comment punctuation color', async 
   const baseColor = tokenizer.getBaseColor('light')
 
   const batch: number[] = []
-  for await (const lineTokens of tokenizer.streamRaw(source, 'tsx', [
-    'light',
-  ])) {
-    batch.push(lineTokens.length, ...lineTokens)
+  for await (const result of tokenizer.streamRaw(source, 'tsx', 'light')) {
+    const lineTokens = result.tokens
+    batch.push(lineTokens.length)
+    for (let i = 0; i < lineTokens.length; i++) {
+      batch.push(lineTokens[i])
+    }
   }
 
   const decodeBinaryChunk = (
@@ -1222,7 +1465,7 @@ test('punctuation in line comments uses comment color', async () => {
   const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
   const tsx = `// greeting
 const x = 1`
-  const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+  const tokens = await decodeRawTokens(tokenizer, tsx, 'tsx', ['dark'])
   const flat = tokens.flatMap((line) => line)
   const slashToken = flat.find((token) => token.value === '//')
   expect(slashToken).toBeDefined()
@@ -1247,7 +1490,7 @@ test('template string interpolation does not bleed punctuation color into identi
 
   const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
   const tsx = 'import(`./posts/${path}.mdx`)'
-  const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+  const tokens = await decodeRawTokens(tokenizer, tsx, 'tsx', ['dark'])
   const flat = tokens.flat()
 
   const interpolationStart = flat.find((token) => token.value === '${')
@@ -1277,7 +1520,7 @@ test('await params property access uses base color with italics', async () => {
 
   const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
   const tsx = 'const slug = (await params).slug'
-  const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+  const tokens = await decodeRawTokens(tokenizer, tsx, 'tsx', ['dark'])
   const flat = tokens.flatMap((line) => line)
 
   const paramsToken = flat.find((token) => token.value === 'params')

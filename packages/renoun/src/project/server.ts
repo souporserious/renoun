@@ -163,12 +163,20 @@ export async function createServer(options?: { port?: number }) {
               }
             }
           } else {
-            for await (const lineTokens of tokenizer.streamRaw(
+            for await (const result of tokenizer.streamRaw(
               options.value,
               finalLanguage as TextMateLanguages,
-              themeNames
+              themeNames[0]
             )) {
-              batch.push(lineTokens.length, ...lineTokens)
+              const lineTokens = result.tokens
+              // Pre-allocate batch space: length (1) + tokens (lineTokens.length)
+              const batchStart = batch.length
+              batch.length = batchStart + 1 + lineTokens.length
+              batch[batchStart] = lineTokens.length
+              // Copy tokens using set() for efficiency
+              for (let i = 0; i < lineTokens.length; i++) {
+                batch[batchStart + 1 + i] = lineTokens[i]
+              }
               batchLineCount++
 
               if (batchLineCount >= BATCH_SIZE) {
