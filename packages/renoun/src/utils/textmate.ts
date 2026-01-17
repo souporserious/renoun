@@ -117,17 +117,15 @@ export function stringArrayCompare(
   return aLen - bLen
 }
 
+const HEX_COLOR_REGEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+const CSS_VAR_HEX_DEFAULT = /var\((--.*),\s?(#[0-9a-f]+)\)/i
+
 export function isValidHexColor(color: string) {
-  return (
-    /^#[0-9a-f]{6}$/i.test(color) ||
-    /^#[0-9a-f]{8}$/i.test(color) ||
-    /^#[0-9a-f]{3}$/i.test(color) ||
-    /^#[0-9a-f]{4}$/i.test(color)
-  )
+  return HEX_COLOR_REGEX.test(color)
 }
 
 function isValidCssVarWithHexColorDefault(potentialCssVar: string): boolean {
-  const match = /var\((--.*),\s?(#[0-9a-f]+)\)/i.exec(potentialCssVar)
+  const match = CSS_VAR_HEX_DEFAULT.exec(potentialCssVar)
   if (match !== null) {
     const hex = match[2]
     return isValidHexColor(hex)
@@ -136,7 +134,7 @@ function isValidCssVarWithHexColorDefault(potentialCssVar: string): boolean {
 }
 
 function colorValueToId(cssValue: string): string {
-  const match = /var\((--.*),\s?(#[0-9a-f]+)\)/i.exec(cssValue)
+  const match = CSS_VAR_HEX_DEFAULT.exec(cssValue)
   if (match !== null) {
     return `var(${match[1]}, ${match[2].toUpperCase()})`
   }
@@ -259,7 +257,7 @@ export const TokenMetadata = {
 
   /** Check if contains balanced brackets flag */
   containsBalancedBrackets(metadata: number): boolean {
-    return (metadata & 0b1_0000_0000) !== 0
+    return (metadata & 0b1_0000_0000_00) !== 0
   },
 
   isItalic(metadata: number): boolean {
@@ -304,29 +302,12 @@ export const EncodedTokenAttributes = {
     })
   },
 
-  getLanguageId(value: number) {
-    return (255 & value) >>> 0
-  },
-
-  getTokenType(value: number) {
-    return (768 & value) >>> 8
-  },
-
-  containsBalancedBrackets(value: number) {
-    return !!(1024 & value)
-  },
-
-  getFontStyle(value: number) {
-    return (30720 & value) >>> 11
-  },
-
-  getForeground(value: number) {
-    return (16744448 & value) >>> 15
-  },
-
-  getBackground(value: number) {
-    return (4278190080 & value) >>> 24
-  },
+  getLanguageId: TokenMetadata.getLanguageId,
+  getTokenType: TokenMetadata.getTokenType,
+  containsBalancedBrackets: TokenMetadata.containsBalancedBrackets,
+  getFontStyle: TokenMetadata.getFontStyle,
+  getForeground: TokenMetadata.getForegroundId,
+  getBackground: TokenMetadata.getBackgroundId,
 
   set(
     existing: number,
@@ -422,6 +403,20 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
   let line = state.line
   let column = state.char
 
+  function consumeKeyword(keyword: string): boolean {
+    const keywordLength = keyword.length
+    // consume first character (already matched by caller)
+    position++
+    column++
+    if (position + keywordLength - 1 > len) return false
+    for (let index = 1; index < keywordLength; index++) {
+      if (src.charCodeAt(position) !== keyword.charCodeAt(index)) return false
+      position++
+      column++
+    }
+    return true
+  }
+
   while (true) {
     if (position >= len) return false
     ch = src.charCodeAt(position)
@@ -511,56 +506,13 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
     column++
   } else if (ch === 110) {
     token.type = 8 // null
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 117) return false
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 108) return false
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 108) return false
-    position++
-    column++
+    if (!consumeKeyword('null')) return false
   } else if (ch === 116) {
     token.type = 9 // true
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 114) return false
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 117) return false
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 101) return false
-    position++
-    column++
+    if (!consumeKeyword('true')) return false
   } else if (ch === 102) {
     token.type = 10 // false
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 97) return false
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 108) return false
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 115) return false
-    position++
-    column++
-    ch = src.charCodeAt(position)
-    if (ch !== 101) return false
-    position++
-    column++
+    if (!consumeKeyword('false')) return false
   } else {
     token.type = 11 // number
     while (true) {
@@ -618,6 +570,47 @@ export function parseJSON(
     parseJSONError(state, message)
   }
 
+  function pushContainer(nextState: number, value: any) {
+    pushState()
+    parserState = nextState
+    currentValue = value
+  }
+
+  function handleValueToken(assign: (value: any) => void): boolean {
+    switch (token.type) {
+      case 1:
+        assign(token.value)
+        return true
+      case 8:
+        assign(null)
+        return true
+      case 9:
+        assign(true)
+        return true
+      case 10:
+        assign(false)
+        return true
+      case 11:
+        assign(parseFloat(token.value!))
+        return true
+      case 2: {
+        const arr: any[] = []
+        assign(arr)
+        pushContainer(4, arr)
+        return true
+      }
+      case 3: {
+        const obj: any = {}
+        if (withLocation) obj.$textmateLocation = token.toLocation(filename)
+        assign(obj)
+        pushContainer(1, obj)
+        return true
+      }
+      default:
+        return false
+    }
+  }
+
   while (parseJSONNext(state, token)) {
     if (parserState === 0) {
       if (currentValue !== null) fail('too many constructs in root')
@@ -663,43 +656,12 @@ export function parseJSON(
 
         parserState = 2
 
-        if (token.type === 1) {
-          currentValue[key] = token.value
+        if (
+          handleValueToken((value) => {
+            currentValue[key] = value
+          })
+        )
           continue
-        }
-        if (token.type === 8) {
-          currentValue[key] = null
-          continue
-        }
-        if (token.type === 9) {
-          currentValue[key] = true
-          continue
-        }
-        if (token.type === 10) {
-          currentValue[key] = false
-          continue
-        }
-        if (token.type === 11) {
-          currentValue[key] = parseFloat(token.value!)
-          continue
-        }
-        if (token.type === 2) {
-          const arr: any[] = []
-          currentValue[key] = arr
-          pushState()
-          parserState = 4
-          currentValue = arr
-          continue
-        }
-        if (token.type === 3) {
-          const obj: any = {}
-          if (withLocation) obj.$textmateLocation = token.toLocation(filename)
-          currentValue[key] = obj
-          pushState()
-          parserState = 1
-          currentValue = obj
-          continue
-        }
       }
       fail('unexpected token in dict')
     }
@@ -723,43 +685,7 @@ export function parseJSON(
       }
       parserState = 5
 
-      if (token.type === 1) {
-        currentValue.push(token.value)
-        continue
-      }
-      if (token.type === 8) {
-        currentValue.push(null)
-        continue
-      }
-      if (token.type === 9) {
-        currentValue.push(true)
-        continue
-      }
-      if (token.type === 10) {
-        currentValue.push(false)
-        continue
-      }
-      if (token.type === 11) {
-        currentValue.push(parseFloat(token.value!))
-        continue
-      }
-      if (token.type === 2) {
-        const arr: any[] = []
-        currentValue.push(arr)
-        pushState()
-        parserState = 4
-        currentValue = arr
-        continue
-      }
-      if (token.type === 3) {
-        const obj: any = {}
-        if (withLocation) obj.$textmateLocation = token.toLocation(filename)
-        currentValue.push(obj)
-        pushState()
-        parserState = 1
-        currentValue = obj
-        continue
-      }
+      if (handleValueToken((value) => currentValue.push(value))) continue
       fail('unexpected token in array')
     }
 
@@ -872,47 +798,47 @@ function parsePLISTBody(
     )
   }
 
-  const openDict = () => {
-    if (pendingKey === null) return fail('missing <key>')
+  function createDict() {
     const obj: any = {}
     if (locationKey !== null)
       obj[locationKey] = { filename, line, char: column }
-    currentValue[pendingKey] = obj
-    pendingKey = null
-    pushContainer(1, obj)
+    return obj
   }
 
-  const openArray = () => {
-    if (pendingKey === null) return fail('missing <key>')
-    const arr: any[] = []
-    currentValue[pendingKey] = arr
-    pendingKey = null
-    pushContainer(2, arr)
+  function createArray() {
+    return [] as any[]
   }
 
-  const openDictInArray = () => {
-    const obj: any = {}
-    if (locationKey !== null)
-      obj[locationKey] = { filename, line, char: column }
-    currentValue.push(obj)
-    pushContainer(1, obj)
+  function openContainer(type: 1 | 2, inArray: boolean) {
+    const value = type === 1 ? createDict() : createArray()
+    if (inArray) {
+      currentValue.push(value)
+    } else {
+      if (pendingKey === null) return fail('missing <key>')
+      currentValue[pendingKey] = value
+      pendingKey = null
+    }
+    pushContainer(type, value)
   }
 
-  const openArrayInArray = () => {
-    const arr: any[] = []
-    currentValue.push(arr)
-    pushContainer(2, arr)
+  function openRootContainer(type: 1 | 2) {
+    const value = type === 1 ? createDict() : createArray()
+    currentValue = value
+    pushContainer(type, value)
   }
 
-  function closeDict() {
-    if (containerType !== 1) return fail('unexpected </dict>')
+  const openDict = () => openContainer(1, false)
+  const openArray = () => openContainer(2, false)
+  const openDictInArray = () => openContainer(1, true)
+  const openArrayInArray = () => openContainer(2, true)
+
+  function closeContainer(expectedType: number, tagName: string) {
+    if (containerType !== expectedType) return fail(`unexpected </${tagName}>`)
     popContainer()
   }
 
-  function closeArray() {
-    if (containerType !== 2) return fail('unexpected </array>')
-    popContainer()
-  }
+  const closeDict = () => closeContainer(1, 'dict')
+  const closeArray = () => closeContainer(2, 'array')
 
   function assignValue(value: any) {
     if (containerType === 1) {
@@ -926,21 +852,8 @@ function parsePLISTBody(
     }
   }
 
-  function parseNumberFloat(value: number) {
-    if (isNaN(value)) return fail('cannot parse float')
-    assignValue(value)
-  }
-  function parseNumberInt(value: number) {
-    if (isNaN(value)) return fail('cannot parse integer')
-    assignValue(value)
-  }
-  function parseDate(value: Date) {
-    assignValue(value)
-  }
-  function parseData(value: string) {
-    assignValue(value)
-  }
-  function parseBool(value: boolean) {
+  function assignNumber(value: number, errorMessage: string) {
+    if (isNaN(value)) return fail(errorMessage)
     assignValue(value)
   }
 
@@ -982,6 +895,13 @@ function parsePLISTBody(
       })
   }
 
+  function closeTag(tagName: string, onClose?: () => void) {
+    if (!matchLiteral(tagName)) return false
+    consumeThrough('>')
+    if (onClose) onClose()
+    return true
+  }
+
   while (pos < totalLen) {
     skipWhitespace()
     if (pos >= totalLen) break
@@ -1016,20 +936,9 @@ function parsePLISTBody(
       // </...>
       advance(1)
       skipWhitespace()
-      if (matchLiteral('plist')) {
-        consumeThrough('>')
-        continue
-      }
-      if (matchLiteral('dict')) {
-        consumeThrough('>')
-        closeDict()
-        continue
-      }
-      if (matchLiteral('array')) {
-        consumeThrough('>')
-        closeArray()
-        continue
-      }
+      if (closeTag('plist')) continue
+      if (closeTag('dict', closeDict)) continue
+      if (closeTag('array', closeArray)) continue
       return fail('unexpected closed tag')
     }
 
@@ -1038,12 +947,7 @@ function parsePLISTBody(
       case 'dict': {
         if (containerType === 1) openDict()
         else if (containerType === 2) openDictInArray()
-        else {
-          currentValue = {}
-          if (locationKey !== null)
-            currentValue[locationKey] = { filename, line, char: column }
-          pushContainer(1, currentValue)
-        }
+        else openRootContainer(1)
         if (tag.isClosed) closeDict()
         continue
       }
@@ -1051,10 +955,7 @@ function parsePLISTBody(
       case 'array': {
         if (containerType === 1) openArray()
         else if (containerType === 2) openArrayInArray()
-        else {
-          currentValue = []
-          pushContainer(2, currentValue)
-        }
+        else openRootContainer(2)
         if (tag.isClosed) closeArray()
         continue
       }
@@ -1068,27 +969,22 @@ function parsePLISTBody(
       }
 
       case 'string':
+      case 'data':
         assignValue(readTagText(tag))
         continue
       case 'real':
-        parseNumberFloat(parseFloat(readTagText(tag)))
+        assignNumber(parseFloat(readTagText(tag)), 'cannot parse float')
         continue
       case 'integer':
-        parseNumberInt(parseInt(readTagText(tag), 10))
+        assignNumber(parseInt(readTagText(tag), 10), 'cannot parse integer')
         continue
       case 'date':
-        parseDate(new Date(readTagText(tag)))
-        continue
-      case 'data':
-        parseData(readTagText(tag))
+        assignValue(new Date(readTagText(tag)))
         continue
       case 'true':
-        readTagText(tag)
-        parseBool(true)
-        continue
       case 'false':
         readTagText(tag)
-        parseBool(false)
+        assignValue(tag.name === 'true')
         continue
     }
 
@@ -1175,10 +1071,8 @@ export class Theme {
       let defaultLineHeight = 0
 
       // Extract default rules (those with empty scope)
-      let defaultRuleCount = 0
       while (sortedRules.length >= 1 && sortedRules[0].scope === '') {
         const rule = sortedRules.shift()!
-        defaultRuleCount++
         if (rule.fontStyle !== -1) defaultFontStyle = rule.fontStyle
         if (rule.foreground !== null) defaultForeground = rule.foreground
         if (rule.background !== null) defaultBackground = rule.background
@@ -1360,9 +1254,12 @@ function scopeMatches(actual: string, expected: string) {
   ) // faster startsWith
 }
 
-function scopePathMatchesParentScopes(
-  scopePath: ScopeStack | null,
-  parentScopes: readonly string[]
+type ScopePathLike = { parent: ScopePathLike | null; scopeName: string | null }
+
+function scopePathMatchesParentScopesCore(
+  scopePath: ScopePathLike | null,
+  parentScopes: readonly string[],
+  allowNullScopeName: boolean
 ): boolean {
   if (parentScopes.length === 0) {
     return true
@@ -1381,7 +1278,11 @@ function scopePathMatchesParentScopes(
     }
 
     while (scopePath) {
-      if (scopeMatches(scopePath.scopeName, scopePattern)) {
+      const scopeName = scopePath.scopeName
+      if (
+        (!allowNullScopeName || scopeName) &&
+        scopeMatches(scopeName as string, scopePattern)
+      ) {
         break
       }
       if (scopeMustMatch) {
@@ -1399,46 +1300,26 @@ function scopePathMatchesParentScopes(
   return true
 }
 
+function scopePathMatchesParentScopes(
+  scopePath: ScopeStack | null,
+  parentScopes: readonly string[]
+): boolean {
+  return scopePathMatchesParentScopesCore(
+    scopePath as ScopePathLike | null,
+    parentScopes,
+    false
+  )
+}
+
 function scopePathMatchesParentScopesAttributed(
   scopePath: AttributedScopeStack | null,
   parentScopes: readonly string[]
 ): boolean {
-  if (parentScopes.length === 0) {
-    return true
-  }
-
-  for (let index = 0; index < parentScopes.length; index++) {
-    let scopePattern = parentScopes[index]
-    let scopeMustMatch = false
-
-    if (scopePattern === '>') {
-      if (index === parentScopes.length - 1) {
-        return false
-      }
-      scopePattern = parentScopes[++index]
-      scopeMustMatch = true
-    }
-
-    while (scopePath) {
-      if (
-        scopePath.scopeName &&
-        scopeMatches(scopePath.scopeName, scopePattern)
-      ) {
-        break
-      }
-      if (scopeMustMatch) {
-        return false
-      }
-      scopePath = scopePath.parent
-    }
-
-    if (!scopePath) {
-      return false
-    }
-    scopePath = scopePath.parent
-  }
-
-  return true
+  return scopePathMatchesParentScopesCore(
+    scopePath as ScopePathLike | null,
+    parentScopes,
+    true
+  )
 }
 
 const _scopeInternTable = new Map<string, string>()
@@ -1493,7 +1374,8 @@ export function parseTheme(theme: IRawTheme | undefined) {
     index++
   ) {
     const entry = settings[index]
-    if (!entry.settings) {
+    const entrySettings = entry.settings
+    if (!entrySettings) {
       continue
     }
 
@@ -1508,9 +1390,9 @@ export function parseTheme(theme: IRawTheme | undefined) {
     }
 
     let fontStyle = -1
-    if (typeof entry.settings.fontStyle === 'string') {
+    if (typeof entrySettings.fontStyle === 'string') {
       fontStyle = 0
-      const parts = entry.settings.fontStyle.split(' ')
+      const parts = entrySettings.fontStyle.split(' ')
       for (let j = 0; j < parts.length; j++) {
         switch (parts[j]) {
           case 'italic':
@@ -1530,37 +1412,36 @@ export function parseTheme(theme: IRawTheme | undefined) {
     }
 
     let foreground: string | null = null
-    if (typeof entry.settings.foreground === 'string') {
+    if (typeof entrySettings.foreground === 'string') {
       if (
-        isValidHexColor(entry.settings.foreground) ||
-        isValidCssVarWithHexColorDefault(entry.settings.foreground)
+        isValidHexColor(entrySettings.foreground) ||
+        isValidCssVarWithHexColorDefault(entrySettings.foreground)
       ) {
-        foreground = entry.settings.foreground
-      } else if (entry.settings.foreground) {
+        foreground = entrySettings.foreground
       }
     }
 
     let background: string | null = null
-    if (typeof entry.settings.background === 'string') {
+    if (typeof entrySettings.background === 'string') {
       if (
-        isValidHexColor(entry.settings.background) ||
-        isValidCssVarWithHexColorDefault(entry.settings.background)
+        isValidHexColor(entrySettings.background) ||
+        isValidCssVarWithHexColorDefault(entrySettings.background)
       ) {
-        background = entry.settings.background
+        background = entrySettings.background
       }
     }
 
     let fontFamily: string | null = ''
-    if (typeof entry.settings.fontFamily === 'string')
-      fontFamily = entry.settings.fontFamily
+    if (typeof entrySettings.fontFamily === 'string')
+      fontFamily = entrySettings.fontFamily
 
     let fontSize: string | null = ''
-    if (typeof entry.settings.fontSize === 'string')
-      fontSize = entry.settings.fontSize
+    if (typeof entrySettings.fontSize === 'string')
+      fontSize = entrySettings.fontSize
 
     let lineHeight = 0
-    if (typeof entry.settings.lineHeight === 'number')
-      lineHeight = entry.settings.lineHeight
+    if (typeof entrySettings.lineHeight === 'number')
+      lineHeight = entrySettings.lineHeight
 
     for (let s = 0; s < scopes.length; s++) {
       const scopeParts = scopes[s].trim().split(' ')
@@ -2241,10 +2122,29 @@ export class CaptureRule extends Rule {
   dispose() {}
 }
 
+class CachedRegExpSourceList {
+  private _list: RegExpSourceList | null = null
+
+  dispose() {
+    if (this._list) {
+      this._list.dispose()
+      this._list = null
+    }
+  }
+
+  get(build: (list: RegExpSourceList) => void): RegExpSourceList {
+    if (!this._list) {
+      this._list = new RegExpSourceList()
+      build(this._list)
+    }
+    return this._list
+  }
+}
+
 export class MatchRule extends Rule {
   private _match: RegExpSource
   captures: any
-  private _cachedCompiledPatterns: RegExpSourceList | null = null
+  private _cachedCompiledPatterns = new CachedRegExpSourceList()
 
   constructor(
     location: any,
@@ -2259,10 +2159,7 @@ export class MatchRule extends Rule {
   }
 
   dispose() {
-    if (this._cachedCompiledPatterns) {
-      this._cachedCompiledPatterns.dispose()
-      this._cachedCompiledPatterns = null
-    }
+    this._cachedCompiledPatterns.dispose()
   }
 
   get debugMatchRegExp() {
@@ -2286,18 +2183,16 @@ export class MatchRule extends Rule {
   }
 
   private _getCachedCompiledPatterns(grammar: any) {
-    if (!this._cachedCompiledPatterns) {
-      this._cachedCompiledPatterns = new RegExpSourceList()
-      this.collectPatterns(grammar, this._cachedCompiledPatterns)
-    }
-    return this._cachedCompiledPatterns
+    return this._cachedCompiledPatterns.get((list) => {
+      this.collectPatterns(grammar, list)
+    })
   }
 }
 
 export class IncludeOnlyRule extends Rule {
   patterns: any[]
   hasMissingPatterns: boolean
-  private _cachedCompiledPatterns: RegExpSourceList | null = null
+  private _cachedCompiledPatterns = new CachedRegExpSourceList()
 
   constructor(
     location: any,
@@ -2312,10 +2207,7 @@ export class IncludeOnlyRule extends Rule {
   }
 
   dispose() {
-    if (this._cachedCompiledPatterns) {
-      this._cachedCompiledPatterns.dispose()
-      this._cachedCompiledPatterns = null
-    }
+    this._cachedCompiledPatterns.dispose()
   }
 
   collectPatterns(grammar: any, out: any) {
@@ -2336,11 +2228,9 @@ export class IncludeOnlyRule extends Rule {
   }
 
   private _getCachedCompiledPatterns(grammar: any) {
-    if (!this._cachedCompiledPatterns) {
-      this._cachedCompiledPatterns = new RegExpSourceList()
-      this.collectPatterns(grammar, this._cachedCompiledPatterns)
-    }
-    return this._cachedCompiledPatterns
+    return this._cachedCompiledPatterns.get((list) => {
+      this.collectPatterns(grammar, list)
+    })
   }
 }
 
@@ -2353,7 +2243,7 @@ export class BeginEndRule extends Rule {
   applyEndPatternLast: boolean
   patterns: any[]
   hasMissingPatterns: boolean
-  private _cachedCompiledPatterns: RegExpSourceList | null = null
+  private _cachedCompiledPatterns = new CachedRegExpSourceList()
 
   constructor(
     location: any,
@@ -2379,10 +2269,7 @@ export class BeginEndRule extends Rule {
   }
 
   dispose() {
-    if (this._cachedCompiledPatterns) {
-      this._cachedCompiledPatterns.dispose()
-      this._cachedCompiledPatterns = null
-    }
+    this._cachedCompiledPatterns.dispose()
   }
 
   get debugBeginRegExp() {
@@ -2414,36 +2301,28 @@ export class BeginEndRule extends Rule {
   }
 
   private _getCachedCompiledPatterns(grammar: any, _end: any) {
-    if (!this._cachedCompiledPatterns) {
-      this._cachedCompiledPatterns = new RegExpSourceList()
+    const compiled = this._cachedCompiledPatterns.get((list) => {
       for (const patternRuleId of this.patterns) {
-        grammar
-          .getRule(patternRuleId)
-          .collectPatterns(grammar, this._cachedCompiledPatterns)
+        grammar.getRule(patternRuleId).collectPatterns(grammar, list)
       }
       if (this.applyEndPatternLast) {
-        this._cachedCompiledPatterns.push(
-          this._end.hasBackReferences ? this._end.clone() : this._end
-        )
+        list.push(this._end.hasBackReferences ? this._end.clone() : this._end)
       } else {
-        this._cachedCompiledPatterns.unshift(
+        list.unshift(
           this._end.hasBackReferences ? this._end.clone() : this._end
         )
       }
-    }
+    })
 
     if (this._end.hasBackReferences) {
       if (this.applyEndPatternLast) {
-        this._cachedCompiledPatterns.setSource(
-          this._cachedCompiledPatterns.length() - 1,
-          _end
-        )
+        compiled.setSource(compiled.length() - 1, _end)
       } else {
-        this._cachedCompiledPatterns.setSource(0, _end)
+        compiled.setSource(0, _end)
       }
     }
 
-    return this._cachedCompiledPatterns
+    return compiled
   }
 }
 
@@ -2455,8 +2334,8 @@ export class BeginWhileRule extends Rule {
   whileHasBackReferences: boolean
   patterns: any[]
   hasMissingPatterns: boolean
-  private _cachedCompiledPatterns: RegExpSourceList | null = null
-  private _cachedCompiledWhilePatterns: RegExpSourceList | null = null
+  private _cachedCompiledPatterns = new CachedRegExpSourceList()
+  private _cachedCompiledWhilePatterns = new CachedRegExpSourceList()
 
   constructor(
     location: any,
@@ -2480,14 +2359,8 @@ export class BeginWhileRule extends Rule {
   }
 
   dispose() {
-    if (this._cachedCompiledPatterns) {
-      this._cachedCompiledPatterns.dispose()
-      this._cachedCompiledPatterns = null
-    }
-    if (this._cachedCompiledWhilePatterns) {
-      this._cachedCompiledWhilePatterns.dispose()
-      this._cachedCompiledWhilePatterns = null
-    }
+    this._cachedCompiledPatterns.dispose()
+    this._cachedCompiledWhilePatterns.dispose()
   }
 
   get debugBeginRegExp() {
@@ -2519,15 +2392,11 @@ export class BeginWhileRule extends Rule {
   }
 
   private _getCachedCompiledPatterns(grammar: any) {
-    if (!this._cachedCompiledPatterns) {
-      this._cachedCompiledPatterns = new RegExpSourceList()
+    return this._cachedCompiledPatterns.get((list) => {
       for (const patternRuleId of this.patterns) {
-        grammar
-          .getRule(patternRuleId)
-          .collectPatterns(grammar, this._cachedCompiledPatterns)
+        grammar.getRule(patternRuleId).collectPatterns(grammar, list)
       }
-    }
-    return this._cachedCompiledPatterns
+    })
   }
 
   compileWhile(grammar: any, end: any) {
@@ -2543,16 +2412,15 @@ export class BeginWhileRule extends Rule {
   }
 
   private _getCachedCompiledWhilePatterns(_grammar: any, end: any) {
-    if (!this._cachedCompiledWhilePatterns) {
-      this._cachedCompiledWhilePatterns = new RegExpSourceList()
-      this._cachedCompiledWhilePatterns.push(
+    const compiled = this._cachedCompiledWhilePatterns.get((list) => {
+      list.push(
         this._while.hasBackReferences ? this._while.clone() : this._while
       )
-    }
+    })
     if (this._while.hasBackReferences) {
-      this._cachedCompiledWhilePatterns.setSource(0, end || '')
+      compiled.setSource(0, end || '')
     }
-    return this._cachedCompiledWhilePatterns
+    return compiled
   }
 }
 
@@ -2691,11 +2559,12 @@ export class RuleFactory {
       for (const captureIdStr in captures) {
         if (captureIdStr === '$textmateLocation') continue
         const captureId = parseInt(captureIdStr, 10)
+        const captureRule = captures[captureIdStr]
 
         let retokenizeRuleId = 0
-        if (captures[captureIdStr].patterns) {
+        if (captureRule.patterns) {
           retokenizeRuleId = RuleFactory.getCompiledRuleId(
-            captures[captureIdStr],
+            captureRule,
             grammar,
             repository
           )
@@ -2703,14 +2572,59 @@ export class RuleFactory {
 
         out[captureId] = RuleFactory.createCaptureRule(
           grammar,
-          captures[captureIdStr].$textmateLocation,
-          captures[captureIdStr].name,
-          captures[captureIdStr].contentName,
+          captureRule.$textmateLocation,
+          captureRule.name,
+          captureRule.contentName,
           retokenizeRuleId
         )
       }
     }
     return out
+  }
+
+  private static _resolveIncludeRuleId(
+    includeRef: IncludeReference,
+    include: string,
+    grammar: any,
+    repository: any
+  ): number {
+    switch (includeRef.kind) {
+      case 0:
+      case 1:
+        return RuleFactory.getCompiledRuleId(
+          repository[include],
+          grammar,
+          repository
+        )
+      case 2: {
+        const target = repository[includeRef.ruleName]
+        if (!target) return -1
+        return RuleFactory.getCompiledRuleId(target, grammar, repository)
+      }
+      case 3:
+      case 4: {
+        const scopeName = includeRef.scopeName
+        const ruleName = includeRef.kind === 4 ? includeRef.ruleName : null
+        const external = grammar.getExternalGrammar(scopeName, repository)
+        if (!external) return -1
+        if (ruleName) {
+          const repoRule = external.repository[ruleName]
+          if (!repoRule) return -1
+          return RuleFactory.getCompiledRuleId(
+            repoRule,
+            grammar,
+            external.repository
+          )
+        }
+        return RuleFactory.getCompiledRuleId(
+          external.repository.$self,
+          grammar,
+          external.repository
+        )
+      }
+      default:
+        return -1
+    }
   }
 
   static _compilePatterns(patterns: any, grammar: any, repository: any) {
@@ -2726,52 +2640,12 @@ export class RuleFactory {
 
         if (pat.include) {
           const includeRef = parseInclude(pat.include)
-          switch (includeRef.kind) {
-            case 0:
-            case 1:
-              ruleId = RuleFactory.getCompiledRuleId(
-                repository[pat.include],
-                grammar,
-                repository
-              )
-              break
-            case 2: {
-              const target = repository[includeRef.ruleName]
-              if (target) {
-                ruleId = RuleFactory.getCompiledRuleId(
-                  target,
-                  grammar,
-                  repository
-                )
-              }
-              break
-            }
-            case 3:
-            case 4: {
-              const scopeName = includeRef.scopeName
-              const ruleName =
-                includeRef.kind === 4 ? includeRef.ruleName : null
-              const external = grammar.getExternalGrammar(scopeName, repository)
-              if (external) {
-                if (ruleName) {
-                  const repoRule = external.repository[ruleName]
-                  if (repoRule)
-                    ruleId = RuleFactory.getCompiledRuleId(
-                      repoRule,
-                      grammar,
-                      external.repository
-                    )
-                } else {
-                  ruleId = RuleFactory.getCompiledRuleId(
-                    external.repository.$self,
-                    grammar,
-                    external.repository
-                  )
-                }
-              }
-              break
-            }
-          }
+          ruleId = RuleFactory._resolveIncludeRuleId(
+            includeRef,
+            pat.include,
+            grammar,
+            repository
+          )
         } else {
           ruleId = RuleFactory.getCompiledRuleId(pat, grammar, repository)
         }
@@ -2782,19 +2656,15 @@ export class RuleFactory {
           // Only check for optimization if the rule is already fully registered.
           // If !rule, it means it is currently being compiled (recursion).
           // We MUST add the ID, otherwise the recursion chain is broken.
-          if (rule) {
-            let skip = false
-            if (
-              (rule instanceof IncludeOnlyRule ||
-                rule instanceof BeginEndRule ||
-                rule instanceof BeginWhileRule) &&
-              rule.hasMissingPatterns &&
-              rule.patterns.length === 0
-            ) {
-              skip = true
-            }
-            if (skip) continue
-          }
+          if (
+            rule &&
+            (rule instanceof IncludeOnlyRule ||
+              rule instanceof BeginEndRule ||
+              rule instanceof BeginWhileRule) &&
+            rule.hasMissingPatterns &&
+            rule.patterns.length === 0
+          )
+            continue
 
           compiled.push(ruleId)
         }
@@ -3360,6 +3230,7 @@ function processRulePatterns(
     const mergedRepo = rule.repository
       ? mergeObjects({}, ctx.repository, rule.repository)
       : ctx.repository
+    const nextCtx = { ...ctx, repository: mergedRepo }
 
     // Captures can contain nested `patterns` (retokenizeCapturedWithRuleId).
     // These nested patterns may reference external grammars (e.g. fenced code blocks
@@ -3376,21 +3247,13 @@ function processRulePatterns(
         if (key === '$textmateLocation') continue
         const captureRule = captures[key]
         if (captureRule && Array.isArray(captureRule.patterns)) {
-          processRulePatterns(
-            [captureRule],
-            { ...ctx, repository: mergedRepo },
-            collector
-          )
+          processRulePatterns([captureRule], nextCtx, collector)
         }
       }
     }
 
     if (Array.isArray(rule.patterns)) {
-      processRulePatterns(
-        rule.patterns,
-        { ...ctx, repository: mergedRepo },
-        collector
-      )
+      processRulePatterns(rule.patterns, nextCtx, collector)
     }
 
     const include = rule.include
@@ -3405,11 +3268,7 @@ function processRulePatterns(
         processSelf(ctx, collector)
         break
       case 2:
-        processRepositoryRule(
-          parsed.ruleName,
-          { ...ctx, repository: mergedRepo },
-          collector
-        )
+        processRepositoryRule(parsed.ruleName, nextCtx, collector)
         break
       case 3:
       case 4: {
@@ -3421,14 +3280,14 @@ function processRulePatterns(
               : undefined
 
         if (resolved) {
-          const nextCtx = {
+          const resolvedCtx = {
             baseGrammar: ctx.baseGrammar,
             selfGrammar: resolved,
             repository: mergedRepo,
           }
           if (parsed.kind === 4)
-            processRepositoryRule(parsed.ruleName, nextCtx, collector)
-          else processSelf(nextCtx, collector)
+            processRepositoryRule(parsed.ruleName, resolvedCtx, collector)
+          else processSelf(resolvedCtx, collector)
         } else {
           if (parsed.kind === 4)
             collector.add(
@@ -3533,12 +3392,8 @@ function createGrammarInjection(
   ctx: { repository: any }
 ) {
   const matchers = createMatchers(selector, nameMatcher)
+  const ruleId = RuleFactory.getCompiledRuleId(rawRule, grammar, ctx.repository)
   for (const m of matchers) {
-    const ruleId = RuleFactory.getCompiledRuleId(
-      rawRule,
-      grammar,
-      ctx.repository
-    )
     injections.push({
       debugSelector: selector,
       matcher: m.matcher,
@@ -5078,11 +4933,15 @@ export class Registry {
     this._hasTheme = true
   }
 
-  getColorMap() {
+  private _ensureTheme() {
     if (!this._hasTheme) {
       this._syncRegistry.setTheme(Theme.createFromRawTheme(undefined, null))
       this._hasTheme = true
     }
+  }
+
+  getColorMap() {
+    this._ensureTheme()
     return this._syncRegistry.getTheme().getColorMap()
   }
 
@@ -5117,10 +4976,7 @@ export class Registry {
     const existing = this._compiledGrammars.get(scopeName)
     if (existing) return existing
 
-    if (!this._hasTheme) {
-      this._syncRegistry.setTheme(Theme.createFromRawTheme(undefined, null))
-      this._hasTheme = true
-    }
+    this._ensureTheme()
 
     const grammar = createGrammar(scopeName, rawGrammar, 0, null, null, null, {
       registry: this._syncRegistry,
@@ -5354,36 +5210,33 @@ export class Tokenizer<Theme extends string> {
     this.#registryOptions = registryOptions
   }
 
+  async #getOrCreateRegistry(theme: Theme): Promise<TokenizerRegistry<Theme>> {
+    let registry = this.#registries.get(theme)
+    if (!registry) {
+      registry = new TokenizerRegistry(this.#registryOptions)
+      const themeData = await registry.fetchTheme(theme)
+      registry.setTheme(themeData)
+      const baseColor = themeData.colors?.['foreground']
+      if (baseColor) {
+        this.#baseColors.set(theme, baseColor)
+      }
+      this.#registries.set(theme, registry)
+    }
+    return registry
+  }
+
   /**
    * Ensure a theme is loaded and registered so color map/base color are available.
    */
   async ensureTheme(themeName: Theme): Promise<void> {
-    let registry = this.#registries.get(themeName)
-    if (!registry) {
-      registry = new TokenizerRegistry(this.#registryOptions)
-      const theme = await registry.fetchTheme(themeName)
-      registry.setTheme(theme)
-      if (theme.colors?.['foreground']) {
-        this.#baseColors.set(themeName, theme.colors['foreground'])
-      }
-      this.#registries.set(themeName, registry)
-    }
+    await this.#getOrCreateRegistry(themeName)
   }
 
   /**
    * Get context (colorMap, baseColor) for decoding raw tokens from a theme.
    */
   async getContext(theme: Theme): Promise<TokenizerContext> {
-    let registry = this.#registries.get(theme)
-    if (!registry) {
-      registry = new TokenizerRegistry(this.#registryOptions)
-      const themeData = await registry.fetchTheme(theme)
-      registry.setTheme(themeData)
-      if (themeData.colors?.['foreground']) {
-        this.#baseColors.set(theme, themeData.colors['foreground'])
-      }
-      this.#registries.set(theme, registry)
-    }
+    const registry = await this.#getOrCreateRegistry(theme)
     const colorMap = registry.getThemeColors()
     const baseColor = this.#baseColors.get(theme) || ''
     return { colorMap, baseColor }
@@ -5423,16 +5276,7 @@ export class Tokenizer<Theme extends string> {
     )
     const lines = source.split(/\r?\n/)
 
-    let registry = this.#registries.get(theme)
-    if (!registry) {
-      registry = new TokenizerRegistry(this.#registryOptions)
-      const themeData = await registry.fetchTheme(theme)
-      registry.setTheme(themeData)
-      if (themeData.colors?.['foreground']) {
-        this.#baseColors.set(theme, themeData.colors['foreground'])
-      }
-      this.#registries.set(theme, registry)
-    }
+    const registry = await this.#getOrCreateRegistry(theme)
 
     const grammar = await registry.loadGrammar(language)
     if (!grammar) {
