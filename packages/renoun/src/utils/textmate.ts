@@ -3,176 +3,6 @@ import { toRegExp } from 'oniguruma-to-es'
 import type { Languages, ScopeName } from '../grammars/index.ts'
 import { grammars } from '../grammars/index.ts'
 
-const IN_DEBUG_MODE = false
-
-export type LogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug' | 'trace'
-
-export interface DiagnosticEntry {
-  timestamp: number
-  level: LogLevel
-  category: string
-  message: string
-  data?: any
-}
-
-class TextMateLogger {
-  private _enabled: boolean = IN_DEBUG_MODE
-  private level: LogLevel = 'trace'
-  private logs: DiagnosticEntry[] = []
-  private maxLogs = 10000
-
-  // Categories to filter (empty = all)
-  private enabledCategories: Set<string> = new Set([
-    'theme-parse',
-    'theme-match',
-    'trie-match',
-    'metadata',
-    'tokenize',
-    'color-map',
-    'scope-stack',
-  ])
-
-  private levelPriority: Record<LogLevel, number> = {
-    none: 0,
-    error: 1,
-    warn: 2,
-    info: 3,
-    debug: 4,
-    trace: 5,
-  }
-
-  // Fast check for hot paths - avoids function call overhead
-  get enabled() {
-    return this._enabled
-  }
-
-  setEnabled(enabled: boolean) {
-    this._enabled = enabled
-  }
-
-  setLevel(level: LogLevel) {
-    this.level = level
-  }
-
-  setCategories(categories: string[]) {
-    this.enabledCategories = new Set(categories)
-  }
-
-  private shouldLog(level: LogLevel, category: string): boolean {
-    if (!this._enabled) return false
-    if (this.levelPriority[level] > this.levelPriority[this.level]) return false
-    if (
-      this.enabledCategories.size > 0 &&
-      !this.enabledCategories.has(category)
-    )
-      return false
-    return true
-  }
-
-  log(level: LogLevel, category: string, message: string, data?: any) {
-    if (!this._enabled) return
-    if (!this.shouldLog(level, category)) return
-
-    const entry: DiagnosticEntry = {
-      timestamp: performance.now(),
-      level,
-      category,
-      message,
-      data,
-    }
-
-    this.logs.push(entry)
-    if (this.logs.length > this.maxLogs) {
-      this.logs.shift()
-    }
-
-    // Also output to console for immediate visibility
-    const prefix = `[TextMate:${category}]`
-    const dataStr =
-      data !== undefined ? ` ${JSON.stringify(data, null, 2)}` : ''
-
-    switch (level) {
-      case 'error':
-        console.error(`${prefix} ${message}${dataStr}`)
-        break
-      case 'warn':
-        console.warn(`${prefix} ${message}${dataStr}`)
-        break
-      case 'info':
-        console.info(`${prefix} ${message}${dataStr}`)
-        break
-      case 'debug':
-      case 'trace':
-        console.log(`${prefix} ${message}${dataStr}`)
-        break
-    }
-  }
-
-  // Fast no-op methods when disabled - inline the check to avoid argument evaluation
-  error(category: string, message: string, data?: any) {
-    if (!this._enabled) return
-    this.log('error', category, message, data)
-  }
-
-  warn(category: string, message: string, data?: any) {
-    if (!this._enabled) return
-    this.log('warn', category, message, data)
-  }
-
-  info(category: string, message: string, data?: any) {
-    if (!this._enabled) return
-    this.log('info', category, message, data)
-  }
-
-  debug(category: string, message: string, data?: any) {
-    if (!this._enabled) return
-    this.log('debug', category, message, data)
-  }
-
-  trace(category: string, message: string, data?: any) {
-    if (!this._enabled) return
-    this.log('trace', category, message, data)
-  }
-
-  getLogs(): DiagnosticEntry[] {
-    return [...this.logs]
-  }
-
-  clearLogs() {
-    this.logs = []
-  }
-
-  dumpSummary() {
-    if (!this._enabled) return
-    console.log('\n========== TEXTMATE DIAGNOSTIC SUMMARY ==========')
-    console.log(`Total log entries: ${this.logs.length}`)
-
-    const byCategory: Record<string, number> = {}
-    const byLevel: Record<string, number> = {}
-
-    for (const entry of this.logs) {
-      byCategory[entry.category] = (byCategory[entry.category] || 0) + 1
-      byLevel[entry.level] = (byLevel[entry.level] || 0) + 1
-    }
-
-    console.log('\nEntries by category:', byCategory)
-    console.log('Entries by level:', byLevel)
-
-    const problems = this.logs.filter(
-      (e) => e.level === 'error' || e.level === 'warn'
-    )
-    if (problems.length > 0) {
-      console.log(`\nFound ${problems.length} problems:`)
-      for (const p of problems.slice(-20)) {
-        console.log(`  [${p.level}][${p.category}] ${p.message}`)
-      }
-    }
-    console.log('=================================================\n')
-  }
-}
-
-export const tmLogger = new TextMateLogger()
-
 export function disposeOnigString(onigString: any) {
   // Only call dispose if it's an object with a dispose method (for native Onig)
   if (
@@ -1288,13 +1118,9 @@ export function parseRawGrammar(
   filename: string | null = null
 ) {
   if (filename !== null && /\.json$/.test(filename)) {
-    return IN_DEBUG_MODE
-      ? parseJSON(sourceText, filename, true)
-      : JSON.parse(sourceText)
+    return JSON.parse(sourceText)
   }
-  return IN_DEBUG_MODE
-    ? parseWithLocation(sourceText, filename!, '$textmateLocation')
-    : parsePLIST(sourceText)
+  return parsePLIST(sourceText)
 }
 
 // Theme + scopes
@@ -1330,15 +1156,6 @@ export class Theme {
     rules: ParsedThemeRule[],
     colorMap: string[] | null
   ) {
-    tmLogger.info(
-      'theme-parse',
-      `createFromParsedTheme called with ${rules.length} rules`,
-      {
-        hasColorMap: !!colorMap,
-        colorMapSize: colorMap?.length,
-      }
-    )
-
     return (function buildTheme(
       sortedRules: ParsedThemeRule[],
       colorMap: string[] | null
@@ -1370,14 +1187,6 @@ export class Theme {
         if (rule.lineHeight !== null) defaultLineHeight = rule.lineHeight
       }
 
-      tmLogger.info('theme-parse', `Theme defaults extracted`, {
-        defaultRuleCount,
-        defaultForeground,
-        defaultBackground,
-        defaultFontStyle,
-        remainingRules: sortedRules.length,
-      })
-
       const cm = new ColorMap(colorMap)
       const defaults = new StyleAttributes(
         defaultFontStyle,
@@ -1387,12 +1196,6 @@ export class Theme {
         defaultFontSize,
         defaultLineHeight
       )
-
-      tmLogger.debug('theme-parse', `Default style attributes`, {
-        fontStyle: defaults.fontStyle,
-        foregroundId: defaults.foregroundId,
-        backgroundId: defaults.backgroundId,
-      })
 
       const root = new ThemeTrieElement(
         new ThemeTrieElementRule(
@@ -1418,14 +1221,6 @@ export class Theme {
         const rule = sortedRules[index]
         const foregroundId = cm.getId(rule.foreground)
 
-        tmLogger.trace('theme-parse', `Inserting rule ${index} into trie`, {
-          scope: rule.scope,
-          parentScopes: rule.parentScopes,
-          foreground: rule.foreground,
-          foregroundId,
-          fontStyle: rule.fontStyle,
-        })
-
         root.insert(
           0,
           rule.scope,
@@ -1438,11 +1233,6 @@ export class Theme {
           rule.lineHeight
         )
       }
-
-      tmLogger.info('theme-parse', `Theme trie built`, {
-        totalRulesInserted: sortedRules.length,
-        colorMapFinal: cm.getColorMap().slice(0, 15),
-      })
 
       return new Theme(cm, defaults, root)
     })(rules, colorMap)
@@ -1458,38 +1248,12 @@ export class Theme {
 
   match(scope: ScopeStack) {
     if (scope === null) {
-      if (IN_DEBUG_MODE) {
-        tmLogger.trace(
-          'theme-match',
-          'match() called with null scope, returning defaults'
-        )
-      }
       return this._defaults
     }
 
     const scopeName = scope.scopeName
-    const scopeSegments = scope.getSegments()
-
-    if (IN_DEBUG_MODE) {
-      tmLogger.trace('theme-match', `Matching scope: ${scopeName}`, {
-        fullScopeStack: scopeSegments,
-      })
-    }
 
     const candidateRules = this._cachedMatchRoot.get(scopeName)
-    if (IN_DEBUG_MODE) {
-      tmLogger.trace(
-        'theme-match',
-        `Found ${candidateRules.length} candidate rules for "${scopeName}"`,
-        {
-          candidates: candidateRules.map((r: any) => ({
-            parentScopes: r.parentScopes,
-            foreground: r.foreground,
-            scopeDepth: r.scopeDepth,
-          })),
-        }
-      )
-    }
 
     const match = candidateRules.find((rule: any) =>
       scopePathMatchesParentScopes(scope.parent, rule.parentScopes)
@@ -1497,24 +1261,7 @@ export class Theme {
 
     if (match) {
       const attributes = match.getStyleAttributes()
-      if (IN_DEBUG_MODE) {
-        tmLogger.debug('theme-match', `Match found for "${scopeName}"`, {
-          foregroundId: attributes.foregroundId,
-          fontStyle: attributes.fontStyle,
-          rule: {
-            parentScopes: match.parentScopes,
-            scopeDepth: match.scopeDepth,
-          },
-        })
-      }
       return attributes
-    }
-
-    if (IN_DEBUG_MODE) {
-      tmLogger.debug('theme-match', `No match found for "${scopeName}"`, {
-        scopeStack: scopeSegments,
-        candidateCount: candidateRules.length,
-      })
     }
     return null
   }
@@ -1727,24 +1474,13 @@ export class StyleAttributes {
 }
 
 export function parseTheme(theme: IRawTheme | undefined) {
-  tmLogger.info('theme-parse', 'parseTheme called', { hasTheme: !!theme })
-
   if (!theme) {
-    tmLogger.warn('theme-parse', 'No theme provided, returning empty rules')
     return []
   }
 
   // Always prefer normalized settings if present, otherwise fallback to tokenColors.
   const settings = theme.settings || theme.tokenColors
-  tmLogger.debug('theme-parse', 'Theme settings source', {
-    hasSettings: !!theme.settings,
-    hasTokenColors: !!theme.tokenColors,
-    settingsCount: settings?.length ?? 0,
-    isArray: Array.isArray(settings),
-  })
-
   if (!settings || !Array.isArray(settings)) {
-    tmLogger.warn('theme-parse', 'No valid settings array in theme')
     return []
   }
 
@@ -1758,11 +1494,6 @@ export function parseTheme(theme: IRawTheme | undefined) {
   ) {
     const entry = settings[index]
     if (!entry.settings) {
-      tmLogger.trace(
-        'theme-parse',
-        `Entry ${index} has no settings, skipping`,
-        { entry }
-      )
       continue
     }
 
@@ -1806,11 +1537,6 @@ export function parseTheme(theme: IRawTheme | undefined) {
       ) {
         foreground = entry.settings.foreground
       } else if (entry.settings.foreground) {
-        tmLogger.warn('theme-parse', `Invalid foreground color rejected`, {
-          scope: entry.scope,
-          foreground: entry.settings.foreground,
-          isValidHex: isValidHexColor(entry.settings.foreground),
-        })
       }
     }
 
@@ -1845,13 +1571,6 @@ export function parseTheme(theme: IRawTheme | undefined) {
         parentScopes.reverse()
       }
 
-      tmLogger.trace('theme-parse', `Creating rule ${ruleIndex}`, {
-        scope,
-        parentScopes,
-        foreground,
-        fontStyle,
-      })
-
       parsed[ruleIndex++] = new ParsedThemeRule(
         scope,
         parentScopes,
@@ -1865,14 +1584,6 @@ export function parseTheme(theme: IRawTheme | undefined) {
       )
     }
   }
-
-  tmLogger.info('theme-parse', `Parsed ${parsed.length} theme rules`, {
-    rulesWithForeground: parsed.filter((r) => r.foreground !== null).length,
-    rulesWithFontStyle: parsed.filter((r) => r.fontStyle !== -1).length,
-    sampleRules: parsed
-      .slice(0, 5)
-      .map((r) => ({ scope: r.scope, fg: r.foreground })),
-  })
 
   return parsed
 }
@@ -1945,43 +1656,27 @@ export class ColorMap {
 
   getId(color: string | null) {
     if (color === null) {
-      tmLogger.trace('color-map', 'getId(null) -> 0')
       return 0
     }
     const normalized = colorValueToId(color)
     // Check both original and normalized to avoid extra processing when already cached
     let id = this._color2id[color]
     if (id !== undefined) {
-      tmLogger.trace('color-map', `getId("${color}") -> ${id} (cached)`)
       return id
     }
     id = this._color2id[normalized]
     if (id !== undefined) {
       // Cache the original case too for faster future lookups
       this._color2id[color] = id
-      tmLogger.trace(
-        'color-map',
-        `getId("${color}") -> ${id} (normalized cached)`
-      )
       return id
     }
     if (this._isFrozen) {
-      tmLogger.error(
-        'color-map',
-        `Missing color in frozen color map: ${color}`,
-        {
-          availableColors: Object.keys(this._color2id).slice(0, 20),
-        }
-      )
       throw new Error(`Missing color in color map - ${color}`)
     }
     id = ++this._lastColorId
     this._color2id[normalized] = id
     this._color2id[color] = id
     this._id2color[id] = normalized
-    tmLogger.debug('color-map', `getId("${color}") -> ${id} (new)`, {
-      totalColors: this._lastColorId,
-    })
     return id
   }
 
@@ -2119,8 +1814,6 @@ export class ThemeTrieElement {
   }
 
   match(scope: string): ThemeTrieElementRule[] {
-    tmLogger.trace('trie-match', `ThemeTrieElement.match("${scope}")`)
-
     if (scope !== '') {
       let head: string
       let tail: string
@@ -2134,33 +1827,12 @@ export class ThemeTrieElement {
       }
 
       if (this._children.hasOwnProperty(head)) {
-        tmLogger.trace(
-          'trie-match',
-          `Found child for "${head}", continuing with tail "${tail}"`
-        )
         return this._children[head].match(tail)
-      } else {
-        tmLogger.trace(
-          'trie-match',
-          `No child for "${head}", available children: ${Object.keys(this._children).join(', ')}`
-        )
       }
     }
 
     const rules = this._rulesWithParentScopes.concat(this._mainRule)
     rules.sort(ThemeTrieElement._cmpBySpecificity)
-
-    tmLogger.trace(
-      'trie-match',
-      `Returning ${rules.length} rules for scope "${scope}"`,
-      {
-        rules: rules.map((r) => ({
-          foreground: r.foreground,
-          scopeDepth: r.scopeDepth,
-          parentScopes: r.parentScopes,
-        })),
-      }
-    )
 
     return rules
   }
@@ -3951,19 +3623,7 @@ export function _tokenizeString(
           linePosition,
           findOptions
         )
-        if (IN_DEBUG_MODE) {
-          console.log('  scanning for while rule')
-          console.log(ruleScanner.toString())
-        }
-
         if (!match) {
-          if (IN_DEBUG_MODE)
-            console.log(
-              '  popping ' +
-                entry.rule.debugName +
-                ' - ' +
-                entry.rule.debugWhileRegExp
-            )
           stack = entry.stack.pop()!
           break
         }
@@ -4055,15 +3715,6 @@ export function _tokenizeString(
   return new TokenizeStringResult(stack, false)
 
   function scanNext() {
-    if (IN_DEBUG_MODE) {
-      console.log('')
-      console.log(
-        `@@scanNext ${linePosition}: |${lineText
-          .substr(linePosition)
-          .replace(/\n$/, '\\n')}|`
-      )
-    }
-
     const match = (function matchRuleOrInjection(
       grammar: Grammar,
       lineText: string,
@@ -4089,32 +3740,11 @@ export function _tokenizeString(
           linePosition === anchorPosition
         )
 
-        let start = 0
-        if (IN_DEBUG_MODE) start = performance.now()
         const match = ruleScanner.findNextMatchSync(
           lineText,
           linePosition,
           findOptions
         )
-
-        if (IN_DEBUG_MODE) {
-          const elapsed = performance.now() - start
-          if (elapsed > 5)
-            console.warn(
-              `Rule ${currentRule.debugName} (${currentRule.id}) matching took ${elapsed} against '${lineText}'`
-            )
-          console.log(
-            `  scanning for (linePosition: ${linePosition}, anchorPosition: ${anchorPosition})`
-          )
-          console.log(ruleScanner.toString())
-          if (match) {
-            const captureStart = getCaptureStart(match.captureIndices, 0)
-            const captureEnd = getCaptureEnd(match.captureIndices, 0)
-            console.log(
-              `matched rule id: ${match.ruleId} from ${captureStart} to ${captureEnd}`
-            )
-          }
-        }
 
         return match
           ? {
@@ -4163,11 +3793,6 @@ export function _tokenizeString(
           )
           if (!match) continue
 
-          if (IN_DEBUG_MODE) {
-            console.log(`  matched injection: ${injection.debugSelector}`)
-            console.log(ruleScanner.toString())
-          }
-
           const start = getCaptureStart(match.captureIndices, 0)
           if (start > bestStart) continue
           if (start === bestStart && injection.priority <= bestPriority)
@@ -4211,7 +3836,6 @@ export function _tokenizeString(
     })(grammar, lineText, isFirstLine, linePosition, stack, anchorPosition)
 
     if (!match) {
-      if (IN_DEBUG_MODE) console.log('  no more matches.')
       produce(stack, lineLength)
       done = true
       return
@@ -4227,9 +3851,6 @@ export function _tokenizeString(
 
     if (matchedRuleId === endRuleId) {
       const rule = stack.getRule(grammar) as BeginEndRule
-      if (IN_DEBUG_MODE)
-        console.log('  popping ' + rule.debugName + ' - ' + rule.debugEndRegExp)
-
       produce(stack, captureStart)
       stack = stack.withContentNameScopesList(stack.nameScopesList)
       handleCaptures(
@@ -4251,11 +3872,6 @@ export function _tokenizeString(
 
       // endless loop guard (case 1): pushed & popped without advancing
       if (!hasAdvanced && popped.getEnterPosition() === linePosition) {
-        if (IN_DEBUG_MODE) {
-          console.error(
-            '[1] - Grammar is in an endless loop - Grammar pushed & popped a rule without advancing'
-          )
-        }
         // Assume this was a grammar author mistake; restore and stop
         stack = popped
         produce(stack, lineLength)
@@ -4284,11 +3900,6 @@ export function _tokenizeString(
       )
 
       if (rule instanceof BeginEndRule) {
-        if (IN_DEBUG_MODE)
-          console.log(
-            '  pushing ' + rule.debugName + ' - ' + rule.debugBeginRegExp
-          )
-
         handleCaptures(
           grammar,
           lineText,
@@ -4318,18 +3929,12 @@ export function _tokenizeString(
         }
 
         if (!hasAdvanced && parentState.hasSameRuleAs(stack)) {
-          if (IN_DEBUG_MODE)
-            console.error(
-              '[2] - Grammar is in an endless loop - Grammar pushed the same rule without advancing'
-            )
           stack = stack.pop()!
           produce(stack, lineLength)
           done = true
           return
         }
       } else if (rule instanceof BeginWhileRule) {
-        if (IN_DEBUG_MODE) console.log('  pushing ' + rule.debugName)
-
         handleCaptures(
           grammar,
           lineText,
@@ -4359,24 +3964,12 @@ export function _tokenizeString(
         }
 
         if (!hasAdvanced && parentState.hasSameRuleAs(stack)) {
-          if (IN_DEBUG_MODE)
-            console.error(
-              '[3] - Grammar is in an endless loop - Grammar pushed the same rule without advancing'
-            )
           stack = stack.pop()!
           produce(stack, lineLength)
           done = true
           return
         }
       } else {
-        if (IN_DEBUG_MODE)
-          console.log(
-            '  matched ' +
-              rule.debugName +
-              ' - ' +
-              (rule as MatchRule).debugMatchRegExp
-          )
-
         handleCaptures(
           grammar,
           lineText,
@@ -4393,10 +3986,6 @@ export function _tokenizeString(
         stack = stack.pop()!
 
         if (!hasAdvanced) {
-          if (IN_DEBUG_MODE)
-            console.error(
-              '[4] - Grammar is in an endless loop - Grammar is not advancing, nor is it pushing/popping'
-            )
           stack = stack.safePop()
           produce(stack, lineLength)
           done = true
@@ -4599,19 +4188,7 @@ export class AttributedScopeStack {
     grammar: Grammar
   ): AttributedScopeStack {
     if (!scopeName) {
-      if (IN_DEBUG_MODE) {
-        tmLogger.trace(
-          'scope-stack',
-          'pushAttributed called with null/empty scope, returning this'
-        )
-      }
       return this
-    }
-
-    if (IN_DEBUG_MODE) {
-      tmLogger.debug('scope-stack', `pushAttributed("${scopeName}")`, {
-        currentStack: this.getScopeNames(),
-      })
     }
 
     // Fast path: most scope names don't have spaces
@@ -4624,29 +4201,9 @@ export class AttributedScopeStack {
         metadata.tokenAttributes,
         metadata.styleAttributes
       )
-
-      if (IN_DEBUG_MODE) {
-        tmLogger.debug(
-          'scope-stack',
-          `Created new AttributedScopeStack for "${scopeName}"`,
-          {
-            tokenAttributes: metadata.tokenAttributes,
-            foregroundId: EncodedTokenAttributes.getForeground(
-              metadata.tokenAttributes
-            ),
-            fontStyle: EncodedTokenAttributes.getFontStyle(
-              metadata.tokenAttributes
-            ),
-          }
-        )
-      }
-
       return result
     }
     // Slow path: scopeName has multiple space-separated scopes
-    if (IN_DEBUG_MODE) {
-      tmLogger.trace('scope-stack', `Processing multi-scope: "${scopeName}"`)
-    }
     let currentStack: AttributedScopeStack = this
     let start = 0
     const scopeNameLength = scopeName.length
@@ -4773,29 +4330,9 @@ export class LineTokens {
 
   produceFromScopes(scopes: AttributedScopeStack, endPosition: number) {
     if (endPosition <= this.lastPosition) {
-      tmLogger.trace(
-        'tokenize',
-        `produceFromScopes skipped (endPos ${endPosition} <= lastPos ${this.lastPosition})`
-      )
       return
     }
     const metadata = scopes.tokenAttributes >>> 0
-
-    const foreground = EncodedTokenAttributes.getForeground(metadata)
-    const fontStyle = EncodedTokenAttributes.getFontStyle(metadata)
-
-    const scopeNames = scopes.getScopeNames()
-    tmLogger.debug(
-      'tokenize',
-      `produceFromScopes: position ${this.lastPosition}-${endPosition}`,
-      {
-        scopeNames,
-        metadata,
-        foregroundId: foreground,
-        fontStyle,
-        isNewToken: this.tokensLen === 0 || this.lastMetadata !== metadata,
-      }
-    )
 
     if (this.tokensLen === 0 || this.lastMetadata !== metadata) {
       // Grow array if needed, reuse existing slots
@@ -4805,16 +4342,6 @@ export class LineTokens {
       }
       this.tokens[this.tokensLen++] = this.lastPosition
       this.tokens[this.tokensLen++] = metadata
-
-      tmLogger.trace(
-        'tokenize',
-        `Emitted token at index ${this.tokensLen - 2}`,
-        {
-          startPos: this.lastPosition,
-          metadata,
-          foregroundId: foreground,
-        }
-      )
     }
     this.lastPosition = endPosition
     this.lastMetadata = metadata
@@ -5371,11 +4898,6 @@ export class Grammar {
     }
 
     const parentScopeNames = parentScopes ? parentScopes.getScopeNames() : []
-    if (IN_DEBUG_MODE) {
-      tmLogger.debug('metadata', `getMetadataForScope("${scope}")`, {
-        parentScopeNames,
-      })
-    }
 
     const basic =
       this._basicScopeAttributesProvider.getBasicScopeAttributes(scope)
@@ -5413,16 +4935,6 @@ export class Grammar {
       background = themeMatch.backgroundId
     }
 
-    if (IN_DEBUG_MODE) {
-      tmLogger.debug('metadata', `Theme match result for "${scope}"`, {
-        foregroundId: foreground,
-        fontStyle: fontStyle,
-        backgroundId: background,
-        usedDefaults: themeMatch === null,
-        inheritingFromParent: themeMatch === null && parentScopes !== null,
-      })
-    }
-
     const encoded = EncodedTokenAttributes.set(
       existingAttributes, // Use parent's attributes as base (0 if no parent)
       basic.languageId,
@@ -5432,19 +4944,6 @@ export class Grammar {
       foreground, // 0 preserves existing
       background // 0 preserves existing
     )
-
-    if (IN_DEBUG_MODE) {
-      tmLogger.trace('metadata', `Encoded token attributes for "${scope}"`, {
-        encoded: encoded >>> 0,
-        decoded: {
-          languageId: EncodedTokenAttributes.getLanguageId(encoded),
-          tokenType: EncodedTokenAttributes.getTokenType(encoded),
-          fontStyle: EncodedTokenAttributes.getFontStyle(encoded),
-          foreground: EncodedTokenAttributes.getForeground(encoded),
-          background: EncodedTokenAttributes.getBackground(encoded),
-        },
-      })
-    }
 
     const result = {
       tokenAttributes: encoded >>> 0,
@@ -5459,16 +4958,6 @@ export class Grammar {
     prevState: StateStackImplementation | null,
     timeLimitMs = 0
   ): ITokenizeLineResult {
-    if (IN_DEBUG_MODE) {
-      tmLogger.info('tokenize', `tokenizeLine called`, {
-        lineText:
-          lineText.substring(0, 100) + (lineText.length > 100 ? '...' : ''),
-        lineLength: lineText.length,
-        hasPrevState: !!prevState,
-        scopeName: this.scopeName,
-      })
-    }
-
     const rootMeta = this.getMetadataForScope(this.scopeName, null)
     const rootScopes = AttributedScopeStack.createRoot(
       this.scopeName,
@@ -5518,27 +5007,6 @@ export class Grammar {
     )
 
     const finalTokens = lineTokens.finalize(lineText.length)
-
-    // Log token results
-    const tokenSummary: Array<{
-      start: number
-      foregroundId: number
-      fontStyle: number
-    }> = []
-    for (let i = 0; i < finalTokens.length; i += 2) {
-      const startPos = finalTokens[i]
-      const metadata = finalTokens[i + 1]
-      tokenSummary.push({
-        start: startPos,
-        foregroundId: EncodedTokenAttributes.getForeground(metadata),
-        fontStyle: EncodedTokenAttributes.getFontStyle(metadata),
-      })
-    }
-
-    tmLogger.info('tokenize', `tokenizeLine complete`, {
-      tokenCount: finalTokens.length / 2,
-      tokens: tokenSummary,
-    })
 
     return {
       tokens: finalTokens as Uint32Array,
@@ -5605,28 +5073,7 @@ export class Registry {
   }
 
   setTheme(rawTheme: IRawTheme) {
-    tmLogger.info('theme-parse', 'Registry.setTheme called', {
-      hasSettings: !!rawTheme?.settings,
-      hasTokenColors: !!(rawTheme as any)?.tokenColors,
-      settingsCount:
-        rawTheme?.settings?.length ??
-        (rawTheme as any)?.tokenColors?.length ??
-        0,
-    })
-
     const theme = Theme.createFromRawTheme(rawTheme, null)
-
-    const colorMap = theme.getColorMap()
-    tmLogger.info('theme-parse', 'Theme created', {
-      colorMapSize: colorMap.length,
-      sampleColors: colorMap.slice(0, 10),
-      defaults: {
-        foregroundId: theme.getDefaults().foregroundId,
-        backgroundId: theme.getDefaults().backgroundId,
-        fontStyle: theme.getDefaults().fontStyle,
-      },
-    })
-
     this._syncRegistry.setTheme(theme)
     this._hasTheme = true
   }
@@ -6117,104 +5564,4 @@ export function deserializeStateStack(
     stack = StateStackImplementation.pushFrame(stack, frame)
   }
   return stack
-}
-
-// ==================== DIAGNOSTIC HELPERS ====================
-/**
- * Call this after tokenization to dump a summary of what happened.
- * Useful for debugging why colors are missing.
- */
-export function dumpTextMateDiagnostics() {
-  tmLogger.dumpSummary()
-}
-
-/**
- * Get all diagnostic logs for programmatic analysis.
- */
-export function getTextMateDiagnosticLogs() {
-  return tmLogger.getLogs()
-}
-
-/**
- * Clear accumulated diagnostic logs.
- */
-export function clearTextMateDiagnosticLogs() {
-  tmLogger.clearLogs()
-}
-
-/**
- * Configure diagnostic logging level and categories.
- * @param options Configuration options
- */
-export function configureTextMateLogging(options: {
-  enabled?: boolean
-  level?: LogLevel
-  categories?: string[]
-}) {
-  if (options.enabled !== undefined) {
-    tmLogger.setEnabled(options.enabled)
-  }
-  if (options.level !== undefined) {
-    tmLogger.setLevel(options.level)
-  }
-  if (options.categories !== undefined) {
-    tmLogger.setCategories(options.categories)
-  }
-}
-
-/**
- * Analyze token results to identify potential color issues.
- * @param tokens The token array from tokenizeLine
- * @param colorMap The color map from the registry
- * @param lineText The original line text
- */
-export function analyzeTokenColors(
-  tokens: Uint32Array | number[],
-  colorMap: string[],
-  lineText: string
-) {
-  const analysis: Array<{
-    startPos: number
-    endPos: number
-    text: string
-    foregroundId: number
-    foregroundColor: string | undefined
-    fontStyle: number
-    issue?: string
-  }> = []
-
-  for (let i = 0; i < tokens.length; i += 2) {
-    const startPos = tokens[i]
-    const metadata = tokens[i + 1]
-    const endPos = i + 2 < tokens.length ? tokens[i + 2] : lineText.length
-
-    const foregroundId = EncodedTokenAttributes.getForeground(metadata)
-    const fontStyle = EncodedTokenAttributes.getFontStyle(metadata)
-    const foregroundColor = colorMap[foregroundId]
-
-    const entry: (typeof analysis)[0] = {
-      startPos,
-      endPos,
-      text: lineText.substring(startPos, endPos),
-      foregroundId,
-      foregroundColor,
-      fontStyle,
-    }
-
-    // Check for potential issues
-    if (foregroundId === 0) {
-      entry.issue = 'No foreground color assigned (id=0)'
-    } else if (
-      foregroundId === 1 &&
-      colorMap[1]?.toUpperCase() === colorMap[0]?.toUpperCase()
-    ) {
-      entry.issue = 'Using default foreground color'
-    } else if (!foregroundColor) {
-      entry.issue = `Color ID ${foregroundId} not found in color map`
-    }
-
-    analysis.push(entry)
-  }
-
-  return analysis
 }
