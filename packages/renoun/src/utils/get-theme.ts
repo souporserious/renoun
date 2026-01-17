@@ -2,7 +2,7 @@ import { readFileSync, watch } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { ConfigurationOptions } from '../components/Config/types.ts'
-import type { TextMateThemeRaw } from './create-tokenizer.ts'
+import type { TextMateThemeRaw } from './textmate.ts'
 import { loadTmTheme } from './load-package.ts'
 import { validateTheme, type Theme } from './theme-schema.ts'
 

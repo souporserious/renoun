@@ -1,5 +1,5 @@
 import type { ConfigurationOptions } from '../components/Config/types.ts'
-import { Tokenizer } from './create-tokenizer.ts'
+import { Tokenizer } from './textmate.ts'
 import { getGrammar } from './get-grammar.ts'
 import { getTheme } from './get-theme.ts'
 
