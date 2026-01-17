@@ -126,6 +126,161 @@ export async function getTokens(
   })
 }
 
+interface StreamInitialMessage {
+  type: 'init'
+  colorMap: string[]
+  baseColor?: string
+  theme: string
+}
+
+interface StreamStateMessage {
+  type: 'state'
+  state: any
+}
+
+type StreamMessage =
+  | StreamInitialMessage
+  | StreamStateMessage
+  | Uint32Array
+  | any[]
+
+function decodeBinaryChunk(
+  chunk: Uint32Array,
+  lines: string[],
+  startLine: number,
+  colorMap: string[],
+  baseColor?: string
+): { tokens: TokenizedLines; nextLine: number } {
+  let position = 0
+  let lineIndex = startLine
+  const decoded: TokenizedLines = []
+
+  while (position < chunk.length) {
+    const count = chunk[position++] ?? 0
+    const endPosition = position + count
+    const lineTokenData = chunk.slice(position, endPosition)
+    position = endPosition
+
+    const lineText = lines[lineIndex] ?? ''
+    const lineTokens: any[] = []
+
+    for (let index = 0; index < lineTokenData.length; index += 2) {
+      const start = lineTokenData[index]
+      const metadata = lineTokenData[index + 1]
+      const end =
+        index + 2 < lineTokenData.length
+          ? lineTokenData[index + 2]
+          : lineText.length
+
+      const colorBits = (metadata & 0b00000000111111111000000000000000) >>> 15
+      const color = colorMap[colorBits] || ''
+      const fontFlags = (metadata >>> 11) & 0b1111
+
+      const fontStyle = fontFlags & 1 ? 'italic' : ''
+      const fontWeight = fontFlags & 2 ? 'bold' : ''
+      let textDecoration = ''
+      if (fontFlags & 4) textDecoration = 'underline'
+      if (fontFlags & 8) {
+        textDecoration = textDecoration
+          ? `${textDecoration} line-through`
+          : 'line-through'
+      }
+
+      const isBaseColor =
+        !color ||
+        (baseColor && color.toLowerCase?.() === baseColor.toLowerCase?.())
+
+      const style: Record<string, string> = {}
+      if (color && !isBaseColor) style['color'] = color
+      if (fontStyle) style['fontStyle'] = fontStyle
+      if (fontWeight) style['fontWeight'] = fontWeight
+      if (textDecoration) style['textDecoration'] = textDecoration
+
+      lineTokens.push({
+        value: lineText.slice(start, end),
+        start,
+        end,
+        hasTextStyles: !!fontFlags,
+        isBaseColor,
+        isWhiteSpace: /^\s*$/.test(lineText.slice(start, end)),
+        isDeprecated: false,
+        isSymbol: false,
+        style,
+      })
+
+    }
+
+    decoded.push(lineTokens)
+    lineIndex++
+  }
+
+  return { tokens: decoded, nextLine: lineIndex }
+}
+
+/**
+ * Stream tokens as binary chunks (Uint32Array) over RPC.
+ */
+export async function* streamTokens(
+  options: Omit<GetTokensOptions, 'highlighter' | 'project'> & {
+    languages?: ConfigurationOptions['languages']
+    projectOptions?: ProjectOptions
+  }
+): AsyncGenerator<TokenizedLines> {
+  const client = getClient()
+  const lines = (options.value || '').split(/\r?\n/)
+  if (!client) {
+    // Fallback to single-shot tokenization locally.
+    yield await getTokens(options)
+    return
+  }
+
+  let colorMap: string[] = []
+  let baseColor: string | undefined
+  let lineIndex = 0
+
+  for await (const rawMessage of client.callStream<
+    Parameters<typeof getTokens>[0],
+    StreamMessage
+  >('getTokens', { ...options, stream: true } as any)) {
+    if (Array.isArray(rawMessage)) {
+      const chunk = Uint32Array.from(rawMessage)
+      const { tokens, nextLine } = decodeBinaryChunk(
+        chunk,
+        lines,
+        lineIndex,
+        colorMap,
+        baseColor
+      )
+      lineIndex = nextLine
+      yield tokens
+      continue
+    }
+
+    if (rawMessage instanceof Uint32Array) {
+      const { tokens, nextLine } = decodeBinaryChunk(
+        rawMessage,
+        lines,
+        lineIndex,
+        colorMap,
+        baseColor
+      )
+      lineIndex = nextLine
+      yield tokens
+      continue
+    }
+
+    if (rawMessage && typeof rawMessage === 'object') {
+      if (rawMessage.type === 'init') {
+        const init = rawMessage as StreamInitialMessage
+        colorMap = init.colorMap || []
+        baseColor = init.baseColor
+      }
+      // state frames are currently ignored client-side, but kept for future resume support
+      continue
+    }
+  }
+}
+
 /**
  * Resolve the type of an expression at a specific location.
  * @internal

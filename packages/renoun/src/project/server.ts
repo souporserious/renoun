@@ -8,6 +8,7 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.ts'
 import type { ConfigurationOptions } from '../components/Config/types.ts'
+import type { Languages as TextMateLanguages } from '../grammars/index.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import {
   getFileExports as baseGetFileExports,
@@ -16,16 +17,18 @@ import {
 import { getOutlineRanges as baseGetOutlineRanges } from '../utils/get-outline-ranges.ts'
 import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import {
-  getTokens as baseGetTokens,
-  type GetTokensOptions,
-} from '../utils/get-tokens.ts'
+import { getLanguage } from '../utils/get-language.ts'
 import {
   getSourceTextMetadata as baseGetSourceTextMetadata,
   type GetSourceTextMetadataOptions,
 } from '../utils/get-source-text-metadata.ts'
+import {
+  getTokens as baseGetTokens,
+  type GetTokensOptions,
+} from '../utils/get-tokens.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.ts'
+import { serializeStateStack } from '../utils/textmate.ts'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
 import { WebSocketServer } from './rpc/server.ts'
 import { getProject } from './get-project.ts'
@@ -87,10 +90,12 @@ export async function createServer(options?: { port?: number }) {
     'getTokens',
     async function getTokens({
       projectOptions,
+      stream,
       ...options
     }: GetTokensOptions & {
       projectOptions?: ProjectOptions
       languages?: ConfigurationOptions['languages']
+      stream?: boolean
     }) {
       const project = getProject(projectOptions)
 
@@ -102,6 +107,93 @@ export async function createServer(options?: { port?: number }) {
       }
 
       const highlighter = await currentHighlighter
+
+      // Streaming/binary path
+      if (stream) {
+        const themeNames: string[] =
+          typeof options.theme === 'string'
+            ? [options.theme]
+            : options.theme
+              ? (
+                  Object.values(options.theme) as Array<string | [string, any]>
+                ).map((themeVariant) =>
+                  typeof themeVariant === 'string'
+                    ? themeVariant
+                    : themeVariant[0]
+                )
+              : ['default']
+
+        const language = options.language ?? 'plaintext'
+        const finalLanguage = getLanguage(language)
+
+        const tokenizer = highlighter
+
+        async function* streamGenerator() {
+          // Send metadata first (color map + base color)
+          await tokenizer.ensureTheme(themeNames[0])
+          const colorMap = tokenizer.getColorMap(themeNames[0]) || []
+          const baseColor = tokenizer.getBaseColor(themeNames[0])
+          yield {
+            type: 'init',
+            colorMap,
+            baseColor,
+            theme: themeNames[0],
+          }
+
+          const BATCH_SIZE = 50
+          let batch: number[] = []
+          let batchLineCount = 0
+
+          // Plaintext (and similar) don't have a TextMate grammar; send trivial tokens.
+          if (
+            language === 'plaintext' ||
+            language === 'text' ||
+            language === 'txt'
+          ) {
+            const lines = options.value.split(/\r?\n/)
+            for (let i = 0; i < lines.length; i++) {
+              // One token spanning the whole line, with metadata=0 (base/default).
+              batch.push(2, 0, 0)
+              // overwrite end by using next start during decode; ensure end == line length by emitting only one token.
+              batchLineCount++
+              if (batchLineCount >= BATCH_SIZE) {
+                yield new Uint32Array(batch)
+                batch = []
+                batchLineCount = 0
+              }
+            }
+          } else {
+            for await (const lineTokens of tokenizer.streamRaw(
+              options.value,
+              finalLanguage as TextMateLanguages,
+              themeNames
+            )) {
+              batch.push(lineTokens.length, ...lineTokens)
+              batchLineCount++
+
+              if (batchLineCount >= BATCH_SIZE) {
+                yield new Uint32Array(batch)
+                batch = []
+                batchLineCount = 0
+              }
+            }
+          }
+
+          if (batch.length > 0) {
+            yield new Uint32Array(batch)
+          }
+
+          const finalState = tokenizer.getGrammarState()[0] ?? null
+          if (finalState) {
+            yield {
+              type: 'state',
+              state: serializeStateStack(finalState),
+            }
+          }
+        }
+
+        return streamGenerator()
+      }
 
       return baseGetTokens({
         ...options,

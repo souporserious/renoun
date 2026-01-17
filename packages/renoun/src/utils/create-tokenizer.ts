@@ -93,6 +93,13 @@ export interface TokenizeOptions {
   timeLimit?: number
 }
 
+export interface TokenizeIncrementalOptions extends TokenizeOptions {
+  previousLines?: string[]
+  previousTokens?: TokenizedLines
+  previousLineStates?: StateStack[]
+  changedStartLine?: number
+}
+
 export type TokenizedLines = TextMateToken[][]
 
 class JsOnigScanner {
@@ -302,6 +309,22 @@ export class Tokenizer<Theme extends string> {
   }
 
   /**
+   * Ensure a theme is loaded and registered so color map/base color are available.
+   */
+  async ensureTheme(themeName: Theme): Promise<void> {
+    let registry = this.#registries.get(themeName)
+    if (!registry) {
+      registry = new Registry(this.#registryOptions)
+      const theme = await registry.fetchTheme(themeName)
+      registry.setTheme(theme)
+      if (theme.colors?.['foreground']) {
+        this.#baseColors.set(themeName, theme.colors['foreground'])
+      }
+      this.#registries.set(themeName, registry)
+    }
+  }
+
+  /**
    * Stream tokens line-by-line for the given source.
    * Useful for long-running operations where incremental results are desired.
    */
@@ -367,6 +390,31 @@ export class Tokenizer<Theme extends string> {
       states[themeIndex] = grammarStates?.[themeIndex] ?? INITIAL
     }
 
+    // Fast path: single theme, no boundary merging required.
+    if (themes.length === 1) {
+      const themeName = themes[0]
+      const grammar = themeGrammars[0]
+      const colorMap = themeColorMaps[0]
+      let state = states[0]
+      const baseColor = this.#baseColors.get(themeName) || ''
+
+      for (const lineText of lines) {
+        const lineResult = grammar!.tokenizeLine(lineText, state, timeLimit)
+        state = lineResult.ruleStack
+        const decoded = this.#decodeSingleThemeLine(
+          lineText,
+          lineResult.tokens,
+          colorMap,
+          baseColor
+        )
+        this.#grammarState = [state]
+        yield decoded
+      }
+
+      this.#grammarState = [state]
+      return
+    }
+
     for (const lineText of lines) {
       const allTokens: Array<{
         start: number
@@ -417,7 +465,6 @@ export class Tokenizer<Theme extends string> {
             tokenDataIndex + 2 < tokens.length
               ? tokens[tokenDataIndex + 2]
               : lineText.length
-
           allTokens.push({
             start: startOffset,
             end: endOffset,
@@ -530,6 +577,202 @@ export class Tokenizer<Theme extends string> {
     return mergedLines
   }
 
+  async tokenizeIncremental(
+    source: string,
+    language: Languages,
+    themes: Theme[],
+    options: TokenizeIncrementalOptions
+  ): Promise<{ tokens: TokenizedLines; lineStates: StateStack[] }> {
+    if (themes.length !== 1) {
+      throw new Error(
+        '[renoun] tokenizeIncremental currently supports a single theme'
+      )
+    }
+
+    const themeName = themes[0]
+    const { timeLimit } = normalizeTokenizeOptions(themes, options)
+    const lines = source.split(/\r?\n/)
+    const prevLines = options.previousLines ?? []
+    const prevTokens = options.previousTokens ?? []
+    const prevLineStates = options.previousLineStates ?? []
+    const changedStart = Math.max(0, options.changedStartLine ?? 0)
+
+    let registry = this.#registries.get(themeName)
+    if (!registry) {
+      registry = new Registry(this.#registryOptions)
+      this.#registries.set(themeName, registry)
+    }
+
+    const theme = await registry.fetchTheme(themeName)
+    registry.setTheme(theme)
+    this.#baseColors.set(themeName, theme.colors!['foreground'])
+
+    const grammar = await registry.loadGrammar(language)
+    if (!grammar) {
+      throw new Error(
+        `[renoun] Could not load grammar for language: ${language}`
+      )
+    }
+
+    const colorMap = registry.getThemeColors()
+    const baseColor = this.#baseColors.get(themeName) || ''
+
+    const tokens: TokenizedLines = []
+    const lineStates: StateStack[] = []
+
+    // Copy prefix tokens/states if available.
+    for (let i = 0; i < changedStart && i < prevTokens.length; i++) {
+      tokens[i] = prevTokens[i]
+    }
+    for (let i = 0; i <= changedStart; i++) {
+      lineStates[i] =
+        prevLineStates[i] ?? (i === 0 ? INITIAL : (lineStates[i] ?? INITIAL))
+    }
+
+    let state: StateStack =
+      lineStates[changedStart] ?? prevLineStates[changedStart] ?? INITIAL
+
+    for (let lineIndex = changedStart; lineIndex < lines.length; lineIndex++) {
+      const lineText = lines[lineIndex]
+      const lineResult = grammar.tokenizeLine(lineText, state, timeLimit)
+      state = lineResult.ruleStack
+      tokens[lineIndex] = this.#decodeSingleThemeLine(
+        lineText,
+        lineResult.tokens,
+        colorMap,
+        baseColor
+      )
+      lineStates[lineIndex + 1] = state
+
+      const prevLineText = prevLines[lineIndex]
+      const prevStateAfter = prevLineStates[lineIndex + 1]
+      if (
+        prevLineText !== undefined &&
+        prevStateAfter &&
+        prevLineText === lineText &&
+        state &&
+        typeof (state as any).equals === 'function' &&
+        (state as any).equals(prevStateAfter)
+      ) {
+        for (
+          let reuseIndex = lineIndex + 1;
+          reuseIndex < prevTokens.length && reuseIndex < prevLines.length;
+          reuseIndex++
+        ) {
+          tokens[reuseIndex] = prevTokens[reuseIndex]
+          lineStates[reuseIndex + 1] = prevLineStates[reuseIndex + 1]
+        }
+        state =
+          prevLineStates[
+            Math.min(prevLines.length, prevLineStates.length - 1)
+          ] ?? state
+        break
+      }
+    }
+
+    this.#grammarState = [state]
+    return { tokens, lineStates }
+  }
+
+  /**
+   * Stream raw TextMate tokens (Uint32Array start/metadata pairs) per line for a single theme.
+   * This is intended for binary RPC transport.
+   */
+  async *streamRaw(
+    source: string,
+    language: Languages,
+    themes: Theme[],
+    options?: TokenizeOptions
+  ): AsyncGenerator<Uint32Array> {
+    if (!themes.length) {
+      throw new Error('[renoun] streamRaw requires at least one theme')
+    }
+    if (themes.length > 1) {
+      throw new Error('[renoun] streamRaw currently supports a single theme')
+    }
+
+    const themeName = themes[0]
+    const { timeLimit } = normalizeTokenizeOptions(themes, options)
+    const lines = source.split(/\r?\n/)
+
+    let registry = this.#registries.get(themeName)
+    if (!registry) {
+      registry = new Registry(this.#registryOptions)
+      this.#registries.set(themeName, registry)
+    }
+
+    const theme = await registry.fetchTheme(themeName)
+    registry.setTheme(theme)
+    this.#baseColors.set(themeName, theme.colors!['foreground'])
+
+    const grammar = await registry.loadGrammar(language)
+    if (!grammar) {
+      throw new Error(
+        `[renoun] Could not load grammar for language: ${language}`
+      )
+    }
+
+    let state: StateStack = this.#grammarState[0] ?? INITIAL
+
+    for (const lineText of lines) {
+      const lineResult = grammar.tokenizeLine(lineText, state, timeLimit)
+      state = lineResult.ruleStack
+      this.#grammarState = [state]
+      yield lineResult.tokens as Uint32Array
+    }
+  }
+
+  #decodeSingleThemeLine(
+    lineText: string,
+    tokenArray: Uint32Array | number[],
+    colorMap: string[],
+    baseColor: string
+  ): TextMateToken[] {
+    const out: TextMateToken[] = []
+    const length = tokenArray.length
+    for (let i = 0; i < length; i += 2) {
+      const start = tokenArray[i]
+      const end = i + 2 < length ? tokenArray[i + 2] : lineText.length
+      if (end <= start) continue
+
+      const meta = tokenArray[i + 1]
+      const colorBits = (meta >>> 15) & 0b1_1111_1111
+      const color = colorMap[colorBits] || ''
+      const fontFlags = (meta >>> 11) & 0b1111
+      const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
+      const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
+      let textDecoration = ''
+      if (fontFlags & FontStyle.Underline) textDecoration = 'underline'
+      if (fontFlags & FontStyle.Strikethrough) {
+        textDecoration = textDecoration
+          ? `${textDecoration} line-through`
+          : 'line-through'
+      }
+
+      const themeIsBaseColor =
+        !color || baseColor.toLowerCase() === color.toLowerCase()
+
+      const style: Partial<TextMateTokenStyle> = {}
+      if (color && !themeIsBaseColor) style.color = color
+      if (fontStyle) style.fontStyle = fontStyle
+      if (fontWeight) style.fontWeight = fontWeight
+      if (textDecoration) style.textDecoration = textDecoration
+
+      const value = lineText.slice(start, end)
+      out.push({
+        value,
+        start,
+        end,
+        style: style as TextMateTokenStyle,
+        hasTextStyles: fontFlags !== 0,
+        isBaseColor: themeIsBaseColor,
+        isWhiteSpace: /^\s*$/.test(value),
+      })
+    }
+
+    return out
+  }
+
   /**
    * Returns the last grammar states per theme from the most recent
    * `tokenize`/`stream` call. The array indexes correspond to the `themes`
@@ -537,6 +780,21 @@ export class Tokenizer<Theme extends string> {
    */
   getGrammarState(): GrammarState {
     return this.#grammarState.slice()
+  }
+
+  /**
+   * Retrieve the active color map for a theme if it has been initialized.
+   */
+  getColorMap(theme: Theme): string[] {
+    const registry = this.#registries.get(theme)
+    return registry ? registry.getThemeColors() : []
+  }
+
+  /**
+   * Retrieve the base foreground color for a theme if it has been initialized.
+   */
+  getBaseColor(theme: Theme): string | undefined {
+    return this.#baseColors.get(theme)
   }
 }
 

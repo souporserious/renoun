@@ -6,6 +6,7 @@ import {
   type TextMateThemeRaw,
   type TextMateGrammarRaw,
 } from './create-tokenizer.ts'
+import { ScopeStack, Theme, parseTheme } from './textmate.ts'
 
 import cssGrammar from '../grammars/css.ts'
 import shellGrammar from '../grammars/shellscript.ts'
@@ -156,9 +157,10 @@ describe('Tokenizer', () => {
 
     const findToken = (
       lines: Awaited<ReturnType<Tokenizer<ThemeName>['tokenize']>>,
-      predicate: (t: (typeof lines)[number][number]) => boolean
+      predicate: (token: (typeof lines)[number][number]) => boolean
     ) => {
-      for (const line of lines) for (const t of line) if (predicate(t)) return t
+      for (const line of lines)
+        for (const token of line) if (predicate(token)) return token
       return undefined
     }
 
@@ -169,16 +171,18 @@ describe('Tokenizer', () => {
 
     const tsxKeyword = findToken(
       tsxTokens,
-      (t) =>
-        /export|const/.test(t.value) &&
-        normalize(t.style.color) === '#A492EA' &&
-        t.style.fontStyle === 'italic'
+      (token) =>
+        /export|const/.test(token.value) &&
+        normalize(token.style.color) === '#A492EA' &&
+        token.style.fontStyle === 'italic'
     )
     expect(tsxKeyword).toBeTruthy()
 
     const tsxComment = findToken(
       tsxTokens,
-      (t) => /comment/.test(t.value) && normalize(t.style.color) === '#FF0000'
+      (token) =>
+        /comment/.test(token.value) &&
+        normalize(token.style.color) === '#FF0000'
     )
     expect(tsxComment).toBeTruthy()
 
@@ -189,15 +193,94 @@ echo "Hello World"`
 
     const shComment = findToken(
       shellTokens,
-      (t) => /comment/.test(t.value) && normalize(t.style.color) === '#FF0000'
+      (token) =>
+        /comment/.test(token.value) &&
+        normalize(token.style.color) === '#FF0000'
     )
     expect(shComment).toBeTruthy()
 
     const shString = findToken(
       shellTokens,
-      (t) => /Hello/.test(t.value) && normalize(t.style.color) === '#00AA00'
+      (token) =>
+        /Hello/.test(token.value) && normalize(token.style.color) === '#00AA00'
     )
     expect(shString).toBeTruthy()
+  })
+
+  test('TSX line comment (including punctuation) inherits comment color', async () => {
+    const tokenizer = new Tokenizer<ThemeName>(registryOptions)
+    const normalize = (c: string | undefined) => (c || '').toUpperCase()
+
+    const source = `export const x = 1
+// comment text`
+    const tokens = await tokenizer.tokenize(source, 'tsx', ['light'])
+
+    // Second line should be a single comment scope; every token should carry the comment color.
+    const commentLine = tokens[1]
+    expect(commentLine.length).toBeGreaterThan(0)
+    for (const token of commentLine) {
+      expect(normalize(token.style.color)).toBe('#FF0000')
+    }
+  })
+
+  test('child combinator in parentScopes matches only the immediate parent (upstream parity)', () => {
+    const rawTheme: TextMateThemeRaw = {
+      name: 'child-combinator-test',
+      settings: [
+        { settings: { foreground: '#000000', background: '#ffffff' } },
+        { scope: 'child', settings: { foreground: '#111111' } },
+        { scope: 'parent > child', settings: { foreground: '#FF0000' } },
+        { scope: 'grand > child', settings: { foreground: '#00FF00' } },
+      ],
+    }
+
+    const theme = Theme.createFromParsedTheme(parseTheme(rawTheme), null)
+    const colorMap = theme.getColorMap()
+
+    const stackImmediate = ScopeStack.from('parent', 'child')!
+    const matchImmediate = theme.match(stackImmediate)!
+    expect(colorMap[matchImmediate.foregroundId].toUpperCase()).toBe('#FF0000')
+
+    // Ancestor chain with parent->child still prefers the immediate-parent rule.
+    const stackAncestor = ScopeStack.from('grand', 'parent', 'child')!
+    const matchAncestor = theme.match(stackAncestor)!
+    expect(colorMap[matchAncestor.foregroundId].toUpperCase()).toBe('#FF0000')
+
+    // Only grand->child should match the grand>child rule.
+    const stackGrandOnly = ScopeStack.from('grand', 'child')!
+    const matchGrandOnly = theme.match(stackGrandOnly)!
+    expect(colorMap[matchGrandOnly.foregroundId].toUpperCase()).toBe('#00FF00')
+  })
+
+  test('incremental tokenization matches full tokenization after an edit', async () => {
+    const tokenizer = new Tokenizer<ThemeName>(registryOptions)
+
+    const original = `const a = 1;
+// comment`
+    const updated = `const a = 2;
+// comment`
+
+    const baseline = await tokenizer.tokenizeIncremental(
+      original,
+      'tsx',
+      ['light'],
+      { changedStartLine: 0 }
+    )
+
+    const incremental = await tokenizer.tokenizeIncremental(
+      updated,
+      'tsx',
+      ['light'],
+      {
+        previousLines: original.split(/\r?\n/),
+        previousTokens: baseline.tokens,
+        previousLineStates: baseline.lineStates,
+        changedStartLine: 0,
+      }
+    )
+
+    const full = await tokenizer.tokenize(updated, 'tsx', ['light'])
+    expect(incremental.tokens).toEqual(full)
   })
 
   test('tokenizes shell code across multiple Tokenizer instances without rule ID conflicts', async () => {
@@ -227,9 +310,15 @@ echo "Hello World"`
     // All tokenizers should produce the same combined text
     // Note: Token boundaries may differ between themes due to scope resolution,
     // but the combined text should be identical
-    const text1 = tokens1.flatMap((line) => line.map((t) => t.value)).join('')
-    const text2 = tokens2.flatMap((line) => line.map((t) => t.value)).join('')
-    const text3 = tokens3.flatMap((line) => line.map((t) => t.value)).join('')
+    const text1 = tokens1
+      .flatMap((line) => line.map((token) => token.value))
+      .join('')
+    const text2 = tokens2
+      .flatMap((line) => line.map((token) => token.value))
+      .join('')
+    const text3 = tokens3
+      .flatMap((line) => line.map((token) => token.value))
+      .join('')
 
     expect(text1).toBe(source)
     expect(text2).toBe(source)
@@ -350,9 +439,9 @@ echo "Hello World"`
       'shell',
       ['light', 'dark']
     )
-    expect(shellTokens.flatMap((l) => l.map((t) => t.value)).join('')).toBe(
-      'npm install renoun'
-    )
+    expect(
+      shellTokens.flatMap((line) => line.map((token) => token.value)).join('')
+    ).toBe('npm install renoun')
   })
 
   test('tokenizes multiple themes without altering merged output', async () => {
@@ -458,14 +547,16 @@ echo "Hello World"`
     const flatTokens = tokens.flatMap((line) => line)
 
     // Find the 'import' keyword token
-    const importToken = flatTokens.find((t) => t.value === 'import')
+    const importToken = flatTokens.find((token) => token.value === 'import')
     expect(importToken).toBeDefined()
     // The more specific keyword.control.import scope should win
     expect(importToken?.style.color).toBe('#A492EA')
     expect(importToken?.style.fontStyle).toBe('italic')
 
     // Find the string token
-    const stringToken = flatTokens.find((t) => t.value.includes('renoun'))
+    const stringToken = flatTokens.find((token) =>
+      token.value.includes('renoun')
+    )
     expect(stringToken).toBeDefined()
     // Strings should have a color
     expect(stringToken?.style.color).toBe('#00AA00')
@@ -496,7 +587,7 @@ export default async function Page({
 
     // Collect all text by joining lines with newlines
     const allText = tokens
-      .map((line) => line.map((t) => t.value).join(''))
+      .map((line) => line.map((token) => token.value).join(''))
       .join('\n')
 
     // Verify we got all the text
@@ -504,11 +595,11 @@ export default async function Page({
 
     // Find the 'const slug' line by content (the one with await params)
     const slugLine = tokens.find((line) => {
-      const text = line.map((t) => t.value).join('')
+      const text = line.map((token) => token.value).join('')
       return text.includes('const slug') && text.includes('await params')
     })
     expect(slugLine).toBeDefined()
-    const slugText = slugLine!.map((t) => t.value).join('')
+    const slugText = slugLine!.map((token) => token.value).join('')
     expect(slugText).toBe('  const slug = (await params).slug')
 
     // Verify 'const' on slug line has keyword styling (may be combined with leading space)
@@ -530,11 +621,11 @@ export default async function Page({
 
     // Find the 'return <Content />' line by content
     const returnLine = tokens.find((line) => {
-      const text = line.map((t) => t.value).join('')
+      const text = line.map((token) => token.value).join('')
       return text.includes('return')
     })
     expect(returnLine).toBeDefined()
-    const returnText = returnLine!.map((t) => t.value).join('')
+    const returnText = returnLine!.map((token) => token.value).join('')
     expect(returnText).toBe('  return <Content />')
 
     const returnToken = returnLine!.find((token) => token.value === 'return')
@@ -550,11 +641,11 @@ export default async function Page({
     const flatTokens = tokens.flatMap((line) => line)
 
     // Verify we got all the text
-    const allText = flatTokens.map((t) => t.value).join('')
+    const allText = flatTokens.map((token) => token.value).join('')
     expect(allText).toBe(source)
 
     // Find the 'npm' token - it should be styled as a command
-    const npmToken = flatTokens.find((t) => t.value === 'npm')
+    const npmToken = flatTokens.find((token) => token.value === 'npm')
     expect(npmToken).toBeDefined()
     // npm should be blue (#0077cc) and italic per our theme
     expect(npmToken?.style.color?.toUpperCase()).toBe('#0077CC')
@@ -646,24 +737,24 @@ export default async function Page({
     const tsxSource = `
       import React, { useState, useEffect, useCallback, useMemo } from 'react';
       
-      interface Props<T extends Record<string, unknown>> {
-        data: T[];
-        onSelect?: (item: T) => void;
-        renderItem: (item: T, index: number) => React.ReactNode;
+      interface Props<token extends Record<string, unknown>> {
+        data: token[];
+        onSelect?: (item: token) => void;
+        renderItem: (item: token, index: number) => React.ReactNode;
       }
       
-      function MyComponent<T extends Record<string, unknown>>({ 
+      function MyComponent<token extends Record<string, unknown>>({ 
         data, 
         onSelect, 
         renderItem 
-      }: Props<T>) {
-        const [selected, setSelected] = useState<T | null>(null);
+      }: Props<token>) {
+        const [selected, setSelected] = useState<token | null>(null);
         
         useEffect(() => {
           console.log('Selected:', selected);
         }, [selected]);
         
-        const handleClick = useCallback((item: T) => {
+        const handleClick = useCallback((item: token) => {
           setSelected(item);
           onSelect?.(item);
         }, [onSelect]);
@@ -744,12 +835,12 @@ export default function Page() {
       isBaseColor: boolean
     }> = []
     for (let i = 0; i < tokens.length; i++) {
-      for (const t of tokens[i]) {
-        if (t.value === 'const') {
+      for (const token of tokens[i]) {
+        if (token.value === 'const') {
           constTokens.push({
             line: i,
-            color: t.style.color,
-            isBaseColor: t.isBaseColor,
+            color: token.style.color,
+            isBaseColor: token.isBaseColor,
           })
         }
       }
@@ -784,7 +875,7 @@ export default function Page() {
     const tokens = await tokenizer.tokenize(shell, 'shell', ['dark'])
 
     // npm should be styled as a command (inheriting from entity.name.function)
-    const npmToken = tokens[0].find((t) => t.value === 'npm')
+    const npmToken = tokens[0].find((token) => token.value === 'npm')
     expect(npmToken).toBeDefined()
     // npm should have blue color (#82AAFF) from entity.name.function and be italic
     expect(npmToken!.isBaseColor).toBe(false)
@@ -824,20 +915,22 @@ export default function Page() {
     const flatTokens = tokens.flatMap((line) => line)
 
     // Component tag names should be styled (entity.name.tag.custom -> #F78C6C in the bundled theme).
-    const rootProviderToken = flatTokens.find((t) => t.value === 'RootProvider')
+    const rootProviderToken = flatTokens.find(
+      (token) => token.value === 'RootProvider'
+    )
     expect(rootProviderToken).toBeDefined()
     expect(rootProviderToken!.isBaseColor).toBe(false)
     expect(rootProviderToken!.style.color?.toUpperCase()).toBe('#F78C6C')
 
     // Native HTML tag names should be styled (entity.name.tag -> #CAECE6 in the bundled theme).
-    const htmlTagToken = flatTokens.find((t) => t.value === 'html')
+    const htmlTagToken = flatTokens.find((token) => token.value === 'html')
     expect(htmlTagToken).toBeDefined()
     expect(htmlTagToken!.isBaseColor).toBe(false)
     expect(htmlTagToken!.style.color?.toUpperCase()).toBe('#CAECE6')
 
     // JSX comments should be styled like comments (italic + #637777 in the bundled theme).
-    const jsxCommentToken = flatTokens.find((t) =>
-      t.value.includes('JSX comment')
+    const jsxCommentToken = flatTokens.find((token) =>
+      token.value.includes('JSX comment')
     )
     expect(jsxCommentToken).toBeDefined()
     expect(jsxCommentToken!.isBaseColor).toBe(false)
@@ -960,8 +1053,9 @@ export default function Page() {
 
     const tokenizer = new Tokenizer<'light'>(registryOptions)
     const tokens = await tokenizer.tokenize('aXYZ', 'shell', ['light'])
+    // console.log(tokens[0].map((token) => ({ v: token.value, c: token.style.color, base: token.isBaseColor })))
 
-    const xyz = tokens[0].find((token) => token.value === 'XYZ')
+    const xyz = tokens[0].find((token) => token.value.includes('XYZ'))
     expect(xyz).toBeDefined()
     // If missing `end` accidentally becomes '\\uFFFF' and the engine appends a sentinel,
     // the content would extend to EOL and \"XYZ\" would become red. We expect default.
@@ -970,4 +1064,232 @@ export default function Page() {
     )
     expect(anyRed).toBe(false)
   })
+})
+
+test('streamRaw emits Uint32Array per line', async () => {
+  const tokenizer = new Tokenizer<ThemeName>(registryOptions)
+  const source = `// hello
+const x = 1`
+  const chunks: Uint32Array[] = []
+  for await (const chunk of tokenizer.streamRaw(source, 'tsx', ['dark'])) {
+    chunks.push(chunk)
+  }
+
+  expect(chunks.length).toBe(2)
+  expect(chunks[0]).toBeInstanceOf(Uint32Array)
+  expect(tokenizer.getGrammarState().length).toBe(1)
+})
+
+test('streamRaw + decodeBinaryChunk preserves comment punctuation color', async () => {
+  const tokenizer = new Tokenizer<ThemeName>(registryOptions)
+  const source = `export const x = 1
+// comment text`
+
+  // Mimic server init order: capture color map/base color before streamRaw runs.
+  await tokenizer.ensureTheme('light')
+  const colorMap = tokenizer.getColorMap('light')
+  const baseColor = tokenizer.getBaseColor('light')
+
+  const batch: number[] = []
+  for await (const lineTokens of tokenizer.streamRaw(source, 'tsx', [
+    'light',
+  ])) {
+    batch.push(lineTokens.length, ...lineTokens)
+  }
+
+  const decodeBinaryChunk = (
+    chunk: Uint32Array,
+    lines: string[],
+    startLine: number,
+    colorMap: string[],
+    baseColor?: string
+  ) => {
+    let position = 0
+    let lineIndex = startLine
+    const decoded: Array<
+      Array<{
+        value: string
+        start: number
+        end: number
+        hasTextStyles: boolean
+        isBaseColor: boolean
+        isWhiteSpace: boolean
+        style: {
+          color?: string
+          fontStyle?: string
+          fontWeight?: string
+          textDecoration?: string
+        }
+      }>
+    > = []
+
+    while (position < chunk.length) {
+      const count = chunk[position++] ?? 0
+      const endPosition = position + count
+      const lineTokenData = chunk.slice(position, endPosition)
+      position = endPosition
+
+      const lineText = lines[lineIndex] ?? ''
+      const lineTokens: (typeof decoded)[number] = []
+
+      for (let index = 0; index < lineTokenData.length; index += 2) {
+        const start = lineTokenData[index]
+        const metadata = lineTokenData[index + 1]
+        const end =
+          index + 2 < lineTokenData.length
+            ? lineTokenData[index + 2]
+            : lineText.length
+
+        const colorBits = (metadata & 0b00000000111111111000000000000000) >>> 15
+        const color = colorMap[colorBits] || ''
+        const fontFlags = (metadata >>> 11) & 0b1111
+
+        const fontStyle = fontFlags & 1 ? 'italic' : ''
+        const fontWeight = fontFlags & 2 ? 'bold' : ''
+        let textDecoration = ''
+        if (fontFlags & 4) textDecoration = 'underline'
+        if (fontFlags & 8) {
+          textDecoration = textDecoration
+            ? `${textDecoration} line-through`
+            : 'line-through'
+        }
+
+        const isBaseColor =
+          !color ||
+          (baseColor
+            ? color.toLowerCase?.() === baseColor.toLowerCase?.()
+            : false)
+
+        const style: {
+          color?: string
+          fontStyle?: string
+          fontWeight?: string
+          textDecoration?: string
+        } = {}
+        if (color && !isBaseColor) style.color = color
+        if (fontStyle) style.fontStyle = fontStyle
+        if (fontWeight) style.fontWeight = fontWeight
+        if (textDecoration) style.textDecoration = textDecoration
+
+        lineTokens.push({
+          value: lineText.slice(start, end),
+          start,
+          end,
+          hasTextStyles: !!fontFlags,
+          isBaseColor,
+          isWhiteSpace: /^\s*$/.test(lineText.slice(start, end)),
+          style,
+        })
+      }
+
+      decoded.push(lineTokens)
+      lineIndex++
+    }
+
+    return { tokens: decoded, nextLine: lineIndex }
+  }
+
+  const lines = source.split(/\r?\n/)
+  const { tokens } = decodeBinaryChunk(
+    new Uint32Array(batch),
+    lines,
+    0,
+    colorMap,
+    baseColor
+  )
+
+  const flat = tokens.flatMap((line) => line)
+  const slashToken = flat.find((token) => token.value.trim().startsWith('//'))
+  expect(slashToken).toBeDefined()
+  expect(slashToken!.style.color?.toUpperCase()).toBe('#FF0000')
+})
+
+test('punctuation in line comments uses comment color', async () => {
+  const textmateRegistryOptions: RegistryOptions<'dark'> = {
+    async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
+      if (scopeName === 'source.tsx') return tsxGrammar
+      throw new Error(`Missing grammar for scope: ${scopeName}`)
+    },
+    async getTheme() {
+      const theme = textmateTheme as unknown as TextMateThemeRaw
+      return {
+        ...theme,
+        settings: theme.tokenColors || theme.settings || [],
+      }
+    },
+  }
+
+  const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
+  const tsx = `// greeting
+const x = 1`
+  const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+  const flat = tokens.flatMap((line) => line)
+  const slashToken = flat.find((token) => token.value === '//')
+  expect(slashToken).toBeDefined()
+  expect(slashToken!.isBaseColor).toBe(false)
+  expect(slashToken!.style.color?.toUpperCase()).toBe('#637777')
+})
+
+test('template string interpolation does not bleed punctuation color into identifiers', async () => {
+  const textmateRegistryOptions: RegistryOptions<'dark'> = {
+    async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
+      if (scopeName === 'source.tsx') return tsxGrammar
+      throw new Error(`Missing grammar for scope: ${scopeName}`)
+    },
+    async getTheme() {
+      const theme = textmateTheme as unknown as TextMateThemeRaw
+      return {
+        ...theme,
+        settings: theme.tokenColors || theme.settings || [],
+      }
+    },
+  }
+
+  const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
+  const tsx = 'import(`./posts/${path}.mdx`)'
+  const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+  const flat = tokens.flat()
+
+  const interpolationStart = flat.find((token) => token.value === '${')
+  expect(interpolationStart).toBeDefined()
+  expect(interpolationStart!.style.color?.toUpperCase()).toBe('#D3423E')
+
+  const pathToken = flat.find((token) => token.value === 'path')
+  expect(pathToken).toBeDefined()
+  // In VSCode, the braces are colored, but the identifier is not red.
+  expect(pathToken!.style.color?.toUpperCase()).not.toBe('#D3423E')
+})
+
+test('await params property access uses base color with italics', async () => {
+  const textmateRegistryOptions: RegistryOptions<'dark'> = {
+    async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
+      if (scopeName === 'source.tsx') return tsxGrammar
+      throw new Error(`Missing grammar for scope: ${scopeName}`)
+    },
+    async getTheme() {
+      const theme = textmateTheme as unknown as TextMateThemeRaw
+      return {
+        ...theme,
+        settings: theme.tokenColors || theme.settings || [],
+      }
+    },
+  }
+
+  const tokenizer = new Tokenizer<'dark'>(textmateRegistryOptions)
+  const tsx = 'const slug = (await params).slug'
+  const tokens = await tokenizer.tokenize(tsx, 'tsx', ['dark'])
+  const flat = tokens.flatMap((line) => line)
+
+  const paramsToken = flat.find((token) => token.value === 'params')
+  expect(paramsToken).toBeDefined()
+  expect(paramsToken!.style.fontStyle).toBe('italic')
+  expect(paramsToken!.isBaseColor).toBe(true)
+
+  const dotIndex = flat.findIndex((token) => token.value === '.')
+  const propertySlugToken =
+    dotIndex >= 0
+      ? flat.slice(dotIndex + 1).find((token) => token.value === 'slug')
+      : undefined
+  expect(propertySlugToken).toBeDefined()
+  expect(propertySlugToken!.style.fontStyle).toBe('italic')
 })

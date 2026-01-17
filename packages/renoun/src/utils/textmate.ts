@@ -1,3 +1,7 @@
+/**
+ * This file contains substantial portions derived from `vscode-textmate` (https://github.com/microsoft/vscode-textmate).
+ * Copyright (c) Microsoft Corporation.
+ */
 const IN_DEBUG_MODE = false
 
 export type LogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug' | 'trace'

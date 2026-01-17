@@ -649,5 +649,5 @@ export function hasMultipleThemes(theme: ConfigurationOptions['theme']) {
   if (!theme || typeof theme !== 'object' || Array.isArray(theme)) {
     return false
   }
-  return true
+  return Object.keys(theme).length > 1
 }
