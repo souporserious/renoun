@@ -153,67 +153,67 @@ export function escapeRegExpCharacters(value: string) {
 }
 
 export class CachedFn<T, R> {
-  private cache = new Map<T, R>()
-  private fn: (arg: T) => R
-  private maxSize: number
+  #cache = new Map<T, R>()
+  #fn: (arg: T) => R
+  #maxSize: number
   constructor(fn: (arg: T) => R, maxSize = 0) {
-    this.fn = fn
-    this.maxSize = maxSize
+    this.#fn = fn
+    this.#maxSize = maxSize
   }
   get(arg: T): R {
-    const cached = this.cache.get(arg)
+    const cached = this.#cache.get(arg)
     if (cached !== undefined) return cached
-    const value = this.fn(arg)
-    if (this.maxSize > 0 && this.cache.size >= this.maxSize) {
+    const value = this.#fn(arg)
+    if (this.#maxSize > 0 && this.#cache.size >= this.#maxSize) {
       // Evict oldest entry (first key)
-      const firstKey = this.cache.keys().next().value
-      if (firstKey !== undefined) this.cache.delete(firstKey)
+      const firstKey = this.#cache.keys().next().value
+      if (firstKey !== undefined) this.#cache.delete(firstKey)
     }
-    this.cache.set(arg, value)
+    this.#cache.set(arg, value)
     return value
   }
   clear() {
-    this.cache.clear()
+    this.#cache.clear()
   }
 }
 
 // Specialized cache for string keys using plain object
 export class StringCachedFn<R> {
-  private cache: Record<string, R> = Object.create(null)
-  private size = 0
-  private fn: (arg: string) => R
-  private maxSize: number
+  #cache: Record<string, R> = Object.create(null)
+  #size = 0
+  #fn: (arg: string) => R
+  #maxSize: number
   constructor(fn: (arg: string) => R, maxSize = 0) {
-    this.fn = fn
-    this.maxSize = maxSize
+    this.#fn = fn
+    this.#maxSize = maxSize
   }
   get(arg: string): R {
-    let value = this.cache[arg]
+    let value = this.#cache[arg]
     if (value !== undefined) return value
-    value = this.fn(arg)
-    if (this.maxSize > 0 && this.size >= this.maxSize) {
+    value = this.#fn(arg)
+    if (this.#maxSize > 0 && this.#size >= this.#maxSize) {
       // Simple eviction: clear cache when full
-      this.cache = Object.create(null)
-      this.size = 0
+      this.#cache = Object.create(null)
+      this.#size = 0
     }
-    this.cache[arg] = value
-    this.size++
+    this.#cache[arg] = value
+    this.#size++
     return value
   }
   clear() {
-    this.cache = Object.create(null)
-    this.size = 0
+    this.#cache = Object.create(null)
+    this.#size = 0
   }
 }
 
-let _containsRTLRegex: RegExp
+let containsRTLRegex: RegExp
 
 export function containsRTL(value: string) {
-  if (!_containsRTLRegex) {
-    _containsRTLRegex =
+  if (!containsRTLRegex) {
+    containsRTLRegex =
       /(?:[\u05BE\u05C0\u05C3\u05C6\u05D0-\u05F4\u0608\u060B\u060D\u061B-\u064A\u066D-\u066F\u0671-\u06D5\u06E5\u06E6\u06EE\u06EF\u06FA-\u0710\u0712-\u072F\u074D-\u07A5\u07B1-\u07EA\u07F4\u07F5\u07FA\u07FE-\u0815\u081A\u0824\u0828\u0830-\u0858\u085E-\u088E\u08A0-\u08C9\u200F\uFB1D\uFB1F-\uFB28\uFB2A-\uFD3D\uFD50-\uFDC7\uFDF0-\uFDFC\uFE70-\uFEFC]|\uD802[\uDC00-\uDD1B\uDD20-\uDE00\uDE10-\uDE35\uDE40-\uDEE4\uDEEB-\uDF35\uDF40-\uDFFF]|\uD803[\uDC00-\uDD23\uDE80-\uDEA9\uDEAD-\uDF45\uDF51-\uDF81\uDF86-\uDFF6]|\uD83A[\uDC00-\uDCCF\uDD00-\uDD43\uDD4B-\uDFFF]|\uD83B[\uDC00-\uDEBB])/
   }
-  return _containsRTLRegex.test(value)
+  return containsRTLRegex.test(value)
 }
 
 /** Font style bit flags */
@@ -288,7 +288,7 @@ export const TokenMetadata = {
 } as const
 
 export const EncodedTokenAttributes = {
-  toBinaryStr(value: number) {
+  toBinaryString(value: number) {
     return value.toString(2).padStart(32, '0')
   },
 
@@ -353,13 +353,13 @@ export function toOptionalTokenType(value: any) {
 
 class JSONState {
   position = 0
-  len: number
+  length: number
   line = 1
   char = 0
   source: string
   constructor(source: string) {
     this.source = source
-    this.len = source.length
+    this.length = source.length
   }
 }
 
@@ -367,7 +367,7 @@ class JSONToken {
   value: string | null = null
   type: number = 0
   offset = -1
-  len = -1
+  length = -1
   line = -1
   char = -1
 
@@ -392,14 +392,14 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
   token.value = null
   token.type = 0
   token.offset = -1
-  token.len = -1
+  token.length = -1
   token.line = -1
   token.char = -1
 
-  let ch: number
+  let char: number
   const src = state.source
   let position = state.position
-  const len = state.len
+  const length = state.length
   let line = state.line
   let column = state.char
 
@@ -408,7 +408,7 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
     // consume first character (already matched by caller)
     position++
     column++
-    if (position + keywordLength - 1 > len) return false
+    if (position + keywordLength - 1 > length) return false
     for (let index = 1; index < keywordLength; index++) {
       if (src.charCodeAt(position) !== keyword.charCodeAt(index)) return false
       position++
@@ -418,10 +418,10 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
   }
 
   while (true) {
-    if (position >= len) return false
-    ch = src.charCodeAt(position)
-    if (ch !== 32 && ch !== 9 && ch !== 13) {
-      if (ch !== 10) break
+    if (position >= length) return false
+    char = src.charCodeAt(position)
+    if (char !== 32 && char !== 9 && char !== 13) {
+      if (char !== 10) break
       position++
       line++
       column = 0
@@ -435,20 +435,20 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
   token.line = line
   token.char = column
 
-  if (ch === 34) {
+  if (char === 34) {
     // string
     token.type = 1
     position++
     column++
     while (true) {
-      if (position >= len) return false
-      ch = src.charCodeAt(position)
+      if (position >= length) return false
+      char = src.charCodeAt(position)
       position++
       column++
-      if (ch === 92) {
+      if (char === 92) {
         position++
         column++
-      } else if (ch === 34) {
+      } else if (char === 34) {
         break
       }
     }
@@ -480,51 +480,51 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
         }
         throw new Error('unreachable')
       })
-  } else if (ch === 91) {
+  } else if (char === 91) {
     token.type = 2 // [
     position++
     column++
-  } else if (ch === 123) {
+  } else if (char === 123) {
     token.type = 3 // {
     position++
     column++
-  } else if (ch === 93) {
+  } else if (char === 93) {
     token.type = 4 // ]
     position++
     column++
-  } else if (ch === 125) {
+  } else if (char === 125) {
     token.type = 5 // }
     position++
     column++
-  } else if (ch === 58) {
+  } else if (char === 58) {
     token.type = 6 // :
     position++
     column++
-  } else if (ch === 44) {
+  } else if (char === 44) {
     token.type = 7 // ,
     position++
     column++
-  } else if (ch === 110) {
+  } else if (char === 110) {
     token.type = 8 // null
     if (!consumeKeyword('null')) return false
-  } else if (ch === 116) {
+  } else if (char === 116) {
     token.type = 9 // true
     if (!consumeKeyword('true')) return false
-  } else if (ch === 102) {
+  } else if (char === 102) {
     token.type = 10 // false
     if (!consumeKeyword('false')) return false
   } else {
     token.type = 11 // number
     while (true) {
-      if (position >= len) return false
-      ch = src.charCodeAt(position)
+      if (position >= length) return false
+      char = src.charCodeAt(position)
       if (
-        ch !== 46 &&
-        !(ch >= 48 && ch <= 57) &&
-        ch !== 101 &&
-        ch !== 69 &&
-        ch !== 45 &&
-        ch !== 43
+        char !== 46 &&
+        !(char >= 48 && char <= 57) &&
+        char !== 101 &&
+        char !== 69 &&
+        char !== 45 &&
+        char !== 43
       ) {
         break
       }
@@ -533,8 +533,8 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
     }
   }
 
-  token.len = position - token.offset
-  if (token.value === null) token.value = src.substr(token.offset, token.len)
+  token.length = position - token.offset
+  if (token.value === null) token.value = src.substr(token.offset, token.length)
 
   state.position = position
   state.line = line
@@ -702,22 +702,22 @@ function parsePLISTBody(
   locationKey: string | null
 ): any {
   const totalLen = sourceText.length
-  let pos = 0
+  let position = 0
   let line = 1
   let column = 0
 
   function advance(count: number) {
     if (locationKey === null) {
-      pos += count
+      position += count
       return
     }
     while (count > 0) {
-      if (sourceText.charCodeAt(pos) === 10) {
-        pos++
+      if (sourceText.charCodeAt(position) === 10) {
+        position++
         line++
         column = 0
       } else {
-        pos++
+        position++
         column++
       }
       count--
@@ -725,20 +725,20 @@ function parsePLISTBody(
   }
 
   function setPos(newPos: number) {
-    if (locationKey === null) pos = newPos
-    else advance(newPos - pos)
+    if (locationKey === null) position = newPos
+    else advance(newPos - position)
   }
 
   function skipWhitespace() {
-    while (pos < totalLen) {
-      const ch = sourceText.charCodeAt(pos)
-      if (ch !== 32 && ch !== 9 && ch !== 13 && ch !== 10) break
+    while (position < totalLen) {
+      const char = sourceText.charCodeAt(position)
+      if (char !== 32 && char !== 9 && char !== 13 && char !== 10) break
       advance(1)
     }
   }
 
   function matchLiteral(lit: string) {
-    if (sourceText.substr(pos, lit.length) === lit) {
+    if (sourceText.substr(position, lit.length) === lit) {
       advance(lit.length)
       return true
     }
@@ -746,24 +746,24 @@ function parsePLISTBody(
   }
 
   function consumeThrough(lit: string) {
-    const idx = sourceText.indexOf(lit, pos)
+    const idx = sourceText.indexOf(lit, position)
     setPos(idx !== -1 ? idx + lit.length : totalLen)
   }
 
   function readUntil(lit: string) {
-    const idx = sourceText.indexOf(lit, pos)
+    const idx = sourceText.indexOf(lit, position)
     if (idx !== -1) {
-      const slice = sourceText.substring(pos, idx)
+      const slice = sourceText.substring(position, idx)
       setPos(idx + lit.length)
       return slice
     }
-    const tail = sourceText.substr(pos)
+    const tail = sourceText.substr(position)
     setPos(totalLen)
     return tail
   }
 
   // Skip BOM
-  if (totalLen > 0 && sourceText.charCodeAt(0) === 65279) pos = 1
+  if (totalLen > 0 && sourceText.charCodeAt(0) === 65279) position = 1
 
   // Parser state:
   // 0 root, 1 dict, 2 array
@@ -789,11 +789,11 @@ function parsePLISTBody(
   function fail(message: string): never {
     throw new Error(
       'Near offset ' +
-        pos +
+        position +
         ': ' +
         message +
         ' ~~~' +
-        sourceText.substr(pos, 50) +
+        sourceText.substr(position, 50) +
         '~~~'
     )
   }
@@ -902,17 +902,17 @@ function parsePLISTBody(
     return true
   }
 
-  while (pos < totalLen) {
+  while (position < totalLen) {
     skipWhitespace()
-    if (pos >= totalLen) break
+    if (position >= totalLen) break
 
-    const lt = sourceText.charCodeAt(pos)
+    const lt = sourceText.charCodeAt(position)
     advance(1)
     if (lt !== 60) return fail('expected <') // '<'
 
-    if (pos >= totalLen) return fail('unexpected end of input')
+    if (position >= totalLen) return fail('unexpected end of input')
 
-    const nextCh = sourceText.charCodeAt(pos)
+    const nextCh = sourceText.charCodeAt(position)
 
     if (nextCh === 63) {
       // <? ... ?>
@@ -1022,22 +1022,22 @@ export function parseRawGrammar(
 // Theme + scopes
 
 export class Theme {
-  private _cachedMatchRoot: StringCachedFn<ThemeTrieElementRule[]>
+  #cachedMatchRoot: StringCachedFn<ThemeTrieElementRule[]>
 
-  private _colorMap: ColorMap
-  private _defaults: StyleAttributes
-  private _root: ThemeTrieElement
+  #colorMap: ColorMap
+  #defaults: StyleAttributes
+  #root: ThemeTrieElement
 
   constructor(
     colorMap: ColorMap,
     defaults: StyleAttributes,
     root: ThemeTrieElement
   ) {
-    this._colorMap = colorMap
-    this._defaults = defaults
-    this._root = root
-    this._cachedMatchRoot = new StringCachedFn((scope) =>
-      this._root.match(scope)
+    this.#colorMap = colorMap
+    this.#defaults = defaults
+    this.#root = root
+    this.#cachedMatchRoot = new StringCachedFn((scope) =>
+      this.#root.match(scope)
     )
   }
 
@@ -1133,21 +1133,21 @@ export class Theme {
   }
 
   getColorMap() {
-    return this._colorMap.getColorMap()
+    return this.#colorMap.getColorMap()
   }
 
   getDefaults() {
-    return this._defaults
+    return this.#defaults
   }
 
   match(scope: ScopeStack) {
     if (scope === null) {
-      return this._defaults
+      return this.#defaults
     }
 
     const scopeName = scope.scopeName
 
-    const candidateRules = this._cachedMatchRoot.get(scopeName)
+    const candidateRules = this.#cachedMatchRoot.get(scopeName)
 
     const match = candidateRules.find((rule: any) =>
       scopePathMatchesParentScopes(scope.parent, rule.parentScopes)
@@ -1168,7 +1168,7 @@ export class Theme {
     scopeName: string,
     parent: AttributedScopeStack | null
   ): StyleAttributes | null {
-    const candidateRules = this._cachedMatchRoot.get(scopeName)
+    const candidateRules = this.#cachedMatchRoot.get(scopeName)
     const match = candidateRules.find((rule: any) =>
       scopePathMatchesParentScopesAttributed(parent, rule.parentScopes)
     )
@@ -1182,7 +1182,7 @@ export class Theme {
 export class ScopeStack {
   parent: ScopeStack | null
   scopeName: string
-  private _segments: string[] | null = null
+  #segments: string[] | null = null
 
   constructor(parent: ScopeStack | null, scopeName: string) {
     this.parent = parent
@@ -1193,8 +1193,8 @@ export class ScopeStack {
     stack: ScopeStack | null,
     scopeNames: string[]
   ): ScopeStack | null {
-    for (let i = 0, len = scopeNames.length; i < len; i++) {
-      stack = new ScopeStack(stack, scopeNames[i])
+    for (let index = 0, length = scopeNames.length; index < length; index++) {
+      stack = new ScopeStack(stack, scopeNames[index])
     }
     return stack
   }
@@ -1212,15 +1212,15 @@ export class ScopeStack {
 
   // Cached - segments are immutable since ScopeStack is immutable
   getSegments(): string[] {
-    if (this._segments !== null) return this._segments
-    let cur: ScopeStack | null = this
+    if (this.#segments !== null) return this.#segments
+    let current: ScopeStack | null = this
     const segments: string[] = []
-    while (cur) {
-      segments.push(cur.scopeName)
-      cur = cur.parent
+    while (current) {
+      segments.push(current.scopeName)
+      current = current.parent
     }
     segments.reverse()
-    this._segments = segments
+    this.#segments = segments
     return segments
   }
 
@@ -1248,10 +1248,10 @@ export class ScopeStack {
 function scopeMatches(actual: string, expected: string) {
   if (!actual) return false
   if (expected === actual) return true
-  const expLen = expected.length
+  const expectedLength = expected.length
   return (
-    actual.length > expLen &&
-    actual.charCodeAt(expLen) === 46 && // 46 = '.'
+    actual.length > expectedLength &&
+    actual.charCodeAt(expectedLength) === 46 && // 46 = '.'
     actual.lastIndexOf(expected, 0) === 0
   ) // faster startsWith
 }
@@ -1324,11 +1324,11 @@ function scopePathMatchesParentScopesAttributed(
   )
 }
 
-const _scopeInternTable = new Map<string, string>()
+const scopeInternTable = new Map<string, string>()
 function internScope(scope: string): string {
-  const existing = _scopeInternTable.get(scope)
+  const existing = scopeInternTable.get(scope)
   if (existing) return existing
-  _scopeInternTable.set(scope, scope)
+  scopeInternTable.set(scope, scope)
   return scope
 }
 
@@ -1383,10 +1383,10 @@ export function parseTheme(theme: IRawTheme | undefined) {
 
     let scopes: string[]
     if (typeof entry.scope === 'string') {
-      let scopeStr = entry.scope
-      scopeStr = scopeStr.replace(/^[,]+/, '')
-      scopeStr = scopeStr.replace(/[,]+$/, '')
-      scopes = scopeStr.split(',')
+      let scopeString = entry.scope
+      scopeString = scopeString.replace(/^[,]+/, '')
+      scopeString = scopeString.replace(/[,]+$/, '')
+      scopes = scopeString.split(',')
     } else {
       scopes = Array.isArray(entry.scope) ? entry.scope : ['']
     }
@@ -1516,24 +1516,24 @@ export function fontStyleToString(fontStyle: number) {
 }
 
 export class ColorMap {
-  private _lastColorId = 0
-  private _id2color: string[] = []
-  private _color2id: Record<string, number> = Object.create(null)
-  private _isFrozen: boolean
+  #lastColorId = 0
+  #id2color: string[] = []
+  #color2id: Record<string, number> = Object.create(null)
+  #isFrozen: boolean
 
   constructor(initialColorMap: string[] | null) {
     if (Array.isArray(initialColorMap)) {
-      this._isFrozen = true
+      this.#isFrozen = true
       for (
         let index = 0, colorMapLength = initialColorMap.length;
         index < colorMapLength;
         index++
       ) {
-        this._color2id[initialColorMap[index]] = index
-        this._id2color[index] = initialColorMap[index]
+        this.#color2id[initialColorMap[index]] = index
+        this.#id2color[index] = initialColorMap[index]
       }
     } else {
-      this._isFrozen = false
+      this.#isFrozen = false
     }
   }
 
@@ -1543,28 +1543,28 @@ export class ColorMap {
     }
     const normalized = colorValueToId(color)
     // Check both original and normalized to avoid extra processing when already cached
-    let id = this._color2id[color]
+    let id = this.#color2id[color]
     if (id !== undefined) {
       return id
     }
-    id = this._color2id[normalized]
+    id = this.#color2id[normalized]
     if (id !== undefined) {
       // Cache the original case too for faster future lookups
-      this._color2id[color] = id
+      this.#color2id[color] = id
       return id
     }
-    if (this._isFrozen) {
+    if (this.#isFrozen) {
       throw new Error(`Missing color in color map - ${color}`)
     }
-    id = ++this._lastColorId
-    this._color2id[normalized] = id
-    this._color2id[color] = id
-    this._id2color[id] = normalized
+    id = ++this.#lastColorId
+    this.#color2id[normalized] = id
+    this.#color2id[color] = id
+    this.#id2color[id] = normalized
     return id
   }
 
   getColorMap() {
-    return this._id2color.slice(0)
+    return this.#id2color.slice(0)
   }
 }
 
@@ -1572,7 +1572,7 @@ const EMPTY_PARENT_SCOPES: readonly string[] = Object.freeze([] as string[])
 
 export class ThemeTrieElementRule {
   parentScopes: readonly string[]
-  private _cachedStyleAttributes: StyleAttributes | null = null
+  #cachedStyleAttributes: StyleAttributes | null = null
 
   scopeDepth: number
   fontStyle: number
@@ -1603,8 +1603,8 @@ export class ThemeTrieElementRule {
   }
 
   getStyleAttributes(): StyleAttributes {
-    if (!this._cachedStyleAttributes) {
-      this._cachedStyleAttributes = new StyleAttributes(
+    if (!this.#cachedStyleAttributes) {
+      this.#cachedStyleAttributes = new StyleAttributes(
         this.fontStyle,
         this.foreground,
         this.background,
@@ -1613,7 +1613,7 @@ export class ThemeTrieElementRule {
         this.lineHeight
       )
     }
-    return this._cachedStyleAttributes
+    return this.#cachedStyleAttributes
   }
 
   clone() {
@@ -1655,7 +1655,7 @@ export class ThemeTrieElementRule {
       this.scopeDepth = scopeDepth
     }
     // Invalidate cached StyleAttributes since we're changing values
-    this._cachedStyleAttributes = null
+    this.#cachedStyleAttributes = null
     if (fontStyle !== -1) this.fontStyle = fontStyle
     if (foreground !== 0) this.foreground = foreground
     if (background !== 0) this.background = background
@@ -1666,20 +1666,23 @@ export class ThemeTrieElementRule {
 }
 
 export class ThemeTrieElement {
-  private _mainRule: ThemeTrieElementRule
-  private _rulesWithParentScopes: ThemeTrieElementRule[]
-  private _children: Record<string, ThemeTrieElement>
+  #mainRule: ThemeTrieElementRule
+  #rulesWithParentScopes: ThemeTrieElementRule[]
+  #children: Record<string, ThemeTrieElement>
   constructor(
     mainRule: ThemeTrieElementRule,
     rulesWithParentScopes: ThemeTrieElementRule[] = [],
     children: Record<string, ThemeTrieElement> = {}
   ) {
-    this._mainRule = mainRule
-    this._rulesWithParentScopes = rulesWithParentScopes
-    this._children = children
+    this.#mainRule = mainRule
+    this.#rulesWithParentScopes = rulesWithParentScopes
+    this.#children = children
   }
 
-  static _cmpBySpecificity(a: ThemeTrieElementRule, b: ThemeTrieElementRule) {
+  static compareBySpecificity(
+    a: ThemeTrieElementRule,
+    b: ThemeTrieElementRule
+  ) {
     if (a.scopeDepth !== b.scopeDepth) return b.scopeDepth - a.scopeDepth
 
     let aIdx = 0
@@ -1709,19 +1712,19 @@ export class ThemeTrieElement {
         tail = scope.substring(dot + 1)
       }
 
-      if (this._children.hasOwnProperty(head)) {
-        return this._children[head].match(tail)
+      if (this.#children.hasOwnProperty(head)) {
+        return this.#children[head].match(tail)
       }
     }
 
-    const parentRules = this._rulesWithParentScopes
+    const parentRules = this.#rulesWithParentScopes
     const parentLen = parentRules.length
     const rules = new Array<ThemeTrieElementRule>(parentLen + 1)
-    for (let i = 0; i < parentLen; i++) {
-      rules[i] = parentRules[i]
+    for (let index = 0; index < parentLen; index++) {
+      rules[index] = parentRules[index]
     }
-    rules[parentLen] = this._mainRule
-    rules.sort(ThemeTrieElement._cmpBySpecificity)
+    rules[parentLen] = this.#mainRule
+    rules.sort(ThemeTrieElement.compareBySpecificity)
 
     return rules
   }
@@ -1763,14 +1766,14 @@ export class ThemeTrieElement {
     }
 
     let child: ThemeTrieElement
-    if (this._children.hasOwnProperty(head)) {
-      child = this._children[head]
+    if (this.#children.hasOwnProperty(head)) {
+      child = this.#children[head]
     } else {
       child = new ThemeTrieElement(
-        this._mainRule.clone(),
-        ThemeTrieElementRule.cloneArr(this._rulesWithParentScopes)
+        this.#mainRule.clone(),
+        ThemeTrieElementRule.cloneArr(this.#rulesWithParentScopes)
       )
-      this._children[head] = child
+      this.#children[head] = child
     }
 
     child.insert(
@@ -1798,7 +1801,7 @@ export class ThemeTrieElement {
   ) {
     if (parentScopes !== null) {
       // Performance: Cache array reference and length
-      const rules = this._rulesWithParentScopes
+      const rules = this.#rulesWithParentScopes
       for (
         let index = 0, rulesLength = rules.length;
         index < rulesLength;
@@ -1819,14 +1822,14 @@ export class ThemeTrieElement {
         }
       }
 
-      if (fontStyle === -1) fontStyle = this._mainRule.fontStyle
-      if (foreground === 0) foreground = this._mainRule.foreground
-      if (background === 0) background = this._mainRule.background
-      if (fontFamily === '') fontFamily = this._mainRule.fontFamily
-      if (fontSize === '') fontSize = this._mainRule.fontSize
-      if (lineHeight === 0) lineHeight = this._mainRule.lineHeight
+      if (fontStyle === -1) fontStyle = this.#mainRule.fontStyle
+      if (foreground === 0) foreground = this.#mainRule.foreground
+      if (background === 0) background = this.#mainRule.background
+      if (fontFamily === '') fontFamily = this.#mainRule.fontFamily
+      if (fontSize === '') fontSize = this.#mainRule.fontSize
+      if (lineHeight === 0) lineHeight = this.#mainRule.lineHeight
 
-      this._rulesWithParentScopes.push(
+      this.#rulesWithParentScopes.push(
         new ThemeTrieElementRule(
           scopeDepth,
           parentScopes,
@@ -1839,7 +1842,7 @@ export class ThemeTrieElement {
         )
       )
     } else {
-      this._mainRule.acceptOverwrite(
+      this.#mainRule.acceptOverwrite(
         scopeDepth,
         fontStyle,
         foreground,
@@ -1864,37 +1867,37 @@ export class BasicScopeAttributes {
 }
 
 export class BasicScopeAttributesProvider {
-  private _getBasicScopeAttributes: StringCachedFn<BasicScopeAttributes>
-  private _defaultAttributes: BasicScopeAttributes
-  private _embeddedLanguagesMatcher: ScopeMatcher
+  #getBasicScopeAttributes: StringCachedFn<BasicScopeAttributes>
+  #defaultAttributes: BasicScopeAttributes
+  #embeddedLanguagesMatcher: ScopeMatcher
 
   constructor(defaultLanguageId: number, embeddedLanguages: any) {
-    this._getBasicScopeAttributes = new StringCachedFn((scopeName: string) => {
-      const languageId = this._scopeToLanguage(scopeName)
-      const tokenType = this._toStandardTokenType(scopeName)
+    this.#getBasicScopeAttributes = new StringCachedFn((scopeName: string) => {
+      const languageId = this.#scopeToLanguage(scopeName)
+      const tokenType = this.#toStandardTokenType(scopeName)
       return new BasicScopeAttributes(languageId, tokenType)
     })
-    this._defaultAttributes = new BasicScopeAttributes(defaultLanguageId, 8)
-    this._embeddedLanguagesMatcher = new ScopeMatcher(
+    this.#defaultAttributes = new BasicScopeAttributes(defaultLanguageId, 8)
+    this.#embeddedLanguagesMatcher = new ScopeMatcher(
       Object.entries(embeddedLanguages || {})
     )
   }
 
   getDefaultAttributes() {
-    return this._defaultAttributes
+    return this.#defaultAttributes
   }
 
   getBasicScopeAttributes(scopeName: string | null): BasicScopeAttributes {
     if (scopeName === null)
       return BasicScopeAttributesProvider._NULL_SCOPE_METADATA
-    return this._getBasicScopeAttributes.get(scopeName)
+    return this.#getBasicScopeAttributes.get(scopeName)
   }
 
-  private _scopeToLanguage(scopeName: string) {
-    return this._embeddedLanguagesMatcher.match(scopeName) || 0
+  #scopeToLanguage(scopeName: string) {
+    return this.#embeddedLanguagesMatcher.match(scopeName) || 0
   }
 
-  private _toStandardTokenType(scopeName: string) {
+  #toStandardTokenType(scopeName: string) {
     const m = scopeName.match(
       BasicScopeAttributesProvider.STANDARD_TOKEN_TYPE_REGEXP
     )
@@ -1918,28 +1921,28 @@ export class BasicScopeAttributesProvider {
 }
 
 class ScopeMatcher {
-  private values: Map<string, any> | null = null
-  private scopesRegExp: RegExp | null = null
+  #values: Map<string, any> | null = null
+  #scopesRegExp: RegExp | null = null
 
   constructor(pairs: any[]) {
     if (pairs.length === 0) {
-      this.values = null
-      this.scopesRegExp = null
+      this.#values = null
+      this.#scopesRegExp = null
     } else {
-      this.values = new Map(pairs)
+      this.#values = new Map(pairs)
       const scopes = pairs.map(([scope]: [string, any]) =>
         escapeRegExpCharacters(scope)
       )
       scopes.sort()
       scopes.reverse()
-      this.scopesRegExp = new RegExp(`^((${scopes.join(')|(')}))($|\\.)`, '')
+      this.#scopesRegExp = new RegExp(`^((${scopes.join(')|(')}))($|\\.)`, '')
     }
   }
 
   match(scope: string) {
-    if (!this.scopesRegExp) return
-    const m = scope.match(this.scopesRegExp)
-    return m ? this.values!.get(m[1]) : undefined
+    if (!this.#scopesRegExp) return
+    const m = scope.match(this.#scopesRegExp)
+    return m ? this.#values!.get(m[1]) : undefined
   }
 }
 
@@ -2054,24 +2057,24 @@ export function ruleIdToNumber(value: number) {
 
 export class Rule {
   id: number
-  $location: any
-  private _name: string | null
-  private _nameIsCapturing: boolean
-  private _contentName: string | null
-  private _contentNameIsCapturing: boolean
+  $location: TextMateLocation | null
+  #name: string | null
+  #nameIsCapturing: boolean
+  #contentName: string | null
+  #contentNameIsCapturing: boolean
 
   constructor(
-    $location: any,
+    $location: TextMateLocation | null,
     id: number,
     name: string | null,
     contentName: string | null
   ) {
     this.$location = $location
     this.id = id
-    this._name = name || null
-    this._nameIsCapturing = RegexSource.hasCaptures(this._name)
-    this._contentName = contentName || null
-    this._contentNameIsCapturing = RegexSource.hasCaptures(this._contentName)
+    this.#name = name || null
+    this.#nameIsCapturing = RegexSource.hasCaptures(this.#name)
+    this.#contentName = contentName || null
+    this.#contentNameIsCapturing = RegexSource.hasCaptures(this.#contentName)
   }
 
   get debugName() {
@@ -2083,25 +2086,25 @@ export class Rule {
 
   getName(sourceText: string | null, captures: any[]) {
     if (
-      !this._nameIsCapturing ||
-      this._name === null ||
+      !this.#nameIsCapturing ||
+      this.#name === null ||
       sourceText === null ||
       captures === null
     ) {
-      return this._name
+      return this.#name
     }
-    return RegexSource.replaceCaptures(this._name, sourceText, captures)
+    return RegexSource.replaceCaptures(this.#name, sourceText, captures)
   }
 
   getContentName(sourceText: string, captures: any[]) {
-    if (this._contentNameIsCapturing && this._contentName !== null) {
+    if (this.#contentNameIsCapturing && this.#contentName !== null) {
       return RegexSource.replaceCaptures(
-        this._contentName,
+        this.#contentName,
         sourceText,
         captures
       )
     }
-    return this._contentName
+    return this.#contentName
   }
 
   collectPatterns(_grammar: any, _out: any): void {
@@ -2118,7 +2121,7 @@ export class Rule {
 export class CaptureRule extends Rule {
   retokenizeCapturedWithRuleId: number
   constructor(
-    location: any,
+    location: TextMateLocation | null,
     id: number,
     name: string | null,
     contentName: string | null,
@@ -2131,67 +2134,67 @@ export class CaptureRule extends Rule {
 }
 
 class CachedRegExpSourceList {
-  private _list: RegExpSourceList | null = null
+  #list: RegExpSourceList | null = null
 
   dispose() {
-    if (this._list) {
-      this._list.dispose()
-      this._list = null
+    if (this.#list) {
+      this.#list.dispose()
+      this.#list = null
     }
   }
 
   get(build: (list: RegExpSourceList) => void): RegExpSourceList {
-    if (!this._list) {
-      this._list = new RegExpSourceList()
-      build(this._list)
+    if (!this.#list) {
+      this.#list = new RegExpSourceList()
+      build(this.#list)
     }
-    return this._list
+    return this.#list
   }
 }
 
 export class MatchRule extends Rule {
-  private _match: RegExpSource
+  #match: RegExpSource
   captures: any
-  private _cachedCompiledPatterns = new CachedRegExpSourceList()
+  #cachedCompiledPatterns = new CachedRegExpSourceList()
 
   constructor(
-    location: any,
+    location: TextMateLocation | null,
     id: number,
     name: string | null,
     match: string,
     captures: any
   ) {
     super(location, id, name, null)
-    this._match = new RegExpSource(match, this.id)
+    this.#match = new RegExpSource(match, this.id)
     this.captures = captures
   }
 
   dispose() {
-    this._cachedCompiledPatterns.dispose()
+    this.#cachedCompiledPatterns.dispose()
   }
 
   get debugMatchRegExp() {
-    return `${this._match.source}`
+    return `${this.#match.source}`
   }
 
   collectPatterns(_grammar: any, out: any) {
-    out.push(this._match)
+    out.push(this.#match)
   }
 
   compile(grammar: any, _end: any) {
-    return this._getCachedCompiledPatterns(grammar).compile(grammar)
+    return this.#getCachedCompiledPatterns(grammar).compile(grammar)
   }
 
   compileAG(grammar: any, _end: any, isFirstLine: any, atAnchor: any) {
-    return this._getCachedCompiledPatterns(grammar).compileAG(
+    return this.#getCachedCompiledPatterns(grammar).compileAG(
       grammar,
       isFirstLine,
       atAnchor
     )
   }
 
-  private _getCachedCompiledPatterns(grammar: any) {
-    return this._cachedCompiledPatterns.get((list) => {
+  #getCachedCompiledPatterns(grammar: any) {
+    return this.#cachedCompiledPatterns.get((list) => {
       this.collectPatterns(grammar, list)
     })
   }
@@ -2200,10 +2203,10 @@ export class MatchRule extends Rule {
 export class IncludeOnlyRule extends Rule {
   patterns: any[]
   hasMissingPatterns: boolean
-  private _cachedCompiledPatterns = new CachedRegExpSourceList()
+  #cachedCompiledPatterns = new CachedRegExpSourceList()
 
   constructor(
-    location: any,
+    location: TextMateLocation | null,
     id: number,
     name: string | null,
     contentName: string | null,
@@ -2215,7 +2218,7 @@ export class IncludeOnlyRule extends Rule {
   }
 
   dispose() {
-    this._cachedCompiledPatterns.dispose()
+    this.#cachedCompiledPatterns.dispose()
   }
 
   collectPatterns(grammar: any, out: any) {
@@ -2224,37 +2227,37 @@ export class IncludeOnlyRule extends Rule {
   }
 
   compile(grammar: any, _end: any) {
-    return this._getCachedCompiledPatterns(grammar).compile(grammar)
+    return this.#getCachedCompiledPatterns(grammar).compile(grammar)
   }
 
   compileAG(grammar: any, _end: any, isFirstLine: any, atAnchor: any) {
-    return this._getCachedCompiledPatterns(grammar).compileAG(
+    return this.#getCachedCompiledPatterns(grammar).compileAG(
       grammar,
       isFirstLine,
       atAnchor
     )
   }
 
-  private _getCachedCompiledPatterns(grammar: any) {
-    return this._cachedCompiledPatterns.get((list) => {
+  #getCachedCompiledPatterns(grammar: any) {
+    return this.#cachedCompiledPatterns.get((list) => {
       this.collectPatterns(grammar, list)
     })
   }
 }
 
 export class BeginEndRule extends Rule {
-  private _begin: RegExpSource
+  #begin: RegExpSource
   beginCaptures: any
-  private _end: RegExpSource
+  #end: RegExpSource
   endHasBackReferences: boolean
   endCaptures: any
   applyEndPatternLast: boolean
   patterns: any[]
   hasMissingPatterns: boolean
-  private _cachedCompiledPatterns = new CachedRegExpSourceList()
+  #cachedCompiledPatterns = new CachedRegExpSourceList()
 
   constructor(
-    location: any,
+    location: TextMateLocation | null,
     id: number,
     name: string | null,
     contentName: string | null,
@@ -2266,10 +2269,10 @@ export class BeginEndRule extends Rule {
     patterns: any
   ) {
     super(location, id, name, contentName)
-    this._begin = new RegExpSource(begin, this.id)
+    this.#begin = new RegExpSource(begin, this.id)
     this.beginCaptures = beginCaptures
-    this._end = new RegExpSource(end || '', -1)
-    this.endHasBackReferences = this._end.hasBackReferences
+    this.#end = new RegExpSource(end || '', -1)
+    this.endHasBackReferences = this.#end.hasBackReferences
     this.endCaptures = endCaptures
     this.applyEndPatternLast = applyEndPatternLast || false
     this.patterns = patterns.patterns
@@ -2277,52 +2280,52 @@ export class BeginEndRule extends Rule {
   }
 
   dispose() {
-    this._cachedCompiledPatterns.dispose()
+    this.#cachedCompiledPatterns.dispose()
   }
 
   get debugBeginRegExp() {
-    return `${this._begin.source}`
+    return `${this.#begin.source}`
   }
 
   get debugEndRegExp() {
-    return `${this._end.source}`
+    return `${this.#end.source}`
   }
 
   getEndWithResolvedBackReferences(sourceText: string, captures: any[]) {
-    return this._end.resolveBackReferences(sourceText, captures)
+    return this.#end.resolveBackReferences(sourceText, captures)
   }
 
   collectPatterns(_grammar: any, out: any) {
-    out.push(this._begin)
+    out.push(this.#begin)
   }
 
   compile(grammar: any, end: any) {
-    return this._getCachedCompiledPatterns(grammar, end).compile(grammar)
+    return this.#getCachedCompiledPatterns(grammar, end).compile(grammar)
   }
 
   compileAG(grammar: any, end: any, isFirstLine: any, atAnchor: any) {
-    return this._getCachedCompiledPatterns(grammar, end).compileAG(
+    return this.#getCachedCompiledPatterns(grammar, end).compileAG(
       grammar,
       isFirstLine,
       atAnchor
     )
   }
 
-  private _getCachedCompiledPatterns(grammar: any, _end: any) {
-    const compiled = this._cachedCompiledPatterns.get((list) => {
+  #getCachedCompiledPatterns(grammar: any, _end: any) {
+    const compiled = this.#cachedCompiledPatterns.get((list) => {
       for (const patternRuleId of this.patterns) {
         grammar.getRule(patternRuleId).collectPatterns(grammar, list)
       }
       if (this.applyEndPatternLast) {
-        list.push(this._end.hasBackReferences ? this._end.clone() : this._end)
+        list.push(this.#end.hasBackReferences ? this.#end.clone() : this.#end)
       } else {
         list.unshift(
-          this._end.hasBackReferences ? this._end.clone() : this._end
+          this.#end.hasBackReferences ? this.#end.clone() : this.#end
         )
       }
     })
 
-    if (this._end.hasBackReferences) {
+    if (this.#end.hasBackReferences) {
       if (this.applyEndPatternLast) {
         compiled.setSource(compiled.length() - 1, _end)
       } else {
@@ -2335,18 +2338,18 @@ export class BeginEndRule extends Rule {
 }
 
 export class BeginWhileRule extends Rule {
-  private _begin: RegExpSource
+  #begin: RegExpSource
   beginCaptures: any
   whileCaptures: any
-  private _while: RegExpSource
+  #while: RegExpSource
   whileHasBackReferences: boolean
   patterns: any[]
   hasMissingPatterns: boolean
-  private _cachedCompiledPatterns = new CachedRegExpSourceList()
-  private _cachedCompiledWhilePatterns = new CachedRegExpSourceList()
+  #cachedCompiledPatterns = new CachedRegExpSourceList()
+  #cachedCompiledWhilePatterns = new CachedRegExpSourceList()
 
   constructor(
-    location: any,
+    location: TextMateLocation | null,
     id: number,
     name: string | null,
     contentName: string | null,
@@ -2357,50 +2360,50 @@ export class BeginWhileRule extends Rule {
     patterns: any
   ) {
     super(location, id, name, contentName)
-    this._begin = new RegExpSource(begin, this.id)
+    this.#begin = new RegExpSource(begin, this.id)
     this.beginCaptures = beginCaptures
     this.whileCaptures = whileCaptures
-    this._while = new RegExpSource(whilePattern, whileRuleId)
-    this.whileHasBackReferences = this._while.hasBackReferences
+    this.#while = new RegExpSource(whilePattern, whileRuleId)
+    this.whileHasBackReferences = this.#while.hasBackReferences
     this.patterns = patterns.patterns
     this.hasMissingPatterns = patterns.hasMissingPatterns
   }
 
   dispose() {
-    this._cachedCompiledPatterns.dispose()
-    this._cachedCompiledWhilePatterns.dispose()
+    this.#cachedCompiledPatterns.dispose()
+    this.#cachedCompiledWhilePatterns.dispose()
   }
 
   get debugBeginRegExp() {
-    return `${this._begin.source}`
+    return `${this.#begin.source}`
   }
 
   get debugWhileRegExp() {
-    return `${this._while.source}`
+    return `${this.#while.source}`
   }
 
   getWhileWithResolvedBackReferences(sourceText: string, captures: any[]) {
-    return this._while.resolveBackReferences(sourceText, captures)
+    return this.#while.resolveBackReferences(sourceText, captures)
   }
 
   collectPatterns(_grammar: any, out: any) {
-    out.push(this._begin)
+    out.push(this.#begin)
   }
 
   compile(grammar: any, _end: any) {
-    return this._getCachedCompiledPatterns(grammar).compile(grammar)
+    return this.#getCachedCompiledPatterns(grammar).compile(grammar)
   }
 
   compileAG(grammar: any, _end: any, isFirstLine: any, atAnchor: any) {
-    return this._getCachedCompiledPatterns(grammar).compileAG(
+    return this.#getCachedCompiledPatterns(grammar).compileAG(
       grammar,
       isFirstLine,
       atAnchor
     )
   }
 
-  private _getCachedCompiledPatterns(grammar: any) {
-    return this._cachedCompiledPatterns.get((list) => {
+  #getCachedCompiledPatterns(grammar: any) {
+    return this.#cachedCompiledPatterns.get((list) => {
       for (const patternRuleId of this.patterns) {
         grammar.getRule(patternRuleId).collectPatterns(grammar, list)
       }
@@ -2408,51 +2411,86 @@ export class BeginWhileRule extends Rule {
   }
 
   compileWhile(grammar: any, end: any) {
-    return this._getCachedCompiledWhilePatterns(grammar, end).compile(grammar)
+    return this.#getCachedCompiledWhilePatterns(grammar, end).compile(grammar)
   }
 
   compileWhileAG(grammar: any, end: any, isFirstLine: any, atAnchor: any) {
-    return this._getCachedCompiledWhilePatterns(grammar, end).compileAG(
+    return this.#getCachedCompiledWhilePatterns(grammar, end).compileAG(
       grammar,
       isFirstLine,
       atAnchor
     )
   }
 
-  private _getCachedCompiledWhilePatterns(_grammar: any, end: any) {
-    const compiled = this._cachedCompiledWhilePatterns.get((list) => {
+  #getCachedCompiledWhilePatterns(_grammar: any, end: any) {
+    const compiled = this.#cachedCompiledWhilePatterns.get((list) => {
       list.push(
-        this._while.hasBackReferences ? this._while.clone() : this._while
+        this.#while.hasBackReferences ? this.#while.clone() : this.#while
       )
     })
-    if (this._while.hasBackReferences) {
+    if (this.#while.hasBackReferences) {
       compiled.setSource(0, end || '')
     }
     return compiled
   }
 }
 
+export type TextMateLocation = {
+  filename: string
+  line: number
+  char?: number
+}
+
+export type RawRepository = Record<string, RawRule>
+
+export type RawCaptures = Record<string, RawCaptureRule | null> & {
+  $textmateLocation?: TextMateLocation
+}
+
+export type RawCaptureRule = RawRule
+
+export interface RawRule {
+  $textmateLocation?: TextMateLocation
+  name?: string | null
+  contentName?: string | null
+  match?: string
+  begin?: string
+  end?: string
+  while?: string
+  applyEndPatternLast?: boolean
+  captures?: RawCaptures
+  beginCaptures?: RawCaptures
+  endCaptures?: RawCaptures
+  whileCaptures?: RawCaptures
+  patterns?: RawRule[]
+  repository?: RawRepository
+  include?: string
+}
+
 export class RuleFactory {
   // Raw rules are shared objects across grammars (e.g. when one grammar includes another).
   // Storing a numeric `id` on the raw rule object causes cross-grammar corruption because
   // rule IDs are per-Grammar-instance. Keep rule IDs in a per-Grammar WeakMap instead.
-  private static _rawRuleIdMaps = new WeakMap<any, WeakMap<object, number>>()
+  private static _rawRuleIdMaps = new WeakMap<
+    Grammar,
+    WeakMap<RawRule, number>
+  >()
 
-  private static _getRawRuleIdMap(grammar: any): WeakMap<object, number> {
+  private static _getRawRuleIdMap(grammar: Grammar): WeakMap<RawRule, number> {
     let map = RuleFactory._rawRuleIdMaps.get(grammar)
     if (!map) {
-      map = new WeakMap<object, number>()
+      map = new WeakMap<RawRule, number>()
       RuleFactory._rawRuleIdMaps.set(grammar, map)
     }
     return map
   }
 
   static createCaptureRule(
-    grammar: any,
-    location: any,
-    name: any,
-    contentName: any,
-    retokenizeRuleId: any
+    grammar: Grammar,
+    location: TextMateLocation | null,
+    name: string | null,
+    contentName: string | null,
+    retokenizeRuleId: number
   ) {
     return grammar.registerRule(
       (ruleId: number) =>
@@ -2460,7 +2498,11 @@ export class RuleFactory {
     )
   }
 
-  static getCompiledRuleId(rawRule: any, grammar: any, repository: any) {
+  static getCompiledRuleId(
+    rawRule: RawRule,
+    grammar: Grammar,
+    repository: RawRepository
+  ) {
     const rawRuleIdMap = RuleFactory._getRawRuleIdMap(grammar)
     const existingId = rawRuleIdMap.get(rawRule)
     if (!existingId) {
@@ -2469,15 +2511,11 @@ export class RuleFactory {
         try {
           if (rawRule.match) {
             return new MatchRule(
-              rawRule.$textmateLocation,
+              rawRule.$textmateLocation ?? null,
               newId,
-              rawRule.name,
+              rawRule.name ?? null,
               rawRule.match,
-              RuleFactory._compileCaptures(
-                rawRule.captures,
-                grammar,
-                repository
-              )
+              RuleFactory.compileCaptures(rawRule.captures, grammar, repository)
             )
           }
 
@@ -2488,59 +2526,55 @@ export class RuleFactory {
             if (typeof patterns === 'undefined' && rawRule.include)
               patterns = [{ include: rawRule.include }]
             return new IncludeOnlyRule(
-              rawRule.$textmateLocation,
+              rawRule.$textmateLocation ?? null,
               newId,
-              rawRule.name,
-              rawRule.contentName,
-              RuleFactory._compilePatterns(patterns, grammar, repository)
+              rawRule.name ?? null,
+              rawRule.contentName ?? null,
+              RuleFactory.compilePatterns(patterns, grammar, repository)
             )
           }
 
           if (rawRule.while) {
             return new BeginWhileRule(
-              rawRule.$textmateLocation,
+              rawRule.$textmateLocation ?? null,
               newId,
-              rawRule.name,
-              rawRule.contentName,
+              rawRule.name ?? null,
+              rawRule.contentName ?? null,
               rawRule.begin,
-              RuleFactory._compileCaptures(
+              RuleFactory.compileCaptures(
                 rawRule.beginCaptures || rawRule.captures,
                 grammar,
                 repository
               ),
               rawRule.while,
-              RuleFactory._compileCaptures(
+              RuleFactory.compileCaptures(
                 rawRule.whileCaptures || rawRule.captures,
                 grammar,
                 repository
               ),
-              RuleFactory._compilePatterns(
-                rawRule.patterns,
-                grammar,
-                repository
-              )
+              RuleFactory.compilePatterns(rawRule.patterns, grammar, repository)
             )
           }
 
           return new BeginEndRule(
-            rawRule.$textmateLocation,
+            rawRule.$textmateLocation ?? null,
             newId,
-            rawRule.name,
-            rawRule.contentName,
+            rawRule.name ?? null,
+            rawRule.contentName ?? null,
             rawRule.begin,
-            RuleFactory._compileCaptures(
+            RuleFactory.compileCaptures(
               rawRule.beginCaptures || rawRule.captures,
               grammar,
               repository
             ),
             rawRule.end,
-            RuleFactory._compileCaptures(
+            RuleFactory.compileCaptures(
               rawRule.endCaptures || rawRule.captures,
               grammar,
               repository
             ),
             rawRule.applyEndPatternLast,
-            RuleFactory._compilePatterns(rawRule.patterns, grammar, repository)
+            RuleFactory.compilePatterns(rawRule.patterns, grammar, repository)
           )
         } catch (error) {
           // Avoid leaving a dangling id mapping when rule construction fails.
@@ -2553,8 +2587,12 @@ export class RuleFactory {
     return existingId
   }
 
-  static _compileCaptures(captures: any, grammar: any, repository: any) {
-    const out: any[] = []
+  static compileCaptures(
+    captures: RawCaptures | undefined,
+    grammar: Grammar,
+    repository: RawRepository
+  ): Array<number | null> {
+    const out: Array<number | null> = []
     if (captures) {
       let maxCaptureId = 0
       for (const key in captures) {
@@ -2564,10 +2602,11 @@ export class RuleFactory {
       }
       for (let index = 0; index <= maxCaptureId; index++) out[index] = null
 
-      for (const captureIdStr in captures) {
-        if (captureIdStr === '$textmateLocation') continue
-        const captureId = parseInt(captureIdStr, 10)
-        const captureRule = captures[captureIdStr]
+      for (const captureIdString in captures) {
+        if (captureIdString === '$textmateLocation') continue
+        const captureId = parseInt(captureIdString, 10)
+        const captureRule = captures[captureIdString]
+        if (!captureRule) continue
 
         let retokenizeRuleId = 0
         if (captureRule.patterns) {
@@ -2580,9 +2619,9 @@ export class RuleFactory {
 
         out[captureId] = RuleFactory.createCaptureRule(
           grammar,
-          captureRule.$textmateLocation,
-          captureRule.name,
-          captureRule.contentName,
+          captureRule.$textmateLocation ?? null,
+          captureRule.name ?? null,
+          captureRule.contentName ?? null,
           retokenizeRuleId
         )
       }
@@ -2590,11 +2629,11 @@ export class RuleFactory {
     return out
   }
 
-  private static _resolveIncludeRuleId(
+  private static resolveIncludeRuleId(
     includeRef: IncludeReference,
     include: string,
-    grammar: any,
-    repository: any
+    grammar: Grammar,
+    repository: RawRepository
   ): number {
     switch (includeRef.kind) {
       case 0:
@@ -2613,7 +2652,7 @@ export class RuleFactory {
       case 4: {
         const scopeName = includeRef.scopeName
         const ruleName = includeRef.kind === 4 ? includeRef.ruleName : null
-        const external = grammar.getExternalGrammar(scopeName, repository)
+        const external = grammar.getExternalGrammar(scopeName)
         if (!external) return -1
         if (ruleName) {
           const repoRule = external.repository[ruleName]
@@ -2625,7 +2664,7 @@ export class RuleFactory {
           )
         }
         return RuleFactory.getCompiledRuleId(
-          external.repository.$self,
+          external.repository['$self'],
           grammar,
           external.repository
         )
@@ -2635,8 +2674,12 @@ export class RuleFactory {
     }
   }
 
-  static _compilePatterns(patterns: any, grammar: any, repository: any) {
-    const compiled: any[] = []
+  static compilePatterns(
+    patterns: RawRule[] | undefined,
+    grammar: Grammar,
+    repository: RawRepository
+  ) {
+    const compiled: number[] = []
     if (patterns) {
       for (
         let index = 0, patternsLength = patterns.length;
@@ -2648,7 +2691,7 @@ export class RuleFactory {
 
         if (pat.include) {
           const includeRef = parseInclude(pat.include)
-          ruleId = RuleFactory._resolveIncludeRuleId(
+          ruleId = RuleFactory.resolveIncludeRuleId(
             includeRef,
             pat.include,
             grammar,
@@ -2659,7 +2702,7 @@ export class RuleFactory {
         }
 
         if (ruleId !== -1) {
-          const rule = grammar._ruleId2rule[ruleId]
+          const rule = grammar.getRuleIfExists(ruleId)
 
           // Only check for optimization if the rule is already fully registered.
           // If !rule, it means it is currently being compiled (recursion).
@@ -2692,7 +2735,7 @@ export class RegExpSource {
   ruleId: number
   hasBackReferences: boolean
   // Performance: Lazy initialization - undefined means not computed yet, null means no anchors
-  private _anchorCache:
+  #anchorCache:
     | { A0_G0: string; A0_G1: string; A1_G0: string; A1_G1: string }
     | null
     | undefined = undefined
@@ -2745,7 +2788,7 @@ export class RegExpSource {
     if (this.source !== nextSource) {
       this.source = nextSource
       // Invalidate anchor cache
-      if (this.hasAnchor) this._anchorCache = undefined
+      if (this.hasAnchor) this.#anchorCache = undefined
     }
   }
 
@@ -2759,14 +2802,14 @@ export class RegExpSource {
   }
 
   // Performance: Lazy build of anchor cache
-  private _getAnchorCache() {
-    if (this._anchorCache === undefined) {
-      this._anchorCache = this.hasAnchor ? this._buildAnchorCache() : null
+  #getAnchorCache() {
+    if (this.#anchorCache === undefined) {
+      this.#anchorCache = this.hasAnchor ? this.#buildAnchorCache() : null
     }
-    return this._anchorCache
+    return this.#anchorCache
   }
 
-  private _buildAnchorCache() {
+  #buildAnchorCache() {
     // keep the backslash, and replace the next character to either preserve
     // the anchor ('A'/'G') or make it fail ('\uFFFF').
     const A0_G0: string[] = []
@@ -2816,7 +2859,7 @@ export class RegExpSource {
 
   resolveAnchors(isFirstLine: boolean, atAnchor: boolean) {
     if (this.hasAnchor) {
-      const cache = this._getAnchorCache()
+      const cache = this.#getAnchorCache()
       if (cache) {
         if (isFirstLine) return atAnchor ? cache.A1_G1 : cache.A1_G0
         return atAnchor ? cache.A0_G1 : cache.A0_G0
@@ -2827,10 +2870,10 @@ export class RegExpSource {
 }
 
 export class RegExpSourceList {
-  private _items: RegExpSource[] = []
-  private _hasAnchors = false
-  private _cached: CompiledRule | null = null
-  private _anchorCache: {
+  #items: RegExpSource[] = []
+  #hasAnchors = false
+  #cached: CompiledRule | null = null
+  #anchorCache: {
     A0_G0: CompiledRule | null
     A0_G1: CompiledRule | null
     A1_G0: CompiledRule | null
@@ -2843,60 +2886,54 @@ export class RegExpSourceList {
   }
 
   dispose() {
-    this._disposeCaches()
+    this.#disposeCaches()
   }
 
-  private _disposeCaches() {
-    if (this._cached) {
-      this._cached.dispose()
-      this._cached = null
-    }
+  #disposeCaches() {
+    if (this.#cached) this.#cached = null
     for (const key of ['A0_G0', 'A0_G1', 'A1_G0', 'A1_G1'] as const) {
-      if (this._anchorCache[key]) {
-        this._anchorCache[key]!.dispose()
-        this._anchorCache[key] = null
-      }
+      if (this.#anchorCache[key]) this.#anchorCache[key] = null
     }
   }
 
   push(value: RegExpSource) {
-    this._items.push(value)
-    this._hasAnchors = this._hasAnchors || value.hasAnchor
+    this.#items.push(value)
+    this.#hasAnchors = this.#hasAnchors || value.hasAnchor
   }
 
   unshift(value: RegExpSource) {
-    this._items.unshift(value)
-    this._hasAnchors = this._hasAnchors || value.hasAnchor
+    this.#items.unshift(value)
+    this.#hasAnchors = this.#hasAnchors || value.hasAnchor
   }
 
   length() {
-    return this._items.length
+    return this.#items.length
   }
 
   setSource(index: number, source: string) {
-    if (this._items[index].source !== source) {
-      this._disposeCaches()
-      this._items[index].setSource(source)
+    if (this.#items[index].source !== source) {
+      this.#disposeCaches()
+      this.#items[index].setSource(source)
     }
   }
 
   compile(grammar: any) {
-    if (!this._cached) {
-      const items = this._items
-      const len = items.length
-      const sources = new Array<string>(len)
-      const rules = new Array<number>(len)
-      for (let i = 0; i < len; i++) {
-        sources[i] = items[i].source
-        rules[i] = items[i].ruleId
+    if (!this.#cached) {
+      const items = this.#items
+      const length = items.length
+      const sources = new Array<string>(length)
+      const rules = new Array<number>(length)
+      for (let index = 0; index < length; index++) {
+        sources[index] = items[index].source
+        rules[index] = items[index].ruleId
       }
-      this._cached = new CompiledRule(grammar, sources, rules)
+      this.#cached = new CompiledRule(grammar, sources, rules)
     }
-    return this._cached
+    return this.#cached
   }
 
   compileAG(grammar: any, isFirstLine: boolean, atAnchor: boolean) {
-    if (this._hasAnchors) {
+    if (this.#hasAnchors) {
       const key = isFirstLine
         ? atAnchor
           ? 'A1_G1'
@@ -2905,29 +2942,25 @@ export class RegExpSourceList {
           ? 'A0_G1'
           : 'A0_G0'
 
-      if (!this._anchorCache[key])
-        this._anchorCache[key] = this._resolveAnchors(
+      if (!this.#anchorCache[key])
+        this.#anchorCache[key] = this.#resolveAnchors(
           grammar,
           isFirstLine,
           atAnchor
         )
-      return this._anchorCache[key]!
+      return this.#anchorCache[key]!
     }
     return this.compile(grammar)
   }
 
-  private _resolveAnchors(
-    grammar: any,
-    isFirstLine: boolean,
-    atAnchor: boolean
-  ) {
-    const items = this._items
-    const len = items.length
-    const sources = new Array<string>(len)
-    const rules = new Array<number>(len)
-    for (let i = 0; i < len; i++) {
-      sources[i] = items[i].resolveAnchors(isFirstLine, atAnchor)
-      rules[i] = items[i].ruleId
+  #resolveAnchors(grammar: any, isFirstLine: boolean, atAnchor: boolean) {
+    const items = this.#items
+    const length = items.length
+    const sources = new Array<string>(length)
+    const rules = new Array<number>(length)
+    for (let index = 0; index < length; index++) {
+      sources[index] = items[index].resolveAnchors(isFirstLine, atAnchor)
+      rules[index] = items[index].ruleId
     }
     return new CompiledRule(grammar, sources, rules)
   }
@@ -2969,11 +3002,11 @@ function getCaptureCount(
 }
 
 export class CompiledRule {
-  private regexes: RegExp[]
-  private captureBuffer = new Int32Array(64)
-  private matchResult = {
+  #regexes: RegExp[]
+  #captureBuffer = new Int32Array(64)
+  #matchResult = {
     ruleId: 0,
-    captureIndices: this.captureBuffer,
+    captureIndices: this.#captureBuffer,
     captureCount: 0,
   }
   public regExps: string[]
@@ -2983,12 +3016,12 @@ export class CompiledRule {
     this.regExps = regExpSources
     this.rules = rules
 
-    const len = regExpSources.length
-    this.regexes = new Array<RegExp>(len)
-    for (let i = 0; i < len; i++) {
-      const source = regExpSources[i]
+    const length = regExpSources.length
+    this.#regexes = new Array<RegExp>(length)
+    for (let index = 0; index < length; index++) {
+      const source = regExpSources[index]
       try {
-        this.regexes[i] = toRegExp(source, {
+        this.#regexes[index] = toRegExp(source, {
           global: true,
           hasIndices: true,
           lazyCompileLength: 3000,
@@ -3002,19 +3035,15 @@ export class CompiledRule {
           target: 'auto',
         })
       } catch {
-        this.regexes[i] = new RegExp('(?!)', 'g') // Never matches
+        this.#regexes[index] = new RegExp('(?!)', 'g') // Never matches
       }
     }
   }
 
-  dispose() {
-    // RegExp objects don't need disposal
-  }
-
   toString() {
     const lines: string[] = []
-    for (let i = 0; i < this.rules.length; i++) {
-      lines.push('   - ' + this.rules[i] + ': ' + this.regExps[i])
+    for (let index = 0; index < this.rules.length; index++) {
+      lines.push('   - ' + this.rules[index] + ': ' + this.regExps[index])
     }
     return lines.join('\n')
   }
@@ -3025,14 +3054,14 @@ export class CompiledRule {
     let bestMatch: RegExpExecArray | null = null
     let bestPatternIndex = -1
 
-    for (let i = 0; i < this.regexes.length; i++) {
-      const regex = this.regexes[i]
+    for (let index = 0; index < this.#regexes.length; index++) {
+      const regex = this.#regexes[index]
       regex.lastIndex = startPosition
       const match = regex.exec(text)
 
       if (match && (bestMatch === null || match.index < bestMatch.index)) {
         bestMatch = match
-        bestPatternIndex = i
+        bestPatternIndex = index
         if (match.index === startPosition) break
       }
     }
@@ -3043,22 +3072,22 @@ export class CompiledRule {
     const captureCount = indices ? indices.length : bestMatch.length
 
     // Ensure buffer is large enough
-    if (captureCount * 2 > this.captureBuffer.length) {
-      this.captureBuffer = new Int32Array(captureCount * 2)
-      this.matchResult.captureIndices = this.captureBuffer
+    if (captureCount * 2 > this.#captureBuffer.length) {
+      this.#captureBuffer = new Int32Array(captureCount * 2)
+      this.#matchResult.captureIndices = this.#captureBuffer
     }
 
     if (indices) {
       // Fast path: regex engine provides indices directly
-      for (let i = 0; i < captureCount; i++) {
-        const pair = indices[i]
-        const offset = i * 2
+      for (let index = 0; index < captureCount; index++) {
+        const pair = indices[index]
+        const offset = index * 2
         if (pair) {
-          this.captureBuffer[offset] = pair[0]
-          this.captureBuffer[offset + 1] = pair[1]
+          this.#captureBuffer[offset] = pair[0]
+          this.#captureBuffer[offset + 1] = pair[1]
         } else {
-          this.captureBuffer[offset] = -1
-          this.captureBuffer[offset + 1] = -1
+          this.#captureBuffer[offset] = -1
+          this.#captureBuffer[offset + 1] = -1
         }
       }
     } else {
@@ -3066,35 +3095,35 @@ export class CompiledRule {
       const fullMatchIndex = bestMatch.index
       const fullMatchText = bestMatch[0]
 
-      this.captureBuffer[0] = fullMatchIndex
-      this.captureBuffer[1] = fullMatchIndex + fullMatchText.length
+      this.#captureBuffer[0] = fullMatchIndex
+      this.#captureBuffer[1] = fullMatchIndex + fullMatchText.length
 
       let currentOffset = 0
-      for (let i = 1; i < bestMatch.length; i++) {
-        const groupText = bestMatch[i]
-        const bufferOffset = i * 2
+      for (let index = 1; index < bestMatch.length; index++) {
+        const groupText = bestMatch[index]
+        const bufferOffset = index * 2
 
         if (groupText == null) {
-          this.captureBuffer[bufferOffset] = -1
-          this.captureBuffer[bufferOffset + 1] = -1
+          this.#captureBuffer[bufferOffset] = -1
+          this.#captureBuffer[bufferOffset + 1] = -1
         } else {
           const groupIndex = fullMatchText.indexOf(groupText, currentOffset)
           if (groupIndex >= 0) {
             const start = fullMatchIndex + groupIndex
-            this.captureBuffer[bufferOffset] = start
-            this.captureBuffer[bufferOffset + 1] = start + groupText.length
+            this.#captureBuffer[bufferOffset] = start
+            this.#captureBuffer[bufferOffset + 1] = start + groupText.length
             currentOffset = groupIndex + groupText.length
           } else {
-            this.captureBuffer[bufferOffset] = -1
-            this.captureBuffer[bufferOffset + 1] = -1
+            this.#captureBuffer[bufferOffset] = -1
+            this.#captureBuffer[bufferOffset + 1] = -1
           }
         }
       }
     }
 
-    this.matchResult.ruleId = this.rules[bestPatternIndex]
-    this.matchResult.captureCount = captureCount
-    return this.matchResult
+    this.#matchResult.ruleId = this.rules[bestPatternIndex]
+    this.#matchResult.captureCount = captureCount
+    return this.#matchResult
   }
 }
 
@@ -3123,17 +3152,17 @@ export class TopLevelRepositoryRuleReference {
 }
 
 export class ExternalReferenceCollector {
-  private _references: any[] = []
-  private _seenReferenceKeys = new Set<string>()
+  #references: any[] = []
+  #seenReferenceKeys = new Set<string>()
   visitedRule = new Set<any>()
   get references() {
-    return this._references
+    return this.#references
   }
   add(ref: any) {
     const key = ref.toKey()
-    if (!this._seenReferenceKeys.has(key)) {
-      this._seenReferenceKeys.add(key)
-      this._references.push(ref)
+    if (!this.#seenReferenceKeys.has(key)) {
+      this.#seenReferenceKeys.add(key)
+      this.#references.push(ref)
     }
   }
 }
@@ -3158,13 +3187,18 @@ export class ScopeDependencyProcessor {
     this.queue = []
     const collector = new ExternalReferenceCollector()
 
-    for (let i = 0, len = current.length; i < len; i++) {
-      processDependency(current[i], this.initialScopeName, this.repo, collector)
+    for (let index = 0, length = current.length; index < length; index++) {
+      processDependency(
+        current[index],
+        this.initialScopeName,
+        this.repo,
+        collector
+      )
     }
 
     const references = collector.references
-    for (let i = 0, len = references.length; i < len; i++) {
-      const ref = references[i]
+    for (let index = 0, length = references.length; index < length; index++) {
+      const ref = references[index]
       if (ref instanceof TopLevelRuleReference) {
         if (this.seenFullScopeRequests.has(ref.scopeName)) continue
         this.seenFullScopeRequests.add(ref.scopeName)
@@ -3254,8 +3288,8 @@ function processRulePatterns(
   ctx: any,
   collector: ExternalReferenceCollector
 ) {
-  for (let i = 0, len = patterns.length; i < len; i++) {
-    const rule = patterns[i]
+  for (let index = 0, length = patterns.length; index < length; index++) {
+    const rule = patterns[index]
     if (collector.visitedRule.has(rule)) continue
     collector.visitedRule.add(rule)
 
@@ -3436,8 +3470,8 @@ function createGrammarInjection(
 ) {
   const matchers = createMatchers(selector, nameMatcher)
   const ruleId = RuleFactory.getCompiledRuleId(rawRule, grammar, ctx.repository)
-  for (let i = 0, len = matchers.length; i < len; i++) {
-    const m = matchers[i]
+  for (let index = 0, length = matchers.length; index < length; index++) {
+    const m = matchers[index]
     injections.push({
       debugSelector: selector,
       matcher: m.matcher,
@@ -3448,7 +3482,7 @@ function createGrammarInjection(
   }
 }
 
-export function _tokenizeString(
+function tokenizeString(
   grammar: Grammar,
   lineText: string,
   isFirstLine: boolean,
@@ -3459,9 +3493,9 @@ export function _tokenizeString(
   checkWhileConditions: boolean,
   timeLimitMs: number
 ) {
-  const produce = (state: StateStackImplementation, pos: number) => {
-    lineTokens.produce(state, pos)
-    lineFonts.produce(state, pos)
+  const produce = (state: StateStackImplementation, position: number) => {
+    lineTokens.produce(state, position)
+    lineFonts.produce(state, position)
   }
 
   const lineLength = lineText.length
@@ -3487,10 +3521,10 @@ export function _tokenizeString(
     ) {
       const produceFromStack = (
         state: StateStackImplementation,
-        pos: number
+        position: number
       ) => {
-        lineTokens.produce(state, pos)
-        lineFonts.produce(state, pos)
+        lineTokens.produce(state, position)
+        lineFonts.produce(state, position)
       }
 
       let anchorPosition = stack.beginRuleCapturedEOL
@@ -3947,18 +3981,24 @@ function handleCaptures(
   captureIndices: Int32Array | Array<{ start: number; end: number }>,
   captureCount: number
 ) {
-  const produceFromScopes = (scopes: AttributedScopeStack, pos: number) => {
-    lineTokens.produceFromScopes(scopes, pos)
-    lineFonts.produceFromScopes(scopes, pos)
+  const produceFromScopes = (
+    scopes: AttributedScopeStack,
+    position: number
+  ) => {
+    lineTokens.produceFromScopes(scopes, position)
+    lineFonts.produceFromScopes(scopes, position)
   }
-  const produceFromStack = (state: StateStackImplementation, pos: number) => {
-    lineTokens.produce(state, pos)
-    lineFonts.produce(state, pos)
+  const produceFromStack = (
+    state: StateStackImplementation,
+    position: number
+  ) => {
+    lineTokens.produce(state, position)
+    lineFonts.produce(state, position)
   }
 
   if (!captureRules || captureRules.length === 0) return
 
-  const len = Math.min(captureRules.length, captureCount)
+  const length = Math.min(captureRules.length, captureCount)
   const localStack = grammar._localStackPool
   localStack.length = 0
   let localStackLen = 0
@@ -3970,19 +4010,19 @@ function handleCaptures(
   // Ensure pool has enough capacity
   if (captureArray.length < captureCount) {
     const needed = captureCount - captureArray.length
-    for (let i = 0; i < needed; i++) {
+    for (let index = 0; index < needed; index++) {
       captureArray.push({ start: 0, end: 0, length: 0 })
     }
   }
-  for (let i = 0; i < captureCount; i++) {
-    const start = getCaptureStart(captureIndices, i)
-    const end = getCaptureEnd(captureIndices, i)
-    captureArray[i].start = start
-    captureArray[i].end = end
-    captureArray[i].length = end >= start ? end - start : 0
+  for (let index = 0; index < captureCount; index++) {
+    const start = getCaptureStart(captureIndices, index)
+    const end = getCaptureEnd(captureIndices, index)
+    captureArray[index].start = start
+    captureArray[index].end = end
+    captureArray[index].length = end >= start ? end - start : 0
   }
 
-  for (let index = 0; index < len; index++) {
+  for (let index = 0; index < length; index++) {
     const captureRuleId = captureRules[index]
     if (captureRuleId === null) continue
 
@@ -4026,7 +4066,7 @@ function handleCaptures(
         contentScopes
       )
 
-      _tokenizeString(
+      tokenizeString(
         grammar,
         lineText.substring(0, capture.end),
         isFirstLine && capture.start === 0,
@@ -4068,7 +4108,7 @@ function handleCaptures(
 // Attributed scope stacks + token emission
 
 export class AttributedScopeStack {
-  private _cachedScopeNames: string[] | null = null
+  #cachedScopeNames: string[] | null = null
 
   parent: AttributedScopeStack | null
   scopeName: string | null
@@ -4149,16 +4189,16 @@ export class AttributedScopeStack {
   }
 
   getScopeNames(): string[] {
-    if (this._cachedScopeNames) return this._cachedScopeNames
+    if (this.#cachedScopeNames) return this.#cachedScopeNames
 
     const out: string[] = []
-    let cur: AttributedScopeStack | null = this
-    while (cur) {
-      if (cur.scopeName) out.push(cur.scopeName)
-      cur = cur.parent
+    let current: AttributedScopeStack | null = this
+    while (current) {
+      if (current.scopeName) out.push(current.scopeName)
+      current = current.parent
     }
     out.reverse()
-    this._cachedScopeNames = out
+    this.#cachedScopeNames = out
     return out
   }
 
@@ -4204,8 +4244,8 @@ export class AttributedScopeStack {
     frames: AttributedScopeStackFrame[]
   ): AttributedScopeStack | null {
     let current = base
-    for (let i = 0, framesLen = frames.length; i < framesLen; i++) {
-      const frame = frames[i]
+    for (let index = 0, framesLen = frames.length; index < framesLen; index++) {
+      const frame = frames[index]
       const scopeNames = frame.scopeNames
       for (
         let j = 0, scopeNamesLen = scopeNames.length;
@@ -4233,16 +4273,16 @@ export class LineTokens {
   // Output is `[startIndex0, metadata0, startIndex1, metadata1, ...]`
   // Note, `finalize()` returns a subarray view. Callers that retain tokens
   // beyond the current processing step must copy (e.g. `tokens.slice(0)`).
-  private tokens: Uint32Array = new Uint32Array(64)
-  private tokensCapacity = 64
-  private tokensLen = 0
-  private lastPosition = 0
-  private lastMetadata = 0
+  #tokens: Uint32Array = new Uint32Array(64)
+  #tokensCapacity = 64
+  #tokensLen = 0
+  #lastPosition = 0
+  #lastMetadata = 0
 
   reset() {
-    this.tokensLen = 0
-    this.lastPosition = 0
-    this.lastMetadata = 0
+    this.#tokensLen = 0
+    this.#lastPosition = 0
+    this.#lastMetadata = 0
   }
 
   produce(stack: StateStackImplementation, endPosition: number) {
@@ -4250,57 +4290,57 @@ export class LineTokens {
   }
 
   produceFromScopes(scopes: AttributedScopeStack, endPosition: number) {
-    if (endPosition <= this.lastPosition) {
+    if (endPosition <= this.#lastPosition) {
       return
     }
     const metadata = scopes.tokenAttributes >>> 0
 
-    if (this.tokensLen === 0 || this.lastMetadata !== metadata) {
+    if (this.#tokensLen === 0 || this.#lastMetadata !== metadata) {
       // Grow array if needed
-      if (this.tokensLen + 2 > this.tokensCapacity) {
+      if (this.#tokensLen + 2 > this.#tokensCapacity) {
         // Grow by doubling capacity to reduce reallocations
-        const newCapacity = this.tokensCapacity * 2
+        const newCapacity = this.#tokensCapacity * 2
         const newTokens = new Uint32Array(newCapacity)
-        newTokens.set(this.tokens.subarray(0, this.tokensLen))
-        this.tokens = newTokens
-        this.tokensCapacity = newCapacity
+        newTokens.set(this.#tokens.subarray(0, this.#tokensLen))
+        this.#tokens = newTokens
+        this.#tokensCapacity = newCapacity
       }
-      this.tokens[this.tokensLen++] = this.lastPosition
-      this.tokens[this.tokensLen++] = metadata
+      this.#tokens[this.#tokensLen++] = this.#lastPosition
+      this.#tokens[this.#tokensLen++] = metadata
     }
-    this.lastPosition = endPosition
-    this.lastMetadata = metadata
+    this.#lastPosition = endPosition
+    this.#lastMetadata = metadata
   }
 
   finalize(lineLength: number) {
     // Ensure last token ends at lineLength by just updating lastPos.
-    this.lastPosition = lineLength
+    this.#lastPosition = lineLength
     // Return a subarray view to avoid copying. Callers that need to retain
     // tokens beyond the current processing step must copy.
-    return this.tokens.subarray(0, this.tokensLen)
+    return this.#tokens.subarray(0, this.#tokensLen)
   }
 }
 
 export class LineFonts {
   // Optional: for variable fonts / family/size/lineHeight rendering, keep simple.
   // Mirrors LineTokens but holds font overrides. If you don't use it, it's harmless.
-  private spans: Array<{
+  #spans: Array<{
     start: number
     fontFamily: string | null
     fontSize: string | null
     lineHeight: number | null
   }> = []
-  private lastPosition = 0
-  private _lastFontFamily: string | null = null
-  private _lastFontSize: string | null = null
-  private _lastLineHeight: number | null = null
+  #lastPosition = 0
+  #lastFontFamily: string | null = null
+  #lastFontSize: string | null = null
+  #lastLineHeight: number | null = null
 
   reset() {
-    this.spans = []
-    this.lastPosition = 0
-    this._lastFontFamily = null
-    this._lastFontSize = null
-    this._lastLineHeight = null
+    this.#spans = []
+    this.#lastPosition = 0
+    this.#lastFontFamily = null
+    this.#lastFontSize = null
+    this.#lastLineHeight = null
   }
 
   produce(stack: StateStackImplementation, endPosition: number) {
@@ -4308,60 +4348,60 @@ export class LineFonts {
   }
 
   produceFromScopes(scopes: AttributedScopeStack, endPosition: number) {
-    if (endPosition <= this.lastPosition) return
+    if (endPosition <= this.#lastPosition) return
 
-    const fontFamily = this.getFontFamily(scopes)
-    const fontSize = this.getFontSize(scopes)
-    const lineHeight = this.getLineHeight(scopes)
+    const fontFamily = this.#getFontFamily(scopes)
+    const fontSize = this.#getFontSize(scopes)
+    const lineHeight = this.#getLineHeight(scopes)
 
     // If none are set anywhere in the parent chain, do nothing.
     if (!fontFamily && !fontSize && !lineHeight) {
-      this.lastPosition = endPosition
+      this.#lastPosition = endPosition
       return
     }
 
     if (
-      fontFamily !== this._lastFontFamily ||
-      fontSize !== this._lastFontSize ||
-      lineHeight !== this._lastLineHeight
+      fontFamily !== this.#lastFontFamily ||
+      fontSize !== this.#lastFontSize ||
+      lineHeight !== this.#lastLineHeight
     ) {
-      this.spans.push({
-        start: this.lastPosition,
+      this.#spans.push({
+        start: this.#lastPosition,
         fontFamily: fontFamily || null,
         fontSize: fontSize || null,
         lineHeight: lineHeight || null,
       })
-      this._lastFontFamily = fontFamily || null
-      this._lastFontSize = fontSize || null
-      this._lastLineHeight = lineHeight || null
+      this.#lastFontFamily = fontFamily || null
+      this.#lastFontSize = fontSize || null
+      this.#lastLineHeight = lineHeight || null
     }
 
-    this.lastPosition = endPosition
+    this.#lastPosition = endPosition
   }
 
   finalize(_lineLength: number) {
-    return this.spans
+    return this.#spans
   }
 
-  private getFontFamily(scopesList: AttributedScopeStack): string | null {
-    return this.getAttribute(scopesList, (styleAttributes) => {
+  #getFontFamily(scopesList: AttributedScopeStack): string | null {
+    return this.#getAttribute(scopesList, (styleAttributes) => {
       return styleAttributes.fontFamily
     })
   }
 
-  private getFontSize(scopesList: AttributedScopeStack): string | null {
-    return this.getAttribute(scopesList, (styleAttributes) => {
+  #getFontSize(scopesList: AttributedScopeStack): string | null {
+    return this.#getAttribute(scopesList, (styleAttributes) => {
       return styleAttributes.fontSize
     })
   }
 
-  private getLineHeight(scopesList: AttributedScopeStack): number | null {
-    return this.getAttribute(scopesList, (styleAttributes) => {
+  #getLineHeight(scopesList: AttributedScopeStack): number | null {
+    return this.#getAttribute(scopesList, (styleAttributes) => {
       return styleAttributes.lineHeight
     })
   }
 
-  private getAttribute<T>(
+  #getAttribute<T>(
     scopesList: AttributedScopeStack | null,
     getAttr: (styleAttributes: StyleAttributes) => T
   ): T | null {
@@ -4378,15 +4418,15 @@ export class LineFonts {
       }
     }
 
-    return this.getAttribute(scopesList.parent, getAttr)
+    return this.#getAttribute(scopesList.parent, getAttr)
   }
 }
 
 export class StateStackImplementation {
   parent: StateStackImplementation | null
   ruleId: number
-  private _enterPosition: number
-  private _anchorPosition: number
+  #enterPosition: number
+  #anchorPosition: number
   beginRuleCapturedEOL: boolean
   endRule: string | null
   nameScopesList: AttributedScopeStack
@@ -4404,8 +4444,8 @@ export class StateStackImplementation {
   ) {
     this.parent = parent
     this.ruleId = ruleId
-    this._enterPosition = enterPosition
-    this._anchorPosition = anchorPosition
+    this.#enterPosition = enterPosition
+    this.#anchorPosition = anchorPosition
     this.beginRuleCapturedEOL = beginRuleCapturedEOL
     this.endRule = endRule
     this.nameScopesList = nameScopesList
@@ -4426,11 +4466,11 @@ export class StateStackImplementation {
   }
 
   getEnterPosition() {
-    return this._enterPosition
+    return this.#enterPosition
   }
 
   getAnchorPosition() {
-    return this._anchorPosition
+    return this.#anchorPosition
   }
 
   /**
@@ -4440,15 +4480,13 @@ export class StateStackImplementation {
    * positions within the current line only.
    */
   reset(): void {
-    StateStackImplementation._resetPositions(this)
+    StateStackImplementation.#resetPositions(this)
   }
 
-  private static _resetPositions(
-    stateStack: StateStackImplementation | null
-  ): void {
+  static #resetPositions(stateStack: StateStackImplementation | null): void {
     while (stateStack) {
-      stateStack._enterPosition = -1
-      stateStack._anchorPosition = -1
+      stateStack.#enterPosition = -1
+      stateStack.#anchorPosition = -1
       stateStack = stateStack.parent
     }
   }
@@ -4457,8 +4495,8 @@ export class StateStackImplementation {
     return new StateStackImplementation(
       this.parent,
       this.ruleId,
-      this._enterPosition,
-      this._anchorPosition,
+      this.#enterPosition,
+      this.#anchorPosition,
       this.beginRuleCapturedEOL,
       this.endRule,
       this.nameScopesList,
@@ -4470,8 +4508,8 @@ export class StateStackImplementation {
     return new StateStackImplementation(
       this.parent,
       this.ruleId,
-      this._enterPosition,
-      this._anchorPosition,
+      this.#enterPosition,
+      this.#anchorPosition,
       this.beginRuleCapturedEOL,
       endRule,
       this.nameScopesList,
@@ -4484,8 +4522,8 @@ export class StateStackImplementation {
     if (!other) return false
     return (
       this.ruleId === other.ruleId &&
-      this._enterPosition === other._enterPosition &&
-      this._anchorPosition === other._anchorPosition &&
+      this.#enterPosition === other.#enterPosition &&
+      this.#anchorPosition === other.#anchorPosition &&
       this.beginRuleCapturedEOL === other.beginRuleCapturedEOL &&
       this.endRule === other.endRule &&
       this.nameScopesList.equals(other.nameScopesList) &&
@@ -4527,8 +4565,8 @@ export class StateStackImplementation {
     return (
       this.ruleId === other.ruleId &&
       this.endRule === other.endRule &&
-      this._enterPosition === other._enterPosition &&
-      this._anchorPosition === other._anchorPosition
+      this.#enterPosition === other.#enterPosition &&
+      this.#anchorPosition === other.#anchorPosition
     )
   }
 
@@ -4538,8 +4576,8 @@ export class StateStackImplementation {
   toStateStackFrame(): StateStackFrame {
     return {
       ruleId: this.ruleId,
-      enterPos: this._enterPosition,
-      anchorPos: this._anchorPosition,
+      enterPos: this.#enterPosition,
+      anchorPos: this.#anchorPosition,
       beginRuleCapturedEOL: this.beginRuleCapturedEOL,
       endRule: this.endRule,
       nameScopesList:
@@ -4601,9 +4639,9 @@ export interface IRawTheme {
 
 export interface IRawGrammar {
   scopeName: string
-  patterns?: any[]
-  repository?: Record<string, any>
-  injections?: Record<string, any>
+  patterns?: RawRule[]
+  repository?: RawRepository
+  injections?: RawRepository
   injectionSelector?: string
 }
 
@@ -4613,36 +4651,36 @@ export type GrammarRepository = {
 }
 
 export class SyncRegistry {
-  private _grammars = new Map<string, IRawGrammar>()
-  private _injections = new Map<string, string[]>()
-  private _theme: Theme | null = null
+  #grammars = new Map<string, IRawGrammar>()
+  #injections = new Map<string, string[]>()
+  #theme: Theme | null = null
 
   setTheme(theme: Theme) {
-    this._theme = theme
+    this.#theme = theme
   }
   getTheme() {
-    if (!this._theme) throw new Error('Missing theme in registry')
-    return this._theme
+    if (!this.#theme) throw new Error('Missing theme in registry')
+    return this.#theme
   }
 
   addGrammar(grammar: IRawGrammar) {
-    this._grammars.set(grammar.scopeName, grammar)
+    this.#grammars.set(grammar.scopeName, grammar)
     // allow grammar.injectionSelector to inject into other grammars by scope name.
-    // You can populate _injections externally as well.
+    // You can populate #injections externally as well.
   }
 
   lookup(scopeName: string) {
-    return this._grammars.get(scopeName) || null
+    return this.#grammars.get(scopeName) || null
   }
 
   injections(scopeName: string) {
-    return this._injections.get(scopeName) || null
+    return this.#injections.get(scopeName) || null
   }
 
   addInjection(targetScope: string, injectorScope: string) {
-    const arr = this._injections.get(targetScope) || []
+    const arr = this.#injections.get(targetScope) || []
     if (!arr.includes(injectorScope)) arr.push(injectorScope)
-    this._injections.set(targetScope, arr)
+    this.#injections.set(targetScope, arr)
   }
 }
 
@@ -4671,35 +4709,35 @@ export interface StateStackFrame {
 }
 
 export class Grammar {
-  private _ruleId = 0
-  private _ruleId2rule: Rule[] = []
-  private _injections: any[] = []
-  private _injectionGrammarScopes: string[] = []
+  #ruleId = 0
+  private ruleId2rule: Rule[] = []
+  #injections: any[] = []
+  #injectionGrammarScopes: string[] = []
 
   readonly repository: Record<string, any>
 
-  private _basicScopeAttributesProvider: BasicScopeAttributesProvider
-  private _tokenTypeMatchers: ScopeMatcher
-  private _balancedBracketMatchers: {
+  #basicScopeAttributesProvider: BasicScopeAttributesProvider
+  #tokenTypeMatchers: ScopeMatcher
+  #balancedBracketMatchers: {
     matcher: (names: string[]) => boolean
   }[] = []
-  private _metadataCache = new WeakMap<
+  #metadataCache = new WeakMap<
     AttributedScopeStack,
     Map<
       string,
       { tokenAttributes: number; styleAttributes: StyleAttributes | null }
     >
   >()
-  private _metadataCacheRoot = new Map<
+  #metadataCacheRoot = new Map<
     string,
     { tokenAttributes: number; styleAttributes: StyleAttributes | null }
   >()
-  private _cachedThemeForMetadata: Theme | null = null
+  #cachedThemeForMetadata: Theme | null = null
 
   // Performance: Pooled instances to reduce allocations
-  private _lineTokensPool: LineTokens = new LineTokens()
-  private _lineFontsPool: LineFonts = new LineFonts()
-  // Pools are accessed by helper functions in the same file
+  #lineTokensPool: LineTokens = new LineTokens()
+  #lineFontsPool: LineFonts = new LineFonts()
+  // Pools are accessed by helper functions in the same file - keep as private (not #)
   _loopGuardPool = {
     seen: new Map<any, Set<number>>(),
     setPool: [] as Set<number>[],
@@ -4717,10 +4755,10 @@ export class Grammar {
   _localStackPool: LocalStackElement[] = []
 
   scopeName: string
-  private _rawGrammar: IRawGrammar
-  private _languageId: number
-  private _grammarRepository: GrammarRepository
-  private _registry: SyncRegistry
+  #rawGrammar: IRawGrammar
+  #languageId: number
+  #grammarRepository: GrammarRepository
+  #registry: SyncRegistry
 
   constructor(
     scopeName: string,
@@ -4733,27 +4771,27 @@ export class Grammar {
     registry: SyncRegistry
   ) {
     this.scopeName = scopeName
-    this._rawGrammar = rawGrammar
-    this._languageId = languageId
-    this._grammarRepository = grammarRepository
-    this._registry = registry
+    this.#rawGrammar = rawGrammar
+    this.#languageId = languageId
+    this.#grammarRepository = grammarRepository
+    this.#registry = registry
 
-    this.repository = mergeObjects({}, this._rawGrammar.repository || {})
+    this.repository = mergeObjects({}, this.#rawGrammar.repository || {})
     // Ensure $self / $base exist.
-    if (!this.repository['$self']) this.repository['$self'] = this._rawGrammar
-    if (!this.repository['$base']) this.repository['$base'] = this._rawGrammar
+    if (!this.repository['$self']) this.repository['$self'] = this.#rawGrammar
+    if (!this.repository['$base']) this.repository['$base'] = this.#rawGrammar
 
-    this._basicScopeAttributesProvider = new BasicScopeAttributesProvider(
-      this._languageId,
+    this.#basicScopeAttributesProvider = new BasicScopeAttributesProvider(
+      this.#languageId,
       embeddedLanguages || {}
     )
-    this._tokenTypeMatchers = new ScopeMatcher(Object.entries(tokenTypes || {}))
+    this.#tokenTypeMatchers = new ScopeMatcher(Object.entries(tokenTypes || {}))
 
     if (balancedBracketSelectors && balancedBracketSelectors.length) {
       for (const sel of balancedBracketSelectors) {
         const matchers = createMatchers(sel, nameMatcher)
         for (const m of matchers)
-          this._balancedBracketMatchers.push({ matcher: m.matcher })
+          this.#balancedBracketMatchers.push({ matcher: m.matcher })
       }
     }
 
@@ -4765,42 +4803,50 @@ export class Grammar {
     )
 
     // Build injections (if any)
-    this._collectInjections()
+    this.#collectInjections()
   }
 
   getRule(ruleId: number) {
-    const r = this._ruleId2rule[ruleId]
-    if (!r) {
+    const rule = this.ruleId2rule[ruleId]
+    if (!rule) {
       throw new Error(
         `Unknown ruleId ${ruleId} in grammar "${this.scopeName}". ` +
-          `This grammar has ${this._ruleId} registered rules (max ruleId: ${this._ruleId}). ` +
+          `This grammar has ${this.#ruleId} registered rules (max ruleId: ${this.#ruleId}). ` +
           `This typically indicates a StateStack from a different grammar instance is being used.`
       )
     }
-    return r
+    return rule
+  }
+
+  getRuleIfExists(ruleId: number) {
+    return this.ruleId2rule[ruleId]
   }
 
   registerRule(factory: (id: number) => Rule) {
-    const id = ++this._ruleId
+    const id = ++this.#ruleId
     const rule = factory(id)
-    this._ruleId2rule[id] = rule
+    this.ruleId2rule[id] = rule
     return id
   }
 
   getInjections() {
-    return this._injections
+    return this.#injections
   }
 
   getExternalGrammar(scopeName: string) {
-    const raw = this._grammarRepository.lookup(scopeName)
+    const raw = this.#grammarRepository.lookup(scopeName)
     if (!raw) return null
     // we create a lightweight external wrapper where repository is raw.repository
     return {
       scopeName,
-      repository: mergeObjects({}, raw.repository || {}, {
-        $self: raw,
-        $base: this._rawGrammar,
-      }),
+      repository: mergeObjects<RawRepository>(
+        Object.create(null) as RawRepository,
+        raw.repository || {},
+        {
+          $self: raw,
+          $base: this.#rawGrammar,
+        }
+      ),
     }
   }
 
@@ -4808,19 +4854,19 @@ export class Grammar {
     scope: string,
     parentScopes: AttributedScopeStack | null
   ): { tokenAttributes: number; styleAttributes: StyleAttributes | null } {
-    const theme = this._registry.getTheme()
+    const theme = this.#registry.getTheme()
 
     // Reset caches if theme changed (style attributes depend on theme).
-    if (this._cachedThemeForMetadata !== theme) {
-      this._cachedThemeForMetadata = theme
-      this._metadataCache = new WeakMap()
-      this._metadataCacheRoot = new Map()
+    if (this.#cachedThemeForMetadata !== theme) {
+      this.#cachedThemeForMetadata = theme
+      this.#metadataCache = new WeakMap()
+      this.#metadataCacheRoot = new Map()
     }
 
     const cacheBucket =
       parentScopes === null
-        ? this._metadataCacheRoot
-        : (this._metadataCache.get(parentScopes) ??
+        ? this.#metadataCacheRoot
+        : (this.#metadataCache.get(parentScopes) ??
           (() => {
             const m = new Map<
               string,
@@ -4829,7 +4875,7 @@ export class Grammar {
                 styleAttributes: StyleAttributes | null
               }
             >()
-            this._metadataCache.set(parentScopes, m)
+            this.#metadataCache.set(parentScopes, m)
             return m
           })())
 
@@ -4841,16 +4887,16 @@ export class Grammar {
     const parentScopeNames = parentScopes ? parentScopes.getScopeNames() : []
 
     const basic =
-      this._basicScopeAttributesProvider.getBasicScopeAttributes(scope)
-    const tokenType = this._tokenTypeMatchers.match(scope) ?? basic.tokenType
+      this.#basicScopeAttributesProvider.getBasicScopeAttributes(scope)
+    const tokenType = this.#tokenTypeMatchers.match(scope) ?? basic.tokenType
     // Create scratch array for balanced bracket check
     const parentLen = parentScopeNames.length
     const scopeNamesWithScope = new Array<string>(parentLen + 1)
-    for (let i = 0; i < parentLen; i++) {
-      scopeNamesWithScope[i] = parentScopeNames[i]
+    for (let index = 0; index < parentLen; index++) {
+      scopeNamesWithScope[index] = parentScopeNames[index]
     }
     scopeNamesWithScope[parentLen] = scope
-    const containsBalanced = this._balancedBracketMatchers.some((m) =>
+    const containsBalanced = this.#balancedBracketMatchers.some((m) =>
       m.matcher(scopeNamesWithScope)
     )
 
@@ -4935,14 +4981,14 @@ export class Grammar {
     const lineTextWithNewline = lineText + '\n'
 
     // Performance: Reuse pooled instances instead of creating new ones
-    const lineTokens = this._lineTokensPool
-    const lineFonts = this._lineFontsPool
+    const lineTokens = this.#lineTokensPool
+    const lineFonts = this.#lineFontsPool
     lineTokens.reset()
     lineFonts.reset()
 
     // Only treat as first line if there is no previous state
     const isFirstLine = !prevState
-    const result = _tokenizeString(
+    const result = tokenizeString(
       this,
       lineTextWithNewline,
       isFirstLine,
@@ -4964,12 +5010,12 @@ export class Grammar {
   }
 
   // Injections: match based on injectionSelector from other grammars registered in registry
-  private _collectInjections() {
+  #collectInjections() {
     // If the raw grammar has injections, compile them.
-    if (this._rawGrammar.injections) {
-      for (const selector in this._rawGrammar.injections) {
-        const rawRule = (this._rawGrammar.injections as any)[selector]
-        createGrammarInjection(this._injections, selector, rawRule, this, {
+    if (this.#rawGrammar.injections) {
+      for (const selector in this.#rawGrammar.injections) {
+        const rawRule = (this.#rawGrammar.injections as any)[selector]
+        createGrammarInjection(this.#injections, selector, rawRule, this, {
           repository: this.repository,
         })
       }
@@ -4977,16 +5023,16 @@ export class Grammar {
 
     // Also include injections provided by registry mappings.
     const injectorScopes =
-      this._grammarRepository.injections(this.scopeName) || []
+      this.#grammarRepository.injections(this.scopeName) || []
     for (const injectorScope of injectorScopes) {
-      if (this._injectionGrammarScopes.includes(injectorScope)) continue
-      this._injectionGrammarScopes.push(injectorScope)
-      const inj = this._grammarRepository.lookup(injectorScope)
+      if (this.#injectionGrammarScopes.includes(injectorScope)) continue
+      this.#injectionGrammarScopes.push(injectorScope)
+      const inj = this.#grammarRepository.lookup(injectorScope)
       if (!inj || !inj.injectionSelector) continue
 
       const selector = inj.injectionSelector
       const rawRule = inj.repository?.['$self'] || inj
-      createGrammarInjection(this._injections, selector, rawRule, this, {
+      createGrammarInjection(this.#injections, selector, rawRule, this, {
         repository: mergeObjects({}, inj.repository || {}, { $self: inj }),
       })
     }
@@ -5004,124 +5050,124 @@ export type TextMateRegistryOptions = {
 }
 
 export class Registry {
-  private _syncRegistry = new SyncRegistry()
-  private _loadGrammar: (scopeName: string) => Promise<IRawGrammar | null>
+  #syncRegistry = new SyncRegistry()
+  #loadGrammar: (scopeName: string) => Promise<IRawGrammar | null>
 
-  private _rawGrammars = new Map<string, IRawGrammar>()
-  private _compiledGrammars = new Map<string, Grammar>()
-  private _injectionScopes = new Set<string>()
-  private _hasTheme = false
+  #rawGrammars = new Map<string, IRawGrammar>()
+  #compiledGrammars = new Map<string, Grammar>()
+  #injectionScopes = new Set<string>()
+  #hasTheme = false
 
   // Prevent race conditions by deduplicating concurrent grammar loads/compilations
-  private _loadingGrammars = new Map<string, Promise<void>>()
-  private _compilingGrammars = new Map<string, Promise<Grammar | null>>()
+  #loadingGrammars = new Map<string, Promise<void>>()
+  #compilingGrammars = new Map<string, Promise<Grammar | null>>()
 
   constructor(options: TextMateRegistryOptions) {
-    this._loadGrammar = options.loadGrammar
+    this.#loadGrammar = options.loadGrammar
   }
 
   setTheme(rawTheme: IRawTheme) {
     const theme = Theme.createFromRawTheme(rawTheme, null)
-    this._syncRegistry.setTheme(theme)
-    this._hasTheme = true
+    this.#syncRegistry.setTheme(theme)
+    this.#hasTheme = true
   }
 
-  private _ensureTheme() {
-    if (!this._hasTheme) {
-      this._syncRegistry.setTheme(Theme.createFromRawTheme(undefined, null))
-      this._hasTheme = true
+  #ensureTheme() {
+    if (!this.#hasTheme) {
+      this.#syncRegistry.setTheme(Theme.createFromRawTheme(undefined, null))
+      this.#hasTheme = true
     }
   }
 
   getColorMap() {
-    this._ensureTheme()
-    return this._syncRegistry.getTheme().getColorMap()
+    this.#ensureTheme()
+    return this.#syncRegistry.getTheme().getColorMap()
   }
 
   async loadGrammar(scopeName: string): Promise<Grammar | null> {
     // Check if already compiled
-    const existing = this._compiledGrammars.get(scopeName)
+    const existing = this.#compiledGrammars.get(scopeName)
     if (existing) return existing
 
     // Check if already compiling (prevent race conditions)
-    const existingCompile = this._compilingGrammars.get(scopeName)
+    const existingCompile = this.#compilingGrammars.get(scopeName)
     if (existingCompile) return existingCompile
 
     // Start compiling and track the promise
-    const compilePromise = this._doCompileGrammar(scopeName)
-    this._compilingGrammars.set(scopeName, compilePromise)
+    const compilePromise = this.#doCompileGrammar(scopeName)
+    this.#compilingGrammars.set(scopeName, compilePromise)
 
     try {
       return await compilePromise
     } finally {
       // Clean up after compilation completes
-      this._compilingGrammars.delete(scopeName)
+      this.#compilingGrammars.delete(scopeName)
     }
   }
 
-  private async _doCompileGrammar(scopeName: string): Promise<Grammar | null> {
-    await this._ensureGrammarAndDependencies(scopeName)
+  async #doCompileGrammar(scopeName: string): Promise<Grammar | null> {
+    await this.#ensureGrammarAndDependencies(scopeName)
 
-    const rawGrammar = this._rawGrammars.get(scopeName)
+    const rawGrammar = this.#rawGrammars.get(scopeName)
     if (!rawGrammar) return null
 
     // Double-check after async operation
-    const existing = this._compiledGrammars.get(scopeName)
+    const existing = this.#compiledGrammars.get(scopeName)
     if (existing) return existing
 
-    this._ensureTheme()
+    this.#ensureTheme()
 
     const grammar = createGrammar(scopeName, rawGrammar, 0, null, null, null, {
-      registry: this._syncRegistry,
-      lookup: (s: string) => this._syncRegistry.lookup(s),
-      injections: (s: string) => this._syncRegistry.injections(s),
+      registry: this.#syncRegistry,
+      lookup: (s: string) => this.#syncRegistry.lookup(s),
+      injections: (s: string) => this.#syncRegistry.injections(s),
     }) as Grammar
 
-    this._compiledGrammars.set(scopeName, grammar)
+    this.#compiledGrammars.set(scopeName, grammar)
     return grammar
   }
 
-  private async _ensureGrammarAndDependencies(initialScopeName: string) {
-    await this._ensureRawGrammarLoaded(initialScopeName)
+  async #ensureGrammarAndDependencies(initialScopeName: string) {
+    await this.#ensureRawGrammarLoaded(initialScopeName)
 
     const processor = new ScopeDependencyProcessor(
-      this._syncRegistry,
+      this.#syncRegistry,
       initialScopeName
     )
 
     while (processor.queue.length > 0) {
       processor.processQueue()
       for (const ref of processor.queue) {
-        await this._ensureRawGrammarLoaded(ref.scopeName)
+        await this.#ensureRawGrammarLoaded(ref.scopeName)
       }
     }
   }
 
-  private async _ensureRawGrammarLoaded(scopeName: string) {
+  async #ensureRawGrammarLoaded(scopeName: string) {
     // Check if already loaded
-    if (this._rawGrammars.has(scopeName)) return
+    if (this.#rawGrammars.has(scopeName)) return
 
     // Check if already loading (prevent race conditions)
-    const existingLoad = this._loadingGrammars.get(scopeName)
+    const existingLoad = this.#loadingGrammars.get(scopeName)
     if (existingLoad) {
       await existingLoad
       return
     }
 
     // Start loading and track the promise
-    const loadPromise = this._doLoadRawGrammar(scopeName)
-    this._loadingGrammars.set(scopeName, loadPromise)
+    const loadPromise = this.#doLoadRawGrammar(scopeName)
+    this.#loadingGrammars.set(scopeName, loadPromise)
 
     try {
       await loadPromise
     } finally {
       // Clean up after loading completes
-      this._loadingGrammars.delete(scopeName)
+      this.#loadingGrammars.delete(scopeName)
     }
   }
 
-  private async _doLoadRawGrammar(scopeName: string) {
-    const rawGrammar = await this._loadGrammar(scopeName)
+  async #doLoadRawGrammar(scopeName: string) {
+    const rawGrammar = await this.#loadGrammar(scopeName)
     if (!rawGrammar) return
 
     // Deep clone the grammar to ensure all nested objects are mutable.
@@ -5129,17 +5175,17 @@ export class Registry {
     // implementation needs to add `id` properties to rule objects.
     const clonedGrammar = clone(rawGrammar)
 
-    this._rawGrammars.set(scopeName, clonedGrammar)
-    this._syncRegistry.addGrammar(clonedGrammar)
+    this.#rawGrammars.set(scopeName, clonedGrammar)
+    this.#syncRegistry.addGrammar(clonedGrammar)
 
     if (rawGrammar.injectionSelector) {
-      this._injectionScopes.add(scopeName)
+      this.#injectionScopes.add(scopeName)
     }
 
     // Make all known injection grammars available for all known scopes.
-    for (const targetScope of this._rawGrammars.keys()) {
-      for (const injectorScope of this._injectionScopes) {
-        this._syncRegistry.addInjection(targetScope, injectorScope)
+    for (const targetScope of this.#rawGrammars.keys()) {
+      for (const injectorScope of this.#injectionScopes) {
+        this.#syncRegistry.addInjection(targetScope, injectorScope)
       }
     }
   }
@@ -5489,10 +5535,10 @@ export function serializeStateStack(
   stack: StateStackImplementation | null
 ): StateStackFrame[] {
   const frames: StateStackFrame[] = []
-  let cur = stack
-  while (cur) {
-    frames.push(cur.toStateStackFrame())
-    cur = cur.parent
+  let current = stack
+  while (current) {
+    frames.push(current.toStateStackFrame())
+    current = current.parent
   }
   return frames.reverse()
 }

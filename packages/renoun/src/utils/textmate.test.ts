@@ -850,7 +850,7 @@ describe('createMatchers', () => {
 
 describe('EncodedTokenAttributes extended', () => {
   test('toBinaryStr returns 32-bit binary string', () => {
-    const str = EncodedTokenAttributes.toBinaryStr(0)
+    const str = EncodedTokenAttributes.toBinaryString(0)
     expect(str).toBe('00000000000000000000000000000000')
     expect(str.length).toBe(32)
   })
