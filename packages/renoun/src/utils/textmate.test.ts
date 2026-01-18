@@ -1193,174 +1193,186 @@ async function decodeRawTokens<T extends string>(
 ): Promise<DecodedToken[][]> {
   const lines = source.split(/\r?\n/)
   const isMultiTheme = themes.length > 1
+  if (!isMultiTheme) {
+    // Single theme: decode directly from stream results.
+    const themeName = themes[0]
+    const context = await tokenizer.getContext(themeName)
+    const tokens: DecodedToken[][] = []
 
-  // Collect per-theme results via streamRaw to avoid accessing private APIs.
-  const perThemeResults: RawTokenizeResult[][] = []
-  for (const themeName of themes) {
-    const themeResults: RawTokenizeResult[] = []
-    for await (const result of tokenizer.streamRaw(
+    for await (const result of tokenizer.stream(
       source,
       language,
       themeName,
       options
     )) {
-      themeResults.push(result)
-    }
-    perThemeResults.push(themeResults)
-  }
+      const lineText = result.lineText
+      const lineTokens: DecodedToken[] = []
 
-  if (isMultiTheme) {
-    // Multi-theme: merge boundaries using per-theme token streams.
-    const contexts = await Promise.all(
-      themes.map((theme) => tokenizer.getContext(theme))
-    )
-    const mergedLines: DecodedToken[][] = []
+      for (let i = 0; i < result.tokens.length; i += 2) {
+        const start = result.tokens[i]
+        const end =
+          i + 2 < result.tokens.length ? result.tokens[i + 2] : lineText.length
+        if (end <= start) continue
 
-    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-      const lineText = lines[lineIndex] ?? ''
-      const allTokens: Array<{
-        start: number
-        end: number
-        metadata: number
-        themeIndex: number
-      }> = []
-
-      for (let themeIndex = 0; themeIndex < themes.length; themeIndex++) {
-        const result = perThemeResults[themeIndex]?.[lineIndex]
-        if (!result) continue
-        const tokens = result.tokens
-
-        for (let i = 0; i < tokens.length; i += 2) {
-          const start = tokens[i]
-          const end = i + 2 < tokens.length ? tokens[i + 2] : lineText.length
-          allTokens.push({
-            start,
-            end,
-            metadata: tokens[i + 1],
-            themeIndex,
-          })
+        const metadata = result.tokens[i + 1]
+        const colorId = TokenMetadata.getForegroundId(metadata)
+        const color = context.colorMap[colorId] || ''
+        const baseColor = context.baseColor
+        const fontFlags = TokenMetadata.getFontStyle(metadata)
+        const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
+        const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
+        let textDecoration = ''
+        if (fontFlags & FontStyle.Underline) textDecoration = 'underline'
+        if (fontFlags & FontStyle.Strikethrough) {
+          textDecoration = textDecoration
+            ? `${textDecoration} line-through`
+            : 'line-through'
         }
-      }
 
-      const boundarySet = new Set<number>()
-      for (const token of allTokens) {
-        boundarySet.add(token.start)
-        boundarySet.add(token.end)
-      }
-      const boundaries = Array.from(boundarySet).sort((a, b) => a - b)
-      const mergedLineTokens: DecodedToken[] = []
+        const themeIsBaseColor =
+          !color || baseColor.toLowerCase() === color.toLowerCase()
 
-      for (let i = 0; i < boundaries.length - 1; i++) {
-        const rangeStart = boundaries[i]
-        const rangeEnd = boundaries[i + 1]
-        if (rangeStart >= rangeEnd) continue
-
-        const value = lineText.slice(rangeStart, rangeEnd)
         const style: Record<string, string> = {}
-        let hasAnyNonBaseColor = false
-        let hasTextStyles = false
+        if (color && !themeIsBaseColor) style.color = color
+        if (fontStyle) style.fontStyle = fontStyle
+        if (fontWeight) style.fontWeight = fontWeight
+        if (textDecoration) style.textDecoration = textDecoration
 
-        for (const token of allTokens) {
-          if (token.start < rangeEnd && token.end > rangeStart) {
-            const context = contexts[token.themeIndex]
-            const colorId = TokenMetadata.getForegroundId(token.metadata)
-            const color = context.colorMap[colorId] || ''
-            const baseColor = context.baseColor
-            const fontFlags = TokenMetadata.getFontStyle(token.metadata)
-            const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
-            const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
-            let textDecoration = ''
-            if (fontFlags & FontStyle.Underline) textDecoration = 'underline'
-            if (fontFlags & FontStyle.Strikethrough) {
-              textDecoration = textDecoration
-                ? `${textDecoration} line-through`
-                : 'line-through'
-            }
-
-            const themeIsBaseColor =
-              !color || baseColor.toLowerCase() === color.toLowerCase()
-            if (!themeIsBaseColor) hasAnyNonBaseColor = true
-            if (fontFlags !== 0) hasTextStyles = true
-
-            const themeKey = `--${token.themeIndex}`
-            if (color && !themeIsBaseColor) style[themeKey + 'fg'] = color
-            if (fontStyle) style[themeKey + 'fs'] = fontStyle
-            if (fontWeight) style[themeKey + 'fw'] = fontWeight
-            if (textDecoration) style[themeKey + 'td'] = textDecoration
-          }
-        }
-
-        mergedLineTokens.push({
-          value,
-          start: rangeStart,
-          end: rangeEnd,
-          hasTextStyles,
-          isBaseColor: !hasAnyNonBaseColor,
-          isWhiteSpace: /^\s*$/.test(value),
+        const tokenValue = lineText.slice(start, end)
+        lineTokens.push({
+          value: tokenValue,
+          start,
+          end,
+          hasTextStyles: fontFlags !== 0,
+          isBaseColor: themeIsBaseColor,
+          isWhiteSpace: /^\s*$/.test(tokenValue),
           style,
         })
       }
-
-      mergedLines.push(mergedLineTokens)
+      tokens.push(lineTokens)
     }
 
-    return mergedLines
+    return tokens
   }
 
-  // Single theme: decode directly from streamRaw results.
-  const themeName = themes[0]
-  const context = await tokenizer.getContext(themeName)
-  const tokens: DecodedToken[][] = []
+  // Multi-theme: merge boundaries using per-theme token streams.
+  const contexts = await Promise.all(
+    themes.map((theme) => tokenizer.getContext(theme))
+  )
+  const mergedLines: DecodedToken[][] = []
+  const lineCount = lines.length
+  const themeCount = themes.length
+  const iterators = new Array<AsyncIterator<RawTokenizeResult>>(themeCount)
+  const doneFlags = new Array<boolean>(themeCount).fill(false)
 
-  for (const result of perThemeResults[0] ?? []) {
-    const lineText = result.lineText
-    const lineTokens: DecodedToken[] = []
+  for (let themeIndex = 0; themeIndex < themeCount; themeIndex++) {
+    iterators[themeIndex] = tokenizer
+      .stream(source, language, themes[themeIndex], options)
+      [Symbol.asyncIterator]()
+  }
 
-    for (let i = 0; i < result.tokens.length; i += 2) {
-      const start = result.tokens[i]
-      const end =
-        i + 2 < result.tokens.length ? result.tokens[i + 2] : lineText.length
-      if (end <= start) continue
+  for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
+    const lineText = lines[lineIndex] ?? ''
+    const allTokens: Array<{
+      start: number
+      end: number
+      metadata: number
+      themeIndex: number
+    }> = []
 
-      const metadata = result.tokens[i + 1]
-      const colorId = TokenMetadata.getForegroundId(metadata)
-      const color = context.colorMap[colorId] || ''
-      const baseColor = context.baseColor
-      const fontFlags = TokenMetadata.getFontStyle(metadata)
-      const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
-      const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
-      let textDecoration = ''
-      if (fontFlags & FontStyle.Underline) textDecoration = 'underline'
-      if (fontFlags & FontStyle.Strikethrough) {
-        textDecoration = textDecoration
-          ? `${textDecoration} line-through`
-          : 'line-through'
+    for (let themeIndex = 0; themeIndex < themeCount; themeIndex++) {
+      if (doneFlags[themeIndex]) continue
+      const step = await iterators[themeIndex].next()
+      if (step.done) {
+        doneFlags[themeIndex] = true
+        continue
+      }
+      const tokens = step.value.tokens
+      const themeLineLength = step.value.lineText.length
+
+      for (let i = 0; i < tokens.length; i += 2) {
+        const start = tokens[i]
+        const end = i + 2 < tokens.length ? tokens[i + 2] : themeLineLength
+        allTokens.push({
+          start,
+          end,
+          metadata: tokens[i + 1],
+          themeIndex,
+        })
+      }
+    }
+
+    const boundarySet = new Set<number>()
+    for (const token of allTokens) {
+      boundarySet.add(token.start)
+      boundarySet.add(token.end)
+    }
+    const boundaries = Array.from(boundarySet).sort((a, b) => a - b)
+    const mergedLineTokens: DecodedToken[] = []
+
+    for (let i = 0; i < boundaries.length - 1; i++) {
+      const rangeStart = boundaries[i]
+      const rangeEnd = boundaries[i + 1]
+      if (rangeStart >= rangeEnd) continue
+
+      const value = lineText.slice(rangeStart, rangeEnd)
+      const style: Record<string, string> = {}
+      let hasAnyNonBaseColor = false
+      let hasTextStyles = false
+
+      for (const token of allTokens) {
+        if (token.start < rangeEnd && token.end > rangeStart) {
+          const context = contexts[token.themeIndex]
+          const colorId = TokenMetadata.getForegroundId(token.metadata)
+          const color = context.colorMap[colorId] || ''
+          const baseColor = context.baseColor
+          const fontFlags = TokenMetadata.getFontStyle(token.metadata)
+          const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
+          const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
+          let textDecoration = ''
+          if (fontFlags & FontStyle.Underline) textDecoration = 'underline'
+          if (fontFlags & FontStyle.Strikethrough) {
+            textDecoration = textDecoration
+              ? `${textDecoration} line-through`
+              : 'line-through'
+          }
+
+          const themeIsBaseColor =
+            !color || baseColor.toLowerCase() === color.toLowerCase()
+          if (!themeIsBaseColor) hasAnyNonBaseColor = true
+          if (fontFlags !== 0) hasTextStyles = true
+
+          const themeKey = `--${token.themeIndex}`
+          if (color && !themeIsBaseColor) style[themeKey + 'fg'] = color
+          if (fontStyle) style[themeKey + 'fs'] = fontStyle
+          if (fontWeight) style[themeKey + 'fw'] = fontWeight
+          if (textDecoration) style[themeKey + 'td'] = textDecoration
+        }
       }
 
-      const themeIsBaseColor =
-        !color || baseColor.toLowerCase() === color.toLowerCase()
-
-      const style: Record<string, string> = {}
-      if (color && !themeIsBaseColor) style.color = color
-      if (fontStyle) style.fontStyle = fontStyle
-      if (fontWeight) style.fontWeight = fontWeight
-      if (textDecoration) style.textDecoration = textDecoration
-
-      const tokenValue = lineText.slice(start, end)
-      lineTokens.push({
-        value: tokenValue,
-        start,
-        end,
-        hasTextStyles: fontFlags !== 0,
-        isBaseColor: themeIsBaseColor,
-        isWhiteSpace: /^\s*$/.test(tokenValue),
+      mergedLineTokens.push({
+        value,
+        start: rangeStart,
+        end: rangeEnd,
+        hasTextStyles,
+        isBaseColor: !hasAnyNonBaseColor,
+        isWhiteSpace: /^\s*$/.test(value),
         style,
       })
     }
-    tokens.push(lineTokens)
+
+    mergedLines.push(mergedLineTokens)
   }
 
-  return tokens
+  for (let themeIndex = 0; themeIndex < themeCount; themeIndex++) {
+    if (doneFlags[themeIndex]) continue
+    const iterator = iterators[themeIndex]
+    if (iterator && iterator.return) {
+      await iterator.return()
+    }
+  }
+
+  return mergedLines
 }
 
 describe('Tokenizer', () => {
@@ -1743,12 +1755,7 @@ echo "Hello World"`
 
     const tokenizer = new Tokenizer<'a' | 'b'>(registryOptions)
     const tsx = `export default function X() { return <div /> }`
-    const tokens = await decodeRawTokens(
-      tokenizer,
-      tsx,
-      'tsx',
-      ['a', 'b']
-    )
+    const tokens = await decodeRawTokens(tokenizer, tsx, 'tsx', ['a', 'b'])
     const flatTokens = tokens.flatMap((line) => line)
 
     const divToken = flatTokens.find((token) => token.value === 'div')
@@ -1879,7 +1886,7 @@ export default async function Page({
     const source = '/* comment line 1*/\n/* comment line 2 */'
 
     const streamed: string[][] = []
-    for await (const result of tokenizer.streamRaw(source, 'css', 'light')) {
+    for await (const result of tokenizer.stream(source, 'css', 'light')) {
       const lineTokens: string[] = []
       for (let i = 0; i < result.tokens.length; i += 2) {
         const start = result.tokens[i]
@@ -1954,9 +1961,15 @@ export default async function Page({
     // This should not crash with "Unknown ruleId" but either work or throw a clear error
     try {
       const shellSource = 'npm install renoun'
-      await decodeRawTokens(tokenizer, shellSource, 'shell', ['light', 'dark'], {
-        grammarState: cssGrammarState,
-      })
+      await decodeRawTokens(
+        tokenizer,
+        shellSource,
+        'shell',
+        ['light', 'dark'],
+        {
+          grammarState: cssGrammarState,
+        }
+      )
       // If we get here, the tokenizer handled the mismatch gracefully
     } catch (error) {
       // The error should be informative, not a cryptic "Unknown ruleId"
@@ -2022,9 +2035,15 @@ export default async function Page({
     // on a completely different tokenizer
     try {
       const shellSource = 'npm install renoun'
-      await decodeRawTokens(tokenizer2, shellSource, 'shell', ['light', 'dark'], {
-        grammarState: tsxGrammarState,
-      })
+      await decodeRawTokens(
+        tokenizer2,
+        shellSource,
+        'shell',
+        ['light', 'dark'],
+        {
+          grammarState: tsxGrammarState,
+        }
+      )
       // If we get here, the tokenizer handled the mismatch gracefully
     } catch (error) {
       // The error should be informative if it throws
@@ -2303,12 +2322,12 @@ export default function Page() {
   })
 })
 
-test('streamRaw emits RawTokenizeResult per line', async () => {
+test('stream emits RawTokenizeResult per line', async () => {
   const tokenizer = new Tokenizer<ThemeName>(registryOptions)
   const source = `// hello
 const x = 1`
   const chunks: RawTokenizeResult[] = []
-  for await (const chunk of tokenizer.streamRaw(source, 'tsx', 'dark')) {
+  for await (const chunk of tokenizer.stream(source, 'tsx', 'dark')) {
     chunks.push(chunk)
   }
 
@@ -2319,18 +2338,18 @@ const x = 1`
   expect(tokenizer.getGrammarState().length).toBe(1)
 })
 
-test('streamRaw + decodeBinaryChunk preserves comment punctuation color', async () => {
+test('stream + decodeBinaryChunk preserves comment punctuation color', async () => {
   const tokenizer = new Tokenizer<ThemeName>(registryOptions)
   const source = `export const x = 1
 // comment text`
 
-  // Mimic server init order: capture color map/base color before streamRaw runs.
+  // Mimic server init order: capture color map/base color before stream runs.
   await tokenizer.ensureTheme('light')
   const colorMap = tokenizer.getColorMap('light')
   const baseColor = tokenizer.getBaseColor('light')
 
   const batch: number[] = []
-  for await (const result of tokenizer.streamRaw(source, 'tsx', 'light')) {
+  for await (const result of tokenizer.stream(source, 'tsx', 'light')) {
     const lineTokens = result.tokens
     batch.push(lineTokens.length)
     for (let i = 0; i < lineTokens.length; i++) {

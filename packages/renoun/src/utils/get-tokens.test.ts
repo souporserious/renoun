@@ -16,7 +16,7 @@ function createStubHighlighter(lines: string[][]): Highlighter {
         baseColor: '#000000',
       }
     },
-    async *streamRaw(
+    async *stream(
       source: string,
       _language: any,
       _theme: string
@@ -50,7 +50,7 @@ function createStubHighlighter(lines: string[][]): Highlighter {
     getColorMap: () => ['#000000'],
     getBaseColor: () => '#000000',
     getGrammarState: () => [],
-  } as Highlighter
+  } as unknown as Highlighter
 }
 
 function createDeferred<T>() {
@@ -70,263 +70,85 @@ function waitForDuration(ms: number) {
 }
 
 describe('getTokens metadata integration', () => {
-  test.concurrent('attaches diagnostics and quick info when source has errors', async () => {
-    const project = new Project({ useInMemoryFileSystem: true })
-    const filePath = 'test.ts'
-    const code = 'const value = missing;\nvalue;\n'
+  test.concurrent(
+    'attaches diagnostics and quick info when source has errors',
+    async () => {
+      const project = new Project({ useInMemoryFileSystem: true })
+      const filePath = 'test.ts'
+      const code = 'const value = missing;\nvalue;\n'
 
-    project.createSourceFile(filePath, code, { overwrite: true })
+      project.createSourceFile(filePath, code, { overwrite: true })
 
-    const highlighter = createStubHighlighter([
-      ['const', ' ', 'value', ' ', '=', ' ', 'missing', ';'],
-      ['value', ';'],
-    ])
-
-    const tokens = await getTokens({
-      project,
-      value: code,
-      language: 'ts',
-      filePath,
-      highlighter,
-      theme: 'default',
-      allowErrors: true,
-    })
-    const secondValueToken = tokens
-      .flat()
-      .find((token) => token.value === 'value' && token.start > 20)
-
-    expect(secondValueToken?.isSymbol).toBe(true)
-    expect(secondValueToken?.quickInfo?.displayText).toContain('value')
-    expect(secondValueToken?.quickInfo?.documentationText).toBeDefined()
-  })
-
-  test.concurrent('preserves symbol quick info for jsx-only snippets', async () => {
-    const project = new Project({
-      useInMemoryFileSystem: true,
-      compilerOptions: {
-        jsx: ts.JsxEmit.Preserve,
-      },
-    })
-
-    project.createSourceFile(
-      'jsx.d.ts',
-      'declare namespace JSX { interface IntrinsicElements { div: any } }\n',
-      { overwrite: true }
-    )
-
-    project.createSourceFile(
-      'Component.tsx',
-      'export function Component() { return <div>content</div>; }\n',
-      { overwrite: true }
-    )
-
-    const filePath = 'Example.tsx'
-    const code = "import { Component } from './Component';\n<Component />\n"
-
-    project.createSourceFile(filePath, code, { overwrite: true })
-
-    const highlighter = createStubHighlighter([
-      [
-        'import',
-        ' ',
-        '{',
-        ' ',
-        'Component',
-        ' ',
-        '}',
-        ' ',
-        'from',
-        ' ',
-        "'./Component'",
-        ';',
-      ],
-      ['<', 'Component', ' />'],
-    ])
-
-    const tokens = await getTokens({
-      project,
-      value: code,
-      language: 'tsx',
-      filePath,
-      highlighter,
-      theme: 'default',
-    })
-
-    expect(tokens[0][0]?.value).toBe('<')
-
-    const componentToken = tokens
-      .flat()
-      .find((token): token is Token => token.value === 'Component')
-
-    expect(componentToken?.isSymbol).toBe(true)
-    expect(componentToken?.quickInfo?.displayText).toContain('Component')
-  })
-
-  test.concurrent('starts highlighter without waiting for TypeScript metadata to resolve', async () => {
-    const project = new Project({ useInMemoryFileSystem: true })
-    const filePath = 'parallel.ts'
-    const code = 'const value = 1;\n'
-
-    project.createSourceFile(filePath, code, { overwrite: true })
-
-    const metadataGate = createDeferred<void>()
-    const metadataStarted = createDeferred<void>()
-    let metadataCompleted = false
-
-    const metadataCollector = async (
-      ...args: Parameters<typeof collectTypeScriptMetadata>
-    ) => {
-      metadataStarted.resolve()
-      await metadataGate.promise
-      const result = await collectTypeScriptMetadata(...args)
-      metadataCompleted = true
-      return result
-    }
-
-    const highlighterStarted = createDeferred<void>()
-
-    const tokenLines = [['const', ' ', 'value', ' ', '=', ' ', '1', ';']]
-    const highlighter = {
-      async getContext() {
-        highlighterStarted.resolve()
-        return { colorMap: ['#000000'], baseColor: '#000000' }
-      },
-      async *streamRaw(
-        source: string,
-        _language: any,
-        _theme: string
-      ): AsyncGenerator<{
-        tokens: Uint32Array
-        lineText: string
-        ruleStack: any
-        stoppedEarly: boolean
-      }> {
-        highlighterStarted.resolve()
-        const sourceLines = source.split(/\r?\n/)
-        for (let lineIndex = 0; lineIndex < sourceLines.length; lineIndex++) {
-          const lineText = sourceLines[lineIndex]
-          const lineTokens = tokenLines[lineIndex] ?? [lineText]
-          const tokens = new Uint32Array(lineTokens.length * 2)
-          let offset = 0
-          let tokenIndex = 0
-          for (const tokenText of lineTokens) {
-            tokens[tokenIndex++] = offset
-            tokens[tokenIndex++] = 0
-            offset += tokenText.length
-          }
-          yield {
-            tokens,
-            lineText,
-            ruleStack: null,
-            stoppedEarly: false,
-          }
-        }
-      },
-      ensureTheme: async () => {},
-      getColorMap: () => ['#000000'],
-      getBaseColor: () => '#000000',
-      getGrammarState: () => [],
-    } as Highlighter
-
-    const tokensPromise = getTokens({
-      project,
-      value: code,
-      language: 'ts',
-      filePath,
-      highlighter,
-      theme: 'default',
-      metadataCollector,
-    })
-
-    await metadataStarted.promise
-
-    try {
-      const highlighterResult = await Promise.race([
-        highlighterStarted.promise.then(() => 'started'),
-        waitForDuration(50).then(() => 'timeout'),
+      const highlighter = createStubHighlighter([
+        ['const', ' ', 'value', ' ', '=', ' ', 'missing', ';'],
+        ['value', ';'],
       ])
 
-      expect(highlighterResult).toBe('started')
-      expect(metadataCompleted).toBe(false)
-    } finally {
-      metadataGate.resolve()
-    }
-
-    await tokensPromise
-
-    expect(metadataCompleted).toBe(true)
-  })
-
-  test.concurrent('does not call metadata collector for non-JavaScript languages', async () => {
-    const project = new Project({ useInMemoryFileSystem: true })
-    const filePath = 'post.mdx'
-    const code = '# Hello World\n\nThis is **bold** text.\n'
-
-    let metadataCollectorCalled = false
-
-    const metadataCollector = async (
-      ...args: Parameters<typeof collectTypeScriptMetadata>
-    ) => {
-      metadataCollectorCalled = true
-      return collectTypeScriptMetadata(...args)
-    }
-
-    const highlighter = createStubHighlighter([
-      ['# Hello World'],
-      [],
-      ['This is ', '**bold**', ' text.'],
-    ])
-
-    const tokens = await getTokens({
-      project,
-      value: code,
-      language: 'mdx',
-      filePath,
-      highlighter,
-      theme: 'default',
-      metadataCollector,
-    })
-
-    // Verify metadata collector was NOT called for MDX
-    expect(metadataCollectorCalled).toBe(false)
-
-    // Verify tokens were still returned correctly
-    expect(tokens.length).toBe(4)
-    expect(tokens[0][0]?.value).toBe('# Hello World')
-  })
-
-  test.concurrent('throws with actionable error when language is js-like but path is mdx', async () => {
-    const project = new Project({ useInMemoryFileSystem: true })
-    const filePath = 'post.mdx'
-    const code = 'export const metadata = { title: \"Hello\" }\n'
-
-    const highlighter = createStubHighlighter([
-      ['export', ' ', 'const', ' ', 'metadata', ' ', '=', ' ', '{', ' ', '}'],
-    ])
-
-    await expect(
-      getTokens({
+      const tokens = await getTokens({
         project,
         value: code,
-        language: 'tsx', // language suggests JS/TS, but path is .mdx
+        language: 'ts',
         filePath,
         highlighter,
         theme: 'default',
+        allowErrors: true,
       })
-    ).rejects.toThrow('getTokens received language "tsx" for file "post.mdx"')
-  })
+      const secondValueToken = tokens
+        .flat()
+        .find((token) => token.value === 'value' && token.start > 20)
 
-  test.concurrent('throws with actionable error when language does not match file extension', async () => {
-    const project = new Project({ useInMemoryFileSystem: true })
-    const filePath = 'post.mdx'
-    const code = 'export const metadata = { title: "Hello" }\n'
+      expect(secondValueToken?.isSymbol).toBe(true)
+      expect(secondValueToken?.quickInfo?.displayText).toContain('value')
+      expect(secondValueToken?.quickInfo?.documentationText).toBeDefined()
+    }
+  )
 
-    const highlighter = createStubHighlighter([
-      ['export', ' ', 'const', ' ', 'metadata', ' ', '=', ' ', '{', ' ', '}'],
-    ])
+  test.concurrent(
+    'preserves symbol quick info for jsx-only snippets',
+    async () => {
+      const project = new Project({
+        useInMemoryFileSystem: true,
+        compilerOptions: {
+          jsx: ts.JsxEmit.Preserve,
+        },
+      })
 
-    await expect(
-      getTokens({
+      project.createSourceFile(
+        'jsx.d.ts',
+        'declare namespace JSX { interface IntrinsicElements { div: any } }\n',
+        { overwrite: true }
+      )
+
+      project.createSourceFile(
+        'Component.tsx',
+        'export function Component() { return <div>content</div>; }\n',
+        { overwrite: true }
+      )
+
+      const filePath = 'Example.tsx'
+      const code = "import { Component } from './Component';\n<Component />\n"
+
+      project.createSourceFile(filePath, code, { overwrite: true })
+
+      const highlighter = createStubHighlighter([
+        [
+          'import',
+          ' ',
+          '{',
+          ' ',
+          'Component',
+          ' ',
+          '}',
+          ' ',
+          'from',
+          ' ',
+          "'./Component'",
+          ';',
+        ],
+        ['<', 'Component', ' />'],
+      ])
+
+      const tokens = await getTokens({
         project,
         value: code,
         language: 'tsx',
@@ -334,40 +156,239 @@ describe('getTokens metadata integration', () => {
         highlighter,
         theme: 'default',
       })
-    ).rejects.toThrow('getTokens received language "tsx" for file "post.mdx"')
-  })
 
-  test.concurrent('calls metadata collector for JavaScript-like languages', async () => {
-    const project = new Project({ useInMemoryFileSystem: true })
-    const filePath = 'test.tsx'
-    const code = 'const x = 1;\n'
+      expect(tokens[0][0]?.value).toBe('<')
 
-    project.createSourceFile(filePath, code, { overwrite: true })
+      const componentToken = tokens
+        .flat()
+        .find((token): token is Token => token.value === 'Component')
 
-    let metadataCollectorCalled = false
-
-    const metadataCollector = async (
-      ...args: Parameters<typeof collectTypeScriptMetadata>
-    ) => {
-      metadataCollectorCalled = true
-      return collectTypeScriptMetadata(...args)
+      expect(componentToken?.isSymbol).toBe(true)
+      expect(componentToken?.quickInfo?.displayText).toContain('Component')
     }
+  )
 
-    const highlighter = createStubHighlighter([
-      ['const', ' ', 'x', ' ', '=', ' ', '1', ';'],
-    ])
+  test.concurrent(
+    'starts highlighter without waiting for TypeScript metadata to resolve',
+    async () => {
+      const project = new Project({ useInMemoryFileSystem: true })
+      const filePath = 'parallel.ts'
+      const code = 'const value = 1;\n'
 
-    await getTokens({
-      project,
-      value: code,
-      language: 'tsx',
-      filePath,
-      highlighter,
-      theme: 'default',
-      metadataCollector,
-    })
+      project.createSourceFile(filePath, code, { overwrite: true })
 
-    // Verify metadata collector WAS called for TSX
-    expect(metadataCollectorCalled).toBe(true)
-  })
+      const metadataGate = createDeferred<void>()
+      const metadataStarted = createDeferred<void>()
+      let metadataCompleted = false
+
+      const metadataCollector = async (
+        ...args: Parameters<typeof collectTypeScriptMetadata>
+      ) => {
+        metadataStarted.resolve()
+        await metadataGate.promise
+        const result = await collectTypeScriptMetadata(...args)
+        metadataCompleted = true
+        return result
+      }
+
+      const highlighterStarted = createDeferred<void>()
+
+      const tokenLines = [['const', ' ', 'value', ' ', '=', ' ', '1', ';']]
+      const highlighter = {
+        async getContext() {
+          highlighterStarted.resolve()
+          return { colorMap: ['#000000'], baseColor: '#000000' }
+        },
+        async *stream(
+          source: string,
+          _language: any,
+          _theme: string
+        ): AsyncGenerator<{
+          tokens: Uint32Array
+          lineText: string
+          ruleStack: any
+          stoppedEarly: boolean
+        }> {
+          highlighterStarted.resolve()
+          const sourceLines = source.split(/\r?\n/)
+          for (let lineIndex = 0; lineIndex < sourceLines.length; lineIndex++) {
+            const lineText = sourceLines[lineIndex]
+            const lineTokens = tokenLines[lineIndex] ?? [lineText]
+            const tokens = new Uint32Array(lineTokens.length * 2)
+            let offset = 0
+            let tokenIndex = 0
+            for (const tokenText of lineTokens) {
+              tokens[tokenIndex++] = offset
+              tokens[tokenIndex++] = 0
+              offset += tokenText.length
+            }
+            yield {
+              tokens,
+              lineText,
+              ruleStack: null,
+              stoppedEarly: false,
+            }
+          }
+        },
+        ensureTheme: async () => {},
+        getColorMap: () => ['#000000'],
+        getBaseColor: () => '#000000',
+        getGrammarState: () => [],
+      } as unknown as Highlighter
+
+      const tokensPromise = getTokens({
+        project,
+        value: code,
+        language: 'ts',
+        filePath,
+        highlighter,
+        theme: 'default',
+        metadataCollector,
+      })
+
+      await metadataStarted.promise
+
+      try {
+        const highlighterResult = await Promise.race([
+          highlighterStarted.promise.then(() => 'started'),
+          waitForDuration(50).then(() => 'timeout'),
+        ])
+
+        expect(highlighterResult).toBe('started')
+        expect(metadataCompleted).toBe(false)
+      } finally {
+        metadataGate.resolve()
+      }
+
+      await tokensPromise
+
+      expect(metadataCompleted).toBe(true)
+    }
+  )
+
+  test.concurrent(
+    'does not call metadata collector for non-JavaScript languages',
+    async () => {
+      const project = new Project({ useInMemoryFileSystem: true })
+      const filePath = 'post.mdx'
+      const code = '# Hello World\n\nThis is **bold** text.\n'
+
+      let metadataCollectorCalled = false
+
+      const metadataCollector = async (
+        ...args: Parameters<typeof collectTypeScriptMetadata>
+      ) => {
+        metadataCollectorCalled = true
+        return collectTypeScriptMetadata(...args)
+      }
+
+      const highlighter = createStubHighlighter([
+        ['# Hello World'],
+        [],
+        ['This is ', '**bold**', ' text.'],
+      ])
+
+      const tokens = await getTokens({
+        project,
+        value: code,
+        language: 'mdx',
+        filePath,
+        highlighter,
+        theme: 'default',
+        metadataCollector,
+      })
+
+      // Verify metadata collector was NOT called for MDX
+      expect(metadataCollectorCalled).toBe(false)
+
+      // Verify tokens were still returned correctly
+      expect(tokens.length).toBe(4)
+      expect(tokens[0][0]?.value).toBe('# Hello World')
+    }
+  )
+
+  test.concurrent(
+    'throws with actionable error when language is js-like but path is mdx',
+    async () => {
+      const project = new Project({ useInMemoryFileSystem: true })
+      const filePath = 'post.mdx'
+      const code = 'export const metadata = { title: \"Hello\" }\n'
+
+      const highlighter = createStubHighlighter([
+        ['export', ' ', 'const', ' ', 'metadata', ' ', '=', ' ', '{', ' ', '}'],
+      ])
+
+      await expect(
+        getTokens({
+          project,
+          value: code,
+          language: 'tsx', // language suggests JS/TS, but path is .mdx
+          filePath,
+          highlighter,
+          theme: 'default',
+        })
+      ).rejects.toThrow('getTokens received language "tsx" for file "post.mdx"')
+    }
+  )
+
+  test.concurrent(
+    'throws with actionable error when language does not match file extension',
+    async () => {
+      const project = new Project({ useInMemoryFileSystem: true })
+      const filePath = 'post.mdx'
+      const code = 'export const metadata = { title: "Hello" }\n'
+
+      const highlighter = createStubHighlighter([
+        ['export', ' ', 'const', ' ', 'metadata', ' ', '=', ' ', '{', ' ', '}'],
+      ])
+
+      await expect(
+        getTokens({
+          project,
+          value: code,
+          language: 'tsx',
+          filePath,
+          highlighter,
+          theme: 'default',
+        })
+      ).rejects.toThrow('getTokens received language "tsx" for file "post.mdx"')
+    }
+  )
+
+  test.concurrent(
+    'calls metadata collector for JavaScript-like languages',
+    async () => {
+      const project = new Project({ useInMemoryFileSystem: true })
+      const filePath = 'test.tsx'
+      const code = 'const x = 1;\n'
+
+      project.createSourceFile(filePath, code, { overwrite: true })
+
+      let metadataCollectorCalled = false
+
+      const metadataCollector = async (
+        ...args: Parameters<typeof collectTypeScriptMetadata>
+      ) => {
+        metadataCollectorCalled = true
+        return collectTypeScriptMetadata(...args)
+      }
+
+      const highlighter = createStubHighlighter([
+        ['const', ' ', 'x', ' ', '=', ' ', '1', ';'],
+      ])
+
+      await getTokens({
+        project,
+        value: code,
+        language: 'tsx',
+        filePath,
+        highlighter,
+        theme: 'default',
+        metadataCollector,
+      })
+
+      // Verify metadata collector WAS called for TSX
+      expect(metadataCollectorCalled).toBe(true)
+    }
+  )
 })

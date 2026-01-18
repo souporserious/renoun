@@ -163,7 +163,7 @@ export async function createServer(options?: { port?: number }) {
               }
             }
           } else {
-            for await (const result of tokenizer.streamRaw(
+            for await (const result of tokenizer.stream(
               options.value,
               finalLanguage as TextMateLanguages,
               themeNames[0]

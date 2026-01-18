@@ -1193,7 +1193,9 @@ export class ScopeStack {
     stack: ScopeStack | null,
     scopeNames: string[]
   ): ScopeStack | null {
-    for (const scope of scopeNames) stack = new ScopeStack(stack, scope)
+    for (let i = 0, len = scopeNames.length; i < len; i++) {
+      stack = new ScopeStack(stack, scopeNames[i])
+    }
     return stack
   }
 
@@ -1712,7 +1714,13 @@ export class ThemeTrieElement {
       }
     }
 
-    const rules = this._rulesWithParentScopes.concat(this._mainRule)
+    const parentRules = this._rulesWithParentScopes
+    const parentLen = parentRules.length
+    const rules = new Array<ThemeTrieElementRule>(parentLen + 1)
+    for (let i = 0; i < parentLen; i++) {
+      rules[i] = parentRules[i]
+    }
+    rules[parentLen] = this._mainRule
     rules.sort(ThemeTrieElement._cmpBySpecificity)
 
     return rules
@@ -2874,12 +2882,15 @@ export class RegExpSourceList {
 
   compile(grammar: any) {
     if (!this._cached) {
-      const sources = this._items.map((r) => r.source)
-      this._cached = new CompiledRule(
-        grammar,
-        sources,
-        this._items.map((r) => r.ruleId)
-      )
+      const items = this._items
+      const len = items.length
+      const sources = new Array<string>(len)
+      const rules = new Array<number>(len)
+      for (let i = 0; i < len; i++) {
+        sources[i] = items[i].source
+        rules[i] = items[i].ruleId
+      }
+      this._cached = new CompiledRule(grammar, sources, rules)
     }
     return this._cached
   }
@@ -2910,14 +2921,15 @@ export class RegExpSourceList {
     isFirstLine: boolean,
     atAnchor: boolean
   ) {
-    const sources = this._items.map((r) =>
-      r.resolveAnchors(isFirstLine, atAnchor)
-    )
-    return new CompiledRule(
-      grammar,
-      sources,
-      this._items.map((r) => r.ruleId)
-    )
+    const items = this._items
+    const len = items.length
+    const sources = new Array<string>(len)
+    const rules = new Array<number>(len)
+    for (let i = 0; i < len; i++) {
+      sources[i] = items[i].resolveAnchors(isFirstLine, atAnchor)
+      rules[i] = items[i].ruleId
+    }
+    return new CompiledRule(grammar, sources, rules)
   }
 }
 
@@ -2971,9 +2983,12 @@ export class CompiledRule {
     this.regExps = regExpSources
     this.rules = rules
 
-    this.regexes = regExpSources.map((source) => {
+    const len = regExpSources.length
+    this.regexes = new Array<RegExp>(len)
+    for (let i = 0; i < len; i++) {
+      const source = regExpSources[i]
       try {
-        return toRegExp(source, {
+        this.regexes[i] = toRegExp(source, {
           global: true,
           hasIndices: true,
           lazyCompileLength: 3000,
@@ -2987,9 +3002,9 @@ export class CompiledRule {
           target: 'auto',
         })
       } catch {
-        return new RegExp('(?!)', 'g') // Never matches
+        this.regexes[i] = new RegExp('(?!)', 'g') // Never matches
       }
-    })
+    }
   }
 
   dispose() {
@@ -3143,10 +3158,13 @@ export class ScopeDependencyProcessor {
     this.queue = []
     const collector = new ExternalReferenceCollector()
 
-    for (const ref of current)
-      processDependency(ref, this.initialScopeName, this.repo, collector)
+    for (let i = 0, len = current.length; i < len; i++) {
+      processDependency(current[i], this.initialScopeName, this.repo, collector)
+    }
 
-    for (const ref of collector.references) {
+    const references = collector.references
+    for (let i = 0, len = references.length; i < len; i++) {
+      const ref = references[i]
       if (ref instanceof TopLevelRuleReference) {
         if (this.seenFullScopeRequests.has(ref.scopeName)) continue
         this.seenFullScopeRequests.add(ref.scopeName)
@@ -3205,14 +3223,27 @@ function processSelf(ctx: any, collector: ExternalReferenceCollector) {
   if (ctx.selfGrammar.patterns && Array.isArray(ctx.selfGrammar.patterns)) {
     processRulePatterns(
       ctx.selfGrammar.patterns,
-      { ...ctx, repository: ctx.selfGrammar.repository },
+      {
+        baseGrammar: ctx.baseGrammar,
+        selfGrammar: ctx.selfGrammar,
+        repository: ctx.selfGrammar.repository,
+      },
       collector
     )
   }
   if (ctx.selfGrammar.injections) {
+    const injections = ctx.selfGrammar.injections
+    const injectionPatterns: any[] = []
+    for (const key in injections) {
+      if (key !== '$textmateLocation') injectionPatterns.push(injections[key])
+    }
     processRulePatterns(
-      Object.values(ctx.selfGrammar.injections),
-      { ...ctx, repository: ctx.selfGrammar.repository },
+      injectionPatterns,
+      {
+        baseGrammar: ctx.baseGrammar,
+        selfGrammar: ctx.selfGrammar,
+        repository: ctx.selfGrammar.repository,
+      },
       collector
     )
   }
@@ -3223,14 +3254,19 @@ function processRulePatterns(
   ctx: any,
   collector: ExternalReferenceCollector
 ) {
-  for (const rule of patterns) {
+  for (let i = 0, len = patterns.length; i < len; i++) {
+    const rule = patterns[i]
     if (collector.visitedRule.has(rule)) continue
     collector.visitedRule.add(rule)
 
     const mergedRepo = rule.repository
       ? mergeObjects({}, ctx.repository, rule.repository)
       : ctx.repository
-    const nextCtx = { ...ctx, repository: mergedRepo }
+    const nextCtx = {
+      baseGrammar: ctx.baseGrammar,
+      selfGrammar: ctx.selfGrammar,
+      repository: mergedRepo,
+    }
 
     // Captures can contain nested `patterns` (retokenizeCapturedWithRuleId).
     // These nested patterns may reference external grammars (e.g. fenced code blocks
@@ -3262,7 +3298,14 @@ function processRulePatterns(
     const parsed = parseInclude(include)
     switch (parsed.kind) {
       case 0:
-        processSelf({ ...ctx, selfGrammar: ctx.baseGrammar }, collector)
+        processSelf(
+          {
+            baseGrammar: ctx.baseGrammar,
+            selfGrammar: ctx.baseGrammar,
+            repository: ctx.repository,
+          },
+          collector
+        )
         break
       case 1:
         processSelf(ctx, collector)
@@ -3393,7 +3436,8 @@ function createGrammarInjection(
 ) {
   const matchers = createMatchers(selector, nameMatcher)
   const ruleId = RuleFactory.getCompiledRuleId(rawRule, grammar, ctx.repository)
-  for (const m of matchers) {
+  for (let i = 0, len = matchers.length; i < len; i++) {
+    const m = matchers[i]
     injections.push({
       debugSelector: selector,
       matcher: m.matcher,
@@ -3424,11 +3468,12 @@ export function _tokenizeString(
   let done = false
   let anchorPosition = -1
 
-  // Loop guard for “endless loop - case 3”.
-  // Track states we’ve seen at the current linePosition. If we revisit the exact same
-  // (stack, anchorPosition) at the same position, we’re in a cycle and must advance.
+  // Loop guard for "endless loop - case 3".
+  // Track states we've seen at the current linePosition. If we revisit the exact same
+  // (stack, anchorPosition) at the same position, we're in a cycle and must advance.
   let _loopGuardLinePosition = -1
-  const _loopGuardSeen = new Map<any, Set<number>>()
+  const _loopGuardSeen = grammar._loopGuardPool.seen
+  _loopGuardSeen.clear()
 
   if (checkWhileConditions) {
     const res = (function applyWhileRules(
@@ -3451,10 +3496,8 @@ export function _tokenizeString(
       let anchorPosition = stack.beginRuleCapturedEOL
         ? 0
         : stack.getAnchorPosition()
-      const whileRules: Array<{
-        rule: BeginWhileRule
-        stack: StateStackImplementation
-      }> = []
+      const whileRules = grammar._whileRulesPool
+      whileRules.length = 0
 
       for (let s: StateStackImplementation | null = stack; s; s = s.pop()) {
         const rule = s.getRule(grammar)
@@ -3536,12 +3579,22 @@ export function _tokenizeString(
     // --- endless loop (case 3) guard ---
     if (linePosition !== _loopGuardLinePosition) {
       _loopGuardSeen.clear()
+      grammar._loopGuardPool.setPoolLen = 0
       _loopGuardLinePosition = linePosition
     }
 
     let _anchors = _loopGuardSeen.get(stack)
     if (!_anchors) {
-      _anchors = new Set<number>()
+      // Get Set from pool or create new one
+      const pool = grammar._loopGuardPool
+      if (pool.setPoolLen < pool.setPool.length) {
+        _anchors = pool.setPool[pool.setPoolLen++]
+        _anchors.clear()
+      } else {
+        _anchors = new Set<number>()
+        pool.setPool.push(_anchors)
+        pool.setPoolLen++
+      }
       _loopGuardSeen.set(stack, _anchors)
     } else if (_anchors.has(anchorPosition)) {
       // We are cycling at the same position. Force progress by consuming 1 char.
@@ -3587,7 +3640,7 @@ export function _tokenizeString(
         anchorPosition: number
       ) {
         const currentRule = stack.getRule(grammar)
-        const { ruleScanner, findOptions } = prepareRuleSearch(
+        const [ruleScanner, findOptions] = prepareRuleSearch(
           currentRule,
           grammar,
           stack.endRule,
@@ -3634,7 +3687,7 @@ export function _tokenizeString(
           const injection = injections[index]
           if (!injection.matcher(scopeNames)) continue
           const rule = grammar.getRule(injection.ruleId)
-          const { ruleScanner, findOptions } = prepareRuleSearch(
+          const [ruleScanner, findOptions] = prepareRuleSearch(
             rule,
             grammar,
             null,
@@ -3739,7 +3792,7 @@ export function _tokenizeString(
       produce(stack, captureStart)
 
       const parentState = stack
-      const name = rule.getName(lineText, captureIndices)
+      const name = rule.getName(lineText, captureIndices as any)
       const pushedNameScopes = stack.contentNameScopesList.pushAttributed(
         name,
         grammar
@@ -3770,7 +3823,7 @@ export function _tokenizeString(
 
         anchorPosition = captureEnd
 
-        const contentName = rule.getContentName(lineText, captureIndices)
+        const contentName = rule.getContentName(lineText, captureIndices as any)
         const pushedContentScopes = pushedNameScopes.pushAttributed(
           contentName,
           grammar
@@ -3779,7 +3832,10 @@ export function _tokenizeString(
 
         if (rule.endHasBackReferences) {
           stack = stack.withEndRule(
-            rule.getEndWithResolvedBackReferences(lineText, captureIndices)
+            rule.getEndWithResolvedBackReferences(
+              lineText,
+              captureIndices as any
+            )
           )
         }
 
@@ -3805,7 +3861,7 @@ export function _tokenizeString(
 
         anchorPosition = captureEnd
 
-        const contentName = rule.getContentName(lineText, captureIndices)
+        const contentName = rule.getContentName(lineText, captureIndices as any)
         const pushedContentScopes = pushedNameScopes.pushAttributed(
           contentName,
           grammar
@@ -3814,7 +3870,10 @@ export function _tokenizeString(
 
         if (rule.whileHasBackReferences) {
           stack = stack.withEndRule(
-            rule.getWhileWithResolvedBackReferences(lineText, captureIndices)
+            rule.getWhileWithResolvedBackReferences(
+              lineText,
+              captureIndices as any
+            )
           )
         }
 
@@ -3862,13 +3921,10 @@ function prepareRuleSearch(
   endRule: any,
   isFirstLine: any,
   atAnchor: any
-) {
+): [CompiledRule, number] {
   // Use the anchor-resolving (AG) path since our JS-based OnigScanner
   // doesn't support Oniguruma's FindOption flags (\A/\G semantics).
-  return {
-    ruleScanner: rule.compileAG(grammar, endRule, isFirstLine, atAnchor),
-    findOptions: 0,
-  }
+  return [rule.compileAG(grammar, endRule, isFirstLine, atAnchor), 0]
 }
 
 export class LocalStackElement {
@@ -3903,21 +3959,27 @@ function handleCaptures(
   if (!captureRules || captureRules.length === 0) return
 
   const len = Math.min(captureRules.length, captureCount)
-  const localStack: LocalStackElement[] = []
+  const localStack = grammar._localStackPool
+  localStack.length = 0
   let localStackLen = 0
   const lineEnd = getCaptureEnd(captureIndices, 0)
 
   // Convert flat buffer to array format for Rule.getName/getContentName compatibility
   // They use RegexSource.replaceCaptures which expects {start, end, length} objects
-  const captureArray: Array<{ start: number; end: number; length: number }> = []
+  const captureArray = grammar._captureArrayPool
+  // Ensure pool has enough capacity
+  if (captureArray.length < captureCount) {
+    const needed = captureCount - captureArray.length
+    for (let i = 0; i < needed; i++) {
+      captureArray.push({ start: 0, end: 0, length: 0 })
+    }
+  }
   for (let i = 0; i < captureCount; i++) {
     const start = getCaptureStart(captureIndices, i)
     const end = getCaptureEnd(captureIndices, i)
-    captureArray.push({
-      start,
-      end,
-      length: end >= start ? end - start : 0,
-    })
+    captureArray[i].start = start
+    captureArray[i].end = end
+    captureArray[i].length = end >= start ? end - start : 0
   }
 
   for (let index = 0; index < len; index++) {
@@ -4142,11 +4204,17 @@ export class AttributedScopeStack {
     frames: AttributedScopeStackFrame[]
   ): AttributedScopeStack | null {
     let current = base
-    for (const frame of frames) {
-      for (const scopeName of frame.scopeNames) {
+    for (let i = 0, framesLen = frames.length; i < framesLen; i++) {
+      const frame = frames[i]
+      const scopeNames = frame.scopeNames
+      for (
+        let j = 0, scopeNamesLen = scopeNames.length;
+        j < scopeNamesLen;
+        j++
+      ) {
         current = new AttributedScopeStack(
           current,
-          scopeName,
+          scopeNames[j],
           frame.encodedTokenAttributes >>> 0,
           null
         )
@@ -4162,16 +4230,14 @@ export interface AttributedScopeStackFrame {
 }
 
 export class LineTokens {
-  // output is [startIndex0, metadata0, startIndex1, metadata1, ...]
-  private tokens: number[] = []
+  // Output is `[startIndex0, metadata0, startIndex1, metadata1, ...]`
+  // Note, `finalize()` returns a subarray view. Callers that retain tokens
+  // beyond the current processing step must copy (e.g. `tokens.slice(0)`).
+  private tokens: Uint32Array = new Uint32Array(64)
+  private tokensCapacity = 64
   private tokensLen = 0
   private lastPosition = 0
   private lastMetadata = 0
-
-  private emitBinaryTokens: boolean
-  constructor(emitBinaryTokens: boolean) {
-    this.emitBinaryTokens = emitBinaryTokens
-  }
 
   reset() {
     this.tokensLen = 0
@@ -4190,10 +4256,14 @@ export class LineTokens {
     const metadata = scopes.tokenAttributes >>> 0
 
     if (this.tokensLen === 0 || this.lastMetadata !== metadata) {
-      // Grow array if needed, reuse existing slots
-      if (this.tokensLen + 2 > this.tokens.length) {
-        // Grow by 32 slots at a time to reduce reallocations
-        this.tokens.length = this.tokens.length + 32
+      // Grow array if needed
+      if (this.tokensLen + 2 > this.tokensCapacity) {
+        // Grow by doubling capacity to reduce reallocations
+        const newCapacity = this.tokensCapacity * 2
+        const newTokens = new Uint32Array(newCapacity)
+        newTokens.set(this.tokens.subarray(0, this.tokensLen))
+        this.tokens = newTokens
+        this.tokensCapacity = newCapacity
       }
       this.tokens[this.tokensLen++] = this.lastPosition
       this.tokens[this.tokensLen++] = metadata
@@ -4205,9 +4275,9 @@ export class LineTokens {
   finalize(lineLength: number) {
     // Ensure last token ends at lineLength by just updating lastPos.
     this.lastPosition = lineLength
-    // Trim to actual size
-    const result = this.tokens.slice(0, this.tokensLen)
-    return this.emitBinaryTokens ? new Uint32Array(result) : result
+    // Return a subarray view to avoid copying. Callers that need to retain
+    // tokens beyond the current processing step must copy.
+    return this.tokens.subarray(0, this.tokensLen)
   }
 }
 
@@ -4627,8 +4697,24 @@ export class Grammar {
   private _cachedThemeForMetadata: Theme | null = null
 
   // Performance: Pooled instances to reduce allocations
-  private _lineTokensPool: LineTokens = new LineTokens(true)
+  private _lineTokensPool: LineTokens = new LineTokens()
   private _lineFontsPool: LineFonts = new LineFonts()
+  // Pools are accessed by helper functions in the same file
+  _loopGuardPool = {
+    seen: new Map<any, Set<number>>(),
+    setPool: [] as Set<number>[],
+    setPoolLen: 0,
+  }
+  _captureArrayPool: Array<{
+    start: number
+    end: number
+    length: number
+  }> = []
+  _whileRulesPool: Array<{
+    rule: BeginWhileRule
+    stack: StateStackImplementation
+  }> = []
+  _localStackPool: LocalStackElement[] = []
 
   scopeName: string
   private _rawGrammar: IRawGrammar
@@ -4757,8 +4843,15 @@ export class Grammar {
     const basic =
       this._basicScopeAttributesProvider.getBasicScopeAttributes(scope)
     const tokenType = this._tokenTypeMatchers.match(scope) ?? basic.tokenType
+    // Create scratch array for balanced bracket check
+    const parentLen = parentScopeNames.length
+    const scopeNamesWithScope = new Array<string>(parentLen + 1)
+    for (let i = 0; i < parentLen; i++) {
+      scopeNamesWithScope[i] = parentScopeNames[i]
+    }
+    scopeNamesWithScope[parentLen] = scope
     const containsBalanced = this._balancedBracketMatchers.some((m) =>
-      m.matcher(parentScopeNames.concat([scope]))
+      m.matcher(scopeNamesWithScope)
     )
 
     // Theme matching using AttributedScopeStack as fast path, with a fallback to ScopeStack
@@ -5118,7 +5211,11 @@ export interface TokenizeOptions {
 
 /** Raw tokenization result for a single line. */
 export interface RawTokenizeResult {
-  /** Raw tokens: [startPos, metadata, startPos, metadata, ...] */
+  /**
+   * Raw tokens: `[startPos, metadata, startPos, metadata, ...]`
+   * Note: This is a subarray view. Callers that retain tokens beyond the current
+   * processing step must copy (e.g. `tokens.slice(0)`).
+   */
   tokens: Uint32Array
   /** The original line text (for slicing) */
   lineText: string
@@ -5263,8 +5360,11 @@ export class Tokenizer<Theme extends string> {
   /**
    * Stream raw tokens line-by-line for the given source.
    * Useful for binary RPC transport.
+   *
+   * Note: The `tokens` in each result are subarray views. Callers that retain
+   * tokens beyond the current processing step must copy (e.g. `tokens.slice(0)`).
    */
-  async *streamRaw(
+  async *stream(
     source: string,
     language: Languages,
     theme: Theme,

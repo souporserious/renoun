@@ -6,7 +6,7 @@ import type { ConfigurationOptions } from '../components/Config/types.ts'
 import type { Languages as TextMateLanguages } from '../grammars/index.ts'
 import type { Highlighter } from './create-highlighter.ts'
 import { getDebugLogger } from './debug.ts'
-import { TokenMetadata, FontStyle } from './textmate.ts'
+import { TokenMetadata, FontStyle, type RawTokenizeResult } from './textmate.ts'
 import { getDiagnosticMessageText } from './get-diagnostic-message.ts'
 import { getLanguage, type Languages } from './get-language.ts'
 import { getRootDirectory } from './get-root-directory.ts'
@@ -198,210 +198,208 @@ export async function getTokens({
       const tokensPromise = getDebugLogger().trackOperation(
         'highlighter',
         async () => {
-          // Collect per-theme raw results via streamRaw
-          const perThemeResults: Array<
-            Array<{
-              tokens: Uint32Array
-              lineText: string
-            }>
-          > = []
+          if (!isMultiTheme) {
+            // Single theme: decode immediately to avoid storing raw tokens.
+            const themeName = themeNames[0]
+            const context = await highlighter.getContext(themeName)
+            const tokens: Token[][] = []
 
-          for (const themeName of themeNames) {
-            const themeResults: Array<{
-              tokens: Uint32Array
-              lineText: string
-            }> = []
-            for await (const result of highlighter.streamRaw(
+            for await (const result of highlighter.stream(
               value,
               finalLanguage as TextMateLanguages,
               themeName
             )) {
-              themeResults.push({
-                tokens: result.tokens,
-                lineText: result.lineText,
-              })
-            }
-            perThemeResults.push(themeResults)
-          }
+              const lineText = result.lineText
+              const lineTokens: Token[] = []
 
-          if (isMultiTheme) {
-            // Multi-theme: merge boundaries across themes
-            const contexts = await Promise.all(
-              themeNames.map((theme) => highlighter.getContext(theme))
-            )
+              for (let i = 0; i < result.tokens.length; i += 2) {
+                const start = result.tokens[i]
+                const end =
+                  i + 2 < result.tokens.length
+                    ? result.tokens[i + 2]
+                    : lineText.length
+                if (end <= start) continue
 
-            const mergedLines: Token[][] = []
-            const lineCount = Math.max(
-              lines.length,
-              ...perThemeResults.map((theme) => theme.length)
-            )
-
-            for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
-              const lineText = lines[lineIndex] ?? ''
-              const allTokens: Array<{
-                start: number
-                end: number
-                metadata: number
-                themeIndex: number
-              }> = []
-
-              for (
-                let themeIndex = 0;
-                themeIndex < themeNames.length;
-                themeIndex++
-              ) {
-                const result = perThemeResults[themeIndex]?.[lineIndex]
-                if (!result) continue
-                const tokens = result.tokens
-
-                for (let i = 0; i < tokens.length; i += 2) {
-                  const start = tokens[i]
-                  const end =
-                    i + 2 < tokens.length ? tokens[i + 2] : lineText.length
-                  allTokens.push({
-                    start,
-                    end,
-                    metadata: tokens[i + 1],
-                    themeIndex,
-                  })
-                }
-              }
-
-              const boundarySet = new Set<number>()
-              for (const token of allTokens) {
-                boundarySet.add(token.start)
-                boundarySet.add(token.end)
-              }
-              const boundaries = Array.from(boundarySet).sort((a, b) => a - b)
-              const mergedLineTokens: Token[] = []
-
-              for (let i = 0; i < boundaries.length - 1; i++) {
-                const rangeStart = boundaries[i]
-                const rangeEnd = boundaries[i + 1]
-                if (rangeStart >= rangeEnd) continue
-
-                const value = lineText.slice(rangeStart, rangeEnd)
-                const style: Record<string, string> = {}
-                let hasAnyNonBaseColor = false
-                let hasTextStyles = false
-
-                for (const token of allTokens) {
-                  if (token.start < rangeEnd && token.end > rangeStart) {
-                    const context = contexts[token.themeIndex]
-                    const colorId = TokenMetadata.getForegroundId(
-                      token.metadata
-                    )
-                    const color = context.colorMap[colorId] || ''
-                    const baseColor = context.baseColor
-                    const fontFlags = TokenMetadata.getFontStyle(token.metadata)
-                    const fontStyle =
-                      fontFlags & FontStyle.Italic ? 'italic' : ''
-                    const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
-                    let textDecoration = ''
-                    if (fontFlags & FontStyle.Underline)
-                      textDecoration = 'underline'
-                    if (fontFlags & FontStyle.Strikethrough) {
-                      textDecoration = textDecoration
-                        ? `${textDecoration} line-through`
-                        : 'line-through'
-                    }
-
-                    const themeIsBaseColor =
-                      !color || baseColor.toLowerCase() === color.toLowerCase()
-                    if (!themeIsBaseColor) hasAnyNonBaseColor = true
-                    if (fontFlags !== 0) hasTextStyles = true
-
-                    const themeKey = `--${token.themeIndex}`
-                    if (color && !themeIsBaseColor)
-                      style[`${themeKey}fg`] = color
-                    if (fontStyle) style[`${themeKey}fs`] = fontStyle
-                    if (fontWeight) style[`${themeKey}fw`] = fontWeight
-                    if (textDecoration) style[`${themeKey}td`] = textDecoration
-                  }
+                const metadata = result.tokens[i + 1]
+                const colorId = TokenMetadata.getForegroundId(metadata)
+                const color = context.colorMap[colorId] || ''
+                const baseColor = context.baseColor
+                const fontFlags = TokenMetadata.getFontStyle(metadata)
+                const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
+                const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
+                let textDecoration = ''
+                if (fontFlags & FontStyle.Underline)
+                  textDecoration = 'underline'
+                if (fontFlags & FontStyle.Strikethrough) {
+                  textDecoration = textDecoration
+                    ? `${textDecoration} line-through`
+                    : 'line-through'
                 }
 
-                mergedLineTokens.push({
-                  value,
-                  start: rangeStart,
-                  end: rangeEnd,
-                  hasTextStyles,
-                  isBaseColor: !hasAnyNonBaseColor,
+                const themeIsBaseColor =
+                  !color || baseColor.toLowerCase() === color.toLowerCase()
+
+                const style: {
+                  color?: string
+                  fontStyle?: string
+                  fontWeight?: string
+                  textDecoration?: string
+                } = {}
+                if (color && !themeIsBaseColor) style.color = color
+                if (fontStyle) style.fontStyle = fontStyle
+                if (fontWeight) style.fontWeight = fontWeight
+                if (textDecoration) style.textDecoration = textDecoration
+
+                const tokenValue = lineText.slice(start, end)
+                lineTokens.push({
+                  value: tokenValue,
+                  start,
+                  end,
+                  hasTextStyles: fontFlags !== 0,
+                  isBaseColor: themeIsBaseColor,
                   isDeprecated: false,
                   isSymbol: false,
-                  isWhiteSpace: /^\s*$/.test(value),
-                  style: style as Token['style'],
+                  isWhiteSpace: /^\s*$/.test(tokenValue),
+                  style,
                 })
               }
-
-              mergedLines.push(mergedLineTokens)
+              tokens.push(lineTokens)
             }
 
-            return mergedLines
+            return tokens
           }
 
-          // Single theme: decode from streamRaw results
-          const themeName = themeNames[0]
-          const context = await highlighter.getContext(themeName)
-          const tokens: Token[][] = []
+          // Multi-theme: merge boundaries across themes without storing raw tokens.
+          const contexts = await Promise.all(
+            themeNames.map((theme) => highlighter.getContext(theme))
+          )
 
-          for (const result of perThemeResults[0] ?? []) {
-            const lineText = result.lineText
-            const lineTokens: Token[] = []
+          const mergedLines: Token[][] = []
+          const lineCount = lines.length
+          const themeCount = themeNames.length
+          const iterators = new Array<AsyncIterator<RawTokenizeResult>>(
+            themeCount
+          )
+          const doneFlags = new Array<boolean>(themeCount).fill(false)
 
-            for (let i = 0; i < result.tokens.length; i += 2) {
-              const start = result.tokens[i]
-              const end =
-                i + 2 < result.tokens.length
-                  ? result.tokens[i + 2]
-                  : lineText.length
-              if (end <= start) continue
+          for (let themeIndex = 0; themeIndex < themeCount; themeIndex++) {
+            iterators[themeIndex] = highlighter
+              .stream(
+                value,
+                finalLanguage as TextMateLanguages,
+                themeNames[themeIndex]
+              )
+              [Symbol.asyncIterator]()
+          }
 
-              const metadata = result.tokens[i + 1]
-              const colorId = TokenMetadata.getForegroundId(metadata)
-              const color = context.colorMap[colorId] || ''
-              const baseColor = context.baseColor
-              const fontFlags = TokenMetadata.getFontStyle(metadata)
-              const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
-              const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
-              let textDecoration = ''
-              if (fontFlags & FontStyle.Underline) textDecoration = 'underline'
-              if (fontFlags & FontStyle.Strikethrough) {
-                textDecoration = textDecoration
-                  ? `${textDecoration} line-through`
-                  : 'line-through'
+          for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
+            const lineText = lines[lineIndex] ?? ''
+            const allTokens: Array<{
+              start: number
+              end: number
+              metadata: number
+              themeIndex: number
+            }> = []
+
+            for (let themeIndex = 0; themeIndex < themeCount; themeIndex++) {
+              if (doneFlags[themeIndex]) continue
+              const step = await iterators[themeIndex].next()
+              if (step.done) {
+                doneFlags[themeIndex] = true
+                continue
+              }
+              const tokens = step.value.tokens
+              const themeLineLength = step.value.lineText.length
+
+              for (let i = 0; i < tokens.length; i += 2) {
+                const start = tokens[i]
+                const end =
+                  i + 2 < tokens.length ? tokens[i + 2] : themeLineLength
+                allTokens.push({
+                  start,
+                  end,
+                  metadata: tokens[i + 1],
+                  themeIndex,
+                })
+              }
+            }
+
+            const boundarySet = new Set<number>()
+            for (const token of allTokens) {
+              boundarySet.add(token.start)
+              boundarySet.add(token.end)
+            }
+            const boundaries = Array.from(boundarySet).sort((a, b) => a - b)
+            const mergedLineTokens: Token[] = []
+
+            for (let i = 0; i < boundaries.length - 1; i++) {
+              const rangeStart = boundaries[i]
+              const rangeEnd = boundaries[i + 1]
+              if (rangeStart >= rangeEnd) continue
+
+              const value = lineText.slice(rangeStart, rangeEnd)
+              const style: Record<string, string> = {}
+              let hasAnyNonBaseColor = false
+              let hasTextStyles = false
+
+              for (const token of allTokens) {
+                if (token.start < rangeEnd && token.end > rangeStart) {
+                  const context = contexts[token.themeIndex]
+                  const colorId = TokenMetadata.getForegroundId(token.metadata)
+                  const color = context.colorMap[colorId] || ''
+                  const baseColor = context.baseColor
+                  const fontFlags = TokenMetadata.getFontStyle(token.metadata)
+                  const fontStyle = fontFlags & FontStyle.Italic ? 'italic' : ''
+                  const fontWeight = fontFlags & FontStyle.Bold ? 'bold' : ''
+                  let textDecoration = ''
+                  if (fontFlags & FontStyle.Underline)
+                    textDecoration = 'underline'
+                  if (fontFlags & FontStyle.Strikethrough) {
+                    textDecoration = textDecoration
+                      ? `${textDecoration} line-through`
+                      : 'line-through'
+                  }
+
+                  const themeIsBaseColor =
+                    !color || baseColor.toLowerCase() === color.toLowerCase()
+                  if (!themeIsBaseColor) hasAnyNonBaseColor = true
+                  if (fontFlags !== 0) hasTextStyles = true
+
+                  const themeKey = `--${token.themeIndex}`
+                  if (color && !themeIsBaseColor) style[`${themeKey}fg`] = color
+                  if (fontStyle) style[`${themeKey}fs`] = fontStyle
+                  if (fontWeight) style[`${themeKey}fw`] = fontWeight
+                  if (textDecoration) style[`${themeKey}td`] = textDecoration
+                }
               }
 
-              const themeIsBaseColor =
-                !color || baseColor.toLowerCase() === color.toLowerCase()
-
-              const style: {
-                color?: string
-                fontStyle?: string
-                fontWeight?: string
-                textDecoration?: string
-              } = {}
-              if (color && !themeIsBaseColor) style.color = color
-              if (fontStyle) style.fontStyle = fontStyle
-              if (fontWeight) style.fontWeight = fontWeight
-              if (textDecoration) style.textDecoration = textDecoration
-
-              const tokenValue = lineText.slice(start, end)
-              lineTokens.push({
-                value: tokenValue,
-                start,
-                end,
-                hasTextStyles: fontFlags !== 0,
-                isBaseColor: themeIsBaseColor,
+              mergedLineTokens.push({
+                value,
+                start: rangeStart,
+                end: rangeEnd,
+                hasTextStyles,
+                isBaseColor: !hasAnyNonBaseColor,
                 isDeprecated: false,
                 isSymbol: false,
-                isWhiteSpace: /^\s*$/.test(tokenValue),
-                style,
+                isWhiteSpace: /^\s*$/.test(value),
+                style: style as Token['style'],
               })
             }
-            tokens.push(lineTokens)
+
+            mergedLines.push(mergedLineTokens)
           }
 
-          return tokens
+          for (let themeIndex = 0; themeIndex < themeCount; themeIndex++) {
+            if (doneFlags[themeIndex]) continue
+            const iterator = iterators[
+              themeIndex
+            ] as AsyncIterator<RawTokenizeResult>
+            if (iterator.return) {
+              await iterator.return()
+            }
+          }
+
+          return mergedLines
         },
         {
           data: {
