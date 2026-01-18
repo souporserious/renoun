@@ -1,3 +1,38 @@
+/*---------------------------------------------------------
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License. See LICENSE.md in the
+ * vscode-textmate repository for full license text.
+ *
+ * This file is compiled from vscode-textmate with significant changes:
+ *
+ * Structural changes:
+ * - Consolidated multiple source files (rule.ts, theme.ts, utils.ts,
+ *   registry.ts, main.ts, grammar/*.ts, etc.) into a single module
+ * - Removed async OnigLib/WASM dependency in favor of synchronous JS regexes
+ *
+ * Regex engine:
+ * - Replaced OnigScanner with native JS RegExp via `oniguruma-to-es`
+ * - CompiledRule.findNextMatchSync uses JS regex execution with
+ *   `hasIndices` flag for capture group positions
+ * - Int32Array buffer pooling to minimize allocations during matching
+ *
+ * Additional utilities:
+ * - TokenMetadata: zero-allocation decoder for encoded token metadata
+ * - LineFonts: tracks fontFamily/fontSize/lineHeight through scope stack
+ * - CSS variable color support (e.g. `var(--color, #fff)`)
+ * - StringCachedFn: specialized cache for string keys using plain objects
+ *
+ * High-level APIs:
+ * - Tokenizer: multi-theme registry with streaming tokenization
+ * - TokenizerRegistry: language-to-scopeName resolution via grammars map
+ * - RawTokenizeResult: Uint32Array-based token output for binary transport
+ *
+ * Performance improvements:
+ * - Object/array pools for loop guards, capture arrays, and local stacks
+ * - Lazy anchor cache building in RegExpSource
+ * - Subarray views from LineTokens.finalize() to avoid copies
+ *--------------------------------------------------------*/
+
 import { toRegExp } from 'oniguruma-to-es'
 
 import type { Languages, ScopeName } from '../grammars/index.ts'
