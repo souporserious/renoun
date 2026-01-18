@@ -1887,6 +1887,52 @@ export default async function Page({
     expect(streamed).toEqual(nonStreamed)
   })
 
+  test('token buffers are isolated between lines (no subarray corruption)', async () => {
+    // This test verifies that tokenizing subsequent lines does not corrupt
+    // token data from previous lines. This catches bugs where a subarray view
+    // into a shared buffer is returned instead of a copy.
+    const tokenizer = new Tokenizer<ThemeName>(registryOptions)
+    const source = `const a = 1
+const b = 2
+const c = 3`
+
+    const lineResults: Array<{ tokens: Uint32Array; lineText: string }> = []
+    for await (const result of tokenizer.stream(source, 'tsx', 'light')) {
+      // Store the raw token array (should be a copy, not a view)
+      lineResults.push({
+        tokens: result.tokens,
+        lineText: result.lineText,
+      })
+    }
+
+    // Verify we got 3 lines
+    expect(lineResults.length).toBe(3)
+
+    // Now verify each line's tokens are still valid and not corrupted
+    // by subsequent line processing
+    for (let lineIndex = 0; lineIndex < lineResults.length; lineIndex++) {
+      const { tokens, lineText } = lineResults[lineIndex]
+
+      // Reconstruct the text from tokens
+      const reconstructed: string[] = []
+      for (let i = 0; i < tokens.length; i += 2) {
+        const start = tokens[i]
+        const end = i + 2 < tokens.length ? tokens[i + 2] : lineText.length
+        if (end > start) {
+          reconstructed.push(lineText.slice(start, end))
+        }
+      }
+      const reconstructedText = reconstructed.join('')
+
+      // The reconstructed text should match the original line
+      expect(reconstructedText).toBe(lineText)
+    }
+
+    // Specifically verify first line wasn't corrupted by line 2 or 3 processing
+    const firstLineTokens = lineResults[0].tokens
+    expect(firstLineTokens[0]).toBe(0) // First token should start at 0
+  })
+
   test('retrieves grammar state and reuses it across tokenization runs', async () => {
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const firstChunk = '/* comment line 1'

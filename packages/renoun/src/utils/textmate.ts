@@ -4286,8 +4286,6 @@ export interface AttributedScopeStackFrame {
 
 export class LineTokens {
   // Output is `[startIndex0, metadata0, startIndex1, metadata1, ...]`
-  // Note, `finalize()` returns a subarray view. Callers that retain tokens
-  // beyond the current processing step must copy (e.g. `tokens.slice(0)`).
   #tokens: Uint32Array = new Uint32Array(64)
   #tokensCapacity = 64
   #tokensLength = 0
@@ -4330,9 +4328,9 @@ export class LineTokens {
   finalize(lineLength: number) {
     // Ensure last token ends at lineLength by just updating lastPosition.
     this.#lastPosition = lineLength
-    // Return a subarray view to avoid copying. Callers that need to retain
-    // tokens beyond the current processing step must copy.
-    return this.#tokens.subarray(0, this.#tokensLength)
+    // Return a copy of the tokens. We must copy because the underlying buffer
+    // is reused when the pool is reset for the next line.
+    return this.#tokens.slice(0, this.#tokensLength)
   }
 }
 
@@ -5243,8 +5241,6 @@ export interface TokenizeOptions {
 export interface RawTokenizeResult {
   /**
    * Raw tokens: `[startPos, metadata, startPos, metadata, ...]`
-   * Note: This is a subarray view. Callers that retain tokens beyond the current
-   * processing step must copy (e.g. `tokens.slice(0)`).
    */
   tokens: Uint32Array
   /** The original line text (for slicing) */
@@ -5390,9 +5386,6 @@ export class Tokenizer<Theme extends string> {
   /**
    * Stream raw tokens line-by-line for the given source.
    * Useful for binary RPC transport.
-   *
-   * Note: The `tokens` in each result are subarray views. Callers that retain
-   * tokens beyond the current processing step must copy (e.g. `tokens.slice(0)`).
    */
   async *stream(
     source: string,
