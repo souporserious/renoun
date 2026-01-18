@@ -3,18 +3,6 @@ import { toRegExp } from 'oniguruma-to-es'
 import type { Languages, ScopeName } from '../grammars/index.ts'
 import { grammars } from '../grammars/index.ts'
 
-export function disposeOnigString(onigString: any) {
-  // Only call dispose if it's an object with a dispose method (for native Onig)
-  if (
-    onigString &&
-    typeof onigString === 'object' &&
-    typeof onigString.dispose === 'function'
-  ) {
-    onigString.dispose()
-  }
-  // Strings don't need disposal - this is now a no-op for JS mode
-}
-
 export function clone<T = any>(value: T): T {
   if (Array.isArray(value)) return value.map(clone) as any
   if (value && typeof value === 'object') {
@@ -37,19 +25,33 @@ export function mergeObjects<T extends Record<string, any>>(
 }
 
 export function basename(path: string): string {
-  const lastSlashBitwise = ~path.lastIndexOf('/') || ~path.lastIndexOf('\\')
-  return lastSlashBitwise === 0
-    ? path
-    : ~lastSlashBitwise === path.length - 1
-      ? basename(path.substring(0, path.length - 1))
-      : path.substr(1 + ~lastSlashBitwise)
+  let end = path.length - 1
+
+  // Trim trailing / or \
+  while (end >= 0) {
+    const char = path.charCodeAt(end)
+    if (char === 47 /* / */ || char === 92 /* \ */) end--
+    else break
+  }
+
+  // Path is all slashes
+  if (end < 0) return ''
+
+  // Find start of last segment
+  let start = end
+  while (start >= 0) {
+    const char = path.charCodeAt(start)
+    if (char === 47 /* / */ || char === 92 /* \ */) break
+    start--
+  }
+
+  return path.slice(start + 1, end + 1)
 }
 
 const CAPTURE_REGEX = /\$(\d+)|\${(\d+):\/(downcase|upcase)}/g
 const CAPTURE_TEST_REGEX = /\$(\d+)|\${(\d+):\/(downcase|upcase)}/
 
 export class RegexSource {
-  // Performance: Cache hasCaptures results to avoid repeated regex tests
   private static _hasCapturesCache: Record<string, boolean> =
     Object.create(null)
 
@@ -75,7 +77,6 @@ export class RegexSource {
         if (!capture) return fullMatch
 
         let replacement = sourceText.substring(capture.start, capture.end)
-        // Performance: Use charCodeAt instead of string indexing
         while (replacement.length > 0 && replacement.charCodeAt(0) === 46) {
           replacement = replacement.substring(1)
         }
@@ -141,12 +142,10 @@ function colorValueToId(cssValue: string): string {
   return cssValue.toUpperCase()
 }
 
-// Pre-compiled regex for escaping - avoid re-creation
 const ESCAPE_REGEXP_CHARS = /[\-\\\{\}\*\+\?\|\^\$\.\,\[\]\(\)\#\s]/g
 const ESCAPE_REGEXP_TEST = /[\-\\\{\}\*\+\?\|\^\$\.\,\[\]\(\)\#\s]/
 
 export function escapeRegExpCharacters(value: string) {
-  // Fast path: if no special characters, return as-is
   if (!ESCAPE_REGEXP_TEST.test(value)) return value
   ESCAPE_REGEXP_CHARS.lastIndex = 0
   return value.replace(ESCAPE_REGEXP_CHARS, '\\$&')
@@ -165,7 +164,6 @@ export class CachedFn<T, R> {
     if (cached !== undefined) return cached
     const value = this.#fn(arg)
     if (this.#maxSize > 0 && this.#cache.size >= this.#maxSize) {
-      // Evict oldest entry (first key)
       const firstKey = this.#cache.keys().next().value
       if (firstKey !== undefined) this.#cache.delete(firstKey)
     }
@@ -192,7 +190,6 @@ export class StringCachedFn<R> {
     if (value !== undefined) return value
     value = this.#fn(arg)
     if (this.#maxSize > 0 && this.#size >= this.#maxSize) {
-      // Simple eviction: clear cache when full
       this.#cache = Object.create(null)
       this.#size = 0
     }
@@ -397,7 +394,7 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
   token.char = -1
 
   let char: number
-  const src = state.source
+  const source = state.source
   let position = state.position
   const length = state.length
   let line = state.line
@@ -410,7 +407,8 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
     column++
     if (position + keywordLength - 1 > length) return false
     for (let index = 1; index < keywordLength; index++) {
-      if (src.charCodeAt(position) !== keyword.charCodeAt(index)) return false
+      if (source.charCodeAt(position) !== keyword.charCodeAt(index))
+        return false
       position++
       column++
     }
@@ -419,7 +417,7 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
 
   while (true) {
     if (position >= length) return false
-    char = src.charCodeAt(position)
+    char = source.charCodeAt(position)
     if (char !== 32 && char !== 9 && char !== 13) {
       if (char !== 10) break
       position++
@@ -436,13 +434,12 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
   token.char = column
 
   if (char === 34) {
-    // string
     token.type = 1
     position++
     column++
     while (true) {
       if (position >= length) return false
-      char = src.charCodeAt(position)
+      char = source.charCodeAt(position)
       position++
       column++
       if (char === 92) {
@@ -452,7 +449,7 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
         break
       }
     }
-    token.value = src
+    token.value = source
       .substring(token.offset + 1, position - 1)
       .replace(/\\u([0-9A-Fa-f]{4})/g, (_m, hex) =>
         String.fromCodePoint(parseInt(hex, 16))
@@ -517,7 +514,7 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
     token.type = 11 // number
     while (true) {
       if (position >= length) return false
-      char = src.charCodeAt(position)
+      char = source.charCodeAt(position)
       if (
         char !== 46 &&
         !(char >= 48 && char <= 57) &&
@@ -534,7 +531,8 @@ function parseJSONNext(state: JSONState, token: JSONToken) {
   }
 
   token.length = position - token.offset
-  if (token.value === null) token.value = src.substr(token.offset, token.length)
+  if (token.value === null)
+    token.value = source.substr(token.offset, token.length)
 
   state.position = position
   state.line = line
@@ -701,7 +699,7 @@ function parsePLISTBody(
   filename: string | null,
   locationKey: string | null
 ): any {
-  const totalLen = sourceText.length
+  const totalLength = sourceText.length
   let position = 0
   let line = 1
   let column = 0
@@ -724,13 +722,13 @@ function parsePLISTBody(
     }
   }
 
-  function setPos(newPos: number) {
-    if (locationKey === null) position = newPos
-    else advance(newPos - position)
+  function setPosition(newPosition: number) {
+    if (locationKey === null) position = newPosition
+    else advance(newPosition - position)
   }
 
   function skipWhitespace() {
-    while (position < totalLen) {
+    while (position < totalLength) {
       const char = sourceText.charCodeAt(position)
       if (char !== 32 && char !== 9 && char !== 13 && char !== 10) break
       advance(1)
@@ -747,23 +745,22 @@ function parsePLISTBody(
 
   function consumeThrough(lit: string) {
     const idx = sourceText.indexOf(lit, position)
-    setPos(idx !== -1 ? idx + lit.length : totalLen)
+    setPosition(idx !== -1 ? idx + lit.length : totalLength)
   }
 
   function readUntil(lit: string) {
     const idx = sourceText.indexOf(lit, position)
     if (idx !== -1) {
       const slice = sourceText.substring(position, idx)
-      setPos(idx + lit.length)
+      setPosition(idx + lit.length)
       return slice
     }
     const tail = sourceText.substr(position)
-    setPos(totalLen)
+    setPosition(totalLength)
     return tail
   }
 
-  // Skip BOM
-  if (totalLen > 0 && sourceText.charCodeAt(0) === 65279) position = 1
+  if (totalLength > 0 && sourceText.charCodeAt(0) === 65279) position = 1
 
   // Parser state:
   // 0 root, 1 dict, 2 array
@@ -902,15 +899,15 @@ function parsePLISTBody(
     return true
   }
 
-  while (position < totalLen) {
+  while (position < totalLength) {
     skipWhitespace()
-    if (position >= totalLen) break
+    if (position >= totalLength) break
 
     const lt = sourceText.charCodeAt(position)
     advance(1)
     if (lt !== 60) return fail('expected <') // '<'
 
-    if (position >= totalLen) return fail('unexpected end of input')
+    if (position >= totalLength) return fail('unexpected end of input')
 
     const nextCh = sourceText.charCodeAt(position)
 
@@ -1007,8 +1004,6 @@ export function parsePLIST(sourceText: string) {
   return parsePLISTBody(sourceText, null, null)
 }
 
-// Raw grammar parser (json or plist)
-
 export function parseRawGrammar(
   sourceText: string,
   filename: string | null = null
@@ -1018,8 +1013,6 @@ export function parseRawGrammar(
   }
   return parsePLIST(sourceText)
 }
-
-// Theme + scopes
 
 export class Theme {
   #cachedMatchRoot: StringCachedFn<ThemeTrieElementRule[]>
@@ -1081,11 +1074,11 @@ export class Theme {
         if (rule.lineHeight !== null) defaultLineHeight = rule.lineHeight
       }
 
-      const cm = new ColorMap(colorMap)
+      const map = new ColorMap(colorMap)
       const defaults = new StyleAttributes(
         defaultFontStyle,
-        cm.getId(defaultForeground),
-        cm.getId(defaultBackground),
+        map.getId(defaultForeground),
+        map.getId(defaultBackground),
         defaultFontFamily,
         defaultFontSize,
         defaultLineHeight
@@ -1113,7 +1106,7 @@ export class Theme {
         index++
       ) {
         const rule = sortedRules[index]
-        const foregroundId = cm.getId(rule.foreground)
+        const foregroundId = map.getId(rule.foreground)
 
         root.insert(
           0,
@@ -1121,14 +1114,14 @@ export class Theme {
           rule.parentScopes,
           rule.fontStyle,
           foregroundId,
-          cm.getId(rule.background),
+          map.getId(rule.background),
           rule.fontFamily,
           rule.fontSize,
           rule.lineHeight
         )
       }
 
-      return new Theme(cm, defaults, root)
+      return new Theme(map, defaults, root)
     })(rules, colorMap)
   }
 
@@ -1149,7 +1142,7 @@ export class Theme {
 
     const candidateRules = this.#cachedMatchRoot.get(scopeName)
 
-    const match = candidateRules.find((rule: any) =>
+    const match = candidateRules.find((rule) =>
       scopePathMatchesParentScopes(scope.parent, rule.parentScopes)
     )
 
@@ -1210,7 +1203,6 @@ export class ScopeStack {
     return new ScopeStack(this, scope)
   }
 
-  // Cached - segments are immutable since ScopeStack is immutable
   getSegments(): string[] {
     if (this.#segments !== null) return this.#segments
     let current: ScopeStack | null = this
@@ -1361,7 +1353,6 @@ export function parseTheme(theme: IRawTheme | undefined) {
     return []
   }
 
-  // Always prefer normalized settings if present, otherwise fallback to tokenColors.
   const settings = theme.settings || theme.tokenColors
   if (!settings || !Array.isArray(settings)) {
     return []
@@ -1395,8 +1386,12 @@ export function parseTheme(theme: IRawTheme | undefined) {
     if (typeof entrySettings.fontStyle === 'string') {
       fontStyle = 0
       const parts = entrySettings.fontStyle.split(' ')
-      for (let j = 0; j < parts.length; j++) {
-        switch (parts[j]) {
+      for (
+        let index = 0, partsLength = parts.length;
+        index < partsLength;
+        index++
+      ) {
+        switch (parts[index]) {
           case 'italic':
             fontStyle |= 1
             break
@@ -1542,14 +1537,12 @@ export class ColorMap {
       return 0
     }
     const normalized = colorValueToId(color)
-    // Check both original and normalized to avoid extra processing when already cached
     let id = this.#color2id[color]
     if (id !== undefined) {
       return id
     }
     id = this.#color2id[normalized]
     if (id !== undefined) {
-      // Cache the original case too for faster future lookups
       this.#color2id[color] = id
       return id
     }
@@ -1654,7 +1647,6 @@ export class ThemeTrieElementRule {
     } else {
       this.scopeDepth = scopeDepth
     }
-    // Invalidate cached StyleAttributes since we're changing values
     this.#cachedStyleAttributes = null
     if (fontStyle !== -1) this.fontStyle = fontStyle
     if (foreground !== 0) this.foreground = foreground
@@ -1685,16 +1677,24 @@ export class ThemeTrieElement {
   ) {
     if (a.scopeDepth !== b.scopeDepth) return b.scopeDepth - a.scopeDepth
 
-    let aIdx = 0
-    let bIdx = 0
+    let aIndex = 0
+    let bIndex = 0
     while (true) {
-      if (a.parentScopes[aIdx] === '>') aIdx++
-      if (b.parentScopes[bIdx] === '>') bIdx++
-      if (aIdx >= a.parentScopes.length || bIdx >= b.parentScopes.length) break
-      const cmp = b.parentScopes[bIdx].length - a.parentScopes[aIdx].length
-      if (cmp !== 0) return cmp
-      aIdx++
-      bIdx++
+      if (a.parentScopes[aIndex] === '>') {
+        aIndex++
+      }
+      if (b.parentScopes[bIndex] === '>') {
+        bIndex++
+      }
+      if (aIndex >= a.parentScopes.length || bIndex >= b.parentScopes.length) {
+        break
+      }
+      const aScope = a.parentScopes[aIndex]
+      const bScope = b.parentScopes[bIndex]
+      const comparison = bScope.length - aScope.length
+      if (comparison !== 0) return comparison
+      aIndex++
+      bIndex++
     }
     return b.parentScopes.length - a.parentScopes.length
   }
@@ -1800,7 +1800,6 @@ export class ThemeTrieElement {
     lineHeight: number | null
   ) {
     if (parentScopes !== null) {
-      // Performance: Cache array reference and length
       const rules = this.#rulesWithParentScopes
       for (
         let index = 0, rulesLength = rules.length;
@@ -1854,8 +1853,6 @@ export class ThemeTrieElement {
     }
   }
 }
-
-// Basic scope attributes
 
 export class BasicScopeAttributes {
   languageId: number
@@ -2734,7 +2731,6 @@ export class RegExpSource {
   source: string
   ruleId: number
   hasBackReferences: boolean
-  // Performance: Lazy initialization - undefined means not computed yet, null means no anchors
   #anchorCache:
     | { A0_G0: string; A0_G1: string; A1_G0: string; A1_G1: string }
     | null
@@ -2749,15 +2745,12 @@ export class RegExpSource {
 
       for (let index = 0; index < length; index++) {
         if (source.charCodeAt(index) === 92 && index + 1 < length) {
-          // backslash, use charCodeAt
           const next = source.charCodeAt(index + 1)
           if (next === 122) {
-            // 'z'
             parts.push(source.substring(start, index))
             parts.push('$(?!\\n)(?<!\\n)')
             start = index + 2
           } else if (next === 65 || next === 71) {
-            // 'A' or 'G'
             hasAnchor = true
           }
           index++
@@ -2777,7 +2770,6 @@ export class RegExpSource {
 
     this.ruleId = ruleId
     this.hasBackReferences = HAS_BACK_REFERENCES.test(this.source)
-    // Performance: Don't build anchor cache in constructor, defer to first use
   }
 
   clone() {
@@ -2787,7 +2779,6 @@ export class RegExpSource {
   setSource(nextSource: string) {
     if (this.source !== nextSource) {
       this.source = nextSource
-      // Invalidate anchor cache
       if (this.hasAnchor) this.#anchorCache = undefined
     }
   }
@@ -2801,7 +2792,6 @@ export class RegExpSource {
     })
   }
 
-  // Performance: Lazy build of anchor cache
   #getAnchorCache() {
     if (this.#anchorCache === undefined) {
       this.#anchorCache = this.hasAnchor ? this.#buildAnchorCache() : null
@@ -2840,6 +2830,8 @@ export class RegExpSource {
           A1_G0[position + 1] = '\uFFFF'
           A1_G1[position + 1] = 'G'
         } else {
+          // Keep the backslash, and replace the next character to either preserve
+          // the anchor ('A'/'G') or make it fail ('\uFFFF').
           A0_G0[position + 1] = nextChar
           A0_G1[position + 1] = nextChar
           A1_G0[position + 1] = nextChar
@@ -2966,7 +2958,6 @@ export class RegExpSourceList {
   }
 }
 
-// Helper functions to read from flat capture buffers
 function getCaptureStart(
   captureIndices: Int32Array | Array<{ start: number; end: number }>,
   index: number
@@ -3071,14 +3062,13 @@ export class CompiledRule {
     const indices = bestMatch.indices
     const captureCount = indices ? indices.length : bestMatch.length
 
-    // Ensure buffer is large enough
     if (captureCount * 2 > this.#captureBuffer.length) {
       this.#captureBuffer = new Int32Array(captureCount * 2)
       this.#matchResult.captureIndices = this.#captureBuffer
     }
 
     if (indices) {
-      // Fast path: regex engine provides indices directly
+      // Capture indices are available, copy them to the buffer.
       for (let index = 0; index < captureCount; index++) {
         const pair = indices[index]
         const offset = index * 2
@@ -3091,7 +3081,7 @@ export class CompiledRule {
         }
       }
     } else {
-      // Slow path: compute indices manually
+      // No capture indices, use the full match index and text.
       const fullMatchIndex = bestMatch.index
       const fullMatchText = bestMatch[0]
 
@@ -3126,8 +3116,6 @@ export class CompiledRule {
     return this.#matchResult
   }
 }
-
-// Dependencies & includes
 
 export class TopLevelRuleReference {
   scopeName: string
@@ -3429,8 +3417,6 @@ export function parseInclude(include: string): IncludeReference {
   return new TopLevelRepositoryReference(scopeName, ruleName)
 }
 
-// Tokenization core
-
 export class TokenizeStringResult {
   stack: StateStackImplementation
   stoppedEarly: boolean
@@ -3619,7 +3605,6 @@ function tokenizeString(
 
     let _anchors = _loopGuardSeen.get(stack)
     if (!_anchors) {
-      // Get Set from pool or create new one
       const pool = grammar._loopGuardPool
       if (pool.setPoolLen < pool.setPool.length) {
         _anchors = pool.setPool[pool.setPoolLen++]
@@ -3641,7 +3626,7 @@ function tokenizeString(
         continue
       }
 
-      // End of line; finish.
+      // End of line, finished scanning
       produce(stack, lineLength)
       done = true
       break
@@ -4105,8 +4090,6 @@ function handleCaptures(
   }
 }
 
-// Attributed scope stacks + token emission
-
 export class AttributedScopeStack {
   #cachedScopeNames: string[] | null = null
 
@@ -4148,7 +4131,6 @@ export class AttributedScopeStack {
       return this
     }
 
-    // Fast path: most scope names don't have spaces
     const spaceIdx = scopeName.indexOf(' ')
     if (spaceIdx === -1) {
       const metadata = grammar.getMetadataForScope(scopeName, this)
@@ -4160,16 +4142,14 @@ export class AttributedScopeStack {
       )
       return result
     }
-    // Slow path: scopeName has multiple space-separated scopes
+
     let currentStack: AttributedScopeStack = this
     let start = 0
     const scopeNameLength = scopeName.length
     while (start < scopeNameLength) {
-      // Skip leading spaces
       while (start < scopeNameLength && scopeName.charCodeAt(start) === 32)
         start++
       if (start >= scopeNameLength) break
-      // Find end of this scope
       let end = start + 1
       while (end < scopeNameLength && scopeName.charCodeAt(end) !== 32) end++
       const currentScopeName = internScope(scopeName.substring(start, end))
@@ -4275,12 +4255,12 @@ export class LineTokens {
   // beyond the current processing step must copy (e.g. `tokens.slice(0)`).
   #tokens: Uint32Array = new Uint32Array(64)
   #tokensCapacity = 64
-  #tokensLen = 0
+  #tokensLength = 0
   #lastPosition = 0
   #lastMetadata = 0
 
   reset() {
-    this.#tokensLen = 0
+    this.#tokensLength = 0
     this.#lastPosition = 0
     this.#lastMetadata = 0
   }
@@ -4295,35 +4275,33 @@ export class LineTokens {
     }
     const metadata = scopes.tokenAttributes >>> 0
 
-    if (this.#tokensLen === 0 || this.#lastMetadata !== metadata) {
+    if (this.#tokensLength === 0 || this.#lastMetadata !== metadata) {
       // Grow array if needed
-      if (this.#tokensLen + 2 > this.#tokensCapacity) {
+      if (this.#tokensLength + 2 > this.#tokensCapacity) {
         // Grow by doubling capacity to reduce reallocations
         const newCapacity = this.#tokensCapacity * 2
         const newTokens = new Uint32Array(newCapacity)
-        newTokens.set(this.#tokens.subarray(0, this.#tokensLen))
+        newTokens.set(this.#tokens.subarray(0, this.#tokensLength))
         this.#tokens = newTokens
         this.#tokensCapacity = newCapacity
       }
-      this.#tokens[this.#tokensLen++] = this.#lastPosition
-      this.#tokens[this.#tokensLen++] = metadata
+      this.#tokens[this.#tokensLength++] = this.#lastPosition
+      this.#tokens[this.#tokensLength++] = metadata
     }
     this.#lastPosition = endPosition
     this.#lastMetadata = metadata
   }
 
   finalize(lineLength: number) {
-    // Ensure last token ends at lineLength by just updating lastPos.
+    // Ensure last token ends at lineLength by just updating lastPosition.
     this.#lastPosition = lineLength
     // Return a subarray view to avoid copying. Callers that need to retain
     // tokens beyond the current processing step must copy.
-    return this.#tokens.subarray(0, this.#tokensLen)
+    return this.#tokens.subarray(0, this.#tokensLength)
   }
 }
 
 export class LineFonts {
-  // Optional: for variable fonts / family/size/lineHeight rendering, keep simple.
-  // Mirrors LineTokens but holds font overrides. If you don't use it, it's harmless.
   #spans: Array<{
     start: number
     fontFamily: string | null
@@ -4354,7 +4332,6 @@ export class LineFonts {
     const fontSize = this.#getFontSize(scopes)
     const lineHeight = this.#getLineHeight(scopes)
 
-    // If none are set anywhere in the parent chain, do nothing.
     if (!fontFamily && !fontSize && !lineHeight) {
       this.#lastPosition = endPosition
       return
@@ -4622,11 +4599,15 @@ export class StateStackImplementation {
     return grammar.getRule(this.ruleId)
   }
 
-  // Optional: stable string/serialization for caching
   toString() {
     const parts: string[] = []
-    for (let s: StateStackImplementation | null = this; s; s = s.parent)
-      parts.push(String(s.ruleId))
+    for (
+      let stack: StateStackImplementation | null = this;
+      stack;
+      stack = stack.parent
+    ) {
+      parts.push(String(stack.ruleId))
+    }
     return parts.reverse().join('/')
   }
 }
@@ -4665,8 +4646,6 @@ export class SyncRegistry {
 
   addGrammar(grammar: IRawGrammar) {
     this.#grammars.set(grammar.scopeName, grammar)
-    // allow grammar.injectionSelector to inject into other grammars by scope name.
-    // You can populate #injections externally as well.
   }
 
   lookup(scopeName: string) {
@@ -4734,10 +4713,8 @@ export class Grammar {
   >()
   #cachedThemeForMetadata: Theme | null = null
 
-  // Performance: Pooled instances to reduce allocations
   #lineTokensPool: LineTokens = new LineTokens()
   #lineFontsPool: LineFonts = new LineFonts()
-  // Pools are accessed by helper functions in the same file - keep as private (not #)
   _loopGuardPool = {
     seen: new Map<any, Set<number>>(),
     setPool: [] as Set<number>[],
@@ -4777,7 +4754,6 @@ export class Grammar {
     this.#registry = registry
 
     this.repository = mergeObjects({}, this.#rawGrammar.repository || {})
-    // Ensure $self / $base exist.
     if (!this.repository['$self']) this.repository['$self'] = this.#rawGrammar
     if (!this.repository['$base']) this.repository['$base'] = this.#rawGrammar
 
@@ -4795,14 +4771,12 @@ export class Grammar {
       }
     }
 
-    // Register root rule
     RuleFactory.getCompiledRuleId(
       this.repository['$self'],
       this,
       this.repository
     )
 
-    // Build injections (if any)
     this.#collectInjections()
   }
 
@@ -4836,7 +4810,6 @@ export class Grammar {
   getExternalGrammar(scopeName: string) {
     const raw = this.#grammarRepository.lookup(scopeName)
     if (!raw) return null
-    // we create a lightweight external wrapper where repository is raw.repository
     return {
       scopeName,
       repository: mergeObjects<RawRepository>(
@@ -4868,15 +4841,15 @@ export class Grammar {
         ? this.#metadataCacheRoot
         : (this.#metadataCache.get(parentScopes) ??
           (() => {
-            const m = new Map<
+            const map = new Map<
               string,
               {
                 tokenAttributes: number
                 styleAttributes: StyleAttributes | null
               }
             >()
-            this.#metadataCache.set(parentScopes, m)
-            return m
+            this.#metadataCache.set(parentScopes, map)
+            return map
           })())
 
     const cached = cacheBucket.get(scope)
@@ -4890,35 +4863,31 @@ export class Grammar {
       this.#basicScopeAttributesProvider.getBasicScopeAttributes(scope)
     const tokenType = this.#tokenTypeMatchers.match(scope) ?? basic.tokenType
     // Create scratch array for balanced bracket check
-    const parentLen = parentScopeNames.length
-    const scopeNamesWithScope = new Array<string>(parentLen + 1)
-    for (let index = 0; index < parentLen; index++) {
+    const parentLength = parentScopeNames.length
+    const scopeNamesWithScope = new Array<string>(parentLength + 1)
+    for (let index = 0; index < parentLength; index++) {
       scopeNamesWithScope[index] = parentScopeNames[index]
     }
-    scopeNamesWithScope[parentLen] = scope
-    const containsBalanced = this.#balancedBracketMatchers.some((m) =>
-      m.matcher(scopeNamesWithScope)
+    scopeNamesWithScope[parentLength] = scope
+    const containsBalanced = this.#balancedBracketMatchers.some((matcher) =>
+      matcher.matcher(scopeNamesWithScope)
     )
 
     // Theme matching using AttributedScopeStack as fast path, with a fallback to ScopeStack
     let themeMatch = theme.matchAttributed(scope, parentScopes)
     if (!themeMatch) {
-      const ss = ScopeStack.push(null, parentScopeNames)
-      const full = ss
-        ? ScopeStack.push(ss, [scope])
+      const stack = ScopeStack.push(null, parentScopeNames)
+      const full = stack
+        ? ScopeStack.push(stack, [scope])
         : ScopeStack.push(null, [scope])
       themeMatch = full ? theme.match(full) : null
     }
-    // If still no match and this is the root scope, use theme defaults.
     if (!themeMatch && parentScopes === null) {
       themeMatch = theme.getDefaults()
     }
 
-    // Get parent's existing token attributes to inherit from
     const existingAttributes = parentScopes ? parentScopes.tokenAttributes : 0
 
-    // If there's a theme match, use its values; otherwise use 0/-1 to preserve parent values
-    // Note: -1 is the "NotSet" value for fontStyle which preserves existing
     let fontStyle = -1
     let foreground = 0
     let background = 0
@@ -4949,7 +4918,7 @@ export class Grammar {
 
   tokenizeLine(
     lineText: string,
-    prevState: StateStackImplementation | null,
+    previousState: StateStackImplementation | null,
     timeLimitMs = 0
   ): ITokenizeLineResult {
     const rootMeta = this.getMetadataForScope(this.scopeName, null)
@@ -4960,11 +4929,9 @@ export class Grammar {
     )
 
     let stack: StateStackImplementation
-    if (prevState) {
-      // Reset enter/anchor positions for the new line
-      // This is critical for the endless loop guard to work correctly
-      prevState.reset()
-      stack = prevState
+    if (previousState) {
+      previousState.reset()
+      stack = previousState
     } else {
       stack = StateStackImplementation.create(
         RuleFactory.getCompiledRuleId(
@@ -4976,18 +4943,15 @@ export class Grammar {
       )
     }
 
-    // Append newline to lineText - this is required by TextMate grammars for
     // proper regex matching (e.g. $ anchors, lookaheads that expect line endings).
     const lineTextWithNewline = lineText + '\n'
 
-    // Performance: Reuse pooled instances instead of creating new ones
     const lineTokens = this.#lineTokensPool
     const lineFonts = this.#lineFontsPool
     lineTokens.reset()
     lineFonts.reset()
 
-    // Only treat as first line if there is no previous state
-    const isFirstLine = !prevState
+    const isFirstLine = !previousState
     const result = tokenizeString(
       this,
       lineTextWithNewline,
@@ -5009,7 +4973,7 @@ export class Grammar {
     }
   }
 
-  // Injections: match based on injectionSelector from other grammars registered in registry
+  // Injections match based on injectionSelector from other grammars registered in registry
   #collectInjections() {
     // If the raw grammar has injections, compile them.
     if (this.#rawGrammar.injections) {
@@ -5039,8 +5003,6 @@ export class Grammar {
   }
 }
 
-// Public TextMate Registry helper used by the high-level Tokenizer API.
-
 export type StateStack = StateStackImplementation | null
 export type IGrammar = Grammar
 export const INITIAL: StateStack = null
@@ -5058,7 +5020,6 @@ export class Registry {
   #injectionScopes = new Set<string>()
   #hasTheme = false
 
-  // Prevent race conditions by deduplicating concurrent grammar loads/compilations
   #loadingGrammars = new Map<string, Promise<void>>()
   #compilingGrammars = new Map<string, Promise<Grammar | null>>()
 
@@ -5085,22 +5046,18 @@ export class Registry {
   }
 
   async loadGrammar(scopeName: string): Promise<Grammar | null> {
-    // Check if already compiled
     const existing = this.#compiledGrammars.get(scopeName)
     if (existing) return existing
 
-    // Check if already compiling (prevent race conditions)
     const existingCompile = this.#compilingGrammars.get(scopeName)
     if (existingCompile) return existingCompile
 
-    // Start compiling and track the promise
     const compilePromise = this.#doCompileGrammar(scopeName)
     this.#compilingGrammars.set(scopeName, compilePromise)
 
     try {
       return await compilePromise
     } finally {
-      // Clean up after compilation completes
       this.#compilingGrammars.delete(scopeName)
     }
   }
@@ -5111,7 +5068,6 @@ export class Registry {
     const rawGrammar = this.#rawGrammars.get(scopeName)
     if (!rawGrammar) return null
 
-    // Double-check after async operation
     const existing = this.#compiledGrammars.get(scopeName)
     if (existing) return existing
 
@@ -5144,24 +5100,20 @@ export class Registry {
   }
 
   async #ensureRawGrammarLoaded(scopeName: string) {
-    // Check if already loaded
     if (this.#rawGrammars.has(scopeName)) return
 
-    // Check if already loading (prevent race conditions)
     const existingLoad = this.#loadingGrammars.get(scopeName)
     if (existingLoad) {
       await existingLoad
       return
     }
 
-    // Start loading and track the promise
     const loadPromise = this.#doLoadRawGrammar(scopeName)
     this.#loadingGrammars.set(scopeName, loadPromise)
 
     try {
       await loadPromise
     } finally {
-      // Clean up after loading completes
       this.#loadingGrammars.delete(scopeName)
     }
   }
@@ -5182,7 +5134,6 @@ export class Registry {
       this.#injectionScopes.add(scopeName)
     }
 
-    // Make all known injection grammars available for all known scopes.
     for (const targetScope of this.#rawGrammars.keys()) {
       for (const injectorScope of this.#injectionScopes) {
         this.#syncRegistry.addInjection(targetScope, injectorScope)
@@ -5190,8 +5141,6 @@ export class Registry {
     }
   }
 }
-
-// High-level tokenizer API (raw-first)
 
 /** The options for the TextMate registry. */
 export interface RegistryOptions<Theme extends string> {

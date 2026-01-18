@@ -32,7 +32,6 @@ import {
   clone,
   containsRTL,
   createMatchers,
-  disposeOnigString,
   escapeRegExpCharacters,
   fontStyleToString,
   isValidHexColor,
@@ -592,25 +591,6 @@ describe('parseTheme', () => {
     const rules = parseTheme(theme)
     expect(rules[0].foreground).toBe(null)
     expect(rules[0].background).toBe(null)
-  })
-})
-
-describe('disposeOnigString', () => {
-  test('calls dispose if available', () => {
-    const disposed = { disposed: false }
-    const onigString = {
-      dispose: () => {
-        disposed.disposed = true
-      },
-    }
-    disposeOnigString(onigString)
-    expect(disposed.disposed).toBe(true)
-  })
-
-  test('does nothing if dispose is not a function', () => {
-    expect(() => disposeOnigString(null)).not.toThrow()
-    expect(() => disposeOnigString(undefined)).not.toThrow()
-    expect(() => disposeOnigString({ dispose: 'not a function' })).not.toThrow()
   })
 })
 
