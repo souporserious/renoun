@@ -51,6 +51,7 @@ import {
 } from './textmate.ts'
 
 import cssGrammar from '../grammars/css.ts'
+import htmlGrammar from '../grammars/html.ts'
 import shellGrammar from '../grammars/shellscript.ts'
 import mdxGrammar from '../grammars/mdx.ts'
 import tsxGrammar from '../grammars/tsx.ts'
@@ -1169,6 +1170,9 @@ const themeFixtures: Record<ThemeName, TextMateThemeRaw> = {
 
 const registryOptions: RegistryOptions<ThemeName> = {
   async getGrammar(scopeName) {
+    if (scopeName === 'text.html.basic') {
+      return htmlGrammar
+    }
     if (scopeName === 'source.css') {
       return cssGrammar
     }
@@ -1460,6 +1464,57 @@ echo "Hello World"`
         /Hello/.test(token.value) && normalize(token.style.color) === '#00AA00'
     )
     expect(shString).toBeTruthy()
+  })
+
+  test('tokenizes HTML tags and exits tag scope after > (precompiled grammar regression)', async () => {
+    const tokenizer = new Tokenizer<ThemeName>(registryOptions)
+
+    // Distinct coloring to detect "stuck in tag" behavior.
+    const htmlTheme: TextMateThemeRaw = {
+      name: 'html-scope-test',
+      settings: [
+        { settings: { foreground: '#111111', background: '#FFFFFF' } },
+        { scope: ['meta.tag'], settings: { foreground: '#FF0000' } },
+        { scope: ['entity.name.tag'], settings: { foreground: '#00AA00' } },
+      ],
+    }
+
+    const localRegistry: RegistryOptions<'html-test'> = {
+      async getGrammar(scopeName: string): Promise<TextMateGrammarRaw> {
+        if (scopeName === 'text.html.basic') return htmlGrammar
+        if (scopeName === 'source.tsx') return tsxGrammar
+        if (scopeName === 'source.css') return cssGrammar
+        throw new Error(`Missing grammar for scope: ${scopeName}`)
+      },
+      async getTheme() {
+        return htmlTheme
+      },
+    }
+
+    const htmlTokenizer = new Tokenizer<'html-test'>(localRegistry)
+
+    const source = `<button className="button">Click me</button>`
+    const tokens = await decodeRawTokens(htmlTokenizer, source, 'html', [
+      'html-test',
+    ])
+    const flat = tokens.flat()
+
+    // Debug: uncomment if diagnosing scope stack issues.
+    // console.log(
+    //   flat.map((t) => ({
+    //     v: t.value,
+    //     c: (t.style.color || '').toUpperCase(),
+    //   }))
+    // )
+
+    const tagName = flat.find((t) => t.value === 'button')
+    expect(tagName).toBeDefined()
+    expect(tagName!.style.color?.toUpperCase()).toBe('#00AA00')
+
+    const click = flat.find((t) => t.value.includes('Click'))
+    expect(click).toBeDefined()
+    // Text after `>` must not be colored as meta.tag (red).
+    expect(click!.style.color?.toUpperCase()).not.toBe('#FF0000')
   })
 
   test('TSX line comment (including punctuation) inherits comment color', async () => {
