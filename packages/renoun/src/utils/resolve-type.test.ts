@@ -802,6 +802,7 @@ describe('resolveType', () => {
         "name": "code",
         "signatures": [
           {
+            "description": "TSL function for creating a code node.",
             "kind": "CallSignature",
             "parameters": [
               {
@@ -957,6 +958,28 @@ describe('resolveType', () => {
               "text": "CodeNode",
               "typeArguments": [],
             },
+            "tags": [
+              {
+                "name": "function",
+                "text": undefined,
+              },
+              {
+                "name": "param",
+                "text": "- The native code.",
+              },
+              {
+                "name": "param",
+                "text": "- An array of includes.",
+              },
+              {
+                "name": "param",
+                "text": "- The used language.",
+              },
+              {
+                "name": "returns",
+                "text": undefined,
+              },
+            ],
             "text": "(code?: string, includes?: Array<Node>, language?: "js" | "wgsl" | "glsl") => CodeNode",
             "thisType": undefined,
           },
@@ -964,6 +987,129 @@ describe('resolveType', () => {
         "text": "() => void",
       }
     `)
+  })
+
+  test('uses jsdoc parameters when @returns is missing', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'params-only.js',
+      dedent`
+      /**
+       * @param {number} count - item count.
+       */
+      export const repeat = () => {}
+      `,
+      { overwrite: true }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('repeat')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved).toMatchObject({
+      kind: 'Function',
+      name: 'repeat',
+      signatures: [
+        {
+          parameters: [
+            {
+              name: 'count',
+              description: 'item count.',
+              type: { kind: 'Number' },
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  test('prefers jsdoc signatures when variable parameters are destructured', () => {
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'billboarding.js',
+      dedent`
+      /** @typedef {number[]} vec3 */
+
+      /**
+       * @template T
+       */
+      class Node {}
+
+      /**
+       * @template T
+       * @param {T} fn
+       * @returns {T}
+       */
+      const Fn = (fn) => fn;
+
+      const positionLocal = /** @type {Node<vec3>} */ ({});
+
+      /**
+       * This can be used to achieve a billboarding behavior for flat meshes. That means they are
+       * oriented always towards the camera.
+       *
+       * @tsl
+       * @function
+       * @param {Object} config - The configuration object.
+       * @param {?Node<vec3>} [config.position=null] - Can be used to define the vertex positions in world space.
+       * @param {boolean} [config.horizontal=true] - Whether to follow the camera rotation horizontally or not.
+       * @param {boolean} [config.vertical=false] - Whether to follow the camera rotation vertically or not.
+       * @return {Node<vec3>} The updated vertex position in clip space.
+       */
+      export const billboarding = /*@__PURE__*/ Fn( ( { position = null, horizontal = true, vertical = false } ) => {
+        return positionLocal;
+      } );
+      `,
+      { overwrite: true, scriptKind: ts.ScriptKind.JS }
+    )
+
+    const declaration = sourceFile.getVariableDeclarationOrThrow('billboarding')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved).toMatchObject({
+      kind: 'Function',
+      name: 'billboarding',
+      signatures: [
+        {
+          description:
+            'This can be used to achieve a billboarding behavior for flat meshes. That means they are\noriented always towards the camera.',
+          parameters: [
+            {
+              name: 'config',
+              description: 'The configuration object.',
+            },
+            {
+              name: 'config.position',
+              description:
+                'Can be used to define the vertex positions in world space.',
+              isOptional: true,
+            },
+            {
+              name: 'config.horizontal',
+              description:
+                'Whether to follow the camera rotation horizontally or not.',
+              isOptional: true,
+            },
+            {
+              name: 'config.vertical',
+              description:
+                'Whether to follow the camera rotation vertically or not.',
+              isOptional: true,
+            },
+          ],
+          returnType: {
+            text: 'Node<vec3>',
+          },
+        },
+      ],
+    })
   })
 
   test('falls back to jsdoc when contextual signatures are filtered out', () => {

@@ -1036,34 +1036,41 @@ export function resolveType(
         )
       }
 
+      const jsDocSignatures = hasJsDocFunctionSignatureTags(enclosingNode)
+        ? resolveJsDocFunctionSignatures(
+            enclosingNode,
+            filter,
+            defaultValues,
+            dependencies
+          )
+        : undefined
+
       // JSDoc fallback: only prefer it when the inferred signatures look low-confidence.
       // This covers proxy/factory patterns where TS infers a generic `() => void`,
       // but the variable has richer JSDoc `@param` / `@returns` describing the types.
-      if (
-        !resolvedFunctionSignatures?.length ||
-        resolvedFunctionSignatures.every((signature) => {
-          const kind = signature.returnType?.kind
-          return kind === 'Any' || kind === 'Unknown' || kind === 'Void'
-        })
-      ) {
-        const jsDocSignatures = resolveJsDocFunctionSignatures(
-          enclosingNode,
-          filter,
-          defaultValues,
-          dependencies
-        )
-
-        if (jsDocSignatures && jsDocSignatures.length > 0) {
-          if (
-            !resolvedFunctionSignatures ||
-            resolvedFunctionSignatures.length === 0
-          ) {
-            resolvedFunctionSignatures = jsDocSignatures
-          } else if (
-            shouldPreferJsDoc(resolvedFunctionSignatures, jsDocSignatures)
-          ) {
-            resolvedFunctionSignatures = jsDocSignatures
-          }
+      if (jsDocSignatures && jsDocSignatures.length > 0) {
+        if (
+          !resolvedFunctionSignatures?.length ||
+          resolvedFunctionSignatures.every((signature) => {
+            const kind = signature.returnType?.kind
+            return kind === 'Any' || kind === 'Unknown' || kind === 'Void'
+          })
+        ) {
+          resolvedFunctionSignatures = jsDocSignatures
+        } else if (
+          shouldPreferJsDoc(resolvedFunctionSignatures, jsDocSignatures)
+        ) {
+          resolvedFunctionSignatures = jsDocSignatures
+        } else if (
+          shouldPreferJsDocParameters(
+            resolvedFunctionSignatures,
+            jsDocSignatures
+          )
+        ) {
+          resolvedFunctionSignatures = mergeJsDocParametersWithTsReturn(
+            resolvedFunctionSignatures,
+            jsDocSignatures
+          )
         }
       }
 
@@ -1720,17 +1727,20 @@ function shouldPreferJsDoc(
   tsSignatures: Kind.CallSignature[],
   jsDocSignatures: Kind.CallSignature[]
 ): boolean {
-  // If TypeScript has any concrete signature, trust TypeScript.
-  // We assume if the user wrote a complex overload with a real return type,
-  // they want that to be the documentation.
-  const hasGoodTsSignature = tsSignatures.some((signature) => {
-    const kind = signature.returnType?.kind
-    return (
+  const isConcreteReturnKind = (kind?: Kind.TypeExpression['kind']) =>
+    Boolean(
+      kind &&
       kind !== 'Void' &&
       kind !== 'Any' &&
       kind !== 'Unknown' &&
       kind !== 'Undefined'
     )
+
+  // If TypeScript has any concrete signature, trust TypeScript.
+  // We assume if the user wrote a complex overload with a real return type,
+  // they want that to be the documentation.
+  const hasGoodTsSignature = tsSignatures.some((signature) => {
+    return isConcreteReturnKind(signature.returnType?.kind)
   })
 
   if (hasGoodTsSignature) {
@@ -1740,16 +1750,321 @@ function shouldPreferJsDoc(
   // If all TypeScript signatures are weak, check if JSDoc offers anything better.
   // If JSDoc has even one concrete return type, we assume it is superior to the "all void" TS set.
   const hasGoodJsDocSignature = jsDocSignatures.some((signature) => {
-    const kind = signature.returnType?.kind
-    return (
-      kind !== 'Void' &&
-      kind !== 'Any' &&
-      kind !== 'Unknown' &&
-      kind !== 'Undefined'
-    )
+    return isConcreteReturnKind(signature.returnType?.kind)
   })
 
   return hasGoodJsDocSignature
+}
+
+/**
+ * Returns true if JSDoc provides richer parameter names than TypeScript signatures.
+ * This handles cases where TS infers unnamed/destructured parameters but JSDoc
+ * includes explicit parameter tags.
+ */
+function shouldPreferJsDocParameters(
+  tsSignatures: Kind.CallSignature[],
+  jsDocSignatures: Kind.CallSignature[]
+): boolean {
+  const isDestructuredName = (name: string | undefined) =>
+    typeof name === 'string' &&
+    (name.trim().startsWith('{') || name.trim().startsWith('['))
+  const tsHasUnnamedParameters = tsSignatures.every((signature) =>
+    signature.parameters.length === 0
+      ? true
+      : signature.parameters.every(
+          (parameter) => !parameter.name || isDestructuredName(parameter.name)
+        )
+  )
+
+  if (!tsHasUnnamedParameters) {
+    return false
+  }
+
+  return jsDocSignatures.some((signature) =>
+    signature.parameters.some((parameter) => Boolean(parameter.name))
+  )
+}
+
+function mergeJsDocParametersWithTsReturn(
+  tsSignatures: Kind.CallSignature[],
+  jsDocSignatures: Kind.CallSignature[]
+): Kind.CallSignature[] {
+  if (!tsSignatures.length) {
+    return jsDocSignatures
+  }
+
+  return jsDocSignatures.map((jsDocSignature, index) => {
+    const tsSignature = tsSignatures[index] ?? tsSignatures[0]
+    if (!tsSignature?.returnType) {
+      return jsDocSignature
+    }
+
+    const jsDocReturnKind = jsDocSignature.returnType?.kind
+    const isWeakJsDocReturn =
+      jsDocReturnKind === 'Any' ||
+      jsDocReturnKind === 'Unknown' ||
+      jsDocReturnKind === 'Void' ||
+      jsDocReturnKind === 'Undefined'
+
+    if (!isWeakJsDocReturn) {
+      return jsDocSignature
+    }
+
+    const parametersText = jsDocSignature.parameters
+      .map((parameter) => parameter.text)
+      .join(', ')
+    const mergedReturnType = tsSignature.returnType
+    const mergedText = `(${parametersText}) => ${mergedReturnType.text}`
+
+    return {
+      ...jsDocSignature,
+      text: mergedText,
+      returnType: mergedReturnType,
+      thisType: jsDocSignature.thisType ?? tsSignature.thisType,
+      isAsync: jsDocSignature.isAsync ?? tsSignature.isAsync,
+      isGenerator: jsDocSignature.isGenerator ?? tsSignature.isGenerator,
+    }
+  })
+}
+
+type ParsedJsDocParam = {
+  name: string
+  typeText: string
+  description?: string
+  isOptional: boolean
+  isRest: boolean
+  initializer?: unknown
+}
+
+function expandJsDocParameterTags(jsDoc: JSDoc): ParsedJsDocParam[] {
+  const existingParamTags = jsDoc
+    .getTags()
+    .filter((tag): tag is JSDocParameterTag =>
+      tsMorph.Node.isJSDocParameterTag(tag)
+    )
+  if (existingParamTags.length > 1) {
+    return []
+  }
+
+  const rawText = jsDoc.getText()
+  const paramLines = rawText
+    .split('\n')
+    .map((line) => line.replace(/^\s*\*\s?/, '').trim())
+    .filter((line) => line.startsWith('@param '))
+
+  if (paramLines.length <= 1) {
+    return []
+  }
+
+  const parsedParams: ParsedJsDocParam[] = []
+
+  for (const line of paramLines) {
+    const match = line.match(/^@param\s+\{([^}]+)\}\s+(\S+)(?:\s+-\s*(.*))?$/)
+    if (!match) {
+      continue
+    }
+
+    const [, rawTypeText, rawName, rawDescription] = match
+    let name = rawName
+    let isOptional = false
+    let isRest = false
+    let initializer: unknown = undefined
+
+    if (name.startsWith('...')) {
+      isRest = true
+      name = name.slice(3)
+    }
+
+    if (name.startsWith('[') && name.endsWith(']')) {
+      isOptional = true
+      name = name.slice(1, -1)
+      const eqIndex = name.indexOf('=')
+      if (eqIndex !== -1) {
+        const defaultRaw = name.slice(eqIndex + 1).trim()
+        initializer = parseJsDocDefaultValue(defaultRaw)
+        name = name.slice(0, eqIndex)
+      }
+    }
+
+    parsedParams.push({
+      name,
+      typeText: rawTypeText.trim(),
+      description: rawDescription?.trim(),
+      isOptional,
+      isRest,
+      initializer,
+    })
+  }
+
+  return parsedParams
+}
+
+function splitTopLevel(text: string, delimiter: string): string[] {
+  const parts: string[] = []
+  let current = ''
+  let depthAngle = 0
+  let depthParen = 0
+  let depthBracket = 0
+  let inString: string | undefined
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+
+    if (inString) {
+      current += char
+      if (char === inString && text[i - 1] !== '\\') {
+        inString = undefined
+      }
+      continue
+    }
+
+    if (char === '"' || char === "'") {
+      inString = char
+      current += char
+      continue
+    }
+
+    if (char === '<') depthAngle++
+    if (char === '>') depthAngle = Math.max(0, depthAngle - 1)
+    if (char === '(') depthParen++
+    if (char === ')') depthParen = Math.max(0, depthParen - 1)
+    if (char === '[') depthBracket++
+    if (char === ']') depthBracket = Math.max(0, depthBracket - 1)
+
+    if (
+      char === delimiter &&
+      depthAngle === 0 &&
+      depthParen === 0 &&
+      depthBracket === 0
+    ) {
+      parts.push(current.trim())
+      current = ''
+      continue
+    }
+
+    current += char
+  }
+
+  if (current.trim()) {
+    parts.push(current.trim())
+  }
+
+  return parts
+}
+
+function parseJsDocTypeText(typeText: string): Kind.TypeExpression | undefined {
+  let text = typeText.trim()
+  if (!text) return undefined
+
+  let isNullable = false
+  if (text.startsWith('?')) {
+    isNullable = true
+    text = text.slice(1).trim()
+  }
+  if (text.startsWith('!')) {
+    text = text.slice(1).trim()
+  }
+
+  const unionParts = splitTopLevel(text, '|')
+  if (unionParts.length > 1) {
+    const types = unionParts
+      .map((part) => parseJsDocTypeText(part))
+      .filter((part): part is Kind.TypeExpression => Boolean(part))
+    if (types.length === 0) return undefined
+    const union: Kind.UnionType = {
+      kind: 'UnionType',
+      types,
+      text: types.map((type) => type.text).join(' | '),
+    }
+    if (isNullable) {
+      union.types.push({ kind: 'Null', text: 'null' })
+      union.text = `${union.text} | null`
+    }
+    return union
+  }
+
+  if (text.startsWith('(') && text.endsWith(')')) {
+    return parseJsDocTypeText(text.slice(1, -1))
+  }
+
+  if (text.endsWith('[]')) {
+    const element = parseJsDocTypeText(text.slice(0, -2).trim())
+    if (!element) return undefined
+    const arrayType: Kind.TypeReference = {
+      kind: 'TypeReference',
+      name: 'Array',
+      text: `Array<${element.text}>`,
+      typeArguments: [element],
+    }
+    if (isNullable) {
+      return {
+        kind: 'UnionType',
+        types: [arrayType, { kind: 'Null', text: 'null' }],
+        text: `${arrayType.text} | null`,
+      }
+    }
+    return arrayType
+  }
+
+  const primitiveMap: Record<string, Kind.TypeExpression> = {
+    string: { kind: 'String', text: 'string' },
+    number: { kind: 'Number', text: 'number' },
+    boolean: { kind: 'Boolean', text: 'boolean' },
+    null: { kind: 'Null', text: 'null' },
+    undefined: { kind: 'Undefined', text: 'undefined' },
+    any: { kind: 'Any', text: 'any' },
+    unknown: { kind: 'Unknown', text: 'unknown' },
+    void: { kind: 'Void', text: 'void' },
+  }
+
+  if (primitiveMap[text]) {
+    const primitive = primitiveMap[text]
+    if (isNullable) {
+      return {
+        kind: 'UnionType',
+        types: [primitive, { kind: 'Null', text: 'null' }],
+        text: `${primitive.text} | null`,
+      }
+    }
+    return primitive
+  }
+
+  const genericMatch = text.match(/^([^<]+)<(.+)>$/)
+  if (genericMatch) {
+    const name = genericMatch[1].trim()
+    const argsText = genericMatch[2].trim()
+    const args = splitTopLevel(argsText, ',')
+      .map((arg) => parseJsDocTypeText(arg))
+      .filter((arg): arg is Kind.TypeExpression => Boolean(arg))
+    const typeReference: Kind.TypeReference = {
+      kind: 'TypeReference',
+      name,
+      text: `${name}<${args.map((arg) => arg.text).join(', ')}>`,
+      typeArguments: args.length ? args : undefined,
+    }
+    if (isNullable) {
+      return {
+        kind: 'UnionType',
+        types: [typeReference, { kind: 'Null', text: 'null' }],
+        text: `${typeReference.text} | null`,
+      }
+    }
+    return typeReference
+  }
+
+  const typeReference: Kind.TypeReference = {
+    kind: 'TypeReference',
+    name: text,
+    text,
+  }
+  if (isNullable) {
+    return {
+      kind: 'UnionType',
+      types: [typeReference, { kind: 'Null', text: 'null' }],
+      text: `${typeReference.text} | null`,
+    }
+  }
+  return typeReference
 }
 
 /** Returns the first JSDoc @type node for a variable declaration, if present. */
@@ -1832,6 +2147,38 @@ function getJsDocOwner(node?: Node): Node | undefined {
   return undefined
 }
 
+function hasJsDocFunctionSignatureTags(
+  declaration: VariableDeclaration
+): boolean {
+  const candidates: Node[] = []
+  const declarationList = declaration.getParent()
+  if (tsMorph.Node.isVariableDeclarationList(declarationList)) {
+    const statement = declarationList.getParent()
+    if (tsMorph.Node.isVariableStatement(statement)) {
+      candidates.push(statement)
+    }
+  }
+
+  candidates.push(declaration)
+
+  const signatureTagPattern = /@(?:param|returns?|this|template)\b/i
+
+  for (const candidate of candidates) {
+    if (!tsMorph.Node.isJSDocable(candidate)) {
+      continue
+    }
+
+    for (const jsDoc of candidate.getJsDocs()) {
+      const text = jsDoc.getText()
+      if (signatureTagPattern.test(text)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
 function resolveJsDocFunctionSignatures(
   declaration: VariableDeclaration,
   filter?: TypeFilter,
@@ -1839,7 +2186,6 @@ function resolveJsDocFunctionSignatures(
   dependencies?: Set<string>
 ): Kind.CallSignature[] | undefined {
   const candidates: Node[] = []
-
   const declarationList = declaration.getParent()
   if (tsMorph.Node.isVariableDeclarationList(declarationList)) {
     const statement = declarationList.getParent()
@@ -1851,6 +2197,7 @@ function resolveJsDocFunctionSignatures(
   candidates.push(declaration)
 
   let parameterTags: JSDocParameterTag[] = []
+  let parsedParameters: ParsedJsDocParam[] = []
   let returnTag: JSDocReturnTag | undefined
   let thisTag: JSDocThisTag | undefined
   let templateTags: JSDocTemplateTag[] = []
@@ -1861,17 +2208,27 @@ function resolveJsDocFunctionSignatures(
     }
 
     for (const jsDoc of candidate.getJsDocs()) {
+      const expandedParamTags = expandJsDocParameterTags(jsDoc)
+      if (expandedParamTags.length > 0) {
+        parsedParameters.push(...expandedParamTags)
+      }
+
       for (const tag of jsDoc.getTags()) {
         if (tsMorph.Node.isJSDocParameterTag(tag)) {
-          parameterTags.push(tag)
+          if (expandedParamTags.length === 0) {
+            parameterTags.push(tag)
+          }
+          continue
         }
 
         if (!returnTag && tsMorph.Node.isJSDocReturnTag(tag)) {
           returnTag = tag
+          continue
         }
 
         if (!thisTag && tsMorph.Node.isJSDocThisTag(tag)) {
           thisTag = tag
+          continue
         }
 
         if (tsMorph.Node.isJSDocTemplateTag(tag)) {
@@ -1881,13 +2238,23 @@ function resolveJsDocFunctionSignatures(
     }
   }
 
-  if (parameterTags.length === 0 && !returnTag) {
+  const hasParameterInfo =
+    parameterTags.length > 0 || parsedParameters.length > 0
+  const hasReturnInfo = Boolean(returnTag)
+  const hasThisInfo = Boolean(thisTag)
+  if (!hasParameterInfo && !hasReturnInfo && !hasThisInfo) {
     return undefined
   }
 
-  parameterTags = parameterTags.filter(
-    (tag, index) => tag.getName() && parameterTags.indexOf(tag) === index
-  )
+  const seenParameterNames = new Set<string>()
+  parameterTags = parameterTags.filter((tag) => {
+    const name = tag.getName()
+    if (!name || seenParameterNames.has(name)) {
+      return false
+    }
+    seenParameterNames.add(name)
+    return true
+  })
 
   const resolvedParameters: Kind.Parameter[] = []
 
@@ -1945,6 +2312,26 @@ function resolveJsDocFunctionSignatures(
     } satisfies Kind.Parameter)
   }
 
+  for (const parsedParameter of parsedParameters) {
+    const resolvedType =
+      parseJsDocTypeText(parsedParameter.typeText) ??
+      ({ kind: 'Any', text: 'any' } satisfies Kind.Any)
+    const isOptional =
+      parsedParameter.isOptional || parsedParameter.initializer !== undefined
+    const text = `${parsedParameter.isRest ? '...' : ''}${parsedParameter.name}${isOptional ? '?' : ''}: ${resolvedType.text}`
+
+    resolvedParameters.push({
+      kind: 'Parameter',
+      name: parsedParameter.name,
+      type: resolvedType,
+      initializer: parsedParameter.initializer,
+      isOptional,
+      isRest: parsedParameter.isRest,
+      description: parsedParameter.description?.replace(/^[-]\s*/, ''),
+      text,
+    } satisfies Kind.Parameter)
+  }
+
   let resolvedReturnType: Kind.TypeExpression | undefined
 
   if (returnTag) {
@@ -1996,7 +2383,14 @@ function resolveJsDocFunctionSignatures(
   }
 
   if (!resolvedReturnType) {
-    return undefined
+    if (returnTag) {
+      return undefined
+    }
+    resolvedReturnType = {
+      kind: 'Any',
+      text: 'any',
+      ...getDeclarationLocation(declaration),
+    }
   }
 
   const parametersText = resolvedParameters
@@ -2031,6 +2425,7 @@ function resolveJsDocFunctionSignatures(
     parameters: resolvedParameters,
     thisType: resolvedThisType,
     returnType: resolvedReturnType,
+    ...getJsDocMetadata(declaration),
   }
 
   if (resolvedTypeParameters.length > 0) {
@@ -7538,14 +7933,25 @@ function getModuleFromSymbol(symbol: Symbol | undefined) {
     return undefined
   }
 
-  for (const declaration of symbol.getDeclarations()) {
+  let declarations: Node[]
+  try {
+    declarations = symbol.getDeclarations()
+  } catch {
+    return undefined
+  }
+
+  for (const declaration of declarations) {
     //`import { Button } from 'ui/components'
     if (tsMorph.Node.isImportSpecifier(declaration)) {
       const importDeclaration = declaration.getFirstAncestorByKind(
         tsMorph.SyntaxKind.ImportDeclaration
       )
       if (importDeclaration) {
-        return importDeclaration.getModuleSpecifierValue()
+        try {
+          return importDeclaration.getModuleSpecifierValue()
+        } catch {
+          return undefined
+        }
       }
     }
 
@@ -7624,7 +8030,12 @@ function matchImportInSourceFile(
   declarationFilePaths: Set<string>
 ): string | undefined {
   for (const importDeclaration of sourceFile.getImportDeclarations()) {
-    const moduleSpecifier = importDeclaration.getModuleSpecifierValue()
+    let moduleSpecifier: string
+    try {
+      moduleSpecifier = importDeclaration.getModuleSpecifierValue()
+    } catch {
+      continue
+    }
     const namespaceImport = importDeclaration.getNamespaceImport()
     if (namespaceImport) {
       const namespaceTypeSymbol = namespaceImport.getType().getSymbol()
@@ -7646,7 +8057,12 @@ function matchImportInSourceFile(
       }
     }
 
-    const moduleSourceFile = importDeclaration.getModuleSpecifierSourceFile()
+    let moduleSourceFile: SourceFile | undefined
+    try {
+      moduleSourceFile = importDeclaration.getModuleSpecifierSourceFile()
+    } catch {
+      moduleSourceFile = undefined
+    }
     if (
       moduleSourceFile &&
       declarationFilePaths.has(moduleSourceFile.getFilePath())
@@ -7667,15 +8083,22 @@ function getModuleSpecifierFromImports(
     return undefined
   }
 
-  const sourceFile = enclosingNode.getSourceFile()
-  const declarationSourceFiles = new Set(
-    symbol.getDeclarations().map((declaration) => declaration.getSourceFile())
-  )
-  const declarationFilePaths = new Set(
-    Array.from(declarationSourceFiles).map((sourceFile) =>
-      sourceFile.getFilePath()
+  let sourceFile: SourceFile
+  let declarationSourceFiles: Set<SourceFile>
+  let declarationFilePaths: Set<string>
+  try {
+    sourceFile = enclosingNode.getSourceFile()
+    declarationSourceFiles = new Set(
+      symbol.getDeclarations().map((declaration) => declaration.getSourceFile())
     )
-  )
+    declarationFilePaths = new Set(
+      Array.from(declarationSourceFiles).map((sourceFile) =>
+        sourceFile.getFilePath()
+      )
+    )
+  } catch {
+    return undefined
+  }
 
   const localMatch = matchImportInSourceFile(
     sourceFile,
@@ -7688,8 +8111,19 @@ function getModuleSpecifierFromImports(
 
   const seenFilePaths = new Set<string>()
   for (const declarationSourceFile of declarationSourceFiles) {
-    for (const referencingSourceFile of declarationSourceFile.getReferencingSourceFiles()) {
-      const filePath = referencingSourceFile.getFilePath()
+    let referencingSourceFiles: SourceFile[]
+    try {
+      referencingSourceFiles = declarationSourceFile.getReferencingSourceFiles()
+    } catch {
+      continue
+    }
+    for (const referencingSourceFile of referencingSourceFiles) {
+      let filePath: string
+      try {
+        filePath = referencingSourceFile.getFilePath()
+      } catch {
+        continue
+      }
       if (
         referencingSourceFile.isInNodeModules() ||
         seenFilePaths.has(filePath)
@@ -7839,11 +8273,31 @@ function findJsDocTypedefOrCallbackByName(
   | undefined {
   let fileCache = jsDocTagCache.get(sourceFile)
   if (!fileCache) {
-    fileCache = buildJsDocTagCache(sourceFile)
-    jsDocTagCache.set(sourceFile, fileCache)
+    try {
+      fileCache = buildJsDocTagCache(sourceFile)
+      jsDocTagCache.set(sourceFile, fileCache)
+    } catch {
+      return undefined
+    }
   }
 
-  return fileCache.get(name)
+  const cached = fileCache.get(name)
+  if (!cached) {
+    return undefined
+  }
+
+  try {
+    cached.tag.getText()
+    return cached
+  } catch {
+    try {
+      const refreshed = buildJsDocTagCache(sourceFile)
+      jsDocTagCache.set(sourceFile, refreshed)
+      return refreshed.get(name)
+    } catch {
+      return undefined
+    }
+  }
 }
 
 function resolveJSDocTypedef(
@@ -8063,14 +8517,19 @@ function resolveJSDocCallback(
         const finalType = resolvedType ?? fallbackType
 
         if (finalType) {
+          const name = tag.getName()
+          const isOptional =
+            tag.isBracketed() || Boolean(unwrappedRestInfo?.isOptional)
+          const isRest = Boolean(unwrappedRestInfo?.isRest)
+          const text = `${isRest ? '...' : ''}${name}${isOptional ? '?' : ''}: ${finalType.text}`
+
           parameters.push({
             kind: 'Parameter',
-            name: tag.getName(),
-            text: finalType.text,
+            name,
+            text,
             type: finalType,
-            isOptional:
-              tag.isBracketed() || Boolean(unwrappedRestInfo?.isOptional),
-            isRest: Boolean(unwrappedRestInfo?.isRest),
+            isOptional,
+            isRest,
             ...getJsDocMetadata(tag),
             ...getDeclarationLocation(tag),
           })
@@ -8078,7 +8537,9 @@ function resolveJSDocCallback(
       }
     } else if (tsMorph.Node.isJSDocReturnTag(tag)) {
       const typeExpression = tag.getTypeExpression()
-      const typeNode = unwrapJsDocNullableType(typeExpression?.getTypeNode())
+      const typeNode = unwrapJsDocNonNullableType(
+        unwrapJsDocNullableType(typeExpression?.getTypeNode())
+      )
       const type = typeNode?.getType()
 
       if (type && typeNode) {
@@ -8101,7 +8562,7 @@ function resolveJSDocCallback(
 
   const returnTypeResolved = returnType ?? { kind: 'Any' as const, text: 'any' }
   const parametersText = parameters
-    .map((parameter) => `${parameter.name}: ${parameter.text}`)
+    .map((parameter) => parameter.text)
     .join(', ')
   const signatureText = `(${parametersText}) => ${returnTypeResolved.text}`
 
@@ -8116,7 +8577,7 @@ function resolveJSDocCallback(
   return {
     kind: 'Function',
     name: callbackTag.getTagName(),
-    text: `(${parameters.map((parameter) => `${parameter.name}${parameter.isOptional ? '?' : ''}: ${parameter.type.text}`).join(', ')}) => ${returnType ? returnType.text : 'any'}`,
+    text: `(${parameters.map((parameter) => parameter.text).join(', ')}) => ${returnType ? returnType.text : 'any'}`,
     signatures: [signature],
     ...getDeclarationLocation(callbackTag),
   } satisfies Kind.Function
