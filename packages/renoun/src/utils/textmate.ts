@@ -15,6 +15,11 @@
  * - CompiledRule.findNextMatchSync uses JS regex execution with
  *   `hasIndices` flag for capture group positions
  * - Int32Array buffer pooling to minimize allocations during matching
+ * - Supports "precompiled" grammars that provide native `RegExp` patterns:
+ *   - Automatically detected when a rule's `match`/`begin`/`end`/`while` is a RegExp
+ *   - Implements TextMate-style `\A` + `\G` semantics for precompiled patterns by
+ *     rewriting sources per anchor state (no separate "raw engine" mode)
+ *   - Uses the `y` (sticky) flag to enforce `\G` at the current anchor position
  *
  * Additional utilities:
  * - TokenMetadata: zero-allocation decoder for encoded token metadata
@@ -33,12 +38,24 @@
  * - Subarray views from LineTokens.finalize() to avoid copies
  *--------------------------------------------------------*/
 
-import { toRegExp } from 'oniguruma-to-es'
+import { EmulatedRegExp, toRegExp } from 'oniguruma-to-es'
 
 import type { Languages, ScopeName } from '../grammars/index.ts'
 import { grammars } from '../grammars/index.ts'
 
 export function clone<T = any>(value: T): T {
+  // Preserve RegExp instances (used by "precompiled" grammars).
+  // Return a fresh instance to avoid leaking `lastIndex` state.
+  if (value instanceof EmulatedRegExp) {
+    const copy = new EmulatedRegExp(value.source, value.flags, value.rawOptions)
+    copy.lastIndex = value.lastIndex
+    return copy as any
+  }
+  if (value instanceof RegExp) {
+    const copy = new RegExp(value.source, value.flags)
+    copy.lastIndex = value.lastIndex
+    return copy as any
+  }
   if (Array.isArray(value)) return value.map(clone) as any
   if (value && typeof value === 'object') {
     const result: any = {}
@@ -228,13 +245,9 @@ function ensureScannerRegExpFlags(flags: string | undefined): string {
   // We rely on:
   // - `g` for setting `lastIndex` (search from a start offset)
   // - `d` for `match.indices` capture ranges
-  // - `v` for UnicodeSet support (ES2024+), which precompiled languages may require
   let next = flags ?? ''
   if (!next.includes('g')) next += 'g'
   if (!next.includes('d')) next += 'd'
-
-  // Prefer `v` (UnicodeSets). If `u` is present, we must not add `v`.
-  if (!next.includes('u') && !next.includes('v')) next += 'v'
 
   return next
 }
@@ -256,24 +269,71 @@ function compileRawRegExp(source: string, flags?: string): RegExp {
   }
 }
 
-function getGrammarScopeName(grammar: any): string {
-  return (
-    (grammar &&
-      (typeof grammar.scopeName === 'string' ? grammar.scopeName : '')) ||
-    ''
-  )
-}
+function resolvePrecompiledAnchors(
+  source: string,
+  flags: string,
+  isFirstLine: boolean,
+  atAnchor: boolean
+): { source: string; flags: string } | null {
+  // Precompiled TextMate grammars may still contain Oniguruma anchors like \A and \G.
+  // Native JS RegExp doesn't implement them, so we must transpile them in a way
+  // that preserves TextMate semantics:
+  //
+  // - \A: beginning of (this) line. Since we tokenize line-by-line, this is `^`.
+  //       It must fail when !isFirstLine (TextMate passes isFirstLine state).
+  // - \G: "sticky" at the current anchor position. We implement this by:
+  //       - requiring atAnchor; otherwise the pattern must fail
+  //       - removing \G from the source, and adding the `y` flag so matching is
+  //         forced at `lastIndex` (which we set to the current scan position).
+  //
+  // Note: we only rewrite outside character classes.
+  let needsSticky = false
+  let inCharClass = false
+  let out = ''
 
-function isPrecompiledUnsupportedScope(scopeName: string): boolean {
-  // Hard-disable precompiled (native RegExp) grammars for languages that are known
-  // to not work correctly at the moment.
-  // Matches user request: python, html, perl, yaml
-  return (
-    scopeName === 'source.python' ||
-    scopeName === 'source.yaml' ||
-    scopeName === 'source.perl' ||
-    scopeName.startsWith('text.html')
-  )
+  for (let i = 0; i < source.length; i++) {
+    const ch = source.charCodeAt(i)
+
+    // Track character class state (ignore escaped brackets).
+    if (!inCharClass && ch === 91 /* [ */) {
+      inCharClass = true
+      out += source[i]
+      continue
+    }
+    if (inCharClass && ch === 93 /* ] */) {
+      inCharClass = false
+      out += source[i]
+      continue
+    }
+
+    if (!inCharClass && ch === 92 /* \ */ && i + 1 < source.length) {
+      const next = source.charCodeAt(i + 1)
+
+      if (next === 65 /* A */) {
+        if (!isFirstLine) return null
+        out += '^'
+        i++
+        continue
+      }
+
+      if (next === 71 /* G */) {
+        if (!atAnchor) return null
+        needsSticky = true
+        i++
+        continue
+      }
+
+      // Other escape: preserve as-is
+      out += source[i] + source[i + 1]
+      i++
+      continue
+    }
+
+    out += source[i]
+  }
+
+  if (!needsSticky) return { source: out, flags }
+  return { source: out, flags: flags.includes('y') ? flags : flags + 'y' }
 }
 
 export class CachedFn<T, R> {
@@ -3088,12 +3148,21 @@ export class RegExpSourceList {
     const sources = new Array<string | RegExp>(length)
     const rules = new Array<number>(length)
     for (let index = 0; index < length; index++) {
-      // If a rule is precompiled (native RegExp instance), we can't safely
-      // mutate its source. These should already have had anchors compiled away.
-      sources[index] = items[index].precompiled
-        ? items[index].precompiled!
-        : items[index].resolveAnchors(isFirstLine, atAnchor)
-      rules[index] = items[index].ruleId
+      const item = items[index]
+      if (item.precompiled) {
+        const resolved = resolvePrecompiledAnchors(
+          item.precompiled.source,
+          item.precompiled.flags,
+          isFirstLine,
+          atAnchor
+        )
+        sources[index] = resolved
+          ? new RegExp(resolved.source, resolved.flags)
+          : new RegExp('(?!)')
+      } else {
+        sources[index] = item.resolveAnchors(isFirstLine, atAnchor)
+      }
+      rules[index] = item.ruleId
     }
     return new CompiledRule(grammar, sources, rules)
   }
@@ -3145,7 +3214,7 @@ export class CompiledRule {
   public rules: number[]
 
   constructor(
-    grammar: any,
+    _grammar: any,
     regExpSources: Array<string | RegExp>,
     rules: number[]
   ) {
@@ -3154,24 +3223,21 @@ export class CompiledRule {
     )
     this.rules = rules
 
-    const scopeName = getGrammarScopeName(grammar)
-
     const length = regExpSources.length
     this.#regexes = new Array<RegExp>(length)
     for (let index = 0; index < length; index++) {
       const input = regExpSources[index]
       try {
-        if (input instanceof RegExp) {
-          if (isPrecompiledUnsupportedScope(scopeName)) {
-            const error: any = new Error(
-              `[renoun] Pre-compiled (native RegExp) grammars are currently not supported for "${scopeName}".`
-            )
-            error.renounFatal = true
-            throw error
-          }
-
-          // Ensure `g`+`d` (+`v` when possible) so our scanner logic works.
-          this.#regexes[index] = compileRawRegExp(input.source, input.flags)
+        if (input instanceof EmulatedRegExp) {
+          // Preserve emulation semantics (e.g. hiddenCaptures/strategy).
+          this.#regexes[index] = new EmulatedRegExp(input, input.flags)
+        } else if (input instanceof RegExp) {
+          // Ensure `g`+`d` so our scanner logic works. We intentionally do NOT
+          // force `v`/`u` here — we only compile what we are given.
+          this.#regexes[index] =
+            input.flags.includes('g') && input.flags.includes('d')
+              ? input
+              : compileRawRegExp(input.source, input.flags)
         } else {
           // Default path: treat patterns as Oniguruma source strings and transpile.
           this.#regexes[index] = toRegExp(input, {
@@ -3188,8 +3254,7 @@ export class CompiledRule {
             target: 'auto',
           })
         }
-      } catch (error: any) {
-        if (error?.renounFatal) throw error
+      } catch {
         this.#regexes[index] = new RegExp('(?!)', 'g') // Never matches
       }
     }

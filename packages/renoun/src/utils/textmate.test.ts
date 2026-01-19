@@ -14,6 +14,7 @@ import {
   RegExpSource,
   RegexSource,
   RelativeReference,
+  Registry,
   RegistryOptions,
   RawTokenizeResult,
   CompiledRule,
@@ -229,18 +230,13 @@ describe('precompiled / raw RegExp support', () => {
     expect(match!.captureIndices[1]).toBe(3)
   })
 
-  test('rejects precompiled RegExp grammars for python/html/perl/yaml', () => {
-    const badScopes = [
-      'source.python',
-      'source.yaml',
-      'source.perl',
-      'text.html.basic',
-    ]
-    for (const scopeName of badScopes) {
-      expect(() => new CompiledRule({ scopeName }, [/x/], [1])).toThrow(
-        /Pre-compiled/
-      )
-    }
+  test('does not force the v flag onto precompiled regexes', () => {
+    const grammar: any = { scopeName: 'source.tsx' }
+    // This pattern is valid without `v` but invalid with `v` in Node 20+/ES2024.
+    // If we were forcing `v`, compilation would fail and this would never match.
+
+    const compiled = new CompiledRule(grammar, [/[a-z&&b]/], [1])
+    expect(compiled.findNextMatchSync('[a-z&&b]', 0)).not.toBeNull()
   })
 })
 
@@ -2396,6 +2392,77 @@ export default function Page() {
       (token) => token.style.color?.toUpperCase() === '#FF0000'
     )
     expect(anyRed).toBe(false)
+  })
+
+  test('precompiled \\G behaves as a sticky anchor (integration)', async () => {
+    // a precompiled end pattern containing `\\G` must behave
+    // like a sticky anchor at the current anchor position.
+    //
+    // Without correct `\\G` handling, the end rule could incorrectly match later
+    // in the line (or never match if treated as a literal escape).
+    const rawGrammar: any = {
+      scopeName: 'source.precompiled-test',
+      patterns: [
+        {
+          name: 'meta.block',
+          begin: /a/,
+          end: /\Gb/,
+          patterns: [{ match: /x/, name: 'comment.line' }],
+        },
+      ],
+    }
+
+    const registry = new Registry({
+      loadGrammar: async (scopeName: string) => {
+        if (scopeName === 'source.precompiled-test') return rawGrammar
+        return null
+      },
+    })
+    registry.setTheme(themeFixtures.light)
+
+    const grammar = await registry.loadGrammar('source.precompiled-test')
+    expect(grammar).not.toBeNull()
+
+    // Case 1: end matches immediately after begin (anchor position) and closes.
+    const r1 = grammar!.tokenizeLine('ab', null, 0)
+    expect(r1.ruleStack.parent).toBeNull()
+
+    // Case 2: end must NOT skip ahead to match later; \\G requires stickiness.
+    const r2 = grammar!.tokenizeLine('axb', null, 0)
+    expect(r2.ruleStack.parent).not.toBeNull()
+  })
+
+  test('precompiled \\A only matches on the first line (integration)', async () => {
+    const rawGrammar: any = {
+      scopeName: 'source.precompiled-A-test',
+      patterns: [{ match: /\Aa/, name: 'keyword.control' }],
+    }
+
+    const registry = new Registry({
+      loadGrammar: async (scopeName: string) => {
+        if (scopeName === 'source.precompiled-A-test') return rawGrammar
+        return null
+      },
+    })
+    registry.setTheme(themeFixtures.light)
+
+    const grammar = await registry.loadGrammar('source.precompiled-A-test')
+    expect(grammar).not.toBeNull()
+
+    // First line: \A should match at BOF (line start).
+    const line1 = grammar!.tokenizeLine('a', null, 0)
+    expect(line1.ruleStack).toBeTruthy()
+
+    // Second line: reusing previous state makes `isFirstLine` false, so \A must fail.
+    const line2 = grammar!.tokenizeLine('a', line1.ruleStack as any, 0)
+
+    // Compare metadata: first line should have keyword styling (italic), second line should not.
+    const meta1 = line1.tokens[1]
+    const meta2 = line2.tokens[1]
+    expect(TokenMetadata.getFontStyle(meta1) & FontStyle.Italic).toBe(
+      FontStyle.Italic
+    )
+    expect(TokenMetadata.getFontStyle(meta2) & FontStyle.Italic).toBe(0)
   })
 })
 
