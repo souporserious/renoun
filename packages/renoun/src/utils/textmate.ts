@@ -11,7 +11,8 @@
  * - Removed async OnigLib/WASM dependency in favor of synchronous JS regexes
  *
  * Regex engine:
- * - Replaced OnigScanner with native JS RegExp via `oniguruma-to-es`
+ * - Precompiled grammars are generated via `oniguruma-to-es` at build time
+ * - Runtime relies on native JS RegExp + a lightweight EmulatedRegExp shim
  * - CompiledRule.findNextMatchSync uses JS regex execution with
  *   `hasIndices` flag for capture group positions
  * - Int32Array buffer pooling to minimize allocations during matching
@@ -38,16 +39,20 @@
  * - Subarray views from LineTokens.finalize() to avoid copies
  *--------------------------------------------------------*/
 
-import { EmulatedRegExp, toRegExp } from 'oniguruma-to-es'
+import { EmulatedRegExp, isEmulatedRegExpLike } from './emulated-regexp.ts'
 
 import type { Languages, ScopeName } from '../grammars/index.ts'
 import { grammars } from '../grammars/index.ts'
 
-export function clone<T = any>(value: T): T {
+export function clone<Type = any>(value: Type): Type {
   // Preserve RegExp instances (used by "precompiled" grammars).
   // Return a fresh instance to avoid leaking `lastIndex` state.
-  if (value instanceof EmulatedRegExp) {
-    const copy = new EmulatedRegExp(value.source, value.flags, value.rawOptions)
+  if (
+    value instanceof EmulatedRegExp ||
+    (value instanceof RegExp && isEmulatedRegExpLike(value))
+  ) {
+    const rawOptions = value.rawOptions
+    const copy = new EmulatedRegExp(value.source, value.flags, rawOptions)
     copy.lastIndex = value.lastIndex
     return copy as any
   }
@@ -59,16 +64,16 @@ export function clone<T = any>(value: T): T {
   if (Array.isArray(value)) return value.map(clone) as any
   if (value && typeof value === 'object') {
     const result: any = {}
-    for (const key in value as any) result[key] = clone((value as any)[key])
+    for (const key in value) result[key] = clone(value[key])
     return result
   }
   return value
 }
 
-export function mergeObjects<T extends Record<string, any>>(
-  target: T,
+export function mergeObjects<Type extends Record<string, any>>(
+  target: Type,
   ...sources: Array<Record<string, any> | null | undefined>
-): T {
+): Type {
   for (const source of sources) {
     if (!source) continue
     for (const key in source) (target as Record<string, any>)[key] = source[key]
@@ -269,11 +274,48 @@ function compileRawRegExp(source: string, flags?: string): RegExp {
   }
 }
 
+function getTextmateAnchorSource(pattern: RegExp): string {
+  if (isEmulatedRegExpLike(pattern)) {
+    const textmateSource = (pattern as any).rawOptions?.textmateSource
+    if (typeof textmateSource === 'string') {
+      return textmateSource
+    }
+  }
+  return pattern.source
+}
+
+function scanTextmateAnchors(source: string): { hasA: boolean; hasG: boolean } {
+  let hasA = false
+  let hasG = false
+  let inCharClass = false
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source.charCodeAt(i)
+    if (!inCharClass && ch === 91 /* [ */) {
+      inCharClass = true
+      continue
+    }
+    if (inCharClass && ch === 93 /* ] */) {
+      inCharClass = false
+      continue
+    }
+    if (!inCharClass && ch === 92 /* \\ */ && i + 1 < source.length) {
+      const next = source.charCodeAt(i + 1)
+      if (next === 65 /* A */) hasA = true
+      if (next === 71 /* G */) hasG = true
+      i++
+    }
+  }
+
+  return { hasA, hasG }
+}
+
 function resolvePrecompiledAnchors(
   source: string,
   flags: string,
   isFirstLine: boolean,
-  atAnchor: boolean
+  atAnchor: boolean,
+  anchorSource?: string
 ): { source: string; flags: string } | null {
   // Precompiled TextMate grammars may still contain Oniguruma anchors like \A and \G.
   // Native JS RegExp doesn't implement them, so we must transpile them in a way
@@ -287,7 +329,13 @@ function resolvePrecompiledAnchors(
   //         forced at `lastIndex` (which we set to the current scan position).
   //
   // Note: we only rewrite outside character classes.
-  let needsSticky = false
+  const anchorText = anchorSource ?? source
+  const { hasA } = scanTextmateAnchors(anchorText)
+  const isBareG = anchorText.trim() === '\\G'
+  if (hasA && !isFirstLine) return null
+  if (isBareG && !atAnchor) return null
+
+  let needsSticky = isBareG
   let inCharClass = false
   let out = ''
 
@@ -310,14 +358,22 @@ function resolvePrecompiledAnchors(
       const next = source.charCodeAt(i + 1)
 
       if (next === 65 /* A */) {
-        if (!isFirstLine) return null
+        if (!isFirstLine) {
+          out += '\uFFFF'
+          i++
+          continue
+        }
         out += '^'
         i++
         continue
       }
 
       if (next === 71 /* G */) {
-        if (!atAnchor) return null
+        if (!atAnchor) {
+          out += '\uFFFF'
+          i++
+          continue
+        }
         needsSticky = true
         i++
         continue
@@ -2484,8 +2540,8 @@ export class BeginEndRule extends Rule {
     // closing (notably in HTML tags) and breaks highlighting.
     const precompiled = this.#end.precompiled
     if (
-      precompiled instanceof EmulatedRegExp &&
-      precompiled.rawOptions &&
+      precompiled instanceof RegExp &&
+      isEmulatedRegExpLike(precompiled) &&
       Array.isArray(precompiled.rawOptions.hiddenCaptures) &&
       precompiled.rawOptions.hiddenCaptures.length > 0
     ) {
@@ -2944,13 +3000,16 @@ export class RegExpSource {
     // Support Shiki-style precompiled languages that provide native JS `RegExp`
     // instances in grammar rules.
     const sourceText = source instanceof RegExp ? source.source : source
+    const anchorText =
+      source instanceof RegExp ? getTextmateAnchorSource(source) : sourceText
     if (source instanceof RegExp) this.precompiled = source
 
     if (sourceText) {
+      const { hasA, hasG } = scanTextmateAnchors(anchorText)
       const length = sourceText.length
       let start = 0
       const parts: string[] = []
-      let hasAnchor = false
+      let hasAnchor = hasA || hasG
 
       for (let index = 0; index < length; index++) {
         if (sourceText.charCodeAt(index) === 92 && index + 1 < length) {
@@ -2959,8 +3018,6 @@ export class RegExpSource {
             parts.push(sourceText.substring(start, index))
             parts.push('$(?!\\n)(?<!\\n)')
             start = index + 2
-          } else if (next === 65 || next === 71) {
-            hasAnchor = true
           }
           index++
         }
@@ -3172,11 +3229,15 @@ export class RegExpSourceList {
           item.precompiled.source,
           item.precompiled.flags,
           isFirstLine,
-          atAnchor
+          atAnchor,
+          getTextmateAnchorSource(item.precompiled)
         )
         if (!resolved) {
           sources[index] = new RegExp('(?!)')
-        } else if (item.precompiled instanceof EmulatedRegExp) {
+        } else if (
+          item.precompiled instanceof RegExp &&
+          isEmulatedRegExpLike(item.precompiled)
+        ) {
           sources[index] = new EmulatedRegExp(
             resolved.source,
             resolved.flags,
@@ -3254,14 +3315,14 @@ export class CompiledRule {
     for (let index = 0; index < length; index++) {
       const input = regExpSources[index]
       try {
-        if (input instanceof EmulatedRegExp) {
+        if (input instanceof RegExp && isEmulatedRegExpLike(input)) {
           // Preserve emulation semantics (e.g. hiddenCaptures/strategy). Ensure
           // `g`+`d` so the scanner can set `lastIndex` and read match indices.
           const flags = ensureScannerRegExpFlags(input.flags)
           this.#regexes[index] = new EmulatedRegExp(
             input.source,
             flags,
-            input.rawOptions
+            (input as any).rawOptions
           )
         } else if (input instanceof RegExp) {
           // Ensure `g`+`d` so our scanner logic works. We intentionally do NOT
@@ -3271,22 +3332,19 @@ export class CompiledRule {
               ? input
               : compileRawRegExp(input.source, input.flags)
         } else {
-          // Default path: treat patterns as Oniguruma source strings and transpile.
-          this.#regexes[index] = toRegExp(input, {
-            global: true,
-            hasIndices: true,
-            lazyCompileLength: 3000,
-            rules: {
-              allowOrphanBackrefs: true,
-              asciiWordBoundaries: true,
-              captureGroup: true,
-              recursionLimit: 5,
-              singleline: true,
-            },
-            target: 'auto',
-          })
+          if (input === '') {
+            this.#regexes[index] = compileRawRegExp('', '')
+          } else {
+            const error = new Error(
+              '[renoun] TextMate patterns must be precompiled to native RegExp. ' +
+                'String patterns are not supported at runtime.'
+            )
+            error.name = 'MissingOnigurumaToEsError'
+            throw error
+          }
         }
-      } catch {
+      } catch (error: any) {
+        if (error?.name === 'MissingOnigurumaToEsError') throw error
         this.#regexes[index] = new RegExp('(?!)', 'g') // Never matches
       }
     }

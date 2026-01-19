@@ -2407,7 +2407,7 @@ export default function Page() {
           scopeName: 'source.shell',
           patterns: [
             {
-              begin: 'a',
+              begin: /a/,
               // Intentionally omit `end` to validate missing-end behavior.
               name: 'meta.block.test',
               contentName: 'meta.content.test',

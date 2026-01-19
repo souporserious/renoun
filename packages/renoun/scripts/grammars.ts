@@ -2,7 +2,8 @@ import { grammars } from 'tm-grammars'
 import { themes } from 'tm-themes'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { EmulatedRegExp, toRegExpDetails } from 'oniguruma-to-es'
+import { toRegExpDetails } from 'oniguruma-to-es'
+import { EmulatedRegExp } from '../src/utils/emulated-regexp.ts'
 
 const BUNDLED_LANGUAGES = new Set<string>([
   'css',
@@ -155,16 +156,15 @@ function toJsonModule(jsonText: string): string {
   const needsEmulated = precompiledString.includes('new EmulatedRegExp(')
 
   return `// prettier-ignore
-${needsEmulated ? "import { EmulatedRegExp } from 'oniguruma-to-es'\n" : ''}export default Object.freeze(${precompiledString})
+${needsEmulated ? "import { EmulatedRegExp } from '../utils/emulated-regexp.ts'\n" : ''}export default Object.freeze(${precompiledString})
 `
 }
 
 function precompileGrammar(grammar: any): any {
   const precompiled = structuredClone(grammar)
   traverseGrammarPatterns(precompiled, (pattern) => {
-    // Preserve Oniguruma anchor tokens for runtime anchor-state handling.
-    // Precompiling these can drop anchor gating semantics (notably bare `\\G`).
-    if (pattern.includes('\\A') || pattern.includes('\\G')) return pattern
+    const hasTextmateAnchors =
+      pattern.includes('\\A') || pattern.includes('\\G')
 
     const details = toRegExpDetails(pattern, {
       global: true,
@@ -179,8 +179,11 @@ function precompileGrammar(grammar: any): any {
       target: 'ES2024',
     })
 
-    if (details.options) {
-      return new EmulatedRegExp(details.pattern, details.flags, details.options)
+    if (details.options || hasTextmateAnchors) {
+      return new EmulatedRegExp(details.pattern, details.flags, {
+        ...(details.options || {}),
+        ...(hasTextmateAnchors ? { textmateSource: pattern } : {}),
+      })
     }
     return new RegExp(details.pattern, details.flags)
   })
