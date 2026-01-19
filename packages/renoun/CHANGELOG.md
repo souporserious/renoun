@@ -1,5 +1,22 @@
 # renoun
 
+## 11.2.0
+
+### Minor Changes
+
+- 08285a3: Adds `JavaScriptFile#getOutlineRanges` that returns outline ranges for a file (imports, regions, statements, etc).
+- f7ae465: Adds `JavaScriptFile#getFoldingRanges` method to query where the file can be folded.
+- b5c992b: Adds textmate theme validation to ensure theme has expected shape.
+- 001b5ae: Adds `resolveExportSources`, `resolveExportSource`, and `getMainSourcePath` methods to the `Package` utility for resolving package export source files.
+
+### Patch Changes
+
+- 4cd01ae: Adds `ModuleExport#getValueWithDefault` for returning a fallback value when the export is missing.
+- 71e2bcf: Adds runtime validation for `CodeBlock` component overrides to provide a better error message for invalid `components` props.
+- 32e9777: Improves directory snapshot traversal performance by processing entries concurrently.
+- ee4d2e8: Prevents `NodeFileSystem` access to paths that attempt to escape the workspace via symlinks.
+- 69d4c98: Improves JSDoc signature handling, including param-only docs, callback parameter formatting, and preserving concrete TypeScript return types when only JSDoc parameter names improve.
+
 ## 11.1.0
 
 ### Minor Changes
