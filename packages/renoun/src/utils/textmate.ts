@@ -39,8 +39,9 @@
  * - Subarray views from LineTokens.finalize() to avoid copies
  *--------------------------------------------------------*/
 
-import { EmulatedRegExp, isEmulatedRegExpLike } from './emulated-regexp.ts'
+import { toRegExpDetails } from 'oniguruma-to-es'
 
+import { EmulatedRegExp, isEmulatedRegExpLike } from './emulated-regexp.ts'
 import type { Languages, ScopeName } from '../grammars/index.ts'
 import { grammars } from '../grammars/index.ts'
 
@@ -272,6 +273,27 @@ function compileRawRegExp(source: string, flags?: string): RegExp {
     }
     throw error
   }
+}
+
+function compileOnigurumaSourceToRegExp(source: string): RegExp {
+  const details = toRegExpDetails(source, {
+    global: true,
+    hasIndices: true,
+    lazyCompileLength: 3000,
+    rules: {
+      allowOrphanBackrefs: true,
+      asciiWordBoundaries: true,
+      captureGroup: true,
+      recursionLimit: 5,
+      singleline: true,
+    },
+    target: 'auto',
+  })
+
+  if (details.options) {
+    return new EmulatedRegExp(details.pattern, details.flags, details.options)
+  }
+  return new RegExp(details.pattern, details.flags)
 }
 
 function getTextmateAnchorSource(pattern: RegExp): string {
@@ -3332,19 +3354,11 @@ export class CompiledRule {
               ? input
               : compileRawRegExp(input.source, input.flags)
         } else {
-          if (input === '') {
-            this.#regexes[index] = compileRawRegExp('', '')
-          } else {
-            const error = new Error(
-              '[renoun] TextMate patterns must be precompiled to native RegExp. ' +
-                'String patterns are not supported at runtime.'
-            )
-            error.name = 'MissingOnigurumaToEsError'
-            throw error
-          }
+          // Raw grammars (string patterns) are still supported for now, but will
+          // be slower than precompiled grammars.
+          this.#regexes[index] = compileOnigurumaSourceToRegExp(input)
         }
       } catch (error: any) {
-        if (error?.name === 'MissingOnigurumaToEsError') throw error
         this.#regexes[index] = new RegExp('(?!)', 'g') // Never matches
       }
     }
