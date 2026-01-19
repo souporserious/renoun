@@ -11,10 +11,12 @@ import {
   FontStyle,
   LineFonts,
   ParsedThemeRule,
+  RegExpSource,
   RegexSource,
   RelativeReference,
   RegistryOptions,
   RawTokenizeResult,
+  CompiledRule,
   ScopeStack,
   SelfReference,
   StringCachedFn,
@@ -190,6 +192,55 @@ describe('RegexSource capture replacement', () => {
     expect(RegexSource.replaceCaptures('x$3y', sourceText, captures)).toBe(
       'x$3y'
     )
+  })
+})
+
+describe('RegExpSource backreference resolution', () => {
+  test('escapes non-literal capture text before splicing into the regex', () => {
+    const end = new RegExpSource('(?:\\1)', 0)
+    const lineText = '/a.b[0]/'
+    const captures: any[] = []
+    captures[1] = { start: 0, end: lineText.length }
+
+    expect(end.resolveBackReferences(lineText, captures)).toBe(
+      '(?:/a\\.b\\[0\\]/)'
+    )
+  })
+
+  test('bypasses escaping when capture text is a JS RegExp literal (/.../flags)', () => {
+    const end = new RegExpSource('(?:\\1)', 0)
+    const lineText = '/a.b[0]/g'
+    const captures: any[] = []
+    captures[1] = { start: 0, end: lineText.length }
+
+    expect(end.resolveBackReferences(lineText, captures)).toBe('(?:/a.b[0]/g)')
+  })
+})
+
+describe('precompiled / raw RegExp support', () => {
+  test('normalizes precompiled RegExp inputs to include global+indices flags for scanning', () => {
+    const grammar: any = { scopeName: 'source.tsx' }
+    const compiled = new CompiledRule(grammar, [/x/], [1])
+
+    const match = compiled.findNextMatchSync('xxx', 2)
+    expect(match).not.toBeNull()
+    expect(match!.ruleId).toBe(1)
+    expect(match!.captureIndices[0]).toBe(2)
+    expect(match!.captureIndices[1]).toBe(3)
+  })
+
+  test('rejects precompiled RegExp grammars for python/html/perl/yaml', () => {
+    const badScopes = [
+      'source.python',
+      'source.yaml',
+      'source.perl',
+      'text.html.basic',
+    ]
+    for (const scopeName of badScopes) {
+      expect(() => new CompiledRule({ scopeName }, [/x/], [1])).toThrow(
+        /Pre-compiled/
+      )
+    }
   })
 })
 

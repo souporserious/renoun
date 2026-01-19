@@ -186,6 +186,96 @@ export function escapeRegExpCharacters(value: string) {
   return value.replace(ESCAPE_REGEXP_CHARS, '\\$&')
 }
 
+const JS_REGEXP_LITERAL_FLAGS = /^[dgimsuyv]+$/
+
+function isJavaScriptRegExpLiteral(value: string): boolean {
+  // Heuristic: require `/.../<flags>` (at least one flag) to avoid accidentally
+  // treating common slash-delimited non-regex strings (e.g. paths) as regexes.
+  if (value.length < 4) return false
+  if (value.charCodeAt(0) !== 47 /* / */) return false
+
+  let inCharClass = false
+  for (let i = 1; i < value.length; i++) {
+    const ch = value.charCodeAt(i)
+
+    // Escape sequence: skip the next character.
+    if (ch === 92 /* \ */) {
+      i++
+      continue
+    }
+
+    if (inCharClass) {
+      if (ch === 93 /* ] */) inCharClass = false
+      continue
+    }
+
+    if (ch === 91 /* [ */) {
+      inCharClass = true
+      continue
+    }
+
+    if (ch === 47 /* / */) {
+      const flags = value.slice(i + 1)
+      if (!JS_REGEXP_LITERAL_FLAGS.test(flags)) return false
+      return new Set(flags).size === flags.length
+    }
+  }
+
+  return false
+}
+
+function ensureScannerRegExpFlags(flags: string | undefined): string {
+  // We rely on:
+  // - `g` for setting `lastIndex` (search from a start offset)
+  // - `d` for `match.indices` capture ranges
+  // - `v` for UnicodeSet support (ES2024+), which precompiled languages may require
+  let next = flags ?? ''
+  if (!next.includes('g')) next += 'g'
+  if (!next.includes('d')) next += 'd'
+
+  // Prefer `v` (UnicodeSets). If `u` is present, we must not add `v`.
+  if (!next.includes('u') && !next.includes('v')) next += 'v'
+
+  return next
+}
+
+function compileRawRegExp(source: string, flags?: string): RegExp {
+  const nextFlags = ensureScannerRegExpFlags(flags)
+  try {
+    return new RegExp(source, nextFlags)
+  } catch (error: any) {
+    // `v` flag is required by Shiki precompiled languages (ES2024 / Node 20+).
+    // https://shiki.style/guide/regex-engines#pre-compiled-languages
+    if (nextFlags.includes('v')) {
+      throw new Error(
+        `[renoun] Failed to compile precompiled JavaScript RegExp (requires UnicodeSets "v" flag / ES2024+ / Node 20+): /${source}/${nextFlags}\n` +
+          (error?.message ? `Original error: ${error.message}` : '')
+      )
+    }
+    throw error
+  }
+}
+
+function getGrammarScopeName(grammar: any): string {
+  return (
+    (grammar &&
+      (typeof grammar.scopeName === 'string' ? grammar.scopeName : '')) ||
+    ''
+  )
+}
+
+function isPrecompiledUnsupportedScope(scopeName: string): boolean {
+  // Hard-disable precompiled (native RegExp) grammars for languages that are known
+  // to not work correctly at the moment.
+  // Matches user request: python, html, perl, yaml
+  return (
+    scopeName === 'source.python' ||
+    scopeName === 'source.yaml' ||
+    scopeName === 'source.perl' ||
+    scopeName.startsWith('text.html')
+  )
+}
+
 export class CachedFn<T, R> {
   #cache = new Map<T, R>()
   #fn: (arg: T) => R
@@ -2193,7 +2283,7 @@ export class MatchRule extends Rule {
     location: TextMateLocation | null,
     id: number,
     name: string | null,
-    match: string,
+    match: string | RegExp,
     captures: any
   ) {
     super(location, id, name, null)
@@ -2293,9 +2383,9 @@ export class BeginEndRule extends Rule {
     id: number,
     name: string | null,
     contentName: string | null,
-    begin: string,
+    begin: string | RegExp,
     beginCaptures: any,
-    end: string | undefined,
+    end: string | RegExp | undefined,
     endCaptures: any,
     applyEndPatternLast: boolean | undefined,
     patterns: any
@@ -2385,9 +2475,9 @@ export class BeginWhileRule extends Rule {
     id: number,
     name: string | null,
     contentName: string | null,
-    begin: string,
+    begin: string | RegExp,
     beginCaptures: any,
-    whilePattern: string,
+    whilePattern: string | RegExp,
     whileCaptures: any,
     patterns: any
   ) {
@@ -2485,10 +2575,10 @@ export interface RawRule {
   $textmateLocation?: TextMateLocation
   name?: string | null
   contentName?: string | null
-  match?: string
-  begin?: string
-  end?: string
-  while?: string
+  match?: string | RegExp
+  begin?: string | RegExp
+  end?: string | RegExp
+  while?: string | RegExp
   applyEndPatternLast?: boolean
   captures?: RawCaptures
   beginCaptures?: RawCaptures
@@ -2766,23 +2856,29 @@ export class RegExpSource {
   source: string
   ruleId: number
   hasBackReferences: boolean
+  precompiled: RegExp | null = null
   #anchorCache:
     | { A0_G0: string; A0_G1: string; A1_G0: string; A1_G1: string }
     | null
     | undefined = undefined
 
-  constructor(source: string, ruleId: number) {
-    if (source) {
-      const length = source.length
+  constructor(source: string | RegExp, ruleId: number) {
+    // Support Shiki-style precompiled languages that provide native JS `RegExp`
+    // instances in grammar rules.
+    const sourceText = source instanceof RegExp ? source.source : source
+    if (source instanceof RegExp) this.precompiled = source
+
+    if (sourceText) {
+      const length = sourceText.length
       let start = 0
       const parts: string[] = []
       let hasAnchor = false
 
       for (let index = 0; index < length; index++) {
-        if (source.charCodeAt(index) === 92 && index + 1 < length) {
-          const next = source.charCodeAt(index + 1)
+        if (sourceText.charCodeAt(index) === 92 && index + 1 < length) {
+          const next = sourceText.charCodeAt(index + 1)
           if (next === 122) {
-            parts.push(source.substring(start, index))
+            parts.push(sourceText.substring(start, index))
             parts.push('$(?!\\n)(?<!\\n)')
             start = index + 2
           } else if (next === 65 || next === 71) {
@@ -2793,14 +2889,14 @@ export class RegExpSource {
       }
 
       this.hasAnchor = hasAnchor
-      if (start === 0) this.source = source
+      if (start === 0) this.source = sourceText
       else {
-        parts.push(source.substring(start, length))
+        parts.push(sourceText.substring(start, length))
         this.source = parts.join('')
       }
     } else {
       this.hasAnchor = false
-      this.source = source
+      this.source = sourceText
     }
 
     this.ruleId = ruleId
@@ -2808,12 +2904,13 @@ export class RegExpSource {
   }
 
   clone() {
-    return new RegExpSource(this.source, this.ruleId)
+    return new RegExpSource(this.precompiled ?? this.source, this.ruleId)
   }
 
   setSource(nextSource: string) {
     if (this.source !== nextSource) {
       this.source = nextSource
+      this.precompiled = null
       if (this.hasAnchor) this.#anchorCache = undefined
     }
   }
@@ -2823,7 +2920,12 @@ export class RegExpSource {
     return this.source.replace(BACK_REFERENCING_END, (_m, n) => {
       const idx = parseInt(n, 10)
       const c = captureIndices[idx]
-      return c ? escapeRegExpCharacters(lineText.substring(c.start, c.end)) : ''
+      if (!c) return ''
+      const captureText = lineText.substring(c.start, c.end)
+      // Some grammars capture JS RegExp literals (e.g. `/foo.*/g`) and expect
+      // them to be spliced back in as a *regex*, not as an escaped literal.
+      if (isJavaScriptRegExpLiteral(captureText)) return captureText
+      return escapeRegExpCharacters(captureText)
     })
   }
 
@@ -2948,10 +3050,10 @@ export class RegExpSourceList {
     if (!this.#cached) {
       const items = this.#items
       const length = items.length
-      const sources = new Array<string>(length)
+      const sources = new Array<string | RegExp>(length)
       const rules = new Array<number>(length)
       for (let index = 0; index < length; index++) {
-        sources[index] = items[index].source
+        sources[index] = items[index].precompiled ?? items[index].source
         rules[index] = items[index].ruleId
       }
       this.#cached = new CompiledRule(grammar, sources, rules)
@@ -2983,10 +3085,14 @@ export class RegExpSourceList {
   #resolveAnchors(grammar: any, isFirstLine: boolean, atAnchor: boolean) {
     const items = this.#items
     const length = items.length
-    const sources = new Array<string>(length)
+    const sources = new Array<string | RegExp>(length)
     const rules = new Array<number>(length)
     for (let index = 0; index < length; index++) {
-      sources[index] = items[index].resolveAnchors(isFirstLine, atAnchor)
+      // If a rule is precompiled (native RegExp instance), we can't safely
+      // mutate its source. These should already have had anchors compiled away.
+      sources[index] = items[index].precompiled
+        ? items[index].precompiled!
+        : items[index].resolveAnchors(isFirstLine, atAnchor)
       rules[index] = items[index].ruleId
     }
     return new CompiledRule(grammar, sources, rules)
@@ -3038,29 +3144,52 @@ export class CompiledRule {
   public regExps: string[]
   public rules: number[]
 
-  constructor(_grammar: any, regExpSources: string[], rules: number[]) {
-    this.regExps = regExpSources
+  constructor(
+    grammar: any,
+    regExpSources: Array<string | RegExp>,
+    rules: number[]
+  ) {
+    this.regExps = regExpSources.map((r) =>
+      typeof r === 'string' ? r : r.source
+    )
     this.rules = rules
+
+    const scopeName = getGrammarScopeName(grammar)
 
     const length = regExpSources.length
     this.#regexes = new Array<RegExp>(length)
     for (let index = 0; index < length; index++) {
-      const source = regExpSources[index]
+      const input = regExpSources[index]
       try {
-        this.#regexes[index] = toRegExp(source, {
-          global: true,
-          hasIndices: true,
-          lazyCompileLength: 3000,
-          rules: {
-            allowOrphanBackrefs: true,
-            asciiWordBoundaries: true,
-            captureGroup: true,
-            recursionLimit: 5,
-            singleline: true,
-          },
-          target: 'auto',
-        })
-      } catch {
+        if (input instanceof RegExp) {
+          if (isPrecompiledUnsupportedScope(scopeName)) {
+            const error: any = new Error(
+              `[renoun] Pre-compiled (native RegExp) grammars are currently not supported for "${scopeName}".`
+            )
+            error.renounFatal = true
+            throw error
+          }
+
+          // Ensure `g`+`d` (+`v` when possible) so our scanner logic works.
+          this.#regexes[index] = compileRawRegExp(input.source, input.flags)
+        } else {
+          // Default path: treat patterns as Oniguruma source strings and transpile.
+          this.#regexes[index] = toRegExp(input, {
+            global: true,
+            hasIndices: true,
+            lazyCompileLength: 3000,
+            rules: {
+              allowOrphanBackrefs: true,
+              asciiWordBoundaries: true,
+              captureGroup: true,
+              recursionLimit: 5,
+              singleline: true,
+            },
+            target: 'auto',
+          })
+        }
+      } catch (error: any) {
+        if (error?.renounFatal) throw error
         this.#regexes[index] = new RegExp('(?!)', 'g') // Never matches
       }
     }
