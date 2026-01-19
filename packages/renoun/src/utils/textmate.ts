@@ -2625,7 +2625,7 @@ export type TextMateLocation = {
 
 export type RawRepository = Record<string, RawRule>
 
-export type RawCaptures = Record<string, RawCaptureRule | null> & {
+export type RawCaptures = Record<string, RawCaptureRule | null | undefined> & {
   $textmateLocation?: TextMateLocation
 }
 
@@ -2639,7 +2639,7 @@ export interface RawRule {
   begin?: string | RegExp
   end?: string | RegExp
   while?: string | RegExp
-  applyEndPatternLast?: boolean
+  applyEndPatternLast?: boolean | number
   captures?: RawCaptures
   beginCaptures?: RawCaptures
   endCaptures?: RawCaptures
@@ -2755,7 +2755,7 @@ export class RuleFactory {
               grammar,
               repository
             ),
-            rawRule.applyEndPatternLast,
+            !!rawRule.applyEndPatternLast,
             RuleFactory.compilePatterns(rawRule.patterns, grammar, repository)
           )
         } catch (error) {

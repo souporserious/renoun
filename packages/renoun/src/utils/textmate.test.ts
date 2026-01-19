@@ -1170,16 +1170,16 @@ const themeFixtures: Record<ThemeName, TextMateThemeRaw> = {
 const registryOptions: RegistryOptions<ThemeName> = {
   async getGrammar(scopeName) {
     if (scopeName === 'source.css') {
-      return cssGrammar as TextMateGrammarRaw
+      return cssGrammar
     }
     if (scopeName === 'source.shell') {
-      return shellGrammar as TextMateGrammarRaw
+      return shellGrammar
     }
     if (scopeName === 'source.mdx') {
-      return mdxGrammar as TextMateGrammarRaw
+      return mdxGrammar
     }
     if (scopeName === 'source.tsx') {
-      return tsxGrammar as TextMateGrammarRaw
+      return tsxGrammar
     }
 
     throw new Error(`Missing grammar for scope: ${scopeName}`)
@@ -1626,7 +1626,7 @@ echo "Hello World"`
             scopeName,
             patterns: [],
             repository: {},
-          } as TextMateGrammarRaw
+          } satisfies TextMateGrammarRaw
         }
       },
       getTheme: registryOptions.getTheme,
@@ -2139,12 +2139,10 @@ const c = 3`
         throw new Error(`Missing grammar for scope: ${scopeName}`)
       },
       async getTheme() {
-        // Cast to TextMateThemeRaw - the textmate theme has tokenColors
-        const theme = textmateTheme as unknown as TextMateThemeRaw
         // Normalize: use tokenColors as settings
         return {
-          ...theme,
-          settings: theme.tokenColors || theme.settings || [],
+          ...textmateTheme,
+          settings: textmateTheme.tokenColors || textmateTheme.settings || [],
         }
       },
     }
