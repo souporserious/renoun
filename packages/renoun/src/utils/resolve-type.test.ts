@@ -1112,6 +1112,63 @@ describe('resolveType', () => {
     })
   })
 
+  test('resolves JSDoc @template type parameters in JS files', () => {
+    // This test verifies that type parameters from JSDoc @template tags
+    // are resolved correctly. TypeParameterDeclaration.getName() can throw
+    // for malformed AST nodes in in-memory files, so safeGetTypeParameterName
+    // is used to handle this gracefully.
+    const project = new Project({
+      compilerOptions: { allowJs: true, checkJs: true },
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceFile = project.createSourceFile(
+      'generic.js',
+      dedent`
+        /**
+         * Identity function that returns its input.
+         * @template T - The type of the value
+         * @param {T} value - The value to return
+         * @returns {T} The same value
+         */
+        export function identity(value) {
+          return value;
+        }
+      `,
+      { scriptKind: ts.ScriptKind.JS }
+    )
+
+    const declaration = sourceFile.getFunctionOrThrow('identity')
+    const resolved = resolveType(declaration.getType(), declaration)
+
+    expect(resolved).toMatchObject({
+      kind: 'Function',
+      name: 'identity',
+      signatures: [
+        {
+          kind: 'CallSignature',
+          description: 'Identity function that returns its input.',
+          typeParameters: [
+            {
+              kind: 'TypeParameter',
+              name: 'T',
+            },
+          ],
+          parameters: [
+            {
+              kind: 'Parameter',
+              name: 'value',
+            },
+          ],
+          returnType: {
+            kind: 'TypeReference',
+            name: 'T',
+          },
+        },
+      ],
+    })
+  })
+
   test('falls back to jsdoc when contextual signatures are filtered out', () => {
     const contextualFile = project.createSourceFile(
       'contextual.js',

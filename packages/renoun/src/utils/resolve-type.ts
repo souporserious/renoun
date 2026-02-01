@@ -66,6 +66,22 @@ interface TypeWithContext extends Type {
   }
 }
 
+/**
+ * Safely get name from a `TypeParameterDeclaration`.
+ *
+ * `TypeParameterDeclaration` uses the `NamedNode` mixin which can throw when
+ * the underlying AST node is malformed (e.g. in-memory files or JS-only projects).
+ */
+function safeGetTypeParameterName(
+  parameter: TypeParameterDeclaration
+): string | undefined {
+  try {
+    return parameter.getName()
+  } catch {
+    return undefined
+  }
+}
+
 export namespace Kind {
   /** Metadata present in all types. */
   export interface Shared {
@@ -4606,7 +4622,7 @@ function resolveTypeParameterDeclaration(
   filter?: TypeFilter,
   dependencies?: Set<string>
 ): Kind.TypeParameter | undefined {
-  const name = parameterDeclaration.getName()
+  const name = safeGetTypeParameterName(parameterDeclaration)
   const constraintNode = parameterDeclaration.getConstraint()
   const resolvedConstraint = constraintNode
     ? resolveTypeExpression(
@@ -5119,9 +5135,9 @@ function resolveParameter(
         }
       }
 
-      let name: string | undefined = parameterDeclaration.getName()
+      let name: string | undefined = parameterDeclaration.getName() || undefined
 
-      if (name.startsWith('__')) {
+      if (name?.startsWith('__')) {
         name = undefined
       }
 
@@ -5265,6 +5281,10 @@ function getJsDocParameterTag(
   const candidates = getJsDocCandidates(functionLike)
   const parameterName = parameterDeclaration.getName()
 
+  if (!parameterName) {
+    return undefined
+  }
+
   for (const candidate of candidates) {
     if (!tsMorph.Node.isJSDocable(candidate)) continue
 
@@ -5346,7 +5366,10 @@ function getJsDocTemplateMetadata(
 ):
   | { description?: string; tags?: { name: string; text?: string }[] }
   | undefined {
-  const name = parameterDeclaration.getName()
+  const name = safeGetTypeParameterName(parameterDeclaration)
+  if (!name) {
+    return undefined
+  }
   const tags: { name: string; text?: string }[] = []
   const seen = new Set<string | undefined>()
   let description: string | undefined
