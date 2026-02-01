@@ -46,6 +46,8 @@ export class InMemoryFileSystem extends FileSystem {
   #projectOptions: ProjectOptions
   #files: Map<string, InMemoryEntry>
   #ignore: ReturnType<typeof ignore> | undefined
+  #syncedSourceFiles: Set<string>
+  #pendingSourceFileWrites: Map<string, Promise<void>>
 
   constructor(files: { [path: string]: InMemoryFileContent }) {
     const projectId = crypto.randomUUID()
@@ -59,6 +61,8 @@ export class InMemoryFileSystem extends FileSystem {
         module: tsMorph.ts.ModuleKind.CommonJS,
       },
     }
+    this.#syncedSourceFiles = new Set()
+    this.#pendingSourceFileWrites = new Map()
     this.#files = new Map(
       Object.entries(files).map(([path, content]) => [
         normalizePath(path),
@@ -146,6 +150,48 @@ export class InMemoryFileSystem extends FileSystem {
       const absolutePath = this.getAbsolutePath(path)
       createSourceFile(absolutePath, entry.content, this.#projectOptions)
     }
+  }
+
+  async #ensureSourceFile(filePath: string) {
+    const absolutePath = this.getAbsolutePath(filePath)
+    if (this.#syncedSourceFiles.has(absolutePath)) {
+      return
+    }
+
+    const pending = this.#pendingSourceFileWrites.get(absolutePath)
+    if (pending) {
+      await pending
+      return
+    }
+
+    const normalized = normalizeSlashes(filePath)
+    const relativePath = normalized.replace(/^\/+/, '')
+    const entry =
+      this.getFileEntry(relativePath) ?? this.getFileEntry(normalized)
+
+    if (!entry || entry.kind !== 'Text') {
+      return
+    }
+
+    const writePromise = createSourceFile(
+      absolutePath,
+      entry.content,
+      this.#projectOptions
+    )
+      .then(() => {
+        this.#syncedSourceFiles.add(absolutePath)
+      })
+      .finally(() => {
+        this.#pendingSourceFileWrites.delete(absolutePath)
+      })
+
+    this.#pendingSourceFileWrites.set(absolutePath, writePromise)
+    await writePromise
+  }
+
+  override async getFileExports(filePath: string) {
+    await this.#ensureSourceFile(filePath)
+    return super.getFileExports(filePath)
   }
 
   #ensureDirectoryPlaceholders(path: string) {
