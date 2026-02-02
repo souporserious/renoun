@@ -27,32 +27,35 @@ describe('GitHostFileSystem', () => {
     globalThis.fetch = mockFetch
 
     // GitHub
-    new GitHostFileSystem({
+    const githubFs = new GitHostFileSystem({
       repository: 'my.user/repo.name',
       host: 'github',
       ref: 'feature-xy',
     })
+    await githubFs.readFile('file.txt')
     let [url] = mockFetch.mock.calls.at(-1)!
     expect(url).toMatch(/repos\/my\.user\/repo\.name\/tarball\/feature-xy$/)
 
     // Bitbucket
-    new GitHostFileSystem({
+    const bitbucketFs = new GitHostFileSystem({
       repository: 'my.user/repo.name',
       host: 'bitbucket',
       ref: 'feature-xy',
     })
+    await bitbucketFs.readFile('file.txt')
     ;[url] = mockFetch.mock.calls.at(-1)!
     expect(url).toMatch(
       /repositories\/my\.user\/repo\.name\/src\/feature-xy\?format=tar\.gz$/
     )
 
     // Self-hosted GitLab (supports nested groups)
-    new GitHostFileSystem({
+    const gitlabFs = new GitHostFileSystem({
       repository: 'group/sub/project',
       host: 'gitlab',
       baseUrl: 'https://git.example.com',
       ref: 'main',
     })
+    await gitlabFs.readFile('file.txt')
     ;[url] = mockFetch.mock.calls.at(-1)!
     expect(url).toMatch(
       /^https:\/\/git\.example\.com\/api\/v4\/projects\/group%2Fsub%2Fproject\/repository\/archive\.tar\.gz\?sha=/
@@ -80,6 +83,7 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
+      token: 'token',
       ref: 'main',
     })
     await expect(fs.readFile('file.txt')).rejects.toThrow()
@@ -254,7 +258,7 @@ describe('GitHostFileSystem', () => {
                     {
                       startingLine: 5,
                       endingLine: 6,
-                      commit: { committedDate: blameDate },
+                      commit: { oid: 'abc123', committedDate: blameDate },
                     },
                   ],
                 },
@@ -321,7 +325,7 @@ describe('GitHostFileSystem', () => {
                     {
                       startingLine: 1,
                       endingLine: 10,
-                      commit: { committedDate: blameDate },
+                      commit: { oid: 'def456', committedDate: blameDate },
                     },
                   ],
                 },
@@ -376,7 +380,6 @@ describe('GitHostFileSystem', () => {
     const fs = new GitHostFileSystem({
       repository: 'owner/repo',
       host: 'github',
-      token: 'token',
       ref: 'main',
     })
 
@@ -512,7 +515,12 @@ describe('GitHostFileSystem', () => {
     globalThis.fetch = mockFetch
 
     const ref = 'feature/abc-1.2'
-    new GitHostFileSystem({ repository: 'owner/repo', host: 'github', ref })
+    const fs = new GitHostFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref,
+    })
+    await fs.readFile('file.txt')
 
     const [firstUrl] = mockFetch.mock.calls[0]
     expect(firstUrl).toContain('/tarball/feature%2Fabc-1.2')
@@ -604,7 +612,13 @@ describe('GitHostFileSystem', () => {
 
     const token = 'test-token'
 
-    new GitHostFileSystem({ repository: 'owner/repo', host: 'github', token })
+    const fs = new GitHostFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      token,
+      ref: 'main',
+    })
+    await fs.readFile('file.txt')
 
     expect(mockFetch).toHaveBeenCalledTimes(1)
     const [, init] = mockFetch.mock.calls[0]
