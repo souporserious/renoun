@@ -171,7 +171,6 @@
   "engines": {
     "node": ">=20.19.0"
   },
-  "packageManager": "pnpm@10.16.1",
   "publishConfig": {
     "bin": {
       "renoun": "./dist/cli/index.js"
