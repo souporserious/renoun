@@ -69,5 +69,17 @@ export { Workspace } from './Workspace.ts'
 export { FileSystem } from './FileSystem.ts'
 export { GitHostFileSystem } from './GitHostFileSystem.ts'
 export { InMemoryFileSystem } from './InMemoryFileSystem.ts'
+export type {
+  ExportChange,
+  ExportHistoryOptions,
+  ExportHistoryReport,
+  GitExportMetadata,
+  GitFileMetadata,
+  GitModuleMetadata,
+  GitPathMetadata,
+  GitPathMetadataKind,
+  LocalGitFileSystemOptions,
+} from './LocalGitFileSystem.ts'
+export { LocalGitFileSystem } from './LocalGitFileSystem.ts'
 export { NodeFileSystem } from './NodeFileSystem.ts'
 export { Repository } from './Repository.ts'

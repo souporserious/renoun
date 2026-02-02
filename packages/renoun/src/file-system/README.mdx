@@ -45,7 +45,7 @@ const posts = new Directory({
 
 export default async function Page({ slug }: { slug: string }) {
   const post = await posts.getFile(slug, 'mdx')
-  const Content = await post.getExportValue('default')
+  const Content = await post.getContent()
 
   return <Content />
 }
@@ -324,14 +324,13 @@ The `GitHostFileSystem` adapter lets you mirror files from a remote Git provider
 ```ts
 import { Directory, GitHostFileSystem } from 'renoun'
 
-const repoFs = new GitHostFileSystem({
+const fileSystem = new GitHostFileSystem({
   repository: 'souporserious/renoun',
   ref: 'main',
 })
 
-const docs = new Directory({
-  path: '.',
-  fileSystem: repoFs,
+const directory = new Directory({
+  fileSystem,
 })
 ```
 
@@ -348,13 +347,74 @@ Provide the token via the `token` option, ideally by reading from an environment
 ```ts
 import { GitHostFileSystem } from 'renoun'
 
-const repoFs = new GitHostFileSystem({
+const fileSystem = new GitHostFileSystem({
   repository: 'souporserious/renoun',
   token: process.env.GITHUB_TOKEN,
 })
 ```
 
 When a token is supplied, renoun batches GraphQL blame queries and reuses cached metadata to keep requests to a minimum. Without a token the file system falls back to higher-volume REST sampling, so authenticated requests are the easiest way to prevent rate limiting during development and CI.
+
+### Using `LocalGitFileSystem`
+
+The `LocalGitFileSystem` adapter provides high-performance file access for local
+git repositories. It can clone remote repositories automatically and read files at any ref by streaming directly from git's object store.
+
+#### Basic usage with a local repo
+
+```ts
+import { Directory, LocalGitFileSystem } from 'renoun'
+
+const fileSystem = new LocalGitFileSystem({
+  repository: process.cwd(),
+})
+const directory = new Directory({
+  fileSystem,
+})
+```
+
+#### Clone a remote repository
+
+```ts
+import { Directory, LocalGitFileSystem } from 'renoun'
+
+const fileSystem = new LocalGitFileSystem({
+  repository: 'souporserious/renoun',
+  ref: 'main',
+})
+```
+
+By default, remote repositories are cloned into the cache directory.
+
+#### Sparse checkout for monorepos
+
+To limit the scope of the repository to a specific directory, you can use the `sparse` option to specify the directories to checkout:
+
+```ts
+import { LocalGitFileSystem } from 'renoun'
+
+const fileSystem = new LocalGitFileSystem({
+  repository: 'https://github.com/vercel/next.js',
+  sparse: ['packages/next'],
+  ref: 'canary',
+})
+```
+
+#### Performance benefits
+
+- Blob SHA caching (same content = cache hit)
+- Persistent git processes (no spawn overhead)
+- Read files at any git ref (branches, tags, commits)
+- Works in sparse checkouts
+
+#### Comparison with `GitHostFileSystem`
+
+| Feature       | LocalGitFileSystem    | GitHostFileSystem |
+| ------------- | --------------------- | ----------------- |
+| File access   | git CLI               | HTTP APIs         |
+| Rate limits   | None                  | API limits apply  |
+| Auth          | SSH keys / git config | OAuth tokens      |
+| History depth | Full (if not shallow) | Limited by API    |
 
 ### Inspecting packages with `Package`
 
