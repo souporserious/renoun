@@ -1358,22 +1358,37 @@ export class GitHostFileSystem extends InMemoryFileSystem {
   }
 
   #isIgnorableNetworkAbortError(error: unknown): boolean {
-    if (error == null) {
+    if (!error || typeof error !== 'object') {
       return false
     }
-    // DOMException in browsers
-    if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
-      return error.name === 'AbortError'
-    }
-    // AbortError thrown directly
-    if (error instanceof Error && error.name === 'AbortError') {
+
+    const name = (error as { name?: string }).name
+    const code = (error as { code?: string }).code
+
+    // Standard AbortError (browser + Node fetch)
+    if (name === 'AbortError') {
       return true
     }
-    // Node fetch abort often becomes AbortError with code 'ABORT_ERR'
+
+    // Older DOMException cases
+    if (
+      typeof DOMException !== 'undefined' &&
+      error instanceof DOMException &&
+      error.name === 'AbortError'
+    ) {
+      return true
+    }
+
+    // Node.js / undici / node-fetch abort codes
+    if (code === 'ABORT_ERR') {
+      return true
+    }
+
     // Some environments may surface TypeError on aborted fetch
-    if (error instanceof TypeError) {
+    if (error instanceof TypeError && /abort/i.test(error.message)) {
       return true
     }
+
     return false
   }
 
