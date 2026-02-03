@@ -292,7 +292,7 @@ export async function ensureCacheClone(
   return target
 }
 
-function ensureCacheCloneSync(options: PrepareRepoOptions): string {
+export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
   const {
     spec,
     cacheDirectory,
@@ -992,7 +992,11 @@ export class LocalGitFileSystem
     if (result.status !== 0) {
       return undefined
     }
-    const seconds = Number(result.stdout?.trim())
+    const trimmed = result.stdout?.trim()
+    if (!trimmed) {
+      return undefined
+    }
+    const seconds = Number(trimmed)
     if (!Number.isFinite(seconds)) {
       return undefined
     }
@@ -1010,7 +1014,11 @@ export class LocalGitFileSystem
     if (result.status !== 0) {
       return undefined
     }
-    const seconds = Number(result.stdout.trim())
+    const trimmed = result.stdout.trim()
+    if (!trimmed) {
+      return undefined
+    }
+    const seconds = Number(trimmed)
     if (!Number.isFinite(seconds)) {
       return undefined
     }
@@ -1347,7 +1355,7 @@ export class LocalGitFileSystem
     const localSha = getLocalRefShaSync(this.repoRoot, ref)
     const { remote, ref: remoteRef } = getRemoteRefQuery(ref, this.fetchRemote)
     const remoteSha = getRemoteRefShaSync(this.repoRoot, remote, remoteRef)
-    if (!remoteSha || localSha === remoteSha) {
+    if (remoteSha && localSha === remoteSha) {
       return
     }
 
@@ -1356,15 +1364,43 @@ export class LocalGitFileSystem
         `[LocalGitFileSystem] Cached ref "${ref}" moved; fetching ${remote}…`
       )
     }
-    const result = spawnSync('git', ['fetch', '--quiet', remote], {
+    const baseEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    let result = spawnSync('git', ['fetch', '--quiet', remote], {
       cwd: this.repoRoot,
       stdio: 'pipe',
       encoding: 'utf8',
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      env: baseEnv,
     })
-    if (result.status !== 0 && this.verbose) {
-      const msg = result.stderr?.trim() || 'unknown error'
-      console.warn(`[LocalGitFileSystem] Fetch failed (${remote}): ${msg}`)
+    if (result.status !== 0) {
+      const stderr = result.stderr?.trim() || ''
+      if (/protocol.*file/i.test(stderr) || /file.*not allowed/i.test(stderr)) {
+        result = spawnSync(
+          'git',
+          ['-c', 'protocol.file.allow=always', 'fetch', '--quiet', remote],
+          {
+            cwd: this.repoRoot,
+            stdio: 'pipe',
+            encoding: 'utf8',
+            env: baseEnv,
+          }
+        )
+      }
+    }
+    if (result.status !== 0) {
+      if (this.verbose) {
+        const msg = result.stderr?.trim() || 'unknown error'
+        console.warn(`[LocalGitFileSystem] Fetch failed (${remote}): ${msg}`)
+      }
+      return
+    }
+
+    if (remoteSha) {
+      const refName = remoteRef.replace(/^refs\/heads\//, '')
+      const trackingRef = `refs/remotes/${remote}/${refName}`
+      spawnSync('git', ['update-ref', trackingRef, remoteSha], {
+        cwd: this.repoRoot,
+        stdio: 'ignore',
+      })
     }
   }
 
@@ -2542,26 +2578,37 @@ export class LocalGitFileSystem
     const localSha = await this.#getLocalRefSha(ref)
     const { remote, ref: remoteRef } = getRemoteRefQuery(ref, this.fetchRemote)
     const remoteSha = await this.#getRemoteRefSha(remote, remoteRef)
-    if (!remoteSha) {
-      return
-    }
-
-    if (localSha !== remoteSha) {
+    if (!remoteSha || localSha !== remoteSha) {
       if (this.verbose) {
         console.log(
           `[LocalGitFileSystem] Cached ref "${ref}" moved; fetching ${remote}…`
         )
       }
-      const result = await spawnWithResult(
-        'git',
-        ['fetch', '--quiet', remote],
-        {
-          cwd: this.repoRoot,
-          maxBuffer: this.maxBufferBytes,
-          verbose: this.verbose,
-          env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      const baseEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+      let result = await spawnWithResult('git', ['fetch', '--quiet', remote], {
+        cwd: this.repoRoot,
+        maxBuffer: this.maxBufferBytes,
+        verbose: this.verbose,
+        env: baseEnv,
+      })
+      if (result.status !== 0) {
+        const stderr = result.stderr ? String(result.stderr).trim() : ''
+        if (
+          /protocol.*file/i.test(stderr) ||
+          /file.*not allowed/i.test(stderr)
+        ) {
+          result = await spawnWithResult(
+            'git',
+            ['-c', 'protocol.file.allow=always', 'fetch', '--quiet', remote],
+            {
+              cwd: this.repoRoot,
+              maxBuffer: this.maxBufferBytes,
+              verbose: this.verbose,
+              env: baseEnv,
+            }
+          )
         }
-      )
+      }
       if (result.status !== 0) {
         if (this.verbose) {
           const msg = result.stderr
@@ -2628,7 +2675,38 @@ export class LocalGitFileSystem
       return null
     }
 
-    const remoteSha = parseLsRemoteSha(result.stdout)
+    let remoteSha = parseLsRemoteSha(result.stdout)
+    if (!remoteSha && !ref.startsWith('refs/')) {
+      const headRef = `refs/heads/${ref}`
+      const headResult = await spawnWithResult(
+        'git',
+        ['ls-remote', remote, headRef],
+        {
+          cwd: this.repoRoot,
+          maxBuffer: this.maxBufferBytes,
+          timeoutMs: REMOTE_REF_TIMEOUT_MS,
+        }
+      )
+      if (headResult.status === 0) {
+        remoteSha = parseLsRemoteSha(headResult.stdout)
+      }
+
+      if (!remoteSha) {
+        const tagRef = `refs/tags/${ref}`
+        const tagResult = await spawnWithResult(
+          'git',
+          ['ls-remote', remote, tagRef],
+          {
+            cwd: this.repoRoot,
+            maxBuffer: this.maxBufferBytes,
+            timeoutMs: REMOTE_REF_TIMEOUT_MS,
+          }
+        )
+        if (tagResult.status === 0) {
+          remoteSha = parseLsRemoteSha(tagResult.stdout)
+        }
+      }
+    }
     remoteRefCache.set(cacheKey, { remoteSha, checkedAt: now })
     return remoteSha
   }
@@ -4264,7 +4342,36 @@ function getRemoteRefShaSync(
     return null
   }
 
-  const remoteSha = parseLsRemoteSha(String(result.stdout))
+  let remoteSha = parseLsRemoteSha(String(result.stdout))
+  if (!remoteSha && !ref.startsWith('refs/')) {
+    const headResult = spawnSync(
+      'git',
+      ['ls-remote', remote, `refs/heads/${ref}`],
+      {
+        cwd: repoRoot,
+        stdio: 'pipe',
+        encoding: 'utf8',
+      }
+    )
+    if (headResult.status === 0) {
+      remoteSha = parseLsRemoteSha(String(headResult.stdout))
+    }
+
+    if (!remoteSha) {
+      const tagResult = spawnSync(
+        'git',
+        ['ls-remote', remote, `refs/tags/${ref}`],
+        {
+          cwd: repoRoot,
+          stdio: 'pipe',
+          encoding: 'utf8',
+        }
+      )
+      if (tagResult.status === 0) {
+        remoteSha = parseLsRemoteSha(String(tagResult.stdout))
+      }
+    }
+  }
   remoteRefCache.set(cacheKey, { remoteSha, checkedAt: now })
   return remoteSha
 }
@@ -4399,11 +4506,29 @@ function looksLikeCacheClone(repoRoot: string, metaCacheDir: string) {
   const temporaryDirectory = normalizePath(os.tmpdir())
   const normalizedMetaCache = normalizePath(metaCacheDir)
 
-  return (
+  // First check without symlink resolution (fast path)
+  if (
     normalizedRepoRoot.startsWith(homeCache + '/') ||
     normalizedRepoRoot.startsWith(temporaryDirectory + '/') ||
     normalizedRepoRoot.startsWith(normalizedMetaCache + '/')
-  )
+  ) {
+    return true
+  }
+
+  // On macOS, /var is a symlink to /private/var. The git rev-parse --show-toplevel
+  // command returns the real path, so we need to resolve symlinks for the cacheDir
+  // comparison to handle cached clones correctly.
+  try {
+    const realRepoRoot = normalizePath(realpathSync(repoRoot))
+    const realMetaCache = normalizePath(realpathSync(metaCacheDir))
+    if (realRepoRoot.startsWith(realMetaCache + '/')) {
+      return true
+    }
+  } catch {
+    // If realpath fails, fall through to return false
+  }
+
+  return false
 }
 
 function looksLikeGitHubSpec(value: string) {

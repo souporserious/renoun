@@ -218,6 +218,59 @@ describe('InMemoryFileSystem', () => {
     )
   })
 
+  test('normalizes base64 string binary entries', () => {
+    const base64 = Buffer.from([10, 11, 12]).toString('base64')
+    const fileSystem = new InMemoryFileSystem({
+      'data.bin': {
+        kind: 'Binary',
+        content: base64,
+        encoding: 'base64',
+      },
+    })
+
+    const entry = fileSystem.getFileEntry('data.bin')
+    expect(entry?.kind).toBe('Binary')
+    if (!entry || entry.kind !== 'Binary') {
+      throw new Error('Expected binary entry')
+    }
+    expect(entry.content).toBeInstanceOf(Uint8Array)
+    expect(Array.from(entry.content as Uint8Array)).toEqual([10, 11, 12])
+    expect(fileSystem.readFileSync('data.bin')).toBe(base64)
+  })
+
+  test('writeFileStream stores invalid UTF-8 as binary', async () => {
+    const fileSystem = new InMemoryFileSystem({})
+    const invalidUtf8 = new Uint8Array([0xc3, 0x28])
+
+    const writer = fileSystem.writeFileStream('invalid.bin').getWriter()
+    await writer.write(invalidUtf8)
+    await writer.close()
+
+    const entry = fileSystem.getFileEntry('invalid.bin')
+    expect(entry?.kind).toBe('Binary')
+    if (!entry || entry.kind !== 'Binary') {
+      throw new Error('Expected binary entry')
+    }
+    expect(Array.from(entry.content as Uint8Array)).toEqual(
+      Array.from(invalidUtf8)
+    )
+
+    const stored = fileSystem.readFileBinarySync('invalid.bin')
+    expect(Array.from(stored)).toEqual(Array.from(invalidUtf8))
+  })
+
+  test('readDirectorySync ignores prefix-collision files', () => {
+    const fileSystem = new InMemoryFileSystem({
+      'integrations.mdx': '# docs',
+      'integrations/guide.mdx': '# guide',
+    })
+
+    const entries = fileSystem.readDirectorySync('integrations')
+    const names = entries.map((entry) => entry.name)
+    expect(names).toContain('guide.mdx')
+    expect(names).not.toContain('integrations.mdx')
+  })
+
   test('supports creating directories, renaming, and copying entries', async () => {
     const fileSystem = new InMemoryFileSystem({
       'folder/file.txt': 'original',

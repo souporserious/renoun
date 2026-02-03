@@ -1,11 +1,23 @@
 // LocalGitFileSystem.test.ts
 import { describe, it, expect } from 'vitest'
-import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
+import {
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  mkdtempSync,
+  existsSync,
+  symlinkSync,
+} from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 
-import { LocalGitFileSystem } from './LocalGitFileSystem'
+import {
+  LocalGitFileSystem,
+  ensureCacheClone,
+  ensureCacheCloneSync,
+} from './LocalGitFileSystem'
 
 const GIT_ENV = {
   GIT_AUTHOR_NAME: 'Test User',
@@ -14,12 +26,16 @@ const GIT_ENV = {
   GIT_COMMITTER_EMAIL: 'test@example.com',
 }
 
-function git(cwd: string, args: string[]) {
+function git(
+  cwd: string,
+  args: string[],
+  envOverrides: Record<string, string> = {}
+) {
   const result = spawnSync('git', args, {
     cwd,
     encoding: 'utf8',
     shell: false,
-    env: { ...process.env, ...GIT_ENV },
+    env: { ...process.env, ...GIT_ENV, ...envOverrides },
   })
   if (result.status !== 0) {
     throw new Error(`Git error: ${result.stderr} (cmd: git ${args.join(' ')})`)
@@ -37,13 +53,14 @@ function commitFile(
   repo: string,
   filename: string,
   content: string,
-  msg: string
+  msg: string,
+  envOverrides: Record<string, string> = {}
 ) {
   const path = join(repo, filename)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
   git(repo, ['add', '--sparse', filename])
-  git(repo, ['commit', '--no-gpg-sign', '-m', msg])
+  git(repo, ['commit', '--no-gpg-sign', '-m', msg], envOverrides)
 
   // Get hash and unix timestamp in a single git command
   const output = git(repo, ['log', '-1', '--format=%H %ct'])
@@ -54,7 +71,8 @@ function commitFile(
 function commitFiles(
   repo: string,
   files: Array<{ filename: string; content: string }>,
-  msg: string
+  msg: string,
+  envOverrides: Record<string, string> = {}
 ) {
   for (const file of files) {
     const path = join(repo, file.filename)
@@ -62,7 +80,7 @@ function commitFiles(
     writeFileSync(path, file.content)
   }
   git(repo, ['add', '--sparse', ...files.map((f) => f.filename)])
-  git(repo, ['commit', '--no-gpg-sign', '-m', msg])
+  git(repo, ['commit', '--no-gpg-sign', '-m', msg], envOverrides)
 
   const output = git(repo, ['log', '-1', '--format=%H %ct'])
   const [hash, unixStr] = output.split(' ')
@@ -1040,6 +1058,306 @@ describe('LocalGitFileSystem', () => {
     expect(renameChange?.previousFilePath).toBeUndefined()
     // Same underlying ID
     expect(renameChange?.previousId).toBe(bazId)
+  })
+
+  test('rejects unsafe repo paths', async ({ repoRoot, cacheDir }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const ok = 1`, 'init')
+
+    using store = new LocalGitFileSystem({ repository: repoRoot, cacheDir })
+    await expect(store.readFile('../secret.txt')).rejects.toThrow(
+      /Invalid repo path/
+    )
+    await expect(store.readFile('a:b')).rejects.toThrow(/Invalid repo path/)
+  })
+
+  test('prevents writes through symlinks escaping the repo', async ({
+    repoRoot,
+    cacheDir,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const ok = 1`, 'init')
+
+    const outsideDir = mkdtempSync(join(tmpdir(), 'renoun-test-outside-'))
+    try {
+      const linkPath = join(repoRoot, 'escape')
+      symlinkSync(outsideDir, linkPath, 'dir')
+
+      using store = new LocalGitFileSystem({ repository: repoRoot, cacheDir })
+      await expect(
+        store.writeFile('escape/secret.txt', 'nope')
+      ).rejects.toThrow(/via symlink/i)
+    } finally {
+      rmSync(outsideDir, { recursive: true, force: true })
+    }
+  })
+
+  test('getFileMetadata aggregates authors and commit bounds', async ({
+    repoRoot,
+    cacheDir,
+  }) => {
+    const authorA = {
+      GIT_AUTHOR_NAME: 'Alice',
+      GIT_AUTHOR_EMAIL: 'alice@example.com',
+      GIT_COMMITTER_NAME: 'Alice',
+      GIT_COMMITTER_EMAIL: 'alice@example.com',
+    }
+    const authorB = {
+      GIT_AUTHOR_NAME: 'Bob',
+      GIT_AUTHOR_EMAIL: 'bob@example.com',
+      GIT_COMMITTER_NAME: 'Bob',
+      GIT_COMMITTER_EMAIL: 'bob@example.com',
+    }
+
+    const c1 = commitFile(repoRoot, 'src/data.txt', `alpha`, 'first', authorA)
+    const c2 = commitFile(repoRoot, 'src/data.txt', `beta`, 'second', authorB)
+
+    using store = new LocalGitFileSystem({ repository: repoRoot, cacheDir })
+    const meta = await store.getFileMetadata('src/data.txt')
+
+    expect(meta.kind).toBe('file')
+    expect(meta.firstCommitHash).toBe(c1.hash)
+    expect(meta.lastCommitHash).toBe(c2.hash)
+    expect(meta.authors.map((author) => author.name)).toEqual(
+      expect.arrayContaining(['Alice', 'Bob'])
+    )
+
+    const alice = meta.authors.find((author) => author.name === 'Alice')
+    const bob = meta.authors.find((author) => author.name === 'Bob')
+    expect(alice?.commitCount).toBe(1)
+    expect(bob?.commitCount).toBe(1)
+  })
+
+  test('getModuleMetadata reports only head exports', async ({
+    repoRoot,
+    cacheDir,
+  }) => {
+    const c1 = commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export const a = 1; export const b = 2`,
+      'v1'
+    )
+    const c2 = commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v2')
+
+    using store = new LocalGitFileSystem({ repository: repoRoot, cacheDir })
+    const meta = await store.getModuleMetadata('src/index.ts')
+
+    expect(meta.kind).toBe('module')
+    expect(meta.exports.a).toBeDefined()
+    expect(meta.exports.b).toBeUndefined()
+    expect(meta.exports.a?.firstCommitHash).toBe(c1.hash)
+    expect(meta.exports.a?.lastCommitHash).toBe(c2.hash)
+  })
+
+  test('metadata helpers return undefined for missing paths', async ({
+    repoRoot,
+    cacheDir,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const ok = 1`, 'init')
+
+    using store = new LocalGitFileSystem({ repository: repoRoot, cacheDir })
+    expect(store.getFileByteLengthSync('missing.txt')).toBeUndefined()
+    await expect(
+      store.getFileByteLength('missing.txt')
+    ).resolves.toBeUndefined()
+    expect(store.getFileLastModifiedMsSync('missing.txt')).toBeUndefined()
+    await expect(store.getFileLastModifiedMs('missing.txt')).resolves.toBe(
+      undefined
+    )
+  })
+
+  test('export history supports multiple entry files', async ({
+    repoRoot,
+    cacheDir,
+  }) => {
+    commitFile(repoRoot, 'src/a.ts', `export const a = 1`, 'add a')
+    commitFile(repoRoot, 'src/b.ts', `export const b = 1`, 'add b')
+
+    using store = new LocalGitFileSystem({ repository: repoRoot, cacheDir })
+    const report = await store.getExportHistory({
+      entry: ['src/a.ts', 'src/b.ts'],
+    })
+
+    expect(getPrimaryId(report, 'a')).toBeDefined()
+    expect(getPrimaryId(report, 'b')).toBeDefined()
+  })
+
+  test('export history carries forward when entry is missing', async ({
+    repoRoot,
+    cacheDir,
+  }) => {
+    const c1 = commitFile(
+      repoRoot,
+      'src/one.ts',
+      `export const one = 1`,
+      'add one'
+    )
+
+    git(repoRoot, ['rm', '-f', '--', 'src/one.ts'])
+    git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'remove one'])
+
+    using store = new LocalGitFileSystem({ repository: repoRoot, cacheDir })
+    const report = await store.getExportHistory({ entry: 'src/one.ts' })
+
+    const oneId = getPrimaryId(report, 'one')
+    expect(oneId).toBeDefined()
+    const history = report.exports[oneId!]
+    expect(history).toHaveLength(1)
+    expect(history[0].kind).toBe('Added')
+    expect(history[0].sha).toBe(c1.hash)
+  })
+
+  test('export history respects limit', async ({ repoRoot, cacheDir }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
+    const c2 = commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export const a = 1; export const b = 2`,
+      'v2'
+    )
+
+    using store = new LocalGitFileSystem({ repository: repoRoot, cacheDir })
+    const report = await store.getExportHistory({
+      entry: 'src/index.ts',
+      limit: 1,
+    })
+
+    const aId = getPrimaryId(report, 'a')
+    const bId = getPrimaryId(report, 'b')
+    expect(aId).toBeDefined()
+    expect(bId).toBeDefined()
+    expect(report.exports[aId!][0].sha).toBe(c2.hash)
+    expect(report.exports[bId!][0].sha).toBe(c2.hash)
+  })
+
+  test('throws on shallow repos when autoFetch is false', async ({
+    repoRoot,
+    cacheDir,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
+    commitFile(repoRoot, 'src/index.ts', `export const a = 2`, 'v2')
+
+    const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+    const bareRepo = join(bareRoot, 'repo.git')
+    const shallowRoot = mkdtempSync(join(tmpdir(), 'renoun-test-shallow-'))
+    const shallowRepo = join(shallowRoot, 'repo')
+
+    try {
+      git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+      const fileUrl = pathToFileURL(bareRepo).toString()
+      git(tmpdir(), ['clone', '--depth', '1', fileUrl, shallowRepo])
+
+      using store = new LocalGitFileSystem({
+        repository: shallowRepo,
+        cacheDir,
+        autoFetch: false,
+      })
+
+      await expect(store.getFileMetadata('src/index.ts')).rejects.toThrow(
+        /shallow cloned/i
+      )
+    } finally {
+      rmSync(bareRoot, { recursive: true, force: true })
+      rmSync(shallowRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('unshallows when autoFetch is true', async ({ repoRoot, cacheDir }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
+    commitFile(repoRoot, 'src/index.ts', `export const a = 2`, 'v2')
+
+    const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+    const bareRepo = join(bareRoot, 'repo.git')
+    const shallowRoot = mkdtempSync(join(tmpdir(), 'renoun-test-shallow-'))
+    const shallowRepo = join(shallowRoot, 'repo')
+
+    try {
+      git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+      const fileUrl = pathToFileURL(bareRepo).toString()
+      git(tmpdir(), ['clone', '--depth', '1', fileUrl, shallowRepo])
+
+      using store = new LocalGitFileSystem({
+        repository: shallowRepo,
+        cacheDir,
+        autoFetch: true,
+      })
+
+      const meta = await store.getFileMetadata('src/index.ts')
+      expect(meta.firstCommitHash).toBeDefined()
+      expect(meta.lastCommitHash).toBeDefined()
+      expect(meta.authors.length).toBeGreaterThan(0)
+    } finally {
+      rmSync(bareRoot, { recursive: true, force: true })
+      rmSync(shallowRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('ensureCacheClone supports file URLs (async + sync)', async ({
+    repoRoot,
+    cacheDir,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'init')
+
+    const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+    const bareRepo = join(bareRoot, 'repo.git')
+    const syncCacheDir = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+
+    try {
+      git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+      const fileUrl = pathToFileURL(bareRepo).toString()
+
+      const asyncClone = await ensureCacheClone({
+        spec: fileUrl,
+        cacheDirectory: cacheDir,
+      })
+      expect(existsSync(join(asyncClone, '.git'))).toBe(true)
+
+      const syncClone = ensureCacheCloneSync({
+        spec: fileUrl,
+        cacheDirectory: syncCacheDir,
+      })
+      expect(existsSync(join(syncClone, '.git'))).toBe(true)
+    } finally {
+      rmSync(bareRoot, { recursive: true, force: true })
+      rmSync(syncCacheDir, { recursive: true, force: true })
+    }
+  })
+
+  test('updates cached clone when remote ref advances', async ({
+    repoRoot,
+    cacheDir,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'v1')
+
+    const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+    const bareRepo = join(bareRoot, 'repo.git')
+
+    try {
+      git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+      const fileUrl = pathToFileURL(bareRepo).toString()
+
+      const cachedRepo = ensureCacheCloneSync({
+        spec: fileUrl,
+        cacheDirectory: cacheDir,
+      })
+      expect(existsSync(join(cachedRepo, '.git'))).toBe(true)
+
+      git(repoRoot, ['remote', 'add', 'origin', fileUrl])
+      git(repoRoot, ['push', '-u', 'origin', 'main'])
+
+      commitFile(repoRoot, 'src/index.ts', `export const value = 2`, 'v2')
+      git(repoRoot, ['push', 'origin', 'main'])
+
+      using store = new LocalGitFileSystem({
+        repository: cachedRepo,
+        cacheDir,
+        ref: 'origin/main',
+        autoFetch: true,
+      })
+      const content = store.readFileSync('src/index.ts')
+      expect(content).toContain('value = 2')
+    } finally {
+      rmSync(bareRoot, { recursive: true, force: true })
+    }
   })
 
   test('throws helpful error when no commits match the entry scope', async ({
