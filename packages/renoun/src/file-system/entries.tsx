@@ -16,15 +16,6 @@ import {
   getEditorUri,
   type GetEditorUriOptions,
 } from '../utils/get-editor-uri.ts'
-import { getLocalGitFileMetadata } from '../utils/get-local-git-file-metadata.ts'
-import type {
-  GitMetadata,
-  GitAuthor,
-} from '../utils/get-local-git-file-metadata.ts'
-import {
-  getLocalGitExportMetadata,
-  type GitExportMetadata,
-} from '../utils/get-local-git-export-metadata.ts'
 import {
   isPositionWithinOutlineRange,
   type OutlineRange,
@@ -56,6 +47,7 @@ import type {
   FileSystemWriteFileContent,
   FileWritableStream,
 } from './FileSystem.ts'
+import { LocalGitFileSystem } from './LocalGitFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
   Repository,
@@ -101,6 +93,9 @@ import type {
   ModuleExportStructure,
   ContentSection,
   Section,
+  GitAuthor,
+  GitMetadata,
+  GitExportMetadata,
 } from './types.ts'
 
 const typedDefaultLoaders = defaultLoaders as unknown as {
@@ -264,6 +259,157 @@ function isGitExportMetadataProvider(
   return (
     typeof (fileSystem as Partial<GitExportMetadataProvider>)
       .getGitExportMetadata === 'function'
+  )
+}
+
+const localGitFileSystems = new Map<string, LocalGitFileSystem>()
+const localGitFileSystemUnavailable = new Set<string>()
+
+function createEmptyGitMetadata(): GitMetadata {
+  return {
+    authors: [],
+    firstCommitDate: undefined,
+    lastCommitDate: undefined,
+  }
+}
+
+function createEmptyGitExportMetadata(): GitExportMetadata {
+  return {
+    firstCommitDate: undefined,
+    lastCommitDate: undefined,
+  }
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return String(error)
+}
+
+function isShallowGitError(error: unknown): boolean {
+  return getErrorMessage(error).includes('shallow cloned')
+}
+
+function isLocalGitUnavailableError(error: unknown): boolean {
+  const message = getErrorMessage(error)
+  return (
+    message.startsWith('Not a git repository:') ||
+    message.startsWith('Directory does not exist:')
+  )
+}
+
+function getLocalGitFileSystemForRoot(rootPath: string) {
+  const workspaceRoot = getRootDirectory(rootPath)
+  if (localGitFileSystemUnavailable.has(workspaceRoot)) {
+    return { root: workspaceRoot, fileSystem: null }
+  }
+
+  let fileSystem = localGitFileSystems.get(workspaceRoot)
+  if (!fileSystem) {
+    try {
+      fileSystem = new LocalGitFileSystem({ repository: workspaceRoot })
+      localGitFileSystems.set(workspaceRoot, fileSystem)
+    } catch {
+      localGitFileSystemUnavailable.add(workspaceRoot)
+      return { root: workspaceRoot, fileSystem: null }
+    }
+  }
+
+  return { root: workspaceRoot, fileSystem }
+}
+
+async function getFallbackGitFileMetadata(
+  rootPath: string,
+  fileSystem: BaseFileSystem,
+  path: string
+): Promise<GitMetadata> {
+  const { root, fileSystem: gitFileSystem } =
+    getLocalGitFileSystemForRoot(rootPath)
+
+  if (!gitFileSystem) {
+    return createEmptyGitMetadata()
+  }
+
+  const normalizedPath = fileSystem.getRelativePathToWorkspace(path)
+
+  try {
+    return await gitFileSystem.getGitFileMetadata(normalizedPath)
+  } catch (error) {
+    if (isShallowGitError(error)) {
+      throw error
+    }
+    if (isLocalGitUnavailableError(error)) {
+      localGitFileSystemUnavailable.add(root)
+      return createEmptyGitMetadata()
+    }
+    throw error
+  }
+}
+
+async function getFallbackGitExportMetadata(
+  rootPath: string,
+  fileSystem: BaseFileSystem,
+  path: string,
+  startLine: number,
+  endLine: number
+): Promise<GitExportMetadata> {
+  const { root, fileSystem: gitFileSystem } =
+    getLocalGitFileSystemForRoot(rootPath)
+
+  if (!gitFileSystem) {
+    return createEmptyGitExportMetadata()
+  }
+
+  const normalizedPath = fileSystem.getRelativePathToWorkspace(path)
+
+  try {
+    return await gitFileSystem.getGitExportMetadata(
+      normalizedPath,
+      startLine,
+      endLine
+    )
+  } catch (error) {
+    if (isShallowGitError(error)) {
+      throw error
+    }
+    if (isLocalGitUnavailableError(error)) {
+      localGitFileSystemUnavailable.add(root)
+      return createEmptyGitExportMetadata()
+    }
+    throw error
+  }
+}
+
+async function getGitFileMetadataForPath(
+  rootPath: string,
+  fileSystem: BaseFileSystem,
+  path: string
+): Promise<GitMetadata> {
+  if (isGitMetadataProvider(fileSystem)) {
+    return fileSystem.getGitFileMetadata(path)
+  }
+
+  return getFallbackGitFileMetadata(rootPath, fileSystem, path)
+}
+
+async function getGitExportMetadataForPath(
+  rootPath: string,
+  fileSystem: BaseFileSystem,
+  path: string,
+  startLine: number,
+  endLine: number
+): Promise<GitExportMetadata> {
+  if (isGitExportMetadataProvider(fileSystem)) {
+    return fileSystem.getGitExportMetadata(path, startLine, endLine)
+  }
+
+  return getFallbackGitExportMetadata(
+    rootPath,
+    fileSystem,
+    path,
+    startLine,
+    endLine
   )
 }
 
@@ -919,27 +1065,33 @@ export class File<
   /** Get the first local git commit date of the file. */
   async getFirstCommitDate() {
     const fileSystem = this.#directory.getFileSystem()
-    const gitMetadata = isGitMetadataProvider(fileSystem)
-      ? await fileSystem.getGitFileMetadata(this.#path)
-      : await getLocalGitFileMetadata(this.#path)
+    const gitMetadata = await getGitFileMetadataForPath(
+      this.#directory.getRootPath(),
+      fileSystem,
+      this.#path
+    )
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last local git commit date of the file. */
   async getLastCommitDate() {
     const fileSystem = this.#directory.getFileSystem()
-    const gitMetadata = isGitMetadataProvider(fileSystem)
-      ? await fileSystem.getGitFileMetadata(this.#path)
-      : await getLocalGitFileMetadata(this.#path)
+    const gitMetadata = await getGitFileMetadataForPath(
+      this.#directory.getRootPath(),
+      fileSystem,
+      this.#path
+    )
     return gitMetadata.lastCommitDate
   }
 
   /** Get the local git authors of the file. */
   async getAuthors() {
     const fileSystem = this.#directory.getFileSystem()
-    const gitMetadata = isGitMetadataProvider(fileSystem)
-      ? await fileSystem.getGitFileMetadata(this.#path)
-      : await getLocalGitFileMetadata(this.#path)
+    const gitMetadata = await getGitFileMetadataForPath(
+      this.#directory.getRootPath(),
+      fileSystem,
+      this.#path
+    )
     return gitMetadata.authors
   }
 
@@ -1583,9 +1735,13 @@ export class ModuleExport<Value> {
     }
 
     const fileSystem = this.#file.getParent().getFileSystem()
-    const gitMetadata = isGitExportMetadataProvider(fileSystem)
-      ? await fileSystem.getGitExportMetadata(location.path, startLine, endLine)
-      : await getLocalGitExportMetadata(location.path, startLine, endLine)
+    const gitMetadata = await getGitExportMetadataForPath(
+      this.#file.getParent().getRootPath(),
+      fileSystem,
+      location.path,
+      startLine,
+      endLine
+    )
 
     return gitMetadata.firstCommitDate
   }
@@ -1607,9 +1763,13 @@ export class ModuleExport<Value> {
     }
 
     const fileSystem = this.#file.getParent().getFileSystem()
-    const gitMetadata = isGitExportMetadataProvider(fileSystem)
-      ? await fileSystem.getGitExportMetadata(location.path, startLine, endLine)
-      : await getLocalGitExportMetadata(location.path, startLine, endLine)
+    const gitMetadata = await getGitExportMetadataForPath(
+      this.#file.getParent().getRootPath(),
+      fileSystem,
+      location.path,
+      startLine,
+      endLine
+    )
 
     return gitMetadata.lastCommitDate
   }
@@ -4883,27 +5043,33 @@ export class Directory<
   /** Get the first local git commit date of this directory. */
   async getFirstCommitDate() {
     const fileSystem = this.getFileSystem()
-    const gitMetadata = isGitMetadataProvider(fileSystem)
-      ? await fileSystem.getGitFileMetadata(this.#path)
-      : await getLocalGitFileMetadata(this.#path)
+    const gitMetadata = await getGitFileMetadataForPath(
+      this.getRootPath(),
+      fileSystem,
+      this.#path
+    )
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last local git commit date of this directory. */
   async getLastCommitDate() {
     const fileSystem = this.getFileSystem()
-    const gitMetadata = isGitMetadataProvider(fileSystem)
-      ? await fileSystem.getGitFileMetadata(this.#path)
-      : await getLocalGitFileMetadata(this.#path)
+    const gitMetadata = await getGitFileMetadataForPath(
+      this.getRootPath(),
+      fileSystem,
+      this.#path
+    )
     return gitMetadata.lastCommitDate
   }
 
   /** Get the local git authors of this directory. */
   async getAuthors() {
     const fileSystem = this.getFileSystem()
-    const gitMetadata = isGitMetadataProvider(fileSystem)
-      ? await fileSystem.getGitFileMetadata(this.#path)
-      : await getLocalGitFileMetadata(this.#path)
+    const gitMetadata = await getGitFileMetadataForPath(
+      this.getRootPath(),
+      fileSystem,
+      this.#path
+    )
     return gitMetadata.authors
   }
 

@@ -33,7 +33,6 @@ import {
   normalizeSlashes,
   relativePath,
 } from '../utils/path.ts'
-import type { GitMetadata as LocalGitMetadata } from '../utils/get-local-git-file-metadata.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -51,6 +50,7 @@ import {
 import type {
   DirectoryEntry,
   GitAuthor,
+  GitMetadata,
   GitExportMetadata,
   GitFileMetadata,
   GitModuleMetadata,
@@ -245,7 +245,7 @@ export async function ensureCacheClone(
   } else {
     throw new Error(
       `[LocalGitFileSystem] Unsupported repository spec: ${spec}. ` +
-        'Use a local path, an "owner/repo" GitHub shorthand, or a git URL (https://, ssh://, git@).'
+        'Use a local path, an "owner/repo" GitHub shorthand, or a git URL (https://, ssh://, file://, git@).'
     )
   }
 
@@ -324,7 +324,7 @@ function ensureCacheCloneSync(options: PrepareRepoOptions): string {
   } else {
     throw new Error(
       `[LocalGitFileSystem] Unsupported repository spec: ${spec}. ` +
-        'Use a local path, an "owner/repo" GitHub shorthand, or a git URL (https://, ssh://, git@).'
+        'Use a local path, an "owner/repo" GitHub shorthand, or a git URL (https://, ssh://, file://, git@).'
     )
   }
 
@@ -794,7 +794,7 @@ export class LocalGitFileSystem
     }
   }
 
-  async getGitFileMetadata(path: string): Promise<LocalGitMetadata> {
+  async getGitFileMetadata(path: string): Promise<GitMetadata> {
     const metadata = await this.getFileMetadata(path)
     const firstCommitDate = metadata.firstCommitDate
       ? new Date(metadata.firstCommitDate)
@@ -4413,7 +4413,8 @@ function looksLikeGitHubSpec(value: string) {
 function looksLikeGitRemoteUrl(value: string) {
   const stringValue = String(value)
   return (
-    /^(https?|git|ssh):\/\//.test(stringValue) || stringValue.startsWith('git@')
+    /^(https?|git|ssh|file):\/\//.test(stringValue) ||
+    stringValue.startsWith('git@')
   )
 }
 

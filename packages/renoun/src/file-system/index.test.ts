@@ -13,7 +13,6 @@ import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import * as gitExportMetadataModule from '../utils/get-local-git-export-metadata.ts'
 import * as rootDirectoryModule from '../utils/get-root-directory.ts'
 import * as v from 'valibot'
 import { z } from 'zod'
@@ -25,6 +24,7 @@ import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import { removeExtension } from '../utils/path.ts'
 import { NodeFileSystem } from './NodeFileSystem'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
+import { LocalGitFileSystem } from './LocalGitFileSystem.ts'
 import * as gitHostFileSystemModule from './GitHostFileSystem'
 import {
   type FileSystemEntry,
@@ -2269,7 +2269,7 @@ export function identity<T>(value: T) {
   test('getFirstCommitDate falls back to local git metadata when provider missing', async () => {
     const firstCommitDate = new Date('2022-01-01T00:00:00.000Z')
     const spy = vi
-      .spyOn(gitExportMetadataModule, 'getLocalGitExportMetadata')
+      .spyOn(LocalGitFileSystem.prototype, 'getGitExportMetadata')
       .mockResolvedValue({ firstCommitDate, lastCommitDate: undefined })
 
     try {
@@ -2322,7 +2322,7 @@ export function identity<T>(value: T) {
   test('getLastCommitDate falls back to local git metadata when provider missing', async () => {
     const lastCommitDate = new Date('2022-02-02T00:00:00.000Z')
     const spy = vi
-      .spyOn(gitExportMetadataModule, 'getLocalGitExportMetadata')
+      .spyOn(LocalGitFileSystem.prototype, 'getGitExportMetadata')
       .mockResolvedValue({ firstCommitDate: undefined, lastCommitDate })
 
     try {

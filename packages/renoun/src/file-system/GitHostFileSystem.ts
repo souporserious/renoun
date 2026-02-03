@@ -6,7 +6,6 @@ import {
   normalizePath,
   normalizeSlashes,
 } from '../utils/path.ts'
-import type { GitMetadata } from '../utils/get-local-git-file-metadata.ts'
 import { Semaphore } from '../utils/Semaphore.ts'
 import {
   hasJavaScriptLikeExtension,
@@ -27,6 +26,7 @@ import type {
   GitPathMetadata,
   GitAuthor,
   GitExportMetadata,
+  GitMetadata,
 } from './types.ts'
 import {
   type ExportItem,

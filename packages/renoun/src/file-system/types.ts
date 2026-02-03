@@ -12,6 +12,13 @@ export interface GitAuthor {
   lastCommitDate?: Date
 }
 
+/** Aggregated git metadata for a path. */
+export interface GitMetadata {
+  authors: GitAuthor[]
+  firstCommitDate?: Date
+  lastCommitDate?: Date
+}
+
 /** Metadata for a single export within a module. */
 export interface GitExportMetadata {
   firstCommitDate?: Date
