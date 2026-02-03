@@ -6,10 +6,13 @@ import type { ProjectOptions } from '../project/types.ts'
 import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
 import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.ts'
 import {
-  FileSystem,
+  BaseFileSystem,
   type FileReadableStream,
   type FileSystemWriteFileContent,
   type FileWritableStream,
+  type AsyncFileSystem,
+  type SyncFileSystem,
+  type WritableFileSystem,
 } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
 
@@ -42,7 +45,10 @@ export type InMemoryFileContent =
   | InMemoryFileEntry
 
 /** A file system that stores files in memory. */
-export class InMemoryFileSystem extends FileSystem {
+export class InMemoryFileSystem
+  extends BaseFileSystem
+  implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
+{
   #projectOptions: ProjectOptions
   #files: Map<string, InMemoryEntry>
   #ignore: ReturnType<typeof ignore> | undefined
@@ -483,6 +489,10 @@ export class InMemoryFileSystem extends FileSystem {
     } catch {
       return undefined
     }
+  }
+
+  async getFileByteLength(path: string): Promise<number | undefined> {
+    return this.getFileByteLengthSync(path)
   }
 
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {

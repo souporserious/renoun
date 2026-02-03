@@ -1,8 +1,155 @@
 export type { ContentSection } from '@renoun/mdx'
 
-import type { GitAuthor } from '../utils/get-local-git-file-metadata.ts'
-import type { FileSystem } from './FileSystem.ts'
+import type { Kind } from '../utils/resolve-type.ts'
 import type { PackageManagerName } from './PackageManager.ts'
+
+/** Represents a Git author with commit statistics. */
+export interface GitAuthor {
+  name: string
+  email?: string
+  commitCount: number
+  firstCommitDate?: Date
+  lastCommitDate?: Date
+}
+
+/** Metadata for a single export within a module. */
+export interface GitExportMetadata {
+  firstCommitDate?: Date
+  lastCommitDate?: Date
+  firstCommitHash?: string
+  lastCommitHash?: string
+}
+
+/** Query options for getting export metadata. */
+export interface GitExportMetadataQuery {
+  exportName?: string
+  exportPath?: string[]
+}
+
+/** Base metadata shared by file and module metadata. */
+export interface GitBaseMetadata {
+  path: string
+  ref: string
+  refCommit: string
+  firstCommitDate?: string
+  lastCommitDate?: string
+  firstCommitHash?: string
+  lastCommitHash?: string
+  authors: GitAuthor[]
+}
+
+/** Git metadata for a non-module file. */
+export interface GitFileMetadata extends GitBaseMetadata {
+  kind: 'file'
+}
+
+/** Git metadata for a module file with export-level metadata. */
+export interface GitModuleMetadata extends GitBaseMetadata {
+  kind: 'module'
+  exports: Record<string, GitExportMetadata>
+}
+
+/** Union of file and module metadata types. */
+export type GitPathMetadata = GitFileMetadata | GitModuleMetadata
+
+/** Kind of metadata to retrieve for a path. */
+export type GitPathMetadataKind = 'auto' | 'file' | 'module'
+
+/** Options for getting export history. */
+export interface ExportHistoryOptions {
+  entry: string | string[]
+  limit?: number
+  maxDepth?: number
+  detectUpdates?: boolean
+  updateMode?: 'body' | 'signature'
+  startRef?: string
+  endRef?: string
+}
+
+/** Base properties shared by all export change types. */
+interface BaseChange {
+  /** The SHA of the commit. */
+  sha: string
+
+  /** The Unix timestamp of the commit. */
+  unix: number
+
+  /** The date of the commit. */
+  date: string
+
+  /** The release of the commit. */
+  release?: string
+
+  /** The exported name of the symbol. */
+  name: string
+
+  /** The file path where the export is defined. */
+  filePath: string
+
+  /** The ID of the export (format: "path/to/file.ts::exportName"). */
+  id: string
+}
+
+/** Change indicating an export was added. */
+export interface AddedChange extends BaseChange {
+  kind: 'Added'
+}
+
+/** Change indicating an export was updated. */
+export interface UpdatedChange extends BaseChange {
+  kind: 'Updated'
+  /** Whether the signature changed (vs only the body). */
+  signature: boolean
+}
+
+/** Change indicating an export was renamed. */
+export interface RenamedChange extends BaseChange {
+  kind: 'Renamed'
+  /** The previous export name, if it changed. */
+  previousName?: string
+  /** The previous file path, if the export moved files. */
+  previousFilePath?: string
+  /** The previous export ID. */
+  previousId: string
+}
+
+/** Change indicating an export was removed. */
+export interface RemovedChange extends BaseChange {
+  kind: 'Removed'
+}
+
+/** Change indicating an export was deprecated. */
+export interface DeprecatedChange extends BaseChange {
+  kind: 'Deprecated'
+  /** The deprecation message, if provided. */
+  message?: string
+}
+
+/** Union of all export change types. */
+export type ExportChange =
+  | AddedChange
+  | UpdatedChange
+  | RenamedChange
+  | RemovedChange
+  | DeprecatedChange
+
+/**
+ * Report of export history across commits.
+ *
+ * The following criteria is used to identify an export across commits:
+ * - ID is the ultimate defining symbol location when resolvable
+ * - Format: "path/to/file.ts::exportName"
+ * - Re-exports resolve to their source; local exports use defining file
+ * - Same ID across commits = same underlying symbol (enables rename detection)
+ */
+export interface ExportHistoryReport {
+  generatedAt: string
+  repo: string
+  entryFiles: string[]
+  exports: Record<string, ExportChange[]>
+  nameToId: Record<string, string[]>
+  parseWarnings?: string[]
+}
 
 /** Represents a section within a file. */
 export interface Section {
@@ -66,16 +213,12 @@ export interface FileStructure extends BaseStructure {
   exports?: ModuleExportStructure[]
 }
 
-export type ModuleExportResolvedType = Awaited<
-  ReturnType<FileSystem['resolveTypeAtLocation']>
->
-
 export interface ModuleExportStructure extends BaseStructure {
   kind: 'ModuleExport'
   relativePath?: string
   description?: string
   tags?: Array<{ name: string; value?: string }>
-  resolvedType?: ModuleExportResolvedType
+  resolvedType?: Kind
   firstCommitDate?: Date
   lastCommitDate?: Date
 }

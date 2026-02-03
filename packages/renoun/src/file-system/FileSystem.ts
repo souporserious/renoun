@@ -33,6 +33,70 @@ export type FileReadableStream = ReadableStream<Uint8Array>
 
 export type FileWritableStream = WritableStream<Uint8Array>
 
+export interface SyncFileSystem {
+  readDirectorySync(path?: string): DirectoryEntry[]
+  readFileSync(path: string): string
+  readFileBinarySync(path: string): Uint8Array
+  readFileStream(path: string): FileReadableStream
+  /**
+   * Get the size of a file in bytes. Implementations should return `undefined`
+   * if the file does not exist or the size cannot be determined.
+   */
+  getFileByteLengthSync(path: string): number | undefined
+  /** Check synchronously if a file exists at the given path. */
+  fileExistsSync(path: string): boolean
+  /**
+   * Get the last modified timestamp of a file or directory in milliseconds.
+   * Implementations should return `undefined` if the path does not exist or
+   * if the timestamp cannot be determined.
+   */
+  getFileLastModifiedMsSync(path: string): number | undefined
+}
+
+export interface AsyncFileSystem {
+  readDirectory(path?: string): Promise<DirectoryEntry[]>
+  readFile(path: string): Promise<string>
+  readFileBinary(path: string): Promise<Uint8Array>
+  readFileStream(path: string): FileReadableStream
+  /**
+   * Get the size of a file in bytes. Implementations should return `undefined`
+   * if the file does not exist or the size cannot be determined.
+   */
+  getFileByteLength(path: string): Promise<number | undefined>
+  /** Check if a file exists at the given path. */
+  fileExists(path: string): Promise<boolean>
+  /**
+   * Get the last modified timestamp of a file or directory in milliseconds.
+   * Implementations should return `undefined` if the path does not exist or
+   * if the timestamp cannot be determined.
+   */
+  getFileLastModifiedMs(path: string): Promise<number | undefined>
+}
+
+export interface WritableFileSystem {
+  writeFileSync(path: string, content: FileSystemWriteFileContent): void
+  writeFile(path: string, content: FileSystemWriteFileContent): Promise<void>
+  writeFileStream(path: string): FileWritableStream
+  deleteFileSync(path: string): void
+  deleteFile(path: string): Promise<void>
+  createDirectory(path: string): Promise<void>
+  rename(
+    source: string,
+    target: string,
+    options?: { overwrite?: boolean }
+  ): Promise<void>
+  copy(
+    source: string,
+    target: string,
+    options?: { overwrite?: boolean }
+  ): Promise<void>
+}
+
+export type FileSystem = BaseFileSystem &
+  SyncFileSystem &
+  AsyncFileSystem &
+  WritableFileSystem
+
 export interface FileSystemOptions {
   /** Path to the tsconfig.json file to use when analyzing types and determining if a file is excluded. */
   tsConfigPath?: string
@@ -48,9 +112,10 @@ export interface TsConfig {
   [key: string]: unknown
 }
 
-export abstract class FileSystem {
+export abstract class BaseFileSystem {
   #tsConfigPath: string
   #tsConfig?: TsConfig
+  #tsConfigPromise?: Promise<TsConfig | undefined>
   #exclude?: Minimatch[]
 
   constructor(options: FileSystemOptions = {}) {
@@ -87,93 +152,35 @@ export abstract class FileSystem {
     return joinPaths('/', options.basePath, resolvedPath)
   }
 
-  abstract readDirectorySync(path?: string): DirectoryEntry[]
-
-  abstract readDirectory(path?: string): Promise<DirectoryEntry[]>
-
-  abstract readFileSync(path: string): string
-
-  abstract readFile(path: string): Promise<string>
-
-  abstract readFileBinarySync(path: string): Uint8Array
-
-  abstract readFileBinary(path: string): Promise<Uint8Array>
-
-  abstract readFileStream(path: string): FileReadableStream
-
-  /**
-   * Get the size of a file in bytes. Implementations should return `undefined`
-   * if the file does not exist or the size cannot be determined.
-   */
-  abstract getFileByteLengthSync(path: string): number | undefined
-
-  async getFileByteLength(path: string): Promise<number | undefined> {
-    return this.getFileByteLengthSync(path)
-  }
-
-  abstract writeFileSync(
-    path: string,
-    content: FileSystemWriteFileContent
-  ): void
-
-  abstract writeFile(
-    path: string,
-    content: FileSystemWriteFileContent
-  ): Promise<void>
-
-  abstract writeFileStream(path: string): FileWritableStream
-
-  /** Check synchronously if a file exists at the given path. */
-  abstract fileExistsSync(path: string): boolean
-
-  async fileExists(path: string): Promise<boolean> {
-    return this.fileExistsSync(path)
-  }
-
-  /**
-   * Get the last modified timestamp of a file or directory in milliseconds.
-   * Implementations should return `undefined` if the path does not exist or
-   * if the timestamp cannot be determined.
-   */
-  abstract getFileLastModifiedMsSync(path: string): number | undefined
-
-  async getFileLastModifiedMs(path: string): Promise<number | undefined> {
-    return this.getFileLastModifiedMsSync(path)
-  }
-
-  abstract deleteFileSync(path: string): void
-
-  abstract deleteFile(path: string): Promise<void>
-
-  abstract createDirectory(path: string): Promise<void>
-
-  abstract rename(
-    source: string,
-    target: string,
-    options?: { overwrite?: boolean }
-  ): Promise<void>
-
-  abstract copy(
-    source: string,
-    target: string,
-    options?: { overwrite?: boolean }
-  ): Promise<void>
-
   /** Whether compilerOptions.stripInternal is enabled in the active tsconfig. */
   shouldStripInternal(): boolean {
+    const syncFileSystem = getSyncFileSystem(this)
+    if (!syncFileSystem) {
+      return false
+    }
     if (this.#tsConfig === undefined) {
-      this.#tsConfig = this.#getTsConfig()
+      this.#tsConfig = this.#getTsConfig(syncFileSystem)
     }
     const flag = this.#tsConfig?.compilerOptions?.stripInternal
     return Boolean(flag)
   }
 
-  #getTsConfig(): TsConfig | undefined {
-    if (!this.fileExistsSync(this.#tsConfigPath)) {
+  async shouldStripInternalAsync(): Promise<boolean> {
+    const asyncFileSystem = getAsyncFileSystem(this)
+    if (asyncFileSystem) {
+      const tsConfig = await this.#getTsConfigAsync(asyncFileSystem)
+      return Boolean(tsConfig?.compilerOptions?.stripInternal)
+    }
+
+    return this.shouldStripInternal()
+  }
+
+  #getTsConfig(syncFileSystem: SyncFileSystem): TsConfig | undefined {
+    if (!syncFileSystem.fileExistsSync(this.#tsConfigPath)) {
       return
     }
 
-    const tsConfigContents = this.readFileSync(this.#tsConfigPath)
+    const tsConfigContents = syncFileSystem.readFileSync(this.#tsConfigPath)
 
     try {
       return parseJsonWithComments<TsConfig>(tsConfigContents)
@@ -184,7 +191,66 @@ export abstract class FileSystem {
     }
   }
 
+  async #getTsConfigAsync(
+    asyncFileSystem: AsyncFileSystem
+  ): Promise<TsConfig | undefined> {
+    if (this.#tsConfig !== undefined) {
+      return this.#tsConfig
+    }
+
+    if (this.#tsConfigPromise) {
+      return this.#tsConfigPromise
+    }
+
+    const loadPromise = (async () => {
+      const exists = await asyncFileSystem.fileExists(this.#tsConfigPath)
+      if (!exists) {
+        return undefined
+      }
+
+      const tsConfigContents = await asyncFileSystem.readFile(
+        this.#tsConfigPath
+      )
+
+      try {
+        return parseJsonWithComments<TsConfig>(tsConfigContents)
+      } catch (error) {
+        throw new Error('[renoun] Failed to parse tsconfig.json', {
+          cause: error,
+        })
+      }
+    })()
+
+    this.#tsConfigPromise = loadPromise
+
+    try {
+      const result = await loadPromise
+      this.#tsConfig = result
+      return result
+    } finally {
+      if (this.#tsConfigPromise === loadPromise) {
+        this.#tsConfigPromise = undefined
+      }
+    }
+  }
+
+  #ensureExcludeMatchers(tsConfig?: TsConfig) {
+    if (this.#exclude !== undefined) {
+      return
+    }
+
+    if (Array.isArray(tsConfig?.exclude)) {
+      this.#exclude = tsConfig.exclude.map(
+        (pattern) => new Minimatch(pattern, { dot: true })
+      )
+    }
+  }
+
   isFilePathExcludedFromTsConfig(filePath: string, isDirectory = false) {
+    const syncFileSystem = getSyncFileSystem(this)
+    if (!syncFileSystem) {
+      return false
+    }
     const absoluteFilePath = this.getAbsolutePath(filePath)
     const absoluteTsConfigDirectory = directoryName(
       this.getAbsolutePath(this.#tsConfigPath)
@@ -199,15 +265,52 @@ export abstract class FileSystem {
     }
 
     if (this.#tsConfig === undefined) {
-      const tsConfig = this.#getTsConfig()
+      const tsConfig = this.#getTsConfig(syncFileSystem)
 
       this.#tsConfig = tsConfig
 
-      if (Array.isArray(tsConfig?.exclude)) {
-        this.#exclude = tsConfig.exclude.map(
-          (pattern) => new Minimatch(pattern, { dot: true })
-        )
+      this.#ensureExcludeMatchers(tsConfig)
+    }
+
+    if (this.#exclude) {
+      for (const matcher of this.#exclude) {
+        if (matcher.match(relativeFilePath)) {
+          return true
+        }
       }
+    }
+
+    return false
+  }
+
+  async isFilePathExcludedFromTsConfigAsync(
+    filePath: string,
+    isDirectory = false
+  ): Promise<boolean> {
+    const asyncFileSystem = getAsyncFileSystem(this)
+    if (!asyncFileSystem) {
+      return this.isFilePathExcludedFromTsConfig(filePath, isDirectory)
+    }
+
+    const absoluteFilePath = this.getAbsolutePath(filePath)
+    const absoluteTsConfigDirectory = directoryName(
+      this.getAbsolutePath(this.#tsConfigPath)
+    )
+    let relativeFilePath = relativePath(
+      absoluteTsConfigDirectory,
+      absoluteFilePath
+    )
+
+    if (isDirectory) {
+      relativeFilePath = joinPaths(relativeFilePath, '/')
+    }
+
+    if (this.#tsConfig === undefined) {
+      const tsConfig = await this.#getTsConfigAsync(asyncFileSystem)
+      this.#tsConfig = tsConfig
+      this.#ensureExcludeMatchers(tsConfig)
+    } else {
+      this.#ensureExcludeMatchers(this.#tsConfig)
     }
 
     if (this.#exclude) {
@@ -297,4 +400,30 @@ export abstract class FileSystem {
       this.getProjectOptions()
     )
   }
+}
+
+function getSyncFileSystem(
+  fileSystem: BaseFileSystem
+): (BaseFileSystem & SyncFileSystem) | null {
+  const candidate = fileSystem as Partial<SyncFileSystem>
+  if (
+    typeof candidate.fileExistsSync !== 'function' ||
+    typeof candidate.readFileSync !== 'function'
+  ) {
+    return null
+  }
+  return fileSystem as BaseFileSystem & SyncFileSystem
+}
+
+function getAsyncFileSystem(
+  fileSystem: BaseFileSystem
+): (BaseFileSystem & AsyncFileSystem) | null {
+  const candidate = fileSystem as Partial<AsyncFileSystem>
+  if (
+    typeof candidate.fileExists !== 'function' ||
+    typeof candidate.readFile !== 'function'
+  ) {
+    return null
+  }
+  return fileSystem as BaseFileSystem & AsyncFileSystem
 }

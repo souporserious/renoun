@@ -1,14 +1,58 @@
-import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.ts'
+import { createHash } from 'node:crypto'
+
+import {
+  directoryName,
+  joinPaths,
+  normalizePath,
+  normalizeSlashes,
+} from '../utils/path.ts'
 import type { GitMetadata } from '../utils/get-local-git-file-metadata.ts'
-import type { GitExportMetadata } from '../utils/get-local-git-export-metadata.ts'
 import { Semaphore } from '../utils/Semaphore.ts'
+import {
+  hasJavaScriptLikeExtension,
+  type JavaScriptLikeExtension,
+} from '../utils/is-javascript-like-extension.ts'
 import {
   InMemoryFileSystem,
   type InMemoryFileContent,
 } from './InMemoryFileSystem.ts'
-import type { DirectoryEntry } from './types.ts'
+import type { AsyncFileSystem, WritableFileSystem } from './FileSystem.ts'
+import type {
+  DirectoryEntry,
+  ExportHistoryOptions,
+  ExportHistoryReport,
+  ExportChange,
+  GitFileMetadata,
+  GitModuleMetadata,
+  GitPathMetadata,
+  GitAuthor,
+  GitExportMetadata,
+} from './types.ts'
+import {
+  type ExportItem,
+  EXTENSION_PRIORITY,
+  INDEX_FILE_CANDIDATES,
+  parseExportId,
+  formatExportId,
+  scanModuleExports,
+  isUnderScope,
+  looksLikeFilePath,
+  LRUMap,
+  mapWithLimit,
+  buildExportComparisonMaps,
+  detectSameFileRenames,
+  detectCrossFileRenames,
+  mergeRenameHistory,
+  checkAndCollapseOscillation,
+} from './export-analysis.ts'
 
 type GitHost = 'github' | 'gitlab' | 'bitbucket'
+
+type MetadataForPath<Path extends string> = string extends Path
+  ? GitPathMetadata
+  : Path extends `${string}.${JavaScriptLikeExtension}`
+    ? GitModuleMetadata
+    : GitFileMetadata
 
 interface GitHostFileSystemOptions {
   /** Repository in the format "owner/repo". */
@@ -91,6 +135,8 @@ type GitMetadataState = {
   >
   firstCommitDate?: Date
   lastCommitDate?: Date
+  firstCommitHash?: string
+  lastCommitHash?: string
 }
 
 type GitHubBlameRange = {
@@ -183,7 +229,10 @@ function getResetDelayMs(
   }
 }
 
-export class GitHostFileSystem extends InMemoryFileSystem {
+export class GitHostFileSystem
+  extends InMemoryFileSystem
+  implements AsyncFileSystem, WritableFileSystem
+{
   #repository: string
   #ref: string
   #host: GitHost
@@ -208,6 +257,10 @@ export class GitHostFileSystem extends InMemoryFileSystem {
   #include?: string[]
   #exclude?: string[]
   #gitMetadataCache: Map<string, GitMetadata>
+  #gitFileMetadataCache: Map<
+    string,
+    { firstCommitHash?: string; lastCommitHash?: string }
+  >
   #gitBlameCache: Map<string, Promise<GitHubBlameRange[] | null>>
   #ghBlameBatchQueue?: {
     path: string
@@ -277,6 +330,7 @@ export class GitHostFileSystem extends InMemoryFileSystem {
 
     this.#symlinkMap = new Map()
     this.#gitMetadataCache = new Map()
+    this.#gitFileMetadataCache = new Map()
     this.#gitBlameCache = new Map()
     this.#initPromise = this.#loadArchive().catch((error) => {
       this.#initPromise = undefined
@@ -571,13 +625,21 @@ export class GitHostFileSystem extends InMemoryFileSystem {
     }
 
     let metadata: GitMetadata
+    let commitHashes: { firstCommitHash?: string; lastCommitHash?: string } = {}
     try {
-      metadata = await this.#fetchGitMetadataForHost(normalizedPath)
+      const result =
+        await this.#fetchGitMetadataForHostWithHashes(normalizedPath)
+      metadata = result.metadata
+      commitHashes = {
+        firstCommitHash: result.firstCommitHash,
+        lastCommitHash: result.lastCommitHash,
+      }
     } catch {
       metadata = this.#createEmptyGitMetadata()
     }
 
     this.#gitMetadataCache.set(cacheKey, metadata)
+    this.#gitFileMetadataCache.set(cacheKey, commitHashes)
     return metadata
   }
 
@@ -634,6 +696,146 @@ export class GitHostFileSystem extends InMemoryFileSystem {
     }
   }
 
+  /** Get metadata for a file or module. */
+  async getMetadata<const Path extends string>(
+    /** The path to the file or module. */
+    filePath: Path
+  ): Promise<MetadataForPath<Path>> {
+    await this.#ensureInitialized()
+
+    const path = this.#normalizeGitMetadataPath(filePath)
+    const result = hasJavaScriptLikeExtension(path)
+      ? await this.getModuleMetadata(path)
+      : await this.getFileMetadata(path)
+
+    return result as MetadataForPath<Path>
+  }
+
+  /** Get metadata for a file. */
+  async getFileMetadata(filePath: string): Promise<GitFileMetadata> {
+    await this.#ensureInitialized()
+
+    const normalizedPath = this.#normalizeGitMetadataPath(filePath)
+    const gitMetadata = await this.getGitFileMetadata(normalizedPath)
+    const cacheKey = `${this.#ref}::${normalizedPath}`
+    const commitHashes = this.#gitFileMetadataCache.get(cacheKey)
+
+    // Convert authors from GitMetadata format to GitAuthor format
+    // GitMetadata.authors has: { name, commitCount, firstCommitDate, lastCommitDate }
+    // GitAuthor needs: { name, email, commitCount, firstCommitDate?, lastCommitDate? }
+    const authors: GitAuthor[] = gitMetadata.authors.map((author) => ({
+      name: author.name,
+      email: '', // Not available from the host API author data
+      commitCount: author.commitCount,
+      firstCommitDate: author.firstCommitDate,
+      lastCommitDate: author.lastCommitDate,
+    }))
+
+    return {
+      kind: 'file',
+      path: normalizedPath,
+      ref: this.#ref,
+      refCommit: this.#ref, // For remote hosts, we use ref as refCommit
+      firstCommitDate: gitMetadata.firstCommitDate?.toISOString(),
+      lastCommitDate: gitMetadata.lastCommitDate?.toISOString(),
+      firstCommitHash: commitHashes?.firstCommitHash,
+      lastCommitHash: commitHashes?.lastCommitHash,
+      authors,
+    }
+  }
+
+  /** Get metadata for a JavaScript module file (exports at current ref only). */
+  async getModuleMetadata(filePath: string): Promise<GitModuleMetadata> {
+    await this.#ensureInitialized()
+
+    const base = await this.getFileMetadata(filePath)
+    if (!hasJavaScriptLikeExtension(base.path)) {
+      return { ...base, kind: 'module', exports: {} }
+    }
+
+    // Read the file content to parse exports
+    let content: string
+    try {
+      content = await this.readFile(base.path)
+    } catch {
+      return { ...base, kind: 'module', exports: {} }
+    }
+
+    // Parse exports from the file
+    const rawExports = scanModuleExports(base.path, content)
+
+    // Filter out internal export markers and collect exports with line numbers
+    const exportItems: Array<{
+      name: string
+      startLine?: number
+      endLine?: number
+    }> = []
+    for (const [name, item] of rawExports) {
+      if (
+        name.startsWith('__STAR__') ||
+        name.startsWith('__FROM__') ||
+        name.startsWith('__NAMESPACE__')
+      ) {
+        continue
+      }
+      exportItems.push({
+        name,
+        startLine: item.startLine,
+        endLine: item.endLine,
+      })
+    }
+
+    // Batch fetch export metadata using blame API
+    // For GitHub with a token, we use the batched GraphQL blame API
+    const exports: Record<
+      string,
+      { firstCommitDate?: Date; lastCommitDate?: Date }
+    > = {}
+
+    // Group exports that have line numbers for batch processing
+    const exportsWithLines = exportItems.filter(
+      (e) => e.startLine !== undefined && e.endLine !== undefined
+    )
+    const exportsWithoutLines = exportItems.filter(
+      (e) => e.startLine === undefined || e.endLine === undefined
+    )
+
+    // Process exports with line numbers in parallel (batched blame)
+    if (exportsWithLines.length > 0) {
+      const blameResults = await Promise.all(
+        exportsWithLines.map(async (exportItem) => {
+          const metadata = await this.getGitExportMetadata(
+            base.path,
+            exportItem.startLine!,
+            exportItem.endLine!
+          )
+          return { name: exportItem.name, metadata }
+        })
+      )
+
+      for (const { name, metadata } of blameResults) {
+        exports[name] = metadata
+      }
+    }
+
+    // For exports without line numbers, use file-level metadata
+    const fileFirstCommitDate = base.firstCommitDate
+      ? new Date(base.firstCommitDate)
+      : undefined
+    const fileLastCommitDate = base.lastCommitDate
+      ? new Date(base.lastCommitDate)
+      : undefined
+
+    for (const exportItem of exportsWithoutLines) {
+      exports[exportItem.name] = {
+        firstCommitDate: fileFirstCommitDate,
+        lastCommitDate: fileLastCommitDate,
+      }
+    }
+
+    return { ...base, kind: 'module', exports }
+  }
+
   #createEmptyGitMetadata(): GitMetadata {
     return {
       authors: [],
@@ -676,6 +878,8 @@ export class GitHostFileSystem extends InMemoryFileSystem {
       authors: new Map(),
       firstCommitDate: undefined,
       lastCommitDate: undefined,
+      firstCommitHash: undefined,
+      lastCommitHash: undefined,
     }
   }
 
@@ -800,7 +1004,8 @@ export class GitHostFileSystem extends InMemoryFileSystem {
     state: GitMetadataState,
     name: string | undefined,
     email: string | undefined,
-    date: Date
+    date: Date,
+    commitHash?: string
   ) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
       return
@@ -842,9 +1047,15 @@ export class GitHostFileSystem extends InMemoryFileSystem {
 
     if (!state.firstCommitDate || date < state.firstCommitDate) {
       state.firstCommitDate = date
+      if (commitHash) {
+        state.firstCommitHash = commitHash
+      }
     }
     if (!state.lastCommitDate || date > state.lastCommitDate) {
       state.lastCommitDate = date
+      if (commitHash) {
+        state.lastCommitHash = commitHash
+      }
     }
   }
 
@@ -862,7 +1073,11 @@ export class GitHostFileSystem extends InMemoryFileSystem {
     }
   }
 
-  async #fetchGitMetadataForHost(path: string): Promise<GitMetadata> {
+  async #fetchGitMetadataForHostWithHashes(path: string): Promise<{
+    metadata: GitMetadata
+    firstCommitHash?: string
+    lastCommitHash?: string
+  }> {
     const state = this.#createGitMetadataState()
 
     switch (this.#host) {
@@ -876,14 +1091,26 @@ export class GitHostFileSystem extends InMemoryFileSystem {
         await this.#collectBitbucketGitMetadata(path, state)
         break
       default:
-        return this.#createEmptyGitMetadata()
+        return {
+          metadata: this.#createEmptyGitMetadata(),
+          firstCommitHash: undefined,
+          lastCommitHash: undefined,
+        }
     }
 
     if (state.authors.size === 0 && state.firstCommitDate === undefined) {
-      return this.#createEmptyGitMetadata()
+      return {
+        metadata: this.#createEmptyGitMetadata(),
+        firstCommitHash: undefined,
+        lastCommitHash: undefined,
+      }
     }
 
-    return this.#finalizeGitMetadataState(state)
+    return {
+      metadata: this.#finalizeGitMetadataState(state),
+      firstCommitHash: state.firstCommitHash,
+      lastCommitHash: state.lastCommitHash,
+    }
   }
 
   async #collectGitHubGitMetadata(
@@ -966,13 +1193,13 @@ export class GitHostFileSystem extends InMemoryFileSystem {
       // Only count each commit once to approximate commit counts.
       if (oid && seenCommitOids.has(oid)) {
         // Update last/first dates even if we do not increment count again.
-        this.#updateGitMetadataState(state, name, email, date)
+        this.#updateGitMetadataState(state, name, email, date, oid)
         continue
       }
       if (oid) {
         seenCommitOids.add(oid)
       }
-      this.#updateGitMetadataState(state, name, email, date)
+      this.#updateGitMetadataState(state, name, email, date, oid)
     }
     return state.authors.size > 0
   }
@@ -997,6 +1224,9 @@ export class GitHostFileSystem extends InMemoryFileSystem {
         continue
       }
 
+      // Extract commit SHA from REST API response
+      const commitSha = typeof commit?.sha === 'string' ? commit.sha : undefined
+
       const emailCandidate =
         (typeof commitData?.author?.email === 'string'
           ? commitData.author.email
@@ -1019,7 +1249,13 @@ export class GitHostFileSystem extends InMemoryFileSystem {
           ? commitData.committer.name
           : undefined)
 
-      this.#updateGitMetadataState(state, nameCandidate, emailCandidate, date)
+      this.#updateGitMetadataState(
+        state,
+        nameCandidate,
+        emailCandidate,
+        date,
+        commitSha
+      )
     }
   }
 
@@ -1213,6 +1449,9 @@ export class GitHostFileSystem extends InMemoryFileSystem {
           continue
         }
 
+        // Extract commit SHA from GitLab response
+        const commitSha = typeof commit?.id === 'string' ? commit.id : undefined
+
         const email =
           typeof commit?.author_email === 'string'
             ? commit.author_email
@@ -1222,7 +1461,7 @@ export class GitHostFileSystem extends InMemoryFileSystem {
             ? commit.author_name
             : undefined) ?? email
 
-        this.#updateGitMetadataState(state, name, email, date)
+        this.#updateGitMetadataState(state, name, email, date, commitSha)
       }
 
       const nextPage = response.headers.get('x-next-page')
@@ -1276,8 +1515,12 @@ export class GitHostFileSystem extends InMemoryFileSystem {
           continue
         }
 
+        // Extract commit hash from Bitbucket response
+        const commitHash =
+          typeof commit?.hash === 'string' ? commit.hash : undefined
+
         const { name, email } = this.#parseBitbucketAuthor(commit?.author)
-        this.#updateGitMetadataState(state, name, email, date)
+        this.#updateGitMetadataState(state, name, email, date, commitHash)
       }
 
       url = typeof data?.next === 'string' && data.next ? data.next : ''
@@ -2361,6 +2604,1108 @@ export class GitHostFileSystem extends InMemoryFileSystem {
     throw new Error(
       '[renoun] readFileSync is not supported in GitHostFileSystem'
     )
+  }
+
+  // LRU cache for parsed exports by content hash (shared across calls)
+  #exportParseCache = new LRUMap<string, Map<string, ExportItem>>(500)
+
+  /** Get the export history of a repository based on a set of entry files. */
+  async getExportHistory(
+    options: ExportHistoryOptions
+  ): Promise<ExportHistoryReport> {
+    await this.#ensureInitialized()
+
+    const entryArgs = Array.isArray(options.entry)
+      ? options.entry
+      : [options.entry]
+    const entrySources = entryArgs.length ? entryArgs : ['.']
+    const uniqueEntrySources = Array.from(
+      new Set(
+        entrySources.map((path) => normalizePath(String(path))).filter(Boolean)
+      )
+    )
+
+    // Strict Validation: Only accept code files as entry points
+    for (const source of uniqueEntrySources) {
+      if (looksLikeFilePath(source) && !hasJavaScriptLikeExtension(source)) {
+        throw new Error(
+          `Invalid entry file: "${source}". Only JavaScript/TypeScript source files are allowed.`
+        )
+      }
+    }
+
+    const scopeDirectories = Array.from(
+      new Set(
+        uniqueEntrySources
+          .map((path) =>
+            looksLikeFilePath(path) ? directoryName(path) : normalizePath(path)
+          )
+          .map((path) => normalizePath(String(path)))
+          .filter(Boolean)
+      )
+    )
+
+    const maxDepth = options.maxDepth ?? 10
+    const detectUpdates = options.detectUpdates ?? true
+    const updateMode = options.updateMode ?? 'signature'
+
+    // Resolve entry files in parallel
+    const entryRelatives = await Promise.all(
+      uniqueEntrySources.map(async (source) => {
+        if (looksLikeFilePath(source)) {
+          return source
+        }
+        return this.#inferEntryFile(source)
+      })
+    )
+
+    const uniqueEntryRelatives = Array.from(
+      new Set(entryRelatives.filter((e): e is string => e !== null))
+    )
+    if (uniqueEntryRelatives.length === 0) {
+      throw new Error(`Could not resolve any entry files.`)
+    }
+
+    const parseWarnings: string[] = []
+    const exports: ExportHistoryReport['exports'] = Object.create(null)
+
+    // Get commit history for the entry files
+    const commitHistory = await this.#getCommitHistoryForPaths(
+      uniqueEntryRelatives,
+      options.limit
+    )
+
+    if (commitHistory.length === 0) {
+      // No commits found, analyze current state only
+      const currentExports = await this.#collectExportsForCurrentSnapshot(
+        uniqueEntryRelatives,
+        maxDepth,
+        scopeDirectories,
+        parseWarnings
+      )
+
+      const addedIds = new Set<string>()
+      const now = Math.floor(Date.now() / 1000)
+      const changeBase = {
+        sha: 'HEAD',
+        unix: now,
+        date: new Date(now * 1000).toISOString(),
+        release: undefined,
+      }
+
+      for (const [name, items] of currentExports) {
+        for (const [id] of items) {
+          let history = exports[id]
+          if (!history) {
+            history = []
+            exports[id] = history
+          }
+          if (!addedIds.has(id)) {
+            history.push({
+              ...changeBase,
+              kind: 'Added',
+              name,
+              filePath: parseExportId(id)?.file ?? '',
+              id,
+            } as ExportChange)
+            addedIds.add(id)
+          }
+        }
+      }
+
+      const nameToId: Record<string, string[]> = Object.create(null)
+      for (const [name, ids] of currentExports) {
+        const sorted = Array.from(ids.keys()).sort()
+        if (sorted.length > 0) {
+          nameToId[name] = sorted
+        }
+      }
+
+      return {
+        generatedAt: new Date().toISOString(),
+        repo: this.#repository,
+        entryFiles: uniqueEntryRelatives,
+        exports,
+        nameToId,
+        ...(parseWarnings.length ? { parseWarnings } : {}),
+      }
+    }
+
+    // Process commits from oldest to newest
+    const reversedCommits = [...commitHistory].reverse()
+
+    // Pre-fetch all file contents in parallel batches
+    // This significantly reduces the number of sequential API calls
+    const FETCH_BATCH_SIZE = 10
+    const fileContentCache = new Map<string, string | null>()
+
+    // Build list of all (commit, file) pairs we need to fetch
+    const fetchTasks: Array<{ commitSha: string; filePath: string }> = []
+    for (const commit of reversedCommits) {
+      for (const entryRelative of uniqueEntryRelatives) {
+        fetchTasks.push({ commitSha: commit.sha, filePath: entryRelative })
+      }
+    }
+
+    // Fetch in parallel batches with concurrency limit
+    await mapWithLimit(fetchTasks, FETCH_BATCH_SIZE, async (task) => {
+      const cacheKey = `${task.commitSha}:${task.filePath}`
+      if (!fileContentCache.has(cacheKey)) {
+        const content = await this.#fetchFileAtCommit(
+          task.filePath,
+          task.commitSha
+        )
+        fileContentCache.set(cacheKey, content)
+      }
+    })
+
+    // Track previous exports for change detection
+    let previousExports: Map<string, Map<string, ExportItem>> | null = null
+
+    // Process each commit
+    for (const commit of reversedCommits) {
+      const commitExports = new Map<string, Map<string, ExportItem>>()
+
+      // Process entry files in parallel
+      const entryResults = await Promise.all(
+        uniqueEntryRelatives.map(async (entryRelative) => {
+          const cacheKey = `${commit.sha}:${entryRelative}`
+          const content = fileContentCache.get(cacheKey)
+          if (!content) return null
+
+          // Use content hash for caching parsed exports
+          const contentHash = this.#hashContent(content)
+          const cachedExports = this.#exportParseCache.get(contentHash)
+
+          if (cachedExports) {
+            return { entryRelative, exports: cachedExports }
+          }
+
+          const rawExports = scanModuleExports(entryRelative, content)
+          const entryExportMap = await this.#resolveExportsFromRawOptimized(
+            entryRelative,
+            rawExports,
+            commit.sha,
+            0,
+            maxDepth,
+            scopeDirectories,
+            parseWarnings,
+            new Set(),
+            fileContentCache
+          )
+
+          // Cache the parsed exports
+          this.#exportParseCache.set(contentHash, entryExportMap)
+
+          return { entryRelative, exports: entryExportMap }
+        })
+      )
+
+      // Merge entry results into commitExports
+      for (const result of entryResults) {
+        if (!result) continue
+        for (const [name, item] of result.exports) {
+          let itemsForName = commitExports.get(name)
+          if (!itemsForName) {
+            itemsForName = new Map()
+            commitExports.set(name, itemsForName)
+          }
+          if (!itemsForName.has(item.id)) {
+            itemsForName.set(item.id, item)
+          }
+        }
+      }
+
+      const changeBase = {
+        sha: commit.sha,
+        unix: commit.unix,
+        date: new Date(commit.unix * 1000).toISOString(),
+        release: commit.release,
+      }
+
+      // Process changes between previous and current exports
+      this.#processExportChanges(
+        previousExports,
+        commitExports,
+        changeBase,
+        exports,
+        detectUpdates,
+        updateMode
+      )
+
+      previousExports = commitExports
+    }
+
+    // Build nameToId mapping from final state
+    const nameToId: Record<string, string[]> = Object.create(null)
+    if (previousExports) {
+      for (const [name, ids] of previousExports) {
+        const sorted = Array.from(ids.keys()).sort()
+        if (sorted.length > 0) {
+          nameToId[name] = sorted
+        }
+      }
+    }
+
+    return {
+      generatedAt: new Date().toISOString(),
+      repo: this.#repository,
+      entryFiles: uniqueEntryRelatives,
+      exports,
+      nameToId,
+      ...(parseWarnings.length ? { parseWarnings } : {}),
+    }
+  }
+
+  #hashContent(content: string): string {
+    return createHash('sha1').update(content).digest('hex').substring(0, 16)
+  }
+
+  async #collectExportsForCurrentSnapshot(
+    entryRelatives: string[],
+    maxDepth: number,
+    scopeDirectories: string[],
+    parseWarnings: string[]
+  ): Promise<Map<string, Map<string, ExportItem>>> {
+    const currentExports = new Map<string, Map<string, ExportItem>>()
+
+    const results = await Promise.all(
+      entryRelatives.map(async (entryRelative) => {
+        const entryExportMap = await this.#collectExportsFromFile(
+          entryRelative,
+          0,
+          maxDepth,
+          scopeDirectories,
+          new Map(),
+          parseWarnings,
+          new Set()
+        )
+        return { entryRelative, exports: entryExportMap }
+      })
+    )
+
+    for (const result of results) {
+      for (const [name, item] of result.exports) {
+        let itemsForName = currentExports.get(name)
+        if (!itemsForName) {
+          itemsForName = new Map()
+          currentExports.set(name, itemsForName)
+        }
+        if (!itemsForName.has(item.id)) {
+          itemsForName.set(item.id, item)
+        }
+      }
+    }
+
+    return currentExports
+  }
+
+  #processExportChanges(
+    previousExports: Map<string, Map<string, ExportItem>> | null,
+    commitExports: Map<string, Map<string, ExportItem>>,
+    changeBase: { sha: string; unix: number; date: string; release?: string },
+    exports: Record<string, ExportChange[]>,
+    detectUpdates: boolean,
+    updateMode: 'body' | 'signature'
+  ): void {
+    if (previousExports !== null) {
+      const { previousById, currentById, previousNamesById } =
+        buildExportComparisonMaps(previousExports, commitExports)
+
+      // Detect removed exports
+      const removedIds: string[] = []
+      for (const id of previousById.keys()) {
+        if (!currentById.has(id)) {
+          removedIds.push(id)
+        }
+      }
+
+      const { renamePairs, usedRemovedIds } = detectSameFileRenames(
+        previousById,
+        currentById,
+        removedIds
+      )
+
+      detectCrossFileRenames(
+        previousById,
+        currentById,
+        removedIds,
+        usedRemovedIds,
+        renamePairs
+      )
+
+      // Process additions and renames
+      const addedIds = new Set<string>()
+      const renamedIds = new Set<string>()
+      const updatedIds = new Set<string>()
+      const deprecatedIds = new Set<string>()
+
+      for (const [name, currentItems] of commitExports) {
+        const previousItems = previousExports.get(name)
+        for (const [id, currentExportItem] of currentItems) {
+          const renameInfo = renamePairs.get(id)
+          const history = mergeRenameHistory(
+            exports,
+            id,
+            renameInfo?.oldId ?? id
+          )
+
+          // Check for deprecation state change
+          const previousDeprecated = renameInfo?.oldId
+            ? previousById.get(renameInfo.oldId)?.deprecated
+            : (previousById.get(id)?.deprecated ??
+              previousItems?.get(id)?.deprecated)
+          const willDeprecate =
+            currentExportItem.deprecated &&
+            !previousDeprecated &&
+            !deprecatedIds.has(id)
+
+          if (renameInfo) {
+            if (!renamedIds.has(id)) {
+              const currentParsed = parseExportId(id)
+              const previousParsed = parseExportId(renameInfo.oldId)
+              const oldExportName = previousById.get(renameInfo.oldId)?.name
+
+              history.push({
+                ...changeBase,
+                kind: 'Renamed',
+                name,
+                filePath: currentParsed?.file ?? '',
+                id,
+                previousName:
+                  oldExportName && oldExportName !== name
+                    ? oldExportName
+                    : undefined,
+                previousFilePath:
+                  currentParsed &&
+                  previousParsed &&
+                  currentParsed.file !== previousParsed.file
+                    ? previousParsed.file
+                    : undefined,
+                previousId: renameInfo.oldId,
+              } as ExportChange)
+              renamedIds.add(id)
+            }
+          } else if (!previousItems || !previousItems.has(id)) {
+            const previousNames = previousNamesById.get(id)
+            if (previousNames && previousNames.size > 0) {
+              if (!renamedIds.has(id)) {
+                let actualPreviousName: string | undefined
+                for (const prevName of previousNames) {
+                  if (prevName !== name) {
+                    actualPreviousName = prevName
+                    break
+                  }
+                }
+                history.push({
+                  ...changeBase,
+                  kind: 'Renamed',
+                  name,
+                  filePath: parseExportId(id)?.file ?? '',
+                  id,
+                  previousName: actualPreviousName,
+                  previousId: id,
+                } as ExportChange)
+                renamedIds.add(id)
+              }
+            } else if (!addedIds.has(id)) {
+              // Check for oscillation: if last entry was "Removed" in same release, collapse
+              const collapsed = checkAndCollapseOscillation(
+                history,
+                'Added',
+                changeBase.release
+              )
+              if (!collapsed) {
+                history.push({
+                  ...changeBase,
+                  kind: 'Added',
+                  name,
+                  filePath: parseExportId(id)?.file ?? '',
+                  id,
+                } as ExportChange)
+              }
+              addedIds.add(id)
+            }
+          } else if (detectUpdates && !willDeprecate) {
+            const previousExportItem = previousItems.get(id)!
+            const signatureChanged =
+              previousExportItem.signatureHash !==
+              currentExportItem.signatureHash
+            const bodyChanged =
+              previousExportItem.bodyHash !== currentExportItem.bodyHash
+            const shouldRecord =
+              updateMode === 'signature' ? signatureChanged : bodyChanged
+            if (shouldRecord && !updatedIds.has(id)) {
+              history.push({
+                ...changeBase,
+                kind: 'Updated',
+                name,
+                filePath: parseExportId(id)?.file ?? '',
+                id,
+                signature: signatureChanged,
+              } as ExportChange)
+              updatedIds.add(id)
+            }
+          }
+
+          // Track deprecation changes
+          if (willDeprecate) {
+            history.push({
+              ...changeBase,
+              kind: 'Deprecated',
+              name,
+              filePath: parseExportId(id)?.file ?? '',
+              id,
+              message: currentExportItem.deprecatedMessage,
+            } as ExportChange)
+            deprecatedIds.add(id)
+          }
+        }
+      }
+
+      // Process removed exports
+      for (const removedId of removedIds) {
+        if (usedRemovedIds.has(removedId)) continue
+        let history = exports[removedId]
+        if (!history) continue
+        const removedItem = previousById.get(removedId)
+        if (!removedItem) continue
+
+        // Check for oscillation: if last entry was "Added" in same release, collapse
+        const collapsed = checkAndCollapseOscillation(
+          history,
+          'Removed',
+          changeBase.release
+        )
+        if (collapsed && history.length === 0) {
+          // History is now empty, remove the export entry entirely
+          delete exports[removedId]
+        } else if (!collapsed) {
+          history.push({
+            ...changeBase,
+            kind: 'Removed',
+            name: removedItem.name,
+            filePath: parseExportId(removedId)?.file ?? '',
+            id: removedId,
+          } as ExportChange)
+        }
+      }
+    } else {
+      // First commit - all exports are added
+      const addedIds = new Set<string>()
+      for (const [name, items] of commitExports) {
+        for (const [id] of items) {
+          let history = exports[id]
+          if (!history) {
+            history = []
+            exports[id] = history
+          }
+          if (!addedIds.has(id)) {
+            history.push({
+              ...changeBase,
+              kind: 'Added',
+              name,
+              filePath: parseExportId(id)?.file ?? '',
+              id,
+            } as ExportChange)
+            addedIds.add(id)
+          }
+        }
+      }
+    }
+  }
+
+  async #resolveExportsFromRawOptimized(
+    filePath: string,
+    rawExports: Map<string, ExportItem>,
+    commitSha: string,
+    depth: number,
+    maxDepth: number,
+    scopeDirectories: string[],
+    parseWarnings: string[],
+    visiting: Set<string>,
+    fileContentCache: Map<string, string | null>
+  ): Promise<Map<string, ExportItem>> {
+    const results = new Map<string, ExportItem>()
+    const fileIdentity = (name: string) => formatExportId(filePath, name)
+
+    // Partition exports by type
+    const localExports: Array<[string, ExportItem]> = []
+    const fromExports: Array<[string, ExportItem, string]> = []
+    const namespaceExports: Array<[string, ExportItem, string]> = []
+    const starExports: Array<[string, ExportItem, string]> = []
+
+    for (const [name, rawItem] of rawExports) {
+      if (rawItem.id === '__LOCAL__') {
+        localExports.push([name, rawItem])
+      } else if (rawItem.id.startsWith('__FROM__')) {
+        fromExports.push([name, rawItem, rawItem.id.slice(8)])
+      } else if (rawItem.id.startsWith('__NAMESPACE__')) {
+        namespaceExports.push([name, rawItem, rawItem.id.slice(13)])
+      } else if (rawItem.id.startsWith('__STAR__')) {
+        starExports.push([name, rawItem, rawItem.id.slice(8)])
+      }
+    }
+
+    // Handle local exports
+    for (const [name, rawItem] of localExports) {
+      results.set(name, { ...rawItem, id: fileIdentity(name) })
+    }
+
+    // Early return if no external exports
+    const allExternalExports = [
+      ...fromExports,
+      ...namespaceExports,
+      ...starExports,
+    ]
+    if (allExternalExports.length === 0) {
+      return results
+    }
+
+    if (depth >= maxDepth) {
+      parseWarnings.push(`Max depth exceeded at ${filePath}`)
+      return results
+    }
+
+    // Resolve module paths in parallel
+    const baseDirectory = directoryName(filePath)
+    const uniqueFromPaths = [
+      ...new Set(allExternalExports.map(([, , fromPath]) => fromPath)),
+    ]
+
+    const resolutionResults = await Promise.all(
+      uniqueFromPaths.map(async (fromPath) => ({
+        fromPath,
+        resolved: await this.#resolveModulePath(baseDirectory, fromPath),
+      }))
+    )
+
+    const resolutionMap = new Map<string, string | null>()
+    for (const { fromPath, resolved } of resolutionResults) {
+      resolutionMap.set(fromPath, resolved)
+    }
+
+    // Collect exports from resolved paths in parallel
+    const collectionMap = new Map<string, Map<string, ExportItem>>()
+    const pathsNeedingCollection = new Set<string>()
+
+    for (const [, , fromPath] of fromExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (resolved) {
+        pathsNeedingCollection.add(resolved)
+      }
+    }
+    for (const [, , fromPath] of starExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (resolved && isUnderScope(resolved, scopeDirectories)) {
+        pathsNeedingCollection.add(resolved)
+      }
+    }
+
+    // Filter out already visiting paths to prevent cycles
+    const newVisiting = new Set(visiting)
+    newVisiting.add(filePath)
+    const pathsToCollect = Array.from(pathsNeedingCollection).filter(
+      (p) => !newVisiting.has(p)
+    )
+
+    // Fetch and parse in parallel
+    const collectionResults = await Promise.all(
+      pathsToCollect.map(async (resolved) => {
+        const cacheKey = `${commitSha}:${resolved}`
+        let content = fileContentCache.get(cacheKey)
+
+        if (content === undefined) {
+          content = await this.#fetchFileAtCommit(resolved, commitSha)
+          fileContentCache.set(cacheKey, content)
+        }
+
+        if (!content)
+          return { resolved, exports: new Map<string, ExportItem>() }
+
+        // Check content cache
+        const contentHash = this.#hashContent(content)
+        const cachedExports = this.#exportParseCache.get(contentHash)
+        if (cachedExports) {
+          return { resolved, exports: cachedExports }
+        }
+
+        const childRawExports = scanModuleExports(resolved, content)
+        const childExports = await this.#resolveExportsFromRawOptimized(
+          resolved,
+          childRawExports,
+          commitSha,
+          depth + 1,
+          maxDepth,
+          scopeDirectories,
+          parseWarnings,
+          newVisiting,
+          fileContentCache
+        )
+
+        this.#exportParseCache.set(contentHash, childExports)
+        return { resolved, exports: childExports }
+      })
+    )
+
+    for (const { resolved, exports: childExports } of collectionResults) {
+      collectionMap.set(resolved, childExports)
+    }
+
+    // Process FROM exports
+    for (const [name, rawItem, fromPath] of fromExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (!resolved) continue
+
+      const targetExports = collectionMap.get(resolved)
+      const sourceName = rawItem.sourceName ?? name
+      const targetItem = targetExports?.get(sourceName)
+
+      if (targetItem) {
+        results.set(name, targetItem)
+      } else {
+        results.set(name, {
+          ...rawItem,
+          id: formatExportId(resolved, sourceName),
+        })
+      }
+    }
+
+    // Process NAMESPACE exports
+    for (const [name, rawItem, fromPath] of namespaceExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (!resolved) continue
+
+      results.set(name, {
+        ...rawItem,
+        id: formatExportId(resolved, '__NAMESPACE__'),
+      })
+    }
+
+    // Process STAR exports
+    for (const [, , fromPath] of starExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (!resolved || !isUnderScope(resolved, scopeDirectories)) continue
+
+      const children = collectionMap.get(resolved)
+      if (!children) continue
+
+      for (const [childName, childItem] of children) {
+        if (childName !== 'default' && !results.has(childName)) {
+          results.set(childName, childItem)
+        }
+      }
+    }
+
+    return results
+  }
+
+  async #inferEntryFile(scopeDirectory: string): Promise<string | null> {
+    for (const name of INDEX_FILE_CANDIDATES) {
+      const path = joinPaths(scopeDirectory, name)
+      const normalizedPath = normalizePath(path)
+      const entry =
+        this.getFileEntry(normalizedPath) ||
+        this.getFileEntry(`./${normalizedPath}`)
+      if (entry) {
+        return normalizedPath
+      }
+    }
+    return null
+  }
+
+  async #collectExportsFromFile(
+    filePath: string,
+    depth: number,
+    maxDepth: number,
+    scopeDirectories: string[],
+    _blobCache: Map<string, Map<string, ExportItem>>,
+    parseWarnings: string[],
+    visiting: Set<string>
+  ): Promise<Map<string, ExportItem>> {
+    const results = new Map<string, ExportItem>()
+
+    if (depth > maxDepth) {
+      parseWarnings.push(`Max depth exceeded at ${filePath}`)
+      return results
+    }
+
+    if (visiting.has(filePath)) {
+      return results
+    }
+    const visitingBranch = new Set(visiting)
+    visitingBranch.add(filePath)
+
+    // Read file content
+    let content: string
+    try {
+      content = await this.readFile(filePath)
+    } catch {
+      return results
+    }
+
+    // Check content cache first
+    const contentHash = this.#hashContent(content)
+    const cachedExports = this.#exportParseCache.get(contentHash)
+    if (cachedExports) {
+      return cachedExports
+    }
+
+    const rawExports = scanModuleExports(filePath, content)
+
+    const exportMap = await this.#resolveExportsFromRaw(
+      filePath,
+      rawExports,
+      null,
+      depth,
+      maxDepth,
+      scopeDirectories,
+      parseWarnings,
+      visitingBranch
+    )
+
+    // Cache the result
+    this.#exportParseCache.set(contentHash, exportMap)
+
+    return exportMap
+  }
+
+  async #resolveExportsFromRaw(
+    filePath: string,
+    rawExports: Map<string, ExportItem>,
+    commitSha: string | null,
+    depth: number,
+    maxDepth: number,
+    scopeDirectories: string[],
+    parseWarnings: string[],
+    visiting: Set<string>
+  ): Promise<Map<string, ExportItem>> {
+    const results = new Map<string, ExportItem>()
+    const fileIdentity = (name: string) => formatExportId(filePath, name)
+
+    // Partition exports by type
+    const localExports: Array<[string, ExportItem]> = []
+    const fromExports: Array<[string, ExportItem, string]> = []
+    const namespaceExports: Array<[string, ExportItem, string]> = []
+    const starExports: Array<[string, ExportItem, string]> = []
+
+    for (const [name, rawItem] of rawExports) {
+      if (rawItem.id === '__LOCAL__') {
+        localExports.push([name, rawItem])
+      } else if (rawItem.id.startsWith('__FROM__')) {
+        fromExports.push([name, rawItem, rawItem.id.slice(8)])
+      } else if (rawItem.id.startsWith('__NAMESPACE__')) {
+        namespaceExports.push([name, rawItem, rawItem.id.slice(13)])
+      } else if (rawItem.id.startsWith('__STAR__')) {
+        starExports.push([name, rawItem, rawItem.id.slice(8)])
+      }
+    }
+
+    // Handle local exports
+    for (const [name, rawItem] of localExports) {
+      results.set(name, { ...rawItem, id: fileIdentity(name) })
+    }
+
+    // Early return if no external exports
+    const allExternalExports = [
+      ...fromExports,
+      ...namespaceExports,
+      ...starExports,
+    ]
+    if (allExternalExports.length === 0) {
+      return results
+    }
+
+    // Resolve module paths in parallel
+    const baseDirectory = directoryName(filePath)
+    const uniqueFromPaths = [
+      ...new Set(allExternalExports.map(([, , fromPath]) => fromPath)),
+    ]
+
+    const resolutionResults = await Promise.all(
+      uniqueFromPaths.map(async (fromPath) => ({
+        fromPath,
+        resolved: await this.#resolveModulePath(baseDirectory, fromPath),
+      }))
+    )
+
+    const resolutionMap = new Map<string, string | null>()
+    for (const { fromPath, resolved } of resolutionResults) {
+      resolutionMap.set(fromPath, resolved)
+    }
+
+    // Collect exports from resolved paths
+    const collectionMap = new Map<string, Map<string, ExportItem>>()
+    const pathsNeedingCollection = new Set<string>()
+
+    for (const [, , fromPath] of fromExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (resolved) {
+        pathsNeedingCollection.add(resolved)
+      }
+    }
+    for (const [, , fromPath] of starExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (resolved && isUnderScope(resolved, scopeDirectories)) {
+        pathsNeedingCollection.add(resolved)
+      }
+    }
+
+    // Filter out already visiting paths to prevent cycles
+    const newVisiting = new Set(visiting)
+    newVisiting.add(filePath)
+    const pathsToCollect = Array.from(pathsNeedingCollection).filter(
+      (p) => !newVisiting.has(p)
+    )
+
+    // Fetch and parse in parallel
+    const collectionResults = await Promise.all(
+      pathsToCollect.map(async (resolved) => {
+        let content: string | null = null
+        try {
+          if (commitSha) {
+            content = await this.#fetchFileAtCommit(resolved, commitSha)
+          } else {
+            content = await this.readFile(resolved)
+          }
+        } catch {
+          return { resolved, exports: new Map<string, ExportItem>() }
+        }
+        if (!content)
+          return { resolved, exports: new Map<string, ExportItem>() }
+
+        // Check content cache
+        const contentHash = this.#hashContent(content)
+        const cachedExports = this.#exportParseCache.get(contentHash)
+        if (cachedExports) {
+          return { resolved, exports: cachedExports }
+        }
+
+        const childRawExports = scanModuleExports(resolved, content)
+        const childExports = await this.#resolveExportsFromRaw(
+          resolved,
+          childRawExports,
+          commitSha,
+          depth + 1,
+          maxDepth,
+          scopeDirectories,
+          parseWarnings,
+          newVisiting
+        )
+
+        this.#exportParseCache.set(contentHash, childExports)
+        return { resolved, exports: childExports }
+      })
+    )
+
+    for (const { resolved, exports: childExports } of collectionResults) {
+      collectionMap.set(resolved, childExports)
+    }
+
+    // Process FROM exports
+    for (const [name, rawItem, fromPath] of fromExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (!resolved) continue
+
+      const targetExports = collectionMap.get(resolved)
+      const sourceName = rawItem.sourceName ?? name
+      const targetItem = targetExports?.get(sourceName)
+
+      if (targetItem) {
+        results.set(name, targetItem)
+      } else {
+        results.set(name, {
+          ...rawItem,
+          id: formatExportId(resolved, sourceName),
+        })
+      }
+    }
+
+    // Process NAMESPACE exports
+    for (const [name, rawItem, fromPath] of namespaceExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (!resolved) continue
+
+      results.set(name, {
+        ...rawItem,
+        id: formatExportId(resolved, '__NAMESPACE__'),
+      })
+    }
+
+    // Process STAR exports
+    for (const [, , fromPath] of starExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (!resolved || !isUnderScope(resolved, scopeDirectories)) continue
+
+      const children = collectionMap.get(resolved)
+      if (!children) continue
+
+      for (const [childName, childItem] of children) {
+        if (childName !== 'default' && !results.has(childName)) {
+          results.set(childName, childItem)
+        }
+      }
+    }
+
+    return results
+  }
+
+  async #resolveModulePath(
+    baseDir: string,
+    specifier: string
+  ): Promise<string | null> {
+    if (!specifier.startsWith('.')) {
+      return null
+    }
+
+    const basePath = joinPaths(baseDir, specifier)
+    const fileCandidates = EXTENSION_PRIORITY.map((ext) => basePath + ext)
+    const indexCandidates = INDEX_FILE_CANDIDATES.map((name) =>
+      joinPaths(basePath, name)
+    )
+
+    for (const candidate of [...fileCandidates, ...indexCandidates]) {
+      const normalized = normalizePath(candidate)
+      const entry =
+        this.getFileEntry(normalized) || this.getFileEntry(`./${normalized}`)
+      if (entry) {
+        return normalized
+      }
+    }
+
+    return null
+  }
+
+  async #getCommitHistoryForPaths(
+    paths: string[],
+    limit?: number
+  ): Promise<Array<{ sha: string; unix: number; release?: string }>> {
+    const commits: Array<{ sha: string; unix: number; release?: string }> = []
+
+    switch (this.#host) {
+      case 'github': {
+        if (!this.#ownerEncoded || !this.#repoEncoded) return commits
+        const pathParam =
+          paths.length === 1 ? `&path=${encodeURIComponent(paths[0])}` : ''
+        const perPage = limit ? Math.min(limit, 100) : 100
+        const url = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/commits?sha=${encodeURIComponent(this.#ref)}&per_page=${perPage}${pathParam}`
+
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return commits
+
+        const data = await response.json().catch(() => [])
+        if (!Array.isArray(data)) return commits
+
+        for (const commit of data) {
+          const sha = commit?.sha
+          const dateStr =
+            commit?.commit?.author?.date || commit?.commit?.committer?.date
+          if (!sha || !dateStr) continue
+          const date = new Date(dateStr)
+          if (isNaN(date.getTime())) continue
+          commits.push({
+            sha,
+            unix: Math.floor(date.getTime() / 1000),
+          })
+        }
+        break
+      }
+      case 'gitlab': {
+        const project = encodeURIComponent(this.#repository)
+        const pathParam =
+          paths.length === 1 ? `&path=${encodeURIComponent(paths[0])}` : ''
+        const perPage = limit ? Math.min(limit, 100) : 100
+        const url = `${this.#apiBaseUrl}/projects/${project}/repository/commits?ref_name=${encodeURIComponent(this.#ref)}&per_page=${perPage}${pathParam}`
+
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return commits
+
+        const data = await response.json().catch(() => [])
+        if (!Array.isArray(data)) return commits
+
+        for (const commit of data) {
+          const sha = commit?.id
+          const dateStr = commit?.committed_date || commit?.created_at
+          if (!sha || !dateStr) continue
+          const date = new Date(dateStr)
+          if (isNaN(date.getTime())) continue
+          commits.push({
+            sha,
+            unix: Math.floor(date.getTime() / 1000),
+          })
+        }
+        break
+      }
+      case 'bitbucket': {
+        if (!this.#ownerEncoded || !this.#repoEncoded) return commits
+        const pathParam =
+          paths.length === 1 ? `&path=${encodeURIComponent(paths[0])}` : ''
+        const pageLen = limit ? Math.min(limit, 100) : 100
+        const url = `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/commits/${encodeURIComponent(this.#ref)}?pagelen=${pageLen}${pathParam}`
+
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return commits
+
+        const data = await response.json().catch(() => ({}))
+        const values = Array.isArray(data?.values) ? data.values : []
+
+        for (const commit of values) {
+          const sha = commit?.hash
+          const dateStr = commit?.date
+          if (!sha || !dateStr) continue
+          const date = new Date(dateStr)
+          if (isNaN(date.getTime())) continue
+          commits.push({
+            sha,
+            unix: Math.floor(date.getTime() / 1000),
+          })
+        }
+        break
+      }
+    }
+
+    return commits
+  }
+
+  async #fetchFileAtCommit(
+    filePath: string,
+    commitSha: string
+  ): Promise<string | null> {
+    try {
+      switch (this.#host) {
+        case 'github': {
+          if (!this.#ownerEncoded || !this.#repoEncoded) return null
+          const url = `https://raw.githubusercontent.com/${this.#ownerEncoded}/${this.#repoEncoded}/${commitSha}/${filePath}`
+          const response = await fetch(url, {
+            headers: this.#noAuthHeaders,
+            referrerPolicy: 'no-referrer',
+          })
+          if (!response.ok) return null
+          return await response.text()
+        }
+        case 'gitlab': {
+          const project = encodeURIComponent(this.#repository)
+          const encodedPath = encodeURIComponent(filePath)
+          const url = `${this.#apiBaseUrl}/projects/${project}/repository/files/${encodedPath}/raw?ref=${commitSha}`
+          const response = await this.#fetchWithRetry(url)
+          if (!response.ok) return null
+          return await response.text()
+        }
+        case 'bitbucket': {
+          if (!this.#ownerEncoded || !this.#repoEncoded) return null
+          const url = `https://bitbucket.org/${this.#ownerEncoded}/${this.#repoEncoded}/raw/${commitSha}/${filePath}`
+          const response = await fetch(url, {
+            headers: this.#noAuthHeaders,
+            referrerPolicy: 'no-referrer',
+          })
+          if (!response.ok) return null
+          return await response.text()
+        }
+      }
+    } catch {
+      return null
+    }
+    return null
   }
 
   isFilePathGitIgnored(): boolean {

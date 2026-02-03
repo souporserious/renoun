@@ -27,15 +27,21 @@ import { ensureRelativePath, relativePath } from '../utils/path.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
-  FileSystem,
+  BaseFileSystem,
   type FileSystemOptions,
   type FileSystemWriteFileContent,
   type FileWritableStream,
   type FileReadableStream,
+  type AsyncFileSystem,
+  type SyncFileSystem,
+  type WritableFileSystem,
 } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
 
-export class NodeFileSystem extends FileSystem {
+export class NodeFileSystem
+  extends BaseFileSystem
+  implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
+{
   #tsConfigPath: string
 
   constructor(options: FileSystemOptions = {}) {

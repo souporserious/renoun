@@ -26,7 +26,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { createInterface } from 'node:readline'
 import os from 'node:os'
 import { Writable } from 'node:stream'
-import { ts } from 'ts-morph'
+
 import {
   ensureRelativePath,
   joinPaths,
@@ -35,57 +35,52 @@ import {
 } from '../utils/path.ts'
 import type { GitMetadata as LocalGitMetadata } from '../utils/get-local-git-file-metadata.ts'
 import {
-  FileSystem,
+  hasJavaScriptLikeExtension,
+  type JavaScriptLikeExtension,
+} from '../utils/is-javascript-like-extension.ts'
+import {
+  BaseFileSystem,
   type FileReadableStream,
   type FileSystemOptions,
   type FileSystemWriteFileContent,
   type FileWritableStream,
+  type AsyncFileSystem,
+  type SyncFileSystem,
+  type WritableFileSystem,
 } from './FileSystem.ts'
-import type { DirectoryEntry } from './types.ts'
-
-export interface GitExportMetadata {
-  firstCommitDate?: Date
-  lastCommitDate?: Date
-  firstCommitHash?: string
-  lastCommitHash?: string
-}
-
-export interface GitExportMetadataQuery {
-  exportName?: string
-  exportPath?: string[]
-}
-
-export interface GitAuthor {
-  name: string
-  email: string
-  commitCount: number
-  firstCommitDate?: Date
-  lastCommitDate?: Date
-}
-
-export interface GitBaseMetadata {
-  path: string
-  ref: string
-  refCommit: string
-  firstCommitDate?: string
-  lastCommitDate?: string
-  firstCommitHash?: string
-  lastCommitHash?: string
-  authors: GitAuthor[]
-}
-
-export interface GitFileMetadata extends GitBaseMetadata {
-  kind: 'file'
-}
-
-export interface GitModuleMetadata extends GitBaseMetadata {
-  kind: 'module'
-  exports: Record<string, GitExportMetadata>
-}
-
-export type GitPathMetadata = GitFileMetadata | GitModuleMetadata
-
-export type GitPathMetadataKind = 'auto' | 'file' | 'module'
+import type {
+  DirectoryEntry,
+  GitAuthor,
+  GitExportMetadata,
+  GitFileMetadata,
+  GitModuleMetadata,
+  GitPathMetadata,
+  ExportHistoryOptions,
+  ExportHistoryReport,
+} from './types.ts'
+import {
+  type ExportItem,
+  MAX_PARSE_BYTES,
+  EXTENSION_PRIORITY,
+  INDEX_FILE_CANDIDATES,
+  RENAME_SIGNATURE_DICE_MIN,
+  RENAME_SIGNATURE_DICE_MIN_RENAMED_FILE,
+  RENAME_SIGNATURE_DICE_MARGIN,
+  RENAME_PATH_DICE_MIN,
+  parseExportId,
+  formatExportId,
+  getExportParseCacheKey,
+  scanModuleExports,
+  getDiceSimilarity,
+  isUnderScope,
+  mapWithLimit,
+  LRUMap,
+  looksLikeFilePath,
+  buildExportComparisonMaps,
+  detectCrossFileRenames,
+  mergeRenameHistory,
+  checkAndCollapseOscillation,
+} from './export-analysis.ts'
 
 export interface LocalGitFileSystemOptions extends FileSystemOptions {
   /** Repository source - remote URL or local path. */
@@ -122,100 +117,6 @@ export interface LocalGitFileSystemOptions extends FileSystemOptions {
   maxDepth?: number
 }
 
-export interface ExportHistoryOptions {
-  entry: string | string[]
-  limit?: number
-  maxDepth?: number
-  detectUpdates?: boolean
-  updateMode?: 'body' | 'signature'
-  startRef?: string
-  endRef?: string
-}
-
-interface BaseChange {
-  /** The SHA of the commit. */
-  sha: string
-
-  /** The Unix timestamp of the commit. */
-  unix: number
-
-  /** The date of the commit. */
-  date: string
-
-  /** The release of the commit. */
-  release?: string
-
-  /** The exported name of the symbol. */
-  name: string
-
-  /** The file path where the export is defined. */
-  filePath: string
-
-  /** The ID of the export (format: "path/to/file.ts::exportName"). */
-  id: string
-}
-
-export interface AddedChange extends BaseChange {
-  kind: 'Added'
-}
-
-export interface UpdatedChange extends BaseChange {
-  kind: 'Updated'
-
-  /** Whether the signature has changed. */
-  signature: boolean
-}
-
-export interface RenamedChange extends BaseChange {
-  kind: 'Renamed'
-
-  /** The previous name of the export. Only defined if the export name changed. */
-  previousName?: string
-
-  /** The previous file path of the export. Only defined if the file path changed. */
-  previousFilePath?: string
-
-  /** The previous ID of the export. */
-  previousId: string
-}
-
-export interface RemovedChange extends BaseChange {
-  kind: 'Removed'
-}
-
-export interface DeprecatedChange extends BaseChange {
-  kind: 'Deprecated'
-
-  /** The message of the deprecated export. */
-  message?: string
-}
-
-/** The change to an export. */
-export type ExportChange =
-  | AddedChange
-  | UpdatedChange
-  | RenamedChange
-  | RemovedChange
-  | DeprecatedChange
-
-/**
- * The report of export history.
- *
- * The following criteria is used to identify an export across commits:
- * - ID is the ultimate defining symbol location when resolvable
- * - Format: "path/to/file.ts::exportName"
- * - Re-exports resolve to their source; local exports use defining file
- * - Same ID across commits = same underlying symbol (enables rename detection)
- */
-export interface ExportHistoryReport {
-  generatedAt: string
-  repo: string
-  entryFiles: string[]
-  exports: Record<string, ExportChange[]>
-  nameToId: Record<string, string[]>
-  parseWarnings?: string[]
-}
-
 interface GitObjectMeta {
   sha: string
   type: string
@@ -240,17 +141,6 @@ interface FileExportIndex {
   >
 }
 
-interface ExportItem {
-  name: string
-  sourceName?: string
-  id: string // "path/to/file::ExportName" or internal flag like "__LOCAL__"
-  bodyHash: string // SHA-1 of the AST node text (for update detection)
-  signatureHash: string // SHA-1 of the export signature (for update detection)
-  signatureText: string
-  deprecated?: true
-  deprecatedMessage?: string
-}
-
 interface GitLogCommit {
   sha: string
   unix: number
@@ -261,82 +151,16 @@ interface ExportHistoryCommit extends GitLogCommit {
   release?: string
 }
 
-const RENAME_SIGNATURE_DICE_MIN = 0.9
-const RENAME_SIGNATURE_DICE_MIN_RENAMED_FILE = 0.7
-const RENAME_SIGNATURE_DICE_MARGIN = 0.05
-const RENAME_PATH_DICE_MIN = 0.6
-const MAX_PARSE_BYTES = 1024 * 1024 // 1MB limit for AST parsing
-const ALLOWED_ENTRY_EXT = /\.(js|jsx|ts|tsx|mjs|mts|cjs|cts)$/i
 const FILE_META_CACHE_MAX = 1000
 const FILE_INDEX_CACHE_MAX = 1000
 const EXPORT_HISTORY_CACHE_MAX = 200
 const GIT_LOG_CACHE_MAX = 128
 const REMOTE_REF_CACHE_TTL_MS = 60_000
 const REMOTE_REF_TIMEOUT_MS = 8_000
-const EXPORT_ID_SEPARATOR = '::'
-let sharedTsPrinter: ts.Printer | null = null
 const remoteRefCache = new Map<
   string,
   { remoteSha: string | null; checkedAt: number }
 >()
-
-function getSharedTsPrinter() {
-  if (!sharedTsPrinter) {
-    sharedTsPrinter = ts.createPrinter({ removeComments: true })
-  }
-  return sharedTsPrinter
-}
-
-function parseExportId(id: string): { file: string; name: string } | null {
-  const idx = id.indexOf(EXPORT_ID_SEPARATOR)
-  if (idx === -1) {
-    return null
-  }
-  return {
-    file: id.slice(0, idx),
-    name: id.slice(idx + EXPORT_ID_SEPARATOR.length),
-  }
-}
-
-function formatExportId(file: string, name: string): string {
-  return `${file}${EXPORT_ID_SEPARATOR}${name}`
-}
-
-function getExportParseCacheKey(sha: string): string {
-  return sha
-}
-
-class LRUMap<K, V> extends Map<K, V> {
-  #maxSize: number
-
-  constructor(maxSize: number) {
-    super()
-    this.#maxSize = maxSize
-  }
-
-  get(key: K): V | undefined {
-    const value = super.get(key)
-    if (value !== undefined) {
-      super.delete(key)
-      super.set(key, value)
-    }
-    return value
-  }
-
-  set(key: K, value: V): this {
-    if (super.has(key)) {
-      super.delete(key)
-    }
-    super.set(key, value)
-    if (this.size > this.#maxSize) {
-      const first = this.keys().next().value as K | undefined
-      if (first !== undefined) {
-        this.delete(first)
-      }
-    }
-    return this
-  }
-}
 
 interface PrepareRepoOptions {
   spec: string
@@ -863,7 +687,10 @@ async function spawnAsync(
   return result.stdout
 }
 
-export class LocalGitFileSystem extends FileSystem {
+export class LocalGitFileSystem
+  extends BaseFileSystem
+  implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
+{
   #tsConfigPath: string
   readonly repository: string
   readonly cloneDepth?: number
@@ -1106,6 +933,11 @@ export class LocalGitFileSystem extends FileSystem {
     }
     const size = Number(result.stdout?.trim())
     return Number.isFinite(size) ? size : undefined
+  }
+
+  async getFileByteLength(path: string): Promise<number | undefined> {
+    await this.#ensureRepoReady()
+    return this.getFileByteLengthSync(path)
   }
 
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {
@@ -1818,7 +1650,7 @@ export class LocalGitFileSystem extends FileSystem {
 
     // Strict Validation: Only accept code files as entry points
     for (const source of uniqueEntrySources) {
-      if (looksLikeFilePath(source) && !ALLOWED_ENTRY_EXT.test(source)) {
+      if (looksLikeFilePath(source) && !hasJavaScriptLikeExtension(source)) {
         throw new Error(
           `Invalid entry file: "${source}". Only JavaScript/TypeScript source files are allowed.`
         )
@@ -2058,35 +1890,8 @@ export class LocalGitFileSystem extends FileSystem {
         }
 
         if (previousExports !== null) {
-          const previousNamesById = new Map<string, Set<string>>()
-          for (const [previousName, previousItems] of previousExports) {
-            for (const id of previousItems.keys()) {
-              let names = previousNamesById.get(id)
-              if (!names) {
-                names = new Set()
-                previousNamesById.set(id, names)
-              }
-              names.add(previousName)
-            }
-          }
-
-          const previousById = new Map<string, ExportItem>()
-          for (const items of previousExports.values()) {
-            for (const [id, item] of items) {
-              if (!previousById.has(id)) {
-                previousById.set(id, item)
-              }
-            }
-          }
-
-          const currentById = new Map<string, ExportItem>()
-          for (const items of currentExports.values()) {
-            for (const [id, item] of items) {
-              if (!currentById.has(id)) {
-                currentById.set(id, item)
-              }
-            }
-          }
+          const { previousById, currentById, previousNamesById } =
+            buildExportComparisonMaps(previousExports, currentExports)
 
           const removedIds: string[] = []
           for (const id of previousById.keys()) {
@@ -2294,95 +2099,15 @@ export class LocalGitFileSystem extends FileSystem {
             }
           }
 
-          const removedByHash = new Map<string, string[]>()
-          for (const removedId of removedIds) {
-            if (usedRemovedIds.has(removedId)) {
-              continue
-            }
-            const removedItem = previousById.get(removedId)
-            if (!removedItem) {
-              continue
-            }
-            const key = `${removedItem.bodyHash}|${removedItem.signatureHash}`
-            const list = removedByHash.get(key)
-            if (list) {
-              list.push(removedId)
-            } else removedByHash.set(key, [removedId])
-          }
-
-          for (const [id, currentItem] of currentById) {
-            if (previousById.has(id)) {
-              continue
-            }
-            if (renamePairs.has(id)) {
-              continue
-            }
-            const key = `${currentItem.bodyHash}|${currentItem.signatureHash}`
-            const candidates = removedByHash.get(key)
-            if (!candidates || candidates.length === 0) {
-              continue
-            }
-
-            let chosen: string | null = null
-
-            if (candidates.length === 1) {
-              chosen = candidates[0]
-            } else {
-              // Tie-break by file path similarity (only when it's meaningfully close)
-              const parsedCurrent = parseExportId(id)
-              if (!parsedCurrent) {
-                continue
-              }
-
-              let best = { removedId: '', score: -1 }
-              let second = { removedId: '', score: -1 }
-
-              for (const removedId of candidates) {
-                if (usedRemovedIds.has(removedId)) {
-                  continue
-                }
-                const parsedRemoved = parseExportId(removedId)
-                if (!parsedRemoved) {
-                  continue
-                }
-
-                const score = getDiceSimilarity(
-                  parsedCurrent.file,
-                  parsedRemoved.file
-                )
-                if (score > best.score) {
-                  second = best
-                  best = { removedId, score }
-                } else if (score > second.score) {
-                  second = { removedId, score }
-                }
-              }
-
-              if (
-                best.score >= RENAME_PATH_DICE_MIN &&
-                best.score - second.score >= RENAME_SIGNATURE_DICE_MARGIN
-              ) {
-                chosen = best.removedId
-              } else {
-                // ambiguous: keep conservative behavior
-                continue
-              }
-            }
-
-            if (!chosen) {
-              continue
-            }
-            if (usedRemovedIds.has(chosen)) {
-              continue
-            }
-            const removedItem = previousById.get(chosen)
-            if (!removedItem) {
-              continue
-            }
-
-            renamePairs.set(id, { oldId: chosen })
-            usedRemovedIds.add(chosen)
-          }
+          detectCrossFileRenames(
+            previousById,
+            currentById,
+            removedIds,
+            usedRemovedIds,
+            renamePairs,
+            RENAME_PATH_DICE_MIN,
+            RENAME_SIGNATURE_DICE_MARGIN
+          )
 
           const addedIds = new Set<string>()
           const renamedIds = new Set<string>()
@@ -2409,19 +2134,8 @@ export class LocalGitFileSystem extends FileSystem {
                 !deprecatedIds.has(id)
 
               if (renameInfo) {
-                if (exports[renameInfo.oldId] && renameInfo.oldId !== id) {
-                  const oldHistory = exports[renameInfo.oldId]
-                  if (oldHistory) {
-                    if (history.length === 0) {
-                      history = oldHistory
-                      exports[id] = history
-                    } else if (oldHistory !== history) {
-                      history = [...oldHistory, ...history]
-                      exports[id] = history
-                    }
-                    delete exports[renameInfo.oldId]
-                  }
-                }
+                history = mergeRenameHistory(exports, id, renameInfo.oldId)
+
                 if (!renamedIds.has(id)) {
                   // Parse IDs to determine what changed (file, name, or both)
                   const currentParsed = parseExportId(id)
@@ -2481,20 +2195,12 @@ export class LocalGitFileSystem extends FileSystem {
                     renamedIds.add(id)
                   }
                 } else if (!addedIds.has(id)) {
-                  // Check for oscillation: if last entry was "Removed" in same release, collapse
-                  // Only collapse when release is defined (not in tag-less mode)
-                  const lastEntry = history[history.length - 1]
-                  if (
-                    lastEntry &&
-                    lastEntry.kind === 'Removed' &&
-                    changeBase.release !== undefined &&
-                    lastEntry.release === changeBase.release
-                  ) {
-                    // Remove the "Removed" entry - it was temporary within this release
-                    history.pop()
-                    // If the re-added version is deprecated, we'll record that below in willDeprecate check
-                    // If signature changed, we might want to emit "Updated" but for now we collapse
-                  } else {
+                  const collapsed = checkAndCollapseOscillation(
+                    history,
+                    'Added',
+                    changeBase.release
+                  )
+                  if (!collapsed) {
                     history.push({
                       ...changeBase,
                       kind: 'Added',
@@ -2554,22 +2260,15 @@ export class LocalGitFileSystem extends FileSystem {
             if (!removedItem) {
               continue
             }
-            // Check for oscillation: if last entry was "Added" in same release, collapse
-            // Only collapse when release is defined (not in tag-less mode)
-            const lastEntry = history[history.length - 1]
-            if (
-              lastEntry &&
-              lastEntry.kind === 'Added' &&
-              changeBase.release !== undefined &&
-              lastEntry.release === changeBase.release
-            ) {
-              // Remove the "Added" entry - it was temporary within this release
-              history.pop()
-              // If history is now empty, remove the export entry entirely
-              if (history.length === 0) {
-                delete exports[removedId]
-              }
-            } else {
+            const collapsed = checkAndCollapseOscillation(
+              history,
+              'Removed',
+              changeBase.release
+            )
+            if (collapsed && history.length === 0) {
+              // History is now empty, remove the export entry entirely
+              delete exports[removedId]
+            } else if (!collapsed) {
               history.push({
                 ...changeBase,
                 kind: 'Removed',
@@ -2651,7 +2350,7 @@ export class LocalGitFileSystem extends FileSystem {
     this.#assertOpen()
 
     const path = this.#normalizeToRepoPath(filePath)
-    const result = isJavaScriptLikePath(path)
+    const result = hasJavaScriptLikeExtension(path)
       ? await this.getModuleMetadata(path)
       : await this.getFileMetadata(path)
 
@@ -2695,7 +2394,7 @@ export class LocalGitFileSystem extends FileSystem {
     await this.#ensureRepoReady()
 
     const base = await this.getFileMetadata(filePath)
-    if (!isJavaScriptLikePath(base.path)) {
+    if (!hasJavaScriptLikeExtension(base.path)) {
       return { ...base, kind: 'module', exports: {} }
     }
 
@@ -4164,521 +3863,6 @@ async function collectExportsFromFile(
   return results
 }
 
-function getCanonicalSurface(
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
-  printer: ts.Printer
-): string {
-  if (ts.isFunctionDeclaration(node)) {
-    const signatureNode = ts.factory.updateFunctionDeclaration(
-      node,
-      node.modifiers,
-      node.asteriskToken,
-      node.name,
-      node.typeParameters,
-      node.parameters,
-      node.type,
-      undefined
-    )
-    return printer.printNode(ts.EmitHint.Unspecified, signatureNode, sourceFile)
-  }
-
-  if (ts.isMethodDeclaration(node)) {
-    const signatureNode = ts.factory.updateMethodDeclaration(
-      node,
-      node.modifiers,
-      node.asteriskToken,
-      node.name,
-      node.questionToken,
-      node.typeParameters,
-      node.parameters,
-      node.type,
-      undefined
-    )
-    return printer.printNode(ts.EmitHint.Unspecified, signatureNode, sourceFile)
-  }
-
-  if (ts.isConstructorDeclaration(node)) {
-    const signatureNode = ts.factory.updateConstructorDeclaration(
-      node,
-      node.modifiers,
-      node.parameters,
-      undefined
-    )
-    return printer.printNode(ts.EmitHint.Unspecified, signatureNode, sourceFile)
-  }
-
-  if (ts.isClassDeclaration(node)) {
-    const members = node.members.map((member) => {
-      if (ts.isMethodDeclaration(member)) {
-        return ts.factory.updateMethodDeclaration(
-          member,
-          member.modifiers,
-          member.asteriskToken,
-          member.name,
-          member.questionToken,
-          member.typeParameters,
-          member.parameters,
-          member.type,
-          undefined
-        )
-      }
-      if (ts.isConstructorDeclaration(member)) {
-        return ts.factory.updateConstructorDeclaration(
-          member,
-          member.modifiers,
-          member.parameters,
-          undefined
-        )
-      }
-      if (ts.isPropertyDeclaration(member)) {
-        return ts.factory.updatePropertyDeclaration(
-          member,
-          member.modifiers,
-          member.name,
-          member.questionToken ?? member.exclamationToken,
-          member.type,
-          undefined
-        )
-      }
-      return member
-    })
-    const signatureNode = ts.factory.updateClassDeclaration(
-      node,
-      node.modifiers,
-      node.name,
-      node.typeParameters,
-      node.heritageClauses,
-      members
-    )
-    return printer.printNode(ts.EmitHint.Unspecified, signatureNode, sourceFile)
-  }
-
-  if (ts.isVariableDeclaration(node)) {
-    const signatureNode = ts.factory.updateVariableDeclaration(
-      node,
-      node.name,
-      node.exclamationToken,
-      node.type,
-      undefined
-    )
-    return printer.printNode(ts.EmitHint.Unspecified, signatureNode, sourceFile)
-  }
-
-  return printer.printNode(ts.EmitHint.Unspecified, node, sourceFile)
-}
-
-/** Get the TypeScript script kind for a file path. */
-function getScriptKindForPath(fileName: string): ts.ScriptKind {
-  const lower = fileName.toLowerCase()
-  if (lower.endsWith('.tsx')) {
-    return ts.ScriptKind.TSX
-  }
-  if (
-    lower.endsWith('.ts') ||
-    lower.endsWith('.mts') ||
-    lower.endsWith('.cts')
-  ) {
-    return ts.ScriptKind.TS
-  }
-  if (lower.endsWith('.jsx')) {
-    return ts.ScriptKind.JSX
-  }
-  if (
-    lower.endsWith('.js') ||
-    lower.endsWith('.mjs') ||
-    lower.endsWith('.cjs')
-  ) {
-    return ts.ScriptKind.JS
-  }
-  if (lower.endsWith('.json')) {
-    return ts.ScriptKind.JSON
-  }
-  return ts.ScriptKind.Unknown
-}
-
-/** Scan exports from a file using the TypeScript AST. */
-function scanModuleExports(
-  fileName: string,
-  content: string
-): Map<string, ExportItem> {
-  const exports = new Map<string, ExportItem>()
-
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    content,
-    ts.ScriptTarget.Latest,
-    false, // setParentNodes: false is faster
-    getScriptKindForPath(fileName)
-  )
-
-  const printer = getSharedTsPrinter()
-  const declarationDeprecations = new Map<string, DeprecatedInfo>()
-
-  const getHashes = (node: ts.Node) => {
-    const fullText = node.getText(sourceFile).replace(/\s+/g, ' ')
-    const bodyHash = createHash('sha1')
-      .update(fullText)
-      .digest('hex')
-      .substring(0, 8)
-
-    const signatureText = getCanonicalSurface(node, sourceFile, printer)
-    const surfaceText = signatureText.replace(/\s+/g, ' ')
-    const signatureHash = createHash('sha1')
-      .update(surfaceText)
-      .digest('hex')
-      .substring(0, 8)
-
-    return { bodyHash, signatureHash, signatureText }
-  }
-
-  ts.forEachChild(sourceFile, (node) => {
-    if (ts.isVariableStatement(node)) {
-      const statementInfo = getDeprecatedInfo(node, sourceFile)
-      node.declarationList.declarations.forEach((declaration) => {
-        const declarationInfo =
-          getDeprecatedInfo(declaration, sourceFile) ?? statementInfo
-        if (!declarationInfo) {
-          return
-        }
-        if (ts.isIdentifier(declaration.name)) {
-          declarationDeprecations.set(declaration.name.text, declarationInfo)
-        } else if (
-          ts.isObjectBindingPattern(declaration.name) ||
-          ts.isArrayBindingPattern(declaration.name)
-        ) {
-          const boundVariables = getBindingIdentifiers(declaration.name)
-          boundVariables.forEach((name) => {
-            declarationDeprecations.set(name, declarationInfo)
-          })
-        }
-      })
-      return
-    }
-
-    if (
-      ts.isFunctionDeclaration(node) ||
-      ts.isClassDeclaration(node) ||
-      ts.isTypeAliasDeclaration(node) ||
-      ts.isInterfaceDeclaration(node) ||
-      ts.isEnumDeclaration(node)
-    ) {
-      const info = getDeprecatedInfo(node, sourceFile)
-      if (info && node.name && ts.isIdentifier(node.name)) {
-        declarationDeprecations.set(node.name.text, info)
-      }
-    }
-  })
-
-  ts.forEachChild(sourceFile, (node) => {
-    // Export Declaration: export { x } from 'y'; export * from 'z';
-    if (ts.isExportDeclaration(node)) {
-      if (node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-        const fromModule = node.moduleSpecifier.text
-
-        if (node.exportClause) {
-          // export { a, b as c } from '...'
-          if (ts.isNamedExports(node.exportClause)) {
-            node.exportClause.elements.forEach((element) => {
-              const exportedName = element.name.text
-              const sourceName = element.propertyName?.text ?? exportedName
-              exports.set(exportedName, {
-                name: exportedName,
-                sourceName,
-                id: `__FROM__${fromModule}`,
-                ...getHashes(element),
-              })
-            })
-          } else if (ts.isNamespaceExport(node.exportClause)) {
-            const exportedName = node.exportClause.name.text
-            exports.set(exportedName, {
-              name: exportedName,
-              id: `__NAMESPACE__${fromModule}`,
-              ...getHashes(node),
-            })
-          }
-        } else {
-          // export * from '...'
-          exports.set(`__STAR__${fromModule}`, {
-            name: '*',
-            id: `__STAR__${fromModule}`,
-            ...getHashes(node),
-          })
-        }
-      } else if (node.exportClause && ts.isNamedExports(node.exportClause)) {
-        // export { x }; (Local export)
-        node.exportClause.elements.forEach((element) => {
-          const deprecatedInfo = declarationDeprecations.get(element.name.text)
-          exports.set(element.name.text, {
-            name: element.name.text,
-            id: '__LOCAL__',
-            ...getHashes(element),
-            ...(deprecatedInfo ?? {}),
-          })
-        })
-      }
-      return
-    }
-
-    // Variable Statement: export const x = 1;
-    if (ts.isVariableStatement(node) && hasExportModifier(node)) {
-      const statementInfo = getDeprecatedInfo(node, sourceFile)
-      node.declarationList.declarations.forEach((declaration) => {
-        const deprecatedInfo =
-          getDeprecatedInfo(declaration, sourceFile) ??
-          statementInfo ??
-          (ts.isIdentifier(declaration.name)
-            ? declarationDeprecations.get(declaration.name.text)
-            : null)
-        if (ts.isIdentifier(declaration.name)) {
-          exports.set(declaration.name.text, {
-            name: declaration.name.text,
-            id: '__LOCAL__',
-            ...getHashes(declaration),
-            ...(deprecatedInfo ?? {}),
-          })
-        } else if (
-          ts.isObjectBindingPattern(declaration.name) ||
-          ts.isArrayBindingPattern(declaration.name)
-        ) {
-          const boundVariables = getBindingIdentifiers(declaration.name)
-          boundVariables.forEach((name) => {
-            exports.set(name, {
-              name,
-              id: '__LOCAL__',
-              ...getHashes(declaration),
-              ...(deprecatedInfo ?? declarationDeprecations.get(name) ?? {}),
-            })
-          })
-        }
-      })
-      return
-    }
-
-    // Functions/Classes/Types/Interfaces
-    if (
-      (ts.isFunctionDeclaration(node) ||
-        ts.isClassDeclaration(node) ||
-        ts.isTypeAliasDeclaration(node) ||
-        ts.isInterfaceDeclaration(node) ||
-        ts.isEnumDeclaration(node)) &&
-      hasExportModifier(node)
-    ) {
-      const deprecatedInfo =
-        getDeprecatedInfo(node, sourceFile) ??
-        (node.name && ts.isIdentifier(node.name)
-          ? declarationDeprecations.get(node.name.text)
-          : null)
-      if (node.name && ts.isIdentifier(node.name)) {
-        exports.set(node.name.text, {
-          name: node.name.text,
-          id: '__LOCAL__',
-          ...getHashes(node),
-          ...(deprecatedInfo ?? {}),
-        })
-      }
-      const isDefault = hasDefaultModifier(node)
-      if (isDefault) {
-        exports.set('default', {
-          name: 'default',
-          id: '__LOCAL__',
-          ...getHashes(node),
-          ...(deprecatedInfo ?? {}),
-        })
-      }
-      return
-    }
-
-    // Export Assignment: export = x;
-    if (ts.isExportAssignment(node)) {
-      const deprecatedInfo = getDeprecatedInfo(node, sourceFile)
-      exports.set('default', {
-        name: 'default',
-        id: '__LOCAL__',
-        ...getHashes(node),
-        ...(deprecatedInfo ?? {}),
-      })
-    }
-  })
-
-  return exports
-}
-
-interface DeprecatedInfo {
-  deprecated: true
-  deprecatedMessage?: string
-}
-
-/**
- * Recursively extracts the text representation of an EntityName or JSDocMemberName
- */
-function getEntityNameText(name: ts.EntityName | ts.JSDocMemberName): string {
-  if (ts.isIdentifier(name)) {
-    return name.escapedText as string
-  }
-  if (ts.isQualifiedName(name)) {
-    // QualifiedName: left.right
-    return `${getEntityNameText(name.left)}.${name.right.escapedText as string}`
-  }
-  // JSDocMemberName: left#right
-  return `${getEntityNameText(name.left)}#${name.right.escapedText as string}`
-}
-
-/**
- * Extracts text from a JSDoc comment, which can be a string or an array of
- * JSDocComment nodes (JSDocText, JSDocLink, etc.)
- */
-function getJSDocCommentText(
-  comment: string | ts.NodeArray<ts.JSDocComment> | undefined
-): string | undefined {
-  if (!comment) return undefined
-  if (typeof comment === 'string') return comment
-
-  // It's an array of JSDocComment nodes - extract text from each
-  const parts: string[] = []
-  for (const node of comment) {
-    // Check node kind for JSDocText (SyntaxKind.JSDocText = 326 in TS 5.x)
-    if (node.kind === ts.SyntaxKind.JSDocText) {
-      parts.push((node as ts.JSDocText).text)
-    } else if (
-      node.kind === ts.SyntaxKind.JSDocLink ||
-      node.kind === ts.SyntaxKind.JSDocLinkCode ||
-      node.kind === ts.SyntaxKind.JSDocLinkPlain
-    ) {
-      // For links, include the link text or extract the name from the identifier
-      const linkNode = node as ts.JSDocLink
-      let linkText = linkNode.text
-      if (!linkText && linkNode.name) {
-        linkText = getEntityNameText(linkNode.name)
-      }
-      if (linkText) parts.push(linkText)
-    }
-  }
-
-  const result = parts.join('').trim()
-  return result || undefined
-}
-
-function getDeprecatedInfo(
-  node: ts.Node,
-  sourceFile?: ts.SourceFile
-): DeprecatedInfo | null {
-  // Check JSDoc tags first (standard @deprecated)
-  const tags = ts.getJSDocTags(node)
-  const jsDoc = (node as ts.Node & { jsDoc?: ts.JSDoc[] }).jsDoc
-  const rawTags =
-    tags.length > 0
-      ? tags
-      : (jsDoc?.flatMap((doc: ts.JSDoc) => doc.tags ?? []) ?? [])
-  for (const tag of rawTags) {
-    if (tag.tagName?.text === 'deprecated') {
-      const comment = getJSDocCommentText(tag.comment)
-      return comment
-        ? { deprecated: true, deprecatedMessage: comment }
-        : { deprecated: true }
-    }
-  }
-
-  // Also check for @deprecated in line comments (e.g., "// @deprecated use X instead")
-  // Only use line comments if they contain a substantive message (not just a version number)
-  // This avoids detecting minimal markers like "// @deprecated, r170" when a proper JSDoc
-  // with full documentation may be added in a later commit
-  if (sourceFile) {
-    const leadingComments = ts.getLeadingCommentRanges(
-      sourceFile.getFullText(),
-      node.getFullStart()
-    )
-    const trailingComments = ts.getTrailingCommentRanges(
-      sourceFile.getFullText(),
-      node.getEnd()
-    )
-    const allComments = [
-      ...(leadingComments ?? []),
-      ...(trailingComments ?? []),
-    ]
-
-    for (const range of allComments) {
-      const commentText = sourceFile.getFullText().slice(range.pos, range.end)
-      const match = commentText.match(/@deprecated(?:[,:\s]+(.*))?$/i)
-      if (match) {
-        const message = match[1]?.trim()
-        // Skip if message is just a version number (e.g., "r170", "v1.2.3")
-        // These minimal markers should wait for proper JSDoc documentation
-        if (message && /^[rv]?\d+(\.\d+)*$/i.test(message)) {
-          continue
-        }
-        return message
-          ? { deprecated: true, deprecatedMessage: message }
-          : { deprecated: true }
-      }
-    }
-
-    // Check for @deprecated within the node's own text (inline comments)
-    const nodeText = node.getText(sourceFile)
-    const inlineMatch = nodeText.match(/\/\/\s*@deprecated(?:[,:\s]+(.*))?/i)
-    if (inlineMatch) {
-      const message = inlineMatch[1]?.trim()
-      // Skip if message is just a version number (e.g., "r170", "v1.2.3")
-      if (!message || !/^[rv]?\d+(\.\d+)*$/i.test(message)) {
-        return message
-          ? { deprecated: true, deprecatedMessage: message }
-          : { deprecated: true }
-      }
-    }
-  }
-
-  return null
-}
-
-function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
-  if (!ts.canHaveModifiers(node)) {
-    return false
-  }
-
-  return (
-    ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) ?? false
-  )
-}
-
-function hasExportModifier(node: ts.Node): boolean {
-  return hasModifier(node, ts.SyntaxKind.ExportKeyword)
-}
-
-function hasDefaultModifier(node: ts.Node): boolean {
-  return hasModifier(node, ts.SyntaxKind.DefaultKeyword)
-}
-
-function getBindingIdentifiers(node: ts.BindingName): string[] {
-  const variables: string[] = []
-  if (ts.isIdentifier(node)) {
-    variables.push(node.text)
-  } else if (ts.isObjectBindingPattern(node)) {
-    node.elements.forEach((element) => {
-      variables.push(...getBindingIdentifiers(element.name))
-    })
-  } else if (ts.isArrayBindingPattern(node)) {
-    node.elements.forEach((element) => {
-      if (!ts.isOmittedExpression(element)) {
-        variables.push(...getBindingIdentifiers(element.name))
-      }
-    })
-  }
-  return variables
-}
-
-const EXTENSION_PRIORITY = [
-  '.ts',
-  '.tsx',
-  '.js',
-  '.jsx',
-  '.mjs',
-  '.mts',
-  '.json',
-]
-const INDEX_FILE_CANDIDATES = EXTENSION_PRIORITY.map(
-  (extension) => 'index' + extension
-)
-
 async function resolveModule(
   context: CollectContext,
   baseDir: string,
@@ -4921,25 +4105,6 @@ function normalizePath(path: string) {
   return normalized
 }
 
-function looksLikeFilePath(path: string) {
-  const last = String(path).split('/').pop()
-  return Boolean(last && /\.[A-Za-z0-9]+$/.test(last))
-}
-
-function isUnderScope(file: string, scope: string | string[]): boolean {
-  if (Array.isArray(scope))
-    return scope.some((scopePath) => isUnderScope(file, scopePath))
-  const normalizedFile = normalizePath(file)
-  const normalizedScope = normalizePath(scope)
-  if (!normalizedScope || normalizedScope === '.') {
-    return true
-  }
-  return (
-    normalizedFile === normalizedScope ||
-    normalizedFile.startsWith(normalizedScope + '/')
-  )
-}
-
 function sha1(input: string) {
   return createHash('sha1').update(input).digest('hex')
 }
@@ -5166,25 +4331,11 @@ function normalizeWriteContent(
   throw new Error('[renoun] Unsupported content type for writeFile')
 }
 
-type JavaScriptLikeExtension =
-  | 'js'
-  | 'jsx'
-  | 'ts'
-  | 'tsx'
-  | 'mjs'
-  | 'mts'
-  | 'cjs'
-  | 'cts'
-
 type MetadataForPath<P extends string> = string extends P
   ? GitPathMetadata
   : P extends `${string}.${JavaScriptLikeExtension}`
     ? GitModuleMetadata
     : GitFileMetadata
-
-function isJavaScriptLikePath(path: string): boolean {
-  return /\.(js|jsx|ts|tsx|mjs|mts|cjs|cts)$/i.test(path)
-}
 
 function shallowRepoErrorMessage(): string {
   const message = `[renoun] This repository is shallow cloned so the firstCommitDate and lastCommitDate dates cannot be calculated correctly.`
@@ -5325,46 +4476,6 @@ function assertSafeGitSpec(specifier: string) {
   }
 }
 
-/** Creates bigrams (e.g. "function" -> "fu", "un", "nc", "ct"...) */
-function getBigrams(string: string): Set<string> {
-  const bigrams = new Set<string>()
-  for (let index = 0; index < string.length - 1; index++) {
-    bigrams.add(string.slice(index, index + 2))
-  }
-  return bigrams
-}
-
-/** Calculates string similarity using Dice Coefficient on bigrams. */
-function getDiceSimilarity(str1: string, str2: string): number {
-  if (str1 === str2) {
-    return 1.0
-  }
-
-  if (str1.length < 2 || str2.length < 2) {
-    return 0.0
-  }
-
-  // Fail fast if lengths are too different
-  const lengthDiff = Math.abs(str1.length - str2.length)
-  const maxLength = Math.max(str1.length, str2.length)
-  if (lengthDiff / maxLength > 0.5) {
-    return 0.0
-  }
-
-  const str1Bigrams = getBigrams(str1)
-  const str2Bigrams = getBigrams(str2)
-
-  // intersection / total size
-  let intersection = 0
-  for (const bigram of str1Bigrams) {
-    if (str2Bigrams.has(bigram)) {
-      intersection++
-    }
-  }
-
-  return (2 * intersection) / (str1Bigrams.size + str2Bigrams.size)
-}
-
 class TaskQueue {
   concurrency: number
   running = 0
@@ -5403,26 +4514,3 @@ class TaskQueue {
 }
 
 const taskQueue = new TaskQueue(10)
-
-/** Maps items with a concurrency limit, starting new work as slots free up. */
-async function mapWithLimit<Type, Result>(
-  items: Type[],
-  limit: number,
-  fn: (item: Type) => Promise<Result>
-): Promise<Result[]> {
-  const results: Result[] = new Array(items.length)
-  let nextIndex = 0
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const index = nextIndex++
-      results[index] = await fn(items[index])
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(limit, items.length) }, () =>
-    worker()
-  )
-  await Promise.all(workers)
-  return results
-}

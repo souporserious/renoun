@@ -48,9 +48,10 @@ import {
   type PathLike,
 } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import type { TypeFilter } from '../utils/resolve-type.ts'
+import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
 import { Semaphore } from '../utils/Semaphore.ts'
 import type {
+  BaseFileSystem,
   FileSystem,
   FileSystemWriteFileContent,
   FileWritableStream,
@@ -97,7 +98,6 @@ import type {
   DirectoryStructure,
   ExtractFileExtension,
   FileStructure,
-  ModuleExportResolvedType,
   ModuleExportStructure,
   ContentSection,
   Section,
@@ -140,7 +140,6 @@ export type {
   FileStructure,
   FileSystemStructure,
   FileSystemStructureKind,
-  ModuleExportResolvedType,
   ModuleExportStructure,
   PackageStructure,
   Section,
@@ -243,8 +242,8 @@ interface GitMetadataProvider {
 }
 
 function isGitMetadataProvider(
-  fileSystem: FileSystem
-): fileSystem is FileSystem & GitMetadataProvider {
+  fileSystem: BaseFileSystem
+): fileSystem is BaseFileSystem & GitMetadataProvider {
   return (
     typeof (fileSystem as Partial<GitMetadataProvider>).getGitFileMetadata ===
     'function'
@@ -260,8 +259,8 @@ interface GitExportMetadataProvider {
 }
 
 function isGitExportMetadataProvider(
-  fileSystem: FileSystem
-): fileSystem is FileSystem & GitExportMetadataProvider {
+  fileSystem: BaseFileSystem
+): fileSystem is BaseFileSystem & GitExportMetadataProvider {
   return (
     typeof (fileSystem as Partial<GitExportMetadataProvider>)
       .getGitExportMetadata === 'function'
@@ -1805,7 +1804,7 @@ export class ModuleExport<Value> {
   }
 
   async getStructure(): Promise<ModuleExportStructure> {
-    let resolvedType: ModuleExportResolvedType | undefined
+    let resolvedType: Kind | undefined
     let firstCommitDate: Date | undefined
     let lastCommitDate: Date | undefined
 
@@ -1993,7 +1992,7 @@ export class JavaScriptFile<
 
     // Optionally filter out @internal exports based on tsconfig `stripInternal`
     const fileSystem = this.getParent().getFileSystem()
-    if (!fileSystem.shouldStripInternal()) {
+    if (!(await fileSystem.shouldStripInternalAsync())) {
       return exports
     }
 
@@ -3302,7 +3301,7 @@ export class Directory<
 
       if (extension === 'ts' || extension === 'tsx') {
         const fileSystem = entry.getParent().getFileSystem()
-        if (!fileSystem.shouldStripInternal()) {
+        if (!(await fileSystem.shouldStripInternalAsync())) {
           return true
         }
         const allExports = await fileSystem.getFileExports(entry.absolutePath)
@@ -4441,10 +4440,11 @@ export class Directory<
             return { kind: 'skip' }
           }
 
-          const isTsConfigExcluded = fileSystem.isFilePathExcludedFromTsConfig(
-            entry.path,
-            entry.isDirectory
-          )
+          const isTsConfigExcluded =
+            await fileSystem.isFilePathExcludedFromTsConfigAsync(
+              entry.path,
+              entry.isDirectory
+            )
 
           if (entry.isDirectory) {
             if (isTsConfigExcluded && !options.includeTsConfigExcludedFiles) {
