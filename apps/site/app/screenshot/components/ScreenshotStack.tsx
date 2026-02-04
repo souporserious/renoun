@@ -11,7 +11,6 @@ import {
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { styled } from 'restyle'
-// @ts-expect-error
 import { lockScrollbars } from 'lock-scrollbars'
 
 const StyledMotionDiv = styled(motion.div)

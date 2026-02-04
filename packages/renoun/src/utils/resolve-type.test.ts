@@ -6677,11 +6677,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 18,
-                  "line": 562,
+                  "line": 563,
                 },
                 "start": {
                   "column": 10,
-                  "line": 562,
+                  "line": 563,
                 },
               },
               "text": "props: P",
@@ -6696,12 +6696,12 @@ describe('resolveType', () => {
                     "name": "FastOmit",
                     "position": {
                       "end": {
-                        "column": 82,
-                        "line": 203,
+                        "column": 90,
+                        "line": 211,
                       },
                       "start": {
-                        "column": 62,
-                        "line": 203,
+                        "column": 70,
+                        "line": 211,
                       },
                     },
                     "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight">",
@@ -6713,12 +6713,12 @@ describe('resolveType', () => {
                         "name": "A",
                         "position": {
                           "end": {
-                            "column": 72,
-                            "line": 203,
+                            "column": 80,
+                            "line": 211,
                           },
                           "start": {
-                            "column": 71,
-                            "line": 203,
+                            "column": 79,
+                            "line": 211,
                           },
                         },
                         "text": "A",
@@ -6735,12 +6735,12 @@ describe('resolveType', () => {
                           "name": "B",
                           "position": {
                             "end": {
-                              "column": 81,
-                              "line": 203,
+                              "column": 89,
+                              "line": 211,
                             },
                             "start": {
-                              "column": 80,
-                              "line": 203,
+                              "column": 88,
+                              "line": 211,
                             },
                           },
                           "text": "B",
@@ -6829,11 +6829,11 @@ describe('resolveType', () => {
             "position": {
               "end": {
                 "column": 31,
-                "line": 562,
+                "line": 563,
               },
               "start": {
                 "column": 9,
-                "line": 562,
+                "line": 563,
               },
             },
             "returnType": {
@@ -6844,11 +6844,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 30,
-                  "line": 562,
+                  "line": 563,
                 },
                 "start": {
                   "column": 21,
-                  "line": 562,
+                  "line": 563,
                 },
               },
               "text": "ReactNode",
@@ -10603,11 +10603,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 18,
-                  "line": 562,
+                  "line": 563,
                 },
                 "start": {
                   "column": 10,
-                  "line": 562,
+                  "line": 563,
                 },
               },
               "text": "props: P",
@@ -10622,12 +10622,12 @@ describe('resolveType', () => {
                     "name": "FastOmit",
                     "position": {
                       "end": {
-                        "column": 82,
-                        "line": 203,
+                        "column": 90,
+                        "line": 211,
                       },
                       "start": {
-                        "column": 62,
-                        "line": 203,
+                        "column": 70,
+                        "line": 211,
                       },
                     },
                     "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
@@ -10639,12 +10639,12 @@ describe('resolveType', () => {
                         "name": "A",
                         "position": {
                           "end": {
-                            "column": 72,
-                            "line": 203,
+                            "column": 80,
+                            "line": 211,
                           },
                           "start": {
-                            "column": 71,
-                            "line": 203,
+                            "column": 79,
+                            "line": 211,
                           },
                         },
                         "text": "A",
@@ -10661,12 +10661,12 @@ describe('resolveType', () => {
                           "name": "B",
                           "position": {
                             "end": {
-                              "column": 81,
-                              "line": 203,
+                              "column": 89,
+                              "line": 211,
                             },
                             "start": {
-                              "column": 80,
-                              "line": 203,
+                              "column": 88,
+                              "line": 211,
                             },
                           },
                           "text": "B",
@@ -10755,11 +10755,11 @@ describe('resolveType', () => {
             "position": {
               "end": {
                 "column": 31,
-                "line": 562,
+                "line": 563,
               },
               "start": {
                 "column": 9,
-                "line": 562,
+                "line": 563,
               },
             },
             "returnType": {
@@ -10770,11 +10770,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 30,
-                  "line": 562,
+                  "line": 563,
                 },
                 "start": {
                   "column": 21,
-                  "line": 562,
+                  "line": 563,
                 },
               },
               "text": "ReactNode",
@@ -10847,11 +10847,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 18,
-                  "line": 562,
+                  "line": 563,
                 },
                 "start": {
                   "column": 10,
-                  "line": 562,
+                  "line": 563,
                 },
               },
               "text": "props: P",
@@ -10866,12 +10866,12 @@ describe('resolveType', () => {
                     "name": "FastOmit",
                     "position": {
                       "end": {
-                        "column": 82,
-                        "line": 203,
+                        "column": 90,
+                        "line": 211,
                       },
                       "start": {
-                        "column": 62,
-                        "line": 203,
+                        "column": 70,
+                        "line": 211,
                       },
                     },
                     "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
@@ -10883,12 +10883,12 @@ describe('resolveType', () => {
                         "name": "A",
                         "position": {
                           "end": {
-                            "column": 72,
-                            "line": 203,
+                            "column": 80,
+                            "line": 211,
                           },
                           "start": {
-                            "column": 71,
-                            "line": 203,
+                            "column": 79,
+                            "line": 211,
                           },
                         },
                         "text": "A",
@@ -10905,12 +10905,12 @@ describe('resolveType', () => {
                           "name": "B",
                           "position": {
                             "end": {
-                              "column": 81,
-                              "line": 203,
+                              "column": 89,
+                              "line": 211,
                             },
                             "start": {
-                              "column": 80,
-                              "line": 203,
+                              "column": 88,
+                              "line": 211,
                             },
                           },
                           "text": "B",
@@ -10943,11 +10943,11 @@ describe('resolveType', () => {
             "position": {
               "end": {
                 "column": 31,
-                "line": 562,
+                "line": 563,
               },
               "start": {
                 "column": 9,
-                "line": 562,
+                "line": 563,
               },
             },
             "returnType": {
@@ -10958,11 +10958,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 30,
-                  "line": 562,
+                  "line": 563,
                 },
                 "start": {
                   "column": 21,
-                  "line": 562,
+                  "line": 563,
                 },
               },
               "text": "ReactNode",
@@ -11034,11 +11034,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 18,
-                  "line": 562,
+                  "line": 563,
                 },
                 "start": {
                   "column": 10,
-                  "line": 562,
+                  "line": 563,
                 },
               },
               "text": "props: P",
@@ -11053,12 +11053,12 @@ describe('resolveType', () => {
                     "name": "FastOmit",
                     "position": {
                       "end": {
-                        "column": 82,
-                        "line": 203,
+                        "column": 90,
+                        "line": 211,
                       },
                       "start": {
-                        "column": 62,
-                        "line": 203,
+                        "column": 70,
+                        "line": 211,
                       },
                     },
                     "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows">",
@@ -11070,12 +11070,12 @@ describe('resolveType', () => {
                         "name": "A",
                         "position": {
                           "end": {
-                            "column": 72,
-                            "line": 203,
+                            "column": 80,
+                            "line": 211,
                           },
                           "start": {
-                            "column": 71,
-                            "line": 203,
+                            "column": 79,
+                            "line": 211,
                           },
                         },
                         "text": "A",
@@ -11092,12 +11092,12 @@ describe('resolveType', () => {
                           "name": "B",
                           "position": {
                             "end": {
-                              "column": 81,
-                              "line": 203,
+                              "column": 89,
+                              "line": 211,
                             },
                             "start": {
-                              "column": 80,
-                              "line": 203,
+                              "column": 88,
+                              "line": 211,
                             },
                           },
                           "text": "B",
@@ -11186,11 +11186,11 @@ describe('resolveType', () => {
             "position": {
               "end": {
                 "column": 31,
-                "line": 562,
+                "line": 563,
               },
               "start": {
                 "column": 9,
-                "line": 562,
+                "line": 563,
               },
             },
             "returnType": {
@@ -11201,11 +11201,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 30,
-                  "line": 562,
+                  "line": 563,
                 },
                 "start": {
                   "column": 21,
-                  "line": 562,
+                  "line": 563,
                 },
               },
               "text": "ReactNode",
@@ -13308,11 +13308,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 52,
-                  "line": 2338,
+                  "line": 2367,
                 },
                 "start": {
                   "column": 9,
-                  "line": 2338,
+                  "line": 2367,
                 },
               },
               "text": "MouseEventHandler<HTMLButtonElement>",
@@ -13331,11 +13331,11 @@ describe('resolveType', () => {
                     "position": {
                       "end": {
                         "column": 81,
-                        "line": 2193,
+                        "line": 2214,
                       },
                       "start": {
                         "column": 73,
-                        "line": 2193,
+                        "line": 2214,
                       },
                     },
                     "text": "event: E",
@@ -13347,11 +13347,11 @@ describe('resolveType', () => {
                       "position": {
                         "end": {
                           "column": 52,
-                          "line": 2338,
+                          "line": 2367,
                         },
                         "start": {
                           "column": 9,
-                          "line": 2338,
+                          "line": 2367,
                         },
                       },
                       "text": "MouseEvent<HTMLButtonElement, globalThis.MouseEvent>",
@@ -13364,11 +13364,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 52,
-                              "line": 2338,
+                              "line": 2367,
                             },
                             "start": {
                               "column": 9,
-                              "line": 2338,
+                              "line": 2367,
                             },
                           },
                           "text": "HTMLButtonElement",
@@ -13382,11 +13382,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 52,
-                              "line": 2338,
+                              "line": 2367,
                             },
                             "start": {
                               "column": 9,
-                              "line": 2338,
+                              "line": 2367,
                             },
                           },
                           "text": "globalThis.MouseEvent",
@@ -13402,11 +13402,11 @@ describe('resolveType', () => {
                   "position": {
                     "end": {
                       "column": 88,
-                      "line": 2193,
+                      "line": 2214,
                     },
                     "start": {
                       "column": 84,
-                      "line": 2193,
+                      "line": 2214,
                     },
                   },
                   "text": "void",
@@ -13530,11 +13530,11 @@ describe('resolveType', () => {
                     "position": {
                       "end": {
                         "column": 52,
-                        "line": 2338,
+                        "line": 2367,
                       },
                       "start": {
                         "column": 9,
-                        "line": 2338,
+                        "line": 2367,
                       },
                     },
                     "text": "MouseEventHandler<HTMLButtonElement>",
@@ -13553,11 +13553,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 81,
-                              "line": 2193,
+                              "line": 2214,
                             },
                             "start": {
                               "column": 73,
-                              "line": 2193,
+                              "line": 2214,
                             },
                           },
                           "text": "event: E",
@@ -13569,11 +13569,11 @@ describe('resolveType', () => {
                             "position": {
                               "end": {
                                 "column": 52,
-                                "line": 2338,
+                                "line": 2367,
                               },
                               "start": {
                                 "column": 9,
-                                "line": 2338,
+                                "line": 2367,
                               },
                             },
                             "text": "MouseEvent<HTMLButtonElement, globalThis.MouseEvent>",
@@ -13586,11 +13586,11 @@ describe('resolveType', () => {
                                 "position": {
                                   "end": {
                                     "column": 52,
-                                    "line": 2338,
+                                    "line": 2367,
                                   },
                                   "start": {
                                     "column": 9,
-                                    "line": 2338,
+                                    "line": 2367,
                                   },
                                 },
                                 "text": "HTMLButtonElement",
@@ -13604,11 +13604,11 @@ describe('resolveType', () => {
                                 "position": {
                                   "end": {
                                     "column": 52,
-                                    "line": 2338,
+                                    "line": 2367,
                                   },
                                   "start": {
                                     "column": 9,
-                                    "line": 2338,
+                                    "line": 2367,
                                   },
                                 },
                                 "text": "globalThis.MouseEvent",
@@ -13624,11 +13624,11 @@ describe('resolveType', () => {
                         "position": {
                           "end": {
                             "column": 88,
-                            "line": 2193,
+                            "line": 2214,
                           },
                           "start": {
                             "column": 84,
-                            "line": 2193,
+                            "line": 2214,
                           },
                         },
                         "text": "void",
@@ -16240,11 +16240,11 @@ describe('resolveType', () => {
                         "position": {
                           "end": {
                             "column": 6,
-                            "line": 1152,
+                            "line": 1153,
                           },
                           "start": {
                             "column": 5,
-                            "line": 1127,
+                            "line": 1128,
                           },
                         },
                         "text": "ComponentClass<MarkdownProps, any>",
@@ -16297,11 +16297,11 @@ describe('resolveType', () => {
                             "position": {
                               "end": {
                                 "column": 6,
-                                "line": 1152,
+                                "line": 1153,
                               },
                               "start": {
                                 "column": 5,
-                                "line": 1127,
+                                "line": 1128,
                               },
                             },
                             "text": "any",
@@ -16316,11 +16316,11 @@ describe('resolveType', () => {
                         "position": {
                           "end": {
                             "column": 6,
-                            "line": 1077,
+                            "line": 1078,
                           },
                           "start": {
                             "column": 5,
-                            "line": 1051,
+                            "line": 1052,
                           },
                         },
                         "text": "FunctionComponent<MarkdownProps>",
@@ -22755,11 +22755,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 81,
-                  "line": 1414,
+                  "line": 1415,
                 },
                 "start": {
                   "column": 49,
-                  "line": 1414,
+                  "line": 1415,
                 },
               },
               "text": "ReactNode",
@@ -22771,11 +22771,11 @@ describe('resolveType', () => {
                 "position": {
                   "end": {
                     "column": 81,
-                    "line": 1414,
+                    "line": 1415,
                   },
                   "start": {
                     "column": 49,
-                    "line": 1414,
+                    "line": 1415,
                   },
                 },
                 "text": "ReactNode",

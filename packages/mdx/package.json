@@ -112,7 +112,7 @@
     "remark-rehype": "11.1.2",
     "unified": "catalog:",
     "unist-util-mdx-define": "1.1.2",
-    "unist-util-visit": "5.0.0",
+    "unist-util-visit": "5.1.0",
     "unist-util-visit-parents": "6.0.2"
   }
 }
