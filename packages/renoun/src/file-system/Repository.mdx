@@ -68,3 +68,8 @@ import { Repository } from 'renoun'
 const repo = new Repository('owner/repo')
 const fileSystem = repo.getFileSystem()
 ```
+
+## Security considerations
+
+- For remote repositories, cloning writes data to disk. Use `cacheDirectory` if you want to isolate cache storage.
+- Use `clone: false` to avoid cloning and read via the host API.

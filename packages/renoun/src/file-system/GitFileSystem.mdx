@@ -55,3 +55,9 @@ const nextDirectory = new Directory({
 - You want explicit control over `ref`, `depth`, or `sparse` options.
 - You need git history from a local or cloned repository.
 - You want deterministic reads at a fixed ref.
+
+## Security
+
+- Cloning untrusted repositories can expose you to git-level CVEs. Keep your git client updated.
+- Cloned repositories are cached on disk. Use `cacheDirectory` to isolate or manage where clones live.
+- If you want to avoid cloning entirely, prefer `GitVirtualFileSystem`.

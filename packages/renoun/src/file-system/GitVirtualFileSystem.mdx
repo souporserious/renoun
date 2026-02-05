@@ -26,3 +26,8 @@ const source = new Directory({ path: 'src', fileSystem })
 - Reads are deterministic for the specified `ref`.
 
 If you need full history or unrestricted access, prefer `GitFileSystem` with a local clone.
+
+## Security
+
+- Tokens should be stored in environment variables and never committed.
+- Prefer least-privileged tokens and rotate them regularly.
