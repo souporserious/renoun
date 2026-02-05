@@ -1,0 +1,74 @@
+# Directory
+
+`Directory` provides a high-level API for querying files and subdirectories with optional filters, loaders, and schemas.
+
+## Basic usage
+
+```ts
+import { Directory } from 'renoun'
+
+const posts = new Directory({
+  path: 'posts',
+  filter: '*.mdx',
+  loader: {
+    mdx: (path) => import(`./posts/${path}.mdx`),
+  },
+})
+```
+
+## Repository-backed directories
+
+```ts
+import { Directory, Repository } from 'renoun'
+
+const repo = new Repository('owner/repo')
+const repoDirectory = new Directory({
+  path: 'src',
+  repository: repo,
+})
+```
+
+## Auto-detected repositories
+
+If you do not provide a repository, renoun will auto-detect the closest git root and attach an implicit `Repository` for git metadata:
+
+```ts
+import { Directory } from 'renoun'
+
+const source = new Directory({ path: 'src' })
+```
+
+## Custom file systems
+
+Use a custom file system as an escape hatch. This disables git metadata for the directory.
+
+```ts
+import { Directory, NodeFileSystem } from 'renoun'
+
+const fileSystem = new NodeFileSystem()
+const localDirectory = new Directory({
+  path: 'docs',
+  fileSystem,
+})
+```
+
+## Repository + file system together
+
+You can pass both `repository` and `fileSystem`, but be aware of the separation:
+
+- `fileSystem` controls file content and directory traversal.
+- `repository` is used only for git metadata and URLs.
+
+This is useful when you want to read local files while linking to a different repository, but it is your responsibility to keep them aligned.
+
+## Common queries
+
+```ts
+import { Directory } from 'renoun'
+
+const docs = new Directory({ path: 'docs' })
+
+const allEntries = await docs.getEntries()
+const gettingStarted = await docs.getFile('getting-started', 'mdx')
+const apiReference = docs.getDirectory('api')
+```

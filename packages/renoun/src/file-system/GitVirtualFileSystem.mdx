@@ -1,0 +1,28 @@
+# GitVirtualFileSystem
+
+`GitVirtualFileSystem` reads repository content through a host API (GitHub, GitLab, Bitbucket). It is useful when you cannot or do not want to clone a repository locally.
+
+`Repository` uses `GitVirtualFileSystem` automatically when you pass `clone: false`.
+
+## Basic usage
+
+```ts
+import { Directory, GitVirtualFileSystem } from 'renoun'
+
+const fileSystem = new GitVirtualFileSystem({
+  repository: 'owner/repo',
+  host: 'github',
+  ref: 'main',
+  token: process.env.GITHUB_TOKEN,
+})
+
+const source = new Directory({ path: 'src', fileSystem })
+```
+
+## Tradeoffs
+
+- API requests can be rate limited.
+- History depth depends on the host API.
+- Reads are deterministic for the specified `ref`.
+
+If you need full history or unrestricted access, prefer `GitFileSystem` with a local clone.

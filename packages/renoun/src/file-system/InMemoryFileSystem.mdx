@@ -1,0 +1,27 @@
+# InMemoryFileSystem
+
+`InMemoryFileSystem` stores files in memory for tests and small simulations. It does not touch disk and does not provide git history.
+
+## Basic usage
+
+```ts
+import { Directory, InMemoryFileSystem } from 'renoun'
+
+const fileSystem = new InMemoryFileSystem({
+  'docs/index.mdx': '# Hello',
+  'docs/getting-started.mdx': '# Getting Started',
+})
+
+const docs = new Directory({
+  path: 'docs',
+  fileSystem,
+})
+
+const guide = await docs.getFile('getting-started', 'mdx')
+```
+
+## Typical use cases
+
+- Unit tests
+- Example fixtures
+- Prototyping without a real file tree

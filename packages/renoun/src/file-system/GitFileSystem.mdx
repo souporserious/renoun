@@ -1,0 +1,57 @@
+# GitFileSystem
+
+`GitFileSystem` is a high-performance adapter that reads files from git objects and uses the git CLI to compute history, export metadata, and commit information. It also supports cloning remote repositories into a local cache.
+
+`Repository` uses `GitFileSystem` automatically for local paths and clone mode, but you can also create it directly when you need full control.
+
+## Local repository usage
+
+```ts
+import { Directory, GitFileSystem } from 'renoun'
+
+const fileSystem = new GitFileSystem({ repository: '.' })
+const source = new Directory({ path: 'src', fileSystem })
+```
+
+Local repositories use a worktree overlay when no explicit `ref` is provided. This means:
+
+- On-disk files are preferred if they exist.
+- Git metadata still comes from the repository.
+- Untracked files are readable but have no history.
+
+## Explicit ref (git-only reads)
+
+```ts
+import { GitFileSystem } from 'renoun'
+
+const fileSystem = new GitFileSystem({
+  repository: '.',
+  ref: 'HEAD',
+})
+```
+
+When `ref` is explicitly set, `GitFileSystem` reads from git objects only for deterministic results.
+
+## Remote clone with sparse checkout
+
+```ts
+import { GitFileSystem, Directory } from 'renoun'
+
+const fileSystem = new GitFileSystem({
+  repository: 'https://github.com/vercel/next.js',
+  ref: 'canary',
+  depth: 1,
+  sparse: ['packages/next'],
+})
+
+const nextDirectory = new Directory({
+  path: 'packages/next',
+  fileSystem,
+})
+```
+
+## Why use GitFileSystem directly?
+
+- You want explicit control over `ref`, `depth`, or `sparse` options.
+- You need git history from a local or cloned repository.
+- You want deterministic reads at a fixed ref.

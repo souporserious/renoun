@@ -1,0 +1,19 @@
+# NodeFileSystem
+
+`NodeFileSystem` reads directly from disk using Node.js APIs. It is the default fallback when a directory is not repository-backed.
+
+## Basic usage
+
+```ts
+import { Directory, NodeFileSystem } from 'renoun'
+
+const fileSystem = new NodeFileSystem()
+const docs = new Directory({
+  path: 'docs',
+  fileSystem,
+})
+```
+
+## Workspace safety
+
+`NodeFileSystem` restricts file access to the workspace root to avoid accidental access outside of a project. If you need full git metadata, use `Repository` or `GitFileSystem` instead.

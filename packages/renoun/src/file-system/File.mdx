@@ -1,0 +1,51 @@
+# File
+
+`File` represents a single entry in the file system with helpers for content, exports, and git metadata.
+
+## Basic usage
+
+```ts
+import { File } from 'renoun'
+
+const guide = new File({ path: 'docs/getting-started.mdx' })
+```
+
+## Getting a file from a directory
+
+```ts
+import { Directory } from 'renoun'
+
+const docs = new Directory({ path: 'docs' })
+const guide = await docs.getFile('getting-started', 'mdx')
+```
+
+## Content and exports
+
+```ts
+import { Directory } from 'renoun'
+
+const docs = new Directory({
+  path: 'docs',
+  loader: {
+    mdx: (path) => import(`./docs/${path}.mdx`),
+  },
+})
+
+const guide = await docs.getFile('getting-started', 'mdx')
+const Content = await guide.getContent()
+const title = await guide.getExportValue('title')
+```
+
+## Git metadata and URLs
+
+```ts
+import { Repository } from 'renoun'
+
+const repo = new Repository('owner/repo')
+const file = repo.getFile('src/index.ts')
+
+const sourceUrl = file.getSourceUrl()
+const historyUrl = file.getHistoryUrl()
+```
+
+Git metadata (commit dates, authors, history) comes from the repository when available. Untracked files are readable but have no history.
