@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import { GitFileSystem } from './GitFileSystem'
+import { GitVirtualFileSystem } from './GitVirtualFileSystem'
 import { Repository, type RepositoryConfig } from './Repository'
 
 describe('Repository', () => {
@@ -15,10 +17,17 @@ describe('Repository', () => {
       ).toEqual('https://github.com/owner/repo/blob/main/README.md')
     })
 
-    test('throws an error for invalid repository string without "/"', () => {
-      expect(() => new Repository('invalidRepoString')).toThrow(
-        'Invalid git specifier "invalidRepoString". Must be in the form "owner/repo" (optionally with host and ref).'
-      )
+    test('defaults to the current directory when no options are provided', () => {
+      const repo = new Repository()
+      expect(repo.toString()).toBe('.')
+    })
+
+    test('treats non-specifier strings as local paths', () => {
+      const repo = new Repository('local-path')
+      expect(repo.toString()).toBe('local-path')
+      expect(() =>
+        repo.getFileUrl({ type: 'source', path: 'README.md' })
+      ).toThrow(/Repository remote information is not configured/)
     })
 
     test('constructs with a RepositoryConfig object', () => {
@@ -41,6 +50,19 @@ describe('Repository', () => {
       )
     })
 
+    test('constructs with RepositoryOptions using a URL path', () => {
+      const repo = new Repository({
+        path: 'https://github.com/owner/repo',
+      })
+      expect(
+        repo.getFileUrl({
+          type: 'source',
+          path: 'README.md',
+          ref: 'main',
+        })
+      ).toEqual('https://github.com/owner/repo/blob/main/README.md')
+    })
+
     test('throws an error for unsupported hosts', () => {
       const config: RepositoryConfig = {
         baseUrl: 'https://example.com/owner/repo',
@@ -59,6 +81,33 @@ describe('Repository', () => {
       expect(() => new Repository(config)).toThrow(
         'Invalid host "GitHub". Must be one of: github, gitlab, bitbucket, pierre'
       )
+    })
+
+    test('defaults to clone for remote repositories and delays file system creation', () => {
+      const repo = new Repository({
+        path: 'https://github.com/owner/repo',
+      })
+      const getFileSystemSpy = vi.spyOn(repo, 'getFileSystem')
+
+      const directory = repo.getDirectory('src/nodes')
+
+      expect(getFileSystemSpy).not.toHaveBeenCalled()
+
+      const fileSystem = directory.getFileSystem()
+      expect(getFileSystemSpy).toHaveBeenCalledTimes(1)
+      expect(fileSystem).toBeInstanceOf(GitFileSystem)
+      expect(
+        (fileSystem as GitFileSystem).prepareScopeDirectories
+      ).toContain('src/nodes')
+    })
+
+    test('uses the virtual file system when clone is false', () => {
+      const repo = new Repository({
+        path: 'https://github.com/owner/repo',
+        clone: false,
+      })
+      const fileSystem = repo.getFileSystem()
+      expect(fileSystem).toBeInstanceOf(GitVirtualFileSystem)
     })
   })
 

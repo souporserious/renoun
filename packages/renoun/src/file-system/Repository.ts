@@ -1,9 +1,20 @@
+import { existsSync } from 'node:fs'
+
+import { directoryName, normalizeSlashes } from '../utils/path.ts'
+import { GitFileSystem } from './GitFileSystem.ts'
+import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
+import { Directory, File } from './entries.tsx'
 import {
   coerceSemVer,
   compareSemVer,
   satisfiesRange,
   type SemVer,
 } from './semver.ts'
+import type {
+  ExportHistoryOptions,
+  ExportHistoryReport,
+  GitAuthor,
+} from './types.ts'
 
 export type GitHostType = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 
@@ -26,6 +37,67 @@ export interface RepositoryConfig {
   /** Optional default path prefix inside the repository. */
   path?: string
 }
+
+export interface BaseRepositoryOptions {
+  /** Local path or remote repository URL/specifier. */
+  path: string
+
+  /** Git reference to use for git operations and default URLs. */
+  ref?: string
+
+  /**
+   * When true (default for remote repositories), use git clone operations.
+   * When false, use the host API (virtual).
+   */
+  clone?: boolean
+}
+
+export interface CloneRepositoryOptions extends BaseRepositoryOptions {
+  /** Clone remote repositories into a local cache. */
+  clone?: true
+
+  /** Shallow clone depth (undefined = full history). */
+  depth?: number
+
+  /** Sparse checkout paths for large repositories. */
+  sparse?: string[]
+}
+
+export interface VirtualRepositoryOptions extends BaseRepositoryOptions {
+  /** Disable cloning and use the host API. */
+  clone: false
+
+  /** Access token for remote API requests. */
+  token?: string
+}
+
+export type RepositoryOptions =
+  | CloneRepositoryOptions
+  | VirtualRepositoryOptions
+
+export type RepositoryInput =
+  | Repository
+  | RepositoryConfig
+  | RepositoryOptions
+  | string
+
+export type RepositoryExportHistoryOptions = Omit<ExportHistoryOptions, 'entry'>
+
+type RepositoryFileSystemConfig =
+  | {
+      kind: 'git'
+      repository: string
+      ref?: string
+      depth?: number
+      sparse?: string[]
+    }
+  | {
+      kind: 'virtual'
+      repository: string
+      host: 'github' | 'gitlab' | 'bitbucket'
+      ref?: string
+      token?: string
+    }
 
 export interface GetFileUrlOptions {
   /** The path to the file within the repository. */
@@ -147,6 +219,89 @@ const HOSTS: Record<GitHostType, string> = {
   pierre: 'pierre.co',
 } as const
 
+function isRepositoryConfig(value: unknown): value is RepositoryConfig {
+  return Boolean(value && typeof value === 'object' && 'baseUrl' in value)
+}
+
+function looksLikeRemoteUrl(value: string): boolean {
+  const trimmed = value.trim().toLowerCase()
+  return (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('git@') ||
+    trimmed.startsWith('ssh://')
+  )
+}
+
+function looksLikeLocalPath(value: string): boolean {
+  const trimmed = value.trim()
+  return (
+    trimmed.startsWith('.') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('~')
+  )
+}
+
+function looksLikeWindowsDrivePath(value: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(value)
+}
+
+function normalizeSparsePath(path: string): string | null {
+  let normalized = normalizeSlashes(path).trim()
+
+  if (!normalized) return null
+  if (looksLikeWindowsDrivePath(normalized)) return null
+
+  if (normalized === '.' || normalized === './' || normalized === '/') {
+    return null
+  }
+
+  if (normalized.startsWith('./')) {
+    normalized = normalized.slice(2)
+  }
+
+  while (normalized.startsWith('/')) {
+    normalized = normalized.slice(1)
+  }
+
+  normalized = normalized.replace(/\/+$/, '')
+
+  if (!normalized || normalized === '.') {
+    return null
+  }
+
+  return normalized
+}
+
+function mergeSparsePaths(
+  base: string[] | undefined,
+  pending: Set<string>
+): string[] | undefined {
+  const merged = new Set<string>()
+
+  if (base) {
+    for (const entry of base) {
+      const normalized = normalizeSparsePath(entry)
+      if (normalized) {
+        merged.add(normalized)
+      }
+    }
+  }
+
+  for (const entry of pending) {
+    const normalized = normalizeSparsePath(entry)
+    if (normalized) {
+      merged.add(normalized)
+    }
+  }
+
+  if (merged.size === 0) {
+    return undefined
+  }
+
+  return Array.from(merged)
+}
+
 /** GitLab path stop-tokens that indicate content views after owner/repo. */
 const GITLAB_STOP_TOKENS: ReadonlySet<string> = new Set<string>([
   '-',
@@ -267,6 +422,22 @@ function getNormalizedHostnameFromUrlString(value: string): string | null {
   }
 }
 
+function resolveHostFromUrl(value: string): GitHostType | undefined {
+  const hostname = getNormalizedHostnameFromUrlString(value)
+  if (!hostname) {
+    return undefined
+  }
+
+  const entries = Object.entries(HOSTS) as [GitHostType, string][]
+  for (const [hostType, domain] of entries) {
+    if (hostname === domain || hostname.endsWith(`.${domain}`)) {
+      return hostType
+    }
+  }
+
+  return undefined
+}
+
 /** Split a URL pathname into clean segments. */
 function getCleanPathSegments(urlObject: URL): string[] {
   let pathname = urlObject.pathname
@@ -329,6 +500,67 @@ function extractOwnerAndRepositoryFromBaseUrl(
     } else {
       return null
     }
+  }
+}
+
+function buildRepositoryBaseUrl(
+  input: string,
+  host: GitHostType,
+  owner: string,
+  repo: string
+): string {
+  const urlObject = tryGetUrl(input)
+  if (urlObject) {
+    const origin = `${urlObject.protocol}//${urlObject.host}`
+    return joinPaths(joinPaths(origin, owner), repo)
+  }
+
+  return `https://${HOSTS[host]}/${owner}/${repo}`
+}
+
+function resolveRemoteRepositoryInfo(input: string): {
+  host: GitHostType
+  owner: string
+  repo: string
+  ref?: string
+  defaultPath?: string
+  baseUrl: string
+} | null {
+  if (looksLikeRemoteUrl(input) && input.startsWith('http')) {
+    const host = resolveHostFromUrl(input)
+    if (!host) {
+      return null
+    }
+    const extracted = extractOwnerAndRepositoryFromBaseUrl(host, input)
+    if (!extracted) {
+      return null
+    }
+    const baseUrl = buildRepositoryBaseUrl(
+      input,
+      host,
+      extracted.owner,
+      extracted.repo
+    )
+    return {
+      host,
+      owner: extracted.owner,
+      repo: extracted.repo,
+      baseUrl,
+    }
+  }
+
+  try {
+    const specifier = parseGitSpecifier(input)
+    return {
+      host: specifier.host,
+      owner: specifier.owner,
+      repo: specifier.repo,
+      ref: specifier.ref,
+      defaultPath: specifier.path,
+      baseUrl: `https://${HOSTS[specifier.host]}/${specifier.owner}/${specifier.repo}`,
+    }
+  } catch {
+    return null
   }
 }
 
@@ -410,31 +642,30 @@ export function parseGitSpecifier(input: string): ParsedGitSpecifier {
 }
 
 export class Repository {
-  #baseUrl: string
-  #host: GitHostType
+  #baseUrl?: string
+  #host?: GitHostType
   #owner?: string
   #repo?: string
   #defaultRef: string = 'main'
   #defaultPath?: string
   #isDefaultRefExplicit: boolean = false
+  #path: string
+  #fileSystem?: GitFileSystem | GitVirtualFileSystem
+  #fileSystemConfig?: RepositoryFileSystemConfig
+  #pendingSparsePaths: Set<string> = new Set()
   #releasePromises: Map<string, Promise<Release>> = new Map()
   #githubReleasesPromise?: Promise<any[]>
 
-  constructor(repository: RepositoryConfig | string) {
-    if (typeof repository === 'string') {
-      const specifier = parseGitSpecifier(repository)
+  constructor(repository?: RepositoryOptions | RepositoryConfig | string) {
+    const options =
+      repository === undefined
+        ? { path: '.' }
+        : typeof repository === 'string'
+          ? { path: repository }
+          : repository
 
-      this.#host = specifier.host
-      this.#owner = specifier.owner
-      this.#repo = specifier.repo
-      if (specifier.ref) {
-        this.#defaultRef = specifier.ref
-        this.#isDefaultRefExplicit = true
-      }
-      this.#defaultPath = specifier.path
-      this.#baseUrl = `https://${HOSTS[this.#host]}/${this.#owner}/${this.#repo}`
-    } else {
-      const { baseUrl, host } = repository
+    if (isRepositoryConfig(options)) {
+      const { baseUrl, host } = options
 
       if (baseUrl === undefined) {
         throw new Error(
@@ -442,6 +673,7 @@ export class Repository {
         )
       }
 
+      this.#path = baseUrl
       this.#baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
 
       if (host === undefined) {
@@ -458,42 +690,266 @@ export class Repository {
 
       this.#host = host as GitHostType
 
-      if (typeof repository === 'object') {
-        // Prefer explicit owner/repository from config when provided
-        if (repository.owner && repository.repository) {
-          this.#owner = repository.owner
-          this.#repo = repository.repository
-        } else {
-          const extracted = extractOwnerAndRepositoryFromBaseUrl(
-            this.#host,
-            this.#baseUrl
-          )
-          if (extracted) {
-            this.#owner = extracted.owner
-            this.#repo = extracted.repo
-          }
+      // Prefer explicit owner/repository from config when provided
+      if (options.owner && options.repository) {
+        this.#owner = options.owner
+        this.#repo = options.repository
+      } else {
+        const extracted = extractOwnerAndRepositoryFromBaseUrl(
+          this.#host,
+          this.#baseUrl
+        )
+        if (extracted) {
+          this.#owner = extracted.owner
+          this.#repo = extracted.repo
         }
+      }
 
-        // Respect default branch if provided
-        if (repository.branch) {
-          this.#defaultRef = repository.branch
-          this.#isDefaultRefExplicit = true
-        }
+      // Respect default branch if provided
+      if (options.branch) {
+        this.#defaultRef = options.branch
+        this.#isDefaultRefExplicit = true
+      }
 
-        // Optional default path inside repository
-        if (repository.path) {
-          this.#defaultPath = repository.path
+      // Optional default path inside repository
+      if (options.path) {
+        this.#defaultPath = options.path
+      }
+
+      const fileSystemRef = options.branch
+      if (this.#host && this.#owner && this.#repo && this.#host !== 'pierre') {
+        this.#fileSystemConfig = {
+          kind: 'virtual',
+          repository: `${this.#owner}/${this.#repo}`,
+          host: this.#host as 'github' | 'gitlab' | 'bitbucket',
+          ref: fileSystemRef,
         }
+        return
+      }
+
+      this.#fileSystemConfig = {
+        kind: 'git',
+        repository: this.#path,
+        ref: fileSystemRef,
+      }
+      return
+    }
+
+    const normalizedPath = String(options.path ?? '.')
+    this.#path = normalizedPath
+
+    const isLocal =
+      looksLikeLocalPath(normalizedPath) || existsSync(normalizedPath)
+    const isRemote = !isLocal && looksLikeRemoteUrl(normalizedPath)
+    let remoteInfo: {
+      host: GitHostType
+      owner: string
+      repo: string
+      ref?: string
+      defaultPath?: string
+      baseUrl: string
+    } | null = null
+
+    if (!isLocal) {
+      if (isRemote && normalizedPath.startsWith('http')) {
+        remoteInfo = resolveRemoteRepositoryInfo(normalizedPath)
+      } else if (
+        !isRemote &&
+        normalizedPath.includes(':') &&
+        !looksLikeWindowsDrivePath(normalizedPath)
+      ) {
+        const specifier = parseGitSpecifier(normalizedPath)
+        remoteInfo = {
+          host: specifier.host,
+          owner: specifier.owner,
+          repo: specifier.repo,
+          ref: specifier.ref,
+          defaultPath: specifier.path,
+          baseUrl: `https://${HOSTS[specifier.host]}/${specifier.owner}/${specifier.repo}`,
+        }
+      } else if (!isRemote) {
+        remoteInfo = resolveRemoteRepositoryInfo(normalizedPath)
+      } else {
+        remoteInfo = resolveRemoteRepositoryInfo(normalizedPath)
       }
     }
 
-    if (!['github', 'gitlab', 'bitbucket', 'pierre'].includes(this.#host)) {
-      throw new Error(`Unsupported host: ${this.#host}`)
+    if (remoteInfo) {
+      this.#host = remoteInfo.host
+      this.#owner = remoteInfo.owner
+      this.#repo = remoteInfo.repo
+      if (remoteInfo.ref) {
+        this.#defaultRef = remoteInfo.ref
+        this.#isDefaultRefExplicit = true
+      }
+      if (remoteInfo.defaultPath) {
+        this.#defaultPath = remoteInfo.defaultPath
+      }
+      this.#baseUrl = remoteInfo.baseUrl
     }
+
+    if (options.ref) {
+      this.#defaultRef = options.ref
+      this.#isDefaultRefExplicit = true
+    }
+
+    const fileSystemRef = options.ref ?? remoteInfo?.ref
+    const depth = 'depth' in options ? options.depth : undefined
+    const sparse = 'sparse' in options ? options.sparse : undefined
+    const wantsVirtual = !isLocal && options.clone === false
+
+    if ((isRemote || remoteInfo) && wantsVirtual) {
+      if (!this.#host || !this.#owner || !this.#repo) {
+        throw new Error(
+          `[renoun] Unable to resolve remote repository "${normalizedPath}". Provide a valid URL/specifier or use a RepositoryConfig with explicit host information.`
+        )
+      }
+
+      if (this.#host === 'pierre') {
+        throw new Error(
+          '[renoun] Pierre repositories are not supported for virtual git access. Use { clone: true } to access the repository via git.'
+        )
+      }
+
+      this.#fileSystemConfig = {
+        kind: 'virtual',
+        repository: `${this.#owner}/${this.#repo}`,
+        host: this.#host as 'github' | 'gitlab' | 'bitbucket',
+        ref: fileSystemRef,
+        token: 'token' in options ? options.token : undefined,
+      }
+      return
+    }
+
+    this.#fileSystemConfig = {
+      kind: 'git',
+      repository: normalizedPath,
+      ref: fileSystemRef,
+      depth,
+      sparse,
+    }
+  }
+
+  /** Returns a directory scoped to this repository. */
+  getDirectory(path?: string): Directory {
+    return new Directory({
+      path: path ?? '.',
+      repository: this,
+    })
+  }
+
+  /** Returns a file scoped to this repository. */
+  getFile<Path extends string>(path: Path): File<Record<string, any>, Path> {
+    this.registerSparsePath(directoryName(path))
+    return new File({
+      path,
+      repository: this,
+    })
+  }
+
+  /** Get the first git commit date of a path in this repository. */
+  async getFirstCommitDate(path: string): Promise<Date | undefined> {
+    const metadata = await this.getFileSystem().getGitFileMetadata(path)
+    return metadata.firstCommitDate
+  }
+
+  /** Get the last git commit date of a path in this repository. */
+  async getLastCommitDate(path: string): Promise<Date | undefined> {
+    const metadata = await this.getFileSystem().getGitFileMetadata(path)
+    return metadata.lastCommitDate
+  }
+
+  /** Get the git authors for a path in this repository. */
+  async getAuthors(path: string): Promise<GitAuthor[]> {
+    const metadata = await this.getFileSystem().getGitFileMetadata(path)
+    return metadata.authors
+  }
+
+  /** Get export history for a path/export in this repository. */
+  async getExportHistory(
+    path: string,
+    exportName: string,
+    options?: RepositoryExportHistoryOptions
+  ): Promise<ExportHistoryReport> {
+    const report = await this.getFileSystem().getExportHistory({
+      entry: path,
+      ...options,
+    })
+
+    if (!exportName) {
+      return report
+    }
+
+    const ids = report.nameToId[exportName] ?? []
+    const filteredExports: ExportHistoryReport['exports'] = {}
+
+    for (const id of ids) {
+      const changes = report.exports[id]
+      if (changes) {
+        filteredExports[id] = changes
+      }
+    }
+
+    return {
+      ...report,
+      exports: filteredExports,
+      nameToId: ids.length ? { [exportName]: ids } : {},
+    }
+  }
+
+  /** @internal */
+  registerSparsePath(path?: string) {
+    if (!path) return
+
+    const normalized = normalizeSparsePath(String(path))
+    if (!normalized) return
+    this.#pendingSparsePaths.add(normalized)
+  }
+
+  /** @internal */
+  getFileSystem(): GitFileSystem | GitVirtualFileSystem {
+    if (this.#fileSystem) {
+      return this.#fileSystem
+    }
+
+    if (!this.#fileSystemConfig) {
+      this.#fileSystem = new GitFileSystem({
+        repository: this.#path,
+      })
+      return this.#fileSystem
+    }
+
+    if (this.#fileSystemConfig.kind === 'virtual') {
+      this.#fileSystem = new GitVirtualFileSystem({
+        repository: this.#fileSystemConfig.repository,
+        host: this.#fileSystemConfig.host,
+        ref: this.#fileSystemConfig.ref,
+        token: this.#fileSystemConfig.token,
+      })
+      return this.#fileSystem
+    }
+
+    const sparse = mergeSparsePaths(
+      this.#fileSystemConfig.sparse,
+      this.#pendingSparsePaths
+    )
+
+    this.#fileSystem = new GitFileSystem({
+      repository: this.#fileSystemConfig.repository,
+      ref: this.#fileSystemConfig.ref,
+      depth: this.#fileSystemConfig.depth,
+      sparse,
+    })
+
+    return this.#fileSystem
   }
 
   /** Returns the string representation of the repository. */
   toString(): string {
+    if (!this.#host || !this.#owner || !this.#repo) {
+      return this.#path
+    }
+
     const ref = this.#isDefaultRefExplicit ? `@${this.#defaultRef}` : ''
     const path = this.#defaultPath ? `/${this.#defaultPath}` : ''
     return `${this.#host}:${this.#owner}/${this.#repo}${ref}${path}`
@@ -501,7 +957,7 @@ export class Repository {
 
   /** Constructs a new issue URL for the repository. */
   getIssueUrl(options: GetIssueUrlOptions): string {
-    if (!this.#owner || !this.#repo) {
+    if (!this.#host || !this.#owner || !this.#repo) {
       throw new Error('Cannot determine owner/repo for this repository.')
     }
 
@@ -547,6 +1003,12 @@ export class Repository {
 
   /** Constructs a URL for a file in the repository. */
   getFileUrl(options: GetFileUrlOptions): string {
+    if (!this.#host || !this.#owner || !this.#repo) {
+      throw new Error(
+        '[renoun] Repository remote information is not configured. Provide a remote repository URL or RepositoryConfig to construct file URLs.'
+      )
+    }
+
     const { type = 'source', path, line } = options
     const ref = options.ref ?? this.#defaultRef
     const fullPath = this.#defaultPath
@@ -569,6 +1031,12 @@ export class Repository {
 
   /** Constructs a URL for a directory in the repository. */
   getDirectoryUrl(options: GetDirectoryUrlOptions): string {
+    if (!this.#host || !this.#owner || !this.#repo) {
+      throw new Error(
+        '[renoun] Repository remote information is not configured. Provide a remote repository URL or RepositoryConfig to construct directory URLs.'
+      )
+    }
+
     const { type = 'source', path } = options
     const ref = options.ref ?? this.#defaultRef ?? 'main'
     const fullPath = this.#defaultPath
@@ -1033,6 +1501,12 @@ export class Repository {
   }
 
   #getRepositoryBaseUrl(): string {
+    if (!this.#baseUrl || !this.#host) {
+      throw new Error(
+        '[renoun] Repository remote information is not configured.'
+      )
+    }
+
     const urlObject = tryGetUrl(this.#baseUrl)
     const extracted = extractOwnerAndRepositoryFromBaseUrl(
       this.#host,
@@ -1069,22 +1543,27 @@ export class Repository {
     path: string,
     line?: number | [number, number]
   ): string {
+    if (!this.#baseUrl || !this.#host) {
+      throw new Error(
+        '[renoun] Repository remote information is not configured.'
+      )
+    }
+
+    const baseUrl = this.#baseUrl
+    const host = this.#host
     const lineFragment = this.#formatLineFragment(line, {
       rangeDelimiter: '-L',
     })
 
     // Compute a repository-aware base URL. If owner/repo are known but not
     // present in `baseUrl` then synthesize "<origin>/<owner>/<repo>"
-    const urlObject = tryGetUrl(this.#baseUrl)
-    const extracted = extractOwnerAndRepositoryFromBaseUrl(
-      this.#host,
-      this.#baseUrl
-    )
+    const urlObject = tryGetUrl(baseUrl)
+    const extracted = extractOwnerAndRepositoryFromBaseUrl(host, baseUrl)
     const hasOwnerRepoInBase = Boolean(extracted)
     const repoBaseUrl =
       this.#owner && this.#repo && urlObject && !hasOwnerRepoInBase
         ? `${urlObject.origin}/${this.#owner}/${this.#repo}`
-        : this.#baseUrl
+        : baseUrl
 
     switch (type) {
       case 'edit':
@@ -1095,7 +1574,7 @@ export class Repository {
         }
         return `${repoBaseUrl}/edit/${ref}/${path}`
       case 'raw': {
-        const host = getNormalizedHostnameFromUrlString(this.#baseUrl)
+        const host = getNormalizedHostnameFromUrlString(baseUrl)
 
         // Public GitHub: use raw.githubusercontent.com
         if (host === HOSTS.github) {
@@ -1138,16 +1617,21 @@ export class Repository {
     ref: string,
     path: string
   ): string {
-    const urlObject = tryGetUrl(this.#baseUrl)
-    const extracted = extractOwnerAndRepositoryFromBaseUrl(
-      this.#host,
-      this.#baseUrl
-    )
+    if (!this.#baseUrl || !this.#host) {
+      throw new Error(
+        '[renoun] Repository remote information is not configured.'
+      )
+    }
+
+    const baseUrl = this.#baseUrl
+    const host = this.#host
+    const urlObject = tryGetUrl(baseUrl)
+    const extracted = extractOwnerAndRepositoryFromBaseUrl(host, baseUrl)
     const hasOwnerRepoInBase = Boolean(extracted)
     const repoBaseUrl =
       this.#owner && this.#repo && urlObject && !hasOwnerRepoInBase
         ? `${urlObject.origin}/${this.#owner}/${this.#repo}`
-        : this.#baseUrl
+        : baseUrl
 
     switch (type) {
       case 'history':

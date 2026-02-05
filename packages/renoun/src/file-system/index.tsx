@@ -19,6 +19,9 @@ export type {
   FileSystemEntry,
   FileWithExtension,
   DirectoryFilter,
+  BaseDirectoryOptions,
+  GitDirectoryOptions,
+  FileSystemDirectoryOptions,
   DirectoryOptions,
   FilePathnameOptions,
   FileOptions,
@@ -72,8 +75,13 @@ export type {
   FileSystem,
 } from './FileSystem.ts'
 export { BaseFileSystem } from './FileSystem.ts'
-export { GitHostFileSystem } from './GitHostFileSystem.ts'
+export { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 export { InMemoryFileSystem } from './InMemoryFileSystem.ts'
-export { LocalGitFileSystem } from './LocalGitFileSystem.ts'
+export { GitFileSystem } from './GitFileSystem.ts'
 export { NodeFileSystem } from './NodeFileSystem.ts'
 export { Repository } from './Repository.ts'
+export type {
+  RepositoryOptions,
+  RepositoryExportHistoryOptions,
+  RepositoryConfig,
+} from './Repository.ts'

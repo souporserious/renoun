@@ -1,5 +1,5 @@
 /**
- * LocalGitFileSystem
+ * GitFileSystem
  *
  * A high-performance git-backed file system that:
  * - Reads files directly from git object storage (`git cat-file --batch`)
@@ -16,12 +16,22 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { mkdir, rename, rm, cp, writeFile } from 'node:fs/promises'
+import {
+  mkdir,
+  readdir,
+  readFile as fsReadFile,
+  rename,
+  rm,
+  cp,
+  writeFile,
+  stat,
+} from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { createInterface } from 'node:readline'
 import os from 'node:os'
@@ -82,7 +92,7 @@ import {
   checkAndCollapseOscillation,
 } from './export-analysis.ts'
 
-export interface LocalGitFileSystemOptions extends FileSystemOptions {
+export interface GitFileSystemOptions extends FileSystemOptions {
   /** Repository source - remote URL or local path. */
   repository: string
 
@@ -230,7 +240,7 @@ export async function ensureCacheClone(
 
   if (existsSync(target) && !existsSync(gitDir)) {
     throw new Error(
-      `[LocalGitFileSystem] Refusing to use cache target that exists but is not a git repo: ${target}`
+      `[GitFileSystem] Refusing to use cache target that exists but is not a git repo: ${target}`
     )
   }
 
@@ -244,7 +254,7 @@ export async function ensureCacheClone(
     cloneUrl = spec
   } else {
     throw new Error(
-      `[LocalGitFileSystem] Unsupported repository spec: ${spec}. ` +
+      `[GitFileSystem] Unsupported repository spec: ${spec}. ` +
         'Use a local path, an "owner/repo" GitHub shorthand, or a git URL (https://, ssh://, file://, git@).'
     )
   }
@@ -253,13 +263,13 @@ export async function ensureCacheClone(
 
   if (verbose && !supportsBackfill) {
     console.log(
-      '[LocalGitFileSystem] git backfill is not available. Falling back to full clone.'
+      '[GitFileSystem] git backfill is not available. Falling back to full clone.'
     )
   }
 
   if (!existsSync(gitDir)) {
     if (verbose) {
-      console.log(`[LocalGitFileSystem] Cloning ${spec} into ${target}…`)
+      console.log(`[GitFileSystem] Cloning ${spec} into ${target}…`)
     }
 
     const clone = await spawnWithResult(
@@ -309,7 +319,7 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
 
   if (existsSync(target) && !existsSync(gitDir)) {
     throw new Error(
-      `[LocalGitFileSystem] Refusing to use cache target that exists but is not a git repo: ${target}`
+      `[GitFileSystem] Refusing to use cache target that exists but is not a git repo: ${target}`
     )
   }
 
@@ -323,7 +333,7 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
     cloneUrl = spec
   } else {
     throw new Error(
-      `[LocalGitFileSystem] Unsupported repository spec: ${spec}. ` +
+      `[GitFileSystem] Unsupported repository spec: ${spec}. ` +
         'Use a local path, an "owner/repo" GitHub shorthand, or a git URL (https://, ssh://, file://, git@).'
     )
   }
@@ -332,13 +342,13 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
 
   if (verbose && !supportsBackfill) {
     console.log(
-      '[LocalGitFileSystem] git backfill is not available. Falling back to full clone.'
+      '[GitFileSystem] git backfill is not available. Falling back to full clone.'
     )
   }
 
   if (!existsSync(gitDir)) {
     if (verbose) {
-      console.log(`[LocalGitFileSystem] Cloning ${spec} into ${target}…`)
+      console.log(`[GitFileSystem] Cloning ${spec} into ${target}…`)
     }
 
     const cloneArgs = [
@@ -406,7 +416,7 @@ async function runGitBackfill(repoRoot: string, verbose: boolean) {
   if (result.status !== 0 && verbose) {
     const stderr = result.stderr ? String(result.stderr).trim() : ''
     console.warn(
-      `[LocalGitFileSystem] git backfill --sparse failed (ignored)${
+      `[GitFileSystem] git backfill --sparse failed (ignored)${
         stderr ? `: ${stderr}` : ''
       }`
     )
@@ -422,7 +432,7 @@ function runGitBackfillSync(repoRoot: string, verbose: boolean) {
   if (result.status !== 0 && verbose) {
     const stderr = result.stderr ? String(result.stderr).trim() : ''
     console.warn(
-      `[LocalGitFileSystem] git backfill --sparse failed (ignored)${
+      `[GitFileSystem] git backfill --sparse failed (ignored)${
         stderr ? `: ${stderr}` : ''
       }`
     )
@@ -687,7 +697,7 @@ async function spawnAsync(
   return result.stdout
 }
 
-export class LocalGitFileSystem
+export class GitFileSystem
   extends BaseFileSystem
   implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
 {
@@ -721,6 +731,11 @@ export class LocalGitFileSystem
   // Lazily resolved commit SHA for `this.ref`
   #refCommit: string | null = null
   #refCommitPromise: Promise<string> | null = null
+  readonly #refIsExplicit: boolean
+  readonly #worktreeEnabled: boolean
+  #worktreeRootChecked = false
+  #worktreeRootExists = false
+  #worktreeIgnoreCache = new Map<string, boolean>()
 
   // Singleton promise to prevent parallel unshallow operations
   #unshallowPromise: Promise<void> | null = null
@@ -745,7 +760,7 @@ export class LocalGitFileSystem
   // Cache git log results (keyed by query) to avoid repeat git invocations in a single process.
   #gitLogCache = new LRUMap<string, Promise<GitLogCommit[]>>(GIT_LOG_CACHE_MAX)
 
-  constructor(options: LocalGitFileSystemOptions) {
+  constructor(options: GitFileSystemOptions) {
     super(options)
 
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
@@ -757,6 +772,8 @@ export class LocalGitFileSystem
     this.cloneDepth = options.depth
 
     this.ref = options.ref ?? 'HEAD'
+    this.#refIsExplicit = options.ref !== undefined
+    this.#worktreeEnabled = !this.repositoryIsRemote && !this.#refIsExplicit
     assertSafeGitArg(this.ref, 'ref')
 
     this.cacheDirectory = options.cacheDir
@@ -782,7 +799,7 @@ export class LocalGitFileSystem
 
     if (this.verbose) {
       console.log(
-        `[LocalGitFileSystem] initialized for ${this.repoRoot} @ ${this.ref}`
+        `[GitFileSystem] initialized for ${this.repoRoot} @ ${this.ref}`
       )
     }
   }
@@ -886,6 +903,11 @@ export class LocalGitFileSystem
   async readFile(path: string): Promise<string> {
     await this.#ensureRepoReady()
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath, 'any')
+    if (worktreePath) {
+      return fsReadFile(worktreePath, 'utf-8')
+    }
+
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
     const object = await this.#git!.getBlobInfo(spec)
     if (!object) {
@@ -922,6 +944,19 @@ export class LocalGitFileSystem
   getFileByteLengthSync(path: string): number | undefined {
     this.#ensureRepoReadySync()
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath, 'any')
+    if (worktreePath) {
+      try {
+        const stats = statSync(worktreePath)
+        if (!stats.isFile() && !stats.isSymbolicLink()) {
+          return undefined
+        }
+        return stats.size
+      } catch {
+        return undefined
+      }
+    }
+
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
     const result = spawnSync('git', ['cat-file', '-s', spec], {
       cwd: this.repoRoot,
@@ -965,6 +1000,11 @@ export class LocalGitFileSystem
   fileExistsSync(path: string): boolean {
     this.#ensureRepoReadySync()
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath, 'any')
+    if (worktreePath) {
+      return true
+    }
+
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
     const result = spawnSync('git', ['cat-file', '-e', spec], {
       cwd: this.repoRoot,
@@ -976,6 +1016,11 @@ export class LocalGitFileSystem
   async fileExists(path: string): Promise<boolean> {
     await this.#ensureRepoReady()
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath, 'any')
+    if (worktreePath) {
+      return true
+    }
+
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
     const meta = await this.#git!.getBlobMeta(spec)
     return meta !== null
@@ -984,6 +1029,16 @@ export class LocalGitFileSystem
   getFileLastModifiedMsSync(path: string): number | undefined {
     this.#ensureRepoReadySync()
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath)
+    if (worktreePath) {
+      try {
+        const stats = statSync(worktreePath)
+        return stats.mtimeMs
+      } catch {
+        return undefined
+      }
+    }
+
     const result = spawnSync(
       'git',
       ['log', '-1', '--format=%ct', this.ref, '--', relativePath],
@@ -1006,6 +1061,16 @@ export class LocalGitFileSystem
   async getFileLastModifiedMs(path: string): Promise<number | undefined> {
     await this.#ensureRepoReady()
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath)
+    if (worktreePath) {
+      try {
+        const stats = await stat(worktreePath)
+        return stats.mtimeMs
+      } catch {
+        return undefined
+      }
+    }
+
     const result = await spawnWithResult(
       'git',
       ['log', '-1', '--format=%ct', this.ref, '--', relativePath],
@@ -1143,6 +1208,71 @@ export class LocalGitFileSystem
     return relative
   }
 
+  #hasWorktreeRoot(): boolean {
+    if (!this.#worktreeEnabled) {
+      return false
+    }
+
+    if (!this.#worktreeRootChecked) {
+      this.#worktreeRootChecked = true
+      this.#worktreeRootExists = existsSync(join(this.repoRoot, '.git'))
+    }
+
+    return this.#worktreeRootExists
+  }
+
+  #resolveWorktreePath(
+    relativePath: string,
+    kind: 'file' | 'directory' | 'any' = 'file'
+  ): string | undefined {
+    if (!this.#hasWorktreeRoot()) {
+      return undefined
+    }
+
+    const absolutePath = this.#resolveRepoAbsolutePath(relativePath)
+
+    try {
+      const stats = statSync(absolutePath)
+      if (kind === 'directory' && !stats.isDirectory()) {
+        return undefined
+      }
+      if (
+        kind === 'file' &&
+        !stats.isFile() &&
+        !stats.isSymbolicLink()
+      ) {
+        return undefined
+      }
+    } catch {
+      return undefined
+    }
+
+    return absolutePath
+  }
+
+  #shouldIncludeWorktreeEntry(relativePath: string): boolean {
+    if (!relativePath) {
+      return true
+    }
+
+    if (relativePath === '.git' || relativePath.startsWith('.git/')) {
+      return false
+    }
+
+    if (relativePath === '.renoun' || relativePath.startsWith('.renoun/')) {
+      return false
+    }
+
+    const cached = this.#worktreeIgnoreCache.get(relativePath)
+    if (cached !== undefined) {
+      return !cached
+    }
+
+    const ignored = this.isFilePathGitIgnored(relativePath)
+    this.#worktreeIgnoreCache.set(relativePath, ignored)
+    return !ignored
+  }
+
   #resolveRepoAbsolutePath(path: string): string {
     const absolutePath = this.getAbsolutePath(path)
     this.#assertWithinRepo(absolutePath)
@@ -1199,6 +1329,11 @@ export class LocalGitFileSystem
 
   #readDirectorySyncInternal(path: string): DirectoryEntry[] {
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath, 'directory')
+    if (worktreePath) {
+      return this.#readDirectoryFromFsSync(relativePath, worktreePath)
+    }
+
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
     const result = spawnSync('git', ['ls-tree', '-z', spec], {
       cwd: this.repoRoot,
@@ -1218,6 +1353,11 @@ export class LocalGitFileSystem
 
   async #readDirectoryInternal(path: string): Promise<DirectoryEntry[]> {
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath, 'directory')
+    if (worktreePath) {
+      return this.#readDirectoryFromFs(relativePath, worktreePath)
+    }
+
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
     const result = await spawnWithResult('git', ['ls-tree', '-z', spec], {
       cwd: this.repoRoot,
@@ -1235,8 +1375,69 @@ export class LocalGitFileSystem
     return parseLsTreeOutput(result.stdout, relativePath)
   }
 
+  /** Read directory using Node fs (worktree overlay). */
+  #readDirectoryFromFsSync(
+    relativePath: string,
+    absolutePath: string
+  ): DirectoryEntry[] {
+    const entries = readdirSync(absolutePath, { withFileTypes: true })
+    const directoryEntries: DirectoryEntry[] = []
+    const base =
+      relativePath && relativePath !== '.'
+        ? normalizeSlashes(relativePath).replace(/\/$/, '')
+        : ''
+
+    for (const entry of entries) {
+      const entryPath = base ? joinPaths(base, entry.name) : entry.name
+      if (!this.#shouldIncludeWorktreeEntry(entryPath)) {
+        continue
+      }
+      directoryEntries.push({
+        name: entry.name,
+        path: ensureRelativePath(entryPath),
+        isDirectory: entry.isDirectory(),
+        isFile: entry.isFile() || entry.isSymbolicLink(),
+      })
+    }
+
+    return directoryEntries
+  }
+
+  /** Read directory using Node fs (worktree overlay). */
+  async #readDirectoryFromFs(
+    relativePath: string,
+    absolutePath: string
+  ): Promise<DirectoryEntry[]> {
+    const entries = await readdir(absolutePath, { withFileTypes: true })
+    const directoryEntries: DirectoryEntry[] = []
+    const base =
+      relativePath && relativePath !== '.'
+        ? normalizeSlashes(relativePath).replace(/\/$/, '')
+        : ''
+
+    for (const entry of entries) {
+      const entryPath = base ? joinPaths(base, entry.name) : entry.name
+      if (!this.#shouldIncludeWorktreeEntry(entryPath)) {
+        continue
+      }
+      directoryEntries.push({
+        name: entry.name,
+        path: ensureRelativePath(entryPath),
+        isDirectory: entry.isDirectory(),
+        isFile: entry.isFile() || entry.isSymbolicLink(),
+      })
+    }
+
+    return directoryEntries
+  }
+
   #readFileSyncInternal(path: string): string {
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath)
+    if (worktreePath) {
+      return readFileSync(worktreePath, 'utf-8')
+    }
+
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
     const result = spawnSync('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
@@ -1254,6 +1455,12 @@ export class LocalGitFileSystem
 
   #readFileBinarySyncInternal(path: string): Uint8Array {
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath)
+    if (worktreePath) {
+      const buffer = readFileSync(worktreePath)
+      return new Uint8Array(buffer)
+    }
+
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
     const result = spawnSync('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
@@ -1273,6 +1480,12 @@ export class LocalGitFileSystem
 
   async #readFileBinaryInternal(path: string): Promise<Uint8Array> {
     const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath)
+    if (worktreePath) {
+      const buffer = await fsReadFile(worktreePath)
+      return new Uint8Array(buffer)
+    }
+
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
     const buffer = await spawnWithBuffer('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
@@ -1295,7 +1508,7 @@ export class LocalGitFileSystem
 
     if (this.#repoRootPromise) {
       throw new Error(
-        '[LocalGitFileSystem] Repository initialization in progress (async).'
+        '[GitFileSystem] Repository initialization in progress (async).'
       )
     }
 
@@ -1318,6 +1531,9 @@ export class LocalGitFileSystem
     }
 
     this.repoRoot = resolved
+    this.#worktreeRootChecked = false
+    this.#worktreeRootExists = false
+    this.#worktreeIgnoreCache.clear()
     if (!this.#git) {
       this.#git = new GitObjectStore(this.repoRoot)
     }
@@ -1361,7 +1577,7 @@ export class LocalGitFileSystem
 
     if (this.verbose) {
       console.log(
-        `[LocalGitFileSystem] Cached ref "${ref}" moved; fetching ${remote}…`
+        `[GitFileSystem] Cached ref "${ref}" moved; fetching ${remote}…`
       )
     }
     const baseEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
@@ -1389,7 +1605,7 @@ export class LocalGitFileSystem
     if (result.status !== 0) {
       if (this.verbose) {
         const msg = result.stderr?.trim() || 'unknown error'
-        console.warn(`[LocalGitFileSystem] Fetch failed (${remote}): ${msg}`)
+        console.warn(`[GitFileSystem] Fetch failed (${remote}): ${msg}`)
       }
       return
     }
@@ -1540,7 +1756,7 @@ export class LocalGitFileSystem
 
     if (this.verbose) {
       console.log(
-        `[LocalGitFileSystem] Building release map for ${neededCommits.size} commits (earliest: ${new Date(earliestUnix * 1000).toISOString()})...`
+        `[GitFileSystem] Building release map for ${neededCommits.size} commits (earliest: ${new Date(earliestUnix * 1000).toISOString()})...`
       )
     }
 
@@ -1588,7 +1804,7 @@ export class LocalGitFileSystem
 
     if (this.verbose) {
       console.log(
-        `[LocalGitFileSystem] Processing ${releaseTags.length}/${allReleaseTags.length} relevant tags (starting from ${releaseTags[0] || 'none'})...`
+        `[GitFileSystem] Processing ${releaseTags.length}/${allReleaseTags.length} relevant tags (starting from ${releaseTags[0] || 'none'})...`
       )
     }
 
@@ -1648,7 +1864,7 @@ export class LocalGitFileSystem
 
     if (this.verbose) {
       console.log(
-        `[LocalGitFileSystem] Release map: ${commitToRelease.size}/${neededCommits.size} commits mapped`
+        `[GitFileSystem] Release map: ${commitToRelease.size}/${neededCommits.size} commits mapped`
       )
     }
 
@@ -1711,13 +1927,13 @@ export class LocalGitFileSystem
     if (startRef) {
       startCommit = await this.#resolveRefToCommit(startRef)
       if (!startCommit) {
-        throw new Error(`[LocalGitFileSystem] Invalid startRef: "${startRef}"`)
+        throw new Error(`[GitFileSystem] Invalid startRef: "${startRef}"`)
       }
     }
     if (options.endRef) {
       const resolved = await this.#resolveRefToCommit(endRef)
       if (!resolved) {
-        throw new Error(`[LocalGitFileSystem] Invalid endRef: "${endRef}"`)
+        throw new Error(`[GitFileSystem] Invalid endRef: "${endRef}"`)
       }
       endCommit = resolved
     } else {
@@ -2365,12 +2581,10 @@ export class LocalGitFileSystem
       const denom = cacheHits + cacheMisses
       const pct = denom ? ((cacheHits / denom) * 100).toFixed(1) : '0.0'
       console.log(
-        `[LocalGitFileSystem] public API scan done (parse cache hit rate: ${pct}%)`
+        `[GitFileSystem] public API scan done (parse cache hit rate: ${pct}%)`
       )
       if (parseWarnings.length)
-        console.log(
-          `[LocalGitFileSystem] parseWarnings=${parseWarnings.length}`
-        )
+        console.log(`[GitFileSystem] parseWarnings=${parseWarnings.length}`)
     }
 
     this.#writeCache(diskPath, report)
@@ -2489,7 +2703,7 @@ export class LocalGitFileSystem
 
   #assertOpen() {
     if (this.#closed) {
-      throw new Error('LocalGitFileSystem is closed')
+      throw new Error('GitFileSystem is closed')
     }
   }
 
@@ -2543,6 +2757,9 @@ export class LocalGitFileSystem
       }
 
       this.repoRoot = resolved
+      this.#worktreeRootChecked = false
+      this.#worktreeRootExists = false
+      this.#worktreeIgnoreCache.clear()
       if (!this.#git) {
         this.#git = new GitObjectStore(this.repoRoot)
       }
@@ -2581,7 +2798,7 @@ export class LocalGitFileSystem
     if (!remoteSha || localSha !== remoteSha) {
       if (this.verbose) {
         console.log(
-          `[LocalGitFileSystem] Cached ref "${ref}" moved; fetching ${remote}…`
+          `[GitFileSystem] Cached ref "${ref}" moved; fetching ${remote}…`
         )
       }
       const baseEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
@@ -2614,7 +2831,7 @@ export class LocalGitFileSystem
           const msg = result.stderr
             ? String(result.stderr).trim()
             : 'unknown error'
-          console.warn(`[LocalGitFileSystem] Fetch failed (${remote}): ${msg}`)
+          console.warn(`[GitFileSystem] Fetch failed (${remote}): ${msg}`)
         }
         return
       }
@@ -2661,14 +2878,14 @@ export class LocalGitFileSystem
       if (this.verbose) {
         if (result.status === 124) {
           console.warn(
-            `[LocalGitFileSystem] ls-remote timed out (${remote} ${ref}); skipping update check.`
+            `[GitFileSystem] ls-remote timed out (${remote} ${ref}); skipping update check.`
           )
         }
         const msg = result.stderr
           ? String(result.stderr).trim()
           : 'unknown error'
         console.warn(
-          `[LocalGitFileSystem] ls-remote failed (${remote} ${ref}): ${msg}`
+          `[GitFileSystem] ls-remote failed (${remote} ${ref}): ${msg}`
         )
       }
       remoteRefCache.set(cacheKey, { remoteSha: null, checkedAt: now })
@@ -2756,7 +2973,7 @@ export class LocalGitFileSystem
         if (resolvedCommit) {
           if (this.verbose) {
             console.log(
-              `[LocalGitFileSystem] ref fallback: "${this.ref}" -> "${candidate}" (${resolvedCommit.slice(0, 7)})`
+              `[GitFileSystem] ref fallback: "${this.ref}" -> "${candidate}" (${resolvedCommit.slice(0, 7)})`
             )
           }
           return (this.#refCommit = resolvedCommit)
@@ -2766,7 +2983,7 @@ export class LocalGitFileSystem
       const refs = await this.#listRefsBrief()
       throw new Error(
         [
-          `[LocalGitFileSystem] Could not resolve ref "${this.ref}" in repo "${this.repoRoot}".`,
+          `[GitFileSystem] Could not resolve ref "${this.ref}" in repo "${this.repoRoot}".`,
           `Known refs (sample): ${refs.length ? refs.join(', ') : '(none)'}`,
           `Tip: pass a branch name ("main") or "origin/main", or enable autoFetch.`,
         ].join('\n')
@@ -2796,7 +3013,7 @@ export class LocalGitFileSystem
       if (isShallow) {
         if (this.verbose) {
           console.log(
-            `[LocalGitFileSystem] Shallow repository detected. Fetching full history from ${this.fetchRemote}...`
+            `[GitFileSystem] Shallow repository detected. Fetching full history from ${this.fetchRemote}...`
           )
         }
         await spawnAsync(
@@ -2807,13 +3024,13 @@ export class LocalGitFileSystem
           }
         )
         if (this.verbose) {
-          console.log('[LocalGitFileSystem] Unshallow complete.')
+          console.log('[GitFileSystem] Unshallow complete.')
         }
       }
     } catch (err: any) {
       if (this.verbose) {
         console.warn(
-          `[LocalGitFileSystem] Failed to unshallow repository: ${err.message}`
+          `[GitFileSystem] Failed to unshallow repository: ${err.message}`
         )
       }
     }
@@ -2908,14 +3125,14 @@ export class LocalGitFileSystem
           ? String(result.stderr).trim()
           : 'unknown error'
         console.warn(
-          `[LocalGitFileSystem] autoFetch failed (${remote} ${branch}): ${msg}`
+          `[GitFileSystem] autoFetch failed (${remote} ${branch}): ${msg}`
         )
       }
       return false
     }
 
     if (this.verbose) {
-      console.log(`[LocalGitFileSystem] autoFetch ok: ${remote} ${branch}`)
+      console.log(`[GitFileSystem] autoFetch ok: ${remote} ${branch}`)
     }
     return true
   }
@@ -3159,7 +3376,7 @@ export class LocalGitFileSystem
     } catch (error: unknown) {
       if (this.verbose) {
         console.warn(
-          `[LocalGitFileSystem] git log failed for ${relativePath}: ${error instanceof Error ? error.message : String(error)}`
+          `[GitFileSystem] git log failed for ${relativePath}: ${error instanceof Error ? error.message : String(error)}`
         )
       }
       return {
@@ -3194,7 +3411,7 @@ export class LocalGitFileSystem
     }
 
     if (this.verbose)
-      console.log(`[LocalGitFileSystem] building file index for ${relPath}…`)
+      console.log(`[GitFileSystem] building file index for ${relPath}…`)
 
     const commits = await this.#gitLogCached(refCommit, relPath, {
       reverse: true,
@@ -4546,45 +4763,41 @@ function looksLikeGitRemoteUrl(value: string) {
 function assertSafeGitArg(value: string, label: string) {
   const stringValue = String(value)
   if (!stringValue) {
-    throw new Error(`[LocalGitFileSystem] Missing ${label}`)
+    throw new Error(`[GitFileSystem] Missing ${label}`)
   }
   if (
     stringValue.includes('\0') ||
     stringValue.includes('\n') ||
     stringValue.includes('\r')
   ) {
-    throw new Error(
-      `[LocalGitFileSystem] Invalid ${label}: contains newline/NUL`
-    )
+    throw new Error(`[GitFileSystem] Invalid ${label}: contains newline/NUL`)
   }
   if (stringValue.startsWith('-')) {
-    throw new Error(
-      `[LocalGitFileSystem] Invalid ${label}: must not start with "-"`
-    )
+    throw new Error(`[GitFileSystem] Invalid ${label}: must not start with "-"`)
   }
 }
 
 function assertSafeRepoPath(relativePath: string) {
   const stringPath = String(relativePath)
   if (!stringPath) {
-    throw new Error('[LocalGitFileSystem] Invalid path: empty')
+    throw new Error('[GitFileSystem] Invalid path: empty')
   }
   if (
     stringPath.includes('\0') ||
     stringPath.includes('\n') ||
     stringPath.includes('\r')
   ) {
-    throw new Error('[LocalGitFileSystem] Invalid path: contains newline/NUL')
+    throw new Error('[GitFileSystem] Invalid path: contains newline/NUL')
   }
   if (stringPath.includes(':')) {
     throw new Error(
-      `[LocalGitFileSystem] Invalid repo path "${stringPath}": ":" is not supported in paths`
+      `[GitFileSystem] Invalid repo path "${stringPath}": ":" is not supported in paths`
     )
   }
   const segments = stringPath.split('/')
   if (segments.some((segment) => segment === '..')) {
     throw new Error(
-      `[LocalGitFileSystem] Invalid repo path "${stringPath}": ".." segments are not allowed`
+      `[GitFileSystem] Invalid repo path "${stringPath}": ".." segments are not allowed`
     )
   }
 }
@@ -4596,9 +4809,7 @@ function assertSafeGitSpec(specifier: string) {
     stringSpecifier.includes('\n') ||
     stringSpecifier.includes('\r')
   ) {
-    throw new Error(
-      '[LocalGitFileSystem] Invalid git spec: contains newline/NUL'
-    )
+    throw new Error('[GitFileSystem] Invalid git spec: contains newline/NUL')
   }
 }
 

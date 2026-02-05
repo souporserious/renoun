@@ -24,8 +24,8 @@ import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import { removeExtension } from '../utils/path.ts'
 import { NodeFileSystem } from './NodeFileSystem'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
-import { LocalGitFileSystem } from './LocalGitFileSystem.ts'
-import * as gitHostFileSystemModule from './GitHostFileSystem'
+import { GitFileSystem } from './GitFileSystem.ts'
+import * as gitHostFileSystemModule from './GitVirtualFileSystem'
 import {
   type FileSystemEntry,
   type InferModuleExports,
@@ -46,6 +46,7 @@ import {
   FileNotFoundError,
   ModuleExportNotFoundError,
   JSONFile,
+  Repository,
   Workspace,
   type FileStructure,
 } from './index'
@@ -2266,27 +2267,15 @@ export function identity<T>(value: T) {
     expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
   })
 
-  test('getFirstCommitDate falls back to local git metadata when provider missing', async () => {
-    const firstCommitDate = new Date('2022-01-01T00:00:00.000Z')
-    const spy = vi
-      .spyOn(LocalGitFileSystem.prototype, 'getGitExportMetadata')
-      .mockResolvedValue({ firstCommitDate, lastCommitDate: undefined })
+  test('getFirstCommitDate returns undefined when provider missing', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const answer = 42',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+    const fileExport = await file.getExport('answer')
 
-    try {
-      const fileSystem = new InMemoryFileSystem({
-        'index.ts': 'export const answer = 42',
-      })
-      const directory = new Directory({ fileSystem })
-      const file = await directory.getFile('index', 'ts')
-      const fileExport = await file.getExport('answer')
-
-      await expect(fileExport.getFirstCommitDate()).resolves.toEqual(
-        firstCommitDate
-      )
-      expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
-    } finally {
-      spy.mockRestore()
-    }
+    await expect(fileExport.getFirstCommitDate()).resolves.toBeUndefined()
   })
 
   test('getLastCommitDate uses git metadata provider when available', async () => {
@@ -2319,27 +2308,15 @@ export function identity<T>(value: T) {
     expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
   })
 
-  test('getLastCommitDate falls back to local git metadata when provider missing', async () => {
-    const lastCommitDate = new Date('2022-02-02T00:00:00.000Z')
-    const spy = vi
-      .spyOn(LocalGitFileSystem.prototype, 'getGitExportMetadata')
-      .mockResolvedValue({ firstCommitDate: undefined, lastCommitDate })
+  test('getLastCommitDate returns undefined when provider missing', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const answer = 42',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+    const fileExport = await file.getExport('answer')
 
-    try {
-      const fileSystem = new InMemoryFileSystem({
-        'index.ts': 'export const answer = 42',
-      })
-      const directory = new Directory({ fileSystem })
-      const file = await directory.getFile('index', 'ts')
-      const fileExport = await file.getExport('answer')
-
-      await expect(fileExport.getLastCommitDate()).resolves.toEqual(
-        lastCommitDate
-      )
-      expect(spy).toHaveBeenCalledWith('/index.ts', 1, 1)
-    } finally {
-      spy.mockRestore()
-    }
+    await expect(fileExport.getLastCommitDate()).resolves.toBeUndefined()
   })
 
   test('file export type reference', async () => {
@@ -3738,10 +3715,10 @@ export function identity<T>(value: T) {
         'src/index.ts': '',
       })
       const gitHostSpy = vi
-        .spyOn(gitHostFileSystemModule, 'GitHostFileSystem')
+        .spyOn(gitHostFileSystemModule, 'GitVirtualFileSystem')
         .mockImplementation(function (this: any, options: any) {
           expect(options.repository).toBe('souporserious/remote')
-          return remoteFs as unknown as gitHostFileSystemModule.GitHostFileSystem
+          return remoteFs as unknown as gitHostFileSystemModule.GitVirtualFileSystem
         } as any)
 
       try {
@@ -4096,9 +4073,9 @@ export function identity<T>(value: T) {
   })
 
   test('throws when repository is not configured', () => {
-    const directory = new Directory()
+    const directory = new Directory({ fileSystem: new InMemoryFileSystem({}) })
     expect(() => directory.getRepository()).toThrowError(
-      /Git repository is not configured/
+      /Repository is not configured/
     )
   })
 
@@ -4107,7 +4084,8 @@ export function identity<T>(value: T) {
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('foo', 'ts')
 
-    expect(file.getSourceUrl({ repository: 'github:owner/repo@main' })).toBe(
+    const repository = new Repository('github:owner/repo@main')
+    expect(file.getSourceUrl({ repository })).toBe(
       'https://github.com/owner/repo/blob/main/foo.ts'
     )
   })

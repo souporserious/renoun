@@ -54,7 +54,7 @@ type MetadataForPath<Path extends string> = string extends Path
     ? GitModuleMetadata
     : GitFileMetadata
 
-interface GitHostFileSystemOptions {
+interface GitVirtualFileSystemOptions {
   /** Repository in the format "owner/repo". */
   repository: string
 
@@ -229,7 +229,7 @@ function getResetDelayMs(
   }
 }
 
-export class GitHostFileSystem
+export class GitVirtualFileSystem
   extends InMemoryFileSystem
   implements AsyncFileSystem, WritableFileSystem
 {
@@ -271,7 +271,7 @@ export class GitHostFileSystem
   }[]
   #ghBlameBatchTimer?: any
 
-  constructor(options: GitHostFileSystemOptions) {
+  constructor(options: GitVirtualFileSystemOptions) {
     if (!options.host) {
       options.host = 'github'
     }
@@ -358,7 +358,7 @@ export class GitHostFileSystem
       totalBytes += size
       if (totalBytes > this.#maxArchiveBytes) {
         throw new Error(
-          '[renoun] Repository archive exceeds allowed size during extraction. Increase the `maxArchiveBytes` limit in the `GitHostFileSystem` constructor or filter the repository using the `include` and `exclude` options to reduce the size of the extracted repository entries.'
+          '[renoun] Repository archive exceeds allowed size during extraction. Increase the `maxArchiveBytes` limit in the `GitVirtualFileSystem` constructor or filter the repository using the `include` and `exclude` options to reduce the size of the extracted repository entries.'
         )
       }
 
@@ -568,7 +568,7 @@ export class GitHostFileSystem
     this.#initPromise = undefined
   }
 
-  #resolveApiBaseUrl(options: GitHostFileSystemOptions) {
+  #resolveApiBaseUrl(options: GitVirtualFileSystemOptions) {
     if (this.#host === 'gitlab') {
       if (options.baseUrl) {
         const urlObject = new URL(options.baseUrl)
@@ -2536,7 +2536,7 @@ export class GitHostFileSystem
   }
 
   readDirectorySync(): DirectoryEntry[] {
-    throw new Error('readDirectorySync is not supported in GitHostFileSystem')
+    throw new Error('readDirectorySync is not supported in GitVirtualFileSystem')
   }
 
   #resolveSymlinkPath(path: string): string {
@@ -2602,7 +2602,7 @@ export class GitHostFileSystem
 
   readFileSync(): string {
     throw new Error(
-      '[renoun] readFileSync is not supported in GitHostFileSystem'
+      '[renoun] readFileSync is not supported in GitVirtualFileSystem'
     )
   }
 

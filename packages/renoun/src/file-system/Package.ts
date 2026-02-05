@@ -15,12 +15,13 @@ import {
 } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { FileSystem } from './FileSystem.ts'
-import { GitHostFileSystem } from './GitHostFileSystem.ts'
+import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
   Repository,
   parseGitSpecifier,
   type RepositoryConfig,
+  type RepositoryInput,
 } from './Repository.ts'
 import {
   Directory,
@@ -406,7 +407,7 @@ export interface PackageOptions<
   sourcePath?: PathLike | null
   fileSystem?: FileSystem
   exports?: Record<string, PackageExportOptions<Types, LoaderTypes>>
-  repository?: RepositoryConfig | string | Repository
+  repository?: RepositoryInput
   /**
    * Optional runtime loaders for individual package exports or a resolver that
    * will be invoked with the export path (e.g. "remark/add-sections").
@@ -660,28 +661,48 @@ function resolvePackageExportRelativePath(
   return relative.length > 0 ? relative : undefined
 }
 
-function resolveRepositorySpecifier(
-  repository?: Repository | RepositoryConfig | string
-) {
+function resolveRepositorySpecifier(repository?: RepositoryInput) {
   if (!repository) {
     return
   }
 
+  const isRepositoryConfig = (
+    value: RepositoryInput
+  ): value is RepositoryConfig => {
+    return Boolean(value && typeof value === 'object' && 'baseUrl' in value)
+  }
+
   if (repository instanceof Repository) {
-    return parseGitSpecifier(repository.toString())
+    try {
+      return parseGitSpecifier(repository.toString())
+    } catch {
+      return undefined
+    }
   }
 
   if (typeof repository === 'string') {
-    return parseGitSpecifier(repository)
+    try {
+      return parseGitSpecifier(repository)
+    } catch {
+      return undefined
+    }
   }
 
-  if (repository.owner && repository.repository && repository.host) {
+  if (isRepositoryConfig(repository)) {
     return {
       host: repository.host,
       owner: repository.owner,
       repo: repository.repository,
       ref: repository.branch,
       path: repository.path,
+    }
+  }
+
+  if ('path' in repository) {
+    try {
+      return parseGitSpecifier(new Repository(repository).toString())
+    } catch {
+      return undefined
     }
   }
 }
@@ -1226,7 +1247,7 @@ export class Package<
   #sourceRootPath: string
   #fileSystem: FileSystem
   #packageJson?: PackageJson
-  #repository?: Repository | RepositoryConfig | string
+  #repository?: Repository
   #exportLoaders?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
   #exportOverrides?: Record<string, PackageExportOptions<Types, LoaderTypes>>
   #exportDirectories?: PackageExportDirectory<Types, LoaderTypes>[]
@@ -1258,14 +1279,14 @@ export class Package<
       name: options.name,
       path: options.path,
       directory: startDirectory,
-      repository: options.repository ?? repositoryInstance,
+      repository: repositoryInstance,
       fileSystem: options.fileSystem ?? new NodeFileSystem(),
     })
 
     this.#fileSystem = fileSystem
     this.#packagePath = packagePath
     this.#name = options.name
-    this.#repository = options.repository ?? repositoryInstance
+    this.#repository = repositoryInstance
     this.#exportOverrides = options.exports
     this.#exportLoaders = options.loader
     this.#sourceRootPath =
@@ -1796,7 +1817,7 @@ export class Package<
     name?: string
     path?: PathLike
     directory?: Directory<any, any, any> | PathLike
-    repository?: Repository | RepositoryConfig | string
+    repository?: Repository
     fileSystem: FileSystem
   }) {
     if (path) {
@@ -1842,9 +1863,7 @@ export class Package<
     )
   }
 
-  #resolveRepositoryPackage(
-    repository: Repository | RepositoryConfig | string
-  ) {
+  #resolveRepositoryPackage(repository: RepositoryInput) {
     const specifier = resolveRepositorySpecifier(repository)
 
     if (!specifier) {
@@ -1864,7 +1883,7 @@ export class Package<
     }
 
     const gitHost = host as 'github' | 'gitlab' | 'bitbucket'
-    const gitFileSystem = new GitHostFileSystem({
+    const gitFileSystem = new GitVirtualFileSystem({
       repository: `${owner}/${repo}`,
       host: gitHost,
       ref,

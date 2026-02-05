@@ -4,6 +4,7 @@ import { css, type CSSObject } from 'restyle'
 import {
   Repository,
   type RepositoryConfig,
+  type RepositoryInput,
   type GetReleaseUrlOptions,
   type Release,
   type ReleaseSpecifier,
@@ -43,8 +44,8 @@ type VariantOptions<
     : never
   : { ref?: string } | undefined
 
-type ReleaseLinkOptions = GetReleaseUrlOptions & {
-  repository?: Repository | RepositoryConfig | string
+interface ReleaseLinkOptions extends GetReleaseUrlOptions {
+  repository?: RepositoryInput
 }
 
 export interface LinkReleaseContext extends Release {
@@ -203,7 +204,7 @@ export type LinkProps<
       compare?: string
 
       /** Override repository for computing release URL. */
-      repository?: Repository | RepositoryConfig | string
+      repository?: RepositoryInput
 
       /** The content of the link. */
       children?: LinkChildren<Variant>

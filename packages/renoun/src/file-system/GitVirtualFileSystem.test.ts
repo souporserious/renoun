@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { gzipSync } from 'node:zlib'
 
-import { GitHostFileSystem } from './GitHostFileSystem.ts'
+import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 import { Directory } from './index.tsx'
 
 const SUCCESS_ARCHIVE = makeTar([
@@ -9,7 +9,7 @@ const SUCCESS_ARCHIVE = makeTar([
   { path: 'root/dir/a.md', content: '# title' },
 ])
 
-describe('GitHostFileSystem', () => {
+describe('GitVirtualFileSystem', () => {
   const originalFetch = globalThis.fetch
 
   beforeEach(() => {
@@ -27,7 +27,7 @@ describe('GitHostFileSystem', () => {
     globalThis.fetch = mockFetch
 
     // GitHub
-    const githubFs = new GitHostFileSystem({
+    const githubFs = new GitVirtualFileSystem({
       repository: 'my.user/repo.name',
       host: 'github',
       ref: 'feature-xy',
@@ -37,7 +37,7 @@ describe('GitHostFileSystem', () => {
     expect(url).toMatch(/repos\/my\.user\/repo\.name\/tarball\/feature-xy$/)
 
     // Bitbucket
-    const bitbucketFs = new GitHostFileSystem({
+    const bitbucketFs = new GitVirtualFileSystem({
       repository: 'my.user/repo.name',
       host: 'bitbucket',
       ref: 'feature-xy',
@@ -49,7 +49,7 @@ describe('GitHostFileSystem', () => {
     )
 
     // Self-hosted GitLab (supports nested groups)
-    const gitlabFs = new GitHostFileSystem({
+    const gitlabFs = new GitVirtualFileSystem({
       repository: 'group/sub/project',
       host: 'gitlab',
       baseUrl: 'https://git.example.com',
@@ -80,7 +80,7 @@ describe('GitHostFileSystem', () => {
     })
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       token: 'token',
@@ -97,7 +97,7 @@ describe('GitHostFileSystem', () => {
       arrayBuffer: async () => archive,
     } as any)
     await expect(
-      new GitHostFileSystem({
+      new GitVirtualFileSystem({
         repository: 'owner/repo',
         host: 'github',
         ref: 'main',
@@ -127,7 +127,7 @@ describe('GitHostFileSystem', () => {
       } as any)
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -143,7 +143,7 @@ describe('GitHostFileSystem', () => {
     vi.restoreAllMocks()
   })
 
-  it('fetches git metadata for files when using GitHostFileSystem', async () => {
+  it('fetches git metadata for files when using GitVirtualFileSystem', async () => {
     const commitHistory = [
       {
         sha: '3',
@@ -198,7 +198,7 @@ describe('GitHostFileSystem', () => {
 
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -269,7 +269,7 @@ describe('GitHostFileSystem', () => {
       })
 
     globalThis.fetch = mockFetch
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       token: 'token',
@@ -338,7 +338,7 @@ describe('GitHostFileSystem', () => {
     globalThis.fetch = mockFetch
     vi.useFakeTimers()
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       token: 'token',
@@ -377,7 +377,7 @@ describe('GitHostFileSystem', () => {
 
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -417,7 +417,7 @@ describe('GitHostFileSystem', () => {
     })
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -464,7 +464,7 @@ describe('GitHostFileSystem', () => {
       .mockResolvedValueOnce(successResponse)
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       token,
@@ -494,7 +494,7 @@ describe('GitHostFileSystem', () => {
     const mockFetch = vi.fn().mockResolvedValue(redirectResponse)
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -515,7 +515,7 @@ describe('GitHostFileSystem', () => {
     globalThis.fetch = mockFetch
 
     const ref = 'feature/abc-1.2'
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref,
@@ -531,7 +531,7 @@ describe('GitHostFileSystem', () => {
     for (const ref of invalids) {
       expect(
         () =>
-          new GitHostFileSystem({
+          new GitVirtualFileSystem({
             repository: 'owner/repo',
             host: 'github',
             ref,
@@ -562,7 +562,7 @@ describe('GitHostFileSystem', () => {
     })
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -592,7 +592,7 @@ describe('GitHostFileSystem', () => {
     })
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -612,7 +612,7 @@ describe('GitHostFileSystem', () => {
 
     const token = 'test-token'
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       token,
@@ -655,7 +655,7 @@ describe('GitHostFileSystem', () => {
       .mockResolvedValueOnce(successResponse)
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -689,7 +689,7 @@ describe('GitHostFileSystem', () => {
       })
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -718,7 +718,7 @@ describe('GitHostFileSystem', () => {
     })
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -749,7 +749,7 @@ describe('GitHostFileSystem', () => {
     })
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -776,7 +776,7 @@ describe('GitHostFileSystem', () => {
     })
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
       ref: 'main',
@@ -818,7 +818,7 @@ describe('GitHostFileSystem', () => {
       .mockResolvedValueOnce(redirect)
     globalThis.fetch = mockFetch
 
-    const fs = new GitHostFileSystem({
+    const fs = new GitVirtualFileSystem({
       repository: 'owner/repo',
       host: 'github',
     })

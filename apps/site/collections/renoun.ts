@@ -16,7 +16,6 @@ type ComponentSchema = Record<string, React.ComponentType>
 export const ComponentsDirectory = new Directory({
   path: '../../packages/renoun/src/components',
   filter: '**/*.{ts,tsx}',
-  repository: 'souporserious/renoun',
   schema: {
     mdx: {
       metadata: z.object({

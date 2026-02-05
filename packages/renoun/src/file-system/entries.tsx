@@ -1,3 +1,5 @@
+import { resolve as resolvePath } from 'node:path'
+import { Minimatch } from 'minimatch'
 import type { MDXContent, SlugCasing } from '@renoun/mdx'
 import {
   createSlug,
@@ -7,7 +9,6 @@ import {
   parseFrontmatter,
   type FrontmatterParseResult,
 } from '@renoun/mdx/utils'
-import { Minimatch } from 'minimatch'
 
 import { getFileExportMetadata } from '../project/client.ts'
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
@@ -27,6 +28,7 @@ import {
 } from '../utils/is-javascript-like-extension.ts'
 import {
   baseName,
+  directoryName,
   ensureRelativePath,
   extensionName,
   joinPaths,
@@ -47,16 +49,15 @@ import type {
   FileSystemWriteFileContent,
   FileWritableStream,
 } from './FileSystem.ts'
-import { LocalGitFileSystem } from './LocalGitFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
   Repository,
-  type RepositoryConfig,
+  type RepositoryInput,
+  type Release,
   type GetFileUrlOptions,
   type GetDirectoryUrlOptions,
   type GetReleaseOptions,
   type GetReleaseUrlOptions,
-  type Release,
 } from './Repository.ts'
 import {
   createRangeLimitedStream,
@@ -142,11 +143,11 @@ export type {
 } from './types.ts'
 
 type SourceReleaseOptions = GetReleaseOptions & {
-  repository?: RepositoryConfig | string | Repository
+  repository?: RepositoryInput
 }
 
 type SourceReleaseUrlOptions = GetReleaseUrlOptions & {
-  repository?: RepositoryConfig | string | Repository
+  repository?: RepositoryInput
 }
 
 export type {
@@ -262,9 +263,6 @@ function isGitExportMetadataProvider(
   )
 }
 
-const localGitFileSystems = new Map<string, LocalGitFileSystem>()
-const localGitFileSystemUnavailable = new Set<string>()
-
 function createEmptyGitMetadata(): GitMetadata {
   return {
     authors: [],
@@ -280,137 +278,69 @@ function createEmptyGitExportMetadata(): GitExportMetadata {
   }
 }
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-  return String(error)
-}
-
-function isShallowGitError(error: unknown): boolean {
-  return getErrorMessage(error).includes('shallow cloned')
-}
-
-function isLocalGitUnavailableError(error: unknown): boolean {
-  const message = getErrorMessage(error)
+function isRepositoryInstance(value: unknown): value is Repository {
+  if (value instanceof Repository) return true
+  if (!value || typeof value !== 'object') return false
   return (
-    message.startsWith('Not a git repository:') ||
-    message.startsWith('Directory does not exist:')
+    'getFileSystem' in value &&
+    typeof (value as { getFileSystem?: unknown }).getFileSystem === 'function'
   )
 }
 
-function getLocalGitFileSystemForRoot(rootPath: string) {
-  const workspaceRoot = getRootDirectory(rootPath)
-  if (localGitFileSystemUnavailable.has(workspaceRoot)) {
-    return { root: workspaceRoot, fileSystem: null }
-  }
-
-  let fileSystem = localGitFileSystems.get(workspaceRoot)
-  if (!fileSystem) {
-    try {
-      fileSystem = new LocalGitFileSystem({ repository: workspaceRoot })
-      localGitFileSystems.set(workspaceRoot, fileSystem)
-    } catch {
-      localGitFileSystemUnavailable.add(workspaceRoot)
-      return { root: workspaceRoot, fileSystem: null }
-    }
-  }
-
-  return { root: workspaceRoot, fileSystem }
-}
-
-async function getFallbackGitFileMetadata(
-  rootPath: string,
-  fileSystem: BaseFileSystem,
-  path: string
-): Promise<GitMetadata> {
-  const { root, fileSystem: gitFileSystem } =
-    getLocalGitFileSystemForRoot(rootPath)
-
-  if (!gitFileSystem) {
-    return createEmptyGitMetadata()
-  }
-
-  const normalizedPath = fileSystem.getRelativePathToWorkspace(path)
-
-  try {
-    return await gitFileSystem.getGitFileMetadata(normalizedPath)
-  } catch (error) {
-    if (isShallowGitError(error)) {
-      throw error
-    }
-    if (isLocalGitUnavailableError(error)) {
-      localGitFileSystemUnavailable.add(root)
-      return createEmptyGitMetadata()
-    }
-    throw error
-  }
-}
-
-async function getFallbackGitExportMetadata(
-  rootPath: string,
-  fileSystem: BaseFileSystem,
-  path: string,
-  startLine: number,
-  endLine: number
-): Promise<GitExportMetadata> {
-  const { root, fileSystem: gitFileSystem } =
-    getLocalGitFileSystemForRoot(rootPath)
-
-  if (!gitFileSystem) {
-    return createEmptyGitExportMetadata()
-  }
-
-  const normalizedPath = fileSystem.getRelativePathToWorkspace(path)
-
-  try {
-    return await gitFileSystem.getGitExportMetadata(
-      normalizedPath,
-      startLine,
-      endLine
-    )
-  } catch (error) {
-    if (isShallowGitError(error)) {
-      throw error
-    }
-    if (isLocalGitUnavailableError(error)) {
-      localGitFileSystemUnavailable.add(root)
-      return createEmptyGitExportMetadata()
-    }
-    throw error
-  }
+function normalizeRepositoryInput(
+  repository?: RepositoryInput
+): Repository | undefined {
+  if (!repository) return undefined
+  if (isRepositoryInstance(repository)) return repository
+  return new Repository(repository)
 }
 
 async function getGitFileMetadataForPath(
-  rootPath: string,
+  repository: RepositoryInput | undefined,
   fileSystem: BaseFileSystem,
   path: string
 ): Promise<GitMetadata> {
+  const normalizedRepository = normalizeRepositoryInput(repository)
+  if (normalizedRepository) {
+    const repoFileSystem = normalizedRepository.getFileSystem()
+    if (isGitMetadataProvider(repoFileSystem)) {
+      const repositoryPath = fileSystem.getRelativePathToWorkspace(path)
+      return repoFileSystem.getGitFileMetadata(repositoryPath)
+    }
+  }
+
   if (isGitMetadataProvider(fileSystem)) {
     return fileSystem.getGitFileMetadata(path)
   }
 
-  return getFallbackGitFileMetadata(rootPath, fileSystem, path)
+  return createEmptyGitMetadata()
 }
 
 async function getGitExportMetadataForPath(
-  rootPath: string,
+  repository: RepositoryInput | undefined,
   fileSystem: BaseFileSystem,
   path: string,
   startLine: number,
   endLine: number
 ): Promise<GitExportMetadata> {
+  const normalizedRepository = normalizeRepositoryInput(repository)
+  if (normalizedRepository) {
+    const repoFileSystem = normalizedRepository.getFileSystem()
+    if (isGitExportMetadataProvider(repoFileSystem)) {
+      const repositoryPath = fileSystem.getRelativePathToWorkspace(path)
+      return repoFileSystem.getGitExportMetadata(
+        repositoryPath,
+        startLine,
+        endLine
+      )
+    }
+  }
+
   if (isGitExportMetadataProvider(fileSystem)) {
     return fileSystem.getGitExportMetadata(path, startLine, endLine)
   }
 
-  return getFallbackGitExportMetadata(
-    rootPath,
-    fileSystem,
-    path,
-    startLine,
-    endLine
-  )
+  return createEmptyGitExportMetadata()
 }
 
 /** A record of loaders for different file extensions. */
@@ -696,6 +626,9 @@ export interface FileOptions<
   directory?:
     | PathLike
     | Directory<Types, WithDefaultTypes<Types>, DirectoryLoader, undefined>
+
+  /** The repository to use for git operations and source URLs. */
+  repository?: RepositoryInput
 }
 
 /** A file in the file system. */
@@ -720,6 +653,10 @@ export class File<
   constructor(options: FileOptions<DirectoryTypes, Path, any>) {
     // Parse path and extension to determine MIME type
     const resolvedPath = resolveSchemePath(options.path)
+    const repository = normalizeRepositoryInput(options.repository)
+    if (repository && options.directory === undefined) {
+      repository.registerSparsePath(directoryName(resolvedPath))
+    }
     const name = baseName(resolvedPath)
     const match = name.match(
       /^(?:(\d+)[.-])?([^.]+)(?:\.([^.]+))?(?:\.([^.]+))?$/
@@ -730,8 +667,13 @@ export class File<
       options.directory instanceof Directory
         ? options.directory
         : options.directory !== undefined
-          ? new Directory({ path: options.directory })
-          : new Directory()
+          ? new Directory({
+              path: options.directory,
+              repository,
+            })
+          : repository
+            ? new Directory({ repository })
+            : new Directory()
 
     // Determine byte length for Blob.size compatibility.
     // When a directory is provided with a relative path, we need to resolve the
@@ -966,7 +908,7 @@ export class File<
 
   /** Get a URL to the file for the configured remote git repository. */
   #getRepositoryUrl(
-    repository?: RepositoryConfig | string | Repository,
+    repository?: RepositoryInput,
     options?: Omit<GetFileUrlOptions, 'path'>
   ) {
     const repo = this.#directory.getRepository(repository)
@@ -981,7 +923,7 @@ export class File<
   /** Get the URL to the file git blame for the configured git repository. */
   getBlameUrl(
     options?: Pick<GetFileUrlOptions, 'ref'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: RepositoryInput
     }
   ) {
     return this.#getRepositoryUrl(options?.repository, {
@@ -993,7 +935,7 @@ export class File<
   /** Get the edit URL to the file source for the configured git repository. */
   getEditUrl(
     options?: Pick<GetFileUrlOptions, 'ref' | 'line'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: RepositoryInput
     }
   ) {
     return this.#getRepositoryUrl(options?.repository, {
@@ -1006,7 +948,7 @@ export class File<
   /** Get the URL to the file history for the configured git repository. */
   getHistoryUrl(
     options?: Pick<GetFileUrlOptions, 'ref'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: RepositoryInput
     }
   ) {
     return this.#getRepositoryUrl(options?.repository, {
@@ -1018,7 +960,7 @@ export class File<
   /** Get the URL to the raw file contents for the configured git repository. */
   getRawUrl(
     options?: Pick<GetFileUrlOptions, 'ref'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: RepositoryInput
     }
   ) {
     return this.#getRepositoryUrl(options?.repository, {
@@ -1030,7 +972,7 @@ export class File<
   /** Get the URL to the file source for the configured git repository. */
   getSourceUrl(
     options?: Pick<GetFileUrlOptions, 'ref' | 'line'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: RepositoryInput
     }
   ) {
     return this.#getRepositoryUrl(options?.repository, {
@@ -1066,7 +1008,7 @@ export class File<
   async getFirstCommitDate() {
     const fileSystem = this.#directory.getFileSystem()
     const gitMetadata = await getGitFileMetadataForPath(
-      this.#directory.getRootPath(),
+      this.#directory.getRepositoryIfAvailable(),
       fileSystem,
       this.#path
     )
@@ -1077,7 +1019,7 @@ export class File<
   async getLastCommitDate() {
     const fileSystem = this.#directory.getFileSystem()
     const gitMetadata = await getGitFileMetadataForPath(
-      this.#directory.getRootPath(),
+      this.#directory.getRepositoryIfAvailable(),
       fileSystem,
       this.#path
     )
@@ -1088,7 +1030,7 @@ export class File<
   async getAuthors() {
     const fileSystem = this.#directory.getFileSystem()
     const gitMetadata = await getGitFileMetadataForPath(
-      this.#directory.getRootPath(),
+      this.#directory.getRepositoryIfAvailable(),
       fileSystem,
       this.#path
     )
@@ -1664,7 +1606,7 @@ export class ModuleExport<Value> {
   /** Get the edit URL to the file export source for the configured git repository. */
   getEditUrl(
     options?: Pick<GetFileUrlOptions, 'ref'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: Repository
     }
   ) {
     return this.#file.getEditUrl({
@@ -1677,7 +1619,7 @@ export class ModuleExport<Value> {
   /** Get the URL to the file export source for the configured git repository. */
   getSourceUrl(
     options?: Pick<GetFileUrlOptions, 'ref'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: Repository
     }
   ) {
     return this.#file.getSourceUrl({
@@ -1734,9 +1676,10 @@ export class ModuleExport<Value> {
       return undefined
     }
 
-    const fileSystem = this.#file.getParent().getFileSystem()
+    const directory = this.#file.getParent()
+    const fileSystem = directory.getFileSystem()
     const gitMetadata = await getGitExportMetadataForPath(
-      this.#file.getParent().getRootPath(),
+      directory.getRepositoryIfAvailable(),
       fileSystem,
       location.path,
       startLine,
@@ -1762,9 +1705,10 @@ export class ModuleExport<Value> {
       return undefined
     }
 
-    const fileSystem = this.#file.getParent().getFileSystem()
+    const directory = this.#file.getParent()
+    const fileSystem = directory.getFileSystem()
     const gitMetadata = await getGitExportMetadataForPath(
-      this.#file.getParent().getRootPath(),
+      directory.getRepositoryIfAvailable(),
       fileSystem,
       location.path,
       startLine,
@@ -2441,7 +2385,7 @@ export class MDXModuleExport<Value> {
 
   getEditUrl(
     options?: Pick<GetFileUrlOptions, 'ref'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: Repository
     }
   ) {
     return this.#file.getEditUrl(options)
@@ -2449,7 +2393,7 @@ export class MDXModuleExport<Value> {
 
   getSourceUrl(
     options?: Pick<GetFileUrlOptions, 'ref'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: Repository
     }
   ) {
     return this.#file.getSourceUrl(options)
@@ -3162,7 +3106,7 @@ export type DirectoryFilter<
   | ((entry: FileSystemEntry<Types>) => Promise<boolean> | boolean)
   | string
 
-export interface DirectoryOptions<
+export interface BaseDirectoryOptions<
   Types extends Record<string, any> = {},
   LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
   Loaders extends DirectoryLoader = DirectoryLoader,
@@ -3200,17 +3144,76 @@ export interface DirectoryOptions<
   /** Slug casing applied to route segments. */
   slugCasing?: SlugCasing
 
-  /** Custom file‑system adapter. */
-  fileSystem?: FileSystem
-
   /** Sort callback applied at *each* directory depth. */
   sort?: SortDescriptor<
     FileSystemEntry<ApplyDirectorySchema<LoaderTypes, NoInferType<Schema>>>
   >
-
-  /** The repository used to generate source URLs. */
-  repository?: Repository | RepositoryConfig | string
 }
+
+export interface GitDirectoryOptions<
+  Types extends Record<string, any> = {},
+  LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
+  Loaders extends DirectoryLoader = DirectoryLoader,
+  Schema extends DirectorySchema | undefined = DirectorySchema | undefined,
+  Filter extends
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
+    | undefined =
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
+    | undefined,
+> extends BaseDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter> {
+  /** The repository used for git-backed operations. */
+  repository?: RepositoryInput
+}
+
+export interface FileSystemDirectoryOptions<
+  Types extends Record<string, any> = {},
+  LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
+  Loaders extends DirectoryLoader = DirectoryLoader,
+  Schema extends DirectorySchema | undefined = DirectorySchema | undefined,
+  Filter extends
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
+    | undefined =
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
+    | undefined,
+> extends BaseDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter> {
+  /** Custom file‑system adapter (escape hatch). */
+  fileSystem: FileSystem
+
+  /** Optional repository for git-backed metadata and URLs. */
+  repository?: RepositoryInput
+}
+
+export type DirectoryOptions<
+  Types extends Record<string, any> = {},
+  LoaderTypes extends WithDefaultTypes<Types> = WithDefaultTypes<Types>,
+  Loaders extends DirectoryLoader = DirectoryLoader,
+  Schema extends DirectorySchema | undefined = DirectorySchema | undefined,
+  Filter extends
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
+    | undefined =
+    | DirectoryFilter<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
+        ApplyDirectorySchema<LoaderTypes, Schema>
+      >
+    | undefined,
+> =
+  | GitDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
+  | FileSystemDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
 
 const enum DirectorySnapshotOptionBit {
   Recursive = 1 << 0,
@@ -3316,7 +3319,6 @@ export class Directory<
   #directory?: Directory<any, any, any>
   #fileSystem: FileSystem | undefined
   #repository: Repository | undefined
-  #repositoryOption?: Repository | RepositoryConfig | string
   #hasExplicitLoader = false
   #filterPattern?: string
   #filter?:
@@ -3335,7 +3337,21 @@ export class Directory<
   #sort?: any
 
   constructor(
-    options?: DirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
+    options?: GitDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
+  )
+  constructor(
+    options: FileSystemDirectoryOptions<
+      Types,
+      LoaderTypes,
+      Loaders,
+      Schema,
+      Filter
+    >
+  )
+  constructor(
+    options?:
+      | GitDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
+      | FileSystemDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
   ) {
     if (options === undefined) {
       this.#path = '.'
@@ -3380,8 +3396,25 @@ export class Directory<
         getClosestFile('tsconfig.json', this.#path) ??
         'tsconfig.json'
       this.#slugCasing = options.slugCasing ?? 'kebab'
-      this.#fileSystem = options.fileSystem
-      this.#repositoryOption = options.repository
+
+      const hasCustomFileSystem =
+        'fileSystem' in options && options.fileSystem !== undefined
+
+      const repositoryOption = normalizeRepositoryInput(options.repository)
+
+      if (hasCustomFileSystem) {
+        this.#fileSystem = options.fileSystem
+        if (repositoryOption) {
+          this.#repository = repositoryOption
+          const sparsePath = this.#fileSystem.getRelativePathToWorkspace(
+            this.#path
+          )
+          repositoryOption.registerSparsePath(sparsePath)
+        }
+      } else if (repositoryOption) {
+        this.#repository = repositoryOption
+        repositoryOption.registerSparsePath(this.#path)
+      }
       if (typeof options.filter === 'string') {
         this.#filterPattern = options.filter
 
@@ -3412,6 +3445,26 @@ export class Directory<
       }
 
       this.#sort = options.sort
+    }
+
+    if (!this.#fileSystem && !this.#repository) {
+      const detectedRoot = this.#detectGitRepo(this.#path)
+      if (detectedRoot) {
+        const resolvedPath = resolveSchemePath(this.#path)
+        const absolutePath = resolvedPath.startsWith('/')
+          ? resolvedPath
+          : resolvePath(resolvedPath)
+        const repoRelativePath = relativePath(
+          normalizeSlashes(detectedRoot),
+          normalizeSlashes(absolutePath)
+        )
+
+        this.#repository = new Repository({ path: detectedRoot })
+        this.#repository.registerSparsePath(repoRelativePath)
+        this.#fileSystem = new NodeFileSystem({
+          tsConfigPath: this.#tsConfigPath,
+        })
+      }
     }
   }
 
@@ -3478,15 +3531,8 @@ export class Directory<
 
   /** Duplicate the directory with the same initial options. */
   #duplicate(options?: DirectoryOptions<any, any, any, any, any>) {
-    const directory = new Directory<
-      Types,
-      LoaderTypes,
-      Loaders,
-      Schema,
-      Filter
-    >({
+    const duplicateOptions = {
       path: this.#path,
-      fileSystem: this.#fileSystem,
       basePathname: this.#basePathname,
       tsConfigPath: this.#tsConfigPath,
       slugCasing: this.#slugCasing,
@@ -3494,14 +3540,23 @@ export class Directory<
       loader: this.#loader,
       filter: this.#filter as any,
       sort: this.#sort,
+      ...(this.#fileSystem ? { fileSystem: this.#fileSystem } : {}),
+      ...(this.#repository ? { repository: this.#repository } : {}),
       ...options,
-    })
+    } as DirectoryOptions<any, any, any, any, any>
+
+    const directory = new Directory<
+      Types,
+      LoaderTypes,
+      Loaders,
+      Schema,
+      Filter
+    >(duplicateOptions as any)
 
     directory.#directory = this
     directory.#filterPattern = this.#filterPattern
     directory.#filterCache = this.#filterCache
     directory.#simpleFilter = this.#simpleFilter
-    directory.#repositoryOption = this.#repositoryOption
     directory.#repository = this.#repository
     directory.#rootPath = this.getRootPath()
     directory.#pathLookup = this.#pathLookup
@@ -3574,6 +3629,12 @@ export class Directory<
     return loaders[extension]
   }
 
+  #detectGitRepo(path?: string): string | undefined {
+    const resolvedPath = path ? resolveSchemePath(path) : this.#path
+    const gitEntry = getClosestFile('.git', resolvedPath)
+    return gitEntry ? directoryName(gitEntry) : undefined
+  }
+
   /** Get the schema configuration for this directory. */
   getSchema() {
     return this.#schema
@@ -3585,43 +3646,42 @@ export class Directory<
       return this.#fileSystem
     }
 
+    if (this.#repository) {
+      this.#fileSystem = this.#repository.getFileSystem()
+      return this.#fileSystem
+    }
+
     this.#fileSystem = new NodeFileSystem({ tsConfigPath: this.#tsConfigPath })
 
     return this.#fileSystem
   }
 
   /** Get the `Repository` for this directory. */
-  getRepository(repository?: RepositoryConfig | string | Repository) {
+  getRepository(repository?: RepositoryInput) {
+    if (repository) {
+      const normalizedRepository = normalizeRepositoryInput(repository)
+      if (normalizedRepository) {
+        this.#repository = normalizedRepository
+        const sparsePath = this.#fileSystem
+          ? this.#fileSystem.getRelativePathToWorkspace(this.#path)
+          : this.#path
+        this.#repository.registerSparsePath(sparsePath)
+        return normalizedRepository
+      }
+    }
+
     if (this.#repository) {
       return this.#repository
     }
 
-    if (repository instanceof Repository) {
-      this.#repository = repository
-      return this.#repository
-    }
-
-    if (typeof repository === 'string' || typeof repository === 'object') {
-      this.#repository = new Repository(repository)
-      return this.#repository
-    }
-
-    if (this.#repositoryOption instanceof Repository) {
-      this.#repository = this.#repositoryOption
-      return this.#repository
-    }
-
-    if (
-      typeof this.#repositoryOption === 'string' ||
-      typeof this.#repositoryOption === 'object'
-    ) {
-      this.#repository = new Repository(this.#repositoryOption)
-      return this.#repository
-    }
-
     throw new Error(
-      `[renoun] Git repository is not configured for directory "${this.#path}". Please provide a repository or repository configuration to enable source links.`
+      `[renoun] Repository is not configured for directory "${this.#path}". Provide a Repository to enable git features.`
     )
+  }
+
+  /** @internal */
+  getRepositoryIfAvailable() {
+    return this.#repository
   }
 
   /** Get the depth of the directory starting from the root directory. */
@@ -4987,7 +5047,7 @@ export class Directory<
 
   /** Get a URL to the directory for the configured git repository. */
   #getRepositoryUrl(
-    repository?: RepositoryConfig | string | Repository,
+    repository?: RepositoryInput,
     options?: Omit<GetDirectoryUrlOptions, 'path'>
   ) {
     return this.getRepository(repository).getDirectoryUrl({
@@ -4999,7 +5059,7 @@ export class Directory<
   /** Get the URL to the directory history for the configured git repository. */
   getHistoryUrl(
     options?: Pick<GetFileUrlOptions, 'ref'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: RepositoryInput
     }
   ) {
     return this.#getRepositoryUrl(options?.repository, {
@@ -5011,7 +5071,7 @@ export class Directory<
   /** Get the URL to the directory source for the configured git repository. */
   getSourceUrl(
     options?: Pick<GetFileUrlOptions, 'ref'> & {
-      repository?: RepositoryConfig | string | Repository
+      repository?: RepositoryInput
     }
   ) {
     return this.#getRepositoryUrl(options?.repository, {
@@ -5044,7 +5104,7 @@ export class Directory<
   async getFirstCommitDate() {
     const fileSystem = this.getFileSystem()
     const gitMetadata = await getGitFileMetadataForPath(
-      this.getRootPath(),
+      this.getRepositoryIfAvailable(),
       fileSystem,
       this.#path
     )
@@ -5055,7 +5115,7 @@ export class Directory<
   async getLastCommitDate() {
     const fileSystem = this.getFileSystem()
     const gitMetadata = await getGitFileMetadataForPath(
-      this.getRootPath(),
+      this.getRepositoryIfAvailable(),
       fileSystem,
       this.#path
     )
@@ -5066,7 +5126,7 @@ export class Directory<
   async getAuthors() {
     const fileSystem = this.getFileSystem()
     const gitMetadata = await getGitFileMetadataForPath(
-      this.getRootPath(),
+      this.getRepositoryIfAvailable(),
       fileSystem,
       this.#path
     )
