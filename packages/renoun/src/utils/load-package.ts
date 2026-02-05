@@ -35,10 +35,6 @@ export function loadTmGrammars() {
   })
 }
 
-const jsonImportOptions = {
-  with: { type: 'json' },
-}
-
 /** Attempts to load a grammar from the tm-grammars package if it is installed. */
 export function loadTmGrammar(name: string) {
   return loadPackage<Record<string, any>>('tm-grammars', async () => {
@@ -51,7 +47,7 @@ export function loadTmGrammar(name: string) {
     }
     return import(
       /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-grammars/grammars/${name}.json`,
-      jsonImportOptions
+      { with: { type: 'json' } }
     ).then((module) => module.default)
   })
 }
@@ -66,7 +62,7 @@ export function loadTmTheme(name: string) {
     }
     return import(
       /* webpackIgnore: true */ /* turbopackIgnore: true */ /* @vite-ignore */ `tm-themes/themes/${name}.json`,
-      jsonImportOptions
+      { with: { type: 'json' } }
     ).then((module) => module.default)
   })
 }
