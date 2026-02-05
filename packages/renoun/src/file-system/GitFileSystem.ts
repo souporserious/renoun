@@ -106,7 +106,7 @@ export interface GitFileSystemOptions extends FileSystemOptions {
   depth?: number
 
   /** The directory to use for cached clones and metadata. */
-  cacheDir?: string
+  cacheDirectory?: string
 
   /** The transport to use for cloning. */
   transport?: 'https' | 'ssh'
@@ -776,8 +776,8 @@ export class GitFileSystem
     this.#worktreeEnabled = !this.repositoryIsRemote && !this.#refIsExplicit
     assertSafeGitArg(this.ref, 'ref')
 
-    this.cacheDirectory = options.cacheDir
-      ? resolve(String(options.cacheDir))
+    this.cacheDirectory = options.cacheDirectory
+      ? resolve(String(options.cacheDirectory))
       : resolve(os.homedir(), '.cache', 'renoun-git')
 
     this.verbose = Boolean(options.verbose)
@@ -1236,11 +1236,7 @@ export class GitFileSystem
       if (kind === 'directory' && !stats.isDirectory()) {
         return undefined
       }
-      if (
-        kind === 'file' &&
-        !stats.isFile() &&
-        !stats.isSymbolicLink()
-      ) {
+      if (kind === 'file' && !stats.isFile() && !stats.isSymbolicLink()) {
         return undefined
       }
     } catch {
@@ -4717,11 +4713,11 @@ function shallowRepoErrorMessage(): string {
   )
 }
 
-function looksLikeCacheClone(repoRoot: string, metaCacheDir: string) {
+function looksLikeCacheClone(repoRoot: string, metaCacheDirectory: string) {
   const normalizedRepoRoot = normalizePath(repoRoot)
   const homeCache = normalizePath(join(os.homedir(), '.cache'))
   const temporaryDirectory = normalizePath(os.tmpdir())
-  const normalizedMetaCache = normalizePath(metaCacheDir)
+  const normalizedMetaCache = normalizePath(metaCacheDirectory)
 
   // First check without symlink resolution (fast path)
   if (
@@ -4733,11 +4729,11 @@ function looksLikeCacheClone(repoRoot: string, metaCacheDir: string) {
   }
 
   // On macOS, /var is a symlink to /private/var. The git rev-parse --show-toplevel
-  // command returns the real path, so we need to resolve symlinks for the cacheDir
+  // command returns the real path, so we need to resolve symlinks for the cacheDirectory
   // comparison to handle cached clones correctly.
   try {
     const realRepoRoot = normalizePath(realpathSync(repoRoot))
-    const realMetaCache = normalizePath(realpathSync(metaCacheDir))
+    const realMetaCache = normalizePath(realpathSync(metaCacheDirectory))
     if (realRepoRoot.startsWith(realMetaCache + '/')) {
       return true
     }
