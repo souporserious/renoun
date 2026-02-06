@@ -79,9 +79,20 @@ export { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 export { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 export { GitFileSystem } from './GitFileSystem.ts'
 export { NodeFileSystem } from './NodeFileSystem.ts'
-export { Repository } from './Repository.ts'
 export type {
   RepositoryOptions,
   RepositoryExportHistoryOptions,
   RepositoryConfig,
 } from './Repository.ts'
+export { Repository } from './Repository.ts'
+export type {
+  ExportChange,
+  ExportHistoryGenerator,
+  ExportHistoryStream,
+  ExportHistoryProgressEvent,
+  AddedChange,
+  UpdatedChange,
+  RenamedChange,
+  RemovedChange,
+  DeprecatedChange,
+} from './types.ts'
