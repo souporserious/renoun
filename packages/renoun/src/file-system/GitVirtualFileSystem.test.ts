@@ -143,6 +143,91 @@ describe('GitVirtualFileSystem', () => {
     vi.restoreAllMocks()
   })
 
+  it('infers base-name entry files when entry is a directory', async () => {
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/foo/index.ts', content: `export const fromIndex = 1` },
+      { path: 'root/src/foo/Foo.ts', content: `export const fromFoo = 1` },
+      { path: 'root/src/foo/Local.ts', content: `export const local = 1` },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/repo/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+          redirected: false,
+          type: 'basic',
+          url: url,
+          clone() {
+            throw new Error('Not implemented')
+          },
+          body: null,
+          bodyUsed: false,
+        } as unknown as Response
+      }
+
+      if (url.includes('/repos/owner/repo/commits?sha=main&per_page=1')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: 'abc123',
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      if (url.endsWith('/abc123/src/foo/Foo.ts')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const fromFoo = 1`,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    const report = await fs.getExportHistory({
+      entry: 'src/foo',
+      limit: 1,
+      detectUpdates: false,
+    })
+
+    expect(report.entryFiles).toEqual(['src/foo/index.ts', 'src/foo/Foo.ts'])
+    expect(report.entryFiles).not.toContain('src/foo/Local.ts')
+  })
+
   it('fetches git metadata for files when using GitVirtualFileSystem', async () => {
     const commitHistory = [
       {
@@ -224,10 +309,10 @@ describe('GitVirtualFileSystem', () => {
       name: 'Alice',
       commitCount: 2,
     })
-    expect(authors[0]?.firstCommitDate.toISOString()).toBe(
+    expect(authors[0]?.firstCommitDate?.toISOString()).toBe(
       '2020-06-01T08:00:00.000Z'
     )
-    expect(authors[0]?.lastCommitDate.toISOString()).toBe(
+    expect(authors[0]?.lastCommitDate?.toISOString()).toBe(
       '2021-01-01T08:00:00.000Z'
     )
     expect(authors[1]).toMatchObject({ name: 'Bob', commitCount: 1 })

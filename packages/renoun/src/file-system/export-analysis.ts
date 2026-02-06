@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
 import { ts } from 'ts-morph'
 
-import { normalizePath } from '../utils/path.ts'
+import { normalizePath, joinPaths } from '../utils/path.ts'
+import { hasJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
+import type { DirectoryEntry } from './types.ts'
 
 /** Separator used in export IDs (format: "path/to/file.ts::exportName") */
 export const EXPORT_ID_SEPARATOR = '::'
@@ -1083,4 +1085,156 @@ export function checkAndCollapseOscillation<
   }
 
   return false
+}
+
+/**
+ * Normalizes a path and strips a leading `./` prefix.
+ */
+function normalizeEntryPath(path: string): string {
+  const normalized = normalizePath(path)
+  return normalized.startsWith('./') ? normalized.slice(2) : normalized
+}
+
+/**
+ * Returns `true` if the module's exports consist exclusively of
+ * re-exports from relative paths (i.e. it is a barrel file).
+ */
+export function isBarrelFile(rawExports: Map<string, ExportItem>): boolean {
+  let relativeReexportCount = 0
+  let nonRelativeReexportCount = 0
+  let localExportCount = 0
+
+  for (const [, item] of rawExports) {
+    if (item.id === '__LOCAL__') {
+      localExportCount += 1
+      continue
+    }
+    if (item.id.startsWith('__FROM__')) {
+      const spec = item.id.slice(8)
+      if (spec.startsWith('.')) {
+        relativeReexportCount += 1
+      } else {
+        nonRelativeReexportCount += 1
+      }
+      continue
+    }
+    if (item.id.startsWith('__STAR__')) {
+      const spec = item.id.slice(8)
+      if (spec.startsWith('.')) {
+        relativeReexportCount += 1
+      } else {
+        nonRelativeReexportCount += 1
+      }
+      continue
+    }
+    if (item.id.startsWith('__NAMESPACE__')) {
+      const spec = item.id.slice(13)
+      if (spec.startsWith('.')) {
+        relativeReexportCount += 1
+      } else {
+        nonRelativeReexportCount += 1
+      }
+    }
+  }
+
+  return (
+    relativeReexportCount > 0 &&
+    nonRelativeReexportCount === 0 &&
+    localExportCount === 0
+  )
+}
+
+/**
+ * Selects entry files from a directory by checking for:
+ *
+ * 1. Index file candidates (`index.ts`, `index.tsx`, etc.)
+ * 2. Files named after the directory (e.g. `Foo.ts` in a `foo/` directory)
+ * 3. Barrel files (modules that only re-export from relative paths)
+ */
+export async function selectEntryFiles(options: {
+  scopeDirectory: string
+  entries: DirectoryEntry[]
+  readContent: (path: string) => Promise<string | null>
+}): Promise<string[]> {
+  const { scopeDirectory, entries, readContent } = options
+  const normalizedScope = normalizeEntryPath(scopeDirectory || '.')
+
+  const topLevelFiles = entries
+    .filter((entry) => entry.isFile)
+    .map((entry) => normalizeEntryPath(entry.path))
+    .filter((path) => hasJavaScriptLikeExtension(path))
+    .sort()
+
+  if (topLevelFiles.length === 0) {
+    return []
+  }
+
+  const fileSet = new Set(topLevelFiles)
+  const selected: string[] = []
+  const seen = new Set<string>()
+  const push = (path: string) => {
+    if (!seen.has(path)) {
+      seen.add(path)
+      selected.push(path)
+    }
+  }
+
+  // 1. Index file candidates
+  for (const name of INDEX_FILE_CANDIDATES) {
+    const candidate = normalizeEntryPath(joinPaths(normalizedScope, name))
+    if (fileSet.has(candidate)) {
+      push(candidate)
+    }
+  }
+
+  // 2. Files named after the directory
+  const baseName = normalizedScope.split('/').pop() || ''
+  const jsLikeExtensions = EXTENSION_PRIORITY.filter(
+    (extension) => extension !== '.json'
+  )
+  if (baseName && baseName !== '.') {
+    const pascalBase =
+      baseName.length > 1
+        ? baseName[0]?.toUpperCase() + baseName.slice(1)
+        : baseName.toUpperCase()
+    const nameVariants = new Set([baseName])
+    if (pascalBase && pascalBase !== baseName) {
+      nameVariants.add(pascalBase)
+    }
+    for (const variant of nameVariants) {
+      for (const extension of jsLikeExtensions) {
+        const candidate = normalizeEntryPath(
+          joinPaths(normalizedScope, `${variant}${extension}`)
+        )
+        if (fileSet.has(candidate)) {
+          push(candidate)
+        }
+      }
+    }
+  }
+
+  // 3. Barrel file detection
+  const barrelCandidates: string[] = []
+  for (const path of topLevelFiles) {
+    if (seen.has(path)) {
+      continue
+    }
+
+    const content = await readContent(path)
+    if (content === null || !content.includes('export')) {
+      continue
+    }
+
+    const rawExports = scanModuleExports(path, content)
+    if (isBarrelFile(rawExports)) {
+      barrelCandidates.push(path)
+    }
+  }
+
+  barrelCandidates.sort()
+  for (const path of barrelCandidates) {
+    push(path)
+  }
+
+  return selected
 }

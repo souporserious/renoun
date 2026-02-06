@@ -87,9 +87,6 @@ export type {
 export { Repository } from './Repository.ts'
 export type {
   ExportChange,
-  ExportHistoryGenerator,
-  ExportHistoryStream,
-  ExportHistoryProgressEvent,
   AddedChange,
   UpdatedChange,
   RenamedChange,

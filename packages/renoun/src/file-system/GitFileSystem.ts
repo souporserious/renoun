@@ -90,6 +90,7 @@ import {
   detectCrossFileRenames,
   mergeRenameHistory,
   checkAndCollapseOscillation,
+  selectEntryFiles,
 } from './export-analysis.ts'
 
 export interface GitFileSystemOptions extends FileSystemOptions {
@@ -1548,10 +1549,13 @@ export class GitFileSystem
     if (!scopeDirectories.length && this.#preparedScope.size === 0) {
       return
     }
-    const { merged } = mergeScopeDirectories(
+    const { merged, missing } = mergeScopeDirectories(
       this.#preparedScope,
       scopeDirectories
     )
+    if (missing.length === 0) {
+      return
+    }
     ensureCachedScopeSync(this.repoRoot, merged, this.verbose)
     this.#preparedScope = new Set(merged)
   }
@@ -2010,9 +2014,14 @@ export class GitFileSystem
         entryRelatives.push(source)
         continue
       }
-      const inferred = await inferEntryFile(git, latestCommit, source)
+      const inferred = await inferEntryFile(
+        this.repoRoot,
+        git,
+        latestCommit,
+        source
+      )
       if (inferred) {
-        entryRelatives.push(inferred)
+        entryRelatives.push(...inferred)
       }
     }
 
@@ -2708,10 +2717,14 @@ export class GitFileSystem
       return
     }
 
-    const { merged } = mergeScopeDirectories(
+    const { merged, missing } = mergeScopeDirectories(
       this.#preparedScope,
       scopeDirectories
     )
+
+    if (missing.length === 0) {
+      return
+    }
 
     // Always run sparse-checkout + backfill for cache clones.
     // The backfill command is idempotent and ensures blobs are available
@@ -4359,26 +4372,59 @@ async function gitLogForPath(
   return commits
 }
 
+async function listDirectoryEntriesAtCommit(
+  repoRoot: string,
+  commit: string,
+  scopeDirectory: string
+): Promise<DirectoryEntry[]> {
+  assertSafeGitArg(commit, 'commit')
+  const normalizedScope = normalizePath(scopeDirectory || '.')
+  const spec =
+    normalizedScope && normalizedScope !== '.'
+      ? `${commit}:${normalizedScope}`
+      : commit
+  try {
+    const result = await spawnWithResult('git', ['ls-tree', '-z', spec], {
+      cwd: repoRoot,
+      maxBuffer: 10 * 1024 * 1024,
+      verbose: false,
+    })
+    if (result.status !== 0) {
+      return []
+    }
+    return parseLsTreeOutput(result.stdout, normalizedScope)
+  } catch {
+    return []
+  }
+}
+
 async function inferEntryFile(
+  repoRoot: string,
   git: GitObjectStore,
   commit: string,
   scopeDirectory: string
-) {
-  const candidates = [
-    'index.ts',
-    'index.tsx',
-    'index.js',
-    'index.jsx',
-    'index.mjs',
-  ]
-  for (const name of candidates) {
-    const path = joinPath(scopeDirectory, name)
-    const meta = await git.getBlobMeta(`${commit}:${path}`)
-    if (meta) {
-      return path
-    }
+): Promise<string[]> {
+  const normalizedScope = normalizePath(scopeDirectory || '.')
+  const entries = await listDirectoryEntriesAtCommit(
+    repoRoot,
+    commit,
+    normalizedScope
+  )
+  if (entries.length === 0) {
+    return []
   }
-  return null
+
+  return selectEntryFiles({
+    scopeDirectory: normalizedScope,
+    entries,
+    readContent: async (path) => {
+      const meta = await git.getBlobMeta(`${commit}:${path}`)
+      if (!meta || meta.type !== 'blob' || meta.size > MAX_PARSE_BYTES) {
+        return null
+      }
+      return git.getBlobContentBySha(meta.sha)
+    },
+  })
 }
 
 function joinPath(...parts: string[]) {

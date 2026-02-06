@@ -100,20 +100,20 @@ function getPrimaryId(
 
 interface TestContext {
   repoRoot: string
-  cacheDir: string
+  cacheDirectory: string
 }
 
 // Wrapper for concurrent tests with automatic cleanup
 function test(name: string, fn: (ctx: TestContext) => Promise<void>): void {
   it.concurrent(name, async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
-    const cacheDir = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+    const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
     initRepo(repoRoot)
     try {
-      await fn({ repoRoot, cacheDir })
+      await fn({ repoRoot, cacheDirectory })
     } finally {
       rmSync(repoRoot, { recursive: true, force: true })
-      rmSync(cacheDir, { recursive: true, force: true })
+      rmSync(cacheDirectory, { recursive: true, force: true })
     }
   })
 }
@@ -121,7 +121,7 @@ function test(name: string, fn: (ctx: TestContext) => Promise<void>): void {
 describe('GitFileSystem', () => {
   test('correctly tracks export additions and removals', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'init')
     const c2 = commitFile(
@@ -131,7 +131,7 @@ describe('GitFileSystem', () => {
       'change exports'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const barId = getPrimaryId(report, 'bar')
@@ -148,13 +148,47 @@ describe('GitFileSystem', () => {
     expect(fooRemoved?.sha).toBe(c2.hash)
   })
 
+  test('infers multiple entry files from a directory', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFiles(
+      repoRoot,
+      [
+        { filename: 'src/foo/index.ts', content: `export * from './a'` },
+        { filename: 'src/foo/Foo.ts', content: `export * from './b'` },
+        { filename: 'src/foo/Barrel.ts', content: `export * from './a'` },
+        { filename: 'src/foo/Local.ts', content: `export const local = 1` },
+        { filename: 'src/foo/External.ts', content: `export { x } from 'pkg'` },
+        { filename: 'src/foo/a.ts', content: `export const a = 1` },
+        { filename: 'src/foo/b.ts', content: `export const b = 1` },
+      ],
+      'init'
+    )
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const report = await store.getExportHistory({
+      entry: 'src/foo',
+      limit: 1,
+      detectUpdates: false,
+    })
+
+    expect(report.entryFiles).toEqual([
+      'src/foo/index.ts',
+      'src/foo/Foo.ts',
+      'src/foo/Barrel.ts',
+    ])
+    expect(report.entryFiles).not.toContain('src/foo/Local.ts')
+    expect(report.entryFiles).not.toContain('src/foo/External.ts')
+  })
+
   test('invalidates export-history cache when ref advances', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
 
-    const store1 = new GitFileSystem({ repository: repoRoot, cacheDir })
+    const store1 = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     try {
       const report1 = await store1.getExportHistory({ entry: 'src/index.ts' })
       expect(getPrimaryId(report1, 'a')).toBeDefined()
@@ -170,7 +204,7 @@ describe('GitFileSystem', () => {
       'v2'
     )
 
-    const store2 = new GitFileSystem({ repository: repoRoot, cacheDir })
+    const store2 = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     try {
       const report2 = await store2.getExportHistory({ entry: 'src/index.ts' })
       expect(getPrimaryId(report2, 'b')).toBeDefined()
@@ -181,7 +215,7 @@ describe('GitFileSystem', () => {
 
   test('supports scope expansion on cached repo', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(
       repoRoot,
@@ -224,7 +258,7 @@ describe('GitFileSystem', () => {
 
       using store = new GitFileSystem({
         repository: sparseRepo,
-        cacheDir,
+        cacheDirectory,
       })
       const reportA = await store.getExportHistory({
         entry: 'scope-a/index.ts',
@@ -243,7 +277,7 @@ describe('GitFileSystem', () => {
 
   test('respects startRef by not re-adding existing exports', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'v1')
     tag(repoRoot, 'v1.0.0')
@@ -254,7 +288,7 @@ describe('GitFileSystem', () => {
       'add bar'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({
       entry: 'src/index.ts',
       startRef: 'v1.0.0',
@@ -274,7 +308,7 @@ describe('GitFileSystem', () => {
 
   test('detects renames when re-exporting with same local name', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/lib.ts', `export const core = 100`, 'add lib')
     commitFile(repoRoot, 'src/index.ts', `export { core } from './lib'`, 'v1')
@@ -291,7 +325,7 @@ describe('GitFileSystem', () => {
       'update re-export'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const coreId = getPrimaryId(report, 'core')
@@ -301,7 +335,7 @@ describe('GitFileSystem', () => {
 
   test('detects alias rename in barrel exports', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/lib.ts', `export const foo = 1`, 'add lib')
     commitFile(
@@ -317,7 +351,7 @@ describe('GitFileSystem', () => {
       'rename to baz'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     expect(getPrimaryId(report, 'bar')).toBeUndefined()
@@ -334,7 +368,7 @@ describe('GitFileSystem', () => {
 
   test('detects cross-file renames within a commit', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/a.ts', `export const core = 1`, 'add a')
     commitFile(
@@ -354,7 +388,7 @@ describe('GitFileSystem', () => {
       'move core'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const coreId = getPrimaryId(report, 'core')
@@ -369,7 +403,7 @@ describe('GitFileSystem', () => {
 
   test('avoids ambiguous rename collisions with identical signatures', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/a.ts', `export const foo = 1`, 'add a')
     commitFile(repoRoot, 'src/b.ts', `export const foo = 1`, 'add b')
@@ -395,7 +429,7 @@ describe('GitFileSystem', () => {
       'swap sources'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const aFooId = getPrimaryId(report, 'aFoo')
@@ -427,7 +461,7 @@ describe('GitFileSystem', () => {
 
   test('records deprecation events when @deprecated is added', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'v1')
     const c2 = commitFile(
@@ -437,7 +471,7 @@ describe('GitFileSystem', () => {
       'deprecate foo'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const fooId = getPrimaryId(report, 'foo')
@@ -451,7 +485,7 @@ describe('GitFileSystem', () => {
 
   test('parses deprecation message with JSDoc link', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'v1')
     // JSDoc with {@link SomeOther} syntax produces an array of JSDocComment nodes
@@ -462,7 +496,7 @@ describe('GitFileSystem', () => {
       'deprecate with link'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const fooId = getPrimaryId(report, 'foo')
@@ -481,7 +515,7 @@ describe('GitFileSystem', () => {
 
   test('detects deprecation in line comments', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'v1')
     const c2 = commitFile(
@@ -491,7 +525,7 @@ describe('GitFileSystem', () => {
       'deprecate foo via line comment'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const fooId = getPrimaryId(report, 'foo')
@@ -507,7 +541,7 @@ describe('GitFileSystem', () => {
 
   test('collapses oscillating add/remove within same release', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     // First commit in release r1
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'add foo')
@@ -523,7 +557,7 @@ describe('GitFileSystem', () => {
     )
     tag(repoRoot, 'r2')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const fooId = getPrimaryId(report, 'foo')
@@ -536,7 +570,7 @@ describe('GitFileSystem', () => {
     expect(fooHistory[0].release).toBe('r1')
   })
 
-  test('detects body updates', async ({ repoRoot, cacheDir }) => {
+  test('detects body updates', async ({ repoRoot, cacheDirectory }) => {
     commitFile(
       repoRoot,
       'src/index.ts',
@@ -550,7 +584,7 @@ describe('GitFileSystem', () => {
       'v2'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({
       entry: 'src/index.ts',
       detectUpdates: true,
@@ -568,7 +602,7 @@ describe('GitFileSystem', () => {
 
   test('handles directory module resolution (index files)', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(
       repoRoot,
@@ -578,14 +612,17 @@ describe('GitFileSystem', () => {
     )
     commitFile(repoRoot, 'src/main.ts', `export * from './utils'`, 'add main')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/main.ts' })
 
     expect(Object.keys(report.exports)).toHaveLength(1)
     expect(getPrimaryId(report, 'util')).toBeDefined()
   })
 
-  test('maps git tags to release history', async ({ repoRoot, cacheDir }) => {
+  test('maps git tags to release history', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
     commitFile(repoRoot, 'src/index.ts', `export const v1 = true`, 'feat')
     tag(repoRoot, 'v1.0.0')
     const c2 = commitFile(
@@ -595,7 +632,7 @@ describe('GitFileSystem', () => {
       'feat 2'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const v1Id = getPrimaryId(report, 'v1')
@@ -613,7 +650,7 @@ describe('GitFileSystem', () => {
 
   test('respects maxDepth to prevent infinite recursion or deep chains', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/C.ts', `export const final = 1`, 'c')
     commitFile(repoRoot, 'src/B.ts', `export * from './C'`, 'b')
@@ -622,7 +659,7 @@ describe('GitFileSystem', () => {
 
     using store = new GitFileSystem({
       repository: repoRoot,
-      cacheDir,
+      cacheDirectory,
       maxDepth: 1,
     })
     const report = await store.getExportHistory({ entry: 'src/main.ts' })
@@ -632,7 +669,10 @@ describe('GitFileSystem', () => {
     expect(report.parseWarnings![0]).toContain('Max depth exceeded')
   })
 
-  test('handles default exports correctly', async ({ repoRoot, cacheDir }) => {
+  test('handles default exports correctly', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
     commitFile(
       repoRoot,
       'src/index.ts',
@@ -640,7 +680,7 @@ describe('GitFileSystem', () => {
       'init'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const defaultId = getPrimaryId(report, 'default')
@@ -650,7 +690,7 @@ describe('GitFileSystem', () => {
 
   test('handles mixed named and default exports', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(
       repoRoot,
@@ -659,7 +699,7 @@ describe('GitFileSystem', () => {
       'init'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     expect(getPrimaryId(report, 'a')).toBeDefined()
@@ -668,11 +708,11 @@ describe('GitFileSystem', () => {
 
   test('resolves entry directories to index files', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'init')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src' })
 
     expect(report.entryFiles).toContain('src/index.ts')
@@ -681,11 +721,11 @@ describe('GitFileSystem', () => {
 
   test('throws when entry directory has no index file', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/other.ts', `export const x = 1`, 'init')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     await expect(store.getExportHistory({ entry: 'src' })).rejects.toThrow(
       /Could not resolve any entry files/
     )
@@ -693,11 +733,11 @@ describe('GitFileSystem', () => {
 
   test('throws helpful errors for invalid refs', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'init')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
 
     await expect(
       store.getExportHistory({ entry: 'src/index.ts', startRef: 'nope' })
@@ -710,7 +750,7 @@ describe('GitFileSystem', () => {
 
   test('skips update events when detectUpdates is false', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(
       repoRoot,
@@ -725,7 +765,7 @@ describe('GitFileSystem', () => {
       'v2'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({
       entry: 'src/index.ts',
       detectUpdates: false,
@@ -740,7 +780,7 @@ describe('GitFileSystem', () => {
 
   test('detects signature updates when updateMode is signature', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(
       repoRoot,
@@ -755,7 +795,7 @@ describe('GitFileSystem', () => {
       'v2'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({
       entry: 'src/index.ts',
       updateMode: 'signature',
@@ -771,7 +811,7 @@ describe('GitFileSystem', () => {
 
   test('supports re-export aliases and namespace exports', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(
       repoRoot,
@@ -786,7 +826,7 @@ describe('GitFileSystem', () => {
       'barrel'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const bazId = getPrimaryId(report, 'baz')
@@ -800,11 +840,11 @@ describe('GitFileSystem', () => {
 
   test('handles export assignment (export =)', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `const foo = 1; export = foo`, 'init')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     expect(getPrimaryId(report, 'default')).toBeDefined()
@@ -812,7 +852,7 @@ describe('GitFileSystem', () => {
 
   test('respects star export precedence (first wins)', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/a.ts', `export const value = 1`, 'a')
     commitFile(repoRoot, 'src/b.ts', `export const value = 2`, 'b')
@@ -823,7 +863,7 @@ describe('GitFileSystem', () => {
       'barrel'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const valueId = getPrimaryId(report, 'value')
@@ -831,7 +871,10 @@ describe('GitFileSystem', () => {
     expect(valueId).toContain('src/a.ts')
   })
 
-  test('detects file rename via git mv', async ({ repoRoot, cacheDir }) => {
+  test('detects file rename via git mv', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
     commitFile(repoRoot, 'src/a.ts', `export const core = 1`, 'add a')
     commitFile(
       repoRoot,
@@ -846,7 +889,7 @@ describe('GitFileSystem', () => {
     git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'rename file'])
     const renameCommitHash = git(repoRoot, ['log', '-1', '--format=%H'])
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const coreId = getPrimaryId(report, 'core')
@@ -861,7 +904,7 @@ describe('GitFileSystem', () => {
 
   test('rename: export name only (same file, different name)', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     // Create a file with an export - use a larger function body so the name
     // is a small portion of the signature (enabling rename detection)
@@ -897,7 +940,7 @@ describe('GitFileSystem', () => {
       'rename to buildProcessor'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const newId = getPrimaryId(report, 'buildProcessor')
@@ -920,7 +963,7 @@ describe('GitFileSystem', () => {
 
   test('rename: file only (different file, same export name)', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     // Create a file with an export
     commitFile(repoRoot, 'src/a.ts', `export const core = 1`, 'add a')
@@ -942,7 +985,7 @@ describe('GitFileSystem', () => {
       'move core to b'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const coreId = getPrimaryId(report, 'core')
@@ -963,7 +1006,10 @@ describe('GitFileSystem', () => {
     expect(renameChange?.previousId).toBe('src/a.ts::core')
   })
 
-  test('rename: both file and export name', async ({ repoRoot, cacheDir }) => {
+  test('rename: both file and export name', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
     // Create a file with an export - use a larger function body so the name
     // is a small portion of the signature (enabling rename detection)
     const funcBody = `export function createValidator(schema: object, options?: { strict?: boolean; allowExtra?: boolean }): (data: unknown) => boolean {
@@ -997,7 +1043,7 @@ describe('GitFileSystem', () => {
     git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'move and rename'])
     const renameCommitHash = git(repoRoot, ['log', '-1', '--format=%H'])
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const newNameId = getPrimaryId(report, 'buildValidator')
@@ -1020,7 +1066,7 @@ describe('GitFileSystem', () => {
 
   test('rename: alias change only (same underlying ID)', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     // Create a source file and barrel that re-exports with an alias
     commitFile(repoRoot, 'src/lib.ts', `export const foo = 1`, 'add lib')
@@ -1039,7 +1085,7 @@ describe('GitFileSystem', () => {
       'rename alias to baz'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/index.ts' })
 
     const bazId = getPrimaryId(report, 'baz')
@@ -1060,10 +1106,10 @@ describe('GitFileSystem', () => {
     expect(renameChange?.previousId).toBe(bazId)
   })
 
-  test('rejects unsafe repo paths', async ({ repoRoot, cacheDir }) => {
+  test('rejects unsafe repo paths', async ({ repoRoot, cacheDirectory }) => {
     commitFile(repoRoot, 'src/index.ts', `export const ok = 1`, 'init')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     await expect(store.readFile('../secret.txt')).rejects.toThrow(
       /Invalid repo path/
     )
@@ -1072,7 +1118,7 @@ describe('GitFileSystem', () => {
 
   test('prevents writes through symlinks escaping the repo', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const ok = 1`, 'init')
 
@@ -1081,7 +1127,7 @@ describe('GitFileSystem', () => {
       const linkPath = join(repoRoot, 'escape')
       symlinkSync(outsideDir, linkPath, 'dir')
 
-      using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+      using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
       await expect(
         store.writeFile('escape/secret.txt', 'nope')
       ).rejects.toThrow(/via symlink/i)
@@ -1092,7 +1138,7 @@ describe('GitFileSystem', () => {
 
   test('getFileMetadata aggregates authors and commit bounds', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     const authorA = {
       GIT_AUTHOR_NAME: 'Alice',
@@ -1110,7 +1156,7 @@ describe('GitFileSystem', () => {
     const c1 = commitFile(repoRoot, 'src/data.txt', `alpha`, 'first', authorA)
     const c2 = commitFile(repoRoot, 'src/data.txt', `beta`, 'second', authorB)
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const meta = await store.getFileMetadata('src/data.txt')
 
     expect(meta.kind).toBe('file')
@@ -1128,7 +1174,7 @@ describe('GitFileSystem', () => {
 
   test('getModuleMetadata reports only head exports', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     const c1 = commitFile(
       repoRoot,
@@ -1138,7 +1184,7 @@ describe('GitFileSystem', () => {
     )
     const c2 = commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v2')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const meta = await store.getModuleMetadata('src/index.ts')
 
     expect(meta.kind).toBe('module')
@@ -1150,11 +1196,11 @@ describe('GitFileSystem', () => {
 
   test('metadata helpers return undefined for missing paths', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const ok = 1`, 'init')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     expect(store.getFileByteLengthSync('missing.txt')).toBeUndefined()
     await expect(
       store.getFileByteLength('missing.txt')
@@ -1167,14 +1213,14 @@ describe('GitFileSystem', () => {
 
   test('prefers worktree content for local repos when ref is implicit', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/tracked.txt', 'v1', 'init')
 
     writeFileSync(join(repoRoot, 'src/tracked.txt'), 'v2')
     writeFileSync(join(repoRoot, 'src/untracked.txt'), 'new')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     expect(store.readFileSync('src/tracked.txt')).toBe('v2')
     expect(store.readFileSync('src/untracked.txt')).toBe('new')
 
@@ -1186,7 +1232,7 @@ describe('GitFileSystem', () => {
 
   test('uses git objects when ref is explicit', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/tracked.txt', 'v1', 'init')
 
@@ -1195,7 +1241,7 @@ describe('GitFileSystem', () => {
 
     using store = new GitFileSystem({
       repository: repoRoot,
-      cacheDir,
+      cacheDirectory,
       ref: 'HEAD',
     })
     expect(store.readFileSync('src/tracked.txt')).toBe('v1')
@@ -1209,12 +1255,12 @@ describe('GitFileSystem', () => {
 
   test('export history supports multiple entry files', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/a.ts', `export const a = 1`, 'add a')
     commitFile(repoRoot, 'src/b.ts', `export const b = 1`, 'add b')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({
       entry: ['src/a.ts', 'src/b.ts'],
     })
@@ -1225,7 +1271,7 @@ describe('GitFileSystem', () => {
 
   test('export history carries forward when entry is missing', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     const c1 = commitFile(
       repoRoot,
@@ -1237,7 +1283,7 @@ describe('GitFileSystem', () => {
     git(repoRoot, ['rm', '-f', '--', 'src/one.ts'])
     git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'remove one'])
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({ entry: 'src/one.ts' })
 
     const oneId = getPrimaryId(report, 'one')
@@ -1248,7 +1294,10 @@ describe('GitFileSystem', () => {
     expect(history[0].sha).toBe(c1.hash)
   })
 
-  test('export history respects limit', async ({ repoRoot, cacheDir }) => {
+  test('export history respects limit', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
     commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
     const c2 = commitFile(
       repoRoot,
@@ -1257,7 +1306,7 @@ describe('GitFileSystem', () => {
       'v2'
     )
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const report = await store.getExportHistory({
       entry: 'src/index.ts',
       limit: 1,
@@ -1273,7 +1322,7 @@ describe('GitFileSystem', () => {
 
   test('throws on shallow repos when autoFetch is false', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
     commitFile(repoRoot, 'src/index.ts', `export const a = 2`, 'v2')
@@ -1290,7 +1339,7 @@ describe('GitFileSystem', () => {
 
       using store = new GitFileSystem({
         repository: shallowRepo,
-        cacheDir,
+        cacheDirectory,
         autoFetch: false,
       })
 
@@ -1303,7 +1352,10 @@ describe('GitFileSystem', () => {
     }
   })
 
-  test('unshallows when autoFetch is true', async ({ repoRoot, cacheDir }) => {
+  test('unshallows when autoFetch is true', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
     commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
     commitFile(repoRoot, 'src/index.ts', `export const a = 2`, 'v2')
 
@@ -1319,7 +1371,7 @@ describe('GitFileSystem', () => {
 
       using store = new GitFileSystem({
         repository: shallowRepo,
-        cacheDir,
+        cacheDirectory,
         autoFetch: true,
       })
 
@@ -1335,13 +1387,13 @@ describe('GitFileSystem', () => {
 
   test('ensureCacheClone supports file URLs (async + sync)', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'init')
 
     const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
     const bareRepo = join(bareRoot, 'repo.git')
-    const syncCacheDir = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+    const synccacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
 
     try {
       git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
@@ -1349,24 +1401,24 @@ describe('GitFileSystem', () => {
 
       const asyncClone = await ensureCacheClone({
         spec: fileUrl,
-        cacheDirectory: cacheDir,
+        cacheDirectory,
       })
       expect(existsSync(join(asyncClone, '.git'))).toBe(true)
 
       const syncClone = ensureCacheCloneSync({
         spec: fileUrl,
-        cacheDirectory: syncCacheDir,
+        cacheDirectory: synccacheDirectory,
       })
       expect(existsSync(join(syncClone, '.git'))).toBe(true)
     } finally {
       rmSync(bareRoot, { recursive: true, force: true })
-      rmSync(syncCacheDir, { recursive: true, force: true })
+      rmSync(synccacheDirectory, { recursive: true, force: true })
     }
   })
 
   test('updates cached clone when remote ref advances', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'v1')
 
@@ -1379,7 +1431,7 @@ describe('GitFileSystem', () => {
 
       const cachedRepo = ensureCacheCloneSync({
         spec: fileUrl,
-        cacheDirectory: cacheDir,
+        cacheDirectory,
       })
       expect(existsSync(join(cachedRepo, '.git'))).toBe(true)
 
@@ -1391,9 +1443,10 @@ describe('GitFileSystem', () => {
 
       using store = new GitFileSystem({
         repository: cachedRepo,
-        cacheDir,
+        cacheDirectory,
         ref: 'origin/main',
         autoFetch: true,
+        verbose: true,
       })
       const content = store.readFileSync('src/index.ts')
       expect(content).toContain('value = 2')
@@ -1404,11 +1457,11 @@ describe('GitFileSystem', () => {
 
   test('throws helpful error when no commits match the entry scope', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'README.md', '# Not Code', 'init')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     await expect(
       store.getExportHistory({ entry: 'src/index.ts' })
     ).rejects.toThrow(/No commits found/)
@@ -1416,11 +1469,11 @@ describe('GitFileSystem', () => {
 
   test('throws helpful error for invalid entry file', async ({
     repoRoot,
-    cacheDir,
+    cacheDirectory,
   }) => {
     commitFile(repoRoot, 'README.md', '# Not Code', 'init')
 
-    using store = new GitFileSystem({ repository: repoRoot, cacheDir })
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     await expect(
       store.getExportHistory({ entry: 'README.md' })
     ).rejects.toThrow(/Invalid entry file/)

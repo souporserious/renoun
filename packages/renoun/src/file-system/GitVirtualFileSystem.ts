@@ -44,6 +44,7 @@ import {
   detectCrossFileRenames,
   mergeRenameHistory,
   checkAndCollapseOscillation,
+  selectEntryFiles,
 } from './export-analysis.ts'
 
 type GitHost = 'github' | 'gitlab' | 'bitbucket'
@@ -2536,7 +2537,9 @@ export class GitVirtualFileSystem
   }
 
   readDirectorySync(): DirectoryEntry[] {
-    throw new Error('readDirectorySync is not supported in GitVirtualFileSystem')
+    throw new Error(
+      'readDirectorySync is not supported in GitVirtualFileSystem'
+    )
   }
 
   #resolveSymlinkPath(path: string): string {
@@ -2653,14 +2656,14 @@ export class GitVirtualFileSystem
     const entryRelatives = await Promise.all(
       uniqueEntrySources.map(async (source) => {
         if (looksLikeFilePath(source)) {
-          return source
+          return [source]
         }
-        return this.#inferEntryFile(source)
+        return this.#inferEntryFiles(source)
       })
     )
 
     const uniqueEntryRelatives = Array.from(
-      new Set(entryRelatives.filter((e): e is string => e !== null))
+      new Set(entryRelatives.flat().filter(Boolean))
     )
     if (uniqueEntryRelatives.length === 0) {
       throw new Error(`Could not resolve any entry files.`)
@@ -3300,18 +3303,24 @@ export class GitVirtualFileSystem
     return results
   }
 
-  async #inferEntryFile(scopeDirectory: string): Promise<string | null> {
-    for (const name of INDEX_FILE_CANDIDATES) {
-      const path = joinPaths(scopeDirectory, name)
-      const normalizedPath = normalizePath(path)
-      const entry =
-        this.getFileEntry(normalizedPath) ||
-        this.getFileEntry(`./${normalizedPath}`)
-      if (entry) {
-        return normalizedPath
-      }
+  async #inferEntryFiles(scopeDirectory: string): Promise<string[]> {
+    const normalizedScope = normalizePath(scopeDirectory)
+    const entries = await this.readDirectory(normalizedScope)
+    if (entries.length === 0) {
+      return []
     }
-    return null
+
+    return selectEntryFiles({
+      scopeDirectory: normalizedScope,
+      entries,
+      readContent: async (path) => {
+        try {
+          return await this.readFile(normalizePath(path))
+        } catch {
+          return null
+        }
+      },
+    })
   }
 
   async #collectExportsFromFile(
