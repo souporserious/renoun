@@ -1,5 +1,12 @@
 # @renoun/screenshot
 
+## 0.3.1
+
+### Patch Changes
+
+- f26f512: Avoids regex backtracking when trimming leading/trailing whitespace during text layout.
+- eb0bbca: Removes fixture data from published package.
+
 ## 0.3.0
 
 ### Minor Changes
