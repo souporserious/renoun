@@ -1,5 +1,46 @@
 # renoun
 
+## 11.2.0
+
+### Minor Changes
+
+- 08285a3: Adds `JavaScriptFile#getOutlineRanges` that returns outline ranges for a file (imports, regions, statements, etc).
+- 9e7cddf: Adds feature parity to `GitHostFileSystem` with the new `LocalGitFileSystem` for export history analysis:
+  - Cross-file rename detection using body and signature hash matching
+  - Oscillation detection to collapse temporary Added/Removed changes within the same release
+  - Deprecation change tracking to record when exports become deprecated
+
+- f7ae465: Adds `JavaScriptFile#getFoldingRanges` method to query where the file can be folded.
+- 1ed6915: Introduces `GitFileSystem` for local and cloned git-backed file systems with support for performant file history analysis.
+- b5c992b: Adds textmate theme validation to ensure theme has expected shape.
+- 0c97b1d: Refactors the file-system API around `Repository`, including lazy clone behavior, repository-first helpers, and git file system renames.
+
+  ### Breaking Changes
+  - Renames `GitHostFileSystem` to `GitVirtualFileSystem`.
+  - The `Repository` utility should now be preferred over using the git utilities directly:
+
+  ```tsx
+  import { Repository } from 'renoun'
+
+  const repository = new Repository({
+    path: 'https://github.com/mrdoob/three.js',
+  })
+  const directory = repository.getDirectory('src/nodes')
+  ```
+
+- 001b5ae: Adds `resolveExportSources`, `resolveExportSource`, and `getMainSourcePath` methods to the `Package` utility for resolving package export source files.
+
+### Patch Changes
+
+- 4cd01ae: Adds `ModuleExport#getValueWithDefault` for returning a fallback value when the export is missing.
+- 71e2bcf: Adds runtime validation for `CodeBlock` component overrides to provide a better error message for invalid `components` props.
+- 32e9777: Improves directory snapshot traversal performance by processing entries concurrently.
+- 04e28c1: Fixes an issue where older versions of Webpack attempt to statically analyze dyanmic import options causing an error.
+- d2f1514: Fixes `InMemoryFileSystem.getFileExports` by lazily synchronizing source files to ts-morph before retrieving exports.
+- ee4d2e8: Prevents `NodeFileSystem` access to paths that attempt to escape the workspace via symlinks.
+- 91caea1: Fixes type parameter name resolution for JS-only projects by using a safe wrapper that handles malformed AST nodes gracefully.
+- 69d4c98: Improves JSDoc signature handling, including param-only docs, callback parameter formatting, and preserving concrete TypeScript return types when only JSDoc parameter names improve.
+
 ## 11.1.0
 
 ### Minor Changes

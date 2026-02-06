@@ -1,6 +1,6 @@
 {
   "name": "renoun",
-  "version": "11.1.0",
+  "version": "11.2.0",
   "description": "Turn JavaScript, TypeScript, Markdown, and MDX into reusable structured data for blogs, docs, and presentations.",
   "author": {
     "name": "souporserious",
