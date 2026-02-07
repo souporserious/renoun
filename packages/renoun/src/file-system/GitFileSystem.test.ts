@@ -20,22 +20,64 @@ import {
 } from './GitFileSystem'
 
 const GIT_ENV = {
+  /** Force the C/POSIX locale so git output/messages are consistent across machines. */
+  LC_ALL: 'C',
+
+  /** Commit author name used for test commits (avoids relying on global git config). */
   GIT_AUTHOR_NAME: 'Test User',
+
+  /** Commit author email used for test commits (avoids relying on global git config). */
   GIT_AUTHOR_EMAIL: 'test@example.com',
+
+  /** Committer name used for test commits (the identity that creates the commit object). */
   GIT_COMMITTER_NAME: 'Test User',
+
+  /** Committer email used for test commits (the identity that creates the commit object). */
   GIT_COMMITTER_EMAIL: 'test@example.com',
+
+  /** Prevent git from prompting for credentials on the terminal. */
+  GIT_TERMINAL_PROMPT: '0',
+
+  /** Ignore the user's global git config to keep tests deterministic. */
+  GIT_CONFIG_GLOBAL: '/dev/null',
+
+  /** Ignore the system git config to keep tests deterministic. */
+  GIT_CONFIG_SYSTEM: '/dev/null',
+
+  /** If git tries "askpass" prompting (no TTY), run `echo` so it fails fast. */
+  GIT_ASKPASS: 'echo',
+
+  /** Same as GIT_ASKPASS, but for SSH auth prompts. */
+  SSH_ASKPASS: 'echo',
+} as const
+
+type GitIdentity = {
+  name: string
+  email: string
+  /** If omitted, committer = author */
+  committerName?: string
+  committerEmail?: string
 }
 
-function git(
-  cwd: string,
-  args: string[],
-  envOverrides: Record<string, string> = {}
-) {
+function identityEnv(id: GitIdentity) {
+  return {
+    GIT_AUTHOR_NAME: id.name,
+    GIT_AUTHOR_EMAIL: id.email,
+    GIT_COMMITTER_NAME: id.committerName ?? id.name,
+    GIT_COMMITTER_EMAIL: id.committerEmail ?? id.email,
+  } as const
+}
+
+function git(cwd: string, args: string[], identity?: GitIdentity) {
   const result = spawnSync('git', args, {
     cwd,
     encoding: 'utf8',
     shell: false,
-    env: { ...process.env, ...GIT_ENV, ...envOverrides },
+    env: {
+      ...process.env,
+      ...GIT_ENV,
+      ...(identity ? identityEnv(identity) : {}),
+    },
   })
   if (result.status !== 0) {
     throw new Error(`Git error: ${result.stderr} (cmd: git ${args.join(' ')})`)
@@ -53,14 +95,14 @@ function commitFile(
   repo: string,
   filename: string,
   content: string,
-  msg: string,
-  envOverrides: Record<string, string> = {}
+  message: string,
+  identity?: GitIdentity
 ) {
   const path = join(repo, filename)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
   git(repo, ['add', '--sparse', filename])
-  git(repo, ['commit', '--no-gpg-sign', '-m', msg], envOverrides)
+  git(repo, ['commit', '--no-gpg-sign', '-m', message], identity)
 
   // Get hash and unix timestamp in a single git command
   const output = git(repo, ['log', '-1', '--format=%H %ct'])
@@ -71,16 +113,16 @@ function commitFile(
 function commitFiles(
   repo: string,
   files: Array<{ filename: string; content: string }>,
-  msg: string,
-  envOverrides: Record<string, string> = {}
+  message: string,
+  identity?: GitIdentity
 ) {
   for (const file of files) {
     const path = join(repo, file.filename)
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, file.content)
   }
-  git(repo, ['add', '--sparse', ...files.map((f) => f.filename)])
-  git(repo, ['commit', '--no-gpg-sign', '-m', msg], envOverrides)
+  git(repo, ['add', '--sparse', ...files.map((file) => file.filename)])
+  git(repo, ['commit', '--no-gpg-sign', '-m', message], identity)
 
   const output = git(repo, ['log', '-1', '--format=%H %ct'])
   const [hash, unixStr] = output.split(' ')
@@ -1140,21 +1182,14 @@ describe('GitFileSystem', () => {
     repoRoot,
     cacheDirectory,
   }) => {
-    const authorA = {
-      GIT_AUTHOR_NAME: 'Alice',
-      GIT_AUTHOR_EMAIL: 'alice@example.com',
-      GIT_COMMITTER_NAME: 'Alice',
-      GIT_COMMITTER_EMAIL: 'alice@example.com',
-    }
-    const authorB = {
-      GIT_AUTHOR_NAME: 'Bob',
-      GIT_AUTHOR_EMAIL: 'bob@example.com',
-      GIT_COMMITTER_NAME: 'Bob',
-      GIT_COMMITTER_EMAIL: 'bob@example.com',
-    }
-
-    const c1 = commitFile(repoRoot, 'src/data.txt', `alpha`, 'first', authorA)
-    const c2 = commitFile(repoRoot, 'src/data.txt', `beta`, 'second', authorB)
+    const c1 = commitFile(repoRoot, 'src/data.txt', `alpha`, 'first', {
+      name: 'Alice',
+      email: 'alice@example.com',
+    })
+    const c2 = commitFile(repoRoot, 'src/data.txt', `beta`, 'second', {
+      name: 'Bob',
+      email: 'bob@example.com',
+    })
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const meta = await store.getFileMetadata('src/data.txt')
