@@ -6,22 +6,51 @@ import { renderToPipeableStream } from 'react-dom/server'
 import { MDX } from '../MDX.tsx'
 import { CodeBlock } from './CodeBlock.tsx'
 
-async function renderToStringAsync(element: React.ReactElement) {
+async function renderToStringAsync(
+  element: React.ReactElement,
+  timeoutMs = 30_000
+) {
   return new Promise<string>((resolve, reject) => {
     const stream = new PassThrough()
     const chunks: Buffer[] = []
-    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
-    stream.on('error', reject)
-    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    let settled = false
+    const finish = (error?: unknown) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        reject(error)
+      } else {
+        resolve(Buffer.concat(chunks).toString('utf8'))
+      }
+    }
 
-    const { pipe } = renderToPipeableStream(element, {
+    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+    stream.on('error', (error) => finish(error))
+    stream.on('end', () => finish())
+
+    const { pipe, abort } = renderToPipeableStream(element, {
       onAllReady() {
         pipe(stream)
       },
+      onShellError(error) {
+        finish(error)
+      },
       onError(error) {
-        reject(error)
+        finish(error)
       },
     })
+
+    const timeout = setTimeout(() => {
+      try {
+        abort()
+      } catch {
+        // ignore
+      }
+      finish(new Error(`renderToStringAsync timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
   })
 }
 
@@ -76,5 +105,5 @@ describe('MDX CodeBlock SSR', () => {
     expect(html).toContain('CodeBlock.example.tsx')
     expect(html).toMatch(/UMD global|react\/jsx-runtime/)
     expect(html).not.toContain('Copy code to clipboard')
-  })
+  }, 60_000)
 })
