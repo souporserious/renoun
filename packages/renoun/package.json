@@ -151,7 +151,7 @@
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "styled-components": "6.3.8",
+    "styled-components": "6.3.9",
     "tm-grammars": "catalog:",
     "tm-themes": "catalog:",
     "valibot": "catalog:",
