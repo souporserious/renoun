@@ -1231,9 +1231,9 @@ describe('GitFileSystem', () => {
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     await expect(store.readFile('../secret.txt')).rejects.toThrow(
-      /Invalid repo path/
+      /Invalid (repo )?path/
     )
-    await expect(store.readFile('a:b')).rejects.toThrow(/Invalid repo path/)
+    await expect(store.readFile('a:b')).rejects.toThrow(/Invalid (repo )?path/)
   })
 
   test('prevents writes through symlinks escaping the repo', async ({

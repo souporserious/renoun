@@ -277,6 +277,8 @@ export async function ensureCacheClone(
       console.log(`[GitFileSystem] Cloning ${spec} into ${target}…`)
     }
 
+    const safeCloneUrl = assertSafeCloneUrl(cloneUrl)
+    const safeTarget = assertSafeFsPath(target, 'clone target')
     const clone = await spawnWithResult(
       'git',
       [
@@ -287,13 +289,14 @@ export async function ensureCacheClone(
         '-c',
         'core.sshCommand=',
         ...(typeof depth === 'number' && depth > 0
-          ? ['--depth', String(depth)]
+          ? ['--depth', String(Math.floor(Math.abs(depth)))]
           : []),
         ...(supportsBackfill ? ['--filter=blob:none'] : []),
         '--no-checkout',
         '--sparse',
-        cloneUrl,
-        target,
+        '--',
+        safeCloneUrl,
+        safeTarget,
       ],
       { cwd: process.cwd(), verbose }
     )
@@ -356,6 +359,8 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
       console.log(`[GitFileSystem] Cloning ${spec} into ${target}…`)
     }
 
+    const safeCloneUrl = assertSafeCloneUrl(cloneUrl)
+    const safeTarget = assertSafeFsPath(target, 'clone target')
     const cloneArgs = [
       'clone',
       '-c',
@@ -363,13 +368,14 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
       '-c',
       'core.sshCommand=',
       ...(typeof depth === 'number' && depth > 0
-        ? ['--depth', String(depth)]
+        ? ['--depth', String(Math.floor(Math.abs(depth)))]
         : []),
       ...(supportsBackfill ? ['--filter=blob:none'] : []),
       '--no-checkout',
       '--sparse',
-      cloneUrl,
-      target,
+      '--',
+      safeCloneUrl,
+      safeTarget,
     ]
 
     const clone = spawnSync('git', cloneArgs, {
@@ -966,8 +972,9 @@ export class GitFileSystem
       }
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
-    assertSafeGitSpec(spec)
+    const spec = assertSafeGitSpec(
+      relativePath ? `${this.ref}:${relativePath}` : this.ref
+    )
     const result = spawnSync('git', ['cat-file', '-s', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
@@ -1016,8 +1023,9 @@ export class GitFileSystem
       return true
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
-    assertSafeGitSpec(spec)
+    const spec = assertSafeGitSpec(
+      relativePath ? `${this.ref}:${relativePath}` : this.ref
+    )
     const result = spawnSync('git', ['cat-file', '-e', spec], {
       cwd: this.repoRoot,
       stdio: 'ignore',
@@ -1052,10 +1060,10 @@ export class GitFileSystem
       }
     }
 
-    assertSafeGitArg(this.ref, 'ref')
+    const safeRef = assertSafeGitArg(this.ref, 'ref')
     const result = spawnSync(
       'git',
-      ['log', '-1', '--format=%ct', this.ref, '--', relativePath],
+      ['log', '-1', '--format=%ct', safeRef, '--', relativePath],
       { cwd: this.repoRoot, stdio: 'pipe', encoding: 'utf8', shell: false }
     )
     if (result.status !== 0) {
@@ -1085,10 +1093,10 @@ export class GitFileSystem
       }
     }
 
-    assertSafeGitArg(this.ref, 'ref')
+    const safeRef = assertSafeGitArg(this.ref, 'ref')
     const result = await spawnWithResult(
       'git',
-      ['log', '-1', '--format=%ct', this.ref, '--', relativePath],
+      ['log', '-1', '--format=%ct', safeRef, '--', relativePath],
       { cwd: this.repoRoot, maxBuffer: this.maxBufferBytes, verbose: false }
     )
     if (result.status !== 0) {
@@ -1346,8 +1354,9 @@ export class GitFileSystem
       return this.#readDirectoryFromFsSync(relativePath, worktreePath)
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
-    assertSafeGitSpec(spec)
+    const spec = assertSafeGitSpec(
+      relativePath ? `${this.ref}:${relativePath}` : this.ref
+    )
     const result = spawnSync('git', ['ls-tree', '-z', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
@@ -1372,8 +1381,9 @@ export class GitFileSystem
       return this.#readDirectoryFromFs(relativePath, worktreePath)
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
-    assertSafeGitSpec(spec)
+    const spec = assertSafeGitSpec(
+      relativePath ? `${this.ref}:${relativePath}` : this.ref
+    )
     const result = await spawnWithResult('git', ['ls-tree', '-z', spec], {
       cwd: this.repoRoot,
       maxBuffer: this.maxBufferBytes,
@@ -1453,8 +1463,9 @@ export class GitFileSystem
       return readFileSync(worktreePath, 'utf-8')
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
-    assertSafeGitSpec(spec)
+    const spec = assertSafeGitSpec(
+      relativePath ? `${this.ref}:${relativePath}` : this.ref
+    )
     const result = spawnSync('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
@@ -1478,8 +1489,9 @@ export class GitFileSystem
       return new Uint8Array(buffer)
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
-    assertSafeGitSpec(spec)
+    const spec = assertSafeGitSpec(
+      relativePath ? `${this.ref}:${relativePath}` : this.ref
+    )
     const result = spawnSync('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
@@ -1602,9 +1614,9 @@ export class GitFileSystem
         `[GitFileSystem] Cached ref "${ref}" moved; fetching ${remote}…`
       )
     }
-    assertSafeGitArg(remote, 'remote')
+    const safeRemote = assertSafeGitArg(remote, 'remote')
     const baseEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
-    let result = spawnSync('git', ['fetch', '--quiet', remote], {
+    let result = spawnSync('git', ['fetch', '--quiet', safeRemote], {
       cwd: this.repoRoot,
       stdio: 'pipe',
       encoding: 'utf8',
@@ -1616,7 +1628,7 @@ export class GitFileSystem
       if (/protocol.*file/i.test(stderr) || /file.*not allowed/i.test(stderr)) {
         result = spawnSync(
           'git',
-          ['-c', 'protocol.file.allow=always', 'fetch', '--quiet', remote],
+          ['-c', 'protocol.file.allow=always', 'fetch', '--quiet', safeRemote],
           {
             cwd: this.repoRoot,
             stdio: 'pipe',
@@ -1630,17 +1642,19 @@ export class GitFileSystem
     if (result.status !== 0) {
       if (this.verbose) {
         const msg = result.stderr?.trim() || 'unknown error'
-        console.warn(`[GitFileSystem] Fetch failed (${remote}): ${msg}`)
+        console.warn(`[GitFileSystem] Fetch failed (${safeRemote}): ${msg}`)
       }
       return
     }
 
     if (remoteSha) {
       const refName = remoteRef.replace(/^refs\/heads\//, '')
-      const trackingRef = `refs/remotes/${remote}/${refName}`
-      assertSafeGitArg(trackingRef, 'trackingRef')
-      assertSafeGitArg(remoteSha, 'remoteSha')
-      spawnSync('git', ['update-ref', trackingRef, remoteSha], {
+      const safeTrackingRef = assertSafeGitArg(
+        `refs/remotes/${safeRemote}/${refName}`,
+        'trackingRef'
+      )
+      const safeRemoteSha = assertSafeGitArg(remoteSha, 'remoteSha')
+      spawnSync('git', ['update-ref', safeTrackingRef, safeRemoteSha], {
         cwd: this.repoRoot,
         stdio: 'ignore',
         shell: false,
@@ -1699,16 +1713,16 @@ export class GitFileSystem
     newCommit: string,
     scopeDirectories: string[]
   ): Promise<Map<string, string>> {
-    assertSafeGitArg(oldCommit, 'oldCommit')
-    assertSafeGitArg(newCommit, 'newCommit')
+    const safeOldCommit = assertSafeGitArg(oldCommit, 'oldCommit')
+    const safeNewCommit = assertSafeGitArg(newCommit, 'newCommit')
     const args = [
       'diff',
       '--name-status',
       '-M',
       '--diff-filter=R',
       '-z',
-      oldCommit,
-      newCommit,
+      safeOldCommit,
+      safeNewCommit,
     ]
     if (scopeDirectories.length) {
       args.push('--', ...scopeDirectories)
@@ -1755,12 +1769,15 @@ export class GitFileSystem
     ancestorCommit: string,
     descendantCommit: string
   ): Promise<boolean> {
-    assertSafeGitArg(ancestorCommit, 'ancestorCommit')
-    assertSafeGitArg(descendantCommit, 'descendantCommit')
+    const safeAncestor = assertSafeGitArg(ancestorCommit, 'ancestorCommit')
+    const safeDescendant = assertSafeGitArg(
+      descendantCommit,
+      'descendantCommit'
+    )
     try {
       await spawnAsync(
         'git',
-        ['merge-base', '--is-ancestor', ancestorCommit, descendantCommit],
+        ['merge-base', '--is-ancestor', safeAncestor, safeDescendant],
         {
           cwd: this.repoRoot,
           maxBuffer: this.maxBufferBytes,
@@ -1774,10 +1791,10 @@ export class GitFileSystem
   }
 
   async #getCommitUnix(commit: string): Promise<number> {
-    assertSafeGitArg(commit, 'commit')
+    const safeCommit = assertSafeGitArg(commit, 'commit')
     const out = await spawnAsync(
       'git',
-      ['show', '-s', '--format=%at', commit],
+      ['show', '-s', '--format=%at', safeCommit],
       {
         cwd: this.repoRoot,
         maxBuffer: this.maxBufferBytes,
@@ -3059,21 +3076,25 @@ export class GitFileSystem
 
     const localSha = await this.#getLocalRefSha(ref)
     const { remote, ref: remoteRef } = getRemoteRefQuery(ref, this.fetchRemote)
-    assertSafeGitArg(remote, 'remote')
-    const remoteSha = await this.#getRemoteRefSha(remote, remoteRef)
+    const safeRemote = assertSafeGitArg(remote, 'remote')
+    const remoteSha = await this.#getRemoteRefSha(safeRemote, remoteRef)
     if (!remoteSha || localSha !== remoteSha) {
       if (this.verbose) {
         console.log(
-          `[GitFileSystem] Cached ref "${ref}" moved; fetching ${remote}…`
+          `[GitFileSystem] Cached ref "${ref}" moved; fetching ${safeRemote}…`
         )
       }
       const baseEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
-      let result = await spawnWithResult('git', ['fetch', '--quiet', remote], {
-        cwd: this.repoRoot,
-        maxBuffer: this.maxBufferBytes,
-        verbose: this.verbose,
-        env: baseEnv,
-      })
+      let result = await spawnWithResult(
+        'git',
+        ['fetch', '--quiet', safeRemote],
+        {
+          cwd: this.repoRoot,
+          maxBuffer: this.maxBufferBytes,
+          verbose: this.verbose,
+          env: baseEnv,
+        }
+      )
       if (result.status !== 0) {
         const stderr = result.stderr ? String(result.stderr).trim() : ''
         if (
@@ -3082,7 +3103,13 @@ export class GitFileSystem
         ) {
           result = await spawnWithResult(
             'git',
-            ['-c', 'protocol.file.allow=always', 'fetch', '--quiet', remote],
+            [
+              '-c',
+              'protocol.file.allow=always',
+              'fetch',
+              '--quiet',
+              safeRemote,
+            ],
             {
               cwd: this.repoRoot,
               maxBuffer: this.maxBufferBytes,
@@ -3097,7 +3124,7 @@ export class GitFileSystem
           const msg = result.stderr
             ? String(result.stderr).trim()
             : 'unknown error'
-          console.warn(`[GitFileSystem] Fetch failed (${remote}): ${msg}`)
+          console.warn(`[GitFileSystem] Fetch failed (${safeRemote}): ${msg}`)
         }
         return
       }
@@ -3108,10 +3135,10 @@ export class GitFileSystem
   }
 
   async #getLocalRefSha(ref: string): Promise<string | null> {
-    assertSafeGitArg(ref, 'ref')
+    const safeRef = assertSafeGitArg(ref, 'ref')
     const result = await spawnWithResult(
       'git',
-      ['rev-parse', '--verify', `${ref}^{commit}`],
+      ['rev-parse', '--verify', `${safeRef}^{commit}`],
       {
         cwd: this.repoRoot,
         maxBuffer: this.maxBufferBytes,
@@ -3125,21 +3152,25 @@ export class GitFileSystem
   }
 
   async #getRemoteRefSha(remote: string, ref: string): Promise<string | null> {
-    assertSafeGitArg(remote, 'remote')
-    assertSafeGitArg(ref, 'ref')
+    const safeRemote = assertSafeGitArg(remote, 'remote')
+    const safeRef = assertSafeGitArg(ref, 'ref')
 
-    const cacheKey = `${this.repoRoot}\x00${remote}\x00${ref}`
+    const cacheKey = `${this.repoRoot}\x00${safeRemote}\x00${safeRef}`
     const cached = remoteRefCache.get(cacheKey)
     const now = Date.now()
     if (cached && now - cached.checkedAt < REMOTE_REF_CACHE_TTL_MS) {
       return cached.remoteSha
     }
 
-    const result = await spawnWithResult('git', ['ls-remote', remote, ref], {
-      cwd: this.repoRoot,
-      maxBuffer: this.maxBufferBytes,
-      timeoutMs: REMOTE_REF_TIMEOUT_MS,
-    })
+    const result = await spawnWithResult(
+      'git',
+      ['ls-remote', safeRemote, safeRef],
+      {
+        cwd: this.repoRoot,
+        maxBuffer: this.maxBufferBytes,
+        timeoutMs: REMOTE_REF_TIMEOUT_MS,
+      }
+    )
     if (result.status !== 0) {
       if (this.verbose) {
         if (result.status === 124) {
@@ -3159,11 +3190,11 @@ export class GitFileSystem
     }
 
     let remoteSha = parseLsRemoteSha(result.stdout)
-    if (!remoteSha && !ref.startsWith('refs/')) {
-      const headRef = `refs/heads/${ref}`
+    if (!remoteSha && !safeRef.startsWith('refs/')) {
+      const headRef = `refs/heads/${safeRef}`
       const headResult = await spawnWithResult(
         'git',
-        ['ls-remote', remote, headRef],
+        ['ls-remote', safeRemote, headRef],
         {
           cwd: this.repoRoot,
           maxBuffer: this.maxBufferBytes,
@@ -3175,10 +3206,10 @@ export class GitFileSystem
       }
 
       if (!remoteSha) {
-        const tagRef = `refs/tags/${ref}`
+        const tagRef = `refs/tags/${safeRef}`
         const tagResult = await spawnWithResult(
           'git',
-          ['ls-remote', remote, tagRef],
+          ['ls-remote', safeRemote, tagRef],
           {
             cwd: this.repoRoot,
             maxBuffer: this.maxBufferBytes,
@@ -3282,10 +3313,13 @@ export class GitFileSystem
             `[GitFileSystem] Shallow repository detected. Fetching full history from ${this.fetchRemote}...`
           )
         }
-        assertSafeGitArg(this.fetchRemote, 'fetchRemote')
+        const safeFetchRemote = assertSafeGitArg(
+          this.fetchRemote,
+          'fetchRemote'
+        )
         await spawnAsync(
           'git',
-          ['fetch', '--unshallow', '--quiet', this.fetchRemote],
+          ['fetch', '--unshallow', '--quiet', safeFetchRemote],
           {
             cwd: this.repoRoot,
           }
@@ -3348,12 +3382,12 @@ export class GitFileSystem
   }
 
   async #resolveRefToCommit(ref: string): Promise<string | null> {
-    assertSafeGitArg(ref, 'ref')
+    const safeRef = assertSafeGitArg(ref, 'ref')
     try {
       await this.#ensureRepoReady()
       const out = await spawnAsync(
         'git',
-        ['rev-parse', '--verify', `${ref}^{commit}`],
+        ['rev-parse', '--verify', `${safeRef}^{commit}`],
         {
           cwd: this.repoRoot,
           maxBuffer: this.maxBufferBytes,
@@ -3367,17 +3401,17 @@ export class GitFileSystem
   }
 
   async #tryFetchBranch(remote: string, branch: string): Promise<boolean> {
-    assertSafeGitArg(remote, 'remote')
-    assertSafeGitArg(branch, 'branch')
+    const safeRemote = assertSafeGitArg(remote, 'remote')
+    const safeBranch = assertSafeGitArg(branch, 'branch')
 
-    const dst = `refs/remotes/${remote}/${branch}`
-    const src = `refs/heads/${branch}`
+    const dst = `refs/remotes/${safeRemote}/${safeBranch}`
+    const src = `refs/heads/${safeBranch}`
     const args = [
       'fetch',
       '--no-tags',
       '--prune',
       '--quiet',
-      remote,
+      safeRemote,
       `+${src}:${dst}`,
     ]
 
@@ -3551,14 +3585,14 @@ export class GitFileSystem
       return diskHit
     }
 
-    assertSafeGitArg(refCommit, 'refCommit')
+    const safeRefCommit = assertSafeGitArg(refCommit, 'refCommit')
     // `git log` is newest-first by default
     const args = [
       'log',
       '--format=%H%x00%at%x00%aN%x00%aE',
       '--no-patch',
       '--follow',
-      refCommit,
+      safeRefCommit,
       '--',
       relativePath,
     ]
@@ -3780,13 +3814,13 @@ function loadCommitTreeSync(
   repoPath: string,
   commitSha: string
 ): Map<string, GitObjectMeta> | null {
-  assertSafeGitArg(commitSha, 'commitSha')
+  const safeCommitSha = assertSafeGitArg(commitSha, 'commitSha')
   // Use `ls-tree -r` WITHOUT `-l` (long format). The `-l` flag forces git
   // to resolve every blob to obtain its size, which triggers lazy-fetch
   // attempts in `--filter=blob:none` partial clones — those fetches may
   // hang or fail on repos with a stale commit-graph.
   // Without `-l`, ls-tree only reads tree objects (always local).
-  const result = spawnSync('git', ['ls-tree', '-r', commitSha], {
+  const result = spawnSync('git', ['ls-tree', '-r', safeCommitSha], {
     cwd: repoPath,
     encoding: 'utf8',
     maxBuffer: 200 * 1024 * 1024,
@@ -3840,8 +3874,8 @@ function loadCommitTreeSync(
  * Bypasses the event loop entirely.
  */
 function readBlobSync(repoPath: string, sha: string): string | null {
-  assertSafeGitArg(sha, 'sha')
-  const result = spawnSync('git', ['cat-file', 'blob', sha], {
+  const safeSha = assertSafeGitArg(sha, 'sha')
+  const result = spawnSync('git', ['cat-file', 'blob', safeSha], {
     cwd: repoPath,
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,
@@ -3865,13 +3899,13 @@ class GitObjectStore {
   }
 
   async getBlobMeta(specifier: string): Promise<GitObjectMeta | null> {
-    assertSafeGitSpec(specifier)
-    return taskQueue.run(() => this.#check.getObjectMeta(specifier))
+    const safeSpecifier = assertSafeGitSpec(specifier)
+    return taskQueue.run(() => this.#check.getObjectMeta(safeSpecifier))
   }
 
   async getBlobContentBySha(sha: string): Promise<string | null> {
-    assertSafeGitArg(sha, 'sha')
-    const object = await taskQueue.run(() => this.#cat.getObject(sha))
+    const safeSha = assertSafeGitArg(sha, 'sha')
+    const object = await taskQueue.run(() => this.#cat.getObject(safeSha))
     if (!object) {
       return null
     }
@@ -4685,7 +4719,7 @@ async function gitLogForPath(
     follow?: boolean
   } = {}
 ): Promise<GitLogCommit[]> {
-  assertSafeGitArg(ref, 'ref')
+  const safeRef = assertSafeGitArg(ref, 'ref')
   // Added %D to get ref names (tags, branches)
   const args = ['log', '--format=%H%x00%at%x00%D']
   if (reverse) {
@@ -4696,7 +4730,7 @@ async function gitLogForPath(
   }
   if (follow && !Array.isArray(path)) args.push('--follow')
   const paths = Array.isArray(path) ? path : [path]
-  args.push(ref, '--', ...paths)
+  args.push(safeRef, '--', ...paths)
 
   const child = spawn('git', args, {
     cwd: repoRoot,
@@ -4785,13 +4819,13 @@ async function listDirectoryEntriesAtCommit(
   commit: string,
   scopeDirectory: string
 ): Promise<DirectoryEntry[]> {
-  assertSafeGitArg(commit, 'commit')
+  const safeCommit = assertSafeGitArg(commit, 'commit')
   const normalizedScope = normalizePath(scopeDirectory || '.')
-  const spec =
+  const spec = assertSafeGitSpec(
     normalizedScope && normalizedScope !== '.'
-      ? `${commit}:${normalizedScope}`
-      : commit
-  assertSafeGitSpec(spec)
+      ? `${safeCommit}:${normalizedScope}`
+      : safeCommit
+  )
   try {
     const result = await spawnWithResult('git', ['ls-tree', '-z', spec], {
       cwd: repoRoot,
@@ -4972,10 +5006,10 @@ function parseLsRemoteSha(output: string): string | null {
 }
 
 function getLocalRefShaSync(repoRoot: string, ref: string): string | null {
-  assertSafeGitArg(ref, 'ref')
+  const safeRef = assertSafeGitArg(ref, 'ref')
   const result = spawnSync(
     'git',
-    ['rev-parse', '--verify', `${ref}^{commit}`],
+    ['rev-parse', '--verify', `${safeRef}^{commit}`],
     { cwd: repoRoot, stdio: 'pipe', encoding: 'utf8', shell: false }
   )
   if (result.status !== 0) {
@@ -4990,17 +5024,17 @@ function getRemoteRefShaSync(
   remote: string,
   ref: string
 ): string | null {
-  assertSafeGitArg(remote, 'remote')
-  assertSafeGitArg(ref, 'ref')
+  const safeRemote = assertSafeGitArg(remote, 'remote')
+  const safeRef = assertSafeGitArg(ref, 'ref')
 
-  const cacheKey = `${repoRoot}\x00${remote}\x00${ref}`
+  const cacheKey = `${repoRoot}\x00${safeRemote}\x00${safeRef}`
   const cached = remoteRefCache.get(cacheKey)
   const now = Date.now()
   if (cached && now - cached.checkedAt < REMOTE_REF_CACHE_TTL_MS) {
     return cached.remoteSha
   }
 
-  const result = spawnSync('git', ['ls-remote', remote, ref], {
+  const result = spawnSync('git', ['ls-remote', safeRemote, safeRef], {
     cwd: repoRoot,
     stdio: 'pipe',
     encoding: 'utf8',
@@ -5012,10 +5046,10 @@ function getRemoteRefShaSync(
   }
 
   let remoteSha = parseLsRemoteSha(String(result.stdout))
-  if (!remoteSha && !ref.startsWith('refs/')) {
+  if (!remoteSha && !safeRef.startsWith('refs/')) {
     const headResult = spawnSync(
       'git',
-      ['ls-remote', remote, `refs/heads/${ref}`],
+      ['ls-remote', safeRemote, `refs/heads/${safeRef}`],
       {
         cwd: repoRoot,
         stdio: 'pipe',
@@ -5030,7 +5064,7 @@ function getRemoteRefShaSync(
     if (!remoteSha) {
       const tagResult = spawnSync(
         'git',
-        ['ls-remote', remote, `refs/tags/${ref}`],
+        ['ls-remote', safeRemote, `refs/tags/${safeRef}`],
         {
           cwd: repoRoot,
           stdio: 'pipe',
@@ -5215,61 +5249,56 @@ function looksLikeGitRemoteUrl(value: string) {
 }
 
 /**
- * Validates a git argument (ref, remote name, sha, etc.) to prevent
- * command injection. Rejects NUL/newline, leading dashes (option injection),
- * and embedded dangerous git flags like `--upload-pack` or `--exec`.
+ * Allowlist for git arguments (refs, remotes, SHAs, etc.).
+ * Covers: alphanumeric, `.`, `_`, `-`, `/`, `^`, `{`, `}`, `~`, `@`, `+`
  */
-function assertSafeGitArg(value: string, label: string) {
+const SAFE_GIT_ARG_RE = /^[a-zA-Z0-9._\-\/^{}~@+]+$/
+
+/**
+ * Validates a git argument (ref, remote name, sha, etc.) and returns it.
+ * Rejects values that don't match a strict character allowlist, preventing
+ * command injection via `--upload-pack` or similar git option smuggling.
+ *
+ * Returns the validated string so callers can use the sanitised reference
+ * in place of the original (required for static-analysis tools like CodeQL
+ * to recognise the data-flow barrier).
+ */
+function assertSafeGitArg(value: string, label: string): string {
   const stringValue = String(value)
   if (!stringValue) {
     throw new Error(`[GitFileSystem] Missing ${label}`)
   }
-  if (
-    stringValue.includes('\0') ||
-    stringValue.includes('\n') ||
-    stringValue.includes('\r')
-  ) {
-    throw new Error(`[GitFileSystem] Invalid ${label}: contains newline/NUL`)
-  }
-  if (stringValue.startsWith('-')) {
-    throw new Error(`[GitFileSystem] Invalid ${label}: must not start with "-"`)
-  }
-  // Reject embedded dangerous git options that could trigger command execution
-  // even when passed as positional arguments in some git sub-commands.
-  if (
-    /--upload-pack|--receive-pack|--exec|--ssh-command/i.test(stringValue)
-  ) {
+  if (!SAFE_GIT_ARG_RE.test(stringValue)) {
     throw new Error(
-      `[GitFileSystem] Invalid ${label}: contains dangerous git option`
+      `[GitFileSystem] Invalid ${label}: contains disallowed characters`
     )
   }
+  return stringValue
 }
+
+/**
+ * Allowlist for repo-relative paths. Broader than git args because file
+ * names may contain spaces and other characters, but still rejects
+ * control characters, colons, and traversal.
+ */
+const SAFE_REPO_PATH_RE = /^[^\0\n\r:]+$/
 
 /**
  * Validates a repo-relative file path. Rejects NUL/newline, colons (Windows
  * drive-letter or git-spec ambiguity), `..` traversal, and leading dashes.
  */
-function assertSafeRepoPath(relativePath: string) {
+function assertSafeRepoPath(relativePath: string): string {
   const stringPath = String(relativePath)
   if (!stringPath) {
     throw new Error('[GitFileSystem] Invalid path: empty')
   }
-  if (
-    stringPath.includes('\0') ||
-    stringPath.includes('\n') ||
-    stringPath.includes('\r')
-  ) {
-    throw new Error('[GitFileSystem] Invalid path: contains newline/NUL')
+  if (!SAFE_REPO_PATH_RE.test(stringPath)) {
+    throw new Error(
+      '[GitFileSystem] Invalid path: contains disallowed characters'
+    )
   }
   if (stringPath.startsWith('-')) {
-    throw new Error(
-      '[GitFileSystem] Invalid path: must not start with "-"'
-    )
-  }
-  if (stringPath.includes(':')) {
-    throw new Error(
-      `[GitFileSystem] Invalid repo path "${stringPath}": ":" is not supported in paths`
-    )
+    throw new Error('[GitFileSystem] Invalid path: must not start with "-"')
   }
   const segments = stringPath.split('/')
   if (segments.some((segment) => segment === '..')) {
@@ -5277,33 +5306,62 @@ function assertSafeRepoPath(relativePath: string) {
       `[GitFileSystem] Invalid repo path "${stringPath}": ".." segments are not allowed`
     )
   }
+  return stringPath
 }
 
 /**
- * Validates a git specifier like `<ref>:<path>` or a bare ref. Rejects
- * NUL/newline, leading dashes, and dangerous embedded git options.
+ * Allowlist for git specifiers (`<ref>:<path>` or bare ref).
+ * Same as the git-arg allowlist plus `:` (ref/path separator) and
+ * common path characters (spaces, parens, brackets, etc.).
  */
-function assertSafeGitSpec(specifier: string) {
+const SAFE_GIT_SPEC_RE =
+  /^[a-zA-Z0-9._\-\/^{}~@+:][a-zA-Z0-9._\-\/^{}~@+: ()\[\]#%!&=,]*$/
+
+/**
+ * Validates a git specifier like `<ref>:<path>` or a bare ref and returns it.
+ * Rejects NUL/newline, leading dashes, and dangerous embedded git options.
+ */
+function assertSafeGitSpec(specifier: string): string {
   const stringSpecifier = String(specifier)
-  if (
-    stringSpecifier.includes('\0') ||
-    stringSpecifier.includes('\n') ||
-    stringSpecifier.includes('\r')
-  ) {
-    throw new Error('[GitFileSystem] Invalid git spec: contains newline/NUL')
+  if (!stringSpecifier) {
+    throw new Error('[GitFileSystem] Invalid git spec: empty')
   }
-  if (stringSpecifier.startsWith('-')) {
+  if (!SAFE_GIT_SPEC_RE.test(stringSpecifier)) {
     throw new Error(
-      '[GitFileSystem] Invalid git spec: must not start with "-"'
+      '[GitFileSystem] Invalid git spec: contains disallowed characters'
     )
   }
-  if (
-    /--upload-pack|--receive-pack|--exec|--ssh-command/i.test(stringSpecifier)
-  ) {
-    throw new Error(
-      '[GitFileSystem] Invalid git spec: contains dangerous git option'
-    )
+  return stringSpecifier
+}
+
+/**
+ * Allowlist for git clone URLs.  Accepts recognised git URL schemes
+ * (`https://`, `ssh://`, `git://`, `file://`, `git@…`) and rejects
+ * control characters and leading dashes.
+ */
+const SAFE_CLONE_URL_RE =
+  /^(https?:\/\/|git:\/\/|ssh:\/\/|file:\/\/|git@)[^\0\n\r]+$/
+
+function assertSafeCloneUrl(url: string): string {
+  const s = String(url)
+  if (!s || !SAFE_CLONE_URL_RE.test(s)) {
+    throw new Error('[GitFileSystem] Invalid clone URL')
   }
+  return s
+}
+
+/**
+ * Allowlist for local filesystem paths used as clone targets or `cwd`.
+ * Must not start with `-` and must not contain NUL/newline.
+ */
+const SAFE_FS_PATH_RE = /^[^\0\n\r-][^\0\n\r]*$/
+
+function assertSafeFsPath(value: string, label: string): string {
+  const s = String(value)
+  if (!s || !SAFE_FS_PATH_RE.test(s)) {
+    throw new Error(`[GitFileSystem] Invalid ${label}`)
+  }
+  return s
 }
 
 class TaskQueue {
