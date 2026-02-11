@@ -278,7 +278,9 @@ function normalizeSparsePath(path: string): string | null {
     normalized = normalized.slice(1)
   }
 
-  normalized = normalized.replace(/\/+$/, '')
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1)
+  }
 
   if (!normalized || normalized === '.') {
     return null
