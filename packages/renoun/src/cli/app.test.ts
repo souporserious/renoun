@@ -8,6 +8,7 @@ import {
   readFile,
   rm,
   stat,
+  symlink,
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -244,6 +245,98 @@ describe('runAppCommand integration', () => {
         kill: ReturnType<typeof vi.fn>
       }
       expect(childProcess.kill).toHaveBeenCalledWith('SIGTERM')
+    } finally {
+      exitSpy.mockRestore()
+      processOnSpy.mockRestore()
+      await rm(tmpRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('ignores project symlinks that escape the project root', async () => {
+    const tmpRoot = realpathSync(
+      await mkdtemp(join(tmpdir(), 'renoun-app-symlink-test-'))
+    )
+    const projectRoot = join(tmpRoot, 'project')
+    await mkdir(projectRoot, { recursive: true })
+
+    const nodeModulesExampleDir = join(
+      projectRoot,
+      'node_modules',
+      '@renoun',
+      'blog'
+    )
+    await mkdir(nodeModulesExampleDir, { recursive: true })
+    await cp(BLOG_APP_PATH, nodeModulesExampleDir, { recursive: true })
+
+    await writeFile(
+      join(projectRoot, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'app-integration',
+          version: '1.0.0',
+          dependencies: { '@renoun/blog': 'workspace:*' },
+          devDependencies: { renoun: 'workspace:*' },
+        },
+        null,
+        2
+      )
+    )
+
+    const outsideFile = join(tmpRoot, 'outside-secret.txt')
+    await writeFile(outsideFile, 'do-not-copy')
+    const escapeLink = join(projectRoot, 'escape-link.txt')
+    await writeFile(escapeLink, '')
+    await rm(escapeLink)
+    await symlink(outsideFile, escapeLink)
+
+    let resolveExit!: (code: number) => void
+    let exitResolved = false
+    const exitPromise = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((
+      code?: number
+    ) => {
+      if (!exitResolved) {
+        exitResolved = true
+        resolveExit(code ?? 0)
+      }
+      return undefined as never
+    }) as unknown as typeof process.exit)
+
+    const originalProcessOn = process.on.bind(process)
+    const processOnSpy = vi.spyOn(process, 'on').mockImplementation(((
+      event: string,
+      listener: (...args: unknown[]) => void
+    ) => {
+      if (
+        event === 'uncaughtException' ||
+        event === 'unhandledRejection' ||
+        event === 'SIGINT' ||
+        event === 'SIGTERM'
+      ) {
+        return process
+      }
+
+      return originalProcessOn(
+        event as Parameters<typeof originalProcessOn>[0],
+        listener as Parameters<typeof originalProcessOn>[1]
+      )
+    }) as unknown as typeof process.on)
+
+    process.chdir(projectRoot)
+
+    try {
+      await runAppCommand({ command: 'dev', args: [] })
+      const exitCode = await exitPromise
+      expect(exitCode).toBe(0)
+
+      const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
+      await expect(
+        lstat(join(runtimeRoot, 'escape-link.txt'))
+      ).rejects.toMatchObject({
+        code: 'ENOENT',
+      })
     } finally {
       exitSpy.mockRestore()
       processOnSpy.mockRestore()

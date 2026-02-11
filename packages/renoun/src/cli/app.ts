@@ -6,6 +6,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
   rm,
   stat,
   symlink,
@@ -1005,7 +1006,25 @@ async function symlinkAppContents(
   appRoot: string,
   runtimeRoot: string
 ): Promise<void> {
-  await recursiveSymlinkDirectory(appRoot, runtimeRoot)
+  await recursiveSymlinkDirectory(appRoot, runtimeRoot, appRoot)
+}
+
+async function assertPathInsideRoot(path: string, root: string, label: string) {
+  const [resolvedPath, resolvedRoot] = await Promise.all([
+    realpath(path),
+    realpath(root),
+  ])
+
+  if (
+    resolvedPath !== resolvedRoot &&
+    !resolvedPath.startsWith(`${resolvedRoot}/`)
+  ) {
+    throw new Error(
+      `[renoun] Refusing to process ${label} outside the project root: ${path}`
+    )
+  }
+
+  return resolvedPath
 }
 
 /**
@@ -1016,7 +1035,8 @@ async function symlinkAppContents(
  */
 async function recursiveSymlinkDirectory(
   sourceDir: string,
-  targetDir: string
+  targetDir: string,
+  rootDir: string
 ): Promise<void> {
   const entries = await readdir(sourceDir, { withFileTypes: true })
 
@@ -1037,12 +1057,23 @@ async function recursiveSymlinkDirectory(
 
       // Create real directory and recurse into it
       await mkdir(targetPath, { recursive: true })
-      await recursiveSymlinkDirectory(sourcePath, targetPath)
+      await recursiveSymlinkDirectory(sourcePath, targetPath, rootDir)
     } else if (entry.isFile() || entry.isSymbolicLink()) {
+      const resolvedSourcePath = entry.isSymbolicLink()
+        ? await assertPathInsideRoot(sourcePath, rootDir, 'symlink target')
+        : sourcePath
+
+      const sourceStat = await stat(resolvedSourcePath)
+      if (sourceStat.isDirectory()) {
+        await mkdir(targetPath, { recursive: true })
+        await recursiveSymlinkDirectory(resolvedSourcePath, targetPath, rootDir)
+        continue
+      }
+
       // Copy ALL files to the runtime directory
       // Symlinking non-source files (images, ico, css) causes issues with Next.js Turbopack
       // during production build as it doesn't follow symlinks for static assets
-      await copyFile(sourcePath, targetPath)
+      await copyFile(resolvedSourcePath, targetPath)
     }
   }
 }
@@ -1294,7 +1325,11 @@ class OverrideManager {
         continue
       }
 
-      if (entry.isFile() || entry.isSymbolicLink()) {
+      if (entry.isSymbolicLink()) {
+        continue
+      }
+
+      if (entry.isFile()) {
         if (normalizedRelativePath) {
           fileOverrides.add(normalizedRelativePath)
         }
@@ -1360,6 +1395,16 @@ class OverrideManager {
 
   async #ensureFileOverride(relativePath: string) {
     const sourcePath = join(this.#projectRoot, relativePath)
+    const resolvedProjectSource = await assertPathInsideRoot(
+      sourcePath,
+      this.#projectRoot,
+      'override file'
+    )
+    const sourceStat = await stat(resolvedProjectSource)
+    if (!sourceStat.isFile()) {
+      return
+    }
+
     const targetPath = join(this.#runtimeRoot, relativePath)
     const targetDirectory = dirname(targetPath)
 
@@ -1385,7 +1430,6 @@ class OverrideManager {
     // This prevents unnecessary recreation which triggers file watchers
     if (existingTarget && existingTarget.isFile()) {
       try {
-        const sourceStat = await stat(sourcePath)
         if (existingTarget.ino === sourceStat.ino) {
           // Already a hard link to the source, skip recreation
           this.#overriddenPaths.add(relativePath)
@@ -1408,11 +1452,11 @@ class OverrideManager {
     // dynamic imports when target files are symlinks. Hard links preserve
     // file metadata (mtime, etc.) since they reference the same inode.
     try {
-      await link(sourcePath, targetPath)
+      await link(resolvedProjectSource, targetPath)
     } catch (error) {
       // Fall back to copy if hard link fails (e.g., cross-filesystem)
       if (error instanceof Error && 'code' in error && error.code === 'EXDEV') {
-        await copyFile(sourcePath, targetPath)
+        await copyFile(resolvedProjectSource, targetPath)
       } else {
         throw error
       }
