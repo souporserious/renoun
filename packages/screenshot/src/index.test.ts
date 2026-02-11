@@ -155,8 +155,8 @@ function createComparisonPanel(
   const panel = document.createElement('div')
   panel.style.cssText = `
     position: fixed;
-    top: 0;
-    left: 0;
+    top: 8px;
+    left: 8px;
     z-index: 999999;
     background: #0f172a;
     padding: 16px;
@@ -277,6 +277,27 @@ function createComparisonPanel(
 }
 
 /**
+ * Scale the comparison panel to fit the current viewport so Playwright's
+ * element screenshot always captures both DOM and canvas panes.
+ */
+function fitPanelToViewport(panel: HTMLElement): void {
+  panel.style.transform = 'none'
+  panel.style.transformOrigin = 'top left'
+
+  const viewportMargin = 8
+  const availableWidth = Math.max(1, window.innerWidth - viewportMargin * 2)
+  const availableHeight = Math.max(1, window.innerHeight - viewportMargin * 2)
+  const rect = panel.getBoundingClientRect()
+  const scaleX = availableWidth / Math.max(1, rect.width)
+  const scaleY = availableHeight / Math.max(1, rect.height)
+  const scale = Math.min(1, scaleX, scaleY)
+
+  if (scale < 1) {
+    panel.style.transform = `scale(${scale})`
+  }
+}
+
+/**
  * Save a side-by-side comparison screenshot on test failure.
  */
 async function saveFailureComparison(
@@ -287,6 +308,7 @@ async function saveFailureComparison(
   const panel = createComparisonPanel(sourceElement, canvas, name, 'FAILED')
   panel.setAttribute('data-testid', 'failure-comparison')
   document.body.appendChild(panel)
+  fitPanelToViewport(panel)
 
   try {
     const locator = page.getByTestId('failure-comparison')
