@@ -203,6 +203,24 @@ describe('project WebSocket RPC', () => {
     )
   })
 
+  it('redacts production RPC error details', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    try {
+      await client.callMethod('fail', { token: 'super-secret-token' })
+      throw new Error('Expected callMethod to throw')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toMatch(
+        /Internal server error while processing method "fail"/
+      )
+      expect(message).not.toMatch(/super-secret-token/)
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
   it('enforces concurrency limits for registered methods', async () => {
     const calls = Array.from({ length: 5 }, () =>
       client.callMethod<{ delay: number }, number>('slow', { delay: 50 })

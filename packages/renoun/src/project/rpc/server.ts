@@ -88,10 +88,9 @@ const WEBSOCKET_SERVER_ERROR_MESSAGES: Record<
     `• Client protocol version mismatch\n` +
     `• Malformed payload`,
 
-  INTERNAL_ERROR: ({ method, params, errorMessage }) =>
+  INTERNAL_ERROR: ({ method, errorMessage }) =>
     `[renoun] Internal server error while processing method "${method}".\n\n` +
     `Error details: ${errorMessage}\n\n` +
-    `Request parameters:\n${JSON.stringify(params, null, 2)}\n\n` +
     `This indicates a bug in the server implementation.\n` +
     `Please check the server logs for more details.`,
 
@@ -1016,7 +1015,10 @@ export class WebSocketServer {
           id: request.id,
           error: {
             code: serverError.code,
-            message: serverError.message,
+            message:
+              process.env.NODE_ENV === 'production'
+                ? `[renoun] Internal server error while processing method "${request.method}".`
+                : serverError.message,
             data: includeStack
               ? {
                   name: original?.name,
