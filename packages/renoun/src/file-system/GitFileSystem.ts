@@ -1990,18 +1990,7 @@ export class GitFileSystem
     const limit = options.limit
     const detectUpdates = options.detectUpdates ?? true
     const updateMode = options.updateMode ?? 'signature'
-    // Bump this version when the cache format or processing logic changes
-    // to invalidate stale disk caches (e.g. the per-commit cache isolation
-    // fix that prevented shared caches from collapsing granular changes,
-    // the export-default-identifier resolution fix that ensures
-    // `export default X;` hashes the actual declaration instead of the
-    // static export statement, the silent-baseline fix that avoids
-    // attributing every export to a single bulk import commit, and
-    // the same-name move detection fix that unifies re-exports that
-    // resolve to different defining files across commits).
-    const exportHistoryCacheVersion = 15
     const keyObject = {
-      cacheVersion: exportHistoryCacheVersion,
       ref: endRef,
       refCommit: endCommit,
       startRef: startRef ?? null,
