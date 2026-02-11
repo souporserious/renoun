@@ -53,6 +53,14 @@ import {
 import type { Expect, Is, IsExact, IsNotAny } from './types'
 import type { Kind } from '../utils/resolve-type'
 
+type IsUnknown<Type> = unknown extends Type
+  ? [Type] extends [unknown]
+    ? true
+    : false
+  : false
+
+type IsNotUnknown<Type> = IsUnknown<Type> extends true ? false : true
+
 describe('file system', () => {
   const initialCwd = process.cwd()
   const packageRoot = fileURLToPath(new URL('../../', import.meta.url))
@@ -2877,6 +2885,43 @@ export function identity<T>(value: T) {
 
     expect(groupEntry).toBeDefined()
     expect(groupEntry?.extension).toBe('tsx')
+  })
+
+  test('collection preserves schema frontmatter typing for mdx files', async () => {
+    const directory = new Directory({
+      fileSystem: new InMemoryFileSystem({
+        'post.mdx': `---
+title: Hello
+date: 2024-12-24
+---
+`,
+      }),
+      schema: {
+        mdx: {
+          frontmatter: z.object({
+            title: z.string(),
+            date: z.coerce.date(),
+          }),
+        },
+      },
+    })
+    const collection = new Collection({ entries: [directory] })
+    const file = await collection.getFile('post', 'mdx')
+
+    const frontmatterExport = await file.getExport('frontmatter')
+    const frontmatterFromExport = await frontmatterExport.getValue()
+    const frontmatterFromValue = await file.getExportValue('frontmatter')
+
+    type ExportTypeTest = Expect<IsNotAny<typeof frontmatterFromExport>>
+    type ExportUnknownTest = Expect<IsNotUnknown<typeof frontmatterFromExport>>
+    type ValueTypeTest = Expect<IsNotAny<typeof frontmatterFromValue>>
+    type ValueUnknownTest = Expect<IsNotUnknown<typeof frontmatterFromValue>>
+
+    frontmatterFromExport satisfies { title: string; date: Date }
+    frontmatterFromValue satisfies { title: string; date: Date }
+
+    expect(frontmatterFromExport.date).toBeInstanceOf(Date)
+    expect(frontmatterFromValue.date).toBeInstanceOf(Date)
   })
 
   test('same base file name in entry group with root directories', async () => {

@@ -5191,16 +5191,106 @@ type UnionToIntersection<Union> = (
   : never
 
 /** Helper type to extract loader types from entries. */
-type LoadersFromEntries<Entries extends FileSystemEntry<any>[]> =
-  UnionToIntersection<
-    Entries[number] extends Directory<any, infer LoaderTypes, any, any>
-      ? {
-          [Extension in keyof LoaderTypes & string]: ModuleRuntimeLoader<
-            LoaderTypes[Extension]
-          >
-        }
+type LoadersFromEntry<Entry> =
+  Entry extends Directory<any, infer LoaderTypes, infer Loaders, infer Schema>
+    ? LoaderTypes extends Record<string, any>
+      ? Loaders extends DirectoryLoader
+        ? Schema extends DirectorySchema | undefined
+          ? {
+              [Extension in keyof ResolveDirectoryTypes<
+                LoaderTypes,
+                Loaders,
+                Schema
+              > &
+                string]: ModuleRuntimeLoader<
+                ResolveDirectoryTypes<LoaderTypes, Loaders, Schema>[Extension]
+              >
+            }
+          : {}
+        : {}
       : {}
-  >
+    : {}
+
+type LoadersFromEntries<Entries extends FileSystemEntry<any>[]> =
+  UnionToIntersection<LoadersFromEntry<Entries[number]>>
+
+type StripIndexSignature<Type> = {
+  [Key in keyof Type as Key extends string
+    ? string extends Key
+      ? never
+      : Key
+    : Key extends number
+      ? number extends Key
+        ? never
+        : Key
+      : Key extends symbol
+        ? symbol extends Key
+          ? never
+          : Key
+        : never]: Type[Key]
+}
+
+type ResolveCollectionDirectoryTypes<
+  LoaderTypes extends Record<string, any>,
+  Loaders extends DirectoryLoader,
+  Schema extends DirectorySchema | undefined,
+> = ApplyDirectorySchema<
+  MergeRecord<
+    LoaderTypes,
+    StripIndexSignature<InferDirectoryTypesFromLoaders<Loaders>>
+  >,
+  Schema
+>
+
+type CollectionTypesFromEntry<Entry> =
+  Entry extends Directory<any, infer LoaderTypes, infer Loaders, infer Schema>
+    ? LoaderTypes extends Record<string, any>
+      ? Loaders extends DirectoryLoader
+        ? Schema extends DirectorySchema | undefined
+          ? ResolveCollectionDirectoryTypes<LoaderTypes, Loaders, Schema>
+          : {}
+        : {}
+      : {}
+    : Entry extends File<infer DirectoryTypes, any, any>
+      ? StripIndexSignature<DirectoryTypes>
+      : {}
+
+type CollectionTypesFromEntries<Entries extends FileSystemEntry<any>[]> =
+  UnionToIntersection<CollectionTypesFromEntry<Entries[number]>>
+
+type CollectionResolvedTypes<
+  Types,
+  Entries extends FileSystemEntry<any>[],
+  Loaders extends ModuleLoaders,
+> = [Types] extends [never]
+  ? StripIndexSignature<
+      MergeRecord<
+        StripIndexSignature<InferModuleLoadersTypes<Loaders>>,
+        CollectionTypesFromEntries<Entries>
+      >
+    >
+  : StripIndexSignature<Extract<Types, Record<string, any>>>
+
+type CollectionLookupType<
+  Types extends Record<string, any>,
+  Extension extends string,
+  Fallback,
+> =
+  Extract<Extension, keyof Types> extends infer Key
+    ? [Key] extends [never]
+      ? Fallback
+      : Types[Key & keyof Types]
+    : Fallback
+
+type CollectionModuleType<
+  Types extends Record<string, any>,
+  Extension extends string,
+> =
+  CollectionLookupType<Types, Extension, ModuleExports> extends infer Type
+    ? Type extends Record<string, any>
+      ? Type
+      : ModuleExports
+    : ModuleExports
 
 /** Options for a `Collection`. */
 export interface CollectionOptions<Entries extends FileSystemEntry<any>[]> {
@@ -5209,7 +5299,7 @@ export interface CollectionOptions<Entries extends FileSystemEntry<any>[]> {
 
 /** A group of file system entries. */
 export class Collection<
-  Types extends InferModuleLoadersTypes<Loaders>,
+  Types extends Record<string, any> = never,
   const Entries extends FileSystemEntry<any>[] = FileSystemEntry<any>[],
   const Loaders extends ModuleLoaders = LoadersFromEntries<Entries>,
 > {
@@ -5269,7 +5359,9 @@ export class Collection<
   async getEntry(
     /** The path to the entry excluding leading numbers. */
     path: string | string[]
-  ): Promise<FileSystemEntry<Types>> {
+  ): Promise<
+    FileSystemEntry<CollectionResolvedTypes<Types, Entries, Loaders>>
+  > {
     const normalizedPath = Array.isArray(path)
       ? path.map(normalizeSlashes)
       : normalizeSlashes(path).split('/').filter(Boolean)
@@ -5322,23 +5414,53 @@ export class Collection<
   ): Promise<
     Extension extends string
       ? IsJavaScriptLikeExtension<Extension> extends true
-        ? JavaScriptFile<Types[Extension]>
+        ? JavaScriptFile<
+            CollectionModuleType<
+              CollectionResolvedTypes<Types, Entries, Loaders>,
+              Extension
+            >
+          >
         : Extension extends 'mdx'
-          ? MDXFile<Types['mdx']>
+          ? MDXFile<
+              CollectionModuleType<
+                CollectionResolvedTypes<Types, Entries, Loaders>,
+                'mdx'
+              >
+            >
           : Extension extends 'md'
-            ? MarkdownFile<Types['md']>
-            : File<Types>
+            ? MarkdownFile<
+                CollectionModuleType<
+                  CollectionResolvedTypes<Types, Entries, Loaders>,
+                  'md'
+                >
+              >
+            : File<CollectionResolvedTypes<Types, Entries, Loaders>>
       : Path extends string
         ? ExtractFileExtension<Path> extends infer PathExtension extends string
           ? IsJavaScriptLikeExtension<PathExtension> extends true
-            ? JavaScriptFile<Types[PathExtension]>
+            ? JavaScriptFile<
+                CollectionModuleType<
+                  CollectionResolvedTypes<Types, Entries, Loaders>,
+                  PathExtension
+                >
+              >
             : PathExtension extends 'mdx'
-              ? MDXFile<Types['mdx']>
+              ? MDXFile<
+                  CollectionModuleType<
+                    CollectionResolvedTypes<Types, Entries, Loaders>,
+                    'mdx'
+                  >
+                >
               : PathExtension extends 'md'
-                ? MarkdownFile<Types['md']>
-                : File<Types>
-          : File<Types>
-        : File<Types>
+                ? MarkdownFile<
+                    CollectionModuleType<
+                      CollectionResolvedTypes<Types, Entries, Loaders>,
+                      'md'
+                    >
+                  >
+                : File<CollectionResolvedTypes<Types, Entries, Loaders>>
+          : File<CollectionResolvedTypes<Types, Entries, Loaders>>
+        : File<CollectionResolvedTypes<Types, Entries, Loaders>>
   > {
     const normalizedExtension: string | string[] | undefined = Array.isArray(
       extension
@@ -5395,7 +5517,7 @@ export class Collection<
   async getDirectory(
     /** The path to the entry excluding leading numbers. */
     path: string | string[]
-  ): Promise<Directory<Types>> {
+  ): Promise<Directory<CollectionResolvedTypes<Types, Entries, Loaders>>> {
     const normalizedPath = Array.isArray(path)
       ? path.map(normalizeSlashes)
       : normalizeSlashes(path).split('/').filter(Boolean)
