@@ -58,20 +58,43 @@ function hasFrontmatterExport(tree: Root): boolean {
   return false
 }
 
+function removeLeadingContentBeforeOffset(tree: Root, offset: number): void {
+  if (offset <= 0) {
+    return
+  }
+
+  while (tree.children.length) {
+    const node = tree.children[0]
+    const endOffset = node?.position?.end?.offset
+
+    if (typeof endOffset !== 'number' || endOffset > offset) {
+      break
+    }
+
+    tree.children.shift()
+  }
+}
+
 export default function addFrontmatter(this: Processor) {
   return function (tree: Root, file: VFile) {
     if (typeof file.value !== 'string') {
       return
     }
 
-    const { content, frontmatter } = parseFrontmatter(file.value)
+    const source = file.value
+
+    const { content, frontmatter } = parseFrontmatter(source)
 
     if (!frontmatter) {
       return
     }
 
-    if (content !== file.value) {
+    if (content !== source) {
       file.value = content
+
+      if (source.endsWith(content)) {
+        removeLeadingContentBeforeOffset(tree, source.length - content.length)
+      }
     }
 
     while (tree.children.length && tree.children[0]?.type === 'yaml') {
