@@ -165,6 +165,15 @@ interface ExportHistoryCommit extends GitLogCommit {
   release?: string
 }
 
+interface NormalizedExportHistoryRefScope {
+  source: 'default' | 'end' | 'range' | 'release'
+  startRef?: string
+  endRef: string
+  endRefExplicit: boolean
+  targetReleaseTag?: string
+  previousReleaseTag?: string
+}
+
 const FILE_META_CACHE_MAX = 1000
 const FILE_INDEX_CACHE_MAX = 1000
 const EXPORT_HISTORY_CACHE_MAX = 200
@@ -1804,6 +1813,179 @@ export class GitFileSystem
     return Number(out.trim()) || 0
   }
 
+  async #getReleaseTagTimeline(): Promise<
+    Array<{ tag: string; unix: number }>
+  > {
+    const tagDateResult = await spawnWithResult(
+      'git',
+      ['tag', '-l', '--format=%(refname:short) %(creatordate:unix)'],
+      { cwd: this.repoRoot, maxBuffer: this.maxBufferBytes }
+    )
+
+    const timeline: Array<{ tag: string; unix: number }> = []
+    const raw = tagDateResult.stdout.trim()
+    if (!raw) {
+      return timeline
+    }
+
+    for (const line of raw.split('\n')) {
+      const [tag, unix] = line.split(' ')
+      const timestamp = Number(unix)
+      if (tag && Number.isFinite(timestamp)) {
+        timeline.push({ tag, unix: timestamp })
+      }
+    }
+
+    timeline.sort((a, b) =>
+      a.unix === b.unix ? a.tag.localeCompare(b.tag) : a.unix - b.unix
+    )
+    return timeline
+  }
+
+  async #tagExists(tag: string): Promise<boolean> {
+    const safeTag = assertSafeGitArg(tag, 'tag')
+    const result = await spawnWithResult(
+      'git',
+      ['show-ref', '--verify', '--quiet', `refs/tags/${safeTag}`],
+      {
+        cwd: this.repoRoot,
+        maxBuffer: this.maxBufferBytes,
+      }
+    )
+
+    return result.status === 0
+  }
+
+  async #resolveReleaseWindow(release: string): Promise<{
+    targetTag: string
+    previousTag?: string
+  }> {
+    const normalized = release.trim()
+    if (!normalized) {
+      throw new Error('[GitFileSystem] Invalid release: expected a tag name.')
+    }
+
+    const timeline = await this.#getReleaseTagTimeline()
+    if (timeline.length === 0) {
+      throw new Error('[GitFileSystem] No release tags found in repository.')
+    }
+
+    const targetIndex =
+      normalized === 'latest'
+        ? timeline.length - 1
+        : timeline.findIndex((entry) => entry.tag === normalized)
+
+    if (targetIndex < 0) {
+      throw new Error(`[GitFileSystem] Invalid release: "${release}"`)
+    }
+
+    const targetTag = timeline[targetIndex]!.tag
+    const safeTargetTag = assertSafeGitArg(targetTag, 'release')
+    const mergedResult = await spawnWithResult(
+      'git',
+      ['tag', '--merged', safeTargetTag],
+      {
+        cwd: this.repoRoot,
+        maxBuffer: this.maxBufferBytes,
+      }
+    )
+    const mergedTags = new Set(
+      mergedResult.stdout
+        .split('\n')
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    )
+    const previousTag = timeline
+      .slice(0, targetIndex)
+      .reverse()
+      .find((entry) => mergedTags.has(entry.tag))?.tag
+
+    return {
+      targetTag,
+      previousTag,
+    }
+  }
+
+  async #normalizeExportHistoryRefScope(
+    ref: ExportHistoryOptions['ref']
+  ): Promise<NormalizedExportHistoryRefScope> {
+    if (ref === undefined) {
+      return {
+        source: 'default',
+        endRef: this.ref,
+        endRefExplicit: false,
+      }
+    }
+
+    if (typeof ref === 'string') {
+      const normalized = ref.trim()
+      if (!normalized) {
+        throw new Error(
+          '[GitFileSystem] Invalid ref: expected a non-empty string.'
+        )
+      }
+
+      if (normalized === 'latest') {
+        const releaseWindow = await this.#resolveReleaseWindow(normalized)
+        return {
+          source: 'release',
+          startRef: releaseWindow.previousTag,
+          endRef: releaseWindow.targetTag,
+          endRefExplicit: true,
+          targetReleaseTag: releaseWindow.targetTag,
+          previousReleaseTag: releaseWindow.previousTag,
+        }
+      }
+
+      const isTag = await this.#tagExists(normalized)
+      if (isTag) {
+        const releaseWindow = await this.#resolveReleaseWindow(normalized)
+        return {
+          source: 'release',
+          startRef: releaseWindow.previousTag,
+          endRef: releaseWindow.targetTag,
+          endRefExplicit: true,
+          targetReleaseTag: releaseWindow.targetTag,
+          previousReleaseTag: releaseWindow.previousTag,
+        }
+      }
+
+      return {
+        source: 'end',
+        endRef: normalized,
+        endRefExplicit: true,
+      }
+    }
+
+    const rawStart = ref.start
+    const rawEnd = ref.end
+    const startRef = rawStart === undefined ? undefined : rawStart.trim()
+    const explicitEnd = rawEnd === undefined ? undefined : rawEnd.trim()
+
+    if (rawStart !== undefined && !startRef) {
+      throw new Error(
+        '[GitFileSystem] Invalid ref.start: expected a non-empty string.'
+      )
+    }
+    if (rawEnd !== undefined && !explicitEnd) {
+      throw new Error(
+        '[GitFileSystem] Invalid ref.end: expected a non-empty string.'
+      )
+    }
+    if (!startRef && !explicitEnd) {
+      throw new Error(
+        '[GitFileSystem] Invalid ref: expected "start" and/or "end".'
+      )
+    }
+
+    return {
+      source: startRef ? 'range' : 'end',
+      startRef,
+      endRef: explicitEnd ?? this.ref,
+      endRefExplicit: Boolean(explicitEnd),
+    }
+  }
+
   async #buildCommitReleaseMap(
     contentCommits: ExportHistoryCommit[],
     scopeDirectories: string[],
@@ -1830,32 +2012,11 @@ export class GitFileSystem
       )
     }
 
-    // Get release tags with their commit dates to filter
-    const tagDateResult = await spawnWithResult(
-      'git',
-      ['tag', '-l', '--format=%(refname:short) %(creatordate:unix)'],
-      { cwd: this.repoRoot, maxBuffer: this.maxBufferBytes }
+    const releaseTimeline = await this.#getReleaseTagTimeline()
+    const allReleaseTags = releaseTimeline.map((entry) => entry.tag)
+    const tagDates = new Map(
+      releaseTimeline.map((entry) => [entry.tag, entry.unix] as const)
     )
-
-    const tagDates = new Map<string, number>()
-    for (const line of tagDateResult.stdout.trim().split('\n')) {
-      const [tag, unix] = line.split(' ')
-      const timestamp = Number(unix)
-      if (tag && Number.isFinite(timestamp)) {
-        tagDates.set(tag, timestamp)
-      }
-    }
-
-    // Sort by the creation date. If dates are identical, fallback to alphabetical sort for stability.
-    const allReleaseTags = Array.from(tagDates.keys()).sort((a, b) => {
-      const dateA = tagDates.get(a) ?? 0
-      const dateB = tagDates.get(b) ?? 0
-
-      if (dateA !== dateB) {
-        return dateA - dateB
-      }
-      return a.localeCompare(b)
-    })
 
     // Find the first tag that could possibly contain our commits
     // (tag date must be >= earliest commit date, with some buffer for safety)
@@ -1954,9 +2115,6 @@ export class GitFileSystem
       elapsedMs: 0,
     } satisfies ExportHistoryProgressEvent
 
-    const startRef = options.startRef
-    const endRef = options.endRef ?? this.ref
-
     const entryArgs = Array.isArray(options.entry)
       ? options.entry
       : options.entry
@@ -2007,22 +2165,50 @@ export class GitFileSystem
       elapsedMs: Date.now() - _startMs,
     } satisfies ExportHistoryProgressEvent
 
+    const normalizedRefScope = await this.#normalizeExportHistoryRefScope(
+      options.ref
+    )
+    const objectEndRefProvided =
+      typeof options.ref === 'object' &&
+      options.ref !== null &&
+      options.ref.end !== undefined
+    const startRef = normalizedRefScope.startRef
+    const endRef = normalizedRefScope.endRef
+    const targetReleaseTag = normalizedRefScope.targetReleaseTag
+    const previousReleaseTag = normalizedRefScope.previousReleaseTag
+
     let startCommit: string | null = null
     let endCommit: string
     if (startRef) {
       startCommit = await this.#resolveRefToCommit(startRef)
       if (!startCommit) {
-        throw new Error(`[GitFileSystem] Invalid startRef: "${startRef}"`)
+        if (normalizedRefScope.source === 'range') {
+          throw new Error(`[GitFileSystem] Invalid ref.start: "${startRef}"`)
+        }
+        throw new Error(`[GitFileSystem] Invalid ref: "${startRef}"`)
       }
     }
-    if (options.endRef) {
+
+    if (normalizedRefScope.endRefExplicit || targetReleaseTag) {
       const resolved = await this.#resolveRefToCommit(endRef)
       if (!resolved) {
-        throw new Error(`[GitFileSystem] Invalid endRef: "${endRef}"`)
+        if (normalizedRefScope.source === 'range' || objectEndRefProvided) {
+          throw new Error(`[GitFileSystem] Invalid ref.end: "${endRef}"`)
+        }
+        throw new Error(`[GitFileSystem] Invalid ref: "${endRef}"`)
       }
       endCommit = resolved
     } else {
       endCommit = await this.#getRefCommit()
+    }
+
+    if (startCommit) {
+      const isAncestor = await this.#gitIsAncestorCommit(startCommit, endCommit)
+      if (!isAncestor) {
+        throw new Error(
+          `[GitFileSystem] Invalid ref range: start "${startRef}" is not an ancestor of end "${endRef}".`
+        )
+      }
     }
 
     yield {
@@ -2036,8 +2222,11 @@ export class GitFileSystem
     const detectUpdates = options.detectUpdates ?? true
     const updateMode = options.updateMode ?? 'signature'
     const keyObject = {
-      ref: endRef,
+      ref: options.ref ?? null,
+      refScope: normalizedRefScope.source,
+      endRef,
       refCommit: endCommit,
+      release: targetReleaseTag ?? null,
       startRef: startRef ?? null,
       startCommit: startCommit ?? null,
       include: scopeDirectories,
@@ -2128,11 +2317,17 @@ export class GitFileSystem
       totalCommits: contentCommits.length,
     } satisfies ExportHistoryProgressEvent
 
-    const commitToRelease = await this.#buildCommitReleaseMap(
-      contentCommits,
-      scopeDirectories,
-      startCommit
-    )
+    let findRelease: (commitSha: string) => string | undefined
+    if (targetReleaseTag) {
+      findRelease = () => targetReleaseTag
+    } else {
+      const commitToRelease = await this.#buildCommitReleaseMap(
+        contentCommits,
+        scopeDirectories,
+        startCommit
+      )
+      findRelease = (commitSha: string) => commitToRelease.get(commitSha)
+    }
 
     yield {
       type: 'progress',
@@ -2141,15 +2336,15 @@ export class GitFileSystem
       totalCommits: contentCommits.length,
     } satisfies ExportHistoryProgressEvent
 
-    function findRelease(commitSha: string): string | undefined {
-      return commitToRelease.get(commitSha)
-    }
-
     // Attach release info
     const uniqueCommits: ExportHistoryCommit[] = contentCommits.map(
       (commit) => ({
         ...commit,
-        release: commit.tags?.length ? commit.tags[0] : findRelease(commit.sha),
+        release: targetReleaseTag
+          ? targetReleaseTag
+          : commit.tags?.length
+            ? commit.tags[0]
+            : findRelease(commit.sha),
       })
     )
 
@@ -2702,10 +2897,13 @@ export class GitFileSystem
 
     if (startCommit) {
       const unix = await this.#getCommitUnix(startCommit)
+      const baselineRelease = targetReleaseTag
+        ? previousReleaseTag
+        : findRelease(startCommit)
       const baselineCommit = {
         unix,
         sha: startCommit,
-        release: findRelease(startCommit),
+        release: baselineRelease,
         tags: [],
       } satisfies ExportHistoryCommit
 

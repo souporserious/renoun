@@ -62,15 +62,34 @@ export type GitPathMetadata = GitFileMetadata | GitModuleMetadata
 /** Kind of metadata to retrieve for a path. */
 export type GitPathMetadataKind = 'auto' | 'file' | 'module'
 
-/** Options for getting export history. */
-export interface ExportHistoryOptions {
+interface ExportHistoryBaseOptions {
   entry?: string | string[]
   limit?: number
   maxDepth?: number
   detectUpdates?: boolean
   updateMode?: 'body' | 'signature'
-  startRef?: string
-  endRef?: string
+}
+
+/** Options for getting export history. */
+export interface ExportHistoryOptions extends ExportHistoryBaseOptions {
+  /**
+   * Ref selector used to scope history processing.
+   *
+   * - `'<tag>'`: if the tag exists, uses release-window mode (previous tag -> tag)
+   * - `'latest'`: most recent release-window mode
+   * - `'<branch|sha>'`: analyze history up to that ref
+   * - `{ start, end }`: explicit range (both optional, but at least one required)
+   */
+  ref?:
+    | string
+    | {
+        start: string
+        end?: string
+      }
+    | {
+        start?: string
+        end: string
+      }
 }
 
 /** Base properties shared by all export change types. */

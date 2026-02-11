@@ -240,6 +240,330 @@ describe('GitVirtualFileSystem', () => {
     expect(report.entryFiles).not.toContain('src/foo/Local.ts')
   })
 
+  it('scopes export history to a specific release tag', async () => {
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const foo = 1` },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/repo/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/repo/tags?per_page=100')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            { name: 'r2', commit: { sha: 'tag-r2' } },
+            { name: 'r1', commit: { sha: 'tag-r1' } },
+          ],
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/repo/compare/r1...r2')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({
+            status: 'ahead',
+            commits: [{ sha: 'c2' }],
+          }),
+        } as Response
+      }
+
+      if (
+        url.includes('/repos/owner/repo/commits?sha=r2&per_page=100') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: 'c2',
+              commit: {
+                author: { date: '2024-02-01T00:00:00Z' },
+              },
+            },
+            {
+              sha: 'c1',
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      if (
+        url.includes('raw.githubusercontent.com/owner/repo/r1/') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const foo = 1`,
+        } as Response
+      }
+
+      if (
+        url.includes('raw.githubusercontent.com/owner/repo/c2/') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const foo = 1; export const bar = 2`,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    const report = await drain(
+      fs.getExportHistory({
+        entry: 'src/index.ts',
+        ref: 'r2',
+        detectUpdates: false,
+      })
+    )
+    expect(report.entryFiles).toHaveLength(1)
+    expect(report.entryFiles[0]).toContain('src/index.ts')
+
+    const fooId = report.nameToId['foo']?.[0]
+    expect(fooId).toBeDefined()
+    expect(
+      report.exports[fooId!]?.find((change) => change.kind === 'Added')
+    ).toBeUndefined()
+
+    const barId = report.nameToId['bar']?.[0]
+    expect(barId).toBeDefined()
+    const barHistory = report.exports[barId!]
+    expect(barHistory).toHaveLength(1)
+    expect(barHistory[0]).toMatchObject({
+      kind: 'Added',
+      sha: 'c2',
+      release: 'r2',
+    })
+    expect(
+      Object.values(report.exports)
+        .flat()
+        .every((change) => change.release === 'r2')
+    ).toBe(true)
+
+    const rangeReport = await drain(
+      fs.getExportHistory({
+        entry: 'src/index.ts',
+        ref: { start: 'r1', end: 'r2' },
+        detectUpdates: false,
+      })
+    )
+    const rangeBarId = rangeReport.nameToId['bar']?.[0]
+    expect(rangeBarId).toBeDefined()
+    expect(
+      rangeReport.exports[rangeBarId!]?.some(
+        (change) => change.kind === 'Added'
+      )
+    ).toBe(true)
+  })
+
+  it('throws when ref range object is empty', async () => {
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const a = 1` },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+      if (url.includes('/repos/owner/repo/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    await expect(
+      drain(
+        fs.getExportHistory({
+          entry: 'src/index.ts',
+          ref: {} as any,
+        } as any)
+      )
+    ).rejects.toThrow(/start.*end/)
+  })
+
+  it('supports commit ref strings and { end } ref objects', async () => {
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const a = 1` },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/repo/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (
+        url.includes('/repos/owner/repo/commits?sha=c2&per_page=100') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: 'c2',
+              commit: {
+                author: { date: '2024-02-01T00:00:00Z' },
+              },
+            },
+            {
+              sha: 'c1',
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      if (
+        url.includes('raw.githubusercontent.com/owner/repo/c1/') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1`,
+        } as Response
+      }
+
+      if (
+        url.includes('raw.githubusercontent.com/owner/repo/c2/') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1; export const b = 2`,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    const byString = await drain(
+      fs.getExportHistory({
+        entry: 'src/index.ts',
+        ref: 'c2',
+        detectUpdates: false,
+      })
+    )
+
+    const byObject = await drain(
+      fs.getExportHistory({
+        entry: 'src/index.ts',
+        ref: { end: 'c2' },
+        detectUpdates: false,
+      })
+    )
+
+    const stringBId = byString.nameToId['b']?.[0]
+    const objectBId = byObject.nameToId['b']?.[0]
+    expect(stringBId).toBeDefined()
+    expect(objectBId).toBeDefined()
+    expect(byString.exports[stringBId!]?.[0]?.sha).toBe('c2')
+    expect(byObject.exports[objectBId!]?.[0]?.sha).toBe('c2')
+  })
+
   it('fetches git metadata for files when using GitVirtualFileSystem', async () => {
     const commitHistory = [
       {

@@ -143,6 +143,15 @@ type GitMetadataState = {
   lastCommitHash?: string
 }
 
+type NormalizedExportHistoryRefScope = {
+  source: 'default' | 'end' | 'range' | 'release'
+  startRef?: string
+  endRef: string
+  endRefExplicit: boolean
+  targetReleaseTag?: string
+  previousReleaseTag?: string
+}
+
 type GitHubBlameRange = {
   startingLine?: number
   endingLine?: number
@@ -2635,6 +2644,13 @@ export class GitVirtualFileSystem
       elapsedMs: Date.now() - _startMs,
     } satisfies ExportHistoryProgressEvent
 
+    const normalizedRefScope = await this.#normalizeExportHistoryRefScope(
+      options.ref
+    )
+    const startRef = normalizedRefScope.startRef
+    const endRef = normalizedRefScope.endRef
+    const targetReleaseTag = normalizedRefScope.targetReleaseTag
+
     const entryArgs = Array.isArray(options.entry)
       ? options.entry
       : options.entry
@@ -2697,13 +2713,45 @@ export class GitVirtualFileSystem
     const parseWarnings: string[] = []
     const exports: ExportHistoryReport['exports'] = Object.create(null)
 
+    if (startRef) {
+      const isAncestor = await this.#isRefAncestor(startRef, endRef).catch(
+        () => false
+      )
+      if (!isAncestor) {
+        throw new Error(
+          `[GitVirtualFileSystem] Invalid ref range: start "${startRef}" is not an ancestor of end "${endRef}".`
+        )
+      }
+    }
+
     // Get commit history for the entry files
-    const commitHistory = await this.#getCommitHistoryForPaths(
+    let commitHistory = await this.#getCommitHistoryForPaths(
       uniqueEntryRelatives,
-      options.limit
+      options.limit,
+      endRef
     )
 
+    if (startRef) {
+      const rangeCommitShas = await this.#getCommitRangeShas(startRef, endRef)
+      commitHistory = commitHistory.filter((commit) =>
+        rangeCommitShas.has(commit.sha)
+      )
+    }
+
+    if (targetReleaseTag) {
+      commitHistory = commitHistory.map((commit) => ({
+        ...commit,
+        release: targetReleaseTag,
+      }))
+    }
+
     if (commitHistory.length === 0) {
+      if (startRef || normalizedRefScope.endRefExplicit || targetReleaseTag) {
+        throw new Error(
+          `No commits found for paths "${uniqueEntryRelatives.join(', ')}" in ref "${endRef}".`
+        )
+      }
+
       // No commits found, analyze current state only
       const currentExports = await this.#collectExportsForCurrentSnapshot(
         uniqueEntryRelatives,
@@ -2797,6 +2845,18 @@ export class GitVirtualFileSystem
 
     // Track previous exports for change detection
     let previousExports: Map<string, Map<string, ExportItem>> | null = null
+
+    if (startRef) {
+      previousExports = await this.#collectExportsForRefSnapshot(
+        uniqueEntryRelatives,
+        startRef,
+        maxDepth,
+        scopeDirectories,
+        parseWarnings,
+        fileContentCache
+      )
+    }
+
     let commitsProcessed = 0
 
     // Yield progress approximately 20 times during batch processing.
@@ -2873,7 +2933,7 @@ export class GitVirtualFileSystem
         exports,
         detectUpdates,
         updateMode,
-        false
+        Boolean(startRef)
       )
 
       previousExports = commitExports
@@ -2941,6 +3001,67 @@ export class GitVirtualFileSystem
           new Set()
         )
         return { entryRelative, exports: entryExportMap }
+      })
+    )
+
+    for (const result of results) {
+      for (const [name, item] of result.exports) {
+        let itemsForName = currentExports.get(name)
+        if (!itemsForName) {
+          itemsForName = new Map()
+          currentExports.set(name, itemsForName)
+        }
+        if (!itemsForName.has(item.id)) {
+          itemsForName.set(item.id, item)
+        }
+      }
+    }
+
+    return currentExports
+  }
+
+  async #collectExportsForRefSnapshot(
+    entryRelatives: string[],
+    ref: string,
+    maxDepth: number,
+    scopeDirectories: string[],
+    parseWarnings: string[],
+    fileContentCache: Map<string, string | null>
+  ): Promise<Map<string, Map<string, ExportItem>>> {
+    const currentExports = new Map<string, Map<string, ExportItem>>()
+
+    const results = await Promise.all(
+      entryRelatives.map(async (entryRelative) => {
+        const cacheKey = `${ref}:${entryRelative}`
+        let content = fileContentCache.get(cacheKey)
+        if (content === undefined) {
+          content = await this.#fetchFileAtCommit(entryRelative, ref)
+          fileContentCache.set(cacheKey, content)
+        }
+        if (!content) {
+          return { exports: new Map<string, ExportItem>() }
+        }
+
+        const contentHash = this.#hashContent(content)
+        const cachedExports = this.#exportParseCache.get(contentHash)
+        if (cachedExports) {
+          return { exports: cachedExports }
+        }
+
+        const rawExports = scanModuleExports(entryRelative, content)
+        const entryExportMap = await this.#resolveExportsFromRawOptimized(
+          entryRelative,
+          rawExports,
+          ref,
+          0,
+          maxDepth,
+          scopeDirectories,
+          parseWarnings,
+          new Set(),
+          fileContentCache
+        )
+        this.#exportParseCache.set(contentHash, entryExportMap)
+        return { exports: entryExportMap }
       })
     )
 
@@ -3659,9 +3780,313 @@ export class GitVirtualFileSystem
     return null
   }
 
+  async #getReleaseTags(): Promise<Array<{ tag: string; sha: string }>> {
+    const tags: Array<{ tag: string; sha: string }> = []
+
+    switch (this.#host) {
+      case 'github': {
+        if (!this.#ownerEncoded || !this.#repoEncoded) return tags
+        const url = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/tags?per_page=100`
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return tags
+
+        const data = await response.json().catch(() => [])
+        if (!Array.isArray(data)) return tags
+
+        for (const entry of data) {
+          const tag = typeof entry?.name === 'string' ? entry.name : undefined
+          const sha =
+            typeof entry?.commit?.sha === 'string'
+              ? entry.commit.sha
+              : undefined
+          if (tag && sha) {
+            tags.push({ tag, sha })
+          }
+        }
+        return tags
+      }
+      case 'gitlab': {
+        const project = encodeURIComponent(this.#repository)
+        const url = `${this.#apiBaseUrl}/projects/${project}/repository/tags?per_page=100`
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return tags
+
+        const data = await response.json().catch(() => [])
+        if (!Array.isArray(data)) return tags
+
+        for (const entry of data) {
+          const tag = typeof entry?.name === 'string' ? entry.name : undefined
+          const sha =
+            typeof entry?.target === 'string'
+              ? entry.target
+              : typeof entry?.commit?.id === 'string'
+                ? entry.commit.id
+                : undefined
+          if (tag && sha) {
+            tags.push({ tag, sha })
+          }
+        }
+        return tags
+      }
+      case 'bitbucket': {
+        if (!this.#ownerEncoded || !this.#repoEncoded) return tags
+        const url = `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/refs/tags?pagelen=100`
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return tags
+
+        const data = await response.json().catch(() => ({}))
+        const values = Array.isArray(data?.values) ? data.values : []
+
+        for (const entry of values) {
+          const tag = typeof entry?.name === 'string' ? entry.name : undefined
+          const sha =
+            typeof entry?.target?.hash === 'string'
+              ? entry.target.hash
+              : typeof entry?.target?.target?.hash === 'string'
+                ? entry.target.target.hash
+                : undefined
+          if (tag && sha) {
+            tags.push({ tag, sha })
+          }
+        }
+        return tags
+      }
+    }
+  }
+
+  async #isRefAncestor(baseRef: string, headRef: string): Promise<boolean> {
+    if (baseRef === headRef) return true
+
+    switch (this.#host) {
+      case 'github': {
+        if (!this.#ownerEncoded || !this.#repoEncoded) return false
+        const url = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/compare/${encodeURIComponent(baseRef)}...${encodeURIComponent(headRef)}`
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return false
+        const data = await response.json().catch(() => ({}))
+        const status = typeof data?.status === 'string' ? data.status : ''
+        return status === 'ahead' || status === 'identical'
+      }
+      case 'gitlab': {
+        const project = encodeURIComponent(this.#repository)
+        const url = `${this.#apiBaseUrl}/projects/${project}/repository/compare?from=${encodeURIComponent(baseRef)}&to=${encodeURIComponent(headRef)}`
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return false
+        const data = await response.json().catch(() => ({}))
+        if (data?.compare_same_ref === true) return true
+        return Array.isArray(data?.commits)
+      }
+      case 'bitbucket': {
+        const range = await this.#getCommitRangeShas(baseRef, headRef)
+        return range.size > 0
+      }
+    }
+  }
+
+  async #resolveReleaseWindow(
+    release: string,
+    tagsInput?: Array<{ tag: string; sha: string }>
+  ): Promise<{
+    targetTag: string
+    previousTag?: string
+  }> {
+    const normalized = release.trim()
+    if (!normalized) {
+      throw new Error(
+        '[GitVirtualFileSystem] Invalid release: expected a tag name.'
+      )
+    }
+
+    const tags = tagsInput ?? (await this.#getReleaseTags())
+    if (tags.length === 0) {
+      throw new Error(
+        '[GitVirtualFileSystem] No release tags found in repository.'
+      )
+    }
+
+    const targetIndex =
+      normalized === 'latest'
+        ? 0
+        : tags.findIndex((entry) => entry.tag === normalized)
+    if (targetIndex < 0) {
+      throw new Error(`[GitVirtualFileSystem] Invalid release: "${release}"`)
+    }
+
+    const targetTag = tags[targetIndex]!.tag
+    let previousTag: string | undefined
+
+    for (let index = targetIndex + 1; index < tags.length; index++) {
+      const candidate = tags[index]!.tag
+      const isAncestor = await this.#isRefAncestor(candidate, targetTag).catch(
+        () => false
+      )
+      if (isAncestor) {
+        previousTag = candidate
+        break
+      }
+    }
+
+    if (!previousTag && targetIndex + 1 < tags.length) {
+      previousTag = tags[targetIndex + 1]!.tag
+    }
+
+    return { targetTag, previousTag }
+  }
+
+  async #normalizeExportHistoryRefScope(
+    ref: ExportHistoryOptions['ref']
+  ): Promise<NormalizedExportHistoryRefScope> {
+    if (ref === undefined) {
+      return {
+        source: 'default',
+        endRef: this.#ref,
+        endRefExplicit: false,
+      }
+    }
+
+    if (typeof ref === 'string') {
+      const normalized = ref.trim()
+      if (!normalized) {
+        throw new Error(
+          '[GitVirtualFileSystem] Invalid ref: expected a non-empty string.'
+        )
+      }
+
+      if (normalized === 'latest') {
+        const releaseWindow = await this.#resolveReleaseWindow(normalized)
+        return {
+          source: 'release',
+          startRef: releaseWindow.previousTag,
+          endRef: releaseWindow.targetTag,
+          endRefExplicit: true,
+          targetReleaseTag: releaseWindow.targetTag,
+          previousReleaseTag: releaseWindow.previousTag,
+        }
+      }
+
+      const tags = await this.#getReleaseTags()
+      const isTag = tags.some((entry) => entry.tag === normalized)
+      if (isTag) {
+        const releaseWindow = await this.#resolveReleaseWindow(normalized, tags)
+        return {
+          source: 'release',
+          startRef: releaseWindow.previousTag,
+          endRef: releaseWindow.targetTag,
+          endRefExplicit: true,
+          targetReleaseTag: releaseWindow.targetTag,
+          previousReleaseTag: releaseWindow.previousTag,
+        }
+      }
+
+      return {
+        source: 'end',
+        endRef: normalized,
+        endRefExplicit: true,
+      }
+    }
+
+    const rawStart = ref.start
+    const rawEnd = ref.end
+    const startRef = rawStart === undefined ? undefined : rawStart.trim()
+    const explicitEnd = rawEnd === undefined ? undefined : rawEnd.trim()
+
+    if (rawStart !== undefined && !startRef) {
+      throw new Error(
+        '[GitVirtualFileSystem] Invalid ref.start: expected a non-empty string.'
+      )
+    }
+    if (rawEnd !== undefined && !explicitEnd) {
+      throw new Error(
+        '[GitVirtualFileSystem] Invalid ref.end: expected a non-empty string.'
+      )
+    }
+    if (!startRef && !explicitEnd) {
+      throw new Error(
+        '[GitVirtualFileSystem] Invalid ref: expected "start" and/or "end".'
+      )
+    }
+
+    return {
+      source: startRef ? 'range' : 'end',
+      startRef,
+      endRef: explicitEnd ?? this.#ref,
+      endRefExplicit: Boolean(explicitEnd),
+    }
+  }
+
+  async #getCommitRangeShas(
+    baseRef: string,
+    headRef: string
+  ): Promise<Set<string>> {
+    if (baseRef === headRef) {
+      return new Set<string>()
+    }
+
+    const commits = new Set<string>()
+
+    switch (this.#host) {
+      case 'github': {
+        if (!this.#ownerEncoded || !this.#repoEncoded) return commits
+        const url = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/compare/${encodeURIComponent(baseRef)}...${encodeURIComponent(headRef)}`
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return commits
+        const data = await response.json().catch(() => ({}))
+        const items = Array.isArray(data?.commits) ? data.commits : []
+        for (const commit of items) {
+          const sha = typeof commit?.sha === 'string' ? commit.sha : undefined
+          if (sha) {
+            commits.add(sha)
+          }
+        }
+        return commits
+      }
+      case 'gitlab': {
+        const project = encodeURIComponent(this.#repository)
+        const url = `${this.#apiBaseUrl}/projects/${project}/repository/compare?from=${encodeURIComponent(baseRef)}&to=${encodeURIComponent(headRef)}`
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) return commits
+        const data = await response.json().catch(() => ({}))
+        const items = Array.isArray(data?.commits) ? data.commits : []
+        for (const commit of items) {
+          const sha = typeof commit?.id === 'string' ? commit.id : undefined
+          if (sha) {
+            commits.add(sha)
+          }
+        }
+        return commits
+      }
+      case 'bitbucket': {
+        if (!this.#ownerEncoded || !this.#repoEncoded) return commits
+        let url = `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/commits/${encodeURIComponent(headRef)}?exclude=${encodeURIComponent(baseRef)}&pagelen=100`
+        const visited = new Set<string>()
+
+        while (url && !visited.has(url)) {
+          visited.add(url)
+          const response = await this.#fetchWithRetry(url)
+          if (!response.ok) return commits
+
+          const data = await response.json().catch(() => ({}))
+          const values = Array.isArray(data?.values) ? data.values : []
+          for (const commit of values) {
+            const sha =
+              typeof commit?.hash === 'string' ? commit.hash : undefined
+            if (sha) {
+              commits.add(sha)
+            }
+          }
+
+          url = typeof data?.next === 'string' ? data.next : ''
+        }
+
+        return commits
+      }
+    }
+  }
+
   async #getCommitHistoryForPaths(
     paths: string[],
-    limit?: number
+    limit?: number,
+    ref = this.#ref
   ): Promise<Array<{ sha: string; unix: number; release?: string }>> {
     const commits: Array<{ sha: string; unix: number; release?: string }> = []
 
@@ -3671,7 +4096,7 @@ export class GitVirtualFileSystem
         const pathParam =
           paths.length === 1 ? `&path=${encodeURIComponent(paths[0])}` : ''
         const perPage = limit ? Math.min(limit, 100) : 100
-        const url = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/commits?sha=${encodeURIComponent(this.#ref)}&per_page=${perPage}${pathParam}`
+        const url = `${this.#apiBaseUrl}/repos/${this.#ownerEncoded}/${this.#repoEncoded}/commits?sha=${encodeURIComponent(ref)}&per_page=${perPage}${pathParam}`
 
         const response = await this.#fetchWithRetry(url)
         if (!response.ok) return commits
@@ -3698,7 +4123,7 @@ export class GitVirtualFileSystem
         const pathParam =
           paths.length === 1 ? `&path=${encodeURIComponent(paths[0])}` : ''
         const perPage = limit ? Math.min(limit, 100) : 100
-        const url = `${this.#apiBaseUrl}/projects/${project}/repository/commits?ref_name=${encodeURIComponent(this.#ref)}&per_page=${perPage}${pathParam}`
+        const url = `${this.#apiBaseUrl}/projects/${project}/repository/commits?ref_name=${encodeURIComponent(ref)}&per_page=${perPage}${pathParam}`
 
         const response = await this.#fetchWithRetry(url)
         if (!response.ok) return commits
@@ -3724,7 +4149,7 @@ export class GitVirtualFileSystem
         const pathParam =
           paths.length === 1 ? `&path=${encodeURIComponent(paths[0])}` : ''
         const pageLen = limit ? Math.min(limit, 100) : 100
-        const url = `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/commits/${encodeURIComponent(this.#ref)}?pagelen=${pageLen}${pathParam}`
+        const url = `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/commits/${encodeURIComponent(ref)}?pagelen=${pageLen}${pathParam}`
 
         const response = await this.#fetchWithRetry(url)
         if (!response.ok) return commits
