@@ -10811,12 +10811,20 @@ function renderTextureWithPerspective(
   browserCorners?: Array<{ x: number; y: number; w?: number }> // Updated to accept W
 ): void {
   const { captureRect, scale = 1, rootElement } = env
+  const viewportW = Math.max(1, Math.ceil(captureRect.width * scale))
+  const viewportH = Math.max(1, Math.ceil(captureRect.height * scale))
   const ownerDocument =
     destinationContext.canvas.ownerDocument ||
     rootElement.ownerDocument ||
     document
 
   const glCanvas = ownerDocument.createElement('canvas')
+  // Set drawing buffer size before WebGL resource/state setup. Resizing a
+  // WebGL canvas resets state in Chromium and can cause empty output if done
+  // after buffers/program are configured.
+  glCanvas.width = viewportW
+  glCanvas.height = viewportH
+
   // Use high-precision context
   const gl = glCanvas.getContext('webgl', {
     premultipliedAlpha: true,
@@ -11018,17 +11026,11 @@ function renderTextureWithPerspective(
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 
   // Viewport & Draw
-  const viewportW = Math.ceil(captureRect.width * scale)
-  const viewportH = Math.ceil(captureRect.height * scale)
-
-  glCanvas.width = viewportW
-  glCanvas.height = viewportH
   gl.viewport(0, 0, viewportW, viewportH)
 
   const uResolution = gl.getUniformLocation(program, 'u_resolution')
   const uMatrix = gl.getUniformLocation(program, 'u_matrix')
   const uOffset = gl.getUniformLocation(program, 'u_offset')
-  const uZOffset = gl.getUniformLocation(program, 'u_zOffset')
 
   gl.uniform2f(uResolution, captureRect.width, captureRect.height)
 
@@ -11038,7 +11040,6 @@ function renderTextureWithPerspective(
 
   gl.uniformMatrix4fv(uMatrix, false, identityMatrix)
   gl.uniform2f(uOffset, 0, 0)
-  gl.uniform1f(uZOffset, 0)
 
   gl.clearColor(0, 0, 0, 0)
   gl.clear(gl.COLOR_BUFFER_BIT)

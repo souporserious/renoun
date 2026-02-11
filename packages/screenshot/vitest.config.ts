@@ -5,7 +5,11 @@ export default defineConfig({
   test: {
     browser: {
       enabled: true,
-      provider: playwright(),
+      provider: playwright({
+        launchOptions: {
+          args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'],
+        },
+      }),
       instances: [{ browser: 'chromium' }],
       headless: true,
       expect: {
