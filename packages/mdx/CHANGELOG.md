@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 3.8.1
+
+### Patch Changes
+
+- bd9ae05: Fixes `add-frontmatter` so stripped frontmatter content is removed from rendered MDX output while preserving the `frontmatter` export behavior.
+
 ## 3.8.0
 
 ### Minor Changes

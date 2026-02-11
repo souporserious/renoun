@@ -1,5 +1,11 @@
 # @renoun/screenshot
 
+## 0.3.2
+
+### Patch Changes
+
+- 08dd4dc: Fixes 3D transform rendering by hardening the WebGL perspective path initialization so rendering state is not reset before draw.
+
 ## 0.3.1
 
 ### Patch Changes
