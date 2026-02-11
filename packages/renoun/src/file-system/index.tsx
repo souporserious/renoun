@@ -83,6 +83,8 @@ export type {
   RepositoryOptions,
   RepositoryExportHistoryOptions,
   RepositoryConfig,
+  GetCommitUrlOptions,
+  GetReleaseTagUrlOptions,
 } from './Repository.ts'
 export { Repository } from './Repository.ts'
 export type {

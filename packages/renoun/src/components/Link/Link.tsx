@@ -5,6 +5,8 @@ import {
   Repository,
   type RepositoryConfig,
   type RepositoryInput,
+  type GetCommitUrlOptions,
+  type GetReleaseTagUrlOptions,
   type GetReleaseUrlOptions,
   type Release,
   type ReleaseSpecifier,
@@ -22,7 +24,7 @@ const VARIANT_METHODS = {
   release: 'getReleaseUrl',
 } as const
 
-type ConfigVariants = 'repository' | 'owner' | 'branch' | 'issue'
+type ConfigVariants = 'repository' | 'owner' | 'branch' | 'commit' | 'releaseTag' | 'issue'
 
 export type LinkVariant = keyof typeof VARIANT_METHODS | ConfigVariants
 
@@ -168,11 +170,23 @@ type ConfigVariantProps<Variant extends ConfigVariants> =
         source?: never
         options?: { ref?: string }
       }
-    : {
-        variant: Exclude<Variant, 'branch'>
-        source?: never
-        options?: never
-      }
+    : Variant extends 'commit'
+      ? {
+          variant: 'commit'
+          source?: never
+          options: GetCommitUrlOptions
+        }
+      : Variant extends 'releaseTag'
+        ? {
+            variant: 'releaseTag'
+            source?: never
+            options: GetReleaseTagUrlOptions
+          }
+        : {
+            variant: Exclude<Variant, 'branch' | 'commit' | 'releaseTag'>
+            source?: never
+            options?: never
+          }
 
 export type LinkProps<
   Source,
@@ -430,6 +444,44 @@ async function computeLink<Source, Variant extends LinkVariant>({
       const ref = (options as any)?.ref ?? gitConfig.branch
       return {
         href: `${gitConfig.source}/tree/${ref}`,
+        context: undefined as InternalLinkContextFor<Variant>,
+      }
+    }
+    case 'commit': {
+      const sha = (options as GetCommitUrlOptions)?.sha
+      if (!sha) {
+        throw new Error(
+          '[renoun] Link variant "commit" requires an `options.sha` value.'
+        )
+      }
+      const repository = new Repository({
+        baseUrl: gitConfig.baseUrl,
+        host: gitConfig.host,
+        owner: gitConfig.owner,
+        repository: gitConfig.repository,
+        branch: gitConfig.branch,
+      } as RepositoryConfig)
+      return {
+        href: repository.getCommitUrl({ sha }),
+        context: undefined as InternalLinkContextFor<Variant>,
+      }
+    }
+    case 'releaseTag': {
+      const tag = (options as GetReleaseTagUrlOptions)?.tag
+      if (!tag) {
+        throw new Error(
+          '[renoun] Link variant "releaseTag" requires an `options.tag` value.'
+        )
+      }
+      const repository = new Repository({
+        baseUrl: gitConfig.baseUrl,
+        host: gitConfig.host,
+        owner: gitConfig.owner,
+        repository: gitConfig.repository,
+        branch: gitConfig.branch,
+      } as RepositoryConfig)
+      return {
+        href: repository.getReleaseTagUrl({ tag }),
         context: undefined as InternalLinkContextFor<Variant>,
       }
     }

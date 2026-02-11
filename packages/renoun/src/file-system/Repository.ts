@@ -204,6 +204,16 @@ export interface Release {
   zipballUrl?: string
 }
 
+export interface GetCommitUrlOptions {
+  /** The full or abbreviated commit SHA to link to. */
+  sha: string
+}
+
+export interface GetReleaseTagUrlOptions {
+  /** The tag name of the release (e.g. "v1.2.3" or "r123"). */
+  tag: string
+}
+
 export interface GetIssueUrlOptions {
   /** The title of the issue. */
   title: string
@@ -961,6 +971,50 @@ export class Repository {
     const ref = this.#isDefaultRefExplicit ? `@${this.#defaultRef}` : ''
     const path = this.#defaultPath ? `/${this.#defaultPath}` : ''
     return `${this.#host}:${this.#owner}/${this.#repo}${ref}${path}`
+  }
+
+  /** Constructs a URL pointing to a specific commit in the repository. */
+  getCommitUrl(options: GetCommitUrlOptions): string {
+    if (!this.#host || !this.#owner || !this.#repo) {
+      throw new Error('Cannot determine owner/repo for this repository.')
+    }
+
+    const base = this.#getRepositoryBaseUrl()
+    const { sha } = options
+
+    switch (this.#host) {
+      case 'github':
+        return `${base}/commit/${sha}`
+      case 'gitlab':
+      case 'pierre':
+        return `${base}/-/commit/${sha}`
+      case 'bitbucket':
+        return `${base}/commits/${sha}`
+      default:
+        throw new Error(`Unsupported host: ${this.#host}`)
+    }
+  }
+
+  /** Constructs a URL pointing to a specific release tag in the repository. */
+  getReleaseTagUrl(options: GetReleaseTagUrlOptions): string {
+    if (!this.#host || !this.#owner || !this.#repo) {
+      throw new Error('Cannot determine owner/repo for this repository.')
+    }
+
+    const base = this.#getRepositoryBaseUrl()
+    const { tag } = options
+
+    switch (this.#host) {
+      case 'github':
+        return `${base}/releases/tag/${tag}`
+      case 'gitlab':
+      case 'pierre':
+        return `${base}/-/releases/${tag}`
+      case 'bitbucket':
+        return `${base}/downloads/?tab=tags&query=${encodeURIComponent(tag)}`
+      default:
+        throw new Error(`Unsupported host: ${this.#host}`)
+    }
   }
 
   /** Constructs a new issue URL for the repository. */
