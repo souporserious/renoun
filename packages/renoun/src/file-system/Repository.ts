@@ -13,6 +13,7 @@ import {
 import type {
   ExportHistoryOptions,
   ExportHistoryReport,
+  ExportHistoryGenerator,
   GitAuthor,
 } from './types.ts'
 
@@ -81,7 +82,10 @@ export type RepositoryInput =
   | RepositoryOptions
   | string
 
-export type RepositoryExportHistoryOptions = Omit<ExportHistoryOptions, 'entry'>
+export type RepositoryExportHistoryOptions = ExportHistoryOptions & {
+  /** Filter the report to only include changes for this export name. */
+  exportName?: string
+}
 
 type RepositoryFileSystemConfig =
   | {
@@ -865,16 +869,20 @@ export class Repository {
     return metadata.authors
   }
 
-  /** Get export history for a path/export in this repository. */
-  async getExportHistory(
-    path: string,
-    exportName: string,
+  /** Get export history for this repository. */
+  async *getExportHistory(
     options?: RepositoryExportHistoryOptions
-  ): Promise<ExportHistoryReport> {
-    const report = await this.getFileSystem().getExportHistory({
-      entry: path,
-      ...options,
-    })
+  ): ExportHistoryGenerator {
+    const { exportName, ...rest } = options ?? {}
+
+    // When no entry is provided, default to the registered scope paths
+    // (e.g. the directory path that created this repository).
+    if (!rest.entry && this.#pendingSparsePaths.size > 0) {
+      rest.entry = Array.from(this.#pendingSparsePaths)
+    }
+
+    const report: ExportHistoryReport =
+      yield* this.getFileSystem().getExportHistory(rest)
 
     if (!exportName) {
       return report

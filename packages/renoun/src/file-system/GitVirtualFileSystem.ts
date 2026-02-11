@@ -20,6 +20,8 @@ import type {
   DirectoryEntry,
   ExportHistoryOptions,
   ExportHistoryReport,
+  ExportHistoryProgressEvent,
+  ExportHistoryGenerator,
   ExportChange,
   GitFileMetadata,
   GitModuleMetadata,
@@ -42,6 +44,7 @@ import {
   buildExportComparisonMaps,
   detectSameFileRenames,
   detectCrossFileRenames,
+  detectSameNameMoves,
   mergeRenameHistory,
   checkAndCollapseOscillation,
   selectEntryFiles,
@@ -2613,14 +2616,30 @@ export class GitVirtualFileSystem
   #exportParseCache = new LRUMap<string, Map<string, ExportItem>>(500)
 
   /** Get the export history of a repository based on a set of entry files. */
-  async getExportHistory(
-    options: ExportHistoryOptions
-  ): Promise<ExportHistoryReport> {
+  async *getExportHistory(
+    options: ExportHistoryOptions = {}
+  ): ExportHistoryGenerator {
+    const _startMs = Date.now()
+
+    yield {
+      type: 'progress',
+      phase: 'start',
+      elapsedMs: 0,
+    } satisfies ExportHistoryProgressEvent
+
     await this.#ensureInitialized()
+
+    yield {
+      type: 'progress',
+      phase: 'ensureRepoReady',
+      elapsedMs: Date.now() - _startMs,
+    } satisfies ExportHistoryProgressEvent
 
     const entryArgs = Array.isArray(options.entry)
       ? options.entry
-      : [options.entry]
+      : options.entry
+        ? [options.entry]
+        : []
     const entrySources = entryArgs.length ? entryArgs : ['.']
     const uniqueEntrySources = Array.from(
       new Set(
@@ -2669,6 +2688,12 @@ export class GitVirtualFileSystem
       throw new Error(`Could not resolve any entry files.`)
     }
 
+    yield {
+      type: 'progress',
+      phase: 'resolveEntries',
+      elapsedMs: Date.now() - _startMs,
+    } satisfies ExportHistoryProgressEvent
+
     const parseWarnings: string[] = []
     const exports: ExportHistoryReport['exports'] = Object.create(null)
 
@@ -2697,7 +2722,7 @@ export class GitVirtualFileSystem
       }
 
       for (const [name, items] of currentExports) {
-        for (const [id] of items) {
+        for (const [id, item] of items) {
           let history = exports[id]
           if (!history) {
             history = []
@@ -2708,6 +2733,7 @@ export class GitVirtualFileSystem
               ...changeBase,
               kind: 'Added',
               name,
+              localName: item.localName,
               filePath: parseExportId(id)?.file ?? '',
               id,
             } as ExportChange)
@@ -2762,8 +2788,21 @@ export class GitVirtualFileSystem
       }
     })
 
+    yield {
+      type: 'progress',
+      phase: 'gitLogCached',
+      elapsedMs: Date.now() - _startMs,
+      totalCommits: reversedCommits.length,
+    } satisfies ExportHistoryProgressEvent
+
     // Track previous exports for change detection
     let previousExports: Map<string, Map<string, ExportItem>> | null = null
+    let commitsProcessed = 0
+
+    // Yield progress approximately 20 times during batch processing.
+    // Each yield creates a React Suspense boundary, and hundreds of
+    // boundaries add significant RSC serialisation overhead.
+    const yieldInterval = Math.max(1, Math.ceil(reversedCommits.length / 20))
 
     // Process each commit
     for (const commit of reversedCommits) {
@@ -2833,10 +2872,28 @@ export class GitVirtualFileSystem
         changeBase,
         exports,
         detectUpdates,
-        updateMode
+        updateMode,
+        false
       )
 
       previousExports = commitExports
+      commitsProcessed++
+
+      // Yield progress periodically rather than per-commit.
+      // Yielding per-commit creates hundreds of React Suspense boundaries,
+      // each adding RSC serialisation overhead.
+      const isLastCommit = commitsProcessed >= reversedCommits.length
+      if (isLastCommit || commitsProcessed % yieldInterval === 0) {
+        yield {
+          type: 'progress',
+          phase: 'batch',
+          elapsedMs: Date.now() - _startMs,
+          batchStart: commitsProcessed - 1,
+          batchSize: yieldInterval,
+          totalCommits: reversedCommits.length,
+          commitsProcessed,
+        } satisfies ExportHistoryProgressEvent
+      }
     }
 
     // Build nameToId mapping from final state
@@ -2909,7 +2966,8 @@ export class GitVirtualFileSystem
     changeBase: { sha: string; unix: number; date: string; release?: string },
     exports: Record<string, ExportChange[]>,
     detectUpdates: boolean,
-    updateMode: 'body' | 'signature'
+    updateMode: 'body' | 'signature',
+    hasStartRef: boolean
   ): void {
     if (previousExports !== null) {
       const { previousById, currentById, previousNamesById } =
@@ -2930,6 +2988,17 @@ export class GitVirtualFileSystem
       )
 
       detectCrossFileRenames(
+        previousById,
+        currentById,
+        removedIds,
+        usedRemovedIds,
+        renamePairs
+      )
+
+      // Detect re-export moves: same public name, different defining file.
+      detectSameNameMoves(
+        previousExports,
+        commitExports,
         previousById,
         currentById,
         removedIds,
@@ -2973,6 +3042,7 @@ export class GitVirtualFileSystem
                 ...changeBase,
                 kind: 'Renamed',
                 name,
+                localName: currentExportItem.localName,
                 filePath: currentParsed?.file ?? '',
                 id,
                 previousName:
@@ -3004,6 +3074,7 @@ export class GitVirtualFileSystem
                   ...changeBase,
                   kind: 'Renamed',
                   name,
+                  localName: currentExportItem.localName,
                   filePath: parseExportId(id)?.file ?? '',
                   id,
                   previousName: actualPreviousName,
@@ -3023,6 +3094,7 @@ export class GitVirtualFileSystem
                   ...changeBase,
                   kind: 'Added',
                   name,
+                  localName: currentExportItem.localName,
                   filePath: parseExportId(id)?.file ?? '',
                   id,
                 } as ExportChange)
@@ -3043,6 +3115,7 @@ export class GitVirtualFileSystem
                 ...changeBase,
                 kind: 'Updated',
                 name,
+                localName: currentExportItem.localName,
                 filePath: parseExportId(id)?.file ?? '',
                 id,
                 signature: signatureChanged,
@@ -3057,6 +3130,7 @@ export class GitVirtualFileSystem
               ...changeBase,
               kind: 'Deprecated',
               name,
+              localName: currentExportItem.localName,
               filePath: parseExportId(id)?.file ?? '',
               id,
               message: currentExportItem.deprecatedMessage,
@@ -3088,30 +3162,30 @@ export class GitVirtualFileSystem
             ...changeBase,
             kind: 'Removed',
             name: removedItem.name,
+            localName: removedItem.localName,
             filePath: parseExportId(removedId)?.file ?? '',
             id: removedId,
           } as ExportChange)
         }
       }
     } else {
-      // First commit - all exports are added
-      const addedIds = new Set<string>()
-      for (const [name, items] of commitExports) {
-        for (const [id] of items) {
-          let history = exports[id]
-          if (!history) {
-            history = []
-            exports[id] = history
-          }
-          if (!addedIds.has(id)) {
+      // First commit — emit Added events unless a startRef baseline was set
+      if (!hasStartRef) {
+        for (const [name, items] of commitExports) {
+          for (const [id, item] of items) {
+            let history = exports[id]
+            if (!history) {
+              history = []
+              exports[id] = history
+            }
             history.push({
               ...changeBase,
               kind: 'Added',
               name,
+              localName: item.localName,
               filePath: parseExportId(id)?.file ?? '',
               id,
             } as ExportChange)
-            addedIds.add(id)
           }
         }
       }

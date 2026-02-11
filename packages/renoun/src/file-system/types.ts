@@ -64,7 +64,7 @@ export type GitPathMetadataKind = 'auto' | 'file' | 'module'
 
 /** Options for getting export history. */
 export interface ExportHistoryOptions {
-  entry: string | string[]
+  entry?: string | string[]
   limit?: number
   maxDepth?: number
   detectUpdates?: boolean
@@ -140,6 +140,21 @@ export type ExportChange =
   | RemovedChange
   | DeprecatedChange
 
+/** Serializable export snapshot used for incremental history resumption. */
+export interface SerializedExportItem {
+  name: string
+  localName?: string
+  sourceName?: string
+  id: string
+  bodyHash: string
+  signatureHash: string
+  signatureText: string
+  startLine?: number
+  endLine?: number
+  deprecated?: true
+  deprecatedMessage?: string
+}
+
 /**
  * Report of export history across commits.
  *
@@ -155,8 +170,43 @@ export interface ExportHistoryReport {
   entryFiles: string[]
   exports: Record<string, ExportChange[]>
   nameToId: Record<string, string[]>
+  /** SHA of the last processed commit (for incremental resumption). */
+  lastCommitSha?: string
+  /** Export state at the last commit (for incremental resumption). */
+  lastExportSnapshot?: Record<string, Record<string, SerializedExportItem>>
   parseWarnings?: string[]
 }
+
+/** Progress phases for streaming export history. */
+export type ExportHistoryPhase =
+  | 'start'
+  | 'ensureRepoReady'
+  | 'resolveHead'
+  | 'gitLogCached'
+  | 'buildCommitReleaseMap'
+  | 'resolveEntries'
+  | 'batch'
+  | 'done'
+
+/** Progress event yielded during export history streaming. */
+export interface ExportHistoryProgressEvent {
+  type: 'progress'
+  phase: ExportHistoryPhase
+  elapsedMs: number
+  batchStart?: number
+  batchSize?: number
+  totalCommits?: number
+  commitsProcessed?: number
+  /** Accumulated export changes so far (only present on 'batch' events). */
+  exports?: Record<string, ExportChange[]>
+}
+
+/** AsyncGenerator type for streaming export history with progress events. */
+export type ExportHistoryGenerator = AsyncGenerator<
+  ExportHistoryProgressEvent,
+  ExportHistoryReport,
+  void
+>
 
 /** Represents a section within a file. */
 export interface Section {

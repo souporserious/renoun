@@ -18,6 +18,16 @@ import {
   ensureCacheClone,
   ensureCacheCloneSync,
 } from './GitFileSystem'
+import type { ExportHistoryGenerator, ExportHistoryReport } from './types'
+
+/** Drain a generator to get the final report. */
+async function drain(
+  gen: ExportHistoryGenerator
+): Promise<ExportHistoryReport> {
+  let result = await gen.next()
+  while (!result.done) result = await gen.next()
+  return result.value
+}
 
 const GIT_ENV = {
   /** Force the C/POSIX locale so git output/messages are consistent across machines. */
@@ -165,6 +175,8 @@ describe('GitFileSystem', () => {
     repoRoot,
     cacheDirectory,
   }) => {
+    // Empty baseline so the next commit enters the comparison path
+    commitFile(repoRoot, 'src/index.ts', `export {}`, 'baseline')
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'init')
     const c2 = commitFile(
       repoRoot,
@@ -174,7 +186,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const barId = getPrimaryId(report, 'bar')
     expect(barId).toBeDefined()
@@ -209,11 +223,13 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({
-      entry: 'src/foo',
-      limit: 1,
-      detectUpdates: false,
-    })
+    const report = await drain(
+      store.getExportHistory({
+        entry: 'src/foo',
+        limit: 1,
+        detectUpdates: false,
+      })
+    )
 
     expect(report.entryFiles).toEqual([
       'src/foo/index.ts',
@@ -232,7 +248,9 @@ describe('GitFileSystem', () => {
 
     const store1 = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     try {
-      const report1 = await store1.getExportHistory({ entry: 'src/index.ts' })
+      const report1 = await drain(
+        store1.getExportHistory({ entry: 'src/index.ts' })
+      )
       expect(getPrimaryId(report1, 'a')).toBeDefined()
       expect(getPrimaryId(report1, 'b')).toBeUndefined()
     } finally {
@@ -248,7 +266,9 @@ describe('GitFileSystem', () => {
 
     const store2 = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     try {
-      const report2 = await store2.getExportHistory({ entry: 'src/index.ts' })
+      const report2 = await drain(
+        store2.getExportHistory({ entry: 'src/index.ts' })
+      )
       expect(getPrimaryId(report2, 'b')).toBeDefined()
     } finally {
       store2.close()
@@ -302,15 +322,19 @@ describe('GitFileSystem', () => {
         repository: sparseRepo,
         cacheDirectory,
       })
-      const reportA = await store.getExportHistory({
-        entry: 'scope-a/index.ts',
-      })
+      const reportA = await drain(
+        store.getExportHistory({
+          entry: 'scope-a/index.ts',
+        })
+      )
       expect(getPrimaryId(reportA, 'a')).toBeDefined()
 
       git(sparseRepo, ['sparse-checkout', 'set', 'scope-a', 'scope-b'])
-      const reportB = await store.getExportHistory({
-        entry: 'scope-b/index.ts',
-      })
+      const reportB = await drain(
+        store.getExportHistory({
+          entry: 'scope-b/index.ts',
+        })
+      )
       expect(getPrimaryId(reportB, 'b')).toBeDefined()
     } finally {
       rmSync(cloneRoot, { recursive: true, force: true })
@@ -331,10 +355,12 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({
-      entry: 'src/index.ts',
-      startRef: 'v1.0.0',
-    })
+    const report = await drain(
+      store.getExportHistory({
+        entry: 'src/index.ts',
+        startRef: 'v1.0.0',
+      })
+    )
 
     const fooId = getPrimaryId(report, 'foo')
     expect(fooId).toBeDefined()
@@ -368,7 +394,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const coreId = getPrimaryId(report, 'core')
     expect(coreId).toBeDefined()
@@ -394,7 +422,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     expect(getPrimaryId(report, 'bar')).toBeUndefined()
     const bazId = getPrimaryId(report, 'baz')
@@ -431,7 +461,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const coreId = getPrimaryId(report, 'core')
     expect(coreId).toBeDefined()
@@ -443,12 +475,14 @@ describe('GitFileSystem', () => {
     expect(report.exports['src/a.ts::core']).toBeUndefined()
   })
 
-  test('avoids ambiguous rename collisions with identical signatures', async ({
+  test('resolves ambiguous rename collisions via per-name matching', async ({
     repoRoot,
     cacheDirectory,
   }) => {
     commitFile(repoRoot, 'src/a.ts', `export const foo = 1`, 'add a')
     commitFile(repoRoot, 'src/b.ts', `export const foo = 1`, 'add b')
+    // Empty barrel baseline so the real barrel enters the comparison path
+    commitFile(repoRoot, 'src/index.ts', `export {}`, 'baseline barrel')
     commitFile(
       repoRoot,
       'src/index.ts',
@@ -472,7 +506,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const aFooId = getPrimaryId(report, 'aFoo')
     expect(aFooId).toBeDefined()
@@ -481,24 +517,23 @@ describe('GitFileSystem', () => {
     expect(bFooId).toBeDefined()
     expect(bFooId).toContain('src/d.ts')
 
+    // Per-name matching detects these as renames (moves) since each public name
+    // independently has exactly one removed and one added ID.
     const aFooHistory = report.exports[aFooId!]
-    expect(aFooHistory.find((c) => c.kind === 'Added')?.sha).toBe(
+    expect(aFooHistory.some((c) => c.kind === 'Renamed')).toBe(true)
+    expect(aFooHistory.find((c) => c.kind === 'Renamed')?.sha).toBe(
       updateCommit.hash
     )
-    expect(aFooHistory.some((c) => c.kind === 'Renamed')).toBe(false)
 
     const bFooHistory = report.exports[bFooId!]
-    expect(bFooHistory.find((c) => c.kind === 'Added')?.sha).toBe(
+    expect(bFooHistory.some((c) => c.kind === 'Renamed')).toBe(true)
+    expect(bFooHistory.find((c) => c.kind === 'Renamed')?.sha).toBe(
       updateCommit.hash
     )
-    expect(bFooHistory.some((c) => c.kind === 'Renamed')).toBe(false)
 
-    expect(
-      report.exports['src/a.ts::foo']?.find((c) => c.kind === 'Removed')?.sha
-    ).toBe(updateCommit.hash)
-    expect(
-      report.exports['src/b.ts::foo']?.find((c) => c.kind === 'Removed')?.sha
-    ).toBe(updateCommit.hash)
+    // Old IDs are merged into the new entries (no separate Removed events)
+    expect(report.exports['src/a.ts::foo']).toBeUndefined()
+    expect(report.exports['src/b.ts::foo']).toBeUndefined()
   })
 
   test('records deprecation events when @deprecated is added', async ({
@@ -514,7 +549,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const fooId = getPrimaryId(report, 'foo')
     expect(fooId).toBeDefined()
@@ -539,7 +576,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const fooId = getPrimaryId(report, 'foo')
     expect(fooId).toBeDefined()
@@ -547,12 +586,11 @@ describe('GitFileSystem', () => {
       (change) => change.kind === 'Deprecated'
     )
     expect(deprecatedChange?.sha).toBe(c2.hash)
-    // Should contain the text, not [object Object]
+    // Should preserve the full text including the link target name
     const message = (deprecatedChange as { message?: string })?.message
     expect(message).toBeDefined()
     expect(message).not.toContain('[object Object]')
-    expect(message).toContain('Use')
-    expect(message).toContain('instead')
+    expect(message).toBe('Use bar instead')
   })
 
   test('detects deprecation in line comments', async ({
@@ -568,7 +606,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const fooId = getPrimaryId(report, 'foo')
     expect(fooId).toBeDefined()
@@ -585,6 +625,8 @@ describe('GitFileSystem', () => {
     repoRoot,
     cacheDirectory,
   }) => {
+    // Empty baseline so 'add foo' enters the comparison path
+    commitFile(repoRoot, 'src/index.ts', `export {}`, 'baseline')
     // First commit in release r1
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'add foo')
     tag(repoRoot, 'r1')
@@ -600,7 +642,9 @@ describe('GitFileSystem', () => {
     tag(repoRoot, 'r2')
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const fooId = getPrimaryId(report, 'foo')
     expect(fooId).toBeDefined()
@@ -627,11 +671,13 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({
-      entry: 'src/index.ts',
-      detectUpdates: true,
-      updateMode: 'body',
-    })
+    const report = await drain(
+      store.getExportHistory({
+        entry: 'src/index.ts',
+        detectUpdates: true,
+        updateMode: 'body',
+      })
+    )
 
     const doThingId = getPrimaryId(report, 'doThing')
     expect(doThingId).toBeDefined()
@@ -652,10 +698,12 @@ describe('GitFileSystem', () => {
       `export const util = true`,
       'add utils index'
     )
+    // Empty entry baseline so the real barrel enters the comparison path
+    commitFile(repoRoot, 'src/main.ts', `export {}`, 'baseline main')
     commitFile(repoRoot, 'src/main.ts', `export * from './utils'`, 'add main')
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/main.ts' })
+    const report = await drain(store.getExportHistory({ entry: 'src/main.ts' }))
 
     expect(Object.keys(report.exports)).toHaveLength(1)
     expect(getPrimaryId(report, 'util')).toBeDefined()
@@ -665,6 +713,8 @@ describe('GitFileSystem', () => {
     repoRoot,
     cacheDirectory,
   }) => {
+    // Empty baseline so 'feat' enters the comparison path
+    commitFile(repoRoot, 'src/index.ts', `export {}`, 'baseline')
     commitFile(repoRoot, 'src/index.ts', `export const v1 = true`, 'feat')
     tag(repoRoot, 'v1.0.0')
     const c2 = commitFile(
@@ -675,7 +725,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const v1Id = getPrimaryId(report, 'v1')
     expect(v1Id).toBeDefined()
@@ -704,7 +756,7 @@ describe('GitFileSystem', () => {
       cacheDirectory,
       maxDepth: 1,
     })
-    const report = await store.getExportHistory({ entry: 'src/main.ts' })
+    const report = await drain(store.getExportHistory({ entry: 'src/main.ts' }))
 
     expect(report.nameToId['final']).toBeUndefined()
     expect(report.parseWarnings?.length).toBeGreaterThan(0)
@@ -723,7 +775,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const defaultId = getPrimaryId(report, 'default')
     expect(defaultId).toBeDefined()
@@ -742,7 +796,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     expect(getPrimaryId(report, 'a')).toBeDefined()
     expect(getPrimaryId(report, 'default')).toBeDefined()
@@ -755,7 +811,7 @@ describe('GitFileSystem', () => {
     commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'init')
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src' })
+    const report = await drain(store.getExportHistory({ entry: 'src' }))
 
     expect(report.entryFiles).toContain('src/index.ts')
     expect(getPrimaryId(report, 'foo')).toBeDefined()
@@ -768,9 +824,9 @@ describe('GitFileSystem', () => {
     commitFile(repoRoot, 'src/other.ts', `export const x = 1`, 'init')
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    await expect(store.getExportHistory({ entry: 'src' })).rejects.toThrow(
-      /Could not resolve any entry files/
-    )
+    await expect(
+      drain(store.getExportHistory({ entry: 'src' }))
+    ).rejects.toThrow(/Could not resolve any entry files/)
   })
 
   test('throws helpful errors for invalid refs', async ({
@@ -782,11 +838,13 @@ describe('GitFileSystem', () => {
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
 
     await expect(
-      store.getExportHistory({ entry: 'src/index.ts', startRef: 'nope' })
+      drain(store.getExportHistory({ entry: 'src/index.ts', startRef: 'nope' }))
     ).rejects.toThrow(/Invalid startRef/)
 
     await expect(
-      store.getExportHistory({ entry: 'src/index.ts', endRef: 'also-nope' })
+      drain(
+        store.getExportHistory({ entry: 'src/index.ts', endRef: 'also-nope' })
+      )
     ).rejects.toThrow(/Invalid endRef/)
   })
 
@@ -808,10 +866,12 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({
-      entry: 'src/index.ts',
-      detectUpdates: false,
-    })
+    const report = await drain(
+      store.getExportHistory({
+        entry: 'src/index.ts',
+        detectUpdates: false,
+      })
+    )
 
     const doThingId = getPrimaryId(report, 'doThing')
     expect(doThingId).toBeDefined()
@@ -838,10 +898,12 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({
-      entry: 'src/index.ts',
-      updateMode: 'signature',
-    })
+    const report = await drain(
+      store.getExportHistory({
+        entry: 'src/index.ts',
+        updateMode: 'signature',
+      })
+    )
 
     const doThingId = getPrimaryId(report, 'doThing')
     expect(doThingId).toBeDefined()
@@ -869,7 +931,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const bazId = getPrimaryId(report, 'baz')
     expect(bazId).toBeDefined()
@@ -887,7 +951,9 @@ describe('GitFileSystem', () => {
     commitFile(repoRoot, 'src/index.ts', `const foo = 1; export = foo`, 'init')
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     expect(getPrimaryId(report, 'default')).toBeDefined()
   })
@@ -906,7 +972,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const valueId = getPrimaryId(report, 'value')
     expect(valueId).toBeDefined()
@@ -932,7 +1000,9 @@ describe('GitFileSystem', () => {
     const renameCommitHash = git(repoRoot, ['log', '-1', '--format=%H'])
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const coreId = getPrimaryId(report, 'core')
     expect(coreId).toBeDefined()
@@ -983,7 +1053,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const newId = getPrimaryId(report, 'buildProcessor')
     expect(newId).toBeDefined()
@@ -1028,7 +1100,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const coreId = getPrimaryId(report, 'core')
     expect(coreId).toBeDefined()
@@ -1086,7 +1160,9 @@ describe('GitFileSystem', () => {
     const renameCommitHash = git(repoRoot, ['log', '-1', '--format=%H'])
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const newNameId = getPrimaryId(report, 'buildValidator')
     expect(newNameId).toBeDefined()
@@ -1128,7 +1204,9 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/index.ts' })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts' })
+    )
 
     const bazId = getPrimaryId(report, 'baz')
     expect(bazId).toBeDefined()
@@ -1296,9 +1374,11 @@ describe('GitFileSystem', () => {
     commitFile(repoRoot, 'src/b.ts', `export const b = 1`, 'add b')
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({
-      entry: ['src/a.ts', 'src/b.ts'],
-    })
+    const report = await drain(
+      store.getExportHistory({
+        entry: ['src/a.ts', 'src/b.ts'],
+      })
+    )
 
     expect(getPrimaryId(report, 'a')).toBeDefined()
     expect(getPrimaryId(report, 'b')).toBeDefined()
@@ -1308,6 +1388,8 @@ describe('GitFileSystem', () => {
     repoRoot,
     cacheDirectory,
   }) => {
+    // Empty baseline so 'add one' enters the comparison path
+    commitFile(repoRoot, 'src/one.ts', `export {}`, 'baseline')
     const c1 = commitFile(
       repoRoot,
       'src/one.ts',
@@ -1319,11 +1401,13 @@ describe('GitFileSystem', () => {
     git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'remove one'])
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({ entry: 'src/one.ts' })
+    const report = await drain(store.getExportHistory({ entry: 'src/one.ts' }))
 
     const oneId = getPrimaryId(report, 'one')
     expect(oneId).toBeDefined()
     const history = report.exports[oneId!]
+    // Entry file is deleted in the last commit, but the carry-forward logic
+    // preserves the previous export state (no Removed event for whole-file deletion).
     expect(history).toHaveLength(1)
     expect(history[0].kind).toBe('Added')
     expect(history[0].sha).toBe(c1.hash)
@@ -1333,6 +1417,9 @@ describe('GitFileSystem', () => {
     repoRoot,
     cacheDirectory,
   }) => {
+    // 3 commits: baseline, v1 (adds a), v2 (adds b)
+    // limit: 2 gives us v1 + v2 — v1 becomes baseline, v2 produces events
+    commitFile(repoRoot, 'src/index.ts', `export {}`, 'baseline')
     commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
     const c2 = commitFile(
       repoRoot,
@@ -1342,16 +1429,16 @@ describe('GitFileSystem', () => {
     )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const report = await store.getExportHistory({
-      entry: 'src/index.ts',
-      limit: 1,
-    })
+    const report = await drain(
+      store.getExportHistory({
+        entry: 'src/index.ts',
+        limit: 2,
+      })
+    )
 
-    const aId = getPrimaryId(report, 'a')
+    // b was added in v2 (relative to v1 baseline)
     const bId = getPrimaryId(report, 'b')
-    expect(aId).toBeDefined()
     expect(bId).toBeDefined()
-    expect(report.exports[aId!][0].sha).toBe(c2.hash)
     expect(report.exports[bId!][0].sha).toBe(c2.hash)
   })
 
@@ -1498,7 +1585,7 @@ describe('GitFileSystem', () => {
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     await expect(
-      store.getExportHistory({ entry: 'src/index.ts' })
+      drain(store.getExportHistory({ entry: 'src/index.ts' }))
     ).rejects.toThrow(/No commits found/)
   })
 
@@ -1510,7 +1597,352 @@ describe('GitFileSystem', () => {
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     await expect(
-      store.getExportHistory({ entry: 'README.md' })
+      drain(store.getExportHistory({ entry: 'README.md' }))
     ).rejects.toThrow(/Invalid entry file/)
+  })
+
+  // Regression: per-commit cache isolation
+  //
+  // metaCache, resolveCache, and blobShaResolveCache must be created fresh
+  // for each commit in processCommit(). Sharing them across commits caused
+  // stale cross-commit module resolution: when a re-exported file changed
+  // between commits, the shared resolve cache returned stale paths/metadata,
+  // collapsing granular per-commit changes into a single "big commit" change.
+  //
+  // This test verifies that updating a re-exported module across multiple
+  // commits produces an individual "Updated" change for *each* commit,
+  // not just one collapsed change.
+  test('tracks granular per-commit updates for re-exported modules (cache isolation)', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    // Commit 1: lib + empty barrel baseline
+    commitFile(
+      repoRoot,
+      'src/lib.ts',
+      `export function greet(): string { return "hello" }`,
+      'add lib'
+    )
+    // Empty barrel baseline so 'add barrel' enters the comparison path
+    commitFile(repoRoot, 'src/index.ts', `export {}`, 'baseline barrel')
+    commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export { greet } from './lib'`,
+      'add barrel'
+    )
+
+    // Commit 3: update the function signature in lib
+    const c2 = commitFile(
+      repoRoot,
+      'src/lib.ts',
+      `export function greet(name: string): string { return "hello " + name }`,
+      'update greet signature v2'
+    )
+
+    // Commit 4: update the function signature again
+    const c3 = commitFile(
+      repoRoot,
+      'src/lib.ts',
+      `export function greet(name: string, formal?: boolean): string { return formal ? "Good day " + name : "hello " + name }`,
+      'update greet signature v3'
+    )
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts', detectUpdates: true })
+    )
+
+    const greetId = getPrimaryId(report, 'greet')
+    expect(greetId).toBeDefined()
+
+    const greetHistory = report.exports[greetId!]
+
+    // Should have: Added + Updated (c2) + Updated (c3) = 3 entries
+    expect(greetHistory.length).toBeGreaterThanOrEqual(3)
+
+    const updates = greetHistory.filter((c) => c.kind === 'Updated')
+    // Both c2 and c3 should be tracked as separate updates, not collapsed
+    expect(updates.length).toBe(2)
+    expect(updates.map((u) => u.sha)).toContain(c2.hash)
+    expect(updates.map((u) => u.sha)).toContain(c3.hash)
+  })
+
+  // Regression: per-commit cache isolation with star exports
+  //
+  // Star exports (`export * from './module'`) resolve recursively through
+  // collectExportsFromFile. When caches were shared across commits, star
+  // re-exports from files that changed between commits would resolve to
+  // stale blob metadata, hiding intermediate "Updated" changes.
+  // This test uses the three.js-style pattern: a barrel with `export *`
+  // pointing at multiple sub-modules that change independently.
+  test('tracks granular updates through star re-exports (cache isolation)', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    // Commit 1: initial setup with barrel + two sub-modules
+    commitFile(
+      repoRoot,
+      'src/core/Alpha.ts',
+      `export function alpha(): number { return 1 }`,
+      'add Alpha'
+    )
+    commitFile(
+      repoRoot,
+      'src/core/Beta.ts',
+      `export function beta(): number { return 2 }`,
+      'add Beta'
+    )
+    commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export * from './core/Alpha'\nexport * from './core/Beta'`,
+      'add barrel'
+    )
+
+    // Commit 2: update only Alpha's signature (Beta unchanged)
+    const c2 = commitFile(
+      repoRoot,
+      'src/core/Alpha.ts',
+      `export function alpha(x: number): number { return x }`,
+      'update Alpha signature'
+    )
+
+    // Commit 3: update only Beta's signature (Alpha unchanged)
+    const c3 = commitFile(
+      repoRoot,
+      'src/core/Beta.ts',
+      `export function beta(y: number): number { return y * 2 }`,
+      'update Beta signature'
+    )
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts', detectUpdates: true })
+    )
+
+    // Alpha should have Added + Updated (c2)
+    const alphaId = getPrimaryId(report, 'alpha')
+    expect(alphaId).toBeDefined()
+    const alphaHistory = report.exports[alphaId!]
+    const alphaUpdates = alphaHistory.filter((c) => c.kind === 'Updated')
+    expect(alphaUpdates.length).toBe(1)
+    expect(alphaUpdates[0].sha).toBe(c2.hash)
+
+    // Beta should have Added + Updated (c3)
+    const betaId = getPrimaryId(report, 'beta')
+    expect(betaId).toBeDefined()
+    const betaHistory = report.exports[betaId!]
+    const betaUpdates = betaHistory.filter((c) => c.kind === 'Updated')
+    expect(betaUpdates.length).toBe(1)
+    expect(betaUpdates[0].sha).toBe(c3.hash)
+  })
+
+  // Diagnostic: three.js uses `class X extends Node {}; export default X;`
+  // pattern rather than `export default class X {}`. When the barrel uses
+  // `export { default as X } from './module'`, changes to the class body
+  // must still produce "Updated" events.
+  test('detects updates through export-default-identifier re-exports (three.js pattern)', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    // Commit 1: initial class + barrel
+    commitFile(
+      repoRoot,
+      'src/core/ContextNode.ts',
+      [
+        'class ContextNode {',
+        '  constructor() {}',
+        '  getContext(): string { return "v1" }',
+        '}',
+        'export default ContextNode;',
+        'export const context = /*#__PURE__*/ ContextNode;',
+      ].join('\n'),
+      'add ContextNode'
+    )
+    commitFile(
+      repoRoot,
+      'src/Nodes.ts',
+      `export { default as ContextNode } from './core/ContextNode'`,
+      'add barrel'
+    )
+
+    // Commit 2: change the class (add a method)
+    const c2 = commitFile(
+      repoRoot,
+      'src/core/ContextNode.ts',
+      [
+        'class ContextNode {',
+        '  constructor() {}',
+        '  getContext(): string { return "v2" }',
+        '  label(): string { return "ctx" }',
+        '}',
+        'export default ContextNode;',
+        'export const context = /*#__PURE__*/ ContextNode;',
+      ].join('\n'),
+      'update ContextNode: add label method'
+    )
+
+    // Commit 3: change the class again (modify method signature)
+    const c3 = commitFile(
+      repoRoot,
+      'src/core/ContextNode.ts',
+      [
+        'class ContextNode {',
+        '  constructor(scope: string) {}',
+        '  getContext(): string { return "v3" }',
+        '  label(prefix?: string): string { return prefix ?? "ctx" }',
+        '}',
+        'export default ContextNode;',
+        'export const context = /*#__PURE__*/ ContextNode;',
+      ].join('\n'),
+      'update ContextNode: change constructor + label'
+    )
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/Nodes.ts', detectUpdates: true })
+    )
+
+    const contextNodeId = getPrimaryId(report, 'ContextNode')
+    expect(contextNodeId).toBeDefined()
+
+    const history = report.exports[contextNodeId!]
+    const updates = history.filter((c) => c.kind === 'Updated')
+
+    // Must detect both updates, not collapse into the first commit
+    expect(updates.length).toBe(2)
+    expect(updates.map((u) => u.sha)).toContain(c2.hash)
+    expect(updates.map((u) => u.sha)).toContain(c3.hash)
+  })
+
+  // Same as above but for `export { X }` (local named re-export without `from`).
+  // The hash must come from the declaration, not the static export specifier.
+  test('detects updates through export-specifier local re-exports', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(
+      repoRoot,
+      'src/lib.ts',
+      ['function greet(): string { return "v1" }', 'export { greet }'].join(
+        '\n'
+      ),
+      'add lib'
+    )
+    commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export { greet } from './lib'`,
+      'add barrel'
+    )
+
+    const c2 = commitFile(
+      repoRoot,
+      'src/lib.ts',
+      [
+        'function greet(name: string): string { return name }',
+        'export { greet }',
+      ].join('\n'),
+      'update greet'
+    )
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const report = await drain(
+      store.getExportHistory({ entry: 'src/index.ts', detectUpdates: true })
+    )
+
+    const greetId = getPrimaryId(report, 'greet')
+    expect(greetId).toBeDefined()
+    const updates = report.exports[greetId!].filter((c) => c.kind === 'Updated')
+    expect(updates.length).toBe(1)
+    expect(updates[0].sha).toBe(c2.hash)
+  })
+
+  test('emits Added for exports in the first commit without startRef', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    // Single commit with exports — no empty baseline, no startRef
+    const c1 = commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export const foo = 1; export const bar = 2`,
+      'init'
+    )
+    const c2 = commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export const foo = 42; export const bar = 2`,
+      'update foo'
+    )
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const report = await drain(
+      store.getExportHistory({
+        entry: 'src/index.ts',
+        detectUpdates: true,
+        updateMode: 'body',
+      })
+    )
+
+    // Both exports should have an Added event from the first commit
+    const fooId = getPrimaryId(report, 'foo')
+    expect(fooId).toBeDefined()
+    const fooHistory = report.exports[fooId!]
+    const fooAdded = fooHistory.find((c) => c.kind === 'Added')
+    expect(fooAdded).toBeDefined()
+    expect(fooAdded!.sha).toBe(c1.hash)
+
+    // foo should also have an Updated event from the second commit
+    const fooUpdated = fooHistory.find((c) => c.kind === 'Updated')
+    expect(fooUpdated).toBeDefined()
+    expect(fooUpdated!.sha).toBe(c2.hash)
+
+    const barId = getPrimaryId(report, 'bar')
+    expect(barId).toBeDefined()
+    const barHistory = report.exports[barId!]
+    const barAdded = barHistory.find((c) => c.kind === 'Added')
+    expect(barAdded).toBeDefined()
+    expect(barAdded!.sha).toBe(c1.hash)
+
+    // bar was not changed, so no Updated event
+    expect(barHistory.find((c) => c.kind === 'Updated')).toBeUndefined()
+  })
+
+  test('silent baseline with startRef omits Added for pre-existing exports', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const foo = 1`, 'init')
+    tag(repoRoot, 'v1.0.0')
+    const c2 = commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export const foo = 42`,
+      'update foo'
+    )
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const report = await drain(
+      store.getExportHistory({
+        entry: 'src/index.ts',
+        startRef: 'v1.0.0',
+        detectUpdates: true,
+        updateMode: 'body',
+      })
+    )
+
+    const fooId = getPrimaryId(report, 'foo')
+    expect(fooId).toBeDefined()
+    const fooHistory = report.exports[fooId!]
+
+    // With startRef, foo existed in the baseline — no Added event
+    expect(fooHistory.find((c) => c.kind === 'Added')).toBeUndefined()
+
+    // But the update should still be tracked
+    const fooUpdated = fooHistory.find((c) => c.kind === 'Updated')
+    expect(fooUpdated).toBeDefined()
+    expect(fooUpdated!.sha).toBe(c2.hash)
   })
 })

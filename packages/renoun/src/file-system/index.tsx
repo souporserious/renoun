@@ -92,4 +92,9 @@ export type {
   RenamedChange,
   RemovedChange,
   DeprecatedChange,
+  ExportHistoryOptions,
+  ExportHistoryReport,
+  ExportHistoryPhase,
+  ExportHistoryProgressEvent,
+  ExportHistoryGenerator,
 } from './types.ts'

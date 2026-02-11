@@ -2,7 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { gzipSync } from 'node:zlib'
 
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
+import type { ExportHistoryGenerator, ExportHistoryReport } from './types.ts'
 import { Directory } from './index.tsx'
+
+/** Drain a generator to get the final report. */
+async function drain(
+  gen: ExportHistoryGenerator
+): Promise<ExportHistoryReport> {
+  let result = await gen.next()
+  while (!result.done) result = await gen.next()
+  return result.value
+}
 
 const SUCCESS_ARCHIVE = makeTar([
   { path: 'root/file.txt', content: 'hello' },
@@ -218,11 +228,13 @@ describe('GitVirtualFileSystem', () => {
       ref: 'main',
     })
 
-    const report = await fs.getExportHistory({
-      entry: 'src/foo',
-      limit: 1,
-      detectUpdates: false,
-    })
+    const report = await drain(
+      fs.getExportHistory({
+        entry: 'src/foo',
+        limit: 1,
+        detectUpdates: false,
+      })
+    )
 
     expect(report.entryFiles).toEqual(['src/foo/index.ts', 'src/foo/Foo.ts'])
     expect(report.entryFiles).not.toContain('src/foo/Local.ts')
