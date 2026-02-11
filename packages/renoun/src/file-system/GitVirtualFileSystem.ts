@@ -3758,7 +3758,7 @@ export class GitVirtualFileSystem
       switch (this.#host) {
         case 'github': {
           if (!this.#ownerEncoded || !this.#repoEncoded) return null
-          const url = `https://raw.githubusercontent.com/${this.#ownerEncoded}/${this.#repoEncoded}/${commitSha}/${filePath}`
+          const url = `https://raw.githubusercontent.com/${this.#ownerEncoded}/${this.#repoEncoded}/${encodeURIComponent(commitSha)}/${encodeURIComponent(filePath)}`
           const response = await fetch(url, {
             headers: this.#noAuthHeaders,
             referrerPolicy: 'no-referrer',
@@ -3769,14 +3769,14 @@ export class GitVirtualFileSystem
         case 'gitlab': {
           const project = encodeURIComponent(this.#repository)
           const encodedPath = encodeURIComponent(filePath)
-          const url = `${this.#apiBaseUrl}/projects/${project}/repository/files/${encodedPath}/raw?ref=${commitSha}`
+          const url = `${this.#apiBaseUrl}/projects/${project}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(commitSha)}`
           const response = await this.#fetchWithRetry(url)
           if (!response.ok) return null
           return await response.text()
         }
         case 'bitbucket': {
           if (!this.#ownerEncoded || !this.#repoEncoded) return null
-          const url = `https://bitbucket.org/${this.#ownerEncoded}/${this.#repoEncoded}/raw/${commitSha}/${filePath}`
+          const url = `https://bitbucket.org/${this.#ownerEncoded}/${this.#repoEncoded}/raw/${encodeURIComponent(commitSha)}/${encodeURIComponent(filePath)}`
           const response = await fetch(url, {
             headers: this.#noAuthHeaders,
             referrerPolicy: 'no-referrer',
