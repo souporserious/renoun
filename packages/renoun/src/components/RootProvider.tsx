@@ -82,10 +82,7 @@ function getRootProviderErrorMessage() {
   return `[renoun] RootProvider must wrap the html element.${instruction}`
 }
 
-interface BaseProps extends Omit<
-  Partial<ConfigurationOptions>,
-  'git' | 'theme'
-> {
+type BaseProps = Omit<Partial<ConfigurationOptions>, 'git' | 'theme'> & {
   /** The nonce to use for the provider scripts. */
   nonce?: string
 
@@ -108,7 +105,7 @@ interface BaseProps extends Omit<
 export type RootProviderProps<
   Theme extends ThemeValue | ThemeMap | undefined = undefined,
 > = BaseProps &
-  (Theme extends ThemeMap
+  ([Theme] extends [ThemeMap]
     ? {
         /** Object map of theme names to theme values e.g. `{ light: 'vitesse-light', dark: 'vitesse-dark' }`. */
         theme: ThemeMap
@@ -125,7 +122,9 @@ export type RootProviderProps<
       })
 
 /** A provider that configures and wraps the root of the application. */
-export function RootProvider<Theme extends ThemeValue | ThemeMap | undefined>({
+export function RootProvider<
+  Theme extends ThemeValue | ThemeMap | undefined = undefined,
+>({
   children,
   theme,
   languages,
