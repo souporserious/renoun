@@ -49,7 +49,21 @@ The `RootProvider` component clones the `html` element and adds the [`suppressHy
 When using the [`Image` component](/docs/components/image) with Figma sources, downloads are cached to `public/images` by default. To change where those files are written (for example to commit them under a different directory), set the `images.outputDirectory` option on `RootProvider` to either a project-relative or absolute path:
 
 ```tsx
-<RootProvider images={{ outputDirectory: 'public/design-assets' }} />
+import { RootProvider } from 'renoun'
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <RootProvider images={{ outputDirectory: 'public/design-assets' }}>
+      <html>
+        <body>{children}</body>
+      </html>
+    </RootProvider>
+  )
+}
 ```
 
 The cache path you choose is used for both reading and writing files and should point to a location that your framework serves as static assets.
