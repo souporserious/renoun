@@ -214,6 +214,7 @@ function supportsGitBackfillSync(): boolean {
     cwd: process.cwd(),
     stdio: 'pipe',
     encoding: 'utf8',
+    shell: false,
   })
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
   const isSupported = !output.includes('is not a git command')
@@ -375,6 +376,7 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
       cwd: process.cwd(),
       stdio: 'pipe',
       encoding: 'utf8',
+      shell: false,
     })
 
     if (clone.status !== 0) {
@@ -408,6 +410,7 @@ function setSparseCheckoutSync(
   spawnSync('git', ['sparse-checkout', 'set', '--', ...paths], {
     cwd: repoRoot,
     stdio: verbose ? 'inherit' : 'ignore',
+    shell: false,
   })
 }
 
@@ -432,6 +435,7 @@ function runGitBackfillSync(repoRoot: string, verbose: boolean) {
     cwd: repoRoot,
     stdio: 'pipe',
     encoding: 'utf8',
+    shell: false,
   })
   if (result.status !== 0 && verbose) {
     const stderr = result.stderr ? String(result.stderr).trim() : ''
@@ -512,6 +516,7 @@ function ensureCachedScopeSync(
   spawnSync('git', ['sparse-checkout', 'init', '--cone'], {
     cwd: repoRoot,
     stdio: verbose ? 'inherit' : 'ignore',
+    shell: false,
   })
   setSparseCheckoutSync(repoRoot, normalized, verbose)
 
@@ -962,10 +967,12 @@ export class GitFileSystem
     }
 
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    assertSafeGitSpec(spec)
     const result = spawnSync('git', ['cat-file', '-s', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
       encoding: 'utf8',
+      shell: false,
     })
     if (result.status !== 0) {
       return undefined
@@ -1010,9 +1017,11 @@ export class GitFileSystem
     }
 
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    assertSafeGitSpec(spec)
     const result = spawnSync('git', ['cat-file', '-e', spec], {
       cwd: this.repoRoot,
       stdio: 'ignore',
+      shell: false,
     })
     return result.status === 0
   }
@@ -1043,10 +1052,11 @@ export class GitFileSystem
       }
     }
 
+    assertSafeGitArg(this.ref, 'ref')
     const result = spawnSync(
       'git',
       ['log', '-1', '--format=%ct', this.ref, '--', relativePath],
-      { cwd: this.repoRoot, stdio: 'pipe', encoding: 'utf8' }
+      { cwd: this.repoRoot, stdio: 'pipe', encoding: 'utf8', shell: false }
     )
     if (result.status !== 0) {
       return undefined
@@ -1075,6 +1085,7 @@ export class GitFileSystem
       }
     }
 
+    assertSafeGitArg(this.ref, 'ref')
     const result = await spawnWithResult(
       'git',
       ['log', '-1', '--format=%ct', this.ref, '--', relativePath],
@@ -1179,6 +1190,7 @@ export class GitFileSystem
       {
         cwd: this.repoRoot,
         stdio: 'ignore',
+        shell: false,
       }
     )
     return result.status === 0
@@ -1335,10 +1347,12 @@ export class GitFileSystem
     }
 
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    assertSafeGitSpec(spec)
     const result = spawnSync('git', ['ls-tree', '-z', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
       encoding: 'utf8',
+      shell: false,
     })
     if (result.status !== 0) {
       const stderr = result.stderr?.trim()
@@ -1359,6 +1373,7 @@ export class GitFileSystem
     }
 
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    assertSafeGitSpec(spec)
     const result = await spawnWithResult('git', ['ls-tree', '-z', spec], {
       cwd: this.repoRoot,
       maxBuffer: this.maxBufferBytes,
@@ -1439,10 +1454,12 @@ export class GitFileSystem
     }
 
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    assertSafeGitSpec(spec)
     const result = spawnSync('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
       encoding: 'utf8',
+      shell: false,
     })
     if (result.status !== 0) {
       const stderr = result.stderr?.trim()
@@ -1462,11 +1479,13 @@ export class GitFileSystem
     }
 
     const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    assertSafeGitSpec(spec)
     const result = spawnSync('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
       encoding: 'buffer',
       maxBuffer: this.maxBufferBytes,
+      shell: false,
     })
     if (result.status !== 0) {
       const stderr = result.stderr?.toString().trim()
@@ -1583,12 +1602,14 @@ export class GitFileSystem
         `[GitFileSystem] Cached ref "${ref}" moved; fetching ${remote}…`
       )
     }
+    assertSafeGitArg(remote, 'remote')
     const baseEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
     let result = spawnSync('git', ['fetch', '--quiet', remote], {
       cwd: this.repoRoot,
       stdio: 'pipe',
       encoding: 'utf8',
       env: baseEnv,
+      shell: false,
     })
     if (result.status !== 0) {
       const stderr = result.stderr?.trim() || ''
@@ -1601,6 +1622,7 @@ export class GitFileSystem
             stdio: 'pipe',
             encoding: 'utf8',
             env: baseEnv,
+            shell: false,
           }
         )
       }
@@ -1616,9 +1638,12 @@ export class GitFileSystem
     if (remoteSha) {
       const refName = remoteRef.replace(/^refs\/heads\//, '')
       const trackingRef = `refs/remotes/${remote}/${refName}`
+      assertSafeGitArg(trackingRef, 'trackingRef')
+      assertSafeGitArg(remoteSha, 'remoteSha')
       spawnSync('git', ['update-ref', trackingRef, remoteSha], {
         cwd: this.repoRoot,
         stdio: 'ignore',
+        shell: false,
       })
     }
   }
@@ -1674,6 +1699,8 @@ export class GitFileSystem
     newCommit: string,
     scopeDirectories: string[]
   ): Promise<Map<string, string>> {
+    assertSafeGitArg(oldCommit, 'oldCommit')
+    assertSafeGitArg(newCommit, 'newCommit')
     const args = [
       'diff',
       '--name-status',
@@ -1747,6 +1774,7 @@ export class GitFileSystem
   }
 
   async #getCommitUnix(commit: string): Promise<number> {
+    assertSafeGitArg(commit, 'commit')
     const out = await spawnAsync(
       'git',
       ['show', '-s', '--format=%at', commit],
@@ -3031,6 +3059,7 @@ export class GitFileSystem
 
     const localSha = await this.#getLocalRefSha(ref)
     const { remote, ref: remoteRef } = getRemoteRefQuery(ref, this.fetchRemote)
+    assertSafeGitArg(remote, 'remote')
     const remoteSha = await this.#getRemoteRefSha(remote, remoteRef)
     if (!remoteSha || localSha !== remoteSha) {
       if (this.verbose) {
@@ -3253,6 +3282,7 @@ export class GitFileSystem
             `[GitFileSystem] Shallow repository detected. Fetching full history from ${this.fetchRemote}...`
           )
         }
+        assertSafeGitArg(this.fetchRemote, 'fetchRemote')
         await spawnAsync(
           'git',
           ['fetch', '--unshallow', '--quiet', this.fetchRemote],
@@ -3521,6 +3551,7 @@ export class GitFileSystem
       return diskHit
     }
 
+    assertSafeGitArg(refCommit, 'refCommit')
     // `git log` is newest-first by default
     const args = [
       'log',
@@ -3749,6 +3780,7 @@ function loadCommitTreeSync(
   repoPath: string,
   commitSha: string
 ): Map<string, GitObjectMeta> | null {
+  assertSafeGitArg(commitSha, 'commitSha')
   // Use `ls-tree -r` WITHOUT `-l` (long format). The `-l` flag forces git
   // to resolve every blob to obtain its size, which triggers lazy-fetch
   // attempts in `--filter=blob:none` partial clones — those fetches may
@@ -3808,6 +3840,7 @@ function loadCommitTreeSync(
  * Bypasses the event loop entirely.
  */
 function readBlobSync(repoPath: string, sha: string): string | null {
+  assertSafeGitArg(sha, 'sha')
   const result = spawnSync('git', ['cat-file', 'blob', sha], {
     cwd: repoPath,
     encoding: 'utf8',
@@ -4621,6 +4654,7 @@ function getRepoRootSync(inputPath: string) {
       cwd: absolutePath,
       stdio: 'pipe',
       encoding: 'utf8',
+      shell: false,
     })
     if (result.status !== 0) {
       throw new Error('Not a git repository')
@@ -4651,6 +4685,7 @@ async function gitLogForPath(
     follow?: boolean
   } = {}
 ): Promise<GitLogCommit[]> {
+  assertSafeGitArg(ref, 'ref')
   // Added %D to get ref names (tags, branches)
   const args = ['log', '--format=%H%x00%at%x00%D']
   if (reverse) {
@@ -4756,6 +4791,7 @@ async function listDirectoryEntriesAtCommit(
     normalizedScope && normalizedScope !== '.'
       ? `${commit}:${normalizedScope}`
       : commit
+  assertSafeGitSpec(spec)
   try {
     const result = await spawnWithResult('git', ['ls-tree', '-z', spec], {
       cwd: repoRoot,
@@ -4940,7 +4976,7 @@ function getLocalRefShaSync(repoRoot: string, ref: string): string | null {
   const result = spawnSync(
     'git',
     ['rev-parse', '--verify', `${ref}^{commit}`],
-    { cwd: repoRoot, stdio: 'pipe', encoding: 'utf8' }
+    { cwd: repoRoot, stdio: 'pipe', encoding: 'utf8', shell: false }
   )
   if (result.status !== 0) {
     return null
@@ -4968,6 +5004,7 @@ function getRemoteRefShaSync(
     cwd: repoRoot,
     stdio: 'pipe',
     encoding: 'utf8',
+    shell: false,
   })
   if (result.status !== 0) {
     remoteRefCache.set(cacheKey, { remoteSha: null, checkedAt: now })
@@ -4983,6 +5020,7 @@ function getRemoteRefShaSync(
         cwd: repoRoot,
         stdio: 'pipe',
         encoding: 'utf8',
+        shell: false,
       }
     )
     if (headResult.status === 0) {
@@ -4997,6 +5035,7 @@ function getRemoteRefShaSync(
           cwd: repoRoot,
           stdio: 'pipe',
           encoding: 'utf8',
+          shell: false,
         }
       )
       if (tagResult.status === 0) {
@@ -5175,6 +5214,11 @@ function looksLikeGitRemoteUrl(value: string) {
   )
 }
 
+/**
+ * Validates a git argument (ref, remote name, sha, etc.) to prevent
+ * command injection. Rejects NUL/newline, leading dashes (option injection),
+ * and embedded dangerous git flags like `--upload-pack` or `--exec`.
+ */
 function assertSafeGitArg(value: string, label: string) {
   const stringValue = String(value)
   if (!stringValue) {
@@ -5190,8 +5234,21 @@ function assertSafeGitArg(value: string, label: string) {
   if (stringValue.startsWith('-')) {
     throw new Error(`[GitFileSystem] Invalid ${label}: must not start with "-"`)
   }
+  // Reject embedded dangerous git options that could trigger command execution
+  // even when passed as positional arguments in some git sub-commands.
+  if (
+    /--upload-pack|--receive-pack|--exec|--ssh-command/i.test(stringValue)
+  ) {
+    throw new Error(
+      `[GitFileSystem] Invalid ${label}: contains dangerous git option`
+    )
+  }
 }
 
+/**
+ * Validates a repo-relative file path. Rejects NUL/newline, colons (Windows
+ * drive-letter or git-spec ambiguity), `..` traversal, and leading dashes.
+ */
 function assertSafeRepoPath(relativePath: string) {
   const stringPath = String(relativePath)
   if (!stringPath) {
@@ -5203,6 +5260,11 @@ function assertSafeRepoPath(relativePath: string) {
     stringPath.includes('\r')
   ) {
     throw new Error('[GitFileSystem] Invalid path: contains newline/NUL')
+  }
+  if (stringPath.startsWith('-')) {
+    throw new Error(
+      '[GitFileSystem] Invalid path: must not start with "-"'
+    )
   }
   if (stringPath.includes(':')) {
     throw new Error(
@@ -5217,6 +5279,10 @@ function assertSafeRepoPath(relativePath: string) {
   }
 }
 
+/**
+ * Validates a git specifier like `<ref>:<path>` or a bare ref. Rejects
+ * NUL/newline, leading dashes, and dangerous embedded git options.
+ */
 function assertSafeGitSpec(specifier: string) {
   const stringSpecifier = String(specifier)
   if (
@@ -5225,6 +5291,18 @@ function assertSafeGitSpec(specifier: string) {
     stringSpecifier.includes('\r')
   ) {
     throw new Error('[GitFileSystem] Invalid git spec: contains newline/NUL')
+  }
+  if (stringSpecifier.startsWith('-')) {
+    throw new Error(
+      '[GitFileSystem] Invalid git spec: must not start with "-"'
+    )
+  }
+  if (
+    /--upload-pack|--receive-pack|--exec|--ssh-command/i.test(stringSpecifier)
+  ) {
+    throw new Error(
+      '[GitFileSystem] Invalid git spec: contains dangerous git option'
+    )
   }
 }
 
