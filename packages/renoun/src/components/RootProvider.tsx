@@ -19,8 +19,12 @@ import { ThemeProvider } from './Theme/index.ts'
 import { ThemeScript } from './Theme/ThemeScript.ts'
 
 type HtmlProps = React.ComponentProps<'html'>
+
 type HeadProps = React.ComponentProps<'head'>
-type ThemeMap = Record<string, ThemeValue>
+
+interface ThemeMap {
+  [name: string]: ThemeValue
+}
 
 interface PackageJson {
   dependencies?: Record<string, unknown>
@@ -82,7 +86,10 @@ function getRootProviderErrorMessage() {
   return `[renoun] RootProvider must wrap the html element.${instruction}`
 }
 
-type BaseProps = Omit<Partial<ConfigurationOptions>, 'git' | 'theme'> & {
+interface BaseProps extends Omit<
+  Partial<ConfigurationOptions>,
+  'git' | 'theme'
+> {
   /** The nonce to use for the provider scripts. */
   nonce?: string
 
@@ -121,10 +128,19 @@ export type RootProviderProps<
         includeThemeScript?: never
       })
 
+interface RootProviderImplementationProps extends BaseProps {
+  theme?: ThemeValue | ThemeMap
+  includeThemeScript?: boolean
+}
+
+export function RootProvider(
+  props: RootProviderProps<ThemeMap>
+): React.JSX.Element
+export function RootProvider(
+  props: RootProviderProps<undefined>
+): React.JSX.Element
 /** A provider that configures and wraps the root of the application. */
-export function RootProvider<
-  Theme extends ThemeValue | ThemeMap | undefined = undefined,
->({
+export function RootProvider({
   children,
   theme,
   languages,
@@ -138,7 +154,7 @@ export function RootProvider<
   includeTableOfContentsScript = true,
   includeThemeScript = true,
   nonce,
-}: RootProviderProps<Theme>) {
+}: RootProviderImplementationProps) {
   const overrides: Partial<ConfigurationOptions> = {}
   if (theme !== undefined) {
     overrides.theme = theme
