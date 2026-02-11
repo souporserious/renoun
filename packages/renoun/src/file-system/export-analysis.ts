@@ -51,6 +51,9 @@ export interface ExportItem {
   /** The exported name of the symbol */
   name: string
 
+  /** The local declaration name when it differs from the export name (e.g. the class name for `export default class Foo`) */
+  localName?: string
+
   /** The source name (for re-exports like `export { x as y }`) */
   sourceName?: string
 
@@ -301,12 +304,12 @@ function getJSDocCommentText(
   comment: string | ts.NodeArray<ts.JSDocComment> | undefined
 ): string | undefined {
   if (!comment) return undefined
-  if (typeof comment === 'string') return comment.trim()
+  if (typeof comment === 'string') return cleanJSDocInlineTags(comment.trim())
   return comment
     .map((node) => {
-      if ('text' in node && typeof node.text === 'string') {
-        return node.text
-      }
+      // Check for link nodes BEFORE the generic 'text' check — JSDocLink
+      // also has a `text` property (the text *after* the link name) which
+      // would match the generic check and lose the link target name.
       if (
         ts.isJSDocLink(node) ||
         ts.isJSDocLinkCode(node) ||
@@ -319,10 +322,25 @@ function getJSDocCommentText(
         }
         return linkText
       }
+      if ('text' in node && typeof node.text === 'string') {
+        return node.text
+      }
       return ''
     })
     .join('')
     .trim()
+}
+
+/**
+ * Strip JSDoc inline tags (e.g. `{@link Foo}`) from raw comment text,
+ * keeping only the meaningful content. Handles `{@link}`, `{@linkplain}`,
+ * `{@linkcode}`, and `{@code}` tags.
+ */
+function cleanJSDocInlineTags(text: string): string {
+  return text.replace(
+    /\{@(?:link|linkplain|linkcode|code)\s+([^}]*)\}/g,
+    (_match, content: string) => content.trim()
+  )
 }
 
 /**
@@ -360,7 +378,8 @@ export function getDeprecatedInfo(
       /(?:\/\*\*[\s\S]*?@deprecated\s*([^\n*]*)[\s\S]*?\*\/|\/\/\s*@deprecated\s*(.*))/
     )
     if (deprecatedMatch) {
-      const message = (deprecatedMatch[1] ?? deprecatedMatch[2])?.trim()
+      const raw = (deprecatedMatch[1] ?? deprecatedMatch[2])?.trim()
+      const message = raw ? cleanJSDocInlineTags(raw) : raw
       return message
         ? { deprecated: true, deprecatedMessage: message }
         : { deprecated: true }
@@ -375,7 +394,8 @@ export function getDeprecatedInfo(
     )
     const trailingMatch = trailingText.match(/\/\/\s*@deprecated[,:]?\s*(.*)/)
     if (trailingMatch) {
-      const message = trailingMatch[1]?.trim()
+      const raw = trailingMatch[1]?.trim()
+      const message = raw ? cleanJSDocInlineTags(raw) : raw
       return message
         ? { deprecated: true, deprecatedMessage: message }
         : { deprecated: true }
@@ -447,6 +467,10 @@ export function scanModuleExports(
 
   const printer = getSharedTsPrinter()
   const declarationDeprecations = new Map<string, DeprecatedInfo>()
+  // Pre-pass: collect top-level declaration nodes by name so that
+  // `export default X;` can resolve `X` to the actual declaration
+  // and use its hash/signature instead of the static export statement.
+  const topLevelDeclarations = new Map<string, ts.Node>()
 
   function getLineNumbers(node: ts.Node) {
     const startPos = node.getStart(sourceFile)
@@ -484,6 +508,9 @@ export function scanModuleExports(
       node.declarationList.declarations.forEach((declaration) => {
         const declarationInfo =
           getDeprecatedInfo(declaration, sourceFile) ?? statementInfo
+        if (ts.isIdentifier(declaration.name)) {
+          topLevelDeclarations.set(declaration.name.text, declaration)
+        }
         if (!declarationInfo) {
           return
         }
@@ -509,6 +536,9 @@ export function scanModuleExports(
       ts.isInterfaceDeclaration(node) ||
       ts.isEnumDeclaration(node)
     ) {
+      if (node.name && ts.isIdentifier(node.name)) {
+        topLevelDeclarations.set(node.name.text, node)
+      }
       const info = getDeprecatedInfo(node, sourceFile)
       if (info && node.name && ts.isIdentifier(node.name)) {
         declarationDeprecations.set(node.name.text, info)
@@ -552,13 +582,18 @@ export function scanModuleExports(
           })
         }
       } else if (node.exportClause && ts.isNamedExports(node.exportClause)) {
-        // export { x }; (Local export)
+        // export { x }; (Local export — no module specifier)
+        // Resolve each element to the actual top-level declaration so the
+        // hash reflects changes to the declaration body, not just the
+        // static export specifier text.
         node.exportClause.elements.forEach((element) => {
+          const localName = element.propertyName?.text ?? element.name.text
           const deprecatedInfo = declarationDeprecations.get(element.name.text)
+          const declNode = topLevelDeclarations.get(localName)
           exports.set(element.name.text, {
             name: element.name.text,
             id: '__LOCAL__',
-            ...getHashesAndLines(element),
+            ...getHashesAndLines(declNode ?? element),
             ...(deprecatedInfo ?? {}),
           })
         })
@@ -631,6 +666,10 @@ export function scanModuleExports(
       if (isDefault) {
         exports.set('default', {
           name: 'default',
+          localName:
+            node.name && ts.isIdentifier(node.name)
+              ? node.name.text
+              : undefined,
           id: '__LOCAL__',
           ...getHashesAndLines(node),
           ...(deprecatedInfo ?? {}),
@@ -639,13 +678,28 @@ export function scanModuleExports(
       return
     }
 
-    // Export Assignment: export = x;
+    // Export Assignment: export default x; / export = x;
     if (ts.isExportAssignment(node)) {
       const deprecatedInfo = getDeprecatedInfo(node, sourceFile)
+
+      // When the expression is a simple identifier (e.g. `export default Foo;`),
+      // resolve it to the actual top-level declaration so that the hash reflects
+      // changes to the declaration body, not just the static export statement.
+      let hashNode: ts.Node = node
+      if (ts.isIdentifier(node.expression)) {
+        const declNode = topLevelDeclarations.get(node.expression.text)
+        if (declNode) {
+          hashNode = declNode
+        }
+      }
+
       exports.set('default', {
         name: 'default',
+        localName: ts.isIdentifier(node.expression)
+          ? node.expression.text
+          : undefined,
         id: '__LOCAL__',
-        ...getHashesAndLines(node),
+        ...getHashesAndLines(hashNode),
         ...(deprecatedInfo ?? {}),
       })
     }
@@ -779,6 +833,7 @@ export class LRUMap<Key, Value> extends Map<Key, Value> {
  */
 export function looksLikeFilePath(path: string): boolean {
   const lastSegment = path.split('/').pop() || ''
+  if (lastSegment === '.' || lastSegment === '..') return false
   return lastSegment.includes('.')
 }
 
@@ -840,6 +895,23 @@ export interface RenamePair {
   score: number
 }
 
+export interface DetectSameFileRenamesOptions {
+  previousById: Map<string, ExportItem>
+  currentById: Map<string, ExportItem>
+  removedIds: string[]
+  thresholdDice?: number
+  /** Pre-grouped added/removed by file. If provided, grouping is skipped. */
+  preGrouped?: {
+    byFileAdded: Map<string, string[]>
+    byFileRemoved: Map<string, string[]>
+  }
+  /** Files where a lower threshold applies (e.g. git-renamed files). */
+  renamedFileGroups?: Set<string>
+  renamedFileThreshold?: number
+  /** Margin required between best and second-best candidates. */
+  marginThreshold?: number
+}
+
 /**
  * Detect same-file renames by comparing signature similarity.
  * Returns a map of new ID -> { oldId } for detected renames.
@@ -848,39 +920,76 @@ export function detectSameFileRenames(
   previousById: Map<string, ExportItem>,
   currentById: Map<string, ExportItem>,
   removedIds: string[],
+  thresholdDice?: number
+): {
+  renamePairs: Map<string, { oldId: string }>
+  usedRemovedIds: Set<string>
+}
+export function detectSameFileRenames(options: DetectSameFileRenamesOptions): {
+  renamePairs: Map<string, { oldId: string }>
+  usedRemovedIds: Set<string>
+}
+export function detectSameFileRenames(
+  previousByIdOrOptions: Map<string, ExportItem> | DetectSameFileRenamesOptions,
+  currentById?: Map<string, ExportItem>,
+  removedIds?: string[],
   thresholdDice: number = RENAME_SIGNATURE_DICE_MIN
 ): {
   renamePairs: Map<string, { oldId: string }>
   usedRemovedIds: Set<string>
 } {
+  const options: DetectSameFileRenamesOptions =
+    previousByIdOrOptions instanceof Map
+      ? {
+          previousById: previousByIdOrOptions,
+          currentById: currentById ?? new Map(),
+          removedIds: removedIds ?? [],
+          thresholdDice,
+        }
+      : previousByIdOrOptions
+
+  const {
+    previousById: previousByIdLocal,
+    currentById: currentByIdLocal,
+    removedIds: removedIdsLocal,
+    thresholdDice: thresholdDiceLocal = RENAME_SIGNATURE_DICE_MIN,
+    preGrouped,
+    renamedFileGroups,
+    renamedFileThreshold = RENAME_SIGNATURE_DICE_MIN_RENAMED_FILE,
+    marginThreshold = RENAME_SIGNATURE_DICE_MARGIN,
+  } = options
+
   const renamePairs = new Map<string, { oldId: string }>()
   const usedRemovedIds = new Set<string>()
 
   // Group added and removed by file
-  const byFileAdded = new Map<string, string[]>()
-  const byFileRemoved = new Map<string, string[]>()
+  const byFileAdded = preGrouped?.byFileAdded ?? new Map<string, string[]>()
+  const byFileRemoved = preGrouped?.byFileRemoved ?? new Map<string, string[]>()
 
-  for (const id of currentById.keys()) {
-    if (previousById.has(id)) continue
-    const parsed = parseExportId(id)
-    if (!parsed) continue
-    const list = byFileAdded.get(parsed.file)
-    if (list) {
-      list.push(id)
-    } else {
-      byFileAdded.set(parsed.file, [id])
+  if (!preGrouped?.byFileAdded) {
+    for (const id of currentByIdLocal.keys()) {
+      if (previousByIdLocal.has(id)) continue
+      const parsed = parseExportId(id)
+      if (!parsed) continue
+      const list = byFileAdded.get(parsed.file)
+      if (list) {
+        list.push(id)
+      } else {
+        byFileAdded.set(parsed.file, [id])
+      }
     }
   }
 
-  for (const removedId of removedIds) {
-    if (usedRemovedIds.has(removedId)) continue
-    const parsed = parseExportId(removedId)
-    if (!parsed) continue
-    const list = byFileRemoved.get(parsed.file)
-    if (list) {
-      list.push(removedId)
-    } else {
-      byFileRemoved.set(parsed.file, [removedId])
+  if (!preGrouped?.byFileRemoved) {
+    for (const removedId of removedIdsLocal) {
+      const parsed = parseExportId(removedId)
+      if (!parsed) continue
+      const list = byFileRemoved.get(parsed.file)
+      if (list) {
+        list.push(removedId)
+      } else {
+        byFileRemoved.set(parsed.file, [removedId])
+      }
     }
   }
 
@@ -897,12 +1006,12 @@ export function detectSameFileRenames(
     const candidates: Candidate[] = []
 
     for (const addedId of addedIds) {
-      const addedItem = currentById.get(addedId)
+      const addedItem = currentByIdLocal.get(addedId)
       if (!addedItem) continue
 
       for (const removedId of removedInFile) {
         if (usedRemovedIds.has(removedId)) continue
-        const removedItem = previousById.get(removedId)
+        const removedItem = previousByIdLocal.get(removedId)
         if (!removedItem) continue
 
         // Exact signature match
@@ -917,7 +1026,10 @@ export function detectSameFileRenames(
             addedItem.signatureText,
             removedItem.signatureText
           )
-          if (score >= thresholdDice) {
+          const min = renamedFileGroups?.has(file)
+            ? renamedFileThreshold
+            : thresholdDiceLocal
+          if (score >= min) {
             candidates.push({ addedId, removedId, score })
           }
         }
@@ -929,14 +1041,39 @@ export function detectSameFileRenames(
     // Sort by score descending
     candidates.sort((a, b) => b.score - a.score)
     const usedAdded = new Set<string>()
+    const usedRemovedLocal = new Set<string>()
+    const bestByAdded = new Map<string, number>()
+    const secondByAdded = new Map<string, number>()
+
+    for (const candidate of candidates) {
+      const best = bestByAdded.get(candidate.addedId)
+      if (best === undefined) {
+        bestByAdded.set(candidate.addedId, candidate.score)
+      } else {
+        const second = secondByAdded.get(candidate.addedId)
+        if (second === undefined && candidate.score < best) {
+          secondByAdded.set(candidate.addedId, candidate.score)
+        }
+      }
+    }
 
     // Greedy matching
     for (const candidate of candidates) {
       if (usedAdded.has(candidate.addedId)) continue
+      if (usedRemovedLocal.has(candidate.removedId)) continue
       if (usedRemovedIds.has(candidate.removedId)) continue
+
+      if (candidate.score < 1) {
+        const best = bestByAdded.get(candidate.addedId) ?? candidate.score
+        const second = secondByAdded.get(candidate.addedId)
+        if (second !== undefined && best - second < marginThreshold) {
+          continue
+        }
+      }
 
       renamePairs.set(candidate.addedId, { oldId: candidate.removedId })
       usedAdded.add(candidate.addedId)
+      usedRemovedLocal.add(candidate.removedId)
       usedRemovedIds.add(candidate.removedId)
     }
   }
@@ -1056,6 +1193,103 @@ export function detectCrossFileRenames(
     if (chosen && !usedRemovedIds.has(chosen)) {
       renamePairs.set(id, { oldId: chosen })
       usedRemovedIds.add(chosen)
+    }
+  }
+}
+
+/**
+ * Detect re-export moves where the same public export name resolves to a
+ * different defining file between commits. This catches cases where a barrel
+ * file (or re-export chain) is reorganized, causing the same export to be
+ * traced to a different origin file even though the public API is unchanged.
+ *
+ * For example, if `timerGlobal` was re-exported from `TimerNode.js` and is
+ * now re-exported from `Timer.js`, this should be treated as a move rather
+ * than a separate remove + add.
+ *
+ * Must run AFTER other rename detection passes (git renames, signature
+ * matching, cross-file hash matching) to only catch what they missed.
+ */
+export function detectSameNameMoves(
+  previousExports: Map<string, Map<string, ExportItem>>,
+  currentExports: Map<string, Map<string, ExportItem>>,
+  previousById: Map<string, ExportItem>,
+  currentById: Map<string, ExportItem>,
+  removedIds: string[],
+  usedRemovedIds: Set<string>,
+  renamePairs: Map<string, { oldId: string }>
+): void {
+  const removedSet = new Set(removedIds)
+
+  for (const [name, currentItems] of currentExports) {
+    const previousItems = previousExports.get(name)
+    if (!previousItems) continue
+
+    // Collect new IDs under this name (not in previous, not already paired)
+    const addedUnderName: string[] = []
+    for (const id of currentItems.keys()) {
+      if (!previousById.has(id) && !renamePairs.has(id)) {
+        addedUnderName.push(id)
+      }
+    }
+    if (addedUnderName.length === 0) continue
+
+    // Collect removed IDs under this name (not in current, not already used)
+    const removedUnderName: string[] = []
+    for (const id of previousItems.keys()) {
+      if (removedSet.has(id) && !usedRemovedIds.has(id)) {
+        removedUnderName.push(id)
+      }
+    }
+    if (removedUnderName.length === 0) continue
+
+    // Match added IDs to removed IDs, preferring same underlying export name
+    // and signature similarity
+    for (const addedId of addedUnderName) {
+      if (renamePairs.has(addedId)) continue
+      const addedParsed = parseExportId(addedId)
+      if (!addedParsed) continue
+      const addedItem = currentById.get(addedId)
+      if (!addedItem) continue
+
+      let bestMatch: string | null = null
+      let bestScore = -1
+
+      for (const removedId of removedUnderName) {
+        if (usedRemovedIds.has(removedId)) continue
+        const removedParsed = parseExportId(removedId)
+        if (!removedParsed) continue
+        const removedItem = previousById.get(removedId)
+        if (!removedItem) continue
+
+        let score = 0
+
+        // Same underlying export name is a strong signal
+        if (addedParsed.name === removedParsed.name) {
+          score += 1
+        }
+
+        // Bonus for exact signature match
+        if (addedItem.signatureHash === removedItem.signatureHash) {
+          score += 1
+        } else if (addedItem.signatureText && removedItem.signatureText) {
+          score += getDiceSimilarity(
+            addedItem.signatureText,
+            removedItem.signatureText
+          )
+        }
+
+        if (score > bestScore) {
+          bestScore = score
+          bestMatch = removedId
+        }
+      }
+
+      // Require at least matching underlying name or some signature similarity
+      if (bestMatch !== null && bestScore > 0) {
+        renamePairs.set(addedId, { oldId: bestMatch })
+        usedRemovedIds.add(bestMatch)
+      }
     }
   }
 }

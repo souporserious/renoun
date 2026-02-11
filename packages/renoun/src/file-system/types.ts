@@ -90,6 +90,9 @@ interface BaseChange {
   /** The exported name of the symbol. */
   name: string
 
+  /** The local declaration name when it differs from the export name (e.g. "NodeBuilder" for `export default class NodeBuilder`). */
+  localName?: string
+
   /** The file path where the export is defined. */
   filePath: string
 
