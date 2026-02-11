@@ -6697,11 +6697,11 @@ describe('resolveType', () => {
                     "position": {
                       "end": {
                         "column": 90,
-                        "line": 211,
+                        "line": 214,
                       },
                       "start": {
                         "column": 70,
-                        "line": 211,
+                        "line": 214,
                       },
                     },
                     "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight">",
@@ -6714,11 +6714,11 @@ describe('resolveType', () => {
                         "position": {
                           "end": {
                             "column": 80,
-                            "line": 211,
+                            "line": 214,
                           },
                           "start": {
                             "column": 79,
-                            "line": 211,
+                            "line": 214,
                           },
                         },
                         "text": "A",
@@ -6736,11 +6736,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 89,
-                              "line": 211,
+                              "line": 214,
                             },
                             "start": {
                               "column": 88,
-                              "line": 211,
+                              "line": 214,
                             },
                           },
                           "text": "B",
@@ -10623,11 +10623,11 @@ describe('resolveType', () => {
                     "position": {
                       "end": {
                         "column": 90,
-                        "line": 211,
+                        "line": 214,
                       },
                       "start": {
                         "column": 70,
-                        "line": 211,
+                        "line": 214,
                       },
                     },
                     "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
@@ -10640,11 +10640,11 @@ describe('resolveType', () => {
                         "position": {
                           "end": {
                             "column": 80,
-                            "line": 211,
+                            "line": 214,
                           },
                           "start": {
                             "column": 79,
-                            "line": 211,
+                            "line": 214,
                           },
                         },
                         "text": "A",
@@ -10662,11 +10662,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 89,
-                              "line": 211,
+                              "line": 214,
                             },
                             "start": {
                               "column": 88,
-                              "line": 211,
+                              "line": 214,
                             },
                           },
                           "text": "B",
@@ -10867,11 +10867,11 @@ describe('resolveType', () => {
                     "position": {
                       "end": {
                         "column": 90,
-                        "line": 211,
+                        "line": 214,
                       },
                       "start": {
                         "column": 70,
-                        "line": 211,
+                        "line": 214,
                       },
                     },
                     "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
@@ -10884,11 +10884,11 @@ describe('resolveType', () => {
                         "position": {
                           "end": {
                             "column": 80,
-                            "line": 211,
+                            "line": 214,
                           },
                           "start": {
                             "column": 79,
-                            "line": 211,
+                            "line": 214,
                           },
                         },
                         "text": "A",
@@ -10906,11 +10906,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 89,
-                              "line": 211,
+                              "line": 214,
                             },
                             "start": {
                               "column": 88,
-                              "line": 211,
+                              "line": 214,
                             },
                           },
                           "text": "B",
@@ -11054,11 +11054,11 @@ describe('resolveType', () => {
                     "position": {
                       "end": {
                         "column": 90,
-                        "line": 211,
+                        "line": 214,
                       },
                       "start": {
                         "column": 70,
-                        "line": 211,
+                        "line": 214,
                       },
                     },
                     "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows">",
@@ -11071,11 +11071,11 @@ describe('resolveType', () => {
                         "position": {
                           "end": {
                             "column": 80,
-                            "line": 211,
+                            "line": 214,
                           },
                           "start": {
                             "column": 79,
-                            "line": 211,
+                            "line": 214,
                           },
                         },
                         "text": "A",
@@ -11093,11 +11093,11 @@ describe('resolveType', () => {
                           "position": {
                             "end": {
                               "column": 89,
-                              "line": 211,
+                              "line": 214,
                             },
                             "start": {
                               "column": 88,
-                              "line": 211,
+                              "line": 214,
                             },
                           },
                           "text": "B",
