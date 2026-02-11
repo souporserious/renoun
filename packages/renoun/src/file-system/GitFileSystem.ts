@@ -2062,7 +2062,9 @@ export class GitFileSystem
 
     // Fetch content history
     const logStartCommit = resumeCommit ?? startCommit
-    const logRef = logStartCommit ? `${logStartCommit}..${endCommit}` : endCommit
+    const logRef = logStartCommit
+      ? `${logStartCommit}..${endCommit}`
+      : endCommit
     const contentCommits = await this.#gitLogCached(logRef, scopeDirectories, {
       reverse: true, // Oldest to Newest
       limit,
@@ -2263,8 +2265,10 @@ export class GitFileSystem
     function serializeExportSnapshot(
       exportMap: Map<string, Map<string, ExportItem>>
     ): Record<string, Record<string, ExportItem>> {
-      const snapshot: Record<string, Record<string, ExportItem>> =
-        Object.create(null)
+      const snapshot: Record<
+        string,
+        Record<string, ExportItem>
+      > = Object.create(null)
       for (const [name, items] of exportMap) {
         const serialized: Record<string, ExportItem> = Object.create(null)
         for (const [id, item] of items) {
@@ -3746,16 +3750,6 @@ function readFileExportIndex(path: string): FileExportIndex | null {
     return null
   }
 }
-
-// ---------------------------------------------------------------------------
-// Synchronous git helpers
-//
-// In environments where the Node.js event loop is congested (e.g. Next.js
-// webpack dev server), the persistent `git cat-file --batch` processes
-// suffer extreme latency because their stdout 'data' callbacks get delayed.
-// These synchronous helpers bypass the event loop entirely by using
-// `spawnSync`, making performance independent of event-loop load.
-// ---------------------------------------------------------------------------
 
 /**
  * Pre-loads the full file tree for a given commit using `git ls-tree -r -l`.
