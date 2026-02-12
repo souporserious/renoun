@@ -1,6 +1,6 @@
 {
   "name": "@renoun/blog",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "homepage": "https://blog.renoun.dev",
   "description": "A blog starter featuring a post index, tags, and individual article pages with MDX.",
   "author": "souporserious",

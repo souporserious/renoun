@@ -1,5 +1,23 @@
 # renoun
 
+## 11.3.0
+
+### Minor Changes
+
+- 293300a: Adds `commit` and `releaseTag` variants to the `Link` component along with `getCommitUrl` and `getReleaseTagUrl` methods on the `Repository` class for constructing URLs to specific commits and release tags.
+
+### Patch Changes
+
+- 1e999f6: Fixes `RootProviderProps` typing so IntelliSense correctly shows concrete provider props instead of collapsing to a broad index signature in generic utility types.
+- 57d9742: Hardens app-mode file synchronization by refusing symlink escapes outside the project root and skipping symlinked project overrides.
+- 97bc302: Improves validation and hardens git commands in `GitFileSystem` provider.
+- cf0be5b: Improves export analysis accuracy: resolves `export default X` to the actual declaration for hashing, tracks `localName` on export changes, strips JSDoc inline tags from deprecation messages, and adds same-name move detection for re-export reorganizations.
+- 1cf083c: Fixes `Collection#getFile` type inference so schema-derived frontmatter types are preserved instead of widening to `unknown` or narrowing export names to only `'default'`.
+- ff3e53a: Redacts RPC error payload details in production responses to avoid leaking request params.
+- b6b5fd0: Encodes URL parameters in `GitVirtualFileSystem` to prevent any potential URL injection.
+- Updated dependencies [bd9ae05]
+  - @renoun/mdx@3.8.1
+
 ## 11.2.0
 
 ### Minor Changes
