@@ -1,0 +1,123 @@
+## Basic Usage
+
+Pass the async generator returned by `repository.getExportHistory()` as the `source` prop:
+
+```tsx
+import { Directory } from 'renoun'
+import { History } from 'renoun/components'
+
+const directory = new Directory({
+  path: 'packages/renoun',
+  repository: {
+    path: 'https://github.com/souporserious/renoun',
+    ref: 'main',
+  },
+})
+
+export default async function Page() {
+  const repo = directory.getRepository()
+  const source = repo.getExportHistory()
+
+  return <History source={source} />
+}
+```
+
+`History` handles streaming + data projection. You provide UI via component slots.
+
+## Slots
+
+| Slot       | Purpose                            |
+| ---------- | ---------------------------------- |
+| `Root`     | Optional wrapper around all output |
+| `Progress` | Rendered while streaming           |
+| `Complete` | Rendered once report is complete   |
+| `Exports`  | Wraps final export entries         |
+| `Export`   | Renders a single export entry      |
+| `Changes`  | Wraps changes for an export        |
+| `Change`   | Renders an individual change       |
+
+## Custom Rendering
+
+```tsx
+import { Directory } from 'renoun'
+import { History, type HistoryComponents } from 'renoun/components'
+
+const directory = new Directory({
+  path: 'packages/renoun',
+  repository: {
+    path: 'https://github.com/souporserious/renoun',
+    ref: 'main',
+  },
+})
+const repo = directory.getRepository()
+
+const components: Partial<HistoryComponents> = {
+  Progress: ({ phase, commitsProcessed, totalCommits }) => (
+    <p>
+      {phase} ({commitsProcessed}/{totalCommits})
+    </p>
+  ),
+  Complete: ({ exportCount, changeCount, children }) => (
+    <section>
+      <h2>
+        {exportCount} exports, {changeCount} changes
+      </h2>
+      {children}
+    </section>
+  ),
+  Exports: ({ children }) => <ul>{children}</ul>,
+  Export: ({ entry, children }) => (
+    <li>
+      <strong>{entry.name}</strong>
+      {children}
+    </li>
+  ),
+  Changes: ({ children }) => <ol>{children}</ol>,
+  Change: ({ change }) => <li>{change.kind}</li>,
+}
+
+export default async function Page() {
+  const source = repo.getExportHistory({ entry: 'src/index.ts' })
+  return <History source={source} components={components} />
+}
+```
+
+## Entry Selection
+
+Use `selectEntries` to project the final report before rendering:
+
+```tsx
+import { Directory } from 'renoun'
+import {
+  History,
+  getRecentlyAddedHistoryEntries,
+  type HistorySelectEntriesContext,
+} from 'renoun/components'
+
+const directory = new Directory({
+  path: 'packages/renoun',
+  repository: {
+    path: 'https://github.com/souporserious/renoun',
+    ref: 'main',
+  },
+})
+const repo = directory.getRepository()
+
+const selectRecent = ({ report }: HistorySelectEntriesContext) =>
+  getRecentlyAddedHistoryEntries(report, { release: 'latest' })
+
+export default async function Page() {
+  const source = repo.getExportHistory({ entry: 'src/index.ts' })
+  return <History source={source} selectEntries={selectRecent} />
+}
+```
+
+## Helpers
+
+- `getHistoryEntries(report)` returns default sorted entries.
+- `getLatestHistoryRelease(report)` returns the most recent release label found.
+- `getRecentlyAddedHistoryEntries(report, { release })` filters to `Added` changes for a release (`'latest'` by default).
+
+## Streaming Model
+
+`History` consumes the async generator one event at a time with recursive Suspense boundaries. Each progress yield is rendered via `Progress`; when complete, `Complete` receives the final report and projected entries.

@@ -35,6 +35,15 @@ export {
   type TableOfContentsComponents,
 } from './TableOfContents/index.ts'
 export {
+  History,
+  getHistoryEntries,
+  getLatestHistoryRelease,
+  getRecentlyAddedHistoryEntries,
+  type HistoryProps,
+  type HistoryComponents,
+  type HistoryListComponents,
+} from './History/index.ts'
+export {
   Navigation,
   type NavigationProps,
   type NavigationComponents,
