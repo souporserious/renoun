@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 
 import {
   BaseReference,
@@ -26,6 +26,7 @@ import {
   TextMateGrammarRaw,
   TextMateThemeRaw,
   TokenMetadata,
+  TokenizerRuntimeTuning,
   Tokenizer,
   TokenizeOptions,
   TokenizeStringResult,
@@ -45,17 +46,20 @@ import {
   parseRawGrammar,
   parseTheme,
   parseWithLocation,
+  getTokenizerRuntimeTuning,
+  resetTokenizerRuntimeTuning,
+  setTokenizerRuntimeTuning,
   stringArrayCompare,
   stringCompare,
   toOptionalTokenType,
-} from './textmate.ts'
+} from './tokenizer-new.ts'
 
-import cssGrammar from '../grammars/css.ts'
-import htmlGrammar from '../grammars/html.ts'
-import shellGrammar from '../grammars/shellscript.ts'
-import mdxGrammar from '../grammars/mdx.ts'
-import tsxGrammar from '../grammars/tsx.ts'
-import textmateTheme from '../theme.ts'
+import cssGrammar from './grammars/css.ts'
+import htmlGrammar from './grammars/html.ts'
+import shellGrammar from './grammars/shellscript.ts'
+import mdxGrammar from './grammars/mdx.ts'
+import tsxGrammar from './grammars/tsx.ts'
+import textmateTheme from './theme.ts'
 
 describe('textmate utilities', () => {
   test('clone deep clones objects and arrays', () => {
@@ -88,6 +92,24 @@ describe('textmate utilities', () => {
 
     // Ensure global regex state doesn\'t leak between calls
     expect(escapeRegExpCharacters('a.b[c]')).toBe('a\\.b\\[c\\]')
+  })
+
+  test('runtime tuning can be updated and reset', () => {
+    const original = getTokenizerRuntimeTuning()
+    const updated = setTokenizerRuntimeTuning({
+      scannerAdvancedPathMinRemaining:
+        original.scannerAdvancedPathMinRemaining + 1,
+    } satisfies Partial<TokenizerRuntimeTuning>)
+
+    expect(updated.scannerAdvancedPathMinRemaining).toBe(
+      original.scannerAdvancedPathMinRemaining + 1
+    )
+    expect(getTokenizerRuntimeTuning().scannerAdvancedPathMinRemaining).toBe(
+      original.scannerAdvancedPathMinRemaining + 1
+    )
+
+    const reset = resetTokenizerRuntimeTuning()
+    expect(reset).toEqual(original)
   })
 })
 
@@ -238,6 +260,52 @@ describe('precompiled / raw RegExp support', () => {
 
     const compiled = new CompiledRule(grammar, [/[a-z&&b]/], [1])
     expect(compiled.findNextMatchSync('[a-z&&b]', 0)).not.toBeNull()
+  })
+
+  test('preserves winner and captures for chunk-eligible patterns', () => {
+    const grammar: any = { scopeName: 'source.test' }
+    const compiled = new CompiledRule(
+      grammar,
+      [/bar/, /foo(\d+)/, /baz/],
+      [1, 2, 3]
+    )
+
+    const match = compiled.findNextMatchSync('xxfoo42 bar', 0)
+    expect(match).not.toBeNull()
+    expect(match!.ruleId).toBe(2)
+    expect(match!.captureIndices[0]).toBe(2)
+    expect(match!.captureIndices[1]).toBe(7)
+    expect(match!.captureIndices[2]).toBe(5)
+    expect(match!.captureIndices[3]).toBe(7)
+  })
+
+  test('preserves tie-by-order semantics across chunk boundaries', () => {
+    const grammar: any = { scopeName: 'source.test' }
+    const sources = Array.from({ length: 20 }, (_, index) => {
+      if (index === 3 || index === 17) return /foo/
+      return new RegExp(`z${index}`)
+    })
+    const rules = sources.map((_, index) => index + 1)
+    const compiled = new CompiledRule(grammar, sources, rules)
+
+    const match = compiled.findNextMatchSync('foo', 0)
+    expect(match).not.toBeNull()
+    expect(match!.ruleId).toBe(4)
+  })
+
+  test('keeps backreference rules behavior when mixed with chunked rules', () => {
+    const grammar: any = { scopeName: 'source.test' }
+    const compiled = new CompiledRule(
+      grammar,
+      [/foo/, /([a-z]+)\1/, /bar/],
+      [1, 2, 3]
+    )
+
+    const match = compiled.findNextMatchSync('abab foo', 0)
+    expect(match).not.toBeNull()
+    expect(match!.ruleId).toBe(2)
+    expect(match!.captureIndices[0]).toBe(0)
+    expect(match!.captureIndices[1]).toBe(4)
   })
 })
 
@@ -806,6 +874,60 @@ describe('Theme', () => {
     expect(match).toBeDefined()
   })
 
+  test('matchAttributedStrict preserves parent-scope specificity', () => {
+    const rawTheme: TextMateThemeRaw = {
+      settings: [
+        { settings: { foreground: '#ffffff', background: '#000000' } },
+        { scope: 'child', settings: { foreground: '#111111' } },
+        { scope: 'parent > child', settings: { foreground: '#ff0000' } },
+        { scope: 'grand > child', settings: { foreground: '#00ff00' } },
+      ],
+    }
+
+    const theme = Theme.createFromParsedTheme(parseTheme(rawTheme), null)
+    const colorMap = theme.getColorMap()
+    const makeAttributed = (segments: string[]) => {
+      let stack: AttributedScopeStack | null = null
+      for (let index = 0; index < segments.length; index++) {
+        if (stack === null) {
+          stack = AttributedScopeStack.createRoot(segments[index], 0, null)
+        } else {
+          stack = new AttributedScopeStack(stack, segments[index], 0, null)
+        }
+      }
+      return stack
+    }
+
+    const strictImmediate = theme.matchAttributedStrict(
+      'child',
+      makeAttributed(['parent'])
+    )!
+    const legacyImmediate = theme.match(ScopeStack.from('parent', 'child')!)!
+    expect(colorMap[strictImmediate.foregroundId]).toBe(
+      colorMap[legacyImmediate.foregroundId]
+    )
+
+    const strictAncestor = theme.matchAttributedStrict(
+      'child',
+      makeAttributed(['grand', 'parent'])
+    )!
+    const legacyAncestor = theme.match(
+      ScopeStack.from('grand', 'parent', 'child')!
+    )!
+    expect(colorMap[strictAncestor.foregroundId]).toBe(
+      colorMap[legacyAncestor.foregroundId]
+    )
+
+    const strictGrandOnly = theme.matchAttributedStrict(
+      'child',
+      makeAttributed(['grand'])
+    )!
+    const legacyGrandOnly = theme.match(ScopeStack.from('grand', 'child')!)!
+    expect(colorMap[strictGrandOnly.foregroundId]).toBe(
+      colorMap[legacyGrandOnly.foregroundId]
+    )
+  })
+
   test('getColorMap returns the color array', () => {
     const rawTheme = {
       settings: [
@@ -873,6 +995,80 @@ describe('createMatchers', () => {
     expect(matchers[0].matcher(['source.js', 'comment'])).toBe(true)
     // With our matchesName, even a single match returns true (checks if any part matches any scope)
     expect(matchers[0].matcher(['comment'])).toBe(true) // 'comment' in parts matches 'comment' in scopes
+  })
+
+  test('supports stack-based matcher inputs with parity to array matching', () => {
+    type ScopeNode = { parent: ScopeNode | null; scopeName: string }
+    const buildScopeStack = (segments: string[]): ScopeNode | null => {
+      let current: ScopeNode | null = null
+      for (let index = 0; index < segments.length; index++) {
+        current = { parent: current, scopeName: segments[index] }
+      }
+      return current
+    }
+    const scopeMatches = (actual: string, expected: string) =>
+      actual === expected || actual.startsWith(expected + '.')
+    const matchesNameByOrder = (names: string[], scopeSegments: string[]) => {
+      if (scopeSegments.length < names.length) return false
+      let segmentIndex = 0
+      for (let nameIndex = 0; nameIndex < names.length; nameIndex++) {
+        const expected = names[nameIndex]
+        let found = false
+        while (segmentIndex < scopeSegments.length) {
+          if (scopeMatches(scopeSegments[segmentIndex++], expected)) {
+            found = true
+            break
+          }
+        }
+        if (!found) return false
+      }
+      return true
+    }
+    const matchesNameByStack = (names: string[], stack: ScopeNode | null) => {
+      let cursor = stack
+      for (let nameIndex = names.length - 1; nameIndex >= 0; nameIndex--) {
+        let found = false
+        const expected = names[nameIndex]
+        while (cursor) {
+          const scopeName = cursor.scopeName
+          cursor = cursor.parent
+          if (scopeMatches(scopeName, expected)) {
+            found = true
+            break
+          }
+        }
+        if (!found) return false
+      }
+      return true
+    }
+
+    const selector =
+      'R:source.js comment.line, L:(text.html meta.tag | source.js string.quoted) - invalid.illegal'
+    const arrayMatchers = createMatchers(selector, matchesNameByOrder)
+    const stackMatchers = createMatchers<ScopeNode | null>(
+      selector,
+      matchesNameByStack
+    )
+    expect(stackMatchers.map((matcher) => matcher.priority)).toEqual(
+      arrayMatchers.map((matcher) => matcher.priority)
+    )
+
+    const scopeSets = [
+      ['source.js', 'comment.line.double-slash'],
+      ['source.js', 'string.quoted.double.js'],
+      ['text.html', 'meta.tag.block'],
+      ['text.html', 'meta.tag.block', 'invalid.illegal'],
+      ['source.css', 'comment.block'],
+    ]
+
+    for (const scopes of scopeSets) {
+      const stack = buildScopeStack(scopes)
+      for (let index = 0; index < arrayMatchers.length; index++) {
+        expect(stackMatchers[index].matcher(stack)).toBe(
+          arrayMatchers[index].matcher(scopes)
+        )
+      }
+    }
   })
 })
 
@@ -1660,6 +1856,107 @@ echo "Hello World"`
       expect(tokens.length).toBeGreaterThan(0)
       expect(tokens[0].length).toBeGreaterThan(0)
     }
+  })
+
+  test('injection matching does not require scope-name array materialization', async () => {
+    const rawGrammar: TextMateGrammarRaw = {
+      scopeName: 'source.injection-test',
+      patterns: [{ match: '\\w+', name: 'word.base' }],
+      injections: {
+        'L:source.injection-test': { match: 'foo', name: 'keyword.injection' },
+      },
+      repository: {},
+    }
+
+    const registry = new Registry({
+      async loadGrammar(scopeName) {
+        if (scopeName === rawGrammar.scopeName) return rawGrammar
+        return null
+      },
+    })
+    registry.setTheme(themeFixtures.light)
+    const grammar = await registry.loadGrammar(rawGrammar.scopeName)
+    expect(grammar).toBeTruthy()
+
+    const originalGetScopeNames = AttributedScopeStack.prototype.getScopeNames
+    let getScopeNamesCalls = 0
+    AttributedScopeStack.prototype.getScopeNames = function () {
+      getScopeNamesCalls++
+      return originalGetScopeNames.call(this)
+    }
+
+    try {
+      const line = grammar!.tokenizeLine('foo bar', null)
+      expect(line.tokens.length).toBeGreaterThan(0)
+    } finally {
+      AttributedScopeStack.prototype.getScopeNames = originalGetScopeNames
+    }
+
+    expect(getScopeNamesCalls).toBe(0)
+  })
+
+  test('tokenizeLine still stops early with tight time limits', async () => {
+    const rawGrammar: TextMateGrammarRaw = {
+      scopeName: 'source.time-limit-test',
+      patterns: [{ match: '.', name: 'meta.char' }],
+      repository: {},
+    }
+
+    const registry = new Registry({
+      async loadGrammar(scopeName) {
+        if (scopeName === rawGrammar.scopeName) return rawGrammar
+        return null
+      },
+    })
+    registry.setTheme(themeFixtures.light)
+    const grammar = await registry.loadGrammar(rawGrammar.scopeName)
+    expect(grammar).toBeTruthy()
+
+    const nowSpy = vi.spyOn(performance, 'now')
+    let tick = 0
+    nowSpy.mockImplementation(() => {
+      tick += 100
+      return tick
+    })
+
+    try {
+      const result = grammar!.tokenizeLine('a'.repeat(200), null, 1)
+      expect(result.stoppedEarly).toBe(true)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
+  test('loads and tokenizes deep-frozen grammars without cloning', async () => {
+    const deepFreeze = (value: any): any => {
+      if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
+        return value
+      }
+      Object.freeze(value)
+      for (const key of Object.keys(value)) {
+        deepFreeze(value[key])
+      }
+      return value
+    }
+
+    const frozenGrammar = deepFreeze({
+      scopeName: 'source.frozen-test',
+      patterns: [{ match: '\\w+', name: 'word.frozen' }],
+      repository: {},
+    }) as TextMateGrammarRaw
+
+    const registry = new Registry({
+      async loadGrammar(scopeName) {
+        if (scopeName === frozenGrammar.scopeName) return frozenGrammar
+        return null
+      },
+    })
+    registry.setTheme(themeFixtures.light)
+    const grammar = await registry.loadGrammar(frozenGrammar.scopeName)
+    expect(grammar).toBeTruthy()
+
+    const line = grammar!.tokenizeLine('frozen grammar input', null)
+    expect(line.tokens.length).toBeGreaterThan(0)
   })
 
   test('tokenizes shell after loading MDX which embeds shell', async () => {
@@ -2516,6 +2813,130 @@ export default function Page() {
       FontStyle.Italic
     )
     expect(TokenMetadata.getFontStyle(meta2) & FontStyle.Italic).toBe(0)
+  })
+
+  test('zero-width/zero-advance loop patterns terminate without early stop', async () => {
+    const zeroWidthGrammar: TextMateGrammarRaw = {
+      scopeName: 'source.tsx',
+      patterns: [
+        { match: /\B/, name: 'meta.zero-width' },
+        { match: /\w+/, name: 'meta.word' },
+        { match: /./, name: 'meta.single-char' },
+      ],
+    }
+
+    const zeroWidthRegistry: RegistryOptions<'light'> = {
+      async getGrammar(scopeName) {
+        if (scopeName === 'source.tsx') return zeroWidthGrammar
+        throw new Error(`Missing grammar for scope: ${scopeName}`)
+      },
+      async getTheme(theme) {
+        return themeFixtures[theme]
+      },
+    }
+
+    const tokenizer = new Tokenizer<'light'>(zeroWidthRegistry)
+    let stoppedEarly = false
+    const chunks: RawTokenizeResult[] = []
+
+    for await (const chunk of tokenizer.stream('aa bb cc', 'tsx', 'light')) {
+      chunks.push(chunk)
+      if (chunk.stoppedEarly) stoppedEarly = true
+    }
+
+    expect(stoppedEarly).toBe(false)
+    expect(chunks.length).toBe(1)
+
+    const decoded = chunks[0].tokens
+    const values: string[] = []
+    for (let i = 0; i < decoded.length; i += 2) {
+      const start = decoded[i]
+      const end =
+        i + 2 < decoded.length ? decoded[i + 2] : chunks[0].lineText.length
+      if (end > start) {
+        values.push(chunks[0].lineText.slice(start, end))
+      }
+    }
+    expect(values.join('')).toBe('aa bb cc')
+  })
+
+  test('deep nested retokenize captures remain stable across long repeated input', async () => {
+    const rawGrammar: TextMateGrammarRaw = {
+      scopeName: 'source.tsx',
+      patterns: [
+        {
+          match: /<[^>]*>/,
+          name: 'meta.angle.block',
+          captures: {
+            0: {
+              patterns: [
+                {
+                  match: /\{[^}]*\}/,
+                  name: 'meta.curly.block',
+                  captures: {
+                    0: {
+                      patterns: [
+                        {
+                          match: /\[[^\]]*]/,
+                          name: 'meta.square.block',
+                          captures: {
+                            0: {
+                              patterns: [
+                                {
+                                  match: /<[^>]*>/,
+                                  name: 'meta.angle.nested',
+                                  captures: {
+                                    0: {
+                                      patterns: [
+                                        {
+                                          match: /\{[^}]*\}/,
+                                          name: 'meta.curly.nested',
+                                        },
+                                      ],
+                                    },
+                                  },
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+      repository: {},
+    }
+
+    const nestedRetokenizeRegistry: RegistryOptions<'light'> = {
+      async getGrammar(scopeName) {
+        if (scopeName === 'source.tsx') return rawGrammar
+        throw new Error(`Missing grammar for scope: ${scopeName}`)
+      },
+      async getTheme(theme) {
+        return themeFixtures[theme]
+      },
+    }
+
+    const tokenizer = new Tokenizer<'light'>(nestedRetokenizeRegistry)
+    const token = '<{[<x>]}>'
+    const lineText = `${token}${' '.repeat(2)}${token}${' '.repeat(2)}${token}`
+    const source = `${lineText}\n${lineText}`
+    let stoppedEarly = false
+    const decoded = await decodeRawTokens(tokenizer, source, 'tsx', ['light'])
+
+    for await (const chunk of tokenizer.stream(source, 'tsx', 'light')) {
+      if (chunk.stoppedEarly) stoppedEarly = true
+    }
+
+    expect(stoppedEarly).toBe(false)
+    expect(decoded.length).toBe(2)
+    expect(decoded[0].map((item) => item.value).join('')).toBe(lineText)
+    expect(decoded[1].map((item) => item.value).join('')).toBe(lineText)
   })
 })
 
