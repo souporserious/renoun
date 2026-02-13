@@ -5945,6 +5945,7 @@ export interface RawTheme {
   tokenColors?: Array<any>
 }
 
+TextMateGrammarRaw
 export interface RawGrammar {
   scopeName: string
   patterns?: RawRule[]
@@ -6159,7 +6160,7 @@ export class Grammar {
       throw new Error(
         `Unknown ruleId ${ruleId} in grammar "${this.scopeName}". ` +
           `This grammar has ${this.#ruleId} registered rules (max ruleId: ${this.#ruleId}). ` +
-          `This typically indicates a TokenizationState from a different grammar instance is being used.`
+          `This typically indicates a StateStack from a different grammar instance is being used.`
       )
     }
     return rule
@@ -6564,8 +6565,6 @@ export class Grammar {
 
 export type StateStack = StateStackImplementation | null
 
-export type CompiledGrammar = Grammar
-
 export const INITIAL_STATE: StateStack = null
 
 export type TextMateRegistryOptions = {
@@ -6700,6 +6699,12 @@ export class GrammarRegistry {
   }
 }
 
+/** The grammar definition from the TextMate registry. */
+export type TextMateGrammar = Grammar
+
+/** The raw grammar definition from the TextMate registry. */
+export type TextMateGrammarRaw = RawGrammar
+
 /** The options for the TextMate registry. */
 export interface TokenizerRegistryOptions<Theme extends string> {
   /** The function to get a grammar from the TextMate registry. */
@@ -6708,12 +6713,6 @@ export interface TokenizerRegistryOptions<Theme extends string> {
   /** The function to get a theme from the TextMate registry. */
   getTheme: (theme: Theme) => Promise<TextMateThemeRaw>
 }
-
-/** The grammar definition from the TextMate registry. */
-export type TextMateGrammar = CompiledGrammar
-
-/** The raw grammar definition from the TextMate registry. */
-export type TextMateGrammarRaw = RawGrammar
 
 /** The registry of TextMate grammars and themes. */
 export type TextMateRegistry<Grammar extends string> = {
