@@ -1,109 +1,8 @@
-/* 
- * Copyright (c) Microsoft Corporation.
- * Licensed under the MIT License. See LICENSE.md in the
- * vscode-textmate repository for full license text.
- *
- * This file is compiled from vscode-textmate with significant changes.
- *
- * Structural changes:
- * - Consolidated multiple source files (rule.ts, theme.ts, utils.ts,
- *   registry.ts, main.ts, grammar/*.ts, etc.) into a single module
- * - Removed async OnigLib/WASM dependency in favor of synchronous JS regexes
- */
-
 import { toRegExpDetails } from 'oniguruma-to-es'
 
-import { EmulatedRegExp, isEmulatedRegExpLike } from './emulated-regexp.ts'
 import type { Languages, ScopeName } from './grammars/index.ts'
 import { grammars } from './grammars/index.ts'
-
-export interface TokenizerPerfSnapshot {
-  findCalls: number
-  regexExecCalls: number
-  regexExecSkipsByPrefix: number
-  tokenizedLines: number
-  tokenizedChars: number
-}
-
-export interface TokenizerRuntimeTuning {
-  scannerChunkMinEligible: number
-  scannerPrefixOptMinPlans: number
-  scannerAdvancedPathMinRemaining: number
-}
-
-const tokenizerPerfCounters: TokenizerPerfSnapshot = {
-  findCalls: 0,
-  regexExecCalls: 0,
-  regexExecSkipsByPrefix: 0,
-  tokenizedLines: 0,
-  tokenizedChars: 0,
-}
-let tokenizerPerfCountersEnabled = false
-const DEFAULT_TOKENIZER_RUNTIME_TUNING: TokenizerRuntimeTuning = {
-  scannerChunkMinEligible: 32,
-  scannerPrefixOptMinPlans: 32,
-  scannerAdvancedPathMinRemaining: 384,
-}
-let tokenizerRuntimeTuning: TokenizerRuntimeTuning = {
-  ...DEFAULT_TOKENIZER_RUNTIME_TUNING,
-}
-
-export function getTokenizerPerfSnapshot(): TokenizerPerfSnapshot {
-  return { ...tokenizerPerfCounters }
-}
-
-export function resetTokenizerPerfSnapshot(): void {
-  tokenizerPerfCounters.findCalls = 0
-  tokenizerPerfCounters.regexExecCalls = 0
-  tokenizerPerfCounters.regexExecSkipsByPrefix = 0
-  tokenizerPerfCounters.tokenizedLines = 0
-  tokenizerPerfCounters.tokenizedChars = 0
-}
-
-export function getTokenizerPerfCountersEnabled(): boolean {
-  return tokenizerPerfCountersEnabled
-}
-
-export function setTokenizerPerfCountersEnabled(enabled: boolean): boolean {
-  tokenizerPerfCountersEnabled = !!enabled
-  return tokenizerPerfCountersEnabled
-}
-
-export function getTokenizerRuntimeTuning(): TokenizerRuntimeTuning {
-  return { ...tokenizerRuntimeTuning }
-}
-
-export function setTokenizerRuntimeTuning(
-  tuning: Partial<TokenizerRuntimeTuning>
-): TokenizerRuntimeTuning {
-  const next = { ...tokenizerRuntimeTuning }
-
-  const assignIfValid = (
-    key: keyof TokenizerRuntimeTuning,
-    value: unknown
-  ): void => {
-    if (value === undefined) return
-    if (typeof value === 'number' && (!Number.isFinite(value) || value < 0)) {
-      throw new Error(`[renoun] Invalid runtime tuning value for "${key}".`)
-    }
-    next[key] = Math.floor(value as number)
-  }
-
-  assignIfValid('scannerChunkMinEligible', tuning.scannerChunkMinEligible)
-  assignIfValid('scannerPrefixOptMinPlans', tuning.scannerPrefixOptMinPlans)
-  assignIfValid(
-    'scannerAdvancedPathMinRemaining',
-    tuning.scannerAdvancedPathMinRemaining
-  )
-
-  tokenizerRuntimeTuning = next
-  return { ...tokenizerRuntimeTuning }
-}
-
-export function resetTokenizerRuntimeTuning(): TokenizerRuntimeTuning {
-  tokenizerRuntimeTuning = { ...DEFAULT_TOKENIZER_RUNTIME_TUNING }
-  return { ...tokenizerRuntimeTuning }
-}
+import { EmulatedRegExp, isEmulatedRegExpLike } from './emulated-regexp.ts'
 
 export function clone<Type = any>(value: Type): Type {
   // Preserve RegExp instances (used by "precompiled" grammars).
@@ -619,20 +518,6 @@ export const TokenMetadata = {
 } as const
 
 export const EncodedTokenAttributes = {
-  toBinaryString(value: number) {
-    return value.toString(2).padStart(32, '0')
-  },
-
-  print(value: number) {
-    console.log({
-      languageId: EncodedTokenAttributes.getLanguageId(value),
-      tokenType: EncodedTokenAttributes.getTokenType(value),
-      fontStyle: EncodedTokenAttributes.getFontStyle(value),
-      foreground: EncodedTokenAttributes.getForeground(value),
-      background: EncodedTokenAttributes.getBackground(value),
-    })
-  },
-
   getLanguageId: TokenMetadata.getLanguageId,
   getTokenType: TokenMetadata.getTokenType,
   containsBalancedBrackets: TokenMetadata.containsBalancedBrackets,
@@ -675,6 +560,10 @@ export const EncodedTokenAttributes = {
         (outBackground << 24)) >>>
       0
     )
+  },
+
+  toBinaryString(value: number) {
+    return value.toString(2).padStart(32, '0')
   },
 } as const
 
@@ -1338,7 +1227,7 @@ export function parsePLIST(sourceText: string) {
   return parsePLISTBody(sourceText, null, null)
 }
 
-export function parseRawGrammar(
+export function parseGrammarDefinition(
   sourceText: string,
   filename: string | null = null
 ) {
@@ -1369,7 +1258,7 @@ export class Theme {
   }
 
   static createFromRawTheme(
-    rawTheme: IRawTheme | undefined,
+    rawTheme: RawTheme | undefined,
     colorMap: string[] | null
   ) {
     return this.createFromParsedTheme(parseTheme(rawTheme), colorMap)
@@ -1724,7 +1613,7 @@ export class StyleAttributes {
   }
 }
 
-export function parseTheme(theme: IRawTheme | undefined) {
+export function parseTheme(theme: RawTheme | undefined) {
   if (!theme) {
     return []
   }
@@ -3519,6 +3408,9 @@ const SCANNER_CHUNK_SIZE = 16
 const SCANNER_EXACT_FAST_PATH_MAX = 12
 const SCANNER_PREFIX_FIRST_BYTE_MIN_PLANS = 4
 const SCANNER_PREFIX_FIRST_BYTE_MIN_REMAINING = 16
+const SCANNER_MIN_CHUNK_ELIGIBLE_PLANS = 32
+const SCANNER_PREFIX_OPT_MIN_PLANS = 32
+const SCANNER_ADVANCED_PATH_MIN_REMAINING = 384
 
 function hasScannerBackReference(source: string): boolean {
   let inCharClass = false
@@ -3738,7 +3630,7 @@ export class CompiledRule {
     // chunking for larger sets where alternation pre-scan amortizes well.
     if (
       this.#plans.length <= SCANNER_EXACT_FAST_PATH_MAX ||
-      eligibleCount < tokenizerRuntimeTuning.scannerChunkMinEligible
+      eligibleCount < SCANNER_MIN_CHUNK_ELIGIBLE_PLANS
     ) {
       this.#chunks = []
       this.#excludedPlanIndices = excluded
@@ -3792,20 +3684,15 @@ export class CompiledRule {
   ) {
     if (startPosition < 0) startPosition = 0
     if (maxStart < startPosition) return null
-    const perfEnabled = tokenizerPerfCountersEnabled
-    if (perfEnabled) tokenizerPerfCounters.findCalls++
 
     let bestMatch: RegExpExecArray | null = null
     let bestPatternIndex = -1
     let bestStart = maxStart
     let lowerText: string | null = null
-    const runtimeTuning = tokenizerRuntimeTuning
     const remaining = text.length - startPosition
-    const useAdvancedPath =
-      remaining >= runtimeTuning.scannerAdvancedPathMinRemaining
+    const useAdvancedPath = remaining >= SCANNER_ADVANCED_PATH_MIN_REMAINING
     const usePrefixSearch =
-      useAdvancedPath &&
-      this.#plans.length >= runtimeTuning.scannerPrefixOptMinPlans
+      useAdvancedPath && this.#plans.length >= SCANNER_PREFIX_OPT_MIN_PLANS
     const useSmallPrefixFirstBytePrefilter =
       !useAdvancedPath &&
       this.#prefixFirstBytePlanCount > 0 &&
@@ -3817,7 +3704,6 @@ export class CompiledRule {
     if (this.#regexes.length === 1) {
       const regex = this.#regexes[0]
       regex.lastIndex = startPosition
-      if (perfEnabled) tokenizerPerfCounters.regexExecCalls++
       const match = regex.exec(text)
       if (!match) return null
       if (match.index > bestStart) return null
@@ -3831,7 +3717,6 @@ export class CompiledRule {
         for (let index = 0; index < this.#regexes.length; index++) {
           const regex = this.#regexes[index]
           regex.lastIndex = startPosition
-          if (perfEnabled) tokenizerPerfCounters.regexExecCalls++
           const match = regex.exec(text)
           if (!match) continue
           const matchStart = match.index
@@ -3892,7 +3777,6 @@ export class CompiledRule {
               ? getFirstBytePositionCI(plan.prefixFirstCharSlot)
               : getFirstBytePositionCS(plan.prefixFirstCharSlot)
             if (firstBytePosition === -1 || firstBytePosition > bestStart) {
-              if (perfEnabled) tokenizerPerfCounters.regexExecSkipsByPrefix++
               continue
             }
             searchStart = firstBytePosition
@@ -3900,7 +3784,6 @@ export class CompiledRule {
 
           const regex = plan.regex
           regex.lastIndex = searchStart
-          if (perfEnabled) tokenizerPerfCounters.regexExecCalls++
           const match = regex.exec(text)
           if (!match) continue
           const matchStart = match.index
@@ -3927,7 +3810,6 @@ export class CompiledRule {
           }
 
           if (prefixPosition === -1 || prefixPosition > bestStart) {
-            if (perfEnabled) tokenizerPerfCounters.regexExecSkipsByPrefix++
             continue
           }
           searchStart = prefixPosition
@@ -3935,7 +3817,6 @@ export class CompiledRule {
 
         const regex = plan.regex
         regex.lastIndex = searchStart
-        if (perfEnabled) tokenizerPerfCounters.regexExecCalls++
         const match = regex.exec(text)
         if (!match) continue
         const matchStart = match.index
@@ -3967,7 +3848,6 @@ export class CompiledRule {
           }
 
           if (prefixPosition === -1 || prefixPosition > bestStart) {
-            if (perfEnabled) tokenizerPerfCounters.regexExecSkipsByPrefix++
             return
           }
           searchStart = prefixPosition
@@ -3975,7 +3855,6 @@ export class CompiledRule {
 
         const regex = plan.regex
         regex.lastIndex = searchStart
-        if (perfEnabled) tokenizerPerfCounters.regexExecCalls++
         const match = regex.exec(text)
         if (!match) return
         const matchStart = match.index
@@ -4008,7 +3887,6 @@ export class CompiledRule {
         ) {
           const chunk = this.#chunks[chunkIndex]
           chunk.regex.lastIndex = startPosition
-          if (perfEnabled) tokenizerPerfCounters.regexExecCalls++
           const chunkMatch = chunk.regex.exec(text)
           if (!chunkMatch) continue
           const matchStart = chunkMatch.index
@@ -6061,13 +5939,13 @@ export class StateStackImplementation {
   }
 }
 
-export interface IRawTheme {
+export interface RawTheme {
   name?: string
   settings?: Array<any>
   tokenColors?: Array<any>
 }
 
-export interface IRawGrammar {
+export interface RawGrammar {
   scopeName: string
   patterns?: RawRule[]
   repository?: RawRepository
@@ -6076,12 +5954,12 @@ export interface IRawGrammar {
 }
 
 export type GrammarRepository = {
-  lookup: (scopeName: string) => IRawGrammar | null
+  lookup: (scopeName: string) => RawGrammar | null
   injections: (scopeName: string) => string[] | null
 }
 
 export class SyncRegistry {
-  #grammars = new Map<string, IRawGrammar>()
+  #grammars = new Map<string, RawGrammar>()
   #injections = new Map<string, string[]>()
   #theme: Theme | null = null
 
@@ -6093,7 +5971,7 @@ export class SyncRegistry {
     return this.#theme
   }
 
-  addGrammar(grammar: IRawGrammar) {
+  addGrammar(grammar: RawGrammar) {
     this.#grammars.set(grammar.scopeName, grammar)
   }
 
@@ -6117,11 +5995,13 @@ export type OnigLib = {
   createOnigString: (str: string) => any
 }
 
-export type ITokenizeLineResult = {
+export type TokenizeLineResult = {
   /** Raw token data: [startPos0, metadata0, startPos1, metadata1, ...] */
   tokens: Uint32Array
+
   /** Grammar state for next line */
   ruleStack: StateStackImplementation
+
   /** True if tokenization was stopped due to time limit */
   stoppedEarly: boolean
 }
@@ -6221,14 +6101,14 @@ export class Grammar {
   _localStackPool: LocalStackElement[] = []
 
   scopeName: string
-  #rawGrammar: IRawGrammar
+  #rawGrammar: RawGrammar
   #languageId: number
   #grammarRepository: GrammarRepository
   #registry: SyncRegistry
 
   constructor(
     scopeName: string,
-    rawGrammar: IRawGrammar,
+    rawGrammar: RawGrammar,
     languageId: number,
     embeddedLanguages: Record<string, number> | null,
     tokenTypes: Record<string, number> | null,
@@ -6279,7 +6159,7 @@ export class Grammar {
       throw new Error(
         `Unknown ruleId ${ruleId} in grammar "${this.scopeName}". ` +
           `This grammar has ${this.#ruleId} registered rules (max ruleId: ${this.#ruleId}). ` +
-          `This typically indicates a StateStack from a different grammar instance is being used.`
+          `This typically indicates a TokenizationState from a different grammar instance is being used.`
       )
     }
     return rule
@@ -6591,7 +6471,7 @@ export class Grammar {
     lineText: string,
     previousState: StateStackImplementation | null,
     timeLimitMs = 0
-  ): ITokenizeLineResult {
+  ): TokenizeLineResult {
     const theme = this.#registry.getTheme()
     this.#activeTheme = theme
     if (this.#cachedThemeForMetadata !== theme) {
@@ -6637,10 +6517,6 @@ export class Grammar {
       )
 
       const finalTokens = lineTokens.finalize(lineText.length)
-      if (tokenizerPerfCountersEnabled) {
-        tokenizerPerfCounters.tokenizedLines++
-        tokenizerPerfCounters.tokenizedChars += lineText.length
-      }
 
       return {
         tokens: finalTokens as Uint32Array,
@@ -6687,18 +6563,20 @@ export class Grammar {
 }
 
 export type StateStack = StateStackImplementation | null
-export type IGrammar = Grammar
-export const INITIAL: StateStack = null
+
+export type CompiledGrammar = Grammar
+
+export const INITIAL_STATE: StateStack = null
 
 export type TextMateRegistryOptions = {
-  loadGrammar: (scopeName: string) => Promise<IRawGrammar | null>
+  loadGrammar: (scopeName: string) => Promise<RawGrammar | null>
 }
 
-export class Registry {
+export class GrammarRegistry {
   #syncRegistry = new SyncRegistry()
-  #loadGrammar: (scopeName: string) => Promise<IRawGrammar | null>
+  #loadGrammar: (scopeName: string) => Promise<RawGrammar | null>
 
-  #rawGrammars = new Map<string, IRawGrammar>()
+  #rawGrammars = new Map<string, RawGrammar>()
   #compiledGrammars = new Map<string, Grammar>()
   #injectionScopes = new Set<string>()
   #hasTheme = false
@@ -6710,7 +6588,7 @@ export class Registry {
     this.#loadGrammar = options.loadGrammar
   }
 
-  setTheme(rawTheme: IRawTheme) {
+  setTheme(rawTheme: RawTheme) {
     const theme = Theme.createFromRawTheme(rawTheme, null)
     this.#syncRegistry.setTheme(theme)
     this.#hasTheme = true
@@ -6823,7 +6701,7 @@ export class Registry {
 }
 
 /** The options for the TextMate registry. */
-export interface RegistryOptions<Theme extends string> {
+export interface TokenizerRegistryOptions<Theme extends string> {
   /** The function to get a grammar from the TextMate registry. */
   getGrammar: (scopeName: ScopeName) => Promise<TextMateGrammarRaw>
 
@@ -6832,10 +6710,10 @@ export interface RegistryOptions<Theme extends string> {
 }
 
 /** The grammar definition from the TextMate registry. */
-export type TextMateGrammar = IGrammar
+export type TextMateGrammar = CompiledGrammar
 
 /** The raw grammar definition from the TextMate registry. */
-export type TextMateGrammarRaw = IRawGrammar
+export type TextMateGrammarRaw = RawGrammar
 
 /** The registry of TextMate grammars and themes. */
 export type TextMateRegistry<Grammar extends string> = {
@@ -6845,12 +6723,12 @@ export type TextMateRegistry<Grammar extends string> = {
 }
 
 /** The raw theme definition from the TextMate registry. */
-export type TextMateThemeRaw = IRawTheme & {
+export type TextMateThemeRaw = RawTheme & {
   type?: 'dark' | 'light'
   colors?: Record<string, string>
   semanticTokenColors?: Record<string, TextMateTokenSettings>
   tokenColors?: TextMateTokenColor[]
-  settings?: IRawTheme['settings']
+  settings?: RawTheme['settings']
 }
 
 /** The color of a single token. */
@@ -6906,7 +6784,7 @@ export interface TokenizerContext {
   baseColor: string
 }
 
-interface GrammarMetadata extends IRawGrammar {
+interface GrammarMetadata extends RawGrammar {
   name?: string
   aliases?: string[]
 }
@@ -6947,13 +6825,13 @@ function* iterateLines(source: string): Generator<string> {
 }
 
 export class TokenizerRegistry<Theme extends string> {
-  #options: RegistryOptions<Theme>
-  #registry: Registry
+  #options: TokenizerRegistryOptions<Theme>
+  #registry: GrammarRegistry
   #theme: TextMateThemeRaw | undefined
 
-  constructor(options: RegistryOptions<Theme>) {
+  constructor(options: TokenizerRegistryOptions<Theme>) {
     this.#options = options
-    this.#registry = new Registry({
+    this.#registry = new GrammarRegistry({
       loadGrammar: (scopeName) => this.fetchGrammar(scopeName as ScopeName),
     })
   }
@@ -6985,7 +6863,7 @@ export class TokenizerRegistry<Theme extends string> {
 
     if (!source) {
       throw new Error(
-        `[renoun] Missing "${name}" theme in Registry. Ensure this theme is configured on \`RootProvider\` and the \`tm-themes\` package is installed.`
+        `[renoun] Missing "${name}" theme in GrammarRegistry. Ensure this theme is configured on \`RootProvider\` and the \`tm-themes\` package is installed.`
       )
     }
 
@@ -7006,10 +6884,10 @@ export class TokenizerRegistry<Theme extends string> {
 export class Tokenizer<Theme extends string> {
   #baseColors: Map<string, string> = new Map()
   #registries: Map<string, TokenizerRegistry<Theme>> = new Map()
-  #registryOptions: RegistryOptions<Theme>
+  #registryOptions: TokenizerRegistryOptions<Theme>
   #grammarState: GrammarState = []
 
-  constructor(registryOptions: RegistryOptions<Theme>) {
+  constructor(registryOptions: TokenizerRegistryOptions<Theme>) {
     this.#registryOptions = registryOptions
   }
 
@@ -7087,7 +6965,7 @@ export class Tokenizer<Theme extends string> {
       )
     }
 
-    let state: StateStack = grammarStates?.[0] ?? INITIAL
+    let state: StateStack = grammarStates?.[0] ?? INITIAL_STATE
 
     for (const lineText of iterateLines(source)) {
       const lineResult = grammar.tokenizeLine(lineText, state, timeLimit ?? 0)
@@ -7143,7 +7021,7 @@ function normalizeTokenizeOptions<Theme extends string>(
 
   if (Array.isArray(grammarState)) {
     const grammarStates = themes.map(
-      (_, index) => grammarState[index] ?? INITIAL
+      (_, index) => grammarState[index] ?? INITIAL_STATE
     )
     return { grammarStates, timeLimit }
   }
