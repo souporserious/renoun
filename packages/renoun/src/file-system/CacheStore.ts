@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { normalizeSlashes } from '../utils/path.ts'
+import { getDebugLogger } from '../utils/debug.ts'
 import type { Snapshot } from './Snapshot.ts'
 
 export interface CacheDependency {
@@ -67,6 +68,9 @@ export class CacheStore {
   ): Promise<Value> {
     const inFlight = this.#inflight.get(nodeKey)
     if (inFlight) {
+      this.#logCacheOperation('hit', nodeKey, {
+        source: 'inflight',
+      })
       return inFlight as Promise<Value>
     }
 
@@ -111,11 +115,21 @@ export class CacheStore {
       updatedAt: Date.now(),
     }
 
+    this.#logCacheOperation('set', nodeKey, {
+      source: 'manual-put',
+      persist: entry.persist,
+      dependencies: dependencyEntries.length,
+    })
+
     this.#entries.set(nodeKey, entry)
     await this.#savePersistedEntry(nodeKey, entry)
   }
 
   async delete(nodeKey: string): Promise<void> {
+    this.#logCacheOperation('clear', nodeKey, {
+      source: 'explicit',
+    })
+
     this.#entries.delete(nodeKey)
     if (!this.#persistence) {
       return
@@ -143,6 +157,11 @@ export class CacheStore {
   }
 
   clearMemory(): void {
+    this.#logCacheOperation('clear', '__cache_memory__', {
+      source: 'memory',
+      size: this.#entries.size,
+    })
+
     this.#entries.clear()
     this.#inflight.clear()
   }
@@ -199,6 +218,12 @@ export class CacheStore {
       updatedAt: Date.now(),
     }
 
+    this.#logCacheOperation('set', nodeKey, {
+      source: 'compute',
+      persist: entry.persist,
+      dependencies: dependencyEntries.length,
+    })
+
     this.#entries.set(nodeKey, entry)
     await this.#savePersistedEntry(nodeKey, entry)
 
@@ -208,6 +233,10 @@ export class CacheStore {
   async #getEntry(nodeKey: string): Promise<CacheEntry | undefined> {
     const memoryEntry = this.#entries.get(nodeKey)
     if (memoryEntry) {
+      this.#logCacheOperation('hit', nodeKey, {
+        source: 'memory',
+        persist: memoryEntry.persist,
+      })
       return memoryEntry
     }
 
@@ -229,6 +258,10 @@ export class CacheStore {
 
     if (persistedEntry && !persistedEntry.persist) {
       await this.#syncPersistenceIntent(nodeKey, false, `cleanup(${nodeKey})`)
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'persisted-entry',
+        reason: 'not-persist-flag',
+      })
       return undefined
     }
 
@@ -249,18 +282,32 @@ export class CacheStore {
       )
 
       if (memoryIsFresh) {
+        this.#logCacheOperation('hit', nodeKey, {
+          source: 'memory',
+          persist: memoryEntry.persist,
+        })
         return memoryEntry
       }
 
       this.#entries.delete(nodeKey)
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'memory',
+        reason: 'stale',
+      })
     }
 
     if (!this.#persistence) {
+      this.#logCacheOperation('miss', nodeKey, {
+        source: 'memory',
+      })
       return undefined
     }
 
     const persistedEntry = await this.#loadPersistedEntry(nodeKey)
     if (!persistedEntry) {
+      this.#logCacheOperation('miss', nodeKey, {
+        source: 'persisted',
+      })
       return undefined
     }
 
@@ -271,11 +318,31 @@ export class CacheStore {
     )
 
     if (persistedIsFresh) {
+      this.#logCacheOperation('hit', nodeKey, {
+        source: 'persisted',
+        persist: persistedEntry.persist,
+      })
       return persistedEntry
     }
 
     await this.delete(nodeKey)
+    this.#logCacheOperation('clear', nodeKey, {
+      source: 'persisted',
+      reason: 'stale',
+    })
     return undefined
+  }
+
+  #logCacheOperation(
+    operation: 'hit' | 'miss' | 'set' | 'clear',
+    nodeKey: string,
+    data?: Record<string, unknown>
+  ): void {
+    if (!getDebugLogger().isEnabled('debug')) {
+      return
+    }
+
+    getDebugLogger().logCacheOperation(operation, nodeKey, data)
   }
 
   async #isEntryFresh(
