@@ -7,6 +7,11 @@ import type { AddressInfo } from 'node:net'
 import { randomBytes, createHash } from 'node:crypto'
 
 import { getDebugLogger } from '../../utils/debug.ts'
+import {
+  readPublicError,
+  RENOUN_PUBLIC_ERROR_CODES,
+  type RenounPublicErrorCode,
+} from '../../utils/public-error.ts'
 import { Semaphore } from '../../utils/Semaphore.ts'
 
 export interface WebSocketRequest {
@@ -152,6 +157,7 @@ const MAX_BUFFERED = 8 * 1024 * 1024
 const MAX_TIMEOUT_MS = 300_000
 const REQUEST_TIMEOUT_MS = 60_000
 const HEARTBEAT_MS = 30_000
+const MAX_PUBLIC_ERROR_MESSAGE_LENGTH = 32_000
 const CLOSE_TEXT: Record<number, string> = {
   1000: 'Normal Closure',
   1001: 'Going Away',
@@ -294,6 +300,37 @@ function isCriticalMessage(message: any): boolean {
       'chunk' in message ||
       'done' in message)
   )
+}
+
+function resolveSafeProductionError(
+  method: string,
+  error: Error | undefined
+): { code: RenounPublicErrorCode; message: string } | undefined {
+  if (!error || method !== 'getTokens') {
+    return undefined
+  }
+
+  const publicError = readPublicError(error)
+  if (
+    !publicError ||
+    publicError.code !== RENOUN_PUBLIC_ERROR_CODES.GET_TOKENS_DIAGNOSTICS ||
+    !publicError.message.startsWith(
+      '[renoun] Type errors found when rendering Tokens component'
+    )
+  ) {
+    return undefined
+  }
+
+  if (publicError.message.length <= MAX_PUBLIC_ERROR_MESSAGE_LENGTH) {
+    return publicError
+  }
+
+  return {
+    code: publicError.code,
+    message:
+      `${publicError.message.slice(0, MAX_PUBLIC_ERROR_MESSAGE_LENGTH)}` +
+      '\n\n[renoun] Output truncated.',
+  }
 }
 
 type RegisterMethodOptions = {
@@ -1009,15 +1046,20 @@ export class WebSocketServer {
       if (!isNotification) {
         // Include detailed error data (name/message/stack) in development to surface
         // actionable stack traces at the caller. In production, omit the stack.
-        const includeStack = process.env.NODE_ENV !== 'production'
+        const isProduction = process.env.NODE_ENV === 'production'
+        const includeStack = !isProduction
         const original = serverError.originalError
+        const safeProductionError = isProduction
+          ? resolveSafeProductionError(request.method, original)
+          : undefined
         return {
           id: request.id,
           error: {
             code: serverError.code,
             message:
-              process.env.NODE_ENV === 'production'
-                ? `[renoun] Internal server error while processing method "${request.method}".`
+              isProduction
+                ? (safeProductionError?.message ??
+                  `[renoun] Internal server error while processing method "${request.method}".`)
                 : serverError.message,
             data: includeStack
               ? {
@@ -1025,7 +1067,12 @@ export class WebSocketServer {
                   message: original?.message,
                   stack: original?.stack,
                 }
-              : { message: original?.message },
+              : safeProductionError
+                ? {
+                    public: true,
+                    code: safeProductionError.code,
+                  }
+                : undefined,
           },
         } satisfies WebSocketResponse
       }

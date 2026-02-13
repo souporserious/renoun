@@ -1,5 +1,9 @@
 import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 
+import {
+  attachPublicError,
+  RENOUN_PUBLIC_ERROR_CODES,
+} from '../../utils/public-error'
 import { WebSocketServer } from './server'
 import { WebSocketClient } from './client'
 
@@ -69,6 +73,26 @@ describe('project WebSocket RPC', () => {
     // Method that deliberately fails to test error propagation
     server.registerMethod('fail', () => {
       throw new Error('Intentional failure')
+    })
+
+    server.registerMethod('getTokens', () => {
+      const error = new Error(
+        '[renoun] Type errors found when rendering Tokens component for \n\n ⓧ Example diagnostic ts(2305)'
+      )
+
+      throw attachPublicError(error, {
+        code: RENOUN_PUBLIC_ERROR_CODES.GET_TOKENS_DIAGNOSTICS,
+        message: error.message,
+      })
+    })
+
+    server.registerMethod('failPublicLike', () => {
+      const error = new Error('Internal failure with secret details')
+
+      throw attachPublicError(error, {
+        code: RENOUN_PUBLIC_ERROR_CODES.GET_TOKENS_DIAGNOSTICS,
+        message: '[renoun] Type errors found when rendering Tokens component',
+      })
     })
 
     // Slow method to test concurrency limits and timeouts
@@ -216,6 +240,49 @@ describe('project WebSocket RPC', () => {
         /Internal server error while processing method "fail"/
       )
       expect(message).not.toMatch(/super-secret-token/)
+      expect(
+        JSON.stringify((error as { data?: unknown }).data ?? null)
+      ).not.toMatch(/Intentional failure|super-secret-token/)
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
+  it('shows allowlisted getTokens diagnostics in production', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    try {
+      await client.callMethod('getTokens', {})
+      throw new Error('Expected callMethod to throw')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toMatch(
+        /Type errors found when rendering Tokens component/
+      )
+      expect(message).not.toMatch(
+        /Internal server error while processing method "getTokens"/
+      )
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
+  it('keeps public-like errors redacted for non-allowlisted methods', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    try {
+      await client.callMethod('failPublicLike', {})
+      throw new Error('Expected callMethod to throw')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toMatch(
+        /Internal server error while processing method "failPublicLike"/
+      )
+      expect(message).not.toMatch(
+        /Type errors found when rendering Tokens component/
+      )
     } finally {
       process.env.NODE_ENV = previousNodeEnv
     }

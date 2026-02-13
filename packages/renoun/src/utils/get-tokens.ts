@@ -12,6 +12,7 @@ import { getRootDirectory } from './get-root-directory.ts'
 import { isJsxOnly } from './is-jsx-only.ts'
 import { generatedFilenames } from './get-source-text-metadata.ts'
 import { splitTokenByRanges } from './split-tokens-by-ranges.ts'
+import { attachPublicError, RENOUN_PUBLIC_ERROR_CODES } from './public-error.ts'
 import {
   validateLanguageFileCompatibility,
   isJavaScriptTypeScriptFile,
@@ -672,7 +673,12 @@ function throwDiagnosticErrors(
   `
   const errorMessage = `${formattedErrors}\n\n${tokensToPlainText(tokens)}\n\n${actionsToTake}`
 
-  throw new Error(
+  const error = new Error(
     `[renoun] Type errors found when rendering Tokens component for ${formattedPath}\n\n${errorMessage}\n\n`
   )
+
+  throw attachPublicError(error, {
+    code: RENOUN_PUBLIC_ERROR_CODES.GET_TOKENS_DIAGNOSTICS,
+    message: error.message,
+  })
 }
