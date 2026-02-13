@@ -5406,7 +5406,10 @@ export class Directory<
     let shouldIncludeSelf = false
 
     for (const metadata of fileMetadata) {
-      if (!metadata.isGitIgnored && metadata.shouldIncludeFile) {
+      if (
+        (options.includeGitIgnoredFiles || !metadata.isGitIgnored) &&
+        metadata.shouldIncludeFile
+      ) {
         shouldIncludeSelf = true
         break
       }

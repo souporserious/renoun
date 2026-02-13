@@ -2419,6 +2419,42 @@ describe('GitFileSystem', () => {
     expect(fooUpdated!.sha).toBe(c2.hash)
   })
 
+  test('includes files from ignored directories when includeGitIgnoredFiles is enabled', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, '.gitignore', 'src/\n', 'ignore src directory')
+    mkdirSync(join(repoRoot, 'src'), { recursive: true })
+    writeFileSync(
+      join(repoRoot, 'src', 'index.ts'),
+      'export const value = 1'
+    )
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const directory = new Directory({
+      fileSystem: store,
+      tsConfigPath: 'tsconfig.json',
+    })
+
+    const listFiles = async (includeGitIgnoredFiles: boolean) => {
+      const entries = await directory.getEntries({
+        recursive: true,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        includeGitIgnoredFiles,
+        includeTsConfigExcludedFiles: true,
+      })
+
+      return entries
+        .filter((entry) => entry instanceof File)
+        .map((entry) => entry.relativePath)
+        .sort()
+    }
+
+    expect(await listFiles(false)).toEqual([])
+    expect(await listFiles(true)).toEqual(['src/index.ts'])
+  })
+
   test('invalidates shared production cache state for write/delete/rename/copy mutations', async ({
     repoRoot,
     cacheDirectory,

@@ -773,7 +773,6 @@ export class GitFileSystem
   readonly #worktreeEnabled: boolean
   #worktreeRootChecked = false
   #worktreeRootExists = false
-  #worktreeIgnoreCache = new Map<string, boolean>()
 
   // Singleton promise to prevent parallel unshallow operations
   #unshallowPromise: Promise<void> | null = null
@@ -1016,6 +1015,26 @@ export class GitFileSystem
   async getFileByteLength(path: string): Promise<number | undefined> {
     await this.#ensureRepoReady()
     return this.getFileByteLengthSync(path)
+  }
+
+  async getContentId(path: string): Promise<string | undefined> {
+    await this.#ensureRepoReady()
+    const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath, 'any')
+
+    // Prefer filesystem metadata/content hashing for live worktree files.
+    if (worktreePath) {
+      return undefined
+    }
+
+    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    const blobMeta = await this.#git!.getBlobMeta(spec)
+
+    if (!blobMeta) {
+      return undefined
+    }
+
+    return `git-blob:${blobMeta.sha}`
   }
 
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {
@@ -1325,14 +1344,7 @@ export class GitFileSystem
       return false
     }
 
-    const cached = this.#worktreeIgnoreCache.get(relativePath)
-    if (cached !== undefined) {
-      return !cached
-    }
-
-    const ignored = this.isFilePathGitIgnored(relativePath)
-    this.#worktreeIgnoreCache.set(relativePath, ignored)
-    return !ignored
+    return true
   }
 
   #resolveRepoAbsolutePath(path: string): string {
@@ -1606,7 +1618,6 @@ export class GitFileSystem
     this.repoRoot = resolved
     this.#worktreeRootChecked = false
     this.#worktreeRootExists = false
-    this.#worktreeIgnoreCache.clear()
     if (!this.#git) {
       this.#git = new GitObjectStore(this.repoRoot)
     }
@@ -3753,7 +3764,6 @@ export class GitFileSystem
       this.repoRoot = resolved
       this.#worktreeRootChecked = false
       this.#worktreeRootExists = false
-      this.#worktreeIgnoreCache.clear()
       if (!this.#git) {
         this.#git = new GitObjectStore(this.repoRoot)
       }
