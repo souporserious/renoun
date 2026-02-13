@@ -489,6 +489,10 @@ function toPersistenceSafeValue(
     return value
   }
 
+  if (isReactElementLikeObject(value)) {
+    return undefined
+  }
+
   if (value instanceof Date) {
     return new Date(value.getTime())
   }
@@ -512,6 +516,42 @@ function toPersistenceSafeValue(
   }
 
   return result
+}
+
+function isReactElementLikeObject(value: object): boolean {
+  const candidate = value as Record<string, unknown>
+
+  if ('$$typeof' in candidate) {
+    return true
+  }
+
+  if (!('key' in candidate) || !('ref' in candidate) || !('props' in candidate)) {
+    return false
+  }
+
+  const keys = Object.keys(candidate)
+  if (keys.length < 3 || keys.length > 4) {
+    return false
+  }
+
+  if (
+    keys.some(
+      (key) => key !== 'key' && key !== 'ref' && key !== 'props' && key !== 'type'
+    )
+  ) {
+    return false
+  }
+
+  const props = candidate['props']
+  if (props === null || typeof props !== 'object' || Array.isArray(props)) {
+    return false
+  }
+
+  if ('type' in candidate && typeof candidate['type'] !== 'string') {
+    return false
+  }
+
+  return true
 }
 
 export function hashString(input: string): string {

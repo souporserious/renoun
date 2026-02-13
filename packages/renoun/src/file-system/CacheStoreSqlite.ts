@@ -200,6 +200,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return undefined
     }
 
+    if (containsStrippedReactElementPayload(value)) {
+      await this.delete(nodeKey)
+      return undefined
+    }
+
     const deps = rows
       .filter((dependencyRow) => typeof dependencyRow.dep_key === 'string')
       .map((dependencyRow) => ({
@@ -674,6 +679,72 @@ function toUint8Array(value: unknown): Uint8Array | undefined {
   }
 
   return undefined
+}
+
+function containsStrippedReactElementPayload(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet()
+): boolean {
+  if (value === null || typeof value !== 'object') {
+    return false
+  }
+
+  if (seen.has(value)) {
+    return false
+  }
+  seen.add(value)
+
+  if (looksLikeStrippedReactElement(value)) {
+    return true
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => containsStrippedReactElementPayload(item, seen))
+  }
+
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    if (containsStrippedReactElementPayload(child, seen)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function looksLikeStrippedReactElement(value: object): boolean {
+  const candidate = value as Record<string, unknown>
+
+  if ('$$typeof' in candidate) {
+    return false
+  }
+
+  if (!('key' in candidate) || !('ref' in candidate) || !('props' in candidate)) {
+    return false
+  }
+
+  const keys = Object.keys(candidate)
+  if (keys.length < 3 || keys.length > 4) {
+    return false
+  }
+
+  if (
+    keys.some(
+      (key) => key !== 'key' && key !== 'ref' && key !== 'props' && key !== 'type'
+    )
+  ) {
+    return false
+  }
+
+  const props = candidate['props']
+  if (props === null || typeof props !== 'object' || Array.isArray(props)) {
+    return false
+  }
+
+  if ('type' in candidate && typeof candidate['type'] !== 'string') {
+    return false
+  }
+
+  return true
 }
 
 function isSqliteBusyOrLockedError(error: unknown): boolean {
