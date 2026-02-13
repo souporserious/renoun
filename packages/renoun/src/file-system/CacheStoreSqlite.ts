@@ -13,7 +13,6 @@ import {
 
 const SQLITE_BUSY_RETRIES = 5
 const SQLITE_BUSY_RETRY_DELAY_MS = 25
-const CACHE_DB_PATH_ENV = 'RENOUN_FS_CACHE_DB_PATH'
 const SQLITE_DEFAULT_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 14
 const SQLITE_DEFAULT_MAX_ROWS = 200_000
 const SQLITE_PRUNE_WRITE_INTERVAL = 32
@@ -44,6 +43,13 @@ function resolveDbPath(options: { dbPath?: string; projectRoot?: string }): stri
   if (typeof options.dbPath === 'string' && options.dbPath.trim()) {
     return resolve(options.dbPath)
   }
+  if (
+    typeof process.env['RENOUN_FS_CACHE_DB_PATH'] === 'string' &&
+    process.env['RENOUN_FS_CACHE_DB_PATH'].trim()
+  ) {
+    return resolve(process.env['RENOUN_FS_CACHE_DB_PATH'])
+  }
+
   if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
     // eslint-disable-next-line no-console
     console.log('[renoun-debug] resolveDbPath', { projectRoot: options.projectRoot })
@@ -52,7 +58,7 @@ function resolveDbPath(options: { dbPath?: string; projectRoot?: string }): stri
 }
 
 export function getDefaultCacheDatabasePath(projectRoot?: string): string {
-  const overridePath = process.env[CACHE_DB_PATH_ENV]
+  const overridePath = process.env['RENOUN_FS_CACHE_DB_PATH']
   if (typeof overridePath === 'string' && overridePath.trim()) {
     return resolve(overridePath)
   }
@@ -64,7 +70,7 @@ export function getDefaultCacheDatabasePath(projectRoot?: string): string {
     console.log('[renoun-debug] getDefaultCacheDatabasePath', {
       projectRoot,
       resolved: path,
-      overridePath: overridePath,
+      overridePath,
     })
   }
   return path
@@ -173,6 +179,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const expiresAt = now + ttlMs
 
     return this.#runWithBusyRetries(() => {
+      this.#db
+        .prepare(`DELETE FROM cache_inflight WHERE expires_at <= ?`)
+        .run(now)
+
       const result = this.#db
         .prepare(
           `
@@ -217,6 +227,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     const maybeOwner = this.#runWithBusyRetries(() => {
       const now = Date.now()
+
+      this.#db
+        .prepare(`DELETE FROM cache_inflight WHERE expires_at <= ?`)
+        .run(now)
+
       const row = this.#db
         .prepare(
           `

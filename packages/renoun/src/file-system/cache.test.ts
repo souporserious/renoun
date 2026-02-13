@@ -8,7 +8,6 @@ import {
 } from 'node:path'
 import { describe, expect, test, vi } from 'vitest'
 
-import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { CacheStore } from './CacheStore.ts'
 import {
   SqliteCacheStorePersistence,
@@ -111,40 +110,46 @@ function createDeferredPromise() {
 function createTempNodeFileSystem(tmpDirectory: string) {
   const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
   writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
-  return new NodeFileSystem({ tsConfigPath })
+  const fs = new NodeFileSystem({ tsConfigPath })
+  return fs
+}
+
+function withTestCacheDbPath<T>(
+  tmpDirectory: string,
+  run: () => Promise<T> | T
+) {
+  const previousPath = process.env.RENOUN_FS_CACHE_DB_PATH
+  process.env.RENOUN_FS_CACHE_DB_PATH = join(tmpDirectory, '.cache', 'renoun', 'fs-cache.sqlite')
+
+  try {
+    return run()
+  } finally {
+    if (previousPath === undefined) {
+      delete process.env.RENOUN_FS_CACHE_DB_PATH
+    } else {
+      process.env.RENOUN_FS_CACHE_DB_PATH = previousPath
+    }
+  }
 }
 
 async function withProductionSqliteCache<T>(
-  run: (tmpDirectory: string, dbPath: string) => Promise<T> | T
+  run: (tmpDirectory: string) => Promise<T> | T
 ) {
-  const workspaceRoot = getRootDirectory()
   const tmpDirectory = mkdtempSync(
-    join(workspaceRoot, 'tmp-renoun-cache-sqlite-worker-')
+    join(process.cwd(), 'tmp-renoun-cache-sqlite-worker-')
   )
-  const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
   const previousNodeEnv = process.env.NODE_ENV
-  const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
-  const previousWorkingDirectory = process.cwd()
 
   process.env.NODE_ENV = 'production'
-  process.env.RENOUN_FS_CACHE_DB_PATH = dbPath
-  process.chdir(workspaceRoot)
   disposeDefaultCacheStorePersistence()
 
   try {
-    return await run(tmpDirectory, dbPath)
+    return await withTestCacheDbPath(tmpDirectory, () => run(tmpDirectory))
   } finally {
     disposeDefaultCacheStorePersistence()
     process.env.NODE_ENV = previousNodeEnv
 
-    if (previousCacheDbPath) {
-      process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
-      } else {
-        delete process.env.RENOUN_FS_CACHE_DB_PATH
-      }
-
-      process.chdir(previousWorkingDirectory)
-      rmSync(tmpDirectory, { recursive: true, force: true })
+    rmSync(tmpDirectory, { recursive: true, force: true })
   }
 }
 
@@ -226,59 +231,41 @@ describe('file-system cache integration', () => {
   })
 
   test('does not persist function-filtered directory structure across sessions', async () => {
-    const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-structure-cache-'))
-    const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
+    const firstFileSystem = new InMemoryFileSystem({
+      'index.ts': '',
+      'page.mdx': '# Page',
+    })
+    const firstDirectory = new Directory({
+      fileSystem: firstFileSystem,
+      filter: (entry): entry is File =>
+        entry instanceof File && entry.extension === 'ts',
+    })
 
-    try {
-      process.env.RENOUN_FS_CACHE_DB_PATH = join(tmpDirectory, 'fs-cache.sqlite')
-      disposeDefaultCacheStorePersistence()
+    const firstStructure = await firstDirectory.getStructure()
+    const firstFileEntries = firstStructure.filter(
+      (entry) => entry.kind === 'File'
+    )
+    expect(firstFileEntries.map((entry) => entry.relativePath)).toEqual([
+      'index.ts',
+    ])
 
-      const firstFileSystem = new InMemoryFileSystem({
-        'index.ts': '',
-        'page.mdx': '# Page',
-      })
-      const firstDirectory = new Directory({
-        fileSystem: firstFileSystem,
-        filter: (entry): entry is File =>
-          entry instanceof File && entry.extension === 'ts',
-      })
+    const secondFileSystem = new InMemoryFileSystem({
+      'index.ts': '',
+      'page.mdx': '# Page',
+    })
+    const secondDirectory = new Directory({
+      fileSystem: secondFileSystem,
+      filter: (entry): entry is File =>
+        entry instanceof File && entry.extension === 'mdx',
+    })
 
-      const firstStructure = await firstDirectory.getStructure()
-      const firstFileEntries = firstStructure.filter(
-        (entry) => entry.kind === 'File'
-      )
-      expect(firstFileEntries.map((entry) => entry.relativePath)).toEqual([
-        'index.ts',
-      ])
-
-      const secondFileSystem = new InMemoryFileSystem({
-        'index.ts': '',
-        'page.mdx': '# Page',
-      })
-      const secondDirectory = new Directory({
-        fileSystem: secondFileSystem,
-        filter: (entry): entry is File =>
-          entry instanceof File && entry.extension === 'mdx',
-      })
-
-      const secondStructure = await secondDirectory.getStructure()
-      const secondFileEntries = secondStructure.filter(
-        (entry) => entry.kind === 'File'
-      )
-      expect(secondFileEntries.map((entry) => entry.relativePath)).toEqual([
-        'page.mdx',
-      ])
-    } finally {
-      disposeDefaultCacheStorePersistence()
-
-      if (previousCacheDbPath) {
-        process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
-      } else {
-        delete process.env.RENOUN_FS_CACHE_DB_PATH
-      }
-
-      rmSync(tmpDirectory, { recursive: true, force: true })
-    }
+    const secondStructure = await secondDirectory.getStructure()
+    const secondFileEntries = secondStructure.filter(
+      (entry) => entry.kind === 'File'
+    )
+    expect(secondFileEntries.map((entry) => entry.relativePath)).toEqual([
+      'page.mdx',
+    ])
   })
 
   test('invalidates shared snapshots across instances when files are mutated', async () => {
@@ -303,68 +290,47 @@ describe('file-system cache integration', () => {
   })
 
   test('dedupes concurrent stale directory rebuilds for instances', async () => {
-      const previousNodeEnv = process.env.NODE_ENV
-      process.env.NODE_ENV = 'development'
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
 
-      try {
-        const fileSystem = new MutableTimestampFileSystem({
+    try {
+      const fileSystem = new MutableTimestampFileSystem({
         'index.ts': 'export const value = 1',
       })
       fileSystem.setLastModified('index.ts', 1)
       const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectory')
       const first = new Directory({ fileSystem })
       const second = new Directory({ fileSystem })
-      const firstSession = Session.for(fileSystem)
-      const secondSession = Session.for(fileSystem)
-      // eslint-disable-next-line no-console
-      console.error('same session', firstSession === secondSession)
 
       await first.getEntries({
         includeIndexAndReadmeFiles: true,
       })
       const callsAfterFirstRead = readDirectorySpy.mock.calls.length
-      fileSystem.setLastModified('index.ts', 2)
-
       const originalReadDirectory = fileSystem.readDirectory.bind(fileSystem)
-      let readDirectoryCount = 0
       const blockRebuild = createDeferredPromise()
       const continueRebuild = createDeferredPromise()
-      const session = Session.for(fileSystem)
+
       readDirectorySpy.mockImplementation(async (path) => {
-        readDirectoryCount += 1
-        if (readDirectoryCount > 64) {
-          throw new Error(
-            `readDirectory repeated too many times: ${readDirectoryCount}`
-          )
-        }
-        if (readDirectoryCount <= 20) {
-          // eslint-disable-next-line no-console
-          console.error(
-            'readDirectory',
-            readDirectoryCount,
-            'path',
-            path,
-            'cached',
-            [...session.directorySnapshots.keys()],
-            'builds',
-            [...session.directorySnapshotBuilds.keys()]
-          )
-        }
         blockRebuild.resolve()
         await continueRebuild.promise
         return originalReadDirectory(path)
       })
 
+      fileSystem.setLastModified('index.ts', 2)
+
       const firstReload = first.getEntries({
         includeIndexAndReadmeFiles: true,
       })
+
       await blockRebuild.promise
       continueRebuild.resolve()
-      const secondReload = second.getEntries({
-        includeIndexAndReadmeFiles: true,
-      })
 
-      await Promise.all([firstReload, secondReload])
+      await Promise.all([
+        firstReload,
+        second.getEntries({
+          includeIndexAndReadmeFiles: true,
+        }),
+      ])
 
       expect(readDirectorySpy.mock.calls.length).toBe(callsAfterFirstRead + 1)
     } finally {
@@ -1315,24 +1281,15 @@ describe('cache replacement semantics', () => {
 
 describe('sqlite cache persistence', () => {
   test('revalidates persisted sibling navigation across worker sessions after file additions', async () => {
-    const tmpDirectory = mkdtempSync(
-      join(process.cwd(), 'tmp-renoun-cache-nav-workers-')
-    )
-    const docsDirectory = join(tmpDirectory, 'docs')
-    const previousNodeEnv = process.env.NODE_ENV
-    const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
 
-    mkdirSync(docsDirectory, { recursive: true })
-    writeFileSync(join(docsDirectory, 'a.mdx'), '# Alpha', 'utf8')
-    writeFileSync(join(docsDirectory, 'b.mdx'), '# Beta', 'utf8')
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'a.mdx'), '# Alpha', 'utf8')
+      writeFileSync(join(docsDirectory, 'b.mdx'), '# Beta', 'utf8')
 
-    process.env.NODE_ENV = 'production'
-    process.env.RENOUN_FS_CACHE_DB_PATH = join(tmpDirectory, 'fs-cache.sqlite')
-    disposeDefaultCacheStorePersistence()
-
-    try {
       const firstWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const firstWorkerFile = await firstWorkerDirectory.getFile('b', 'mdx')
@@ -1341,7 +1298,7 @@ describe('sqlite cache persistence', () => {
       expect(firstNext).toBeUndefined()
 
       const secondWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const secondWorkerFile = await secondWorkerDirectory.getFile('b', 'mdx')
@@ -1353,52 +1310,31 @@ describe('sqlite cache persistence', () => {
       await new Promise((resolve) => setTimeout(resolve, 300))
 
       const thirdWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const thirdWorkerFile = await thirdWorkerDirectory.getFile('b', 'mdx')
       const [thirdPrevious, thirdNext] = await thirdWorkerFile.getSiblings()
       expect(thirdPrevious?.baseName).toBe('a')
       expect(thirdNext?.baseName).toBe('c')
-    } finally {
-      disposeDefaultCacheStorePersistence()
-      process.env.NODE_ENV = previousNodeEnv
-
-      if (previousCacheDbPath) {
-        process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
-      } else {
-        delete process.env.RENOUN_FS_CACHE_DB_PATH
-      }
-
-      rmSync(tmpDirectory, { recursive: true, force: true })
-    }
+    })
   })
 
   test('revalidates persisted markdown structure across worker sessions after content updates', async () => {
-    const tmpDirectory = mkdtempSync(
-      join(process.cwd(), 'tmp-renoun-cache-markdown-workers-')
-    )
-    const docsDirectory = join(tmpDirectory, 'docs')
-    const pagePath = join(docsDirectory, 'page.mdx')
-    const previousNodeEnv = process.env.NODE_ENV
-    const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const pagePath = join(docsDirectory, 'page.mdx')
 
-    mkdirSync(docsDirectory, { recursive: true })
-    writeFileSync(
-      pagePath,
-      `# Alpha
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(
+        pagePath,
+        `# Alpha
 
 first content`,
-      'utf8'
-    )
-
-    process.env.NODE_ENV = 'production'
-    process.env.RENOUN_FS_CACHE_DB_PATH = join(tmpDirectory, 'fs-cache.sqlite')
-    disposeDefaultCacheStorePersistence()
-
-    try {
+        'utf8'
+      )
       const firstWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const firstWorkerFile = await firstWorkerDirectory.getFile('page', 'mdx')
@@ -1406,7 +1342,7 @@ first content`,
       expect(firstStructure.description).toBe('Alpha')
 
       const secondWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const secondWorkerFile = await secondWorkerDirectory.getFile('page', 'mdx')
@@ -1423,24 +1359,13 @@ updated content`,
       await new Promise((resolve) => setTimeout(resolve, 300))
 
       const thirdWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const thirdWorkerFile = await thirdWorkerDirectory.getFile('page', 'mdx')
       const thirdStructure = await thirdWorkerFile.getStructure()
       expect(thirdStructure.description).toBe('Beta')
-    } finally {
-      disposeDefaultCacheStorePersistence()
-      process.env.NODE_ENV = previousNodeEnv
-
-      if (previousCacheDbPath) {
-        process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
-      } else {
-        delete process.env.RENOUN_FS_CACHE_DB_PATH
-      }
-
-      rmSync(tmpDirectory, { recursive: true, force: true })
-    }
+    })
   })
 
   test('revalidates persisted directory navigation structure across worker sessions after nested markdown updates', async () => {
@@ -1494,25 +1419,16 @@ updated content`,
   })
 
   test('revalidates persisted sibling navigation across worker sessions after file deletion', async () => {
-    const tmpDirectory = mkdtempSync(
-      join(process.cwd(), 'tmp-renoun-cache-nav-delete-workers-')
-    )
-    const docsDirectory = join(tmpDirectory, 'docs')
-    const previousNodeEnv = process.env.NODE_ENV
-    const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
 
-    mkdirSync(docsDirectory, { recursive: true })
-    writeFileSync(join(docsDirectory, 'a.mdx'), '# Alpha', 'utf8')
-    writeFileSync(join(docsDirectory, 'b.mdx'), '# Beta', 'utf8')
-    writeFileSync(join(docsDirectory, 'c.mdx'), '# Gamma', 'utf8')
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'a.mdx'), '# Alpha', 'utf8')
+      writeFileSync(join(docsDirectory, 'b.mdx'), '# Beta', 'utf8')
+      writeFileSync(join(docsDirectory, 'c.mdx'), '# Gamma', 'utf8')
 
-    process.env.NODE_ENV = 'production'
-    process.env.RENOUN_FS_CACHE_DB_PATH = join(tmpDirectory, 'fs-cache.sqlite')
-    disposeDefaultCacheStorePersistence()
-
-    try {
       const firstWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const firstWorkerFile = await firstWorkerDirectory.getFile('b', 'mdx')
@@ -1521,7 +1437,7 @@ updated content`,
       expect(firstNext?.baseName).toBe('c')
 
       const secondWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const secondWorkerFile = await secondWorkerDirectory.getFile('b', 'mdx')
@@ -1533,25 +1449,14 @@ updated content`,
       await new Promise((resolve) => setTimeout(resolve, 300))
 
       const thirdWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const thirdWorkerFile = await thirdWorkerDirectory.getFile('b', 'mdx')
       const [thirdPrevious, thirdNext] = await thirdWorkerFile.getSiblings()
       expect(thirdPrevious?.baseName).toBe('a')
       expect(thirdNext).toBeUndefined()
-    } finally {
-      disposeDefaultCacheStorePersistence()
-      process.env.NODE_ENV = previousNodeEnv
-
-      if (previousCacheDbPath) {
-        process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
-      } else {
-        delete process.env.RENOUN_FS_CACHE_DB_PATH
-      }
-
-      rmSync(tmpDirectory, { recursive: true, force: true })
-    }
+    })
   })
 
   test('revalidates persisted package structure when package.json changes across worker sessions', async () => {
@@ -1902,35 +1807,30 @@ export type Metadata = Value`,
   })
 
   test('revalidates persisted recursive entries across worker sessions after directory rename', async () => {
-    const tmpDirectory = mkdtempSync(
-      join(process.cwd(), 'tmp-renoun-cache-tree-rename-workers-')
-    )
-    const docsDirectory = join(tmpDirectory, 'docs')
-    const previousNodeEnv = process.env.NODE_ENV
-    const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
 
-    mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
-    writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
-    writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+      mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
 
-    process.env.NODE_ENV = 'production'
-    process.env.RENOUN_FS_CACHE_DB_PATH = join(tmpDirectory, 'fs-cache.sqlite')
-    disposeDefaultCacheStorePersistence()
+      const getRecursiveFilePaths = async (directory: Directory<any>) => {
+        const entries = await directory.getEntries({
+          recursive: true,
+          includeIndexAndReadmeFiles: true,
+        })
+        return entries
+          .filter((entry): entry is File => entry instanceof File)
+          .map((entry) => entry.workspacePath)
+          .sort()
+      }
 
-    const getRecursiveFilePaths = async (directory: Directory<any>) => {
-      const entries = await directory.getEntries({
-        recursive: true,
-        includeIndexAndReadmeFiles: true,
-      })
-      return entries
-        .filter((entry): entry is File => entry instanceof File)
-        .map((entry) => entry.workspacePath)
-        .sort()
-    }
-
-    try {
       const firstWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const firstPaths = await getRecursiveFilePaths(firstWorkerDirectory)
@@ -1940,7 +1840,7 @@ export type Metadata = Value`,
       ])
 
       const secondWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const secondPaths = await getRecursiveFilePaths(secondWorkerDirectory)
@@ -1950,7 +1850,7 @@ export type Metadata = Value`,
       await new Promise((resolve) => setTimeout(resolve, 300))
 
       const thirdWorkerDirectory = new Directory({
-        fileSystem: new NodeFileSystem(),
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
         path: docsDirectory,
       })
       const thirdPaths = await getRecursiveFilePaths(thirdWorkerDirectory)
@@ -1961,18 +1861,7 @@ export type Metadata = Value`,
       expect(
         thirdPaths.some((path) => path.includes('/guides/intro.mdx'))
       ).toBe(false)
-    } finally {
-      disposeDefaultCacheStorePersistence()
-      process.env.NODE_ENV = previousNodeEnv
-
-      if (previousCacheDbPath) {
-        process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
-      } else {
-        delete process.env.RENOUN_FS_CACHE_DB_PATH
-      }
-
-      rmSync(tmpDirectory, { recursive: true, force: true })
-    }
+    })
   })
 
   test('persists cache entries and reloads them in a new cache store instance', async () => {
@@ -2994,14 +2883,12 @@ export type Metadata = Value`,
       join(tmpdir(), 'renoun-cache-sqlite-slot-')
     )
     const previousNodeEnv = process.env.NODE_ENV
-    const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
     })
     const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
 
     process.env.NODE_ENV = 'production'
-    process.env.RENOUN_FS_CACHE_DB_PATH = dbPath
     disposeDefaultCacheStorePersistence()
 
     try {
@@ -3055,12 +2942,6 @@ export type Metadata = Value`,
     } finally {
       disposeDefaultCacheStorePersistence()
       process.env.NODE_ENV = previousNodeEnv
-
-      if (previousCacheDbPath) {
-        process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
-      } else {
-        delete process.env.RENOUN_FS_CACHE_DB_PATH
-      }
 
       rmSync(tmpDirectory, { recursive: true, force: true })
     }

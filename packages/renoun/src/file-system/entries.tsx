@@ -3730,9 +3730,6 @@ function createOptionsMask(options: NormalizedDirectoryEntriesOptions) {
 const DIRECTORY_DEPENDENCY_PREFIX = 'dir:'
 const FILE_DEPENDENCY_PREFIX = 'file:'
 const PRODUCTION_SNAPSHOT_REVALIDATE_INTERVAL_MS = 250
-let dirSnapshotGetCount = 0
-let dirSnapshotMismatchCount = 0
-let dirSnapshotBuildCount = 0
 
 function createDirectoryListingSignature(
   entries: ReadonlyArray<{
@@ -5123,39 +5120,26 @@ export class Directory<
   ): Promise<
     DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
   > {
-    dirSnapshotGetCount += 1
     const session = directory.#getSession()
     const snapshotKey = directory.#getSessionSnapshotKey(mask)
     const cachedSnapshot = session.directorySnapshots.get(snapshotKey)
-    if (dirSnapshotGetCount <= 20) {
-      // eslint-disable-next-line no-console
-      console.error(
-        'snapshot get',
-        dirSnapshotGetCount,
-        snapshotKey,
-        'cached? ',
-        !!cachedSnapshot,
-        'existingBuild?',
-        session.directorySnapshotBuilds.has(snapshotKey)
-      )
-    }
+
     const existingBuild = session.directorySnapshotBuilds.get(snapshotKey)
     if (existingBuild) {
       return existingBuild.then((metadata) => metadata.snapshot)
     }
 
-    const build = Promise.resolve().then(async () => {
-      if (cachedSnapshot) {
-        const isStale = await directory.#isCachedSnapshotStale(cachedSnapshot)
-        if (!isStale) {
-          return { snapshot: cachedSnapshot, shouldIncludeSelf: false }
-        }
+    const build = cachedSnapshot
+      ? (async () => {
+          const isStale = await directory.#isCachedSnapshotStale(cachedSnapshot)
+          if (!isStale) {
+            return { snapshot: cachedSnapshot, shouldIncludeSelf: false }
+          }
 
-        session.directorySnapshots.delete(snapshotKey)
-      }
-
-      return directory.#buildSnapshot(directory, options, mask)
-    })
+          session.directorySnapshots.delete(snapshotKey)
+          return directory.#buildSnapshot(directory, options, mask)
+        })()
+      : directory.#buildSnapshot(directory, options, mask)
 
     session.directorySnapshotBuilds.set(snapshotKey, build)
     try {
@@ -5215,17 +5199,6 @@ export class Directory<
       }
 
       if (currentSignature !== previousSignature) {
-        if (dirSnapshotMismatchCount < 8) {
-          // eslint-disable-next-line no-console
-          console.error(
-            'snapshot mismatch',
-            snapshot.getDependencies()?.size ?? 0,
-            pathWithType,
-            previousSignature,
-            currentSignature
-          )
-          dirSnapshotMismatchCount += 1
-        }
         return true
       }
     }
@@ -5270,22 +5243,12 @@ export class Directory<
   >
     shouldIncludeSelf: boolean
   }> {
-    dirSnapshotBuildCount += 1
-    if (dirSnapshotBuildCount <= 20) {
-      // eslint-disable-next-line no-console
-      console.error('build snapshot', dirSnapshotBuildCount, directory.#path)
-    }
-
     const session = directory.#getSession()
     const snapshotKey = directory.#getSessionSnapshotKey(mask)
     const fileSystem = directory.getFileSystem()
 
     const rawEntries = await fileSystem.readDirectory(directory.#path)
     const dependencySignatures = new Map<string, string>()
-    dependencySignatures.set(
-      `${DIRECTORY_DEPENDENCY_PREFIX}${directory.#path}`,
-      createDirectoryListingSignature(rawEntries)
-    )
 
     const fileMetadata: FileEntryMetadata<LoaderTypes>[] = []
     const finalMetadata: DirectorySnapshotMetadataEntry<LoaderTypes>[] = []
@@ -5513,6 +5476,11 @@ export class Directory<
       finalMetadata.push(result.metadata)
       directory.#addPathLookup(result.metadata.entry)
     }
+
+    dependencySignatures.set(
+      `${DIRECTORY_DEPENDENCY_PREFIX}${directory.#path}`,
+      createDirectoryListingSignature(rawEntries)
+    )
 
     let shouldIncludeSelf = false
 

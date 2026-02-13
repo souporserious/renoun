@@ -7,8 +7,7 @@ import type {
 } from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
-
-const { Node } = tsMorph
+const { Node, ts } = tsMorph
 
 export type LiteralExpressionValue =
   | undefined
@@ -69,7 +68,133 @@ export function resolveLiteralExpression(
     return resolveObjectLiteralExpression(expression)
   }
 
-  if (Node.isSpreadElement(expression) || Node.isAsExpression(expression)) {
+  if (Node.isParenthesizedExpression(expression)) {
+    return resolveLiteralExpression(expression.getExpression())
+  }
+
+  if (Node.isConditionalExpression(expression)) {
+    const condition = resolveLiteralExpression(expression.getCondition())
+    if (typeof condition === 'boolean') {
+      return resolveLiteralExpression(
+        condition ? expression.getWhenTrue() : expression.getWhenFalse()
+      )
+    }
+
+    return EMPTY_LITERAL_EXPRESSION_VALUE
+  }
+
+  if (Node.isPrefixUnaryExpression(expression)) {
+    const value = resolveLiteralExpression(expression.getOperand())
+
+    if (value === EMPTY_LITERAL_EXPRESSION_VALUE) {
+      return value
+    }
+
+    const operatorKind = expression.getOperatorToken().getKind()
+
+    if (operatorKind === ts.SyntaxKind.MinusToken && typeof value === 'number') {
+      return -value
+    }
+
+    if (operatorKind === ts.SyntaxKind.PlusToken && typeof value === 'number') {
+      return value
+    }
+
+    if (
+      operatorKind === ts.SyntaxKind.ExclamationToken &&
+      typeof value === 'boolean'
+    ) {
+      return !value
+    }
+  }
+
+  if (Node.isBinaryExpression(expression)) {
+    const leftValue = resolveLiteralExpression(expression.getLeft())
+    const rightValue = resolveLiteralExpression(expression.getRight())
+    const operatorKind = expression.getOperatorToken().getKind()
+
+    if (
+      leftValue === EMPTY_LITERAL_EXPRESSION_VALUE ||
+      rightValue === EMPTY_LITERAL_EXPRESSION_VALUE
+    ) {
+      return EMPTY_LITERAL_EXPRESSION_VALUE
+    }
+
+    if (operatorKind === ts.SyntaxKind.PlusToken) {
+      if (
+        (typeof leftValue === 'string' &&
+          (typeof rightValue === 'string' || typeof rightValue === 'number')) ||
+        (typeof rightValue === 'string' &&
+          (typeof leftValue === 'string' || typeof leftValue === 'number'))
+      ) {
+        return `${leftValue}${rightValue}`
+      }
+
+      if (typeof leftValue === 'number' && typeof rightValue === 'number') {
+        return leftValue + rightValue
+      }
+    }
+
+    if (
+      operatorKind === ts.SyntaxKind.MinusToken &&
+      typeof leftValue === 'number' &&
+      typeof rightValue === 'number'
+    ) {
+      return leftValue - rightValue
+    }
+
+    if (
+      operatorKind === ts.SyntaxKind.AsteriskToken &&
+      typeof leftValue === 'number' &&
+      typeof rightValue === 'number'
+    ) {
+      return leftValue * rightValue
+    }
+
+    if (
+      operatorKind === ts.SyntaxKind.SlashToken &&
+      typeof leftValue === 'number' &&
+      typeof rightValue === 'number' &&
+      rightValue !== 0
+    ) {
+      return leftValue / rightValue
+    }
+
+    if (operatorKind === ts.SyntaxKind.QuestionQuestionToken) {
+      return leftValue ?? rightValue
+    }
+  }
+
+  if (Node.isTemplateExpression(expression)) {
+    const head = expression.getHead().getLiteralText()
+    let value = head
+
+    for (const span of expression.getTemplateSpans()) {
+      const substitution = resolveLiteralExpression(span.getExpression())
+      const resolvedSubstitution =
+        substitution === null ||
+        typeof substitution === 'boolean' ||
+        typeof substitution === 'number' ||
+        typeof substitution === 'string'
+          ? `${substitution}`
+          : EMPTY_LITERAL_EXPRESSION_VALUE
+
+      if (resolvedSubstitution === EMPTY_LITERAL_EXPRESSION_VALUE) {
+        return EMPTY_LITERAL_EXPRESSION_VALUE
+      }
+
+      value += resolvedSubstitution
+      value += span.getLiteral().getLiteralText()
+    }
+
+    return value
+  }
+
+  if (
+    Node.isSpreadElement(expression) ||
+    Node.isAsExpression(expression) ||
+    expression.getKind() === ts.SyntaxKind.TypeAssertionExpression
+  ) {
     return resolveLiteralExpression(expression.getExpression())
   }
 

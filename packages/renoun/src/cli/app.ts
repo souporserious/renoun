@@ -20,6 +20,7 @@ import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
+import { prewarmRenounRpcServerCache } from './prewarm.ts'
 import { spawn } from 'node:child_process'
 
 function mergeDependencySections(
@@ -427,6 +428,18 @@ export async function runAppCommand({
     server = await createServer()
     const port = String(await server.getPort())
     const id = server.getId()
+
+    void prewarmRenounRpcServerCache({
+      projectOptions: {
+        tsConfigFilePath: join(projectRoot, 'tsconfig.json'),
+      },
+    }).catch((error) => {
+      getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
+        data: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      }))
+    })
 
     if (resolvedExample.framework === 'next') {
       const runtimeNext = await getInstalledPackageVersion({

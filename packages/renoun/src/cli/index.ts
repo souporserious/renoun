@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
+import { join } from 'node:path'
 
 import { createServer } from '../project/server.ts'
 import { getDebugLogger } from '../utils/debug.ts'
@@ -7,6 +8,7 @@ import { runAppCommand } from './app.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
 import { runEjectCommand } from './eject.ts'
 import { runOverrideCommand } from './override.ts'
+import { prewarmRenounRpcServerCache } from './prewarm.ts'
 import { reorderEntries } from './reorder.ts'
 import { runThemeCommand } from './theme.ts'
 import { runValidateCommand } from './validate.ts'
@@ -106,6 +108,18 @@ if (firstArgument === 'validate') {
         getDebugLogger().info('renoun server created', () => ({
           data: { port, serverId: id },
         }))
+
+        void prewarmRenounRpcServerCache({
+          projectOptions: {
+            tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
+          },
+        }).catch((error) => {
+          getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
+            data: {
+              error: error instanceof Error ? error.message : String(error),
+            },
+          }))
+        })
 
         const frameworkBinPath = resolveFrameworkBinFile(
           firstArgument as Framework
@@ -295,6 +309,19 @@ if (firstArgument === 'validate') {
           data: { port },
         }))
       }
+
+      void prewarmRenounRpcServerCache({
+        projectOptions: {
+          tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
+        },
+      }).catch((error) => {
+        getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
+          data: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        }))
+      })
+
       return server
     },
     { data: { mode: 'watch' } }
