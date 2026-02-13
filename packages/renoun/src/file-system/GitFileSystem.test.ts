@@ -129,7 +129,9 @@ function commitFile(
   const path = join(repo, filename)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
-  git(repo, ['add', filename])
+  // Use --sparse so staging works even if a sparse-checkout config is active.
+  // It is a no-op when sparse-checkout is disabled and avoids CI-specific failures.
+  git(repo, ['add', '--sparse', filename])
   git(repo, ['commit', '--no-gpg-sign', '-m', message], identity)
 
   // Get hash and unix timestamp in a single git command
@@ -149,7 +151,7 @@ function commitFiles(
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, file.content)
   }
-  git(repo, ['add', ...files.map((file) => file.filename)])
+  git(repo, ['add', '--sparse', ...files.map((file) => file.filename)])
   git(repo, ['commit', '--no-gpg-sign', '-m', message], identity)
 
   const output = git(repo, ['log', '-1', '--format=%H %ct'])
