@@ -1,4 +1,4 @@
-import { normalizeSlashes } from '../utils/path.ts'
+import { normalizePathKey } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { CacheStore, hashString, stableStringify } from './CacheStore.ts'
 import { getCacheStorePersistence } from './CacheStoreSqlite.ts'
@@ -12,7 +12,7 @@ const snapshotFamilyByFileSystem = new WeakMap<object, Map<string, string>>()
 
 function getSessionFamilyId(
   snapshotId: string,
-  familyMap: Map<string, string>,
+  familyMap: Map<string, string>
 ): string {
   return familyMap.get(snapshotId) ?? snapshotId
 }
@@ -68,8 +68,7 @@ export class Session {
 
       const snapshotFamilyId = getSessionFamilyId(snapshotId, familyMap)
       const familySessions = Array.from(sessionMap.entries()).filter(
-        ([id]) =>
-          getSessionFamilyId(id, familyMap) === snapshotFamilyId
+        ([id]) => getSessionFamilyId(id, familyMap) === snapshotFamilyId
       )
 
       if (familySessions.length === 0) {
@@ -94,7 +93,8 @@ export class Session {
       return
     }
 
-    const currentGeneration = snapshotGenerationByFileSystem.get(fileSystem) ?? 0
+    const currentGeneration =
+      snapshotGenerationByFileSystem.get(fileSystem) ?? 0
     snapshotGenerationByFileSystem.set(fileSystem, currentGeneration + 1)
 
     if (!sessionMap) {
@@ -114,10 +114,7 @@ export class Session {
   readonly snapshot: Snapshot
   readonly inflight = new Map<string, Promise<unknown>>()
   readonly cache: CacheStore
-  readonly directorySnapshots = new Map<
-    string,
-    DirectorySnapshot<any, any>
-  >()
+  readonly directorySnapshots = new Map<string, DirectorySnapshot<any, any>>()
 
   readonly #functionIds = new WeakMap<Function, string>()
   #nextFunctionId = 0
@@ -151,7 +148,11 @@ export class Session {
   }
 
   createValueSignature(value: unknown, prefix = 'value'): string {
-    const normalized = this.#normalizeSignatureValue(value, prefix, new WeakSet())
+    const normalized = this.#normalizeSignatureValue(
+      value,
+      prefix,
+      new WeakSet()
+    )
     return hashString(stableStringify(normalized)).slice(0, 16)
   }
 
@@ -184,7 +185,8 @@ export class Session {
 
     for (const key of this.directorySnapshots.keys()) {
       const delimiterIndex = key.indexOf('|')
-      const directoryPrefix = delimiterIndex === -1 ? key : key.slice(0, delimiterIndex)
+      const directoryPrefix =
+        delimiterIndex === -1 ? key : key.slice(0, delimiterIndex)
 
       if (!directoryPrefix.startsWith('dir:')) {
         continue
@@ -319,12 +321,7 @@ class GeneratedSnapshot implements Snapshot {
 
 function normalizeSessionPath(fileSystem: FileSystem, path: string): string {
   const relativePath = fileSystem.getRelativePathToWorkspace(path)
-  const normalized = normalizeSlashes(relativePath)
-    .replace(/^\.\/+/, '')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '')
-
-  return normalized === '' ? '.' : normalized
+  return normalizePathKey(relativePath)
 }
 
 function pathsIntersect(firstPath: string, secondPath: string): boolean {

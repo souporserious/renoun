@@ -1,4 +1,4 @@
-import { normalizeSlashes } from '../utils/path.ts'
+import { normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from './CacheStore.ts'
 
 export const CACHE_SCHEMA_VERSION = 2
@@ -9,15 +9,13 @@ export const GIT_HISTORY_CACHE_VERSION = '3'
 export const GIT_VIRTUAL_HISTORY_CACHE_VERSION = '3'
 
 export function normalizeCachePath(path: string): string {
-  const normalized = normalizeSlashes(path)
-    .replace(/^\.\/+/, '')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '')
-
-  return normalized === '' ? '.' : normalized
+  return normalizePathKey(path)
 }
 
-export function createCacheNodeKey(namespace: string, payload: unknown): string {
+export function createCacheNodeKey(
+  namespace: string,
+  payload: unknown
+): string {
   return `${namespace}:${hashString(stableStringify(payload))}`
 }
 

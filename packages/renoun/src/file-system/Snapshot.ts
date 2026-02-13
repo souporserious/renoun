@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { normalizeSlashes } from '../utils/path.ts'
+import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import type { FileReadableStream, FileSystem } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
 
@@ -10,7 +10,11 @@ const SNAPSHOT_VERSION = 1
 const METADATA_CONTENT_ID_MAX_AGE_MS = 250
 const MISSING_CONTENT_ID_MAX_AGE_MS = 100
 
-type ContentIdStrategy = 'metadata' | 'file-content' | 'directory-content' | 'missing'
+type ContentIdStrategy =
+  | 'metadata'
+  | 'file-content'
+  | 'directory-content'
+  | 'missing'
 
 interface CachedContentId {
   promise: Promise<string>
@@ -254,12 +258,7 @@ export class FileSystemSnapshot implements Snapshot {
 
   #normalizeSnapshotPath(path: string): string {
     const relativePath = this.#fileSystem.getRelativePathToWorkspace(path)
-    const normalized = normalizeSlashes(relativePath)
-      .replace(/^\.\/+/, '')
-      .replace(/^\/+/, '')
-      .replace(/\/+$/, '')
-
-    return normalized === '' ? '.' : normalized
+    return normalizePathKey(relativePath)
   }
 
   #getContentIdLookupPaths(path: string, normalizedPath: string): string[] {
@@ -306,10 +305,7 @@ function safeGetCacheIdentity(fileSystem: FileSystem): unknown {
   }
 }
 
-function safeGetStringField(
-  value: object,
-  key: string
-): string | undefined {
+function safeGetStringField(value: object, key: string): string | undefined {
   const candidate = (value as any)[key]
   return typeof candidate === 'string' ? candidate : undefined
 }
