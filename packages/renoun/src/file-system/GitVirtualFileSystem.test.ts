@@ -468,6 +468,119 @@ describe('GitVirtualFileSystem', () => {
     expect(fs.getCacheIdentity().ref).toBe('main')
   })
 
+  it('prevents stale export parse reuse when fallback ref changes during concurrent export queries', async () => {
+    let resolveMainArchive:
+      | ((response: Response | PromiseLike<Response>) => void)
+      | undefined
+    const mainArchive = new Promise<Response>((resolve) => {
+      resolveMainArchive = resolve
+    })
+    const masterArchive = makeTar([
+      { path: 'root/index.ts', content: 'export const masterValue = 2' },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url === 'https://api.github.com/repos/owner/concurrent-ref-switch') {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ default_branch: 'main' }),
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/concurrent-ref-switch/commits?sha=')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [],
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/concurrent-ref-switch/tarball/main')) {
+        return mainArchive
+      }
+
+      if (url.includes('/repos/owner/concurrent-ref-switch/tarball/master')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(masterArchive).buffer,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const sessionResetSpy = vi.spyOn(Session, 'reset')
+    const scanSpy = vi.spyOn(exportAnalysis, 'scanModuleExports')
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/concurrent-ref-switch',
+      host: 'github',
+    })
+
+    const first = drain(
+      fs.getExportHistory({
+        entry: 'index.ts',
+        detectUpdates: false,
+      })
+    )
+    const second = drain(
+      fs.getExportHistory({
+        entry: 'index.ts',
+        detectUpdates: false,
+      })
+    )
+
+    await Promise.resolve()
+
+    if (!resolveMainArchive) {
+      throw new Error('Expected pending main archive request to be initialized.')
+    }
+
+    resolveMainArchive({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+      headers: createHeaders({}),
+      json: async () => ({}),
+    } as Response)
+
+    const [firstReport, secondReport] = await Promise.all([first, second])
+
+    expect(firstReport.exports).toEqual(
+      expect.objectContaining({
+        './index.ts::masterValue': expect.any(Array),
+      })
+    )
+    expect(secondReport.exports).toEqual(
+      expect.objectContaining({
+        './index.ts::masterValue': expect.any(Array),
+      })
+    )
+    expect(scanSpy).toHaveBeenCalledTimes(1)
+    expect(fs.getCacheIdentity().ref).toBe('master')
+    expect(sessionResetSpy.mock.calls.some((call) => call[0] === fs)).toBe(true)
+  })
+
   it('clearCache force-resets all session families', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

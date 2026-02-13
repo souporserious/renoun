@@ -19,6 +19,7 @@ const SQLITE_DEFAULT_MAX_ROWS = 200_000
 const SQLITE_PRUNE_WRITE_INTERVAL = 32
 const SQLITE_PRUNE_MAX_INTERVAL_MS = 1000 * 60 * 5
 const SQLITE_DELETE_BATCH_SIZE = 500
+const SQLITE_INFLIGHT_TTL_MS = 20_000
 
 let warnedAboutSqliteFallback = false
 const persistenceByDbPath = new Map<string, SqliteCacheStorePersistence>()
@@ -155,6 +156,93 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       )
     )
     this.#readyPromise = this.#initialize()
+  }
+
+  async acquireComputeSlot(
+    nodeKey: string,
+    owner: string,
+    ttlMs: number = SQLITE_INFLIGHT_TTL_MS
+  ): Promise<boolean> {
+    await this.#readyPromise
+
+    if (!this.#db) {
+      return false
+    }
+
+    const now = Date.now()
+    const expiresAt = now + ttlMs
+
+    return this.#runWithBusyRetries(() => {
+      const result = this.#db
+        .prepare(
+          `
+            INSERT INTO cache_inflight (node_key, owner, started_at, expires_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(node_key) DO UPDATE SET
+              owner = excluded.owner,
+              started_at = excluded.started_at,
+              expires_at = excluded.expires_at
+            WHERE cache_inflight.expires_at < ?
+          `
+        )
+        .run(nodeKey, owner, now, expiresAt, now)
+
+      const changes = Number((result as { changes?: number }).changes ?? 0)
+      return changes > 0
+    })
+  }
+
+  async releaseComputeSlot(nodeKey: string, owner: string): Promise<void> {
+    await this.#readyPromise
+
+    if (!this.#db) {
+      return
+    }
+
+    await this.#runWithBusyRetries(() => {
+      this.#db
+        .prepare(
+          `DELETE FROM cache_inflight WHERE node_key = ? AND owner = ?`
+        )
+        .run(nodeKey, owner)
+    })
+  }
+
+  async getComputeSlotOwner(nodeKey: string): Promise<string | undefined> {
+    await this.#readyPromise
+
+    if (!this.#db) {
+      return undefined
+    }
+
+    const maybeOwner = this.#runWithBusyRetries(() => {
+      const now = Date.now()
+      const row = this.#db
+        .prepare(
+          `
+            SELECT owner, expires_at
+            FROM cache_inflight
+            WHERE node_key = ?
+          `
+        )
+        .get(nodeKey) as { owner?: string; expires_at?: number } | undefined
+
+      if (!row?.owner) {
+        return undefined
+      }
+
+      const expiresAt = Number(row.expires_at)
+      if (!Number.isFinite(expiresAt) || expiresAt <= now) {
+        this.#db
+          .prepare(`DELETE FROM cache_inflight WHERE node_key = ?`)
+          .run(nodeKey)
+        return undefined
+      }
+
+      return row.owner
+    })
+
+    return maybeOwner
   }
 
   async load(nodeKey: string): Promise<CacheEntry | undefined> {
@@ -410,6 +498,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         if (currentSchemaVersion !== this.#schemaVersion) {
           db.exec(`DROP TABLE IF EXISTS cache_deps`)
           db.exec(`DROP TABLE IF EXISTS cache_entries`)
+          db.exec(`DROP TABLE IF EXISTS cache_inflight`)
         }
 
         this.#createCacheTables(db)
@@ -492,6 +581,19 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     )
     db.exec(
       `CREATE INDEX IF NOT EXISTS cache_deps_dep_key_idx ON cache_deps(dep_key)`
+    )
+    db.exec(
+      `
+        CREATE TABLE IF NOT EXISTS cache_inflight (
+          node_key TEXT PRIMARY KEY,
+          owner TEXT NOT NULL,
+          started_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL
+        )
+      `
+    )
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS cache_inflight_expires_at_idx ON cache_inflight(expires_at)`
     )
   }
 
@@ -631,8 +733,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         .run(staleBefore)
 
       const countRow = this.#db
-        .prepare(`SELECT COUNT(*) as total FROM cache_entries`)
-        .get() as { total?: number }
+          .prepare(`SELECT COUNT(*) as total FROM cache_entries`)
+          .get() as { total?: number }
       const totalRows = Number(countRow?.total ?? 0)
       const overflow = totalRows - this.#maxRows
 
@@ -654,6 +756,20 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
         this.#deleteRowsForNodeKeys(victimNodeKeys)
       }
+
+      this.#deleteInflightRowsForNodeKeys(
+        this.#db
+          .prepare(
+            `
+              SELECT node_key
+              FROM cache_inflight
+              WHERE expires_at <= ?
+            `
+          )
+          .all(Date.now())
+          .map((row: { node_key?: string }) => row.node_key)
+          .filter((nodeKey): nodeKey is string => typeof nodeKey === 'string')
+      )
 
       this.#db.exec('COMMIT')
     } catch (error) {
@@ -697,6 +813,28 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         .run(...batch)
       this.#db
         .prepare(`DELETE FROM cache_entries WHERE node_key IN (${placeholders})`)
+        .run(...batch)
+    }
+  }
+
+  #deleteInflightRowsForNodeKeys(nodeKeys: string[]) {
+    if (!this.#db || nodeKeys.length === 0) {
+      return
+    }
+
+    for (
+      let offset = 0;
+      offset < nodeKeys.length;
+      offset += SQLITE_DELETE_BATCH_SIZE
+    ) {
+      const batch = nodeKeys.slice(offset, offset + SQLITE_DELETE_BATCH_SIZE)
+      if (batch.length === 0) {
+        continue
+      }
+
+      const placeholders = batch.map(() => '?').join(',')
+      this.#db
+        .prepare(`DELETE FROM cache_inflight WHERE node_key IN (${placeholders})`)
         .run(...batch)
     }
   }

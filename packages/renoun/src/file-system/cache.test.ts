@@ -303,44 +303,68 @@ describe('file-system cache integration', () => {
   })
 
   test('dedupes concurrent stale directory rebuilds for instances', async () => {
-    const previousNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'development'
+      const previousNodeEnv = process.env.NODE_ENV
+      process.env.NODE_ENV = 'development'
 
-    try {
-      const fileSystem = new MutableTimestampFileSystem({
+      try {
+        const fileSystem = new MutableTimestampFileSystem({
         'index.ts': 'export const value = 1',
       })
       fileSystem.setLastModified('index.ts', 1)
       const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectory')
       const first = new Directory({ fileSystem })
       const second = new Directory({ fileSystem })
+      const firstSession = Session.for(fileSystem)
+      const secondSession = Session.for(fileSystem)
+      // eslint-disable-next-line no-console
+      console.error('same session', firstSession === secondSession)
 
       await first.getEntries({
         includeIndexAndReadmeFiles: true,
       })
       const callsAfterFirstRead = readDirectorySpy.mock.calls.length
+      fileSystem.setLastModified('index.ts', 2)
+
       const originalReadDirectory = fileSystem.readDirectory.bind(fileSystem)
+      let readDirectoryCount = 0
       const blockRebuild = createDeferredPromise()
       const continueRebuild = createDeferredPromise()
+      const session = Session.for(fileSystem)
       readDirectorySpy.mockImplementation(async (path) => {
+        readDirectoryCount += 1
+        if (readDirectoryCount > 64) {
+          throw new Error(
+            `readDirectory repeated too many times: ${readDirectoryCount}`
+          )
+        }
+        if (readDirectoryCount <= 20) {
+          // eslint-disable-next-line no-console
+          console.error(
+            'readDirectory',
+            readDirectoryCount,
+            'path',
+            path,
+            'cached',
+            [...session.directorySnapshots.keys()],
+            'builds',
+            [...session.directorySnapshotBuilds.keys()]
+          )
+        }
         blockRebuild.resolve()
         await continueRebuild.promise
         return originalReadDirectory(path)
       })
-
-      fileSystem.setLastModified('index.ts', 2)
 
       const firstReload = first.getEntries({
         includeIndexAndReadmeFiles: true,
       })
       await blockRebuild.promise
       continueRebuild.resolve()
-      await Promise.all([
-        firstReload,
-        second.getEntries({
-          includeIndexAndReadmeFiles: true,
-        }),
-      ])
+      const secondReload = second.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      await Promise.all([firstReload, secondReload])
 
       expect(readDirectorySpy.mock.calls.length).toBe(callsAfterFirstRead + 1)
     } finally {
@@ -2961,6 +2985,83 @@ export type Metadata = Value`,
         lockDb.close()
       }
     } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
+  test('deduplicates concurrent sqlite-backed compute work across sessions', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-')
+    )
+    const previousNodeEnv = process.env.NODE_ENV
+    const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+
+    process.env.NODE_ENV = 'production'
+    process.env.RENOUN_FS_CACHE_DB_PATH = dbPath
+    disposeDefaultCacheStorePersistence()
+
+    try {
+      const snapshot = new FileSystemSnapshot(fileSystem, 'sqlite-compute-slot')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const firstStore = new CacheStore({
+        snapshot,
+        persistence,
+      })
+      const secondStore = new CacheStore({
+        snapshot,
+        persistence,
+      })
+
+      const blockFirst = createDeferredPromise()
+      let computeCount = 0
+
+      const first = firstStore.getOrCompute(
+        'test:sqlite-compute-slot',
+        { persist: true },
+        async (ctx) => {
+          computeCount += 1
+          await ctx.recordFileDep('/index.ts')
+          await blockFirst.promise
+          return 'first'
+        }
+      )
+
+      await Promise.resolve()
+
+      const second = secondStore.getOrCompute(
+        'test:sqlite-compute-slot',
+        { persist: true },
+        async (ctx) => {
+          computeCount += 1
+          await ctx.recordFileDep('/index.ts')
+          return 'second'
+        }
+      )
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100)
+      })
+      blockFirst.resolve()
+
+      const [firstResult, secondResult] = await Promise.all([first, second])
+
+      expect(firstResult).toBe('first')
+      expect(secondResult).toBe('first')
+      expect(computeCount).toBe(1)
+    } finally {
+      disposeDefaultCacheStorePersistence()
+      process.env.NODE_ENV = previousNodeEnv
+
+      if (previousCacheDbPath) {
+        process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
+      } else {
+        delete process.env.RENOUN_FS_CACHE_DB_PATH
+      }
+
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
   }, 12000)

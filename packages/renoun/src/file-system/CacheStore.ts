@@ -49,6 +49,28 @@ export interface CacheStoreOptions {
 
 const PERSISTENCE_INVALIDATION_TTL_MS = 2_000
 const failedPersistenceEntries = new Map<string, number>()
+const COMPUTE_SLOT_TTL_MS = getEnvInt(
+  'RENOUN_FS_CACHE_COMPUTE_SLOT_TTL_MS',
+  20_000
+)
+const COMPUTE_SLOT_WAIT_MS = getEnvInt(
+  'RENOUN_FS_CACHE_COMPUTE_SLOT_WAIT_MS',
+  10_000
+)
+const COMPUTE_SLOT_POLL_MS = getEnvInt(
+  'RENOUN_FS_CACHE_COMPUTE_SLOT_POLL_MS',
+  25
+)
+
+interface CacheStorePersistenceComputeSlot {
+  acquireComputeSlot(
+    nodeKey: string,
+    owner: string,
+    ttlMs: number
+  ): Promise<boolean>
+  releaseComputeSlot(nodeKey: string, owner: string): Promise<void>
+  getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
+}
 
 function markPersistedEntryInvalid(nodeKey: string): void {
   failedPersistenceEntries.set(nodeKey, Date.now() + PERSISTENCE_INVALIDATION_TTL_MS)
@@ -232,6 +254,99 @@ export class CacheStore {
     })
   }
 
+  #getComputeSlotPersistence(): CacheStorePersistenceComputeSlot | undefined {
+    const persistence = this.#persistence
+    if (
+      !persistence ||
+      typeof (
+        persistence as Partial<CacheStorePersistenceComputeSlot>
+      ).acquireComputeSlot !== 'function' ||
+      typeof (
+        persistence as Partial<CacheStorePersistenceComputeSlot>
+      ).releaseComputeSlot !== 'function' ||
+      typeof (
+        persistence as Partial<CacheStorePersistenceComputeSlot>
+      ).getComputeSlotOwner !== 'function'
+    ) {
+      return undefined
+    }
+
+    return persistence as CacheStorePersistenceComputeSlot
+  }
+
+  async #acquireComputeSlot(
+    nodeKey: string,
+    owner: string
+  ): Promise<boolean> {
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      return true
+    }
+
+    try {
+      return await persistence.acquireComputeSlot(
+        nodeKey,
+        owner,
+        COMPUTE_SLOT_TTL_MS
+      )
+    } catch {
+      return true
+    }
+  }
+
+  async #releaseComputeSlot(nodeKey: string, owner: string): Promise<void> {
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      return
+    }
+
+    try {
+      await persistence.releaseComputeSlot(nodeKey, owner)
+    } catch {
+      return
+    }
+  }
+
+  async #waitForInFlightValue<Value>(nodeKey: string): Promise<Value | undefined> {
+    const stopAt = Date.now() + COMPUTE_SLOT_WAIT_MS
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      return undefined
+    }
+
+    while (Date.now() < stopAt) {
+      const freshEntry = await this.#getFreshEntry(nodeKey)
+      if (freshEntry) {
+        return freshEntry.value as Value
+      }
+
+      let inFlightOwner: string | undefined
+      try {
+        inFlightOwner = await persistence.getComputeSlotOwner(nodeKey)
+      } catch {
+        return undefined
+      }
+
+      if (!inFlightOwner) {
+        return undefined
+      }
+
+      const sleep =
+        Math.max(0, Math.min(COMPUTE_SLOT_POLL_MS, stopAt - Date.now())) || 0
+      if (sleep > 0) {
+        await delay(sleep)
+      }
+      continue
+    }
+
+    return undefined
+  }
+
+  #createComputeSlotOwner(): string {
+    const randomSuffix = Math.random().toString(36).slice(2)
+    return `${process.pid}:${Date.now()}:${randomSuffix}`
+  }
+
   clearMemory(): void {
     this.#logCacheOperation('clear', '__cache_memory__', {
       source: 'memory',
@@ -280,30 +395,55 @@ export class CacheStore {
       },
     }
 
-    const value = await compute(context)
-    const dependencyEntries = Array.from(deps.entries())
-      .map(([depKey, depVersion]) => ({ depKey, depVersion }))
-      .sort((first, second) => first.depKey.localeCompare(second.depKey))
-    const fingerprint = createFingerprint(dependencyEntries)
+    const shouldCoordinate = options.persist === true && !!this.#persistence
+    let computeSlotOwner: string | undefined
+    if (shouldCoordinate) {
+      const candidateOwner = this.#createComputeSlotOwner()
 
-    const entry: CacheEntry<Value> = {
-      value,
-      deps: dependencyEntries,
-      fingerprint,
-      persist: options.persist ?? false,
-      updatedAt: Date.now(),
+      const acquired = await this.#acquireComputeSlot(nodeKey, candidateOwner)
+      if (!acquired) {
+        const sharedValue = await this.#waitForInFlightValue<Value>(
+          nodeKey
+        )
+        if (sharedValue !== undefined) {
+          return sharedValue
+        }
+      } else {
+        computeSlotOwner = candidateOwner
+      }
     }
 
-    this.#logCacheOperation('set', nodeKey, {
-      source: 'compute',
-      persist: entry.persist,
-      dependencies: dependencyEntries.length,
-    })
+    try {
+      const value = await compute(context)
 
-    this.#entries.set(nodeKey, entry)
-    await this.#savePersistedEntry(nodeKey, entry)
+      const dependencyEntries = Array.from(deps.entries())
+        .map(([depKey, depVersion]) => ({ depKey, depVersion }))
+        .sort((first, second) => first.depKey.localeCompare(second.depKey))
+      const fingerprint = createFingerprint(dependencyEntries)
 
-    return value
+      const entry: CacheEntry<Value> = {
+        value,
+        deps: dependencyEntries,
+        fingerprint,
+        persist: options.persist ?? false,
+        updatedAt: Date.now(),
+      }
+
+      this.#logCacheOperation('set', nodeKey, {
+        source: 'compute',
+        persist: entry.persist,
+        dependencies: dependencyEntries.length,
+      })
+
+      this.#entries.set(nodeKey, entry)
+      await this.#savePersistedEntry(nodeKey, entry)
+
+      return value
+    } finally {
+      if (computeSlotOwner) {
+        await this.#releaseComputeSlot(nodeKey, computeSlotOwner)
+      }
+    }
   }
 
   async #getEntry(nodeKey: string): Promise<CacheEntry | undefined> {
@@ -736,4 +876,24 @@ function isUnserializablePersistenceValueError(error: unknown): boolean {
   return /could not be cloned|cannot be serialized|datacloneerror/i.test(
     error.message
   )
+}
+
+function getEnvInt(envVarName: string, fallback: number): number {
+  const value = process.env[envVarName]
+  if (!value) {
+    return fallback
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback
+  }
+
+  return parsed
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 }
