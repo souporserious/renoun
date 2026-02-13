@@ -109,6 +109,14 @@ function initRepo(cwd: string) {
   git(cwd, ['-c', 'init.defaultBranch=main', 'init'])
   // Disable sparse-checkout to avoid CI issues where it may be enabled globally
   git(cwd, ['config', 'core.sparseCheckout', 'false'])
+  // Ensure worktree-level sparse settings are also cleared.
+  git(cwd, ['config', '--worktree', 'core.sparseCheckout', 'false'])
+  git(cwd, ['config', '--worktree', 'core.sparseCheckoutCone', 'false'])
+  const sparseCheckoutPath = join(cwd, '.git', 'info', 'sparse-checkout')
+  if (existsSync(sparseCheckoutPath)) {
+    rmSync(sparseCheckoutPath, { force: true })
+  }
+  git(cwd, ['sparse-checkout', 'disable'])
 }
 
 function commitFile(
@@ -121,7 +129,7 @@ function commitFile(
   const path = join(repo, filename)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
-  git(repo, ['add', '--sparse', filename])
+  git(repo, ['add', filename])
   git(repo, ['commit', '--no-gpg-sign', '-m', message], identity)
 
   // Get hash and unix timestamp in a single git command
@@ -141,7 +149,7 @@ function commitFiles(
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, file.content)
   }
-  git(repo, ['add', '--sparse', ...files.map((file) => file.filename)])
+  git(repo, ['add', ...files.map((file) => file.filename)])
   git(repo, ['commit', '--no-gpg-sign', '-m', message], identity)
 
   const output = git(repo, ['log', '-1', '--format=%H %ct'])
@@ -1468,7 +1476,7 @@ describe('GitFileSystem', () => {
 
     git(repoRoot, ['mv', 'src/a.ts', 'src/b.ts'])
     writeFileSync(join(repoRoot, 'src/index.ts'), `export { core } from './b'`)
-    git(repoRoot, ['add', '--sparse', 'src/index.ts'])
+    git(repoRoot, ['add', 'src/index.ts'])
     git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'rename file'])
     const renameCommitHash = git(repoRoot, ['log', '-1', '--format=%H'])
 
@@ -1628,7 +1636,7 @@ describe('GitFileSystem', () => {
       join(repoRoot, 'src/index.ts'),
       `export { buildValidator } from './new'`
     )
-    git(repoRoot, ['add', '--sparse', 'src/new.ts', 'src/index.ts'])
+    git(repoRoot, ['add', 'src/new.ts', 'src/index.ts'])
     git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'move and rename'])
     const renameCommitHash = git(repoRoot, ['log', '-1', '--format=%H'])
 
