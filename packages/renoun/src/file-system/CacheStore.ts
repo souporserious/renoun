@@ -47,11 +47,39 @@ export interface CacheStoreOptions {
   inflight?: Map<string, Promise<unknown>>
 }
 
+const PERSISTENCE_INVALIDATION_TTL_MS = 2_000
+const failedPersistenceEntries = new Map<string, number>()
+
+function markPersistedEntryInvalid(nodeKey: string): void {
+  failedPersistenceEntries.set(nodeKey, Date.now() + PERSISTENCE_INVALIDATION_TTL_MS)
+}
+
+function isPersistedEntryInvalid(nodeKey: string): boolean {
+  const expiresAt = failedPersistenceEntries.get(nodeKey)
+
+  if (expiresAt === undefined) {
+    return false
+  }
+
+  if (Date.now() <= expiresAt) {
+    return true
+  }
+
+  failedPersistenceEntries.delete(nodeKey)
+  return false
+}
+
+function clearPersistedEntryInvalidation(nodeKey: string): void {
+  failedPersistenceEntries.delete(nodeKey)
+}
+
 export class CacheStore {
   readonly #snapshot: Snapshot
   readonly #persistence?: CacheStorePersistence
   readonly #entries = new Map<string, CacheEntry>()
   readonly #inflight: Map<string, Promise<unknown>>
+  readonly #persistenceOperationByKey = new Map<string, Promise<void>>()
+  readonly #persistenceIntentVersionByKey = new Map<string, number>()
   #warnedAboutPersistenceFailure = false
   #warnedAboutUnserializableValue = false
 
@@ -135,25 +163,73 @@ export class CacheStore {
       return
     }
 
-    await this.#syncPersistenceIntent(nodeKey, false, `delete(${nodeKey})`)
+    clearPersistedEntryInvalidation(nodeKey)
+    await this.#withPersistenceIntent(nodeKey, () =>
+      this.#clearPersistedCacheEntry(nodeKey)
+    )
   }
 
-  async #syncPersistenceIntent(
+  async #withPersistenceIntent(
     nodeKey: string,
-    shouldPersist: boolean,
-    operation: string
-  ): Promise<boolean> {
-    if (!this.#persistence || shouldPersist) {
-      return false
+    task: () => Promise<void>
+  ): Promise<void> {
+    const previous =
+      this.#persistenceOperationByKey.get(nodeKey) ?? Promise.resolve()
+    const currentVersion =
+      (this.#persistenceIntentVersionByKey.get(nodeKey) ?? 0) + 1
+    this.#persistenceIntentVersionByKey.set(nodeKey, currentVersion)
+
+    const operation = previous
+      .catch(() => {})
+      .then(() => {
+        if (
+          this.#persistenceIntentVersionByKey.get(nodeKey) !== currentVersion
+        ) {
+          return
+        }
+
+        return task()
+      })
+
+    this.#persistenceOperationByKey.set(nodeKey, operation)
+
+    try {
+      await operation
+    } finally {
+      if (this.#persistenceOperationByKey.get(nodeKey) === operation) {
+        this.#persistenceOperationByKey.delete(nodeKey)
+        this.#persistenceIntentVersionByKey.delete(nodeKey)
+      }
+    }
+  }
+
+  async #clearPersistedCacheEntry(nodeKey: string): Promise<void> {
+    if (!this.#persistence) {
+      return
     }
 
     try {
       await this.#persistence.delete(nodeKey)
-      return false
     } catch (error) {
-      this.#warnPersistenceFailure(operation, error)
-      return true
+      this.#warnPersistenceFailure(`cleanup(${nodeKey})`, error)
+      markPersistedEntryInvalid(nodeKey)
+      return
     }
+
+    clearPersistedEntryInvalidation(nodeKey)
+  }
+
+  #cleanupPersistedEntry(nodeKey: string, entry: CacheEntry): Promise<void> {
+    markPersistedEntryInvalid(nodeKey)
+    if (!this.#persistence) {
+      return Promise.resolve()
+    }
+
+    return this.#clearPersistedCacheEntry(nodeKey).then(() => {
+      if (!this.#entries.get(nodeKey)) {
+        this.#entries.set(nodeKey, entry)
+      }
+    })
   }
 
   clearMemory(): void {
@@ -248,6 +324,14 @@ export class CacheStore {
       return undefined
     }
 
+    if (isPersistedEntryInvalid(nodeKey)) {
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'persisted-entry',
+        reason: 'in-process-invalid',
+      })
+      return undefined
+    }
+
     let persistedEntry: CacheEntry | undefined
     try {
       persistedEntry = await this.#persistence.load(nodeKey)
@@ -257,7 +341,9 @@ export class CacheStore {
     }
 
     if (persistedEntry && !persistedEntry.persist) {
-      await this.#syncPersistenceIntent(nodeKey, false, `cleanup(${nodeKey})`)
+      await this.#withPersistenceIntent(nodeKey, () =>
+        this.#clearPersistedCacheEntry(nodeKey)
+      )
       this.#logCacheOperation('clear', nodeKey, {
         source: 'persisted-entry',
         reason: 'not-persist-flag',
@@ -424,77 +510,77 @@ export class CacheStore {
   }
 
   async #savePersistedEntry(nodeKey: string, entry: CacheEntry): Promise<void> {
-    await this.#syncPersistenceIntent(
-      nodeKey,
-      entry.persist,
-      `cleanup(${nodeKey})`
-    )
-
-    if (!this.#persistence || !entry.persist) {
+    clearPersistedEntryInvalidation(nodeKey)
+    if (!this.#persistence) {
       return
     }
 
-    try {
-      await this.#persistence.save(nodeKey, entry)
-    } catch (error) {
-      // Keep the computed value in memory when persistence rejects this value.
-      entry.persist = false
-
-      const cleanupFailed = await this.#syncPersistenceIntent(
-        nodeKey,
-        false,
-        `cleanup(${nodeKey})`
+    if (!entry.persist) {
+      await this.#withPersistenceIntent(nodeKey, () =>
+        this.#clearPersistedCacheEntry(nodeKey)
       )
+      return
+    }
 
-      if (cleanupFailed) {
+    await this.#withPersistenceIntent(nodeKey, async () => {
+      let valueToPersist: unknown = entry.value
+
+      const attempt = async (value: unknown): Promise<void> => {
+        const persisted = {
+          ...entry,
+          value,
+          persist: true,
+        }
+        await this.#persistence!.save(nodeKey, persisted)
+        const verified = await this.#persistence!.load(nodeKey)
+
+        if (!verified || !verified.persist) {
+          throw new Error('cache persistence verification failed')
+        }
+        if (verified.fingerprint !== entry.fingerprint) {
+          throw new Error('cache persistence fingerprint drift')
+        }
+      }
+
+      try {
+        await attempt(valueToPersist)
+        clearPersistedEntryInvalidation(nodeKey)
+        return
+      } catch (error) {
         if (isUnserializablePersistenceValueError(error)) {
           this.#warnUnserializableValue(nodeKey, error)
 
-          const serializableValue = toPersistenceSafeValue(entry.value)
+          const serializableValue = toPersistenceSafeValue(valueToPersist)
           if (serializableValue !== undefined) {
             try {
-              await this.#persistence.save(nodeKey, {
-                ...entry,
-                persist: true,
-                value: serializableValue,
-              })
-            } catch (fallbackError) {
-              if (isUnserializablePersistenceValueError(fallbackError)) {
-                return
-              }
-            }
-          }
-          return
-        }
-
-        return
-      }
-
-      if (isUnserializablePersistenceValueError(error)) {
-        this.#warnUnserializableValue(nodeKey, error)
-
-        const serializableValue = toPersistenceSafeValue(entry.value)
-        if (serializableValue !== undefined) {
-          try {
-            await this.#persistence.save(nodeKey, {
-              ...entry,
-              persist: true,
-              value: serializableValue,
-            })
-            return
-          } catch (fallbackError) {
-            if (isUnserializablePersistenceValueError(fallbackError)) {
+              await attempt(serializableValue)
+              entry.value = serializableValue
+              clearPersistedEntryInvalidation(nodeKey)
               return
+            } catch (fallbackError) {
+              error = fallbackError
             }
-            this.#warnPersistenceFailure(`save(${nodeKey})`, fallbackError)
-            return
+          } else {
+            error = undefined
           }
         }
 
-        return
+        const cleanupError = error instanceof Error ? error : new Error(String(error))
+
+        await this.#cleanupPersistedEntry(
+          nodeKey,
+          { ...entry, value: entry.value }
+        )
+        entry.persist = false
+        markPersistedEntryInvalid(nodeKey)
+        if (
+          cleanupError &&
+          !isUnserializablePersistenceValueError(cleanupError)
+        ) {
+          this.#warnPersistenceFailure(`save(${nodeKey})`, cleanupError)
+        }
       }
-      this.#warnPersistenceFailure(`save(${nodeKey})`, error)
-    }
+    })
   }
 
   #warnPersistenceFailure(operation: string, error: unknown) {

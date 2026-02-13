@@ -293,6 +293,32 @@ describe('GitFileSystem', () => {
     }
   })
 
+  test('re-resolves ref commits for long-lived file-system instances', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    const v1 = commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'v1')
+
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const firstMetadata = await store.getFileMetadata('src/index.ts')
+      expect(firstMetadata.refCommit).toBe(v1.hash)
+
+      const v2 = commitFile(
+        repoRoot,
+        'src/index.ts',
+        `export const value = 2`,
+        'v2'
+      )
+
+      const secondMetadata = await store.getFileMetadata('src/index.ts')
+      expect(secondMetadata.refCommit).toBe(v2.hash)
+      expect(secondMetadata.refCommit).not.toBe(firstMetadata.refCommit)
+    } finally {
+      store.close()
+    }
+  })
+
   test('reuses export-history cache across store instances when ref is unchanged', async ({
     repoRoot,
     cacheDirectory,

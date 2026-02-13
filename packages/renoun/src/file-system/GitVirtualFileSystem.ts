@@ -116,6 +116,7 @@ const MAX_FILE_BYTES = 8 * 1024 * 1024
 const MAX_GITHUB_BLAME_LINE = 1_000_000
 
 const MAX_GITHUB_BLAME_BATCH = 20
+const GIT_VIRTUAL_REF_IDENTITY_TTL_MS = 60_000
 
 const TAR_TYPE_FLAGS = {
   NormalFile: 0x00,
@@ -297,6 +298,14 @@ export class GitVirtualFileSystem
   #ghBlameAbortControllers = new Set<AbortController>()
   #ghBlameBatchFlushScheduled = false
   #ghBlameBatchFlushing = false
+  #refIdentityCache = new Map<
+    string,
+    { identity: string; deterministic: boolean; checkedAt: number }
+  >()
+  #refIdentityLookupInflight = new Map<
+    string,
+    Promise<{ identity: string; deterministic: boolean }>
+  >()
 
   constructor(options: GitVirtualFileSystemOptions) {
     if (!options.host) {
@@ -580,9 +589,10 @@ export class GitVirtualFileSystem
     }
   }
 
-  #clearRefScopedCaches(cancelMessage: string) {
+  #clearRefCaches(cancelMessage: string) {
     this.#gitMetadataMirror.clear()
     this.#gitBlameCache.clear()
+    this.#exportParseCache.clear()
     const pendingBlameQueue = this.#ghBlameBatchQueue ?? []
     if (pendingBlameQueue.length > 0) {
       const error = new Error(cancelMessage)
@@ -624,7 +634,7 @@ export class GitVirtualFileSystem
     }
 
     this.#ref = nextRef
-    this.#clearRefScopedCaches(
+    this.#clearRefCaches(
       '[renoun] Git blame request was cancelled because the active Git ref changed.'
     )
     this.#resetSession(true)
@@ -638,7 +648,7 @@ export class GitVirtualFileSystem
     this.#initId++
     const files = this.getFiles()
     files.clear()
-    this.#clearRefScopedCaches(
+    this.#clearRefCaches(
       '[renoun] Git blame request was cancelled because the cache was cleared.'
     )
     this.#resetSession(true)
@@ -725,9 +735,126 @@ export class GitVirtualFileSystem
     deterministic: boolean
   }> {
     const normalizedRef = ref.trim()
-    return {
-      identity: normalizedRef,
-      deterministic: isFullCommitSha(normalizedRef),
+    const now = Date.now()
+    const cached = this.#refIdentityCache.get(normalizedRef)
+
+    if (cached && now - cached.checkedAt < GIT_VIRTUAL_REF_IDENTITY_TTL_MS) {
+      return cached
+    }
+
+    const inFlight =
+      this.#refIdentityLookupInflight.get(normalizedRef) ??
+      this.#resolveRefCacheIdentity(normalizedRef)
+
+    if (!this.#refIdentityLookupInflight.has(normalizedRef)) {
+      this.#refIdentityLookupInflight.set(normalizedRef, inFlight)
+    }
+
+    try {
+      return await inFlight
+    } finally {
+      if (this.#refIdentityLookupInflight.get(normalizedRef) === inFlight) {
+        this.#refIdentityLookupInflight.delete(normalizedRef)
+      }
+    }
+  }
+
+  async #resolveRefCacheIdentity(ref: string): Promise<{
+    identity: string
+    deterministic: boolean
+  }> {
+    const cached = this.#refIdentityCache.get(ref)
+    let identity = ref
+    let deterministic = false
+
+    try {
+      const resolved = await this.#resolveRefToCommit(ref)
+      if (resolved) {
+        identity = resolved
+        deterministic = true
+      }
+    } catch {
+      if (cached !== undefined) {
+        this.#refIdentityCache.set(ref, {
+          ...cached,
+          checkedAt: Date.now(),
+        })
+        return cached
+      }
+    }
+
+    const next = {
+      identity,
+      deterministic,
+      checkedAt: Date.now(),
+    }
+
+    if (cached && cached.identity !== next.identity) {
+      this.#clearRefCaches(
+        '[renoun] Git ref identity changed; invalidating in-memory ref caches.'
+      )
+    }
+
+    this.#refIdentityCache.set(ref, next)
+    return next
+  }
+
+  async #resolveRefToCommit(ref: string): Promise<string | null> {
+    const normalizedRef = ref.trim()
+    if (isFullCommitSha(normalizedRef)) {
+      return normalizedRef
+    }
+
+    switch (this.#host) {
+      case 'github': {
+        const project = `${this.#ownerEncoded}/${this.#repoEncoded}`
+        const response = await this.#fetchWithRetry(
+          `${this.#apiBaseUrl}/repos/${project}/commits/${encodeURIComponent(
+            normalizedRef
+          )}`
+        )
+        if (!response.ok) {
+          return null
+        }
+        const data = await response.json()
+        const sha = typeof data?.sha === 'string' ? data.sha : undefined
+        if (sha && isFullCommitSha(sha)) {
+          return sha
+        }
+        const parentSha =
+          typeof data?.commit?.sha === 'string' ? data.commit.sha : undefined
+        if (parentSha && isFullCommitSha(parentSha)) {
+          return parentSha
+        }
+        return null
+      }
+      case 'gitlab': {
+        const project = encodeURIComponent(this.#repository)
+        const response = await this.#fetchWithRetry(
+          `${this.#apiBaseUrl}/projects/${project}/repository/commits/${encodeURIComponent(
+            normalizedRef
+          )}`
+        )
+        if (!response.ok) {
+          return null
+        }
+        const data = await response.json()
+        const id = typeof data?.id === 'string' ? data.id : undefined
+        return id && isFullCommitSha(id) ? id : null
+      }
+      case 'bitbucket': {
+        const response = await this.#fetchWithRetry(
+          `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/commit/${encodeURIComponent(
+            normalizedRef
+          )}`
+        )
+        if (!response.ok) {
+          return null
+        }
+        const data = await response.json()
+        const hash = typeof data?.hash === 'string' ? data.hash : undefined
+        return hash && isFullCommitSha(hash) ? hash : null
+      }
     }
   }
 

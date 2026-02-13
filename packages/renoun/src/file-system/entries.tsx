@@ -74,6 +74,7 @@ import {
   FS_STRUCTURE_CACHE_VERSION,
   createCacheNodeKey,
   normalizeCachePath,
+  serializeTypeFilterForCache,
 } from './cache-key.ts'
 import { Session } from './Session.ts'
 import {
@@ -1102,7 +1103,10 @@ export class File<
       createGitMetadataCacheSignature(gitMetadata)
     const nodeKey = this.getStructureCacheKey()
 
-    if (this.#structureCacheNodeKey && this.#structureCacheNodeKey !== nodeKey) {
+    if (
+      this.#structureCacheNodeKey &&
+      this.#structureCacheNodeKey !== nodeKey
+    ) {
       await session.cache.delete(this.#structureCacheNodeKey)
     }
 
@@ -1204,15 +1208,18 @@ export class File<
 
   async getStructure(): Promise<FileStructure> {
     const session = this.#directory.getSession()
-    const { nodeKey, gitMetadata } = await this.resolveStructureCacheState(
-      session
-    )
+    const { nodeKey, gitMetadata } =
+      await this.resolveStructureCacheState(session)
     const filePath = this.absolutePath
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(filePath)
-      return this.getFileStructureBase(gitMetadata)
-    })
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        return this.getFileStructureBase(gitMetadata)
+      }
+    )
   }
 
   /** Read the file contents as bytes. */
@@ -1730,15 +1737,19 @@ export class ModuleExport<Value> {
       includeDependencies: includeDependencies ?? false,
     })
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(filePath)
-      return fileSystem.getFileExportText(
-        location.path,
-        location.position,
-        location.kind,
-        includeDependencies
-      )
-    })
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        return fileSystem.getFileExportText(
+          location.path,
+          location.position,
+          location.kind,
+          includeDependencies
+        )
+      }
+    )
   }
 
   /** Get the start and end position of the export in the file system. */
@@ -1846,7 +1857,10 @@ export class ModuleExport<Value> {
       createGitExportMetadataCacheSignature(gitMetadata)
     const nodeKey = this.getStructureCacheKey()
 
-    if (this.#structureCacheNodeKey && this.#structureCacheNodeKey !== nodeKey) {
+    if (
+      this.#structureCacheNodeKey &&
+      this.#structureCacheNodeKey !== nodeKey
+    ) {
       await session.cache.delete(this.#structureCacheNodeKey)
     }
 
@@ -1875,7 +1889,7 @@ export class ModuleExport<Value> {
       snapshot: session.snapshot.id,
       filePath: normalizeCachePath(this.#file.absolutePath),
       exportName: this.#name,
-      filter: filter ?? null,
+      filter: filter ? serializeTypeFilterForCache(filter) : 'none',
     })
   }
 
@@ -1908,23 +1922,28 @@ export class ModuleExport<Value> {
     const session = directory.getSession()
     const nodeKey = this.#getTypeNodeKey(filter)
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      const typeResolution = await fileSystem.resolveTypeAtLocationWithDependencies(
-        location.path,
-        location.position,
-        location.kind,
-        filter
-      )
-      const dependencyPaths = typeResolution.dependencies.length
-        ? typeResolution.dependencies
-        : [location.path]
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        const typeResolution =
+          await fileSystem.resolveTypeAtLocationWithDependencies(
+            location.path,
+            location.position,
+            location.kind,
+            filter
+          )
+        const dependencyPaths = typeResolution.dependencies.length
+          ? typeResolution.dependencies
+          : [location.path]
 
-      for (const dependencyPath of dependencyPaths) {
-        await ctx.recordFileDep(dependencyPath)
+        for (const dependencyPath of dependencyPaths) {
+          await ctx.recordFileDep(dependencyPath)
+        }
+
+        return typeResolution.resolvedType
       }
-
-      return typeResolution.resolvedType
-    })
+    )
   }
 
   /** Attempt to return a literal value for this export if it can be determined statically. */
@@ -2118,9 +2137,8 @@ export class ModuleExport<Value> {
   async getStructure(): Promise<ModuleExportStructure> {
     const directory = this.#file.getParent()
     const session = directory.getSession()
-    const { nodeKey, gitMetadata } = await this.#resolveStructureCacheNodeKey(
-      session
-    )
+    const { nodeKey, gitMetadata } =
+      await this.#resolveStructureCacheNodeKey(session)
     const filePath = this.#file.absolutePath
     let typeResolutionFailed = false
 
@@ -2310,14 +2328,31 @@ export class JavaScriptFile<
     const cacheFilePath = normalizeCachePath(filePath)
     const nodeKey = createCacheNodeKey('js.exports', {
       version: FS_ANALYSIS_CACHE_VERSION,
+      dependencyVersion: 2,
       snapshot: session.snapshot.id,
       filePath: cacheFilePath,
     })
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(filePath)
-      return fileSystem.getFileExports(this.absolutePath)
-    })
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        const fileExports = await fileSystem.getFileExports(this.absolutePath)
+        const dependencyPaths = new Set<string>([filePath])
+
+        for (const fileExport of fileExports) {
+          if (typeof fileExport.path === 'string' && fileExport.path.length > 0) {
+            dependencyPaths.add(fileExport.path)
+          }
+        }
+
+        for (const dependencyPath of dependencyPaths) {
+          await ctx.recordFileDep(dependencyPath)
+        }
+
+        return fileExports
+      }
+    )
   }
 
   /** Get all exports from the JavaScript file. */
@@ -2528,10 +2563,14 @@ export class JavaScriptFile<
       filePath: cacheFilePath,
     })
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(filePath)
-      return fileSystem.getOutlineRanges(this.absolutePath)
-    })
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        return fileSystem.getOutlineRanges(this.absolutePath)
+      }
+    )
   }
 
   /** Get foldable ranges in the JavaScript file (IDE-style folding). */
@@ -2543,34 +2582,37 @@ export class JavaScriptFile<
   override async getStructure(): Promise<FileStructure> {
     const directory = this.getParent()
     const session = directory.getSession()
-    const { nodeKey, gitMetadata } = await this.resolveStructureCacheState(
-      session
-    )
+    const { nodeKey, gitMetadata } =
+      await this.resolveStructureCacheState(session)
     const filePath = this.absolutePath
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(filePath)
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
 
-      const base = await this.getFileStructureBase(gitMetadata)
-      const fileExports = await this.getExports()
-      const exports: ModuleExportStructure[] = []
+        const base = await this.getFileStructureBase(gitMetadata)
+        const fileExports = await this.getExports()
+        const exports: ModuleExportStructure[] = []
 
-      for (const fileExport of fileExports) {
-        if (typeof (fileExport as any).getStructure === 'function') {
-          const exportStructure = await (fileExport as any).getStructure()
-          exports.push(exportStructure)
+        for (const fileExport of fileExports) {
+          if (typeof (fileExport as any).getStructure === 'function') {
+            const exportStructure = await (fileExport as any).getStructure()
+            exports.push(exportStructure)
+          }
+
+          if (typeof (fileExport as any).getStructureCacheKey === 'function') {
+            await ctx.recordNodeDep((fileExport as any).getStructureCacheKey())
+          }
         }
 
-        if (typeof (fileExport as any).getStructureCacheKey === 'function') {
-          await ctx.recordNodeDep((fileExport as any).getStructureCacheKey())
+        return {
+          ...base,
+          exports: exports.length > 0 ? exports : undefined,
         }
       }
-
-      return {
-        ...base,
-        exports: exports.length > 0 ? exports : undefined,
-      }
-    })
+    )
   }
 
   /** Check if an export exists statically in the JavaScript file. */
@@ -2903,30 +2945,34 @@ export class MDXFile<
     const filePath = this.absolutePath
     const nodeKey = this.#getFrontmatterCacheNodeKey()
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(filePath)
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
 
-      try {
-        this.#resolvingFrontmatter = true
-        const frontmatter = (await this.getExportValue(
-          'frontmatter' as any
-        )) as Record<string, unknown> | undefined
+        try {
+          this.#resolvingFrontmatter = true
+          const frontmatter = (await this.getExportValue(
+            'frontmatter' as any
+          )) as Record<string, unknown> | undefined
 
-        if (frontmatter !== undefined) {
-          return frontmatter
+          if (frontmatter !== undefined) {
+            return frontmatter
+          }
+        } catch (error) {
+          if (!(error instanceof ModuleExportNotFoundError)) {
+            throw error
+          }
+        } finally {
+          this.#resolvingFrontmatter = false
         }
-      } catch (error) {
-        if (!(error instanceof ModuleExportNotFoundError)) {
-          throw error
-        }
-      } finally {
-        this.#resolvingFrontmatter = false
+
+        const result = await this.#getSourceWithFrontmatter()
+
+        return result.frontmatter
       }
-
-      const result = await this.#getSourceWithFrontmatter()
-
-      return result.frontmatter
-    })
+    )
   }
 
   async getChatGPTUrl(): Promise<string> {
@@ -3048,33 +3094,36 @@ export class MDXFile<
   override async getStructure(): Promise<FileStructure> {
     const directory = this.getParent()
     const session = directory.getSession()
-    const { nodeKey, gitMetadata } = await this.resolveStructureCacheState(
-      session
-    )
+    const { nodeKey, gitMetadata } =
+      await this.resolveStructureCacheState(session)
     const filePath = this.absolutePath
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(filePath)
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
 
-      const base = await this.getFileStructureBase(gitMetadata)
-      const [frontmatter, sections] = await Promise.all([
-        this.getFrontmatter().catch(() => undefined),
-        this.getSections().catch(() => undefined),
-      ])
-      await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
-      await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
+        const base = await this.getFileStructureBase(gitMetadata)
+        const [frontmatter, sections] = await Promise.all([
+          this.getFrontmatter().catch(() => undefined),
+          this.getSections().catch(() => undefined),
+        ])
+        await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
+        await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
 
-      const description =
-        (frontmatter?.['description'] as string | undefined) ??
-        (sections && sections.length > 0 ? sections[0]!.title : undefined)
+        const description =
+          (frontmatter?.['description'] as string | undefined) ??
+          (sections && sections.length > 0 ? sections[0]!.title : undefined)
 
-      return {
-        ...base,
-        frontmatter,
-        sections,
-        description,
+        return {
+          ...base,
+          frontmatter,
+          sections,
+          description,
+        }
       }
-    })
+    )
   }
 
   /** Check if an export exists at runtime in the MDX file. */
@@ -3274,29 +3323,33 @@ export class MarkdownFile<
     const filePath = this.absolutePath
     const nodeKey = this.#getFrontmatterCacheNodeKey()
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(filePath)
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
 
-      try {
-        this.#resolvingFrontmatter = true
-        const frontmatter = (await this.getExportValue(
-          'frontmatter' as any
-        )) as Record<string, unknown> | undefined
+        try {
+          this.#resolvingFrontmatter = true
+          const frontmatter = (await this.getExportValue(
+            'frontmatter' as any
+          )) as Record<string, unknown> | undefined
 
-        if (frontmatter !== undefined) {
-          return frontmatter
+          if (frontmatter !== undefined) {
+            return frontmatter
+          }
+        } catch (error) {
+          if (!(error instanceof ModuleExportNotFoundError)) {
+            throw error
+          }
+        } finally {
+          this.#resolvingFrontmatter = false
         }
-      } catch (error) {
-        if (!(error instanceof ModuleExportNotFoundError)) {
-          throw error
-        }
-      } finally {
-        this.#resolvingFrontmatter = false
+
+        const result = await this.#getSourceWithFrontmatter()
+        return result.frontmatter
       }
-
-      const result = await this.#getSourceWithFrontmatter()
-      return result.frontmatter
-    })
+    )
   }
 
   async getChatGPTUrl(): Promise<string> {
@@ -3374,33 +3427,36 @@ export class MarkdownFile<
   override async getStructure(): Promise<FileStructure> {
     const directory = this.getParent()
     const session = directory.getSession()
-    const { nodeKey, gitMetadata } = await this.resolveStructureCacheState(
-      session
-    )
+    const { nodeKey, gitMetadata } =
+      await this.resolveStructureCacheState(session)
     const filePath = this.absolutePath
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(filePath)
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
 
-      const base = await this.getFileStructureBase(gitMetadata)
-      const [frontmatter, sections] = await Promise.all([
-        this.getFrontmatter().catch(() => undefined),
-        this.getSections().catch(() => undefined),
-      ])
-      await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
-      await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
+        const base = await this.getFileStructureBase(gitMetadata)
+        const [frontmatter, sections] = await Promise.all([
+          this.getFrontmatter().catch(() => undefined),
+          this.getSections().catch(() => undefined),
+        ])
+        await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
+        await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
 
-      const description =
-        (frontmatter?.['description'] as string | undefined) ??
-        (sections && sections.length > 0 ? sections[0]!.title : undefined)
+        const description =
+          (frontmatter?.['description'] as string | undefined) ??
+          (sections && sections.length > 0 ? sections[0]!.title : undefined)
 
-      return {
-        ...base,
-        frontmatter,
-        sections,
-        description,
+        return {
+          ...base,
+          frontmatter,
+          sections,
+          description,
+        }
       }
-    })
+    )
   }
 
   /** Get the runtime value of an export in the Markdown file. (Permissive signature for union compatibility.) */
@@ -4835,8 +4891,7 @@ export class Directory<
 
   #canPersistStructureCache() {
     return (
-      typeof this.#filter !== 'function' &&
-      typeof this.#sort !== 'function'
+      typeof this.#filter !== 'function' && typeof this.#sort !== 'function'
     )
   }
 
@@ -4949,18 +5004,6 @@ export class Directory<
 
     const normalized = directory.#normalizeEntriesOptions(entriesOptions)
     const mask = createOptionsMask(normalized)
-    const session = directory.#getSession()
-    const snapshotKey = directory.#getSessionSnapshotKey(mask)
-    const cachedSnapshot = session.directorySnapshots.get(snapshotKey)
-    if (cachedSnapshot) {
-      const isStale = await directory.#isCachedSnapshotStale(cachedSnapshot)
-      if (!isStale) {
-        return cachedSnapshot.materialize() as any
-      }
-
-      session.directorySnapshots.delete(snapshotKey)
-    }
-
     const snapshot = await directory.#hydrateDirectorySnapshot(
       directory,
       normalized,
@@ -5062,8 +5105,51 @@ export class Directory<
   ): Promise<
     DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
   > {
-    const { snapshot } = await this.#buildSnapshot(directory, options, mask)
+    const snapshot = await directory.#getDirectorySnapshot(
+      directory,
+      options,
+      mask
+    )
     return snapshot
+  }
+
+  async #getDirectorySnapshot(
+    directory: Directory<LoaderTypes>,
+    options: NormalizedDirectoryEntriesOptions,
+    mask: number
+  ): Promise<
+    DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
+  > {
+    const session = directory.#getSession()
+    const snapshotKey = directory.#getSessionSnapshotKey(mask)
+    const cachedSnapshot = session.directorySnapshots.get(snapshotKey)
+
+    if (cachedSnapshot) {
+      const isStale = await directory.#isCachedSnapshotStale(cachedSnapshot)
+      if (!isStale) {
+        return cachedSnapshot
+      }
+
+      session.directorySnapshots.delete(snapshotKey)
+    }
+
+    const existingBuild = session.directorySnapshotBuilds.get(snapshotKey)
+    if (existingBuild) {
+      return existingBuild.then((metadata) => metadata.snapshot)
+    }
+
+    const build = directory.#buildSnapshot(directory, options, mask)
+    session.directorySnapshotBuilds.set(snapshotKey, build)
+    try {
+      const { snapshot } = await build
+      session.directorySnapshots.set(snapshotKey, snapshot)
+      return snapshot
+    } finally {
+      const currentBuild = session.directorySnapshotBuilds.get(snapshotKey)
+      if (currentBuild === build) {
+        session.directorySnapshotBuilds.delete(snapshotKey)
+      }
+    }
   }
 
   async #isSnapshotStale(
@@ -5158,16 +5244,6 @@ export class Directory<
   }> {
     const session = directory.#getSession()
     const snapshotKey = directory.#getSessionSnapshotKey(mask)
-    const cached = session.directorySnapshots.get(snapshotKey)
-    if (cached) {
-      const isStale = await directory.#isCachedSnapshotStale(cached)
-      if (!isStale) {
-        return { snapshot: cached, shouldIncludeSelf: cached.shouldIncludeSelf }
-      }
-
-      session.directorySnapshots.delete(snapshotKey)
-    }
-
     const fileSystem = directory.getFileSystem()
     const rawEntries = await fileSystem.readDirectory(directory.#path)
     const dependencySignatures = new Map<string, string>()

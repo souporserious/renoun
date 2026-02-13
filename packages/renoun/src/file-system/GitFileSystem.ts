@@ -194,10 +194,17 @@ const EXPORT_HISTORY_CACHE_MAX = 200
 const GIT_LOG_CACHE_MAX = 128
 const REMOTE_REF_CACHE_TTL_MS = 60_000
 const REMOTE_REF_TIMEOUT_MS = 8_000
+const REF_IDENTITY_CACHE_TTL_MS = 60_000
 const remoteRefCache = new Map<
   string,
   { remoteSha: string | null; checkedAt: number }
 >()
+
+type RefIdentity = {
+  identity: string
+  deterministic: boolean
+  checkedAt: number
+}
 
 interface PrepareRepoOptions {
   spec: string
@@ -769,6 +776,8 @@ export class GitFileSystem
   // Lazily resolved commit SHA for `this.ref`
   #refCommit: string | null = null
   #refCommitPromise: Promise<string> | null = null
+  #refIdentityCache = new Map<string, RefIdentity>()
+  #refIdentityLookupInflight = new Map<string, Promise<RefIdentity>>()
   readonly #refIsExplicit: boolean
   readonly #worktreeEnabled: boolean
   #worktreeRootChecked = false
@@ -1746,6 +1755,27 @@ export class GitFileSystem
     }
   }
 
+  #clearRefCaches(reason: string): void {
+    void reason
+    this.#refCommit = null
+    this.#refCommitPromise = null
+    this.#fileMetaCache.clear()
+    this.#fileMetaPromises.clear()
+    this.#gitLogCache.clear()
+    this.#fileExportIndexMemory.clear()
+    this.#exportHistoryMemory.clear()
+    this.#exportParseCache.clear()
+    this.#historyWarmupInFlight.clear()
+
+    const session = this.#session
+    if (session) {
+      this.#session = undefined
+      Session.reset(this, session.snapshot.id)
+    } else {
+      Session.reset(this)
+    }
+  }
+
   #createPersistentCacheNodeKey(scope: string, payload: unknown): string {
     return createGitFileSystemPersistentCacheNodeKey({
       domainVersion: GIT_HISTORY_CACHE_VERSION,
@@ -1776,16 +1806,78 @@ export class GitFileSystem
     identity: string
     deterministic: boolean
   }> {
-    const resolved = await this.#resolveRefToCommit(ref).catch(() => null)
-    if (resolved) {
-      return { identity: resolved, deterministic: true }
+    const normalizedRef = ref.trim()
+    const now = Date.now()
+    const cached = this.#refIdentityCache.get(normalizedRef)
+
+    if (cached && now - cached.checkedAt < REF_IDENTITY_CACHE_TTL_MS) {
+      return {
+        identity: cached.identity,
+        deterministic: cached.deterministic,
+      }
     }
 
-    const normalizedRef = ref.trim()
-    return {
-      identity: normalizedRef,
-      deterministic: isFullSha(normalizedRef),
+    const inFlight =
+      this.#refIdentityLookupInflight.get(normalizedRef) ??
+      this.#resolveRefCacheIdentity(normalizedRef)
+
+    if (!this.#refIdentityLookupInflight.has(normalizedRef)) {
+      this.#refIdentityLookupInflight.set(normalizedRef, inFlight)
     }
+
+    try {
+      const result = await inFlight
+      return {
+        identity: result.identity,
+        deterministic: result.deterministic,
+      }
+    } finally {
+      if (this.#refIdentityLookupInflight.get(normalizedRef) === inFlight) {
+        this.#refIdentityLookupInflight.delete(normalizedRef)
+      }
+    }
+  }
+
+  async #resolveRefCacheIdentity(ref: string): Promise<RefIdentity> {
+    const cached = this.#refIdentityCache.get(ref)
+    let identity = ref
+    let deterministic = false
+
+    try {
+      const resolved = await this.#resolveRefToCommit(ref)
+      if (resolved) {
+        identity = resolved
+        deterministic = true
+      }
+    } catch {
+      if (cached !== undefined) {
+        this.#refIdentityCache.set(ref, {
+          identity: cached.identity,
+          deterministic: cached.deterministic,
+          checkedAt: Date.now(),
+        })
+        return {
+          identity: cached.identity,
+          deterministic: cached.deterministic,
+          checkedAt: Date.now(),
+        }
+      }
+    }
+
+    const next: RefIdentity = {
+      identity,
+      deterministic,
+      checkedAt: Date.now(),
+    }
+
+    if (cached && cached.identity !== next.identity) {
+      this.#clearRefCaches(
+        '[renoun] Git ref identity changed; clearing in-memory ref caches.'
+      )
+    }
+
+    this.#refIdentityCache.set(ref, next)
+    return next
   }
 
   async #getGitLogRefCacheIdentity(ref: string): Promise<{
@@ -3953,7 +4045,18 @@ export class GitFileSystem
 
   async #getRefCommit(): Promise<string> {
     if (this.#refCommit) {
-      return this.#refCommit
+      const { identity, deterministic } = await this.#resolveRefCacheIdentity(
+        this.ref
+      )
+      if (deterministic && identity === this.#refCommit) {
+        return this.#refCommit
+      }
+      if (!deterministic) {
+        return this.#refCommit
+      }
+      this.#clearRefCaches(
+        '[renoun] Ref commit changed in git; invalidating cached in-memory ref data.'
+      )
     }
     if (this.#refCommitPromise) {
       return this.#refCommitPromise
@@ -3961,7 +4064,12 @@ export class GitFileSystem
 
     this.#refCommitPromise = (async () => {
       await this.#ensureRepoReady()
-      let resolved = await this.#resolveRefToCommit(this.ref)
+      const { identity, deterministic } = await this.#resolveRefCacheIdentity(
+        this.ref
+      )
+      let resolved = deterministic
+        ? identity
+        : await this.#resolveRefToCommit(this.ref)
       if (resolved && !this.autoFetch) {
         return (this.#refCommit = resolved)
       }

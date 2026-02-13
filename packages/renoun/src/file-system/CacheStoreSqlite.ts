@@ -43,7 +43,10 @@ function resolveDbPath(options: { dbPath?: string; projectRoot?: string }): stri
   if (typeof options.dbPath === 'string' && options.dbPath.trim()) {
     return resolve(options.dbPath)
   }
-
+  if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+    // eslint-disable-next-line no-console
+    console.log('[renoun-debug] resolveDbPath', { projectRoot: options.projectRoot })
+  }
   return getDefaultCacheDatabasePath(options.projectRoot)
 }
 
@@ -54,7 +57,16 @@ export function getDefaultCacheDatabasePath(projectRoot?: string): string {
   }
 
   const root = projectRoot ? resolve(projectRoot) : resolve(getRootDirectory())
-  return resolve(root, '.cache', 'renoun', 'fs-cache.sqlite')
+  const path = resolve(root, '.cache', 'renoun', 'fs-cache.sqlite')
+  if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+    // eslint-disable-next-line no-console
+    console.log('[renoun-debug] getDefaultCacheDatabasePath', {
+      projectRoot,
+      resolved: path,
+      overridePath: overridePath,
+    })
+  }
+  return path
 }
 
 export function getCacheStorePersistence(options: CacheStoreSqliteOptions = {}) {
@@ -219,6 +231,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     if (storedFingerprint !== createFingerprint(deps)) {
       await this.delete(nodeKey)
       return undefined
+    }
+
+    try {
+      await this.#touchLastAccessed(nodeKey)
+    } catch {
+      // Ignore access-time update failures so reads can still return cached data.
     }
 
     return {
@@ -542,6 +560,29 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         await delay((attempt + 1) * SQLITE_BUSY_RETRY_DELAY_MS)
       }
     }
+  }
+
+  async #touchLastAccessed(nodeKey: string): Promise<void> {
+    if (!this.#db) {
+      return
+    }
+
+    const now = Date.now()
+
+    await this.#runWithBusyRetries(() => {
+      this.#db
+        .prepare(
+          `
+            UPDATE cache_entries
+            SET last_accessed_at = CASE
+              WHEN last_accessed_at >= ? THEN last_accessed_at + 1
+              ELSE ?
+            END
+            WHERE node_key = ?
+          `
+        )
+        .run(now, now, nodeKey)
+    })
   }
 
   async #runWithBusyRetries<T>(operation: () => T): Promise<T> {

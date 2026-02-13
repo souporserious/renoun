@@ -1,3 +1,4 @@
+import { serializeTypeFilterForCache } from '../file-system/cache-key.ts'
 import { getTsMorph } from './ts-morph.ts'
 import type { Project, SyntaxKind as TsMorphSyntaxKind } from './ts-morph.ts'
 
@@ -21,7 +22,7 @@ export async function resolveTypeAtLocationWithDependencies(
   filter?: TypeFilter,
   _isInMemoryFileSystem = false
 ): Promise<ResolvedTypeAtLocationResult> {
-  const filterKey = filter ? JSON.stringify(filter) : 'none'
+  const filterKey = filter ? serializeTypeFilterForCache(filter) : 'none'
   const typeId = `${filePath}:${position}:${kind}:${filterKey}`
   const startTime = performance.now()
 

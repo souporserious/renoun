@@ -1,3 +1,5 @@
+import { resolve } from 'node:path'
+
 import { normalizePathKey } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { CacheStore, hashString, stableStringify } from './CacheStore.ts'
@@ -115,6 +117,13 @@ export class Session {
   readonly inflight = new Map<string, Promise<unknown>>()
   readonly cache: CacheStore
   readonly directorySnapshots = new Map<string, DirectorySnapshot<any, any>>()
+  readonly directorySnapshotBuilds = new Map<
+    string,
+    Promise<{
+      snapshot: DirectorySnapshot<any, any>
+      shouldIncludeSelf: boolean
+    }>
+  >()
 
   readonly #functionIds = new WeakMap<Function, string>()
   #nextFunctionId = 0
@@ -197,11 +206,27 @@ export class Session {
         this.directorySnapshots.delete(key)
       }
     }
+
+    for (const key of this.directorySnapshotBuilds.keys()) {
+      const delimiterIndex = key.indexOf('|')
+      const directoryPrefix =
+        delimiterIndex === -1 ? key : key.slice(0, delimiterIndex)
+
+      if (!directoryPrefix.startsWith('dir:')) {
+        continue
+      }
+
+      const directoryPath = directoryPrefix.slice('dir:'.length)
+      if (pathsIntersect(directoryPath, normalizedPath)) {
+        this.directorySnapshotBuilds.delete(key)
+      }
+    }
   }
 
   reset(): void {
     this.inflight.clear()
     this.directorySnapshots.clear()
+    this.directorySnapshotBuilds.clear()
     this.cache.clearMemory()
     if (typeof this.snapshot.invalidateAll === 'function') {
       this.snapshot.invalidateAll()
@@ -339,11 +364,14 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
 function resolveSessionProjectRoot(fileSystem: FileSystem): string {
   const repoRoot = (fileSystem as any).repoRoot
   if (typeof repoRoot === 'string' && repoRoot.startsWith('/')) {
-    try {
-      return getRootDirectory(repoRoot)
-    } catch {
-      return repoRoot
+    if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+      // eslint-disable-next-line no-console
+      console.log('[renoun-debug] resolveSessionProjectRoot(repoRoot)', {
+        repoRoot,
+        resolved: resolve(repoRoot),
+      })
     }
+    return resolve(repoRoot)
   }
 
   try {

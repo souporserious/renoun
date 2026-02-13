@@ -309,6 +309,9 @@ export class Workspace {
       for (const workspaceManifestPath of packageResolution.workspaceManifestPaths) {
         await ctx.recordFileDep(workspaceManifestPath)
       }
+      for (const packageManagerDependencyPath of this.#getPackageManagerDependencyPaths()) {
+        await ctx.recordFileDep(packageManagerDependencyPath)
+      }
       for (const scannedDirectory of packageResolution.scannedDirectories) {
         await ctx.recordDirectoryDep(scannedDirectory)
       }
@@ -378,6 +381,25 @@ export class Workspace {
           fileSystem: this.#fileSystem,
         })
     )
+  }
+
+  #getPackageManagerDependencyPaths(): string[] {
+    const dependencyPaths = new Set<string>()
+
+    for (const [filename] of LOCKFILE_CANDIDATES) {
+      const discoveredLockfilePath = this.#findWorkspacePath(filename)
+
+      if (discoveredLockfilePath) {
+        dependencyPaths.add(discoveredLockfilePath)
+        continue
+      }
+
+      // Record the missing-path probe so cache entries invalidate when a
+      // lockfile appears later in the workspace root.
+      dependencyPaths.add(this.#resolveWorkspacePath(filename, true))
+    }
+
+    return Array.from(dependencyPaths)
   }
 
   #resolveWorkspacePackages(): WorkspacePackageResolution {

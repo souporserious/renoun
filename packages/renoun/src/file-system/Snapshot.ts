@@ -11,6 +11,7 @@ const METADATA_CONTENT_ID_MAX_AGE_MS = 250
 const MISSING_CONTENT_ID_MAX_AGE_MS = 100
 
 type ContentIdStrategy =
+  | 'file-system-content-id'
   | 'metadata'
   | 'file-content'
   | 'directory-content'
@@ -200,6 +201,15 @@ export class FileSystemSnapshot implements Snapshot {
     strategy: ContentIdStrategy
   }> {
     for (const path of pathCandidates) {
+      const fileSystemContentId = await this.#getFileSystemContentId(path)
+
+      if (typeof fileSystemContentId === 'string' && fileSystemContentId) {
+        return {
+          id: fileSystemContentId,
+          strategy: 'file-system-content-id',
+        }
+      }
+
       const [lastModifiedMs, byteLength] = await Promise.all([
         this.getFileLastModifiedMs(path).catch(() => undefined),
         this.getFileByteLength(path).catch(() => undefined),
@@ -253,6 +263,30 @@ export class FileSystemSnapshot implements Snapshot {
     return {
       id: 'missing',
       strategy: 'missing',
+    }
+  }
+
+  async #getFileSystemContentId(path: string): Promise<string | undefined> {
+    const candidate = (this.#fileSystem as FileSystem & {
+      getContentId?: (
+        path: string
+      ) => Promise<string | undefined> | string | undefined
+    }).getContentId
+
+    if (typeof candidate !== 'function') {
+      return undefined
+    }
+
+    try {
+      const contentId = await candidate.call(this.#fileSystem, path)
+
+      if (typeof contentId !== 'string' || contentId.length === 0) {
+        return undefined
+      }
+
+      return contentId
+    } catch {
+      return undefined
     }
   }
 

@@ -36,6 +36,66 @@ class NestedCwdNodeFileSystem extends NodeFileSystem {
   }
 }
 
+class SyntheticContentIdFileSystem extends InMemoryFileSystem {
+  readonly #contentIds = new Map<string, string>()
+
+  constructor(
+    files: Record<string, string> = {},
+    contentIds: Record<string, string> = {}
+  ) {
+    super(files)
+
+    for (const [path, contentId] of Object.entries(contentIds)) {
+      this.#contentIds.set(this.#normalizePath(path), contentId)
+    }
+  }
+
+  setContentId(path: string, contentId: string): void {
+    this.#contentIds.set(this.#normalizePath(path), contentId)
+  }
+
+  override getFileLastModifiedMsSync(_path: string): number | undefined {
+    return 1_000
+  }
+
+  override async getFileLastModifiedMs(path: string): Promise<number | undefined> {
+    return this.getFileLastModifiedMsSync(path)
+  }
+
+  override getFileByteLengthSync(_path: string): number | undefined {
+    return 16
+  }
+
+  override async getFileByteLength(path: string): Promise<number | undefined> {
+    return this.getFileByteLengthSync(path)
+  }
+
+  async getContentId(path: string): Promise<string | undefined> {
+    return this.#contentIds.get(this.#normalizePath(path))
+  }
+
+  #normalizePath(path: string): string {
+    return path.replace(/^\/+/, '')
+  }
+}
+
+class MutableTimestampFileSystem extends InMemoryFileSystem {
+  readonly #fileTimes = new Map<string, number>()
+
+  setLastModified(path: string, modifiedMs: number): void {
+    this.#fileTimes.set(this.#normalizePath(path), modifiedMs)
+  }
+
+  override getFileLastModifiedMsSync(path: string): number | undefined {
+    const normalized = this.#normalizePath(path)
+    return this.#fileTimes.get(normalized) ?? super.getFileLastModifiedMsSync(path)
+  }
+
+  #normalizePath(path: string): string {
+    return path.replace(/^\/+/, '')
+  }
+}
+
 function createDeferredPromise() {
   let resolve!: () => void
   const promise = new Promise<void>((resolvePromise) => {
@@ -242,6 +302,52 @@ describe('file-system cache integration', () => {
     expect(readDirectorySpy.mock.calls.length).toBeGreaterThan(callsAfterFirstRead)
   })
 
+  test('dedupes concurrent stale directory rebuilds for instances', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    try {
+      const fileSystem = new MutableTimestampFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      fileSystem.setLastModified('index.ts', 1)
+      const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectory')
+      const first = new Directory({ fileSystem })
+      const second = new Directory({ fileSystem })
+
+      await first.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+      const callsAfterFirstRead = readDirectorySpy.mock.calls.length
+      const originalReadDirectory = fileSystem.readDirectory.bind(fileSystem)
+      const blockRebuild = createDeferredPromise()
+      const continueRebuild = createDeferredPromise()
+      readDirectorySpy.mockImplementation(async (path) => {
+        blockRebuild.resolve()
+        await continueRebuild.promise
+        return originalReadDirectory(path)
+      })
+
+      fileSystem.setLastModified('index.ts', 2)
+
+      const firstReload = first.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+      await blockRebuild.promise
+      continueRebuild.resolve()
+      await Promise.all([
+        firstReload,
+        second.getEntries({
+          includeIndexAndReadmeFiles: true,
+        }),
+      ])
+
+      expect(readDirectorySpy.mock.calls.length).toBe(callsAfterFirstRead + 1)
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
   test('invalidates root directory snapshots for path-scoped invalidations', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'production'
@@ -434,6 +540,27 @@ export type Metadata = Value`,
     expect(firstType).toBeDefined()
     expect(secondType).toBeDefined()
     expect(typeResolverSpy).toHaveBeenCalledTimes(2)
+  })
+
+  test('invalidates cached re-export locations when source declarations change', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': `export { JSONValue } from './entries'`,
+      'entries.ts': `export type JSONValue = string`,
+    })
+    const firstDirectory = new Directory({ fileSystem })
+    const firstIndexFile = await firstDirectory.getFile('index', 'ts')
+    const firstExport = await firstIndexFile.getExport('JSONValue')
+
+    expect(firstExport.getPosition()?.start.line).toBe(1)
+
+    const entriesFile = await firstDirectory.getFile('entries', 'ts')
+    await entriesFile.write(`/** updated */\nexport type JSONValue = string`)
+
+    const secondDirectory = new Directory({ fileSystem })
+    const secondIndexFile = await secondDirectory.getFile('index', 'ts')
+    const secondExport = await secondIndexFile.getExport('JSONValue')
+
+    expect(secondExport.getPosition()?.start.line).toBe(2)
   })
 
   test('stabilizes snapshot dependency parsing with namespace keys', async () => {
@@ -737,6 +864,27 @@ updated content`
     }
   })
 
+  test('prefers file-system-provided content IDs over coarse metadata fingerprints', async () => {
+    const fileSystem = new SyntheticContentIdFileSystem(
+      {
+        'index.ts': 'export const value = 1',
+      },
+      {
+        'index.ts': 'git-blob:one',
+      }
+    )
+    const snapshot = new FileSystemSnapshot(fileSystem, 'custom-content-id')
+
+    const firstContentId = await snapshot.contentId('/index.ts')
+    await fileSystem.writeFile('/index.ts', 'export const value = 2')
+    fileSystem.setContentId('/index.ts', 'git-blob:two')
+    snapshot.invalidatePath('/index.ts')
+    const secondContentId = await snapshot.contentId('/index.ts')
+
+    expect(firstContentId).toBe('git-blob:one')
+    expect(secondContentId).toBe('git-blob:two')
+  })
+
   test('clears cached content IDs when invalidating the snapshot root path', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
@@ -852,6 +1000,38 @@ updated content`
       (entry) => entry.kind === 'Workspace'
     )
     expect(secondWorkspaceEntry?.name).toBe('docs-workspace')
+  })
+
+  test('invalidates workspace structure when lockfiles change package manager detection', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'package.json': JSON.stringify({
+        name: 'repo',
+        workspaces: ['packages/*'],
+      }),
+      'packages/foo/package.json': JSON.stringify({
+        name: 'foo',
+        exports: {
+          '.': './src/index.ts',
+        },
+      }),
+      'packages/foo/src/index.ts': 'export const foo = 1',
+    })
+    const workspace = new Workspace({ fileSystem, rootDirectory: '.' })
+
+    const firstStructure = await workspace.getStructure()
+    const firstWorkspaceEntry = firstStructure.find(
+      (entry) => entry.kind === 'Workspace'
+    )
+    expect(firstWorkspaceEntry?.packageManager).toBe('npm')
+
+    await fileSystem.writeFile('pnpm-lock.yaml', 'lockfileVersion: "9.0"')
+    Session.for(fileSystem).invalidatePath('pnpm-lock.yaml')
+
+    const secondStructure = await workspace.getStructure()
+    const secondWorkspaceEntry = secondStructure.find(
+      (entry) => entry.kind === 'Workspace'
+    )
+    expect(secondWorkspaceEntry?.packageManager).toBe('pnpm')
   })
 
   test('invalidates workspace structure when a matching package is added', async () => {
@@ -1924,7 +2104,7 @@ export type Metadata = Value`,
     }
   })
 
-  test('does not update last_updated_at on cache reads (write-time-only eviction order)', async () => {
+  test('updates last_accessed_at on persisted reads while keeping updated_at write-only', async () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-read-only-'))
 
     try {
@@ -1958,14 +2138,15 @@ export type Metadata = Value`,
       const beforeRow = beforeDb
         .prepare(
           `
-            SELECT last_accessed_at
+            SELECT updated_at, last_accessed_at
             FROM cache_entries
             WHERE node_key = ?
           `
         )
-        .get(nodeKey) as { last_accessed_at?: number } | undefined
+        .get(nodeKey) as { updated_at?: number; last_accessed_at?: number } | undefined
       beforeDb.close()
 
+      expect(typeof beforeRow?.updated_at).toBe('number')
       expect(typeof beforeRow?.last_accessed_at).toBe('number')
 
       const secondStore = new CacheStore({ snapshot, persistence })
@@ -1978,15 +2159,18 @@ export type Metadata = Value`,
       const afterRow = afterDb
         .prepare(
           `
-            SELECT last_accessed_at
+            SELECT updated_at, last_accessed_at
             FROM cache_entries
             WHERE node_key = ?
           `
         )
-        .get(nodeKey) as { last_accessed_at?: number } | undefined
+        .get(nodeKey) as { updated_at?: number; last_accessed_at?: number } | undefined
       afterDb.close()
 
-      expect(afterRow?.last_accessed_at).toBe(beforeRow?.last_accessed_at)
+      expect(afterRow?.updated_at).toBe(beforeRow?.updated_at)
+      expect(afterRow?.last_accessed_at ?? 0).toBeGreaterThanOrEqual(
+        beforeRow?.last_accessed_at ?? 0
+      )
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
@@ -2127,6 +2311,47 @@ export type Metadata = Value`,
 
       expect(skippedValue).toEqual({})
       expect(persistedValue).toEqual({ value: 1 })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('drops persisted rows containing stripped React element payloads', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-stripped-react-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(fileSystem, 'sqlite-stripped-react')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const writerStore = new CacheStore({ snapshot, persistence })
+
+      await writerStore.put(
+        'test:stripped-react',
+        {
+          title: {
+            key: null,
+            ref: null,
+            props: { children: 'section heading' },
+          },
+        },
+        { persist: true }
+      )
+      await writerStore.put('test:still-serializable', { value: 1 }, { persist: true })
+
+      const readerStore = new CacheStore({ snapshot, persistence })
+      const strippedValue = await readerStore.get('test:stripped-react')
+      const serializableValue = await readerStore.get<{ value: number }>(
+        'test:still-serializable'
+      )
+
+      expect(strippedValue).toBeUndefined()
+      expect(serializableValue).toEqual({ value: 1 })
+      expect(await persistence.load('test:stripped-react')).toBeUndefined()
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
@@ -2302,10 +2527,82 @@ export type Metadata = Value`,
       expect(await store.get('test:stale-save-failure')).toEqual({ value: 2 })
       expect(warnSpy).toHaveBeenCalledTimes(1)
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('delete(test:stale-save-failure)')
+        expect.stringContaining('cleanup(test:stale-save-failure)')
       )
     } finally {
       warnSpy.mockRestore()
+    }
+  })
+
+  test('prevents stale persisted rows from rehydrating after failed overwrite cleanup', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-overwrite-cleanup-fallback-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'old',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-save-cleanup-fallback'
+      )
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:save-cleanup-fallback'
+      const staleVersion = await snapshot.contentId('index.ts')
+
+      const writerStore = new CacheStore({ snapshot, persistence })
+      await writerStore.put(
+        nodeKey,
+        { value: 1 },
+        {
+          persist: true,
+          deps: [{ depKey: 'file:index.ts', depVersion: staleVersion }],
+        }
+      )
+      await fileSystem.writeFile('index.ts', 'changed')
+      snapshot.invalidatePath('/index.ts')
+      const stalePersisted = await persistence.load(nodeKey)
+      expect(stalePersisted).toBeDefined()
+
+      const failingPersistence = {
+        load: async (lookupNodeKey: string) =>
+          persistence.load(lookupNodeKey),
+        save: vi.fn(async () => {
+          throw new Error('disk write failure')
+        }),
+        delete: vi.fn(async () => {
+          throw new Error('disk delete failure')
+        }),
+      }
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const failingStore = new CacheStore({ snapshot, persistence: failingPersistence })
+
+      try {
+        const value = await failingStore.getOrCompute(
+          nodeKey,
+          { persist: true },
+          async (ctx) => {
+            await ctx.recordFileDep('/index.ts')
+            return { value: 2 }
+          }
+        )
+
+        expect(value).toEqual({ value: 2 })
+        expect(await failingStore.get(nodeKey)).toEqual({ value: 2 })
+      } finally {
+        warnSpy.mockRestore()
+      }
+
+      const reopenAfterFailureStore = new CacheStore({ snapshot, persistence: failingPersistence })
+      expect(await reopenAfterFailureStore.get(nodeKey)).toBeUndefined()
+
+      const reopenedStore = new CacheStore({ snapshot, persistence })
+      expect(await reopenedStore.get(nodeKey)).toBeUndefined()
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
     }
   })
 
@@ -2392,6 +2689,87 @@ export type Metadata = Value`,
           total?: number
         }
         expect(Number(countRow.total ?? 0)).toBeLessThanOrEqual(3)
+      } finally {
+        db.close()
+      }
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('updates last_accessed_at on sqlite reads so pruning retains recently loaded rows', async () => {
+    const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-prune-lru-'))
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(fileSystem, 'sqlite-prune-lru')
+      const persistence = new SqliteCacheStorePersistence({
+        dbPath,
+        maxRows: 2,
+        maxAgeMs: 1000 * 60 * 60,
+      })
+      const writerStore = new CacheStore({ snapshot, persistence })
+      const readerStore = new CacheStore({ snapshot, persistence })
+
+      await writerStore.put(
+        'test:lru:a',
+        { index: 'a' },
+        {
+          persist: true,
+          deps: [{ depKey: 'const:lru:a:1', depVersion: '1' }],
+        }
+      )
+      await writerStore.put(
+        'test:lru:b',
+        { index: 'b' },
+        {
+          persist: true,
+          deps: [{ depKey: 'const:lru:b:1', depVersion: '1' }],
+        }
+      )
+
+      await new Promise((resolve) => setTimeout(resolve, 5))
+
+      // Load "a" from a different store so sqlite access-time bookkeeping is exercised.
+      await readerStore.get('test:lru:a')
+      await writerStore.put(
+        'test:lru:c',
+        { index: 'c' },
+        {
+          persist: true,
+          deps: [{ depKey: 'const:lru:c:1', depVersion: '1' }],
+        }
+      )
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const db = new DatabaseSync(dbPath)
+      try {
+        const rows = db
+          .prepare(
+            `
+              SELECT node_key
+              FROM cache_entries
+              ORDER BY node_key ASC
+            `
+          )
+          .all() as Array<{ node_key?: string }>
+        const nodeKeys = rows
+          .map((row) => row.node_key)
+          .filter((nodeKey): nodeKey is string => typeof nodeKey === 'string')
+
+        expect(nodeKeys).toContain('test:lru:a')
+        expect(nodeKeys).toContain('test:lru:c')
+        expect(nodeKeys).not.toContain('test:lru:b')
       } finally {
         db.close()
       }
@@ -2648,9 +3026,21 @@ export type Metadata = Value`,
       fileSystem,
       'persistence-persist-false-failed-delete'
     )
+    const persistedEntries = new Map<
+      string,
+      {
+        value: { value: number }
+        deps: Array<{ depKey: string; depVersion: string }>
+        fingerprint: string
+        persist: boolean
+        updatedAt: number
+      }
+    >()
     const persistence = {
-      load: vi.fn(async () => undefined),
-      save: vi.fn(async () => undefined),
+      load: vi.fn(async (nodeKey) => persistedEntries.get(nodeKey)),
+      save: vi.fn(async (nodeKey, entry) => {
+        persistedEntries.set(nodeKey, { ...entry })
+      }),
       delete: vi.fn(async () => {
         throw new Error('disk delete failure')
       }),

@@ -107,7 +107,7 @@ export async function resolveTypeAtLocationWithDependencies(
         filePath: string
         position: number
         kind: SyntaxKind
-        filter?: string
+        filter?: TypeFilter
         projectOptions?: ProjectOptions
       },
       ResolvedTypeAtLocationResult
@@ -115,7 +115,7 @@ export async function resolveTypeAtLocationWithDependencies(
       filePath,
       position,
       kind,
-      filter: filter ? JSON.stringify(filter) : undefined,
+      filter,
       projectOptions,
     })
   }
