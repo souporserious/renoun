@@ -42,6 +42,8 @@ export {
   type HistoryProps,
   type HistoryComponents,
   type HistoryListComponents,
+  type HistorySelectEntries,
+  type HistorySelectEntriesContext,
 } from './History/index.ts'
 export {
   Navigation,

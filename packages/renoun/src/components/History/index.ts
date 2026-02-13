@@ -8,4 +8,6 @@ export type {
   HistoryProps,
   HistoryComponents,
   HistoryListComponents,
+  HistorySelectEntries,
+  HistorySelectEntriesContext,
 } from './History.tsx'
