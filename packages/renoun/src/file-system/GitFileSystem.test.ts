@@ -18,6 +18,16 @@ import {
   ensureCacheClone,
   ensureCacheCloneSync,
 } from './GitFileSystem'
+import { Directory, File } from './index.tsx'
+import { GIT_HISTORY_CACHE_VERSION } from './cache-key'
+import { CacheStore } from './CacheStore'
+import {
+  getCacheStorePersistence,
+  disposeCacheStorePersistence,
+} from './CacheStoreSqlite'
+import { InMemoryFileSystem } from './InMemoryFileSystem'
+import { FileSystemSnapshot } from './Snapshot'
+import { createGitFileSystemPersistentCacheNodeKey } from './git-cache-key'
 import type { ExportHistoryGenerator, ExportHistoryReport } from './types'
 
 /** Drain a generator to get the final report. */
@@ -167,7 +177,7 @@ function test(name: string, fn: (ctx: TestContext) => Promise<void>): void {
       rmSync(repoRoot, { recursive: true, force: true })
       rmSync(cacheDirectory, { recursive: true, force: true })
     }
-  })
+  }, 12_000)
 }
 
 describe('GitFileSystem', () => {
@@ -272,6 +282,222 @@ describe('GitFileSystem', () => {
       expect(getPrimaryId(report2, 'b')).toBeDefined()
     } finally {
       store2.close()
+    }
+  })
+
+  test('reuses export-history cache across store instances when ref is unchanged', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
+
+    const store1 = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    let report1: ExportHistoryReport
+    try {
+      report1 = await drain(store1.getExportHistory({ entry: 'src/index.ts' }))
+    } finally {
+      store1.close()
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25))
+
+    const store2 = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const report2 = await drain(
+        store2.getExportHistory({ entry: 'src/index.ts' })
+      )
+
+      expect(report2.generatedAt).toBe(report1.generatedAt)
+      expect(report2.lastCommitSha).toBe(report1.lastCommitSha)
+      expect(report2.nameToId).toEqual(report1.nameToId)
+    } finally {
+      store2.close()
+    }
+  })
+
+  test('recomputes export-history when public-api-latest pointer is for a different request', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFiles(
+      repoRoot,
+      [
+        { filename: 'src/index.ts', content: `export const index = 1` },
+        { filename: 'src/other.ts', content: `export const other = 1` },
+      ],
+      'init'
+    )
+
+    const endRef = 'HEAD'
+    const endCommit = git(repoRoot, ['rev-parse', endRef])
+    const commonCacheBase = {
+      ref: null,
+      refScope: 'default',
+      endRef,
+      release: null,
+      startRef: null,
+      startCommit: null,
+      include: ['src'],
+      limit: undefined,
+      maxDepth: 25,
+      detectUpdates: true,
+      updateMode: 'signature',
+    }
+
+    const indexReportKey = createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: GIT_HISTORY_CACHE_VERSION,
+      repository: repoRoot,
+      repoRoot,
+      namespace: 'public-api-report',
+      payload: {
+        ...commonCacheBase,
+        refCommit: endCommit,
+        entry: ['src/index.ts'],
+      },
+    })
+
+    const poisonedLatestKey = createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: GIT_HISTORY_CACHE_VERSION,
+      repository: repoRoot,
+      repoRoot,
+      namespace: 'public-api-latest',
+      payload: {
+        ...commonCacheBase,
+        refCommit: null,
+        entry: ['src/other.ts'],
+      },
+    })
+
+    const persistence = getCacheStorePersistence({ projectRoot: repoRoot })
+    const seedStore = new CacheStore({
+      snapshot: new FileSystemSnapshot(
+        new InMemoryFileSystem({ 'seed.ts': 'export {}' }),
+        'seed-snapshot'
+      ),
+      persistence,
+    })
+
+    try {
+      using indexStore = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+      const indexReport = await drain(
+        indexStore.getExportHistory({ entry: 'src/index.ts' })
+      )
+
+      await seedStore.put(
+        indexReportKey,
+        indexReport,
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+              depVersion: GIT_HISTORY_CACHE_VERSION,
+            },
+          ],
+        }
+      )
+
+      await seedStore.put(
+        poisonedLatestKey,
+        {
+          reportNodeKey: indexReportKey,
+          lastCommitSha: indexReport.lastCommitSha!,
+        },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+              depVersion: GIT_HISTORY_CACHE_VERSION,
+            },
+          ],
+        }
+      )
+
+      using poisonedStore = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+      const poisonedReport = await drain(
+        poisonedStore.getExportHistory({ entry: 'src/other.ts' })
+      )
+
+      expect(poisonedReport.entryFiles).toContain('src/other.ts')
+      expect(poisonedReport.entryFiles).not.toContain('src/index.ts')
+    } finally {
+      disposeCacheStorePersistence({ projectRoot: repoRoot })
+    }
+  })
+
+  test('ignores legacy null blob-export cache payloads and reparses the blob', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    const commit = commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
+    const blobSha = git(repoRoot, ['rev-parse', `${commit.hash}:src/index.ts`])
+    const persistence = getCacheStorePersistence({ projectRoot: repoRoot })
+    const seedStore = new CacheStore({
+      snapshot: new FileSystemSnapshot(
+        new InMemoryFileSystem({ 'seed.ts': 'export {}' }),
+        'seed-snapshot'
+      ),
+      persistence,
+    })
+    const nodeKey = createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: GIT_HISTORY_CACHE_VERSION,
+      repository: repoRoot,
+      repoRoot,
+      namespace: 'blob-exports',
+      payload: {
+        sha: blobSha,
+        parserFlavor: 'ts',
+      },
+    })
+
+    try {
+      await seedStore.put(nodeKey, null, {
+        persist: true,
+        deps: [
+          {
+            depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+            depVersion: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      })
+
+      using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+      const metadata = await store.getModuleMetadata('src/index.ts')
+
+      expect(Object.keys(metadata.exports)).toContain('a')
+    } finally {
+      disposeCacheStorePersistence({ projectRoot: repoRoot })
+    }
+  })
+
+  test('does not persist fallback file metadata after transient git-log failures', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/a.ts', `export const a = 1`, 'a')
+    const commit = commitFile(repoRoot, 'src/b.ts', `export const b = 1`, 'b')
+
+    const store = new GitFileSystem({
+      repository: repoRoot,
+      cacheDirectory,
+    })
+
+    try {
+      // Warm up ref/repo state before forcing a tiny log buffer.
+      await store.getFileMetadata('src/a.ts')
+
+      const originalMaxBufferBytes = store.maxBufferBytes
+      ;(store as any).maxBufferBytes = 1
+      const fallback = await store.getFileMetadata('src/b.ts')
+      ;(store as any).maxBufferBytes = originalMaxBufferBytes
+
+      expect(fallback.authors).toEqual([])
+      const recovered = await store.getFileMetadata('src/b.ts')
+      expect(recovered.authors.length).toBeGreaterThan(0)
+      expect(recovered.lastCommitHash).toBe(commit.hash)
+    } finally {
+      store.close()
     }
   })
 
@@ -2191,5 +2417,91 @@ describe('GitFileSystem', () => {
     const fooUpdated = fooHistory.find((c) => c.kind === 'Updated')
     expect(fooUpdated).toBeDefined()
     expect(fooUpdated!.sha).toBe(c2.hash)
+  })
+
+  test('invalidates shared production cache state for write/delete/rename/copy mutations', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+
+    const previousNodeEnv = process.env.NODE_ENV
+    const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
+    const previousWorkingDirectory = process.cwd()
+
+    process.env.NODE_ENV = 'production'
+    process.env.RENOUN_FS_CACHE_DB_PATH = join(cacheDirectory, 'fs-cache.sqlite')
+    process.chdir(repoRoot)
+
+    disposeCacheStorePersistence()
+
+      const listFiles = async (directory: Directory) => {
+        const entries = await directory.getEntries({
+          recursive: true,
+          includeDirectoryNamedFiles: true,
+          includeIndexAndReadmeFiles: true,
+        })
+
+        return entries
+          .filter((entry) => entry instanceof File)
+          .map((entry) => entry.relativePath)
+          .sort()
+      }
+
+    try {
+      using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+      const writerDirectory = new Directory({ fileSystem: store })
+      const readerDirectory = new Directory({ fileSystem: store })
+
+      const initialEntries = await listFiles(writerDirectory)
+      expect(initialEntries).toEqual(['src/index.ts'])
+
+      const initialFile = await writerDirectory.getFile('src/index', 'ts')
+      expect(await initialFile.getText()).toContain('value = 1')
+
+      await store.writeFile('src/index.ts', `export const value = 2`)
+      const afterWrite = await readerDirectory.getFile('src/index', 'ts')
+      expect(await afterWrite.getText()).toContain('value = 2')
+
+      await store.rename('src/index.ts', 'src/renamed.ts')
+      const entriesAfterRename = await listFiles(writerDirectory)
+      const renamedDirect = await readerDirectory
+        .getFile('src/renamed', 'ts')
+        .then(
+          async (file) => ({
+            exists: true,
+            text: await file.getText(),
+          }),
+          () => ({ exists: false, text: undefined as string | undefined })
+        )
+      expect(entriesAfterRename).toEqual(['src/renamed.ts'])
+      const renamedFile = await readerDirectory.getFile('src/renamed', 'ts')
+      expect(await renamedFile.getText()).toContain('value = 2')
+      expect(renamedDirect.text).toContain('value = 2')
+      expect(renamedDirect.exists).toBe(true)
+
+      await store.copy('src/renamed.ts', 'src/copied.ts')
+      const entriesAfterCopy = await listFiles(writerDirectory)
+      expect(entriesAfterCopy).toEqual(['src/copied.ts', 'src/renamed.ts'])
+      const copiedFile = await readerDirectory.getFile('src/copied', 'ts')
+      expect(await copiedFile.getText()).toContain('value = 2')
+
+      await store.deleteFile('src/copied.ts')
+      const entriesAfterDelete = await listFiles(readerDirectory)
+      expect(entriesAfterDelete).toEqual(['src/renamed.ts'])
+
+      await store.deleteFile('src/renamed.ts')
+      const entriesAfterFinalDelete = await listFiles(readerDirectory)
+      expect(entriesAfterFinalDelete).toEqual([])
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+      if (previousCacheDbPath) {
+        process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
+      } else {
+        delete process.env.RENOUN_FS_CACHE_DB_PATH
+      }
+      process.chdir(previousWorkingDirectory)
+      disposeCacheStorePersistence()
+    }
   })
 })

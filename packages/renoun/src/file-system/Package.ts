@@ -14,6 +14,11 @@ import {
   type PathLike,
 } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import {
+  FS_STRUCTURE_CACHE_VERSION,
+  createCacheNodeKey,
+  normalizeCachePath,
+} from './cache-key.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
@@ -34,6 +39,7 @@ import {
   type PackageStructure,
   type WithDefaultTypes,
 } from './entries.tsx'
+import { Session } from './Session.ts'
 
 interface PackageJson {
   name?: string
@@ -127,6 +133,10 @@ function normalizeWorkspaceRelative(path: string) {
     return ''
   }
   return normalized.replace(/^\.\/+/, '')
+}
+
+function createStructureNodeKey(namespace: string, payload: unknown) {
+  return createCacheNodeKey(namespace, payload)
 }
 
 function parsePnpmWorkspacePackages(source: string) {
@@ -1243,6 +1253,7 @@ export class Package<
   ExportLoaders extends PackageExportLoaderMap = {},
 > {
   #name?: string
+  #hasExplicitName: boolean
   #packagePath: string
   #sourceRootPath: string
   #fileSystem: FileSystem
@@ -1286,6 +1297,7 @@ export class Package<
     this.#fileSystem = fileSystem
     this.#packagePath = packagePath
     this.#name = options.name
+    this.#hasExplicitName = options.name !== undefined
     this.#repository = repositoryInstance
     this.#exportOverrides = options.exports
     this.#exportLoaders = options.loader
@@ -1457,47 +1469,72 @@ export class Package<
     return mainExport?.sources[0]
   }
 
+  /** @internal */
+  getStructureCacheKey() {
+    const session = Session.for(this.#fileSystem)
+
+    return createStructureNodeKey('structure.package', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      packagePath: normalizeCachePath(this.#packagePath),
+      // Keep cache keys stable when the package name is inferred from
+      // package.json. Include only explicit name overrides to avoid collisions.
+      explicitName: this.#hasExplicitName ? this.#name ?? null : null,
+    })
+  }
+
   async getStructure(): Promise<
     Array<PackageStructure | DirectoryStructure | FileStructure>
   > {
-    this.#ensurePackageJsonLoaded()
+    const session = Session.for(this.#fileSystem)
+    const nodeKey = this.getStructureCacheKey()
 
-    const packageJson = this.#packageJson
-    const name =
-      this.#name ??
-      packageJson?.name ??
-      formatNameAsTitle(baseName(this.#packagePath))
-    const relativePath = this.#fileSystem.getRelativePathToWorkspace(
-      this.#packagePath
-    )
-    const normalizedRelativePath =
-      relativePath === '.' ? '' : normalizeSlashes(relativePath)
-    const path =
-      normalizedRelativePath === ''
-        ? '/'
-        : `/${normalizedRelativePath.replace(/^\/+/, '')}`
+    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
+      await ctx.recordFileDep(
+        joinPaths(this.#packagePath, 'package.json')
+      )
 
-    const structures: Array<
-      PackageStructure | DirectoryStructure | FileStructure
-    > = [
-      {
-        kind: 'Package',
-        name,
-        title: formatNameAsTitle(name),
-        slug: createSlug(name, 'kebab'),
-        path,
-        version: packageJson?.version,
-        description: packageJson?.description,
-        relativePath: normalizedRelativePath || '.',
-      },
-    ]
+      this.#resetManifestState()
+      this.#ensurePackageJsonLoaded()
 
-    for (const directory of this.getExports()) {
-      const directoryStructures = await directory.getStructure()
-      structures.push(...directoryStructures)
-    }
+      const packageJson = this.#packageJson
+      const name =
+        this.#name ??
+        packageJson?.name ??
+        formatNameAsTitle(baseName(this.#packagePath))
+      const relativePath = this.#fileSystem.getRelativePathToWorkspace(
+        this.#packagePath
+      )
+      const normalizedRelativePath =
+        relativePath === '.' ? '' : normalizeSlashes(relativePath)
+      const path =
+        normalizedRelativePath === ''
+          ? '/'
+          : `/${normalizedRelativePath.replace(/^\/+/, '')}`
 
-    return structures
+      const structures: Array<
+        PackageStructure | DirectoryStructure | FileStructure
+      > = [
+        {
+          kind: 'Package',
+          name,
+          title: formatNameAsTitle(name),
+          slug: createSlug(name, 'kebab'),
+          path,
+          version: packageJson?.version,
+          description: packageJson?.description,
+          relativePath: normalizedRelativePath || '.',
+        },
+      ]
+
+      for (const directory of this.getExports()) {
+        const directoryStructures = await directory.getStructure()
+        structures.push(...directoryStructures)
+        await ctx.recordNodeDep(directory.getStructureCacheKey())
+      }
+
+      return structures
+    })
   }
 
   async getExport<Key extends keyof ExportLoaders & string>(
@@ -1609,9 +1646,21 @@ export class Package<
     if (!this.#packageJson) {
       const packageJson = this.#readPackageJson()
       this.#packageJson = packageJson
-      if (!this.#name && packageJson.name) {
+      if (!this.#hasExplicitName && packageJson.name) {
         this.#name = packageJson.name
       }
+    }
+  }
+
+  #resetManifestState() {
+    this.#packageJson = undefined
+    this.#exportDirectories = undefined
+    this.#importEntries = undefined
+    this.#exportManifestEntries = undefined
+    this.#importManifestEntries = undefined
+
+    if (!this.#hasExplicitName) {
+      this.#name = undefined
     }
   }
 

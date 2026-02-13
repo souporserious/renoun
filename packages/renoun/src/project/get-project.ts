@@ -10,7 +10,6 @@ import type { FSWatcher } from 'node:fs'
 import { getDebugLogger } from '../utils/debug.ts'
 import type { DebugContext } from '../utils/debug.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
-import { resolvedTypeCache } from '../utils/resolve-type-at-location.ts'
 import { invalidateProjectFileCache } from './cache.ts'
 import {
   activeRefreshingProjects,
@@ -179,8 +178,6 @@ function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {
       project.addSourceFileAtPath(filePath)
       return
     }
-
-    resolvedTypeCache.clear()
 
     const promise = existingSourceFile.refreshFromFileSystem()
 

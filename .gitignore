@@ -17,6 +17,7 @@ out
 
 # renoun
 .renoun
+/.cache/renoun/
 
 # turbo
 .turbo

@@ -43,30 +43,77 @@ export async function createProjectFileCache<Type>(
 }
 
 /** Invalidates cached project analysis results. */
+export function invalidateProjectFileCache(project: Project, filePath?: string): void
 export function invalidateProjectFileCache(
   project: Project,
-  cacheName?: string,
-  filePath?: string
+  filePath?: string,
+  cacheName?: string
+): void
+export function invalidateProjectFileCache(
+  project: Project,
+  filePath?: string,
+  cacheName?: string
 ) {
   const cacheByName = projectFileCaches.get(project)
 
   if (!cacheByName) return
 
-  const cacheNames = cacheName ? [cacheName] : [...cacheByName.keys()]
+  // Primary path: file-first API.
+  if (cacheName === undefined && filePath !== undefined && !cacheByName.has(filePath)) {
+    // Backward compatibility: `invalidateProjectFileCache(project, cacheName)` still
+    // clears a namespace across all files.
+    // Keep this branch for older callers that pass `(project, cacheName)` directly,
+    // but prefer `(project, filePath, cacheName)` when file IDs can be ambiguous.
+    invalidateProjectFileCacheByName(project, filePath)
+    return
+  }
 
-  for (const name of cacheNames) {
-    const fileMap = cacheByName.get(name)
+  if (filePath) {
+    const fileMap = cacheByName.get(filePath)
 
-    if (!fileMap) continue
+    if (!fileMap) return
 
-    if (filePath) {
-      fileMap.delete(filePath)
-    } else {
-      fileMap.clear()
+    if (cacheName) {
+      fileMap.delete(cacheName)
+
+      if (fileMap.size === 0) {
+        cacheByName.delete(filePath)
+      }
+
+      return
     }
 
+    cacheByName.delete(filePath)
+    return
+  }
+
+  if (!cacheName) {
+    cacheByName.clear()
+    return
+  }
+
+  for (const [cachedFilePath, fileMap] of [...cacheByName.entries()]) {
+    fileMap.delete(cacheName)
+
     if (fileMap.size === 0) {
-      cacheByName.delete(name)
+      cacheByName.delete(cachedFilePath)
+    }
+  }
+}
+
+function invalidateProjectFileCacheByName(
+  project: Project,
+  cacheName: string
+) {
+  const cacheByName = projectFileCaches.get(project)
+
+  if (!cacheByName) return
+
+  for (const [cachedFilePath, fileMap] of [...cacheByName.entries()]) {
+    fileMap.delete(cacheName)
+
+    if (fileMap.size === 0) {
+      cacheByName.delete(cachedFilePath)
     }
   }
 }

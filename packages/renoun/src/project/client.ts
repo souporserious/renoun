@@ -15,8 +15,10 @@ import type {
   SourceTextMetadata,
 } from '../utils/get-source-text-metadata.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
-import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
-import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.ts'
+import type { TypeFilter } from '../utils/resolve-type.ts'
+import type {
+  ResolvedTypeAtLocationResult,
+} from '../utils/resolve-type-at-location.ts'
 import type { DistributiveOmit } from '../types.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import { getProject } from './get-project.ts'
@@ -87,6 +89,53 @@ function untilHighlighterLoaded(
 }
 
 /**
+ * Resolve the type of an expression at a specific location.
+ * @internal
+ */
+export async function resolveTypeAtLocationWithDependencies(
+  filePath: string,
+  position: number,
+  kind: SyntaxKind,
+  filter?: TypeFilter,
+  projectOptions?: ProjectOptions
+): Promise<ResolvedTypeAtLocationResult> {
+  const client = getClient()
+
+  if (client) {
+    return client.callMethod<
+      {
+        filePath: string
+        position: number
+        kind: SyntaxKind
+        filter?: string
+        projectOptions?: ProjectOptions
+      },
+      ResolvedTypeAtLocationResult
+    >('resolveTypeAtLocationWithDependencies', {
+      filePath,
+      position,
+      kind,
+      filter: filter ? JSON.stringify(filter) : undefined,
+      projectOptions,
+    })
+  }
+
+  const { resolveTypeAtLocationWithDependencies } = await import(
+    '../utils/resolve-type-at-location.ts'
+  )
+  const project = getProject(projectOptions)
+
+  return resolveTypeAtLocationWithDependencies(
+    project,
+    filePath,
+    position,
+    kind,
+    filter,
+    projectOptions?.useInMemoryFileSystem
+  )
+}
+
+/**
  * Tokenize source text based on a language and return highlighted tokens.
  * @internal
  */
@@ -127,55 +176,6 @@ export async function getTokens(
 }
 
 /**
- * Resolve the type of an expression at a specific location.
- * @internal
- */
-export async function resolveTypeAtLocation(
-  filePath: string,
-  position: number,
-  kind: SyntaxKind,
-  filter?: TypeFilter,
-  projectOptions?: ProjectOptions
-): Promise<Kind | undefined> {
-  const client = getClient()
-  if (client) {
-    return client.callMethod<
-      {
-        filePath: string
-        position: number
-        kind: SyntaxKind
-        filter?: string
-        projectOptions?: ProjectOptions
-      },
-      ReturnType<typeof baseResolveTypeAtLocation>
-    >('resolveTypeAtLocation', {
-      filePath,
-      position,
-      kind,
-      filter: filter ? JSON.stringify(filter) : undefined,
-      projectOptions,
-    })
-  }
-
-  return import('../utils/resolve-type-at-location.ts').then(
-    async ({ resolveTypeAtLocation }) => {
-      const project = getProject(projectOptions)
-
-      return resolveTypeAtLocation(
-        project,
-        filePath,
-        position,
-        kind,
-        filter,
-        projectOptions?.useInMemoryFileSystem
-      )
-    }
-  )
-}
-
-const fileExportsCache = new Map<string, ModuleExport[]>()
-
-/**
  * Get the exports of a file.
  * @internal
  */
@@ -183,18 +183,9 @@ export async function getFileExports(
   filePath: string,
   projectOptions?: ProjectOptions
 ) {
-  let cacheKey: string
-
-  if (process.env.NODE_ENV === 'production') {
-    cacheKey = filePath + getProjectOptionsCacheKey(projectOptions)
-    if (fileExportsCache.has(cacheKey)) {
-      return fileExportsCache.get(cacheKey)!
-    }
-  }
-
   const client = getClient()
   if (client) {
-    const fileExports = await client.callMethod<
+    return client.callMethod<
       {
         filePath: string
         projectOptions?: ProjectOptions
@@ -204,23 +195,11 @@ export async function getFileExports(
       filePath,
       projectOptions,
     })
-
-    if (process.env.NODE_ENV === 'production') {
-      fileExportsCache.set(cacheKey!, fileExports)
-    }
-
-    return fileExports
   }
 
   return import('../utils/get-file-exports.ts').then(({ getFileExports }) => {
     const project = getProject(projectOptions)
-    const fileExports = getFileExports(filePath, project)
-
-    if (process.env.NODE_ENV === 'production') {
-      fileExportsCache.set(cacheKey, fileExports)
-    }
-
-    return fileExports
+    return getFileExports(filePath, project)
   })
 }
 

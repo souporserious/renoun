@@ -326,7 +326,7 @@ export async function getTokens({
       }
 
       if (
-        allowErrors !== true &&
+        allowErrors === false &&
         sourceFile &&
         sourceFileDiagnostics.length > 0
       ) {

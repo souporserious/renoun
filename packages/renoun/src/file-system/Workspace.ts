@@ -11,6 +11,11 @@ import {
   trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
+import {
+  FS_STRUCTURE_CACHE_VERSION,
+  createCacheNodeKey,
+  normalizeCachePath,
+} from './cache-key.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
@@ -20,6 +25,7 @@ import {
   parsePackageManagerField,
 } from './PackageManager.ts'
 import { Package } from './Package.ts'
+import { Session } from './Session.ts'
 import type {
   DirectoryStructure,
   FileStructure,
@@ -89,6 +95,10 @@ function normalizeWorkspaceRelative(path: string) {
   return normalized.replace(/^\.\/+/, '')
 }
 
+function createStructureNodeKey(namespace: string, payload: unknown) {
+  return createCacheNodeKey(namespace, payload)
+}
+
 function parsePnpmWorkspacePackages(source: string) {
   const packages: string[] = []
   const lines = source.split(/\r?\n/)
@@ -126,9 +136,14 @@ function parsePnpmWorkspacePackages(source: string) {
   return packages
 }
 
-function buildWorkspacePatterns(fileSystem: FileSystem, workspaceRoot: string) {
+function buildWorkspacePatternsWithSources(
+  fileSystem: FileSystem,
+  workspaceRoot: string
+): { patterns: string[]; manifestPaths: string[] } {
   const patterns: string[] = []
+  const manifestPaths = new Set<string>()
   const pnpmWorkspacePath = joinPaths(workspaceRoot, 'pnpm-workspace.yaml')
+  manifestPaths.add(pnpmWorkspacePath)
 
   if (safeFileExistsSync(fileSystem, pnpmWorkspacePath)) {
     const manifest = readTextFile(fileSystem, pnpmWorkspacePath)
@@ -136,6 +151,7 @@ function buildWorkspacePatterns(fileSystem: FileSystem, workspaceRoot: string) {
   }
 
   const workspacePackageJsonPath = joinPaths(workspaceRoot, 'package.json')
+  manifestPaths.add(workspacePackageJsonPath)
 
   if (safeFileExistsSync(fileSystem, workspacePackageJsonPath)) {
     const packageJson = readJsonFile<PackageJson>(
@@ -152,9 +168,16 @@ function buildWorkspacePatterns(fileSystem: FileSystem, workspaceRoot: string) {
     }
   }
 
-  return patterns
-    .map((pattern) => pattern.trim())
-    .filter((pattern) => pattern && !pattern.startsWith('!'))
+  return {
+    patterns: patterns
+      .map((pattern) => pattern.trim())
+      .filter((pattern) => pattern && !pattern.startsWith('!')),
+    manifestPaths: Array.from(manifestPaths),
+  }
+}
+
+function buildWorkspacePatterns(fileSystem: FileSystem, workspaceRoot: string) {
+  return buildWorkspacePatternsWithSources(fileSystem, workspaceRoot).patterns
 }
 
 function getWorkspacePatternBase(pattern: string) {
@@ -183,6 +206,12 @@ function buildWorkspaceSearchRoots(patterns: string[]) {
   }
 
   return Array.from(bases)
+}
+
+interface WorkspacePackageResolution {
+  packageEntries: Array<{ name?: string; path: string }>
+  scannedDirectories: string[]
+  workspaceManifestPaths: string[]
 }
 
 export class Workspace {
@@ -255,54 +284,93 @@ export class Workspace {
     return this.getPackages().find((pkg) => pkg.name === name)
   }
 
+  /** @internal */
+  getStructureCacheKey() {
+    const session = Session.for(this.#fileSystem)
+
+    return createStructureNodeKey('structure.workspace', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      workspaceRoot: normalizeCachePath(this.#workspaceRoot),
+    })
+  }
+
   async getStructure(): Promise<
     Array<
       WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
     >
   > {
-    let workspaceName = 'workspace'
-    const rootPackageJsonPath = this.#findWorkspacePath('package.json')
+    const session = Session.for(this.#fileSystem)
+    const nodeKey = this.getStructureCacheKey()
 
-    if (rootPackageJsonPath) {
-      try {
-        const packageJson = readJsonFile<{ name?: string }>(
-          this.#fileSystem,
-          rootPackageJsonPath,
-          `package.json at "${rootPackageJsonPath}"`
-        )
-        if (packageJson?.name) {
-          workspaceName = packageJson.name
-        }
-      } catch {
-        // fall back to default workspace name on read/parse errors
+    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
+      const packageResolution = this.#resolveWorkspacePackages()
+
+      for (const workspaceManifestPath of packageResolution.workspaceManifestPaths) {
+        await ctx.recordFileDep(workspaceManifestPath)
       }
-    }
+      for (const scannedDirectory of packageResolution.scannedDirectories) {
+        await ctx.recordDirectoryDep(scannedDirectory)
+      }
 
-    const workspaceSlug = createSlug(workspaceName, 'kebab')
+      const rootPackageJsonPath = this.#findWorkspacePath('package.json')
+      const workspacePackageJsonPath =
+        rootPackageJsonPath ??
+        this.#resolveWorkspacePath('package.json', true)
+      if (
+        !packageResolution.workspaceManifestPaths.includes(workspacePackageJsonPath)
+      ) {
+        await ctx.recordFileDep(workspacePackageJsonPath)
+      }
 
-    const structures: Array<
-      WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
-    > = [
-      {
-        kind: 'Workspace',
-        name: workspaceName,
-        title: formatNameAsTitle(workspaceName),
-        slug: workspaceSlug,
-        path: '/',
-        packageManager: this.getPackageManager(),
-      },
-    ]
+      let workspaceName = 'workspace'
 
-    for (const pkg of this.getPackages()) {
-      const packageStructures = await pkg.getStructure()
-      structures.push(...packageStructures)
-    }
+      if (rootPackageJsonPath) {
+        try {
+          const packageJson = readJsonFile<{ name?: string }>(
+            this.#fileSystem,
+            rootPackageJsonPath,
+            `package.json at "${rootPackageJsonPath}"`
+          )
+          if (packageJson?.name) {
+            workspaceName = packageJson.name
+          }
+        } catch {
+          // fall back to default workspace name on read/parse errors
+        }
+      }
 
-    return structures
+      const workspaceSlug = createSlug(workspaceName, 'kebab')
+
+      const structures: Array<
+        WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
+      > = [
+        {
+          kind: 'Workspace',
+          name: workspaceName,
+          title: formatNameAsTitle(workspaceName),
+          slug: workspaceSlug,
+          path: '/',
+          packageManager: this.getPackageManager(),
+        },
+      ]
+
+      for (const pkg of this.#createPackages(packageResolution.packageEntries)) {
+        const packageStructures = await pkg.getStructure()
+        structures.push(...packageStructures)
+        await ctx.recordNodeDep(pkg.getStructureCacheKey())
+      }
+
+      return structures
+    })
   }
 
   getPackages(): Package[] {
-    return this.#getWorkspacePackageEntries().map(
+    return this.#createPackages(this.#resolveWorkspacePackages().packageEntries)
+  }
+
+  #createPackages(entries: Array<{ name?: string; path: string }>): Package[] {
+    return entries.map(
       ({ name, path }) =>
         new Package({
           name,
@@ -312,10 +380,14 @@ export class Workspace {
     )
   }
 
-  #getWorkspacePackageEntries() {
+  #resolveWorkspacePackages(): WorkspacePackageResolution {
     const packageEntries: { name?: string; path: string }[] = []
+    const scannedDirectories = new Set<string>()
     const workspaceRoot = this.#workspaceRelativeRoot || this.#workspaceRoot
-    const patterns = buildWorkspacePatterns(this.#fileSystem, workspaceRoot)
+    const { patterns, manifestPaths } = buildWorkspacePatternsWithSources(
+      this.#fileSystem,
+      workspaceRoot
+    )
 
     if (patterns.length === 0) {
       const rootPackageJsonPath = this.#findWorkspacePath('package.json')
@@ -332,7 +404,11 @@ export class Workspace {
         })
       }
 
-      return packageEntries
+      return {
+        packageEntries,
+        scannedDirectories: Array.from(scannedDirectories),
+        workspaceManifestPaths: manifestPaths,
+      }
     }
 
     const matchers = patterns.map(
@@ -377,6 +453,7 @@ export class Workspace {
         }
 
         const directoryPath = this.#resolveWorkspacePath(normalized || '.')
+        scannedDirectories.add(directoryPath)
 
         for (const entry of safeReadDirectory(
           this.#fileSystem,
@@ -394,7 +471,11 @@ export class Workspace {
       }
     }
 
-    return packageEntries
+    return {
+      packageEntries,
+      scannedDirectories: Array.from(scannedDirectories),
+      workspaceManifestPaths: manifestPaths,
+    }
   }
 
   #findWorkspacePath(path: string) {
