@@ -2432,6 +2432,8 @@ describe('GitFileSystem', () => {
         recursive: true,
         includeDirectoryNamedFiles: true,
         includeIndexAndReadmeFiles: true,
+        includeGitIgnoredFiles: true,
+        includeTsConfigExcludedFiles: true,
       })
 
       return entries
@@ -2442,8 +2444,14 @@ describe('GitFileSystem', () => {
 
     try {
       using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-      const writerDirectory = new Directory({ fileSystem: store })
-      const readerDirectory = new Directory({ fileSystem: store })
+      const writerDirectory = new Directory({
+        fileSystem: store,
+        tsConfigPath: 'tsconfig.json',
+      })
+      const readerDirectory = new Directory({
+        fileSystem: store,
+        tsConfigPath: 'tsconfig.json',
+      })
 
       const initialEntries = await listFiles(writerDirectory)
       expect(initialEntries).toEqual(['src/index.ts'])
