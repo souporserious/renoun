@@ -2425,28 +2425,20 @@ describe('GitFileSystem', () => {
   }) => {
     commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
 
-    const previousNodeEnv = process.env.NODE_ENV
-    const previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
-    const previousWorkingDirectory = process.cwd()
+    disposeCacheStorePersistence({ projectRoot: repoRoot })
 
-    process.env.NODE_ENV = 'production'
-    process.env.RENOUN_FS_CACHE_DB_PATH = join(cacheDirectory, 'fs-cache.sqlite')
-    process.chdir(repoRoot)
+    const listFiles = async (directory: Directory) => {
+      const entries = await directory.getEntries({
+        recursive: true,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+      })
 
-    disposeCacheStorePersistence()
-
-      const listFiles = async (directory: Directory) => {
-        const entries = await directory.getEntries({
-          recursive: true,
-          includeDirectoryNamedFiles: true,
-          includeIndexAndReadmeFiles: true,
-        })
-
-        return entries
-          .filter((entry) => entry instanceof File)
-          .map((entry) => entry.relativePath)
-          .sort()
-      }
+      return entries
+        .filter((entry) => entry instanceof File)
+        .map((entry) => entry.relativePath)
+        .sort()
+    }
 
     try {
       using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
@@ -2494,14 +2486,7 @@ describe('GitFileSystem', () => {
       const entriesAfterFinalDelete = await listFiles(readerDirectory)
       expect(entriesAfterFinalDelete).toEqual([])
     } finally {
-      process.env.NODE_ENV = previousNodeEnv
-      if (previousCacheDbPath) {
-        process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
-      } else {
-        delete process.env.RENOUN_FS_CACHE_DB_PATH
-      }
-      process.chdir(previousWorkingDirectory)
-      disposeCacheStorePersistence()
+      disposeCacheStorePersistence({ projectRoot: repoRoot })
     }
   })
 })
