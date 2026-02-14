@@ -15,9 +15,7 @@ import {
   InMemoryFileSystem,
   type InMemoryFileContent,
 } from './InMemoryFileSystem.ts'
-import {
-  GIT_VIRTUAL_HISTORY_CACHE_VERSION,
-} from './cache-key.ts'
+import { GIT_VIRTUAL_HISTORY_CACHE_VERSION } from './cache-key.ts'
 import { createGitVirtualPersistentCacheNodeKey } from './git-cache-key.ts'
 import type { AsyncFileSystem, WritableFileSystem } from './FileSystem.ts'
 import { Session } from './Session.ts'
@@ -764,6 +762,7 @@ export class GitVirtualFileSystem
     deterministic: boolean
   }> {
     const cached = this.#refIdentityCache.get(ref)
+    const isCommitSha = isFullCommitSha(ref)
     let identity = ref
     let deterministic = false
 
@@ -771,7 +770,7 @@ export class GitVirtualFileSystem
       const resolved = await this.#resolveRefToCommit(ref)
       if (resolved) {
         identity = resolved
-        deterministic = true
+        deterministic = isCommitSha
       }
     } catch {
       if (cached !== undefined) {
@@ -867,9 +866,8 @@ export class GitVirtualFileSystem
       return mirrored
     }
 
-    const { identity: refIdentity, deterministic } = await this.#getRefCacheIdentity(
-      this.#ref
-    )
+    const { identity: refIdentity, deterministic } =
+      await this.#getRefCacheIdentity(this.#ref)
     const session = this.#getSession()
     const nodeKey = this.#createPersistentCacheNodeKey('file-metadata', {
       refIdentity,
@@ -886,9 +884,8 @@ export class GitVirtualFileSystem
             GIT_VIRTUAL_HISTORY_CACHE_VERSION
           )
 
-          const result = await this.#fetchGitMetadataForHostWithHashes(
-            normalizedPath
-          )
+          const result =
+            await this.#fetchGitMetadataForHostWithHashes(normalizedPath)
           return {
             metadata: result.metadata,
             commitHashes: {
@@ -1215,9 +1212,8 @@ export class GitVirtualFileSystem
     }
 
     if (!this.#gitBlameCache.has(cacheKey)) {
-      const { identity: refIdentity, deterministic } = await this.#getRefCacheIdentity(
-        this.#ref
-      )
+      const { identity: refIdentity, deterministic } =
+        await this.#getRefCacheIdentity(this.#ref)
       const session = this.#getSession()
       const nodeKey = this.#createPersistentCacheNodeKey('blame-range', {
         refIdentity,
@@ -1228,13 +1224,21 @@ export class GitVirtualFileSystem
 
       this.#gitBlameCache.set(
         cacheKey,
-        session.cache.getOrCompute(nodeKey, { persist: deterministic }, async (ctx) => {
-          ctx.recordConstDep(
-            'git-virtual-cache',
-            GIT_VIRTUAL_HISTORY_CACHE_VERSION
-          )
-          return this.#enqueueGitHubBlameRequest(path, startLine, normalizedEnd)
-        })
+        session.cache.getOrCompute(
+          nodeKey,
+          { persist: deterministic },
+          async (ctx) => {
+            ctx.recordConstDep(
+              'git-virtual-cache',
+              GIT_VIRTUAL_HISTORY_CACHE_VERSION
+            )
+            return this.#enqueueGitHubBlameRequest(
+              path,
+              startLine,
+              normalizedEnd
+            )
+          }
+        )
       )
     }
 
@@ -3319,17 +3323,12 @@ export class GitVirtualFileSystem
       contentHash,
       parserFlavor,
     })
-    const payload = await session.cache.getOrCompute<Record<string, ExportItem>>(
-      nodeKey,
-      { persist: true },
-      async (ctx) => {
-        ctx.recordConstDep(
-          'git-virtual-cache',
-          GIT_VIRTUAL_HISTORY_CACHE_VERSION
-        )
-        return serializeExportItemMap(scanModuleExports(filePath, content))
-      }
-    )
+    const payload = await session.cache.getOrCompute<
+      Record<string, ExportItem>
+    >(nodeKey, { persist: true }, async (ctx) => {
+      ctx.recordConstDep('git-virtual-cache', GIT_VIRTUAL_HISTORY_CACHE_VERSION)
+      return serializeExportItemMap(scanModuleExports(filePath, content))
+    })
     const parsed = deserializeExportItemMap(payload)
     this.#exportParseCache.set(contentHash, parsed)
     return parsed
@@ -4568,7 +4567,10 @@ export class GitVirtualFileSystem
             'git-virtual-cache',
             GIT_VIRTUAL_HISTORY_CACHE_VERSION
           )
-          return this.#fetchFileAtCommitUncached(normalizedPath, normalizedCommit)
+          return this.#fetchFileAtCommitUncached(
+            normalizedPath,
+            normalizedCommit
+          )
         }
       )
     } catch {
@@ -4696,5 +4698,7 @@ function isMissingResourceStatus(status: number): boolean {
 
 function isFullCommitSha(value: string): boolean {
   const normalized = value.trim()
-  return /^[0-9a-f]{40}$/i.test(normalized) || /^[0-9a-f]{64}$/i.test(normalized)
+  return (
+    /^[0-9a-f]{40}$/i.test(normalized) || /^[0-9a-f]{64}$/i.test(normalized)
+  )
 }

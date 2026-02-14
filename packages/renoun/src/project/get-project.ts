@@ -21,6 +21,7 @@ import type { ProjectOptions } from './types.ts'
 const { Project, ts } = getTsMorph()
 
 const projects = new Map<string, TsMorphProject>()
+const inMemoryProjectIds = new Map<string, string>()
 const directoryWatchers = new Map<string, FSWatcher>()
 const directoryToProjects = new Map<string, Set<TsMorphProject>>()
 
@@ -41,13 +42,27 @@ const defaultCompilerOptions = {
 
 /** Get the project associated with the provided options. */
 export function getProject(options?: ProjectOptions) {
-  const projectId = JSON.stringify(options)
+  const projectId = getSerializedProjectOptions(options)
+  const useInMemoryFileSystem = Boolean(options?.useInMemoryFileSystem)
   const projectDirectory = options?.tsConfigFilePath
     ? resolve(dirname(options.tsConfigFilePath))
     : process.cwd()
 
   if (projects.has(projectId)) {
     const existingProject = projects.get(projectId)!
+    const inMemoryProjectId = useInMemoryFileSystem
+      ? (options!.projectId ?? '')
+      : ''
+    const previousProjectId = inMemoryProjectIds.get(projectId)
+
+    if (useInMemoryFileSystem && previousProjectId !== inMemoryProjectId) {
+      for (const sourceFile of existingProject.getSourceFiles()) {
+        if (!sourceFile.isFromExternalLibrary()) {
+          existingProject.removeSourceFile(sourceFile)
+        }
+      }
+      inMemoryProjectIds.set(projectId, inMemoryProjectId)
+    }
 
     getDebugLogger().debug('Reusing cached project instance', () =>
       createProjectDebugContext({
@@ -156,6 +171,9 @@ export function getProject(options?: ProjectOptions) {
   }
 
   projects.set(projectId, project)
+  if (useInMemoryFileSystem) {
+    inMemoryProjectIds.set(projectId, options?.projectId ?? '')
+  }
 
   getDebugLogger().info('Created new project instance', () =>
     createProjectDebugContext({
@@ -168,6 +186,19 @@ export function getProject(options?: ProjectOptions) {
   )
 
   return project
+}
+
+function getSerializedProjectOptions(options?: ProjectOptions) {
+  if (!options) {
+    return ''
+  }
+
+  const normalizedOptions = {
+    ...options,
+    projectId: options.useInMemoryFileSystem ? undefined : options.projectId,
+  }
+
+  return JSON.stringify(normalizedOptions)
 }
 
 function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {

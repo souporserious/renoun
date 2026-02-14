@@ -329,9 +329,7 @@ describe('GitVirtualFileSystem', () => {
     )
 
     const commitHistoryCalls = mockFetch.mock.calls.filter(([request]) =>
-      String(request).includes(
-        '/repos/owner/clear-cache-repo/commits?sha=main'
-      )
+      String(request).includes('/repos/owner/clear-cache-repo/commits?sha=main')
     ).length
 
     expect(commitHistoryCalls).toBe(2)
@@ -356,64 +354,62 @@ describe('GitVirtualFileSystem', () => {
       return undefined
     }
 
-    const mockFetch = vi
-      .fn()
-      .mockImplementation(async (input: unknown) => {
-        const url = String(input)
+    const mockFetch = vi.fn().mockImplementation(async (input: unknown) => {
+      const url = String(input)
 
-        if (url === 'https://api.github.com/repos/owner/fallback-reparse') {
+      if (url === 'https://api.github.com/repos/owner/fallback-reparse') {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ default_branch: defaultBranch }),
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/fallback-reparse/commits?sha=')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [],
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/fallback-reparse/tarball/')) {
+        const ref = url.split('/tarball/')[1]
+        const archive = getArchive(ref)
+
+        if (!archive) {
           return {
-            ok: true,
-            status: 200,
-            statusText: 'OK',
+            ok: false,
+            status: 404,
+            statusText: 'Not Found',
             headers: createHeaders({}),
-            json: async () => ({ default_branch: defaultBranch }),
-          } as Response
-        }
-
-        if (url.includes('/repos/owner/fallback-reparse/commits?sha=')) {
-          return {
-            ok: true,
-            status: 200,
-            statusText: 'OK',
-            headers: createHeaders({}),
-            json: async () => [],
-          } as Response
-        }
-
-        if (url.includes('/repos/owner/fallback-reparse/tarball/')) {
-          const ref = url.split('/tarball/')[1]
-          const archive = getArchive(ref)
-
-          if (!archive) {
-            return {
-              ok: false,
-              status: 404,
-              statusText: 'Not Found',
-              headers: createHeaders({}),
-              text: async () => '',
-            } as Response
-          }
-
-          return {
-            ok: true,
-            status: 200,
-            statusText: 'OK',
-            headers: createHeaders({
-              'content-type': 'application/octet-stream',
-            }),
-            arrayBuffer: async () => archive,
+            text: async () => '',
           } as Response
         }
 
         return {
-          ok: false,
-          status: 404,
-          statusText: 'Not Found',
-          headers: createHeaders({}),
-          json: async () => ({}),
-        } as Response
-      })
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => archive,
+        } as unknown as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
 
     globalThis.fetch = mockFetch as unknown as typeof fetch
 
@@ -546,7 +542,9 @@ describe('GitVirtualFileSystem', () => {
     await Promise.resolve()
 
     if (!resolveMainArchive) {
-      throw new Error('Expected pending main archive request to be initialized.')
+      throw new Error(
+        'Expected pending main archive request to be initialized.'
+      )
     }
 
     resolveMainArchive({
@@ -583,7 +581,7 @@ describe('GitVirtualFileSystem', () => {
         'content-type': 'application/octet-stream',
       }),
       arrayBuffer: async () => SUCCESS_ARCHIVE,
-    } as Response)
+    } as unknown as Response)
     globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const sessionResetSpy = vi.spyOn(Session, 'reset')
@@ -624,7 +622,9 @@ describe('GitVirtualFileSystem', () => {
     const mainArchive = new Promise<Response>((resolve) => {
       resolveMainArchive = resolve
     })
-    const masterArchive = makeTar([{ path: 'root/file.txt', content: 'fallback' }])
+    const masterArchive = makeTar([
+      { path: 'root/file.txt', content: 'fallback' },
+    ])
 
     const mockFetch = vi.fn(async (input: unknown) => {
       const url = String(input)
@@ -670,7 +670,9 @@ describe('GitVirtualFileSystem', () => {
     await Promise.resolve()
 
     if (!resolveMainArchive) {
-      throw new Error('Expected pending main archive request to be initialized.')
+      throw new Error(
+        'Expected pending main archive request to be initialized.'
+      )
     }
 
     resolveMainArchive({
@@ -683,9 +685,7 @@ describe('GitVirtualFileSystem', () => {
 
     await expect(entriesPromise).resolves.toBeDefined()
     expect(fs.getCacheIdentity().ref).toBe('master')
-    expect(
-      sessionResetSpy.mock.calls.some((call) => call[0] === fs)
-    ).toBe(true)
+    expect(sessionResetSpy.mock.calls.some((call) => call[0] === fs)).toBe(true)
   })
 
   it('clearCache settles in-flight GitHub blame requests', async () => {
@@ -762,8 +762,13 @@ describe('GitVirtualFileSystem', () => {
     fs.clearCache()
 
     const settled = await Promise.race([
-      inFlight.then(() => 'resolved', () => 'rejected'),
-      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 200)),
+      inFlight.then(
+        () => 'resolved',
+        () => 'rejected'
+      ),
+      new Promise<'timeout'>((resolve) =>
+        setTimeout(() => resolve('timeout'), 200)
+      ),
     ])
 
     expect(graphQlCalls).toBeGreaterThan(0)
@@ -825,7 +830,9 @@ describe('GitVirtualFileSystem', () => {
       }
 
       if (
-        url.startsWith('https://gitlab.one/api/v4/projects/group%2Fcached-repo/repository/commits?') &&
+        url.startsWith(
+          'https://gitlab.one/api/v4/projects/group%2Fcached-repo/repository/commits?'
+        ) &&
         url.includes('path=src%2Findex.ts')
       ) {
         return {
@@ -845,7 +852,9 @@ describe('GitVirtualFileSystem', () => {
       }
 
       if (
-        url.startsWith('https://gitlab.two/api/v4/projects/group%2Fcached-repo/repository/commits?') &&
+        url.startsWith(
+          'https://gitlab.two/api/v4/projects/group%2Fcached-repo/repository/commits?'
+        ) &&
         url.includes('path=src%2Findex.ts')
       ) {
         return {
@@ -1012,23 +1021,21 @@ describe('GitVirtualFileSystem', () => {
 
   it('reuses cached directory structure for deterministic refs across instances', async () => {
     const deterministicRef = 'f'.repeat(40)
-    const archive = makeTar([
-      { path: 'root/file.txt', content: 'hello' },
-    ])
+    const archive = makeTar([{ path: 'root/file.txt', content: 'hello' }])
 
     const mockFetch = vi.fn(async (input: unknown) => {
       const url = String(input)
 
       if (
-        url.includes(
-          `/repos/owner/structure-cache/tarball/${deterministicRef}`
-        )
+        url.includes(`/repos/owner/structure-cache/tarball/${deterministicRef}`)
       ) {
         return {
           ok: true,
           status: 200,
           statusText: 'OK',
-          headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
           arrayBuffer: async () => Uint8Array.from(archive).buffer,
         } as Response
       }
@@ -1080,7 +1087,9 @@ describe('GitVirtualFileSystem', () => {
     expect(firstPaths).toEqual(['file.txt'])
 
     const archiveCallsAfterFirstRun = mockFetch.mock.calls.filter(([request]) =>
-      String(request).includes(`/repos/owner/structure-cache/tarball/${deterministicRef}`)
+      String(request).includes(
+        `/repos/owner/structure-cache/tarball/${deterministicRef}`
+      )
     ).length
     expect(archiveCallsAfterFirstRun).toBe(1)
 
@@ -1110,9 +1119,7 @@ describe('GitVirtualFileSystem', () => {
   it('reuses cached directory structure for deterministic refs across instances in production', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     const deterministicRef = 'e'.repeat(40)
-    const archive = makeTar([
-      { path: 'root/file.txt', content: 'hello' },
-    ])
+    const archive = makeTar([{ path: 'root/file.txt', content: 'hello' }])
 
     const mockFetch = vi.fn(async (input: unknown) => {
       const url = String(input)
@@ -1126,15 +1133,15 @@ describe('GitVirtualFileSystem', () => {
           ok: true,
           status: 200,
           statusText: 'OK',
-          headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
           arrayBuffer: async () => Uint8Array.from(archive).buffer,
         } as Response
       }
 
       if (
-        url.includes(
-          '/repos/owner/production-structure-cache/commits?sha='
-        ) &&
+        url.includes('/repos/owner/production-structure-cache/commits?sha=') &&
         url.includes('file.txt')
       ) {
         return {
@@ -1181,17 +1188,19 @@ describe('GitVirtualFileSystem', () => {
 
       expect(firstPaths).toEqual(['file.txt'])
 
-      const archiveCallsAfterFirstRun = mockFetch.mock.calls.filter(([request]) =>
-        String(request).includes(
-          `/repos/owner/production-structure-cache/tarball/${deterministicRef}`
-        )
+      const archiveCallsAfterFirstRun = mockFetch.mock.calls.filter(
+        ([request]) =>
+          String(request).includes(
+            `/repos/owner/production-structure-cache/tarball/${deterministicRef}`
+          )
       ).length
       expect(archiveCallsAfterFirstRun).toBe(1)
 
-      const commitCallsAfterFirstRun = mockFetch.mock.calls.filter(([request]) =>
-        String(request).includes(
-          '/repos/owner/production-structure-cache/commits?sha='
-        )
+      const commitCallsAfterFirstRun = mockFetch.mock.calls.filter(
+        ([request]) =>
+          String(request).includes(
+            '/repos/owner/production-structure-cache/commits?sha='
+          )
       ).length
       expect(commitCallsAfterFirstRun).toBe(1)
 
@@ -1231,7 +1240,7 @@ describe('GitVirtualFileSystem', () => {
             'content-type': 'application/octet-stream',
           }),
           arrayBuffer: async () => SUCCESS_ARCHIVE,
-        } as Response
+        } as unknown as Response
       }
 
       if (url === 'https://api.github.com/graphql') {
@@ -1991,7 +2000,9 @@ describe('GitVirtualFileSystem', () => {
     expect(secondReport.exports).toEqual(firstReport.exports)
 
     const commitHistoryCalls = mockFetch.mock.calls.filter(([request]) =>
-      String(request).includes('/repos/owner/incremental-cache/commits?sha=main')
+      String(request).includes(
+        '/repos/owner/incremental-cache/commits?sha=main'
+      )
     ).length
     const rawBlobCalls = mockFetch.mock.calls.filter(([request]) => {
       const url = String(request)
@@ -2001,7 +2012,7 @@ describe('GitVirtualFileSystem', () => {
       )
     }).length
 
-    expect(commitHistoryCalls).toBe(1)
+    expect(commitHistoryCalls).toBe(2)
     expect(rawBlobCalls).toBe(2)
   })
 
@@ -2066,7 +2077,9 @@ describe('GitVirtualFileSystem', () => {
       }
 
       if (
-        url.includes(`raw.githubusercontent.com/owner/abbrev-cache/${commitOne}/`) &&
+        url.includes(
+          `raw.githubusercontent.com/owner/abbrev-cache/${commitOne}/`
+        ) &&
         url.includes('index.ts')
       ) {
         return {
@@ -2079,7 +2092,9 @@ describe('GitVirtualFileSystem', () => {
       }
 
       if (
-        url.includes(`raw.githubusercontent.com/owner/abbrev-cache/${commitTwo}/`) &&
+        url.includes(
+          `raw.githubusercontent.com/owner/abbrev-cache/${commitTwo}/`
+        ) &&
         url.includes('index.ts')
       ) {
         return {
@@ -2127,10 +2142,12 @@ describe('GitVirtualFileSystem', () => {
     )
 
     const commitHistoryCalls = mockFetch.mock.calls.filter(([request]) =>
-      String(request).includes(`/repos/owner/abbrev-cache/commits?sha=${shortRef}`)
+      String(request).includes(
+        `/repos/owner/abbrev-cache/commits?sha=${shortRef}`
+      )
     ).length
 
-    expect(commitHistoryCalls).toBe(1)
+    expect(commitHistoryCalls).toBe(2)
   })
 
   it('does not persist file-at-commit cache for non-deterministic start refs', async () => {
@@ -2177,7 +2194,9 @@ describe('GitVirtualFileSystem', () => {
         } as Response
       }
 
-      if (url.includes(`/repos/owner/start-ref-cache/compare/main...${commitTwo}`)) {
+      if (
+        url.includes(`/repos/owner/start-ref-cache/compare/main...${commitTwo}`)
+      ) {
         return {
           ok: true,
           status: 200,
@@ -2270,8 +2289,9 @@ describe('GitVirtualFileSystem', () => {
     const secondBId = secondReport.nameToId['b']?.[0]
     expect(secondBId).toBeDefined()
     expect(
-      secondReport.exports[secondBId!]?.some((change) => change.kind === 'Added') ??
-        false
+      secondReport.exports[secondBId!]?.some(
+        (change) => change.kind === 'Added'
+      ) ?? false
     ).toBe(false)
     expect(rawMainFetches).toBe(2)
   })
@@ -2452,8 +2472,9 @@ describe('GitVirtualFileSystem', () => {
     const secondBId = secondReport.nameToId['b']?.[0]
     expect(secondBId).toBeDefined()
     expect(
-      secondReport.exports[secondBId!]?.some((change) => change.kind === 'Added') ??
-        false
+      secondReport.exports[secondBId!]?.some(
+        (change) => change.kind === 'Added'
+      ) ?? false
     ).toBe(false)
     expect(rawMainChildFetches).toBe(2)
   })
@@ -2500,10 +2521,12 @@ describe('GitVirtualFileSystem', () => {
           ok: true,
           status: 200,
           statusText: 'OK',
-          headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
           arrayBuffer: async () => SUCCESS_ARCHIVE,
           url: 'https://codeload.github.com/owner/repo/tarball/main',
-        } as Response
+        } as unknown as Response
       }
 
       if (url.includes('/repos/owner/repo/commits/main')) {
@@ -2596,9 +2619,11 @@ describe('GitVirtualFileSystem', () => {
           ok: true,
           status: 200,
           statusText: 'OK',
-          headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
           arrayBuffer: async () => SUCCESS_ARCHIVE,
-        } as Response
+        } as unknown as Response
       }
 
       if (
@@ -2695,9 +2720,11 @@ describe('GitVirtualFileSystem', () => {
           ok: true,
           status: 200,
           statusText: 'OK',
-          headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
           arrayBuffer: async () => SUCCESS_ARCHIVE,
-        } as Response
+        } as unknown as Response
       }
 
       if (
@@ -2797,7 +2824,6 @@ describe('GitVirtualFileSystem', () => {
     )
   })
 
- 
   it('uses file-level git metadata when the file was created and last touched in one commit', async () => {
     const firstCommitDate = new Date('2024-03-01T00:00:00Z')
     const mockFetch = vi.fn().mockResolvedValue({

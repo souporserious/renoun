@@ -132,10 +132,16 @@ export class Session {
     this.#fileSystem = fileSystem
     this.snapshot = snapshot
 
-    const projectRoot = resolveSessionProjectRoot(fileSystem)
+    const projectRoot = shouldUseSessionCachePersistence()
+      ? resolveSessionProjectRoot(fileSystem)
+      : undefined
+    const persistence = projectRoot
+      ? getCacheStorePersistence({ projectRoot })
+      : undefined
+
     this.cache = new CacheStore({
       snapshot: this.snapshot,
-      persistence: getCacheStorePersistence({ projectRoot }),
+      persistence,
       inflight: this.inflight,
     })
   }
@@ -384,4 +390,18 @@ function resolveSessionProjectRoot(fileSystem: FileSystem): string {
       return process.cwd()
     }
   }
+}
+
+function shouldUseSessionCachePersistence(): boolean {
+  const explicit = process.env['RENOUN_FS_CACHE']
+
+  if (explicit === '1' || explicit?.toLowerCase() === 'true') {
+    return true
+  }
+
+  if (explicit === '0' || explicit?.toLowerCase() === 'false') {
+    return false
+  }
+
+  return true
 }

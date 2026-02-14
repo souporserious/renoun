@@ -74,6 +74,21 @@ interface CacheStorePersistenceComputeSlot {
   getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
 }
 
+function isCacheStorePersistenceComputeSlot(
+  persistence: CacheStorePersistence | undefined
+): persistence is CacheStorePersistence & CacheStorePersistenceComputeSlot {
+  if (!persistence) {
+    return false
+  }
+
+  const candidate = persistence as Partial<CacheStorePersistenceComputeSlot>
+  return (
+    typeof candidate.acquireComputeSlot === 'function' &&
+    typeof candidate.releaseComputeSlot === 'function' &&
+    typeof candidate.getComputeSlotOwner === 'function'
+  )
+}
+
 function getFailedPersistenceEntries(
   persistence: CacheStorePersistence
 ): Set<string> {
@@ -280,19 +295,11 @@ export class CacheStore {
 
   #getComputeSlotPersistence(): CacheStorePersistenceComputeSlot | undefined {
     const persistence = this.#persistence
-    if (
-      !persistence ||
-      typeof (persistence as Partial<CacheStorePersistenceComputeSlot>)
-        .acquireComputeSlot !== 'function' ||
-      typeof (persistence as Partial<CacheStorePersistenceComputeSlot>)
-        .releaseComputeSlot !== 'function' ||
-      typeof (persistence as Partial<CacheStorePersistenceComputeSlot>)
-        .getComputeSlotOwner !== 'function'
-    ) {
+    if (!isCacheStorePersistenceComputeSlot(persistence)) {
       return undefined
     }
 
-    return persistence as CacheStorePersistenceComputeSlot
+    return persistence
   }
 
   async #acquireComputeSlot(nodeKey: string, owner: string): Promise<boolean> {

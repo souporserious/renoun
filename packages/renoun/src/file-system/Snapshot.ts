@@ -23,6 +23,27 @@ interface CachedContentId {
   updatedAt: number
 }
 
+function sanitizeProjectOptions(projectOptions: unknown): unknown {
+  if (
+    !projectOptions ||
+    typeof projectOptions !== 'object' ||
+    Array.isArray(projectOptions)
+  ) {
+    return projectOptions
+  }
+
+  const options = projectOptions as Record<string, unknown>
+  if (
+    options['useInMemoryFileSystem'] !== true ||
+    typeof options['projectId'] !== 'string'
+  ) {
+    return projectOptions
+  }
+
+  const { projectId: _projectId, ...stableOptions } = options
+  return stableOptions
+}
+
 export interface Snapshot {
   readonly id: string
   readDirectory(path?: string): Promise<DirectoryEntry[]>
@@ -267,11 +288,13 @@ export class FileSystemSnapshot implements Snapshot {
   }
 
   async #getFileSystemContentId(path: string): Promise<string | undefined> {
-    const candidate = (this.#fileSystem as FileSystem & {
-      getContentId?: (
-        path: string
-      ) => Promise<string | undefined> | string | undefined
-    }).getContentId
+    const candidate = (
+      this.#fileSystem as FileSystem & {
+        getContentId?: (
+          path: string
+        ) => Promise<string | undefined> | string | undefined
+      }
+    ).getContentId
 
     if (typeof candidate !== 'function') {
       return undefined
@@ -319,7 +342,7 @@ export class FileSystemSnapshot implements Snapshot {
 
 function safeGetProjectOptions(fileSystem: FileSystem): unknown {
   try {
-    return fileSystem.getProjectOptions()
+    return sanitizeProjectOptions(fileSystem.getProjectOptions())
   } catch {
     return undefined
   }

@@ -177,6 +177,34 @@ describe('NodeFileSystem', () => {
     )
   })
 
+  test('resolves bare relative paths from the current working directory', () => {
+    const uniqueId = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const cwdDirectory = mkdtempSync(join(tempDirectory, 'cwd-'))
+    const rootOnlyPath = join(rootDirectory, `root-only-${uniqueId}.txt`)
+    const sharedName = `shared-${uniqueId}.txt`
+
+    writeFileSync(rootOnlyPath, 'workspace')
+    writeFileSync(join(cwdDirectory, sharedName), 'cwd-shared')
+
+    const previousCwd = process.cwd()
+    process.chdir(cwdDirectory)
+
+    try {
+      expect(fileSystem.getAbsolutePath(`root-only-${uniqueId}.txt`)).toBe(
+        join(cwdDirectory, `root-only-${uniqueId}.txt`)
+      )
+      expect(fileSystem.getAbsolutePath(sharedName)).toBe(
+        join(cwdDirectory, sharedName)
+      )
+      expect(fileSystem.getAbsolutePath(`./${sharedName}`)).toBe(
+        join(cwdDirectory, sharedName)
+      )
+    } finally {
+      process.chdir(previousCwd)
+      rmSync(rootOnlyPath, { force: true })
+    }
+  })
+
   afterAll(() => {
     rmSync(tempDirectory, { recursive: true, force: true })
     for (const directory of outsideDirectories) {
