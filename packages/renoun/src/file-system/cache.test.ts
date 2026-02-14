@@ -2519,6 +2519,53 @@ export type Metadata = Value`,
     }
   })
 
+  test('does not rehydrate a persisted row after delete cleanup fails', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-delete-cleanup-fallback-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-delete-cleanup-fallback'
+      )
+      const nodeKey = 'test:delete-cleanup-fallback'
+
+      const seedPersistence = new SqliteCacheStorePersistence({ dbPath })
+      const seedStore = new CacheStore({ snapshot, persistence: seedPersistence })
+
+      await seedStore.put(nodeKey, { value: 1 }, { persist: true })
+
+      const failingPersistence = {
+        load: async (lookupNodeKey: string) =>
+          seedPersistence.load(lookupNodeKey),
+        save: async (lookupNodeKey: string, entry: unknown) =>
+          seedPersistence.save(lookupNodeKey, entry),
+        delete: vi.fn(async () => {
+          throw new Error('disk delete failure')
+        }),
+      }
+      const failingStore = new CacheStore({
+        snapshot,
+        persistence: failingPersistence,
+      })
+
+      await failingStore.delete(nodeKey)
+      expect(await failingStore.get(nodeKey)).toBeUndefined()
+
+      await new Promise((resolve) => setTimeout(resolve, 2200))
+
+      expect(await failingStore.get(nodeKey)).toBeUndefined()
+      expect(failingPersistence.delete).toHaveBeenCalledTimes(1)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('keeps persisted cache values consistent across multiple stores during updates', async () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-multi-store-'))
 

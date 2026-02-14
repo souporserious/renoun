@@ -47,8 +47,10 @@ export interface CacheStoreOptions {
   inflight?: Map<string, Promise<unknown>>
 }
 
-const PERSISTENCE_INVALIDATION_TTL_MS = 2_000
-const failedPersistenceEntries = new Map<string, number>()
+const failedPersistenceEntries = new WeakMap<
+  CacheStorePersistence,
+  Set<string>
+>()
 const COMPUTE_SLOT_TTL_MS = getEnvInt(
   'RENOUN_FS_CACHE_COMPUTE_SLOT_TTL_MS',
   20_000
@@ -72,27 +74,49 @@ interface CacheStorePersistenceComputeSlot {
   getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
 }
 
-function markPersistedEntryInvalid(nodeKey: string): void {
-  failedPersistenceEntries.set(nodeKey, Date.now() + PERSISTENCE_INVALIDATION_TTL_MS)
+function getFailedPersistenceEntries(
+  persistence: CacheStorePersistence
+): Set<string> {
+  let failedEntries = failedPersistenceEntries.get(persistence)
+  if (!failedEntries) {
+    failedEntries = new Set()
+    failedPersistenceEntries.set(persistence, failedEntries)
+  }
+  return failedEntries
 }
 
-function isPersistedEntryInvalid(nodeKey: string): boolean {
-  const expiresAt = failedPersistenceEntries.get(nodeKey)
+function markPersistedEntryInvalid(
+  persistence: CacheStorePersistence | undefined,
+  nodeKey: string
+): void {
+  if (!persistence) {
+    return
+  }
+  getFailedPersistenceEntries(persistence).add(nodeKey)
+}
 
-  if (expiresAt === undefined) {
+function isPersistedEntryInvalid(
+  persistence: CacheStorePersistence | undefined,
+  nodeKey: string
+): boolean {
+  if (!persistence) {
     return false
   }
 
-  if (Date.now() <= expiresAt) {
-    return true
-  }
-
-  failedPersistenceEntries.delete(nodeKey)
-  return false
+  const failedEntries = failedPersistenceEntries.get(persistence)
+  return failedEntries?.has(nodeKey) ?? false
 }
 
-function clearPersistedEntryInvalidation(nodeKey: string): void {
-  failedPersistenceEntries.delete(nodeKey)
+function clearPersistedEntryInvalidation(
+  persistence: CacheStorePersistence | undefined,
+  nodeKey: string
+): void {
+  if (!persistence) {
+    return
+  }
+
+  const failedEntries = failedPersistenceEntries.get(persistence)
+  failedEntries?.delete(nodeKey)
 }
 
 export class CacheStore {
@@ -185,7 +209,7 @@ export class CacheStore {
       return
     }
 
-    clearPersistedEntryInvalidation(nodeKey)
+    clearPersistedEntryInvalidation(this.#persistence, nodeKey)
     await this.#withPersistenceIntent(nodeKey, () =>
       this.#clearPersistedCacheEntry(nodeKey)
     )
@@ -234,15 +258,15 @@ export class CacheStore {
       await this.#persistence.delete(nodeKey)
     } catch (error) {
       this.#warnPersistenceFailure(`cleanup(${nodeKey})`, error)
-      markPersistedEntryInvalid(nodeKey)
+      markPersistedEntryInvalid(this.#persistence, nodeKey)
       return
     }
 
-    clearPersistedEntryInvalidation(nodeKey)
+    clearPersistedEntryInvalidation(this.#persistence, nodeKey)
   }
 
   #cleanupPersistedEntry(nodeKey: string, entry: CacheEntry): Promise<void> {
-    markPersistedEntryInvalid(nodeKey)
+    markPersistedEntryInvalid(this.#persistence, nodeKey)
     if (!this.#persistence) {
       return Promise.resolve()
     }
@@ -258,15 +282,12 @@ export class CacheStore {
     const persistence = this.#persistence
     if (
       !persistence ||
-      typeof (
-        persistence as Partial<CacheStorePersistenceComputeSlot>
-      ).acquireComputeSlot !== 'function' ||
-      typeof (
-        persistence as Partial<CacheStorePersistenceComputeSlot>
-      ).releaseComputeSlot !== 'function' ||
-      typeof (
-        persistence as Partial<CacheStorePersistenceComputeSlot>
-      ).getComputeSlotOwner !== 'function'
+      typeof (persistence as Partial<CacheStorePersistenceComputeSlot>)
+        .acquireComputeSlot !== 'function' ||
+      typeof (persistence as Partial<CacheStorePersistenceComputeSlot>)
+        .releaseComputeSlot !== 'function' ||
+      typeof (persistence as Partial<CacheStorePersistenceComputeSlot>)
+        .getComputeSlotOwner !== 'function'
     ) {
       return undefined
     }
@@ -274,10 +295,7 @@ export class CacheStore {
     return persistence as CacheStorePersistenceComputeSlot
   }
 
-  async #acquireComputeSlot(
-    nodeKey: string,
-    owner: string
-  ): Promise<boolean> {
+  async #acquireComputeSlot(nodeKey: string, owner: string): Promise<boolean> {
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence) {
       return true
@@ -307,7 +325,9 @@ export class CacheStore {
     }
   }
 
-  async #waitForInFlightValue<Value>(nodeKey: string): Promise<Value | undefined> {
+  async #waitForInFlightValue<Value>(
+    nodeKey: string
+  ): Promise<Value | undefined> {
     const stopAt = Date.now() + COMPUTE_SLOT_WAIT_MS
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence) {
@@ -389,7 +409,8 @@ export class CacheStore {
         return depVersion
       },
       recordNodeDep: async (childNodeKey: string) => {
-        const depVersion = (await this.getFingerprint(childNodeKey)) ?? 'missing'
+        const depVersion =
+          (await this.getFingerprint(childNodeKey)) ?? 'missing'
         deps.set(`node:${childNodeKey}`, depVersion)
         return depVersion
       },
@@ -402,9 +423,7 @@ export class CacheStore {
 
       const acquired = await this.#acquireComputeSlot(nodeKey, candidateOwner)
       if (!acquired) {
-        const sharedValue = await this.#waitForInFlightValue<Value>(
-          nodeKey
-        )
+        const sharedValue = await this.#waitForInFlightValue<Value>(nodeKey)
         if (sharedValue !== undefined) {
           return sharedValue
         }
@@ -464,7 +483,7 @@ export class CacheStore {
       return undefined
     }
 
-    if (isPersistedEntryInvalid(nodeKey)) {
+    if (isPersistedEntryInvalid(this.#persistence, nodeKey)) {
       this.#logCacheOperation('clear', nodeKey, {
         source: 'persisted-entry',
         reason: 'in-process-invalid',
@@ -650,7 +669,7 @@ export class CacheStore {
   }
 
   async #savePersistedEntry(nodeKey: string, entry: CacheEntry): Promise<void> {
-    clearPersistedEntryInvalidation(nodeKey)
+    clearPersistedEntryInvalidation(this.#persistence, nodeKey)
     if (!this.#persistence) {
       return
     }
@@ -684,7 +703,7 @@ export class CacheStore {
 
       try {
         await attempt(valueToPersist)
-        clearPersistedEntryInvalidation(nodeKey)
+        clearPersistedEntryInvalidation(this.#persistence, nodeKey)
         return
       } catch (error) {
         if (isUnserializablePersistenceValueError(error)) {
@@ -695,7 +714,7 @@ export class CacheStore {
             try {
               await attempt(serializableValue)
               entry.value = serializableValue
-              clearPersistedEntryInvalidation(nodeKey)
+              clearPersistedEntryInvalidation(this.#persistence, nodeKey)
               return
             } catch (fallbackError) {
               error = fallbackError
@@ -705,14 +724,15 @@ export class CacheStore {
           }
         }
 
-        const cleanupError = error instanceof Error ? error : new Error(String(error))
+        const cleanupError =
+          error instanceof Error ? error : new Error(String(error))
 
-        await this.#cleanupPersistedEntry(
-          nodeKey,
-          { ...entry, value: entry.value }
-        )
+        await this.#cleanupPersistedEntry(nodeKey, {
+          ...entry,
+          value: entry.value,
+        })
         entry.persist = false
-        markPersistedEntryInvalid(nodeKey)
+        markPersistedEntryInvalid(this.#persistence, nodeKey)
         if (
           cleanupError &&
           !isUnserializablePersistenceValueError(cleanupError)
@@ -801,7 +821,9 @@ function toPersistenceSafeValue(
   }
 
   const result: Record<string, unknown> = {}
-  for (const [key, entryValue] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, entryValue] of Object.entries(
+    value as Record<string, unknown>
+  )) {
     const sanitized = toPersistenceSafeValue(entryValue, seen)
     if (sanitized !== undefined) {
       result[key] = sanitized
@@ -818,7 +840,11 @@ function isReactElementLikeObject(value: object): boolean {
     return true
   }
 
-  if (!('key' in candidate) || !('ref' in candidate) || !('props' in candidate)) {
+  if (
+    !('key' in candidate) ||
+    !('ref' in candidate) ||
+    !('props' in candidate)
+  ) {
     return false
   }
 
@@ -829,7 +855,8 @@ function isReactElementLikeObject(value: object): boolean {
 
   if (
     keys.some(
-      (key) => key !== 'key' && key !== 'ref' && key !== 'props' && key !== 'type'
+      (key) =>
+        key !== 'key' && key !== 'ref' && key !== 'props' && key !== 'type'
     )
   ) {
     return false
