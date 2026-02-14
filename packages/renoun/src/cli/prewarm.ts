@@ -13,6 +13,7 @@ import {
 import { getTsMorph } from '../utils/ts-morph.ts'
 import type {
   Expression,
+  CallExpression,
   Project,
   SourceFile,
   Symbol as TsMorphSymbol,
@@ -56,15 +57,26 @@ interface FileRequest {
   extensions?: string[]
 }
 
+type RenounMethodTarget =
+  | {
+      kind: 'directory'
+      path: string
+    }
+  | {
+      kind: 'collection'
+      symbol: TsMorphSymbol
+    }
+
 type WarmFileMethod = 'getExports' | 'getSections' | 'getContent'
+type WarmFileOptionalMethods = {
+  getExports?: () => Promise<unknown>
+  getSections?: () => Promise<unknown>
+  getContent?: () => Promise<unknown>
+}
 
 interface WarmFileTask {
   absolutePath: string
-  file: {
-    getExports?: () => Promise<unknown>
-    getSections?: () => Promise<unknown>
-    getContent?: () => Promise<unknown>
-  }
+  file: File & WarmFileOptionalMethods
   methods: Set<WarmFileMethod>
 }
 
@@ -82,6 +94,7 @@ export function collectRenounPrewarmTargets(
 ): RenounPrewarmTargets {
   const directoryDeclarations = new Map<TsMorphSymbol, RenounDirectoryDeclaration>()
   const collectionRawEntries = new Map<TsMorphSymbol, Expression[]>()
+  const collectionSourceFiles = new Map<TsMorphSymbol, SourceFile>()
   const collectionDeclarations = new Map<TsMorphSymbol, RenounCollectionDeclaration>()
 
   const getEntriesRequests = new Map<string, DirectoryEntriesRequest>()
@@ -116,20 +129,26 @@ export function collectRenounPrewarmTargets(
       aliases,
       projectDirectory,
       directoryDeclarations,
-      collectionRawEntries
+      collectionRawEntries,
+      collectionSourceFiles
     )
   }
 
   for (const [collectionSymbol, rawEntries] of collectionRawEntries.entries()) {
+    const sourceFile = collectionSourceFiles.get(collectionSymbol)
+    const aliases = sourceFile
+      ? getRenounAliases(sourceFile)
+      : EMPTY_RENOUN_ALIASES
+
     const resolvedEntries = rawEntries
       .map((entryExpression) =>
         resolveCollectionEntryReference(
           entryExpression,
           {
             directories: directoryDeclarations,
-            collections: collectionRawEntries,
+            collections: collectionDeclarations,
             projectDirectory,
-            aliases: getRenounAliases(entryExpression.getSourceFile()),
+            aliases,
           }
         )
       )
@@ -149,14 +168,6 @@ export function collectRenounPrewarmTargets(
     }
 
     const aliases = getRenounAliases(sourceFile)
-    if (
-      aliases.directoryConstructors.size === 0 &&
-      aliases.collectionConstructors.size === 0 &&
-      aliases.namespaceImports.size === 0
-    ) {
-      continue
-    }
-
     for (const callExpression of sourceFile.getDescendantsOfKind(
       ts.SyntaxKind.CallExpression
     )) {
@@ -199,7 +210,7 @@ export function collectRenounPrewarmTargets(
         }
 
         collectionGetEntriesCalls.push({
-          collectionSymbol: methodTarget.path,
+          collectionSymbol: methodTarget.symbol,
           options: {
             recursive: options.recursive,
             includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
@@ -212,8 +223,7 @@ export function collectRenounPrewarmTargets(
 
       const fileRequest = resolveGetFileCall(
         callExpression,
-        methodTarget,
-        directoryDeclarations
+        methodTarget
       )
 
       if (fileRequest !== undefined) {
@@ -239,6 +249,12 @@ export function collectRenounPrewarmTargets(
     directoryGetEntries: Array.from(getEntriesRequests.values()),
     fileGetFile: getFileRequests,
   }
+}
+
+const EMPTY_RENOUN_ALIASES: RenounAliases = {
+  directoryConstructors: new Set(),
+  collectionConstructors: new Set(),
+  namespaceImports: new Set(),
 }
 
 function getRenounAliases(sourceFile: SourceFile): RenounAliases {
@@ -286,7 +302,8 @@ function collectRenounDeclarations(
   aliases: RenounAliases,
   projectDirectory: string,
   directoryDeclarations: Map<TsMorphSymbol, RenounDirectoryDeclaration>,
-  collectionRawEntries: Map<TsMorphSymbol, Expression[]>
+  collectionRawEntries: Map<TsMorphSymbol, Expression[]>,
+  collectionSourceFiles: Map<TsMorphSymbol, SourceFile>
 ): void {
   for (const variableDeclaration of sourceFile.getDescendantsOfKind(
     ts.SyntaxKind.VariableDeclaration
@@ -317,24 +334,19 @@ function collectRenounDeclarations(
         }
       }
 
-      if (
-        isCollectionConstructorExpression(referenceExpression.getExpression(), aliases)
-      ) {
+      if (isCollectionConstructorExpression(referenceExpression.getExpression(), aliases)) {
         const entries = resolveCollectionEntriesFromNewExpression(
-          referenceExpression,
-          sourceFile
+          referenceExpression
         )
 
         collectionRawEntries.set(symbol, entries)
+        collectionSourceFiles.set(symbol, sourceFile)
       }
     }
   }
 }
 
-function resolveCollectionEntriesFromNewExpression(
-  newExpression: Expression,
-  sourceFile: SourceFile
-): Expression[] {
+function resolveCollectionEntriesFromNewExpression(newExpression: Expression): Expression[] {
   const expression = resolveReferenceExpression(newExpression)
   if (!Node.isNewExpression(expression)) {
     return []
@@ -381,7 +393,7 @@ function resolveCollectionEntryReference(
   expression: Expression,
   references: {
     directories: Map<TsMorphSymbol, RenounDirectoryDeclaration>
-    collections: Map<TsMorphSymbol, Expression[]>
+    collections: Map<TsMorphSymbol, RenounCollectionDeclaration>
     projectDirectory: string
     aliases: RenounAliases
   }
@@ -389,7 +401,7 @@ function resolveCollectionEntryReference(
   const resolved = resolveReferenceExpression(expression)
 
   if (Node.isIdentifier(resolved)) {
-    const symbol = resolved.getSymbol()
+    const symbol = resolveRenounSymbol(resolved.getSymbol())
     if (!symbol) {
       return undefined
     }
@@ -448,11 +460,11 @@ function resolveRenounMethodTarget(
     collections: Map<TsMorphSymbol, RenounCollectionDeclaration>
     projectDirectory: string
   }
-): { kind: 'directory' | 'collection'; path: string | TsMorphSymbol } | undefined {
+): RenounMethodTarget | undefined {
   const resolved = resolveReferenceExpression(expression)
 
   if (Node.isIdentifier(resolved)) {
-    const symbol = resolved.getSymbol()
+    const symbol = resolveRenounSymbol(resolved.getSymbol())
     if (!symbol) {
       return undefined
     }
@@ -468,7 +480,7 @@ function resolveRenounMethodTarget(
     if (references.collections.has(symbol)) {
       return {
         kind: 'collection',
-        path: symbol,
+        symbol,
       }
     }
 
@@ -495,31 +507,58 @@ function resolveRenounMethodTarget(
   return undefined
 }
 
+function resolveRenounSymbol(
+  symbol?: TsMorphSymbol
+): TsMorphSymbol | undefined {
+  if (!symbol) {
+    return undefined
+  }
+
+  const visited = new Set<TsMorphSymbol>()
+  let current = symbol
+
+  while (current.isAlias()) {
+    const aliasedSymbol = current.getAliasedSymbol()
+
+    if (!aliasedSymbol || visited.has(aliasedSymbol)) {
+      return current
+    }
+
+    visited.add(current)
+    current = aliasedSymbol
+  }
+
+  return current
+}
+
 function resolveGetFileCall(
-  callExpression: ReturnType<typeof ts.factory.createCallExpression>,
-  methodTarget: { kind: 'directory' | 'collection'; path: string | TsMorphSymbol },
-  directoryDeclarations: Map<TsMorphSymbol, RenounDirectoryDeclaration>
+  callExpression: CallExpression,
+  methodTarget: RenounMethodTarget
 ): FileRequest | undefined {
   if (methodTarget.kind !== 'directory') {
     return undefined
   }
 
   const args = callExpression.getArguments()
-  if (args.length === 0) {
+  const pathArgument = args[0]
+
+  if (!pathArgument || !Node.isExpression(pathArgument)) {
     return undefined
   }
 
-  const pathArg = resolveLiteralExpression(args[0])
+  const pathArg = resolveLiteralExpression(pathArgument)
   if (typeof pathArg !== 'string') {
     return undefined
   }
 
   const extensionArgument = args[1]
-  const extensions = resolveFileExtensionArgument(extensionArgument)
-  const directoryPath =
-    typeof methodTarget.path === 'string'
-      ? methodTarget.path
-      : directoryDeclarations.get(methodTarget.path)?.path
+  const extensionExpression = extensionArgument
+    ? Node.isExpression(extensionArgument)
+      ? extensionArgument
+      : undefined
+    : undefined
+  const extensions = resolveFileExtensionArgument(extensionExpression)
+  const directoryPath = methodTarget.path
 
   if (!directoryPath) {
     return undefined
@@ -555,17 +594,21 @@ function resolveFileExtensionArgument(
   return undefined
 }
 
-function resolveDirectoryGetEntriesOptions(callExpression: {
-  getArguments(): import('../utils/ts-morph.ts').Expression[]
-}): {
+function resolveDirectoryGetEntriesOptions(
+  callExpression: CallExpression
+): {
   recursive: boolean
   includeDirectoryNamedFiles: boolean
   includeIndexAndReadmeFiles: boolean
   filterExtensions: Set<string> | null
 } {
   const firstArgument = callExpression.getArguments()[0]
+  const optionsArgument =
+    firstArgument && Node.isExpression(firstArgument)
+      ? firstArgument
+      : undefined
 
-  if (!firstArgument) {
+  if (!optionsArgument) {
     return {
       recursive: false,
       includeDirectoryNamedFiles: true,
@@ -574,7 +617,7 @@ function resolveDirectoryGetEntriesOptions(callExpression: {
     }
   }
 
-  const value = resolveLiteralExpression(firstArgument) as
+  const value = resolveLiteralExpression(optionsArgument) as
     | LiteralExpressionValue
     | Record<string, unknown>
 
@@ -743,41 +786,38 @@ function resolveDirectoryPathFromNewExpression(
   }
 
   const firstArgument = expression.getArguments()[0]
-  if (!firstArgument) {
-    return toAbsoluteDirectoryPath('.', projectDirectory)
+  if (!firstArgument || !Node.isExpression(firstArgument)) {
+    return undefined
   }
 
   return resolveDirectoryPathFromLiteral(
     firstArgument,
-    aliases,
-    projectDirectory,
-    '.'
+    projectDirectory
   )
 }
 
 function resolveDirectoryPathFromLiteral(
   expression: Expression,
-  aliases: RenounAliases,
-  projectDirectory: string,
-  defaultPath?: string
+  projectDirectory: string
 ): string | undefined {
   const value = resolveLiteralExpression(expression)
 
   if (
     value &&
     typeof value === 'object' &&
+    value !== null &&
     !Array.isArray(value) &&
-    typeof value['path'] === 'string'
+    'path' in value &&
+    typeof (value as Record<string, unknown>)['path'] === 'string'
   ) {
-    return toAbsoluteDirectoryPath(value['path'], projectDirectory)
+    return toAbsoluteDirectoryPath(
+      (value as Record<string, unknown>)['path'] as string,
+      projectDirectory
+    )
   }
 
   if (typeof value === 'string') {
     return toAbsoluteDirectoryPath(value, projectDirectory)
-  }
-
-  if (defaultPath) {
-    return toAbsoluteDirectoryPath(defaultPath, projectDirectory)
   }
 
   return undefined
