@@ -2530,6 +2530,94 @@ export type Metadata = Value`,
     }
   })
 
+  test('canonicalizes alias project roots for direct cache db resolution', () => {
+    const tmpDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-direct-alias-'
+    )
+    const realRoot = join(tmpDirectory, 'real')
+    const aliasRoot = join(tmpDirectory, 'alias')
+    mkdirSync(realRoot, { recursive: true })
+    symlinkSync(realRoot, aliasRoot, 'dir')
+
+    try {
+      const directPath = getDefaultCacheDatabasePath(realRoot)
+      const aliasedPath = getDefaultCacheDatabasePath(aliasRoot)
+
+      expect(directPath).toBe(aliasedPath)
+
+      const realPersistence = getCacheStorePersistence({ projectRoot: realRoot })
+      const aliasPersistence = getCacheStorePersistence({ projectRoot: aliasRoot })
+
+      expect(aliasPersistence).toBe(realPersistence)
+    } finally {
+      disposeCacheStorePersistence({ projectRoot: realRoot })
+      disposeCacheStorePersistence({ projectRoot: aliasRoot })
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('cleans stale compute slots during sqlite read', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-inflight-cleanup-read-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const nodeKey = 'test:sqlite-read-stale-inflight'
+
+    try {
+      await persistence.save(nodeKey, {
+        value: 'initialized',
+        deps: [],
+        fingerprint: createFingerprint([]),
+        persist: false,
+        updatedAt: Date.now(),
+      })
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const staleAt = Date.now() - 1_000
+      const sqliteDb = new DatabaseSync(dbPath)
+      sqliteDb
+        .prepare(
+          `
+            INSERT INTO cache_inflight (node_key, owner, started_at, expires_at)
+            VALUES (?, ?, ?, ?)
+          `
+        )
+        .run(nodeKey, 'stale-reader', staleAt - 1_000, staleAt)
+
+      const rowsBefore = sqliteDb
+        .prepare(
+          `SELECT node_key FROM cache_inflight WHERE node_key = ?`
+        )
+        .all(nodeKey) as Array<{ node_key?: string }>
+      sqliteDb.close()
+
+      expect(rowsBefore.length).toBe(1)
+
+      await persistence.load(nodeKey)
+
+      const verifiedDb = new DatabaseSync(dbPath)
+      const rowsAfter = verifiedDb
+        .prepare(
+          `SELECT node_key FROM cache_inflight WHERE node_key = ?`
+        )
+        .all(nodeKey) as Array<{ node_key?: string }>
+      verifiedDb.close()
+
+      expect(rowsAfter.length).toBe(0)
+    } finally {
+      disposeCacheStorePersistence({ dbPath })
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('continues persisting other cache entries after skipping an unserializable value', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-unserializable-')

@@ -1,4 +1,5 @@
 import { mkdir } from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { deserialize, serialize } from 'node:v8'
@@ -20,6 +21,7 @@ const SQLITE_PRUNE_WRITE_INTERVAL = 32
 const SQLITE_PRUNE_MAX_INTERVAL_MS = 1000 * 60 * 5
 const SQLITE_DELETE_BATCH_SIZE = 500
 const SQLITE_INFLIGHT_TTL_MS = 20_000
+const SQLITE_INFLIGHT_CLEANUP_INTERVAL_MS = 10_000
 
 let warnedAboutSqliteFallback = false
 const persistenceByDbPath = new Map<string, SqliteCacheStorePersistence>()
@@ -55,7 +57,11 @@ function resolveDbPath(options: { dbPath?: string; projectRoot?: string }): stri
     // eslint-disable-next-line no-console
     console.log('[renoun-debug] resolveDbPath', { projectRoot: options.projectRoot })
   }
-  return getDefaultCacheDatabasePath(options.projectRoot)
+  return getDefaultCacheDatabasePath(
+    options.projectRoot
+      ? resolveCanonicalProjectRootPath(options.projectRoot)
+      : undefined
+  )
 }
 
 export function getDefaultCacheDatabasePath(projectRoot?: string): string {
@@ -64,7 +70,9 @@ export function getDefaultCacheDatabasePath(projectRoot?: string): string {
     return resolve(overridePath)
   }
 
-  let root = projectRoot ? resolve(projectRoot) : resolve(getRootDirectory())
+  let root = projectRoot
+    ? resolveCanonicalProjectRootPath(projectRoot)
+    : resolve(getRootDirectory())
   if (root === resolve('/')) {
     root = tmpdir()
   }
@@ -78,6 +86,14 @@ export function getDefaultCacheDatabasePath(projectRoot?: string): string {
     })
   }
   return path
+}
+
+function resolveCanonicalProjectRootPath(pathToResolve: string): string {
+  try {
+    return realpathSync(pathToResolve)
+  } catch {
+    return resolve(pathToResolve)
+  }
 }
 
 export function getCacheStorePersistence(options: CacheStoreSqliteOptions = {}) {
@@ -150,6 +166,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   readonly #readyPromise: Promise<void>
   #writesSincePrune = 0
   #lastPrunedAt = 0
+  #lastInflightCleanupAt = 0
   #pruneInFlight?: Promise<void>
   #db: any
 
@@ -183,9 +200,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const expiresAt = now + ttlMs
 
     return this.#runWithBusyRetries(() => {
-      this.#db
-        .prepare(`DELETE FROM cache_inflight WHERE expires_at <= ?`)
-        .run(now)
+      this.#cleanupExpiredComputeSlots(now)
 
       const result = this.#db
         .prepare(
@@ -259,9 +274,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const maybeOwner = this.#runWithBusyRetries(() => {
       const now = Date.now()
 
-      this.#db
-        .prepare(`DELETE FROM cache_inflight WHERE expires_at <= ?`)
-        .run(now)
+      this.#cleanupExpiredComputeSlots(now)
 
       const row = this.#db
         .prepare(
@@ -302,6 +315,15 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
     const shouldDebug = shouldDebugCachePersistenceLoadFailure(nodeKey)
     const skipFingerprintCheck = options.skipFingerprintCheck ?? false
+    const now = Date.now()
+    try {
+      await this.#runWithBusyRetries(() => {
+        this.#cleanupExpiredComputeSlots(now)
+      })
+    } catch {
+      // Ignore stale slot cleanup errors during reads.
+      // Cache reads should still work if cleanup temporarily fails.
+    }
 
     const rows = (await this.#runWithBusyRetries(() =>
       this.#db
@@ -849,6 +871,27 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     throw new Error('[renoun] Exhausted SQLite busy retries.')
+  }
+
+  #cleanupExpiredComputeSlots(
+    now: number,
+    options: { force?: boolean } = {}
+  ): void {
+    if (!this.#db) {
+      return
+    }
+
+    if (
+      !options.force &&
+      now - this.#lastInflightCleanupAt < SQLITE_INFLIGHT_CLEANUP_INTERVAL_MS
+    ) {
+      return
+    }
+
+    this.#db
+      .prepare(`DELETE FROM cache_inflight WHERE expires_at <= ?`)
+      .run(now)
+    this.#lastInflightCleanupAt = now
   }
 
   async #pruneStaleEntries() {
