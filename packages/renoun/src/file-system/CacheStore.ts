@@ -18,7 +18,12 @@ export interface CacheEntry<Value = unknown> {
 }
 
 export interface CacheStorePersistence {
-  load(nodeKey: string): Promise<CacheEntry | undefined>
+  load(
+    nodeKey: string,
+    options?: {
+      skipFingerprintCheck?: boolean
+    }
+  ): Promise<CacheEntry | undefined>
   save(nodeKey: string, entry: CacheEntry): Promise<void>
   delete(nodeKey: string): Promise<void>
 }
@@ -55,10 +60,6 @@ const COMPUTE_SLOT_TTL_MS = getEnvInt(
   'RENOUN_FS_CACHE_COMPUTE_SLOT_TTL_MS',
   20_000
 )
-const COMPUTE_SLOT_WAIT_MS = Math.max(
-  getEnvInt('RENOUN_FS_CACHE_COMPUTE_SLOT_WAIT_MS', COMPUTE_SLOT_TTL_MS),
-  COMPUTE_SLOT_TTL_MS
-)
 const COMPUTE_SLOT_POLL_MS = getEnvInt(
   'RENOUN_FS_CACHE_COMPUTE_SLOT_POLL_MS',
   25
@@ -70,8 +71,30 @@ interface CacheStorePersistenceComputeSlot {
     owner: string,
     ttlMs: number
   ): Promise<boolean>
+  refreshComputeSlot?(nodeKey: string, owner: string, ttlMs: number): Promise<void>
   releaseComputeSlot(nodeKey: string, owner: string): Promise<void>
   getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
+  /**
+   * Optional per-instance compute-slot lease duration override used by custom
+   * persistence implementations.
+   */
+  computeSlotTtlMs?: number
+}
+
+function getComputeSlotTtlMs(
+  persistence: CacheStorePersistenceComputeSlot | undefined,
+  fallbackMs: number
+): number {
+  const configured = persistence?.computeSlotTtlMs
+  if (typeof configured !== 'number' || !Number.isFinite(configured)) {
+    return fallbackMs
+  }
+
+  return Math.max(1, Math.floor(configured))
+}
+
+function getComputeSlotHeartbeatMs(slotTtlMs: number): number {
+  return Math.min(1000, Math.max(1, Math.floor(slotTtlMs / 2)))
 }
 
 function isCacheStorePersistenceComputeSlot(
@@ -302,20 +325,62 @@ export class CacheStore {
     return persistence
   }
 
-  async #acquireComputeSlot(nodeKey: string, owner: string): Promise<boolean> {
+  async #acquireComputeSlot(
+    nodeKey: string,
+    owner: string,
+    slotTtlMs: number
+  ): Promise<boolean> {
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence) {
       return true
     }
 
     try {
-      return await persistence.acquireComputeSlot(
-        nodeKey,
-        owner,
-        COMPUTE_SLOT_TTL_MS
-      )
+      return await persistence.acquireComputeSlot(nodeKey, owner, slotTtlMs)
+    } catch (error) {
+      if (isComputeSlotTransientError(error)) {
+        return false
+      }
+
+      throw error
+    }
+  }
+
+  #startComputeSlotHeartbeat(
+    nodeKey: string,
+    owner: string,
+    slotTtlMs: number
+  ): () => void {
+    const persistence = this.#getComputeSlotPersistence()
+    const heartbeatMs = getComputeSlotHeartbeatMs(slotTtlMs)
+    if (!persistence?.refreshComputeSlot || heartbeatMs <= 0) {
+      return () => {}
+    }
+
+    const heartbeat = setInterval(() => {
+      void this.#refreshComputeSlot(nodeKey, owner, slotTtlMs)
+    }, heartbeatMs)
+
+    return () => {
+      clearInterval(heartbeat)
+    }
+  }
+
+  async #refreshComputeSlot(
+    nodeKey: string,
+    owner: string,
+    slotTtlMs: number
+  ): Promise<void> {
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence?.refreshComputeSlot) {
+      return
+    }
+
+    try {
+      await persistence.refreshComputeSlot(nodeKey, owner, slotTtlMs)
     } catch {
-      return true
+      // Ignore heartbeat refresh failures.
+      // The slot may expire naturally and should be discovered by waiters.
     }
   }
 
@@ -335,13 +400,12 @@ export class CacheStore {
   async #waitForInFlightValue<Value>(
     nodeKey: string
   ): Promise<Value | undefined> {
-    const stopAt = Date.now() + COMPUTE_SLOT_WAIT_MS
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence) {
       return undefined
     }
 
-    while (Date.now() < stopAt) {
+    while (true) {
       const freshEntry = await this.#getFreshEntry(nodeKey)
       if (freshEntry) {
         return freshEntry.value as Value
@@ -358,8 +422,7 @@ export class CacheStore {
         return undefined
       }
 
-      const sleep =
-        Math.max(0, Math.min(COMPUTE_SLOT_POLL_MS, stopAt - Date.now())) || 0
+      const sleep = Math.max(0, COMPUTE_SLOT_POLL_MS) || 0
       if (sleep > 0) {
         await delay(sleep)
       }
@@ -423,12 +486,24 @@ export class CacheStore {
       },
     }
 
-    const shouldCoordinate = options.persist === true && !!this.#persistence
+    const shouldCoordinate =
+      options.persist === true &&
+      !!this.#persistence &&
+      !isPersistedEntryInvalid(this.#persistence, nodeKey)
+    const computeSlotTtlMs = getComputeSlotTtlMs(
+      this.#getComputeSlotPersistence(),
+      COMPUTE_SLOT_TTL_MS
+    )
     let computeSlotOwner: string | undefined
+    let stopComputeSlotHeartbeat: (() => void) | undefined
     if (shouldCoordinate) {
       const candidateOwner = this.#createComputeSlotOwner()
 
-      const acquired = await this.#acquireComputeSlot(nodeKey, candidateOwner)
+      const acquired = await this.#acquireComputeSlot(
+        nodeKey,
+        candidateOwner,
+        computeSlotTtlMs
+      )
       if (!acquired) {
         const sharedValue = await this.#waitForInFlightValue<Value>(nodeKey)
         if (sharedValue !== undefined) {
@@ -436,6 +511,11 @@ export class CacheStore {
         }
       } else {
         computeSlotOwner = candidateOwner
+        stopComputeSlotHeartbeat = this.#startComputeSlotHeartbeat(
+          nodeKey,
+          computeSlotOwner,
+          computeSlotTtlMs
+        )
       }
     }
 
@@ -467,6 +547,7 @@ export class CacheStore {
       return value
     } finally {
       if (computeSlotOwner) {
+        stopComputeSlotHeartbeat?.()
         await this.#releaseComputeSlot(nodeKey, computeSlotOwner)
       }
     }
@@ -689,33 +770,124 @@ export class CacheStore {
     }
 
     await this.#withPersistenceIntent(nodeKey, async () => {
-      const attempt = async (value: unknown): Promise<void> => {
+      const shouldDebugPersistenceFailure =
+        this.#shouldDebugCachePersistenceFailure(nodeKey)
+      const maxVerificationAttempts = 3
+
+      const attempt = async (
+        value: unknown
+      ): Promise<'verified' | 'superseded'> => {
         const persisted = {
           ...entry,
           value,
           persist: true,
         }
         await this.#persistence!.save(nodeKey, persisted)
-        const verified = await this.#persistence!.load(nodeKey)
 
-        if (!verified || !verified.persist) {
-          throw new Error('cache persistence verification failed')
+        for (
+          let verifyAttempt = 0;
+          verifyAttempt < maxVerificationAttempts;
+          verifyAttempt += 1
+        ) {
+          const verified = await this.#persistence!.load(nodeKey, {
+            skipFingerprintCheck: true,
+          })
+
+          if (!verified) {
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: `verification-load-miss attempt=${verifyAttempt + 1} of ${maxVerificationAttempts} expectedFingerprint=${entry.fingerprint}`,
+                entry,
+              })
+            }
+
+            if (verifyAttempt + 1 < maxVerificationAttempts) {
+              await delay(Math.pow(2, verifyAttempt) * 25)
+              continue
+            }
+
+            throw new Error('cache persistence verification failed: load returned no entry')
+          }
+
+          if (!verified.persist) {
+            throw new Error(
+              'cache persistence verification failed: load returned non-persistent entry'
+            )
+          }
+
+          if (verified.fingerprint === entry.fingerprint) {
+            return 'verified'
+          }
+
+          if (shouldDebugPersistenceFailure) {
+            this.#logPersistenceDebug(nodeKey, {
+              phase: 'save-verify',
+              entry,
+              verified,
+              details: `fingerprint-drift expected=${entry.fingerprint} actual=${verified.fingerprint} expectedUpdatedAt=${entry.updatedAt} actualUpdatedAt=${verified.updatedAt}`,
+            })
+          }
+
+          if (verified.updatedAt >= entry.updatedAt) {
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: `superseded-by-persisted-entry updatedAt=${verified.updatedAt} expected=${entry.updatedAt}`,
+                entry,
+                verified,
+              })
+            }
+
+            return 'superseded'
+          }
+
+          throw new Error(
+            `cache persistence fingerprint drift: expected=${
+              entry.fingerprint
+            } actual=${verified.fingerprint}`
+          )
         }
-        if (verified.fingerprint !== entry.fingerprint) {
-          throw new Error('cache persistence fingerprint drift')
-        }
+
+        throw new Error('cache persistence verification failed: max retries exceeded')
       }
 
       try {
-        await attempt(entry.value)
+        const result = await attempt(entry.value)
+
+        if (result === 'verified') {
+          clearPersistedEntryInvalidation(this.#persistence, nodeKey)
+          return
+        }
+
+        entry.persist = false
         clearPersistedEntryInvalidation(this.#persistence, nodeKey)
         return
       } catch (error) {
+        if (shouldDebugPersistenceFailure) {
+          this.#logPersistenceDebug(nodeKey, {
+            phase: 'save-verify',
+            error,
+            entry,
+          })
+        }
+
         if (isUnserializablePersistenceValueError(error)) {
           this.#warnUnserializableValue(nodeKey, error)
           await this.#clearPersistedCacheEntry(nodeKey)
           entry.persist = false
           markPersistedEntryInvalid(this.#persistence, nodeKey)
+          return
+        }
+
+        if (
+          error instanceof Error &&
+          error.message.startsWith(
+            'cache persistence verification failed: load returned no entry'
+          )
+        ) {
+          clearPersistedEntryInvalidation(this.#persistence, nodeKey)
+          entry.persist = false
           return
         }
 
@@ -736,6 +908,64 @@ export class CacheStore {
         }
       }
     })
+  }
+
+  #logPersistenceDebug(
+    nodeKey: string,
+    payload: {
+      phase: 'save-verify' | 'load'
+      error?: unknown
+      entry?: CacheEntry
+      verified?: CacheEntry
+      details?: string
+    }
+  ) {
+    const debugEnvValue = process.env['RENOUN_DEBUG_CACHE_PERSISTENCE']
+    if (debugEnvValue !== '1' && debugEnvValue !== 'true') {
+      return
+    }
+
+    const lines: string[] = []
+    lines.push(`phase=${payload.phase}`)
+
+    if (payload.error instanceof Error) {
+      lines.push(`error=${payload.error.message}`)
+    } else if (payload.error !== undefined) {
+      lines.push(`error=${String(payload.error)}`)
+    }
+
+    if (payload.details) {
+      lines.push(`details=${payload.details}`)
+    }
+
+    if (payload.entry) {
+      lines.push(
+        `deps=${payload.entry.deps.length} fingerprint=${payload.entry.fingerprint}`
+      )
+      lines.push(`value=${summarizePersistedValue(payload.entry.value)}`)
+    }
+
+    if (payload.verified) {
+      lines.push(
+        `verifiedDeps=${payload.verified.deps.length} verifiedFingerprint=${payload.verified.fingerprint} verifiedUpdatedAt=${payload.verified.updatedAt}`
+      )
+    }
+
+    console.warn(
+      `[renoun-debug] cache persistence failure for ${nodeKey} ${lines.join(' ')}`
+    )
+  }
+
+  #shouldDebugCachePersistenceFailure(nodeKey: string): boolean {
+    const debugEnvValue = process.env['RENOUN_DEBUG_CACHE_PERSISTENCE']
+    if (debugEnvValue !== '1' && debugEnvValue !== 'true') {
+      return false
+    }
+
+    return (
+      nodeKey.startsWith('js.exports:') ||
+      nodeKey.startsWith('mdx.sections:')
+    )
   }
 
   #warnPersistenceFailure(operation: string, error: unknown) {
@@ -816,6 +1046,58 @@ function isUnserializablePersistenceValueError(error: unknown): boolean {
   )
 }
 
+function isComputeSlotTransientError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const candidateError = error as {
+    code?: number | string
+    errno?: number | string
+    resultCode?: number | string
+    extendedResultCode?: number | string
+  }
+
+  const isCodeMatched = (code: unknown): boolean => {
+    if (typeof code === 'number') {
+      return code === 5 || code === 6
+    }
+
+    if (typeof code === 'string') {
+      const normalizedCode = code.toUpperCase()
+      if (
+        normalizedCode.includes('SQLITE_BUSY') ||
+        normalizedCode.includes('SQLITE_LOCKED')
+      ) {
+        return true
+      }
+
+      const codeNumber = Number.parseInt(code, 10)
+      if (codeNumber === 5 || codeNumber === 6) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  if (
+    isCodeMatched(candidateError.code) ||
+    isCodeMatched(candidateError.errno) ||
+    isCodeMatched(candidateError.resultCode) ||
+    isCodeMatched(candidateError.extendedResultCode)
+  ) {
+    return true
+  }
+
+  const normalizedMessage = error.message.toLowerCase()
+  return (
+    normalizedMessage.includes('database is locked') ||
+    normalizedMessage.includes('database table is locked') ||
+    normalizedMessage.includes('database is busy')
+  )
+}
+
 function getEnvInt(envVarName: string, fallback: number): number {
   const value = process.env[envVarName]
   if (!value) {
@@ -828,6 +1110,52 @@ function getEnvInt(envVarName: string, fallback: number): number {
   }
 
   return parsed
+}
+
+function summarizePersistedValue(value: unknown): string {
+  if (value === null) {
+    return 'null'
+  }
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return `${typeof value}:${value}`
+  }
+
+  if (typeof value === 'undefined') {
+    return 'undefined'
+  }
+
+  if (typeof value === 'symbol') {
+    return `symbol:${value.description ?? value.toString()}`
+  }
+
+  if (value instanceof RegExp) {
+    return `regexp:${value.toString()}`
+  }
+
+  if (Array.isArray(value)) {
+    const length = value.length
+    const first = summarizePersistedValue(value[0])
+    return `array(length=${length}, first=${first})`
+  }
+
+  if (typeof value === 'function') {
+    return `function:${value.name || 'anonymous'}`
+  }
+
+  if (typeof value === 'bigint') {
+    return `bigint:${value.toString()}`
+  }
+
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>)
+    const previewKeys = keys.slice(0, 10).join(',')
+    const hasSymbols = Object.getOwnPropertySymbols(value as object).length > 0
+    const symbolsPart = hasSymbols ? ' symbols=true' : ''
+    return `object(keys=[${previewKeys}]${symbolsPart})`
+  }
+
+  return `unsupported:${typeof value}`
 }
 
 function delay(ms: number): Promise<void> {

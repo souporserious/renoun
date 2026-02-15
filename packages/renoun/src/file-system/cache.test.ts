@@ -3,8 +3,10 @@ import {
   mkdtempSync,
   renameSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
+import { createElement, Fragment, isValidElement } from 'react'
 import { tmpdir } from 'node:os'
 import {
   dirname,
@@ -14,12 +16,18 @@ import {
 } from 'node:path'
 import { describe, expect, test, vi } from 'vitest'
 
-import { CacheStore, type CacheEntry } from './CacheStore.ts'
+import {
+  CacheStore,
+  type CacheEntry,
+  type CacheStorePersistence,
+  createFingerprint,
+} from './CacheStore.ts'
 import {
   SqliteCacheStorePersistence,
   disposeCacheStorePersistence,
   disposeDefaultCacheStorePersistence,
   getCacheStorePersistence,
+  getDefaultCacheDatabasePath,
 } from './CacheStoreSqlite.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
@@ -29,6 +37,21 @@ import { FileSystemSnapshot } from './Snapshot.ts'
 import { Directory, File, Package, Workspace } from './index.tsx'
 import type { FileStructure, GitExportMetadata, GitMetadata } from './types.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
+
+type SqliteComputeSlotPersistence = CacheStorePersistence & {
+  acquireComputeSlot(
+    nodeKey: string,
+    owner: string,
+    ttlMs?: number
+  ): Promise<boolean>
+  refreshComputeSlot?(
+    nodeKey: string,
+    owner: string,
+    ttlMs: number
+  ): Promise<void>
+  releaseComputeSlot(nodeKey: string, owner: string): Promise<void>
+  getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
+}
 
 class SyntheticContentIdFileSystem extends InMemoryFileSystem {
   readonly #contentIds = new Map<string, string>()
@@ -121,6 +144,39 @@ function createDeferredPromise() {
     promise,
     resolve,
   }
+}
+
+function createShortTtlComputeSlotPersistence(
+  dbPath: string,
+  options: {
+    slotTtlMs: number
+    withHeartbeat: boolean
+  }
+): SqliteComputeSlotPersistence {
+  const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+  const slotTtlMs = Math.max(1, Math.floor(options.slotTtlMs))
+
+  const persistence: SqliteComputeSlotPersistence = {
+    load: sqlitePersistence.load.bind(sqlitePersistence),
+    save: sqlitePersistence.save.bind(sqlitePersistence),
+    delete: sqlitePersistence.delete.bind(sqlitePersistence),
+    computeSlotTtlMs: slotTtlMs,
+    acquireComputeSlot: (nodeKey, owner) =>
+      sqlitePersistence.acquireComputeSlot(nodeKey, owner, slotTtlMs),
+    getComputeSlotOwner: sqlitePersistence.getComputeSlotOwner.bind(
+      sqlitePersistence
+    ),
+    releaseComputeSlot: sqlitePersistence.releaseComputeSlot.bind(
+      sqlitePersistence
+    ),
+  }
+
+  if (options.withHeartbeat) {
+    persistence.refreshComputeSlot = (nodeKey, owner) =>
+      sqlitePersistence.refreshComputeSlot(nodeKey, owner, slotTtlMs)
+  }
+
+  return persistence
 }
 
 function createTempNodeFileSystem(tmpDirectory: string) {
@@ -541,18 +597,32 @@ describe('file-system cache integration', () => {
 const a = 1
 //#endregion`,
     })
+
+    const previousFsCache = process.env['RENOUN_FS_CACHE']
+    process.env['RENOUN_FS_CACHE'] = '0'
+    disposeDefaultCacheStorePersistence()
+
     const outlineSpy = vi.spyOn(fileSystem, 'getOutlineRanges')
     const first = new Directory({ fileSystem })
     const second = new Directory({ fileSystem })
     const firstFile = await first.getFile('file', 'ts')
     const secondFile = await second.getFile('file', 'ts')
 
-    await Promise.all([
-      firstFile.getOutlineRanges(),
-      secondFile.getOutlineRanges(),
-    ])
+    try {
+      await Promise.all([
+        firstFile.getOutlineRanges(),
+        secondFile.getOutlineRanges(),
+      ])
 
-    expect(outlineSpy).toHaveBeenCalledTimes(1)
+      expect(outlineSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      if (previousFsCache === undefined) {
+        delete process.env['RENOUN_FS_CACHE']
+      } else {
+        process.env['RENOUN_FS_CACHE'] = previousFsCache
+      }
+      disposeDefaultCacheStorePersistence()
+    }
   })
 
   test('invalidates cached getType results when dependency files change', async () => {
@@ -1391,6 +1461,59 @@ describe('cache replacement semantics', () => {
 })
 
 describe('sqlite cache persistence', () => {
+  test('reuses persisted mdx section jsx across worker sessions', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const pagePath = join(docsDirectory, 'page.mdx')
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(pagePath, '# Intro', 'utf8')
+
+      const loadSections = vi.fn(async () => ({
+        default: () => null,
+        sections: [
+          {
+            id: 'intro',
+            title: 'Intro',
+            depth: 1,
+            jsx: createElement(
+              Fragment,
+              null,
+              'Intro ',
+              createElement('strong', null, 'text')
+            ),
+          },
+        ],
+      }))
+
+      const createWorkerDirectory = () =>
+        new Directory({
+          fileSystem: createTempNodeFileSystem(tmpDirectory),
+          path: docsDirectory,
+          loader: {
+            mdx: loadSections,
+          },
+        })
+
+      const firstWorkerDirectory = createWorkerDirectory()
+      const firstWorkerFile = await firstWorkerDirectory.getFile('page', 'mdx')
+      const firstSections = await firstWorkerFile.getSections()
+
+      expect(firstSections).toHaveLength(1)
+      expect(firstSections[0]!.title).toBe('Intro')
+      expect(isValidElement(firstSections[0]!.jsx as any)).toBe(true)
+
+      const secondWorkerDirectory = createWorkerDirectory()
+      const secondWorkerFile = await secondWorkerDirectory.getFile('page', 'mdx')
+      const secondSections = await secondWorkerFile.getSections()
+
+      expect(secondSections).toHaveLength(1)
+      expect(secondSections[0]!.title).toBe('Intro')
+      expect(isValidElement(secondSections[0]!.jsx as any)).toBe(true)
+      expect(loadSections).toHaveBeenCalledTimes(1)
+    })
+  })
+
   test('revalidates persisted sibling navigation across worker sessions after file additions', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
@@ -2343,6 +2466,70 @@ export type Metadata = Value`,
     expect(computeCount).toBe(2)
   })
 
+  test('uses tmpdir as cache root when project root is filesystem root', () => {
+    expect(getDefaultCacheDatabasePath('/')).toBe(
+      resolvePath(tmpdir(), '.cache', 'renoun', 'fs-cache.sqlite')
+    )
+  })
+
+  test('canonicalizes alias session roots so symlinked paths share one sqlite namespace', async () => {
+    const tmpDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-session-root-alias-'
+    )
+    const realRoot = join(tmpDirectory, 'real')
+    const aliasRoot = join(tmpDirectory, 'alias')
+
+    mkdirSync(realRoot, { recursive: true })
+    symlinkSync(realRoot, aliasRoot, 'dir')
+    writeFileSync(join(realRoot, 'index.ts'), 'export const value = 1', 'utf8')
+
+    const previousNodeEnv = process.env.NODE_ENV
+    const previousCachePath = process.env.RENOUN_FS_CACHE_DB_PATH
+    const realFileSystem = new NodeFileSystem()
+    const aliasFileSystem = new NodeFileSystem()
+    ;(realFileSystem as { repoRoot: string }).repoRoot = realRoot
+    ;(aliasFileSystem as { repoRoot: string }).repoRoot = aliasRoot
+    process.env.NODE_ENV = 'production'
+
+    try {
+      const realSession = Session.for(realFileSystem)
+      const aliasSession = Session.for(aliasFileSystem)
+      let computeCount = 0
+
+      const realResult = await realSession.cache.getOrCompute(
+        'test:session-root-alias',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'real'
+        }
+      )
+      const aliasResult = await aliasSession.cache.getOrCompute(
+        'test:session-root-alias',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'alias'
+        }
+      )
+
+      expect(realResult).toBe('real')
+      expect(aliasResult).toBe('real')
+      expect(computeCount).toBe(1)
+    } finally {
+      Session.reset(realFileSystem)
+      Session.reset(aliasFileSystem)
+      disposeDefaultCacheStorePersistence()
+      process.env.NODE_ENV = previousNodeEnv
+      if (previousCachePath === undefined) {
+        delete process.env.RENOUN_FS_CACHE_DB_PATH
+      } else {
+        process.env.RENOUN_FS_CACHE_DB_PATH = previousCachePath
+      }
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('continues persisting other cache entries after skipping an unserializable value', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-unserializable-')
@@ -2415,6 +2602,18 @@ export type Metadata = Value`,
         { persist: true }
       )
       await writerStore.put(
+        'test:stripped-react-symbolic',
+        {
+          title: {
+            $$typeof: Symbol.for('react.transitional.element'),
+            key: null,
+            ref: null,
+            props: { children: 'section heading' },
+          },
+        },
+        { persist: true }
+      )
+      await writerStore.put(
         'test:still-serializable',
         { value: 1 },
         { persist: true }
@@ -2422,13 +2621,18 @@ export type Metadata = Value`,
 
       const readerStore = new CacheStore({ snapshot, persistence })
       const strippedValue = await readerStore.get('test:stripped-react')
+      const strippedSymbolicValue = await readerStore.get(
+        'test:stripped-react-symbolic'
+      )
       const serializableValue = await readerStore.get<{ value: number }>(
         'test:still-serializable'
       )
 
       expect(strippedValue).toBeUndefined()
+      expect(strippedSymbolicValue).toBeUndefined()
       expect(serializableValue).toEqual({ value: 1 })
       expect(await persistence.load('test:stripped-react')).toBeUndefined()
+      expect(await persistence.load('test:stripped-react-symbolic')).toBeUndefined()
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
@@ -3254,6 +3458,476 @@ export type Metadata = Value`,
     }
   }, 12000)
 
+  test('deduplicates concurrent sqlite-backed compute work under sqlite lock contention', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-lock-slot-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-compute-slot-lock'
+      )
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const firstStore = new CacheStore({ snapshot, persistence })
+      const secondStore = new CacheStore({ snapshot, persistence })
+
+      let computeCount = 0
+      const lockDb = new DatabaseSync(dbPath)
+      lockDb.exec('BEGIN IMMEDIATE')
+
+      try {
+        const startedAt = Date.now()
+        const first = firstStore.getOrCompute(
+          'test:sqlite-compute-slot-lock',
+          { persist: true },
+          async () => {
+            computeCount += 1
+            await new Promise((resolve) => setTimeout(resolve, 40))
+            return 'first'
+          }
+        )
+
+        await new Promise((resolve) => {
+          setTimeout(resolve, 30)
+        })
+        const second = secondStore.getOrCompute(
+          'test:sqlite-compute-slot-lock',
+          { persist: true },
+          async () => {
+            computeCount += 1
+            return 'second'
+          }
+        )
+
+        await new Promise((resolve) => {
+          setTimeout(resolve, 120)
+        })
+        lockDb.exec('ROLLBACK')
+
+        const [firstResult, secondResult] = await Promise.all([first, second])
+
+        expect(firstResult).toBe('first')
+        expect(secondResult).toBe('first')
+        expect(computeCount).toBe(1)
+        expect(Date.now() - startedAt).toBeGreaterThan(80)
+      } finally {
+        lockDb.close()
+      }
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
+  test('keeps a newer persisted row when verification is superseded by concurrent writes', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-save-supersede-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-save-supersede'
+      )
+      const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:sqlite-save-supersede'
+
+      const staleDeps = [{ depKey: 'file:index.ts', depVersion: '1' }]
+      await sqlitePersistence.save(nodeKey, {
+        value: { value: 'stale' },
+        deps: staleDeps,
+        fingerprint: createFingerprint(staleDeps),
+        persist: true,
+        updatedAt: Date.now(),
+      })
+
+      let injectConcurrentWrite = true
+      const concurrentDeps = [{ depKey: 'file:index.ts', depVersion: '2' }]
+      const localDeps = [
+        {
+          depKey: 'file:index.ts',
+          depVersion: await snapshot.contentId('index.ts'),
+        },
+      ]
+      const racingPersistence: CacheStorePersistence = {
+        load: sqlitePersistence.load.bind(sqlitePersistence),
+        delete: sqlitePersistence.delete.bind(sqlitePersistence),
+        save: async (candidateNodeKey, persistedEntry) => {
+          await sqlitePersistence.save(candidateNodeKey, persistedEntry)
+
+          if (!injectConcurrentWrite) {
+            return
+          }
+
+          injectConcurrentWrite = false
+          await sqlitePersistence.save(candidateNodeKey, {
+            ...persistedEntry,
+            value: { value: 'concurrent' },
+            deps: concurrentDeps,
+            fingerprint: createFingerprint(concurrentDeps),
+            updatedAt: Date.now() + 1000,
+          })
+        },
+      }
+
+      const store = new CacheStore({
+        snapshot,
+        persistence: racingPersistence,
+      })
+
+      await store.put(
+        nodeKey,
+        { value: 'local' },
+        {
+          persist: true,
+          deps: localDeps,
+        }
+      )
+
+      const persistedAfter = await sqlitePersistence.load(nodeKey)
+      const memoryAfter = await store.get(nodeKey)
+
+      expect(persistedAfter?.value).toEqual({ value: 'concurrent' })
+      expect(memoryAfter).toEqual({ value: 'local' })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('deduplicates concurrent sqlite-backed compute work when acquire returns SQLITE_BUSY code', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-busy-code-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-compute-slot-busy-code'
+      )
+      const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+      let shouldThrowNextAcquire = false
+
+      const busyError = new Error('lock contention')
+      ;(busyError as { code?: string }).code = 'SQLITE_BUSY'
+
+      const persistence: SqliteComputeSlotPersistence = {
+        load: sqlitePersistence.load.bind(sqlitePersistence),
+        save: sqlitePersistence.save.bind(sqlitePersistence),
+        delete: sqlitePersistence.delete.bind(sqlitePersistence),
+        acquireComputeSlot: async (nodeKey, owner) => {
+          if (shouldThrowNextAcquire) {
+            shouldThrowNextAcquire = false
+            throw busyError
+          }
+
+          return sqlitePersistence.acquireComputeSlot(nodeKey, owner)
+        },
+        getComputeSlotOwner: sqlitePersistence.getComputeSlotOwner.bind(
+          sqlitePersistence
+        ),
+        releaseComputeSlot: sqlitePersistence.releaseComputeSlot.bind(
+          sqlitePersistence
+        ),
+      }
+
+      const firstStore = new CacheStore({ snapshot, persistence })
+      const secondStore = new CacheStore({ snapshot, persistence })
+
+      let computeCount = 0
+      const started = createDeferredPromise()
+
+      const first = firstStore.getOrCompute(
+        'test:sqlite-compute-slot-busy-code',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          started.resolve()
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          return 'first'
+        }
+      )
+
+      await started.promise
+      shouldThrowNextAcquire = true
+
+      const second = secondStore.getOrCompute(
+        'test:sqlite-compute-slot-busy-code',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'second'
+        }
+      )
+
+      const [firstResult, secondResult] = await Promise.all([first, second])
+
+      expect(firstResult).toBe('first')
+      expect(secondResult).toBe('first')
+      expect(computeCount).toBe(1)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
+  test('deduplicates concurrent sqlite-backed compute work when acquire reports locked by message', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-busy-message-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-compute-slot-busy-message'
+      )
+      const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+      let shouldThrowNextAcquire = false
+
+      const messageError = new Error('database table is locked')
+
+      const persistence: SqliteComputeSlotPersistence = {
+        load: sqlitePersistence.load.bind(sqlitePersistence),
+        save: sqlitePersistence.save.bind(sqlitePersistence),
+        delete: sqlitePersistence.delete.bind(sqlitePersistence),
+        acquireComputeSlot: async (nodeKey, owner) => {
+          if (shouldThrowNextAcquire) {
+            shouldThrowNextAcquire = false
+            throw messageError
+          }
+
+          return sqlitePersistence.acquireComputeSlot(nodeKey, owner)
+        },
+        getComputeSlotOwner: sqlitePersistence.getComputeSlotOwner.bind(
+          sqlitePersistence
+        ),
+        releaseComputeSlot: sqlitePersistence.releaseComputeSlot.bind(
+          sqlitePersistence
+        ),
+      }
+
+      const firstStore = new CacheStore({ snapshot, persistence })
+      const secondStore = new CacheStore({ snapshot, persistence })
+
+      let computeCount = 0
+      const started = createDeferredPromise()
+
+      const first = firstStore.getOrCompute(
+        'test:sqlite-compute-slot-busy-message',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          started.resolve()
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          return 'first'
+        }
+      )
+
+      await started.promise
+      shouldThrowNextAcquire = true
+
+      const second = secondStore.getOrCompute(
+        'test:sqlite-compute-slot-busy-message',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'second'
+        }
+      )
+
+      const [firstResult, secondResult] = await Promise.all([first, second])
+
+      expect(firstResult).toBe('first')
+      expect(secondResult).toBe('first')
+      expect(computeCount).toBe(1)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
+  test('rethrows non-transient sqlite compute-slot acquire errors', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-non-transient-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-compute-slot-non-transient'
+      )
+      const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+
+      const persistError = new Error('disk failure')
+      ;(persistError as { code?: string }).code = 'ENOSPC'
+
+      const persistence: SqliteComputeSlotPersistence = {
+        load: sqlitePersistence.load.bind(sqlitePersistence),
+        save: sqlitePersistence.save.bind(sqlitePersistence),
+        delete: sqlitePersistence.delete.bind(sqlitePersistence),
+        acquireComputeSlot: async () => {
+          throw persistError
+        },
+        getComputeSlotOwner: sqlitePersistence.getComputeSlotOwner.bind(
+          sqlitePersistence
+        ),
+        releaseComputeSlot: sqlitePersistence.releaseComputeSlot.bind(
+          sqlitePersistence
+        ),
+      }
+
+      const store = new CacheStore({ snapshot, persistence })
+      let computeCount = 0
+
+      await expect(
+        store.getOrCompute(
+          'test:sqlite-compute-slot-non-transient',
+          { persist: true },
+          async () => {
+            computeCount += 1
+            return 'value'
+          }
+        )
+      ).rejects.toThrow('disk failure')
+
+      expect(computeCount).toBe(0)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('keeps a long-running sqlite compute slot alive with heartbeat refresh', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-heartbeat-')
+    )
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'sqlite-compute-slot-heartbeat'
+    )
+    const persistence = createShortTtlComputeSlotPersistence(dbPath, {
+      slotTtlMs: 60,
+      withHeartbeat: true,
+    })
+    const firstStore = new CacheStore({ snapshot, persistence })
+    const secondStore = new CacheStore({ snapshot, persistence })
+
+    try {
+      let computeCount = 0
+      const first = firstStore.getOrCompute(
+        'test:sqlite-compute-slot-heartbeat',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          await new Promise((resolve) => setTimeout(resolve, 220))
+          return 'first'
+        }
+      )
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20)
+      })
+      const second = secondStore.getOrCompute(
+        'test:sqlite-compute-slot-heartbeat',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'second'
+        }
+      )
+
+      const [firstResult, secondResult] = await Promise.all([first, second])
+
+      expect(firstResult).toBe('first')
+      expect(secondResult).toBe('first')
+      expect(computeCount).toBe(1)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
+  test('duplicates long-running sqlite compute work without a heartbeat refresh', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-no-heartbeat-')
+    )
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'sqlite-compute-slot-no-heartbeat'
+    )
+    const persistence = createShortTtlComputeSlotPersistence(dbPath, {
+      slotTtlMs: 60,
+      withHeartbeat: false,
+    })
+    const firstStore = new CacheStore({ snapshot, persistence })
+    const secondStore = new CacheStore({ snapshot, persistence })
+
+    try {
+      let computeCount = 0
+      const first = firstStore.getOrCompute(
+        'test:sqlite-compute-slot-no-heartbeat',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          await new Promise((resolve) => setTimeout(resolve, 220))
+          return 'first'
+        }
+      )
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20)
+      })
+      const second = secondStore.getOrCompute(
+        'test:sqlite-compute-slot-no-heartbeat',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          await new Promise((resolve) => setTimeout(resolve, 220))
+          return 'second'
+        }
+      )
+
+      const [firstResult, secondResult] = await Promise.all([first, second])
+
+      expect(firstResult).toBe('first')
+      expect(secondResult).toBe('second')
+      expect(computeCount).toBe(2)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
   test('continues with in-memory cache when persistence writes fail', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
@@ -3304,6 +3978,56 @@ export type Metadata = Value`,
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('cleanup(test:persistence-failure)')
       )
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  test('handles verification load-no-entry races without warning', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(fileSystem, 'persistence-verification-no-entry')
+    const persistedEntries = new Map<string, CacheEntry<{ value: number }>>()
+    const persistence = {
+      load: vi.fn(async (nodeKey) => persistedEntries.get(nodeKey)),
+      save: vi.fn(async (nodeKey, entry) => {
+        persistedEntries.set(nodeKey, { ...entry })
+        persistedEntries.delete(nodeKey)
+      }),
+      delete: vi.fn(async () => undefined),
+    }
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = new CacheStore({ snapshot, persistence })
+    let computeCount = 0
+
+    try {
+      const firstResult = await store.getOrCompute(
+        'test:persistence-verification-no-entry',
+        { persist: true },
+        async (ctx) => {
+          computeCount += 1
+          await ctx.recordFileDep('/index.ts')
+          return { value: 42 }
+        }
+      )
+
+      const secondResult = await store.getOrCompute(
+        'test:persistence-verification-no-entry',
+        { persist: true },
+        async (ctx) => {
+          computeCount += 1
+          await ctx.recordFileDep('/index.ts')
+          return { value: 43 }
+        }
+      )
+
+      expect(firstResult).toEqual({ value: 42 })
+      expect(secondResult).toEqual({ value: 42 })
+      expect(computeCount).toBe(1)
+      expect(warnSpy).not.toHaveBeenCalled()
+      expect(persistence.save).toHaveBeenCalledTimes(1)
+      expect(persistence.load).toHaveBeenCalled()
     } finally {
       warnSpy.mockRestore()
     }

@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { realpathSync } from 'node:fs'
 
 import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -395,14 +396,15 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
 function resolveSessionProjectRoot(fileSystem: FileSystem): string {
   const repoRoot = (fileSystem as any).repoRoot
   if (typeof repoRoot === 'string' && isAbsolutePath(repoRoot)) {
+    const resolvedRoot = resolveCanonicalPath(repoRoot)
     if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
       // eslint-disable-next-line no-console
       console.log('[renoun-debug] resolveSessionProjectRoot(repoRoot)', {
         repoRoot,
-        resolved: resolve(repoRoot),
+        resolved: resolvedRoot,
       })
     }
-    return resolve(repoRoot)
+    return resolvedRoot
   }
 
   let absoluteRoot: string | undefined
@@ -423,7 +425,8 @@ function resolveSessionProjectRoot(fileSystem: FileSystem): string {
   }
 
   try {
-    return getRootDirectory(absoluteRoot)
+    const rootDirectory = getRootDirectory(absoluteRoot)
+    return resolveCanonicalPath(rootDirectory)
   } catch (error) {
     if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
       // eslint-disable-next-line no-console
@@ -432,7 +435,15 @@ function resolveSessionProjectRoot(fileSystem: FileSystem): string {
         absoluteRoot,
       })
     }
-    return resolve(absoluteRoot)
+    return resolveCanonicalPath(absoluteRoot)
+  }
+}
+
+function resolveCanonicalPath(pathToResolve: string): string {
+  try {
+    return realpathSync(pathToResolve)
+  } catch {
+    return resolve(pathToResolve)
   }
 }
 

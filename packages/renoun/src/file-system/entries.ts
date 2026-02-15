@@ -1,5 +1,11 @@
 import { resolve as resolvePath } from 'node:path'
 import { Minimatch } from 'minimatch'
+import {
+  createElement,
+  Fragment,
+  isValidElement,
+  type ReactNode,
+} from 'react'
 import type { MDXContent, SlugCasing } from '@renoun/mdx'
 import {
   createSlug,
@@ -2857,6 +2863,262 @@ export interface MDXFileOptions<
   loader?: ModuleLoader<{ default: MDXContent } & Types>
 }
 
+const RENOUN_SECTION_JSX_MARKER = '__renounSectionJsx'
+
+interface SectionJsxFragment {
+  [RENOUN_SECTION_JSX_MARKER]: 'react-fragment'
+  children: SectionJsxValue[]
+}
+
+interface SectionJsxElement {
+  [RENOUN_SECTION_JSX_MARKER]: 'react-element'
+  type: string
+  props: Record<string, SectionJsxValue>
+  children: SectionJsxValue[]
+}
+
+type SectionJsxValue =
+  | null
+  | string
+  | number
+  | boolean
+  | SectionJsxFragment
+  | SectionJsxElement
+  | SectionJsxValue[]
+  | { [key: string]: SectionJsxValue }
+
+type PersistedContentSection = Omit<ContentSection, 'children' | 'jsx'> & {
+  children?: PersistedContentSection[]
+  jsx?: SectionJsxValue
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') {
+    return false
+  }
+
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+function isSectionJsxMarker(
+  value: unknown
+): value is SectionJsxFragment | SectionJsxElement {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>)[RENOUN_SECTION_JSX_MARKER] !== undefined
+  )
+}
+
+function isSerializedSectionJsxFragment(
+  value: SectionJsxFragment | SectionJsxElement
+): value is SectionJsxFragment {
+  return value[RENOUN_SECTION_JSX_MARKER] === 'react-fragment'
+}
+
+function isSerializedSectionJsxElement(
+  value: SectionJsxFragment | SectionJsxElement
+): value is SectionJsxElement {
+  return value[RENOUN_SECTION_JSX_MARKER] === 'react-element'
+}
+
+function isReactFragmentType(value: unknown): boolean {
+  return typeof value === 'symbol' && value.description === 'react.fragment'
+}
+
+function encodeSectionJsxValue(value: ReactNode): SectionJsxValue | undefined {
+  if (value === null) {
+    return null
+  }
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value
+  }
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (Array.isArray(value)) {
+    const encodedValues = value
+      .map((child) => encodeSectionJsxValue(child))
+      .filter((child) => child !== undefined)
+
+    return encodedValues
+  }
+
+  if (isValidElement(value)) {
+    const sectionJsxElement = value as {
+      type: unknown
+      props?: Record<string, unknown>
+    }
+    const type = sectionJsxElement.type
+    const rawProps = sectionJsxElement.props ?? {}
+
+    if (type === Fragment || isReactFragmentType(type)) {
+      const children = encodeSectionJsxValue(rawProps['children'] as ReactNode)
+
+      return {
+        [RENOUN_SECTION_JSX_MARKER]: 'react-fragment',
+        children: children === undefined ? [] : Array.isArray(children) ? children : [children],
+      }
+    }
+
+    if (typeof type !== 'string') {
+      return undefined
+    }
+
+    const props: Record<string, SectionJsxValue> = {}
+
+    for (const [key, propValue] of Object.entries(rawProps)) {
+      if (key === 'children') {
+        continue
+      }
+
+      const encodedProp = encodeSectionJsxValue(propValue as ReactNode)
+      if (encodedProp !== undefined) {
+        props[key] = encodedProp
+      }
+    }
+
+    const children = encodeSectionJsxValue(rawProps['children'] as ReactNode)
+
+    return {
+      [RENOUN_SECTION_JSX_MARKER]: 'react-element',
+      type,
+      props,
+      children: children === undefined ? [] : Array.isArray(children) ? children : [children],
+    }
+  }
+
+  if (isPlainObject(value)) {
+    const encodedProps: Record<string, SectionJsxValue> = {}
+
+    for (const [key, propValue] of Object.entries(value)) {
+      const encodedProp = encodeSectionJsxValue(propValue as ReactNode)
+      if (encodedProp !== undefined) {
+        encodedProps[key] = encodedProp
+      }
+    }
+
+    return encodedProps
+  }
+
+  return undefined
+}
+
+function decodeSectionJsxValue(value: unknown): ReactNode {
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value
+  }
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (isValidElement(value)) {
+    return value
+  }
+
+  if (isSectionJsxMarker(value)) {
+    const markerValue = value
+    const children = Array.isArray(markerValue.children)
+      ? markerValue.children
+      : []
+    const decodedChildren = children.map((child) => decodeSectionJsxValue(child))
+
+    if (isSerializedSectionJsxFragment(value)) {
+      return createElement(Fragment, undefined, ...decodedChildren)
+    }
+
+    if (isSerializedSectionJsxElement(value)) {
+      const props: Record<string, unknown> = {}
+      const rawProps = value.props ?? {}
+
+      for (const [key, propValue] of Object.entries(rawProps)) {
+        props[key] = decodeSectionJsxValue(propValue)
+      }
+
+      return createElement(value.type, props, ...decodedChildren)
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((child) => decodeSectionJsxValue(child))
+  }
+
+  if (isPlainObject(value)) {
+    const decoded: Record<string, unknown> = {}
+    for (const [key, propValue] of Object.entries(value)) {
+      decoded[key] = decodeSectionJsxValue(propValue)
+    }
+
+    return decoded as unknown as ReactNode
+  }
+
+  return undefined
+}
+
+function serializeSectionForCache(section: ContentSection): PersistedContentSection {
+  const { children, jsx, ...rest } = section
+  const persisted: PersistedContentSection = {
+    ...rest,
+  }
+
+  if (children !== undefined) {
+    persisted.children = children.map(serializeSectionForCache)
+  }
+
+  if (jsx !== undefined) {
+    const encodedJsx = encodeSectionJsxValue(jsx)
+    if (encodedJsx !== undefined) {
+      persisted.jsx = encodedJsx
+    }
+  }
+
+  return persisted
+}
+
+function serializeSectionsForCache(sections: ContentSection[]): PersistedContentSection[] {
+  return sections.map(serializeSectionForCache)
+}
+
+function deserializeSectionFromCache(
+  section: PersistedContentSection
+): ContentSection {
+  const { children, jsx, ...rest } = section
+  const decoded: ContentSection = {
+    ...rest,
+  }
+
+  if (children !== undefined) {
+    decoded.children = children.map(deserializeSectionFromCache)
+  }
+
+  if (jsx !== undefined) {
+    const decodedJsx = decodeSectionJsxValue(jsx)
+    if (decodedJsx !== undefined) {
+      decoded.jsx = decodedJsx as ContentSection['jsx']
+    }
+  }
+
+  return decoded
+}
+
+function deserializeSectionsFromCache(
+  sections: unknown
+): ContentSection[] {
+  if (!Array.isArray(sections)) {
+    return []
+  }
+
+  return sections.map((section) =>
+    deserializeSectionFromCache(section as PersistedContentSection)
+  )
+}
+
 /** An MDX file in the file system. */
 export class MDXFile<
   Types extends Record<string, any> = { default: MDXContent },
@@ -3061,7 +3323,7 @@ export class MDXFile<
       const filePath = this.absolutePath
       const nodeKey = this.#getSectionsCacheNodeKey()
 
-      this.#sections = await session.cache.getOrCompute(
+      const persistedSections = await session.cache.getOrCompute(
         nodeKey,
         { persist: true },
         async (ctx) => {
@@ -3084,9 +3346,11 @@ export class MDXFile<
             resolvedSections = getMDXSections(source) as ContentSection[]
           }
 
-          return resolvedSections
+          return serializeSectionsForCache(resolvedSections)
         }
       )
+
+      this.#sections = deserializeSectionsFromCache(persistedSections)
     }
 
     return this.#sections ?? []

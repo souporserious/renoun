@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 import { deserialize, serialize } from 'node:v8'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -63,7 +64,10 @@ export function getDefaultCacheDatabasePath(projectRoot?: string): string {
     return resolve(overridePath)
   }
 
-  const root = projectRoot ? resolve(projectRoot) : resolve(getRootDirectory())
+  let root = projectRoot ? resolve(projectRoot) : resolve(getRootDirectory())
+  if (root === resolve('/')) {
+    root = tmpdir()
+  }
   const path = resolve(root, '.cache', 'renoun', 'fs-cache.sqlite')
   if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
     // eslint-disable-next-line no-console
@@ -202,6 +206,33 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     })
   }
 
+  async refreshComputeSlot(
+    nodeKey: string,
+    owner: string,
+    ttlMs: number = SQLITE_INFLIGHT_TTL_MS
+  ): Promise<void> {
+    await this.#readyPromise
+
+    if (!this.#db) {
+      return
+    }
+
+    const now = Date.now()
+    const expiresAt = now + ttlMs
+
+    await this.#runWithBusyRetries(() => {
+      this.#db
+        .prepare(
+          `
+            UPDATE cache_inflight
+            SET expires_at = ?
+            WHERE node_key = ? AND owner = ?
+          `
+        )
+        .run(expiresAt, nodeKey, owner)
+    })
+  }
+
   async releaseComputeSlot(nodeKey: string, owner: string): Promise<void> {
     await this.#readyPromise
 
@@ -260,12 +291,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     return maybeOwner
   }
 
-  async load(nodeKey: string): Promise<CacheEntry | undefined> {
+  async load(
+    nodeKey: string,
+    options: { skipFingerprintCheck?: boolean } = {}
+  ): Promise<CacheEntry | undefined> {
     await this.#readyPromise
 
     if (!this.#db) {
       return undefined
     }
+    const shouldDebug = shouldDebugCachePersistenceLoadFailure(nodeKey)
+    const skipFingerprintCheck = options.skipFingerprintCheck ?? false
 
     const rows = (await this.#runWithBusyRetries(() =>
       this.#db
@@ -275,7 +311,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
               e.fingerprint as fingerprint,
               e.value_blob as value_blob,
               e.updated_at as updated_at,
-              e.persist as persist,
+      e.persist as persist,
               d.dep_key as dep_key,
               d.dep_version as dep_version
             FROM cache_entries e
@@ -283,7 +319,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             WHERE e.node_key = ?
             ORDER BY d.dep_key
           `
-        )
+      )
         .all(nodeKey)
     )) as Array<{
       fingerprint?: string
@@ -295,13 +331,49 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }>
 
     if (rows.length === 0) {
+      if (shouldDebug) {
+        logCachePersistenceLoadFailure(nodeKey, 'no-rows')
+      }
       return undefined
     }
 
     const row = rows[0]!
+    const storedFingerprint = getPersistedFingerprint(row.fingerprint)
+    if (!storedFingerprint) {
+      if (shouldDebug) {
+        logCachePersistenceLoadFailure(
+          nodeKey,
+          'invalid-fingerprint',
+          `raw=${String(row.fingerprint)}`
+        )
+      }
+      await this.delete(nodeKey)
+      return undefined
+    }
+
+    const updatedAt = getPersistedTimestamp(row.updated_at)
+    if (!Number.isFinite(updatedAt)) {
+      if (shouldDebug) {
+        logCachePersistenceLoadFailure(
+          nodeKey,
+          'invalid-updated-at',
+          `raw=${String(row.updated_at)}`
+        )
+      }
+      await this.delete(nodeKey)
+      return undefined
+    }
+
     const valueBuffer = toUint8Array(row.value_blob)
 
     if (!valueBuffer) {
+      if (shouldDebug) {
+        logCachePersistenceLoadFailure(
+          nodeKey,
+          'missing-value-blob',
+          `type=${typeof row.value_blob}`
+        )
+      }
       await this.delete(nodeKey)
       return undefined
     }
@@ -310,12 +382,26 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     try {
       value = deserialize(valueBuffer)
-    } catch {
+    } catch (error) {
+      if (shouldDebug) {
+        logCachePersistenceLoadFailure(
+          nodeKey,
+          'deserialize-failed',
+          `error=${error instanceof Error ? error.message : String(error)}`
+        )
+      }
       await this.delete(nodeKey)
       return undefined
     }
 
     if (containsStrippedReactElementPayload(value)) {
+      if (shouldDebug) {
+        logCachePersistenceLoadFailure(
+          nodeKey,
+          'contains-stripped-react',
+          `value=${summarizePersistedValue(value)}`
+        )
+      }
       await this.delete(nodeKey)
       return undefined
     }
@@ -329,9 +415,16 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             ? dependencyRow.dep_version
             : '',
       }))
-    const storedFingerprint = String(row.fingerprint ?? '')
 
-    if (storedFingerprint !== createFingerprint(deps)) {
+    const recalculatedFingerprint = createFingerprint(deps)
+    if (!skipFingerprintCheck && storedFingerprint !== recalculatedFingerprint) {
+      if (shouldDebug) {
+        logCachePersistenceLoadFailure(
+          nodeKey,
+          'fingerprint-mismatch',
+          `stored=${storedFingerprint} recalculated=${recalculatedFingerprint} deps=${deps.length}`
+        )
+      }
       await this.delete(nodeKey)
       return undefined
     }
@@ -347,7 +440,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       deps,
       fingerprint: storedFingerprint,
       persist: Number(row.persist) === 1,
-      updatedAt: Number(row.updated_at) || Date.now(),
+      updatedAt,
     }
   }
 
@@ -907,6 +1000,97 @@ function toUint8Array(value: unknown): Uint8Array | undefined {
   return undefined
 }
 
+function getPersistedFingerprint(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  if (value.length !== 40) {
+    return undefined
+  }
+
+  if (!/^[0-9a-f]{40}$/.test(value)) {
+    return undefined
+  }
+
+  return value
+}
+
+function getPersistedTimestamp(value: unknown): number {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : Number.NaN
+}
+
+function shouldDebugCachePersistenceLoadFailure(nodeKey: string): boolean {
+  const debugEnvValue = process.env['RENOUN_DEBUG_CACHE_PERSISTENCE']
+  if (debugEnvValue !== '1' && debugEnvValue !== 'true') {
+    return false
+  }
+
+  return (
+    nodeKey.startsWith('js.exports:') ||
+    nodeKey.startsWith('mdx.sections:')
+  )
+}
+
+function logCachePersistenceLoadFailure(
+  nodeKey: string,
+  reason: string,
+  details?: string
+): void {
+  const lines = [`reason=${reason}`]
+  if (details) {
+    lines.push(`details=${details}`)
+  }
+
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[renoun-debug] cache persistence load failure for ${nodeKey} ${lines.join(' ')}`
+  )
+}
+
+function summarizePersistedValue(value: unknown): string {
+  if (value === null) {
+    return 'null'
+  }
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return `${typeof value}:${value}`
+  }
+
+  if (value === undefined) {
+    return 'undefined'
+  }
+
+  if (typeof value === 'symbol') {
+    return `symbol:${value.description ?? value.toString()}`
+  }
+
+  if (value instanceof RegExp) {
+    return `regexp:${value.toString()}`
+  }
+
+  if (Array.isArray(value)) {
+    return `array(length=${value.length})`
+  }
+
+  if (typeof value === 'function') {
+    return `function:${value.name || 'anonymous'}`
+  }
+
+  if (typeof value === 'bigint') {
+    return `bigint:${value.toString()}`
+  }
+
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>)
+    const previewKeys = keys.slice(0, 10).join(',')
+    return `object(keys=[${previewKeys}])`
+  }
+
+  return `unsupported:${typeof value}`
+}
+
 function containsStrippedReactElementPayload(
   value: unknown,
   seen: WeakSet<object> = new WeakSet()
@@ -940,7 +1124,19 @@ function containsStrippedReactElementPayload(
 function looksLikeStrippedReactElement(value: object): boolean {
   const candidate = value as Record<string, unknown>
 
-  if ('$$typeof' in candidate) {
+  const reactType = candidate['$$typeof']
+  if (typeof reactType === 'symbol') {
+    const reactTypeName = reactType.description ?? ''
+    if (
+      !(
+        reactTypeName.endsWith('.element') ||
+        reactTypeName === 'react.element' ||
+        reactTypeName === 'react.portal'
+      )
+    ) {
+      return false
+    }
+  } else if ('$$typeof' in candidate) {
     return false
   }
 
@@ -978,7 +1174,46 @@ function isSqliteBusyOrLockedError(error: unknown): boolean {
     return false
   }
 
-  return /database is locked|SQLITE_BUSY/i.test(error.message)
+  const candidateError = error as {
+    code?: number | string
+    errno?: number | string
+    resultCode?: number | string
+    extendedResultCode?: number | string
+  }
+
+  const isBusyOrLockedSqliteCode = (code: unknown): boolean => {
+    if (typeof code === 'number') {
+      return code === 5 || code === 6
+    }
+
+    if (typeof code !== 'string') {
+      return false
+    }
+
+    const normalizedCode = code.toUpperCase()
+    if (normalizedCode.includes('SQLITE_BUSY') || normalizedCode.includes('SQLITE_LOCKED')) {
+      return true
+    }
+
+    const parsedCode = Number.parseInt(normalizedCode, 10)
+    return parsedCode === 5 || parsedCode === 6
+  }
+
+  if (
+    isBusyOrLockedSqliteCode(candidateError.code) ||
+    isBusyOrLockedSqliteCode(candidateError.errno) ||
+    isBusyOrLockedSqliteCode(candidateError.resultCode) ||
+    isBusyOrLockedSqliteCode(candidateError.extendedResultCode)
+  ) {
+    return true
+  }
+
+  const normalizedMessage = error.message.toLowerCase()
+  return (
+    normalizedMessage.includes('database is locked') ||
+    normalizedMessage.includes('database table is locked') ||
+    normalizedMessage.includes('database is busy')
+  )
 }
 
 function delay(milliseconds: number): Promise<void> {
