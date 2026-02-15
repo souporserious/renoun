@@ -7,7 +7,7 @@ import {
   getFileExportText,
   getFileExportStaticValue,
   getOutlineRanges,
-  resolveTypeAtLocation,
+  resolveTypeAtLocationWithDependencies,
 } from '../project/client.ts'
 import type { ProjectOptions } from '../project/types.ts'
 import {
@@ -386,19 +386,35 @@ export abstract class BaseFileSystem {
     )
   }
 
-  resolveTypeAtLocation(
+  resolveTypeAtLocationWithDependencies(
     filePath: string,
     position: number,
     kind: SyntaxKind,
     filter?: TypeFilter
   ) {
-    return resolveTypeAtLocation(
+    return resolveTypeAtLocationWithDependencies(
       filePath,
       position,
       kind,
       filter,
       this.getProjectOptions()
     )
+  }
+
+  async resolveTypeAtLocation(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind,
+    filter?: TypeFilter
+  ) {
+    const result = await this.resolveTypeAtLocationWithDependencies(
+      filePath,
+      position,
+      kind,
+      filter
+    )
+
+    return result.resolvedType
   }
 }
 

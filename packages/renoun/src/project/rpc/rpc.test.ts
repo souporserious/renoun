@@ -174,6 +174,10 @@ describe('project WebSocket RPC', () => {
     const collected: number[] = []
 
     for await (const value of stream) {
+      if (value === undefined) {
+        continue
+      }
+
       collected.push(value)
     }
 
@@ -198,6 +202,10 @@ describe('project WebSocket RPC', () => {
     })
 
     for await (const value of stream) {
+      if (value === undefined) {
+        continue
+      }
+
       collected.push(value)
     }
     await once

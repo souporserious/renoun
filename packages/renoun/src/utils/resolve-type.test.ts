@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect, vi, afterAll } from 'vitest'
 import { getTsMorph } from './ts-morph.ts'
 import type { ClassDeclaration, FunctionDeclaration } from './ts-morph.ts'
 import dedent from 'dedent'
@@ -15,6 +15,21 @@ const renounTsConfigFilePath = fileURLToPath(
 const renounFileSystemWorkspacePath = fileURLToPath(
   new URL('../file-system/Workspace.ts', import.meta.url)
 )
+
+const renounPackageRootPath = fileURLToPath(new URL('../../', import.meta.url))
+const originalTestCwd = process.cwd()
+
+// Keep ts-morph module resolution stable when this test file is executed
+// from the monorepo root during package-wide test runs.
+if (originalTestCwd !== renounPackageRootPath) {
+  process.chdir(renounPackageRootPath)
+}
+
+afterAll(() => {
+  if (process.cwd() !== originalTestCwd) {
+    process.chdir(originalTestCwd)
+  }
+})
 
 const project = new Project({
   compilerOptions: {

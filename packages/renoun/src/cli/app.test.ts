@@ -72,6 +72,12 @@ vi.mock('./framework.ts', () => ({
   resolveFrameworkBinFile: resolveFrameworkBinFileMock,
 }))
 
+const prewarmRenounRpcServerCacheMock = vi.fn(async () => undefined)
+
+vi.mock('./prewarm.ts', () => ({
+  prewarmRenounRpcServerCache: prewarmRenounRpcServerCacheMock,
+}))
+
 let runAppCommand: (typeof import('./app.ts'))['runAppCommand']
 
 beforeAll(async () => {
@@ -178,6 +184,12 @@ describe('runAppCommand integration', () => {
       expect(exitCode).toBe(0)
 
       expect(createServerMock).toHaveBeenCalledTimes(1)
+      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
+      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
+        projectOptions: {
+          tsConfigFilePath: join(projectRoot, 'tsconfig.json'),
+        },
+      })
       expect(getPortMock).toHaveBeenCalled()
       expect(getIdMock).toHaveBeenCalled()
       expect(serverCleanupMock).toHaveBeenCalledTimes(1)

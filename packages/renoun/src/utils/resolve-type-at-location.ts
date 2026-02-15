@@ -1,3 +1,4 @@
+import { serializeTypeFilterForCache } from '../file-system/cache-key.ts'
 import { getTsMorph } from './ts-morph.ts'
 import type { Project, SyntaxKind as TsMorphSyntaxKind } from './ts-morph.ts'
 
@@ -7,31 +8,28 @@ import { resolveType } from './resolve-type.ts'
 
 const { SyntaxKind } = getTsMorph()
 
-export const resolvedTypeCache = new Map<
-  string,
-  {
-    resolvedType?: Kind
-    dependencies: Map<string, number>
-  }
->()
+export interface ResolvedTypeAtLocationResult {
+  resolvedType?: Kind
+  dependencies: string[]
+}
 
 /** Process all properties of a given type including their default values. */
-export async function resolveTypeAtLocation(
+export async function resolveTypeAtLocationWithDependencies(
   project: Project,
   filePath: string,
   position: number,
   kind: TsMorphSyntaxKind,
   filter?: TypeFilter,
-  isInMemoryFileSystem = false
-) {
-  const typeId = `${filePath}:${position}:${kind}`
+  _isInMemoryFileSystem = false
+): Promise<ResolvedTypeAtLocationResult> {
+  const filterKey = filter ? serializeTypeFilterForCache(filter) : 'none'
+  const typeId = `${filePath}:${position}:${kind}:${filterKey}`
   const startTime = performance.now()
 
   return getDebugLogger().trackOperation(
-    'resolveTypeAtLocation',
+    'resolveTypeAtLocationWithDependencies',
     async () => {
       const sourceFile = project.addSourceFileAtPath(filePath)
-
       const declaration = sourceFile.getDescendantAtPos(position)
 
       if (!declaration) {
@@ -51,71 +49,6 @@ export async function resolveTypeAtLocation(
         )
       }
 
-      const exportDeclarationType = exportDeclaration.getType()
-
-      if (isInMemoryFileSystem) {
-        // Skip dependency tracking and caching for memory file systems
-        const result = resolveType(
-          exportDeclarationType,
-          exportDeclaration,
-          filter,
-          undefined
-        )
-
-        const duration =
-          Math.round((performance.now() - startTime) * 1000) / 1000
-        getDebugLogger().logTypeResolution(
-          filePath,
-          position,
-          SyntaxKind[kind],
-          duration
-        )
-
-        return result
-      }
-
-      const { statSync } = await import('node:fs')
-      const cacheEntry = resolvedTypeCache.get(typeId)
-
-      if (cacheEntry) {
-        let dependenciesChanged = false
-
-        for (const [
-          depFilePath,
-          cachedDepLastModified,
-        ] of cacheEntry.dependencies) {
-          let depLastModified: number
-          try {
-            depLastModified = statSync(depFilePath).mtimeMs
-          } catch {
-            // File might have been deleted; invalidate the cache
-            dependenciesChanged = true
-            break
-          }
-          if (depLastModified !== cachedDepLastModified) {
-            dependenciesChanged = true
-            break
-          }
-        }
-
-        if (!dependenciesChanged) {
-          getDebugLogger().logCacheOperation('hit', typeId, {
-            filePath,
-            position,
-            kind: SyntaxKind[kind],
-          })
-          const duration =
-            Math.round((performance.now() - startTime) * 1000) / 1000
-          getDebugLogger().logTypeResolution(
-            filePath,
-            position,
-            SyntaxKind[kind],
-            duration
-          )
-          return cacheEntry.resolvedType
-        }
-      }
-
       getDebugLogger().logCacheOperation('miss', typeId, {
         filePath,
         position,
@@ -124,27 +57,12 @@ export async function resolveTypeAtLocation(
 
       const dependencies = new Set<string>([filePath])
       const resolvedType = resolveType(
-        exportDeclarationType,
+        exportDeclaration.getType(),
         exportDeclaration,
         filter,
         undefined,
         dependencies
       )
-      const dependencyTimestamps = new Map<string, number>()
-
-      for (const depFilePath of dependencies) {
-        try {
-          const depLastModified = statSync(depFilePath).mtimeMs
-          dependencyTimestamps.set(depFilePath, depLastModified)
-        } catch {
-          // File might have been deleted; skip it
-        }
-      }
-
-      resolvedTypeCache.set(typeId, {
-        resolvedType,
-        dependencies: dependencyTimestamps,
-      })
 
       const duration = Math.round((performance.now() - startTime) * 1000) / 1000
       getDebugLogger().logTypeResolution(
@@ -154,7 +72,10 @@ export async function resolveTypeAtLocation(
         duration
       )
 
-      return resolvedType
+      return {
+        resolvedType,
+        dependencies: Array.from(dependencies),
+      }
     },
     {
       data: { filePath, position, kind: SyntaxKind[kind] },

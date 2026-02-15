@@ -25,8 +25,11 @@ import {
   type GetSourceTextMetadataOptions,
 } from '../utils/get-source-text-metadata.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
-import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.ts'
+import {
+  resolveTypeAtLocationWithDependencies as baseResolveTypeAtLocationWithDependencies,
+} from '../utils/resolve-type-at-location.ts'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
+import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
 import { getProject } from './get-project.ts'
 import type { ProjectOptions } from './types.ts'
@@ -34,6 +37,97 @@ import type { ProjectOptions } from './types.ts'
 const { SyntaxKind } = getTsMorph()
 
 let currentHighlighter: Promise<Highlighter> | null = null
+
+interface ResolveTypeAtLocationRpcRequest {
+  filePath: string
+  position: number
+  kind: TsMorphSyntaxKind
+  filter?: TypeFilter | string
+  projectOptions?: ProjectOptions
+}
+
+function parseTypeFilter(filter?: TypeFilter | string): TypeFilter | undefined {
+  if (filter === undefined) {
+    return undefined
+  }
+
+  const parsedFilter = typeof filter === 'string' ? parseTypeFilterJson(filter) : filter
+
+  if (!isValidTypeFilter(parsedFilter)) {
+    throw new Error(
+      '[renoun] Invalid type filter payload. Expected a TypeFilter object or JSON stringified TypeFilter.'
+    )
+  }
+
+  return parsedFilter
+}
+
+function parseTypeFilterJson(value: string) {
+  try {
+    return JSON.parse(value)
+  } catch {
+    throw new Error('[renoun] Invalid type filter JSON payload.')
+  }
+}
+
+function isValidTypeFilter(value: unknown): value is TypeFilter {
+  if (Array.isArray(value)) {
+    return value.every(isValidFilterDescriptor)
+  }
+
+  return isValidFilterDescriptor(value)
+}
+
+function isValidFilterDescriptor(value: unknown): value is TypeFilter {
+  if (!isObject(value)) {
+    return false
+  }
+
+  const candidate = value as {
+    moduleSpecifier?: unknown
+    types?: unknown
+  }
+
+  if (
+    candidate.moduleSpecifier !== undefined &&
+    typeof candidate.moduleSpecifier !== 'string'
+  ) {
+    return false
+  }
+
+  if (!Array.isArray(candidate.types)) {
+    return false
+  }
+
+  for (const typeEntry of candidate.types) {
+    if (!isObject(typeEntry)) {
+      return false
+    }
+
+    const candidateType = typeEntry as {
+      name?: unknown
+      properties?: unknown
+    }
+
+    if (typeof candidateType.name !== 'string') {
+      return false
+    }
+
+    if (
+      candidateType.properties !== undefined &&
+      (!Array.isArray(candidateType.properties) ||
+        !candidateType.properties.every((property) => typeof property === 'string'))
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+}
 
 /**
  * Create a WebSocket server that improves the performance of renoun components and
@@ -116,20 +210,14 @@ export async function createServer(options?: { port?: number }) {
   )
 
   server.registerMethod(
-    'resolveTypeAtLocation',
-    async function resolveTypeAtLocation({
+    'resolveTypeAtLocationWithDependencies',
+    async function resolveTypeAtLocationWithDependencies({
       projectOptions,
       filter,
       ...options
-    }: {
-      filePath: string
-      position: number
-      kind: TsMorphSyntaxKind
-      filter?: string
-      projectOptions?: ProjectOptions
-    }) {
+    }: ResolveTypeAtLocationRpcRequest) {
       return getDebugLogger().trackOperation(
-        'server.resolveTypeAtLocation',
+        'server.resolveTypeAtLocationWithDependencies',
         async () => {
           const project = getProject(projectOptions)
 
@@ -142,12 +230,12 @@ export async function createServer(options?: { port?: number }) {
             },
           }))
 
-          return baseResolveTypeAtLocation(
+          return baseResolveTypeAtLocationWithDependencies(
             project,
             options.filePath,
             options.position,
             options.kind,
-            filter ? JSON.parse(filter) : undefined,
+            parseTypeFilter(filter),
             projectOptions?.useInMemoryFileSystem
           )
         },
@@ -161,9 +249,6 @@ export async function createServer(options?: { port?: number }) {
       )
     },
     {
-      // Type resolution already has its own dependency-aware cache
-      // (see `resolve-type-at-location.ts`). Avoid RPC-level memoization
-      // so changes to source or its dependencies are always reflected.
       memoize: false,
       concurrency: 3,
     }
@@ -182,7 +267,7 @@ export async function createServer(options?: { port?: number }) {
       return baseGetFileExports(filePath, project)
     },
     {
-      memoize: true,
+      memoize: false,
       concurrency: 25,
     }
   )
@@ -200,7 +285,7 @@ export async function createServer(options?: { port?: number }) {
       return baseGetOutlineRanges(filePath, project)
     },
     {
-      memoize: true,
+      memoize: false,
       concurrency: 25,
     }
   )
@@ -224,7 +309,7 @@ export async function createServer(options?: { port?: number }) {
       return baseGetFileExportMetadata(name, filePath, position, kind, project)
     },
     {
-      memoize: true,
+      memoize: false,
       concurrency: 25,
     }
   )
@@ -254,7 +339,7 @@ export async function createServer(options?: { port?: number }) {
       })
     },
     {
-      memoize: true,
+      memoize: false,
       concurrency: 25,
     }
   )
@@ -276,6 +361,10 @@ export async function createServer(options?: { port?: number }) {
       const { getFileExportStaticValue } =
         await import('../utils/get-file-export-static-value.ts')
       return getFileExportStaticValue(filePath, position, kind, project)
+    },
+    {
+      memoize: false,
+      concurrency: 25,
     }
   )
 

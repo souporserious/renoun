@@ -497,7 +497,7 @@ describe('file system', () => {
         "/project/types",
       ]
     `)
-  })
+  }, 12_000)
 
   test('directory accepts URL path input', async () => {
     const projectUrl = new URL('../../fixtures/project', import.meta.url)

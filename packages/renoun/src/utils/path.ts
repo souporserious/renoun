@@ -60,12 +60,51 @@ export function normalizeSlashes(path: string): string {
   return path.replace(/\\+/g, '/')
 }
 
+export function isAbsolutePath(path: string): boolean {
+  const normalized = normalizeSlashes(path)
+
+  return (
+    normalized.startsWith('/') ||
+    /^[A-Za-z]:\//.test(normalized) ||
+    normalized.startsWith('//')
+  )
+}
+
 /** Remove trailing forward slashes from a path-like string. */
 export function trimTrailingSlashes(value: string): string {
   let end = value.length
   // 47 is '/'
   while (end > 0 && value.charCodeAt(end - 1) === 47) end--
   return value.slice(0, end)
+}
+
+/** Normalize a path to a stable key form (relative, no outer slashes, '.' for root). */
+export function normalizePathKey(path: string): string {
+  const normalized = normalizeSlashes(path)
+  let start = 0
+  let end = normalized.length
+
+  if (
+    end >= 2 &&
+    normalized.charCodeAt(0) === 46 &&
+    normalized.charCodeAt(1) === 47
+  ) {
+    start = 2
+    while (start < end && normalized.charCodeAt(start) === 47) {
+      start++
+    }
+  }
+
+  while (start < end && normalized.charCodeAt(start) === 47) {
+    start++
+  }
+
+  while (end > start && normalized.charCodeAt(end - 1) === 47) {
+    end--
+  }
+
+  const key = normalized.slice(start, end)
+  return key === '' ? '.' : key
 }
 
 /** Normalize a path to be relative to the current working directory. */
