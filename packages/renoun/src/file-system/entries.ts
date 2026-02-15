@@ -85,6 +85,7 @@ import {
   type GlobModuleMap,
 } from './loaders.ts'
 import { inferMediaType } from './mime.ts'
+import type { Snapshot } from './Snapshot.ts'
 import {
   applyModuleSchemaToModule,
   isStandardSchema,
@@ -3652,14 +3653,14 @@ export type DirectoryOptions<
   | GitDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
   | FileSystemDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
 
-const enum DirectorySnapshotOptionBit {
-  Recursive = 1 << 0,
-  IncludeDirectoryNamedFiles = 1 << 1,
-  IncludeIndexAndReadmeFiles = 1 << 2,
-  IncludeGitIgnoredFiles = 1 << 3,
-  IncludeTsConfigExcludedFiles = 1 << 4,
-  IncludeHiddenFiles = 1 << 5,
-}
+const DIRECTORY_SNAPSHOT_OPTION_BIT = {
+  Recursive: 1 << 0,
+  IncludeDirectoryNamedFiles: 1 << 1,
+  IncludeIndexAndReadmeFiles: 1 << 2,
+  IncludeGitIgnoredFiles: 1 << 3,
+  IncludeTsConfigExcludedFiles: 1 << 4,
+  IncludeHiddenFiles: 1 << 5,
+} as const
 
 interface NormalizedDirectoryEntriesOptions {
   recursive: boolean
@@ -3701,27 +3702,27 @@ function createOptionsMask(options: NormalizedDirectoryEntriesOptions) {
   let mask = 0
 
   if (options.recursive) {
-    mask |= DirectorySnapshotOptionBit.Recursive
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.Recursive
   }
 
   if (options.includeDirectoryNamedFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeDirectoryNamedFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeDirectoryNamedFiles
   }
 
   if (options.includeIndexAndReadmeFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeIndexAndReadmeFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeIndexAndReadmeFiles
   }
 
   if (options.includeGitIgnoredFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeGitIgnoredFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeGitIgnoredFiles
   }
 
   if (options.includeTsConfigExcludedFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeTsConfigExcludedFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeTsConfigExcludedFiles
   }
 
   if (options.includeHiddenFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeHiddenFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeHiddenFiles
   }
 
   return mask
@@ -3736,6 +3737,7 @@ function createDirectoryListingSignature(
     name: string
     isDirectory: boolean
     isFile: boolean
+    signature?: string
   }>
 ): string {
   if (entries.length === 0) {
@@ -3745,11 +3747,42 @@ function createDirectoryListingSignature(
   const encodedEntries = entries
     .map((entry) => {
       const entryType = entry.isDirectory ? 'd' : entry.isFile ? 'f' : 'o'
-      return `${entryType}:${entry.name}`
+      const signature = entry.signature ? `sig:${entry.signature}` : ''
+      return `${entryType}:${entry.name}|${signature}`
     })
     .sort()
 
   return encodedEntries.join('\u0000')
+}
+
+async function getDirectoryEntryListingSignature(
+  snapshot: Snapshot,
+  fileSystem: FileSystem,
+  entry: {
+    path: string
+    isDirectory: boolean
+    isFile: boolean
+  }
+): Promise<string> {
+  try {
+    const contentId = await snapshot.contentId(entry.path)
+    if (contentId && contentId !== 'missing') {
+      return `content:${contentId}`
+    }
+  } catch {
+    // Fall back to metadata-based signature.
+  }
+
+  const [modifiedMs, byteLength] = await Promise.all([
+    fileSystem.getFileLastModifiedMs(entry.path).catch(() => undefined),
+    fileSystem.getFileByteLength(entry.path).catch(() => undefined),
+  ])
+
+  if (modifiedMs !== undefined || byteLength !== undefined) {
+    return `mtime:${String(modifiedMs ?? 'missing')};size:${String(byteLength ?? 'missing')}`
+  }
+
+  return 'missing'
 }
 
 /** A directory containing files and subdirectories in the file system. */
@@ -5180,6 +5213,7 @@ export class Directory<
         let entries:
           | ReadonlyArray<{
               name: string
+              path: string
               isDirectory: boolean
               isFile: boolean
             }>
@@ -5191,7 +5225,10 @@ export class Directory<
           return true
         }
 
-        currentSignature = createDirectoryListingSignature(entries)
+        currentSignature = await this.#createDirectoryListingSignature(
+          fileSystem,
+          entries
+        )
       } else {
         const currentModified = await fileSystem.getFileLastModifiedMs(path)
         currentSignature =
@@ -5204,6 +5241,38 @@ export class Directory<
     }
 
     return false
+  }
+
+  async #createDirectoryListingSignature(
+    fileSystem: FileSystem,
+    entries: ReadonlyArray<{
+      name: string
+      path: string
+      isDirectory: boolean
+      isFile: boolean
+    }>
+  ): Promise<string> {
+    const session = this.#getSession()
+
+    const signatureEntries = await Promise.all(
+      entries.map(async (entry) => {
+        const signature = await getDirectoryEntryListingSignature(
+          session.snapshot,
+          fileSystem,
+          entry
+        )
+
+        return {
+          name: entry.name,
+          isDirectory: entry.isDirectory,
+          isFile: entry.isFile,
+          path: entry.path,
+          signature,
+        }
+      })
+    )
+
+    return createDirectoryListingSignature(signatureEntries)
   }
 
   async #isCachedSnapshotStale(
@@ -5479,7 +5548,7 @@ export class Directory<
 
     dependencySignatures.set(
       `${DIRECTORY_DEPENDENCY_PREFIX}${directory.#path}`,
-      createDirectoryListingSignature(rawEntries)
+      await this.#createDirectoryListingSignature(fileSystem, rawEntries)
     )
 
     let shouldIncludeSelf = false

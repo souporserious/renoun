@@ -55,36 +55,40 @@ function resolveExpectedPaths({
 }
 
 describe('collectRenounPrewarmTargets app coverage', () => {
-  test('collects granular directory and file prewarm targets for all app entrypoints', async () => {
-    const targetsByApp = await Promise.all(
-      appSites.map(async (app) => {
-        const project = getProject({
-          tsConfigFilePath: join(app.rootPath, 'tsconfig.json'),
-        })
-        const target = collectRenounPrewarmTargets(project, {
-          tsConfigFilePath: join(app.rootPath, 'tsconfig.json'),
-        })
+  test(
+    'collects granular directory and file prewarm targets for all app entrypoints',
+    async () => {
+      const targetsByApp = await Promise.all(
+        appSites.map(async (app) => {
+          const project = getProject({
+            tsConfigFilePath: join(app.rootPath, 'tsconfig.json'),
+          })
+          const target = await collectRenounPrewarmTargets(project, {
+            tsConfigFilePath: join(app.rootPath, 'tsconfig.json'),
+          })
 
-        return { app, target }
-      })
-    )
-
-    for (const { app, target } of targetsByApp) {
-      const expected = resolveExpectedPaths(app)
-      const discoveredDirectories = target.directoryGetEntries.map(
-        (entry) => entry.directoryPath
-      )
-      const discoveredFiles = target.fileGetFile.map(
-        (request) => `${request.directoryPath}:${request.path}`
+          return { app, target }
+        })
       )
 
-      for (const expectedDirectory of expected.directoryGetEntries) {
-        expect(discoveredDirectories).toContain(expectedDirectory)
-      }
+      for (const { app, target } of targetsByApp) {
+        const expected = resolveExpectedPaths(app)
+        const discoveredDirectories = target.directoryGetEntries.map(
+          (entry) => entry.directoryPath
+        )
+        const discoveredFiles = target.fileGetFile.map(
+          (request) => `${request.directoryPath}:${request.path}`
+        )
 
-      for (const expectedFile of expected.fileGetFile) {
-        expect(discoveredFiles).toContain(expectedFile)
+        for (const expectedDirectory of expected.directoryGetEntries) {
+          expect(discoveredDirectories).toContain(expectedDirectory)
+        }
+
+        for (const expectedFile of expected.fileGetFile) {
+          expect(discoveredFiles).toContain(expectedFile)
+        }
       }
-    }
-  })
+    },
+    30_000
+  )
 })

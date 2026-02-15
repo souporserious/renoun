@@ -38,7 +38,7 @@ import {
   type ModuleLoaders,
   type PackageStructure,
   type WithDefaultTypes,
-} from './entries.tsx'
+} from './entries.ts'
 import { Session } from './Session.ts'
 
 interface PackageJson {
@@ -1666,6 +1666,13 @@ export class Package<
 
   #readPackageJson(): PackageJson {
     const packageJsonPath = joinPaths(this.#packagePath, 'package.json')
+    if (process.env['RENOUN_DEBUG_PACKAGE_PATH'] === '1') {
+      // eslint-disable-next-line no-console
+      console.log('[renoun-debug-package]', {
+        packagePath: this.#packagePath,
+        packageJsonPath,
+      })
+    }
     try {
       return readJsonFile<PackageJson>(
         this.#fileSystem,

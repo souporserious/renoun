@@ -81,7 +81,7 @@ vi.mock('../project/get-project.ts', () => ({
   getProject: getProjectMock,
 }))
 
-vi.mock('../file-system/entries.tsx', () => ({
+vi.mock('../file-system/entries.ts', () => ({
   Directory: MockDirectory,
   File: MockFile,
 }))
@@ -378,7 +378,7 @@ describe('collectRenounPrewarmTargets', () => {
       { overwrite: true }
     )
 
-    const targets = collectRenounPrewarmTargets!(project, projectOptions)
+    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
 
     expect(targets.directoryGetEntries).toEqual([
       {
@@ -432,7 +432,7 @@ describe('collectRenounPrewarmTargets', () => {
       { overwrite: true }
     )
 
-    const targets = collectRenounPrewarmTargets!(project, projectOptions)
+    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
 
     expect(targets.directoryGetEntries).toEqual(
       expect.arrayContaining([
@@ -458,6 +458,44 @@ describe('collectRenounPrewarmTargets', () => {
         directoryPath: '/repo/nested',
         path: 'readme',
         extensions: ['mdx'],
+      },
+    ])
+  })
+
+  test('captures renoun imports from subpath specifiers', async () => {
+    project.createSourceFile(
+      '/repo/src/subpath.ts',
+      `
+        import { Directory, Collection } from 'renoun/file-system'
+
+        const posts = new Directory('/repo/posts')
+        const nestedCollection = new Collection({
+          entries: [posts],
+        })
+
+        posts.getFile('index', ['md'])
+        nestedCollection.getEntries()
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
+
+    expect(targets.directoryGetEntries).toEqual([
+      {
+        directoryPath: '/repo/posts',
+        recursive: false,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        filterExtensions: null,
+      },
+    ])
+
+    expect(targets.fileGetFile).toEqual([
+      {
+        directoryPath: '/repo/posts',
+        path: 'index',
+        extensions: ['md'],
       },
     ])
   })
@@ -500,7 +538,7 @@ describe('collectRenounPrewarmTargets', () => {
       { overwrite: true }
     )
 
-    const targets = collectRenounPrewarmTargets!(project, projectOptions)
+    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
 
     expect(targets.directoryGetEntries).toEqual(
       expect.arrayContaining([

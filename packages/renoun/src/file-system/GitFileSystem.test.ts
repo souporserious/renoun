@@ -8,7 +8,7 @@ import {
   existsSync,
   symlinkSync,
 } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
@@ -28,6 +28,7 @@ import {
 import { InMemoryFileSystem } from './InMemoryFileSystem'
 import { FileSystemSnapshot } from './Snapshot'
 import { createGitFileSystemPersistentCacheNodeKey } from './git-cache-key'
+import { Session } from './Session'
 import type { ExportHistoryGenerator, ExportHistoryReport } from './types'
 
 /** Drain a generator to get the final report. */
@@ -2568,5 +2569,40 @@ describe('GitFileSystem', () => {
     } finally {
       disposeCacheStorePersistence({ projectRoot: repoRoot })
     }
+  })
+
+  test('refreshes session cache when sync repo readiness resolves the root', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'index.ts', 'export const value = 1', 'init')
+
+    const repository = relative(process.cwd(), repoRoot)
+    const store = new GitFileSystem({ repository, cacheDirectory })
+    const beforeReadySession = Session.for(store)
+
+    store.readDirectorySync('.')
+    const afterReadySession = Session.for(store)
+
+    expect(afterReadySession).not.toBe(beforeReadySession)
+    expect(afterReadySession.snapshot.id).not.toBe(beforeReadySession.snapshot.id)
+  })
+
+  test('refreshes session cache when async repo readiness resolves the root', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'index.ts', 'export const value = 1', 'init')
+
+    const repository = relative(process.cwd(), repoRoot)
+    const store = new GitFileSystem({ repository, cacheDirectory })
+    const beforeReadySession = Session.for(store)
+
+    const metadata = await store.getMetadata('index.ts')
+    expect(metadata.kind).toBe('module')
+
+    const afterReadySession = Session.for(store)
+    expect(afterReadySession).not.toBe(beforeReadySession)
+    expect(afterReadySession.snapshot.id).not.toBe(beforeReadySession.snapshot.id)
   })
 })

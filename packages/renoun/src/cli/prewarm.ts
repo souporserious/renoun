@@ -1,11 +1,15 @@
 import { dirname, isAbsolute, resolve } from 'node:path'
+import { cpus } from 'node:os'
 import { Semaphore } from '../utils/Semaphore.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getProject } from '../project/get-project.ts'
 import type { ProjectOptions } from '../project/types.ts'
-import { Directory, File } from '../file-system/entries.tsx'
-import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
+import { Directory, File } from '../file-system/entries.ts'
+import {
+  hasJavaScriptLikeExtension,
+  isJavaScriptLikeExtension,
+} from '../utils/is-javascript-like-extension.ts'
 import {
   resolveLiteralExpression,
   type LiteralExpressionValue,
@@ -19,9 +23,13 @@ import type {
   Symbol as TsMorphSymbol,
 } from '../utils/ts-morph.ts'
 
-const { Node, ts } = getTsMorph()
+const { Node } = getTsMorph()
 
-const PREWARM_FILE_CACHE_CONCURRENCY = 8
+const PREWARM_FILE_CACHE_CONCURRENCY = Math.max(
+  8,
+  Math.min(32, cpus().length * 2)
+)
+const PREWARM_COLLECTION_YIELD_INTERVAL = 128
 const NODE_MODULES_PATH = '/node_modules/'
 
 interface RenounAliases {
@@ -85,44 +93,56 @@ export interface RenounPrewarmTargets {
   fileGetFile: FileRequest[]
 }
 
+type PendingRenounCallsite = {
+  callExpression: CallExpression
+  methodName: 'getEntries' | 'getFile'
+  aliases: RenounAliases
+}
+
 /**
  * Collect `Directory`/`Collection` callsites for prewarming from the provided project.
  */
-export function collectRenounPrewarmTargets(
+export async function collectRenounPrewarmTargets(
   project: Project,
   projectOptions?: ProjectOptions
-): RenounPrewarmTargets {
+): Promise<RenounPrewarmTargets> {
   const directoryDeclarations = new Map<TsMorphSymbol, RenounDirectoryDeclaration>()
   const collectionRawEntries = new Map<TsMorphSymbol, Expression[]>()
-  const collectionSourceFiles = new Map<TsMorphSymbol, SourceFile>()
+  const collectionAliases = new Map<TsMorphSymbol, RenounAliases>()
   const collectionDeclarations = new Map<TsMorphSymbol, RenounCollectionDeclaration>()
 
   const getEntriesRequests = new Map<string, DirectoryEntriesRequest>()
   const getFileRequests: FileRequest[] = []
-
-  const collectionGetEntriesCalls: Array<{
-    collectionSymbol: TsMorphSymbol
-    options: Omit<DirectoryEntriesRequest, 'directoryPath'>
-  }> = []
+  const pendingCallsites: PendingRenounCallsite[] = []
+  const collectionGetEntriesRequests = new Map<
+    TsMorphSymbol,
+    Omit<DirectoryEntriesRequest, 'directoryPath'>
+  >()
 
   const projectDirectory = projectOptions?.tsConfigFilePath
     ? dirname(projectOptions.tsConfigFilePath)
     : process.cwd()
+  const sourceFiles = project.getSourceFiles()
 
-  for (const sourceFile of project.getSourceFiles()) {
+  for (const [index, sourceFile] of sourceFiles.entries()) {
+    if (index > 0 && index % PREWARM_COLLECTION_YIELD_INTERVAL === 0) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+
     const sourceFilePath = sourceFile.getFilePath()
+    if (!hasJavaScriptLikeExtension(sourceFilePath)) {
+      continue
+    }
+
     if (shouldSkipSourceFile(sourceFilePath)) {
       continue
     }
 
-    const aliases = getRenounAliases(sourceFile)
-    if (
-      aliases.directoryConstructors.size === 0 &&
-      aliases.collectionConstructors.size === 0 &&
-      aliases.namespaceImports.size === 0
-    ) {
+    if (!isLikelyRenounSourceFile(sourceFile)) {
       continue
     }
+
+    const aliases = getRenounAliases(sourceFile)
 
     collectRenounDeclarations(
       sourceFile,
@@ -130,15 +150,13 @@ export function collectRenounPrewarmTargets(
       projectDirectory,
       directoryDeclarations,
       collectionRawEntries,
-      collectionSourceFiles
+      collectionAliases,
+      pendingCallsites
     )
   }
 
   for (const [collectionSymbol, rawEntries] of collectionRawEntries.entries()) {
-    const sourceFile = collectionSourceFiles.get(collectionSymbol)
-    const aliases = sourceFile
-      ? getRenounAliases(sourceFile)
-      : EMPTY_RENOUN_ALIASES
+    const aliases = collectionAliases.get(collectionSymbol) ?? EMPTY_RENOUN_ALIASES
 
     const resolvedEntries = rawEntries
       .map((entryExpression) =>
@@ -161,81 +179,67 @@ export function collectRenounPrewarmTargets(
     })
   }
 
-  for (const sourceFile of project.getSourceFiles()) {
-    const sourceFilePath = sourceFile.getFilePath()
-    if (shouldSkipSourceFile(sourceFilePath)) {
+  for (const { callExpression, methodName, aliases } of pendingCallsites) {
+    const callExpressionTarget = callExpression.getExpression()
+    if (!Node.isPropertyAccessExpression(callExpressionTarget)) {
       continue
     }
 
-    const aliases = getRenounAliases(sourceFile)
-    for (const callExpression of sourceFile.getDescendantsOfKind(
-      ts.SyntaxKind.CallExpression
-    )) {
-      const expression = callExpression.getExpression()
-      if (!Node.isPropertyAccessExpression(expression)) {
-        continue
+    const methodTarget = resolveRenounMethodTarget(
+      callExpressionTarget.getExpression(),
+      aliases,
+      {
+        directories: directoryDeclarations,
+        collections: collectionDeclarations,
+        projectDirectory,
       }
+    )
 
-      const methodName = expression.getName()
-      if (methodName !== 'getEntries' && methodName !== 'getFile') {
-        continue
-      }
+    if (!methodTarget) {
+      continue
+    }
 
-      const methodTarget = resolveRenounMethodTarget(
-        expression.getExpression(),
-        aliases,
-        {
-          directories: directoryDeclarations,
-          collections: collectionDeclarations,
-          projectDirectory,
-        }
-      )
+    if (methodName === 'getEntries') {
+      const options = resolveDirectoryGetEntriesOptions(callExpression)
 
-      if (!methodTarget) {
-        continue
-      }
-
-      if (methodName === 'getEntries') {
-        const options = resolveDirectoryGetEntriesOptions(callExpression)
-
-        if (methodTarget.kind === 'directory') {
-          addDirectoryEntriesRequest(getEntriesRequests, {
-            directoryPath: methodTarget.path,
-            recursive: options.recursive,
-            includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
-            includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
-            filterExtensions: options.filterExtensions,
-          })
-          continue
-        }
-
-        collectionGetEntriesCalls.push({
-          collectionSymbol: methodTarget.symbol,
-          options: {
-            recursive: options.recursive,
-            includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
-            includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
-            filterExtensions: options.filterExtensions,
-          },
+      if (methodTarget.kind === 'directory') {
+        addDirectoryEntriesRequest(getEntriesRequests, {
+          directoryPath: methodTarget.path,
+          recursive: options.recursive,
+          includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
+          includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
+          filterExtensions: options.filterExtensions,
         })
         continue
       }
 
-      const fileRequest = resolveGetFileCall(
-        callExpression,
-        methodTarget
+      mergeCollectionGetEntriesRequest(
+        collectionGetEntriesRequests,
+        methodTarget.symbol,
+        {
+          recursive: options.recursive,
+          includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
+          includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
+          filterExtensions: options.filterExtensions,
+        }
       )
+      continue
+    }
 
-      if (fileRequest !== undefined) {
-        getFileRequests.push(fileRequest)
-      }
+    const fileRequest = resolveGetFileCall(callExpression, methodTarget)
+
+    if (fileRequest !== undefined) {
+      getFileRequests.push(fileRequest)
     }
   }
 
-  for (const collectionCall of collectionGetEntriesCalls) {
+  for (const [
+    collectionSymbol,
+    options,
+  ] of collectionGetEntriesRequests.entries()) {
     expandCollectionEntries(
-      collectionCall.collectionSymbol,
-      collectionCall.options,
+      collectionSymbol,
+      options,
       {
         collections: collectionDeclarations,
         directories: directoryDeclarations,
@@ -265,7 +269,7 @@ function getRenounAliases(sourceFile: SourceFile): RenounAliases {
   }
 
   for (const importDeclaration of sourceFile.getImportDeclarations()) {
-    if (importDeclaration.getModuleSpecifierValue() !== 'renoun') {
+    if (!isRenounImportSpecifier(importDeclaration.getModuleSpecifierValue())) {
       continue
     }
 
@@ -297,53 +301,97 @@ function getRenounAliases(sourceFile: SourceFile): RenounAliases {
   return aliases
 }
 
+function isRenounImportSpecifier(moduleSpecifier: string): boolean {
+  return moduleSpecifier === 'renoun' || moduleSpecifier.startsWith('renoun/')
+}
+
 function collectRenounDeclarations(
   sourceFile: SourceFile,
   aliases: RenounAliases,
   projectDirectory: string,
   directoryDeclarations: Map<TsMorphSymbol, RenounDirectoryDeclaration>,
   collectionRawEntries: Map<TsMorphSymbol, Expression[]>,
-  collectionSourceFiles: Map<TsMorphSymbol, SourceFile>
+  collectionAliases: Map<TsMorphSymbol, RenounAliases>,
+  pendingCallsites: PendingRenounCallsite[]
 ): void {
-  for (const variableDeclaration of sourceFile.getDescendantsOfKind(
-    ts.SyntaxKind.VariableDeclaration
-  )) {
-    const initializer = variableDeclaration.getInitializer()
-    if (!initializer) {
-      continue
-    }
+  sourceFile.forEachDescendant((node) => {
+    if (Node.isVariableDeclaration(node)) {
+      const initializer = node.getInitializer()
+      if (!initializer) {
+        return
+      }
 
-    const symbol = variableDeclaration.getSymbol()
-    if (!symbol) {
-      continue
-    }
+      const referenceExpression = resolveReferenceExpression(initializer)
 
-    const referenceExpression = resolveReferenceExpression(initializer)
+      if (Node.isNewExpression(referenceExpression)) {
+        const symbol = node.getSymbol()
+        if (!symbol) {
+          return
+        }
 
-    if (Node.isNewExpression(referenceExpression)) {
-      if (isDirectoryConstructorExpression(referenceExpression.getExpression(), aliases)) {
-        const path = resolveDirectoryPathFromNewExpression(
-          referenceExpression,
-          aliases,
-          projectDirectory
-        )
+        if (
+          isDirectoryConstructorExpression(referenceExpression.getExpression(), aliases)
+        ) {
+          const path = resolveDirectoryPathFromNewExpression(
+            referenceExpression,
+            aliases,
+            projectDirectory
+          )
 
-        if (path !== undefined) {
-          directoryDeclarations.set(symbol, { path })
-          continue
+          if (path !== undefined) {
+            directoryDeclarations.set(symbol, { path })
+            return
+          }
+        }
+
+        if (
+          isCollectionConstructorExpression(
+            referenceExpression.getExpression(),
+            aliases
+          )
+        ) {
+          const entries = resolveCollectionEntriesFromNewExpression(
+            referenceExpression
+          )
+
+          collectionRawEntries.set(symbol, entries)
+          collectionAliases.set(symbol, aliases)
         }
       }
-
-      if (isCollectionConstructorExpression(referenceExpression.getExpression(), aliases)) {
-        const entries = resolveCollectionEntriesFromNewExpression(
-          referenceExpression
-        )
-
-        collectionRawEntries.set(symbol, entries)
-        collectionSourceFiles.set(symbol, sourceFile)
-      }
     }
-  }
+
+    if (!Node.isCallExpression(node)) {
+      return
+    }
+
+    const expression = node.getExpression()
+    if (!Node.isPropertyAccessExpression(expression)) {
+      return
+    }
+
+    const methodName = expression.getName()
+    if (methodName !== 'getEntries' && methodName !== 'getFile') {
+      return
+    }
+
+    pendingCallsites.push({
+      callExpression: node,
+      methodName,
+      aliases,
+    })
+  })
+}
+
+function isLikelyRenounSourceFile(sourceFile: SourceFile): boolean {
+  const sourceText = sourceFile.getFullText()
+
+  return (
+    sourceText.includes('renoun') ||
+    sourceText.includes('Directory') ||
+    sourceText.includes('Collection') ||
+    sourceText.includes('getEntries') ||
+    sourceText.includes('getFile')
+  )
 }
 
 function resolveCollectionEntriesFromNewExpression(newExpression: Expression): Expression[] {
@@ -897,8 +945,8 @@ function shouldSkipSourceFile(filePath: string): boolean {
   const normalizedPath = filePath.replace(/\\/g, '/')
 
   return (
-    isFilePathGitIgnored(filePath) ||
-    normalizedPath.includes(NODE_MODULES_PATH)
+    normalizedPath.includes(NODE_MODULES_PATH) ||
+    isFilePathGitIgnored(filePath)
   )
 }
 
@@ -915,7 +963,10 @@ export async function prewarmRenounRpcServerCache(options?: {
   }
 
   const project = getProject(options?.projectOptions)
-  const targets = collectRenounPrewarmTargets(project, options?.projectOptions)
+  const targets = await collectRenounPrewarmTargets(
+    project,
+    options?.projectOptions
+  )
 
   if (
     targets.directoryGetEntries.length === 0 &&
@@ -926,6 +977,15 @@ export async function prewarmRenounRpcServerCache(options?: {
   }
 
   const warmFilesByPath = new Map<string, WarmFileTask>()
+  const collectDirectoryTargetsTask =
+    targets.directoryGetEntries.length > 0
+      ? collectWarmFilesFromDirectoryTargets(targets.directoryGetEntries)
+      : Promise.resolve(new Map<string, WarmFileTask>())
+
+  const collectFileTargetsTask =
+    targets.fileGetFile.length > 0
+      ? collectWarmFilesFromGetFileTargets(targets.fileGetFile)
+      : Promise.resolve(new Map<string, WarmFileTask>())
 
   if (targets.directoryGetEntries.length > 0) {
     logger.debug('Collecting files from Directory#getEntries callsites', () => ({
@@ -933,11 +993,6 @@ export async function prewarmRenounRpcServerCache(options?: {
         directories: targets.directoryGetEntries.length,
       },
     }))
-
-    await collectWarmFilesFromDirectoryTargets(
-      targets.directoryGetEntries,
-      warmFilesByPath
-    )
   }
 
   if (targets.fileGetFile.length > 0) {
@@ -946,8 +1001,19 @@ export async function prewarmRenounRpcServerCache(options?: {
         files: targets.fileGetFile.length,
       },
     }))
+  }
 
-    await collectWarmFilesFromGetFileTargets(targets.fileGetFile, warmFilesByPath)
+  const [directoryWarmFiles, fileWarmFiles] = await Promise.all([
+    collectDirectoryTargetsTask,
+    collectFileTargetsTask,
+  ])
+
+  for (const task of directoryWarmFiles.values()) {
+    mergeWarmTask(task, warmFilesByPath)
+  }
+
+  for (const task of fileWarmFiles.values()) {
+    mergeWarmTask(task, warmFilesByPath)
   }
 
   if (warmFilesByPath.size === 0) {
@@ -967,9 +1033,9 @@ export async function prewarmRenounRpcServerCache(options?: {
 }
 
 async function collectWarmFilesFromDirectoryTargets(
-  directoryTargets: DirectoryEntriesRequest[],
-  warmFilesByPath: Map<string, WarmFileTask>
-): Promise<void> {
+  directoryTargets: DirectoryEntriesRequest[]
+): Promise<Map<string, WarmFileTask>> {
+  const warmFilesByPath = new Map<string, WarmFileTask>()
   const gate = new Semaphore(PREWARM_FILE_CACHE_CONCURRENCY)
 
   await Promise.all(
@@ -1022,16 +1088,19 @@ async function collectWarmFilesFromDirectoryTargets(
       }
     })
   )
+
+  return warmFilesByPath
 }
 
 async function collectWarmFilesFromGetFileTargets(
-  getFileTargets: FileRequest[],
-  warmFilesByPath: Map<string, WarmFileTask>
-): Promise<void> {
+  getFileTargets: FileRequest[]
+): Promise<Map<string, WarmFileTask>> {
+  const warmFilesByPath = new Map<string, WarmFileTask>()
+  const deduplicatedTargets = dedupeGetFileTargets(getFileTargets)
   const gate = new Semaphore(PREWARM_FILE_CACHE_CONCURRENCY)
 
   await Promise.all(
-    getFileTargets.map(async (request) => {
+    Array.from(deduplicatedTargets.values()).map(async (request) => {
       const release = await gate.acquire()
       try {
         const directory = new Directory({ path: request.directoryPath })
@@ -1063,6 +1132,72 @@ async function collectWarmFilesFromGetFileTargets(
       }
     })
   )
+
+  return warmFilesByPath
+}
+
+function dedupeGetFileTargets(
+  getFileTargets: FileRequest[]
+): Map<string, FileRequest> {
+  const uniqueTargets = new Map<string, FileRequest>()
+
+  for (const request of getFileTargets) {
+    const key = getFileRequestKey(request)
+    if (uniqueTargets.has(key)) {
+      continue
+    }
+
+    uniqueTargets.set(key, request)
+  }
+
+  return uniqueTargets
+}
+
+function getFileRequestKey(request: FileRequest): string {
+  if (!request.extensions || request.extensions.length === 0) {
+    return `${request.directoryPath}\0${request.path}\0`
+  }
+
+  return `${request.directoryPath}\0${request.path}\0${request.extensions
+    .slice()
+    .sort()
+    .join('\0')}`
+}
+
+function mergeCollectionGetEntriesRequest(
+  collectionGetEntriesRequests: Map<
+    TsMorphSymbol,
+    Omit<DirectoryEntriesRequest, 'directoryPath'>
+  >,
+  collectionSymbol: TsMorphSymbol,
+  options: Omit<DirectoryEntriesRequest, 'directoryPath'>
+): void {
+  const existing = collectionGetEntriesRequests.get(collectionSymbol)
+  if (!existing) {
+    collectionGetEntriesRequests.set(collectionSymbol, {
+      recursive: options.recursive,
+      includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
+      includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
+      filterExtensions:
+        options.filterExtensions === null ? null : new Set(options.filterExtensions),
+    })
+    return
+  }
+
+  existing.recursive = existing.recursive || options.recursive
+  existing.includeDirectoryNamedFiles =
+    existing.includeDirectoryNamedFiles || options.includeDirectoryNamedFiles
+  existing.includeIndexAndReadmeFiles =
+    existing.includeIndexAndReadmeFiles || options.includeIndexAndReadmeFiles
+
+  if (existing.filterExtensions === null || options.filterExtensions === null) {
+    existing.filterExtensions = null
+    return
+  }
+
+  for (const extension of options.filterExtensions) {
+    existing.filterExtensions.add(extension)
+  }
 }
 
 function determineWarmMethods(extension: string): Set<WarmFileMethod> {

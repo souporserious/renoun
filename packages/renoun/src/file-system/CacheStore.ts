@@ -689,8 +689,6 @@ export class CacheStore {
     }
 
     await this.#withPersistenceIntent(nodeKey, async () => {
-      let valueToPersist: unknown = entry.value
-
       const attempt = async (value: unknown): Promise<void> => {
         const persisted = {
           ...entry,
@@ -709,26 +707,16 @@ export class CacheStore {
       }
 
       try {
-        await attempt(valueToPersist)
+        await attempt(entry.value)
         clearPersistedEntryInvalidation(this.#persistence, nodeKey)
         return
       } catch (error) {
         if (isUnserializablePersistenceValueError(error)) {
           this.#warnUnserializableValue(nodeKey, error)
-
-          const serializableValue = toPersistenceSafeValue(valueToPersist)
-          if (serializableValue !== undefined) {
-            try {
-              await attempt(serializableValue)
-              entry.value = serializableValue
-              clearPersistedEntryInvalidation(this.#persistence, nodeKey)
-              return
-            } catch (fallbackError) {
-              error = fallbackError
-            }
-          } else {
-            error = undefined
-          }
+          await this.#clearPersistedCacheEntry(nodeKey)
+          entry.persist = false
+          markPersistedEntryInvalid(this.#persistence, nodeKey)
+          return
         }
 
         const cleanupError =
@@ -795,90 +783,6 @@ export function stableStringify(value: unknown): string {
   }
 
   return `{${entries.join(',')}}`
-}
-
-function toPersistenceSafeValue(
-  value: unknown,
-  seen: WeakSet<object> = new WeakSet()
-): unknown | undefined {
-  if (typeof value === 'function' || typeof value === 'symbol') {
-    return undefined
-  }
-
-  if (value === null || typeof value !== 'object') {
-    return value
-  }
-
-  if (isReactElementLikeObject(value)) {
-    return undefined
-  }
-
-  if (value instanceof Date) {
-    return new Date(value.getTime())
-  }
-
-  if (seen.has(value)) {
-    return undefined
-  }
-
-  seen.add(value)
-
-  if (Array.isArray(value)) {
-    return value.map((item) => toPersistenceSafeValue(item, seen))
-  }
-
-  const result: Record<string, unknown> = {}
-  for (const [key, entryValue] of Object.entries(
-    value as Record<string, unknown>
-  )) {
-    const sanitized = toPersistenceSafeValue(entryValue, seen)
-    if (sanitized !== undefined) {
-      result[key] = sanitized
-    }
-  }
-
-  return result
-}
-
-function isReactElementLikeObject(value: object): boolean {
-  const candidate = value as Record<string, unknown>
-
-  if ('$$typeof' in candidate) {
-    return true
-  }
-
-  if (
-    !('key' in candidate) ||
-    !('ref' in candidate) ||
-    !('props' in candidate)
-  ) {
-    return false
-  }
-
-  const keys = Object.keys(candidate)
-  if (keys.length < 3 || keys.length > 4) {
-    return false
-  }
-
-  if (
-    keys.some(
-      (key) =>
-        key !== 'key' && key !== 'ref' && key !== 'props' && key !== 'type'
-    )
-  ) {
-    return false
-  }
-
-  const props = candidate['props']
-  if (props === null || typeof props !== 'object' || Array.isArray(props)) {
-    return false
-  }
-
-  if ('type' in candidate && typeof candidate['type'] !== 'string') {
-    return false
-  }
-
-  return true
 }
 
 export function hashString(input: string): string {

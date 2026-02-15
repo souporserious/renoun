@@ -60,6 +60,16 @@ export function normalizeSlashes(path: string): string {
   return path.replace(/\\+/g, '/')
 }
 
+export function isAbsolutePath(path: string): boolean {
+  const normalized = normalizeSlashes(path)
+
+  return (
+    normalized.startsWith('/') ||
+    /^[A-Za-z]:\//.test(normalized) ||
+    normalized.startsWith('//')
+  )
+}
+
 /** Remove trailing forward slashes from a path-like string. */
 export function trimTrailingSlashes(value: string): string {
   let end = value.length

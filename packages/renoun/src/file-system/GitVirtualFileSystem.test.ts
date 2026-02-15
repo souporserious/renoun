@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
@@ -26,9 +28,24 @@ const SUCCESS_ARCHIVE = makeTar([
 
 describe('GitVirtualFileSystem', () => {
   const originalFetch = globalThis.fetch
+  let previousCacheDbPath: string | undefined
+  let cacheDbDirectory: string | undefined
 
   beforeEach(() => {
     vi.useRealTimers()
+
+    previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
+    cacheDbDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-git-virtual-cache-test-')
+    )
+
+    process.env.RENOUN_FS_CACHE_DB_PATH = join(
+      cacheDbDirectory,
+      '.cache',
+      'renoun',
+      'fs-cache.sqlite'
+    )
+
     disposeDefaultCacheStorePersistence()
   })
 
@@ -1457,6 +1474,17 @@ describe('GitVirtualFileSystem', () => {
     globalThis.fetch = originalFetch
     vi.restoreAllMocks()
     disposeDefaultCacheStorePersistence()
+
+    if (cacheDbDirectory) {
+      rmSync(cacheDbDirectory, { recursive: true, force: true })
+      cacheDbDirectory = undefined
+    }
+
+    if (previousCacheDbPath === undefined) {
+      delete process.env.RENOUN_FS_CACHE_DB_PATH
+    } else {
+      process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
+    }
   })
 
   it('infers base-name entry files when entry is a directory', async () => {

@@ -37,7 +37,7 @@
   ],
   "sideEffects": false,
   "bin": {
-    "renoun": "./src/cli/index.ts"
+    "renoun": "./dist/cli/index.js"
   },
   "type": "module",
   "main": "./dist/index.js",
@@ -120,6 +120,7 @@
     "dev": "node ./scripts/dev.ts",
     "grammars": "node ./scripts/grammars.ts",
     "theme": "node ./scripts/theme.ts",
+    "typecheck:tests": "vitest --run --typecheck",
     "test": "vitest --typecheck",
     "bench": "vitest bench"
   },

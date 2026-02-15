@@ -1624,6 +1624,7 @@ export class GitFileSystem
       prepared = true
     }
 
+    this.#refreshSessionAfterRootChange(this.repoRoot, resolved)
     this.repoRoot = resolved
     this.#worktreeRootChecked = false
     this.#worktreeRootExists = false
@@ -1636,6 +1637,18 @@ export class GitFileSystem
     this.#ensureCachedScopeSync(scopeDirectories)
     this.#repoReady = true
     return this.repoRoot
+  }
+
+  #refreshSessionAfterRootChange(previousRepoRoot: string, resolvedRepoRoot: string) {
+    const previousResolved = resolve(previousRepoRoot)
+    const nextResolved = resolve(resolvedRepoRoot)
+
+    if (previousResolved === nextResolved) {
+      return
+    }
+
+    Session.reset(this)
+    this.#session = undefined
   }
 
   #ensureCachedScopeSync(scopeDirectories: string[]) {
@@ -3853,6 +3866,7 @@ export class GitFileSystem
         prepared = true
       }
 
+      this.#refreshSessionAfterRootChange(this.repoRoot, resolved)
       this.repoRoot = resolved
       this.#worktreeRootChecked = false
       this.#worktreeRootExists = false

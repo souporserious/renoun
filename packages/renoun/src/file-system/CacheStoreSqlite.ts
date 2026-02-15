@@ -552,6 +552,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
         if (!warnedAboutSqliteFallback) {
           warnedAboutSqliteFallback = true
+          // eslint-disable-next-line no-console
+          console.error(
+            '[renoun-debug] failed to initialize sqlite cache',
+            this.#dbPath,
+            error instanceof Error ? error.message : String(error)
+          )
           console.warn(
             `[renoun] Falling back to in-memory FileSystem cache because SQLite initialization failed: ${
               error instanceof Error ? error.message : String(error)
@@ -584,6 +590,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           node_key TEXT NOT NULL,
           dep_key TEXT NOT NULL,
           dep_version TEXT NOT NULL,
+          FOREIGN KEY (node_key) REFERENCES cache_entries(node_key) ON DELETE CASCADE,
           PRIMARY KEY (node_key, dep_key)
         )
       `
@@ -612,14 +619,19 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     )
   }
 
-  async #maybePruneAfterWrite(now: number): Promise<void> {
+  async #maybePruneAfterWrite(
+    now: number,
+    options: { skipWriteCount?: boolean; force?: boolean } = {}
+  ): Promise<void> {
     if (!this.#db) {
       return
     }
 
-    this.#writesSincePrune += 1
+    if (!options.skipWriteCount) {
+      this.#writesSincePrune += 1
+    }
     const shouldCheckOverflow =
-      this.#writesSincePrune >= this.#overflowCheckInterval
+      options.force || this.#writesSincePrune >= this.#overflowCheckInterval
     const shouldPruneForAgeWindow =
       now - this.#lastPrunedAt >= SQLITE_PRUNE_MAX_INTERVAL_MS
 
@@ -645,6 +657,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     if (this.#pruneInFlight) {
       await this.#pruneInFlight
+      await this.#maybePruneAfterWrite(Date.now(), {
+        skipWriteCount: true,
+        force: true,
+      })
       return
     }
 
@@ -727,29 +743,31 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const staleBefore = Date.now() - this.#maxAgeMs
+    const staleNodes = this.#db
+      .prepare(
+        `
+          SELECT node_key
+          FROM cache_entries
+          WHERE updated_at < ?
+        `
+      )
+      .all(staleBefore) as Array<{ node_key?: string }>
+    const staleNodeKeys = staleNodes
+      .map((row) => row.node_key)
+      .filter((nodeKey: string | undefined): nodeKey is string => {
+        return typeof nodeKey === 'string'
+      })
+    const staleCount = staleNodeKeys.length
 
     this.#db.exec('BEGIN IMMEDIATE')
     try {
-      this.#db
-        .prepare(
-          `
-            DELETE FROM cache_deps
-            WHERE node_key IN (
-              SELECT node_key
-              FROM cache_entries
-              WHERE updated_at < ?
-            )
-          `
-        )
-        .run(staleBefore)
-
-      this.#db
-        .prepare(`DELETE FROM cache_entries WHERE updated_at < ?`)
-        .run(staleBefore)
+      if (staleCount > 0) {
+        this.#deleteRowsForNodeKeys(staleNodeKeys)
+      }
 
       const countRow = this.#db
-          .prepare(`SELECT COUNT(*) as total FROM cache_entries`)
-          .get() as { total?: number }
+        .prepare(`SELECT COUNT(*) as total FROM cache_entries`)
+        .get() as { total?: number }
       const totalRows = Number(countRow?.total ?? 0)
       const overflow = totalRows - this.#maxRows
 
@@ -767,7 +785,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
         const victimNodeKeys = overflowRows
           .map((row) => row.node_key)
-          .filter((nodeKey): nodeKey is string => typeof nodeKey === 'string')
+          .filter((nodeKey: string | undefined): nodeKey is string => {
+            return typeof nodeKey === 'string'
+          })
 
         this.#deleteRowsForNodeKeys(victimNodeKeys)
       }
@@ -783,7 +803,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           )
           .all(Date.now())
           .map((row: { node_key?: string }) => row.node_key)
-          .filter((nodeKey): nodeKey is string => typeof nodeKey === 'string')
+          .filter((nodeKey: string | undefined): nodeKey is string => {
+            return typeof nodeKey === 'string'
+          })
       )
 
       this.#db.exec('COMMIT')
@@ -812,12 +834,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return
     }
 
+    const uniqueNodeKeys = Array.from(new Set(nodeKeys)).sort()
+
     for (
       let offset = 0;
-      offset < nodeKeys.length;
+      offset < uniqueNodeKeys.length;
       offset += SQLITE_DELETE_BATCH_SIZE
     ) {
-      const batch = nodeKeys.slice(offset, offset + SQLITE_DELETE_BATCH_SIZE)
+      const batch = uniqueNodeKeys.slice(
+        offset,
+        offset + SQLITE_DELETE_BATCH_SIZE
+      )
       if (batch.length === 0) {
         continue
       }
@@ -837,12 +864,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return
     }
 
+    const uniqueNodeKeys = Array.from(new Set(nodeKeys)).sort()
+
     for (
       let offset = 0;
-      offset < nodeKeys.length;
+      offset < uniqueNodeKeys.length;
       offset += SQLITE_DELETE_BATCH_SIZE
     ) {
-      const batch = nodeKeys.slice(offset, offset + SQLITE_DELETE_BATCH_SIZE)
+      const batch = uniqueNodeKeys.slice(
+        offset,
+        offset + SQLITE_DELETE_BATCH_SIZE
+      )
       if (batch.length === 0) {
         continue
       }

@@ -90,7 +90,7 @@ export function resolveLiteralExpression(
       return value
     }
 
-    const operatorKind = expression.getOperatorToken().getKind()
+    const operatorKind = expression.getOperatorToken()
 
     if (operatorKind === ts.SyntaxKind.MinusToken && typeof value === 'number') {
       return -value
@@ -190,13 +190,13 @@ export function resolveLiteralExpression(
     return value
   }
 
-  if (
-    Node.isSpreadElement(expression) ||
-    Node.isAsExpression(expression) ||
-    expression.getKind() === ts.SyntaxKind.TypeAssertionExpression
-  ) {
-    return resolveLiteralExpression(expression.getExpression())
-  }
+    if (
+      Node.isSpreadElement(expression) ||
+      Node.isAsExpression(expression) ||
+      Node.isTypeAssertion(expression)
+    ) {
+      return resolveLiteralExpression(expression.getExpression())
+    }
 
   return EMPTY_LITERAL_EXPRESSION_VALUE
 }

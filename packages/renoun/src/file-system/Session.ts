@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 
-import { normalizePathKey } from '../utils/path.ts'
+import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { CacheStore, hashString, stableStringify } from './CacheStore.ts'
 import { getCacheStorePersistence } from './CacheStoreSqlite.ts'
@@ -10,13 +10,36 @@ import type { DirectorySnapshot } from './directory-snapshot.ts'
 
 const sessionsByFileSystem = new WeakMap<object, Map<string, Session>>()
 const snapshotGenerationByFileSystem = new WeakMap<object, number>()
-const snapshotFamilyByFileSystem = new WeakMap<object, Map<string, string>>()
+const snapshotParentByFileSystem = new WeakMap<object, Map<string, string>>()
 
-function getSessionFamilyId(
+function collectSnapshotFamily(
   snapshotId: string,
-  familyMap: Map<string, string>
-): string {
-  return familyMap.get(snapshotId) ?? snapshotId
+  parentMap: Map<string, string>
+): Set<string> {
+  const family = new Set<string>()
+  const queue: string[] = [snapshotId]
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current || family.has(current)) {
+      continue
+    }
+
+    family.add(current)
+
+    const parent = parentMap.get(current)
+    if (parent) {
+      queue.push(parent)
+    }
+
+    for (const [childId, childParentId] of parentMap) {
+      if (childParentId === current) {
+        queue.push(childId)
+      }
+    }
+  }
+
+  return family
 }
 
 export class Session {
@@ -29,22 +52,19 @@ export class Session {
         : baseSnapshot
     const sessionMap =
       sessionsByFileSystem.get(fileSystem) ?? new Map<string, Session>()
-    const familyMap =
-      snapshotFamilyByFileSystem.get(fileSystem) ?? new Map<string, string>()
+    const parentMap =
+      snapshotParentByFileSystem.get(fileSystem) ?? new Map<string, string>()
 
     if (!sessionsByFileSystem.has(fileSystem)) {
       sessionsByFileSystem.set(fileSystem, sessionMap)
     }
-    if (!snapshotFamilyByFileSystem.has(fileSystem)) {
-      snapshotFamilyByFileSystem.set(fileSystem, familyMap)
+    if (!snapshotParentByFileSystem.has(fileSystem)) {
+      snapshotParentByFileSystem.set(fileSystem, parentMap)
     }
 
-    const targetFamilyId =
-      targetSnapshot instanceof GeneratedSnapshot
-        ? targetSnapshot.baseSnapshotId
-        : getSessionFamilyId(targetSnapshot.id, familyMap)
-
-    familyMap.set(targetSnapshot.id, targetFamilyId)
+    if (targetSnapshot instanceof GeneratedSnapshot) {
+      parentMap.set(targetSnapshot.id, targetSnapshot.baseSnapshotId)
+    }
 
     const existing = sessionMap.get(targetSnapshot.id)
     if (existing) {
@@ -58,22 +78,27 @@ export class Session {
 
   static reset(fileSystem: FileSystem, snapshotId?: string): void {
     const sessionMap = sessionsByFileSystem.get(fileSystem)
-    const familyMap = snapshotFamilyByFileSystem.get(fileSystem)
+    const parentMap = snapshotParentByFileSystem.get(fileSystem)
 
     if (snapshotId) {
       if (!sessionMap) {
         return
       }
-      if (!familyMap || familyMap.size === 0) {
+      if (!parentMap) {
         return
       }
 
-      const snapshotFamilyId = getSessionFamilyId(snapshotId, familyMap)
+      const family = collectSnapshotFamily(snapshotId, parentMap)
       const familySessions = Array.from(sessionMap.entries()).filter(
-        ([id]) => getSessionFamilyId(id, familyMap) === snapshotFamilyId
+        ([id]) => family.has(id)
       )
 
       if (familySessions.length === 0) {
+        if (process.env['NODE_ENV'] !== 'test') {
+          console.warn(
+            `[renoun] Session.reset(${String(snapshotId)}) did not match any active session family. No caches were invalidated.`
+          )
+        }
         return
       }
 
@@ -84,12 +109,12 @@ export class Session {
       for (const [id, session] of familySessions) {
         session.reset()
         sessionMap.delete(id)
-        familyMap?.delete(id)
+        parentMap.delete(id)
       }
 
       if (sessionMap.size === 0) {
         sessionsByFileSystem.delete(fileSystem)
-        snapshotFamilyByFileSystem.delete(fileSystem)
+        snapshotParentByFileSystem.delete(fileSystem)
       }
 
       return
@@ -109,7 +134,7 @@ export class Session {
 
     sessionMap.clear()
     sessionsByFileSystem.delete(fileSystem)
-    snapshotFamilyByFileSystem.delete(fileSystem)
+    snapshotParentByFileSystem.delete(fileSystem)
   }
 
   readonly #fileSystem: FileSystem
@@ -369,7 +394,7 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
 
 function resolveSessionProjectRoot(fileSystem: FileSystem): string {
   const repoRoot = (fileSystem as any).repoRoot
-  if (typeof repoRoot === 'string' && repoRoot.startsWith('/')) {
+  if (typeof repoRoot === 'string' && isAbsolutePath(repoRoot)) {
     if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
       // eslint-disable-next-line no-console
       console.log('[renoun-debug] resolveSessionProjectRoot(repoRoot)', {
@@ -380,15 +405,34 @@ function resolveSessionProjectRoot(fileSystem: FileSystem): string {
     return resolve(repoRoot)
   }
 
+  let absoluteRoot: string | undefined
   try {
-    const absoluteRoot = fileSystem.getAbsolutePath('.')
-    return getRootDirectory(absoluteRoot)
-  } catch {
-    try {
-      return getRootDirectory()
-    } catch {
-      return process.cwd()
+    absoluteRoot = fileSystem.getAbsolutePath('.')
+  } catch (error) {
+    if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+      // eslint-disable-next-line no-console
+      console.log('[renoun-debug] resolveSessionProjectRoot(getAbsolutePath failed)', {
+        repoRoot: typeof repoRoot === 'string' ? repoRoot : undefined,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
+  }
+
+  if (!absoluteRoot) {
+    absoluteRoot = typeof repoRoot === 'string' ? resolve(repoRoot) : resolve('.')
+  }
+
+  try {
+    return getRootDirectory(absoluteRoot)
+  } catch (error) {
+    if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+      // eslint-disable-next-line no-console
+      console.log('[renoun-debug] resolveSessionProjectRoot(fallback)', {
+        error: error instanceof Error ? error.message : String(error),
+        absoluteRoot,
+      })
+    }
+    return resolve(absoluteRoot)
   }
 }
 

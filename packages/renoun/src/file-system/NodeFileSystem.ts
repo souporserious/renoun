@@ -57,15 +57,18 @@ export class NodeFileSystem
 
   /** Asserts that the provided path is within the workspace root. */
   #assertWithinWorkspace(path: string) {
+    this.#assertWithinWorkspacePath(this.getAbsolutePath(path))
+  }
+
+  #assertWithinWorkspacePath(absolutePath: string) {
     const rootDirectory = getRootDirectory()
-    const absolutePath = this.getAbsolutePath(path)
     const relativeToRoot = relativePath(rootDirectory, absolutePath)
 
     if (relativeToRoot.startsWith('..') || relativeToRoot.startsWith('../')) {
       throw new Error(
         `[renoun] Attempted to access a path outside of the workspace root.\n` +
           `  Workspace root: ${rootDirectory}\n` +
-          `  Provided path:  ${path}\n` +
+          `  Provided path:  ${absolutePath}\n` +
           `  Resolved path:  ${absolutePath}\n` +
           'Accessing files outside of the workspace is not allowed.'
       )
@@ -80,7 +83,7 @@ export class NodeFileSystem
         `[renoun] Attempted to access a path outside of the workspace root via symlink.\n` +
           `  Workspace root:       ${rootDirectory}\n` +
           `  Workspace real path:  ${realWorkspaceRoot}\n` +
-          `  Provided path:        ${path}\n` +
+          `  Provided path:        ${absolutePath}\n` +
           `  Resolved path:        ${absolutePath}\n` +
           `  Real target path:     ${realTargetPath}\n` +
           'Accessing files outside of the workspace is not allowed.'
@@ -107,33 +110,18 @@ export class NodeFileSystem
 
   getAbsolutePath(path: string): string {
     const absolutePath = resolve(path)
-    const isDotPrefixed = path.startsWith('./')
-    const normalizedPath = path.startsWith('./') ? path.slice(2) : path
 
-    if (
-      path &&
-      !path.startsWith('/') &&
-      !isDotPrefixed &&
-      !normalizedPath.startsWith('../')
-    ) {
-      const rootDirectory = getRootDirectory()
-      const relativeCwdPath = relativePath(rootDirectory, process.cwd())
-
-      if (
-        relativeCwdPath &&
-        !relativeCwdPath.startsWith('..') &&
-        normalizedPath.startsWith(`${relativeCwdPath}/`) &&
-        !path.endsWith('/')
-      ) {
-        const adjustedPath = normalizedPath.slice(`${relativeCwdPath}/`.length)
-        const adjustedAbsolutePath = resolve(rootDirectory, adjustedPath)
-
-        if (existsSync(adjustedAbsolutePath)) {
-          return adjustedAbsolutePath
-        }
+    if (process.env['RENOUN_DEBUG_ABS_PATH'] === '1') {
+      if (path.includes('tmp-renoun-')) {
+        // eslint-disable-next-line no-console
+        console.log('[renoun-debug-abs]', {
+          input: path,
+          absolutePath,
+          cwd: process.cwd(),
+          normalized: absolutePath,
+        })
       }
     }
-
     return absolutePath
   }
 
@@ -291,17 +279,17 @@ export class NodeFileSystem
     target: string,
     options?: { overwrite?: boolean }
   ): Promise<void> {
-    this.#assertWithinWorkspace(source)
-    this.#assertWithinWorkspace(target)
+    const absoluteSource = this.getAbsolutePath(source)
+    const absoluteTarget = this.getAbsolutePath(target)
 
-    if (source === target) {
+    this.#assertWithinWorkspacePath(absoluteSource)
+    this.#assertWithinWorkspacePath(absoluteTarget)
+
+    if (absoluteSource === absoluteTarget) {
       return
     }
 
     const overwrite = options?.overwrite ?? false
-
-    const absoluteSource = this.getAbsolutePath(source)
-    const absoluteTarget = this.getAbsolutePath(target)
 
     if (!overwrite && (await this.fileExists(absoluteTarget))) {
       throw new Error(
@@ -326,13 +314,17 @@ export class NodeFileSystem
     target: string,
     options?: { overwrite?: boolean }
   ): Promise<void> {
-    this.#assertWithinWorkspace(source)
-    this.#assertWithinWorkspace(target)
+    const absoluteSource = this.getAbsolutePath(source)
+    const absoluteTarget = this.getAbsolutePath(target)
+
+    this.#assertWithinWorkspacePath(absoluteSource)
+    this.#assertWithinWorkspacePath(absoluteTarget)
 
     const overwrite = options?.overwrite ?? false
 
-    const absoluteSource = this.getAbsolutePath(source)
-    const absoluteTarget = this.getAbsolutePath(target)
+    if (absoluteSource === absoluteTarget) {
+      return
+    }
 
     if (!overwrite && (await this.fileExists(absoluteTarget))) {
       throw new Error(

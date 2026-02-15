@@ -21,6 +21,7 @@ import {
   disposeDefaultCacheStorePersistence,
   getCacheStorePersistence,
 } from './CacheStoreSqlite.ts'
+import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import { Session } from './Session.ts'
@@ -28,19 +29,6 @@ import { FileSystemSnapshot } from './Snapshot.ts'
 import { Directory, File, Package, Workspace } from './index.tsx'
 import type { FileStructure, GitExportMetadata, GitMetadata } from './types.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
-
-class NestedCwdNodeFileSystem extends NodeFileSystem {
-  readonly #cwd: string
-
-  constructor(cwd: string) {
-    super()
-    this.#cwd = cwd
-  }
-
-  override getAbsolutePath(path: string): string {
-    return resolvePath(this.#cwd, path)
-  }
-}
 
 class SyntheticContentIdFileSystem extends InMemoryFileSystem {
   readonly #contentIds = new Map<string, string>()
@@ -87,6 +75,23 @@ class SyntheticContentIdFileSystem extends InMemoryFileSystem {
   }
 }
 
+class NestedCwdNodeFileSystem extends NodeFileSystem {
+  readonly #cwd: string
+
+  constructor(cwd: string, tsConfigPath?: string) {
+    super({ tsConfigPath })
+    this.#cwd = cwd
+  }
+
+  override getAbsolutePath(path: string): string {
+    return resolvePath(this.#cwd, path)
+  }
+
+  override isFilePathGitIgnored(filePath: string): boolean {
+    return false
+  }
+}
+
 class MutableTimestampFileSystem extends InMemoryFileSystem {
   readonly #fileTimes = new Map<string, number>()
 
@@ -121,8 +126,7 @@ function createDeferredPromise() {
 function createTempNodeFileSystem(tmpDirectory: string) {
   const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
   writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
-  const fs = new NodeFileSystem({ tsConfigPath })
-  return fs
+  return new NestedCwdNodeFileSystem(getRootDirectory(), tsConfigPath)
 }
 
 function withTestCacheDbPath<T>(
@@ -130,12 +134,9 @@ function withTestCacheDbPath<T>(
   run: () => Promise<T> | T
 ) {
   const previousPath = process.env.RENOUN_FS_CACHE_DB_PATH
-  process.env.RENOUN_FS_CACHE_DB_PATH = join(
-    tmpDirectory,
-    '.cache',
-    'renoun',
-    'fs-cache.sqlite'
-  )
+  const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+  mkdirSync(dirname(dbPath), { recursive: true })
+  process.env.RENOUN_FS_CACHE_DB_PATH = dbPath
 
   try {
     return run()
@@ -148,11 +149,23 @@ function withTestCacheDbPath<T>(
   }
 }
 
+function createTmpRenounCacheDirectory(prefix: string) {
+  const cacheBaseDirectory = join(
+    getRootDirectory(),
+    'packages',
+    'renoun',
+    '.cache',
+    'renoun'
+  )
+  mkdirSync(cacheBaseDirectory, { recursive: true })
+  return mkdtempSync(join(cacheBaseDirectory, prefix))
+}
+
 async function withProductionSqliteCache<T>(
   run: (tmpDirectory: string) => Promise<T> | T
 ) {
-  const tmpDirectory = mkdtempSync(
-    join(process.cwd(), 'tmp-renoun-cache-sqlite-worker-')
+  const tmpDirectory = createTmpRenounCacheDirectory(
+    'renoun-cache-sqlite-worker-'
   )
   const previousNodeEnv = process.env.NODE_ENV
 
@@ -396,8 +409,8 @@ describe('file-system cache integration', () => {
     let tempDirectory: string | undefined
 
     try {
-      tempDirectory = mkdtempSync(
-        join(process.cwd(), 'tmp-renoun-cache-child-snapshot-')
+      tempDirectory = createTmpRenounCacheDirectory(
+        'renoun-cache-child-snapshot-'
       )
       const directoryPath = relativePath(process.cwd(), tempDirectory)
       const fileSystem = new NodeFileSystem()
@@ -464,8 +477,8 @@ describe('file-system cache integration', () => {
     let tempDirectory: string | undefined
 
     try {
-      tempDirectory = mkdtempSync(
-        join(process.cwd(), 'tmp-renoun-cache-child-snapshot-prod-')
+      tempDirectory = createTmpRenounCacheDirectory(
+        'renoun-cache-child-snapshot-prod-'
       )
       const directoryPath = relativePath(process.cwd(), tempDirectory)
       const fileSystem = new NodeFileSystem()
@@ -790,9 +803,7 @@ export type Metadata = Value`,
   })
 
   test('invalidates cached markdown sections on NodeFileSystem when files change', async () => {
-    const tempDirectory = mkdtempSync(
-      join(process.cwd(), 'tmp-renoun-cache-node-')
-    )
+    const tempDirectory = createTmpRenounCacheDirectory('renoun-cache-node-')
     const scopedCwd = join(tempDirectory, 'scoped-cwd')
     mkdirSync(scopedCwd, { recursive: true })
     const fileSystem = new NestedCwdNodeFileSystem(scopedCwd)
@@ -834,8 +845,8 @@ updated content`
   })
 
   test('invalidates snapshot content IDs for absolute paths in nested-cwd sessions', async () => {
-    const tempDirectory = mkdtempSync(
-      join(process.cwd(), 'tmp-renoun-cache-session-invalidate-')
+    const tempDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-session-invalidate-'
     )
     const filePath = join(tempDirectory, 'index.ts')
     const scopedCwd = join(tempDirectory, 'scoped-cwd')
@@ -860,8 +871,8 @@ updated content`
   })
 
   test('revalidates metadata content IDs after a short freshness window for NodeFileSystem', async () => {
-    const tempDirectory = mkdtempSync(
-      join(process.cwd(), 'tmp-renoun-cache-snapshot-')
+    const tempDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-snapshot-'
     )
     const filePath = join(tempDirectory, 'index.ts')
     const fileSystem = new NodeFileSystem()
@@ -930,8 +941,8 @@ updated content`
   })
 
   test('clears all snapshot content IDs when resetting nested-cwd sessions', async () => {
-    const tempDirectory = mkdtempSync(
-      join(process.cwd(), 'tmp-renoun-cache-session-reset-')
+    const tempDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-session-reset-'
     )
     const filePath = join(tempDirectory, 'index.ts')
     const scopedCwd = join(tempDirectory, 'scoped-cwd')
@@ -1223,6 +1234,35 @@ updated content`
     expect(secondSession.snapshot.id).toBe(firstSnapshotId)
   })
 
+  test('resets a full snapshot lineage when reset is targeted at an ancestor', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+
+    const baseSession = Session.for(fileSystem)
+    Session.reset(fileSystem)
+
+    const parentSession = Session.for(fileSystem, baseSession.snapshot)
+    const childSession = Session.for(fileSystem, parentSession.snapshot)
+    const unrelatedSession = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'unrelated-lineage')
+    )
+
+    const parentToken = Promise.resolve(Symbol('parent-session'))
+    const childToken = Promise.resolve(Symbol('child-session'))
+    const unrelatedToken = Promise.resolve(Symbol('unrelated-session'))
+    parentSession.inflight.set('token', parentToken)
+    childSession.inflight.set('token', childToken)
+    unrelatedSession.inflight.set('token', unrelatedToken)
+
+    Session.reset(fileSystem, parentSession.snapshot.id)
+
+    expect(parentSession.inflight.has('token')).toBe(false)
+    expect(childSession.inflight.has('token')).toBe(false)
+    expect(await unrelatedSession.inflight.get('token')).toBe(await unrelatedToken)
+  })
+
   test('does not reset unrelated :g-suffixed sessions that are not in the same explicit family', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
@@ -1263,6 +1303,31 @@ updated content`
     expect(await unrelatedSession.inflight.get('token')).toBe(
       await unrelatedSessionToken
     )
+  })
+
+  test('invalidates parent directory snapshots on nested entry content changes', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    try {
+      const fileSystem = new InMemoryFileSystem({
+        'nested/child.ts': 'export const value = 1',
+      })
+      const directory = new Directory({ fileSystem })
+      const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectory')
+
+      await directory.getEntries({ recursive: false })
+      const callsAfterFirstRead = readDirectorySpy.mock.calls.length
+
+      await fileSystem.writeFile('nested/child.ts', 'export const value = 2')
+      await directory.getEntries({ recursive: false })
+
+      expect(readDirectorySpy.mock.calls.length).toBeGreaterThan(
+        callsAfterFirstRead
+      )
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
   })
 })
 
@@ -2295,20 +2360,26 @@ export type Metadata = Value`,
       const persistence = new SqliteCacheStorePersistence({ dbPath })
       const store = new CacheStore({ snapshot, persistence })
 
+      const unserializableValue = { value: Symbol('not-serializable') }
+
       await store.put(
         'test:unserializable',
-        { value: Symbol('not-serializable') },
+        unserializableValue,
         { persist: true }
       )
       await store.put('test:serializable', { value: 1 }, { persist: true })
 
+      const memoryValue = await store.get<typeof unserializableValue>(
+        'test:unserializable'
+      )
       const reloadedStore = new CacheStore({ snapshot, persistence })
       const skippedValue = await reloadedStore.get('test:unserializable')
       const persistedValue = await reloadedStore.get<{ value: number }>(
         'test:serializable'
       )
 
-      expect(skippedValue).toEqual({})
+      expect(memoryValue).toEqual(unserializableValue)
+      expect(skippedValue).toBeUndefined()
       expect(persistedValue).toEqual({ value: 1 })
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
@@ -2917,6 +2988,75 @@ export type Metadata = Value`,
         for (const row of rows) {
           expect(Number(row.deps ?? 0)).toBe(1)
         }
+      } finally {
+        db.close()
+      }
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('keeps prune behavior idempotent under concurrent writes', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-prune-concurrent-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(fileSystem, 'sqlite-prune-concurrent')
+      const persistence = new SqliteCacheStorePersistence({
+        dbPath,
+        maxRows: 2,
+        maxAgeMs: 1000 * 60 * 60,
+      })
+      const writerOne = new CacheStore({ snapshot, persistence })
+      const writerTwo = new CacheStore({ snapshot, persistence })
+
+      await Promise.all(
+        Array.from({ length: 20 }, (_, index) => {
+          const writer = index % 2 === 0 ? writerOne : writerTwo
+          return writer.put(`test:prune-concurrent:${index}`, { index }, {
+            persist: true,
+            deps: [
+              {
+                depKey: `const:prune-concurrent:${index}`,
+                depVersion: String(index),
+              },
+            ],
+          })
+        })
+      )
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const db = new DatabaseSync(dbPath)
+      try {
+        const countRow = db
+          .prepare(`SELECT COUNT(*) as total FROM cache_entries`)
+          .get() as { total?: number }
+        const orphanRows = db
+          .prepare(
+            `
+              SELECT COUNT(*) as total
+              FROM cache_deps AS dependency
+              LEFT JOIN cache_entries AS entry
+                ON entry.node_key = dependency.node_key
+              WHERE entry.node_key IS NULL
+            `
+          )
+          .get() as { total?: number }
+
+        expect(Number(countRow.total ?? 0)).toBeLessThanOrEqual(2)
+        expect(Number(orphanRows.total ?? 0)).toBe(0)
       } finally {
         db.close()
       }

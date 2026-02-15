@@ -110,6 +110,22 @@ describe('NodeFileSystem', () => {
     )
   })
 
+  test('rejects rename/copy targets outside the workspace root', async () => {
+    const outsideDirectory = mkdtempSync(join(rootDirectory, '..', 'node-fs-outside-'))
+    outsideDirectories.push(outsideDirectory)
+    const outsidePath = join(outsideDirectory, 'outside.txt')
+    const target = join(tempDirectory, 'outside-copy.txt')
+
+    writeFileSync(outsidePath, 'outside')
+
+    await expect(
+      fileSystem.rename(outsidePath, target)
+    ).rejects.toThrow(/outside of the workspace root/i)
+    await expect(
+      fileSystem.copy(outsidePath, target)
+    ).rejects.toThrow(/outside of the workspace root/i)
+  })
+
   test('rename and copy respect overwrite options', async () => {
     const source = join(tempDirectory, 'source.txt')
     const target = join(tempDirectory, 'target.txt')
@@ -135,6 +151,28 @@ describe('NodeFileSystem', () => {
     await fileSystem.copy(copySource, copyTarget, { overwrite: true })
     expect(await fileSystem.readFile(copyTarget)).toBe('copy')
     expect(await fileSystem.fileExists(copySource)).toBe(true)
+  })
+
+  test('rename and copy treat equivalent absolute and relative forms as the same path', async () => {
+    const previousCwd = process.cwd()
+    const source = 'canonical.txt'
+    const absoluteSource = join(tempDirectory, source)
+    process.chdir(tempDirectory)
+
+    try {
+      await fileSystem.writeFile(absoluteSource, 'canonical')
+
+      await expect(
+        fileSystem.rename(absoluteSource, `./${source}`)
+      ).resolves.toBeUndefined()
+      await expect(
+        fileSystem.copy(`./${source}`, absoluteSource)
+      ).resolves.toBeUndefined()
+
+      expect(await fileSystem.readFile(absoluteSource)).toBe('canonical')
+    } finally {
+      process.chdir(previousCwd)
+    }
   })
 
   test('copy supports recursive directories', async () => {
@@ -198,6 +236,9 @@ describe('NodeFileSystem', () => {
       )
       expect(fileSystem.getAbsolutePath(`./${sharedName}`)).toBe(
         join(cwdDirectory, sharedName)
+      )
+      expect(fileSystem.getAbsolutePath(`./${sharedName}`)).toBe(
+        fileSystem.getAbsolutePath(sharedName)
       )
     } finally {
       process.chdir(previousCwd)

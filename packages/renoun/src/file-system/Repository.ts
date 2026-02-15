@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { directoryName, normalizeSlashes } from '../utils/path.ts'
 import { GitFileSystem } from './GitFileSystem.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
-import { Directory, File } from './entries.tsx'
+import { Directory, File } from './entries.ts'
 import {
   coerceSemVer,
   compareSemVer,
