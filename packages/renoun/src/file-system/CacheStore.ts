@@ -25,6 +25,7 @@ export interface CacheStorePersistence {
     }
   ): Promise<CacheEntry | undefined>
   save(nodeKey: string, entry: CacheEntry): Promise<void>
+  saveWithRevision?(nodeKey: string, entry: CacheEntry): Promise<number>
   delete(nodeKey: string): Promise<void>
 }
 
@@ -79,6 +80,10 @@ interface CacheStorePersistenceComputeSlot {
    * persistence implementations.
    */
   computeSlotTtlMs?: number
+}
+
+interface PersistedCacheEntry<Value = unknown> extends CacheEntry<Value> {
+  revision?: number
 }
 
 function getComputeSlotTtlMs(
@@ -566,7 +571,9 @@ export class CacheStore {
     return this.#loadPersistedEntry(nodeKey)
   }
 
-  async #loadPersistedEntry(nodeKey: string): Promise<CacheEntry | undefined> {
+  async #loadPersistedEntry(
+    nodeKey: string
+  ): Promise<CacheEntry | undefined> {
     if (!this.#persistence) {
       return undefined
     }
@@ -579,7 +586,7 @@ export class CacheStore {
       return undefined
     }
 
-    let persistedEntry: CacheEntry | undefined
+    let persistedEntry: PersistedCacheEntry | undefined
     try {
       persistedEntry = await this.#persistence.load(nodeKey)
     } catch (error) {
@@ -777,28 +784,41 @@ export class CacheStore {
       const attempt = async (
         value: unknown
       ): Promise<'verified' | 'superseded'> => {
+        const persistenceWithRevision = this.#persistence as CacheStorePersistence & {
+          saveWithRevision?(
+            nodeKey: string,
+            entry: CacheEntry
+          ): Promise<number>
+        }
         const persisted = {
           ...entry,
           value,
           persist: true,
         }
-        await this.#persistence!.save(nodeKey, persisted)
+        const expectedRevision = persistenceWithRevision.saveWithRevision
+          ? await persistenceWithRevision.saveWithRevision(nodeKey, persisted)
+          : undefined
+
+        if (!persistenceWithRevision.saveWithRevision) {
+          await this.#persistence!.save(nodeKey, persisted)
+        }
 
         for (
           let verifyAttempt = 0;
           verifyAttempt < maxVerificationAttempts;
           verifyAttempt += 1
         ) {
-          const verified = await this.#persistence!.load(nodeKey, {
+          const verified = (await this.#persistence!.load(nodeKey, {
             skipFingerprintCheck: true,
-          })
+          })) as PersistedCacheEntry | undefined
 
-          if (!verified) {
+        if (!verified) {
             if (shouldDebugPersistenceFailure) {
               this.#logPersistenceDebug(nodeKey, {
                 phase: 'save-verify',
                 details: `verification-load-miss attempt=${verifyAttempt + 1} of ${maxVerificationAttempts} expectedFingerprint=${entry.fingerprint}`,
                 entry,
+                expectedRevision,
               })
             }
 
@@ -807,7 +827,16 @@ export class CacheStore {
               continue
             }
 
-            throw new Error('cache persistence verification failed: load returned no entry')
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: 'superseded-by-load-miss',
+                entry,
+                expectedRevision,
+              })
+            }
+
+            return 'superseded'
           }
 
           if (!verified.persist) {
@@ -817,28 +846,48 @@ export class CacheStore {
           }
 
           if (verified.fingerprint === entry.fingerprint) {
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: 'verification-match',
+                entry,
+                verified,
+                expectedRevision,
+                actualRevision: verified.revision,
+              })
+            }
+
             return 'verified'
           }
+
+          const isRevisionSuperseding =
+            typeof expectedRevision === 'number' &&
+            typeof verified.revision === 'number' &&
+            verified.revision > expectedRevision
+
+          const hasWinnerTimestamp = verified.updatedAt >= entry.updatedAt
+          const isSuperseded = isRevisionSuperseding || hasWinnerTimestamp
+          const supersedeReason = isRevisionSuperseding
+            ? 'superseded-by-revision'
+            : hasWinnerTimestamp
+              ? 'superseded-by-updated-at'
+              : 'fingerprint-drift'
 
           if (shouldDebugPersistenceFailure) {
             this.#logPersistenceDebug(nodeKey, {
               phase: 'save-verify',
               entry,
               verified,
-              details: `fingerprint-drift expected=${entry.fingerprint} actual=${verified.fingerprint} expectedUpdatedAt=${entry.updatedAt} actualUpdatedAt=${verified.updatedAt}`,
+              details:
+                supersedeReason === 'fingerprint-drift'
+                  ? `fingerprint-drift expected=${entry.fingerprint} actual=${verified.fingerprint} expectedUpdatedAt=${entry.updatedAt} actualUpdatedAt=${verified.updatedAt}`
+                  : `${supersedeReason} expectedRevision=${expectedRevision} actualRevision=${verified.revision} expectedFingerprint=${entry.fingerprint} actualFingerprint=${verified.fingerprint} expectedUpdatedAt=${entry.updatedAt} actualUpdatedAt=${verified.updatedAt}`,
+              expectedRevision,
+              actualRevision: verified.revision,
             })
           }
 
-          if (verified.updatedAt >= entry.updatedAt) {
-            if (shouldDebugPersistenceFailure) {
-              this.#logPersistenceDebug(nodeKey, {
-                phase: 'save-verify',
-                details: `superseded-by-persisted-entry updatedAt=${verified.updatedAt} expected=${entry.updatedAt}`,
-                entry,
-                verified,
-              })
-            }
-
+          if (isSuperseded) {
             return 'superseded'
           }
 
@@ -849,7 +898,7 @@ export class CacheStore {
           )
         }
 
-        throw new Error('cache persistence verification failed: max retries exceeded')
+        return 'superseded'
       }
 
       try {
@@ -880,17 +929,6 @@ export class CacheStore {
           return
         }
 
-        if (
-          error instanceof Error &&
-          error.message.startsWith(
-            'cache persistence verification failed: load returned no entry'
-          )
-        ) {
-          clearPersistedEntryInvalidation(this.#persistence, nodeKey)
-          entry.persist = false
-          return
-        }
-
         const cleanupError =
           error instanceof Error ? error : new Error(String(error))
 
@@ -918,6 +956,8 @@ export class CacheStore {
       entry?: CacheEntry
       verified?: CacheEntry
       details?: string
+      expectedRevision?: number
+      actualRevision?: number
     }
   ) {
     const debugEnvValue = process.env['RENOUN_DEBUG_CACHE_PERSISTENCE']
@@ -949,6 +989,13 @@ export class CacheStore {
       lines.push(
         `verifiedDeps=${payload.verified.deps.length} verifiedFingerprint=${payload.verified.fingerprint} verifiedUpdatedAt=${payload.verified.updatedAt}`
       )
+    }
+
+    if (payload.expectedRevision !== undefined) {
+      lines.push(`expectedRevision=${payload.expectedRevision}`)
+    }
+    if (payload.actualRevision !== undefined) {
+      lines.push(`actualRevision=${payload.actualRevision}`)
     }
 
     console.warn(

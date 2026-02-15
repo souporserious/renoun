@@ -3531,6 +3531,56 @@ export type Metadata = Value`,
     }
   }, 12000)
 
+  test('monotonically increments sqlite persisted revisions for repeated node writes', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-save-revision-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:sqlite-save-revision'
+      const baseDependencies = [{ depKey: 'file:index.ts', depVersion: '1' }]
+
+      const firstRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
+        value: { value: 'first' },
+        deps: baseDependencies,
+        fingerprint: createFingerprint(baseDependencies),
+        persist: true,
+        updatedAt: Date.now(),
+      })
+
+      const secondRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
+        value: { value: 'second' },
+        deps: baseDependencies,
+        fingerprint: createFingerprint(baseDependencies),
+        persist: true,
+        updatedAt: Date.now() + 1,
+      })
+
+      const nextDependencies = [{ depKey: 'file:index.ts', depVersion: '2' }]
+      const thirdRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
+        value: { value: 'third' },
+        deps: nextDependencies,
+        fingerprint: createFingerprint(nextDependencies),
+        persist: true,
+        updatedAt: Date.now() + 2,
+      })
+
+      expect(firstRevision).toBe(1)
+      expect(secondRevision).toBe(2)
+      expect(thirdRevision).toBe(3)
+
+      const persistedAfter = await sqlitePersistence.load(nodeKey)
+      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBe(
+        thirdRevision
+      )
+      expect(persistedAfter?.value).toEqual({ value: 'third' })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('keeps a newer persisted row when verification is superseded by concurrent writes', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-sqlite-save-supersede-')
@@ -3547,18 +3597,31 @@ export type Metadata = Value`,
       )
       const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
       const nodeKey = 'test:sqlite-save-supersede'
-
-      const staleDeps = [{ depKey: 'file:index.ts', depVersion: '1' }]
-      await sqlitePersistence.save(nodeKey, {
-        value: { value: 'stale' },
+      const staleDeps = [{ depKey: 'file:index.ts', depVersion: '0' }]
+      const staleRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
+        value: { value: 'baseline' },
         deps: staleDeps,
         fingerprint: createFingerprint(staleDeps),
         persist: true,
         updatedAt: Date.now(),
       })
 
+      const bumpDeps = [{ depKey: 'file:index.ts', depVersion: '1' }]
+      const bumpedRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
+        value: { value: 'bumped' },
+        deps: bumpDeps,
+        fingerprint: createFingerprint(bumpDeps),
+        persist: true,
+        updatedAt: Date.now() + 10,
+      })
+
+      expect(bumpedRevision).toBe(staleRevision + 1)
+      expect(staleRevision).toBe(1)
+
       let injectConcurrentWrite = true
       const concurrentDeps = [{ depKey: 'file:index.ts', depVersion: '2' }]
+      let concurrentRevision: number | undefined
+      let localRevision: number | undefined
       const localDeps = [
         {
           depKey: 'file:index.ts',
@@ -3568,21 +3631,31 @@ export type Metadata = Value`,
       const racingPersistence: CacheStorePersistence = {
         load: sqlitePersistence.load.bind(sqlitePersistence),
         delete: sqlitePersistence.delete.bind(sqlitePersistence),
-        save: async (candidateNodeKey, persistedEntry) => {
-          await sqlitePersistence.save(candidateNodeKey, persistedEntry)
-
+        saveWithRevision: async (candidateNodeKey, persistedEntry) => {
+          const revision = await sqlitePersistence.saveWithRevision(
+            candidateNodeKey,
+            persistedEntry
+          )
+          localRevision = revision
           if (!injectConcurrentWrite) {
-            return
+            return revision
           }
 
           injectConcurrentWrite = false
-          await sqlitePersistence.save(candidateNodeKey, {
-            ...persistedEntry,
-            value: { value: 'concurrent' },
-            deps: concurrentDeps,
-            fingerprint: createFingerprint(concurrentDeps),
-            updatedAt: Date.now() + 1000,
-          })
+          concurrentRevision = await sqlitePersistence.saveWithRevision(
+            candidateNodeKey,
+            {
+              ...persistedEntry,
+              value: { value: 'concurrent' },
+              deps: concurrentDeps,
+              fingerprint: createFingerprint(concurrentDeps),
+              updatedAt: persistedEntry.updatedAt + 1000,
+            }
+          )
+          return revision
+        },
+        save: async (candidateNodeKey, persistedEntry) => {
+          await sqlitePersistence.save(candidateNodeKey, persistedEntry)
         },
       }
 
@@ -3603,8 +3676,18 @@ export type Metadata = Value`,
       const persistedAfter = await sqlitePersistence.load(nodeKey)
       const memoryAfter = await store.get(nodeKey)
 
+      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBe(
+        concurrentRevision
+      )
+      expect(concurrentRevision).toBeGreaterThan(staleRevision)
+      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBeGreaterThan(
+        bumpedRevision
+      )
+      expect(localRevision).toBeGreaterThan(bumpedRevision)
+      expect(concurrentRevision).toBeGreaterThan(localRevision)
       expect(persistedAfter?.value).toEqual({ value: 'concurrent' })
       expect(memoryAfter).toEqual({ value: 'local' })
+      expect(localRevision).toBe(staleRevision + 2)
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
@@ -4028,6 +4111,98 @@ export type Metadata = Value`,
       expect(warnSpy).not.toHaveBeenCalled()
       expect(persistence.save).toHaveBeenCalledTimes(1)
       expect(persistence.load).toHaveBeenCalled()
+
+      const replayed = await store.get('test:persistence-verification-no-entry')
+      expect(replayed).toEqual({ value: 42 })
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  test('falls back gracefully without saveWithRevision when fingerprint drift is expectedly superseded', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'persistence-verification-fallback-revisionless'
+    )
+    const persistedEntries = new Map<string, CacheEntry<{ value: number }>>()
+    let forceSupersedingReplay = true
+    const concurrencyDependencies = [{ depKey: 'file:index.ts', depVersion: '2' }]
+    const concurrencyFingerprint = createFingerprint([
+      { depKey: 'file:index.ts', depVersion: '2' },
+    ])
+    const persistence = {
+      load: vi.fn(async (nodeKey) => {
+        if (forceSupersedingReplay) {
+          const current = persistedEntries.get(nodeKey)
+          if (current?.value.value === 1) {
+            return {
+              ...current,
+              value: { value: 2 },
+              fingerprint: concurrencyFingerprint,
+              updatedAt: current.updatedAt + 100,
+              deps: concurrencyDependencies,
+            }
+          }
+        }
+
+        return persistedEntries.get(nodeKey)
+      }),
+      save: vi.fn(async (nodeKey, entry) => {
+        persistedEntries.set(nodeKey, { ...entry })
+        if (entry.value.value === 1 && forceSupersedingReplay) {
+          forceSupersedingReplay = false
+          const current = persistedEntries.get(nodeKey)
+          if (current) {
+            persistedEntries.set(nodeKey, {
+              ...current,
+              value: { value: 2 },
+              deps: concurrencyDependencies,
+              fingerprint: concurrencyFingerprint,
+              updatedAt: current.updatedAt + 100,
+            })
+          }
+        }
+      }),
+      delete: vi.fn(async () => undefined),
+    }
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = new CacheStore({ snapshot, persistence })
+    let computeCount = 0
+
+    try {
+      const firstResult = await store.getOrCompute(
+        'test:persistence-verification-fallback-revisionless',
+        { persist: true },
+        async (ctx) => {
+          computeCount += 1
+          await ctx.recordFileDep('/index.ts')
+          return { value: 1 }
+        }
+      )
+
+      const secondResult = await store.get('test:persistence-verification-fallback-revisionless')
+
+      expect(firstResult).toEqual({ value: 1 })
+      expect(secondResult).toEqual({ value: 1 })
+      expect(computeCount).toBe(1)
+      expect(persistedEntries.get('test:persistence-verification-fallback-revisionless')?.value).toEqual({
+        value: 2,
+      })
+      expect(persistedEntries.get('test:persistence-verification-fallback-revisionless')).toMatchObject({
+        value: { value: 2 },
+        deps: [
+          {
+            depKey: 'file:index.ts',
+            depVersion: '2',
+          },
+        ],
+        fingerprint: concurrencyFingerprint,
+        persist: true,
+      })
+      expect(warnSpy).not.toHaveBeenCalled()
     } finally {
       warnSpy.mockRestore()
     }

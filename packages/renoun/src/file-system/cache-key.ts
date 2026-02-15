@@ -2,7 +2,7 @@ import { normalizePathKey } from '../utils/path.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { hashString, stableStringify } from './CacheStore.ts'
 
-export const CACHE_SCHEMA_VERSION = 3
+export const CACHE_SCHEMA_VERSION = 4
 
 export const FS_ANALYSIS_CACHE_VERSION = '2'
 export const FS_STRUCTURE_CACHE_VERSION = '2'

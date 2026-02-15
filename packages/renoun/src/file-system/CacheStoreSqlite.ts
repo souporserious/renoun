@@ -311,7 +311,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
               e.fingerprint as fingerprint,
               e.value_blob as value_blob,
               e.updated_at as updated_at,
-      e.persist as persist,
+              e.persist as persist,
+              e.revision as revision,
               d.dep_key as dep_key,
               d.dep_version as dep_version
             FROM cache_entries e
@@ -326,6 +327,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       value_blob?: unknown
       updated_at?: number
       persist?: number
+      revision?: unknown
       dep_key?: string | null
       dep_version?: string | null
     }>
@@ -339,12 +341,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     const row = rows[0]!
     const storedFingerprint = getPersistedFingerprint(row.fingerprint)
+    const revision = getPersistedRevision(row.revision)
     if (!storedFingerprint) {
       if (shouldDebug) {
         logCachePersistenceLoadFailure(
           nodeKey,
           'invalid-fingerprint',
-          `raw=${String(row.fingerprint)}`
+          `raw=${String(row.fingerprint)} revision=${String(revision)}`
         )
       }
       await this.delete(nodeKey)
@@ -357,7 +360,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         logCachePersistenceLoadFailure(
           nodeKey,
           'invalid-updated-at',
-          `raw=${String(row.updated_at)}`
+          `raw=${String(row.updated_at)} revision=${String(revision)}`
         )
       }
       await this.delete(nodeKey)
@@ -371,7 +374,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         logCachePersistenceLoadFailure(
           nodeKey,
           'missing-value-blob',
-          `type=${typeof row.value_blob}`
+          `type=${typeof row.value_blob} revision=${String(revision)}`
         )
       }
       await this.delete(nodeKey)
@@ -387,7 +390,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         logCachePersistenceLoadFailure(
           nodeKey,
           'deserialize-failed',
-          `error=${error instanceof Error ? error.message : String(error)}`
+          `error=${error instanceof Error ? error.message : String(error)} revision=${String(revision)}`
         )
       }
       await this.delete(nodeKey)
@@ -399,7 +402,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         logCachePersistenceLoadFailure(
           nodeKey,
           'contains-stripped-react',
-          `value=${summarizePersistedValue(value)}`
+          `value=${summarizePersistedValue(value)} revision=${String(revision)}`
         )
       }
       await this.delete(nodeKey)
@@ -422,7 +425,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         logCachePersistenceLoadFailure(
           nodeKey,
           'fingerprint-mismatch',
-          `stored=${storedFingerprint} recalculated=${recalculatedFingerprint} deps=${deps.length}`
+          `stored=${storedFingerprint} recalculated=${recalculatedFingerprint} deps=${deps.length} revision=${String(revision)}`
         )
       }
       await this.delete(nodeKey)
@@ -435,20 +438,23 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       // Ignore access-time update failures so reads can still return cached data.
     }
 
-    return {
+    const loadedEntry: CacheEntry & { revision: number } = {
       value,
       deps,
       fingerprint: storedFingerprint,
       persist: Number(row.persist) === 1,
+      revision,
       updatedAt,
     }
+
+    return loadedEntry
   }
 
-  async save(nodeKey: string, entry: CacheEntry): Promise<void> {
+  async saveWithRevision(nodeKey: string, entry: CacheEntry): Promise<number> {
     await this.#readyPromise
 
     if (!this.#db) {
-      return
+      return 0
     }
 
     const serializedValue = serialize(entry.value)
@@ -471,15 +477,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
                 value_blob,
                 updated_at,
                 last_accessed_at,
-                persist
+                persist,
+                revision
               )
-              VALUES (?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT revision FROM cache_entries WHERE node_key = ?), 0) + 1)
               ON CONFLICT(node_key) DO UPDATE SET
                 fingerprint = excluded.fingerprint,
                 value_blob = excluded.value_blob,
                 updated_at = excluded.updated_at,
                 last_accessed_at = excluded.last_accessed_at,
-                persist = excluded.persist
+                persist = excluded.persist,
+                revision = excluded.revision
             `
           )
           .run(
@@ -488,7 +496,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             serializedValue,
             entry.updatedAt,
             now,
-            persist
+            persist,
+            nodeKey
           )
 
         this.#db
@@ -512,13 +521,18 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           }
         }
 
+        const revisionRow = this.#db
+          .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
+          .get(nodeKey) as { revision?: unknown } | undefined
+        const revision = getPersistedRevision(revisionRow?.revision)
+
         this.#db.exec('COMMIT')
         try {
           await this.#maybePruneAfterWrite(now)
         } catch {
           // Ignore prune errors so cache writes keep succeeding.
         }
-        return
+        return Number.isFinite(revision) ? revision : 0
       } catch (error) {
         if (transactionStarted) {
           try {
@@ -538,6 +552,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         await delay((attempt + 1) * SQLITE_BUSY_RETRY_DELAY_MS)
       }
     }
+
+    throw new Error('[renoun] Exhausted SQLITE busy retries for cache revision write.')
+  }
+
+  async save(nodeKey: string, entry: CacheEntry): Promise<void> {
+    await this.saveWithRevision(nodeKey, entry)
   }
 
   async delete(nodeKey: string): Promise<void> {
@@ -673,7 +693,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           value_blob BLOB NOT NULL,
           updated_at INTEGER NOT NULL,
           last_accessed_at INTEGER NOT NULL,
-          persist INTEGER NOT NULL DEFAULT 0
+          persist INTEGER NOT NULL DEFAULT 0,
+          revision INTEGER NOT NULL DEFAULT 0
         )
       `
     )
@@ -1017,6 +1038,11 @@ function getPersistedFingerprint(value: unknown): string | undefined {
 }
 
 function getPersistedTimestamp(value: unknown): number {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : Number.NaN
+}
+
+function getPersistedRevision(value: unknown): number {
   const numberValue = Number(value)
   return Number.isFinite(numberValue) ? numberValue : Number.NaN
 }
