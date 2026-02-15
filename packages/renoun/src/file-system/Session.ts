@@ -224,6 +224,8 @@ export class Session {
 
     this.snapshot.invalidatePath(path)
 
+    const expiredKeys = new Set<string>()
+
     for (const key of this.directorySnapshots.keys()) {
       const delimiterIndex = key.indexOf('|')
       const directoryPrefix =
@@ -236,6 +238,7 @@ export class Session {
       const directoryPath = directoryPrefix.slice('dir:'.length)
       if (pathsIntersect(directoryPath, normalizedPath)) {
         this.directorySnapshots.delete(key)
+        expiredKeys.add(key)
       }
     }
 
@@ -251,7 +254,12 @@ export class Session {
       const directoryPath = directoryPrefix.slice('dir:'.length)
       if (pathsIntersect(directoryPath, normalizedPath)) {
         this.directorySnapshotBuilds.delete(key)
+        expiredKeys.add(key)
       }
+    }
+
+    for (const key of expiredKeys) {
+      void this.cache.delete(key)
     }
   }
 

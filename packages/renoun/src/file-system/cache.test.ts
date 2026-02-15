@@ -1514,6 +1514,212 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('persists session directory snapshots across worker sessions', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(process.cwd(), docsDirectory)
+
+      mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
+      writeFileSync(
+        join(docsDirectory, 'guides', 'advanced', 'getting-started.mdx'),
+        '# Getting Started',
+        'utf8'
+      )
+      writeFileSync(
+        join(docsDirectory, 'index.mdx'),
+        '# Home',
+        'utf8'
+      )
+
+      const firstWorkerDirectory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+
+      const firstEntries = await firstWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+      const firstPaths = firstEntries
+        .filter((entry): entry is File => entry instanceof File)
+        .map((entry) => entry.workspacePath)
+        .sort()
+
+      const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
+      const secondReadDirectory = vi.spyOn(
+        secondWorkerFilesystem,
+        'readDirectory'
+      )
+      const secondWorkerDirectory = new Directory({
+        fileSystem: secondWorkerFilesystem,
+        path: workspaceDirectory,
+      })
+      const secondEntries = await secondWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+      const secondPaths = secondEntries
+        .filter((entry): entry is File => entry instanceof File)
+        .map((entry) => entry.workspacePath)
+        .sort()
+
+      expect(secondPaths).toEqual(firstPaths)
+      expect(secondReadDirectory).toHaveBeenCalledTimes(0)
+    })
+  })
+
+  test('rebuilds persisted directory snapshots when a child signature changes', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    try {
+      await withProductionSqliteCache(async (tmpDirectory) => {
+        const docsDirectory = join(tmpDirectory, 'docs')
+        const workspaceDirectory = relativePath(process.cwd(), docsDirectory)
+
+        mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
+        const childPath = join(docsDirectory, 'guides', 'intro.mdx')
+        writeFileSync(childPath, '# Intro', 'utf8')
+        writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+
+        const firstWorkerDirectory = new Directory({
+          fileSystem: createTempNodeFileSystem(tmpDirectory),
+          path: workspaceDirectory,
+        })
+
+        await firstWorkerDirectory.getEntries({
+          recursive: true,
+          includeIndexAndReadmeFiles: true,
+        })
+
+        writeFileSync(childPath, '# Intro with updates', 'utf8')
+
+        const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
+        const secondReadDirectory = vi.spyOn(
+          secondWorkerFilesystem,
+          'readDirectory'
+        )
+        const secondWorkerDirectory = new Directory({
+          fileSystem: secondWorkerFilesystem,
+          path: workspaceDirectory,
+        })
+
+        await secondWorkerDirectory.getEntries({
+          recursive: true,
+          includeIndexAndReadmeFiles: true,
+        })
+
+        expect(secondReadDirectory).toHaveBeenCalledTimes(1)
+      })
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
+  test('does not persist function-based directory snapshot options', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(process.cwd(), docsDirectory)
+      const mdxFilter = (entry: any): entry is File =>
+        entry instanceof File && entry.extension === 'mdx'
+
+      mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+      writeFileSync(join(docsDirectory, 'notes.txt'), 'note', 'utf8')
+
+      const firstWorkerDirectory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+        filter: mdxFilter,
+      })
+
+      await firstWorkerDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const firstSession = firstWorkerDirectory.getSession()
+      const snapshotKeys = Array.from(firstSession.directorySnapshots.keys())
+      expect(snapshotKeys.length).toBe(1)
+      expect(
+        await firstSession.cache.get(snapshotKeys[0]!)
+      ).toBeUndefined()
+
+      const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
+      const secondReadDirectory = vi.spyOn(
+        secondWorkerFilesystem,
+        'readDirectory'
+      )
+      const secondWorkerDirectory = new Directory({
+        fileSystem: secondWorkerFilesystem,
+        path: workspaceDirectory,
+        filter: (entry: any): entry is File =>
+          entry instanceof File && entry.extension === 'mdx',
+      })
+
+      await secondWorkerDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      expect(secondReadDirectory).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  test('invalidates persisted directory snapshots when cache paths are invalidated', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(process.cwd(), docsDirectory)
+      const targetFile = join(docsDirectory, 'notes.md')
+
+      mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(targetFile, 'note', 'utf8')
+
+      const firstWorkerDirectory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+      await firstWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const firstSession = firstWorkerDirectory.getSession()
+      const snapshotKey = Array.from(firstSession.directorySnapshots.keys())[0]
+      expect(snapshotKey).toBeDefined()
+      expect(await firstSession.cache.get(snapshotKey!)).toBeDefined()
+
+      firstSession.invalidatePath(targetFile)
+
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (await firstSession.cache.get(snapshotKey!) === undefined) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+
+      const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
+      const secondReadDirectory = vi.spyOn(
+        secondWorkerFilesystem,
+        'readDirectory'
+      )
+      const secondWorkerDirectory = new Directory({
+        fileSystem: secondWorkerFilesystem,
+        path: workspaceDirectory,
+      })
+      await secondWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      expect(secondReadDirectory).toHaveBeenCalledTimes(1)
+    })
+  })
+
   test('revalidates persisted sibling navigation across worker sessions after file additions', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
