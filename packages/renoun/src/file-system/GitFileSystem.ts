@@ -10,6 +10,7 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   createWriteStream,
   existsSync,
@@ -931,6 +932,61 @@ export class GitFileSystem
     return normalizeSlashes(
       relativeToRepo.startsWith('./') ? relativeToRepo.slice(2) : relativeToRepo
     )
+  }
+
+  async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    try {
+      await this.#ensureRepoReady()
+
+      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
+        cwd: this.repoRoot,
+        maxBuffer: this.maxBufferBytes,
+        verbose: false,
+      })
+      if (headResult.status !== 0) {
+        return null
+      }
+
+      const headCommit = headResult.stdout.trim()
+      if (!headCommit) {
+        return null
+      }
+
+      const relativeRoot = this.#normalizeRepoPath(rootPath)
+      const statusScope = relativeRoot || '.'
+      const statusResult = await spawnWithResult(
+        'git',
+        [
+          'status',
+          '--porcelain=1',
+          '--untracked-files=all',
+          '--ignore-submodules=all',
+          '--',
+          statusScope,
+        ],
+        {
+          cwd: this.repoRoot,
+          maxBuffer: this.maxBufferBytes,
+          verbose: false,
+        }
+      )
+      if (statusResult.status !== 0) {
+        return null
+      }
+
+      const statusLines = statusResult.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0)
+        .sort((first, second) => first.localeCompare(second))
+      const dirtyDigest = createHash('sha1')
+        .update(statusLines.join('\n'))
+        .digest('hex')
+
+      return `head:${headCommit};dirty:${dirtyDigest};count:${statusLines.length}`
+    } catch {
+      return null
+    }
   }
 
   readDirectorySync(path: string = '.'): DirectoryEntry[] {

@@ -9,6 +9,7 @@ import { CACHE_SCHEMA_VERSION } from './cache-key.ts'
 import { loadSqliteModule } from './sqlite.ts'
 import {
   createFingerprint,
+  type CacheDependencyEvictionResult,
   type CacheEntry,
   type CacheStorePersistence,
 } from './CacheStore.ts'
@@ -22,6 +23,7 @@ const SQLITE_PRUNE_MAX_INTERVAL_MS = 1000 * 60 * 5
 const SQLITE_DELETE_BATCH_SIZE = 500
 const SQLITE_INFLIGHT_TTL_MS = 20_000
 const SQLITE_INFLIGHT_CLEANUP_INTERVAL_MS = 10_000
+const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
 
 let warnedAboutSqliteFallback = false
 const persistenceByDbPath = new Map<string, SqliteCacheStorePersistence>()
@@ -440,6 +442,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             ? dependencyRow.dep_version
             : '',
       }))
+      .sort((first, second) => first.depKey.localeCompare(second.depKey))
 
     const recalculatedFingerprint = createFingerprint(deps)
     if (!skipFingerprintCheck && storedFingerprint !== recalculatedFingerprint) {
@@ -606,6 +609,174 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         throw error
       }
     })
+  }
+
+  async deleteByDependencyPath(
+    dependencyPathKey: string
+  ): Promise<CacheDependencyEvictionResult> {
+    await this.#readyPromise
+
+    if (!this.#db) {
+      return {
+        deletedNodeKeys: [],
+        usedDependencyIndex: false,
+        hasMissingDependencyMetadata: false,
+      }
+    }
+
+    const normalizedPathKey = normalizeDependencyPathKey(dependencyPathKey)
+    const dependencyPrefixes = ['file:', 'dir:', 'dir-mtime:'] as const
+    const exactDependencyKeys = new Set<string>()
+    const descendantDependencyPatterns: string[] = []
+    const toDirectorySnapshotDepIndexKey = (depKey: string) =>
+      `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${depKey}:1`
+
+    for (const prefix of dependencyPrefixes) {
+      const exactDependencyKey = `${prefix}${normalizedPathKey}`
+      exactDependencyKeys.add(exactDependencyKey)
+      exactDependencyKeys.add(toDirectorySnapshotDepIndexKey(exactDependencyKey))
+
+      if (normalizedPathKey === '.') {
+        descendantDependencyPatterns.push(`${prefix}%`)
+        descendantDependencyPatterns.push(
+          `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${prefix}%:1`
+        )
+      } else {
+        descendantDependencyPatterns.push(`${prefix}${normalizedPathKey}/%`)
+        descendantDependencyPatterns.push(
+          `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${prefix}${normalizedPathKey}/%:1`
+        )
+      }
+    }
+
+    for (const ancestorPath of getAncestorPathKeys(normalizedPathKey)) {
+      const directoryDependencyKey = `dir:${ancestorPath}`
+      const directoryMtimeDependencyKey = `dir-mtime:${ancestorPath}`
+      exactDependencyKeys.add(directoryDependencyKey)
+      exactDependencyKeys.add(directoryMtimeDependencyKey)
+      exactDependencyKeys.add(
+        toDirectorySnapshotDepIndexKey(directoryDependencyKey)
+      )
+      exactDependencyKeys.add(
+        toDirectorySnapshotDepIndexKey(directoryMtimeDependencyKey)
+      )
+    }
+
+    const exactDependencyList = Array.from(exactDependencyKeys).sort()
+    const whereClauses: string[] = []
+    const whereParameters: string[] = []
+
+    if (exactDependencyList.length > 0) {
+      whereClauses.push(
+        `dependency.dep_key IN (${exactDependencyList.map(() => '?').join(',')})`
+      )
+      whereParameters.push(...exactDependencyList)
+    }
+
+    if (descendantDependencyPatterns.length > 0) {
+      whereClauses.push(
+        descendantDependencyPatterns
+          .map(() => `dependency.dep_key LIKE ?`)
+          .join(' OR ')
+      )
+      whereParameters.push(...descendantDependencyPatterns)
+    }
+
+    const deletedNodeKeys = await this.#runWithBusyRetries(() => {
+      const rows = this.#db
+        .prepare(
+          `
+            SELECT DISTINCT entry.node_key as node_key
+            FROM cache_entries AS entry
+            JOIN cache_deps AS dependency
+              ON dependency.node_key = entry.node_key
+            WHERE entry.node_key LIKE 'dir:%'
+              AND (${whereClauses.join(' OR ')})
+            ORDER BY entry.node_key
+          `
+        )
+        .all(...whereParameters) as Array<{ node_key?: string }>
+
+      return rows
+        .map((row) => row.node_key)
+        .filter((nodeKey: string | undefined): nodeKey is string => {
+          return typeof nodeKey === 'string'
+        })
+    })
+
+    if (deletedNodeKeys.length > 0) {
+      await this.#runWithBusyRetries(() => {
+        this.#db.exec('BEGIN IMMEDIATE')
+        try {
+          this.#deleteRowsForNodeKeys(deletedNodeKeys)
+          this.#db.exec('COMMIT')
+        } catch (error) {
+          try {
+            this.#db.exec('ROLLBACK')
+          } catch {
+            // Ignore rollback errors and rethrow the original delete error.
+          }
+          throw error
+        }
+      })
+    }
+
+    const hasMissingDependencyMetadata = await this.#runWithBusyRetries(() => {
+      const row = this.#db
+        .prepare(
+          `
+            SELECT EXISTS(
+              SELECT 1
+              FROM cache_entries AS entry
+              WHERE entry.node_key LIKE 'dir:%'
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM cache_deps AS dependency
+                  WHERE dependency.node_key = entry.node_key
+                )
+            ) as has_missing
+          `
+        )
+        .get() as { has_missing?: number | string | bigint } | undefined
+
+      return Number(row?.has_missing ?? 0) > 0
+    })
+
+    return {
+      deletedNodeKeys,
+      usedDependencyIndex: true,
+      hasMissingDependencyMetadata,
+    }
+  }
+
+  async listNodeKeysByPrefix(prefix: string): Promise<string[]> {
+    await this.#readyPromise
+
+    if (!this.#db) {
+      return []
+    }
+
+    const normalizedPrefix = String(prefix)
+    const likePattern = `${normalizedPrefix}%`
+
+    const rows = (await this.#runWithBusyRetries(() =>
+      this.#db
+        .prepare(
+          `
+            SELECT node_key
+            FROM cache_entries
+            WHERE node_key LIKE ?
+            ORDER BY node_key
+          `
+        )
+        .all(likePattern)
+    )) as Array<{ node_key?: string }>
+
+    return rows
+      .map((row) => row.node_key)
+      .filter((nodeKey: string | undefined): nodeKey is string => {
+        return typeof nodeKey === 'string'
+      })
   }
 
   async #initialize(): Promise<void> {
@@ -1042,6 +1213,29 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         .run(...batch)
     }
   }
+}
+
+function normalizeDependencyPathKey(path: string): string {
+  const normalized = path.replace(/\\+/g, '/').replace(/^\.\/+/, '')
+  const trimmed = normalized.replace(/^\/+/, '').replace(/\/+$/, '')
+  return trimmed === '' ? '.' : trimmed
+}
+
+function getAncestorPathKeys(path: string): string[] {
+  const normalized = normalizeDependencyPathKey(path)
+  if (normalized === '.') {
+    return ['.']
+  }
+
+  const segments = normalized.split('/')
+  const ancestors = ['.']
+
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const ancestor = segments.slice(0, index + 1).join('/')
+    ancestors.push(ancestor)
+  }
+
+  return ancestors
 }
 
 function toUint8Array(value: unknown): Uint8Array | undefined {

@@ -17,6 +17,7 @@ import {
 import { describe, expect, test, vi } from 'vitest'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { normalizePathKey } from '../utils/path.ts'
 
 import {
   CacheStore,
@@ -132,6 +133,29 @@ class MutableTimestampFileSystem extends InMemoryFileSystem {
 
   #normalizePath(path: string): string {
     return path.replace(/^\/+/, '')
+  }
+}
+
+class TokenAwareNodeFileSystem extends NestedCwdNodeFileSystem {
+  #workspaceChangeToken: string
+
+  constructor(cwd: string, tsConfigPath: string, token: string) {
+    super(cwd, tsConfigPath)
+    this.#workspaceChangeToken = token
+  }
+
+  setWorkspaceChangeToken(token: string): void {
+    this.#workspaceChangeToken = token
+  }
+
+  override async getWorkspaceChangeToken(rootPath: string): Promise<string> {
+    return `${this.#workspaceChangeToken}:${normalizePathKey(rootPath)}`
+  }
+}
+
+class ThrowingByteLengthNodeFileSystem extends NestedCwdNodeFileSystem {
+  override getFileByteLengthSync(_path: string): number | undefined {
+    throw new Error('byte-length-lookup-should-not-run')
   }
 }
 
@@ -1647,6 +1671,226 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('reuses persisted snapshots without dependency stat checks when token is unchanged', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+
+      mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const firstFileSystem = new TokenAwareNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        'stable-token'
+      )
+      const firstWorkerDirectory = new Directory({
+        fileSystem: firstFileSystem,
+        path: workspaceDirectory,
+      })
+
+      await firstWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const secondFileSystem = new TokenAwareNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        'stable-token'
+      )
+      const secondReadDirectory = vi.spyOn(secondFileSystem, 'readDirectory')
+      const secondStatLookup = vi.spyOn(
+        secondFileSystem,
+        'getFileLastModifiedMs'
+      )
+      const secondWorkerDirectory = new Directory({
+        fileSystem: secondFileSystem,
+        path: workspaceDirectory,
+      })
+
+      await secondWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      expect(secondReadDirectory).toHaveBeenCalledTimes(0)
+      expect(secondStatLookup).toHaveBeenCalledTimes(0)
+    })
+  })
+
+  test('restores persisted file entries with byteLength metadata', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const firstWorkerDirectory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+
+      await firstWorkerDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const secondFileSystem = new ThrowingByteLengthNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath
+      )
+      const secondReadDirectory = vi.spyOn(secondFileSystem, 'readDirectory')
+      const secondWorkerDirectory = new Directory({
+        fileSystem: secondFileSystem,
+        path: workspaceDirectory,
+      })
+
+      const restoredEntries = await secondWorkerDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+      const restoredFiles = restoredEntries.filter(
+        (entry): entry is File => entry instanceof File
+      )
+
+      expect(restoredFiles.length).toBeGreaterThan(0)
+      expect(restoredFiles[0]!.size).toBeGreaterThan(0)
+      expect(secondReadDirectory).toHaveBeenCalledTimes(0)
+    })
+  })
+
+  test('stores persisted snapshot paths as normalized workspace-relative keys', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+
+      mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'advanced', 'getting-started.mdx'),
+        '# Getting Started',
+        'utf8'
+      )
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+
+      const directory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+
+      await directory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const session = directory.getSession()
+      const snapshotKey = Array.from(session.directorySnapshots.keys())[0]
+      expect(snapshotKey).toBeDefined()
+
+      const persistedSnapshot = await session.cache.get(snapshotKey!)
+      expect(persistedSnapshot).toBeDefined()
+
+      const payload = persistedSnapshot as {
+        entries: Array<
+          | { kind: 'file'; path: string; byteLength?: number }
+          | {
+              kind: 'directory'
+              path: string
+              snapshot: { entries: Array<{ kind: string; path: string }> }
+            }
+        >
+      }
+
+      const collectedPaths: string[] = []
+      const collectPaths = (
+        entries: Array<
+          | { kind: 'file'; path: string; byteLength?: number }
+          | {
+              kind: 'directory'
+              path: string
+              snapshot: { entries: Array<{ kind: string; path: string }> }
+            }
+        >
+      ) => {
+        for (const entry of entries) {
+          collectedPaths.push(entry.path)
+          if (entry.kind === 'directory') {
+            collectPaths(entry.snapshot.entries as any)
+          }
+        }
+      }
+      collectPaths(payload.entries)
+
+      expect(collectedPaths.length).toBeGreaterThan(0)
+      expect(
+        collectedPaths.every((path) => path === normalizePathKey(path))
+      ).toBe(true)
+
+      const rootPathKey = normalizePathKey(workspaceDirectory)
+      expect(
+        collectedPaths.some((path) =>
+          path.includes(`${rootPathKey}/${rootPathKey}`)
+        )
+      ).toBe(false)
+    })
+  })
+
+  test('dedupes concurrent persisted snapshot rebuilds across workers', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+
+      mkdirSync(docsDirectory, { recursive: true })
+      const targetFile = join(docsDirectory, 'index.mdx')
+      writeFileSync(targetFile, '# Home', 'utf8')
+
+      const seedDirectory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+      await seedDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      writeFileSync(targetFile, '# Updated Home', 'utf8')
+
+      const firstWorkerFileSystem = createTempNodeFileSystem(tmpDirectory)
+      const secondWorkerFileSystem = createTempNodeFileSystem(tmpDirectory)
+      const firstReadDirectory = vi.spyOn(firstWorkerFileSystem, 'readDirectory')
+      const secondReadDirectory = vi.spyOn(
+        secondWorkerFileSystem,
+        'readDirectory'
+      )
+
+      const firstWorkerDirectory = new Directory({
+        fileSystem: firstWorkerFileSystem,
+        path: workspaceDirectory,
+      })
+      const secondWorkerDirectory = new Directory({
+        fileSystem: secondWorkerFileSystem,
+        path: workspaceDirectory,
+      })
+
+      await Promise.all([
+        firstWorkerDirectory.getEntries({
+          includeIndexAndReadmeFiles: true,
+        }),
+        secondWorkerDirectory.getEntries({
+          includeIndexAndReadmeFiles: true,
+        }),
+      ])
+
+      const totalDirectoryReads =
+        firstReadDirectory.mock.calls.length + secondReadDirectory.mock.calls.length
+      expect(totalDirectoryReads).toBe(1)
+    })
+  })
+
   test('rebuilds persisted directory snapshots when a child signature changes', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'development'
@@ -1791,6 +2035,119 @@ describe('sqlite cache persistence', () => {
       })
 
       expect(secondReadDirectory).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  test('evicts only impacted persisted snapshots via dependency index invalidation', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const guidesWorkspacePath = join(workspaceDirectory, 'guides')
+      const apiWorkspacePath = join(workspaceDirectory, 'api')
+
+      mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
+      mkdirSync(join(docsDirectory, 'api'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(join(docsDirectory, 'api', 'reference.mdx'), '# Reference', 'utf8')
+
+      const fileSystem = createTempNodeFileSystem(tmpDirectory)
+      const guidesDirectory = new Directory({
+        fileSystem,
+        path: guidesWorkspacePath,
+      })
+      const apiDirectory = new Directory({
+        fileSystem,
+        path: apiWorkspacePath,
+      })
+
+      await guidesDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+      await apiDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const session = guidesDirectory.getSession()
+      const guidesPathKey = normalizePathKey(guidesWorkspacePath)
+      const apiPathKey = normalizePathKey(apiWorkspacePath)
+      const snapshotKeys = Array.from(session.directorySnapshots.keys())
+      const guidesSnapshotKey = snapshotKeys.find((key) =>
+        key.startsWith(`dir:${guidesPathKey}|`)
+      )
+      const apiSnapshotKey = snapshotKeys.find((key) =>
+        key.startsWith(`dir:${apiPathKey}|`)
+      )
+
+      expect(guidesSnapshotKey).toBeDefined()
+      expect(apiSnapshotKey).toBeDefined()
+      expect(await session.cache.get(guidesSnapshotKey!)).toBeDefined()
+      expect(await session.cache.get(apiSnapshotKey!)).toBeDefined()
+
+      session.invalidatePath(join(docsDirectory, 'guides', 'intro.mdx'))
+
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (await session.cache.get(guidesSnapshotKey!) === undefined) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+
+      expect(await session.cache.get(guidesSnapshotKey!)).toBeUndefined()
+      expect(await session.cache.get(apiSnapshotKey!)).toBeDefined()
+    })
+  })
+
+  test('falls back to broad persisted invalidation when dependency metadata is missing', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const workspacePathKey = normalizePathKey(workspaceDirectory)
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+
+      const directory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+      await directory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const session = directory.getSession()
+      const legacySnapshotKey = `dir:${workspacePathKey}|legacy`
+      await session.cache.put(
+        legacySnapshotKey,
+        {
+          version: 1,
+          path: workspacePathKey,
+          hasVisibleDescendant: false,
+          shouldIncludeSelf: false,
+          lastValidatedAt: Date.now(),
+          filterSignature: 'filter:none',
+          sortSignature: 'sort:none',
+          dependencySignatures: [],
+          entries: [],
+          flatEntries: [],
+        },
+        {
+          persist: true,
+          deps: [],
+        }
+      )
+
+      expect(await session.cache.get(legacySnapshotKey)).toBeDefined()
+
+      session.invalidatePath(join(docsDirectory, 'index.mdx'))
+
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        if (await session.cache.get(legacySnapshotKey) === undefined) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+
+      expect(await session.cache.get(legacySnapshotKey)).toBeUndefined()
     })
   })
 

@@ -17,6 +17,12 @@ export interface CacheEntry<Value = unknown> {
   updatedAt: number
 }
 
+export interface CacheDependencyEvictionResult {
+  deletedNodeKeys: string[]
+  usedDependencyIndex: boolean
+  hasMissingDependencyMetadata: boolean
+}
+
 export interface CacheStorePersistence {
   load(
     nodeKey: string,
@@ -27,6 +33,10 @@ export interface CacheStorePersistence {
   save(nodeKey: string, entry: CacheEntry): Promise<void>
   saveWithRevision?(nodeKey: string, entry: CacheEntry): Promise<number>
   delete(nodeKey: string): Promise<void>
+  deleteByDependencyPath?(
+    dependencyPathKey: string
+  ): Promise<CacheDependencyEvictionResult>
+  listNodeKeysByPrefix?(prefix: string): Promise<string[]>
 }
 
 export interface CacheStoreGetOrComputeOptions {
@@ -270,10 +280,116 @@ export class CacheStore {
       return
     }
 
-    clearPersistedEntryInvalidation(this.#persistence, nodeKey)
+    markPersistedEntryInvalid(this.#persistence, nodeKey)
     await this.#withPersistenceIntent(nodeKey, () =>
       this.#clearPersistedCacheEntry(nodeKey)
     )
+  }
+
+  async deleteByDependencyPath(
+    dependencyPathKey: string
+  ): Promise<CacheDependencyEvictionResult> {
+    const normalizedPath = normalizeDepPath(dependencyPathKey)
+    const persistence = this.#persistence
+    const defaultResult: CacheDependencyEvictionResult = {
+      deletedNodeKeys: [],
+      usedDependencyIndex: false,
+      hasMissingDependencyMetadata: false,
+    }
+
+    if (!persistence?.deleteByDependencyPath) {
+      return defaultResult
+    }
+
+    let result: CacheDependencyEvictionResult
+    try {
+      result = await persistence.deleteByDependencyPath(normalizedPath)
+    } catch (error) {
+      this.#warnPersistenceFailure(
+        `deleteByDependencyPath(${normalizedPath})`,
+        error
+      )
+      return defaultResult
+    }
+
+    for (const nodeKey of result.deletedNodeKeys) {
+      this.#entries.delete(nodeKey)
+      this.#inflight.delete(nodeKey)
+      this.#persistenceOperationByKey.delete(nodeKey)
+      this.#persistenceIntentVersionByKey.delete(nodeKey)
+      clearPersistedEntryInvalidation(this.#persistence, nodeKey)
+    }
+
+    return result
+  }
+
+  async listNodeKeysByPrefix(prefix: string): Promise<string[]> {
+    const normalizedPrefix = normalizeSlashes(prefix)
+    const memoryKeys = Array.from(this.#entries.keys()).filter((nodeKey) =>
+      nodeKey.startsWith(normalizedPrefix)
+    )
+
+    const persistence = this.#persistence
+    if (!persistence?.listNodeKeysByPrefix) {
+      return Array.from(new Set(memoryKeys)).sort()
+    }
+
+    try {
+      const persistedKeys =
+        await persistence.listNodeKeysByPrefix(normalizedPrefix)
+      return Array.from(new Set([...memoryKeys, ...persistedKeys])).sort()
+    } catch (error) {
+      this.#warnPersistenceFailure(
+        `listNodeKeysByPrefix(${normalizedPrefix})`,
+        error
+      )
+      return Array.from(new Set(memoryKeys)).sort()
+    }
+  }
+
+  async withComputeSlot(
+    nodeKey: string,
+    options: {
+      leader: () => Promise<void>
+      follower?: () => Promise<void>
+      ttlMs?: number
+    }
+  ): Promise<'leader' | 'follower'> {
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      await options.leader()
+      return 'leader'
+    }
+
+    const slotTtlMs = getComputeSlotTtlMs(
+      persistence,
+      options.ttlMs ?? COMPUTE_SLOT_TTL_MS
+    )
+    const owner = this.#createComputeSlotOwner()
+    const acquired = await this.#acquireComputeSlot(nodeKey, owner, slotTtlMs)
+
+    if (!acquired) {
+      await this.#waitForComputeSlotRelease(nodeKey)
+      if (options.follower) {
+        await options.follower()
+      }
+      return 'follower'
+    }
+
+    const stopHeartbeat = this.#startComputeSlotHeartbeat(
+      nodeKey,
+      owner,
+      slotTtlMs
+    )
+
+    try {
+      await options.leader()
+    } finally {
+      stopHeartbeat()
+      await this.#releaseComputeSlot(nodeKey, owner)
+    }
+
+    return 'leader'
   }
 
   async #withPersistenceIntent(
@@ -453,6 +569,31 @@ export class CacheStore {
     }
 
     return undefined
+  }
+
+  async #waitForComputeSlotRelease(nodeKey: string): Promise<void> {
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      return
+    }
+
+    while (true) {
+      let inFlightOwner: string | undefined
+      try {
+        inFlightOwner = await persistence.getComputeSlotOwner(nodeKey)
+      } catch {
+        return
+      }
+
+      if (!inFlightOwner) {
+        return
+      }
+
+      const sleep = Math.max(0, COMPUTE_SLOT_POLL_MS) || 0
+      if (sleep > 0) {
+        await delay(sleep)
+      }
+    }
   }
 
   #createComputeSlotOwner(): string {

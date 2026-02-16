@@ -6,6 +6,7 @@ export interface DirectorySnapshotDirectoryMetadata<Entry = unknown> {
 export interface PersistedDirectoryFileEntry {
   kind: 'file'
   path: string
+  byteLength?: number
 }
 
 export interface PersistedDirectoryDirectoryEntry {
@@ -31,6 +32,7 @@ export interface PersistedDirectorySnapshotV1 {
   lastValidatedAt: number
   filterSignature: string
   sortSignature: string
+  workspaceChangeToken?: string | null
   dependencySignatures: Array<[string, string]>
   entries: PersistedDirectoryEntry[]
   flatEntries: PersistedDirectoryFlatEntry[]
@@ -38,13 +40,14 @@ export interface PersistedDirectorySnapshotV1 {
 
 export interface DirectorySnapshotRestoreFactory<DirectoryType, Entry> {
   createDirectory(path: string): DirectoryType
-  createFile(path: string): Entry
+  createFile(path: string, options?: { byteLength?: number }): Entry
 }
 
 export type PersistedEntryMetadata<DirectoryType, Entry> =
   | {
       kind: 'file'
       path: string
+      byteLength?: number
       entry: Entry
   }
   | {
@@ -72,6 +75,7 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
   #path: string
   #filterSignature: string
   #sortSignature: string
+  #workspaceChangeToken?: string | null
   #persistedEntries?: PersistedEntryMetadata<DirectoryType, Entry>[]
 
   constructor(options: {
@@ -84,6 +88,7 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
     path: string
     filterSignature?: string
     sortSignature?: string
+    workspaceChangeToken?: string | null
     persistedEntries?: PersistedEntryMetadata<DirectoryType, Entry>[]
   }) {
     this.#entries = options.entries
@@ -95,6 +100,7 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
     this.#path = options.path
     this.#filterSignature = options.filterSignature ?? ''
     this.#sortSignature = options.sortSignature ?? ''
+    this.#workspaceChangeToken = options.workspaceChangeToken
     this.#persistedEntries = options.persistedEntries
   }
 
@@ -121,6 +127,14 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
 
   getLastValidatedAt(): number {
     return this.#lastValidatedAt
+  }
+
+  getWorkspaceChangeToken(): string | null | undefined {
+    return this.#workspaceChangeToken
+  }
+
+  setWorkspaceChangeToken(token: string | null | undefined): void {
+    this.#workspaceChangeToken = token
   }
 
   toPersistedSnapshot(): PersistedDirectorySnapshotV1 {
@@ -174,14 +188,18 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
       lastValidatedAt: this.#lastValidatedAt,
       filterSignature: this.#filterSignature,
       sortSignature: this.#sortSignature,
+      workspaceChangeToken: this.#workspaceChangeToken,
       dependencySignatures: this.#dependencies
-        ? Array.from(this.#dependencies.entries())
+        ? Array.from(this.#dependencies.entries()).sort((first, second) =>
+            first[0].localeCompare(second[0])
+          )
         : [],
       entries: this.#persistedEntries.map((entry) => {
         if (entry.kind === 'file') {
           return {
             kind: 'file',
             path: entry.path,
+            byteLength: entry.byteLength,
           }
         }
 
@@ -223,11 +241,14 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
 
     for (const entry of payload.entries) {
       if (entry.kind === 'file') {
-        const restoredFile = factory.createFile(entry.path)
+        const restoredFile = factory.createFile(entry.path, {
+          byteLength: entry.byteLength,
+        })
         immediateEntries.push(restoredFile)
         persistedEntries.push({
           kind: 'file',
           path: entry.path,
+          byteLength: entry.byteLength,
           entry: restoredFile,
         })
         restoredEntriesByKey.set(
@@ -284,6 +305,7 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
       path: payload.path,
       filterSignature: payload.filterSignature,
       sortSignature: payload.sortSignature,
+      workspaceChangeToken: payload.workspaceChangeToken,
       persistedEntries,
     })
 
@@ -314,6 +336,15 @@ export function isPersistedDirectorySnapshotV1(
     typeof candidate['lastValidatedAt'] !== 'number' ||
     typeof candidate['filterSignature'] !== 'string' ||
     typeof candidate['sortSignature'] !== 'string'
+  ) {
+    return false
+  }
+
+  const workspaceChangeToken = candidate['workspaceChangeToken']
+  if (
+    workspaceChangeToken !== undefined &&
+    workspaceChangeToken !== null &&
+    typeof workspaceChangeToken !== 'string'
   ) {
     return false
   }
@@ -362,6 +393,16 @@ export function isPersistedDirectorySnapshotV1(
     }
 
     if (
+      typedEntry['kind'] === 'file' &&
+      typedEntry['byteLength'] !== undefined &&
+      (typeof typedEntry['byteLength'] !== 'number' ||
+        !Number.isFinite(typedEntry['byteLength']) ||
+        typedEntry['byteLength'] < 0)
+    ) {
+      return false
+    }
+
+    if (
       typedEntry['kind'] === 'directory' &&
       !isPersistedDirectorySnapshotV1(typedEntry['snapshot'])
     ) {
@@ -403,6 +444,7 @@ export function createDirectorySnapshot<
   path?: string
   filterSignature?: string
   sortSignature?: string
+  workspaceChangeToken?: string | null
   persistedEntries?: PersistedEntryMetadata<DirectoryType, Entry>[]
 }): DirectorySnapshot<DirectoryType, Entry> {
   return new DirectorySnapshot<DirectoryType, Entry>({
@@ -417,6 +459,7 @@ export function createDirectorySnapshot<
     path: options.path ?? '',
     filterSignature: options.filterSignature,
     sortSignature: options.sortSignature,
+    workspaceChangeToken: options.workspaceChangeToken,
     persistedEntries: options.persistedEntries,
   })
 }

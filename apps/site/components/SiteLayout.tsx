@@ -1,6 +1,7 @@
 import { Link, Logo } from 'renoun'
 // @ts-expect-error - RenounLogo is internal
 import { RenounLogo } from 'renoun/assets'
+import renounPackage from '../../../packages/renoun/package.json'
 
 import { getSearchRoutes } from '@/lib/get-search-routes'
 
@@ -8,6 +9,14 @@ import { DocsMenu } from './DocsMenu'
 import { NavigationLink } from './NavigationLink'
 import { SearchDialog } from './SearchDialog'
 import { NavigationToggle } from './Sidebar/NavigationToggle'
+
+const localReleaseRepository = {
+  path: 'souporserious/renoun',
+  releaseSource: {
+    mode: 'local-version',
+    version: renounPackage.version,
+  },
+} as const
 
 export async function SiteLayout({
   sidebar,
@@ -117,7 +126,11 @@ export async function SiteLayout({
             </a>
 
             {variant === 'docs' ? (
-              <Link variant="release" packageName="renoun">
+              <Link
+                variant="release"
+                packageName="renoun"
+                repository={localReleaseRepository}
+              >
                 {({ href, tag }) => (
                   <a
                     href={href}

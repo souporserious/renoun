@@ -192,6 +192,85 @@ function test(name: string, fn: (ctx: TestContext) => Promise<void>): void {
 }
 
 describe('GitFileSystem', () => {
+  test('returns a stable workspace change token when tree state is unchanged', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const firstToken = await store.getWorkspaceChangeToken('.')
+      const secondToken = await store.getWorkspaceChangeToken('.')
+
+      expect(firstToken).toBeTruthy()
+      expect(firstToken).toBe(secondToken)
+    } finally {
+      store.close()
+    }
+  })
+
+  test('changes workspace token for dirty and untracked updates', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+
+    const trackedPath = join(repoRoot, 'src/index.ts')
+    const untrackedPath = join(repoRoot, 'src/new-file.ts')
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const cleanToken = await store.getWorkspaceChangeToken('.')
+
+      writeFileSync(trackedPath, `export const value = 2`)
+      const dirtyToken = await store.getWorkspaceChangeToken('.')
+
+      writeFileSync(untrackedPath, `export const created = true`)
+      const untrackedToken = await store.getWorkspaceChangeToken('.')
+
+      expect(cleanToken).toBeTruthy()
+      expect(dirtyToken).toBeTruthy()
+      expect(untrackedToken).toBeTruthy()
+      expect(dirtyToken).not.toBe(cleanToken)
+      expect(untrackedToken).not.toBe(dirtyToken)
+    } finally {
+      store.close()
+    }
+  })
+
+  test('scopes workspace change token by requested root path', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFiles(
+      repoRoot,
+      [
+        { filename: 'docs/page.mdx', content: '# Page' },
+        { filename: 'src/index.ts', content: 'export const value = 1' },
+      ],
+      'init'
+    )
+
+    const sourcePath = join(repoRoot, 'src/index.ts')
+    const docsPath = join(repoRoot, 'docs/page.mdx')
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const initialDocsToken = await store.getWorkspaceChangeToken('docs')
+
+      writeFileSync(sourcePath, 'export const value = 2')
+      const docsTokenAfterSourceEdit = await store.getWorkspaceChangeToken('docs')
+
+      writeFileSync(docsPath, '# Updated')
+      const docsTokenAfterDocsEdit = await store.getWorkspaceChangeToken('docs')
+
+      expect(initialDocsToken).toBeTruthy()
+      expect(docsTokenAfterSourceEdit).toBe(initialDocsToken)
+      expect(docsTokenAfterDocsEdit).not.toBe(initialDocsToken)
+    } finally {
+      store.close()
+    }
+  })
+
   test('correctly tracks export additions and removals', async ({
     repoRoot,
     cacheDirectory,

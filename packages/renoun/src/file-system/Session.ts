@@ -16,6 +16,30 @@ const sessionsByFileSystem = new WeakMap<object, Map<string, Session>>()
 const snapshotGenerationByFileSystem = new WeakMap<object, number>()
 const snapshotParentByFileSystem = new WeakMap<object, Map<string, string>>()
 
+type PersistedStaleReason =
+  | 'token_changed'
+  | 'dep_changed'
+  | 'shape_mismatch'
+  | 'policy_nonpersistable'
+
+type CacheMetricCounter =
+  | 'memory_hit'
+  | 'memory_miss'
+  | 'persisted_hit'
+  | 'persisted_miss'
+  | 'rebuild_count'
+  | 'invalidation_evictions_path'
+  | 'invalidation_evictions_dep_index'
+
+const WORKSPACE_CHANGE_TOKEN_TTL_MS = getEnvInt(
+  'RENOUN_FS_WORKSPACE_CHANGE_TOKEN_TTL_MS',
+  250
+)
+const INVALIDATED_PATH_TTL_MS = getEnvInt(
+  'RENOUN_FS_INVALIDATED_PATH_TTL_MS',
+  1000
+)
+
 function collectSnapshotFamily(
   snapshotId: string,
   parentMap: Map<string, string>
@@ -152,11 +176,40 @@ export class Session {
     Promise<{
       snapshot: DirectorySnapshot<any, any>
       shouldIncludeSelf: boolean
+      skipPersist?: boolean
     }>
   >()
   readonly #functionIds = new WeakMap<Function, string>()
   #nextFunctionId = 0
   readonly #invalidatedDirectorySnapshotKeys = new Set<string>()
+  readonly #workspaceChangeTokenByRootPath = new Map<
+    string,
+    {
+      token: string | null
+      expiresAt: number
+      promise?: Promise<string | null>
+    }
+  >()
+  readonly #recentlyInvalidatedPathTimestamps = new Map<string, number>()
+  #persistedInvalidationQueue: Promise<void> = Promise.resolve()
+  readonly #cacheMetricsEnabled =
+    process.env['RENOUN_FS_CACHE_METRICS'] === '1'
+  readonly #cacheMetricCounters: Record<CacheMetricCounter, number> = {
+    memory_hit: 0,
+    memory_miss: 0,
+    persisted_hit: 0,
+    persisted_miss: 0,
+    rebuild_count: 0,
+    invalidation_evictions_path: 0,
+    invalidation_evictions_dep_index: 0,
+  }
+  readonly #persistedStaleReasonCounters: Record<PersistedStaleReason, number> =
+    {
+      token_changed: 0,
+      dep_changed: 0,
+      shape_mismatch: 0,
+      policy_nonpersistable: 0,
+    }
 
   private constructor(fileSystem: FileSystem, snapshot: Snapshot) {
     this.#fileSystem = fileSystem
@@ -219,7 +272,9 @@ export class Session {
       filterSignature: options.filterSignature,
       sortSignature: options.sortSignature,
       basePathname: options.basePathname ?? null,
-      rootPath: options.rootPath ?? '',
+      rootPath: options.rootPath
+        ? normalizeSessionPath(this.#fileSystem, options.rootPath)
+        : '',
     })
     return `dir:${directoryPath}|${digest}`
   }
@@ -240,8 +295,92 @@ export class Session {
     return this.#invalidatedDirectorySnapshotKeys.size > 0
   }
 
+  recordCacheMetric(counter: CacheMetricCounter, increment = 1): void {
+    if (increment <= 0) {
+      return
+    }
+
+    this.#cacheMetricCounters[counter] += increment
+    this.#emitCacheMetricLog({
+      metric: counter,
+      increment,
+      total: this.#cacheMetricCounters[counter],
+    })
+  }
+
+  recordPersistedStaleReason(reason: PersistedStaleReason): void {
+    this.#persistedStaleReasonCounters[reason] += 1
+    this.#emitCacheMetricLog({
+      metric: 'persisted_stale_reason',
+      reason,
+      total: this.#persistedStaleReasonCounters[reason],
+    })
+  }
+
+  async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    const tokenGetter = this.#fileSystem.getWorkspaceChangeToken
+    if (typeof tokenGetter !== 'function') {
+      return null
+    }
+
+    const normalizedRootPath = normalizeSessionPath(this.#fileSystem, rootPath)
+    const now = Date.now()
+    const cached = this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
+
+    if (cached && cached.expiresAt > now) {
+      return cached.token
+    }
+
+    if (cached?.promise) {
+      return cached.promise
+    }
+
+    const lookupPromise = (async () => {
+      try {
+        const token = await tokenGetter.call(this.#fileSystem, rootPath)
+        return typeof token === 'string' ? token : null
+      } catch {
+        return null
+      }
+    })()
+
+    this.#workspaceChangeTokenByRootPath.set(normalizedRootPath, {
+      token: cached?.token ?? null,
+      expiresAt: now,
+      promise: lookupPromise,
+    })
+
+    try {
+      const token = await lookupPromise
+      this.#workspaceChangeTokenByRootPath.set(normalizedRootPath, {
+        token,
+        expiresAt: Date.now() + WORKSPACE_CHANGE_TOKEN_TTL_MS,
+      })
+      return token
+    } finally {
+      const latest = this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
+      if (latest?.promise === lookupPromise) {
+        this.#workspaceChangeTokenByRootPath.delete(normalizedRootPath)
+      }
+    }
+  }
+
+  getRecentlyInvalidatedPaths():
+    | ReadonlySet<string>
+    | undefined {
+    this.#cleanupExpiredInvalidatedPaths()
+
+    if (this.#recentlyInvalidatedPathTimestamps.size === 0) {
+      return undefined
+    }
+
+    return new Set(this.#recentlyInvalidatedPathTimestamps.keys())
+  }
+
   invalidatePath(path: string): void {
     const normalizedPath = normalizeSessionPath(this.#fileSystem, path)
+    this.#recentlyInvalidatedPathTimestamps.set(normalizedPath, Date.now())
+    this.#cleanupExpiredInvalidatedPaths()
 
     this.snapshot.invalidatePath(path)
 
@@ -281,15 +420,25 @@ export class Session {
       }
     }
 
+    if (expiredKeys.size > 0) {
+      this.recordCacheMetric('invalidation_evictions_path', expiredKeys.size)
+    }
+
     for (const key of expiredKeys) {
       void this.cache.delete(key)
     }
+
+    this.#queuePersistedDependencyInvalidation(normalizedPath)
   }
 
   reset(): void {
     this.inflight.clear()
     this.directorySnapshots.clear()
     this.directorySnapshotBuilds.clear()
+    this.#invalidatedDirectorySnapshotKeys.clear()
+    this.#workspaceChangeTokenByRootPath.clear()
+    this.#recentlyInvalidatedPathTimestamps.clear()
+    this.#persistedInvalidationQueue = Promise.resolve()
     this.cache.clearMemory()
     if (typeof this.snapshot.invalidateAll === 'function') {
       this.snapshot.invalidateAll()
@@ -337,6 +486,87 @@ export class Session {
     }
 
     return normalizedObject
+  }
+
+  #queuePersistedDependencyInvalidation(normalizedPath: string): void {
+    this.#persistedInvalidationQueue = this.#persistedInvalidationQueue
+      .catch(() => {})
+      .then(async () => {
+        const dependencyEviction = await this.cache.deleteByDependencyPath(
+          normalizedPath
+        )
+
+        if (dependencyEviction.deletedNodeKeys.length > 0) {
+          this.recordCacheMetric(
+            'invalidation_evictions_dep_index',
+            dependencyEviction.deletedNodeKeys.length
+          )
+        }
+
+        if (
+          !dependencyEviction.usedDependencyIndex ||
+          dependencyEviction.hasMissingDependencyMetadata
+        ) {
+          await this.#runBroadPersistedInvalidationFallback(normalizedPath)
+        }
+      })
+  }
+
+  async #runBroadPersistedInvalidationFallback(
+    normalizedPath: string
+  ): Promise<void> {
+    const candidateKeys = await this.cache.listNodeKeysByPrefix('dir:')
+    if (candidateKeys.length === 0) {
+      return
+    }
+
+    const fallbackKeysToDelete: string[] = []
+
+    for (const key of candidateKeys) {
+      const directoryPath = extractDirectoryPathFromSnapshotKey(key)
+      if (!directoryPath) {
+        continue
+      }
+
+      if (pathsIntersect(directoryPath, normalizedPath)) {
+        fallbackKeysToDelete.push(key)
+      }
+    }
+
+    if (fallbackKeysToDelete.length === 0) {
+      return
+    }
+
+    await Promise.all(
+      fallbackKeysToDelete.map((key) => this.cache.delete(key))
+    )
+    this.recordCacheMetric(
+      'invalidation_evictions_path',
+      fallbackKeysToDelete.length
+    )
+  }
+
+  #cleanupExpiredInvalidatedPaths(now = Date.now()): void {
+    const expiresBefore = now - INVALIDATED_PATH_TTL_MS
+    for (const [path, timestamp] of this.#recentlyInvalidatedPathTimestamps) {
+      if (timestamp <= expiresBefore) {
+        this.#recentlyInvalidatedPathTimestamps.delete(path)
+      }
+    }
+  }
+
+  #emitCacheMetricLog(fields: Record<string, string | number>): void {
+    if (!this.#cacheMetricsEnabled) {
+      return
+    }
+
+    const orderedEntries = Object.entries(fields).sort(([first], [second]) =>
+      first.localeCompare(second)
+    )
+    const message = orderedEntries
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .join(' ')
+    console.log(`[renoun-fs-cache-metrics] ${message}`)
   }
 }
 
@@ -410,6 +640,23 @@ class GeneratedSnapshot implements Snapshot {
 function normalizeSessionPath(fileSystem: FileSystem, path: string): string {
   const relativePath = fileSystem.getRelativePathToWorkspace(path)
   return normalizePathKey(relativePath)
+}
+
+function extractDirectoryPathFromSnapshotKey(key: string): string | undefined {
+  if (!key.startsWith('dir:')) {
+    return undefined
+  }
+
+  const delimiterIndex = key.indexOf('|')
+  const rawPath =
+    delimiterIndex === -1
+      ? key.slice('dir:'.length)
+      : key.slice('dir:'.length, delimiterIndex)
+  if (!rawPath) {
+    return undefined
+  }
+
+  return normalizePathKey(rawPath)
 }
 
 function pathsIntersect(firstPath: string, secondPath: string): boolean {
@@ -514,4 +761,18 @@ function shouldUseSessionCachePersistence(fileSystem: FileSystem): boolean {
   }
 
   return process.env['NODE_ENV'] === 'production'
+}
+
+function getEnvInt(envVarName: string, fallback: number): number {
+  const value = process.env[envVarName]
+  if (!value) {
+    return fallback
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback
+  }
+
+  return parsed
 }

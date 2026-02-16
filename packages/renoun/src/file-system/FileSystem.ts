@@ -118,6 +118,14 @@ export abstract class BaseFileSystem {
   #tsConfigPromise?: Promise<TsConfig | undefined>
   #exclude?: Minimatch[]
 
+  /**
+   * Optional workspace change token used for fast cache revalidation.
+   *
+   * Implementations should return a deterministic token for a scoped root path
+   * or `null` when a token cannot be produced.
+   */
+  getWorkspaceChangeToken?(rootPath: string): Promise<string | null>
+
   constructor(options: FileSystemOptions = {}) {
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
   }

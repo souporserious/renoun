@@ -19,6 +19,10 @@ import type {
 
 export type GitHostType = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 
+export type RepositoryReleaseSource =
+  | { mode?: 'remote' }
+  | { mode: 'local-version'; version: string }
+
 export interface RepositoryConfig {
   /** The base URL of the repository host or full repository URL. */
   baseUrl: string
@@ -37,6 +41,9 @@ export interface RepositoryConfig {
 
   /** Optional default path prefix inside the repository. */
   path?: string
+
+  /** Internal release metadata source mode. */
+  releaseSource?: RepositoryReleaseSource
 }
 
 export interface BaseRepositoryOptions {
@@ -51,6 +58,9 @@ export interface BaseRepositoryOptions {
    * When false, use the host API (virtual).
    */
   clone?: boolean
+
+  /** Internal release metadata source mode. */
+  releaseSource?: RepositoryReleaseSource
 }
 
 export interface CloneRepositoryOptions extends BaseRepositoryOptions {
@@ -316,6 +326,28 @@ function mergeSparsePaths(
   }
 
   return Array.from(merged)
+}
+
+function normalizeReleaseSource(
+  value: RepositoryReleaseSource | undefined
+): { mode: 'remote' } | { mode: 'local-version'; version: string } {
+  if (!value || value.mode === undefined || value.mode === 'remote') {
+    return { mode: 'remote' }
+  }
+
+  if (value.mode === 'local-version') {
+    const normalizedVersion = String(value.version ?? '').trim()
+    if (!normalizedVersion) {
+      return { mode: 'remote' }
+    }
+
+    return {
+      mode: 'local-version',
+      version: normalizedVersion,
+    }
+  }
+
+  return { mode: 'remote' }
 }
 
 /** GitLab path stop-tokens that indicate content views after owner/repo. */
@@ -671,6 +703,8 @@ export class Repository {
   #pendingSparsePaths: Set<string> = new Set()
   #releasePromises: Map<string, Promise<Release>> = new Map()
   #githubReleasesPromise?: Promise<any[]>
+  #releaseSource: { mode: 'remote' } | { mode: 'local-version'; version: string } =
+    { mode: 'remote' }
 
   constructor(repository?: RepositoryOptions | RepositoryConfig | string) {
     const options =
@@ -679,6 +713,10 @@ export class Repository {
         : typeof repository === 'string'
           ? { path: repository }
           : repository
+
+    this.#releaseSource = normalizeReleaseSource(
+      'releaseSource' in options ? options.releaseSource : undefined
+    )
 
     if (isRepositoryConfig(options)) {
       const { baseUrl, host } = options
@@ -1127,6 +1165,11 @@ export class Repository {
     const cacheKey = JSON.stringify({
       release: releaseSpecifier,
       packageName: options?.packageName,
+      releaseSourceMode: this.#releaseSource.mode,
+      releaseSourceVersion:
+        this.#releaseSource.mode === 'local-version'
+          ? this.#releaseSource.version
+          : undefined,
     })
 
     if (options?.refresh) {
@@ -1210,6 +1253,10 @@ export class Repository {
     specifier: ReleaseSpecifier,
     options?: GetReleaseOptions
   ): Promise<Release> {
+    if (this.#releaseSource.mode === 'local-version') {
+      return this.#resolveLocalVersionRelease(this.#releaseSource, options)
+    }
+
     if (!this.#owner || !this.#repo) {
       throw new Error(
         '[renoun] Cannot determine owner/repository while resolving a release.'
@@ -1240,6 +1287,32 @@ export class Repository {
         isFallback: true,
         assets: [],
       }
+    }
+  }
+
+  #resolveLocalVersionRelease(
+    releaseSource: { mode: 'local-version'; version: string },
+    options?: GetReleaseOptions
+  ): Release {
+    const rawVersion = releaseSource.version.trim()
+    const versionWithoutPrefix = rawVersion.replace(/^v/i, '')
+    const tagName = rawVersion.startsWith('v')
+      ? rawVersion
+      : `v${versionWithoutPrefix}`
+
+    const releaseName = options?.packageName
+      ? `${options.packageName}@${versionWithoutPrefix}`
+      : tagName
+    const htmlUrl = this.getReleaseTagUrl({ tag: tagName })
+
+    return {
+      tagName,
+      name: releaseName,
+      htmlUrl,
+      isDraft: false,
+      isPrerelease: Boolean(coerceSemVer(tagName)?.prerelease.length),
+      isFallback: false,
+      assets: [],
     }
   }
 

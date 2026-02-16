@@ -775,6 +775,61 @@ describe('Repository', () => {
       vi.restoreAllMocks()
     })
 
+    test('does not call fetch in local-version release mode', async () => {
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository({
+        path: 'owner/repo',
+        releaseSource: {
+          mode: 'local-version',
+          version: '11.3.0',
+        },
+      })
+
+      await repository.getRelease({
+        packageName: 'renoun',
+      })
+
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    test('builds release metadata and URL from local version in local-version mode', async () => {
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository({
+        path: 'owner/repo',
+        releaseSource: {
+          mode: 'local-version',
+          version: '11.3.0',
+        },
+      })
+
+      const release = await repository.getRelease({
+        packageName: 'renoun',
+      })
+
+      expect(release.tagName).toBe('v11.3.0')
+      expect(release.name).toBe('renoun@11.3.0')
+      expect(release.htmlUrl).toBe(
+        'https://github.com/owner/repo/releases/tag/v11.3.0'
+      )
+      expect(release.isFallback).toBe(false)
+      await expect(repository.getReleaseUrl()).resolves.toBe(
+        'https://github.com/owner/repo/releases/tag/v11.3.0'
+      )
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
     test('fetches release metadata from GitHub and caches results', async () => {
       const releasesPayload = [
         {
