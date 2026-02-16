@@ -37,7 +37,7 @@
   ],
   "sideEffects": false,
   "bin": {
-    "renoun": "./dist/cli/index.js"
+    "renoun": "./src/cli/index.ts"
   },
   "type": "module",
   "main": "./dist/index.js",
