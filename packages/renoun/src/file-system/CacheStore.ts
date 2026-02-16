@@ -213,6 +213,24 @@ export class CacheStore {
     return entry?.value as Value | undefined
   }
 
+  async getWithFreshness<Value>(
+    nodeKey: string
+  ): Promise<{ value: Value | undefined; fresh: boolean }> {
+    const memoryEntry = this.#entries.get(nodeKey)
+    if (memoryEntry) {
+      const fresh = await this.#isEntryFresh(nodeKey, memoryEntry, new Set())
+      return { value: memoryEntry.value as Value, fresh }
+    }
+
+    const persistedEntry = await this.#loadPersistedEntry(nodeKey)
+    if (!persistedEntry) {
+      return { value: undefined, fresh: false }
+    }
+
+    const fresh = await this.#isEntryFresh(nodeKey, persistedEntry, new Set())
+    return { value: persistedEntry.value as Value, fresh }
+  }
+
   async put<Value>(
     nodeKey: string,
     value: Value,

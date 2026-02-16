@@ -1,4 +1,5 @@
 import ignore from 'fast-ignore'
+import { randomUUID } from 'node:crypto'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.ts'
@@ -50,6 +51,7 @@ export class InMemoryFileSystem
   implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
 {
   #projectOptions: ProjectOptions
+  #cacheIdentity: string
   #files: Map<string, InMemoryEntry>
   #ignore: ReturnType<typeof ignore> | undefined
   #syncedSourceFiles: Set<string>
@@ -67,6 +69,7 @@ export class InMemoryFileSystem
         module: tsMorph.ts.ModuleKind.CommonJS,
       },
     }
+    this.#cacheIdentity = randomUUID()
     this.#syncedSourceFiles = new Set()
     this.#pendingSourceFileWrites = new Map()
     this.#files = new Map(
@@ -304,6 +307,10 @@ export class InMemoryFileSystem
 
   getProjectOptions() {
     return this.#projectOptions
+  }
+
+  getCacheIdentity(): unknown {
+    return this.#cacheIdentity
   }
 
   transpileFile(path: string) {

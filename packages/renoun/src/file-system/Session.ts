@@ -1,7 +1,10 @@
 import { resolve } from 'node:path'
 import { realpathSync } from 'node:fs'
 
-import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
+import {
+  isAbsolutePath,
+  normalizePathKey,
+} from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { CacheStore, hashString, stableStringify } from './CacheStore.ts'
 import { getCacheStorePersistence } from './CacheStoreSqlite.ts'
@@ -140,6 +143,7 @@ export class Session {
 
   readonly #fileSystem: FileSystem
   readonly snapshot: Snapshot
+  readonly usesPersistentCache: boolean
   readonly inflight = new Map<string, Promise<unknown>>()
   readonly cache: CacheStore
   readonly directorySnapshots = new Map<string, DirectorySnapshot<any, any>>()
@@ -150,15 +154,16 @@ export class Session {
       shouldIncludeSelf: boolean
     }>
   >()
-
   readonly #functionIds = new WeakMap<Function, string>()
   #nextFunctionId = 0
+  readonly #invalidatedDirectorySnapshotKeys = new Set<string>()
 
   private constructor(fileSystem: FileSystem, snapshot: Snapshot) {
     this.#fileSystem = fileSystem
     this.snapshot = snapshot
 
-    const projectRoot = shouldUseSessionCachePersistence()
+    this.usesPersistentCache = shouldUseSessionCachePersistence(fileSystem)
+    const projectRoot = this.usesPersistentCache
       ? resolveSessionProjectRoot(fileSystem)
       : undefined
     const persistence = projectRoot
@@ -219,6 +224,22 @@ export class Session {
     return `dir:${directoryPath}|${digest}`
   }
 
+  markInvalidatedDirectorySnapshotKey(snapshotKey: string): void {
+    this.#invalidatedDirectorySnapshotKeys.add(snapshotKey)
+  }
+
+  isDirectorySnapshotKeyInvalidated(snapshotKey: string): boolean {
+    return this.#invalidatedDirectorySnapshotKeys.has(snapshotKey)
+  }
+
+  clearDirectorySnapshotKeyInvalidation(snapshotKey: string): void {
+    this.#invalidatedDirectorySnapshotKeys.delete(snapshotKey)
+  }
+
+  hasInvalidatedDirectorySnapshotKeys(): boolean {
+    return this.#invalidatedDirectorySnapshotKeys.size > 0
+  }
+
   invalidatePath(path: string): void {
     const normalizedPath = normalizeSessionPath(this.#fileSystem, path)
 
@@ -238,6 +259,7 @@ export class Session {
       const directoryPath = directoryPrefix.slice('dir:'.length)
       if (pathsIntersect(directoryPath, normalizedPath)) {
         this.directorySnapshots.delete(key)
+        this.markInvalidatedDirectorySnapshotKey(key)
         expiredKeys.add(key)
       }
     }
@@ -254,6 +276,7 @@ export class Session {
       const directoryPath = directoryPrefix.slice('dir:'.length)
       if (pathsIntersect(directoryPath, normalizedPath)) {
         this.directorySnapshotBuilds.delete(key)
+        this.markInvalidatedDirectorySnapshotKey(key)
         expiredKeys.add(key)
       }
     }
@@ -455,8 +478,15 @@ function resolveCanonicalPath(pathToResolve: string): string {
   }
 }
 
-function shouldUseSessionCachePersistence(): boolean {
+function shouldUseSessionCachePersistence(fileSystem: FileSystem): boolean {
   const explicit = process.env['RENOUN_FS_CACHE']
+  const constructorName = fileSystem.constructor?.name ?? ''
+  const isInMemoryFileSystem =
+    constructorName === 'InMemoryFileSystem' ||
+    constructorName === 'MutableTimestampFileSystem'
+  const hasExplicitCacheDbPath =
+    typeof process.env['RENOUN_FS_CACHE_DB_PATH'] === 'string' &&
+    process.env['RENOUN_FS_CACHE_DB_PATH'].trim().length > 0
 
   if (explicit === '1' || explicit?.toLowerCase() === 'true') {
     return true
@@ -466,5 +496,22 @@ function shouldUseSessionCachePersistence(): boolean {
     return false
   }
 
-  return true
+  if (hasExplicitCacheDbPath && !isInMemoryFileSystem) {
+    return true
+  }
+
+  if (process.env['VITEST'] === 'true') {
+    if (isInMemoryFileSystem) {
+      return false
+    }
+
+    if (process.env['NODE_ENV'] === 'production') {
+      return true
+    }
+
+    const repoRoot = (fileSystem as { repoRoot?: unknown }).repoRoot
+    return typeof repoRoot === 'string' && repoRoot.length > 0
+  }
+
+  return process.env['NODE_ENV'] === 'production'
 }

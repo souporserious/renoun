@@ -35,7 +35,6 @@ import {
 import {
   baseName,
   directoryName,
-  ensureRelativePath,
   extensionName,
   joinPaths,
   normalizeSlashes,
@@ -44,9 +43,9 @@ import {
   removeAllExtensions,
   removeOrderPrefixes,
   relativePath,
+  ensureRelativePath,
   type PathLike,
 } from '../utils/path.ts'
-import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
 import { Semaphore } from '../utils/Semaphore.ts'
 import type {
@@ -73,8 +72,8 @@ import {
 import {
   DirectorySnapshot,
   createDirectorySnapshot,
-  type DirectorySnapshotDirectoryMetadata,
   type DirectorySnapshotRestoreFactory,
+  type DirectorySnapshotDirectoryMetadata,
   type PersistedEntryMetadata,
   type PersistedDirectorySnapshotV1,
   isPersistedDirectorySnapshotV1,
@@ -3946,6 +3945,7 @@ type DirectorySnapshotMetadataEntry<LoaderTypes extends Record<string, any>> =
 interface FileEntryMetadata<LoaderTypes extends Record<string, any>> {
   kind: 'File'
   entry: FileSystemEntry<LoaderTypes>
+  path: string
   includeInFinal: boolean
   isGitIgnored: boolean
   isIndexOrReadme: boolean
@@ -3958,6 +3958,7 @@ interface FileEntryMetadata<LoaderTypes extends Record<string, any>> {
 interface DirectoryEntryMetadata<LoaderTypes extends Record<string, any>> {
   kind: 'Directory'
   entry: Directory<LoaderTypes>
+  path: string
   includeInFinal: boolean
   passesFilterSelf: boolean
   snapshot: DirectorySnapshot<
@@ -3997,8 +3998,29 @@ function createOptionsMask(options: NormalizedDirectoryEntriesOptions) {
 }
 
 const DIRECTORY_DEPENDENCY_PREFIX = 'dir:'
+const DIRECTORY_MTIME_DEPENDENCY_PREFIX = 'dir-mtime:'
 const FILE_DEPENDENCY_PREFIX = 'file:'
 const PRODUCTION_SNAPSHOT_REVALIDATE_INTERVAL_MS = 250
+
+function shouldTrackDirectoryMtime(fileSystem: FileSystem): boolean {
+  const constructorName = fileSystem.constructor?.name ?? ''
+  return (
+    constructorName === 'NodeFileSystem' ||
+    constructorName === 'NestedCwdNodeFileSystem' ||
+    constructorName === 'GitFileSystem'
+  )
+}
+
+function shouldValidatePersistedFileDependencies(
+  fileSystem: FileSystem
+): boolean {
+  const constructorName = fileSystem.constructor?.name ?? ''
+  return (
+    constructorName === 'NodeFileSystem' ||
+    constructorName === 'NestedCwdNodeFileSystem' ||
+    constructorName === 'InMemoryFileSystem'
+  )
+}
 
 function isSessionSnapshotPersistable(options: {
   filter?: unknown
@@ -4051,29 +4073,6 @@ function isSessionSnapshotPersistable(options: {
   return true
 }
 
-function createDirectoryListingSignature(
-  entries: ReadonlyArray<{
-    name: string
-    isDirectory: boolean
-    isFile: boolean
-    signature?: string
-  }>
-): string {
-  if (entries.length === 0) {
-    return ''
-  }
-
-  const encodedEntries = entries
-    .map((entry) => {
-      const entryType = entry.isDirectory ? 'd' : entry.isFile ? 'f' : 'o'
-      const signature = entry.signature ? `sig:${entry.signature}` : ''
-      return `${entryType}:${entry.name}|${signature}`
-    })
-    .sort()
-
-  return encodedEntries.join('\u0000')
-}
-
 async function getDirectoryEntryListingSignature(
   snapshot: Snapshot,
   fileSystem: FileSystem,
@@ -4102,6 +4101,29 @@ async function getDirectoryEntryListingSignature(
   }
 
   return 'missing'
+}
+
+function createDirectoryListingSignature(
+  entries: ReadonlyArray<{
+    name: string
+    isDirectory: boolean
+    isFile: boolean
+    signature?: string
+  }>
+): string {
+  if (entries.length === 0) {
+    return ''
+  }
+
+  const encodedEntries = entries
+    .map((entry) => {
+      const entryType = entry.isDirectory ? 'd' : entry.isFile ? 'f' : 'o'
+      const signature = entry.signature ? `sig:${entry.signature}` : ''
+      return `${entryType}:${entry.name}|${signature}`
+    })
+    .sort()
+
+  return encodedEntries.join('\u0000')
 }
 
 /** A directory containing files and subdirectories in the file system. */
@@ -4172,24 +4194,13 @@ export class Directory<
       this.#slugCasing = 'kebab'
       this.#tsConfigPath = 'tsconfig.json'
     } else {
+      const hasCustomFileSystem =
+        'fileSystem' in options && options.fileSystem !== undefined
+
       if (options.path) {
         const resolved = resolveSchemePath(options.path)
         if (resolved.startsWith('/')) {
-          // If the resolved path is inside the workspace, store a workspace‑relative path
-          const workspaceRoot = normalizeSlashes(getRootDirectory())
-          const absoluteResolved = normalizeSlashes(resolved)
-          if (
-            absoluteResolved === workspaceRoot ||
-            absoluteResolved.startsWith(
-              workspaceRoot.endsWith('/') ? workspaceRoot : `${workspaceRoot}/`
-            )
-          ) {
-            // Store absolute (workspace‑anchored) path to avoid cwd coupling
-            this.#path = absoluteResolved
-          } else {
-            // Keep external absolute path as is
-            this.#path = resolved
-          }
+          this.#path = resolved
         } else {
           this.#path = ensureRelativePath(resolved)
         }
@@ -4210,9 +4221,6 @@ export class Directory<
         getClosestFile('tsconfig.json', this.#path) ??
         'tsconfig.json'
       this.#slugCasing = options.slugCasing ?? 'kebab'
-
-      const hasCustomFileSystem =
-        'fileSystem' in options && options.fileSystem !== undefined
 
       const repositoryOption = normalizeRepositoryInput(options.repository)
 
@@ -5259,35 +5267,75 @@ export class Directory<
   }
 
   #getParentDirectoryPath(path: string): string {
-    const normalizedPath = normalizeSlashes(path).replace(/^\.\//, '')
+    const normalizedPath = this.#normalizeSnapshotPath(path)
 
     if (!normalizedPath || normalizedPath === '.') {
-      return this.#path
+      return '.'
     }
 
     const parentPath = directoryName(normalizedPath)
-    if (!parentPath || parentPath === '.') {
-      return this.#path
+    if (!parentPath) {
+      return '.'
     }
 
-    return parentPath
+    return this.#normalizeSnapshotPath(parentPath)
+  }
+
+  #normalizeSnapshotPath(path: string): string {
+    const normalizedPath = normalizeSlashes(path).replace(/^\.\//, '')
+
+    if (!normalizedPath || normalizedPath === '.') {
+      return '.'
+    }
+
+    if (normalizedPath === '/') {
+      return normalizedPath
+    }
+
+    return normalizedPath.replace(/\/+$/, '')
   }
 
   #resolveSnapshotDirectoryByPath(
-    path: string
+    path: string,
   ): Directory<LoaderTypes> {
-    const normalizedPath = normalizeSlashes(path).replace(/^\.\//, '')
+    const normalizedPath = this.#normalizeSnapshotPath(path)
+    const basePath = this.#normalizeSnapshotPath(this.#path)
 
-    if (!normalizedPath || normalizedPath === '.' || normalizedPath === this.#path) {
+    if (!normalizedPath || normalizedPath === '.') {
       return this
     }
 
-    const parentPath = this.#getParentDirectoryPath(normalizedPath)
-    const parentDirectory =
-      parentPath === normalizedPath
-        ? this
-        : this.#resolveSnapshotDirectoryByPath(parentPath)
-    return parentDirectory.#duplicate({ path: normalizedPath })
+    if (normalizedPath === basePath) {
+      return this
+    }
+
+    const lineage: string[] = []
+    const seen = new Set<string>()
+    let currentPath = normalizedPath
+
+    while (
+      currentPath !== '.' &&
+      currentPath !== '/' &&
+      currentPath !== basePath &&
+      !seen.has(currentPath)
+    ) {
+      seen.add(currentPath)
+      lineage.push(currentPath)
+
+      const parentPath = this.#getParentDirectoryPath(currentPath)
+      if (parentPath === currentPath) {
+        break
+      }
+
+      currentPath = parentPath
+    }
+
+    let directory: Directory<LoaderTypes> = this
+    for (let index = lineage.length - 1; index >= 0; index -= 1) {
+      directory = directory.#duplicate({ path: lineage[index] })
+    }
+
+    return directory
   }
 
   #createDirectorySnapshotFile(
@@ -5541,41 +5589,72 @@ export class Directory<
   async #getDirectorySnapshot(
     directory: Directory<LoaderTypes>,
     options: NormalizedDirectoryEntriesOptions,
-    mask: number
+    mask: number,
+    registerInSession = true
   ): Promise<
     DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
   > {
     const session = directory.#getSession()
     const snapshotKey = directory.#getSessionSnapshotKey(mask)
-    const cachedSnapshot = session.directorySnapshots.get(snapshotKey)
+    const cachedSnapshot = registerInSession
+      ? session.directorySnapshots.get(snapshotKey)
+      : undefined
     const canPersist = isSessionSnapshotPersistable({
       filter: directory.#filter,
       filterPattern: directory.#filterPattern,
       sort: directory.#sort,
-    })
+    }) && session.usesPersistentCache
+    const wasPathInvalidated =
+      registerInSession &&
+      session.isDirectorySnapshotKeyInvalidated(snapshotKey)
+    const hasPendingInvalidation = !registerInSession
+      ? session.hasInvalidatedDirectorySnapshotKeys()
+      : false
 
-    const existingBuild = session.directorySnapshotBuilds.get(snapshotKey)
+    const existingBuild = registerInSession
+      ? session.directorySnapshotBuilds.get(snapshotKey)
+      : undefined
     if (existingBuild) {
       return existingBuild.then((metadata) => metadata.snapshot)
     }
 
     const build = cachedSnapshot
       ? (async () => {
-          const isStale = await directory.#isCachedSnapshotStale(cachedSnapshot)
-          if (!isStale) {
-            return { snapshot: cachedSnapshot, shouldIncludeSelf: false }
-          }
-
+        if (wasPathInvalidated) {
           session.directorySnapshots.delete(snapshotKey)
           return directory.#buildSnapshot(directory, options, mask)
-        })()
+        }
+
+        const isStale = await directory.#isCachedSnapshotStale(cachedSnapshot)
+        if (!isStale) {
+          return { snapshot: cachedSnapshot, shouldIncludeSelf: false }
+        }
+
+        session.directorySnapshots.delete(snapshotKey)
+        return directory.#buildSnapshot(directory, options, mask)
+      })()
       : (async () => {
+          if (wasPathInvalidated) {
+            return directory.#buildSnapshot(directory, options, mask)
+          }
+
+          if (hasPendingInvalidation) {
+            return directory.#buildSnapshot(directory, options, mask)
+          }
+
           if (!canPersist) {
             return directory.#buildSnapshot(directory, options, mask)
           }
 
+          const validateFileDependencies =
+            registerInSession &&
+            shouldValidatePersistedFileDependencies(directory.getFileSystem())
+
           const restoredSnapshot =
-            await directory.#restorePersistedDirectorySnapshot(snapshotKey)
+            await directory.#restorePersistedDirectorySnapshot(snapshotKey, {
+              validateFileDependencies,
+              validateDirectoryDependencies: true,
+            })
 
           if (restoredSnapshot) {
             return {
@@ -5587,31 +5666,51 @@ export class Directory<
           return directory.#buildSnapshot(directory, options, mask)
         })()
 
-    session.directorySnapshotBuilds.set(snapshotKey, build)
+    if (registerInSession) {
+      session.directorySnapshotBuilds.set(snapshotKey, build)
+    }
     try {
       const { snapshot } = await build
-      session.directorySnapshots.set(snapshotKey, snapshot)
+      const activeSession = directory.#getSession()
+      if (registerInSession) {
+        activeSession.directorySnapshots.set(snapshotKey, snapshot)
+      }
       if (canPersist) {
-        void directory.#persistDirectorySnapshot(snapshotKey, snapshot)
+        await directory.#persistDirectorySnapshot(snapshotKey, snapshot)
+      }
+      if (registerInSession) {
+        activeSession.clearDirectorySnapshotKeyInvalidation(snapshotKey)
       }
       return snapshot
     } finally {
-      const currentBuild = session.directorySnapshotBuilds.get(snapshotKey)
-      if (currentBuild === build) {
-        session.directorySnapshotBuilds.delete(snapshotKey)
+      if (registerInSession) {
+        const activeSession = directory.#getSession()
+        const activeBuild = activeSession.directorySnapshotBuilds.get(snapshotKey)
+        if (activeBuild === build) {
+          activeSession.directorySnapshotBuilds.delete(snapshotKey)
+        }
+
+        if (activeSession !== session) {
+          const previousBuild = session.directorySnapshotBuilds.get(snapshotKey)
+          if (previousBuild === build) {
+            session.directorySnapshotBuilds.delete(snapshotKey)
+          }
+        }
       }
     }
   }
 
   async #restorePersistedDirectorySnapshot(
-    snapshotKey: string
+    snapshotKey: string,
+    options?: {
+      validateFileDependencies?: boolean
+      validateDirectoryDependencies?: boolean
+    }
   ): Promise<
     DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>> | undefined
   > {
     const session = this.#getSession()
-    const persisted = await session.cache.get<PersistedDirectorySnapshotV1>(
-      snapshotKey
-    )
+    const persisted = await session.cache.get<PersistedDirectorySnapshotV1>(snapshotKey)
     if (!persisted) {
       return undefined
     }
@@ -5621,28 +5720,68 @@ export class Directory<
       return undefined
     }
 
+    const validateFileDependencies = options?.validateFileDependencies ?? true
+    const validateDirectoryDependencies =
+      options?.validateDirectoryDependencies ?? true
+    const shouldValidateDirectoryDependencies =
+      validateDirectoryDependencies &&
+      shouldTrackDirectoryMtime(this.getFileSystem())
+
+    if (validateFileDependencies || shouldValidateDirectoryDependencies) {
+      const isStale = await this.#isPersistedSnapshotStaleByFileDependencies(
+        persisted,
+        {
+          validateFileDependencies,
+          validateDirectoryDependencies: shouldValidateDirectoryDependencies,
+        }
+      )
+      if (isStale) {
+        await session.cache.delete(snapshotKey)
+        return undefined
+      }
+    }
+
     const snapshot = DirectorySnapshot.fromPersistedSnapshot(
       persisted,
       {
-        createDirectory: (path) =>
-          this.#resolveSnapshotDirectoryByPath(path),
+        createDirectory: (path) => {
+          const normalizedPath = this.#normalizeSnapshotPath(path)
+          const restoredPath =
+            normalizedPath === '.' ||
+            normalizedPath.startsWith('/') ||
+            normalizedPath.startsWith('./') ||
+            normalizedPath.startsWith('../')
+              ? normalizedPath
+              : ensureRelativePath(normalizedPath)
+          return this.#resolveSnapshotDirectoryByPath(restoredPath)
+        },
         createFile: (path) => {
+          const normalizedPath = this.#normalizeSnapshotPath(path)
+          const restoredPath =
+            normalizedPath === '.' ||
+            normalizedPath.startsWith('/') ||
+            normalizedPath.startsWith('./') ||
+            normalizedPath.startsWith('../')
+              ? normalizedPath
+              : ensureRelativePath(normalizedPath)
+          const parentPath = this.#getParentDirectoryPath(restoredPath)
+          const restoredParentPath =
+            parentPath === '.' ||
+            parentPath.startsWith('/') ||
+            parentPath.startsWith('./') ||
+            parentPath.startsWith('../')
+              ? parentPath
+              : ensureRelativePath(parentPath)
           const parentDirectory = this.#resolveSnapshotDirectoryByPath(
-            this.#getParentDirectoryPath(path)
+            restoredParentPath
           )
-          return this.#createDirectorySnapshotFile(parentDirectory, path)
+          return this.#createDirectorySnapshotFile(parentDirectory, restoredPath)
         },
       } satisfies DirectorySnapshotRestoreFactory<
         Directory<LoaderTypes>,
         FileSystemEntry<LoaderTypes>
       >
     )
-
-    const isStale = await this.#isCachedSnapshotStale(snapshot)
-    if (isStale) {
-      await session.cache.delete(snapshotKey)
-      return undefined
-    }
 
     return snapshot
   }
@@ -5655,34 +5794,8 @@ export class Directory<
     >
   ): Promise<void> {
     const session = this.#getSession()
-    const dependencies = snapshot.getDependencies()
-    if (!dependencies || dependencies.size === 0) {
-      await session.cache.put(snapshotKey, snapshot.toPersistedSnapshot(), {
-        persist: true,
-      })
-      return
-    }
-
-    const persistDependencies = await Promise.all(
-      Array.from(dependencies.entries()).map(async ([keyWithType]) => {
-        const isDirectory = keyWithType.startsWith(DIRECTORY_DEPENDENCY_PREFIX)
-        const depPath = isDirectory
-          ? keyWithType.slice(DIRECTORY_DEPENDENCY_PREFIX.length)
-          : keyWithType.startsWith(FILE_DEPENDENCY_PREFIX)
-            ? keyWithType.slice(FILE_DEPENDENCY_PREFIX.length)
-            : keyWithType
-        const version = await session.snapshot.contentId(depPath)
-
-        return {
-          depKey: keyWithType,
-          depVersion: version,
-        }
-      })
-    )
-
     await session.cache.put(snapshotKey, snapshot.toPersistedSnapshot(), {
       persist: true,
-      deps: persistDependencies,
     })
   }
 
@@ -5697,18 +5810,81 @@ export class Directory<
       return false
     }
 
+    return this.#isDependencySignaturesStale(dependencies)
+  }
+
+  async #isPersistedSnapshotStaleByFileDependencies(
+    snapshot: PersistedDirectorySnapshotV1,
+    options: {
+      validateFileDependencies: boolean
+      validateDirectoryDependencies: boolean
+    }
+  ): Promise<boolean> {
     const fileSystem = this.getFileSystem()
-    for (const [pathWithType, previousSignature] of dependencies) {
-      const isDirectory = pathWithType.startsWith(DIRECTORY_DEPENDENCY_PREFIX)
-      const path = isDirectory
+
+    for (const [pathWithType, previousSignature] of snapshot.dependencySignatures) {
+      const isFileDependency = pathWithType.startsWith(FILE_DEPENDENCY_PREFIX)
+      const isDirectoryMtimeDependency = pathWithType.startsWith(
+        DIRECTORY_MTIME_DEPENDENCY_PREFIX
+      )
+
+      if (isFileDependency && !options.validateFileDependencies) {
+        continue
+      }
+
+      if (
+        isDirectoryMtimeDependency &&
+        !options.validateDirectoryDependencies
+      ) {
+        continue
+      }
+
+      if (!isFileDependency && !isDirectoryMtimeDependency) {
+        continue
+      }
+
+      const path = isFileDependency
+        ? pathWithType.slice(FILE_DEPENDENCY_PREFIX.length)
+        : pathWithType.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
+      const currentModified = await fileSystem.getFileLastModifiedMs(path)
+      const currentSignature = currentModified === undefined ? 'missing' : String(currentModified)
+
+      if (currentSignature !== previousSignature) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  async #isDependencySignaturesStale(
+    dependencies: ReadonlyMap<string, string>
+  ): Promise<boolean> {
+    const fileSystem = this.getFileSystem()
+    const trackDirectoryMtime = shouldTrackDirectoryMtime(fileSystem)
+    for (const [pathWithType, previousSignature] of dependencies.entries()) {
+      const isDirectoryListing = pathWithType.startsWith(
+        DIRECTORY_DEPENDENCY_PREFIX
+      )
+      const isDirectoryMtime = pathWithType.startsWith(
+        DIRECTORY_MTIME_DEPENDENCY_PREFIX
+      )
+
+      if (isDirectoryMtime && !trackDirectoryMtime) {
+        continue
+      }
+
+      const path = isDirectoryListing
         ? pathWithType.slice(DIRECTORY_DEPENDENCY_PREFIX.length)
+        : isDirectoryMtime
+          ? pathWithType.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
         : pathWithType.startsWith(FILE_DEPENDENCY_PREFIX)
           ? pathWithType.slice(FILE_DEPENDENCY_PREFIX.length)
           : pathWithType
 
       let currentSignature: string
 
-      if (isDirectory) {
+      if (isDirectoryListing) {
         let entries:
           | ReadonlyArray<{
               name: string
@@ -5730,8 +5906,7 @@ export class Directory<
         )
       } else {
         const currentModified = await fileSystem.getFileLastModifiedMs(path)
-        currentSignature =
-          currentModified === undefined ? 'missing' : String(currentModified)
+        currentSignature = currentModified === undefined ? 'missing' : String(currentModified)
       }
 
       if (currentSignature !== previousSignature) {
@@ -5811,9 +5986,8 @@ export class Directory<
   >
     shouldIncludeSelf: boolean
   }> {
-    const session = directory.#getSession()
-    const snapshotKey = directory.#getSessionSnapshotKey(mask)
     const fileSystem = directory.getFileSystem()
+    const trackDirectoryMtime = shouldTrackDirectoryMtime(fileSystem)
 
     const rawEntries = await fileSystem.readDirectory(directory.#path)
     const dependencySignatures = new Map<string, string>()
@@ -5867,6 +6041,22 @@ export class Directory<
             }
           }
 
+          if (trackDirectoryMtime && entry.isDirectory) {
+            try {
+              const modifiedMs = await fileSystem.getFileLastModifiedMs(
+                entry.path
+              )
+              const signature =
+                modifiedMs === undefined ? 'missing' : String(modifiedMs)
+              dependencySignatures.set(
+                `${DIRECTORY_MTIME_DEPENDENCY_PREFIX}${entry.path}`,
+                signature
+              )
+            } catch {
+              // Ignore errors when reading timestamps; fall back to listing signatures.
+            }
+          }
+
           const isGitIgnored = fileSystem.isFilePathGitIgnored(entry.path)
 
           if (isGitIgnored && !options.includeGitIgnoredFiles) {
@@ -5883,21 +6073,7 @@ export class Directory<
             if (isTsConfigExcluded && !options.includeTsConfigExcludedFiles) {
               return { kind: 'skip' }
             }
-
             const subdirectory = directory.#duplicate({ path: entry.path })
-
-            const { snapshot: childSnapshot } = await this.#buildSnapshot(
-              subdirectory,
-              options,
-              mask
-            )
-            const childDependencies = childSnapshot.getDependencies()
-            if (childDependencies && childDependencies.size > 0) {
-              for (const [childPath, childSignature] of childDependencies) {
-                dependencySignatures.set(childPath, childSignature)
-              }
-            }
-
             const passesFilterSelf =
               directory.#simpleFilter?.recursive === true
                 ? true
@@ -5905,8 +6081,27 @@ export class Directory<
                   ? await directory.#passesFilter(subdirectory)
                   : true
 
+            if (!options.recursive && !passesFilterSelf) {
+              return { kind: 'skip' }
+            }
+
+            const childSnapshot = await this.#getDirectorySnapshot(
+              subdirectory,
+              options,
+              mask,
+              false
+            )
+
+            const childDependencies = childSnapshot.getDependencies()
+            if (childDependencies && childDependencies.size > 0) {
+              for (const [childPath, childSignature] of childDependencies) {
+                dependencySignatures.set(childPath, childSignature)
+              }
+            }
+
             const metadata: DirectoryEntryMetadata<LoaderTypes> = {
               kind: 'Directory',
+              path: entry.path,
               entry: subdirectory,
               includeInFinal: true,
               passesFilterSelf,
@@ -5968,6 +6163,7 @@ export class Directory<
 
           const metadata: FileEntryMetadata<LoaderTypes> = {
             kind: 'File',
+            path: entry.path,
             entry: file,
             includeInFinal,
             isGitIgnored,
@@ -6026,6 +6222,19 @@ export class Directory<
       `${DIRECTORY_DEPENDENCY_PREFIX}${directory.#path}`,
       await this.#createDirectoryListingSignature(fileSystem, rawEntries)
     )
+    if (trackDirectoryMtime) {
+      try {
+        const directoryModifiedMs = await fileSystem.getFileLastModifiedMs(
+          directory.#path
+        )
+        dependencySignatures.set(
+          `${DIRECTORY_MTIME_DEPENDENCY_PREFIX}${directory.#path}`,
+          directoryModifiedMs === undefined ? 'missing' : String(directoryModifiedMs)
+        )
+      } catch {
+        // Ignore errors when reading directory timestamps.
+      }
+    }
 
     let shouldIncludeSelf = false
 
@@ -6052,10 +6261,6 @@ export class Directory<
     }
 
     const immediateMetadata: DirectorySnapshotMetadataEntry<LoaderTypes>[] = []
-    const persistedEntries: PersistedEntryMetadata<
-      Directory<LoaderTypes>,
-      FileSystemEntry<LoaderTypes>
-    >[] = []
 
     for (const metadata of finalMetadata) {
       if (metadata.kind === 'File') {
@@ -6068,29 +6273,6 @@ export class Directory<
     }
 
     const immediateEntries = immediateMetadata.map((meta) => meta.entry)
-    for (const metadata of immediateMetadata) {
-      if (metadata.kind === 'Directory') {
-        const entryPath = (metadata.entry as FileSystemEntry<LoaderTypes> & {
-          path: string
-        }).path
-
-        persistedEntries.push({
-          kind: 'directory',
-          path: entryPath,
-          entry: metadata.entry,
-          snapshot: metadata.snapshot,
-        })
-      } else {
-        const entryPath = (metadata.entry as FileSystemEntry<LoaderTypes> & {
-          path: string
-        }).path
-        persistedEntries.push({
-          kind: 'file',
-          path: entryPath,
-          entry: metadata.entry,
-        })
-      }
-    }
 
     if (this.#sort && immediateEntries.length > 1) {
       await sortEntries(immediateEntries, this.#sort)
@@ -6115,6 +6297,7 @@ export class Directory<
       const childrenEntries = options.recursive
         ? childSnapshot.materialize()
         : []
+
       const hasVisibleDescendant = options.recursive
         ? childrenEntries.length > 0
         : childSnapshot.hasVisibleDescendant
@@ -6147,6 +6330,29 @@ export class Directory<
       }
     }
 
+    const persistedEntries: PersistedEntryMetadata<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >[] = []
+
+    for (const metadata of immediateMetadata) {
+      if (metadata.kind === 'Directory') {
+        persistedEntries.push({
+          kind: 'directory',
+          path: metadata.path,
+          entry: metadata.entry,
+          snapshot: metadata.snapshot,
+        })
+        continue
+      }
+
+      persistedEntries.push({
+        kind: 'file',
+        path: metadata.path,
+        entry: metadata.entry,
+      })
+    }
+
     const snapshot = createDirectorySnapshot<
       Directory<LoaderTypes>,
       FileSystemEntry<LoaderTypes>
@@ -6161,8 +6367,6 @@ export class Directory<
       sortSignature: directory.#getSortSignature(),
       persistedEntries,
     })
-
-    session.directorySnapshots.set(snapshotKey, snapshot)
 
     return { snapshot, shouldIncludeSelf }
   }

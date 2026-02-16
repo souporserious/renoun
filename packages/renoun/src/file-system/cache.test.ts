@@ -16,6 +16,8 @@ import {
 } from 'node:path'
 import { describe, expect, test, vi } from 'vitest'
 
+import { getRootDirectory } from '../utils/get-root-directory.ts'
+
 import {
   CacheStore,
   type CacheEntry,
@@ -29,7 +31,6 @@ import {
   getCacheStorePersistence,
   getDefaultCacheDatabasePath,
 } from './CacheStoreSqlite.ts'
-import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import { Session } from './Session.ts'
@@ -185,7 +186,7 @@ function createTempNodeFileSystem(tmpDirectory: string) {
   return new NestedCwdNodeFileSystem(getRootDirectory(), tsConfigPath)
 }
 
-function withTestCacheDbPath<T>(
+async function withTestCacheDbPath<T>(
   tmpDirectory: string,
   run: () => Promise<T> | T
 ) {
@@ -195,7 +196,7 @@ function withTestCacheDbPath<T>(
   process.env.RENOUN_FS_CACHE_DB_PATH = dbPath
 
   try {
-    return run()
+    return await run()
   } finally {
     if (previousPath === undefined) {
       delete process.env.RENOUN_FS_CACHE_DB_PATH
@@ -1517,7 +1518,7 @@ describe('sqlite cache persistence', () => {
   test('persists session directory snapshots across worker sessions', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
-      const workspaceDirectory = relativePath(process.cwd(), docsDirectory)
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
 
       mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
       writeFileSync(
@@ -1573,6 +1574,79 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('persists deep directory snapshot payloads and restores them on a warm run', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+
+      mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'advanced', 'getting-started.mdx'),
+        '# Getting Started',
+        'utf8'
+      )
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+
+      const firstWorkerDirectory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+
+      await firstWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const firstSession = firstWorkerDirectory.getSession()
+      const firstSnapshotKey = Array.from(firstSession.directorySnapshots.keys())[0]
+      expect(firstSnapshotKey).toBeDefined()
+
+      const persistedSnapshot = await firstSession.cache.get(firstSnapshotKey!)
+      expect(persistedSnapshot).toBeDefined()
+      const persisted = persistedSnapshot as {
+        version: 1
+        path: string
+        entries: Array<
+          | { kind: 'file'; path: string }
+          | { kind: 'directory'; path: string; snapshot: { entries: any[] } }
+        >
+      }
+
+      expect(persisted.version).toBe(1)
+      expect(
+        persisted.entries.some(
+          (entry) =>
+            entry.kind === 'directory' &&
+            entry.path.endsWith('guides') &&
+            entry.snapshot.entries.some(
+              (inner) =>
+                inner.kind === 'directory' &&
+                inner.path.endsWith('guides/advanced')
+            )
+        )
+      ).toBe(true)
+
+      const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
+      const secondReadDirectory = vi.spyOn(secondWorkerFilesystem, 'readDirectory')
+      const secondWorkerDirectory = new Directory({
+        fileSystem: secondWorkerFilesystem,
+        path: workspaceDirectory,
+      })
+      const secondEntries = await secondWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      expect(
+        secondEntries.some((entry) =>
+          entry.relativePath.endsWith('getting-started.mdx')
+        )
+      ).toBe(true)
+      expect(secondReadDirectory).toHaveBeenCalledTimes(0)
+    })
+  })
+
   test('rebuilds persisted directory snapshots when a child signature changes', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'development'
@@ -1580,7 +1654,7 @@ describe('sqlite cache persistence', () => {
     try {
       await withProductionSqliteCache(async (tmpDirectory) => {
         const docsDirectory = join(tmpDirectory, 'docs')
-        const workspaceDirectory = relativePath(process.cwd(), docsDirectory)
+        const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
 
         mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
         const childPath = join(docsDirectory, 'guides', 'intro.mdx')
@@ -1624,7 +1698,7 @@ describe('sqlite cache persistence', () => {
   test('does not persist function-based directory snapshot options', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
-      const workspaceDirectory = relativePath(process.cwd(), docsDirectory)
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
       const mdxFilter = (entry: any): entry is File =>
         entry instanceof File && entry.extension === 'mdx'
 
@@ -1672,7 +1746,7 @@ describe('sqlite cache persistence', () => {
   test('invalidates persisted directory snapshots when cache paths are invalidated', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
-      const workspaceDirectory = relativePath(process.cwd(), docsDirectory)
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
       const targetFile = join(docsDirectory, 'notes.md')
 
       mkdirSync(join(docsDirectory, 'guides'), { recursive: true })

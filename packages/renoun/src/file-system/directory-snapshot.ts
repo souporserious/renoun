@@ -18,6 +18,11 @@ export type PersistedDirectoryEntry =
   | PersistedDirectoryFileEntry
   | PersistedDirectoryDirectoryEntry
 
+export interface PersistedDirectoryFlatEntry {
+  kind: 'file' | 'directory'
+  path: string
+}
+
 export interface PersistedDirectorySnapshotV1 {
   version: 1
   path: string
@@ -28,6 +33,7 @@ export interface PersistedDirectorySnapshotV1 {
   sortSignature: string
   dependencySignatures: Array<[string, string]>
   entries: PersistedDirectoryEntry[]
+  flatEntries: PersistedDirectoryFlatEntry[]
 }
 
 export interface DirectorySnapshotRestoreFactory<DirectoryType, Entry> {
@@ -37,16 +43,25 @@ export interface DirectorySnapshotRestoreFactory<DirectoryType, Entry> {
 
 export type PersistedEntryMetadata<DirectoryType, Entry> =
   | {
-  kind: 'file'
-  path: string
-  entry: Entry
+      kind: 'file'
+      path: string
+      entry: Entry
   }
   | {
-  kind: 'directory'
-  path: string
-  entry: DirectoryType
-  snapshot: DirectorySnapshot<DirectoryType, Entry>
+      kind: 'directory'
+      path: string
+      entry: DirectoryType
+      snapshot: DirectorySnapshot<DirectoryType, Entry>
   }
+
+interface PersistedSnapshotRestoreResult<DirectoryType, Entry> {
+  snapshot: DirectorySnapshot<DirectoryType, Entry>
+  restoredEntriesByKey: Map<string, Entry>
+}
+
+function createPersistedEntryKey(kind: 'file' | 'directory', path: string) {
+  return `${kind}:${path}`
+}
 
 export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
   #entries: Entry[]
@@ -115,6 +130,42 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
       )
     }
 
+    const entryLookup = new Map<Entry | DirectoryType, PersistedDirectoryFlatEntry>()
+    const collectPersistedEntries = (
+      entries: PersistedEntryMetadata<DirectoryType, Entry>[]
+    ) => {
+      for (const entry of entries) {
+        entryLookup.set(entry.entry, {
+          kind: entry.kind,
+          path: entry.path,
+        })
+
+        if (entry.kind === 'directory') {
+          const childPersistedEntries = entry.snapshot.#persistedEntries
+          if (childPersistedEntries) {
+            collectPersistedEntries(childPersistedEntries)
+          }
+        }
+      }
+    }
+
+    collectPersistedEntries(this.#persistedEntries)
+
+    const flatEntries: PersistedDirectoryFlatEntry[] = []
+    for (const entry of this.materialize()) {
+      const persistedEntry = entryLookup.get(entry)
+      if (!persistedEntry) {
+        throw new Error(
+          '[renoun] Failed to serialize DirectorySnapshot materialized entries.'
+        )
+      }
+
+      flatEntries.push({
+        kind: persistedEntry.kind,
+        path: persistedEntry.path,
+      })
+    }
+
     return {
       version: 1,
       path: this.#path,
@@ -140,6 +191,7 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
           snapshot: entry.snapshot.toPersistedSnapshot(),
         }
       }),
+      flatEntries,
     }
   }
 
@@ -150,37 +202,80 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
     payload: PersistedDirectorySnapshotV1,
     factory: DirectorySnapshotRestoreFactory<DirectoryType, Entry>
   ): DirectorySnapshot<DirectoryType, Entry> {
-    const entries: Entry[] = []
-    const directories = new Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>()
+    const restored = this.restorePersistedSnapshot(payload, factory)
+    return restored.snapshot
+  }
+
+  private static restorePersistedSnapshot<
+    Entry = unknown,
+    DirectoryType extends Entry = Entry,
+  >(
+    payload: PersistedDirectorySnapshotV1,
+    factory: DirectorySnapshotRestoreFactory<DirectoryType, Entry>
+  ): PersistedSnapshotRestoreResult<DirectoryType, Entry> {
+    const immediateEntries: Entry[] = []
+    const directories = new Map<
+      DirectoryType,
+      DirectorySnapshotDirectoryMetadata<Entry>
+    >()
     const persistedEntries: PersistedEntryMetadata<DirectoryType, Entry>[] = []
+    const restoredEntriesByKey = new Map<string, Entry>()
 
     for (const entry of payload.entries) {
       if (entry.kind === 'file') {
         const restoredFile = factory.createFile(entry.path)
-        entries.push(restoredFile)
-        persistedEntries.push({ kind: 'file', path: entry.path, entry: restoredFile })
+        immediateEntries.push(restoredFile)
+        persistedEntries.push({
+          kind: 'file',
+          path: entry.path,
+          entry: restoredFile,
+        })
+        restoredEntriesByKey.set(
+          createPersistedEntryKey('file', entry.path),
+          restoredFile
+        )
         continue
       }
 
-      const childSnapshot = this.fromPersistedSnapshot(entry.snapshot, factory)
+      const childRestored = this.restorePersistedSnapshot(entry.snapshot, factory)
       const restoredDirectory = factory.createDirectory(entry.path)
 
       directories.set(restoredDirectory, {
-        hasVisibleDescendant: childSnapshot.hasVisibleDescendant,
-        materializedEntries: childSnapshot.materialize(),
+        hasVisibleDescendant: childRestored.snapshot.hasVisibleDescendant,
+        materializedEntries: childRestored.snapshot.materialize(),
       })
 
-      entries.push(restoredDirectory)
+      immediateEntries.push(restoredDirectory)
       persistedEntries.push({
         kind: 'directory',
         path: entry.path,
         entry: restoredDirectory,
-        snapshot: childSnapshot,
+        snapshot: childRestored.snapshot,
       })
+      restoredEntriesByKey.set(
+        createPersistedEntryKey('directory', entry.path),
+        restoredDirectory
+      )
+
+      for (const [childKey, childEntry] of childRestored.restoredEntriesByKey) {
+        restoredEntriesByKey.set(childKey, childEntry)
+      }
     }
 
-    return createDirectorySnapshot<DirectoryType, Entry>({
-      entries,
+    const materializedEntries: Entry[] = []
+    for (const entry of payload.flatEntries) {
+      const restoredEntry = restoredEntriesByKey.get(
+        createPersistedEntryKey(entry.kind, entry.path)
+      )
+
+      if (restoredEntry) {
+        materializedEntries.push(restoredEntry)
+      }
+    }
+
+    const snapshot = createDirectorySnapshot<DirectoryType, Entry>({
+      entries:
+        materializedEntries.length > 0 ? materializedEntries : immediateEntries,
       directories,
       shouldIncludeSelf: payload.shouldIncludeSelf,
       hasVisibleDescendant: payload.hasVisibleDescendant,
@@ -191,6 +286,11 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
       sortSignature: payload.sortSignature,
       persistedEntries,
     })
+
+    return {
+      snapshot,
+      restoredEntriesByKey,
+    }
   }
 
   markValidated(timestamp = Date.now()): void {
@@ -205,22 +305,27 @@ export function isPersistedDirectorySnapshotV1(
     return false
   }
 
-  const candidate = value as Partial<PersistedDirectorySnapshotV1>
+  const candidate = value as Record<string, unknown>
   if (
-    candidate.version !== 1 ||
-    typeof candidate.path !== 'string' ||
-    typeof candidate.hasVisibleDescendant !== 'boolean' ||
-    typeof candidate.shouldIncludeSelf !== 'boolean' ||
-    typeof candidate.lastValidatedAt !== 'number' ||
-    typeof candidate.filterSignature !== 'string' ||
-    typeof candidate.sortSignature !== 'string'
+    candidate['version'] !== 1 ||
+    typeof candidate['path'] !== 'string' ||
+    typeof candidate['hasVisibleDescendant'] !== 'boolean' ||
+    typeof candidate['shouldIncludeSelf'] !== 'boolean' ||
+    typeof candidate['lastValidatedAt'] !== 'number' ||
+    typeof candidate['filterSignature'] !== 'string' ||
+    typeof candidate['sortSignature'] !== 'string'
   ) {
     return false
   }
 
-  const dependencySignatures = candidate.dependencySignatures
-  const entries = candidate.entries
-  if (!Array.isArray(dependencySignatures) || !Array.isArray(entries)) {
+  const dependencySignatures = candidate['dependencySignatures']
+  const entries = candidate['entries']
+  const flatEntries = candidate['flatEntries']
+  if (
+    !Array.isArray(dependencySignatures) ||
+    !Array.isArray(entries) ||
+    !Array.isArray(flatEntries)
+  ) {
     return false
   }
 
@@ -244,21 +349,40 @@ export function isPersistedDirectorySnapshotV1(
       return false
     }
 
-    const typedEntry = entry as PersistedDirectoryEntry
+    const typedEntry = entry as Record<string, unknown>
     if (
-      typedEntry.kind !== 'file' &&
-      typedEntry.kind !== 'directory'
+      typedEntry['kind'] !== 'file' &&
+      typedEntry['kind'] !== 'directory'
     ) {
       return false
     }
 
-    if (typeof typedEntry.path !== 'string') {
+    if (typeof typedEntry['path'] !== 'string') {
       return false
     }
 
-    if (typedEntry.kind === 'directory' &&
-      !isPersistedDirectorySnapshotV1(typedEntry.snapshot)
+    if (
+      typedEntry['kind'] === 'directory' &&
+      !isPersistedDirectorySnapshotV1(typedEntry['snapshot'])
     ) {
+      return false
+    }
+  }
+
+  for (const entry of flatEntries) {
+    if (!entry || typeof entry !== 'object') {
+      return false
+    }
+
+    const typedEntry = entry as Record<string, unknown>
+    if (
+      typedEntry['kind'] !== 'file' &&
+      typedEntry['kind'] !== 'directory'
+    ) {
+      return false
+    }
+
+    if (typeof typedEntry['path'] !== 'string') {
       return false
     }
   }
