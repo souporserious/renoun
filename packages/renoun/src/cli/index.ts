@@ -3,17 +3,30 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 
 import { createServer } from '../project/server.ts'
+import type { ProjectOptions } from '../project/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { runAppCommand } from './app.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
 import { runEjectCommand } from './eject.ts'
 import { runOverrideCommand } from './override.ts'
-import { prewarmRenounRpcServerCache } from './prewarm.ts'
 import { reorderEntries } from './reorder.ts'
 import { runThemeCommand } from './theme.ts'
 import { runValidateCommand } from './validate.ts'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
+
+async function runPrewarmSafely(options?: { projectOptions?: ProjectOptions }) {
+  try {
+    const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
+    await prewarmRenounRpcServerCache(options)
+  } catch (error) {
+    getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
+      data: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    }))
+  }
+}
 
 if (firstArgument === 'help') {
   const usageMessage =
@@ -109,16 +122,10 @@ if (firstArgument === 'validate') {
           data: { port, serverId: id },
         }))
 
-        void prewarmRenounRpcServerCache({
+        void runPrewarmSafely({
           projectOptions: {
             tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
           },
-        }).catch((error) => {
-          getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
-            data: {
-              error: error instanceof Error ? error.message : String(error),
-            },
-          }))
         })
 
         const frameworkBinPath = resolveFrameworkBinFile(
@@ -310,16 +317,10 @@ if (firstArgument === 'validate') {
         }))
       }
 
-      void prewarmRenounRpcServerCache({
+      void runPrewarmSafely({
         projectOptions: {
           tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
         },
-      }).catch((error) => {
-        getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
-          data: {
-            error: error instanceof Error ? error.message : String(error),
-          },
-        }))
       })
 
       return server

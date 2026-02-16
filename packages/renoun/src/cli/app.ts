@@ -14,14 +14,27 @@ import {
 } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
+import { spawn } from 'node:child_process'
 
 import { createServer } from '../project/server.ts'
+import type { ProjectOptions } from '../project/types.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
-import { prewarmRenounRpcServerCache } from './prewarm.ts'
-import { spawn } from 'node:child_process'
+
+async function runPrewarmSafely(options?: { projectOptions?: ProjectOptions }) {
+  try {
+    const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
+    await prewarmRenounRpcServerCache(options)
+  } catch (error) {
+    getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
+      data: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    }))
+  }
+}
 
 function mergeDependencySections(
   appPackageJson: Record<string, unknown>,
@@ -429,16 +442,10 @@ export async function runAppCommand({
     const port = String(await server.getPort())
     const id = server.getId()
 
-    void prewarmRenounRpcServerCache({
+    void runPrewarmSafely({
       projectOptions: {
         tsConfigFilePath: join(projectRoot, 'tsconfig.json'),
       },
-    }).catch((error) => {
-      getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
-        data: {
-          error: error instanceof Error ? error.message : String(error),
-        },
-      }))
     })
 
     if (resolvedExample.framework === 'next') {

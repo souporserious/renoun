@@ -88,12 +88,11 @@ import {
 } from './cache-key.ts'
 import { Session } from './Session.ts'
 import {
-  defaultLoaders,
   isGlobModuleMap,
   isRuntimeLoader,
   unwrapModuleResult,
   type GlobModuleMap,
-} from './loaders.ts'
+} from './loader-core.ts'
 import { inferMediaType } from './mime.ts'
 import type { Snapshot } from './Snapshot.ts'
 import {
@@ -116,12 +115,6 @@ import type {
   GitMetadata,
   GitExportMetadata,
 } from './types.ts'
-
-const typedDefaultLoaders = defaultLoaders as unknown as {
-  md: ModuleLoader<any>
-  mdx: ModuleLoader<any>
-  [extension: string]: ModuleLoader<any>
-}
 
 /** A function that resolves the module runtime. */
 type ModuleRuntimeResult<Value> =
@@ -250,6 +243,35 @@ type ApplyFileSchemaOption<
 /** A module loader runtime function. */
 type ModuleLoader<Exports extends ModuleExports = ModuleExports> =
   ModuleRuntimeLoader<Exports>
+
+type RuntimeDefaultLoaders = {
+  md: ModuleLoader<any>
+  mdx: ModuleLoader<any>
+  [extension: string]: ModuleLoader<any>
+}
+
+let runtimeDefaultLoadersPromise: Promise<RuntimeDefaultLoaders> | undefined
+
+async function getRuntimeDefaultLoaders(): Promise<RuntimeDefaultLoaders> {
+  if (!runtimeDefaultLoadersPromise) {
+    runtimeDefaultLoadersPromise = import('./loader-runtime.ts').then(
+      ({ defaultLoaders }) => defaultLoaders as unknown as RuntimeDefaultLoaders
+    )
+  }
+
+  return runtimeDefaultLoadersPromise
+}
+
+async function getRuntimeDefaultLoader(
+  extension: string | undefined
+): Promise<ModuleLoader<any> | undefined> {
+  if (extension !== 'md' && extension !== 'mdx') {
+    return undefined
+  }
+
+  const runtimeLoaders = await getRuntimeDefaultLoaders()
+  return runtimeLoaders[extension]
+}
 
 interface GitMetadataProvider {
   getGitFileMetadata(path: string): Promise<GitMetadata>
@@ -589,9 +611,7 @@ function createGlobRuntimeLoader(
       return await importer()
     } catch (error) {
       // If the importer exists but fails to parse fall back to a default loader for that extension when available.
-      const fallback = file?.extension
-        ? typedDefaultLoaders[file.extension]
-        : undefined
+      const fallback = await getRuntimeDefaultLoader(file?.extension)
       if (fallback) {
         return fallback(_path, file)
       }
@@ -2248,13 +2268,7 @@ export class JavaScriptFile<
   }: JavaScriptFileOptions<Types, DirectoryTypes, Path>) {
     super(fileOptions)
 
-    if (loader === undefined) {
-      const extension = this.extension
-
-      if (extension) {
-        this.#loader = typedDefaultLoaders[extension]
-      }
-    } else {
+    if (loader !== undefined) {
       this.#loader = loader
     }
 
@@ -3146,9 +3160,7 @@ export class MDXFile<
   }: MDXFileOptions<{ default: MDXContent } & Types, DirectoryTypes, Path>) {
     super(fileOptions)
 
-    if (loader === undefined) {
-      this.#loader = typedDefaultLoaders.mdx
-    } else {
+    if (loader !== undefined) {
       this.#loader = loader
     }
 
@@ -3446,19 +3458,30 @@ export class MDXFile<
   }
 
   #getModule() {
-    if (this.#loader === undefined) {
-      const parentPath = this.getParent().relativePath
-
-      throw new Error(
-        `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
-      )
-    }
-
     const path = removeExtension(this.relativePath)
-    const loader = this.#loader
     let executeModuleLoader: () => Promise<any>
 
     executeModuleLoader = async () => {
+      let loader = this.#loader
+
+      if (loader === undefined) {
+        loader = (await getRuntimeDefaultLoader('mdx')) as
+          | ModuleLoader<{ default: MDXContent } & Types>
+          | undefined
+
+        if (loader) {
+          this.#loader = loader
+        }
+      }
+
+      if (loader === undefined) {
+        const parentPath = this.getParent().relativePath
+
+        throw new Error(
+          `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
+        )
+      }
+
       const moduleValue = await unwrapModuleResult(loader(path, this))
       const schemaOption =
         this.schema ??
@@ -3515,7 +3538,7 @@ export class MarkdownFile<
   Extension extends string = ExtractFileExtension<Path>,
   SchemaOption extends DirectorySchemaOption | undefined = undefined,
 > extends File<DirectoryTypes, Path, Extension> {
-  #loader: ModuleLoader<{ default: MDXContent } & Types>
+  #loader?: ModuleLoader<{ default: MDXContent } & Types>
   #sections?: ContentSection[]
   #modulePromise?: Promise<any>
   #rawSource?: Promise<string>
@@ -3532,7 +3555,10 @@ export class MarkdownFile<
     SchemaOption
   >) {
     super(fileOptions)
-    this.#loader = loader ?? typedDefaultLoaders.md
+
+    if (loader !== undefined) {
+      this.#loader = loader
+    }
   }
 
   async #getRawSource() {
@@ -3637,9 +3663,27 @@ export class MarkdownFile<
 
   #getModule() {
     const path = removeExtension(this.relativePath)
-    const loader = this.#loader
-
     const executeModuleLoader = async () => {
+      let loader = this.#loader
+
+      if (loader === undefined) {
+        loader = (await getRuntimeDefaultLoader('md')) as
+          | ModuleLoader<{ default: MDXContent } & Types>
+          | undefined
+
+        if (loader) {
+          this.#loader = loader
+        }
+      }
+
+      if (loader === undefined) {
+        const parentPath = this.getParent().relativePath
+
+        throw new Error(
+          `[renoun] A markdown loader for the parent Directory at ${parentPath} is not defined.`
+        )
+      }
+
       const moduleValue = await unwrapModuleResult(loader(path, this))
       const schemaOption =
         this.schema ??

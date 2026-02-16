@@ -1,3 +1,4 @@
+import { basename, resolve } from 'node:path'
 import {
   afterEach,
   beforeAll,
@@ -13,21 +14,20 @@ import type { RenounPrewarmTargets } from './prewarm.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
 const getProjectMock = vi.fn()
-const getEntriesMock =
-  vi.fn<
-    (path: string, options?: Record<string, unknown>) => Promise<MockFile[]>
-  >()
-const getFileMock =
+const readDirectoryMock =
   vi.fn<
     (
-      directoryPath: string,
-      filePath: string,
-      extensions?: string | string[]
-    ) => Promise<MockFile>
+      path: string
+    ) => Promise<
+      Array<{ name: string; path: string; isDirectory: boolean; isFile: boolean }>
+    >
   >()
-const getExportsMock = vi.fn<(filePath: string) => Promise<unknown>>()
-const getSectionsMock = vi.fn<(filePath: string) => Promise<unknown>>()
-const getContentMock = vi.fn<(filePath: string) => Promise<unknown>>()
+const readFileMock = vi.fn<(path: string) => Promise<string>>()
+const fileExistsMock = vi.fn<(path: string) => Promise<boolean>>()
+const getFileExportsMock = vi.fn<(filePath: string) => Promise<unknown>>()
+const getOutlineRangesMock = vi.fn<(filePath: string) => Promise<unknown>>()
+const getMarkdownSectionsMock = vi.fn<(source: string) => unknown>()
+const getMDXSectionsMock = vi.fn<(source: string) => unknown>()
 const isFilePathGitIgnoredMock = vi.fn(() => false)
 
 const { Project } = getTsMorph()
@@ -41,39 +41,35 @@ const projectOptions: ProjectOptions = {
 
 let project: ProjectInstance
 
-class MockFile {
-  readonly extension: string
-
-  constructor(public readonly absolutePath: string) {
-    this.extension = absolutePath.split('.').pop() ?? ''
+class MockNodeFileSystem {
+  getAbsolutePath(path: string): string {
+    return resolve(path)
   }
 
-  async getExports() {
-    return getExportsMock(this.absolutePath)
+  readDirectory(path: string) {
+    return readDirectoryMock(path)
   }
 
-  async getSections() {
-    return getSectionsMock(this.absolutePath)
+  readFile(path: string) {
+    return readFileMock(path)
   }
 
-  async getContent() {
-    return getContentMock(this.absolutePath)
+  fileExists(path: string) {
+    return fileExistsMock(path)
   }
 }
 
-class MockDirectory {
-  readonly path: string
-
-  constructor(options: { path: string }) {
-    this.path = options.path
-  }
-
-  getEntries(_options?: Record<string, unknown>) {
-    return getEntriesMock(this.path)
-  }
-
-  getFile(path: string, extensions?: string | string[]) {
-    return getFileMock(this.path, path, extensions)
+function createMockFileEntry(path: string): {
+  name: string
+  path: string
+  isDirectory: boolean
+  isFile: boolean
+} {
+  return {
+    name: basename(path),
+    path,
+    isDirectory: false,
+    isFile: true,
   }
 }
 
@@ -81,9 +77,18 @@ vi.mock('../project/get-project.ts', () => ({
   getProject: getProjectMock,
 }))
 
-vi.mock('../file-system/entries.ts', () => ({
-  Directory: MockDirectory,
-  File: MockFile,
+vi.mock('../file-system/NodeFileSystem.ts', () => ({
+  NodeFileSystem: MockNodeFileSystem,
+}))
+
+vi.mock('../project/client.ts', () => ({
+  getFileExports: getFileExportsMock,
+  getOutlineRanges: getOutlineRangesMock,
+}))
+
+vi.mock('@renoun/mdx/utils', () => ({
+  getMarkdownSections: getMarkdownSectionsMock,
+  getMDXSections: getMDXSectionsMock,
 }))
 
 vi.mock('../utils/is-file-path-git-ignored.ts', () => ({
@@ -94,7 +99,10 @@ let prewarmRenounRpcServerCache:
   | ((options?: { projectOptions?: ProjectOptions }) => Promise<void>)
   | undefined
 let collectRenounPrewarmTargets:
-  | ((project: ProjectInstance, projectOptions?: ProjectOptions) => RenounPrewarmTargets)
+  | ((
+      project: ProjectInstance,
+      projectOptions?: ProjectOptions
+    ) => Promise<RenounPrewarmTargets>)
   | undefined
 
 beforeAll(async () => {
@@ -111,11 +119,13 @@ beforeEach(() => {
   project = new Project({ useInMemoryFileSystem: true })
   getProjectMock.mockReturnValue(project)
 
-  getEntriesMock.mockResolvedValue([])
-  getFileMock.mockResolvedValue(new MockFile('/repo/fallback'))
-  getExportsMock.mockResolvedValue(undefined)
-  getSectionsMock.mockResolvedValue(undefined)
-  getContentMock.mockResolvedValue(undefined)
+  readDirectoryMock.mockResolvedValue([])
+  readFileMock.mockRejectedValue(new Error('File not found'))
+  fileExistsMock.mockResolvedValue(false)
+  getFileExportsMock.mockResolvedValue(undefined)
+  getOutlineRangesMock.mockResolvedValue(undefined)
+  getMarkdownSectionsMock.mockReturnValue([])
+  getMDXSectionsMock.mockReturnValue([])
 })
 
 afterEach(() => {
@@ -124,7 +134,7 @@ afterEach(() => {
 })
 
 describe('prewarmRenounRpcServerCache', () => {
-  test('collects callsites and prewarms files via direct File methods', async () => {
+  test('collects callsites and prewarms files via analysis-only methods', async () => {
     project.createSourceFile(
       '/repo/src/test.ts',
       `
@@ -146,32 +156,53 @@ describe('prewarmRenounRpcServerCache', () => {
       { overwrite: true }
     )
 
-    getEntriesMock.mockImplementation(async (directoryPath: string) => {
-      const entriesByPath = new Map<string, MockFile[]>([
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      const entriesByPath = new Map<
+        string,
+        Array<{
+          name: string
+          path: string
+          isDirectory: boolean
+          isFile: boolean
+        }>
+      >([
         [
           '/repo/direct',
           [
-            new MockFile('/repo/direct/index.ts'),
-            new MockFile('/repo/direct/notes.txt'),
+            createMockFileEntry('/repo/direct/index.ts'),
+            createMockFileEntry('/repo/direct/notes.txt'),
           ],
         ],
-        ['/repo/object', [new MockFile('/repo/object/main.mts')]],
+        ['/repo/object', [createMockFileEntry('/repo/object/main.mts')]],
         [
           '/repo/namespaced',
           [
-            new MockFile('/repo/namespaced/page.mjs'),
-            new MockFile('/repo/namespaced/readme.md'),
+            createMockFileEntry('/repo/namespaced/page.mjs'),
+            createMockFileEntry('/repo/namespaced/readme.md'),
+            createMockFileEntry('/repo/namespaced/guide.mdx'),
           ],
         ],
-        ['/repo/inline', [new MockFile('/repo/inline/content.tsx')]],
+        ['/repo/inline', [createMockFileEntry('/repo/inline/content.tsx')]],
       ])
 
       return entriesByPath.get(directoryPath) ?? []
     })
 
+    readFileMock.mockImplementation(async (path) => {
+      if (path === '/repo/namespaced/readme.md') {
+        return '# Markdown readme'
+      }
+
+      if (path === '/repo/namespaced/guide.mdx') {
+        return '# MDX guide'
+      }
+
+      throw new Error(`Unexpected file read: ${path}`)
+    })
+
     await prewarmRenounRpcServerCache!({ projectOptions })
 
-    expect(getExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual(
+    expect(getFileExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual(
       [
         '/repo/direct/index.ts',
         '/repo/object/main.mts',
@@ -180,22 +211,23 @@ describe('prewarmRenounRpcServerCache', () => {
       ].sort()
     )
 
-    expect(getSectionsMock.mock.calls.map((call) => call[0]).sort()).toEqual(
+    expect(getOutlineRangesMock.mock.calls.map((call) => call[0]).sort()).toEqual(
       [
         '/repo/direct/index.ts',
         '/repo/object/main.mts',
         '/repo/namespaced/page.mjs',
-        '/repo/namespaced/readme.md',
         '/repo/inline/content.tsx',
       ].sort()
     )
 
-    expect(getContentMock.mock.calls.map((call) => call[0]).sort()).toEqual([
-      '/repo/namespaced/readme.md',
-    ])
+    expect(getMarkdownSectionsMock).toHaveBeenCalledWith('# Markdown readme')
+    expect(getMDXSectionsMock).toHaveBeenCalledWith('# MDX guide')
+    expect(readFileMock.mock.calls.map((call) => call[0]).sort()).toEqual(
+      ['/repo/namespaced/guide.mdx', '/repo/namespaced/readme.md'].sort()
+    )
 
     expect(getProjectMock).toHaveBeenCalledWith(projectOptions)
-    expect(getEntriesMock).toHaveBeenCalled()
+    expect(readDirectoryMock).toHaveBeenCalled()
   })
 
   test('is a no-op when server environment variables are missing', async () => {
@@ -205,11 +237,12 @@ describe('prewarmRenounRpcServerCache', () => {
     await prewarmRenounRpcServerCache!()
 
     expect(getProjectMock).not.toHaveBeenCalled()
-    expect(getEntriesMock).not.toHaveBeenCalled()
-    expect(getFileMock).not.toHaveBeenCalled()
-    expect(getExportsMock).not.toHaveBeenCalled()
-    expect(getSectionsMock).not.toHaveBeenCalled()
-    expect(getContentMock).not.toHaveBeenCalled()
+    expect(readDirectoryMock).not.toHaveBeenCalled()
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(getFileExportsMock).not.toHaveBeenCalled()
+    expect(getOutlineRangesMock).not.toHaveBeenCalled()
+    expect(getMarkdownSectionsMock).not.toHaveBeenCalled()
+    expect(getMDXSectionsMock).not.toHaveBeenCalled()
   })
 
   test('does not swallow errors from directory enumeration', async () => {
@@ -223,7 +256,7 @@ describe('prewarmRenounRpcServerCache', () => {
       { overwrite: true }
     )
 
-    getEntriesMock.mockRejectedValue(new Error('Directory enumeration failed'))
+    readDirectoryMock.mockRejectedValue(new Error('Directory enumeration failed'))
 
     await expect(
       prewarmRenounRpcServerCache!({ projectOptions })
@@ -241,10 +274,12 @@ describe('prewarmRenounRpcServerCache', () => {
       { overwrite: true }
     )
 
-    getEntriesMock.mockImplementation(async () => [
-      new MockFile('/repo/failing/index.ts'),
+    readDirectoryMock.mockImplementation(async () => [
+      createMockFileEntry('/repo/failing/index.ts'),
     ])
-    getExportsMock.mockRejectedValueOnce(new Error('RPC cache prewarm failed'))
+    getFileExportsMock.mockRejectedValueOnce(
+      new Error('RPC cache prewarm failed')
+    )
 
     await expect(
       prewarmRenounRpcServerCache!({ projectOptions })
@@ -273,12 +308,17 @@ describe('prewarmRenounRpcServerCache', () => {
       { overwrite: true }
     )
 
-    getEntriesMock.mockImplementation(async (directoryPath: string) => {
-      const entriesByPath = new Map<string, MockFile[]>([
-        [
-          '/repo/known',
-          [new MockFile('/repo/known/index.ts')],
-        ],
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      const entriesByPath = new Map<
+        string,
+        Array<{
+          name: string
+          path: string
+          isDirectory: boolean
+          isFile: boolean
+        }>
+      >([
+        ['/repo/known', [createMockFileEntry('/repo/known/index.ts')]],
       ])
 
       return entriesByPath.get(directoryPath) ?? []
@@ -286,8 +326,8 @@ describe('prewarmRenounRpcServerCache', () => {
 
     await prewarmRenounRpcServerCache!({ projectOptions })
 
-    expect(getEntriesMock).toHaveBeenCalledTimes(1)
-    expect(getEntriesMock).toHaveBeenCalledWith('/repo/known')
+    expect(readDirectoryMock).toHaveBeenCalledTimes(1)
+    expect(readDirectoryMock).toHaveBeenCalledWith('/repo/known')
   })
 
   test('prewarms Next.js-style barrel-exported directories without dynamic-root fallback', async () => {
@@ -333,19 +373,27 @@ describe('prewarmRenounRpcServerCache', () => {
       { overwrite: true }
     )
 
-    getEntriesMock.mockImplementation(async (directoryPath: string) => {
-      const entriesByPath = new Map<string, MockFile[]>([
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      const entriesByPath = new Map<
+        string,
+        Array<{
+          name: string
+          path: string
+          isDirectory: boolean
+          isFile: boolean
+        }>
+      >([
         [
           '/repo/src/app',
-          [new MockFile('/repo/src/app/page.tsx')],
+          [createMockFileEntry('/repo/src/app/page.tsx')],
         ],
         [
           '/repo/src/app/api',
-          [new MockFile('/repo/src/app/api/route.ts')],
+          [createMockFileEntry('/repo/src/app/api/route.ts')],
         ],
         [
           '/repo/src/app/(marketing)',
-          [new MockFile('/repo/src/app/(marketing)/campaign.ts')],
+          [createMockFileEntry('/repo/src/app/(marketing)/campaign.ts')],
         ],
       ])
 
@@ -354,11 +402,11 @@ describe('prewarmRenounRpcServerCache', () => {
 
     await prewarmRenounRpcServerCache!({ projectOptions })
 
-    expect(getEntriesMock).toHaveBeenCalledTimes(3)
-    expect(getEntriesMock).toHaveBeenCalledWith('/repo/src/app')
-    expect(getEntriesMock).toHaveBeenCalledWith('/repo/src/app/api')
-    expect(getEntriesMock).toHaveBeenCalledWith('/repo/src/app/(marketing)')
-    expect(getEntriesMock).not.toHaveBeenCalledWith('/repo')
+    expect(readDirectoryMock).toHaveBeenCalledTimes(3)
+    expect(readDirectoryMock).toHaveBeenCalledWith('/repo/src/app')
+    expect(readDirectoryMock).toHaveBeenCalledWith('/repo/src/app/api')
+    expect(readDirectoryMock).toHaveBeenCalledWith('/repo/src/app/(marketing)')
+    expect(readDirectoryMock).not.toHaveBeenCalledWith('/repo')
   })
 })
 

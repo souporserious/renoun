@@ -1,20 +1,15 @@
 import { dirname, isAbsolute, resolve } from 'node:path'
-import { cpus } from 'node:os'
-import { Semaphore } from '../utils/Semaphore.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getProject } from '../project/get-project.ts'
 import type { ProjectOptions } from '../project/types.ts'
-import { Directory, File } from '../file-system/entries.ts'
-import {
-  hasJavaScriptLikeExtension,
-  isJavaScriptLikeExtension,
-} from '../utils/is-javascript-like-extension.ts'
+import { hasJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
 import {
   resolveLiteralExpression,
   type LiteralExpressionValue,
 } from '../utils/resolve-expressions.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
+import { warmRenounPrewarmTargets } from './prewarm/warm-analysis.ts'
 import type {
   Expression,
   CallExpression,
@@ -25,10 +20,6 @@ import type {
 
 const { Node } = getTsMorph()
 
-const PREWARM_FILE_CACHE_CONCURRENCY = Math.max(
-  8,
-  Math.min(32, cpus().length * 2)
-)
 const PREWARM_COLLECTION_YIELD_INTERVAL = 128
 const NODE_MODULES_PATH = '/node_modules/'
 
@@ -51,7 +42,7 @@ type RenounCollectionEntryReference =
   | { kind: 'directoryPath'; path: string }
   | { kind: 'collection'; symbol: TsMorphSymbol }
 
-interface DirectoryEntriesRequest {
+export interface DirectoryEntriesRequest {
   directoryPath: string
   recursive: boolean
   includeDirectoryNamedFiles: boolean
@@ -59,7 +50,7 @@ interface DirectoryEntriesRequest {
   filterExtensions: Set<string> | null
 }
 
-interface FileRequest {
+export interface FileRequest {
   directoryPath: string
   path: string
   extensions?: string[]
@@ -74,19 +65,6 @@ type RenounMethodTarget =
       kind: 'collection'
       symbol: TsMorphSymbol
     }
-
-type WarmFileMethod = 'getExports' | 'getSections' | 'getContent'
-type WarmFileOptionalMethods = {
-  getExports?: () => Promise<unknown>
-  getSections?: () => Promise<unknown>
-  getContent?: () => Promise<unknown>
-}
-
-interface WarmFileTask {
-  absolutePath: string
-  file: File & WarmFileOptionalMethods
-  methods: Set<WarmFileMethod>
-}
 
 export interface RenounPrewarmTargets {
   directoryGetEntries: DirectoryEntriesRequest[]
@@ -976,192 +954,10 @@ export async function prewarmRenounRpcServerCache(options?: {
     return
   }
 
-  const warmFilesByPath = new Map<string, WarmFileTask>()
-  const collectDirectoryTargetsTask =
-    targets.directoryGetEntries.length > 0
-      ? collectWarmFilesFromDirectoryTargets(targets.directoryGetEntries)
-      : Promise.resolve(new Map<string, WarmFileTask>())
-
-  const collectFileTargetsTask =
-    targets.fileGetFile.length > 0
-      ? collectWarmFilesFromGetFileTargets(targets.fileGetFile)
-      : Promise.resolve(new Map<string, WarmFileTask>())
-
-  if (targets.directoryGetEntries.length > 0) {
-    logger.debug('Collecting files from Directory#getEntries callsites', () => ({
-      data: {
-        directories: targets.directoryGetEntries.length,
-      },
-    }))
-  }
-
-  if (targets.fileGetFile.length > 0) {
-    logger.debug('Collecting files from Directory#getFile callsites', () => ({
-      data: {
-        files: targets.fileGetFile.length,
-      },
-    }))
-  }
-
-  const [directoryWarmFiles, fileWarmFiles] = await Promise.all([
-    collectDirectoryTargetsTask,
-    collectFileTargetsTask,
-  ])
-
-  for (const task of directoryWarmFiles.values()) {
-    mergeWarmTask(task, warmFilesByPath)
-  }
-
-  for (const task of fileWarmFiles.values()) {
-    mergeWarmTask(task, warmFilesByPath)
-  }
-
-  if (warmFilesByPath.size === 0) {
-    logger.debug('No prewarm files were discovered')
-    return
-  }
-
-  logger.debug('Prewarming renoun file cache', () => ({
-    data: {
-      files: warmFilesByPath.size,
-    },
-  }))
-
-  await warmFiles(Array.from(warmFilesByPath.values()))
-
-  logger.debug('Finished prewarming Renoun file cache')
-}
-
-async function collectWarmFilesFromDirectoryTargets(
-  directoryTargets: DirectoryEntriesRequest[]
-): Promise<Map<string, WarmFileTask>> {
-  const warmFilesByPath = new Map<string, WarmFileTask>()
-  const gate = new Semaphore(PREWARM_FILE_CACHE_CONCURRENCY)
-
-  await Promise.all(
-    directoryTargets.map(async (request) => {
-      const release = await gate.acquire()
-      try {
-        const directory = new Directory({ path: request.directoryPath })
-        const entries = await directory.getEntries({
-          recursive: request.recursive,
-          includeDirectoryNamedFiles: request.includeDirectoryNamedFiles,
-          includeIndexAndReadmeFiles: request.includeIndexAndReadmeFiles,
-        })
-
-        for (const entry of entries) {
-          if (!(entry instanceof File)) {
-            continue
-          }
-
-          if (isFilePathGitIgnored(entry.absolutePath)) {
-            continue
-          }
-
-          if (entry.extension === undefined) {
-            continue
-          }
-
-          if (
-            request.filterExtensions !== null &&
-            !request.filterExtensions.has(entry.extension)
-          ) {
-            continue
-          }
-
-          const methods = determineWarmMethods(entry.extension)
-          if (methods.size === 0) {
-            continue
-          }
-
-          mergeWarmTask(
-            {
-              absolutePath: entry.absolutePath,
-              file: entry,
-              methods,
-            },
-            warmFilesByPath
-          )
-        }
-      } finally {
-        release()
-      }
-    })
-  )
-
-  return warmFilesByPath
-}
-
-async function collectWarmFilesFromGetFileTargets(
-  getFileTargets: FileRequest[]
-): Promise<Map<string, WarmFileTask>> {
-  const warmFilesByPath = new Map<string, WarmFileTask>()
-  const deduplicatedTargets = dedupeGetFileTargets(getFileTargets)
-  const gate = new Semaphore(PREWARM_FILE_CACHE_CONCURRENCY)
-
-  await Promise.all(
-    Array.from(deduplicatedTargets.values()).map(async (request) => {
-      const release = await gate.acquire()
-      try {
-        const directory = new Directory({ path: request.directoryPath })
-        const file = await directory.getFile(request.path, request.extensions)
-
-        if (isFilePathGitIgnored(file.absolutePath)) {
-          return
-        }
-
-        if (file.extension === undefined) {
-          return
-        }
-
-        const methods = determineWarmMethods(file.extension)
-        if (methods.size === 0) {
-          return
-        }
-
-        mergeWarmTask(
-          {
-            absolutePath: file.absolutePath,
-            file,
-            methods,
-          },
-          warmFilesByPath
-        )
-      } finally {
-        release()
-      }
-    })
-  )
-
-  return warmFilesByPath
-}
-
-function dedupeGetFileTargets(
-  getFileTargets: FileRequest[]
-): Map<string, FileRequest> {
-  const uniqueTargets = new Map<string, FileRequest>()
-
-  for (const request of getFileTargets) {
-    const key = getFileRequestKey(request)
-    if (uniqueTargets.has(key)) {
-      continue
-    }
-
-    uniqueTargets.set(key, request)
-  }
-
-  return uniqueTargets
-}
-
-function getFileRequestKey(request: FileRequest): string {
-  if (!request.extensions || request.extensions.length === 0) {
-    return `${request.directoryPath}\0${request.path}\0`
-  }
-
-  return `${request.directoryPath}\0${request.path}\0${request.extensions
-    .slice()
-    .sort()
-    .join('\0')}`
+  await warmRenounPrewarmTargets(targets, {
+    projectOptions: options?.projectOptions,
+    isFilePathGitIgnored,
+  })
 }
 
 function mergeCollectionGetEntriesRequest(
@@ -1198,63 +994,4 @@ function mergeCollectionGetEntriesRequest(
   for (const extension of options.filterExtensions) {
     existing.filterExtensions.add(extension)
   }
-}
-
-function determineWarmMethods(extension: string): Set<WarmFileMethod> {
-  const methods = new Set<WarmFileMethod>()
-
-  if (isJavaScriptLikeExtension(extension)) {
-    methods.add('getExports')
-    methods.add('getSections')
-    return methods
-  }
-
-  if (extension === 'mdx' || extension === 'md') {
-    methods.add('getSections')
-    methods.add('getContent')
-    return methods
-  }
-
-  return methods
-}
-
-function mergeWarmTask(
-  task: WarmFileTask,
-  warmFilesByPath: Map<string, WarmFileTask>
-): void {
-  const existing = warmFilesByPath.get(task.absolutePath)
-
-  if (!existing) {
-    warmFilesByPath.set(task.absolutePath, task)
-    return
-  }
-
-  for (const method of task.methods) {
-    existing.methods.add(method)
-  }
-}
-
-async function warmFiles(warmFiles: WarmFileTask[]): Promise<void> {
-  const gate = new Semaphore(PREWARM_FILE_CACHE_CONCURRENCY)
-
-  await Promise.all(
-    warmFiles.map(async (warmFile) => {
-      const release = await gate.acquire()
-      try {
-        if (warmFile.methods.has('getExports') && warmFile.file.getExports) {
-          await warmFile.file.getExports()
-        }
-
-        if (warmFile.methods.has('getSections') && warmFile.file.getSections) {
-          await warmFile.file.getSections()
-        }
-
-        if (warmFile.methods.has('getContent') && warmFile.file.getContent) {
-          await warmFile.file.getContent()
-        }
-      } finally {
-        release()
-      }
-    })
-  )
 }

@@ -24,6 +24,27 @@ vi.mock('./prewarm.ts', () => ({
 let originalArgv: string[] = []
 let originalCwd: string = process.cwd()
 
+async function waitForAssertion(
+  assertion: () => void,
+  options: { timeoutMs?: number; intervalMs?: number } = {}
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 2_000
+  const intervalMs = options.intervalMs ?? 20
+  const deadline = Date.now() + timeoutMs
+
+  while (true) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      if (Date.now() >= deadline) {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+}
+
 beforeEach(() => {
   originalArgv = process.argv.slice()
   originalCwd = process.cwd()
@@ -42,10 +63,10 @@ describe('renoun CLI index integration', () => {
 
     await import('./index.ts')
 
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
     expect(createServerMock).toHaveBeenCalledTimes(1)
-    expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
+    await waitForAssertion(() => {
+      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
+    })
     expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
       projectOptions: {
         tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
