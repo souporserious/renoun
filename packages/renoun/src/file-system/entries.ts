@@ -4484,11 +4484,10 @@ export class Directory<
     if (repository) {
       const normalizedRepository = normalizeRepositoryInput(repository)
       if (normalizedRepository) {
-        this.#repository = normalizedRepository
         const sparsePath = this.#fileSystem
           ? this.#fileSystem.getRelativePathToWorkspace(this.#path)
           : this.#path
-        this.#repository.registerSparsePath(sparsePath)
+        normalizedRepository.registerSparsePath(sparsePath)
         return normalizedRepository
       }
     }
@@ -5292,7 +5291,15 @@ export class Directory<
       return normalizedPath
     }
 
-    return normalizedPath.replace(/\/+$/, '')
+    let end = normalizedPath.length
+
+    while (end > 0 && normalizedPath[end - 1] === '/') {
+      end -= 1
+    }
+
+    return end === normalizedPath.length
+      ? normalizedPath
+      : normalizedPath.slice(0, end)
   }
 
   #resolveSnapshotDirectoryByPath(
