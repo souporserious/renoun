@@ -5488,9 +5488,7 @@ export class Directory<
     const restoredPath =
       normalizedRootPath === '.'
         ? relativeToRootPath
-        : normalizedRootPath === '/'
-          ? `/${relativeToRootPath.replace(/^\/+/, '')}`
-          : `${normalizedRootPath.replace(/\/+$/, '')}/${relativeToRootPath.replace(/^\/+/, '')}`
+        : joinPaths(normalizedRootPath, relativeToRootPath)
     const rootUsesAbsolutePaths =
       normalizedRootPath.startsWith('/') ||
       /^[A-Za-z]:\//.test(normalizedRootPath) ||
