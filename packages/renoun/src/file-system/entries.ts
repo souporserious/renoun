@@ -749,7 +749,10 @@ export class File<
   #schema?: DirectorySchemaOption
   #type: string
   #structureGitMetadataSignature: GitMetadataCacheSignature
+  #structureGitMetadata?: GitMetadata
+  #structureWorkspaceChangeToken?: string
   #structureCacheNodeKey?: string
+  #structureCacheSessionKey?: string
 
   constructor(options: FileOptions<DirectoryTypes, Path, any>) {
     // Parse path and extension to determine MIME type
@@ -1125,14 +1128,49 @@ export class File<
     }
   }
 
+  async #getCurrentWorkspaceChangeToken(): Promise<string | undefined> {
+    const session = this.#directory.getSession()
+    const token = await session.getWorkspaceChangeToken(this.#directory.getRootPath())
+    return token ?? undefined
+  }
+
   protected async resolveStructureCacheState(session: Session): Promise<{
     nodeKey: string
     gitMetadata: GitMetadata
   }> {
+    const cacheSessionKey = this.#getStructureCacheSessionKey()
+    const cachedNodeKey = this.#structureCacheNodeKey
+    const cachedGitMetadata = this.#structureGitMetadata
+    const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
+    const canUseCachedMetadata =
+      this.#structureCacheSessionKey === cacheSessionKey &&
+      cachedNodeKey !== undefined &&
+      cachedGitMetadata !== undefined &&
+      cachedWorkspaceChangeToken !== undefined
+
+    if (canUseCachedMetadata) {
+      const currentWorkspaceChangeToken =
+        await this.#getCurrentWorkspaceChangeToken()
+      if (
+        currentWorkspaceChangeToken !== undefined &&
+        cachedWorkspaceChangeToken === currentWorkspaceChangeToken
+      ) {
+        return {
+          nodeKey: cachedNodeKey,
+          gitMetadata: cachedGitMetadata,
+        }
+      }
+    }
+
     const gitMetadata = await this.#loadGitMetadataForStructure()
+    this.#structureGitMetadata = gitMetadata
     this.#structureGitMetadataSignature =
       createGitMetadataCacheSignature(gitMetadata)
     const nodeKey = this.getStructureCacheKey()
+    const currentWorkspaceChangeToken =
+      await this.#getCurrentWorkspaceChangeToken()
+    this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+    this.#structureCacheSessionKey = cacheSessionKey
 
     if (
       this.#structureCacheNodeKey &&
@@ -1145,21 +1183,35 @@ export class File<
     return { nodeKey, gitMetadata }
   }
 
+  #getStructureCacheSessionKey() {
+    const session = this.#directory.getSession()
+
+    return createCacheNodeKey('structure.file', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.absolutePath),
+      extension: this.extension,
+    })
+  }
+
   /** Get the first local git commit date of the file. */
   async getFirstCommitDate() {
-    const gitMetadata = await this.#loadGitMetadata()
+    const session = this.#directory.getSession()
+    const { gitMetadata } = await this.resolveStructureCacheState(session)
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last local git commit date of the file. */
   async getLastCommitDate() {
-    const gitMetadata = await this.#loadGitMetadata()
+    const session = this.#directory.getSession()
+    const { gitMetadata } = await this.resolveStructureCacheState(session)
     return gitMetadata.lastCommitDate
   }
 
   /** Get the local git authors of the file. */
   async getAuthors() {
-    const gitMetadata = await this.#loadGitMetadata()
+    const session = this.#directory.getSession()
+    const { gitMetadata } = await this.resolveStructureCacheState(session)
     return gitMetadata.authors
   }
 
@@ -1314,12 +1366,14 @@ export class File<
   async write(content: FileSystemWriteFileContent): Promise<void> {
     const fileSystem = this.#directory.getFileSystem()
     await fileSystem.writeFile(this.#path, content)
+    this.invalidateCachedValues()
     this.#directory.getSession().invalidatePath(this.#path)
   }
 
   /** Create a writable stream for this file. */
   writeStream(): FileWritableStream {
     const fileSystem = this.#directory.getFileSystem()
+    this.invalidateCachedValues()
     this.#directory.getSession().invalidatePath(this.#path)
     return fileSystem.writeFileStream(this.#path)
   }
@@ -1328,7 +1382,18 @@ export class File<
   async delete(): Promise<void> {
     const fileSystem = this.#directory.getFileSystem()
     await fileSystem.deleteFile(this.#path)
+    this.invalidateCachedValues()
     this.#directory.getSession().invalidatePath(this.#path)
+  }
+
+  protected invalidateCachedValues(): void {
+    this.#structureGitMetadata = undefined
+    this.#structureWorkspaceChangeToken = undefined
+    this.#structureCacheNodeKey = undefined
+    this.#structureCacheSessionKey = undefined
+    this.#structureGitMetadataSignature = createGitMetadataCacheSignature(
+      createEmptyGitMetadata()
+    )
   }
 
   /** Check if this file exists in the file system. */
@@ -1531,6 +1596,11 @@ export class JSONFile<
 
     return value
   }
+
+  protected override invalidateCachedValues(): void {
+    super.invalidateCachedValues()
+    this.#dataPromise = undefined
+  }
 }
 
 /** Error for when a module export cannot be found. */
@@ -1607,6 +1677,9 @@ export class ModuleExport<Value> {
   #loader?: ModuleLoader<any>
   #slugCasing: SlugCasing
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
+  #structureGitMetadata?: GitExportMetadata
+  #structureWorkspaceChangeToken?: string
+  #structureCacheSessionKey?: string
   #staticPromise?: Promise<Value>
   #runtimePromise?: Promise<Value>
   #isComponent: boolean | undefined
@@ -1705,6 +1778,19 @@ export class ModuleExport<Value> {
       return this.#name === 'default' ? this.#file.name : this.#name
     }
     return this.#metadata?.name || this.#name
+  }
+
+  clearCachedValues(): void {
+    this.#metadata = undefined
+    this.#staticPromise = undefined
+    this.#runtimePromise = undefined
+    this.#structureGitMetadata = undefined
+    this.#isComponent = undefined
+    this.#structureCacheNodeKey = undefined
+    this.#structureCacheSessionKey = undefined
+    this.#structureWorkspaceChangeToken = undefined
+    this.#structureGitMetadataSignature =
+      createGitExportMetadataCacheSignature(createEmptyGitExportMetadata())
   }
 
   /** The export name formatted as a title. */
@@ -1881,14 +1967,50 @@ export class ModuleExport<Value> {
     }
   }
 
+  async #getCurrentWorkspaceChangeToken(): Promise<string | undefined> {
+    const directory = this.#file.getParent()
+    const session = directory.getSession()
+    const token = await session.getWorkspaceChangeToken(directory.getRootPath())
+    return token ?? undefined
+  }
+
   async #resolveStructureCacheNodeKey(session: Session): Promise<{
     nodeKey: string
     gitMetadata: GitExportMetadata
   }> {
+    const cacheSessionKey = this.#getStructureCacheSessionKey()
+    const cachedNodeKey = this.#structureCacheNodeKey
+    const cachedGitMetadata = this.#structureGitMetadata
+    const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
+    const canUseCachedMetadata =
+      this.#structureCacheSessionKey === cacheSessionKey &&
+      cachedNodeKey !== undefined &&
+      cachedGitMetadata !== undefined &&
+      cachedWorkspaceChangeToken !== undefined
+
+    if (canUseCachedMetadata) {
+      const currentWorkspaceChangeToken =
+        await this.#getCurrentWorkspaceChangeToken()
+      if (
+        currentWorkspaceChangeToken !== undefined &&
+        cachedWorkspaceChangeToken === currentWorkspaceChangeToken
+      ) {
+        return {
+          nodeKey: cachedNodeKey,
+          gitMetadata: cachedGitMetadata,
+        }
+      }
+    }
+
     const gitMetadata = await this.#loadGitExportMetadataForStructure()
+    this.#structureGitMetadata = gitMetadata
     this.#structureGitMetadataSignature =
       createGitExportMetadataCacheSignature(gitMetadata)
     const nodeKey = this.getStructureCacheKey()
+    const currentWorkspaceChangeToken =
+      await this.#getCurrentWorkspaceChangeToken()
+    this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+    this.#structureCacheSessionKey = cacheSessionKey
 
     if (
       this.#structureCacheNodeKey &&
@@ -1901,15 +2023,31 @@ export class ModuleExport<Value> {
     return { nodeKey, gitMetadata }
   }
 
+  #getStructureCacheSessionKey() {
+    const directory = this.#file.getParent()
+    const session = directory.getSession()
+
+    return createCacheNodeKey('structure.module-export', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.#file.absolutePath),
+      exportName: this.#name,
+    })
+  }
+
   /** Get the first git commit date that touched this export. */
   async getFirstCommitDate() {
-    const gitMetadata = await this.#loadGitExportMetadata()
+    const { gitMetadata } = await this.#resolveStructureCacheNodeKey(
+      this.#file.getParent().getSession()
+    )
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last git commit date that touched this export. */
   async getLastCommitDate() {
-    const gitMetadata = await this.#loadGitExportMetadata()
+    const { gitMetadata } = await this.#resolveStructureCacheNodeKey(
+      this.#file.getParent().getSession()
+    )
     return gitMetadata.lastCommitDate
   }
 
@@ -2275,6 +2413,18 @@ export class JavaScriptFile<
     }
 
     this.#slugCasing = fileOptions.slugCasing ?? 'kebab'
+  }
+
+  protected override invalidateCachedValues(): void {
+    super.invalidateCachedValues()
+
+    for (const fileExport of this.#exports.values()) {
+      fileExport.clearCachedValues()
+    }
+
+    this.#exports.clear()
+    this.#modulePromise = undefined
+    this.#sections = undefined
   }
 
   #getModule() {
@@ -2706,6 +2856,11 @@ export class MDXModuleExport<Value> {
 
   get title() {
     return formatNameAsTitle(this.name)
+  }
+
+  clearCachedValues(): void {
+    this.#staticPromise = undefined
+    this.#runtimePromise = undefined
   }
 
   get slug() {
@@ -3169,6 +3324,19 @@ export class MDXFile<
     this.#slugCasing = fileOptions.slugCasing ?? 'kebab'
   }
 
+  protected override invalidateCachedValues(): void {
+    super.invalidateCachedValues()
+    for (const fileExport of this.#exports.values()) {
+      fileExport.clearCachedValues()
+    }
+    this.#exports.clear()
+    this.#sections = undefined
+    this.#modulePromise = undefined
+    this.#rawSource = undefined
+    this.#parsedSource = undefined
+    this.#resolvingFrontmatter = false
+  }
+
   async #getRawSource() {
     if (!this.#rawSource) {
       this.#rawSource = super.getText()
@@ -3561,6 +3729,15 @@ export class MarkdownFile<
     if (loader !== undefined) {
       this.#loader = loader
     }
+  }
+
+  protected override invalidateCachedValues(): void {
+    super.invalidateCachedValues()
+    this.#modulePromise = undefined
+    this.#rawSource = undefined
+    this.#parsedSource = undefined
+    this.#sections = undefined
+    this.#resolvingFrontmatter = false
   }
 
   async #getRawSource() {
@@ -4367,6 +4544,9 @@ export class Directory<
   >
   #simpleFilter?: { recursive: boolean; extensions: Set<string> }
   #sort?: any
+  #structureGitMetadata?: GitMetadata
+  #structureWorkspaceChangeToken?: string
+  #structureCacheSessionKey?: string
 
   constructor(
     options?: GitDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
@@ -7201,36 +7381,86 @@ export class Directory<
     })
   }
 
-  /** Get the first local git commit date of this directory. */
-  async getFirstCommitDate() {
+  async #loadGitMetadata(): Promise<GitMetadata> {
     const fileSystem = this.getFileSystem()
-    const gitMetadata = await getGitFileMetadataForPath(
+    return getGitFileMetadataForPath(
       this.getRepositoryIfAvailable(),
       fileSystem,
       this.#path
     )
+  }
+
+  async #loadGitMetadataForStructure(): Promise<GitMetadata> {
+    try {
+      return await this.#loadGitMetadata()
+    } catch {
+      return createEmptyGitMetadata()
+    }
+  }
+
+  async #getCurrentWorkspaceChangeToken(): Promise<string | undefined> {
+    const token = await this.#getSession().getWorkspaceChangeToken(
+      this.getRootPath()
+    )
+    return token ?? undefined
+  }
+
+  async #resolveStructureGitMetadata(): Promise<GitMetadata> {
+    const cacheSessionKey = this.#getStructureCacheSessionKey()
+    const cachedGitMetadata = this.#structureGitMetadata
+    const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
+    const canUseCachedMetadata =
+      this.#structureCacheSessionKey === cacheSessionKey &&
+      cachedWorkspaceChangeToken !== undefined &&
+      cachedGitMetadata !== undefined
+
+    if (canUseCachedMetadata) {
+      const currentWorkspaceChangeToken =
+        await this.#getCurrentWorkspaceChangeToken()
+      if (
+        currentWorkspaceChangeToken !== undefined &&
+        cachedWorkspaceChangeToken === currentWorkspaceChangeToken
+      ) {
+        return cachedGitMetadata
+      }
+    }
+
+    const gitMetadata = await this.#loadGitMetadataForStructure()
+    this.#structureGitMetadata = gitMetadata
+    const currentWorkspaceChangeToken =
+      await this.#getCurrentWorkspaceChangeToken()
+    this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+    this.#structureCacheSessionKey = cacheSessionKey
+
+    return gitMetadata
+  }
+
+  #getStructureCacheSessionKey() {
+    const session = this.#getSession()
+
+    return createCacheNodeKey('structure.directory', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      directoryPath: normalizeCachePath(this.absolutePath),
+      rootPath: this.getRootPath(),
+    })
+  }
+
+  /** Get the first local git commit date of this directory. */
+  async getFirstCommitDate() {
+    const gitMetadata = await this.#resolveStructureGitMetadata()
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last local git commit date of this directory. */
   async getLastCommitDate() {
-    const fileSystem = this.getFileSystem()
-    const gitMetadata = await getGitFileMetadataForPath(
-      this.getRepositoryIfAvailable(),
-      fileSystem,
-      this.#path
-    )
+    const gitMetadata = await this.#resolveStructureGitMetadata()
     return gitMetadata.lastCommitDate
   }
 
   /** Get the local git authors of this directory. */
   async getAuthors() {
-    const fileSystem = this.getFileSystem()
-    const gitMetadata = await getGitFileMetadataForPath(
-      this.getRepositoryIfAvailable(),
-      fileSystem,
-      this.#path
-    )
+    const gitMetadata = await this.#resolveStructureGitMetadata()
     return gitMetadata.authors
   }
 

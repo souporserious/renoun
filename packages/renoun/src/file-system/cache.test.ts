@@ -937,6 +937,123 @@ export type Metadata = Value`,
     )
   })
 
+  test('recomputes file and export git metadata after session reset when workspace token is unchanged', async () => {
+    class MetadataAwareInMemoryFileSystem extends InMemoryFileSystem {
+      fileMetadata: GitMetadata = {
+        authors: [
+          {
+            name: 'Ada',
+            email: 'ada@example.com',
+            commitCount: 1,
+            firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+            lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+          },
+        ],
+        firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+        lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+      }
+      exportMetadata: GitExportMetadata = {
+        firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+        lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+        firstCommitHash: 'a1',
+        lastCommitHash: 'a1',
+      }
+
+      fileMetadataCalls = 0
+      exportMetadataCalls = 0
+      workspaceChangeTokenCalls = 0
+
+      override async getWorkspaceChangeToken(rootPath: string): Promise<string> {
+        this.workspaceChangeTokenCalls += 1
+        return `token:${normalizePathKey(rootPath)}`
+      }
+
+      async getGitFileMetadata(_path: string): Promise<GitMetadata> {
+        this.fileMetadataCalls += 1
+        return this.fileMetadata
+      }
+
+      async getGitExportMetadata(
+        _path: string,
+        _startLine: number,
+        _endLine: number
+      ): Promise<GitExportMetadata> {
+        this.exportMetadataCalls += 1
+        return this.exportMetadata
+      }
+    }
+
+    const fileSystem = new MetadataAwareInMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+    const valueExport = await file.getExport('value')
+
+    const firstFileCommitDate = await file.getLastCommitDate()
+    const firstExportCommitDate = await valueExport.getLastCommitDate()
+    const firstWorkspaceCommitDate = await directory.getLastCommitDate()
+
+    expect(firstFileCommitDate?.toISOString()).toBe(
+      '2024-01-01T00:00:00.000Z'
+    )
+    expect(firstExportCommitDate?.toISOString()).toBe(
+      '2024-01-01T00:00:00.000Z'
+    )
+    expect(firstWorkspaceCommitDate?.toISOString()).toBe(
+      '2024-01-01T00:00:00.000Z'
+    )
+
+    await file.getLastCommitDate()
+    await valueExport.getLastCommitDate()
+    await directory.getLastCommitDate()
+
+    expect(fileSystem.fileMetadataCalls).toBe(2)
+    expect(fileSystem.exportMetadataCalls).toBe(1)
+    expect(fileSystem.workspaceChangeTokenCalls).toBeGreaterThan(0)
+
+    fileSystem.fileMetadata = {
+      authors: [
+        {
+          name: 'Ada',
+          email: 'ada@example.com',
+          commitCount: 2,
+          firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+          lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+        },
+      ],
+      firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+      lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+    }
+    fileSystem.exportMetadata = {
+      firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+      lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+      firstCommitHash: 'a1',
+      lastCommitHash: 'b2',
+    }
+
+    const priorFileMetadataCalls = fileSystem.fileMetadataCalls
+    const priorExportMetadataCalls = fileSystem.exportMetadataCalls
+
+    Session.reset(fileSystem)
+
+    const secondFileCommitDate = await file.getLastCommitDate()
+    const secondExportCommitDate = await valueExport.getLastCommitDate()
+    const secondWorkspaceCommitDate = await directory.getLastCommitDate()
+
+    expect(secondFileCommitDate?.toISOString()).toBe(
+      '2024-02-01T00:00:00.000Z'
+    )
+    expect(secondExportCommitDate?.toISOString()).toBe(
+      '2024-02-01T00:00:00.000Z'
+    )
+    expect(secondWorkspaceCommitDate?.toISOString()).toBe(
+      '2024-02-01T00:00:00.000Z'
+    )
+    expect(fileSystem.fileMetadataCalls).toBeGreaterThan(priorFileMetadataCalls)
+    expect(fileSystem.exportMetadataCalls).toBeGreaterThan(priorExportMetadataCalls)
+  })
+
   test('invalidates cached markdown sections on NodeFileSystem when files change', async () => {
     const tempDirectory = createTmpRenounCacheDirectory('renoun-cache-node-')
     const scopedCwd = join(tempDirectory, 'scoped-cwd')
