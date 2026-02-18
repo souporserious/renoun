@@ -12,6 +12,7 @@
     "dev:site": "pnpm dev --filter=renoun --filter=@apps/site",
     "dev:examples": "pnpm dev --filter=renoun --filter=@examples/*",
     "dev:example": "bash -c 'pnpm dev --filter=renoun --filter=@examples/$1'",
+    "test": "turbo run test",
     "test:github": "vitest run .github",
     "format": "prettier --write '**/**/*.{js,ts,tsx,json,css}'",
     "release": "pnpm publish -r --provenance --access public --publish-branch main && pnpm changeset tag",
