@@ -5529,8 +5529,17 @@ export class Directory<
           workspaceRelativePath[afterRootPathKeyIndex] === '/'
 
         if (hasBoundaryBefore && hasBoundaryAfter) {
-          workspaceRelativePath = workspaceRelativePath.slice(rootPathKeyIndex)
-          isWorkspaceRelativePath = true
+          const legacyPath = workspaceRelativePath.slice(rootPathKeyIndex)
+          if (
+            this.#shouldUseLegacyWorkspacePath(
+              fileSystem,
+              workspaceRelativePath,
+              legacyPath
+            )
+          ) {
+            workspaceRelativePath = legacyPath
+            isWorkspaceRelativePath = true
+          }
         }
       }
     }
@@ -5564,6 +5573,28 @@ export class Directory<
     }
 
     return ensureRelativePath(restoredPath)
+  }
+
+  #shouldUseLegacyWorkspacePath(
+    fileSystem: FileSystem,
+    normalizedPath: string,
+    candidatePath: string
+  ): boolean {
+    try {
+      const candidateExists = fileSystem.fileExistsSync(candidatePath)
+      if (!candidateExists) {
+        return false
+      }
+
+      if (normalizedPath === candidatePath) {
+        return false
+      }
+
+      const normalizedPathExists = fileSystem.fileExistsSync(normalizedPath)
+      return !normalizedPathExists
+    } catch {
+      return false
+    }
   }
 
   #resolveSnapshotDirectoryByPath(

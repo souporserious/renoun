@@ -11,7 +11,7 @@ import {
   type Dirent,
 } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import {
   access,
   mkdir,
@@ -45,11 +45,14 @@ import {
 } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
 
+const GIT_MAX_BUFFER_BYTES = 100 * 1024 * 1024
+
 export class NodeFileSystem
   extends BaseFileSystem
   implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
 {
   #tsConfigPath: string
+  readonly #gitRootCache = new Map<string, string | null>()
 
   constructor(options: FileSystemOptions = {}) {
     super(options)
@@ -116,10 +119,15 @@ export class NodeFileSystem
   }
 
   #findGitRoot(startPath: string): string | null {
+    if (this.#gitRootCache.has(startPath)) {
+      return this.#gitRootCache.get(startPath) ?? null
+    }
+
     let currentPath = startPath
 
     while (true) {
       if (existsSync(join(currentPath, '.git'))) {
+        this.#gitRootCache.set(startPath, currentPath)
         return currentPath
       }
 
@@ -130,6 +138,7 @@ export class NodeFileSystem
       currentPath = parentPath
     }
 
+    this.#gitRootCache.set(startPath, null)
     return null
   }
 
@@ -231,10 +240,9 @@ export class NodeFileSystem
 
       const scopePath = relativeRootPath === '.' ? '.' : relativeRootPath
 
-      const headResult = spawnSync('git', ['rev-parse', 'HEAD'], {
+      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
         cwd: gitRoot,
-        stdio: 'pipe',
-        encoding: 'utf8',
+        maxBuffer: GIT_MAX_BUFFER_BYTES,
         shell: false,
       })
       if (headResult.status !== 0) {
@@ -246,7 +254,7 @@ export class NodeFileSystem
         return null
       }
 
-      const statusResult = spawnSync(
+      const statusResult = await spawnWithResult(
         'git',
         [
           'status',
@@ -259,8 +267,7 @@ export class NodeFileSystem
         ],
         {
           cwd: gitRoot,
-          stdio: 'pipe',
-          encoding: 'utf8',
+          maxBuffer: GIT_MAX_BUFFER_BYTES,
           shell: false,
         }
       )
@@ -311,10 +318,9 @@ export class NodeFileSystem
 
       const scopePath = relativeRootPath === '.' ? '.' : relativeRootPath
 
-      const headResult = spawnSync('git', ['rev-parse', 'HEAD'], {
+      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
         cwd: gitRoot,
-        stdio: 'pipe',
-        encoding: 'utf8',
+        maxBuffer: GIT_MAX_BUFFER_BYTES,
         shell: false,
       })
       if (headResult.status !== 0) {
@@ -327,40 +333,26 @@ export class NodeFileSystem
       }
 
       const changedPaths = new Set<string>()
-
-      if (currentHead !== previousHead) {
-        const diffResult = spawnSync(
-          'git',
-          [
-            'diff',
-            '--name-only',
-            '--no-renames',
-            `${previousHead}..${currentHead}`,
-            '--',
-            scopePath,
-          ],
-          {
-            cwd: gitRoot,
-            stdio: 'pipe',
-            encoding: 'utf8',
-            shell: false,
-          }
-        )
-        if (diffResult.status !== 0) {
-          return null
-        }
-
-        const diffPaths = diffResult.stdout
-          .split(/\r?\n/)
-          .map((line) => normalizeSlashes(line.trim()))
-          .filter((line) => line.length > 0)
-
-        for (const diffPath of diffPaths) {
-          changedPaths.add(diffPath)
-        }
-      }
-
-      const statusResult = spawnSync(
+      const diffResultPromise =
+        currentHead !== previousHead
+          ? spawnWithResult(
+              'git',
+              [
+                'diff',
+                '--name-only',
+                '--no-renames',
+                `${previousHead}..${currentHead}`,
+                '--',
+                scopePath,
+              ],
+              {
+                cwd: gitRoot,
+                maxBuffer: GIT_MAX_BUFFER_BYTES,
+                shell: false,
+              }
+            )
+          : Promise.resolve<SpawnResult | null>(null)
+      const statusResultPromise = spawnWithResult(
         'git',
         [
           'status',
@@ -373,13 +365,32 @@ export class NodeFileSystem
         ],
         {
           cwd: gitRoot,
-          stdio: 'pipe',
-          encoding: 'utf8',
+          maxBuffer: GIT_MAX_BUFFER_BYTES,
           shell: false,
         }
       )
+      const [statusResult, diffResult] = await Promise.all([
+        statusResultPromise,
+        diffResultPromise,
+      ])
+
       if (statusResult.status !== 0) {
         return null
+      }
+
+      if (currentHead !== previousHead) {
+        if (!diffResult || diffResult.status !== 0) {
+          return null
+        }
+
+        const diffPaths = diffResult.stdout
+          .split(/\r?\n/)
+          .map((line) => normalizeSlashes(line.trim()))
+          .filter((line) => line.length > 0)
+
+        for (const diffPath of diffPaths) {
+          changedPaths.add(diffPath)
+        }
       }
 
       const statusLines = statusResult.stdout
@@ -683,4 +694,82 @@ function normalizeWriteContent(
   }
 
   throw new Error('[renoun] Unsupported content type for writeFile')
+}
+
+interface SpawnResult {
+  status: number | null
+  stdout: string
+  stderr: string
+}
+
+function spawnWithResult(
+  command: string,
+  args: string[],
+  options: {
+    cwd: string
+    maxBuffer?: number
+    verbose?: boolean
+    shell?: boolean
+  }
+): Promise<SpawnResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      stdio: 'pipe',
+      shell: options.shell ?? false,
+    })
+
+    let stdout = ''
+    let stderr = ''
+    const maxBuffer = options.maxBuffer ?? GIT_MAX_BUFFER_BYTES
+    let totalBytes = 0
+    let settled = false
+
+    const finish = (error?: Error, result?: SpawnResult) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(result!)
+    }
+
+    const onData = (chunk: Buffer, isStdout: boolean) => {
+      totalBytes += chunk.length
+      if (totalBytes > maxBuffer) {
+        child.kill()
+        finish(
+          new Error(
+            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${args.join(
+              ' '
+            )}`
+          )
+        )
+        return
+      }
+
+      const text = chunk.toString()
+      if (isStdout) {
+        stdout += text
+        if (options.verbose) {
+          process.stdout.write(text)
+        }
+      } else {
+        stderr += text
+        if (options.verbose) {
+          process.stderr.write(text)
+        }
+      }
+    }
+
+    child.stdout?.on('data', (chunk) => onData(chunk, true))
+    child.stderr?.on('data', (chunk) => onData(chunk, false))
+    child.on('error', (error) => finish(error))
+    child.on('close', (code) =>
+      finish(undefined, { status: code, stdout, stderr })
+    )
+  })
 }

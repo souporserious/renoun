@@ -139,7 +139,10 @@ class MutableTimestampFileSystem extends InMemoryFileSystem {
 
 class TokenAwareNodeFileSystem extends NestedCwdNodeFileSystem {
   #workspaceChangeToken: string
-  readonly #changedPathsByToken = new Map<string, readonly string[] | null>()
+  readonly #changedPathsByToken = new Map<
+    string,
+    Map<string, readonly string[] | null>
+  >()
 
   constructor(cwd: string, tsConfigPath: string, token: string) {
     super(cwd, tsConfigPath)
@@ -159,18 +162,24 @@ class TokenAwareNodeFileSystem extends NestedCwdNodeFileSystem {
     previousToken: string,
     changedPaths: readonly string[] | null
   ): void {
-    this.#changedPathsByToken.set(
-      `${normalizePathKey(rootPath)}|${previousToken}`,
-      changedPaths
-    )
+    const normalizedRootPath = normalizePathKey(rootPath)
+    const changedPathsByToken = this.#changedPathsByToken.get(normalizedRootPath) ?? new Map<
+      string,
+      readonly string[] | null
+    >()
+    changedPathsByToken.set(previousToken, changedPaths)
+    this.#changedPathsByToken.set(normalizedRootPath, changedPathsByToken)
   }
 
   override async getWorkspaceChangedPathsSinceToken(
     rootPath: string,
     previousToken: string
   ): Promise<readonly string[] | null> {
-    const key = `${normalizePathKey(rootPath)}|${previousToken}`
-    const configuredChangedPaths = this.#changedPathsByToken.get(key)
+    const changedPathsByToken = this.#changedPathsByToken.get(
+      normalizePathKey(rootPath)
+    )
+    const configuredChangedPaths =
+      changedPathsByToken?.get(previousToken) ?? undefined
     if (configuredChangedPaths !== undefined) {
       return configuredChangedPaths
     }
@@ -1751,6 +1760,34 @@ describe('sqlite cache persistence', () => {
       expect(secondReadDirectory).toHaveBeenCalledTimes(0)
       expect(secondStatLookup).toHaveBeenCalledTimes(0)
     })
+  })
+
+  test('distinguishes workspace-change token cache lookups when values contain separators', async () => {
+    const fileSystem = new TokenAwareNodeFileSystem(
+      getRootDirectory(),
+      join(getRootDirectory(), 'tsconfig.json'),
+      'stable-token'
+    )
+
+    fileSystem.setChangedPathsSinceToken('a|b', 'c', [
+      normalizePathKey('legacy-snapshots'),
+    ])
+    fileSystem.setChangedPathsSinceToken('a', 'b|c', [
+      normalizePathKey('primary-snapshots'),
+    ])
+
+    const session = Session.for(fileSystem)
+
+    expect(
+      Array.from(
+        (await session.getWorkspaceChangedPathsSinceToken('a|b', 'c')) ?? []
+      )
+    ).toEqual([normalizePathKey('legacy-snapshots')])
+    expect(
+      Array.from(
+        (await session.getWorkspaceChangedPathsSinceToken('a', 'b|c')) ?? []
+      )
+    ).toEqual([normalizePathKey('primary-snapshots')])
   })
 
   test('reuses persisted snapshots when token changes without dependency-path intersection', async () => {

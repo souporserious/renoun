@@ -484,7 +484,10 @@ export class Session {
     }
 
     const normalizedRootPath = normalizeSessionPath(this.#fileSystem, rootPath)
-    const cacheKey = `${normalizedRootPath}|${previousToken}`
+    const cacheKey = createWorkspaceChangedPathsCacheKey(
+      normalizedRootPath,
+      previousToken
+    )
     const now = Date.now()
     const cached = this.#workspaceChangedPathsByToken.get(cacheKey)
 
@@ -953,6 +956,13 @@ class GeneratedSnapshot implements Snapshot {
 function normalizeSessionPath(fileSystem: FileSystem, path: string): string {
   const relativePath = fileSystem.getRelativePathToWorkspace(path)
   return normalizePathKey(relativePath)
+}
+
+function createWorkspaceChangedPathsCacheKey(
+  normalizedRootPath: string,
+  previousToken: string
+): string {
+  return JSON.stringify([normalizedRootPath, previousToken])
 }
 
 function extractDirectoryPathFromSnapshotKey(key: string): string | undefined {
