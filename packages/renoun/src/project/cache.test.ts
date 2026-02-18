@@ -419,6 +419,93 @@ describe('project file cache', () => {
     expect(calls).toBe(2)
   })
 
+  test('supports dynamic dependency resolution from computed cache values', async () => {
+    const project = {} as unknown as Project
+    const cacheFilePath = '/project/src/index.ts'
+    const dependencyPath = '/project/src/shared.ts'
+    let calls = 0
+
+    const first = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'dynamic-deps',
+      () => {
+        calls += 1
+        return {
+          value: `value-${calls}`,
+          paths: [dependencyPath],
+        }
+      },
+      {
+        deps: (result) => [
+          {
+            kind: 'file',
+            path: cacheFilePath,
+          },
+          ...result.paths.map((path) => ({
+            kind: 'file' as const,
+            path,
+          })),
+        ],
+      }
+    )
+    const second = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'dynamic-deps',
+      () => ({
+        value: 'should not run',
+        paths: [dependencyPath],
+      }),
+      {
+        deps: (result) => [
+          {
+            kind: 'file',
+            path: cacheFilePath,
+          },
+          ...result.paths.map((path) => ({
+            kind: 'file' as const,
+            path,
+          })),
+        ],
+      }
+    )
+
+    expect(first.value).toBe('value-1')
+    expect(second.value).toBe('value-1')
+    expect(calls).toBe(1)
+
+    invalidateProjectFileCache(project, dependencyPath)
+
+    const third = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'dynamic-deps',
+      () => {
+        calls += 1
+        return {
+          value: `value-${calls}`,
+          paths: [dependencyPath],
+        }
+      },
+      {
+        deps: (result) => [
+          {
+            kind: 'file',
+            path: cacheFilePath,
+          },
+          ...result.paths.map((path) => ({
+            kind: 'file' as const,
+            path,
+          })),
+        ],
+      }
+    )
+
+    expect(third.value).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
   test('recomputes entries when a cache dependency is invalidated', async () => {
     const project = {} as unknown as Project
     const sourcePath = '/project/src/source.ts'
@@ -492,6 +579,76 @@ describe('project file cache', () => {
     )
 
     expect(thirdDependent).toBe('dependent-2')
+    expect(dependentCalls).toBe(2)
+  })
+
+  test('path invalidation propagates through cache dependencies before source recompute', async () => {
+    const project = {} as unknown as Project
+    const sourcePath = '/project/src/source.ts'
+    const dependentPath = '/project/src/dependent.ts'
+    let sourceCalls = 0
+    let dependentCalls = 0
+
+    await createProjectFileCache(
+      project,
+      sourcePath,
+      'metadata',
+      () => {
+        sourceCalls += 1
+        return `source-${sourceCalls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: sourcePath,
+          },
+        ],
+      }
+    )
+
+    const firstDependent = await createProjectFileCache(
+      project,
+      dependentPath,
+      'summary',
+      () => {
+        dependentCalls += 1
+        return `dependent-${dependentCalls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'cache',
+            filePath: sourcePath,
+            cacheName: 'metadata',
+          },
+        ],
+      }
+    )
+
+    invalidateProjectFileCache(project, sourcePath)
+
+    const secondDependent = await createProjectFileCache(
+      project,
+      dependentPath,
+      'summary',
+      () => {
+        dependentCalls += 1
+        return `dependent-${dependentCalls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'cache',
+            filePath: sourcePath,
+            cacheName: 'metadata',
+          },
+        ],
+      }
+    )
+
+    expect(firstDependent).toBe('dependent-1')
+    expect(secondDependent).toBe('dependent-2')
     expect(dependentCalls).toBe(2)
   })
 })

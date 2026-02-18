@@ -1,4 +1,4 @@
-import { watch } from 'node:fs'
+import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import { getTsMorph } from '../utils/ts-morph.ts'
 import type { SyntaxKind as TsMorphSyntaxKind } from '../utils/ts-morph.ts'
@@ -9,11 +9,6 @@ import {
 } from '../utils/create-highlighter.ts'
 import type { ConfigurationOptions } from '../components/Config/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
-import {
-  getFileExports as baseGetFileExports,
-  getFileExportMetadata as baseGetFileExportMetadata,
-} from '../utils/get-file-exports.ts'
-import { getOutlineRanges as baseGetOutlineRanges } from '../utils/get-outline-ranges.ts'
 import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
@@ -28,15 +23,23 @@ import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import {
   resolveTypeAtLocationWithDependencies as baseResolveTypeAtLocationWithDependencies,
 } from '../utils/resolve-type-at-location.ts'
-import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
-import { getProject } from './get-project.ts'
+import {
+  getCachedFileExportMetadata,
+  getCachedFileExportStaticValue,
+  getCachedFileExports,
+  getCachedOutlineRanges,
+  transpileCachedSourceFile,
+} from './cached-analysis.ts'
+import { invalidateProjectFileCache } from './cache.ts'
+import { disposeProjectWatchers, getProject } from './get-project.ts'
 import type { ProjectOptions } from './types.ts'
 
 const { SyntaxKind } = getTsMorph()
 
 let currentHighlighter: Promise<Highlighter> | null = null
+let activeProjectServers = 0
 
 interface ResolveTypeAtLocationRpcRequest {
   filePath: string
@@ -136,24 +139,46 @@ function isObject(value: unknown): value is Record<string, unknown> {
 export async function createServer(options?: { port?: number }) {
   const server = new WebSocketServer({ port: options?.port })
   const port = await server.getPort()
+  activeProjectServers += 1
 
   process.env.RENOUN_SERVER_PORT = String(port)
 
-  if (process.env.NODE_ENV === 'development') {
-    const rootDirectory = getRootDirectory()
+  const rootDirectory = getRootDirectory()
 
-    watch(rootDirectory, { recursive: true }, (_, fileName) => {
-      if (!fileName) return
+  const rootWatcher = watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
+    if (!fileName) return
 
-      const filePath = join(rootDirectory, fileName)
+    const filePath = join(rootDirectory, fileName)
 
-      if (isFilePathGitIgnored(filePath)) {
-        return
-      }
+    if (isFilePathGitIgnored(filePath)) {
+      return
+    }
 
-      /* Notify the client to refresh when files change. */
-      server.sendNotification({ type: 'refresh' })
+    /* Notify the client to refresh when files change. */
+    server.sendNotification({
+      type: 'refresh',
+      data: {
+        eventType,
+        filePath,
+      },
     })
+  })
+
+  const originalCleanup = server.cleanup.bind(server)
+  let cleanedUp = false
+  server.cleanup = () => {
+    if (cleanedUp) {
+      return
+    }
+    cleanedUp = true
+
+    closeWatcher(rootWatcher)
+    activeProjectServers = Math.max(0, activeProjectServers - 1)
+    if (activeProjectServers === 0) {
+      disposeProjectWatchers()
+    }
+
+    originalCleanup()
   }
 
   server.registerMethod(
@@ -264,7 +289,7 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileExports(filePath, project)
+      return getCachedFileExports(project, filePath)
     },
     {
       memoize: false,
@@ -282,7 +307,7 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetOutlineRanges(filePath, project)
+      return getCachedOutlineRanges(project, filePath)
     },
     {
       memoize: false,
@@ -306,7 +331,12 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileExportMetadata(name, filePath, position, kind, project)
+      return getCachedFileExportMetadata(project, {
+        name,
+        filePath,
+        position,
+        kind,
+      })
     },
     {
       memoize: false,
@@ -358,9 +388,11 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      const { getFileExportStaticValue } =
-        await import('../utils/get-file-export-static-value.ts')
-      return getFileExportStaticValue(filePath, position, kind, project)
+      return getCachedFileExportStaticValue(project, {
+        filePath,
+        position,
+        kind,
+      })
     },
     {
       memoize: false,
@@ -383,6 +415,11 @@ export async function createServer(options?: { port?: number }) {
       project.createSourceFile(filePath, sourceText, {
         overwrite: true,
       })
+      invalidateProjectFileCache(project, filePath)
+    },
+    {
+      memoize: false,
+      concurrency: 1,
     }
   )
 
@@ -396,9 +433,21 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseTranspileSourceFile(filePath, project)
+      return transpileCachedSourceFile(project, filePath)
+    },
+    {
+      memoize: false,
+      concurrency: 25,
     }
   )
 
   return server
+}
+
+function closeWatcher(watcher: FSWatcher): void {
+  try {
+    watcher.close()
+  } catch {
+    // Ignore watcher close errors during server shutdown.
+  }
 }

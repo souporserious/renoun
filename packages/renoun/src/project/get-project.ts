@@ -50,6 +50,14 @@ export function getProject(options?: ProjectOptions) {
 
   if (projects.has(projectId)) {
     const existingProject = projects.get(projectId)!
+    let associatedProjects = directoryToProjects.get(projectDirectory)
+    if (!associatedProjects) {
+      associatedProjects = new Set()
+      directoryToProjects.set(projectDirectory, associatedProjects)
+    }
+    associatedProjects.add(existingProject)
+    ensureProjectDirectoryWatcher(projectDirectory)
+
     const inMemoryProjectId = useInMemoryFileSystem
       ? (options!.projectId ?? '')
       : ''
@@ -104,71 +112,7 @@ export function getProject(options?: ProjectOptions) {
 
   associatedProjects.add(project)
 
-  if (
-    process.env.NODE_ENV === 'development' &&
-    process.env.RENOUN_SERVER_PORT !== undefined &&
-    !directoryWatchers.has(projectDirectory)
-  ) {
-    const watcher = watch(
-      projectDirectory,
-      { recursive: true },
-      async (eventType, fileName) => {
-        if (!fileName) return
-
-        const filePath = join(projectDirectory, fileName)
-
-        if (isFilePathGitIgnored(filePath)) {
-          return
-        }
-
-        const isDirectory = existsSync(filePath)
-          ? statSync(filePath).isDirectory()
-          : extname(fileName) === ''
-
-        try {
-          const projectsToUpdate = directoryToProjects.get(projectDirectory)
-
-          if (!projectsToUpdate) return
-
-          for (const currentProject of projectsToUpdate) {
-            invalidateProjectFileCache(currentProject, filePath)
-
-            if (eventType === 'rename') {
-              if (existsSync(filePath)) {
-                if (isDirectory) {
-                  currentProject.addDirectoryAtPath(filePath)
-                } else {
-                  refreshOrAddSourceFile(currentProject, filePath)
-                }
-              } else if (isDirectory) {
-                const removedDirectory = currentProject.getDirectory(filePath)
-                if (removedDirectory) {
-                  removedDirectory.deleteImmediatelySync()
-                }
-              } else {
-                const removedSourceFile = currentProject.getSourceFile(filePath)
-
-                if (removedSourceFile) {
-                  removedSourceFile.deleteImmediatelySync()
-                }
-              }
-            } else if (eventType === 'change') {
-              refreshOrAddSourceFile(currentProject, filePath)
-            }
-          }
-        } catch (error) {
-          if (error instanceof Error) {
-            throw new Error(
-              `[renoun] An error occurred in the file system watcher while trying to ${eventType} the file path at: ${fileName}`,
-              { cause: error }
-            )
-          }
-        }
-      }
-    )
-
-    directoryWatchers.set(projectDirectory, watcher)
-  }
+  ensureProjectDirectoryWatcher(projectDirectory)
 
   projects.set(projectId, project)
   if (useInMemoryFileSystem) {
@@ -186,6 +130,96 @@ export function getProject(options?: ProjectOptions) {
   )
 
   return project
+}
+
+function ensureProjectDirectoryWatcher(projectDirectory: string): void {
+  if (
+    process.env.RENOUN_SERVER_PORT === undefined ||
+    directoryWatchers.has(projectDirectory)
+  ) {
+    return
+  }
+
+  const watcher = watch(
+    projectDirectory,
+    { recursive: true },
+    async (eventType, fileName) => {
+      if (!fileName) return
+
+      const filePath = join(projectDirectory, fileName)
+
+      if (isFilePathGitIgnored(filePath)) {
+        return
+      }
+
+      const isDirectory = existsSync(filePath)
+        ? statSync(filePath).isDirectory()
+        : extname(fileName) === ''
+
+      try {
+        const projectsToUpdate = directoryToProjects.get(projectDirectory)
+
+        if (!projectsToUpdate) return
+
+        for (const currentProject of projectsToUpdate) {
+          invalidateProjectFileCache(currentProject, filePath)
+
+          if (eventType === 'rename') {
+            if (existsSync(filePath)) {
+              if (isDirectory) {
+                currentProject.addDirectoryAtPath(filePath)
+              } else {
+                refreshOrAddSourceFile(currentProject, filePath)
+              }
+            } else if (isDirectory) {
+              const removedDirectory = currentProject.getDirectory(filePath)
+              if (removedDirectory) {
+                removedDirectory.deleteImmediatelySync()
+              }
+            } else {
+              const removedSourceFile = currentProject.getSourceFile(filePath)
+
+              if (removedSourceFile) {
+                removedSourceFile.deleteImmediatelySync()
+              }
+            }
+          } else if (eventType === 'change') {
+            refreshOrAddSourceFile(currentProject, filePath)
+          }
+        }
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new Error(
+            `[renoun] An error occurred in the file system watcher while trying to ${eventType} the file path at: ${fileName}`,
+            { cause: error }
+          )
+        }
+      }
+    }
+  )
+
+  directoryWatchers.set(projectDirectory, watcher)
+}
+
+export function invalidateProjectCachesByPath(path: string): number {
+  let affectedProjects = 0
+
+  for (const projectsByDirectory of directoryToProjects.values()) {
+    for (const project of projectsByDirectory) {
+      invalidateProjectFileCache(project, path)
+      affectedProjects += 1
+    }
+  }
+
+  return affectedProjects
+}
+
+export function disposeProjectWatchers(): void {
+  for (const watcher of directoryWatchers.values()) {
+    watcher.close()
+  }
+
+  directoryWatchers.clear()
 }
 
 function getSerializedProjectOptions(options?: ProjectOptions) {

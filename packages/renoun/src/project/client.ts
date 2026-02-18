@@ -20,8 +20,16 @@ import type {
   ResolvedTypeAtLocationResult,
 } from '../utils/resolve-type-at-location.ts'
 import type { DistributiveOmit } from '../types.ts'
+import {
+  getCachedFileExportMetadata,
+  getCachedFileExportStaticValue,
+  getCachedFileExports,
+  getCachedOutlineRanges,
+  transpileCachedSourceFile,
+} from './cached-analysis.ts'
+import { invalidateProjectFileCache } from './cache.ts'
 import { WebSocketClient } from './rpc/client.ts'
-import { getProject } from './get-project.ts'
+import { getProject, invalidateProjectCachesByPath } from './get-project.ts'
 import type { ProjectOptions } from './types.ts'
 
 let client: WebSocketClient | undefined
@@ -29,8 +37,35 @@ let client: WebSocketClient | undefined
 function getClient(): WebSocketClient | undefined {
   if (!client && process.env.RENOUN_SERVER_PORT) {
     client = new WebSocketClient(process.env.RENOUN_SERVER_ID!)
+    client.on('notification', (message) => {
+      if (!isRefreshNotification(message)) {
+        return
+      }
+
+      invalidateProjectCachesByPath(message.data.filePath)
+    })
   }
   return client
+}
+
+function isRefreshNotification(
+  value: unknown
+): value is { type: 'refresh'; data: { filePath: string } } {
+  if (value === null || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as { type?: unknown; data?: unknown }
+  if (candidate.type !== 'refresh') {
+    return false
+  }
+
+  if (candidate.data === null || typeof candidate.data !== 'object') {
+    return false
+  }
+
+  const data = candidate.data as { filePath?: unknown }
+  return typeof data.filePath === 'string' && data.filePath.length > 0
 }
 
 /**
@@ -197,10 +232,8 @@ export async function getFileExports(
     })
   }
 
-  return import('../utils/get-file-exports.ts').then(({ getFileExports }) => {
-    const project = getProject(projectOptions)
-    return getFileExports(filePath, project)
-  })
+  const project = getProject(projectOptions)
+  return getCachedFileExports(project, filePath)
 }
 
 /**
@@ -219,12 +252,8 @@ export async function getOutlineRanges(
     >('getOutlineRanges', { filePath, projectOptions })
   }
 
-  return import('../utils/get-outline-ranges.ts').then(
-    ({ getOutlineRanges }) => {
-      const project = getProject(projectOptions)
-      return getOutlineRanges(filePath, project)
-    }
-  )
+  const project = getProject(projectOptions)
+  return getCachedOutlineRanges(project, filePath)
 }
 
 /**
@@ -258,12 +287,13 @@ export async function getFileExportMetadata(
     })
   }
 
-  return import('../utils/get-file-exports.ts').then(
-    ({ getFileExportMetadata }) => {
-      const project = getProject(projectOptions)
-      return getFileExportMetadata(name, filePath, position, kind, project)
-    }
-  )
+  const project = getProject(projectOptions)
+  return getCachedFileExportMetadata(project, {
+    name,
+    filePath,
+    position,
+    kind,
+  })
 }
 
 /**
@@ -294,12 +324,12 @@ export async function getFileExportStaticValue(
     })
   }
 
-  return import('../utils/get-file-export-static-value.ts').then(
-    ({ getFileExportStaticValue }) => {
-      const project = getProject(projectOptions)
-      return getFileExportStaticValue(filePath, position, kind, project)
-    }
-  )
+  const project = getProject(projectOptions)
+  return getCachedFileExportStaticValue(project, {
+    filePath,
+    position,
+    kind,
+  })
 }
 
 /**
@@ -374,6 +404,7 @@ export async function createSourceFile(
 
   const project = getProject(projectOptions)
   project.createSourceFile(filePath, sourceText, { overwrite: true })
+  invalidateProjectFileCache(project, filePath)
 }
 
 /**
@@ -400,11 +431,7 @@ export async function transpileSourceFile(
 
   const project = getProject(projectOptions)
 
-  return import('../utils/transpile-source-file.ts').then(
-    ({ transpileSourceFile }) => {
-      return transpileSourceFile(filePath, project)
-    }
-  )
+  return transpileCachedSourceFile(project, filePath)
 }
 
 /**

@@ -177,6 +177,32 @@ function invalidateProjectCacheEntry(
   state.graph.touchDependency(toCacheDependencyKey(filePath, cacheName))
 }
 
+function pruneDirtyProjectCacheEntries(state: ProjectCacheState): number {
+  let prunedEntries = 0
+
+  for (const [cachedFilePath, fileMap] of [...state.cacheByFilePath.entries()]) {
+    for (const cachedCacheName of [...fileMap.keys()]) {
+      const nodeKey = toProjectCacheNodeKey(cachedFilePath, cachedCacheName)
+      if (!state.graph.isNodeDirty(nodeKey)) {
+        continue
+      }
+
+      state.graph.unregisterNode(nodeKey)
+      state.graph.touchDependency(
+        toCacheDependencyKey(cachedFilePath, cachedCacheName)
+      )
+      fileMap.delete(cachedCacheName)
+      prunedEntries += 1
+    }
+
+    if (fileMap.size === 0) {
+      state.cacheByFilePath.delete(cachedFilePath)
+    }
+  }
+
+  return prunedEntries
+}
+
 /**
  * Create (or reuse) a lazily-filled, per-file cache for the given project. This is useful
  * for caching expensive computations that are specific to a file in a project.
@@ -185,9 +211,11 @@ export async function createProjectFileCache<Type>(
   project: Project,
   fileName: string,
   cacheName: string,
-  compute: () => Type,
+  compute: () => Type | Promise<Type>,
   options?: {
-    deps?: ProjectCacheDependency[]
+    deps?:
+      | ProjectCacheDependency[]
+      | ((value: Type) => ProjectCacheDependency[])
   }
 ): Promise<Type> {
   await waitForRefreshingProjects()
@@ -202,20 +230,37 @@ export async function createProjectFileCache<Type>(
 
   const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
   const cachedEntry = namespace.get(cacheName) as ProjectCacheEntry | undefined
-  const dependencies = normalizeDependencyRecords(
-    (options?.deps ?? [toDefaultDependency(filePath)]).map(toDependencyRecord)
-  )
+  const dependencySpec = options?.deps
+  const staticDependencies =
+    typeof dependencySpec === 'function'
+      ? undefined
+      : normalizeDependencyRecords(
+          (dependencySpec ?? [toDefaultDependency(filePath)]).map(
+            toDependencyRecord
+          )
+        )
 
   if (
     cachedEntry &&
     !state.graph.isNodeDirty(nodeKey) &&
-    areDependencyRecordsEqual(cachedEntry.deps, dependencies)
+    (staticDependencies === undefined ||
+      areDependencyRecordsEqual(cachedEntry.deps, staticDependencies))
   ) {
     return cachedEntry.value as Type
   }
 
+  const computedValue = await compute()
+  const dependencies =
+    staticDependencies ??
+    normalizeDependencyRecords(
+      (typeof dependencySpec === 'function'
+        ? dependencySpec(computedValue)
+        : [toDefaultDependency(filePath)]
+      ).map(toDependencyRecord)
+    )
+
   const entry: ProjectCacheEntry = {
-    value: compute(),
+    value: computedValue,
     deps: dependencies,
   }
   namespace.set(cacheName, entry)
@@ -256,6 +301,7 @@ export function invalidateProjectFileCache(
   if (normalizedFilePath) {
     if (!cacheName) {
       state.graph.touchPathDependencies(normalizedFilePath)
+      pruneDirtyProjectCacheEntries(state)
     }
 
     if (cacheName) {
