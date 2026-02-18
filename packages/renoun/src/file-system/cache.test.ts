@@ -1581,6 +1581,152 @@ updated content`
       process.env.NODE_ENV = previousNodeEnv
     }
   })
+
+  test('auto-links parent cache nodes to child nodes without explicit recordNodeDep', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(fileSystem, 'auto-node-links')
+    const store = new CacheStore({ snapshot })
+    const childNodeKey = 'test:auto-node-links:child'
+    const parentNodeKey = 'test:auto-node-links:parent'
+    let childCalls = 0
+    let parentCalls = 0
+
+    const readChild = () =>
+      store.getOrCompute(childNodeKey, { persist: false }, async (ctx) => {
+        childCalls += 1
+        await ctx.recordFileDep('/index.ts')
+        return childCalls
+      })
+
+    const readParent = () =>
+      store.getOrCompute(parentNodeKey, { persist: false }, async () => {
+        parentCalls += 1
+        const childValue = await readChild()
+        return childValue * 2
+      })
+
+    const firstParentValue = await readParent()
+    const secondParentValue = await readParent()
+
+    expect(firstParentValue).toBe(2)
+    expect(secondParentValue).toBe(2)
+    expect(childCalls).toBe(1)
+    expect(parentCalls).toBe(1)
+
+    await fileSystem.writeFile('index.ts', 'export const value = 2')
+    snapshot.invalidatePath('/index.ts')
+
+    const thirdParentValue = await readParent()
+
+    expect(thirdParentValue).toBe(4)
+    expect(childCalls).toBe(2)
+    expect(parentCalls).toBe(2)
+  })
+
+  test('Session.invalidatePath marks memory cache entries stale via dependency graph', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'graph-path-invalidation')
+    )
+    const nodeKey = 'test:graph-path-invalidation'
+    let calls = 0
+
+    const firstValue = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: false },
+      async (ctx) => {
+        calls += 1
+        await ctx.recordFileDep('/index.ts')
+        return `value-${calls}`
+      }
+    )
+    const secondValue = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: false },
+      () => 'should-not-run'
+    )
+
+    expect(firstValue).toBe('value-1')
+    expect(secondValue).toBe('value-1')
+    expect(calls).toBe(1)
+
+    session.invalidatePath('/index.ts')
+
+    const thirdValue = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: false },
+      async (ctx) => {
+        calls += 1
+        await ctx.recordFileDep('/index.ts')
+        return `value-${calls}`
+      }
+    )
+
+    expect(thirdValue).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
+  test('propagates stale child state through transitive auto node dependencies', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'transitive-auto-node-links'
+    )
+    const store = new CacheStore({ snapshot })
+    const grandchildNodeKey = 'test:transitive:auto:grandchild'
+    const childNodeKey = 'test:transitive:auto:child'
+    const parentNodeKey = 'test:transitive:auto:parent'
+    let grandchildCalls = 0
+    let childCalls = 0
+    let parentCalls = 0
+
+    const readGrandchild = () =>
+      store.getOrCompute(grandchildNodeKey, { persist: false }, async (ctx) => {
+        grandchildCalls += 1
+        await ctx.recordFileDep('/index.ts')
+        return grandchildCalls
+      })
+
+    const readChild = () =>
+      store.getOrCompute(childNodeKey, { persist: false }, async () => {
+        childCalls += 1
+        const grandchildValue = await readGrandchild()
+        return grandchildValue + 1
+      })
+
+    const readParent = () =>
+      store.getOrCompute(parentNodeKey, { persist: false }, async () => {
+        parentCalls += 1
+        const childValue = await readChild()
+        return childValue + 1
+      })
+
+    const firstValue = await readParent()
+    const secondValue = await readParent()
+
+    expect(firstValue).toBe(3)
+    expect(secondValue).toBe(3)
+    expect(grandchildCalls).toBe(1)
+    expect(childCalls).toBe(1)
+    expect(parentCalls).toBe(1)
+
+    await fileSystem.writeFile('index.ts', 'export const value = 2')
+    snapshot.invalidatePath('/index.ts')
+
+    const thirdValue = await readParent()
+
+    expect(thirdValue).toBe(4)
+    expect(grandchildCalls).toBe(2)
+    expect(childCalls).toBe(2)
+    expect(parentCalls).toBe(2)
+  })
 })
 
 describe('cache replacement semantics', () => {

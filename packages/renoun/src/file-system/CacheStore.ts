@@ -1,6 +1,8 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash } from 'node:crypto'
 
 import { normalizeSlashes } from '../utils/path.ts'
+import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import type { Snapshot } from './Snapshot.ts'
 
@@ -177,6 +179,11 @@ export class CacheStore {
   readonly #persistence?: CacheStorePersistence
   readonly #entries = new Map<string, CacheEntry>()
   readonly #inflight: Map<string, Promise<unknown>>
+  readonly #dependencyGraph = new ReactiveDependencyGraph()
+  readonly #activeComputeScope = new AsyncLocalStorage<{
+    nodeKey: string
+    deps: Map<string, string>
+  }>()
   readonly #persistenceOperationByKey = new Map<string, Promise<void>>()
   readonly #persistenceIntentVersionByKey = new Map<string, number>()
   #warnedAboutPersistenceFailure = false
@@ -198,14 +205,18 @@ export class CacheStore {
       this.#logCacheOperation('hit', nodeKey, {
         source: 'inflight',
       })
-      return inFlight as Promise<Value>
+      const value = await (inFlight as Promise<Value>)
+      await this.#recordAutomaticNodeDependency(nodeKey)
+      return value
     }
 
     const operation = this.#getOrCompute(nodeKey, options, compute)
     this.#inflight.set(nodeKey, operation as Promise<unknown>)
 
     try {
-      return await operation
+      const value = await operation
+      await this.#recordAutomaticNodeDependency(nodeKey)
+      return value
     } finally {
       if (this.#inflight.get(nodeKey) === operation) {
         this.#inflight.delete(nodeKey)
@@ -220,6 +231,7 @@ export class CacheStore {
 
   async get<Value>(nodeKey: string): Promise<Value | undefined> {
     const entry = await this.#getFreshEntry(nodeKey)
+    await this.#recordAutomaticNodeDependency(nodeKey, entry?.fingerprint)
     return entry?.value as Value | undefined
   }
 
@@ -229,15 +241,18 @@ export class CacheStore {
     const memoryEntry = this.#entries.get(nodeKey)
     if (memoryEntry) {
       const fresh = await this.#isEntryFresh(nodeKey, memoryEntry, new Set())
+      await this.#recordAutomaticNodeDependency(nodeKey, memoryEntry.fingerprint)
       return { value: memoryEntry.value as Value, fresh }
     }
 
     const persistedEntry = await this.#loadPersistedEntry(nodeKey)
     if (!persistedEntry) {
+      await this.#recordAutomaticNodeDependency(nodeKey, undefined)
       return { value: undefined, fresh: false }
     }
 
     const fresh = await this.#isEntryFresh(nodeKey, persistedEntry, new Set())
+    await this.#recordAutomaticNodeDependency(nodeKey, persistedEntry.fingerprint)
     return { value: persistedEntry.value as Value, fresh }
   }
 
@@ -267,6 +282,7 @@ export class CacheStore {
     })
 
     this.#entries.set(nodeKey, entry)
+    this.#registerEntryInGraph(nodeKey, entry)
     await this.#savePersistedEntry(nodeKey, entry)
   }
 
@@ -275,6 +291,8 @@ export class CacheStore {
       source: 'explicit',
     })
 
+    this.#dependencyGraph.markNodeDirty(nodeKey)
+    this.#dependencyGraph.unregisterNode(nodeKey)
     this.#entries.delete(nodeKey)
     if (!this.#persistence) {
       return
@@ -313,6 +331,8 @@ export class CacheStore {
     }
 
     for (const nodeKey of result.deletedNodeKeys) {
+      this.#dependencyGraph.markNodeDirty(nodeKey)
+      this.#dependencyGraph.unregisterNode(nodeKey)
       this.#entries.delete(nodeKey)
       this.#inflight.delete(nodeKey)
       this.#persistenceOperationByKey.delete(nodeKey)
@@ -321,6 +341,11 @@ export class CacheStore {
     }
 
     return result
+  }
+
+  invalidateDependencyPath(dependencyPathKey: string): void {
+    const normalizedPath = normalizeDepPath(dependencyPathKey)
+    this.#dependencyGraph.touchPathDependencies(normalizedPath)
   }
 
   async listNodeKeysByPrefix(prefix: string): Promise<string[]> {
@@ -609,6 +634,7 @@ export class CacheStore {
 
     this.#entries.clear()
     this.#inflight.clear()
+    this.#dependencyGraph.clear()
   }
 
   async #getOrCompute<Value>(
@@ -643,8 +669,7 @@ export class CacheStore {
         return depVersion
       },
       recordNodeDep: async (childNodeKey: string) => {
-        const depVersion =
-          (await this.getFingerprint(childNodeKey)) ?? 'missing'
+        const depVersion = await this.#resolveNodeDependencyVersion(childNodeKey)
         deps.set(`node:${childNodeKey}`, depVersion)
         return depVersion
       },
@@ -684,7 +709,10 @@ export class CacheStore {
     }
 
     try {
-      const value = await compute(context)
+      const value = await this.#activeComputeScope.run(
+        { nodeKey, deps },
+        async () => compute(context)
+      )
 
       const dependencyEntries = Array.from(deps.entries())
         .map(([depKey, depVersion]) => ({ depKey, depVersion }))
@@ -706,6 +734,7 @@ export class CacheStore {
       })
 
       this.#entries.set(nodeKey, entry)
+      this.#registerEntryInGraph(nodeKey, entry)
       await this.#savePersistedEntry(nodeKey, entry)
 
       return value
@@ -766,6 +795,7 @@ export class CacheStore {
 
     if (persistedEntry) {
       this.#entries.set(nodeKey, persistedEntry)
+      this.#registerEntryInGraph(nodeKey, persistedEntry)
     }
 
     return persistedEntry
@@ -774,25 +804,35 @@ export class CacheStore {
   async #getFreshEntry(nodeKey: string): Promise<CacheEntry | undefined> {
     const memoryEntry = this.#entries.get(nodeKey)
     if (memoryEntry) {
-      const memoryIsFresh = await this.#isEntryFresh(
-        nodeKey,
-        memoryEntry,
-        new Set()
-      )
-
-      if (memoryIsFresh) {
-        this.#logCacheOperation('hit', nodeKey, {
+      if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
+        this.#entries.delete(nodeKey)
+        this.#dependencyGraph.unregisterNode(nodeKey)
+        this.#logCacheOperation('clear', nodeKey, {
           source: 'memory',
-          persist: memoryEntry.persist,
+          reason: 'graph-dirty',
         })
-        return memoryEntry
-      }
+      } else {
+        const memoryIsFresh = await this.#isEntryFresh(
+          nodeKey,
+          memoryEntry,
+          new Set()
+        )
 
-      this.#entries.delete(nodeKey)
-      this.#logCacheOperation('clear', nodeKey, {
-        source: 'memory',
-        reason: 'stale',
-      })
+        if (memoryIsFresh) {
+          this.#logCacheOperation('hit', nodeKey, {
+            source: 'memory',
+            persist: memoryEntry.persist,
+          })
+          return memoryEntry
+        }
+
+        this.#entries.delete(nodeKey)
+        this.#dependencyGraph.unregisterNode(nodeKey)
+        this.#logCacheOperation('clear', nodeKey, {
+          source: 'memory',
+          reason: 'stale',
+        })
+      }
     }
 
     if (!this.#persistence) {
@@ -806,6 +846,15 @@ export class CacheStore {
     if (!persistedEntry) {
       this.#logCacheOperation('miss', nodeKey, {
         source: 'persisted',
+      })
+      return undefined
+    }
+
+    if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
+      await this.delete(nodeKey)
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'persisted',
+        reason: 'graph-dirty',
       })
       return undefined
     }
@@ -844,11 +893,53 @@ export class CacheStore {
     getDebugLogger().logCacheOperation(operation, nodeKey, data)
   }
 
+  async #resolveNodeDependencyVersion(nodeKey: string): Promise<string> {
+    const entry = await this.#getFreshEntry(nodeKey)
+    return entry?.fingerprint ?? 'missing'
+  }
+
+  async #recordAutomaticNodeDependency(
+    childNodeKey: string,
+    fingerprint?: string
+  ): Promise<void> {
+    const computeScope = this.#activeComputeScope.getStore()
+    if (!computeScope || computeScope.nodeKey === childNodeKey) {
+      return
+    }
+
+    const depVersion =
+      fingerprint ?? (await this.#resolveNodeDependencyVersion(childNodeKey))
+    computeScope.deps.set(`node:${childNodeKey}`, depVersion)
+  }
+
+  #registerEntryInGraph(nodeKey: string, entry: CacheEntry): void {
+    for (const dependency of entry.deps) {
+      if (dependency.depKey.startsWith('node:')) {
+        continue
+      }
+
+      this.#dependencyGraph.setDependencyVersion(
+        dependency.depKey,
+        dependency.depVersion
+      )
+    }
+
+    this.#dependencyGraph.registerNode(
+      nodeKey,
+      entry.deps.map((dependency) => dependency.depKey)
+    )
+    this.#dependencyGraph.markNodeVersion(nodeKey, entry.fingerprint)
+  }
+
   async #isEntryFresh(
     nodeKey: string,
     entry: CacheEntry,
     visitedNodeKeys: Set<string>
   ): Promise<boolean> {
+    if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
+      return false
+    }
+
     if (visitedNodeKeys.has(nodeKey)) {
       return true
     }
@@ -862,11 +953,29 @@ export class CacheStore {
       )
 
       if (currentVersion !== dependency.depVersion) {
+        this.#dependencyGraph.markNodeDirty(nodeKey)
+        this.#dependencyGraph.touchDependency(dependency.depKey)
+        if (currentVersion !== undefined) {
+          this.#dependencyGraph.setDependencyVersion(
+            dependency.depKey,
+            currentVersion
+          )
+        }
         return false
+      }
+
+      if (
+        currentVersion !== undefined &&
+        !dependency.depKey.startsWith('node:')
+      ) {
+        this.#dependencyGraph.setDependencyVersion(
+          dependency.depKey,
+          currentVersion
+        )
       }
     }
 
-    return true
+    return !this.#dependencyGraph.isNodeDirty(nodeKey)
   }
 
   async #resolveDepVersion(
@@ -896,6 +1005,7 @@ export class CacheStore {
       const childEntry = await this.#getEntry(nodeKey)
 
       if (!childEntry) {
+        this.#dependencyGraph.markNodeDirty(nodeKey)
         return 'missing'
       }
 
@@ -906,6 +1016,7 @@ export class CacheStore {
       )
 
       if (!childIsFresh) {
+        this.#dependencyGraph.markNodeDirty(nodeKey)
         return 'stale'
       }
 

@@ -1,0 +1,463 @@
+import {
+  effect,
+  setActiveSub,
+  signal,
+  trigger,
+} from 'alien-signals'
+import { normalizePathKey } from './path.ts'
+
+type MutableSignal<Value> = {
+  (): Value
+  (value: Value): void
+}
+
+interface ReactiveNodeRecord {
+  stop: () => void
+  dirty: MutableSignal<boolean>
+  dependencyKeys: string[]
+}
+
+interface PathDependencyNode {
+  children: Map<string, PathDependencyNode>
+  dependencyKeys: Set<string>
+}
+
+interface IndexedPathDependency {
+  kind: 'file' | 'dir'
+  pathKey: string
+}
+
+function createPathDependencyNode(): PathDependencyNode {
+  return {
+    children: new Map(),
+    dependencyKeys: new Set(),
+  }
+}
+
+function runUntracked<Value>(task: () => Value): Value {
+  const previousSub = setActiveSub(undefined)
+  try {
+    return task()
+  } finally {
+    setActiveSub(previousSub)
+  }
+}
+
+export class ReactiveDependencyGraph {
+  readonly #dependencySignals = new Map<string, MutableSignal<string | undefined>>()
+  readonly #nodes = new Map<string, ReactiveNodeRecord>()
+  readonly #nodeKeysByDependency = new Map<string, Set<string>>()
+  readonly #dependencyRefCountByKey = new Map<string, number>()
+  readonly #indexedPathDependencyByKey = new Map<string, IndexedPathDependency>()
+  #filePathDependencies = createPathDependencyNode()
+  #directoryPathDependencies = createPathDependencyNode()
+
+  registerNode(nodeKey: string, dependencyKeys: Iterable<string>): void {
+    const previous = this.#nodes.get(nodeKey)
+    const dirtySignal = previous?.dirty ?? signal(false)
+    if (previous) {
+      previous.stop()
+      this.#detachNodeDependencies(nodeKey, previous.dependencyKeys)
+    }
+
+    const normalizedDependencyKeys = Array.from(
+      new Set(Array.from(dependencyKeys).filter(Boolean))
+    )
+
+    for (const dependencyKey of normalizedDependencyKeys) {
+      this.#linkNodeDependency(nodeKey, dependencyKey)
+    }
+
+    runUntracked(() => {
+      dirtySignal(false)
+    })
+
+    let isFirstRun = true
+    const stop = effect(() => {
+      for (const dependencyKey of normalizedDependencyKeys) {
+        const dependencySignal = this.#getDependencySignal(dependencyKey)
+        dependencySignal()
+      }
+
+      if (isFirstRun) {
+        isFirstRun = false
+        return
+      }
+
+      dirtySignal(true)
+    })
+
+    this.#nodes.set(nodeKey, {
+      stop,
+      dirty: dirtySignal,
+      dependencyKeys: normalizedDependencyKeys,
+    })
+  }
+
+  unregisterNode(nodeKey: string): void {
+    const node = this.#nodes.get(nodeKey)
+    if (!node) {
+      return
+    }
+
+    node.stop()
+    this.#detachNodeDependencies(nodeKey, node.dependencyKeys)
+    this.#nodes.delete(nodeKey)
+  }
+
+  setDependencyVersion(depKey: string, depVersion: string): void {
+    const dependencySignal = this.#getDependencySignal(depKey)
+    runUntracked(() => {
+      dependencySignal(depVersion)
+    })
+  }
+
+  touchDependency(depKey: string): void {
+    const dependencySignal = this.#getDependencySignal(depKey)
+    runUntracked(() => {
+      trigger(dependencySignal)
+    })
+  }
+
+  markNodeVersion(nodeKey: string, version: string): void {
+    this.setDependencyVersion(this.#toNodeDependencyKey(nodeKey), version)
+  }
+
+  markNodeDirty(nodeKey: string): void {
+    const node = this.#nodes.get(nodeKey)
+    if (node) {
+      runUntracked(() => {
+        node.dirty(true)
+      })
+    }
+
+    this.touchDependency(this.#toNodeDependencyKey(nodeKey))
+  }
+
+  isNodeDirty(nodeKey: string): boolean {
+    const node = this.#nodes.get(nodeKey)
+    if (!node) {
+      return false
+    }
+
+    return runUntracked(() => node.dirty())
+  }
+
+  touchDependencies(
+    matcher: (dependencyKey: string) => boolean
+  ): number {
+    const dependencyKeysToTouch = new Set<string>()
+    for (const dependencyKey of this.#nodeKeysByDependency.keys()) {
+      if (!matcher(dependencyKey)) {
+        continue
+      }
+      dependencyKeysToTouch.add(dependencyKey)
+    }
+
+    for (const dependencyKey of dependencyKeysToTouch) {
+      this.touchDependency(dependencyKey)
+    }
+
+    return dependencyKeysToTouch.size
+  }
+
+  touchPathDependencies(pathKey: string): number {
+    const normalizedPath = normalizePathKey(pathKey)
+    const dependencyKeysToTouch = new Set<string>()
+
+    this.#collectExactPathDependencies(
+      this.#filePathDependencies,
+      normalizedPath,
+      dependencyKeysToTouch
+    )
+    this.#collectDescendantPathDependencies(
+      this.#filePathDependencies,
+      normalizedPath,
+      dependencyKeysToTouch
+    )
+
+    const directoryPathsToTouch = new Set<string>()
+    this.#collectAncestorPaths(normalizedPath, directoryPathsToTouch)
+    for (const directoryPath of directoryPathsToTouch) {
+      this.#collectExactPathDependencies(
+        this.#directoryPathDependencies,
+        directoryPath,
+        dependencyKeysToTouch
+      )
+    }
+    this.#collectDescendantPathDependencies(
+      this.#directoryPathDependencies,
+      normalizedPath,
+      dependencyKeysToTouch
+    )
+
+    for (const dependencyKey of dependencyKeysToTouch) {
+      this.touchDependency(dependencyKey)
+    }
+
+    return dependencyKeysToTouch.size
+  }
+
+  clear(): void {
+    for (const node of this.#nodes.values()) {
+      node.stop()
+    }
+
+    this.#nodes.clear()
+    this.#nodeKeysByDependency.clear()
+    this.#dependencySignals.clear()
+    this.#dependencyRefCountByKey.clear()
+    this.#indexedPathDependencyByKey.clear()
+    this.#filePathDependencies = createPathDependencyNode()
+    this.#directoryPathDependencies = createPathDependencyNode()
+  }
+
+  #toNodeDependencyKey(nodeKey: string): string {
+    return `node:${nodeKey}`
+  }
+
+  #getDependencySignal(depKey: string): MutableSignal<string | undefined> {
+    const existing = this.#dependencySignals.get(depKey)
+    if (existing) {
+      return existing
+    }
+
+    const created = signal<string | undefined>(undefined)
+    this.#dependencySignals.set(depKey, created)
+    return created
+  }
+
+  #linkNodeDependency(nodeKey: string, dependencyKey: string): void {
+    const nodeKeys = this.#nodeKeysByDependency.get(dependencyKey) ?? new Set()
+    if (nodeKeys.has(nodeKey)) {
+      return
+    }
+
+    nodeKeys.add(nodeKey)
+    this.#nodeKeysByDependency.set(dependencyKey, nodeKeys)
+    this.#incrementDependencyRefCount(dependencyKey)
+  }
+
+  #detachNodeDependencies(nodeKey: string, dependencyKeys: Iterable<string>): void {
+    for (const dependencyKey of dependencyKeys) {
+      const nodeKeys = this.#nodeKeysByDependency.get(dependencyKey)
+      if (!nodeKeys) {
+        continue
+      }
+
+      if (!nodeKeys.delete(nodeKey)) {
+        continue
+      }
+
+      this.#decrementDependencyRefCount(dependencyKey)
+      if (nodeKeys.size === 0) {
+        this.#nodeKeysByDependency.delete(dependencyKey)
+      }
+    }
+  }
+
+  #incrementDependencyRefCount(dependencyKey: string): void {
+    const nextCount = (this.#dependencyRefCountByKey.get(dependencyKey) ?? 0) + 1
+    this.#dependencyRefCountByKey.set(dependencyKey, nextCount)
+    if (nextCount === 1) {
+      this.#indexPathDependency(dependencyKey)
+    }
+  }
+
+  #decrementDependencyRefCount(dependencyKey: string): void {
+    const currentCount = this.#dependencyRefCountByKey.get(dependencyKey)
+    if (!currentCount) {
+      return
+    }
+
+    if (currentCount <= 1) {
+      this.#dependencyRefCountByKey.delete(dependencyKey)
+      this.#unindexPathDependency(dependencyKey)
+      return
+    }
+
+    this.#dependencyRefCountByKey.set(dependencyKey, currentCount - 1)
+  }
+
+  #indexPathDependency(dependencyKey: string): void {
+    const parsedDependency = this.#parsePathDependency(dependencyKey)
+    if (!parsedDependency) {
+      return
+    }
+
+    const rootNode =
+      parsedDependency.kind === 'file'
+        ? this.#filePathDependencies
+        : this.#directoryPathDependencies
+
+    this.#addPathDependency(rootNode, parsedDependency.pathKey, dependencyKey)
+    this.#indexedPathDependencyByKey.set(dependencyKey, parsedDependency)
+  }
+
+  #unindexPathDependency(dependencyKey: string): void {
+    const indexedDependency = this.#indexedPathDependencyByKey.get(dependencyKey)
+    if (!indexedDependency) {
+      return
+    }
+
+    const rootNode =
+      indexedDependency.kind === 'file'
+        ? this.#filePathDependencies
+        : this.#directoryPathDependencies
+
+    this.#removePathDependency(rootNode, indexedDependency.pathKey, dependencyKey)
+    this.#indexedPathDependencyByKey.delete(dependencyKey)
+  }
+
+  #parsePathDependency(dependencyKey: string): IndexedPathDependency | undefined {
+    if (dependencyKey.startsWith('file:')) {
+      const pathKey = dependencyKey.slice('file:'.length)
+      if (!pathKey) {
+        return undefined
+      }
+
+      return {
+        kind: 'file',
+        pathKey: normalizePathKey(pathKey),
+      }
+    }
+
+    if (dependencyKey.startsWith('dir:')) {
+      const pathKey = dependencyKey.slice('dir:'.length)
+      if (!pathKey) {
+        return undefined
+      }
+
+      return {
+        kind: 'dir',
+        pathKey: normalizePathKey(pathKey),
+      }
+    }
+
+    return undefined
+  }
+
+  #addPathDependency(
+    rootNode: PathDependencyNode,
+    pathKey: string,
+    dependencyKey: string
+  ): void {
+    let currentNode = rootNode
+    for (const segment of this.#getPathSegments(pathKey)) {
+      const nextNode = currentNode.children.get(segment)
+      if (nextNode) {
+        currentNode = nextNode
+        continue
+      }
+
+      const createdNode = createPathDependencyNode()
+      currentNode.children.set(segment, createdNode)
+      currentNode = createdNode
+    }
+
+    currentNode.dependencyKeys.add(dependencyKey)
+  }
+
+  #removePathDependency(
+    rootNode: PathDependencyNode,
+    pathKey: string,
+    dependencyKey: string
+  ): void {
+    const pathSegments = this.#getPathSegments(pathKey)
+    const visitedNodes: PathDependencyNode[] = [rootNode]
+
+    let currentNode = rootNode
+    for (const segment of pathSegments) {
+      const nextNode = currentNode.children.get(segment)
+      if (!nextNode) {
+        return
+      }
+
+      currentNode = nextNode
+      visitedNodes.push(currentNode)
+    }
+
+    currentNode.dependencyKeys.delete(dependencyKey)
+
+    for (let index = pathSegments.length - 1; index >= 0; index -= 1) {
+      const node = visitedNodes[index + 1]
+      if (node.children.size > 0 || node.dependencyKeys.size > 0) {
+        break
+      }
+      visitedNodes[index].children.delete(pathSegments[index])
+    }
+  }
+
+  #collectExactPathDependencies(
+    rootNode: PathDependencyNode,
+    pathKey: string,
+    target: Set<string>
+  ): void {
+    const node = this.#getPathNode(rootNode, pathKey)
+    if (!node) {
+      return
+    }
+
+    for (const dependencyKey of node.dependencyKeys) {
+      target.add(dependencyKey)
+    }
+  }
+
+  #collectDescendantPathDependencies(
+    rootNode: PathDependencyNode,
+    pathKey: string,
+    target: Set<string>
+  ): void {
+    const node = this.#getPathNode(rootNode, pathKey)
+    if (!node) {
+      return
+    }
+
+    const nodesToVisit = [node]
+    while (nodesToVisit.length > 0) {
+      const currentNode = nodesToVisit.pop()!
+      for (const dependencyKey of currentNode.dependencyKeys) {
+        target.add(dependencyKey)
+      }
+      for (const childNode of currentNode.children.values()) {
+        nodesToVisit.push(childNode)
+      }
+    }
+  }
+
+  #collectAncestorPaths(pathKey: string, target: Set<string>): void {
+    target.add('.')
+    if (pathKey === '.') {
+      return
+    }
+
+    let currentPath = pathKey
+    while (currentPath !== '.' && currentPath !== '') {
+      target.add(currentPath)
+      const separatorIndex = currentPath.lastIndexOf('/')
+      currentPath = separatorIndex === -1 ? '.' : currentPath.slice(0, separatorIndex)
+    }
+  }
+
+  #getPathNode(
+    rootNode: PathDependencyNode,
+    pathKey: string
+  ): PathDependencyNode | undefined {
+    let currentNode: PathDependencyNode | undefined = rootNode
+    for (const segment of this.#getPathSegments(pathKey)) {
+      currentNode = currentNode.children.get(segment)
+      if (!currentNode) {
+        return undefined
+      }
+    }
+    return currentNode
+  }
+
+  #getPathSegments(pathKey: string): string[] {
+    if (pathKey === '.') {
+      return []
+    }
+
+    return pathKey.split('/').filter(Boolean)
+  }
+}

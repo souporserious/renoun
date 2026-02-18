@@ -172,4 +172,326 @@ describe('project file cache', () => {
 
     expect(value).toBe('value-2')
   })
+
+  test('recomputes entries when a structured file dependency is invalidated', async () => {
+    const project = {} as unknown as Project
+    const cacheFilePath = '/project/src/index.ts'
+    const dependencyPath = '/project/src/shared.ts'
+    let calls = 0
+
+    const first = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'fileExportsText',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: dependencyPath,
+          },
+        ],
+      }
+    )
+    const second = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'fileExportsText',
+      () => 'should not run',
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: dependencyPath,
+          },
+        ],
+      }
+    )
+
+    expect(first).toBe('value-1')
+    expect(second).toBe('value-1')
+    expect(calls).toBe(1)
+
+    invalidateProjectFileCache(project, dependencyPath)
+
+    const third = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'fileExportsText',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: dependencyPath,
+          },
+        ],
+      }
+    )
+
+    expect(third).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
+  test('recomputes entries when a structured directory dependency intersects an invalidated file', async () => {
+    const project = {} as unknown as Project
+    const cacheFilePath = '/project/src/index.ts'
+    const directoryDependencyPath = '/project/src/components'
+    const changedFilePath = '/project/src/components/button.tsx'
+    let calls = 0
+
+    const first = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'component-index',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'directory',
+            path: directoryDependencyPath,
+          },
+        ],
+      }
+    )
+    const second = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'component-index',
+      () => 'should not run',
+      {
+        deps: [
+          {
+            kind: 'directory',
+            path: directoryDependencyPath,
+          },
+        ],
+      }
+    )
+
+    expect(first).toBe('value-1')
+    expect(second).toBe('value-1')
+    expect(calls).toBe(1)
+
+    invalidateProjectFileCache(project, changedFilePath)
+
+    const third = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'component-index',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'directory',
+            path: directoryDependencyPath,
+          },
+        ],
+      }
+    )
+
+    expect(third).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
+  test('does not recompute entries when invalidated path does not intersect dependencies', async () => {
+    const project = {} as unknown as Project
+    const cacheFilePath = '/project/src/index.ts'
+    const dependencyPath = '/project/src/shared.ts'
+    const unrelatedPath = '/project/src/other.ts'
+    let calls = 0
+
+    const first = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'fileExportsText',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: dependencyPath,
+          },
+        ],
+      }
+    )
+
+    invalidateProjectFileCache(project, unrelatedPath)
+
+    const second = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'fileExportsText',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: dependencyPath,
+          },
+        ],
+      }
+    )
+
+    expect(first).toBe('value-1')
+    expect(second).toBe('value-1')
+    expect(calls).toBe(1)
+  })
+
+  test('recomputes entries when structured dependency versions change', async () => {
+    const project = {} as unknown as Project
+    const cacheFilePath = '/project/src/index.ts'
+    let calls = 0
+
+    const first = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'schema',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'const',
+            name: 'schema-version',
+            version: '1',
+          },
+        ],
+      }
+    )
+    const second = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'schema',
+      () => 'should not run',
+      {
+        deps: [
+          {
+            kind: 'const',
+            name: 'schema-version',
+            version: '1',
+          },
+        ],
+      }
+    )
+    const third = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'schema',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'const',
+            name: 'schema-version',
+            version: '2',
+          },
+        ],
+      }
+    )
+
+    expect(first).toBe('value-1')
+    expect(second).toBe('value-1')
+    expect(third).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
+  test('recomputes entries when a cache dependency is invalidated', async () => {
+    const project = {} as unknown as Project
+    const sourcePath = '/project/src/source.ts'
+    const dependentPath = '/project/src/dependent.ts'
+    let sourceCalls = 0
+    let dependentCalls = 0
+
+    await createProjectFileCache(project, sourcePath, 'metadata', () => {
+      sourceCalls += 1
+      return `source-${sourceCalls}`
+    })
+
+    const firstDependent = await createProjectFileCache(
+      project,
+      dependentPath,
+      'summary',
+      () => {
+        dependentCalls += 1
+        return `dependent-${dependentCalls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'cache',
+            filePath: sourcePath,
+            cacheName: 'metadata',
+          },
+        ],
+      }
+    )
+    const secondDependent = await createProjectFileCache(
+      project,
+      dependentPath,
+      'summary',
+      () => 'should not run',
+      {
+        deps: [
+          {
+            kind: 'cache',
+            filePath: sourcePath,
+            cacheName: 'metadata',
+          },
+        ],
+      }
+    )
+
+    expect(firstDependent).toBe('dependent-1')
+    expect(secondDependent).toBe('dependent-1')
+    expect(sourceCalls).toBe(1)
+    expect(dependentCalls).toBe(1)
+
+    invalidateProjectFileCache(project, sourcePath, 'metadata')
+
+    const thirdDependent = await createProjectFileCache(
+      project,
+      dependentPath,
+      'summary',
+      () => {
+        dependentCalls += 1
+        return `dependent-${dependentCalls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'cache',
+            filePath: sourcePath,
+            cacheName: 'metadata',
+          },
+        ],
+      }
+    )
+
+    expect(thirdDependent).toBe('dependent-2')
+    expect(dependentCalls).toBe(2)
+  })
 })

@@ -568,6 +568,7 @@ export class Session {
     this.#cleanupExpiredInvalidatedPaths()
 
     this.snapshot.invalidatePath(path)
+    this.cache.invalidateDependencyPath(normalizedPath)
 
     const expiredKeys = new Set<string>()
 

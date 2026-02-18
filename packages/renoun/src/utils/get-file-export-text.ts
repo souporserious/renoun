@@ -27,7 +27,15 @@ export async function getFileExportText({
       project,
       filePath,
       'fileExportsText',
-      () => getFileExportsText(filePath, project)
+      () => getFileExportsText(filePath, project),
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: filePath,
+          },
+        ],
+      }
     )
     const fileExportText = fileExportsText.find((fileExport) => {
       return fileExport.position === position && fileExport.kind === kind

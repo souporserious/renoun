@@ -1,11 +1,181 @@
+import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import type { Project } from '../utils/ts-morph.ts'
+import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
 
 import { waitForRefreshingProjects } from './refresh.ts'
 
-const projectFileCaches = new WeakMap<
-  Project,
-  Map<string, Map<string, unknown>>
->()
+export type ProjectCacheDependency =
+  | { kind: 'file'; path: string }
+  | { kind: 'directory'; path: string }
+  | { kind: 'const'; name: string; version: string }
+  | { kind: 'cache'; filePath: string; cacheName: string }
+
+interface ProjectCacheEntry {
+  value: unknown
+  deps: ProjectCacheDependencyRecord[]
+}
+
+interface ProjectCacheDependencyRecord {
+  depKey: string
+  depVersion: string
+}
+
+interface ProjectCacheState {
+  cacheByFilePath: Map<string, Map<string, ProjectCacheEntry>>
+  graph: ReactiveDependencyGraph
+}
+
+const projectCacheStateByProject = new WeakMap<Project, ProjectCacheState>()
+const PROJECT_CACHE_VERSION_TOKEN = 'project-cache-v1'
+
+function getProjectCacheState(project: Project): ProjectCacheState {
+  const existing = projectCacheStateByProject.get(project)
+  if (existing) {
+    return existing
+  }
+
+  const created: ProjectCacheState = {
+    cacheByFilePath: new Map(),
+    graph: new ReactiveDependencyGraph(),
+  }
+  projectCacheStateByProject.set(project, created)
+  return created
+}
+
+function normalizeProjectPath(path: string): string {
+  return normalizePathKey(normalizeSlashes(path))
+}
+
+function toFileDependencyKey(path: string): string {
+  return `file:${normalizeProjectPath(path)}`
+}
+
+function toDirectoryDependencyKey(path: string): string {
+  return `dir:${normalizeProjectPath(path)}`
+}
+
+function toCacheDependencyKey(filePath: string, cacheName: string): string {
+  return `cache:${normalizeProjectPath(filePath)}:${cacheName}`
+}
+
+function toProjectCacheNodeKey(filePath: string, cacheName: string): string {
+  return `project-cache:${normalizeProjectPath(filePath)}:${cacheName}`
+}
+
+function isLikelyPath(value: string): boolean {
+  return (
+    value.includes('/') ||
+    value.includes('\\') ||
+    value.startsWith('.') ||
+    value.endsWith('.ts') ||
+    value.endsWith('.tsx') ||
+    value.endsWith('.js') ||
+    value.endsWith('.jsx') ||
+    value.endsWith('.md') ||
+    value.endsWith('.mdx') ||
+    value.endsWith('.json')
+  )
+}
+
+function toDependencyRecord(
+  dependency: ProjectCacheDependency
+): ProjectCacheDependencyRecord {
+  switch (dependency.kind) {
+    case 'file': {
+      const depKey = toFileDependencyKey(dependency.path)
+      return { depKey, depVersion: depKey }
+    }
+    case 'directory': {
+      const depKey = toDirectoryDependencyKey(dependency.path)
+      return { depKey, depVersion: depKey }
+    }
+    case 'const': {
+      const depKey = `const:${dependency.name}:${dependency.version}`
+      return { depKey, depVersion: dependency.version }
+    }
+    case 'cache': {
+      const depKey = toCacheDependencyKey(
+        dependency.filePath,
+        dependency.cacheName
+      )
+      return { depKey, depVersion: depKey }
+    }
+  }
+}
+
+function compareDependencyRecord(
+  first: ProjectCacheDependencyRecord,
+  second: ProjectCacheDependencyRecord
+): number {
+  const keyCompare = first.depKey.localeCompare(second.depKey)
+  if (keyCompare !== 0) {
+    return keyCompare
+  }
+
+  return first.depVersion.localeCompare(second.depVersion)
+}
+
+function normalizeDependencyRecords(
+  dependencies: ProjectCacheDependencyRecord[]
+): ProjectCacheDependencyRecord[] {
+  return [...dependencies].sort(compareDependencyRecord)
+}
+
+function areDependencyRecordsEqual(
+  first: ProjectCacheDependencyRecord[],
+  second: ProjectCacheDependencyRecord[]
+): boolean {
+  if (first.length !== second.length) {
+    return false
+  }
+
+  for (let index = 0; index < first.length; index += 1) {
+    if (
+      first[index].depKey !== second[index].depKey ||
+      first[index].depVersion !== second[index].depVersion
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function toDefaultDependency(filePath: string): ProjectCacheDependency {
+  return {
+    kind: 'file',
+    path: filePath,
+  }
+}
+
+function registerProjectCacheEntry(
+  state: ProjectCacheState,
+  filePath: string,
+  cacheName: string,
+  entry: ProjectCacheEntry
+): void {
+  const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
+  for (const dependency of entry.deps) {
+    state.graph.setDependencyVersion(dependency.depKey, dependency.depVersion)
+  }
+  state.graph.registerNode(
+    nodeKey,
+    entry.deps.map((dependency) => dependency.depKey)
+  )
+  state.graph.markNodeVersion(nodeKey, PROJECT_CACHE_VERSION_TOKEN)
+  state.graph.touchDependency(toCacheDependencyKey(filePath, cacheName))
+}
+
+function invalidateProjectCacheEntry(
+  state: ProjectCacheState,
+  filePath: string,
+  cacheName: string
+): void {
+  const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
+  state.graph.markNodeDirty(nodeKey)
+  state.graph.unregisterNode(nodeKey)
+  state.graph.touchDependency(toCacheDependencyKey(filePath, cacheName))
+}
 
 /**
  * Create (or reuse) a lazily-filled, per-file cache for the given project. This is useful
@@ -15,31 +185,42 @@ export async function createProjectFileCache<Type>(
   project: Project,
   fileName: string,
   cacheName: string,
-  compute: () => Type
+  compute: () => Type,
+  options?: {
+    deps?: ProjectCacheDependency[]
+  }
 ): Promise<Type> {
   await waitForRefreshingProjects()
 
-  let projectEntry = projectFileCaches.get(project)
-  if (!projectEntry) {
-    projectEntry = new Map()
-    projectFileCaches.set(project, projectEntry)
-  }
-
-  let namespace = projectEntry.get(fileName) as Map<string, Type> | undefined
+  const state = getProjectCacheState(project)
+  const filePath = normalizeProjectPath(fileName)
+  let namespace = state.cacheByFilePath.get(filePath)
   if (!namespace) {
     namespace = new Map()
-    projectEntry.set(fileName, namespace)
+    state.cacheByFilePath.set(filePath, namespace)
   }
 
-  const cachedValue = namespace.get(cacheName)
+  const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
+  const cachedEntry = namespace.get(cacheName) as ProjectCacheEntry | undefined
+  const dependencies = normalizeDependencyRecords(
+    (options?.deps ?? [toDefaultDependency(filePath)]).map(toDependencyRecord)
+  )
 
-  if (cachedValue !== undefined) {
-    return cachedValue
+  if (
+    cachedEntry &&
+    !state.graph.isNodeDirty(nodeKey) &&
+    areDependencyRecordsEqual(cachedEntry.deps, dependencies)
+  ) {
+    return cachedEntry.value as Type
   }
 
-  const value = compute()
-  namespace.set(cacheName, value)
-  return value
+  const entry: ProjectCacheEntry = {
+    value: compute(),
+    deps: dependencies,
+  }
+  namespace.set(cacheName, entry)
+  registerProjectCacheEntry(state, filePath, cacheName, entry)
+  return entry.value as Type
 }
 
 /** Invalidates cached project analysis results. */
@@ -54,66 +235,91 @@ export function invalidateProjectFileCache(
   filePath?: string,
   cacheName?: string
 ) {
-  const cacheByName = projectFileCaches.get(project)
+  const state = projectCacheStateByProject.get(project)
 
-  if (!cacheByName) return
+  if (!state) return
 
-  // Primary path: file-first API.
-  if (cacheName === undefined && filePath !== undefined && !cacheByName.has(filePath)) {
-    // Backward compatibility: `invalidateProjectFileCache(project, cacheName)` still
-    // clears a namespace across all files.
-    // Keep this branch for older callers that pass `(project, cacheName)` directly,
-    // but prefer `(project, filePath, cacheName)` when file IDs can be ambiguous.
-    invalidateProjectFileCacheByName(project, filePath)
+  const cacheByFilePath = state.cacheByFilePath
+  const normalizedFilePath = filePath ? normalizeProjectPath(filePath) : undefined
+
+  if (
+    cacheName === undefined &&
+    filePath !== undefined &&
+    normalizedFilePath !== undefined &&
+    !cacheByFilePath.has(normalizedFilePath) &&
+    !isLikelyPath(filePath)
+  ) {
+    invalidateProjectFileCacheByName(project, normalizedFilePath)
     return
   }
 
-  if (filePath) {
-    const fileMap = cacheByName.get(filePath)
-
-    if (!fileMap) return
+  if (normalizedFilePath) {
+    if (!cacheName) {
+      state.graph.touchPathDependencies(normalizedFilePath)
+    }
 
     if (cacheName) {
+      const fileMap = cacheByFilePath.get(normalizedFilePath)
+      if (!fileMap) {
+        return
+      }
+
+      if (!fileMap.has(cacheName)) {
+        return
+      }
+
+      invalidateProjectCacheEntry(state, normalizedFilePath, cacheName)
       fileMap.delete(cacheName)
 
       if (fileMap.size === 0) {
-        cacheByName.delete(filePath)
+        cacheByFilePath.delete(normalizedFilePath)
       }
 
       return
     }
-
-    cacheByName.delete(filePath)
     return
   }
 
   if (!cacheName) {
-    cacheByName.clear()
+    for (const [cachedFilePath, fileMap] of cacheByFilePath) {
+      for (const cachedCacheName of fileMap.keys()) {
+        invalidateProjectCacheEntry(state, cachedFilePath, cachedCacheName)
+      }
+    }
+    cacheByFilePath.clear()
+    state.graph.clear()
     return
   }
 
-  for (const [cachedFilePath, fileMap] of [...cacheByName.entries()]) {
+  for (const [cachedFilePath, fileMap] of [...cacheByFilePath.entries()]) {
+    if (!fileMap.has(cacheName)) {
+      continue
+    }
+
+    invalidateProjectCacheEntry(state, cachedFilePath, cacheName)
     fileMap.delete(cacheName)
 
     if (fileMap.size === 0) {
-      cacheByName.delete(cachedFilePath)
+      cacheByFilePath.delete(cachedFilePath)
     }
   }
 }
 
-function invalidateProjectFileCacheByName(
-  project: Project,
-  cacheName: string
-) {
-  const cacheByName = projectFileCaches.get(project)
+function invalidateProjectFileCacheByName(project: Project, cacheName: string) {
+  const state = projectCacheStateByProject.get(project)
 
-  if (!cacheByName) return
+  if (!state) return
 
-  for (const [cachedFilePath, fileMap] of [...cacheByName.entries()]) {
+  for (const [cachedFilePath, fileMap] of [...state.cacheByFilePath.entries()]) {
+    if (!fileMap.has(cacheName)) {
+      continue
+    }
+
+    invalidateProjectCacheEntry(state, cachedFilePath, cacheName)
     fileMap.delete(cacheName)
 
     if (fileMap.size === 0) {
-      cacheByName.delete(cachedFilePath)
+      state.cacheByFilePath.delete(cachedFilePath)
     }
   }
 }
