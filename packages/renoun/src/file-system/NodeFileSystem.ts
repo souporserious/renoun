@@ -53,6 +53,14 @@ export class NodeFileSystem
 {
   #tsConfigPath: string
   readonly #gitRootCache = new Map<string, string | null>()
+  readonly #workspaceChangeTokenInFlight = new Map<
+    string,
+    Promise<string | null>
+  >()
+  readonly #workspaceChangedPathsInFlight = new Map<
+    string,
+    Promise<readonly string[] | null>
+  >()
 
   constructor(options: FileSystemOptions = {}) {
     super(options)
@@ -119,15 +127,24 @@ export class NodeFileSystem
   }
 
   #findGitRoot(startPath: string): string | null {
-    if (this.#gitRootCache.has(startPath)) {
-      return this.#gitRootCache.get(startPath) ?? null
-    }
-
     let currentPath = startPath
+    const visitedPaths: string[] = []
 
     while (true) {
+      if (this.#gitRootCache.has(currentPath)) {
+        const cached = this.#gitRootCache.get(currentPath) ?? null
+        for (const path of visitedPaths) {
+          this.#gitRootCache.set(path, cached)
+        }
+        return cached
+      }
+
+      visitedPaths.push(currentPath)
+
       if (existsSync(join(currentPath, '.git'))) {
-        this.#gitRootCache.set(startPath, currentPath)
+        for (const path of visitedPaths) {
+          this.#gitRootCache.set(path, currentPath)
+        }
         return currentPath
       }
 
@@ -138,7 +155,9 @@ export class NodeFileSystem
       currentPath = parentPath
     }
 
-    this.#gitRootCache.set(startPath, null)
+    for (const path of visitedPaths) {
+      this.#gitRootCache.set(path, null)
+    }
     return null
   }
 
@@ -225,6 +244,35 @@ export class NodeFileSystem
   async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
     try {
       const absoluteRootPath = this.getAbsolutePath(rootPath)
+      const inflightKey = createWorkspaceCacheKey(absoluteRootPath)
+
+      const existingInflight = this.#workspaceChangeTokenInFlight.get(inflightKey)
+      if (existingInflight) {
+        return await existingInflight
+      }
+
+      const lookupPromise = this.#getWorkspaceChangeTokenByAbsolutePath(
+        absoluteRootPath
+      )
+      this.#workspaceChangeTokenInFlight.set(inflightKey, lookupPromise)
+
+      try {
+        return await lookupPromise
+      } finally {
+        const latest = this.#workspaceChangeTokenInFlight.get(inflightKey)
+        if (latest === lookupPromise) {
+          this.#workspaceChangeTokenInFlight.delete(inflightKey)
+        }
+      }
+    } catch {
+      return null
+    }
+  }
+
+  #getWorkspaceChangeTokenByAbsolutePath(
+    absoluteRootPath: string
+  ): Promise<string | null> {
+    return (async () => {
       const gitRoot = this.#findGitRoot(absoluteRootPath)
       if (!gitRoot) {
         return null
@@ -288,9 +336,7 @@ export class NodeFileSystem
         .digest('hex')
 
       return `head:${headCommit};dirty:${dirtyDigest};count:${statusLines.length};ignored-only:${ignoredOnly ? 1 : 0}`
-    } catch {
-      return null
-    }
+    })().catch(() => null)
   }
 
   async getWorkspaceChangedPathsSinceToken(
@@ -298,14 +344,50 @@ export class NodeFileSystem
     previousToken: string
   ): Promise<readonly string[] | null> {
     try {
+      const absoluteRootPath = this.getAbsolutePath(rootPath)
+      const inflightKey = createWorkspaceChangedPathsCacheKey(
+        absoluteRootPath,
+        previousToken
+      )
+      const existingInflight =
+        this.#workspaceChangedPathsInFlight.get(inflightKey)
+      if (existingInflight) {
+        return existingInflight
+      }
+
+      const lookupPromise =
+        this.#getWorkspaceChangedPathsSinceTokenByAbsolutePath(
+          absoluteRootPath,
+          previousToken
+        )
+      this.#workspaceChangedPathsInFlight.set(inflightKey, lookupPromise)
+
+      try {
+        return await lookupPromise
+      } finally {
+        const latest = this.#workspaceChangedPathsInFlight.get(inflightKey)
+        if (latest === lookupPromise) {
+          this.#workspaceChangedPathsInFlight.delete(inflightKey)
+        }
+      }
+    } catch {
+      return null
+    }
+  }
+
+  #getWorkspaceChangedPathsSinceTokenByAbsolutePath(
+    absoluteRootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null> {
+    return (async () => {
       const previousHead = this.#extractHeadFromWorkspaceToken(previousToken)
       if (!previousHead) {
         return null
       }
+
       const previousDirtyDigest =
         this.#extractDirtyDigestFromWorkspaceToken(previousToken)
 
-      const absoluteRootPath = this.getAbsolutePath(rootPath)
       const gitRoot = this.#findGitRoot(absoluteRootPath)
       if (!gitRoot) {
         return null
@@ -424,9 +506,7 @@ export class NodeFileSystem
         .sort((first, second) => first.localeCompare(second))
 
       return workspaceRelativePaths
-    } catch {
-      return null
-    }
+    })().catch(() => null)
   }
 
   #processDirectoryEntries(
@@ -694,6 +774,17 @@ function normalizeWriteContent(
   }
 
   throw new Error('[renoun] Unsupported content type for writeFile')
+}
+
+function createWorkspaceCacheKey(absoluteRootPath: string): string {
+  return JSON.stringify([absoluteRootPath])
+}
+
+function createWorkspaceChangedPathsCacheKey(
+  absoluteRootPath: string,
+  previousToken: string
+): string {
+  return JSON.stringify([absoluteRootPath, previousToken])
 }
 
 interface SpawnResult {
