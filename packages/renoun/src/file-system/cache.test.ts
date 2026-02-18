@@ -2358,6 +2358,105 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('restores persisted snapshots when entry paths contain legacy parent traversal', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+
+      mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'advanced', 'getting-started.mdx'),
+        '# Getting Started',
+        'utf8'
+      )
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+
+      const firstWorkerDirectory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+
+      await firstWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const session = firstWorkerDirectory.getSession()
+      const snapshotKey = Array.from(session.directorySnapshots.keys())[0]
+      expect(snapshotKey).toBeDefined()
+
+      const persistedSnapshot = (await session.cache.get(snapshotKey!)) as any
+      expect(persistedSnapshot).toBeDefined()
+
+      const addLegacyTraversal = (snapshot: any) => {
+        if (!snapshot || typeof snapshot !== 'object') {
+          return
+        }
+
+        if (typeof snapshot.path === 'string') {
+          snapshot.path = `../../${snapshot.path}`
+        }
+
+        if (Array.isArray(snapshot.entries)) {
+          for (const entry of snapshot.entries) {
+            if (typeof entry.path === 'string') {
+              entry.path = `../../${entry.path}`
+            }
+            if (entry.kind === 'directory' && entry.snapshot) {
+              addLegacyTraversal(entry.snapshot)
+            }
+          }
+        }
+
+        if (Array.isArray(snapshot.flatEntries)) {
+          for (const entry of snapshot.flatEntries) {
+            if (typeof entry.path === 'string') {
+              entry.path = `../../${entry.path}`
+            }
+          }
+        }
+      }
+
+      addLegacyTraversal(persistedSnapshot)
+      await session.cache.put(snapshotKey!, persistedSnapshot, {
+        persist: true,
+      })
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
+      const secondReadDirectory = vi.spyOn(secondWorkerFilesystem, 'readDirectory')
+      try {
+        const secondWorkerDirectory = new Directory({
+          fileSystem: secondWorkerFilesystem,
+          path: workspaceDirectory,
+        })
+
+        const restoredEntries = await secondWorkerDirectory.getEntries({
+          recursive: true,
+          includeIndexAndReadmeFiles: true,
+        })
+
+        expect(
+          restoredEntries.some((entry) =>
+            entry.workspacePath.endsWith('getting-started.mdx')
+          )
+        ).toBe(true)
+        expect(secondReadDirectory).toHaveBeenCalledTimes(0)
+      } finally {
+        const warnings = warnSpy.mock.calls
+        warnSpy.mockRestore()
+        expect(
+          warnings.every(
+            ([warning]) =>
+              typeof warning !== 'string' ||
+              !warning.includes('Failed to restore persisted directory snapshot')
+          )
+        ).toBe(true)
+      }
+    })
+  })
+
   test('dedupes concurrent persisted snapshot rebuilds across workers', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')

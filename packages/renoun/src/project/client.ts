@@ -33,19 +33,66 @@ import { getProject, invalidateProjectCachesByPath } from './get-project.ts'
 import type { ProjectOptions } from './types.ts'
 
 let client: WebSocketClient | undefined
+const pendingRefreshInvalidationPaths = new Set<string>()
+let isRefreshInvalidationFlushQueued = false
 
 function getClient(): WebSocketClient | undefined {
   if (!client && process.env.RENOUN_SERVER_PORT) {
     client = new WebSocketClient(process.env.RENOUN_SERVER_ID!)
-    client.on('notification', (message) => {
-      if (!isRefreshNotification(message)) {
-        return
-      }
+    if (shouldConsumeRefreshNotifications()) {
+      client.on('notification', (message) => {
+        if (!isRefreshNotification(message)) {
+          return
+        }
 
-      invalidateProjectCachesByPath(message.data.filePath)
-    })
+        queueRefreshInvalidation(message.data.filePath)
+      })
+    }
   }
   return client
+}
+
+function queueRefreshInvalidation(path: string): void {
+  pendingRefreshInvalidationPaths.add(path)
+  if (isRefreshInvalidationFlushQueued) {
+    return
+  }
+
+  isRefreshInvalidationFlushQueued = true
+  queueMicrotask(() => {
+    isRefreshInvalidationFlushQueued = false
+    const paths = Array.from(pendingRefreshInvalidationPaths)
+    pendingRefreshInvalidationPaths.clear()
+    for (const pendingPath of paths) {
+      invalidateProjectCachesByPath(pendingPath)
+    }
+  })
+}
+
+function shouldConsumeRefreshNotifications(): boolean {
+  const override = parseBooleanEnv(process.env.RENOUN_PROJECT_REFRESH_NOTIFICATIONS)
+  if (override !== undefined) {
+    return override
+  }
+
+  return true
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '1' || normalized === 'true') {
+    return true
+  }
+
+  if (normalized === '0' || normalized === 'false') {
+    return false
+  }
+
+  return undefined
 }
 
 function isRefreshNotification(

@@ -144,25 +144,26 @@ export async function createServer(options?: { port?: number }) {
   process.env.RENOUN_SERVER_PORT = String(port)
 
   const rootDirectory = getRootDirectory()
+  const rootWatcher = shouldEmitRefreshNotifications()
+    ? watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
+        if (!fileName) return
 
-  const rootWatcher = watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
-    if (!fileName) return
+        const filePath = join(rootDirectory, fileName)
 
-    const filePath = join(rootDirectory, fileName)
+        if (isFilePathGitIgnored(filePath)) {
+          return
+        }
 
-    if (isFilePathGitIgnored(filePath)) {
-      return
-    }
-
-    /* Notify the client to refresh when files change. */
-    server.sendNotification({
-      type: 'refresh',
-      data: {
-        eventType,
-        filePath,
-      },
-    })
-  })
+        /* Notify the client to refresh when files change. */
+        server.sendNotification({
+          type: 'refresh',
+          data: {
+            eventType,
+            filePath,
+          },
+        })
+      })
+    : undefined
 
   const originalCleanup = server.cleanup.bind(server)
   let cleanedUp = false
@@ -172,7 +173,9 @@ export async function createServer(options?: { port?: number }) {
     }
     cleanedUp = true
 
-    closeWatcher(rootWatcher)
+    if (rootWatcher) {
+      closeWatcher(rootWatcher)
+    }
     activeProjectServers = Math.max(0, activeProjectServers - 1)
     if (activeProjectServers === 0) {
       disposeProjectWatchers()
@@ -450,4 +453,30 @@ function closeWatcher(watcher: FSWatcher): void {
   } catch {
     // Ignore watcher close errors during server shutdown.
   }
+}
+
+function shouldEmitRefreshNotifications(): boolean {
+  const override = parseBooleanEnv(process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS)
+  if (override !== undefined) {
+    return override
+  }
+
+  return true
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '1' || normalized === 'true') {
+    return true
+  }
+
+  if (normalized === '0' || normalized === 'false') {
+    return false
+  }
+
+  return undefined
 }

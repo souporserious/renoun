@@ -37,6 +37,7 @@ import {
   directoryName,
   extensionName,
   joinPaths,
+  isAbsolutePath,
   normalizeSlashes,
   resolveSchemePath,
   removeExtension,
@@ -5677,22 +5678,57 @@ export class Directory<
       : normalizedPath.slice(0, end)
   }
 
-  #restoreSnapshotEntryPath(path: string): string {
+  #normalizePersistedSnapshotPath(path: string): string {
     const normalizedPath = this.#normalizeSnapshotPath(path)
-
-    if (
-      normalizedPath === '.' ||
-      normalizedPath.startsWith('/') ||
-      normalizedPath.startsWith('../')
-    ) {
-      return normalizedPath
+    if (!normalizedPath || normalizedPath === '.') {
+      return '.'
     }
 
+    if (normalizedPath === '/') {
+      return '.'
+    }
+
+    const segments = normalizedPath.split('/').filter(Boolean)
+    const normalizedSegments: string[] = []
+
+    for (const segment of segments) {
+      if (segment === '.') {
+        continue
+      }
+
+      if (segment === '..') {
+        continue
+      }
+
+      normalizedSegments.push(segment)
+    }
+
+    return normalizedSegments.length === 0 ? '.' : normalizedSegments.join('/')
+  }
+
+  #normalizeWorkspaceRelativeSnapshotPath(path: string): string {
+    const normalizedPath = this.#normalizeSnapshotPath(path)
+    if (!normalizedPath || normalizedPath === '.') {
+      return '.'
+    }
+
+    if (isAbsolutePath(normalizedPath)) {
+      const fileSystem = this.getFileSystem()
+      return this.#normalizePersistedSnapshotPath(
+        fileSystem.getRelativePathToWorkspace(normalizedPath)
+      )
+    }
+
+    return this.#normalizePersistedSnapshotPath(normalizedPath)
+  }
+
+  #restoreSnapshotEntryPath(path: string): string {
     const fileSystem = this.getFileSystem()
     const rootPath = this.getRootPath()
     const normalizedRootPath = this.#normalizeSnapshotPath(rootPath)
     const rootPathKey = normalizeWorkspacePathKey(fileSystem, rootPath)
-    let workspaceRelativePath = normalizedPath
+    let workspaceRelativePath = this.#normalizeWorkspaceRelativeSnapshotPath(path)
+
     let isWorkspaceRelativePath =
       rootPathKey === '.' ||
       workspaceRelativePath === rootPathKey ||
@@ -5701,7 +5737,7 @@ export class Directory<
     if (!isWorkspaceRelativePath) {
       // Fall back to the normalized path form when the path cannot be
       // bound to the current workspace root key.
-      return ensureRelativePath(normalizedPath)
+      return ensureRelativePath(workspaceRelativePath)
     }
 
     const relativeToRootPath =
@@ -6440,10 +6476,17 @@ export class Directory<
 
     const rootPrefix = `${rootPathKey}/`
     for (const entry of snapshot.materialize()) {
-      const entryPathKey = normalizePathKey(entry.workspacePath)
+      const entryPathKey = this.#normalizeWorkspaceRelativeSnapshotPath(
+        entry.workspacePath
+      )
+      if (entryPathKey === '.') {
+        continue
+      }
+
       if (entryPathKey === rootPathKey) {
         continue
       }
+
       if (entryPathKey.startsWith(rootPrefix)) {
         continue
       }
@@ -7168,9 +7211,8 @@ export class Directory<
       if (metadata.kind === 'Directory') {
         persistedEntries.push({
           kind: 'directory',
-          path: normalizeWorkspacePathKey(
-            fileSystem,
-            metadata.entry.absolutePath
+          path: this.#normalizeWorkspaceRelativeSnapshotPath(
+            metadata.entry.workspacePath
           ),
           entry: metadata.entry,
           snapshot: metadata.snapshot,
@@ -7180,9 +7222,8 @@ export class Directory<
 
       persistedEntries.push({
         kind: 'file',
-        path: normalizeWorkspacePathKey(
-          fileSystem,
-          metadata.entry.absolutePath
+        path: this.#normalizeWorkspaceRelativeSnapshotPath(
+          metadata.entry.workspacePath
         ),
         byteLength:
           metadata.entry instanceof File ? metadata.entry.size : undefined,

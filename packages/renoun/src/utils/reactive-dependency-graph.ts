@@ -46,6 +46,7 @@ function runUntracked<Value>(task: () => Value): Value {
 export class ReactiveDependencyGraph {
   readonly #dependencySignals = new Map<string, MutableSignal<string | undefined>>()
   readonly #nodes = new Map<string, ReactiveNodeRecord>()
+  readonly #dirtyNodeKeys = new Set<string>()
   readonly #nodeKeysByDependency = new Map<string, Set<string>>()
   readonly #dependencyRefCountByKey = new Map<string, number>()
   readonly #indexedPathDependencyByKey = new Map<string, IndexedPathDependency>()
@@ -71,6 +72,7 @@ export class ReactiveDependencyGraph {
     runUntracked(() => {
       dirtySignal(false)
     })
+    this.#dirtyNodeKeys.delete(nodeKey)
 
     let isFirstRun = true
     const stop = effect(() => {
@@ -85,6 +87,7 @@ export class ReactiveDependencyGraph {
       }
 
       dirtySignal(true)
+      this.#dirtyNodeKeys.add(nodeKey)
     })
 
     this.#nodes.set(nodeKey, {
@@ -95,6 +98,7 @@ export class ReactiveDependencyGraph {
   }
 
   unregisterNode(nodeKey: string): void {
+    this.#dirtyNodeKeys.delete(nodeKey)
     const node = this.#nodes.get(nodeKey)
     if (!node) {
       return
@@ -129,6 +133,7 @@ export class ReactiveDependencyGraph {
       runUntracked(() => {
         node.dirty(true)
       })
+      this.#dirtyNodeKeys.add(nodeKey)
     }
 
     this.touchDependency(this.#toNodeDependencyKey(nodeKey))
@@ -141,6 +146,21 @@ export class ReactiveDependencyGraph {
     }
 
     return runUntracked(() => node.dirty())
+  }
+
+  getDirtyNodeKeys(nodeKeyPrefix?: string): string[] {
+    if (!nodeKeyPrefix) {
+      return Array.from(this.#dirtyNodeKeys)
+    }
+
+    const dirtyNodeKeys: string[] = []
+    for (const nodeKey of this.#dirtyNodeKeys) {
+      if (nodeKey.startsWith(nodeKeyPrefix)) {
+        dirtyNodeKeys.push(nodeKey)
+      }
+    }
+
+    return dirtyNodeKeys
   }
 
   touchDependencies(
@@ -204,6 +224,7 @@ export class ReactiveDependencyGraph {
     }
 
     this.#nodes.clear()
+    this.#dirtyNodeKeys.clear()
     this.#nodeKeysByDependency.clear()
     this.#dependencySignals.clear()
     this.#dependencyRefCountByKey.clear()

@@ -10,6 +10,7 @@ import type { FSWatcher } from 'node:fs'
 import { getDebugLogger } from '../utils/debug.ts'
 import type { DebugContext } from '../utils/debug.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
+import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { invalidateProjectFileCache } from './cache.ts'
 import {
   activeRefreshingProjects,
@@ -133,10 +134,7 @@ export function getProject(options?: ProjectOptions) {
 }
 
 function ensureProjectDirectoryWatcher(projectDirectory: string): void {
-  if (
-    process.env.RENOUN_SERVER_PORT === undefined ||
-    directoryWatchers.has(projectDirectory)
-  ) {
+  if (!shouldEnableProjectWatchers() || directoryWatchers.has(projectDirectory)) {
     return
   }
 
@@ -202,11 +200,16 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
 }
 
 export function invalidateProjectCachesByPath(path: string): number {
+  const normalizedPath = normalizeComparablePath(path)
   let affectedProjects = 0
 
-  for (const projectsByDirectory of directoryToProjects.values()) {
+  for (const [projectDirectory, projectsByDirectory] of directoryToProjects) {
+    if (!pathsIntersect(normalizeComparablePath(projectDirectory), normalizedPath)) {
+      continue
+    }
+
     for (const project of projectsByDirectory) {
-      invalidateProjectFileCache(project, path)
+      invalidateProjectFileCache(project, normalizedPath)
       affectedProjects += 1
     }
   }
@@ -233,6 +236,51 @@ function getSerializedProjectOptions(options?: ProjectOptions) {
   }
 
   return JSON.stringify(normalizedOptions)
+}
+
+function shouldEnableProjectWatchers(): boolean {
+  if (process.env.RENOUN_SERVER_PORT === undefined) {
+    return false
+  }
+
+  const override = parseBooleanEnv(process.env.RENOUN_PROJECT_WATCHERS)
+  if (override !== undefined) {
+    return override
+  }
+
+  return true
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '1' || normalized === 'true') {
+    return true
+  }
+
+  if (normalized === '0' || normalized === 'false') {
+    return false
+  }
+
+  return undefined
+}
+
+function normalizeComparablePath(path: string): string {
+  return normalizePathKey(normalizeSlashes(path))
+}
+
+function pathsIntersect(firstPath: string, secondPath: string): boolean {
+  if (firstPath === secondPath) {
+    return true
+  }
+
+  return (
+    firstPath.startsWith(`${secondPath}/`) ||
+    secondPath.startsWith(`${firstPath}/`)
+  )
 }
 
 function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {

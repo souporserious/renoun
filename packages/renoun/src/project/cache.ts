@@ -23,10 +23,12 @@ interface ProjectCacheDependencyRecord {
 interface ProjectCacheState {
   cacheByFilePath: Map<string, Map<string, ProjectCacheEntry>>
   graph: ReactiveDependencyGraph
+  nodeLocationByKey: Map<string, { filePath: string; cacheName: string }>
 }
 
 const projectCacheStateByProject = new WeakMap<Project, ProjectCacheState>()
 const PROJECT_CACHE_VERSION_TOKEN = 'project-cache-v1'
+const PROJECT_CACHE_NODE_PREFIX = 'project-cache:'
 
 function getProjectCacheState(project: Project): ProjectCacheState {
   const existing = projectCacheStateByProject.get(project)
@@ -37,6 +39,7 @@ function getProjectCacheState(project: Project): ProjectCacheState {
   const created: ProjectCacheState = {
     cacheByFilePath: new Map(),
     graph: new ReactiveDependencyGraph(),
+    nodeLocationByKey: new Map(),
   }
   projectCacheStateByProject.set(project, created)
   return created
@@ -164,6 +167,7 @@ function registerProjectCacheEntry(
   )
   state.graph.markNodeVersion(nodeKey, PROJECT_CACHE_VERSION_TOKEN)
   state.graph.touchDependency(toCacheDependencyKey(filePath, cacheName))
+  state.nodeLocationByKey.set(nodeKey, { filePath, cacheName })
 }
 
 function invalidateProjectCacheEntry(
@@ -175,28 +179,50 @@ function invalidateProjectCacheEntry(
   state.graph.markNodeDirty(nodeKey)
   state.graph.unregisterNode(nodeKey)
   state.graph.touchDependency(toCacheDependencyKey(filePath, cacheName))
+  state.nodeLocationByKey.delete(nodeKey)
 }
 
 function pruneDirtyProjectCacheEntries(state: ProjectCacheState): number {
+  const visitedNodeKeys = new Set<string>()
   let prunedEntries = 0
 
-  for (const [cachedFilePath, fileMap] of [...state.cacheByFilePath.entries()]) {
-    for (const cachedCacheName of [...fileMap.keys()]) {
-      const nodeKey = toProjectCacheNodeKey(cachedFilePath, cachedCacheName)
-      if (!state.graph.isNodeDirty(nodeKey)) {
+  while (true) {
+    let foundPendingNode = false
+    for (const nodeKey of state.graph.getDirtyNodeKeys(PROJECT_CACHE_NODE_PREFIX)) {
+      if (visitedNodeKeys.has(nodeKey)) {
+        continue
+      }
+      foundPendingNode = true
+      visitedNodeKeys.add(nodeKey)
+
+      const nodeLocation = state.nodeLocationByKey.get(nodeKey)
+      if (!nodeLocation) {
+        state.graph.unregisterNode(nodeKey)
+        continue
+      }
+
+      const fileMap = state.cacheByFilePath.get(nodeLocation.filePath)
+      if (!fileMap || !fileMap.has(nodeLocation.cacheName)) {
+        state.nodeLocationByKey.delete(nodeKey)
+        state.graph.unregisterNode(nodeKey)
         continue
       }
 
       state.graph.unregisterNode(nodeKey)
+      state.nodeLocationByKey.delete(nodeKey)
+      fileMap.delete(nodeLocation.cacheName)
+      if (fileMap.size === 0) {
+        state.cacheByFilePath.delete(nodeLocation.filePath)
+      }
+
       state.graph.touchDependency(
-        toCacheDependencyKey(cachedFilePath, cachedCacheName)
+        toCacheDependencyKey(nodeLocation.filePath, nodeLocation.cacheName)
       )
-      fileMap.delete(cachedCacheName)
       prunedEntries += 1
     }
 
-    if (fileMap.size === 0) {
-      state.cacheByFilePath.delete(cachedFilePath)
+    if (!foundPendingNode) {
+      break
     }
   }
 
@@ -333,6 +359,7 @@ export function invalidateProjectFileCache(
       }
     }
     cacheByFilePath.clear()
+    state.nodeLocationByKey.clear()
     state.graph.clear()
     return
   }
