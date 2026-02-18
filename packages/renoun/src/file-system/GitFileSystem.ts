@@ -40,6 +40,7 @@ import { Writable } from 'node:stream'
 import {
   ensureRelativePath,
   joinPaths,
+  normalizePathKey,
   normalizeSlashes,
   relativePath,
 } from '../utils/path.ts'
@@ -927,7 +928,14 @@ export class GitFileSystem
   }
 
   getRelativePathToWorkspace(path: string): string {
-    const absolutePath = this.getAbsolutePath(path)
+    const normalizedPath = normalizeSlashes(String(path))
+    const isAlreadyAbsolutePath =
+      normalizedPath.startsWith('/') ||
+      /^[A-Za-z]:\//.test(normalizedPath) ||
+      normalizedPath.startsWith('//')
+    const absolutePath = isAlreadyAbsolutePath
+      ? resolve(normalizedPath)
+      : this.getAbsolutePath(path)
     const relativeToRepo = relativePath(this.repoRoot, absolutePath)
     return normalizeSlashes(
       relativeToRepo.startsWith('./') ? relativeToRepo.slice(2) : relativeToRepo
@@ -960,6 +968,7 @@ export class GitFileSystem
           'status',
           '--porcelain=1',
           '--untracked-files=all',
+          '--ignored=matching',
           '--ignore-submodules=all',
           '--',
           statusScope,
@@ -979,11 +988,130 @@ export class GitFileSystem
         .map((line) => line.trimEnd())
         .filter((line) => line.length > 0)
         .sort((first, second) => first.localeCompare(second))
+      const ignoredOnly =
+        statusLines.length > 0 &&
+        statusLines.every((line) => line.startsWith('!! '))
       const dirtyDigest = createHash('sha1')
         .update(statusLines.join('\n'))
         .digest('hex')
 
-      return `head:${headCommit};dirty:${dirtyDigest};count:${statusLines.length}`
+      return `head:${headCommit};dirty:${dirtyDigest};count:${statusLines.length};ignored-only:${ignoredOnly ? 1 : 0}`
+    } catch {
+      return null
+    }
+  }
+
+  async getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null> {
+    try {
+      await this.#ensureRepoReady()
+
+      const previousHead = this.#extractHeadFromWorkspaceToken(previousToken)
+      if (!previousHead) {
+        return null
+      }
+      const previousDirtyDigest =
+        this.#extractDirtyDigestFromWorkspaceToken(previousToken)
+
+      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
+        cwd: this.repoRoot,
+        maxBuffer: this.maxBufferBytes,
+        verbose: false,
+      })
+      if (headResult.status !== 0) {
+        return null
+      }
+
+      const currentHead = headResult.stdout.trim()
+      if (!currentHead) {
+        return null
+      }
+
+      const relativeRoot = this.#normalizeRepoPath(rootPath)
+      const statusScope = relativeRoot || '.'
+      const changedPaths = new Set<string>()
+
+      if (currentHead !== previousHead) {
+        const diffResult = await spawnWithResult(
+          'git',
+          [
+            'diff',
+            '--name-only',
+            '--no-renames',
+            `${previousHead}..${currentHead}`,
+            '--',
+            statusScope,
+          ],
+          {
+            cwd: this.repoRoot,
+            maxBuffer: this.maxBufferBytes,
+            verbose: false,
+          }
+        )
+        if (diffResult.status !== 0) {
+          return null
+        }
+
+        for (const line of diffResult.stdout
+          .split(/\r?\n/)
+          .map((entry) => normalizeSlashes(entry.trim()))
+          .filter((entry) => entry.length > 0)) {
+          changedPaths.add(line)
+        }
+      }
+
+      const statusResult = await spawnWithResult(
+        'git',
+        [
+          'status',
+          '--porcelain=1',
+          '--untracked-files=all',
+          '--ignored=matching',
+          '--ignore-submodules=all',
+          '--',
+          statusScope,
+        ],
+        {
+          cwd: this.repoRoot,
+          maxBuffer: this.maxBufferBytes,
+          verbose: false,
+        }
+      )
+      if (statusResult.status !== 0) {
+        return null
+      }
+
+      const statusLines = statusResult.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0)
+        .sort((first, second) => first.localeCompare(second))
+      const currentDirtyDigest = createHash('sha1')
+        .update(statusLines.join('\n'))
+        .digest('hex')
+
+      if (currentHead === previousHead && previousDirtyDigest === currentDirtyDigest) {
+        return []
+      }
+
+      for (const path of this.#extractChangedPathsFromStatusOutput(
+        statusResult.stdout
+      )) {
+        const normalizedPath = normalizeSlashes(path)
+        if (normalizedPath.length > 0) {
+          changedPaths.add(normalizedPath)
+        }
+      }
+
+      return Array.from(changedPaths)
+        .map((path) =>
+          normalizePathKey(
+            this.getRelativePathToWorkspace(this.#resolveRepoAbsolutePath(path))
+          )
+        )
+        .sort((first, second) => first.localeCompare(second))
     } catch {
       return null
     }
@@ -1356,6 +1484,64 @@ export class GitFileSystem
     }
     assertSafeRepoPath(relative)
     return relative
+  }
+
+  #extractHeadFromWorkspaceToken(token: string): string | null {
+    const match = /^head:([^;]+);/.exec(token)
+    return match?.[1] ?? null
+  }
+
+  #extractDirtyDigestFromWorkspaceToken(token: string): string | null {
+    const match = /;dirty:([^;]+);/.exec(token)
+    return match?.[1] ?? null
+  }
+
+  #decodeGitStatusPath(path: string): string {
+    const trimmed = path.trim()
+    if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) {
+      return normalizeSlashes(trimmed)
+    }
+
+    const unquoted = trimmed
+      .slice(1, -1)
+      .replace(/\\\"/g, '"')
+      .replace(/\\\\/g, '\\')
+
+    return normalizeSlashes(unquoted)
+  }
+
+  #extractChangedPathsFromStatusOutput(output: string): string[] {
+    const changedPaths: string[] = []
+    const lines = output
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0)
+
+    for (const line of lines) {
+      if (line.length <= 3) {
+        continue
+      }
+
+      const rawPath = line.slice(3).trim()
+      if (!rawPath) {
+        continue
+      }
+
+      if (rawPath.includes(' -> ')) {
+        const [fromPath, toPath] = rawPath.split(' -> ')
+        if (fromPath) {
+          changedPaths.push(this.#decodeGitStatusPath(fromPath))
+        }
+        if (toPath) {
+          changedPaths.push(this.#decodeGitStatusPath(toPath))
+        }
+        continue
+      }
+
+      changedPaths.push(this.#decodeGitStatusPath(rawPath))
+    }
+
+    return changedPaths
   }
 
   #hasWorktreeRoot(): boolean {
@@ -1803,17 +1989,14 @@ export class GitFileSystem
 
   #invalidateSessionPaths(paths: readonly string[]): void {
     const session = Session.for(this)
-    session.invalidatePath('.')
-
     for (const path of paths) {
-      session.invalidatePath(path)
-
-      const parent = normalizeSlashes(path)
-      if (!parent) {
+      const normalizedPath = this.#normalizeRepoPath(path)
+      if (!normalizedPath) {
         continue
       }
+      session.invalidatePath(normalizedPath)
 
-      const parentDirectory = dirname(parent)
+      const parentDirectory = dirname(normalizedPath)
       if (
         parentDirectory &&
         parentDirectory !== '.' &&

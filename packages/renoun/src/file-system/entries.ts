@@ -1196,7 +1196,9 @@ export class File<
     const path = this.getPathname({
       includeDirectoryNamedSegment: options?.includeDirectoryNamedSegment,
     })
-    const index = entries.findIndex((entry) => entry.getPathname() === path)
+    const index = entries.findIndex(
+      (entry) => entry.getPathname() === path
+    )
     const previous = index > 0 ? entries[index - 1] : undefined
     const next = index < entries.length - 1 ? entries[index + 1] : undefined
 
@@ -4102,6 +4104,21 @@ function extractDependencyPathKey(depKey: string): string | undefined {
   return undefined
 }
 
+function collectDependencyPathKeys(
+  dependencySignatures: Iterable<[string, string]>
+): Set<string> {
+  const dependencyPathKeys = new Set<string>()
+
+  for (const [dependencyKey] of dependencySignatures) {
+    const dependencyPathKey = extractDependencyPathKey(dependencyKey)
+    if (dependencyPathKey) {
+      dependencyPathKeys.add(dependencyPathKey)
+    }
+  }
+
+  return dependencyPathKeys
+}
+
 function toDirectorySnapshotDependencyIndexKey(depKey: string): string {
   return `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${depKey}:1`
 }
@@ -4155,6 +4172,36 @@ function pathKeySetsIntersect(
   }
 
   return false
+}
+
+function mergeKnownPathKeySets(
+  firstSet: ReadonlySet<string> | null,
+  secondSet: ReadonlySet<string> | undefined
+): ReadonlySet<string> | undefined {
+  if (firstSet === null) {
+    return secondSet
+  }
+
+  if (!secondSet || secondSet.size === 0) {
+    return firstSet
+  }
+
+  const merged = new Set(firstSet)
+  for (const path of secondSet) {
+    merged.add(path)
+  }
+
+  return merged
+}
+
+function isTrustedWorkspaceChangeToken(
+  token: string | null | undefined
+): boolean {
+  if (!token) {
+    return false
+  }
+
+  return !token.includes(';ignored-only:1')
 }
 
 function pathKeysIntersect(firstPath: string, secondPath: string): boolean {
@@ -4673,8 +4720,7 @@ export class Directory<
 
     for (const entry of rawEntries) {
       // Always include index/readme and directory‑named files during traversal.
-      const entryKey =
-        entry.isDirectory || true ? entry.path : removeAllExtensions(entry.path)
+      const entryKey = entry.path
 
       if (entriesMap.has(entryKey)) {
         continue
@@ -5437,7 +5483,7 @@ export class Directory<
     }
 
     if (normalizedPath === '/') {
-      return normalizedPath
+      return '/'
     }
 
     let end = normalizedPath.length
@@ -5466,10 +5512,28 @@ export class Directory<
     const rootPath = this.getRootPath()
     const normalizedRootPath = this.#normalizeSnapshotPath(rootPath)
     const rootPathKey = normalizeWorkspacePathKey(fileSystem, rootPath)
-    const isWorkspaceRelativePath =
+    let workspaceRelativePath = normalizedPath
+    let isWorkspaceRelativePath =
       rootPathKey === '.' ||
-      normalizedPath === rootPathKey ||
-      normalizedPath.startsWith(`${rootPathKey}/`)
+      workspaceRelativePath === rootPathKey ||
+      workspaceRelativePath.startsWith(`${rootPathKey}/`)
+
+    if (!isWorkspaceRelativePath && rootPathKey !== '.') {
+      const rootPathKeyIndex = workspaceRelativePath.lastIndexOf(rootPathKey)
+      if (rootPathKeyIndex > 0) {
+        const hasBoundaryBefore =
+          workspaceRelativePath[rootPathKeyIndex - 1] === '/'
+        const afterRootPathKeyIndex = rootPathKeyIndex + rootPathKey.length
+        const hasBoundaryAfter =
+          afterRootPathKeyIndex === workspaceRelativePath.length ||
+          workspaceRelativePath[afterRootPathKeyIndex] === '/'
+
+        if (hasBoundaryBefore && hasBoundaryAfter) {
+          workspaceRelativePath = workspaceRelativePath.slice(rootPathKeyIndex)
+          isWorkspaceRelativePath = true
+        }
+      }
+    }
 
     if (!isWorkspaceRelativePath) {
       // Backward compatibility for legacy payloads that stored root-relative paths.
@@ -5478,17 +5542,18 @@ export class Directory<
 
     const relativeToRootPath =
       rootPathKey === '.'
-        ? normalizedPath
-        : relativePath(rootPathKey, normalizedPath)
+        ? workspaceRelativePath
+        : relativePath(rootPathKey, workspaceRelativePath)
 
     if (!relativeToRootPath || relativeToRootPath === '.') {
       return normalizedRootPath
     }
 
     const restoredPath =
-      normalizedRootPath === '.'
+      rootPathKey === '.'
         ? relativeToRootPath
         : joinPaths(normalizedRootPath, relativeToRootPath)
+
     const rootUsesAbsolutePaths =
       normalizedRootPath.startsWith('/') ||
       /^[A-Za-z]:\//.test(normalizedRootPath) ||
@@ -5515,6 +5580,7 @@ export class Directory<
       return this
     }
 
+    let directory: Directory<LoaderTypes> = this
     const lineage: string[] = []
     const seen = new Set<string>()
     let currentPath = normalizedPath
@@ -5536,12 +5602,12 @@ export class Directory<
       currentPath = parentPath
     }
 
-    let directory: Directory<LoaderTypes> = this
+    let current = directory
     for (let index = lineage.length - 1; index >= 0; index -= 1) {
-      directory = directory.#duplicate({ path: lineage[index] })
+      current = current.#duplicate({ path: lineage[index] })
     }
 
-    return directory
+    return current
   }
 
   #createDirectorySnapshotFile(
@@ -5804,6 +5870,7 @@ export class Directory<
   > {
     const session = directory.#getSession()
     const snapshotKey = directory.#getSessionSnapshotKey(mask)
+    session.recordDirectorySnapshotLookup(snapshotKey)
     const cachedSnapshot = registerInSession
       ? session.directorySnapshots.get(snapshotKey)
       : undefined
@@ -5837,14 +5904,17 @@ export class Directory<
       ? (async () => {
           if (wasPathInvalidated) {
             session.recordCacheMetric('memory_miss')
+            session.recordDirectorySnapshotMiss(snapshotKey, 'memory')
             session.directorySnapshots.delete(snapshotKey)
             session.recordCacheMetric('rebuild_count')
+            session.recordDirectorySnapshotRebuild(snapshotKey, 'invalidated')
             return directory.#buildSnapshot(directory, options, mask)
           }
 
           const isStale = await directory.#isCachedSnapshotStale(cachedSnapshot)
           if (!isStale) {
             session.recordCacheMetric('memory_hit')
+            session.recordDirectorySnapshotHit(snapshotKey, 'memory')
             return {
               snapshot: cachedSnapshot,
               shouldIncludeSelf: cachedSnapshot.shouldIncludeSelf,
@@ -5853,21 +5923,32 @@ export class Directory<
           }
 
           session.recordCacheMetric('memory_miss')
+          session.recordDirectorySnapshotMiss(snapshotKey, 'memory')
           session.directorySnapshots.delete(snapshotKey)
           session.recordCacheMetric('rebuild_count')
+          session.recordDirectorySnapshotRebuild(snapshotKey, 'memory_stale')
           return directory.#buildSnapshot(directory, options, mask)
         })()
       : (async () => {
           session.recordCacheMetric('memory_miss')
+          session.recordDirectorySnapshotMiss(snapshotKey, 'memory')
 
           if (wasPathInvalidated || hasPendingInvalidation) {
             session.recordCacheMetric('rebuild_count')
+            session.recordDirectorySnapshotRebuild(
+              snapshotKey,
+              wasPathInvalidated ? 'invalidated' : 'pending_invalidation'
+            )
             return directory.#buildSnapshot(directory, options, mask)
           }
 
           if (!canPersist) {
             session.recordPersistedStaleReason('policy_nonpersistable')
             session.recordCacheMetric('rebuild_count')
+            session.recordDirectorySnapshotRebuild(
+              snapshotKey,
+              'policy_nonpersistable'
+            )
             return directory.#buildSnapshot(directory, options, mask)
           }
 
@@ -5902,6 +5983,10 @@ export class Directory<
             }
 
             session.recordCacheMetric('rebuild_count')
+            session.recordDirectorySnapshotRebuild(
+              snapshotKey,
+              'persisted_unavailable'
+            )
             return directory.#buildSnapshot(directory, options, mask)
           }
 
@@ -5927,6 +6012,10 @@ export class Directory<
               }
 
               session.recordCacheMetric('rebuild_count')
+              session.recordDirectorySnapshotRebuild(
+                snapshotKey,
+                'persisted_unavailable'
+              )
               const builtSnapshot = await directory.#buildSnapshot(
                 directory,
                 options,
@@ -5954,6 +6043,10 @@ export class Directory<
           }
 
           session.recordCacheMetric('rebuild_count')
+          session.recordDirectorySnapshotRebuild(
+            snapshotKey,
+            'coordination_fallback'
+          )
           return directory.#buildSnapshot(directory, options, mask)
         })()
 
@@ -6013,14 +6106,51 @@ export class Directory<
       await session.cache.get<PersistedDirectorySnapshotV1>(snapshotKey)
     if (!persisted) {
       session.recordCacheMetric('persisted_miss')
+      session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
       return undefined
     }
 
     if (!isPersistedDirectorySnapshotV1(persisted)) {
       session.recordCacheMetric('persisted_miss')
+      session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
       session.recordPersistedStaleReason('shape_mismatch')
       await session.cache.delete(snapshotKey)
       return undefined
+    }
+
+    const restorePersistedSnapshot = async (
+      workspaceChangeToken: string | null
+    ): Promise<
+      | DirectorySnapshot<
+          Directory<LoaderTypes>,
+          FileSystemEntry<LoaderTypes>
+        >
+      | undefined
+    > => {
+      try {
+        const restored = this.#restorePersistedDirectorySnapshotPayload(
+          persisted,
+          workspaceChangeToken
+        )
+        if (!this.#isRestoredSnapshotWithinRootScope(restored)) {
+          throw new Error('restored snapshot path scope mismatch')
+        }
+        session.recordCacheMetric('persisted_hit')
+        session.recordDirectorySnapshotHit(snapshotKey, 'persisted')
+        return restored
+      } catch (error) {
+        await session.cache.delete(snapshotKey)
+        session.recordCacheMetric('persisted_miss')
+        session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
+        session.recordPersistedStaleReason('shape_mismatch')
+        if (process.env['NODE_ENV'] !== 'test') {
+          console.warn(
+            '[renoun] Failed to restore persisted directory snapshot',
+            { snapshotKey, cause: String((error as Error)?.message ?? error) }
+          )
+        }
+        return undefined
+      }
     }
 
     const validateFileDependencies = options?.validateFileDependencies ?? true
@@ -6034,47 +6164,59 @@ export class Directory<
       this.getRootPath()
     )
     const persistedWorkspaceToken = persisted.workspaceChangeToken ?? null
+    const currentTokenIsTrusted = isTrustedWorkspaceChangeToken(currentWorkspaceToken)
+    const persistedTokenIsTrusted = isTrustedWorkspaceChangeToken(
+      persistedWorkspaceToken
+    )
+    const persistWorkspaceToken = async (token: string) => {
+      await session.cache.put(
+        snapshotKey,
+        {
+          ...persisted,
+          workspaceChangeToken: token,
+        },
+        {
+          persist: true,
+          deps: toDirectorySnapshotDependencyIndexEntries(
+            persisted.dependencySignatures
+          ),
+        }
+      )
+    }
 
-    if (currentWorkspaceToken && persistedWorkspaceToken) {
-      if (currentWorkspaceToken === persistedWorkspaceToken) {
-        session.recordCacheMetric('persisted_hit')
-        return this.#restorePersistedDirectorySnapshotPayload(
-          persisted,
-          currentWorkspaceToken
-        )
-      }
+    const canUseTokenFastPath =
+      currentWorkspaceToken !== null &&
+      persistedWorkspaceToken !== null &&
+      currentTokenIsTrusted &&
+      persistedTokenIsTrusted
 
-      const recentlyInvalidatedPaths = session.getRecentlyInvalidatedPaths()
-      if (recentlyInvalidatedPaths && recentlyInvalidatedPaths.size > 0) {
-        const dependencyPathKeys = this.#collectPersistedDependencyPathKeys(
-          persisted
+    if (canUseTokenFastPath) {
+
+      const changedPathsSinceToken =
+        await session.getWorkspaceChangedPathsSinceToken(
+          this.getRootPath(),
+          persistedWorkspaceToken
         )
-        if (
+      const knownChangedPathKeys = mergeKnownPathKeySets(
+        changedPathsSinceToken,
+        session.getRecentlyInvalidatedPaths()
+      )
+
+      if (knownChangedPathKeys) {
+        const dependencyPathKeys =
+          this.#collectPersistedDependencyPathKeys(persisted)
+        const hasIntersectingDependency =
           dependencyPathKeys.size > 0 &&
-          !pathKeySetsIntersect(dependencyPathKeys, recentlyInvalidatedPaths)
-        ) {
-          await session.cache.put(
-            snapshotKey,
-            {
-              ...persisted,
-              workspaceChangeToken: currentWorkspaceToken,
-            },
-            {
-              persist: true,
-              deps: toDirectorySnapshotDependencyIndexEntries(
-                persisted.dependencySignatures
-              ),
-            }
-          )
-          session.recordCacheMetric('persisted_hit')
-          return this.#restorePersistedDirectorySnapshotPayload(
-            persisted,
-            currentWorkspaceToken
-          )
+          pathKeySetsIntersect(dependencyPathKeys, knownChangedPathKeys)
+
+        if (!hasIntersectingDependency) {
+          await persistWorkspaceToken(currentWorkspaceToken)
+          return await restorePersistedSnapshot(currentWorkspaceToken)
         }
 
         await session.cache.delete(snapshotKey)
         session.recordCacheMetric('persisted_miss')
+        session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
         session.recordPersistedStaleReason('token_changed')
         return undefined
       }
@@ -6091,6 +6233,7 @@ export class Directory<
       if (isStale) {
         await session.cache.delete(snapshotKey)
         session.recordCacheMetric('persisted_miss')
+        session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
         session.recordPersistedStaleReason('dep_changed')
         return undefined
       }
@@ -6098,26 +6241,14 @@ export class Directory<
 
     if (
       currentWorkspaceToken &&
-      persistedWorkspaceToken !== currentWorkspaceToken
+      persistedWorkspaceToken &&
+      currentWorkspaceToken !== persistedWorkspaceToken &&
+      currentTokenIsTrusted
     ) {
-      await session.cache.put(
-        snapshotKey,
-        {
-          ...persisted,
-          workspaceChangeToken: currentWorkspaceToken,
-        },
-        {
-          persist: true,
-          deps: toDirectorySnapshotDependencyIndexEntries(
-            persisted.dependencySignatures
-          ),
-        }
-      )
+      await persistWorkspaceToken(currentWorkspaceToken)
     }
 
-    session.recordCacheMetric('persisted_hit')
-    return this.#restorePersistedDirectorySnapshotPayload(
-      persisted,
+    return await restorePersistedSnapshot(
       currentWorkspaceToken ?? persistedWorkspaceToken
     )
   }
@@ -6125,15 +6256,37 @@ export class Directory<
   #collectPersistedDependencyPathKeys(
     snapshot: PersistedDirectorySnapshotV1
   ): Set<string> {
-    const dependencyPathKeys = new Set<string>()
-    for (const [dependencyKey] of snapshot.dependencySignatures) {
-      const dependencyPathKey = extractDependencyPathKey(dependencyKey)
-      if (dependencyPathKey) {
-        dependencyPathKeys.add(dependencyPathKey)
-      }
+    return collectDependencyPathKeys(snapshot.dependencySignatures)
+  }
+
+  #isRestoredSnapshotWithinRootScope(
+    snapshot: DirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >
+  ): boolean {
+    const rootPathKey = normalizeWorkspacePathKey(
+      this.getFileSystem(),
+      this.getRootPath()
+    )
+
+    if (rootPathKey === '.') {
+      return true
     }
 
-    return dependencyPathKeys
+    const rootPrefix = `${rootPathKey}/`
+    for (const entry of snapshot.materialize()) {
+      const entryPathKey = normalizePathKey(entry.workspacePath)
+      if (entryPathKey === rootPathKey) {
+        continue
+      }
+      if (entryPathKey.startsWith(rootPrefix)) {
+        continue
+      }
+      return false
+    }
+
+    return true
   }
 
   #restorePersistedDirectorySnapshotPayload(
@@ -6154,8 +6307,17 @@ export class Directory<
           const parentDirectory = this.#resolveSnapshotDirectoryByPath(
             restoredParentPath
           )
+          let byteLength = restoreOptions?.byteLength
+          if (byteLength === undefined) {
+            const fileSystem = this.getFileSystem()
+            try {
+              byteLength = fileSystem.getFileByteLengthSync(restoredPath)
+            } catch {
+              // Fall back to construction-time byte length resolution.
+            }
+          }
           return this.#createDirectorySnapshotFile(parentDirectory, restoredPath, {
-            byteLength: restoreOptions?.byteLength,
+            byteLength,
           })
         },
       } satisfies DirectorySnapshotRestoreFactory<
@@ -6233,7 +6395,10 @@ export class Directory<
         continue
       }
 
-      if (!isFileDependency && !isDirectoryMtimeDependency) {
+      if (
+        !isFileDependency &&
+        !isDirectoryMtimeDependency
+      ) {
         continue
       }
 
@@ -6242,9 +6407,9 @@ export class Directory<
         ? pathWithType.slice(FILE_DEPENDENCY_PREFIX.length)
         : pathWithType.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
       const fileSystemPath = toFileSystemPathFromPathKey(pathKey)
-      const currentModified =
-        await fileSystem.getFileLastModifiedMs(fileSystemPath)
-      const currentSignature = currentModified === undefined ? 'missing' : String(currentModified)
+      const currentModified = await fileSystem.getFileLastModifiedMs(fileSystemPath)
+      const currentSignature =
+        currentModified === undefined ? 'missing' : String(currentModified)
 
       if (currentSignature !== previousSignature) {
         return true
@@ -6349,6 +6514,73 @@ export class Directory<
     return createDirectoryListingSignature(signatureEntries)
   }
 
+  async #isSnapshotFreshByWorkspaceToken(
+    snapshot: DirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >,
+    options?: { markValidatedAt?: number }
+  ): Promise<boolean | null> {
+    const cachedWorkspaceToken = snapshot.getWorkspaceChangeToken()
+    if (!cachedWorkspaceToken) {
+      return null
+    }
+    const cachedTokenIsTrusted = isTrustedWorkspaceChangeToken(cachedWorkspaceToken)
+    const session = this.#getSession()
+    const currentWorkspaceToken = await session.getWorkspaceChangeToken(
+      this.getRootPath()
+    )
+    if (!currentWorkspaceToken) {
+      return null
+    }
+    const currentTokenIsTrusted = isTrustedWorkspaceChangeToken(currentWorkspaceToken)
+
+    if (currentWorkspaceToken === cachedWorkspaceToken) {
+      if (!cachedTokenIsTrusted || !currentTokenIsTrusted) {
+        return null
+      }
+      if (options?.markValidatedAt !== undefined) {
+        snapshot.markValidated(options.markValidatedAt)
+      }
+      return true
+    }
+
+    if (!cachedTokenIsTrusted || !currentTokenIsTrusted) {
+      return null
+    }
+
+    const changedPathsSinceToken =
+      await session.getWorkspaceChangedPathsSinceToken(
+        this.getRootPath(),
+        cachedWorkspaceToken
+      )
+    const knownChangedPathKeys = mergeKnownPathKeySets(
+      changedPathsSinceToken,
+      session.getRecentlyInvalidatedPaths()
+    )
+    if (!knownChangedPathKeys) {
+      return null
+    }
+
+    const dependencies = snapshot.getDependencies()
+    const dependencyPathKeys = dependencies
+      ? collectDependencyPathKeys(dependencies.entries())
+      : new Set<string>()
+    const hasIntersectingDependency =
+      dependencyPathKeys.size > 0 &&
+      pathKeySetsIntersect(dependencyPathKeys, knownChangedPathKeys)
+
+    if (!hasIntersectingDependency) {
+      snapshot.setWorkspaceChangeToken(currentWorkspaceToken)
+      if (options?.markValidatedAt !== undefined) {
+        snapshot.markValidated(options.markValidatedAt)
+      }
+      return true
+    }
+
+    return false
+  }
+
   async #isCachedSnapshotStale(
     snapshot: DirectorySnapshot<
       Directory<LoaderTypes>,
@@ -6364,12 +6596,33 @@ export class Directory<
         return false
       }
 
+      const workspaceTokenFreshness = await this.#isSnapshotFreshByWorkspaceToken(
+        snapshot,
+        { markValidatedAt: now }
+      )
+      if (workspaceTokenFreshness === true) {
+        return false
+      }
+      if (workspaceTokenFreshness === false) {
+        return true
+      }
+
       const stale = await this.#isSnapshotStale(snapshot)
       if (!stale) {
         snapshot.markValidated(now)
       }
 
       return stale
+    }
+
+    const workspaceTokenFreshness = await this.#isSnapshotFreshByWorkspaceToken(
+      snapshot
+    )
+    if (workspaceTokenFreshness === true) {
+      return false
+    }
+    if (workspaceTokenFreshness === false) {
+      return true
     }
 
     return this.#isSnapshotStale(snapshot)
@@ -6523,10 +6776,7 @@ export class Directory<
             return { kind: 'skip' }
           }
 
-          const file = directory.#createDirectorySnapshotFile(
-            directory,
-            entry.path
-          )
+          const file = directory.#createDirectorySnapshotFile(directory, entry.path)
 
           const passesFilter = directory.#filter
             ? await directory.#passesFilter(file)
@@ -6653,7 +6903,6 @@ export class Directory<
     }
 
     let shouldIncludeSelf = false
-
     for (const metadata of fileMetadata) {
       if (
         (options.includeGitIgnoredFiles || !metadata.isGitIgnored) &&

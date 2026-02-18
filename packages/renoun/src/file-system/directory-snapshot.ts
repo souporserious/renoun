@@ -25,7 +25,7 @@ export interface PersistedDirectoryFlatEntry {
 }
 
 export interface PersistedDirectorySnapshotV1 {
-  version: 1
+  version: 2
   path: string
   hasVisibleDescendant: boolean
   shouldIncludeSelf: boolean
@@ -43,7 +43,7 @@ export interface DirectorySnapshotRestoreFactory<DirectoryType, Entry> {
   createFile(path: string, options?: { byteLength?: number }): Entry
 }
 
-export type PersistedEntryMetadata<DirectoryType, Entry> =
+export type PersistedEntryMetadata<DirectoryType extends Entry, Entry = unknown> =
   | {
       kind: 'file'
       path: string
@@ -57,7 +57,7 @@ export type PersistedEntryMetadata<DirectoryType, Entry> =
       snapshot: DirectorySnapshot<DirectoryType, Entry>
   }
 
-interface PersistedSnapshotRestoreResult<DirectoryType, Entry> {
+interface PersistedSnapshotRestoreResult<DirectoryType extends Entry, Entry> {
   snapshot: DirectorySnapshot<DirectoryType, Entry>
   restoredEntriesByKey: Map<string, Entry>
 }
@@ -66,7 +66,7 @@ function createPersistedEntryKey(kind: 'file' | 'directory', path: string) {
   return `${kind}:${path}`
 }
 
-export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
+export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
   #entries: Entry[]
   #directories: Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>
   #materialized?: Entry[]
@@ -144,7 +144,7 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
       )
     }
 
-    const entryLookup = new Map<Entry | DirectoryType, PersistedDirectoryFlatEntry>()
+    const entryLookup = new Map<unknown, PersistedDirectoryFlatEntry>()
     const collectPersistedEntries = (
       entries: PersistedEntryMetadata<DirectoryType, Entry>[]
     ) => {
@@ -181,7 +181,7 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
     }
 
     return {
-      version: 1,
+      version: 2,
       path: this.#path,
       shouldIncludeSelf: this.shouldIncludeSelf,
       hasVisibleDescendant: this.hasVisibleDescendant,
@@ -213,10 +213,7 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
     }
   }
 
-  static fromPersistedSnapshot<
-    Entry = unknown,
-    DirectoryType extends Entry = Entry,
-  >(
+  static fromPersistedSnapshot<DirectoryType extends Entry, Entry = unknown>(
     payload: PersistedDirectorySnapshotV1,
     factory: DirectorySnapshotRestoreFactory<DirectoryType, Entry>
   ): DirectorySnapshot<DirectoryType, Entry> {
@@ -225,8 +222,8 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
   }
 
   private static restorePersistedSnapshot<
-    Entry = unknown,
-    DirectoryType extends Entry = Entry,
+    DirectoryType extends Entry,
+    Entry = unknown
   >(
     payload: PersistedDirectorySnapshotV1,
     factory: DirectorySnapshotRestoreFactory<DirectoryType, Entry>
@@ -258,7 +255,10 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
         continue
       }
 
-      const childRestored = this.restorePersistedSnapshot(entry.snapshot, factory)
+      const childRestored = this.restorePersistedSnapshot(
+        entry.snapshot,
+        factory
+      )
       const restoredDirectory = factory.createDirectory(entry.path)
 
       directories.set(restoredDirectory, {
@@ -288,9 +288,8 @@ export class DirectorySnapshot<DirectoryType = unknown, Entry = unknown> {
       const restoredEntry = restoredEntriesByKey.get(
         createPersistedEntryKey(entry.kind, entry.path)
       )
-
       if (restoredEntry) {
-        materializedEntries.push(restoredEntry)
+        materializedEntries.push(restoredEntry as Entry)
       }
     }
 
@@ -329,7 +328,7 @@ export function isPersistedDirectorySnapshotV1(
 
   const candidate = value as Record<string, unknown>
   if (
-    candidate['version'] !== 1 ||
+    (candidate['version'] !== 1 && candidate['version'] !== 2) ||
     typeof candidate['path'] !== 'string' ||
     typeof candidate['hasVisibleDescendant'] !== 'boolean' ||
     typeof candidate['shouldIncludeSelf'] !== 'boolean' ||
@@ -432,7 +431,7 @@ export function isPersistedDirectorySnapshotV1(
 }
 
 export function createDirectorySnapshot<
-  DirectoryType = unknown,
+  DirectoryType extends Entry,
   Entry = unknown,
 >(options: {
   entries: Entry[]

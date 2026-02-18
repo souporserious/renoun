@@ -22,6 +22,8 @@ type PersistedStaleReason =
   | 'shape_mismatch'
   | 'policy_nonpersistable'
 
+type DirectorySnapshotHitSource = 'memory' | 'persisted'
+
 type CacheMetricCounter =
   | 'memory_hit'
   | 'memory_miss'
@@ -31,13 +33,38 @@ type CacheMetricCounter =
   | 'invalidation_evictions_path'
   | 'invalidation_evictions_dep_index'
 
+interface DirectorySnapshotKeyMetrics {
+  lookups: number
+  memoryHits: number
+  memoryMisses: number
+  persistedHits: number
+  persistedMisses: number
+  rebuilds: number
+}
+
 const WORKSPACE_CHANGE_TOKEN_TTL_MS = getEnvInt(
   'RENOUN_FS_WORKSPACE_CHANGE_TOKEN_TTL_MS',
+  250
+)
+const WORKSPACE_CHANGED_PATHS_TTL_MS = getEnvInt(
+  'RENOUN_FS_WORKSPACE_CHANGED_PATHS_TTL_MS',
   250
 )
 const INVALIDATED_PATH_TTL_MS = getEnvInt(
   'RENOUN_FS_INVALIDATED_PATH_TTL_MS',
   1000
+)
+const CACHE_METRICS_TOP_KEYS_LIMIT = Math.max(
+  1,
+  getEnvInt('RENOUN_FS_CACHE_TOP_KEYS_LIMIT', 10)
+)
+const CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT = Math.max(
+  CACHE_METRICS_TOP_KEYS_LIMIT,
+  getEnvInt('RENOUN_FS_CACHE_TOP_KEYS_TRACKING_LIMIT', 250)
+)
+const CACHE_METRICS_TOP_KEYS_LOG_INTERVAL = Math.max(
+  1,
+  getEnvInt('RENOUN_FS_CACHE_TOP_KEYS_LOG_INTERVAL', 25)
 )
 
 function collectSnapshotFamily(
@@ -190,6 +217,14 @@ export class Session {
       promise?: Promise<string | null>
     }
   >()
+  readonly #workspaceChangedPathsByToken = new Map<
+    string,
+    {
+      paths: ReadonlySet<string> | null
+      expiresAt: number
+      promise?: Promise<ReadonlySet<string> | null>
+    }
+  >()
   readonly #recentlyInvalidatedPathTimestamps = new Map<string, number>()
   #persistedInvalidationQueue: Promise<void> = Promise.resolve()
   readonly #cacheMetricsEnabled =
@@ -210,6 +245,16 @@ export class Session {
       shape_mismatch: 0,
       policy_nonpersistable: 0,
     }
+  readonly #directorySnapshotMetricsByKey = new Map<
+    string,
+    DirectorySnapshotKeyMetrics
+  >()
+  readonly #directorySnapshotRebuildReasonTotals = new Map<string, number>()
+  readonly #directorySnapshotRebuildReasonByKey = new Map<
+    string,
+    Map<string, number>
+  >()
+  #directorySnapshotRebuildEventsSinceLog = 0
 
   private constructor(fileSystem: FileSystem, snapshot: Snapshot) {
     this.#fileSystem = fileSystem
@@ -317,6 +362,70 @@ export class Session {
     })
   }
 
+  recordDirectorySnapshotLookup(snapshotKey: string): void {
+    if (!this.#cacheMetricsEnabled) {
+      return
+    }
+
+    const metrics = this.#getDirectorySnapshotKeyMetrics(snapshotKey)
+    metrics.lookups += 1
+  }
+
+  recordDirectorySnapshotHit(
+    snapshotKey: string,
+    source: DirectorySnapshotHitSource
+  ): void {
+    if (!this.#cacheMetricsEnabled) {
+      return
+    }
+
+    const metrics = this.#getDirectorySnapshotKeyMetrics(snapshotKey)
+    if (source === 'memory') {
+      metrics.memoryHits += 1
+      return
+    }
+
+    metrics.persistedHits += 1
+  }
+
+  recordDirectorySnapshotMiss(
+    snapshotKey: string,
+    source: DirectorySnapshotHitSource
+  ): void {
+    if (!this.#cacheMetricsEnabled) {
+      return
+    }
+
+    const metrics = this.#getDirectorySnapshotKeyMetrics(snapshotKey)
+    if (source === 'memory') {
+      metrics.memoryMisses += 1
+      return
+    }
+
+    metrics.persistedMisses += 1
+  }
+
+  recordDirectorySnapshotRebuild(snapshotKey: string, reason: string): void {
+    if (!this.#cacheMetricsEnabled) {
+      return
+    }
+
+    const metrics = this.#getDirectorySnapshotKeyMetrics(snapshotKey)
+    metrics.rebuilds += 1
+
+    this.#incrementMapCount(this.#directorySnapshotRebuildReasonTotals, reason)
+
+    let reasonCounts = this.#directorySnapshotRebuildReasonByKey.get(snapshotKey)
+    if (!reasonCounts) {
+      reasonCounts = new Map<string, number>()
+      this.#directorySnapshotRebuildReasonByKey.set(snapshotKey, reasonCounts)
+    }
+    this.#incrementMapCount(reasonCounts, reason)
+
+    this.#directorySnapshotRebuildEventsSinceLog += 1
+    this.#maybeEmitDirectorySnapshotMetrics()
+  }
+
   async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
     const tokenGetter = this.#fileSystem.getWorkspaceChangeToken
     if (typeof tokenGetter !== 'function') {
@@ -361,6 +470,79 @@ export class Session {
       const latest = this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
       if (latest?.promise === lookupPromise) {
         this.#workspaceChangeTokenByRootPath.delete(normalizedRootPath)
+      }
+    }
+  }
+
+  async getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<ReadonlySet<string> | null> {
+    const changedPathsGetter = this.#fileSystem.getWorkspaceChangedPathsSinceToken
+    if (typeof changedPathsGetter !== 'function') {
+      return null
+    }
+
+    const normalizedRootPath = normalizeSessionPath(this.#fileSystem, rootPath)
+    const cacheKey = `${normalizedRootPath}|${previousToken}`
+    const now = Date.now()
+    const cached = this.#workspaceChangedPathsByToken.get(cacheKey)
+
+    if (cached && cached.expiresAt > now) {
+      return cached.paths
+    }
+
+    if (cached?.promise) {
+      return cached.promise
+    }
+
+    const lookupPromise = (async () => {
+      try {
+        const changedPaths = await changedPathsGetter.call(
+          this.#fileSystem,
+          rootPath,
+          previousToken
+        )
+
+        if (!Array.isArray(changedPaths)) {
+          return null
+        }
+
+        const normalizedPaths = new Set<string>()
+        for (const changedPath of changedPaths) {
+          if (typeof changedPath !== 'string') {
+            continue
+          }
+
+          const normalizedPath = isAbsolutePath(changedPath)
+            ? normalizeSessionPath(this.#fileSystem, changedPath)
+            : normalizePathKey(changedPath)
+          normalizedPaths.add(normalizedPath)
+        }
+
+        return normalizedPaths
+      } catch {
+        return null
+      }
+    })()
+
+    this.#workspaceChangedPathsByToken.set(cacheKey, {
+      paths: cached?.paths ?? null,
+      expiresAt: now,
+      promise: lookupPromise,
+    })
+
+    try {
+      const changedPaths = await lookupPromise
+      this.#workspaceChangedPathsByToken.set(cacheKey, {
+        paths: changedPaths,
+        expiresAt: Date.now() + WORKSPACE_CHANGED_PATHS_TTL_MS,
+      })
+      return changedPaths
+    } finally {
+      const latest = this.#workspaceChangedPathsByToken.get(cacheKey)
+      if (latest?.promise === lookupPromise) {
+        this.#workspaceChangedPathsByToken.delete(cacheKey)
       }
     }
   }
@@ -432,13 +614,19 @@ export class Session {
   }
 
   reset(): void {
+    this.#maybeEmitDirectorySnapshotMetrics(true, 'reset')
     this.inflight.clear()
     this.directorySnapshots.clear()
     this.directorySnapshotBuilds.clear()
     this.#invalidatedDirectorySnapshotKeys.clear()
     this.#workspaceChangeTokenByRootPath.clear()
+    this.#workspaceChangedPathsByToken.clear()
     this.#recentlyInvalidatedPathTimestamps.clear()
     this.#persistedInvalidationQueue = Promise.resolve()
+    this.#directorySnapshotMetricsByKey.clear()
+    this.#directorySnapshotRebuildReasonTotals.clear()
+    this.#directorySnapshotRebuildReasonByKey.clear()
+    this.#directorySnapshotRebuildEventsSinceLog = 0
     this.cache.clearMemory()
     if (typeof this.snapshot.invalidateAll === 'function') {
       this.snapshot.invalidateAll()
@@ -567,6 +755,131 @@ export class Session {
       .map(([key, value]) => `${key}=${String(value)}`)
       .join(' ')
     console.log(`[renoun-fs-cache-metrics] ${message}`)
+  }
+
+  #getDirectorySnapshotKeyMetrics(
+    snapshotKey: string
+  ): DirectorySnapshotKeyMetrics {
+    const existing = this.#directorySnapshotMetricsByKey.get(snapshotKey)
+    if (existing) {
+      this.#directorySnapshotMetricsByKey.delete(snapshotKey)
+      this.#directorySnapshotMetricsByKey.set(snapshotKey, existing)
+      return existing
+    }
+
+    const created: DirectorySnapshotKeyMetrics = {
+      lookups: 0,
+      memoryHits: 0,
+      memoryMisses: 0,
+      persistedHits: 0,
+      persistedMisses: 0,
+      rebuilds: 0,
+    }
+    this.#directorySnapshotMetricsByKey.set(snapshotKey, created)
+    this.#trimDirectorySnapshotMetrics()
+    return created
+  }
+
+  #incrementMapCount(map: Map<string, number>, key: string, by = 1): void {
+    map.set(key, (map.get(key) ?? 0) + by)
+  }
+
+  #trimDirectorySnapshotMetrics(): void {
+    if (
+      this.#directorySnapshotMetricsByKey.size <=
+      CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT
+    ) {
+      return
+    }
+
+    const removeKeys: string[] = []
+    for (const key of this.#directorySnapshotMetricsByKey.keys()) {
+      removeKeys.push(key)
+      if (
+        this.#directorySnapshotMetricsByKey.size - removeKeys.length <=
+        CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT
+      ) {
+        break
+      }
+    }
+
+    for (const key of removeKeys) {
+      this.#directorySnapshotMetricsByKey.delete(key)
+      this.#directorySnapshotRebuildReasonByKey.delete(key)
+    }
+  }
+
+  #maybeEmitDirectorySnapshotMetrics(
+    force = false,
+    trigger = 'interval'
+  ): void {
+    if (!this.#cacheMetricsEnabled) {
+      return
+    }
+
+    if (
+      !force &&
+      this.#directorySnapshotRebuildEventsSinceLog <
+        CACHE_METRICS_TOP_KEYS_LOG_INTERVAL
+    ) {
+      return
+    }
+
+    this.#directorySnapshotRebuildEventsSinceLog = 0
+
+    const entries = Array.from(this.#directorySnapshotMetricsByKey.entries())
+      .filter(([, metrics]) => metrics.lookups > 0)
+      .sort((first, second) => {
+        const firstMetrics = first[1]
+        const secondMetrics = second[1]
+        if (secondMetrics.rebuilds !== firstMetrics.rebuilds) {
+          return secondMetrics.rebuilds - firstMetrics.rebuilds
+        }
+        if (secondMetrics.lookups !== firstMetrics.lookups) {
+          return secondMetrics.lookups - firstMetrics.lookups
+        }
+        if (secondMetrics.persistedHits !== firstMetrics.persistedHits) {
+          return secondMetrics.persistedHits - firstMetrics.persistedHits
+        }
+        return first[0].localeCompare(second[0])
+      })
+      .slice(0, CACHE_METRICS_TOP_KEYS_LIMIT)
+
+    for (let index = 0; index < entries.length; index += 1) {
+      const [snapshotKey, metrics] = entries[index]!
+      const path = extractDirectoryPathFromSnapshotKey(snapshotKey) ?? snapshotKey
+      this.#emitCacheMetricLog({
+        metric: 'snapshot_hot_key',
+        trigger,
+        rank: index + 1,
+        path,
+        key_hash: hashString(snapshotKey).slice(0, 8),
+        lookups: metrics.lookups,
+        rebuilds: metrics.rebuilds,
+        memory_hits: metrics.memoryHits,
+        memory_misses: metrics.memoryMisses,
+        persisted_hits: metrics.persistedHits,
+        persisted_misses: metrics.persistedMisses,
+      })
+    }
+
+    const reasons = Array.from(this.#directorySnapshotRebuildReasonTotals.entries())
+      .sort((first, second) => {
+        if (second[1] !== first[1]) {
+          return second[1] - first[1]
+        }
+        return first[0].localeCompare(second[0])
+      })
+      .slice(0, CACHE_METRICS_TOP_KEYS_LIMIT)
+
+    for (const [reason, total] of reasons) {
+      this.#emitCacheMetricLog({
+        metric: 'snapshot_rebuild_reason',
+        trigger,
+        reason,
+        total,
+      })
+    }
   }
 }
 

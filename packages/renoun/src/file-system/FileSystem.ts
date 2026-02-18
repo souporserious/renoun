@@ -126,6 +126,24 @@ export abstract class BaseFileSystem {
    */
   getWorkspaceChangeToken?(rootPath: string): Promise<string | null>
 
+  /**
+   * Optional stable identity used to scope persistent cache keys for different
+   * file-system backends that may expose the same workspace-relative paths.
+   */
+  getCacheIdentity?(): unknown
+
+  /**
+   * Optional changed-path resolver used when a workspace token changes.
+   *
+   * Implementations should return workspace-relative POSIX paths that changed
+   * since `previousToken`, scoped to `rootPath`. Return `null` when the change
+   * set cannot be determined.
+   */
+  getWorkspaceChangedPathsSinceToken?(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null>
+
   constructor(options: FileSystemOptions = {}) {
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
   }

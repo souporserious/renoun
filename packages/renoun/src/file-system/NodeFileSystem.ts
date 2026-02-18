@@ -10,6 +10,8 @@ import {
   realpathSync,
   type Dirent,
 } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { spawnSync } from 'node:child_process'
 import {
   access,
   mkdir,
@@ -23,7 +25,12 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
-import { ensureRelativePath, relativePath } from '../utils/path.ts'
+import {
+  ensureRelativePath,
+  normalizePathKey,
+  normalizeSlashes,
+  relativePath,
+} from '../utils/path.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
@@ -108,6 +115,82 @@ export class NodeFileSystem
     return resolve(realExistingPath, ...segmentsToAppend)
   }
 
+  #findGitRoot(startPath: string): string | null {
+    let currentPath = startPath
+
+    while (true) {
+      if (existsSync(join(currentPath, '.git'))) {
+        return currentPath
+      }
+
+      const parentPath = dirname(currentPath)
+      if (parentPath === currentPath) {
+        break
+      }
+      currentPath = parentPath
+    }
+
+    return null
+  }
+
+  #extractHeadFromWorkspaceToken(token: string): string | null {
+    const match = /^head:([^;]+);/.exec(token)
+    return match?.[1] ?? null
+  }
+
+  #extractDirtyDigestFromWorkspaceToken(token: string): string | null {
+    const match = /;dirty:([^;]+);/.exec(token)
+    return match?.[1] ?? null
+  }
+
+  #decodeGitStatusPath(path: string): string {
+    const trimmed = path.trim()
+    if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) {
+      return normalizeSlashes(trimmed)
+    }
+
+    const unquoted = trimmed
+      .slice(1, -1)
+      .replace(/\\\"/g, '"')
+      .replace(/\\\\/g, '\\')
+
+    return normalizeSlashes(unquoted)
+  }
+
+  #extractChangedPathsFromStatusOutput(output: string): string[] {
+    const changedPaths: string[] = []
+    const lines = output
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0)
+
+    for (const line of lines) {
+      if (line.length <= 3) {
+        continue
+      }
+
+      const rawPath = line.slice(3).trim()
+      if (!rawPath) {
+        continue
+      }
+
+      if (rawPath.includes(' -> ')) {
+        const [fromPath, toPath] = rawPath.split(' -> ')
+        if (fromPath) {
+          changedPaths.push(this.#decodeGitStatusPath(fromPath))
+        }
+        if (toPath) {
+          changedPaths.push(this.#decodeGitStatusPath(toPath))
+        }
+        continue
+      }
+
+      changedPaths.push(this.#decodeGitStatusPath(rawPath))
+    }
+
+    return changedPaths
+  }
+
   getAbsolutePath(path: string): string {
     const absolutePath = resolve(path)
 
@@ -128,6 +211,211 @@ export class NodeFileSystem
   getRelativePathToWorkspace(path: string) {
     const rootDirectory = getRootDirectory()
     return relativePath(rootDirectory, this.getAbsolutePath(path))
+  }
+
+  async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    try {
+      const absoluteRootPath = this.getAbsolutePath(rootPath)
+      const gitRoot = this.#findGitRoot(absoluteRootPath)
+      if (!gitRoot) {
+        return null
+      }
+
+      const relativeRootPath = relativePath(gitRoot, absoluteRootPath)
+      if (
+        relativeRootPath === '..' ||
+        relativeRootPath.startsWith('../')
+      ) {
+        return null
+      }
+
+      const scopePath = relativeRootPath === '.' ? '.' : relativeRootPath
+
+      const headResult = spawnSync('git', ['rev-parse', 'HEAD'], {
+        cwd: gitRoot,
+        stdio: 'pipe',
+        encoding: 'utf8',
+        shell: false,
+      })
+      if (headResult.status !== 0) {
+        return null
+      }
+
+      const headCommit = headResult.stdout.trim()
+      if (!headCommit) {
+        return null
+      }
+
+      const statusResult = spawnSync(
+        'git',
+        [
+          'status',
+          '--porcelain=1',
+          '--untracked-files=all',
+          '--ignored=matching',
+          '--ignore-submodules=all',
+          '--',
+          scopePath,
+        ],
+        {
+          cwd: gitRoot,
+          stdio: 'pipe',
+          encoding: 'utf8',
+          shell: false,
+        }
+      )
+      if (statusResult.status !== 0) {
+        return null
+      }
+
+      const statusLines = statusResult.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0)
+        .sort((first, second) => first.localeCompare(second))
+      const ignoredOnly =
+        statusLines.length > 0 &&
+        statusLines.every((line) => line.startsWith('!! '))
+      const dirtyDigest = createHash('sha1')
+        .update(statusLines.join('\n'))
+        .digest('hex')
+
+      return `head:${headCommit};dirty:${dirtyDigest};count:${statusLines.length};ignored-only:${ignoredOnly ? 1 : 0}`
+    } catch {
+      return null
+    }
+  }
+
+  async getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null> {
+    try {
+      const previousHead = this.#extractHeadFromWorkspaceToken(previousToken)
+      if (!previousHead) {
+        return null
+      }
+      const previousDirtyDigest =
+        this.#extractDirtyDigestFromWorkspaceToken(previousToken)
+
+      const absoluteRootPath = this.getAbsolutePath(rootPath)
+      const gitRoot = this.#findGitRoot(absoluteRootPath)
+      if (!gitRoot) {
+        return null
+      }
+
+      const relativeRootPath = relativePath(gitRoot, absoluteRootPath)
+      if (relativeRootPath === '..' || relativeRootPath.startsWith('../')) {
+        return null
+      }
+
+      const scopePath = relativeRootPath === '.' ? '.' : relativeRootPath
+
+      const headResult = spawnSync('git', ['rev-parse', 'HEAD'], {
+        cwd: gitRoot,
+        stdio: 'pipe',
+        encoding: 'utf8',
+        shell: false,
+      })
+      if (headResult.status !== 0) {
+        return null
+      }
+
+      const currentHead = headResult.stdout.trim()
+      if (!currentHead) {
+        return null
+      }
+
+      const changedPaths = new Set<string>()
+
+      if (currentHead !== previousHead) {
+        const diffResult = spawnSync(
+          'git',
+          [
+            'diff',
+            '--name-only',
+            '--no-renames',
+            `${previousHead}..${currentHead}`,
+            '--',
+            scopePath,
+          ],
+          {
+            cwd: gitRoot,
+            stdio: 'pipe',
+            encoding: 'utf8',
+            shell: false,
+          }
+        )
+        if (diffResult.status !== 0) {
+          return null
+        }
+
+        const diffPaths = diffResult.stdout
+          .split(/\r?\n/)
+          .map((line) => normalizeSlashes(line.trim()))
+          .filter((line) => line.length > 0)
+
+        for (const diffPath of diffPaths) {
+          changedPaths.add(diffPath)
+        }
+      }
+
+      const statusResult = spawnSync(
+        'git',
+        [
+          'status',
+          '--porcelain=1',
+          '--untracked-files=all',
+          '--ignored=matching',
+          '--ignore-submodules=all',
+          '--',
+          scopePath,
+        ],
+        {
+          cwd: gitRoot,
+          stdio: 'pipe',
+          encoding: 'utf8',
+          shell: false,
+        }
+      )
+      if (statusResult.status !== 0) {
+        return null
+      }
+
+      const statusLines = statusResult.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0)
+        .sort((first, second) => first.localeCompare(second))
+      const currentDirtyDigest = createHash('sha1')
+        .update(statusLines.join('\n'))
+        .digest('hex')
+
+      if (currentHead === previousHead && previousDirtyDigest === currentDirtyDigest) {
+        return []
+      }
+
+      for (const statusPath of this.#extractChangedPathsFromStatusOutput(
+        statusResult.stdout
+      )) {
+        const normalizedStatusPath = normalizeSlashes(statusPath)
+        if (normalizedStatusPath.length > 0) {
+          changedPaths.add(normalizedStatusPath)
+        }
+      }
+
+      const workspaceRelativePaths = Array.from(changedPaths)
+        .map((path) =>
+          normalizePathKey(
+            this.getRelativePathToWorkspace(resolve(gitRoot, path))
+          )
+        )
+        .sort((first, second) => first.localeCompare(second))
+
+      return workspaceRelativePaths
+    } catch {
+      return null
+    }
   }
 
   #processDirectoryEntries(
