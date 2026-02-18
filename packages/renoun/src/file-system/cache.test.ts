@@ -1475,8 +1475,8 @@ describe('cache replacement semantics', () => {
     const store = new CacheStore({ snapshot })
     const nodeKey = 'test:replacement-semantics'
 
-    const firstLegacyGate = createDeferredPromise()
-    const secondLegacyGate = createDeferredPromise()
+    const firstGate = createDeferredPromise()
+    const secondGate = createDeferredPromise()
 
     const replaceWithGetOrCompute = async (
       value: string,
@@ -1488,19 +1488,19 @@ describe('cache replacement semantics', () => {
       })
     }
 
-    const legacyFirst = replaceWithGetOrCompute(
+    const firstCompute = replaceWithGetOrCompute(
       'first',
-      firstLegacyGate.promise
+      firstGate.promise
     )
     await Promise.resolve()
-    const legacySecond = replaceWithGetOrCompute(
+    const secondCompute = replaceWithGetOrCompute(
       'second',
-      secondLegacyGate.promise
+      secondGate.promise
     )
     await Promise.resolve()
-    firstLegacyGate.resolve()
-    secondLegacyGate.resolve()
-    await Promise.all([legacyFirst, legacySecond])
+    firstGate.resolve()
+    secondGate.resolve()
+    await Promise.all([firstCompute, secondCompute])
 
     expect(await store.get<string>(nodeKey)).toBe('first')
 
@@ -1770,7 +1770,7 @@ describe('sqlite cache persistence', () => {
     )
 
     fileSystem.setChangedPathsSinceToken('a|b', 'c', [
-      normalizePathKey('legacy-snapshots'),
+      normalizePathKey('joined-snapshots'),
     ])
     fileSystem.setChangedPathsSinceToken('a', 'b|c', [
       normalizePathKey('primary-snapshots'),
@@ -1782,7 +1782,7 @@ describe('sqlite cache persistence', () => {
       Array.from(
         (await session.getWorkspaceChangedPathsSinceToken('a|b', 'c')) ?? []
       )
-    ).toEqual([normalizePathKey('legacy-snapshots')])
+    ).toEqual([normalizePathKey('joined-snapshots')])
     expect(
       Array.from(
         (await session.getWorkspaceChangedPathsSinceToken('a', 'b|c')) ?? []
@@ -2370,9 +2370,9 @@ describe('sqlite cache persistence', () => {
       })
 
       const session = directory.getSession()
-      const legacySnapshotKey = `dir:${workspacePathKey}|legacy`
+      const broadInvalidationSnapshotKey = `dir:${workspacePathKey}|fallback`
       await session.cache.put(
-        legacySnapshotKey,
+        broadInvalidationSnapshotKey,
         {
           version: 1,
           path: workspacePathKey,
@@ -2391,18 +2391,18 @@ describe('sqlite cache persistence', () => {
         }
       )
 
-      expect(await session.cache.get(legacySnapshotKey)).toBeDefined()
+      expect(await session.cache.get(broadInvalidationSnapshotKey)).toBeDefined()
 
       session.invalidatePath(join(docsDirectory, 'index.mdx'))
 
       for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (await session.cache.get(legacySnapshotKey) === undefined) {
+        if (await session.cache.get(broadInvalidationSnapshotKey) === undefined) {
           break
         }
         await new Promise((resolve) => setTimeout(resolve, 25))
       }
 
-      expect(await session.cache.get(legacySnapshotKey)).toBeUndefined()
+      expect(await session.cache.get(broadInvalidationSnapshotKey)).toBeUndefined()
     })
   })
 

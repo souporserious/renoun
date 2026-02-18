@@ -5518,34 +5518,9 @@ export class Directory<
       workspaceRelativePath === rootPathKey ||
       workspaceRelativePath.startsWith(`${rootPathKey}/`)
 
-    if (!isWorkspaceRelativePath && rootPathKey !== '.') {
-      const rootPathKeyIndex = workspaceRelativePath.lastIndexOf(rootPathKey)
-      if (rootPathKeyIndex > 0) {
-        const hasBoundaryBefore =
-          workspaceRelativePath[rootPathKeyIndex - 1] === '/'
-        const afterRootPathKeyIndex = rootPathKeyIndex + rootPathKey.length
-        const hasBoundaryAfter =
-          afterRootPathKeyIndex === workspaceRelativePath.length ||
-          workspaceRelativePath[afterRootPathKeyIndex] === '/'
-
-        if (hasBoundaryBefore && hasBoundaryAfter) {
-          const legacyPath = workspaceRelativePath.slice(rootPathKeyIndex)
-          if (
-            this.#shouldUseLegacyWorkspacePath(
-              fileSystem,
-              workspaceRelativePath,
-              legacyPath
-            )
-          ) {
-            workspaceRelativePath = legacyPath
-            isWorkspaceRelativePath = true
-          }
-        }
-      }
-    }
-
     if (!isWorkspaceRelativePath) {
-      // Backward compatibility for legacy payloads that stored root-relative paths.
+      // Fall back to the normalized path form when the path cannot be
+      // bound to the current workspace root key.
       return ensureRelativePath(normalizedPath)
     }
 
@@ -5573,28 +5548,6 @@ export class Directory<
     }
 
     return ensureRelativePath(restoredPath)
-  }
-
-  #shouldUseLegacyWorkspacePath(
-    fileSystem: FileSystem,
-    normalizedPath: string,
-    candidatePath: string
-  ): boolean {
-    try {
-      const candidateExists = fileSystem.fileExistsSync(candidatePath)
-      if (!candidateExists) {
-        return false
-      }
-
-      if (normalizedPath === candidatePath) {
-        return false
-      }
-
-      const normalizedPathExists = fileSystem.fileExistsSync(normalizedPath)
-      return !normalizedPathExists
-    } catch {
-      return false
-    }
   }
 
   #resolveSnapshotDirectoryByPath(
