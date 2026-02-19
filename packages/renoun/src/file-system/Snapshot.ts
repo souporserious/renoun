@@ -58,6 +58,7 @@ export interface Snapshot {
     path: string,
     isDirectory?: boolean
   ): Promise<boolean>
+  getRelativePathToWorkspace(path: string): string
   contentId(path: string): Promise<string>
   invalidatePath(path: string): void
   invalidateAll?(): void
@@ -136,6 +137,10 @@ export class FileSystemSnapshot implements Snapshot {
 
   getFileLastModifiedMs(path: string): Promise<number | undefined> {
     return this.#fileSystem.getFileLastModifiedMs(path)
+  }
+
+  getRelativePathToWorkspace(path: string): string {
+    return this.#fileSystem.getRelativePathToWorkspace(path)
   }
 
   getFileByteLength(path: string): Promise<number | undefined> {

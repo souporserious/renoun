@@ -293,6 +293,29 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
       }
     }
 
+    if (materializedEntries.length !== payload.flatEntries.length) {
+      const missingEntries = payload.flatEntries
+        .map((entry) => ({
+          kind: entry.kind,
+          path: entry.path,
+          found: !!restoredEntriesByKey.get(
+            createPersistedEntryKey(entry.kind, entry.path)
+          ),
+        }))
+        .filter((entry) => !entry.found)
+
+      console.log(
+        '[snapshot-restore-mismatch]',
+        JSON.stringify({
+          snapshotPath: payload.path,
+          entriesLength: payload.entries.length,
+          flatEntriesLength: payload.flatEntries.length,
+          materializedLength: materializedEntries.length,
+          missingEntries,
+        })
+      )
+    }
+
     const snapshot = createDirectorySnapshot<DirectoryType, Entry>({
       entries:
         materializedEntries.length > 0 ? materializedEntries : immediateEntries,

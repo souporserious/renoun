@@ -568,37 +568,27 @@ export class Session {
     this.#cleanupExpiredInvalidatedPaths()
 
     this.snapshot.invalidatePath(path)
-    this.cache.invalidateDependencyPath(normalizedPath)
 
     const expiredKeys = new Set<string>()
 
     for (const key of this.directorySnapshots.keys()) {
-      const delimiterIndex = key.indexOf('|')
-      const directoryPrefix =
-        delimiterIndex === -1 ? key : key.slice(0, delimiterIndex)
-
-      if (!directoryPrefix.startsWith('dir:')) {
+      const directoryPath = extractDirectoryPathFromSnapshotKey(key)
+      if (directoryPath === undefined) {
         continue
       }
 
-      const directoryPath = directoryPrefix.slice('dir:'.length)
       if (pathsIntersect(directoryPath, normalizedPath)) {
         this.directorySnapshots.delete(key)
         this.markInvalidatedDirectorySnapshotKey(key)
         expiredKeys.add(key)
       }
     }
-
     for (const key of this.directorySnapshotBuilds.keys()) {
-      const delimiterIndex = key.indexOf('|')
-      const directoryPrefix =
-        delimiterIndex === -1 ? key : key.slice(0, delimiterIndex)
-
-      if (!directoryPrefix.startsWith('dir:')) {
+      const directoryPath = extractDirectoryPathFromSnapshotKey(key)
+      if (directoryPath === undefined) {
         continue
       }
 
-      const directoryPath = directoryPrefix.slice('dir:'.length)
       if (pathsIntersect(directoryPath, normalizedPath)) {
         this.directorySnapshotBuilds.delete(key)
         this.markInvalidatedDirectorySnapshotKey(key)
@@ -887,7 +877,7 @@ export class Session {
   }
 }
 
-class GeneratedSnapshot implements Snapshot {
+  class GeneratedSnapshot implements Snapshot {
   readonly #base: Snapshot
   readonly id: string
 
@@ -934,6 +924,10 @@ class GeneratedSnapshot implements Snapshot {
 
   isFilePathExcludedFromTsConfigAsync(path: string, isDirectory?: boolean) {
     return this.#base.isFilePathExcludedFromTsConfigAsync(path, isDirectory)
+  }
+
+  getRelativePathToWorkspace(path: string): string {
+    return this.#base.getRelativePathToWorkspace(path)
   }
 
   contentId(path: string) {

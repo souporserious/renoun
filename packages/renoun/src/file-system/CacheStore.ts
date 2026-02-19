@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash } from 'node:crypto'
 
-import { normalizeSlashes } from '../utils/path.ts'
+import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import type { Snapshot } from './Snapshot.ts'
@@ -69,6 +69,13 @@ const failedPersistenceEntries = new WeakMap<
   CacheStorePersistence,
   Set<string>
 >()
+const snapshotDependencyPathWatchers = new WeakMap<
+  Snapshot,
+  Set<{
+    invalidateDependencyPath(dependencyPathKey: string): void
+  }>
+>()
+const snapshotInvalidationHooked = new WeakSet<Snapshot>()
 const COMPUTE_SLOT_TTL_MS = getEnvInt(
   'RENOUN_FS_CACHE_COMPUTE_SLOT_TTL_MS',
   20_000
@@ -193,6 +200,30 @@ export class CacheStore {
     this.#snapshot = options.snapshot
     this.#persistence = options.persistence
     this.#inflight = options.inflight ?? new Map<string, Promise<unknown>>()
+
+    const stores =
+      snapshotDependencyPathWatchers.get(this.#snapshot) ?? new Set()
+    stores.add(this)
+    snapshotDependencyPathWatchers.set(this.#snapshot, stores)
+
+    if (snapshotInvalidationHooked.has(this.#snapshot)) {
+      return
+    }
+
+    const snapshot = this.#snapshot
+    const originalInvalidatePath = snapshot.invalidatePath.bind(snapshot)
+    snapshot.invalidatePath = (path: string) => {
+      originalInvalidatePath(path)
+      const linkedStores = snapshotDependencyPathWatchers.get(snapshot)
+      if (!linkedStores) {
+        return
+      }
+
+      for (const store of linkedStores) {
+        store.invalidateDependencyPath(path)
+      }
+    }
+    snapshotInvalidationHooked.add(this.#snapshot)
   }
 
   async getOrCompute<Value>(
@@ -307,7 +338,6 @@ export class CacheStore {
   async deleteByDependencyPath(
     dependencyPathKey: string
   ): Promise<CacheDependencyEvictionResult> {
-    const normalizedPath = normalizeDepPath(dependencyPathKey)
     const persistence = this.#persistence
     const defaultResult: CacheDependencyEvictionResult = {
       deletedNodeKeys: [],
@@ -319,18 +349,45 @@ export class CacheStore {
       return defaultResult
     }
 
-    let result: CacheDependencyEvictionResult
-    try {
-      result = await persistence.deleteByDependencyPath(normalizedPath)
-    } catch (error) {
-      this.#warnPersistenceFailure(
-        `deleteByDependencyPath(${normalizedPath})`,
-        error
-      )
+    const dependencyPathCandidates = this.#getDependencyPathCandidates(
+      dependencyPathKey
+    )
+    const deletedNodeKeys = new Set<string>()
+    let usedDependencyIndex = false
+    let hasMissingDependencyMetadata = false
+
+    if (dependencyPathCandidates.size === 0) {
       return defaultResult
     }
 
-    for (const nodeKey of result.deletedNodeKeys) {
+    for (const normalizedPath of dependencyPathCandidates) {
+      let result: CacheDependencyEvictionResult
+      try {
+        result = await persistence.deleteByDependencyPath(normalizedPath)
+      } catch (error) {
+        this.#warnPersistenceFailure(
+          `deleteByDependencyPath(${normalizedPath})`,
+          error
+        )
+        continue
+      }
+
+      for (const nodeKey of result.deletedNodeKeys) {
+        deletedNodeKeys.add(nodeKey)
+      }
+      usedDependencyIndex ||= result.usedDependencyIndex
+      hasMissingDependencyMetadata ||= result.hasMissingDependencyMetadata
+    }
+
+    if (deletedNodeKeys.size === 0) {
+      return {
+        ...defaultResult,
+        usedDependencyIndex,
+        hasMissingDependencyMetadata,
+      }
+    }
+
+    for (const nodeKey of deletedNodeKeys) {
       this.#dependencyGraph.markNodeDirty(nodeKey)
       this.#dependencyGraph.unregisterNode(nodeKey)
       this.#entries.delete(nodeKey)
@@ -340,12 +397,58 @@ export class CacheStore {
       clearPersistedEntryInvalidation(this.#persistence, nodeKey)
     }
 
-    return result
+    return {
+      deletedNodeKeys: Array.from(deletedNodeKeys),
+      usedDependencyIndex,
+      hasMissingDependencyMetadata,
+    }
+  }
+
+  #getDependencyPathCandidates(dependencyPathKey: string): Set<string> {
+    const candidates = new Set<string>()
+
+    const addPathCandidate = (path: string) => {
+      const normalizedPath = normalizeDepPath(path)
+      candidates.add(normalizedPath)
+    }
+
+    addPathCandidate(dependencyPathKey)
+
+    let relativePath = dependencyPathKey
+    try {
+      relativePath = this.#snapshot.getRelativePathToWorkspace(dependencyPathKey)
+    } catch {
+      return candidates
+    }
+
+    addPathCandidate(relativePath)
+
+    return candidates
   }
 
   invalidateDependencyPath(dependencyPathKey: string): void {
-    const normalizedPath = normalizeDepPath(dependencyPathKey)
-    this.#dependencyGraph.touchPathDependencies(normalizedPath)
+    const dependencyPathCandidates = this.#getDependencyPathCandidates(
+      dependencyPathKey
+    )
+    const affectedNodeKeys = new Set<string>()
+
+    for (const normalizedPath of dependencyPathCandidates) {
+      for (const nodeKey of this.#dependencyGraph.touchPathDependencies(
+        normalizedPath
+      )) {
+        affectedNodeKeys.add(nodeKey)
+      }
+    }
+
+    for (const nodeKey of affectedNodeKeys) {
+      this.#dependencyGraph.markNodeDirty(nodeKey)
+      this.#dependencyGraph.unregisterNode(nodeKey)
+      this.#entries.delete(nodeKey)
+      this.#inflight.delete(nodeKey)
+      this.#persistenceOperationByKey.delete(nodeKey)
+      this.#persistenceIntentVersionByKey.delete(nodeKey)
+      markPersistedEntryInvalid(this.#persistence, nodeKey)
+    }
   }
 
   async listNodeKeysByPrefix(prefix: string): Promise<string[]> {
@@ -657,13 +760,15 @@ export class CacheStore {
         deps.set(`const:${name}:${version}`, version)
       },
       recordFileDep: async (path: string) => {
-        const normalizedPath = normalizeDepPath(path)
+        const relativePath = this.#snapshot.getRelativePathToWorkspace(path)
+        const normalizedPath = normalizeDepPath(relativePath)
         const depVersion = await this.#snapshot.contentId(normalizedPath)
         deps.set(`file:${normalizedPath}`, depVersion)
         return depVersion
       },
       recordDirectoryDep: async (path: string) => {
-        const normalizedPath = normalizeDepPath(path)
+        const relativePath = this.#snapshot.getRelativePathToWorkspace(path)
+        const normalizedPath = normalizeDepPath(relativePath)
         const depVersion = await this.#snapshot.contentId(normalizedPath)
         deps.set(`dir:${normalizedPath}`, depVersion)
         return depVersion
@@ -1349,8 +1454,7 @@ export function createFingerprint(dependencies: CacheDependency[]): string {
 }
 
 function normalizeDepPath(path: string): string {
-  const normalized = normalizeSlashes(path).replace(/^\.\/+/, '')
-  return normalized === '' ? '.' : normalized
+  return normalizePathKey(path)
 }
 
 function isUnserializablePersistenceValueError(error: unknown): boolean {

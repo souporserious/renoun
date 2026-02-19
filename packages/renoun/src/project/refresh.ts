@@ -1,9 +1,13 @@
 import type { FileSystemRefreshResult } from '../utils/ts-morph.ts'
-import { EventEmitter } from 'node:events'
 
-const REFRESHING_COMPLETED = 'refreshing:completed'
-const emitter = new EventEmitter()
 let isRefreshingProjects = false
+type Waiter = {
+  resolve(value: boolean): void
+  timeoutId: ReturnType<typeof setTimeout>
+  settled: boolean
+}
+
+const refreshWaiters = new Set<Waiter>()
 
 /** Active promises that are refreshing projects. */
 export const activeRefreshingProjects = new Set<
@@ -19,7 +23,17 @@ export function startRefreshingProjects() {
 export function completeRefreshingProjects() {
   if (isRefreshingProjects && activeRefreshingProjects.size === 0) {
     isRefreshingProjects = false
-    emitter.emit(REFRESHING_COMPLETED)
+    for (const waiter of refreshWaiters) {
+      if (waiter.settled) {
+        continue
+      }
+
+      waiter.settled = true
+      clearTimeout(waiter.timeoutId)
+      waiter.resolve(true)
+    }
+
+    refreshWaiters.clear()
   }
 }
 
@@ -28,14 +42,18 @@ export async function waitForRefreshingProjects() {
   if (!isRefreshingProjects) return false
 
   return new Promise<boolean>((resolve) => {
-    const timeoutId = setTimeout(() => {
-      emitter.removeAllListeners(REFRESHING_COMPLETED)
-      resolve(false)
-    }, 10000)
+    const waiter: Waiter = {
+      settled: false,
+      timeoutId: setTimeout(() => {
+        if (!waiter.settled) {
+          waiter.settled = true
+          refreshWaiters.delete(waiter)
+          resolve(false)
+        }
+      }, 10000),
+      resolve,
+    }
 
-    emitter.once(REFRESHING_COMPLETED, () => {
-      clearTimeout(timeoutId)
-      resolve(true)
-    })
+    refreshWaiters.add(waiter)
   })
 }

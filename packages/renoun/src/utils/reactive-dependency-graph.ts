@@ -27,6 +27,8 @@ interface IndexedPathDependency {
   pathKey: string
 }
 
+const DIRECTORY_SNAPSHOT_PATH_PREFIX = 'const:dir-snapshot-path:'
+
 function createPathDependencyNode(): PathDependencyNode {
   return {
     children: new Map(),
@@ -181,41 +183,62 @@ export class ReactiveDependencyGraph {
     return dependencyKeysToTouch.size
   }
 
-  touchPathDependencies(pathKey: string): number {
+  touchPathDependencies(pathKey: string): string[] {
     const normalizedPath = normalizePathKey(pathKey)
-    const dependencyKeysToTouch = new Set<string>()
-
-    this.#collectExactPathDependencies(
-      this.#filePathDependencies,
-      normalizedPath,
-      dependencyKeysToTouch
-    )
-    this.#collectDescendantPathDependencies(
-      this.#filePathDependencies,
-      normalizedPath,
-      dependencyKeysToTouch
-    )
-
-    const directoryPathsToTouch = new Set<string>()
-    this.#collectAncestorPaths(normalizedPath, directoryPathsToTouch)
-    for (const directoryPath of directoryPathsToTouch) {
-      this.#collectExactPathDependencies(
-        this.#directoryPathDependencies,
-        directoryPath,
-        dependencyKeysToTouch
-      )
-    }
-    this.#collectDescendantPathDependencies(
-      this.#directoryPathDependencies,
-      normalizedPath,
-      dependencyKeysToTouch
-    )
+    const dependencyKeysToTouch =
+      this.#collectMatchingPathDependencyKeys(normalizedPath)
+    const affectedNodeKeys =
+      this.#collectAffectedNodeKeysForDependencyKeys(dependencyKeysToTouch)
 
     for (const dependencyKey of dependencyKeysToTouch) {
       this.touchDependency(dependencyKey)
     }
 
-    return dependencyKeysToTouch.size
+    return Array.from(affectedNodeKeys)
+  }
+
+  getAffectedNodeKeysForPathDependency(pathKey: string): string[] {
+    const normalizedPath = normalizePathKey(pathKey)
+    const dependencyKeysToTouch =
+      this.#collectMatchingPathDependencyKeys(normalizedPath)
+    return Array.from(
+      this.#collectAffectedNodeKeysForDependencyKeys(dependencyKeysToTouch)
+    )
+  }
+
+  #collectAffectedNodeKeysForDependencyKeys(
+    dependencyKeys: Iterable<string>
+  ): Set<string> {
+    const affectedNodeKeys = new Set<string>()
+    const dependencyKeysToVisit = Array.from(new Set(dependencyKeys))
+    const dependencyKeysVisited = new Set<string>(dependencyKeysToVisit)
+
+    while (dependencyKeysToVisit.length > 0) {
+      const dependencyKey = dependencyKeysToVisit.pop()
+      if (!dependencyKey) {
+        continue
+      }
+
+      const nodeKeys = this.#nodeKeysByDependency.get(dependencyKey)
+      if (!nodeKeys) {
+        continue
+      }
+
+      for (const nodeKey of nodeKeys) {
+        if (affectedNodeKeys.has(nodeKey)) {
+          continue
+        }
+
+        affectedNodeKeys.add(nodeKey)
+        const nodeDependencyKey = this.#toNodeDependencyKey(nodeKey)
+        if (!dependencyKeysVisited.has(nodeDependencyKey)) {
+          dependencyKeysVisited.add(nodeDependencyKey)
+          dependencyKeysToVisit.push(nodeDependencyKey)
+        }
+      }
+    }
+
+    return affectedNodeKeys
   }
 
   clear(): void {
@@ -331,6 +354,36 @@ export class ReactiveDependencyGraph {
   }
 
   #parsePathDependency(dependencyKey: string): IndexedPathDependency | undefined {
+    if (dependencyKey.startsWith(DIRECTORY_SNAPSHOT_PATH_PREFIX)) {
+      const dependencyPath = dependencyKey.slice(
+        DIRECTORY_SNAPSHOT_PATH_PREFIX.length
+      )
+      const dependencyTypeIndex = dependencyPath.indexOf(':')
+      if (dependencyTypeIndex === -1) {
+        return undefined
+      }
+
+      const dependencyType = dependencyPath.slice(0, dependencyTypeIndex)
+      if (dependencyType !== 'file' && dependencyType !== 'dir') {
+        return undefined
+      }
+
+      const versionSeparatedPath = dependencyPath.slice(
+        dependencyTypeIndex + 1
+      )
+      const versionSeparatorIndex = versionSeparatedPath.lastIndexOf(':')
+      if (versionSeparatorIndex <= 0) {
+        return undefined
+      }
+
+      return {
+        kind: dependencyType,
+        pathKey: normalizePathKey(
+          versionSeparatedPath.slice(0, versionSeparatorIndex)
+        ),
+      }
+    }
+
     if (dependencyKey.startsWith('file:')) {
       const pathKey = dependencyKey.slice('file:'.length)
       if (!pathKey) {
@@ -356,6 +409,39 @@ export class ReactiveDependencyGraph {
     }
 
     return undefined
+  }
+
+  #collectMatchingPathDependencyKeys(pathKey: string): Set<string> {
+    const normalizedPath = normalizePathKey(pathKey)
+    const dependencyKeysToTouch = new Set<string>()
+
+    this.#collectExactPathDependencies(
+      this.#filePathDependencies,
+      normalizedPath,
+      dependencyKeysToTouch
+    )
+    this.#collectDescendantPathDependencies(
+      this.#filePathDependencies,
+      normalizedPath,
+      dependencyKeysToTouch
+    )
+
+    const directoryPathsToTouch = new Set<string>()
+    this.#collectAncestorPaths(normalizedPath, directoryPathsToTouch)
+    for (const directoryPath of directoryPathsToTouch) {
+      this.#collectExactPathDependencies(
+        this.#directoryPathDependencies,
+        directoryPath,
+        dependencyKeysToTouch
+      )
+    }
+    this.#collectDescendantPathDependencies(
+      this.#directoryPathDependencies,
+      normalizedPath,
+      dependencyKeysToTouch
+    )
+
+    return dependencyKeysToTouch
   }
 
   #addPathDependency(

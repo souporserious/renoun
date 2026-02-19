@@ -524,6 +524,90 @@ describe('file-system cache integration', () => {
     }
   })
 
+  test('invalidates only intersecting directory snapshot keys by path', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    try {
+      const fileSystem = new InMemoryFileSystem({
+        'guides/guide.ts': 'export const value = 1',
+        'api/api.ts': 'export const value = 2',
+      })
+
+      const guidesDirectory = new Directory({ fileSystem, path: 'guides' })
+      const apiDirectory = new Directory({ fileSystem, path: 'api' })
+      const originalReadDirectory = fileSystem.readDirectory.bind(fileSystem)
+      const normalizeDirectoryPath = (path: string): string =>
+        normalizePathKey(path)
+      const isGuidesDirectoryPath = (path: string): boolean => {
+        const normalized = normalizeDirectoryPath(String(path))
+        return normalized === 'guides' || normalized.startsWith('guides/')
+      }
+      const isApiDirectoryPath = (path: string): boolean => {
+        const normalized = normalizeDirectoryPath(String(path))
+        return normalized === 'api' || normalized.startsWith('api/')
+      }
+
+      const readDirectorySpy = vi
+        .spyOn(fileSystem, 'readDirectory')
+        .mockImplementation(async (path) => originalReadDirectory(path))
+
+      await guidesDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+      await apiDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const session = guidesDirectory.getSession()
+      const guidesSnapshotKey = Array.from(session.directorySnapshots.keys()).find(
+        (key) => key.startsWith(`dir:${normalizePathKey('guides')}|`)
+      )
+      const apiSnapshotKey = Array.from(session.directorySnapshots.keys()).find(
+        (key) => key.startsWith(`dir:${normalizePathKey('api')}|`)
+      )
+      expect(guidesSnapshotKey).toBeDefined()
+      expect(apiSnapshotKey).toBeDefined()
+      expect(session.directorySnapshots.has(guidesSnapshotKey!)).toBe(true)
+      expect(session.directorySnapshots.has(apiSnapshotKey!)).toBe(true)
+
+      session.invalidatePath('guides/guide.ts')
+      expect(session.directorySnapshots.has(guidesSnapshotKey!)).toBe(false)
+      expect(session.directorySnapshots.has(apiSnapshotKey!)).toBe(true)
+
+      const callsBeforeRebuild = readDirectorySpy.mock.calls.length
+      await guidesDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+      const rebuildGuidesCalls = readDirectorySpy.mock.calls.slice(callsBeforeRebuild)
+      const rebuildGuidePaths = rebuildGuidesCalls.map(([path]) =>
+        String(path)
+      )
+
+      expect(
+        rebuildGuidePaths.some((path) => isGuidesDirectoryPath(path))
+      ).toBe(true)
+      expect(
+        rebuildGuidePaths.every((path) => !isApiDirectoryPath(path))
+      ).toBe(true)
+      expect(session.directorySnapshots.has(guidesSnapshotKey!)).toBe(true)
+
+      session.invalidatePath('guides/guide.ts')
+      expect(session.directorySnapshots.has(guidesSnapshotKey!)).toBe(false)
+
+      const callsBeforeApiGet = readDirectorySpy.mock.calls.length
+      await apiDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+      expect(readDirectorySpy.mock.calls.slice(callsBeforeApiGet).length).toBe(0)
+
+      readDirectorySpy.mockRestore()
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+      vi.restoreAllMocks()
+    }
+  })
+
   test('revalidates cached child directory snapshots in development mode', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'development'
@@ -1671,6 +1755,51 @@ updated content`
     expect(calls).toBe(2)
   })
 
+  test('path invalidation without manual node deps propagates through reactive parent/child cache links', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/index.ts': 'export const value = 1',
+      'src/child.ts': 'export const child = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'graph-path-invalidation-parent-propagation'
+    )
+    const store = new CacheStore({ snapshot })
+    const childNodeKey = 'test:graph-path-invalidation:child'
+    const parentNodeKey = 'test:graph-path-invalidation:parent'
+    let childCalls = 0
+    let parentCalls = 0
+
+    const readChild = () =>
+      store.getOrCompute(childNodeKey, { persist: false }, async (ctx) => {
+        childCalls += 1
+        await ctx.recordFileDep('/src/child.ts')
+        return childCalls
+      })
+
+    const readParent = () =>
+      store.getOrCompute(parentNodeKey, { persist: false }, async () => {
+        parentCalls += 1
+        return readChild()
+      })
+
+    const firstValue = await readParent()
+    const secondValue = await readParent()
+
+    expect(firstValue).toBe(1)
+    expect(secondValue).toBe(1)
+    expect(childCalls).toBe(1)
+    expect(parentCalls).toBe(1)
+
+    snapshot.invalidatePath('src')
+
+    const thirdValue = await readParent()
+
+    expect(thirdValue).toBe(2)
+    expect(childCalls).toBe(2)
+    expect(parentCalls).toBe(2)
+  })
+
   test('propagates stale child state through transitive auto node dependencies', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
@@ -2168,6 +2297,196 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('filters out invalid persisted snapshot entries while preserving valid restore', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    try {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const guidesDirectoryPath = join(workspaceDirectory, 'guides')
+      const validEntryPath = join(guidesDirectoryPath, 'index.mdx')
+      const validEntryAbsolutePath = join(docsDirectory, 'guides', 'index.mdx')
+      const guideWorkspacePathKey = normalizePathKey(guidesDirectoryPath)
+      const validSnapshotPathKey = normalizePathKey(validEntryPath)
+
+        mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
+        writeFileSync(validEntryAbsolutePath, '# Guide', 'utf8')
+
+        const firstFileSystem = createTempNodeFileSystem(tmpDirectory)
+        const firstDirectory = new Directory({
+          fileSystem: firstFileSystem,
+          path: guidesDirectoryPath,
+        })
+
+        await firstDirectory.getEntries({
+          recursive: true,
+          includeIndexAndReadmeFiles: true,
+        })
+
+        const firstSession = firstDirectory.getSession()
+        const snapshotKey = Array.from(firstSession.directorySnapshots.keys()).find(
+          (key) => key.startsWith(`dir:${guideWorkspacePathKey}|`)
+        )
+        expect(snapshotKey).toBeDefined()
+
+        const corruptedSnapshot = {
+          version: 2,
+          path: guideWorkspacePathKey,
+          hasVisibleDescendant: false,
+          shouldIncludeSelf: false,
+          lastValidatedAt: Date.now(),
+          filterSignature: 'filter:none',
+          sortSignature: 'sort:none',
+          dependencySignatures: [],
+          entries: [
+            {
+              kind: 'file',
+              path: validSnapshotPathKey,
+              byteLength: 7,
+            },
+            {
+              kind: 'file',
+              path: '../outside.mdx',
+              byteLength: 4,
+            },
+            {
+              kind: 'directory',
+              path: 'weird/../outside-dir',
+              snapshot: {
+                version: 2,
+                path: 'weird/../outside-dir',
+                hasVisibleDescendant: false,
+                shouldIncludeSelf: false,
+                lastValidatedAt: Date.now(),
+                filterSignature: 'filter:none',
+                sortSignature: 'sort:none',
+                dependencySignatures: [],
+                entries: [],
+                flatEntries: [],
+              },
+            },
+          ],
+          flatEntries: [
+            {
+              kind: 'file',
+              path: validSnapshotPathKey,
+            },
+            {
+              kind: 'file',
+              path: '../outside.mdx',
+            },
+          ],
+        }
+
+        await firstSession.cache.put(snapshotKey!, corruptedSnapshot, {
+          persist: true,
+          deps: [],
+        })
+
+        const secondFileSystem = createTempNodeFileSystem(tmpDirectory)
+        const secondReadDirectory = vi.spyOn(secondFileSystem, 'readDirectory')
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const secondDirectory = new Directory({
+          fileSystem: secondFileSystem,
+          path: guidesDirectoryPath,
+        })
+
+        try {
+          const secondEntries = await secondDirectory.getEntries({
+            recursive: true,
+            includeIndexAndReadmeFiles: true,
+          })
+          const cacheKeysAfterFirstRead =
+            await secondDirectory.getSession().cache.listNodeKeysByPrefix('dir:')
+
+          expect(
+            secondEntries.some((entry) => entry.workspacePath.endsWith('index.mdx'))
+          ).toBe(true)
+          expect(secondReadDirectory).toHaveBeenCalledTimes(0)
+          expect(warnSpy).toHaveBeenCalledTimes(0)
+          expect(await secondDirectory.getSession().cache.get(snapshotKey!)).toBeDefined()
+          expect(cacheKeysAfterFirstRead).toContain(snapshotKey!)
+
+          const retryEntries = await secondDirectory.getEntries({
+            recursive: true,
+            includeIndexAndReadmeFiles: true,
+          })
+          expect(
+            retryEntries.some((entry) =>
+              entry.workspacePath.endsWith('index.mdx')
+            )
+          ).toBe(true)
+          expect(warnSpy).toHaveBeenCalledTimes(0)
+        } finally {
+          warnSpy.mockRestore()
+        }
+      })
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+  })
+
+  test('restores persisted snapshots when cwd-relative roots persist workspace-scoped entries', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const scopedCwd = join(tmpDirectory, 'apps', 'site')
+      const docsDirectory = join(scopedCwd, 'docs')
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const firstFileSystem = new NestedCwdNodeFileSystem(
+        scopedCwd,
+        tsConfigPath
+      )
+      const firstDirectory = new Directory({
+        fileSystem: firstFileSystem,
+        path: './docs',
+      })
+
+      await firstDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const firstSession = firstDirectory.getSession()
+      const docsWorkspacePathKey = normalizePathKey(firstDirectory.workspacePath)
+      const snapshotKey = Array.from(firstSession.directorySnapshots.keys()).find(
+        (key) => key.startsWith(`dir:${docsWorkspacePathKey}|`)
+      )
+
+      expect(snapshotKey).toBeDefined()
+
+      const persistedSnapshot = (await firstSession.cache.get(snapshotKey!)) as {
+        path?: unknown
+      }
+      expect(persistedSnapshot.path).toBe(docsWorkspacePathKey)
+
+      const secondFileSystem = new NestedCwdNodeFileSystem(
+        scopedCwd,
+        tsConfigPath
+      )
+      const secondDirectory = new Directory({
+        fileSystem: secondFileSystem,
+        path: './docs',
+      })
+
+      const secondEntries = await secondDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      expect(
+        secondEntries.some((entry) => entry.workspacePath.endsWith('intro.mdx'))
+      ).toBe(true)
+    })
+  })
+
   test('restores persisted file entries with byteLength metadata', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
@@ -2355,105 +2674,6 @@ describe('sqlite cache persistence', () => {
           path.includes(`${rootPathKey}/${rootPathKey}`)
         )
       ).toBe(false)
-    })
-  })
-
-  test('restores persisted snapshots when entry paths contain legacy parent traversal', async () => {
-    await withProductionSqliteCache(async (tmpDirectory) => {
-      const docsDirectory = join(tmpDirectory, 'docs')
-      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
-
-      mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
-      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
-      writeFileSync(
-        join(docsDirectory, 'guides', 'advanced', 'getting-started.mdx'),
-        '# Getting Started',
-        'utf8'
-      )
-      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
-
-      const firstWorkerDirectory = new Directory({
-        fileSystem: createTempNodeFileSystem(tmpDirectory),
-        path: workspaceDirectory,
-      })
-
-      await firstWorkerDirectory.getEntries({
-        recursive: true,
-        includeIndexAndReadmeFiles: true,
-      })
-
-      const session = firstWorkerDirectory.getSession()
-      const snapshotKey = Array.from(session.directorySnapshots.keys())[0]
-      expect(snapshotKey).toBeDefined()
-
-      const persistedSnapshot = (await session.cache.get(snapshotKey!)) as any
-      expect(persistedSnapshot).toBeDefined()
-
-      const addLegacyTraversal = (snapshot: any) => {
-        if (!snapshot || typeof snapshot !== 'object') {
-          return
-        }
-
-        if (typeof snapshot.path === 'string') {
-          snapshot.path = `../../${snapshot.path}`
-        }
-
-        if (Array.isArray(snapshot.entries)) {
-          for (const entry of snapshot.entries) {
-            if (typeof entry.path === 'string') {
-              entry.path = `../../${entry.path}`
-            }
-            if (entry.kind === 'directory' && entry.snapshot) {
-              addLegacyTraversal(entry.snapshot)
-            }
-          }
-        }
-
-        if (Array.isArray(snapshot.flatEntries)) {
-          for (const entry of snapshot.flatEntries) {
-            if (typeof entry.path === 'string') {
-              entry.path = `../../${entry.path}`
-            }
-          }
-        }
-      }
-
-      addLegacyTraversal(persistedSnapshot)
-      await session.cache.put(snapshotKey!, persistedSnapshot, {
-        persist: true,
-      })
-
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
-      const secondReadDirectory = vi.spyOn(secondWorkerFilesystem, 'readDirectory')
-      try {
-        const secondWorkerDirectory = new Directory({
-          fileSystem: secondWorkerFilesystem,
-          path: workspaceDirectory,
-        })
-
-        const restoredEntries = await secondWorkerDirectory.getEntries({
-          recursive: true,
-          includeIndexAndReadmeFiles: true,
-        })
-
-        expect(
-          restoredEntries.some((entry) =>
-            entry.workspacePath.endsWith('getting-started.mdx')
-          )
-        ).toBe(true)
-        expect(secondReadDirectory).toHaveBeenCalledTimes(0)
-      } finally {
-        const warnings = warnSpy.mock.calls
-        warnSpy.mockRestore()
-        expect(
-          warnings.every(
-            ([warning]) =>
-              typeof warning !== 'string' ||
-              !warning.includes('Failed to restore persisted directory snapshot')
-          )
-        ).toBe(true)
-      }
     })
   })
 
@@ -2714,14 +2934,18 @@ describe('sqlite cache persistence', () => {
     })
   })
 
-  test('falls back to broad persisted invalidation when dependency metadata is missing', async () => {
+  test('falls back to intersecting path-pattern persisted invalidation when dependency metadata is missing', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
       const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
-      const workspacePathKey = normalizePathKey(workspaceDirectory)
+      const affectedSnapshotPathKey = normalizePathKey(join(workspaceDirectory, 'guides'))
+      const unrelatedSnapshotPathKey = normalizePathKey(join(workspaceDirectory, 'api'))
 
       mkdirSync(docsDirectory, { recursive: true })
-      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+      mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
+      mkdirSync(join(docsDirectory, 'api'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'guides', 'index.mdx'), '# Guides', 'utf8')
+      writeFileSync(join(docsDirectory, 'api', 'index.mdx'), '# API', 'utf8')
 
       const directory = new Directory({
         fileSystem: createTempNodeFileSystem(tmpDirectory),
@@ -2732,39 +2956,59 @@ describe('sqlite cache persistence', () => {
       })
 
       const session = directory.getSession()
-      const broadInvalidationSnapshotKey = `dir:${workspacePathKey}|fallback`
-      await session.cache.put(
-        broadInvalidationSnapshotKey,
-        {
-          version: 1,
-          path: workspacePathKey,
-          hasVisibleDescendant: false,
-          shouldIncludeSelf: false,
-          lastValidatedAt: Date.now(),
-          filterSignature: 'filter:none',
-          sortSignature: 'sort:none',
-          dependencySignatures: [],
-          entries: [],
-          flatEntries: [],
-        },
-        {
-          persist: true,
-          deps: [],
-        }
-      )
+      const affectedSnapshotKey = `dir:${affectedSnapshotPathKey}|fallback-affected`
+      const unaffectedSnapshotKey =
+        `dir:${unrelatedSnapshotPathKey}|fallback-unrelated`
 
-      expect(await session.cache.get(broadInvalidationSnapshotKey)).toBeDefined()
+      await session.cache.put(affectedSnapshotKey, {
+        version: 1,
+        path: affectedSnapshotPathKey,
+        hasVisibleDescendant: false,
+        shouldIncludeSelf: false,
+        lastValidatedAt: Date.now(),
+        filterSignature: 'filter:none',
+        sortSignature: 'sort:none',
+        dependencySignatures: [],
+        entries: [],
+        flatEntries: [],
+      }, {
+        persist: true,
+        deps: [],
+      })
 
-      session.invalidatePath(join(docsDirectory, 'index.mdx'))
+      await session.cache.put(unaffectedSnapshotKey, {
+        version: 1,
+        path: unrelatedSnapshotPathKey,
+        hasVisibleDescendant: false,
+        shouldIncludeSelf: false,
+        lastValidatedAt: Date.now(),
+        filterSignature: 'filter:none',
+        sortSignature: 'sort:none',
+        dependencySignatures: [],
+        entries: [],
+        flatEntries: [],
+      }, {
+        persist: true,
+        deps: [],
+      })
+
+      expect(await session.cache.get(affectedSnapshotKey)).toBeDefined()
+      expect(await session.cache.get(unaffectedSnapshotKey)).toBeDefined()
+
+      session.invalidatePath(join(docsDirectory, 'guides', 'index.mdx'))
 
       for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (await session.cache.get(broadInvalidationSnapshotKey) === undefined) {
+        const affectedResult = await session.cache.get(affectedSnapshotKey)
+        const unaffectedResult = await session.cache.get(unaffectedSnapshotKey)
+
+        if (affectedResult === undefined && unaffectedResult !== undefined) {
           break
         }
         await new Promise((resolve) => setTimeout(resolve, 25))
       }
 
-      expect(await session.cache.get(broadInvalidationSnapshotKey)).toBeUndefined()
+      expect(await session.cache.get(affectedSnapshotKey)).toBeUndefined()
+      expect(await session.cache.get(unaffectedSnapshotKey)).toBeDefined()
     })
   })
 
