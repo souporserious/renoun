@@ -32,7 +32,10 @@ const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
 
 let warnedAboutSqliteFallback = false
 const persistenceByDbPath = new Map<string, SqliteCacheStorePersistence>()
-const persistenceOptionsByDbPath = new Map<string, ResolvedSqlitePersistenceOptions>()
+const persistenceOptionsByDbPath = new Map<
+  string,
+  ResolvedSqlitePersistenceOptions
+>()
 
 export interface CacheStoreSqliteOptions {
   dbPath?: string
@@ -49,7 +52,10 @@ interface ResolvedSqlitePersistenceOptions {
   maxRows: number
 }
 
-function resolveDbPath(options: { dbPath?: string; projectRoot?: string }): string {
+function resolveDbPath(options: {
+  dbPath?: string
+  projectRoot?: string
+}): string {
   if (typeof options.dbPath === 'string' && options.dbPath.trim()) {
     return resolve(options.dbPath)
   }
@@ -62,7 +68,9 @@ function resolveDbPath(options: { dbPath?: string; projectRoot?: string }): stri
 
   if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
     // eslint-disable-next-line no-console
-    console.log('[renoun-debug] resolveDbPath', { projectRoot: options.projectRoot })
+    console.log('[renoun-debug] resolveDbPath', {
+      projectRoot: options.projectRoot,
+    })
   }
   return getDefaultCacheDatabasePath(
     options.projectRoot
@@ -103,11 +111,15 @@ function resolveCanonicalProjectRootPath(pathToResolve: string): string {
   }
 }
 
-export function getCacheStorePersistence(options: CacheStoreSqliteOptions = {}) {
+export function getCacheStorePersistence(
+  options: CacheStoreSqliteOptions = {}
+) {
   const resolvedOptions = resolveSqlitePersistenceOptions(options)
   const existing = persistenceByDbPath.get(resolvedOptions.dbPath)
   if (existing) {
-    const existingOptions = persistenceOptionsByDbPath.get(resolvedOptions.dbPath)
+    const existingOptions = persistenceOptionsByDbPath.get(
+      resolvedOptions.dbPath
+    )
 
     if (
       existingOptions &&
@@ -136,10 +148,12 @@ export function getDefaultCacheStorePersistence() {
   return getCacheStorePersistence()
 }
 
-export function disposeCacheStorePersistence(options: {
-  dbPath?: string
-  projectRoot?: string
-} = {}) {
+export function disposeCacheStorePersistence(
+  options: {
+    dbPath?: string
+    projectRoot?: string
+  } = {}
+) {
   if (!options.dbPath && !options.projectRoot) {
     for (const [dbPath, persistence] of persistenceByDbPath) {
       persistence.close()
@@ -184,10 +198,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#maxRows = options.maxRows ?? SQLITE_DEFAULT_MAX_ROWS
     this.#overflowCheckInterval = Math.max(
       1,
-      Math.min(
-        SQLITE_PRUNE_WRITE_INTERVAL,
-        Math.floor(this.#maxRows / 100)
-      )
+      Math.min(SQLITE_PRUNE_WRITE_INTERVAL, Math.floor(this.#maxRows / 100))
     )
     this.#readyPromise = this.#initialize()
   }
@@ -264,9 +275,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     await this.#runWithBusyRetries(() => {
       this.#db
-        .prepare(
-          `DELETE FROM cache_inflight WHERE node_key = ? AND owner = ?`
-        )
+        .prepare(`DELETE FROM cache_inflight WHERE node_key = ? AND owner = ?`)
         .run(nodeKey, owner)
     })
   }
@@ -352,7 +361,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             WHERE e.node_key = ?
             ORDER BY d.dep_key
           `
-      )
+        )
         .all(nodeKey)
     )) as Array<{
       fingerprint?: string
@@ -453,7 +462,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       .sort((first, second) => first.depKey.localeCompare(second.depKey))
 
     const recalculatedFingerprint = createFingerprint(deps)
-    if (!skipFingerprintCheck && storedFingerprint !== recalculatedFingerprint) {
+    if (
+      !skipFingerprintCheck &&
+      storedFingerprint !== recalculatedFingerprint
+    ) {
       if (shouldDebug) {
         logCachePersistenceLoadFailure(
           nodeKey,
@@ -505,7 +517,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
         this.#db
           .prepare(
-          `
+            `
               INSERT INTO cache_entries (
                 node_key,
                 fingerprint,
@@ -588,7 +600,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
     }
 
-    throw new Error('[renoun] Exhausted SQLITE busy retries for cache revision write.')
+    throw new Error(
+      '[renoun] Exhausted SQLITE busy retries for cache revision write.'
+    )
   }
 
   async save(nodeKey: string, entry: CacheEntry): Promise<void> {
@@ -622,7 +636,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         const currentRevisionRow = this.#db
           .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
           .get(nodeKey) as { revision?: unknown } | undefined
-        const currentRevision = getPersistedRevision(currentRevisionRow?.revision)
+        const currentRevision = getPersistedRevision(
+          currentRevisionRow?.revision
+        )
 
         if (options.expectedRevision === 'missing') {
           if (Number.isFinite(currentRevision)) {
@@ -696,7 +712,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             const latestRevisionRow = this.#db
               .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
               .get(nodeKey) as { revision?: unknown } | undefined
-            const latestRevision = getPersistedRevision(latestRevisionRow?.revision)
+            const latestRevision = getPersistedRevision(
+              latestRevisionRow?.revision
+            )
             this.#db.exec('COMMIT')
             return {
               applied: false,
@@ -761,7 +779,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
     }
 
-    throw new Error('[renoun] Exhausted SQLITE busy retries for guarded cache write.')
+    throw new Error(
+      '[renoun] Exhausted SQLITE busy retries for guarded cache write.'
+    )
   }
 
   async delete(nodeKey: string): Promise<void> {
@@ -774,7 +794,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     await this.#runWithBusyRetries(() => {
       this.#db.exec('BEGIN IMMEDIATE')
       try {
-        this.#db.prepare(`DELETE FROM cache_deps WHERE node_key = ?`).run(nodeKey)
+        this.#db
+          .prepare(`DELETE FROM cache_deps WHERE node_key = ?`)
+          .run(nodeKey)
         this.#db
           .prepare(`DELETE FROM cache_entries WHERE node_key = ?`)
           .run(nodeKey)
@@ -813,12 +835,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     for (const prefix of dependencyPrefixes) {
       const exactDependencyKey = `${prefix}${normalizedPathKey}`
       exactDependencyKeys.add(exactDependencyKey)
-      exactDependencyKeys.add(toDirectorySnapshotDepIndexKey(exactDependencyKey))
+      exactDependencyKeys.add(
+        toDirectorySnapshotDepIndexKey(exactDependencyKey)
+      )
 
       if (normalizedPathKey === '.') {
-        descendantDependencyPatterns.push(
-          `${escapeSqlLikePattern(prefix)}%`
-        )
+        descendantDependencyPatterns.push(`${escapeSqlLikePattern(prefix)}%`)
         descendantDependencyPatterns.push(
           `${escapeSqlLikePattern(DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX + prefix)}%:1`
         )
@@ -1371,7 +1393,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         .prepare(`DELETE FROM cache_deps WHERE node_key IN (${placeholders})`)
         .run(...batch)
       this.#db
-        .prepare(`DELETE FROM cache_entries WHERE node_key IN (${placeholders})`)
+        .prepare(
+          `DELETE FROM cache_entries WHERE node_key IN (${placeholders})`
+        )
         .run(...batch)
     }
   }
@@ -1398,7 +1422,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
       const placeholders = batch.map(() => '?').join(',')
       this.#db
-        .prepare(`DELETE FROM cache_inflight WHERE node_key IN (${placeholders})`)
+        .prepare(
+          `DELETE FROM cache_inflight WHERE node_key IN (${placeholders})`
+        )
         .run(...batch)
     }
   }
@@ -1484,8 +1510,7 @@ function shouldDebugCachePersistenceLoadFailure(nodeKey: string): boolean {
   }
 
   return (
-    nodeKey.startsWith('js.exports:') ||
-    nodeKey.startsWith('mdx.sections:')
+    nodeKey.startsWith('js.exports:') || nodeKey.startsWith('mdx.sections:')
   )
 }
 
@@ -1554,7 +1579,11 @@ function looksLikeStrippedReactElement(value: object): boolean {
     return false
   }
 
-  if (!('key' in candidate) || !('ref' in candidate) || !('props' in candidate)) {
+  if (
+    !('key' in candidate) ||
+    !('ref' in candidate) ||
+    !('props' in candidate)
+  ) {
     return false
   }
 
@@ -1565,7 +1594,8 @@ function looksLikeStrippedReactElement(value: object): boolean {
 
   if (
     keys.some(
-      (key) => key !== 'key' && key !== 'ref' && key !== 'props' && key !== 'type'
+      (key) =>
+        key !== 'key' && key !== 'ref' && key !== 'props' && key !== 'type'
     )
   ) {
     return false
@@ -1605,7 +1635,10 @@ function isSqliteBusyOrLockedError(error: unknown): boolean {
     }
 
     const normalizedCode = code.toUpperCase()
-    if (normalizedCode.includes('SQLITE_BUSY') || normalizedCode.includes('SQLITE_LOCKED')) {
+    if (
+      normalizedCode.includes('SQLITE_BUSY') ||
+      normalizedCode.includes('SQLITE_LOCKED')
+    ) {
       return true
     }
 
