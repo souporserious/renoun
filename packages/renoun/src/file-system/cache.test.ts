@@ -5642,6 +5642,124 @@ export type Metadata = Value`,
     }
   }, 12000)
 
+  test('reuses in-flight persisted values when the leader computes undefined', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-undefined-shared-')
+    )
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'sqlite-compute-slot-shared-undefined'
+    )
+    const persistence = createShortTtlComputeSlotPersistence(dbPath, {
+      slotTtlMs: 60,
+      withHeartbeat: true,
+    })
+    const firstStore = new CacheStore({ snapshot, persistence })
+    const secondStore = new CacheStore({ snapshot, persistence })
+
+    try {
+      let computeCount = 0
+      const first = firstStore.getOrCompute<string | undefined>(
+        'test:sqlite-compute-slot-shared-undefined',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          await new Promise((resolve) => setTimeout(resolve, 220))
+          return undefined
+        }
+      )
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20)
+      })
+      const second = secondStore.getOrCompute<string | undefined>(
+        'test:sqlite-compute-slot-shared-undefined',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'second'
+        }
+      )
+
+      const [firstResult, secondResult] = await Promise.all([first, second])
+
+      expect(firstResult).toBeUndefined()
+      expect(secondResult).toBeUndefined()
+      expect(computeCount).toBe(1)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
+  test('escapes sqlite LIKE wildcards in cache prefix and dependency invalidation queries', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-like-escape-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'src/components_button/index.ts': 'export const a = 1',
+        'src/componentsXbutton/index.ts': 'export const b = 1',
+      }),
+      'sqlite-like-escape'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+
+    const affectedNodeKey = 'dir:src/components_button|abc'
+    const unaffectedNodeKey = 'dir:src/componentsXbutton|xyz'
+
+    try {
+      const affectedDepVersion = await snapshot.contentId(
+        'src/components_button/index.ts'
+      )
+      const unaffectedDepVersion = await snapshot.contentId(
+        'src/componentsXbutton/index.ts'
+      )
+
+      await store.put(affectedNodeKey, { value: 'affected' }, {
+        persist: true,
+        deps: [
+          {
+            depKey: 'file:src/components_button/index.ts',
+            depVersion: affectedDepVersion,
+          },
+        ],
+      })
+      await store.put(unaffectedNodeKey, { value: 'unaffected' }, {
+        persist: true,
+        deps: [
+          {
+            depKey: 'file:src/componentsXbutton/index.ts',
+            depVersion: unaffectedDepVersion,
+          },
+        ],
+      })
+
+      const prefixMatches = await store.listNodeKeysByPrefix(
+        'dir:src/components_button|'
+      )
+      expect(prefixMatches).toEqual([affectedNodeKey])
+
+      const eviction = await store.deleteByDependencyPath('src/components_button')
+      expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
+      expect(eviction.deletedNodeKeys).not.toContain(unaffectedNodeKey)
+
+      expect(
+        await store.get<{ value: string }>(affectedNodeKey)
+      ).toBeUndefined()
+      expect(
+        await store.get<{ value: string }>(unaffectedNodeKey)
+      ).toEqual({ value: 'unaffected' })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('continues with in-memory cache when persistence writes fail', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',

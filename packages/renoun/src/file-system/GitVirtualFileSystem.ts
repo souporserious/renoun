@@ -39,6 +39,8 @@ import {
   INDEX_FILE_CANDIDATES,
   parseExportId,
   formatExportId,
+  getParserFlavorFromFileName,
+  getExportParseCacheKey,
   scanModuleExports,
   isUnderScope,
   looksLikeFilePath,
@@ -715,6 +717,10 @@ export class GitVirtualFileSystem
       repository: this.#repository,
       ref: this.#ref,
     }
+  }
+
+  isPersistentCacheDeterministic(): boolean {
+    return isFullCommitSha(this.#ref)
   }
 
   #createPersistentCacheNodeKey(scope: string, payload: unknown): string {
@@ -3306,18 +3312,13 @@ export class GitVirtualFileSystem
     content: string
   ): Promise<Map<string, ExportItem>> {
     const contentHash = this.#hashContent(content)
-    const cached = this.#exportParseCache.get(contentHash)
+    const parserFlavor = getParserFlavorFromFileName(filePath)
+    const cacheKey = getExportParseCacheKey(contentHash, parserFlavor)
+    const cached = this.#exportParseCache.get(cacheKey)
     if (cached) {
       return cached
     }
 
-    const parserFlavor = (() => {
-      const index = filePath.lastIndexOf('.')
-      if (index === -1) {
-        return 'unknown'
-      }
-      return filePath.slice(index + 1).toLowerCase() || 'unknown'
-    })()
     const session = this.#getSession()
     const nodeKey = this.#createPersistentCacheNodeKey('blob-exports', {
       contentHash,
@@ -3330,7 +3331,7 @@ export class GitVirtualFileSystem
       return serializeExportItemMap(scanModuleExports(filePath, content))
     })
     const parsed = deserializeExportItemMap(payload)
-    this.#exportParseCache.set(contentHash, parsed)
+    this.#exportParseCache.set(cacheKey, parsed)
     return parsed
   }
 

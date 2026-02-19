@@ -84,6 +84,9 @@ const COMPUTE_SLOT_POLL_MS = getEnvInt(
   'RENOUN_FS_CACHE_COMPUTE_SLOT_POLL_MS',
   25
 )
+const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
+  'renoun.fs.cache.no-compute-slot-shared-value'
+)
 
 interface CacheStorePersistenceComputeSlot {
   acquireComputeSlot(
@@ -662,10 +665,10 @@ export class CacheStore {
 
   async #waitForInFlightValue<Value>(
     nodeKey: string
-  ): Promise<Value | undefined> {
+  ): Promise<Value | typeof NO_COMPUTE_SLOT_SHARED_VALUE> {
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence) {
-      return undefined
+      return NO_COMPUTE_SLOT_SHARED_VALUE
     }
 
     while (true) {
@@ -678,11 +681,11 @@ export class CacheStore {
       try {
         inFlightOwner = await persistence.getComputeSlotOwner(nodeKey)
       } catch {
-        return undefined
+        return NO_COMPUTE_SLOT_SHARED_VALUE
       }
 
       if (!inFlightOwner) {
-        return undefined
+        return NO_COMPUTE_SLOT_SHARED_VALUE
       }
 
       const sleep = Math.max(0, COMPUTE_SLOT_POLL_MS) || 0
@@ -692,7 +695,7 @@ export class CacheStore {
       continue
     }
 
-    return undefined
+    return NO_COMPUTE_SLOT_SHARED_VALUE
   }
 
   async #waitForComputeSlotRelease(nodeKey: string): Promise<void> {
@@ -796,7 +799,7 @@ export class CacheStore {
       )
       if (!acquired) {
         const sharedValue = await this.#waitForInFlightValue<Value>(nodeKey)
-        if (sharedValue !== undefined) {
+        if (sharedValue !== NO_COMPUTE_SLOT_SHARED_VALUE) {
           return sharedValue
         }
       } else {

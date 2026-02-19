@@ -133,6 +133,15 @@ export abstract class BaseFileSystem {
   getCacheIdentity?(): unknown
 
   /**
+   * Optional hint indicating whether persisted cache entries are deterministic
+   * for the current file-system state.
+   *
+   * Returning `false` allows callers to skip persistence for cache domains that
+   * cannot be safely revalidated (for example moving branch refs).
+   */
+  isPersistentCacheDeterministic?(): boolean
+
+  /**
    * Optional changed-path resolver used when a workspace token changes.
    *
    * Implementations should return workspace-relative POSIX paths that changed

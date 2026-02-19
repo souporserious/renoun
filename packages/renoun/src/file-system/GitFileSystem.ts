@@ -82,6 +82,7 @@ import {
   RENAME_PATH_DICE_MIN,
   parseExportId,
   formatExportId,
+  getParserFlavorFromFileName,
   getExportParseCacheKey,
   scanModuleExports,
   isUnderScope,
@@ -2419,19 +2420,13 @@ export class GitFileSystem
   ): Promise<Map<string, ExportItem>> {
     assertSafeGitArg(sha, 'sha')
 
-    const cacheKey = getExportParseCacheKey(sha)
+    const parserFlavor = getParserFlavorFromFileName(fileNameForParser)
+    const cacheKey = getExportParseCacheKey(sha, parserFlavor)
     const cached = this.#exportParseCache.get(cacheKey)
     if (cached) {
       return cached
     }
 
-    const parserFlavor = (() => {
-      const index = fileNameForParser.lastIndexOf('.')
-      if (index === -1) {
-        return 'unknown'
-      }
-      return fileNameForParser.slice(index + 1).toLowerCase() || 'unknown'
-    })()
     const session = this.#getSession()
     const nodeKey = this.#createPersistentCacheNodeKey('blob-exports', {
       sha,
@@ -3125,14 +3120,22 @@ export class GitFileSystem
       await session.cache.get<ExportHistoryLatestPointer>(latestNodeKey)
     if (
       latestPointer?.reportNodeKey &&
-      latestPointer.lastCommitSha &&
-      latestPointer.reportNodeKey === reportNodeKey
+      latestPointer.lastCommitSha
     ) {
       const previousReport = await session.cache.get<ExportHistoryReport>(
         latestPointer.reportNodeKey
       )
+      const hasSameEntrySelection = Array.isArray(previousReport?.entryFiles)
+        ? previousReport.entryFiles.length === sortedEntryRelatives.length &&
+          [...previousReport.entryFiles]
+            .sort()
+            .every(
+              (entryFile, index) => entryFile === sortedEntryRelatives[index]
+            )
+        : false
       if (
         previousReport?.repo === this.repoRoot &&
+        hasSameEntrySelection &&
         previousReport.lastCommitSha &&
         previousReport.lastExportSnapshot &&
         previousReport.lastCommitSha === latestPointer.lastCommitSha
@@ -5331,7 +5334,8 @@ async function collectExportsFromFile(
   }
 
   // Get raw exports from cache or parse them
-  const cacheKey = getExportParseCacheKey(meta.sha)
+  const parserFlavor = getParserFlavorFromFileName(filePath)
+  const cacheKey = getExportParseCacheKey(meta.sha, parserFlavor)
   let rawExports = blobCache.get(cacheKey)
   if (rawExports) {
     cacheStats.hits++

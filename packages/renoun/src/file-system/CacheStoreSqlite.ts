@@ -637,14 +637,20 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       exactDependencyKeys.add(toDirectorySnapshotDepIndexKey(exactDependencyKey))
 
       if (normalizedPathKey === '.') {
-        descendantDependencyPatterns.push(`${prefix}%`)
         descendantDependencyPatterns.push(
-          `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${prefix}%:1`
+          `${escapeSqlLikePattern(prefix)}%`
+        )
+        descendantDependencyPatterns.push(
+          `${escapeSqlLikePattern(DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX + prefix)}%:1`
         )
       } else {
-        descendantDependencyPatterns.push(`${prefix}${normalizedPathKey}/%`)
         descendantDependencyPatterns.push(
-          `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${prefix}${normalizedPathKey}/%:1`
+          `${escapeSqlLikePattern(`${prefix}${normalizedPathKey}`)}/%`
+        )
+        descendantDependencyPatterns.push(
+          `${escapeSqlLikePattern(
+            `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${prefix}${normalizedPathKey}`
+          )}/%:1`
         )
       }
     }
@@ -676,7 +682,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     if (descendantDependencyPatterns.length > 0) {
       whereClauses.push(
         descendantDependencyPatterns
-          .map(() => `dependency.dep_key LIKE ?`)
+          .map(() => `dependency.dep_key LIKE ? ESCAPE '\\'`)
           .join(' OR ')
       )
       whereParameters.push(...descendantDependencyPatterns)
@@ -757,7 +763,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const normalizedPrefix = String(prefix)
-    const likePattern = `${normalizedPrefix}%`
+    const likePattern = `${escapeSqlLikePattern(normalizedPrefix)}%`
 
     const rows = (await this.#runWithBusyRetries(() =>
       this.#db
@@ -765,7 +771,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           `
             SELECT node_key
             FROM cache_entries
-            WHERE node_key LIKE ?
+            WHERE node_key LIKE ? ESCAPE '\\'
             ORDER BY node_key
           `
         )
@@ -1219,6 +1225,10 @@ function normalizeDependencyPathKey(path: string): string {
   const normalized = path.replace(/\\+/g, '/').replace(/^\.\/+/, '')
   const trimmed = normalized.replace(/^\/+/, '').replace(/\/+$/, '')
   return trimmed === '' ? '.' : trimmed
+}
+
+function escapeSqlLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`)
 }
 
 function getAncestorPathKeys(path: string): string[] {

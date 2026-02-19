@@ -4272,6 +4272,22 @@ function shouldValidatePersistedFileDependencies(
   )
 }
 
+function shouldPersistDirectorySnapshots(fileSystem: FileSystem): boolean {
+  const maybeIsDeterministic = (fileSystem as {
+    isPersistentCacheDeterministic?: () => boolean
+  }).isPersistentCacheDeterministic
+
+  if (typeof maybeIsDeterministic !== 'function') {
+    return true
+  }
+
+  try {
+    return maybeIsDeterministic.call(fileSystem)
+  } catch {
+    return false
+  }
+}
+
 function normalizeWorkspacePathKey(
   fileSystem: FileSystem,
   path: string
@@ -6305,7 +6321,9 @@ export class Directory<
         filter: directory.#filter,
         filterPattern: directory.#filterPattern,
         sort: directory.#sort,
-      }) && session.usesPersistentCache
+      }) &&
+      session.usesPersistentCache &&
+      shouldPersistDirectorySnapshots(directory.getFileSystem())
     const wasPathInvalidated =
       registerInSession &&
       session.isDirectorySnapshotKeyInvalidated(snapshotKey)

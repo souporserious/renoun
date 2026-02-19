@@ -4,6 +4,8 @@ import {
   scanModuleExports,
   parseExportId,
   formatExportId,
+  getParserFlavorFromFileName,
+  getExportParseCacheKey,
   isBarrelFile,
   getDiceSimilarity,
   buildExportComparisonMaps,
@@ -361,6 +363,33 @@ describe('formatExportId', () => {
     const id = formatExportId('path/to/file.ts', 'Thing')
     const parsed = parseExportId(id)
     expect(parsed).toEqual({ file: 'path/to/file.ts', name: 'Thing' })
+  })
+})
+
+describe('getExportParseCacheKey', () => {
+  it('differentiates parser flavors for the same digest', () => {
+    const digest = '0123456789abcdef'
+
+    expect(getExportParseCacheKey(digest, 'ts')).not.toBe(
+      getExportParseCacheKey(digest, 'tsx')
+    )
+  })
+
+  it('uses unknown parser flavor by default', () => {
+    const digest = 'feedface'
+    expect(getExportParseCacheKey(digest)).toBe(
+      getExportParseCacheKey(digest, 'unknown')
+    )
+  })
+})
+
+describe('getParserFlavorFromFileName', () => {
+  it('extracts lowercased file extensions', () => {
+    expect(getParserFlavorFromFileName('Component.TSX')).toBe('tsx')
+  })
+
+  it('returns unknown for extension-less file names', () => {
+    expect(getParserFlavorFromFileName('LICENSE')).toBe('unknown')
   })
 })
 
