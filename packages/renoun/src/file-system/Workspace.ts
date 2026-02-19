@@ -7,6 +7,7 @@ import {
   directoryName,
   joinPaths,
   normalizeSlashes,
+  normalizeWorkspaceRelativePath as normalizeWorkspaceRelative,
   resolveSchemePath,
   trimTrailingSlashes,
   type PathLike,
@@ -85,14 +86,6 @@ function safeReadDirectory(fileSystem: FileSystem, path: string) {
   } catch {
     return []
   }
-}
-
-function normalizeWorkspaceRelative(path: string) {
-  const normalized = normalizeSlashes(path)
-  if (!normalized || normalized === '.' || normalized === './') {
-    return ''
-  }
-  return normalized.replace(/^\.\/+/, '')
 }
 
 function createStructureNodeKey(namespace: string, payload: unknown) {

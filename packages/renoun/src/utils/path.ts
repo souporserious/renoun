@@ -28,9 +28,8 @@ export function pathLikeToString(path: PathLike): string {
 const SCHEME_RESOLVERS: Record<string, (path: string) => string> = {
   workspace: (schemePath: string) => {
     const workspaceRoot = normalizeSlashes(getRootDirectory())
-    const normalizedSchemePath = normalizeSlashes(schemePath).replace(
-      /^\/+/,
-      ''
+    const normalizedSchemePath = trimLeadingSlashes(
+      normalizeSlashes(schemePath)
     )
 
     if (normalizedSchemePath.length === 0) {
@@ -57,9 +56,59 @@ function parseSchemePath(path: string) {
 
 /** Normalize Windows backslashes to POSIX forward slashes. */
 export function normalizeSlashes(path: string): string {
-  return path.replace(/\\+/g, '/')
+  return path.replaceAll('\\', '/')
 }
 
+/** Remove a single leading "./" segment and any immediate extra slashes. */
+export function trimLeadingDotSlash(path: string): string {
+  const normalized = normalizeSlashes(path)
+  if (
+    normalized.length >= 2 &&
+    normalized.charCodeAt(0) === 46 &&
+    normalized.charCodeAt(1) === 47
+  ) {
+    let start = 2
+    while (start < normalized.length && normalized.charCodeAt(start) === 47) {
+      start++
+    }
+    return normalized.slice(start)
+  }
+
+  return normalized
+}
+
+/** Remove a single leading "./" prefix. */
+export function trimLeadingCurrentDirPrefix(path: string): string {
+  const normalized = normalizeSlashes(path)
+  return normalized.startsWith('./') ? normalized.slice(2) : normalized
+}
+
+/** Remove a leading "." marker and at most one following slash. */
+export function trimLeadingDotPrefix(path: string): string {
+  const normalized = normalizeSlashes(path)
+  if (!normalized.startsWith('.')) {
+    return normalized
+  }
+  if (normalized.length > 1 && normalized.charCodeAt(1) === 47) {
+    return normalized.slice(2)
+  }
+  return normalized.slice(1)
+}
+
+/** Remove one leading all-dot segment (e.g. "./", "../", ".../"). */
+export function trimLeadingDotsSegment(path: string): string {
+  const normalized = normalizeSlashes(path)
+  let index = 0
+  while (index < normalized.length && normalized.charCodeAt(index) === 46) {
+    index++
+  }
+  if (index > 0 && index < normalized.length && normalized.charCodeAt(index) === 47) {
+    return normalized.slice(index + 1)
+  }
+  return normalized
+}
+
+/** Check if a path is absolute (starts with '/', 'C:\', or '\\'). */
 export function isAbsolutePath(path: string): boolean {
   const normalized = normalizeSlashes(path)
 
@@ -68,6 +117,14 @@ export function isAbsolutePath(path: string): boolean {
     /^[A-Za-z]:\//.test(normalized) ||
     normalized.startsWith('//')
   )
+}
+
+/** Remove leading forward slashes from a path-like string. */
+export function trimLeadingSlashes(value: string): string {
+  let start = 0
+  // 47 is '/'
+  while (start < value.length && value.charCodeAt(start) === 47) start++
+  return value.slice(start)
 }
 
 /** Remove trailing forward slashes from a path-like string. */
@@ -80,31 +137,19 @@ export function trimTrailingSlashes(value: string): string {
 
 /** Normalize a path to a stable key form (relative, no outer slashes, '.' for root). */
 export function normalizePathKey(path: string): string {
-  const normalized = normalizeSlashes(path)
-  let start = 0
-  let end = normalized.length
-
-  if (
-    end >= 2 &&
-    normalized.charCodeAt(0) === 46 &&
-    normalized.charCodeAt(1) === 47
-  ) {
-    start = 2
-    while (start < end && normalized.charCodeAt(start) === 47) {
-      start++
-    }
-  }
-
-  while (start < end && normalized.charCodeAt(start) === 47) {
-    start++
-  }
-
-  while (end > start && normalized.charCodeAt(end - 1) === 47) {
-    end--
-  }
-
-  const key = normalized.slice(start, end)
+  const key = trimTrailingSlashes(
+    trimLeadingSlashes(trimLeadingDotSlash(path))
+  )
   return key === '' ? '.' : key
+}
+
+/** Normalize workspace-relative values while preserving absolute roots. */
+export function normalizeWorkspaceRelativePath(path: string): string {
+  const normalized = trimLeadingDotSlash(path)
+  if (!normalized || normalized === '.') {
+    return ''
+  }
+  return normalized
 }
 
 /** Normalize a path to be relative to the current working directory. */

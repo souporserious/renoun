@@ -16,7 +16,12 @@ import {
 
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import { trimTrailingSlashes } from '../utils/path.ts'
+import {
+  normalizeSlashes,
+  trimLeadingCurrentDirPrefix,
+  trimLeadingDotPrefix,
+  trimTrailingSlashes,
+} from '../utils/path.ts'
 
 const MAX_WAIT_TIME = 30_000
 const PING_INTERVAL = 2_000
@@ -517,7 +522,7 @@ async function discoverFrameworkProjects(
     frameworks: FrameworkKind[]
   }> = []
   const workspaceRelative = (path: string) =>
-    relativePath(workspaceRoot, path).replace(/^\.\//, '')
+    trimLeadingCurrentDirPrefix(relativePath(workspaceRoot, path))
 
   const workspaceGlobs = await readWorkspacePackageGlobs(workspaceRoot)
   const roots = workspaceGlobs
@@ -893,7 +898,7 @@ function computeRouteFromFilePath(
 ): string {
   // Create a probable route from file path by removing numeric prefixes and extensions.
   let relative = relativePath(rootDirectory, filePath)
-  relative = relative.replace(/\\+/g, '/').replace(/^\.\/?/, '')
+  relative = trimLeadingDotPrefix(normalizeSlashes(relative))
 
   const segments = relative
     .split('/')

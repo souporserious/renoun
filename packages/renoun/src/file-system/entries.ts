@@ -41,6 +41,10 @@ import {
   relativePath,
   ensureRelativePath,
   normalizePathKey,
+  trimLeadingCurrentDirPrefix,
+  trimLeadingDotPrefix,
+  trimLeadingSlashes,
+  trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
 import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
@@ -576,7 +580,7 @@ function createGlobRuntimeLoader(
   glob: GlobModuleMap<any>
 ): ModuleRuntimeLoader<any> {
   return async (_path: string, file: any) => {
-    const relative = normalizeSlashes(file.relativePath).replace(/^\.\/?/, '')
+    const relative = trimLeadingDotPrefix(normalizeSlashes(file.relativePath))
     const candidates = [relative, `./${relative}`, `/${relative}`]
 
     let importer: (() => Promise<any>) | undefined
@@ -990,7 +994,7 @@ export class File<
       remainingPath = remainingPath.slice(repeatedPrefix.length)
     }
 
-    const finalPath = remainingPath.replace(/^\/+/, '')
+    const finalPath = trimLeadingSlashes(remainingPath)
 
     if (!finalPath) {
       return joinPaths(scope, rawPath)
@@ -4994,9 +4998,9 @@ export class Directory<
   ): Promise<FileSystemEntry<LoaderTypes>> {
     // Fast path try direct path lookup without hydrating the directory.
     if (segments.length > 0) {
-      const directoryWorkspacePath = directory.workspacePath
-        .replace(/^\.\/?/, '')
-        .replace(/\/$/, '')
+      const directoryWorkspacePath = trimTrailingSlashes(
+        trimLeadingDotPrefix(directory.workspacePath)
+      )
       const targetPath =
         (directoryWorkspacePath ? directoryWorkspacePath + '/' : '') +
         segments.join('/')
@@ -5449,10 +5453,7 @@ export class Directory<
   async getDirectory(path: string | string[]): Promise<Directory<LoaderTypes>> {
     const segments = Array.isArray(path)
       ? path.map(normalizeSlashes)
-      : normalizeSlashes(path)
-          .replace(/^\.\/?/, '')
-          .split('/')
-          .filter(Boolean)
+      : trimLeadingDotPrefix(normalizeSlashes(path)).split('/').filter(Boolean)
     let currentDirectory = this as Directory<LoaderTypes>
 
     while (segments.length > 0) {
@@ -5590,14 +5591,14 @@ export class Directory<
     this.#pathLookup.set(routePath, entry)
 
     // Remove leading and trailing slashes
-    const normalizedPath = routePath.replace(/^\.\/?/, '').replace(/\/$/, '')
+    const normalizedPath = trimTrailingSlashes(trimLeadingDotPrefix(routePath))
     this.#pathLookup.set(normalizedPath, entry)
     // Also index by workspace-relative filesystem path so lookups by raw path
     // (e.g. "fixtures/docs/index") can short-circuit hydration.
     const workspacePath = entry.workspacePath
-    const normalizedWorkspacePath = workspacePath
-      .replace(/^\.\/?/, '')
-      .replace(/\/$/, '')
+    const normalizedWorkspacePath = trimTrailingSlashes(
+      trimLeadingDotPrefix(workspacePath)
+    )
     this.#pathLookup.set(normalizedWorkspacePath, entry)
     // For files, also index the workspace path without extensions to match
     // extension-agnostic lookups.
@@ -5693,7 +5694,7 @@ export class Directory<
   }
 
   #normalizeSnapshotPath(path: string): string {
-    const normalizedPath = normalizeSlashes(path).replace(/^\.\//, '')
+    const normalizedPath = trimLeadingCurrentDirPrefix(normalizeSlashes(path))
 
     if (!normalizedPath || normalizedPath === '.') {
       return '.'
@@ -5996,8 +5997,8 @@ export class Directory<
   }
 
   #joinSnapshotPaths(basePath: string, childPath: string): string {
-    const normalizedBasePath = normalizeSlashes(basePath).replace(/\/+$/, '')
-    const normalizedChildPath = normalizeSlashes(childPath).replace(/^\/+/, '')
+    const normalizedBasePath = trimTrailingSlashes(normalizeSlashes(basePath))
+    const normalizedChildPath = trimLeadingSlashes(normalizeSlashes(childPath))
 
     if (!normalizedBasePath || normalizedBasePath === '.') {
       return normalizedChildPath || '.'

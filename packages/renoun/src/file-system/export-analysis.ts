@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { ts } from 'ts-morph'
 
-import { normalizePath, joinPaths } from '../utils/path.ts'
+import { normalizePath, joinPaths, trimLeadingDotSlash } from '../utils/path.ts'
 import { hasJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
 import type { DirectoryEntry } from './types.ts'
 
@@ -1344,8 +1344,7 @@ export function checkAndCollapseOscillation<
  * Normalizes a path and strips a leading `./` prefix.
  */
 function normalizeEntryPath(path: string): string {
-  const normalized = normalizePath(path)
-  return normalized.startsWith('./') ? normalized.slice(2) : normalized
+  return trimLeadingDotSlash(normalizePath(path))
 }
 
 /**

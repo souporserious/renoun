@@ -43,6 +43,9 @@ import {
   normalizePathKey,
   normalizeSlashes,
   relativePath,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
+  trimTrailingSlashes,
 } from '../utils/path.ts'
 import {
   hasJavaScriptLikeExtension,
@@ -938,9 +941,7 @@ export class GitFileSystem
       ? resolve(normalizedPath)
       : this.getAbsolutePath(path)
     const relativeToRepo = relativePath(this.repoRoot, absolutePath)
-    return normalizeSlashes(
-      relativeToRepo.startsWith('./') ? relativeToRepo.slice(2) : relativeToRepo
-    )
+    return trimLeadingDotSlash(relativeToRepo)
   }
 
   async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
@@ -1715,7 +1716,7 @@ export class GitFileSystem
     const directoryEntries: DirectoryEntry[] = []
     const base =
       relativePath && relativePath !== '.'
-        ? normalizeSlashes(relativePath).replace(/\/$/, '')
+        ? trimTrailingSlashes(normalizeSlashes(relativePath))
         : ''
 
     for (const entry of entries) {
@@ -1743,7 +1744,7 @@ export class GitFileSystem
     const directoryEntries: DirectoryEntry[] = []
     const base =
       relativePath && relativePath !== '.'
-        ? normalizeSlashes(relativePath).replace(/\/$/, '')
+        ? trimTrailingSlashes(normalizeSlashes(relativePath))
         : ''
 
     for (const entry of entries) {
@@ -4585,7 +4586,7 @@ export class GitFileSystem
     }
 
     relativePath = relativePath.split(sep).join('/')
-    relativePath = relativePath.replace(/^\.?\//, '')
+    relativePath = trimLeadingSlashes(trimLeadingDotSlash(relativePath))
     relativePath = normalizePath(relativePath)
     assertSafeRepoPath(relativePath)
     return relativePath
@@ -6155,7 +6156,7 @@ function parseLsTreeOutput(output: string, basePath: string): DirectoryEntry[] {
   const normalizedBase = normalizeSlashes(basePath || '')
   const base =
     normalizedBase && normalizedBase !== '.'
-      ? normalizedBase.replace(/\/$/, '')
+      ? trimTrailingSlashes(normalizedBase)
       : ''
   const records = String(output).split('\0').filter(Boolean)
 

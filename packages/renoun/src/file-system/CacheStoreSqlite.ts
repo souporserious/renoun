@@ -6,6 +6,7 @@ import { deserialize, serialize } from 'node:v8'
 
 import { delay } from '../utils/delay.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { normalizePathKey } from '../utils/path.ts'
 import { CACHE_SCHEMA_VERSION } from './cache-key.ts'
 import { summarizePersistedValue } from './cache-persistence-debug.ts'
 import { loadSqliteModule } from './sqlite.ts'
@@ -825,7 +826,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
     }
 
-    const normalizedPathKey = normalizeDependencyPathKey(dependencyPathKey)
+    const normalizedPathKey = normalizePathKey(dependencyPathKey)
     const dependencyPrefixes = ['file:', 'dir:', 'dir-mtime:'] as const
     const exactDependencyKeys = new Set<string>()
     const descendantDependencyPatterns: string[] = []
@@ -1430,18 +1431,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   }
 }
 
-function normalizeDependencyPathKey(path: string): string {
-  const normalized = path.replace(/\\+/g, '/').replace(/^\.\/+/, '')
-  const trimmed = normalized.replace(/^\/+/, '').replace(/\/+$/, '')
-  return trimmed === '' ? '.' : trimmed
-}
-
 function escapeSqlLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`)
 }
 
 function getAncestorPathKeys(path: string): string[] {
-  const normalized = normalizeDependencyPathKey(path)
+  const normalized = normalizePathKey(path)
   if (normalized === '.') {
     return ['.']
   }

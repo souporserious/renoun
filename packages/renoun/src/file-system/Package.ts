@@ -8,8 +8,11 @@ import {
   ensureRelativePath,
   joinPaths,
   normalizeSlashes,
+  normalizeWorkspaceRelativePath as normalizeWorkspaceRelative,
   relativePath,
   resolveSchemePath,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
   trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
@@ -125,14 +128,6 @@ function resolveSearchStartDirectory(
   }
 
   return normalizeSlashes(getRootDirectory())
-}
-
-function normalizeWorkspaceRelative(path: string) {
-  const normalized = normalizeSlashes(path)
-  if (!normalized || normalized === '.' || normalized === './') {
-    return ''
-  }
-  return normalized.replace(/^\.\/+/, '')
 }
 
 function createStructureNodeKey(namespace: string, payload: unknown) {
@@ -563,7 +558,7 @@ function normalizeExportSubpath(exportPath: string) {
     return ''
   }
 
-  let normalized = exportPath.replace(/^\.\/+/, '')
+  let normalized = trimLeadingDotSlash(exportPath)
   const wildcardIndex = normalized.indexOf('*')
 
   if (wildcardIndex !== -1) {
@@ -582,7 +577,7 @@ function isDirectoryLikeExport(exportPath: string) {
     return false
   }
 
-  const normalized = exportPath.replace(/^\.\/+/, '')
+  const normalized = trimLeadingDotSlash(exportPath)
 
   if (!normalized) {
     return true
@@ -621,7 +616,7 @@ function normalizePackageExportSpecifier(
     }
   }
 
-  normalized = normalized.replace(/^\/+/, '')
+  normalized = trimLeadingSlashes(normalized)
 
   if (!normalized || normalized === '.' || normalized === './') {
     return ''
@@ -1037,11 +1032,10 @@ function guessSourceFromBuilt(
     '.',
   ])
 
-  const normalizedBuilt = normalizeSlashes(builtTarget).replace(/^\.\//, '')
-  const rewrittenBuilt = applyRewrites(
-    normalizedBuilt,
-    config.rewrites
-  ).replace(/^\.\//, '')
+  const normalizedBuilt = trimLeadingDotSlash(normalizeSlashes(builtTarget))
+  const rewrittenBuilt = trimLeadingDotSlash(
+    applyRewrites(normalizedBuilt, config.rewrites)
+  )
 
   // Candidate “inside paths” we try mapping under sourceRoots.
   // We try:
@@ -1510,7 +1504,7 @@ export class Package<
       const path =
         normalizedRelativePath === ''
           ? '/'
-          : `/${normalizedRelativePath.replace(/^\/+/, '')}`
+          : `/${trimLeadingSlashes(normalizedRelativePath)}`
 
       const structures: Array<
         PackageStructure | DirectoryStructure | FileStructure

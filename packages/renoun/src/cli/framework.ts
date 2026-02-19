@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { trimLeadingCurrentDirPrefix } from '../utils/path.ts'
 
 export type Framework = 'next' | 'vite' | 'waku'
 
@@ -37,5 +38,5 @@ export function resolveFrameworkBinFile(
   }
 
   const packageJsonDirectory = dirname(packageJsonPath)
-  return join(packageJsonDirectory, binRelativePath.replace(/^\.\//, ''))
+  return join(packageJsonDirectory, trimLeadingCurrentDirPrefix(binRelativePath))
 }

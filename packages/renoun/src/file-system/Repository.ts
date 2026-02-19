@@ -1,6 +1,10 @@
 import { existsSync } from 'node:fs'
 
-import { directoryName, normalizeSlashes } from '../utils/path.ts'
+import {
+  directoryName,
+  normalizePathKey,
+  normalizeSlashes,
+} from '../utils/path.ts'
 import { GitFileSystem } from './GitFileSystem.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 import { Directory, File } from './entries.ts'
@@ -271,32 +275,17 @@ function looksLikeWindowsDrivePath(value: string): boolean {
 }
 
 function normalizeSparsePath(path: string): string | null {
-  let normalized = normalizeSlashes(path).trim()
+  const normalized = normalizeSlashes(path).trim()
 
   if (!normalized) return null
   if (looksLikeWindowsDrivePath(normalized)) return null
 
-  if (normalized === '.' || normalized === './' || normalized === '/') {
+  const pathKey = normalizePathKey(normalized)
+  if (pathKey === '.') {
     return null
   }
 
-  if (normalized.startsWith('./')) {
-    normalized = normalized.slice(2)
-  }
-
-  while (normalized.startsWith('/')) {
-    normalized = normalized.slice(1)
-  }
-
-  while (normalized.endsWith('/')) {
-    normalized = normalized.slice(0, -1)
-  }
-
-  if (!normalized || normalized === '.') {
-    return null
-  }
-
-  return normalized
+  return pathKey
 }
 
 function mergeSparsePaths(

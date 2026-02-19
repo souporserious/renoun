@@ -4,7 +4,11 @@ import {
   directoryName,
   joinPaths,
   normalizePath,
+  normalizePathKey,
   normalizeSlashes,
+  trimLeadingDotsSegment,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
 } from '../utils/path.ts'
 import { Semaphore } from '../utils/Semaphore.ts'
 import {
@@ -410,14 +414,14 @@ export class GitVirtualFileSystem
         continue
       }
 
-      fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
+      fullPath = trimLeadingDotSlash(fullPath)
       if (!rootPrefix) {
         rootPrefix = fullPath.split('/')[0]
       }
       if (rootPrefix && fullPath.startsWith(`${rootPrefix}/`)) {
         fullPath = fullPath.slice(rootPrefix.length + 1)
       }
-      fullPath = fullPath.replace(/^\/+/, '')
+      fullPath = trimLeadingSlashes(fullPath)
       if (!fullPath || fullPath.endsWith('/')) {
         await discard()
         continue
@@ -500,11 +504,11 @@ export class GitVirtualFileSystem
 
       if (isSymLink) {
         const rawTarget = this.#sanitizeTarPath(paxLinkPath) || ''
-        const target = normalizeSlashes(rawTarget).replace(/^\/+/, '')
+        const target = trimLeadingSlashes(normalizeSlashes(rawTarget))
         const directory = effectiveSegments.slice(0, -1).join('/') || '.'
-        const resolvedTarget = normalizeSlashes(
-          joinPaths(directory, target)
-        ).replace(/^\/+/, '')
+        const resolvedTarget = trimLeadingSlashes(
+          normalizeSlashes(joinPaths(directory, target))
+        )
         const key = normalizePath(relativePath)
         const value = normalizePath(resolvedTarget)
         this.#symlinkMap.set(key, value)
@@ -1132,31 +1136,9 @@ export class GitVirtualFileSystem
 
   #normalizeGitMetadataPath(path: string): string {
     const relative = normalizeSlashes(this.getRelativePathToWorkspace(path))
-    if (!relative || relative === '.' || relative === './') {
-      return ''
-    }
-    // Trim leading "./" segments
-    let normalized = relative
-    while (normalized.startsWith('./')) {
-      normalized = normalized.slice(2)
-    }
-    // Trim leading slashes
-    let start = 0
-    while (start < normalized.length && normalized.charCodeAt(start) === 47) {
-      start++
-    }
-    if (start > 0) {
-      normalized = normalized.slice(start)
-    }
-    // Trim trailing slashes
-    let end = normalized.length
-    while (end > 0 && normalized.charCodeAt(end - 1) === 47) {
-      end--
-    }
-    if (end < normalized.length) {
-      normalized = normalized.slice(0, end)
-    }
-    return normalized
+    const normalized = normalizePathKey(relative)
+
+    return normalized === '.' ? '' : normalized
   }
 
   #createGitMetadataState(): GitMetadataState {
@@ -2442,16 +2424,16 @@ export class GitVirtualFileSystem
   }
 
   #pathMatchesFilters(path: string): boolean {
-    const normalizedPath = path.replace(/^\.\/+/, '')
+    const normalizedPath = trimLeadingDotSlash(path)
     if (this.#include && this.#include.length > 0) {
       const includeHit = this.#include.some((inc) =>
-        normalizedPath.startsWith(inc.replace(/^\/+/, ''))
+        normalizedPath.startsWith(trimLeadingSlashes(inc))
       )
       if (!includeHit) return false
     }
     if (this.#exclude && this.#exclude.length > 0) {
       const excludeHit = this.#exclude.some((exc) =>
-        normalizedPath.startsWith(exc.replace(/^\/+/, ''))
+        normalizedPath.startsWith(trimLeadingSlashes(exc))
       )
       if (excludeHit) return false
     }
@@ -2930,7 +2912,7 @@ export class GitVirtualFileSystem
     if (!entry) {
       const keys = Array.from(this.getFiles().keys())
       // Fallback try to locate file by suffix (handles tar root folder prefix)
-      const suffix = `/${normalizeSlashes(targetPath).replace(/^\.+\//, '')}`
+      const suffix = `/${trimLeadingDotsSegment(normalizeSlashes(targetPath))}`
       const candidates = keys.filter(
         (key) =>
           key === `./${normalizeSlashes(targetPath)}` || key.endsWith(suffix)
@@ -3354,8 +3336,11 @@ export class GitVirtualFileSystem
         ],
       },
       async (ctx) => {
-      ctx.recordConstDep('git-virtual-cache', GIT_VIRTUAL_HISTORY_CACHE_VERSION)
-      return serializeExportItemMap(scanModuleExports(filePath, content))
+        ctx.recordConstDep(
+          'git-virtual-cache',
+          GIT_VIRTUAL_HISTORY_CACHE_VERSION
+        )
+        return serializeExportItemMap(scanModuleExports(filePath, content))
       }
     )
     const parsed = deserializeExportItemMap(payload)

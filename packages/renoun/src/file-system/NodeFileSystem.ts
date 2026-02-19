@@ -30,6 +30,7 @@ import {
   normalizePathKey,
   normalizeSlashes,
   relativePath,
+  trimLeadingDotSlash,
 } from '../utils/path.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -238,7 +239,9 @@ export class NodeFileSystem
 
   getRelativePathToWorkspace(path: string) {
     const rootDirectory = getRootDirectory()
-    return relativePath(rootDirectory, this.getAbsolutePath(path))
+    return trimLeadingDotSlash(
+      relativePath(rootDirectory, this.getAbsolutePath(path))
+    )
   }
 
   async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {

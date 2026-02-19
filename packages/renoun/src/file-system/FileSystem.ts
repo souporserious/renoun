@@ -17,6 +17,8 @@ import {
   relativePath,
   removeAllExtensions,
   removeOrderPrefixes,
+  trimLeadingDotSlash,
+  trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
 import { parseJsonWithComments } from '../utils/parse-json-with-comments.ts'
@@ -176,13 +178,9 @@ export abstract class BaseFileSystem {
       return joinPaths('/', options.basePath)
     }
 
-    const resolvedPath = removeAllExtensions(
-      removeOrderPrefixes(rootRelativePath)
+    const resolvedPath = trimTrailingSlashes(
+      trimLeadingDotSlash(removeAllExtensions(removeOrderPrefixes(rootRelativePath)))
     )
-      // remove leading dot
-      .replace(/^\.\//, '')
-      // remove trailing slash
-      .replace(/\/$/, '')
 
     return joinPaths('/', options.basePath, resolvedPath)
   }
