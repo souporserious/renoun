@@ -883,7 +883,15 @@ export class GitVirtualFileSystem
     try {
       const payload = await session.cache.getOrCompute<GitFileMetadataPayload>(
         nodeKey,
-        { persist: deterministic },
+        {
+          persist: deterministic,
+          constDeps: [
+            {
+              name: 'git-virtual-cache',
+              version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+            },
+          ],
+        },
         async (ctx) => {
           ctx.recordConstDep(
             'git-virtual-cache',
@@ -1232,7 +1240,15 @@ export class GitVirtualFileSystem
         cacheKey,
         session.cache.getOrCompute(
           nodeKey,
-          { persist: deterministic },
+          {
+            persist: deterministic,
+            constDeps: [
+              {
+                name: 'git-virtual-cache',
+                version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+              },
+            ],
+          },
           async (ctx) => {
             ctx.recordConstDep(
               'git-virtual-cache',
@@ -3326,10 +3342,22 @@ export class GitVirtualFileSystem
     })
     const payload = await session.cache.getOrCompute<
       Record<string, ExportItem>
-    >(nodeKey, { persist: true }, async (ctx) => {
+    >(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: [
+          {
+            name: 'git-virtual-cache',
+            version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
       ctx.recordConstDep('git-virtual-cache', GIT_VIRTUAL_HISTORY_CACHE_VERSION)
       return serializeExportItemMap(scanModuleExports(filePath, content))
-    })
+      }
+    )
     const parsed = deserializeExportItemMap(payload)
     this.#exportParseCache.set(cacheKey, parsed)
     return parsed
@@ -4438,7 +4466,15 @@ export class GitVirtualFileSystem
 
     return session.cache.getOrCompute(
       nodeKey,
-      { persist: deterministic },
+      {
+        persist: deterministic,
+        constDeps: [
+          {
+            name: 'git-virtual-cache',
+            version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
       async (ctx) => {
         ctx.recordConstDep(
           'git-virtual-cache',
@@ -4562,7 +4598,15 @@ export class GitVirtualFileSystem
     try {
       return await session.cache.getOrCompute(
         nodeKey,
-        { persist: shouldPersist },
+        {
+          persist: shouldPersist,
+          constDeps: [
+            {
+              name: 'git-virtual-cache',
+              version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+            },
+          ],
+        },
         async (ctx) => {
           ctx.recordConstDep(
             'git-virtual-cache',

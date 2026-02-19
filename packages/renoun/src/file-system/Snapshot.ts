@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { FileReadableStream, FileSystem } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
 
@@ -8,11 +9,13 @@ const SNAPSHOT_VERSION = 1
 // Paths resolved via metadata/missing IDs are revalidated on a short interval.
 // Explicit Session.invalidatePath() calls still invalidate immediately.
 const METADATA_CONTENT_ID_MAX_AGE_MS = 250
+const METADATA_COLLISION_GUARD_WINDOW_MS = 1_000
 const MISSING_CONTENT_ID_MAX_AGE_MS = 100
 
 type ContentIdStrategy =
   | 'file-system-content-id'
   | 'metadata'
+  | 'metadata-guarded'
   | 'file-content'
   | 'directory-content'
   | 'missing'
@@ -20,6 +23,7 @@ type ContentIdStrategy =
 interface CachedContentId {
   promise: Promise<string>
   strategy?: ContentIdStrategy
+  id?: string
   updatedAt: number
 }
 
@@ -62,35 +66,13 @@ export interface Snapshot {
   contentId(path: string): Promise<string>
   invalidatePath(path: string): void
   invalidateAll?(): void
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value)
-  }
-
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`
-  }
-
-  const object = value as Record<string, unknown>
-  const keys = Object.keys(object).sort()
-  const entries: string[] = []
-
-  for (const key of keys) {
-    entries.push(`${JSON.stringify(key)}:${stableStringify(object[key])}`)
-  }
-
-  return `{${entries.join(',')}}`
-}
-
-function hashString(input: string): string {
-  return createHash('sha1').update(input).digest('hex')
+  onInvalidate(listener: (path: string) => void): () => void
 }
 
 export class FileSystemSnapshot implements Snapshot {
   readonly #fileSystem: FileSystem
   readonly #contentIds = new Map<string, CachedContentId>()
+  readonly #invalidateListeners = new Set<(path: string) => void>()
 
   readonly id: string
 
@@ -164,13 +146,21 @@ export class FileSystemSnapshot implements Snapshot {
   async contentId(path: string): Promise<string> {
     const normalizedPath = this.#normalizeSnapshotPath(path)
     const cached = this.#contentIds.get(normalizedPath)
+    let previousMetadataId: string | undefined
 
     if (cached) {
-      if (cached.strategy === 'metadata') {
+      if (
+        cached.strategy === 'metadata' ||
+        cached.strategy === 'metadata-guarded'
+      ) {
         const age = Date.now() - cached.updatedAt
         if (age <= METADATA_CONTENT_ID_MAX_AGE_MS) {
           return cached.promise
         }
+        previousMetadataId =
+          typeof cached.id === 'string' && cached.id.startsWith('mtime:')
+            ? cached.id
+            : undefined
         this.#contentIds.delete(normalizedPath)
       } else if (cached.strategy === 'missing') {
         const age = Date.now() - cached.updatedAt
@@ -188,9 +178,13 @@ export class FileSystemSnapshot implements Snapshot {
       updatedAt: Date.now(),
     }
     const promise = this.#createContentId(
-      this.#getContentIdLookupPaths(path, normalizedPath)
+      this.#getContentIdLookupPaths(path, normalizedPath),
+      {
+        previousMetadataId,
+      }
     ).then((result) => {
       cachedEntry.strategy = result.strategy
+      cachedEntry.id = result.id
       cachedEntry.updatedAt = Date.now()
       return result.id
     })
@@ -204,6 +198,7 @@ export class FileSystemSnapshot implements Snapshot {
     const normalizedPath = this.#normalizeSnapshotPath(path)
     if (normalizedPath === '.') {
       this.#contentIds.clear()
+      this.#emitInvalidate(path)
       return
     }
 
@@ -216,13 +211,28 @@ export class FileSystemSnapshot implements Snapshot {
         this.#contentIds.delete(cachedPath)
       }
     }
+
+    this.#emitInvalidate(path)
   }
 
   invalidateAll(): void {
     this.#contentIds.clear()
+    this.#emitInvalidate('.')
   }
 
-  async #createContentId(pathCandidates: string[]): Promise<{
+  onInvalidate(listener: (path: string) => void): () => void {
+    this.#invalidateListeners.add(listener)
+    return () => {
+      this.#invalidateListeners.delete(listener)
+    }
+  }
+
+  async #createContentId(
+    pathCandidates: string[],
+    options: {
+      previousMetadataId?: string
+    } = {}
+  ): Promise<{
     id: string
     strategy: ContentIdStrategy
   }> {
@@ -242,8 +252,22 @@ export class FileSystemSnapshot implements Snapshot {
       ])
 
       if (lastModifiedMs !== undefined && byteLength !== undefined) {
+        const metadataId = `mtime:${lastModifiedMs};size:${byteLength}`
+        const shouldGuardMetadataCollision =
+          options.previousMetadataId === metadataId &&
+          this.#shouldGuardMetadataCollision(lastModifiedMs)
+        if (shouldGuardMetadataCollision) {
+          const guardedHashId = await this.#createFileContentHashId(path)
+          if (guardedHashId) {
+            return {
+              id: guardedHashId,
+              strategy: 'metadata-guarded',
+            }
+          }
+        }
+
         return {
-          id: `mtime:${lastModifiedMs};size:${byteLength}`,
+          id: metadataId,
           strategy: 'metadata',
         }
       }
@@ -289,6 +313,21 @@ export class FileSystemSnapshot implements Snapshot {
     return {
       id: 'missing',
       strategy: 'missing',
+    }
+  }
+
+  #shouldGuardMetadataCollision(lastModifiedMs: number): boolean {
+    const now = Date.now()
+    return now - lastModifiedMs <= METADATA_COLLISION_GUARD_WINDOW_MS
+  }
+
+  async #createFileContentHashId(path: string): Promise<string | undefined> {
+    try {
+      const bytes = await this.readFileBinary(path)
+      const hash = createHash('sha1').update(bytes).digest('hex')
+      return `sha1:${hash}`
+    } catch {
+      return undefined
     }
   }
 
@@ -342,6 +381,16 @@ export class FileSystemSnapshot implements Snapshot {
     addCandidate(path)
 
     return candidates
+  }
+
+  #emitInvalidate(path: string): void {
+    for (const listener of this.#invalidateListeners) {
+      try {
+        listener(path)
+      } catch {
+        // Ignore listener failures so snapshot invalidation remains best-effort.
+      }
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 import { normalizePathKey } from '../utils/path.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
-import { hashString, stableStringify } from './CacheStore.ts'
 
 export const CACHE_SCHEMA_VERSION = 0
 

@@ -4,9 +4,10 @@ import {
   type RawData,
 } from './websocket.ts'
 import type { AddressInfo } from 'node:net'
-import { randomBytes, createHash } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 
 import { getDebugLogger } from '../../utils/debug.ts'
+import { hashString, stableStringify } from '../../utils/stable-serialization.ts'
 import {
   readPublicError,
   RENOUN_PUBLIC_ERROR_CODES,
@@ -239,25 +240,6 @@ class LRUCache<Value> {
   }
 }
 
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value)
-  }
-
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`
-  }
-
-  const object = value as Record<string, unknown>
-  const keys = Object.keys(object).sort()
-
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(object[key])}`).join(',')}}`
-}
-
-function sha1(string: string) {
-  return createHash('sha1').update(string).digest('hex')
-}
-
 // keep only relevant bits of params in the cache key
 function normalizeForKey(params: any) {
   if (!params || typeof params !== 'object') {
@@ -268,7 +250,7 @@ function normalizeForKey(params: any) {
 
   for (const [key, value] of Object.entries(params)) {
     if (typeof value === 'string') {
-      out[key] = `hash:${sha1(value)}`
+      out[key] = `hash:${hashString(value)}`
     } else if (key === 'projectOptions' && value && typeof value === 'object') {
       out[key] = {
         tsConfigFilePath: (value as any).tsConfigFilePath ?? null,
@@ -287,7 +269,7 @@ function normalizeForKey(params: any) {
 }
 
 function makeKey(method: string, params: unknown): string {
-  return sha1(`${method}|${stableStringify(normalizeForKey(params))}`)
+  return hashString(`${method}|${stableStringify(normalizeForKey(params))}`)
 }
 
 function isCriticalMessage(message: any): boolean {

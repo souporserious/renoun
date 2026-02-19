@@ -1,4 +1,5 @@
 import type { SyntaxKind, Project } from '../utils/ts-morph.ts'
+import { stableStringify } from '../utils/stable-serialization.ts'
 
 import type { ModuleExport } from '../utils/get-file-exports.ts'
 import {
@@ -16,20 +17,6 @@ const FILE_EXPORTS_CACHE_NAME = 'fileExports'
 const OUTLINE_RANGES_CACHE_NAME = 'outlineRanges'
 const FILE_EXPORT_STATIC_VALUE_CACHE_NAME = 'fileExportStaticValue'
 const TRANSPILE_SOURCE_FILE_CACHE_NAME = 'transpileSourceFile'
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value)
-  }
-
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`
-  }
-
-  const record = value as Record<string, unknown>
-  const keys = Object.keys(record).sort()
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}`
-}
 
 function getCompilerOptionsVersion(project: Project): string {
   return stableStringify(project.getCompilerOptions())

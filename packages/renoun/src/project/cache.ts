@@ -24,11 +24,13 @@ interface ProjectCacheState {
   cacheByFilePath: Map<string, Map<string, ProjectCacheEntry>>
   graph: ReactiveDependencyGraph
   nodeLocationByKey: Map<string, { filePath: string; cacheName: string }>
+  dependencyRevisionByKey: Map<string, number>
 }
 
 const projectCacheStateByProject = new WeakMap<Project, ProjectCacheState>()
 const PROJECT_CACHE_VERSION_TOKEN = 'project-cache-v0'
 const PROJECT_CACHE_NODE_PREFIX = 'project-cache:'
+const PROJECT_CACHE_DEP_REVISION_PREFIX = 'r'
 
 function getProjectCacheState(project: Project): ProjectCacheState {
   const existing = projectCacheStateByProject.get(project)
@@ -40,6 +42,7 @@ function getProjectCacheState(project: Project): ProjectCacheState {
     cacheByFilePath: new Map(),
     graph: new ReactiveDependencyGraph(),
     nodeLocationByKey: new Map(),
+    dependencyRevisionByKey: new Map(),
   }
   projectCacheStateByProject.set(project, created)
   return created
@@ -65,17 +68,44 @@ function toProjectCacheNodeKey(filePath: string, cacheName: string): string {
   return `project-cache:${normalizeProjectPath(filePath)}:${cacheName}`
 }
 
+function toDependencyRevisionToken(revision: number): string {
+  return `${PROJECT_CACHE_DEP_REVISION_PREFIX}${revision}`
+}
+
+function getDependencyRevisionToken(
+  state: ProjectCacheState,
+  depKey: string
+): string {
+  return toDependencyRevisionToken(state.dependencyRevisionByKey.get(depKey) ?? 0)
+}
+
+function bumpDependencyRevisionToken(state: ProjectCacheState, depKey: string): string {
+  const nextRevision = (state.dependencyRevisionByKey.get(depKey) ?? 0) + 1
+  state.dependencyRevisionByKey.set(depKey, nextRevision)
+  return toDependencyRevisionToken(nextRevision)
+}
+
+function bumpPathDependencyRevisionTokens(
+  state: ProjectCacheState,
+  pathKey: string
+): void {
+  for (const dependencyKey of state.graph.getPathDependencyKeys(pathKey)) {
+    bumpDependencyRevisionToken(state, dependencyKey)
+  }
+}
+
 function toDependencyRecord(
+  state: ProjectCacheState,
   dependency: ProjectCacheDependency
 ): ProjectCacheDependencyRecord {
   switch (dependency.kind) {
     case 'file': {
       const depKey = toFileDependencyKey(dependency.path)
-      return { depKey, depVersion: depKey }
+      return { depKey, depVersion: getDependencyRevisionToken(state, depKey) }
     }
     case 'directory': {
       const depKey = toDirectoryDependencyKey(dependency.path)
-      return { depKey, depVersion: depKey }
+      return { depKey, depVersion: getDependencyRevisionToken(state, depKey) }
     }
     case 'const': {
       const depKey = `const:${dependency.name}:${dependency.version}`
@@ -86,7 +116,7 @@ function toDependencyRecord(
         dependency.filePath,
         dependency.cacheName
       )
-      return { depKey, depVersion: depKey }
+      return { depKey, depVersion: getDependencyRevisionToken(state, depKey) }
     }
   }
 }
@@ -161,9 +191,11 @@ function invalidateProjectCacheEntry(
   cacheName: string
 ): void {
   const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
+  const cacheDependencyKey = toCacheDependencyKey(filePath, cacheName)
   state.graph.markNodeDirty(nodeKey)
   state.graph.unregisterNode(nodeKey)
-  state.graph.touchDependency(toCacheDependencyKey(filePath, cacheName))
+  bumpDependencyRevisionToken(state, cacheDependencyKey)
+  state.graph.touchDependency(cacheDependencyKey)
   state.nodeLocationByKey.delete(nodeKey)
 }
 
@@ -200,9 +232,12 @@ function pruneDirtyProjectCacheEntries(state: ProjectCacheState): number {
         state.cacheByFilePath.delete(nodeLocation.filePath)
       }
 
-      state.graph.touchDependency(
-        toCacheDependencyKey(nodeLocation.filePath, nodeLocation.cacheName)
+      const cacheDependencyKey = toCacheDependencyKey(
+        nodeLocation.filePath,
+        nodeLocation.cacheName
       )
+      bumpDependencyRevisionToken(state, cacheDependencyKey)
+      state.graph.touchDependency(cacheDependencyKey)
       prunedEntries += 1
     }
 
@@ -247,7 +282,7 @@ export async function createProjectFileCache<Type>(
       ? undefined
       : normalizeDependencyRecords(
           (dependencySpec ?? [toDefaultDependency(filePath)]).map(
-            toDependencyRecord
+            (dependency) => toDependencyRecord(state, dependency)
           )
         )
 
@@ -267,7 +302,7 @@ export async function createProjectFileCache<Type>(
       (typeof dependencySpec === 'function'
         ? dependencySpec(computedValue)
         : [toDefaultDependency(filePath)]
-      ).map(toDependencyRecord)
+      ).map((dependency) => toDependencyRecord(state, dependency))
     )
 
   const entry: ProjectCacheEntry = {
@@ -300,17 +335,28 @@ export function invalidateProjectFileCache(
 
   if (normalizedFilePath) {
     if (!cacheName) {
+      bumpPathDependencyRevisionTokens(state, normalizedFilePath)
       state.graph.touchPathDependencies(normalizedFilePath)
       pruneDirtyProjectCacheEntries(state)
     }
 
     if (cacheName) {
+      const cacheDependencyKey = toCacheDependencyKey(
+        normalizedFilePath,
+        cacheName
+      )
       const fileMap = cacheByFilePath.get(normalizedFilePath)
       if (!fileMap) {
+        bumpDependencyRevisionToken(state, cacheDependencyKey)
+        state.graph.touchDependency(cacheDependencyKey)
+        pruneDirtyProjectCacheEntries(state)
         return
       }
 
       if (!fileMap.has(cacheName)) {
+        bumpDependencyRevisionToken(state, cacheDependencyKey)
+        state.graph.touchDependency(cacheDependencyKey)
+        pruneDirtyProjectCacheEntries(state)
         return
       }
 
@@ -334,6 +380,7 @@ export function invalidateProjectFileCache(
     }
     cacheByFilePath.clear()
     state.nodeLocationByKey.clear()
+    state.dependencyRevisionByKey.clear()
     state.graph.clear()
     return
   }
@@ -349,5 +396,30 @@ export function invalidateProjectFileCache(
     if (fileMap.size === 0) {
       cacheByFilePath.delete(cachedFilePath)
     }
+  }
+}
+
+export function __getProjectCacheDependencyVersionForTesting(
+  project: Project,
+  dependency:
+    | { kind: 'file'; path: string }
+    | { kind: 'directory'; path: string }
+    | { kind: 'cache'; filePath: string; cacheName: string }
+): string {
+  const state = getProjectCacheState(project)
+
+  switch (dependency.kind) {
+    case 'file':
+      return getDependencyRevisionToken(state, toFileDependencyKey(dependency.path))
+    case 'directory':
+      return getDependencyRevisionToken(
+        state,
+        toDirectoryDependencyKey(dependency.path)
+      )
+    case 'cache':
+      return getDependencyRevisionToken(
+        state,
+        toCacheDependencyKey(dependency.filePath, dependency.cacheName)
+      )
   }
 }

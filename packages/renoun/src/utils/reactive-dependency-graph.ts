@@ -28,6 +28,7 @@ interface IndexedPathDependency {
 }
 
 const DIRECTORY_SNAPSHOT_PATH_PREFIX = 'const:dir-snapshot-path:'
+const DEPENDENCY_SIGNAL_SWEEP_THRESHOLD = 1_024
 
 function createPathDependencyNode(): PathDependencyNode {
   return {
@@ -47,6 +48,7 @@ function runUntracked<Value>(task: () => Value): Value {
 
 export class ReactiveDependencyGraph {
   readonly #dependencySignals = new Map<string, MutableSignal<string | undefined>>()
+  readonly #dependencySignalsPendingCleanup = new Set<string>()
   readonly #nodes = new Map<string, ReactiveNodeRecord>()
   readonly #dirtyNodeKeys = new Set<string>()
   readonly #nodeKeysByDependency = new Map<string, Set<string>>()
@@ -206,6 +208,33 @@ export class ReactiveDependencyGraph {
     )
   }
 
+  getPathDependencyKeys(pathKey: string): string[] {
+    const normalizedPath = normalizePathKey(pathKey)
+    const dependencyKeys = this.#collectMatchingPathDependencyKeys(normalizedPath)
+    return Array.from(dependencyKeys).sort()
+  }
+
+  getDependencySignalCount(): number {
+    return this.#dependencySignals.size
+  }
+
+  sweepUnreferencedDependencySignals(): number {
+    let removed = 0
+
+    for (const dependencyKey of this.#dependencySignalsPendingCleanup) {
+      if (this.#dependencyRefCountByKey.has(dependencyKey)) {
+        continue
+      }
+
+      if (this.#dependencySignals.delete(dependencyKey)) {
+        removed += 1
+      }
+    }
+
+    this.#dependencySignalsPendingCleanup.clear()
+    return removed
+  }
+
   #collectAffectedNodeKeysForDependencyKeys(
     dependencyKeys: Iterable<string>
   ): Set<string> {
@@ -250,6 +279,7 @@ export class ReactiveDependencyGraph {
     this.#dirtyNodeKeys.clear()
     this.#nodeKeysByDependency.clear()
     this.#dependencySignals.clear()
+    this.#dependencySignalsPendingCleanup.clear()
     this.#dependencyRefCountByKey.clear()
     this.#indexedPathDependencyByKey.clear()
     this.#filePathDependencies = createPathDependencyNode()
@@ -303,6 +333,7 @@ export class ReactiveDependencyGraph {
   #incrementDependencyRefCount(dependencyKey: string): void {
     const nextCount = (this.#dependencyRefCountByKey.get(dependencyKey) ?? 0) + 1
     this.#dependencyRefCountByKey.set(dependencyKey, nextCount)
+    this.#dependencySignalsPendingCleanup.delete(dependencyKey)
     if (nextCount === 1) {
       this.#indexPathDependency(dependencyKey)
     }
@@ -317,6 +348,13 @@ export class ReactiveDependencyGraph {
     if (currentCount <= 1) {
       this.#dependencyRefCountByKey.delete(dependencyKey)
       this.#unindexPathDependency(dependencyKey)
+      this.#dependencySignalsPendingCleanup.add(dependencyKey)
+      if (
+        this.#dependencySignalsPendingCleanup.size >=
+        DEPENDENCY_SIGNAL_SWEEP_THRESHOLD
+      ) {
+        this.sweepUnreferencedDependencySignals()
+      }
       return
     }
 

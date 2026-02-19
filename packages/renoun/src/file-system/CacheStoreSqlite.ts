@@ -4,8 +4,10 @@ import { dirname, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { deserialize, serialize } from 'node:v8'
 
+import { delay } from '../utils/delay.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { CACHE_SCHEMA_VERSION } from './cache-key.ts'
+import { summarizePersistedValue } from './cache-persistence-debug.ts'
 import { loadSqliteModule } from './sqlite.ts'
 import {
   createFingerprint,
@@ -16,6 +18,9 @@ import {
 
 const SQLITE_BUSY_RETRIES = 5
 const SQLITE_BUSY_RETRY_DELAY_MS = 25
+const SQLITE_INIT_BUSY_RETRIES = 30
+const SQLITE_INIT_BUSY_RETRY_DELAY_MS = 25
+const SQLITE_INIT_BUSY_RETRY_MAX_DELAY_MS = 250
 const SQLITE_DEFAULT_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 14
 const SQLITE_DEFAULT_MAX_ROWS = 200_000
 const SQLITE_PRUNE_WRITE_INTERVAL = 32
@@ -308,7 +313,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
   async load(
     nodeKey: string,
-    options: { skipFingerprintCheck?: boolean } = {}
+    options: {
+      skipFingerprintCheck?: boolean
+      skipLastAccessedUpdate?: boolean
+    } = {}
   ): Promise<CacheEntry | undefined> {
     await this.#readyPromise
 
@@ -457,10 +465,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return undefined
     }
 
-    try {
-      await this.#touchLastAccessed(nodeKey)
-    } catch {
-      // Ignore access-time update failures so reads can still return cached data.
+    if (!options.skipLastAccessedUpdate) {
+      try {
+        await this.#touchLastAccessed(nodeKey)
+      } catch {
+        // Ignore access-time update failures so reads can still return cached data.
+      }
     }
 
     const loadedEntry: CacheEntry & { revision: number } = {
@@ -583,6 +593,175 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
   async save(nodeKey: string, entry: CacheEntry): Promise<void> {
     await this.saveWithRevision(nodeKey, entry)
+  }
+
+  async saveWithRevisionGuarded(
+    nodeKey: string,
+    entry: CacheEntry,
+    options: {
+      expectedRevision: number | 'missing'
+    }
+  ): Promise<{ applied: boolean; revision: number }> {
+    await this.#readyPromise
+
+    if (!this.#db) {
+      return { applied: false, revision: 0 }
+    }
+
+    const serializedValue = serialize(entry.value)
+    const persist = entry.persist ? 1 : 0
+    const now = Date.now()
+
+    for (let attempt = 0; attempt <= SQLITE_BUSY_RETRIES; attempt += 1) {
+      let transactionStarted = false
+
+      try {
+        this.#db.exec('BEGIN IMMEDIATE')
+        transactionStarted = true
+
+        const currentRevisionRow = this.#db
+          .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
+          .get(nodeKey) as { revision?: unknown } | undefined
+        const currentRevision = getPersistedRevision(currentRevisionRow?.revision)
+
+        if (options.expectedRevision === 'missing') {
+          if (Number.isFinite(currentRevision)) {
+            this.#db.exec('COMMIT')
+            return { applied: false, revision: currentRevision }
+          }
+
+          this.#db
+            .prepare(
+              `
+                INSERT INTO cache_entries (
+                  node_key,
+                  fingerprint,
+                  value_blob,
+                  updated_at,
+                  last_accessed_at,
+                  persist,
+                  revision
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 1)
+              `
+            )
+            .run(
+              nodeKey,
+              entry.fingerprint,
+              serializedValue,
+              entry.updatedAt,
+              now,
+              persist
+            )
+        } else {
+          if (
+            !Number.isFinite(currentRevision) ||
+            currentRevision !== options.expectedRevision
+          ) {
+            this.#db.exec('COMMIT')
+            return {
+              applied: false,
+              revision: Number.isFinite(currentRevision) ? currentRevision : 0,
+            }
+          }
+
+          const nextRevision = options.expectedRevision + 1
+          const updateResult = this.#db
+            .prepare(
+              `
+                UPDATE cache_entries
+                SET
+                  fingerprint = ?,
+                  value_blob = ?,
+                  updated_at = ?,
+                  last_accessed_at = ?,
+                  persist = ?,
+                  revision = ?
+                WHERE node_key = ? AND revision = ?
+              `
+            )
+            .run(
+              entry.fingerprint,
+              serializedValue,
+              entry.updatedAt,
+              now,
+              persist,
+              nextRevision,
+              nodeKey,
+              options.expectedRevision
+            ) as { changes?: number }
+
+          const changes = Number(updateResult.changes ?? 0)
+          if (changes === 0) {
+            const latestRevisionRow = this.#db
+              .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
+              .get(nodeKey) as { revision?: unknown } | undefined
+            const latestRevision = getPersistedRevision(latestRevisionRow?.revision)
+            this.#db.exec('COMMIT')
+            return {
+              applied: false,
+              revision: Number.isFinite(latestRevision) ? latestRevision : 0,
+            }
+          }
+        }
+
+        this.#db
+          .prepare(`DELETE FROM cache_deps WHERE node_key = ?`)
+          .run(nodeKey)
+
+        if (entry.deps.length > 0) {
+          const insertDepStatement = this.#db.prepare(
+            `
+              INSERT INTO cache_deps (node_key, dep_key, dep_version)
+              VALUES (?, ?, ?)
+            `
+          )
+
+          for (const dependency of entry.deps) {
+            insertDepStatement.run(
+              nodeKey,
+              dependency.depKey,
+              dependency.depVersion
+            )
+          }
+        }
+
+        const revisionRow = this.#db
+          .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
+          .get(nodeKey) as { revision?: unknown } | undefined
+        const revision = getPersistedRevision(revisionRow?.revision)
+
+        this.#db.exec('COMMIT')
+        try {
+          await this.#maybePruneAfterWrite(now)
+        } catch {
+          // Ignore prune errors so cache writes keep succeeding.
+        }
+        return {
+          applied: true,
+          revision: Number.isFinite(revision) ? revision : 0,
+        }
+      } catch (error) {
+        if (transactionStarted) {
+          try {
+            this.#db.exec('ROLLBACK')
+          } catch {
+            // Ignore rollback errors; we'll rethrow the original write error below.
+          }
+        }
+
+        if (
+          attempt >= SQLITE_BUSY_RETRIES ||
+          !isSqliteBusyOrLockedError(error)
+        ) {
+          throw error
+        }
+
+        await delay((attempt + 1) * SQLITE_BUSY_RETRY_DELAY_MS)
+      }
+    }
+
+    throw new Error('[renoun] Exhausted SQLITE busy retries for guarded cache write.')
   }
 
   async delete(nodeKey: string): Promise<void> {
@@ -786,7 +965,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   }
 
   async #initialize(): Promise<void> {
-    for (let attempt = 0; attempt <= SQLITE_BUSY_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= SQLITE_INIT_BUSY_RETRIES; attempt += 1) {
       let db: any
 
       try {
@@ -855,10 +1034,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
 
         if (
-          attempt < SQLITE_BUSY_RETRIES &&
+          attempt < SQLITE_INIT_BUSY_RETRIES &&
           isSqliteBusyOrLockedError(error)
         ) {
-          await delay((attempt + 1) * SQLITE_BUSY_RETRY_DELAY_MS)
+          const retryDelay = Math.min(
+            SQLITE_INIT_BUSY_RETRY_MAX_DELAY_MS,
+            (attempt + 1) * SQLITE_INIT_BUSY_RETRY_DELAY_MS
+          )
+          await delay(retryDelay)
           continue
         }
 
@@ -1082,7 +1265,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         `
           SELECT node_key
           FROM cache_entries
-          WHERE updated_at < ?
+          WHERE last_accessed_at < ?
         `
       )
       .all(staleBefore) as Array<{ node_key?: string }>
@@ -1322,48 +1505,6 @@ function logCachePersistenceLoadFailure(
   )
 }
 
-function summarizePersistedValue(value: unknown): string {
-  if (value === null) {
-    return 'null'
-  }
-
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return `${typeof value}:${value}`
-  }
-
-  if (value === undefined) {
-    return 'undefined'
-  }
-
-  if (typeof value === 'symbol') {
-    return `symbol:${value.description ?? value.toString()}`
-  }
-
-  if (value instanceof RegExp) {
-    return `regexp:${value.toString()}`
-  }
-
-  if (Array.isArray(value)) {
-    return `array(length=${value.length})`
-  }
-
-  if (typeof value === 'function') {
-    return `function:${value.name || 'anonymous'}`
-  }
-
-  if (typeof value === 'bigint') {
-    return `bigint:${value.toString()}`
-  }
-
-  if (typeof value === 'object') {
-    const keys = Object.keys(value as Record<string, unknown>)
-    const previewKeys = keys.slice(0, 10).join(',')
-    return `object(keys=[${previewKeys}])`
-  }
-
-  return `unsupported:${typeof value}`
-}
-
 function containsStrippedReactElementPayload(
   value: unknown,
   seen: WeakSet<object> = new WeakSet()
@@ -1487,12 +1628,6 @@ function isSqliteBusyOrLockedError(error: unknown): boolean {
     normalizedMessage.includes('database table is locked') ||
     normalizedMessage.includes('database is busy')
   )
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, milliseconds)
-  })
 }
 
 function resolveSqlitePersistenceOptions(

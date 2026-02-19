@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 
 import {
+  __getProjectCacheDependencyVersionForTesting,
   createProjectFileCache,
   invalidateProjectFileCache,
 } from './cache.ts'
@@ -655,6 +656,88 @@ describe('project file cache', () => {
 
     expect(thirdDependent).toBe('dependent-2')
     expect(dependentCalls).toBe(2)
+  })
+
+  test('advances structured dependency revision tokens when dependencies are invalidated', async () => {
+    const project = {} as unknown as Project
+    const sourcePath = '/project/src/source.ts'
+    const dependentPath = '/project/src/dependent.ts'
+
+    const initialFileVersion = __getProjectCacheDependencyVersionForTesting(project, {
+      kind: 'file',
+      path: sourcePath,
+    })
+    const initialCacheVersion = __getProjectCacheDependencyVersionForTesting(project, {
+      kind: 'cache',
+      filePath: sourcePath,
+      cacheName: 'metadata',
+    })
+
+    await createProjectFileCache(
+      project,
+      sourcePath,
+      'metadata',
+      () => 'source-1',
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: sourcePath,
+          },
+        ],
+      }
+    )
+
+    await createProjectFileCache(
+      project,
+      dependentPath,
+      'summary',
+      () => 'dependent-1',
+      {
+        deps: [
+          {
+            kind: 'cache',
+            filePath: sourcePath,
+            cacheName: 'metadata',
+          },
+        ],
+      }
+    )
+
+    invalidateProjectFileCache(project, sourcePath)
+
+    const afterFileInvalidationVersion = __getProjectCacheDependencyVersionForTesting(
+      project,
+      {
+        kind: 'file',
+        path: sourcePath,
+      }
+    )
+    const afterFileInvalidationCacheVersion = __getProjectCacheDependencyVersionForTesting(
+      project,
+      {
+        kind: 'cache',
+        filePath: sourcePath,
+        cacheName: 'metadata',
+      }
+    )
+
+    expect(afterFileInvalidationVersion).not.toBe(initialFileVersion)
+    expect(afterFileInvalidationCacheVersion).not.toBe(initialCacheVersion)
+
+    invalidateProjectFileCache(project, sourcePath, 'metadata')
+
+    const afterCacheInvalidationVersion = __getProjectCacheDependencyVersionForTesting(
+      project,
+      {
+        kind: 'cache',
+        filePath: sourcePath,
+        cacheName: 'metadata',
+      }
+    )
+    expect(afterCacheInvalidationVersion).not.toBe(
+      afterFileInvalidationCacheVersion
+    )
   })
 
   test('path invalidation propagates through cache dependencies before source recompute', async () => {

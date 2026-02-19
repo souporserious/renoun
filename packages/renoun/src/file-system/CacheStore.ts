@@ -1,10 +1,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { createHash } from 'node:crypto'
 
+import { delay } from '../utils/delay.ts'
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
 import { getDebugLogger } from '../utils/debug.ts'
+import { hashString } from '../utils/stable-serialization.ts'
 import type { Snapshot } from './Snapshot.ts'
+import { summarizePersistedValue } from './cache-persistence-debug.ts'
 
 export interface CacheDependency {
   depKey: string
@@ -30,10 +32,18 @@ export interface CacheStorePersistence {
     nodeKey: string,
     options?: {
       skipFingerprintCheck?: boolean
+      skipLastAccessedUpdate?: boolean
     }
   ): Promise<CacheEntry | undefined>
   save(nodeKey: string, entry: CacheEntry): Promise<void>
   saveWithRevision?(nodeKey: string, entry: CacheEntry): Promise<number>
+  saveWithRevisionGuarded?(
+    nodeKey: string,
+    entry: CacheEntry,
+    options: {
+      expectedRevision: number | 'missing'
+    }
+  ): Promise<{ applied: boolean; revision: number }>
   delete(nodeKey: string): Promise<void>
   deleteByDependencyPath?(
     dependencyPathKey: string
@@ -43,6 +53,7 @@ export interface CacheStorePersistence {
 
 export interface CacheStoreGetOrComputeOptions {
   persist?: boolean
+  constDeps?: CacheStoreConstDependency[]
 }
 
 export interface CacheStorePutOptions {
@@ -57,6 +68,11 @@ export interface CacheStoreComputeContext {
   recordFileDep(path: string): Promise<string>
   recordDirectoryDep(path: string): Promise<string>
   recordNodeDep(nodeKey: string): Promise<string>
+}
+
+export interface CacheStoreConstDependency {
+  name: string
+  version: string
 }
 
 export interface CacheStoreOptions {
@@ -75,7 +91,11 @@ const snapshotDependencyPathWatchers = new WeakMap<
     invalidateDependencyPath(dependencyPathKey: string): void
   }>
 >()
-const snapshotInvalidationHooked = new WeakSet<Snapshot>()
+const snapshotInvalidationUnsubscribeBySnapshot = new WeakMap<
+  Snapshot,
+  () => void
+>()
+const CONST_DEPENDENCY_PREFIX = 'const:'
 const COMPUTE_SLOT_TTL_MS = getEnvInt(
   'RENOUN_FS_CACHE_COMPUTE_SLOT_TTL_MS',
   20_000
@@ -107,6 +127,8 @@ interface CacheStorePersistenceComputeSlot {
 interface PersistedCacheEntry<Value = unknown> extends CacheEntry<Value> {
   revision?: number
 }
+
+type PersistedRevisionPrecondition = number | 'missing' | undefined
 
 function getComputeSlotTtlMs(
   persistence: CacheStorePersistenceComputeSlot | undefined,
@@ -184,18 +206,60 @@ function clearPersistedEntryInvalidation(
   failedEntries?.delete(nodeKey)
 }
 
+function toConstDependencyKey(name: string): string {
+  return `${CONST_DEPENDENCY_PREFIX}${encodeURIComponent(name)}`
+}
+
+function parseConstDependencyKey(
+  depKey: string
+): { name: string; legacyVersion?: string } | undefined {
+  if (!depKey.startsWith(CONST_DEPENDENCY_PREFIX)) {
+    return undefined
+  }
+
+  const payload = depKey.slice(CONST_DEPENDENCY_PREFIX.length)
+  if (!payload) {
+    return undefined
+  }
+
+  const separatorIndex = payload.lastIndexOf(':')
+  if (separatorIndex > 0) {
+    const legacyName = payload.slice(0, separatorIndex)
+    const legacyVersion = payload.slice(separatorIndex + 1)
+    return {
+      name: legacyName,
+      legacyVersion,
+    }
+  }
+
+  try {
+    return {
+      name: decodeURIComponent(payload),
+    }
+  } catch {
+    return {
+      name: payload,
+    }
+  }
+}
+
 export class CacheStore {
   readonly #snapshot: Snapshot
   readonly #persistence?: CacheStorePersistence
   readonly #entries = new Map<string, CacheEntry>()
   readonly #inflight: Map<string, Promise<unknown>>
   readonly #dependencyGraph = new ReactiveDependencyGraph()
+  readonly #constDepVersionByName = new Map<string, string>()
   readonly #activeComputeScope = new AsyncLocalStorage<{
     nodeKey: string
     deps: Map<string, string>
   }>()
   readonly #persistenceOperationByKey = new Map<string, Promise<void>>()
   readonly #persistenceIntentVersionByKey = new Map<string, number>()
+  readonly #persistedRevisionPreconditionByKey = new Map<
+    string,
+    number | 'missing'
+  >()
   #warnedAboutPersistenceFailure = false
   #warnedAboutUnserializableValue = false
 
@@ -209,14 +273,12 @@ export class CacheStore {
     stores.add(this)
     snapshotDependencyPathWatchers.set(this.#snapshot, stores)
 
-    if (snapshotInvalidationHooked.has(this.#snapshot)) {
+    if (snapshotInvalidationUnsubscribeBySnapshot.has(this.#snapshot)) {
       return
     }
 
     const snapshot = this.#snapshot
-    const originalInvalidatePath = snapshot.invalidatePath.bind(snapshot)
-    snapshot.invalidatePath = (path: string) => {
-      originalInvalidatePath(path)
+    const unsubscribe = snapshot.onInvalidate((path: string) => {
       const linkedStores = snapshotDependencyPathWatchers.get(snapshot)
       if (!linkedStores) {
         return
@@ -225,8 +287,8 @@ export class CacheStore {
       for (const store of linkedStores) {
         store.invalidateDependencyPath(path)
       }
-    }
-    snapshotInvalidationHooked.add(this.#snapshot)
+    })
+    snapshotInvalidationUnsubscribeBySnapshot.set(this.#snapshot, unsubscribe)
   }
 
   async getOrCompute<Value>(
@@ -234,6 +296,8 @@ export class CacheStore {
     options: CacheStoreGetOrComputeOptions,
     compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
   ): Promise<Value> {
+    this.#registerConstDependencies(options.constDeps)
+
     const inFlight = this.#inflight.get(nodeKey)
     if (inFlight) {
       this.#logCacheOperation('hit', nodeKey, {
@@ -290,11 +354,87 @@ export class CacheStore {
     return { value: persistedEntry.value as Value, fresh }
   }
 
+  #registerConstDependencies(
+    constDeps: CacheStoreConstDependency[] | undefined
+  ): void {
+    if (!constDeps || constDeps.length === 0) {
+      return
+    }
+
+    for (const constDep of constDeps) {
+      this.#constDepVersionByName.set(constDep.name, constDep.version)
+    }
+  }
+
+  #registerConstDependencyRecords(
+    dependencies: CacheDependency[] | undefined
+  ): void {
+    if (!dependencies || dependencies.length === 0) {
+      return
+    }
+
+    for (const dependency of dependencies) {
+      const parsed = parseConstDependencyKey(dependency.depKey)
+      if (!parsed) {
+        continue
+      }
+      this.#constDepVersionByName.set(parsed.name, dependency.depVersion)
+    }
+  }
+
+  async #capturePersistedRevisionPrecondition(
+    nodeKey: string,
+    options: {
+      allowLoad?: boolean
+    } = {}
+  ): Promise<PersistedRevisionPrecondition> {
+    const cachedPrecondition = this.#persistedRevisionPreconditionByKey.get(nodeKey)
+    if (cachedPrecondition !== undefined) {
+      return cachedPrecondition
+    }
+
+    if (options.allowLoad === false) {
+      return undefined
+    }
+
+    if (!this.#persistence) {
+      return undefined
+    }
+
+    try {
+      const persistedEntry = (await this.#persistence.load(nodeKey, {
+        skipFingerprintCheck: true,
+        skipLastAccessedUpdate: true,
+      })) as PersistedCacheEntry | undefined
+      if (!persistedEntry) {
+        this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
+        return 'missing'
+      }
+
+      const revision =
+        typeof persistedEntry.revision === 'number' &&
+        Number.isFinite(persistedEntry.revision)
+          ? persistedEntry.revision
+          : undefined
+      if (typeof revision === 'number') {
+        this.#persistedRevisionPreconditionByKey.set(nodeKey, revision)
+      }
+      return revision
+    } catch {
+      return undefined
+    }
+  }
+
   async put<Value>(
     nodeKey: string,
     value: Value,
     options: CacheStorePutOptions = {}
   ): Promise<void> {
+    this.#registerConstDependencyRecords(options.deps)
+    const expectedPersistedRevision =
+      options.persist === true
+        ? await this.#capturePersistedRevisionPrecondition(nodeKey)
+        : undefined
     const dependencyEntries = (options.deps ?? [])
       .map((dependency) => ({
         depKey: dependency.depKey,
@@ -317,7 +457,9 @@ export class CacheStore {
 
     this.#entries.set(nodeKey, entry)
     this.#registerEntryInGraph(nodeKey, entry)
-    await this.#savePersistedEntry(nodeKey, entry)
+    await this.#savePersistedEntry(nodeKey, entry, {
+      expectedRevision: expectedPersistedRevision,
+    })
   }
 
   async delete(nodeKey: string): Promise<void> {
@@ -570,6 +712,7 @@ export class CacheStore {
       return
     }
 
+    this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
     clearPersistedEntryInvalidation(this.#persistence, nodeKey)
   }
 
@@ -694,8 +837,6 @@ export class CacheStore {
       }
       continue
     }
-
-    return NO_COMPUTE_SLOT_SHARED_VALUE
   }
 
   async #waitForComputeSlotRelease(nodeKey: string): Promise<void> {
@@ -749,14 +890,22 @@ export class CacheStore {
       return cachedEntry.value as Value
     }
 
+    const expectedPersistedRevision =
+      options.persist === true
+        ? await this.#capturePersistedRevisionPrecondition(nodeKey, {
+            allowLoad: false,
+          })
+        : undefined
+
     const deps = new Map<string, string>()
     const context: CacheStoreComputeContext = {
       snapshot: this.#snapshot,
       recordDep(depKey, depVersion) {
         deps.set(depKey, depVersion)
       },
-      recordConstDep(name, version) {
-        deps.set(`const:${name}:${version}`, version)
+      recordConstDep: (name, version) => {
+        this.#constDepVersionByName.set(name, version)
+        deps.set(toConstDependencyKey(name), version)
       },
       recordFileDep: async (path: string) => {
         const relativePath = this.#snapshot.getRelativePathToWorkspace(path)
@@ -839,7 +988,9 @@ export class CacheStore {
 
       this.#entries.set(nodeKey, entry)
       this.#registerEntryInGraph(nodeKey, entry)
-      await this.#savePersistedEntry(nodeKey, entry)
+      await this.#savePersistedEntry(nodeKey, entry, {
+        expectedRevision: expectedPersistedRevision,
+      })
 
       return value
     } finally {
@@ -884,6 +1035,20 @@ export class CacheStore {
     } catch (error) {
       this.#warnPersistenceFailure(`load(${nodeKey})`, error)
       return undefined
+    }
+
+    if (!persistedEntry) {
+      this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
+    } else if (
+      typeof persistedEntry.revision === 'number' &&
+      Number.isFinite(persistedEntry.revision)
+    ) {
+      this.#persistedRevisionPreconditionByKey.set(
+        nodeKey,
+        persistedEntry.revision
+      )
+    } else {
+      this.#persistedRevisionPreconditionByKey.delete(nodeKey)
     }
 
     if (persistedEntry && !persistedEntry.persist) {
@@ -1128,16 +1293,31 @@ export class CacheStore {
     }
 
     if (depKey.startsWith('const:')) {
-      const separatorIndex = depKey.lastIndexOf(':')
-      return separatorIndex === -1
-        ? undefined
-        : depKey.slice(separatorIndex + 1)
+      const parsedConstDependency = parseConstDependencyKey(depKey)
+      if (!parsedConstDependency) {
+        return undefined
+      }
+
+      const currentVersion = this.#constDepVersionByName.get(
+        parsedConstDependency.name
+      )
+      if (currentVersion !== undefined) {
+        return currentVersion
+      }
+
+      return parsedConstDependency.legacyVersion
     }
 
     return undefined
   }
 
-  async #savePersistedEntry(nodeKey: string, entry: CacheEntry): Promise<void> {
+  async #savePersistedEntry(
+    nodeKey: string,
+    entry: CacheEntry,
+    options: {
+      expectedRevision?: PersistedRevisionPrecondition
+    } = {}
+  ): Promise<void> {
     clearPersistedEntryInvalidation(this.#persistence, nodeKey)
     if (!this.#persistence) {
       return
@@ -1149,6 +1329,8 @@ export class CacheStore {
       )
       return
     }
+
+    const expectedPersistedRevision = options.expectedRevision
 
     await this.#withPersistenceIntent(nodeKey, async () => {
       const shouldDebugPersistenceFailure =
@@ -1163,18 +1345,59 @@ export class CacheStore {
             nodeKey: string,
             entry: CacheEntry
           ): Promise<number>
+          saveWithRevisionGuarded?(
+            nodeKey: string,
+            entry: CacheEntry,
+            options: {
+              expectedRevision: number | 'missing'
+            }
+          ): Promise<{ applied: boolean; revision: number }>
         }
         const persisted = {
           ...entry,
           value,
           persist: true,
         }
-        const expectedRevision = persistenceWithRevision.saveWithRevision
-          ? await persistenceWithRevision.saveWithRevision(nodeKey, persisted)
-          : undefined
-
-        if (!persistenceWithRevision.saveWithRevision) {
+        let persistedRevision: number | undefined
+        if (
+          (expectedPersistedRevision === 'missing' ||
+            typeof expectedPersistedRevision === 'number') &&
+          persistenceWithRevision.saveWithRevisionGuarded
+        ) {
+          const guardedResult =
+            await persistenceWithRevision.saveWithRevisionGuarded(
+              nodeKey,
+              persisted,
+              {
+                expectedRevision: expectedPersistedRevision,
+              }
+            )
+          persistedRevision = guardedResult.revision
+          this.#persistedRevisionPreconditionByKey.set(
+            nodeKey,
+            guardedResult.revision > 0 ? guardedResult.revision : 'missing'
+          )
+          if (!guardedResult.applied) {
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: `guarded-write-not-applied expectedRevision=${String(expectedPersistedRevision)} currentRevision=${String(guardedResult.revision)}`,
+                entry,
+                expectedRevision: expectedPersistedRevision,
+                actualRevision: guardedResult.revision,
+              })
+            }
+            return 'superseded'
+          }
+        } else if (persistenceWithRevision.saveWithRevision) {
+          persistedRevision = await persistenceWithRevision.saveWithRevision(
+            nodeKey,
+            persisted
+          )
+          this.#persistedRevisionPreconditionByKey.set(nodeKey, persistedRevision)
+        } else {
           await this.#persistence!.save(nodeKey, persisted)
+          this.#persistedRevisionPreconditionByKey.delete(nodeKey)
         }
 
         for (
@@ -1184,15 +1407,16 @@ export class CacheStore {
         ) {
           const verified = (await this.#persistence!.load(nodeKey, {
             skipFingerprintCheck: true,
+            skipLastAccessedUpdate: true,
           })) as PersistedCacheEntry | undefined
 
-        if (!verified) {
+          if (!verified) {
             if (shouldDebugPersistenceFailure) {
               this.#logPersistenceDebug(nodeKey, {
                 phase: 'save-verify',
                 details: `verification-load-miss attempt=${verifyAttempt + 1} of ${maxVerificationAttempts} expectedFingerprint=${entry.fingerprint}`,
                 entry,
-                expectedRevision,
+                expectedRevision: expectedPersistedRevision,
               })
             }
 
@@ -1206,10 +1430,11 @@ export class CacheStore {
                 phase: 'save-verify',
                 details: 'superseded-by-load-miss',
                 entry,
-                expectedRevision,
+                expectedRevision: expectedPersistedRevision,
               })
             }
 
+            this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
             return 'superseded'
           }
 
@@ -1226,18 +1451,29 @@ export class CacheStore {
                 details: 'verification-match',
                 entry,
                 verified,
-                expectedRevision,
+                expectedRevision: expectedPersistedRevision,
                 actualRevision: verified.revision,
               })
             }
 
+            if (
+              typeof verified.revision === 'number' &&
+              Number.isFinite(verified.revision)
+            ) {
+              this.#persistedRevisionPreconditionByKey.set(
+                nodeKey,
+                verified.revision
+              )
+            } else {
+              this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+            }
             return 'verified'
           }
 
           const isRevisionSuperseding =
-            typeof expectedRevision === 'number' &&
+            typeof persistedRevision === 'number' &&
             typeof verified.revision === 'number' &&
-            verified.revision > expectedRevision
+            verified.revision > persistedRevision
 
           const hasWinnerTimestamp = verified.updatedAt >= entry.updatedAt
           const isSuperseded = isRevisionSuperseding || hasWinnerTimestamp
@@ -1255,13 +1491,24 @@ export class CacheStore {
               details:
                 supersedeReason === 'fingerprint-drift'
                   ? `fingerprint-drift expected=${entry.fingerprint} actual=${verified.fingerprint} expectedUpdatedAt=${entry.updatedAt} actualUpdatedAt=${verified.updatedAt}`
-                  : `${supersedeReason} expectedRevision=${expectedRevision} actualRevision=${verified.revision} expectedFingerprint=${entry.fingerprint} actualFingerprint=${verified.fingerprint} expectedUpdatedAt=${entry.updatedAt} actualUpdatedAt=${verified.updatedAt}`,
-              expectedRevision,
+                  : `${supersedeReason} expectedRevision=${persistedRevision} actualRevision=${verified.revision} expectedFingerprint=${entry.fingerprint} actualFingerprint=${verified.fingerprint} expectedUpdatedAt=${entry.updatedAt} actualUpdatedAt=${verified.updatedAt}`,
+              expectedRevision: expectedPersistedRevision,
               actualRevision: verified.revision,
             })
           }
 
           if (isSuperseded) {
+            if (
+              typeof verified.revision === 'number' &&
+              Number.isFinite(verified.revision)
+            ) {
+              this.#persistedRevisionPreconditionByKey.set(
+                nodeKey,
+                verified.revision
+              )
+            } else {
+              this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+            }
             return 'superseded'
           }
 
@@ -1283,7 +1530,10 @@ export class CacheStore {
           return
         }
 
-        entry.persist = false
+        const persistedWinner = await this.#loadPersistedEntry(nodeKey)
+        if (!persistedWinner) {
+          entry.persist = false
+        }
         clearPersistedEntryInvalidation(this.#persistence, nodeKey)
         return
       } catch (error) {
@@ -1327,7 +1577,7 @@ export class CacheStore {
       entry?: CacheEntry
       verified?: CacheEntry
       details?: string
-      expectedRevision?: number
+      expectedRevision?: number | 'missing'
       actualRevision?: number
     }
   ) {
@@ -1413,29 +1663,7 @@ export class CacheStore {
   }
 }
 
-export function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value)
-  }
-
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`
-  }
-
-  const object = value as Record<string, unknown>
-  const keys = Object.keys(object).sort()
-  const entries: string[] = []
-
-  for (const key of keys) {
-    entries.push(`${JSON.stringify(key)}:${stableStringify(object[key])}`)
-  }
-
-  return `{${entries.join(',')}}`
-}
-
-export function hashString(input: string): string {
-  return createHash('sha1').update(input).digest('hex')
-}
+export { hashString, stableStringify } from '../utils/stable-serialization.ts'
 
 export function createFingerprint(dependencies: CacheDependency[]): string {
   if (dependencies.length === 0) {
@@ -1527,56 +1755,4 @@ function getEnvInt(envVarName: string, fallback: number): number {
   }
 
   return parsed
-}
-
-function summarizePersistedValue(value: unknown): string {
-  if (value === null) {
-    return 'null'
-  }
-
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return `${typeof value}:${value}`
-  }
-
-  if (typeof value === 'undefined') {
-    return 'undefined'
-  }
-
-  if (typeof value === 'symbol') {
-    return `symbol:${value.description ?? value.toString()}`
-  }
-
-  if (value instanceof RegExp) {
-    return `regexp:${value.toString()}`
-  }
-
-  if (Array.isArray(value)) {
-    const length = value.length
-    const first = summarizePersistedValue(value[0])
-    return `array(length=${length}, first=${first})`
-  }
-
-  if (typeof value === 'function') {
-    return `function:${value.name || 'anonymous'}`
-  }
-
-  if (typeof value === 'bigint') {
-    return `bigint:${value.toString()}`
-  }
-
-  if (typeof value === 'object') {
-    const keys = Object.keys(value as Record<string, unknown>)
-    const previewKeys = keys.slice(0, 10).join(',')
-    const hasSymbols = Object.getOwnPropertySymbols(value as object).length > 0
-    const symbolsPart = hasSymbols ? ' symbols=true' : ''
-    return `object(keys=[${previewKeys}]${symbolsPart})`
-  }
-
-  return `unsupported:${typeof value}`
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
 }

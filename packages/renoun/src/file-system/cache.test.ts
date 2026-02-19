@@ -1235,6 +1235,33 @@ updated content`
     }
   })
 
+  test('falls back to content hashing when metadata IDs collide within the guard window', async () => {
+    const fileSystem = new MutableTimestampFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'metadata-collision-guard'
+    )
+    const filePath = '/index.ts'
+    const fixedModifiedAt = Date.now()
+    fileSystem.setLastModified(filePath, fixedModifiedAt)
+
+    const firstId = await snapshot.contentId(filePath)
+    expect(firstId.startsWith('mtime:')).toBe(true)
+
+    await new Promise((resolve) => setTimeout(resolve, 275))
+
+    // Keep metadata unchanged (same mtime and byte length) while changing content.
+    await fileSystem.writeFile('index.ts', 'export const value = 2')
+    fileSystem.setLastModified(filePath, fixedModifiedAt)
+
+    const secondId = await snapshot.contentId(filePath)
+
+    expect(secondId).not.toBe(firstId)
+    expect(secondId.startsWith('sha1:')).toBe(true)
+  })
+
   test('prefers file-system-provided content IDs over coarse metadata fingerprints', async () => {
     const fileSystem = new SyntheticContentIdFileSystem(
       {
@@ -1753,6 +1780,99 @@ updated content`
 
     expect(thirdValue).toBe('value-2')
     expect(calls).toBe(2)
+  })
+
+  test('recomputes when provided const dependency versions change', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(fileSystem, 'const-deps-freshness')
+    const store = new CacheStore({ snapshot })
+    const nodeKey = 'test:const-deps-freshness'
+    let calls = 0
+
+    const run = (compilerOptionsVersion: string) =>
+      store.getOrCompute(
+        nodeKey,
+        {
+          persist: false,
+          constDeps: [
+            {
+              name: 'compiler-options',
+              version: compilerOptionsVersion,
+            },
+          ],
+        },
+        async (ctx) => {
+          calls += 1
+          ctx.recordConstDep('compiler-options', compilerOptionsVersion)
+          return `value-${calls}`
+        }
+      )
+
+    expect(await run('hash-1')).toBe('value-1')
+    expect(await run('hash-1')).toBe('value-1')
+    expect(await run('hash-2')).toBe('value-2')
+    expect(await run('hash-2')).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
+  test('invalidates all linked stores when shared snapshots invalidate a path', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(fileSystem, 'shared-snapshot-store')
+    const firstStore = new CacheStore({ snapshot })
+    const secondStore = new CacheStore({ snapshot })
+    let firstCalls = 0
+    let secondCalls = 0
+
+    const readFromStore = (
+      store: CacheStore,
+      nodeKey: string,
+      nextCalls: () => number
+    ) =>
+      store.getOrCompute(nodeKey, { persist: false }, async (ctx) => {
+        await ctx.recordFileDep('/index.ts')
+        return `value-${nextCalls()}`
+      })
+
+    await readFromStore(firstStore, 'test:shared-store:first', () => {
+      firstCalls += 1
+      return firstCalls
+    })
+    await readFromStore(secondStore, 'test:shared-store:second', () => {
+      secondCalls += 1
+      return secondCalls
+    })
+
+    expect(firstCalls).toBe(1)
+    expect(secondCalls).toBe(1)
+
+    await fileSystem.writeFile('index.ts', 'export const value = 2')
+    snapshot.invalidatePath('/index.ts')
+
+    const firstAfter = await readFromStore(
+      firstStore,
+      'test:shared-store:first',
+      () => {
+        firstCalls += 1
+        return firstCalls
+      }
+    )
+    const secondAfter = await readFromStore(
+      secondStore,
+      'test:shared-store:second',
+      () => {
+        secondCalls += 1
+        return secondCalls
+      }
+    )
+
+    expect(firstAfter).toBe('value-2')
+    expect(secondAfter).toBe('value-2')
+    expect(firstCalls).toBe(2)
+    expect(secondCalls).toBe(2)
   })
 
   test('path invalidation without manual node deps propagates through reactive parent/child cache links', async () => {
@@ -4759,6 +4879,86 @@ export type Metadata = Value`,
     }
   })
 
+  test('age pruning uses last_accessed_at instead of updated_at', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-prune-last-accessed-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-prune-last-accessed'
+      )
+      const persistence = new SqliteCacheStorePersistence({
+        dbPath,
+        maxRows: 2,
+        maxAgeMs: 1_000,
+      })
+      const store = new CacheStore({ snapshot, persistence })
+      const survivorNodeKey = 'test:stale-survivor'
+
+      await store.put(
+        survivorNodeKey,
+        { value: 'a' },
+        {
+          persist: true,
+          deps: [{ depKey: 'const:stale-survivor:1', depVersion: '1' }],
+        }
+      )
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const db = new DatabaseSync(dbPath)
+      try {
+        db.prepare(
+          `
+            UPDATE cache_entries
+            SET updated_at = ?, last_accessed_at = ?
+            WHERE node_key = ?
+          `
+        ).run(
+          Date.now() - 24 * 60 * 60 * 1_000,
+          Date.now() + 60_000,
+          survivorNodeKey
+        )
+      } finally {
+        db.close()
+      }
+
+      await store.put(
+        'test:stale-trigger:b',
+        { value: 'b' },
+        {
+          persist: true,
+          deps: [{ depKey: 'const:stale-trigger:b:1', depVersion: '1' }],
+        }
+      )
+      await store.put(
+        'test:stale-trigger:c',
+        { value: 'c' },
+        {
+          persist: true,
+          deps: [{ depKey: 'const:stale-trigger:c:1', depVersion: '1' }],
+        }
+      )
+
+      const persistedSurvivor = await persistence.load(survivorNodeKey)
+      expect(persistedSurvivor?.value).toEqual({ value: 'a' })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('keeps dependency rows aligned with pruned cache entries', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-prune-aligned-')
@@ -5212,6 +5412,151 @@ export type Metadata = Value`,
     }
   })
 
+  test('returns applied=false when guarded sqlite writes miss revision preconditions', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-guarded-write-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:sqlite-guarded-write'
+      const baselineDeps = [{ depKey: 'const:guarded:baseline', depVersion: '1' }]
+      const baselineRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
+        value: { value: 'baseline' },
+        deps: baselineDeps,
+        fingerprint: createFingerprint(baselineDeps),
+        persist: true,
+        updatedAt: Date.now(),
+      })
+
+      const candidateDeps = [{ depKey: 'const:guarded:candidate', depVersion: '1' }]
+      const candidateEntry: CacheEntry = {
+        value: { value: 'candidate' },
+        deps: candidateDeps,
+        fingerprint: createFingerprint(candidateDeps),
+        persist: true,
+        updatedAt: Date.now() + 1,
+      }
+
+      const missingPreconditionResult = await sqlitePersistence.saveWithRevisionGuarded(
+        nodeKey,
+        candidateEntry,
+        {
+          expectedRevision: 'missing',
+        }
+      )
+      expect(missingPreconditionResult).toEqual({
+        applied: false,
+        revision: baselineRevision,
+      })
+
+      const staleRevisionResult = await sqlitePersistence.saveWithRevisionGuarded(
+        nodeKey,
+        candidateEntry,
+        {
+          expectedRevision: baselineRevision - 1,
+        }
+      )
+      expect(staleRevisionResult).toEqual({
+        applied: false,
+        revision: baselineRevision,
+      })
+
+      const persistedAfter = await sqlitePersistence.load(nodeKey)
+      expect(persistedAfter?.value).toEqual({ value: 'baseline' })
+      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBe(
+        baselineRevision
+      )
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('reconciles in-memory values to the persisted winner when guarded writes are superseded', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-guarded-reconcile-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-guarded-reconcile'
+      )
+      const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:sqlite-guarded-reconcile'
+      const baselineDeps = [
+        { depKey: 'const:sqlite-guarded-reconcile:baseline', depVersion: '1' },
+      ]
+      const baselineRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
+        value: { value: 'baseline' },
+        deps: baselineDeps,
+        fingerprint: createFingerprint(baselineDeps),
+        persist: true,
+        updatedAt: Date.now(),
+      })
+
+      const winnerDeps = [
+        { depKey: 'const:sqlite-guarded-reconcile:winner', depVersion: '1' },
+      ]
+      let injectedConcurrentWrite = false
+      const persistence: CacheStorePersistence = {
+        load: sqlitePersistence.load.bind(sqlitePersistence),
+        delete: sqlitePersistence.delete.bind(sqlitePersistence),
+        save: sqlitePersistence.save.bind(sqlitePersistence),
+        saveWithRevision: sqlitePersistence.saveWithRevision.bind(sqlitePersistence),
+        saveWithRevisionGuarded: async (candidateNodeKey, entry, options) => {
+          if (!injectedConcurrentWrite) {
+            injectedConcurrentWrite = true
+            await sqlitePersistence.saveWithRevision(candidateNodeKey, {
+              value: { value: 'winner' },
+              deps: winnerDeps,
+              fingerprint: createFingerprint(winnerDeps),
+              persist: true,
+              updatedAt: entry.updatedAt + 1_000,
+            })
+          }
+
+          return sqlitePersistence.saveWithRevisionGuarded(
+            candidateNodeKey,
+            entry,
+            options
+          )
+        },
+      }
+
+      const store = new CacheStore({ snapshot, persistence })
+      await store.put(
+        nodeKey,
+        { value: 'local' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'const:sqlite-guarded-reconcile:local',
+              depVersion: '1',
+            },
+          ],
+        }
+      )
+
+      const memoryAfter = await store.get(nodeKey)
+      const persistedAfter = await sqlitePersistence.load(nodeKey)
+
+      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBe(
+        baselineRevision + 1
+      )
+      expect(persistedAfter?.value).toEqual({ value: 'winner' })
+      expect(memoryAfter).toEqual({ value: 'winner' })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('keeps a newer persisted row when verification is superseded by concurrent writes', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-sqlite-save-supersede-')
@@ -5228,7 +5573,7 @@ export type Metadata = Value`,
       )
       const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
       const nodeKey = 'test:sqlite-save-supersede'
-      const staleDeps = [{ depKey: 'file:index.ts', depVersion: '0' }]
+      const staleDeps = [{ depKey: 'const:sqlite-save-supersede:stale', depVersion: '1' }]
       const staleRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
         value: { value: 'baseline' },
         deps: staleDeps,
@@ -5237,7 +5582,7 @@ export type Metadata = Value`,
         updatedAt: Date.now(),
       })
 
-      const bumpDeps = [{ depKey: 'file:index.ts', depVersion: '1' }]
+      const bumpDeps = [{ depKey: 'const:sqlite-save-supersede:bump', depVersion: '1' }]
       const bumpedRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
         value: { value: 'bumped' },
         deps: bumpDeps,
@@ -5250,15 +5595,12 @@ export type Metadata = Value`,
       expect(staleRevision).toBe(1)
 
       let injectConcurrentWrite = true
-      const concurrentDeps = [{ depKey: 'file:index.ts', depVersion: '2' }]
+      const concurrentDeps = [
+        { depKey: 'const:sqlite-save-supersede:concurrent', depVersion: '1' },
+      ]
       let concurrentRevision: number | undefined
       let localRevision: number | undefined
-      const localDeps = [
-        {
-          depKey: 'file:index.ts',
-          depVersion: await snapshot.contentId('index.ts'),
-        },
-      ]
+      const localDeps = [{ depKey: 'const:sqlite-save-supersede:local', depVersion: '1' }]
       const racingPersistence: CacheStorePersistence = {
         load: sqlitePersistence.load.bind(sqlitePersistence),
         delete: sqlitePersistence.delete.bind(sqlitePersistence),
@@ -5317,7 +5659,7 @@ export type Metadata = Value`,
       expect(localRevision).toBeGreaterThan(bumpedRevision)
       expect(concurrentRevision).toBeGreaterThan(localRevision)
       expect(persistedAfter?.value).toEqual({ value: 'concurrent' })
-      expect(memoryAfter).toEqual({ value: 'local' })
+      expect(memoryAfter).toEqual({ value: 'concurrent' })
       expect(localRevision).toBe(staleRevision + 2)
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
@@ -5878,9 +6220,11 @@ export type Metadata = Value`,
     )
     const persistedEntries = new Map<string, CacheEntry<{ value: number }>>()
     let forceSupersedingReplay = true
-    const concurrencyDependencies = [{ depKey: 'file:index.ts', depVersion: '2' }]
+    const concurrencyDependencies = [
+      { depKey: 'const:persistence-fallback:2', depVersion: '2' },
+    ]
     const concurrencyFingerprint = createFingerprint([
-      { depKey: 'file:index.ts', depVersion: '2' },
+      { depKey: 'const:persistence-fallback:2', depVersion: '2' },
     ])
     const persistence = {
       load: vi.fn(async (nodeKey) => {
@@ -5927,7 +6271,7 @@ export type Metadata = Value`,
         { persist: true },
         async (ctx) => {
           computeCount += 1
-          await ctx.recordFileDep('/index.ts')
+          ctx.recordDep('const:persistence-fallback:1', '1')
           return { value: 1 }
         }
       )
@@ -5935,7 +6279,7 @@ export type Metadata = Value`,
       const secondResult = await store.get('test:persistence-verification-fallback-revisionless')
 
       expect(firstResult).toEqual({ value: 1 })
-      expect(secondResult).toEqual({ value: 1 })
+      expect(secondResult).toEqual({ value: 2 })
       expect(computeCount).toBe(1)
       expect(persistedEntries.get('test:persistence-verification-fallback-revisionless')?.value).toEqual({
         value: 2,
@@ -5944,7 +6288,7 @@ export type Metadata = Value`,
         value: { value: 2 },
         deps: [
           {
-            depKey: 'file:index.ts',
+            depKey: 'const:persistence-fallback:2',
             depVersion: '2',
           },
         ],

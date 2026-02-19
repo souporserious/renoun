@@ -2232,7 +2232,15 @@ export class GitFileSystem
     const payload =
       await session.cache.getOrCompute<ReverseReExportGraphPayload>(
         nodeKey,
-        { persist: true },
+        {
+          persist: true,
+          constDeps: [
+            {
+              name: 'git-file-system-cache',
+              version: GIT_HISTORY_CACHE_VERSION,
+            },
+          ],
+        },
         async (ctx) => {
           ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
 
@@ -2449,12 +2457,24 @@ export class GitFileSystem
 
     const parsedPayload = await session.cache.getOrCompute<
       Record<string, ExportItem>
-    >(nodeKey, { persist: true }, async (ctx) => {
+    >(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: [
+          {
+            name: 'git-file-system-cache',
+            version: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
       ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
       return serializeExportItemMap(
         scanModuleExports(fileNameForParser, content)
       )
-    })
+      }
+    )
     const parsed = deserializeExportItemMap(parsedPayload)
 
     this.#exportParseCache.set(cacheKey, parsed)
@@ -2494,7 +2514,15 @@ export class GitFileSystem
 
       const logPromise = session.cache.getOrCompute(
         nodeKey,
-        { persist: deterministic },
+        {
+          persist: deterministic,
+          constDeps: [
+            {
+              name: 'git-file-system-cache',
+              version: GIT_HISTORY_CACHE_VERSION,
+            },
+          ],
+        },
         async (ctx) => {
           ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
 
@@ -4575,7 +4603,15 @@ export class GitFileSystem
 
     return session.cache.getOrCompute(
       nodeKey,
-      { persist: true },
+      {
+        persist: true,
+        constDeps: [
+          {
+            name: 'git-file-system-cache',
+            version: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
       async (ctx) => {
         ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
 
@@ -4674,7 +4710,15 @@ export class GitFileSystem
     const session = this.#getSession()
     const index = await session.cache.getOrCompute(
       nodeKey,
-      { persist: true },
+      {
+        persist: true,
+        constDeps: [
+          {
+            name: 'git-file-system-cache',
+            version: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
       async (ctx) => {
         ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
 

@@ -5,8 +5,9 @@ import {
   isAbsolutePath,
   normalizePathKey,
 } from '../utils/path.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import { CacheStore, hashString, stableStringify } from './CacheStore.ts'
+import { CacheStore } from './CacheStore.ts'
 import { getCacheStorePersistence } from './CacheStoreSqlite.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
@@ -945,6 +946,10 @@ export class Session {
     }
 
     this.#base.invalidatePath('.')
+  }
+
+  onInvalidate(listener: (path: string) => void): () => void {
+    return this.#base.onInvalidate(listener)
   }
 }
 
