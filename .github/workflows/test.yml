@@ -88,4 +88,4 @@ jobs:
         if: steps.affected.outputs.package_count != '0'
         env:
           TURBO_SCM_BASE: ${{ steps.affected.outputs.turbo_scm_base }}
-        run: pnpm test --filter="...[$TURBO_SCM_BASE]" --filter="!@renoun/screenshot"
+        run: pnpm turbo run test --filter="...[$TURBO_SCM_BASE]" --filter="!@renoun/screenshot"
