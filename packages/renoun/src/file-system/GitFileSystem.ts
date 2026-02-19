@@ -2437,19 +2437,13 @@ export class GitFileSystem
       sha,
       parserFlavor,
     })
-    const persistedPayload = await session.cache.get<Record<
-      string,
-      ExportItem
-    > | null>(nodeKey)
+    const persistedPayload = await session.cache.get<Record<string, ExportItem>>(
+      nodeKey
+    )
     if (persistedPayload !== undefined) {
-      if (persistedPayload !== null) {
-        const parsed = deserializeExportItemMap(persistedPayload)
-        this.#exportParseCache.set(cacheKey, parsed)
-        return parsed
-      }
-
-      // Legacy cache entries may contain null payloads from transient blob misses.
-      await session.cache.delete(nodeKey)
+      const parsed = deserializeExportItemMap(persistedPayload)
+      this.#exportParseCache.set(cacheKey, parsed)
+      return parsed
     }
 
     const content = await getContent()

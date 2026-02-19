@@ -542,51 +542,6 @@ describe('GitFileSystem', () => {
     }
   })
 
-  test('ignores legacy null blob-export cache payloads and reparses the blob', async ({
-    repoRoot,
-    cacheDirectory,
-  }) => {
-    const commit = commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
-    const blobSha = git(repoRoot, ['rev-parse', `${commit.hash}:src/index.ts`])
-    const persistence = getCacheStorePersistence({ projectRoot: repoRoot })
-    const seedStore = new CacheStore({
-      snapshot: new FileSystemSnapshot(
-        new InMemoryFileSystem({ 'seed.ts': 'export {}' }),
-        'seed-snapshot'
-      ),
-      persistence,
-    })
-    const nodeKey = createGitFileSystemPersistentCacheNodeKey({
-      domainVersion: GIT_HISTORY_CACHE_VERSION,
-      repository: repoRoot,
-      repoRoot,
-      namespace: 'blob-exports',
-      payload: {
-        sha: blobSha,
-        parserFlavor: 'ts',
-      },
-    })
-
-    try {
-      await seedStore.put(nodeKey, null, {
-        persist: true,
-        deps: [
-          {
-            depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
-            depVersion: GIT_HISTORY_CACHE_VERSION,
-          },
-        ],
-      })
-
-      using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-      const metadata = await store.getModuleMetadata('src/index.ts')
-
-      expect(Object.keys(metadata.exports)).toContain('a')
-    } finally {
-      disposeCacheStorePersistence({ projectRoot: repoRoot })
-    }
-  })
-
   test('does not persist fallback file metadata after transient git-log failures', async ({
     repoRoot,
     cacheDirectory,

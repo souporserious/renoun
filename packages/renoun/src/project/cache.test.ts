@@ -107,7 +107,7 @@ describe('project file cache', () => {
     expect(fileExportsCalls).toBe(2)
   })
 
-  test('supports explicit cache-name invalidation through namespace path', async () => {
+  test('supports explicit cache-name invalidation via cacheName argument', async () => {
     const project = {} as unknown as Project
 
     let firstCalls = 0
@@ -131,7 +131,7 @@ describe('project file cache', () => {
     expect(metadataCalls).toBe(1)
     expect(secondCalls).toBe(1)
 
-    invalidateProjectFileCache(project, 'fileExportsText')
+    invalidateProjectFileCache(project, undefined, 'fileExportsText')
 
     await createProjectFileCache(project, '/project/src/index.ts', 'fileMetadata', () => {
       metadataCalls += 1
@@ -151,26 +151,101 @@ describe('project file cache', () => {
     expect(metadataCalls).toBe(1)
   })
 
-  test('still supports legacy cache-name-only invalidation syntax', async () => {
+  test('does not treat filePath-only invalidation as cache-name invalidation', async () => {
     const project = {} as unknown as Project
 
+    let calls = 0
     await createProjectFileCache(
       project,
       '/project/src/index.ts',
       'fileExportsText',
-      () => 'value'
+      () => {
+        calls += 1
+        return `value-${calls}`
+      }
     )
 
+    // File-path invalidation must not remove cache entries by namespace.
     invalidateProjectFileCache(project, 'fileExportsText')
 
     const value = await createProjectFileCache(
       project,
       '/project/src/index.ts',
       'fileExportsText',
-      () => 'value-2'
+      () => {
+        calls += 1
+        return `value-${calls}`
+      }
     )
 
-    expect(value).toBe('value-2')
+    expect(value).toBe('value-1')
+    expect(calls).toBe(1)
+  })
+
+  test('does not misclassify extensionless dependency paths as cache names', async () => {
+    const project = {} as unknown as Project
+    const cacheFilePath = '/project/src/index.ts'
+    const dependencyPath = 'LICENSE'
+    let calls = 0
+
+    const first = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'fileExportsText',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: dependencyPath,
+          },
+        ],
+      }
+    )
+    const second = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'fileExportsText',
+      () => 'should not run',
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: dependencyPath,
+          },
+        ],
+      }
+    )
+
+    expect(first).toBe('value-1')
+    expect(second).toBe('value-1')
+    expect(calls).toBe(1)
+
+    invalidateProjectFileCache(project, dependencyPath)
+
+    const third = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      'fileExportsText',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: dependencyPath,
+          },
+        ],
+      }
+    )
+
+    expect(third).toBe('value-2')
+    expect(calls).toBe(2)
   })
 
   test('recomputes entries when a structured file dependency is invalidated', async () => {

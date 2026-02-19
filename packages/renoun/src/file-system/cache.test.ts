@@ -4534,6 +4534,51 @@ export type Metadata = Value`,
     }
   })
 
+  test('does not resurrect deleted entries after concurrent save cleanup', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(fileSystem, 'persistence-delete-race')
+    const nodeKey = 'test:persistence-delete-race'
+    const saveStarted = createDeferredPromise()
+    const allowSaveFailure = createDeferredPromise()
+    const persistence = {
+      load: vi.fn(async () => undefined),
+      save: vi.fn(async () => {
+        saveStarted.resolve()
+        await allowSaveFailure.promise
+        throw new Error('disk write failure')
+      }),
+      delete: vi.fn(async () => undefined),
+    }
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = new CacheStore({ snapshot, persistence })
+
+    try {
+      const inFlightWrite = store.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (ctx) => {
+          await ctx.recordFileDep('/index.ts')
+          return { value: 1 }
+        }
+      )
+
+      await saveStarted.promise
+
+      const deletePromise = store.delete(nodeKey)
+      allowSaveFailure.resolve()
+
+      await expect(deletePromise).resolves.toBeUndefined()
+      await expect(inFlightWrite).resolves.toEqual({ value: 1 })
+
+      expect(await store.get(nodeKey)).toBeUndefined()
+      expect(persistence.delete).toHaveBeenCalledTimes(2)
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
   test('keeps persisted cache values consistent across multiple stores during updates', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-multi-store-')

@@ -27,7 +27,7 @@ interface ProjectCacheState {
 }
 
 const projectCacheStateByProject = new WeakMap<Project, ProjectCacheState>()
-const PROJECT_CACHE_VERSION_TOKEN = 'project-cache-v1'
+const PROJECT_CACHE_VERSION_TOKEN = 'project-cache-v0'
 const PROJECT_CACHE_NODE_PREFIX = 'project-cache:'
 
 function getProjectCacheState(project: Project): ProjectCacheState {
@@ -63,21 +63,6 @@ function toCacheDependencyKey(filePath: string, cacheName: string): string {
 
 function toProjectCacheNodeKey(filePath: string, cacheName: string): string {
   return `project-cache:${normalizeProjectPath(filePath)}:${cacheName}`
-}
-
-function isLikelyPath(value: string): boolean {
-  return (
-    value.includes('/') ||
-    value.includes('\\') ||
-    value.startsWith('.') ||
-    value.endsWith('.ts') ||
-    value.endsWith('.tsx') ||
-    value.endsWith('.js') ||
-    value.endsWith('.jsx') ||
-    value.endsWith('.md') ||
-    value.endsWith('.mdx') ||
-    value.endsWith('.json')
-  )
 }
 
 function toDependencyRecord(
@@ -313,17 +298,6 @@ export function invalidateProjectFileCache(
   const cacheByFilePath = state.cacheByFilePath
   const normalizedFilePath = filePath ? normalizeProjectPath(filePath) : undefined
 
-  if (
-    cacheName === undefined &&
-    filePath !== undefined &&
-    normalizedFilePath !== undefined &&
-    !cacheByFilePath.has(normalizedFilePath) &&
-    !isLikelyPath(filePath)
-  ) {
-    invalidateProjectFileCacheByName(project, normalizedFilePath)
-    return
-  }
-
   if (normalizedFilePath) {
     if (!cacheName) {
       state.graph.touchPathDependencies(normalizedFilePath)
@@ -374,25 +348,6 @@ export function invalidateProjectFileCache(
 
     if (fileMap.size === 0) {
       cacheByFilePath.delete(cachedFilePath)
-    }
-  }
-}
-
-function invalidateProjectFileCacheByName(project: Project, cacheName: string) {
-  const state = projectCacheStateByProject.get(project)
-
-  if (!state) return
-
-  for (const [cachedFilePath, fileMap] of [...state.cacheByFilePath.entries()]) {
-    if (!fileMap.has(cacheName)) {
-      continue
-    }
-
-    invalidateProjectCacheEntry(state, cachedFilePath, cacheName)
-    fileMap.delete(cacheName)
-
-    if (fileMap.size === 0) {
-      state.cacheByFilePath.delete(cachedFilePath)
     }
   }
 }

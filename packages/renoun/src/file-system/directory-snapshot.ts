@@ -66,6 +66,11 @@ function createPersistedEntryKey(kind: 'file' | 'directory', path: string) {
   return `${kind}:${path}`
 }
 
+function shouldDebugSnapshotRestoreMismatch(): boolean {
+  const debugEnvValue = process.env['RENOUN_DEBUG_DIRECTORY_SNAPSHOT_RESTORE']
+  return debugEnvValue === '1' || debugEnvValue === 'true'
+}
+
 export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
   #entries: Entry[]
   #directories: Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>
@@ -293,7 +298,10 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
       }
     }
 
-    if (materializedEntries.length !== payload.flatEntries.length) {
+    if (
+      materializedEntries.length !== payload.flatEntries.length &&
+      shouldDebugSnapshotRestoreMismatch()
+    ) {
       const missingEntries = payload.flatEntries
         .map((entry) => ({
           kind: entry.kind,

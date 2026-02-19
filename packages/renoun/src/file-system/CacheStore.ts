@@ -570,17 +570,13 @@ export class CacheStore {
     clearPersistedEntryInvalidation(this.#persistence, nodeKey)
   }
 
-  #cleanupPersistedEntry(nodeKey: string, entry: CacheEntry): Promise<void> {
+  #cleanupPersistedEntry(nodeKey: string): Promise<void> {
     markPersistedEntryInvalid(this.#persistence, nodeKey)
     if (!this.#persistence) {
       return Promise.resolve()
     }
 
-    return this.#clearPersistedCacheEntry(nodeKey).then(() => {
-      if (!this.#entries.get(nodeKey)) {
-        this.#entries.set(nodeKey, entry)
-      }
-    })
+    return this.#clearPersistedCacheEntry(nodeKey)
   }
 
   #getComputeSlotPersistence(): CacheStorePersistenceComputeSlot | undefined {
@@ -1307,10 +1303,7 @@ export class CacheStore {
         const cleanupError =
           error instanceof Error ? error : new Error(String(error))
 
-        await this.#cleanupPersistedEntry(nodeKey, {
-          ...entry,
-          value: entry.value,
-        })
+        await this.#cleanupPersistedEntry(nodeKey)
         entry.persist = false
         markPersistedEntryInvalid(this.#persistence, nodeKey)
         if (
