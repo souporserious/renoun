@@ -1,4 +1,11 @@
-import type { SyntaxKind, Project } from '../utils/ts-morph.ts'
+import { dirname, join } from 'node:path'
+import type {
+  SourceFile,
+  SyntaxKind,
+  Project,
+  ts as TsMorphTS,
+} from '../utils/ts-morph.ts'
+import { getTsMorph } from '../utils/ts-morph.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -7,9 +14,12 @@ import {
   normalizeCachePath,
   serializeTypeFilterForCache,
 } from '../file-system/cache-key.ts'
-import { CacheStore, type CacheStoreComputeContext } from '../file-system/Cache.ts'
+import {
+  CacheStore,
+  type CacheStoreComputeContext,
+  type CacheStoreConstDependency,
+} from '../file-system/Cache.ts'
 import { getCacheStorePersistence } from '../file-system/CacheSqlite.ts'
-import { NodeFileSystem } from '../file-system/NodeFileSystem.ts'
 import { FileSystemSnapshot } from '../file-system/Snapshot.ts'
 import type { ModuleExport } from '../utils/get-file-exports.ts'
 import {
@@ -44,50 +54,84 @@ const RESOLVE_TYPE_AT_LOCATION_CACHE_NAME = 'resolveTypeAtLocation'
 const TRANSPILE_SOURCE_FILE_CACHE_NAME = 'transpileSourceFile'
 const TOKENS_CACHE_NAME = 'tokens'
 const SOURCE_TEXT_METADATA_CACHE_NAME = 'sourceTextMetadata'
+const TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME = 'typeScriptDependencyAnalysis'
 const RUNTIME_ANALYSIS_CACHE_SCOPE = 'project-analysis-runtime'
 const RUNTIME_ANALYSIS_CACHE_VERSION = '1'
 const RUNTIME_ANALYSIS_CACHE_VERSION_DEP = 'runtime-analysis-cache-version'
 const PROJECT_COMPILER_OPTIONS_DEP = 'project:compiler-options'
+const MAX_TS_DEPENDENCY_ANALYSIS_FILES = 10_000
+const MODULE_RESOLUTION_FILE_EXTENSIONS = [
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.d.ts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+] as const
+
+const { ts } = getTsMorph()
 
 interface RuntimeAnalysisCacheStore {
   store: CacheStore
-  fileSystem: NodeFileSystem
+  fileSystem: RuntimeAnalysisFileSystem
+}
+
+interface RuntimeAnalysisFileSystem {
+  getAbsolutePath(path: string): string
+  getRelativePathToWorkspace(path: string): string
+  fileExistsSync(path: string): boolean
+  readFileSync(path: string): string
 }
 
 let runtimeAnalysisCacheStore:
   | RuntimeAnalysisCacheStore
   | null
   | undefined
+let runtimeAnalysisCacheStorePromise:
+  | Promise<RuntimeAnalysisCacheStore | null>
+  | undefined
 
-function getRuntimeAnalysisCacheStore(): RuntimeAnalysisCacheStore | undefined {
+async function getRuntimeAnalysisCacheStore(): Promise<
+  RuntimeAnalysisCacheStore | undefined
+> {
   if (runtimeAnalysisCacheStore !== undefined) {
     return runtimeAnalysisCacheStore ?? undefined
   }
 
-  try {
-    const fileSystem = new NodeFileSystem()
-    const snapshot = new FileSystemSnapshot(fileSystem)
-    const projectRoot = resolveRuntimeAnalysisProjectRoot(fileSystem)
-    const persistence = projectRoot
-      ? getCacheStorePersistence({ projectRoot })
-      : getCacheStorePersistence()
+  if (!runtimeAnalysisCacheStorePromise) {
+    runtimeAnalysisCacheStorePromise = (async () => {
+      try {
+        const { NodeFileSystem } = await import('../file-system/NodeFileSystem.ts')
+        const fileSystem = new NodeFileSystem()
+        const snapshot = new FileSystemSnapshot(fileSystem)
+        const projectRoot = resolveRuntimeAnalysisProjectRoot(fileSystem)
+        const persistence = projectRoot
+          ? getCacheStorePersistence({ projectRoot })
+          : getCacheStorePersistence()
 
-    runtimeAnalysisCacheStore = {
-      store: new CacheStore({
-        snapshot,
-        persistence,
-      }),
-      fileSystem,
-    }
-  } catch {
-    runtimeAnalysisCacheStore = null
+        return {
+          store: new CacheStore({
+            snapshot,
+            persistence,
+          }),
+          fileSystem,
+        } satisfies RuntimeAnalysisCacheStore
+      } catch {
+        return null
+      }
+    })()
   }
+
+  runtimeAnalysisCacheStore = await runtimeAnalysisCacheStorePromise
 
   return runtimeAnalysisCacheStore ?? undefined
 }
 
 function resolveRuntimeAnalysisProjectRoot(
-  fileSystem: NodeFileSystem
+  fileSystem: RuntimeAnalysisFileSystem
 ): string | undefined {
   try {
     return getRootDirectory(fileSystem.getAbsolutePath('.'))
@@ -151,32 +195,872 @@ function normalizeCacheFilePath(path: string | undefined): string | undefined {
   return normalizeCachePath(path)
 }
 
-function getSourceFileDependencyPaths(
-  project: Project,
-  filePath: string
+interface SourceFileDependencyLink {
+  moduleSpecifier: string
+  sourceFilePath?: string
+}
+
+interface SourceFileDependencyLinksResult {
+  links: SourceFileDependencyLink[]
+}
+
+interface TypeScriptDependencyAnalysis {
+  dependencyFilePaths: string[]
+  packageDependencies: Array<{
+    packageName: string
+    importerPaths: string[]
+  }>
+}
+
+interface RuntimeTypeScriptDependencyAnalysisResult {
+  nodeKey: string
+  dependencyFilePaths: string[]
+}
+
+interface PackageVersionDependencyResolution {
+  dependencyFilePaths: string[]
+}
+
+interface PackageManifest {
+  version?: unknown
+  dependencies?: Record<string, unknown>
+  devDependencies?: Record<string, unknown>
+  peerDependencies?: Record<string, unknown>
+  optionalDependencies?: Record<string, unknown>
+}
+
+function normalizeModuleSpecifier(moduleSpecifier: string): string {
+  if (moduleSpecifier.startsWith('npm:')) {
+    return moduleSpecifier.slice('npm:'.length)
+  }
+
+  return moduleSpecifier
+}
+
+function getModuleSpecifierTextFromCompilerNode(
+  node: TsMorphTS.Node | undefined
+): string | undefined {
+  if (!node) {
+    return undefined
+  }
+
+  if (ts.isStringLiteralLike(node)) {
+    return node.text
+  }
+
+  return undefined
+}
+
+function collectSourceFileModuleSpecifiers(
+  sourceFile: SourceFile
 ): string[] {
+  const moduleSpecifiers = new Set<string>()
+  const addModuleSpecifier = (moduleSpecifier: string | undefined): void => {
+    if (!moduleSpecifier || moduleSpecifier.length === 0) {
+      return
+    }
+
+    moduleSpecifiers.add(moduleSpecifier)
+  }
+
+  const visitNode = (node: TsMorphTS.Node): void => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      const moduleSpecifier = getModuleSpecifierTextFromCompilerNode(
+        node.moduleSpecifier
+      )
+      addModuleSpecifier(moduleSpecifier)
+    } else if (ts.isImportEqualsDeclaration(node)) {
+      if (ts.isExternalModuleReference(node.moduleReference)) {
+        const moduleSpecifier = getModuleSpecifierTextFromCompilerNode(
+          node.moduleReference.expression
+        )
+        addModuleSpecifier(moduleSpecifier)
+      }
+    } else if (ts.isImportTypeNode(node)) {
+      if (ts.isLiteralTypeNode(node.argument)) {
+        const moduleSpecifier = getModuleSpecifierTextFromCompilerNode(
+          node.argument.literal
+        )
+        addModuleSpecifier(moduleSpecifier)
+      }
+    }
+
+    ts.forEachChild(node, visitNode)
+  }
+
+  visitNode(sourceFile.compilerNode)
+
+  return Array.from(moduleSpecifiers.values())
+}
+
+function isModuleSpecifierRelativeOrAbsolute(moduleSpecifier: string): boolean {
+  return (
+    moduleSpecifier.startsWith('.') ||
+    moduleSpecifier.startsWith('/') ||
+    /^[A-Za-z]:[\\/]/.test(moduleSpecifier)
+  )
+}
+
+function resolveSourceFileByPathCandidates(
+  project: Project,
+  basePath: string
+): string | undefined {
+  const candidatePaths = new Set<string>()
+  candidatePaths.add(basePath)
+  candidatePaths.add(normalizeCachePath(basePath))
+
+  for (const extension of MODULE_RESOLUTION_FILE_EXTENSIONS) {
+    candidatePaths.add(`${basePath}${extension}`)
+    candidatePaths.add(normalizeCachePath(`${basePath}${extension}`))
+    candidatePaths.add(join(basePath, `index${extension}`))
+    candidatePaths.add(normalizeCachePath(join(basePath, `index${extension}`)))
+  }
+
+  for (const candidatePath of candidatePaths) {
+    const sourceFile = project.getSourceFile(candidatePath)
+    if (sourceFile) {
+      return sourceFile.getFilePath()
+    }
+  }
+
+  return undefined
+}
+
+function resolveModuleSpecifierSourceFilePath(
+  project: Project,
+  containingFilePath: string,
+  moduleSpecifier: string,
+  moduleResolutionByKey: Map<string, string | null>
+): string | undefined {
+  const normalizedModuleSpecifier = normalizeModuleSpecifier(moduleSpecifier)
+  if (!normalizedModuleSpecifier) {
+    return undefined
+  }
+
+  const cacheKey = `${normalizeCachePath(containingFilePath)}:${normalizedModuleSpecifier}`
+  const cachedResolution = moduleResolutionByKey.get(cacheKey)
+  if (cachedResolution !== undefined) {
+    return cachedResolution ?? undefined
+  }
+
+  const resolvedModuleSpecifierSourceFile = project.getSourceFile(
+    normalizedModuleSpecifier
+  )
+  if (resolvedModuleSpecifierSourceFile) {
+    const resolvedFilePath = resolvedModuleSpecifierSourceFile.getFilePath()
+    moduleResolutionByKey.set(cacheKey, resolvedFilePath)
+    return resolvedFilePath
+  }
+
+  if (isModuleSpecifierRelativeOrAbsolute(normalizedModuleSpecifier)) {
+    const baseCandidatePath =
+      normalizedModuleSpecifier.startsWith('.')
+        ? join(dirname(containingFilePath), normalizedModuleSpecifier)
+        : normalizedModuleSpecifier
+
+    const resolvedCandidateSourceFilePath = resolveSourceFileByPathCandidates(
+      project,
+      baseCandidatePath
+    )
+    if (resolvedCandidateSourceFilePath) {
+      moduleResolutionByKey.set(cacheKey, resolvedCandidateSourceFilePath)
+      return resolvedCandidateSourceFilePath
+    }
+  }
+
+  try {
+    const resolutionResult = ts.resolveModuleName(
+      normalizedModuleSpecifier,
+      containingFilePath,
+      project.getCompilerOptions(),
+      ts.sys
+    )
+    const resolvedFileName = resolutionResult.resolvedModule?.resolvedFileName
+    if (resolvedFileName) {
+      const resolvedSourceFile = project.getSourceFile(resolvedFileName)
+      const resolvedSourceFilePath =
+        resolvedSourceFile?.getFilePath() ?? resolvedFileName
+      moduleResolutionByKey.set(cacheKey, resolvedSourceFilePath)
+      return resolvedSourceFilePath
+    }
+  } catch {
+    // Ignore module resolution failures and leave dependency unresolved.
+  }
+
+  moduleResolutionByKey.set(cacheKey, null)
+  return undefined
+}
+
+function getSourceFileDependencyLinks(
+  project: Project,
+  sourceFile: SourceFile,
+  moduleResolutionByKey: Map<string, string | null>
+): SourceFileDependencyLinksResult {
+  const links: SourceFileDependencyLink[] = []
+  const seenLinkKeys = new Set<string>()
+  const containingFilePath = sourceFile.getFilePath()
+  const moduleSpecifiers = collectSourceFileModuleSpecifiers(sourceFile)
+
+  for (const moduleSpecifier of moduleSpecifiers) {
+    const sourceFilePath = resolveModuleSpecifierSourceFilePath(
+      project,
+      containingFilePath,
+      moduleSpecifier,
+      moduleResolutionByKey
+    )
+    const linkKey = `${moduleSpecifier}:${sourceFilePath ?? 'missing'}`
+    if (seenLinkKeys.has(linkKey)) {
+      continue
+    }
+    seenLinkKeys.add(linkKey)
+
+    links.push({
+      moduleSpecifier,
+      sourceFilePath,
+    })
+  }
+
+  return {
+    links,
+  }
+}
+
+function isWorkspacePath(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  path: string
+): boolean {
+  try {
+    runtimeCacheStore.fileSystem.getRelativePathToWorkspace(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function shouldTraverseDependencySourceFile(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  sourceFile: SourceFile
+): boolean {
+  if (sourceFile.isFromExternalLibrary()) {
+    return false
+  }
+
+  const dependencyPath = sourceFile.getFilePath()
+
+  if (normalizeCachePath(dependencyPath).includes('/node_modules/')) {
+    return false
+  }
+
+  return isWorkspacePath(runtimeCacheStore, dependencyPath)
+}
+
+function shouldTraverseDependencyPath(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  dependencyPath: string
+): boolean {
+  if (!isWorkspacePath(runtimeCacheStore, dependencyPath)) {
+    return false
+  }
+
+  return !normalizeCachePath(dependencyPath).includes('/node_modules/')
+}
+
+function isPathWithinRoot(path: string, rootPath: string): boolean {
+  const normalizedPath = normalizeCachePath(path)
+  const normalizedRootPath = normalizeCachePath(rootPath)
+  return (
+    normalizedPath === normalizedRootPath ||
+    normalizedPath.startsWith(`${normalizedRootPath}/`)
+  )
+}
+
+function getProjectDependencyBoundaryPath(project: Project): string | undefined {
+  const compilerOptions = project.getCompilerOptions() as {
+    configFilePath?: string
+  }
+  const configFilePath = compilerOptions.configFilePath
+  if (!configFilePath) {
+    return undefined
+  }
+
+  return dirname(configFilePath)
+}
+
+function shouldRecordLocalWorkspaceDependencyPath(options: {
+  runtimeCacheStore: RuntimeAnalysisCacheStore
+  dependencyPath: string
+  moduleSpecifier: string
+  projectDependencyBoundaryPath: string | undefined
+}): boolean {
+  const {
+    runtimeCacheStore,
+    dependencyPath,
+    moduleSpecifier,
+    projectDependencyBoundaryPath,
+  } = options
+  if (!isWorkspacePath(runtimeCacheStore, dependencyPath)) {
+    return false
+  }
+
+  const normalizedDependencyPath = normalizeCachePath(dependencyPath)
+  if (normalizedDependencyPath.includes('/node_modules/')) {
+    return false
+  }
+
+  if (isModuleSpecifierRelativeOrAbsolute(moduleSpecifier)) {
+    return true
+  }
+
+  if (!projectDependencyBoundaryPath) {
+    return true
+  }
+
+  return isPathWithinRoot(dependencyPath, projectDependencyBoundaryPath)
+}
+
+function getPackageNameFromModuleSpecifier(
+  moduleSpecifier: string | undefined
+): string | undefined {
+  if (!moduleSpecifier) {
+    return undefined
+  }
+
+  if (
+    moduleSpecifier.startsWith('.') ||
+    moduleSpecifier.startsWith('/') ||
+    moduleSpecifier.startsWith('#') ||
+    moduleSpecifier.startsWith('node:')
+  ) {
+    return undefined
+  }
+
+  if (/^[A-Za-z]:[\\/]/.test(moduleSpecifier)) {
+    return undefined
+  }
+
+  const normalizedSpecifier = normalizeModuleSpecifier(moduleSpecifier)
+
+  if (!normalizedSpecifier) {
+    return undefined
+  }
+
+  if (normalizedSpecifier.startsWith('@')) {
+    const [scope, packageName] = normalizedSpecifier.split('/')
+    if (!scope || scope === '@' || !packageName) {
+      return undefined
+    }
+
+    return `${scope}/${packageName}`
+  }
+
+  const [packageName] = normalizedSpecifier.split('/')
+  return packageName || undefined
+}
+
+function collectTypeScriptDependencyAnalysis(
+  project: Project,
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  filePath: string
+): TypeScriptDependencyAnalysis {
   const sourceFile = project.getSourceFile(filePath)
+  const projectDependencyBoundaryPath = getProjectDependencyBoundaryPath(project)
 
   if (!sourceFile) {
-    return []
+    return {
+      dependencyFilePaths: [],
+      packageDependencies: [],
+    }
   }
 
   const dependencyPaths = new Set<string>()
-  for (const importDeclaration of sourceFile.getImportDeclarations()) {
-    const dependencySourceFile = importDeclaration.getModuleSpecifierSourceFile()
-    if (dependencySourceFile) {
-      dependencyPaths.add(dependencySourceFile.getFilePath())
+  const packageImportersByName = new Map<string, Set<string>>()
+  const visitedSourceFilePaths = new Set<string>()
+  const sourceFileQueue: SourceFile[] = [sourceFile]
+  const moduleResolutionByKey = new Map<string, string | null>()
+  const dependencyLinksBySourceFilePath = new Map<
+    string,
+    SourceFileDependencyLinksResult
+  >()
+  let dependencyAnalysisLimitReached = false
+
+  const getDependencyLinksForSourceFile = (
+    targetSourceFile: SourceFile
+  ): SourceFileDependencyLinksResult => {
+    const sourceFilePathKey = normalizeCachePath(targetSourceFile.getFilePath())
+    const cachedLinks = dependencyLinksBySourceFilePath.get(sourceFilePathKey)
+    if (cachedLinks) {
+      return cachedLinks
+    }
+
+    const resolvedLinks = getSourceFileDependencyLinks(
+      project,
+      targetSourceFile,
+      moduleResolutionByKey
+    )
+    dependencyLinksBySourceFilePath.set(sourceFilePathKey, resolvedLinks)
+    return resolvedLinks
+  }
+
+  while (sourceFileQueue.length > 0) {
+    if (visitedSourceFilePaths.size >= MAX_TS_DEPENDENCY_ANALYSIS_FILES) {
+      dependencyAnalysisLimitReached = true
+      break
+    }
+
+    const currentSourceFile = sourceFileQueue.shift()!
+    const currentSourceFilePath = currentSourceFile.getFilePath()
+    const normalizedCurrentSourceFilePath = normalizeCachePath(currentSourceFilePath)
+
+    if (visitedSourceFilePaths.has(normalizedCurrentSourceFilePath)) {
+      continue
+    }
+
+    visitedSourceFilePaths.add(normalizedCurrentSourceFilePath)
+
+    for (const link of getDependencyLinksForSourceFile(currentSourceFile).links) {
+      const dependencyPath = link.sourceFilePath
+      const normalizedDependencyPath =
+        typeof dependencyPath === 'string'
+          ? normalizeCachePath(dependencyPath)
+          : undefined
+      const isLocalWorkspaceDependencyPath =
+        normalizedDependencyPath !== undefined &&
+        typeof dependencyPath === 'string' &&
+        shouldRecordLocalWorkspaceDependencyPath({
+          runtimeCacheStore,
+          dependencyPath,
+          moduleSpecifier: link.moduleSpecifier,
+          projectDependencyBoundaryPath,
+        })
+
+      if (isLocalWorkspaceDependencyPath && dependencyPath) {
+        dependencyPaths.add(dependencyPath)
+      }
+
+      if (isLocalWorkspaceDependencyPath && dependencyPath) {
+        const dependencySourceFile = project.getSourceFile(dependencyPath)
+        if (
+          dependencySourceFile &&
+          shouldTraverseDependencySourceFile(
+            runtimeCacheStore,
+            dependencySourceFile
+          ) &&
+          shouldTraverseDependencyPath(runtimeCacheStore, dependencyPath)
+        ) {
+          sourceFileQueue.push(dependencySourceFile)
+        }
+      }
+
+      if (isLocalWorkspaceDependencyPath) {
+        continue
+      }
+
+      const packageName = getPackageNameFromModuleSpecifier(link.moduleSpecifier)
+      if (!packageName) {
+        continue
+      }
+
+      let importerPaths = packageImportersByName.get(packageName)
+      if (!importerPaths) {
+        importerPaths = new Set<string>()
+        packageImportersByName.set(packageName, importerPaths)
+      }
+      importerPaths.add(currentSourceFilePath)
     }
   }
 
-  for (const exportDeclaration of sourceFile.getExportDeclarations()) {
-    const dependencySourceFile = exportDeclaration.getModuleSpecifierSourceFile()
-    if (dependencySourceFile) {
-      dependencyPaths.add(dependencySourceFile.getFilePath())
+  if (dependencyAnalysisLimitReached) {
+    for (const projectSourceFile of project.getSourceFiles()) {
+      const projectSourceFilePath = projectSourceFile.getFilePath()
+      if (!isWorkspacePath(runtimeCacheStore, projectSourceFilePath)) {
+        continue
+      }
+      if (normalizeCachePath(projectSourceFilePath).includes('/node_modules/')) {
+        continue
+      }
+      if (
+        projectDependencyBoundaryPath &&
+        !isPathWithinRoot(projectSourceFilePath, projectDependencyBoundaryPath)
+      ) {
+        continue
+      }
+      dependencyPaths.add(projectSourceFilePath)
+
+      for (const link of getDependencyLinksForSourceFile(projectSourceFile).links) {
+        const dependencyPath = link.sourceFilePath
+        const normalizedDependencyPath =
+          typeof dependencyPath === 'string'
+            ? normalizeCachePath(dependencyPath)
+            : undefined
+        const isLocalWorkspaceDependencyPath =
+          typeof dependencyPath === 'string' &&
+          normalizedDependencyPath !== undefined &&
+          shouldRecordLocalWorkspaceDependencyPath({
+            runtimeCacheStore,
+            dependencyPath,
+            moduleSpecifier: link.moduleSpecifier,
+            projectDependencyBoundaryPath,
+          })
+        if (isLocalWorkspaceDependencyPath) {
+          continue
+        }
+
+        const packageName = getPackageNameFromModuleSpecifier(link.moduleSpecifier)
+        if (!packageName) {
+          continue
+        }
+
+        let importerPaths = packageImportersByName.get(packageName)
+        if (!importerPaths) {
+          importerPaths = new Set<string>()
+          packageImportersByName.set(packageName, importerPaths)
+        }
+
+        importerPaths.add(projectSourceFilePath)
+      }
     }
   }
 
-  return Array.from(dependencyPaths.values())
+  const packageDependencies = Array.from(packageImportersByName.entries())
+    .map(([packageName, importerPaths]) => ({
+      packageName,
+      importerPaths: Array.from(importerPaths.values()).sort((a, b) =>
+        a.localeCompare(b)
+      ),
+    }))
+    .sort((a, b) => a.packageName.localeCompare(b.packageName))
+
+  return {
+    dependencyFilePaths: Array.from(dependencyPaths.values()),
+    packageDependencies,
+  }
+}
+
+function getDependencyVersionFromPackageManifest(
+  packageManifest: PackageManifest,
+  packageName: string
+): string | undefined {
+  const dependencyGroups = [
+    packageManifest.dependencies,
+    packageManifest.devDependencies,
+    packageManifest.peerDependencies,
+    packageManifest.optionalDependencies,
+  ]
+
+  for (const dependencyGroup of dependencyGroups) {
+    const dependencyVersion = dependencyGroup?.[packageName]
+    if (typeof dependencyVersion === 'string' && dependencyVersion.length > 0) {
+      return dependencyVersion
+    }
+  }
+
+  return undefined
+}
+
+function readPackageManifest(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  packageManifestByPath: Map<string, PackageManifest | null>,
+  packageManifestPath: string
+): PackageManifest | null {
+  const normalizedPackageManifestPath = normalizeCachePath(packageManifestPath)
+  const cachedPackageManifest = packageManifestByPath.get(
+    normalizedPackageManifestPath
+  )
+
+  if (cachedPackageManifest !== undefined) {
+    return cachedPackageManifest
+  }
+
+  try {
+    if (!runtimeCacheStore.fileSystem.fileExistsSync(packageManifestPath)) {
+      packageManifestByPath.set(normalizedPackageManifestPath, null)
+      return null
+    }
+
+    const contents = runtimeCacheStore.fileSystem.readFileSync(packageManifestPath)
+    const parsedManifest = JSON.parse(contents) as PackageManifest
+    if (!parsedManifest || typeof parsedManifest !== 'object') {
+      packageManifestByPath.set(normalizedPackageManifestPath, null)
+      return null
+    }
+
+    packageManifestByPath.set(normalizedPackageManifestPath, parsedManifest)
+    return parsedManifest
+  } catch {
+    packageManifestByPath.set(normalizedPackageManifestPath, null)
+    return null
+  }
+}
+
+function getWorkspaceRootPath(
+  runtimeCacheStore: RuntimeAnalysisCacheStore
+): string | undefined {
+  try {
+    return getRootDirectory(runtimeCacheStore.fileSystem.getAbsolutePath('.'))
+  } catch {
+    return undefined
+  }
+}
+
+function getAncestorDirectoriesInWorkspace(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  workspaceRootPath: string,
+  filePath: string
+): string[] {
+  const directories: string[] = []
+
+  try {
+    let currentDirectory = dirname(runtimeCacheStore.fileSystem.getAbsolutePath(filePath))
+    const normalizedWorkspaceRoot = normalizeCachePath(workspaceRootPath)
+
+    while (true) {
+      const normalizedCurrentDirectory = normalizeCachePath(currentDirectory)
+      const isWithinWorkspaceRoot =
+        normalizedCurrentDirectory === normalizedWorkspaceRoot ||
+        normalizedCurrentDirectory.startsWith(
+          `${normalizedWorkspaceRoot}/`
+        )
+      if (!isWithinWorkspaceRoot) {
+        break
+      }
+
+      directories.push(currentDirectory)
+
+      if (normalizedCurrentDirectory === normalizedWorkspaceRoot) {
+        break
+      }
+
+      const parentDirectory = dirname(currentDirectory)
+      if (parentDirectory === currentDirectory) {
+        break
+      }
+      currentDirectory = parentDirectory
+    }
+  } catch {
+    return []
+  }
+
+  return directories
+}
+
+function resolveDeclaredPackageManifestPath(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  packageManifestByPath: Map<string, PackageManifest | null>,
+  workspaceRootPath: string,
+  filePath: string,
+  packageName: string
+): string | undefined {
+  for (const directoryPath of getAncestorDirectoriesInWorkspace(
+    runtimeCacheStore,
+    workspaceRootPath,
+    filePath
+  )) {
+    const packageManifestPath = join(directoryPath, 'package.json')
+    const packageManifest = readPackageManifest(
+      runtimeCacheStore,
+      packageManifestByPath,
+      packageManifestPath
+    )
+    if (!packageManifest) {
+      continue
+    }
+
+    const dependencyVersion = getDependencyVersionFromPackageManifest(
+      packageManifest,
+      packageName
+    )
+
+    if (dependencyVersion) {
+      return packageManifestPath
+    }
+  }
+
+  return undefined
+}
+
+function resolveInstalledPackageManifestPath(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  packageManifestByPath: Map<string, PackageManifest | null>,
+  workspaceRootPath: string,
+  filePath: string,
+  packageName: string
+): string | undefined {
+  const packagePathSegments = packageName.split('/')
+
+  for (const directoryPath of getAncestorDirectoriesInWorkspace(
+    runtimeCacheStore,
+    workspaceRootPath,
+    filePath
+  )) {
+    const installedPackageManifestPath = join(
+      directoryPath,
+      'node_modules',
+      ...packagePathSegments,
+      'package.json'
+    )
+    const packageManifest = readPackageManifest(
+      runtimeCacheStore,
+      packageManifestByPath,
+      installedPackageManifestPath
+    )
+
+    if (!packageManifest) {
+      continue
+    }
+
+    return installedPackageManifestPath
+  }
+
+  return undefined
+}
+
+function resolvePackageVersionDependencies(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  packageDependencies: TypeScriptDependencyAnalysis['packageDependencies']
+): PackageVersionDependencyResolution {
+  if (packageDependencies.length === 0) {
+    return {
+      dependencyFilePaths: [],
+    }
+  }
+
+  const workspaceRootPath = getWorkspaceRootPath(runtimeCacheStore)
+  if (!workspaceRootPath) {
+    return {
+      dependencyFilePaths: [],
+    }
+  }
+
+  const packageManifestByPath = new Map<string, PackageManifest | null>()
+  const dependencyFilePaths = new Set<string>()
+
+  for (const packageDependency of packageDependencies) {
+    for (const importerPath of packageDependency.importerPaths) {
+      const declaredPackageManifestPath = resolveDeclaredPackageManifestPath(
+        runtimeCacheStore,
+        packageManifestByPath,
+        workspaceRootPath,
+        importerPath,
+        packageDependency.packageName
+      )
+
+      if (declaredPackageManifestPath) {
+        dependencyFilePaths.add(declaredPackageManifestPath)
+      }
+
+      const installedPackageManifestPath = resolveInstalledPackageManifestPath(
+        runtimeCacheStore,
+        packageManifestByPath,
+        workspaceRootPath,
+        importerPath,
+        packageDependency.packageName
+      )
+
+      if (installedPackageManifestPath) {
+        dependencyFilePaths.add(installedPackageManifestPath)
+      }
+    }
+  }
+
+  return {
+    dependencyFilePaths: Array.from(dependencyFilePaths.values()),
+  }
+}
+
+async function getCachedRuntimeTypeScriptDependencyAnalysis(
+  project: Project,
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  filePath: string | undefined
+): Promise<RuntimeTypeScriptDependencyAnalysisResult | undefined> {
+  if (!filePath) {
+    return undefined
+  }
+
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+  const normalizedFilePath = normalizeCacheFilePath(filePath)
+  const runtimeConstDeps: CacheStoreConstDependency[] = [
+    {
+      name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
+      version: RUNTIME_ANALYSIS_CACHE_VERSION,
+    },
+    {
+      name: PROJECT_COMPILER_OPTIONS_DEP,
+      version: compilerOptionsVersion,
+    },
+  ]
+  const nodeKey = createRuntimeAnalysisCacheNodeKey(
+    TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME,
+    {
+      compilerOptionsVersion,
+      filePath: normalizedFilePath,
+    }
+  )
+
+  const value = await runtimeCacheStore.store.getOrCompute(
+    nodeKey,
+    {
+      persist: true,
+      constDeps: runtimeConstDeps,
+    },
+    async (context) => {
+      recordConstDependencies(context, runtimeConstDeps)
+
+      await recordProjectConfigDependency(context, runtimeCacheStore, project)
+      await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
+
+      const typeScriptDependencies = collectTypeScriptDependencyAnalysis(
+        project,
+        runtimeCacheStore,
+        filePath
+      )
+
+      const packageVersionDependencies = resolvePackageVersionDependencies(
+        runtimeCacheStore,
+        typeScriptDependencies.packageDependencies
+      )
+
+      const dependencyFilePaths = Array.from(
+        new Set<string>([
+          ...typeScriptDependencies.dependencyFilePaths,
+          ...packageVersionDependencies.dependencyFilePaths,
+        ])
+      )
+
+      await recordFileDependenciesIfPossible(
+        context,
+        runtimeCacheStore,
+        dependencyFilePaths
+      )
+
+      return {
+        dependencyFilePaths,
+      }
+    }
+  )
+
+  return {
+    nodeKey,
+    dependencyFilePaths: value.dependencyFilePaths,
+  }
+}
+
+function recordConstDependencies(
+  context: CacheStoreComputeContext,
+  constDeps: readonly CacheStoreConstDependency[]
+): void {
+  for (const constDependency of constDeps) {
+    context.recordConstDep(constDependency.name, constDependency.version)
+  }
+}
+
+async function recordFileDependenciesIfPossible(
+  context: CacheStoreComputeContext,
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  filePaths: readonly string[]
+): Promise<void> {
+  for (const filePath of filePaths) {
+    await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
+  }
 }
 
 async function recordFileDependencyIfPossible(
@@ -189,8 +1073,10 @@ async function recordFileDependencyIfPossible(
   }
 
   try {
-    runtimeCacheStore.fileSystem.getRelativePathToWorkspace(path)
-    await context.recordFileDep(path)
+    const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
+    runtimeCacheStore.fileSystem.getRelativePathToWorkspace(absolutePath)
+    const dependencyVersion = await context.snapshot.contentId(absolutePath)
+    context.recordDep(`file:${absolutePath}`, dependencyVersion)
   } catch {
     // Ignore non-workspace and unavailable paths.
   }
@@ -496,7 +1382,7 @@ export async function getCachedSourceTextMetadata(
   project: Project,
   options: Omit<GetSourceTextMetadataOptions, 'project'>
 ): Promise<SourceTextMetadata> {
-  const runtimeCacheStore = getRuntimeAnalysisCacheStore()
+  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
   if (!runtimeCacheStore) {
     return baseGetSourceTextMetadata({
       ...options,
@@ -505,6 +1391,16 @@ export async function getCachedSourceTextMetadata(
   }
 
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
+  const runtimeConstDeps: CacheStoreConstDependency[] = [
+    {
+      name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
+      version: RUNTIME_ANALYSIS_CACHE_VERSION,
+    },
+    {
+      name: PROJECT_COMPILER_OPTIONS_DEP,
+      version: compilerOptionsVersion,
+    },
+  ]
   const nodeKey = createRuntimeAnalysisCacheNodeKey(
     SOURCE_TEXT_METADATA_CACHE_NAME,
     {
@@ -522,23 +1418,10 @@ export async function getCachedSourceTextMetadata(
     nodeKey,
     {
       persist: true,
-      constDeps: [
-        {
-          name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
-          version: RUNTIME_ANALYSIS_CACHE_VERSION,
-        },
-        {
-          name: PROJECT_COMPILER_OPTIONS_DEP,
-          version: compilerOptionsVersion,
-        },
-      ],
+      constDeps: runtimeConstDeps,
     },
     async (context) => {
-      context.recordConstDep(
-        RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
-        RUNTIME_ANALYSIS_CACHE_VERSION
-      )
-      context.recordConstDep(PROJECT_COMPILER_OPTIONS_DEP, compilerOptionsVersion)
+      recordConstDependencies(context, runtimeConstDeps)
 
       await recordProjectConfigDependency(context, runtimeCacheStore, project)
       await recordFileDependencyIfPossible(
@@ -557,6 +1440,30 @@ export async function getCachedSourceTextMetadata(
         runtimeCacheStore,
         result.filePath
       )
+      const sourceTextDependencyNodeKeys = new Set<string>()
+      for (const dependencyAnalysisPath of [
+        options.filePath,
+        result.filePath,
+      ] as const) {
+        const dependencyAnalysis =
+          await getCachedRuntimeTypeScriptDependencyAnalysis(
+            project,
+            runtimeCacheStore,
+            dependencyAnalysisPath
+          )
+        if (!dependencyAnalysis) {
+          continue
+        }
+
+        if (
+          sourceTextDependencyNodeKeys.has(dependencyAnalysis.nodeKey)
+        ) {
+          continue
+        }
+
+        sourceTextDependencyNodeKeys.add(dependencyAnalysis.nodeKey)
+        await context.recordNodeDep(dependencyAnalysis.nodeKey)
+      }
 
       return result
     }
@@ -567,7 +1474,7 @@ export async function getCachedTokens(
   project: Project,
   options: Omit<GetTokensOptions, 'project'>
 ): Promise<TokenizedLines> {
-  const runtimeCacheStore = getRuntimeAnalysisCacheStore()
+  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
   if (!runtimeCacheStore) {
     return baseGetTokens({
       ...options,
@@ -577,9 +1484,16 @@ export async function getCachedTokens(
 
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
   const normalizedFilePath = normalizeCacheFilePath(options.filePath)
-  const directDependencyPaths = options.filePath
-    ? getSourceFileDependencyPaths(project, options.filePath)
-    : []
+  const runtimeConstDeps: CacheStoreConstDependency[] = [
+    {
+      name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
+      version: RUNTIME_ANALYSIS_CACHE_VERSION,
+    },
+    {
+      name: PROJECT_COMPILER_OPTIONS_DEP,
+      version: compilerOptionsVersion,
+    },
+  ]
   const nodeKey = createRuntimeAnalysisCacheNodeKey(TOKENS_CACHE_NAME, {
     compilerOptionsVersion,
     filePath: normalizedFilePath,
@@ -599,23 +1513,10 @@ export async function getCachedTokens(
     nodeKey,
     {
       persist: true,
-      constDeps: [
-        {
-          name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
-          version: RUNTIME_ANALYSIS_CACHE_VERSION,
-        },
-        {
-          name: PROJECT_COMPILER_OPTIONS_DEP,
-          version: compilerOptionsVersion,
-        },
-      ],
+      constDeps: runtimeConstDeps,
     },
     async (context) => {
-      context.recordConstDep(
-        RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
-        RUNTIME_ANALYSIS_CACHE_VERSION
-      )
-      context.recordConstDep(PROJECT_COMPILER_OPTIONS_DEP, compilerOptionsVersion)
+      recordConstDependencies(context, runtimeConstDeps)
 
       await recordProjectConfigDependency(context, runtimeCacheStore, project)
       await recordFileDependencyIfPossible(
@@ -624,18 +1525,22 @@ export async function getCachedTokens(
         options.filePath
       )
 
-      for (const dependencyPath of directDependencyPaths) {
-        await recordFileDependencyIfPossible(
-          context,
-          runtimeCacheStore,
-          dependencyPath
-        )
-      }
-
-      return baseGetTokens({
+      const result = await baseGetTokens({
         ...options,
         project,
       })
+
+      const tokenTypeScriptDependencies =
+        await getCachedRuntimeTypeScriptDependencyAnalysis(
+          project,
+          runtimeCacheStore,
+          options.filePath
+        )
+      if (tokenTypeScriptDependencies) {
+        await context.recordNodeDep(tokenTypeScriptDependencies.nodeKey)
+      }
+
+      return result
     }
   )
 }

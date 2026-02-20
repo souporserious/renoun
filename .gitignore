@@ -17,8 +17,6 @@ out
 
 # renoun
 .renoun
-.cache/renoun
-packages/renoun/.cache/renoun
 
 # turbo
 .turbo

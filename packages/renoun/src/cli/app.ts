@@ -17,37 +17,11 @@ import { basename, dirname, join } from 'node:path'
 import { spawn } from 'node:child_process'
 
 import { createServer } from '../project/server.ts'
-import type { ProjectOptions } from '../project/types.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
-
-async function runPrewarmSafely(options?: { projectOptions?: ProjectOptions }) {
-  const startedAt = Date.now()
-  getDebugLogger().info('Renoun RPC cache prewarm started', () => ({
-    data: { status: 'running' },
-  }))
-
-  try {
-    const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
-    await prewarmRenounRpcServerCache(options)
-
-    getDebugLogger().info('Renoun RPC cache prewarm completed', () => ({
-      data: {
-        status: 'finished',
-        durationMs: Date.now() - startedAt,
-      },
-    }))
-  } catch (error) {
-    getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
-      data: {
-        error: error instanceof Error ? error.message : String(error),
-        durationMs: Date.now() - startedAt,
-      },
-    }))
-  }
-}
+import { runPrewarmSafely } from './prewarm-runner.ts'
 
 function mergeDependencySections(
   appPackageJson: Record<string, unknown>,
@@ -455,11 +429,13 @@ export async function runAppCommand({
     const port = String(await server.getPort())
     const id = server.getId()
 
-    void runPrewarmSafely({
-      projectOptions: {
-        tsConfigFilePath: join(projectRoot, 'tsconfig.json'),
-      },
-    })
+    if (command === 'dev') {
+      void runPrewarmSafely({
+        projectOptions: {
+          tsConfigFilePath: join(projectRoot, 'tsconfig.json'),
+        },
+      })
+    }
 
     if (resolvedExample.framework === 'next') {
       const runtimeNext = await getInstalledPackageVersion({

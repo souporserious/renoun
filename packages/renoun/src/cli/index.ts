@@ -3,43 +3,17 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 
 import { createServer } from '../project/server.ts'
-import type { ProjectOptions } from '../project/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { runAppCommand } from './app.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
 import { runEjectCommand } from './eject.ts'
 import { runOverrideCommand } from './override.ts'
+import { runPrewarmSafely } from './prewarm-runner.ts'
 import { reorderEntries } from './reorder.ts'
 import { runThemeCommand } from './theme.ts'
 import { runValidateCommand } from './validate.ts'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
-
-async function runPrewarmSafely(options?: { projectOptions?: ProjectOptions }) {
-  const startedAt = Date.now()
-  getDebugLogger().info('Renoun RPC cache prewarm started', () => ({
-    data: { status: 'running' },
-  }))
-
-  try {
-    const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
-    await prewarmRenounRpcServerCache(options)
-
-    getDebugLogger().info('Renoun RPC cache prewarm completed', () => ({
-      data: {
-        status: 'finished',
-        durationMs: Date.now() - startedAt,
-      },
-    }))
-  } catch (error) {
-    getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
-      data: {
-        error: error instanceof Error ? error.message : String(error),
-        durationMs: Date.now() - startedAt,
-      },
-    }))
-  }
-}
 
 if (firstArgument === 'help') {
   const usageMessage =
@@ -135,11 +109,13 @@ if (firstArgument === 'validate') {
           data: { port, serverId: id },
         }))
 
-        void runPrewarmSafely({
-          projectOptions: {
-            tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
-          },
-        })
+        if (!isProduction) {
+          void runPrewarmSafely({
+            projectOptions: {
+              tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
+            },
+          })
+        }
 
         const frameworkBinPath = resolveFrameworkBinFile(
           firstArgument as Framework

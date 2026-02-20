@@ -30,6 +30,8 @@ const getOutlineRangesMock = vi.fn<(filePath: string) => Promise<unknown>>()
 const getMarkdownSectionsMock = vi.fn<(source: string) => unknown>()
 const getMDXSectionsMock = vi.fn<(source: string) => unknown>()
 const isFilePathGitIgnoredMock = vi.fn(() => false)
+const getWorkspaceChangeTokenMock =
+  vi.fn<(rootPath: string) => Promise<string | null>>()
 
 const { Project } = getTsMorph()
 type ProjectInstance = InstanceType<typeof Project>
@@ -43,8 +45,14 @@ const projectOptions: ProjectOptions = {
 let project: ProjectInstance
 
 class MockNodeFileSystem {
+  constructor(_options?: unknown) {}
+
   getAbsolutePath(path: string): string {
     return resolve(path)
+  }
+
+  getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    return getWorkspaceChangeTokenMock(rootPath)
   }
 
   readDirectory(path: string) {
@@ -127,6 +135,7 @@ beforeEach(() => {
   getOutlineRangesMock.mockResolvedValue(undefined)
   getMarkdownSectionsMock.mockReturnValue([])
   getMDXSectionsMock.mockReturnValue([])
+  getWorkspaceChangeTokenMock.mockResolvedValue(null)
 })
 
 afterEach(() => {
@@ -244,6 +253,39 @@ describe('prewarmRenounRpcServerCache', () => {
     expect(getOutlineRangesMock).not.toHaveBeenCalled()
     expect(getMarkdownSectionsMock).not.toHaveBeenCalled()
     expect(getMDXSectionsMock).not.toHaveBeenCalled()
+  })
+
+  test('skips prewarm when workspace token is unchanged and reruns when token changes', async () => {
+    const tokenProjectOptions: ProjectOptions = {
+      ...projectOptions,
+      tsConfigFilePath: `/repo/tsconfig.${Date.now()}.json`,
+    }
+
+    project.createSourceFile(
+      '/repo/src/token-gate.ts',
+      `
+        import { Directory } from 'renoun'
+        const posts = new Directory('/repo/posts')
+        posts.getEntries()
+      `,
+      { overwrite: true }
+    )
+
+    readDirectoryMock.mockResolvedValue([createMockFileEntry('/repo/posts/index.ts')])
+    getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
+
+    await prewarmRenounRpcServerCache!({ projectOptions: tokenProjectOptions })
+    expect(getProjectMock).toHaveBeenCalledTimes(1)
+    expect(readDirectoryMock).toHaveBeenCalledTimes(1)
+
+    await prewarmRenounRpcServerCache!({ projectOptions: tokenProjectOptions })
+    expect(getProjectMock).toHaveBeenCalledTimes(1)
+    expect(readDirectoryMock).toHaveBeenCalledTimes(1)
+
+    getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-b')
+    await prewarmRenounRpcServerCache!({ projectOptions: tokenProjectOptions })
+    expect(getProjectMock).toHaveBeenCalledTimes(2)
+    expect(readDirectoryMock).toHaveBeenCalledTimes(2)
   })
 
   test('continues prewarming when one directory target fails enumeration', async () => {
