@@ -21,10 +21,12 @@ import type {
 } from '../utils/resolve-type-at-location.ts'
 import type { DistributiveOmit } from '../types.ts'
 import {
+  getCachedFileExportText,
   getCachedFileExportMetadata,
   getCachedFileExportStaticValue,
   getCachedFileExports,
   getCachedOutlineRanges,
+  resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
 import { invalidateProjectFileCache } from './cache.ts'
@@ -202,19 +204,15 @@ export async function resolveTypeAtLocationWithDependencies(
     })
   }
 
-  const { resolveTypeAtLocationWithDependencies } = await import(
-    '../utils/resolve-type-at-location.ts'
-  )
   const project = getProject(projectOptions)
 
-  return resolveTypeAtLocationWithDependencies(
-    project,
+  return resolveCachedTypeAtLocationWithDependencies(project, {
     filePath,
     position,
     kind,
     filter,
-    projectOptions?.useInMemoryFileSystem
-  )
+    isInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+  })
 }
 
 /**
@@ -410,18 +408,13 @@ export async function getFileExportText(
     })
   }
 
-  return import('../utils/get-file-export-text.ts').then(
-    ({ getFileExportText }) => {
-      const project = getProject(projectOptions)
-      return getFileExportText({
-        filePath,
-        position,
-        kind,
-        includeDependencies,
-        project,
-      })
-    }
-  )
+  const project = getProject(projectOptions)
+  return getCachedFileExportText(project, {
+    filePath,
+    position,
+    kind,
+    includeDependencies,
+  })
 }
 
 /**

@@ -1348,7 +1348,8 @@ export class CacheStore {
     for (const dependency of entry.deps) {
       const currentVersion = await this.#resolveDepVersion(
         dependency.depKey,
-        visitedNodeKeys
+        visitedNodeKeys,
+        dependency.depVersion
       )
 
       if (currentVersion !== dependency.depVersion) {
@@ -1379,7 +1380,8 @@ export class CacheStore {
 
   async #resolveDepVersion(
     depKey: string,
-    visitedNodeKeys: Set<string>
+    visitedNodeKeys: Set<string>,
+    fallbackVersion?: string
   ): Promise<string | undefined> {
     if (depKey.startsWith('file:')) {
       const filePath = depKey.slice('file:'.length)
@@ -1435,7 +1437,7 @@ export class CacheStore {
         return currentVersion
       }
 
-      return parsedConstDependency.legacyVersion
+      return parsedConstDependency.legacyVersion ?? fallbackVersion
     }
 
     return undefined

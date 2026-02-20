@@ -29,6 +29,8 @@ const SQLITE_PRUNE_MAX_INTERVAL_MS = 1000 * 60 * 5
 const SQLITE_DELETE_BATCH_SIZE = 500
 const SQLITE_INFLIGHT_TTL_MS = 20_000
 const SQLITE_INFLIGHT_CLEANUP_INTERVAL_MS = 10_000
+const SQLITE_LAST_ACCESSED_TOUCH_MIN_INTERVAL_MS = 30_000
+const SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE = 50_000
 const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
 
 let warnedAboutSqliteFallback = false
@@ -192,6 +194,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   #writesSincePrune = 0
   #lastPrunedAt = 0
   #lastInflightCleanupAt = 0
+  #lastAccessTouchAtByNodeKey = new Map<string, number>()
   #pruneInFlight?: Promise<void>
   #db: any
 
@@ -800,6 +803,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return
     }
 
+    this.#lastAccessTouchAtByNodeKey.delete(nodeKey)
     await this.#runWithBusyRetries(() => {
       this.#db.exec('BEGIN IMMEDIATE')
       try {
@@ -1228,6 +1232,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const now = Date.now()
+    const lastTouchedAt = this.#lastAccessTouchAtByNodeKey.get(nodeKey)
+    if (
+      typeof lastTouchedAt === 'number' &&
+      now - lastTouchedAt < SQLITE_LAST_ACCESSED_TOUCH_MIN_INTERVAL_MS
+    ) {
+      return
+    }
 
     await this.#runWithBusyRetries(() => {
       this.#db
@@ -1243,6 +1254,49 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         )
         .run(now, now, nodeKey)
     })
+    this.#recordLastAccessTouch(nodeKey, now)
+  }
+
+  #recordLastAccessTouch(nodeKey: string, touchedAt: number): void {
+    if (this.#lastAccessTouchAtByNodeKey.has(nodeKey)) {
+      this.#lastAccessTouchAtByNodeKey.delete(nodeKey)
+    }
+    this.#lastAccessTouchAtByNodeKey.set(nodeKey, touchedAt)
+    this.#pruneLastAccessTouchCache(touchedAt)
+  }
+
+  #pruneLastAccessTouchCache(now: number): void {
+    if (
+      this.#lastAccessTouchAtByNodeKey.size <=
+      SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE
+    ) {
+      return
+    }
+
+    const staleBefore = now - SQLITE_LAST_ACCESSED_TOUCH_MIN_INTERVAL_MS * 4
+    for (const [nodeKey, touchedAt] of this.#lastAccessTouchAtByNodeKey) {
+      if (
+        this.#lastAccessTouchAtByNodeKey.size <=
+        SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE
+      ) {
+        break
+      }
+
+      if (touchedAt < staleBefore) {
+        this.#lastAccessTouchAtByNodeKey.delete(nodeKey)
+      }
+    }
+
+    while (
+      this.#lastAccessTouchAtByNodeKey.size >
+      SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE
+    ) {
+      const oldestKey = this.#lastAccessTouchAtByNodeKey.keys().next().value
+      if (typeof oldestKey !== 'string') {
+        break
+      }
+      this.#lastAccessTouchAtByNodeKey.delete(oldestKey)
+    }
   }
 
   async #runWithBusyRetries<T>(operation: () => T): Promise<T> {
@@ -1370,6 +1424,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   close() {
     const db = this.#db
     this.#pruneInFlight = undefined
+    this.#lastAccessTouchAtByNodeKey.clear()
     this.#db = undefined
 
     if (db && typeof db.close === 'function') {
@@ -1393,6 +1448,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const uniqueNodeKeys = Array.from(new Set(nodeKeys)).sort()
+    for (const nodeKey of uniqueNodeKeys) {
+      this.#lastAccessTouchAtByNodeKey.delete(nodeKey)
+    }
 
     for (
       let offset = 0;

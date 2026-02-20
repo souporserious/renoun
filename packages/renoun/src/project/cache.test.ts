@@ -809,4 +809,58 @@ describe('project file cache', () => {
     expect(secondDependent).toBe('dependent-2')
     expect(dependentCalls).toBe(2)
   })
+
+  test('deduplicates concurrent compute work for the same cache key', async () => {
+    const project = {} as unknown as Project
+    const filePath = '/project/src/index.ts'
+    let calls = 0
+    let releaseCompute: (() => void) | undefined
+    const computeGate = new Promise<void>((resolve) => {
+      releaseCompute = resolve
+    })
+
+    const first = createProjectFileCache(
+      project,
+      filePath,
+      'fileExportsText',
+      async () => {
+        calls += 1
+        await computeGate
+        return `value-${calls}`
+      }
+    )
+    const second = createProjectFileCache(
+      project,
+      filePath,
+      'fileExportsText',
+      async () => {
+        calls += 1
+        return `value-${calls}`
+      }
+    )
+
+    releaseCompute?.()
+    const [firstValue, secondValue] = await Promise.all([first, second])
+
+    expect(firstValue).toBe('value-1')
+    expect(secondValue).toBe('value-1')
+    expect(calls).toBe(1)
+  })
+
+  test('does not advance revision tokens for invalidated cache dependencies with no listeners', async () => {
+    const project = {} as unknown as Project
+    const dependency = {
+      kind: 'cache' as const,
+      filePath: '/project/src/unknown.ts',
+      cacheName: 'unknown-cache',
+    }
+
+    const before = __getProjectCacheDependencyVersionForTesting(project, dependency)
+    expect(before).toBe('r0')
+
+    invalidateProjectFileCache(project, dependency.filePath, dependency.cacheName)
+
+    const after = __getProjectCacheDependencyVersionForTesting(project, dependency)
+    expect(after).toBe('r0')
+  })
 })

@@ -9,7 +9,6 @@ import {
 } from '../utils/create-highlighter.ts'
 import type { ConfigurationOptions } from '../components/Config/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
-import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
   getTokens as baseGetTokens,
@@ -20,16 +19,15 @@ import {
   type GetSourceTextMetadataOptions,
 } from '../utils/get-source-text-metadata.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
-import {
-  resolveTypeAtLocationWithDependencies as baseResolveTypeAtLocationWithDependencies,
-} from '../utils/resolve-type-at-location.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
 import {
+  getCachedFileExportText,
   getCachedFileExportMetadata,
   getCachedFileExportStaticValue,
   getCachedFileExports,
   getCachedOutlineRanges,
+  resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
 import { invalidateProjectFileCache } from './cache.ts'
@@ -258,14 +256,13 @@ export async function createServer(options?: { port?: number }) {
             },
           }))
 
-          return baseResolveTypeAtLocationWithDependencies(
-            project,
-            options.filePath,
-            options.position,
-            options.kind,
-            parseTypeFilter(filter),
-            projectOptions?.useInMemoryFileSystem
-          )
+          return resolveCachedTypeAtLocationWithDependencies(project, {
+            filePath: options.filePath,
+            position: options.position,
+            kind: options.kind,
+            filter: parseTypeFilter(filter),
+            isInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+          })
         },
         {
           data: {
@@ -363,12 +360,11 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileExportText({
+      return getCachedFileExportText(project, {
         filePath,
         position,
         kind,
         includeDependencies,
-        project,
       })
     },
     {

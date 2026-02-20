@@ -3953,6 +3953,52 @@ export type Metadata = Value`,
     }
   })
 
+  test('keeps persisted const-only dependencies fresh without runtime const registration', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-persisted-const-fallback-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-persisted-const-fallback'
+      )
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:persisted-const-fallback'
+
+      const writerStore = new CacheStore({ snapshot, persistence })
+      await writerStore.put(
+        nodeKey,
+        { value: 'persisted' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: `const:${encodeURIComponent('cache-version')}`,
+              depVersion: '1',
+            },
+          ],
+        }
+      )
+
+      const reloadedStore = new CacheStore({ snapshot, persistence })
+      const cached = await reloadedStore.get(nodeKey)
+      const freshness = await reloadedStore.getWithFreshness(nodeKey)
+
+      expect(cached).toEqual({ value: 'persisted' })
+      expect(freshness).toEqual({
+        value: { value: 'persisted' },
+        fresh: true,
+      })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('updates last_accessed_at on persisted reads while keeping updated_at write-only', async () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-read-only-'))
 
@@ -4023,6 +4069,89 @@ export type Metadata = Value`,
       expect(afterRow?.updated_at).toBe(beforeRow?.updated_at)
       expect(afterRow?.last_accessed_at ?? 0).toBeGreaterThanOrEqual(
         beforeRow?.last_accessed_at ?? 0
+      )
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('throttles repeated persisted read touches to reduce sqlite write churn', async () => {
+    const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-touch-throttle-'))
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(fileSystem, 'sqlite-touch-throttle')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:touch-throttle'
+
+      const writerStore = new CacheStore({ snapshot, persistence })
+      await writerStore.put(
+        nodeKey,
+        { value: 1 },
+        {
+          persist: true,
+          deps: [{ depKey: 'const:touch-throttle:1', depVersion: '1' }],
+        }
+      )
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const beforeDb = new DatabaseSync(dbPath)
+      const beforeRow = beforeDb
+        .prepare(
+          `
+            SELECT last_accessed_at
+            FROM cache_entries
+            WHERE node_key = ?
+          `
+        )
+        .get(nodeKey) as { last_accessed_at?: number } | undefined
+      beforeDb.close()
+
+      const firstReader = new CacheStore({ snapshot, persistence })
+      await firstReader.get(nodeKey)
+
+      const afterFirstReadDb = new DatabaseSync(dbPath)
+      const afterFirstReadRow = afterFirstReadDb
+        .prepare(
+          `
+            SELECT last_accessed_at
+            FROM cache_entries
+            WHERE node_key = ?
+          `
+        )
+        .get(nodeKey) as { last_accessed_at?: number } | undefined
+      afterFirstReadDb.close()
+
+      const secondReader = new CacheStore({ snapshot, persistence })
+      await secondReader.get(nodeKey)
+
+      const afterSecondReadDb = new DatabaseSync(dbPath)
+      const afterSecondReadRow = afterSecondReadDb
+        .prepare(
+          `
+            SELECT last_accessed_at
+            FROM cache_entries
+            WHERE node_key = ?
+          `
+        )
+        .get(nodeKey) as { last_accessed_at?: number } | undefined
+      afterSecondReadDb.close()
+
+      expect(afterFirstReadRow?.last_accessed_at ?? 0).toBeGreaterThanOrEqual(
+        beforeRow?.last_accessed_at ?? 0
+      )
+      expect(afterSecondReadRow?.last_accessed_at).toBe(
+        afterFirstReadRow?.last_accessed_at
       )
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })

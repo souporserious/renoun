@@ -25,12 +25,14 @@ interface ProjectCacheState {
   graph: ReactiveDependencyGraph
   nodeLocationByKey: Map<string, { filePath: string; cacheName: string }>
   dependencyRevisionByKey: Map<string, number>
+  inflightByNodeKey: Map<string, Promise<unknown>>
 }
 
 const projectCacheStateByProject = new WeakMap<Project, ProjectCacheState>()
 const PROJECT_CACHE_VERSION_TOKEN = 'project-cache-v0'
 const PROJECT_CACHE_NODE_PREFIX = 'project-cache:'
 const PROJECT_CACHE_DEP_REVISION_PREFIX = 'r'
+const PROJECT_CACHE_REVISION_PRUNE_THRESHOLD = 512
 
 function getProjectCacheState(project: Project): ProjectCacheState {
   const existing = projectCacheStateByProject.get(project)
@@ -43,6 +45,7 @@ function getProjectCacheState(project: Project): ProjectCacheState {
     graph: new ReactiveDependencyGraph(),
     nodeLocationByKey: new Map(),
     dependencyRevisionByKey: new Map(),
+    inflightByNodeKey: new Map(),
   }
   projectCacheStateByProject.set(project, created)
   return created
@@ -83,6 +86,28 @@ function bumpDependencyRevisionToken(state: ProjectCacheState, depKey: string): 
   const nextRevision = (state.dependencyRevisionByKey.get(depKey) ?? 0) + 1
   state.dependencyRevisionByKey.set(depKey, nextRevision)
   return toDependencyRevisionToken(nextRevision)
+}
+
+function touchTrackedDependency(state: ProjectCacheState, depKey: string): void {
+  if (!state.graph.hasDependencyReferences(depKey)) {
+    state.dependencyRevisionByKey.delete(depKey)
+    return
+  }
+
+  bumpDependencyRevisionToken(state, depKey)
+  state.graph.touchDependency(depKey)
+}
+
+function pruneUnreferencedDependencyRevisionTokens(state: ProjectCacheState): void {
+  if (state.dependencyRevisionByKey.size < PROJECT_CACHE_REVISION_PRUNE_THRESHOLD) {
+    return
+  }
+
+  for (const depKey of state.dependencyRevisionByKey.keys()) {
+    if (!state.graph.hasDependencyReferences(depKey)) {
+      state.dependencyRevisionByKey.delete(depKey)
+    }
+  }
 }
 
 function bumpPathDependencyRevisionTokens(
@@ -194,9 +219,9 @@ function invalidateProjectCacheEntry(
   const cacheDependencyKey = toCacheDependencyKey(filePath, cacheName)
   state.graph.markNodeDirty(nodeKey)
   state.graph.unregisterNode(nodeKey)
-  bumpDependencyRevisionToken(state, cacheDependencyKey)
-  state.graph.touchDependency(cacheDependencyKey)
+  touchTrackedDependency(state, cacheDependencyKey)
   state.nodeLocationByKey.delete(nodeKey)
+  state.inflightByNodeKey.delete(nodeKey)
 }
 
 function pruneDirtyProjectCacheEntries(state: ProjectCacheState): number {
@@ -236,8 +261,7 @@ function pruneDirtyProjectCacheEntries(state: ProjectCacheState): number {
         nodeLocation.filePath,
         nodeLocation.cacheName
       )
-      bumpDependencyRevisionToken(state, cacheDependencyKey)
-      state.graph.touchDependency(cacheDependencyKey)
+      touchTrackedDependency(state, cacheDependencyKey)
       prunedEntries += 1
     }
 
@@ -245,6 +269,8 @@ function pruneDirtyProjectCacheEntries(state: ProjectCacheState): number {
       break
     }
   }
+
+  pruneUnreferencedDependencyRevisionTokens(state)
 
   return prunedEntries
 }
@@ -295,23 +321,44 @@ export async function createProjectFileCache<Type>(
     return cachedEntry.value as Type
   }
 
-  const computedValue = await compute()
-  const dependencies =
-    staticDependencies ??
-    normalizeDependencyRecords(
-      (typeof dependencySpec === 'function'
-        ? dependencySpec(computedValue)
-        : [toDefaultDependency(filePath)]
-      ).map((dependency) => toDependencyRecord(state, dependency))
-    )
-
-  const entry: ProjectCacheEntry = {
-    value: computedValue,
-    deps: dependencies,
+  const inFlight = state.inflightByNodeKey.get(nodeKey)
+  if (inFlight) {
+    return (await inFlight) as Type
   }
-  namespace.set(cacheName, entry)
-  registerProjectCacheEntry(state, filePath, cacheName, entry)
-  return entry.value as Type
+
+  const operation = (async () => {
+    const computedValue = await compute()
+    const dependencies =
+      staticDependencies ??
+      normalizeDependencyRecords(
+        (typeof dependencySpec === 'function'
+          ? dependencySpec(computedValue)
+          : [toDefaultDependency(filePath)]
+        ).map((dependency) => toDependencyRecord(state, dependency))
+      )
+
+    const entry: ProjectCacheEntry = {
+      value: computedValue,
+      deps: dependencies,
+    }
+    let liveNamespace = state.cacheByFilePath.get(filePath)
+    if (!liveNamespace) {
+      liveNamespace = new Map()
+      state.cacheByFilePath.set(filePath, liveNamespace)
+    }
+    liveNamespace.set(cacheName, entry)
+    registerProjectCacheEntry(state, filePath, cacheName, entry)
+    return entry.value as Type
+  })()
+
+  state.inflightByNodeKey.set(nodeKey, operation as Promise<unknown>)
+  try {
+    return await operation
+  } finally {
+    if (state.inflightByNodeKey.get(nodeKey) === operation) {
+      state.inflightByNodeKey.delete(nodeKey)
+    }
+  }
 }
 
 /** Invalidates cached project analysis results. */
@@ -335,6 +382,14 @@ export function invalidateProjectFileCache(
 
   if (normalizedFilePath) {
     if (!cacheName) {
+      const fileMap = cacheByFilePath.get(normalizedFilePath)
+      if (fileMap) {
+        for (const cachedCacheName of fileMap.keys()) {
+          state.inflightByNodeKey.delete(
+            toProjectCacheNodeKey(normalizedFilePath, cachedCacheName)
+          )
+        }
+      }
       bumpPathDependencyRevisionTokens(state, normalizedFilePath)
       state.graph.touchPathDependencies(normalizedFilePath)
       pruneDirtyProjectCacheEntries(state)
@@ -345,17 +400,17 @@ export function invalidateProjectFileCache(
         normalizedFilePath,
         cacheName
       )
+      const nodeKey = toProjectCacheNodeKey(normalizedFilePath, cacheName)
+      state.inflightByNodeKey.delete(nodeKey)
       const fileMap = cacheByFilePath.get(normalizedFilePath)
       if (!fileMap) {
-        bumpDependencyRevisionToken(state, cacheDependencyKey)
-        state.graph.touchDependency(cacheDependencyKey)
+        touchTrackedDependency(state, cacheDependencyKey)
         pruneDirtyProjectCacheEntries(state)
         return
       }
 
       if (!fileMap.has(cacheName)) {
-        bumpDependencyRevisionToken(state, cacheDependencyKey)
-        state.graph.touchDependency(cacheDependencyKey)
+        touchTrackedDependency(state, cacheDependencyKey)
         pruneDirtyProjectCacheEntries(state)
         return
       }
@@ -381,6 +436,7 @@ export function invalidateProjectFileCache(
     cacheByFilePath.clear()
     state.nodeLocationByKey.clear()
     state.dependencyRevisionByKey.clear()
+    state.inflightByNodeKey.clear()
     state.graph.clear()
     return
   }
@@ -390,6 +446,7 @@ export function invalidateProjectFileCache(
       continue
     }
 
+    state.inflightByNodeKey.delete(toProjectCacheNodeKey(cachedFilePath, cacheName))
     invalidateProjectCacheEntry(state, cachedFilePath, cacheName)
     fileMap.delete(cacheName)
 
@@ -397,6 +454,8 @@ export function invalidateProjectFileCache(
       cacheByFilePath.delete(cachedFilePath)
     }
   }
+
+  pruneUnreferencedDependencyRevisionTokens(state)
 }
 
 export function __getProjectCacheDependencyVersionForTesting(

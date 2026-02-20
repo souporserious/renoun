@@ -214,6 +214,10 @@ export class ReactiveDependencyGraph {
     return Array.from(dependencyKeys).sort()
   }
 
+  hasDependencyReferences(depKey: string): boolean {
+    return this.#dependencyRefCountByKey.has(depKey)
+  }
+
   getDependencySignalCount(): number {
     return this.#dependencySignals.size
   }
