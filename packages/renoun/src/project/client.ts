@@ -26,6 +26,8 @@ import {
   getCachedFileExportStaticValue,
   getCachedFileExports,
   getCachedOutlineRanges,
+  getCachedSourceTextMetadata,
+  getCachedTokens,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
@@ -141,14 +143,7 @@ export async function getSourceTextMetadata(
   const { projectOptions, ...getSourceTextMetadataOptions } = options
   const project = getProject(projectOptions)
 
-  return import('../utils/get-source-text-metadata.ts').then(
-    ({ getSourceTextMetadata }) => {
-      return getSourceTextMetadata({
-        ...getSourceTextMetadataOptions,
-        project,
-      })
-    }
-  )
+  return getCachedSourceTextMetadata(project, getSourceTextMetadataOptions)
 }
 
 let currentHighlighter: { current: Highlighter | null } = { current: null }
@@ -242,16 +237,13 @@ export async function getTokens(
     languages,
   })
 
-  return import('../utils/get-tokens.ts').then(({ getTokens }) => {
-    if (currentHighlighter.current === null) {
-      throw new Error('[renoun] Highlighter is not initialized in "getTokens"')
-    }
+  if (currentHighlighter.current === null) {
+    throw new Error('[renoun] Highlighter is not initialized in "getTokens"')
+  }
 
-    return getTokens({
-      ...getTokensOptions,
-      highlighter: currentHighlighter.current,
-      project,
-    })
+  return getCachedTokens(project, {
+    ...getTokensOptions,
+    highlighter: currentHighlighter.current,
   })
 }
 

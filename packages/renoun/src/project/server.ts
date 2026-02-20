@@ -10,14 +10,8 @@ import {
 import type { ConfigurationOptions } from '../components/Config/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import {
-  getTokens as baseGetTokens,
-  type GetTokensOptions,
-} from '../utils/get-tokens.ts'
-import {
-  getSourceTextMetadata as baseGetSourceTextMetadata,
-  type GetSourceTextMetadataOptions,
-} from '../utils/get-source-text-metadata.ts'
+import type { GetTokensOptions } from '../utils/get-tokens.ts'
+import type { GetSourceTextMetadataOptions } from '../utils/get-source-text-metadata.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
@@ -27,6 +21,8 @@ import {
   getCachedFileExportStaticValue,
   getCachedFileExports,
   getCachedOutlineRanges,
+  getCachedSourceTextMetadata,
+  getCachedTokens,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
@@ -192,10 +188,7 @@ export async function createServer(options?: { port?: number }) {
     }) {
       const project = getProject(projectOptions)
 
-      return baseGetSourceTextMetadata({
-        ...options,
-        project,
-      })
+      return getCachedSourceTextMetadata(project, options)
     },
     {
       memoize: true,
@@ -223,10 +216,9 @@ export async function createServer(options?: { port?: number }) {
 
       const highlighter = await currentHighlighter
 
-      return baseGetTokens({
+      return getCachedTokens(project, {
         ...options,
         highlighter,
-        project,
       })
     },
     {
