@@ -7195,44 +7195,6 @@ export class Directory<
             return { kind: 'skip' }
           }
 
-          if (entry.isFile) {
-            try {
-              const mtime = await fileSystem.getFileLastModifiedMs(entry.path)
-              const signature = mtime === undefined ? 'missing' : String(mtime)
-              dependencySignatures.set(
-                createDependencyPathKey(
-                  fileSystem,
-                  FILE_DEPENDENCY_PREFIX,
-                  entry.path
-                ),
-                signature
-              )
-            } catch {
-              // Ignore errors when reading timestamps; fall back to snapshot invalidation
-              // via explicit cache clearing (e.g. write/delete operations).
-            }
-          }
-
-          if (trackDirectoryMtime && entry.isDirectory) {
-            try {
-              const modifiedMs = await fileSystem.getFileLastModifiedMs(
-                entry.path
-              )
-              const signature =
-                modifiedMs === undefined ? 'missing' : String(modifiedMs)
-              dependencySignatures.set(
-                createDependencyPathKey(
-                  fileSystem,
-                  DIRECTORY_MTIME_DEPENDENCY_PREFIX,
-                  entry.path
-                ),
-                signature
-              )
-            } catch {
-              // Ignore errors when reading timestamps; fall back to listing signatures.
-            }
-          }
-
           const isGitIgnored = fileSystem.isFilePathGitIgnored(entry.path)
 
           if (isGitIgnored && !options.includeGitIgnoredFiles) {
@@ -7259,6 +7221,26 @@ export class Directory<
 
             if (!options.recursive && !passesFilterSelf) {
               return { kind: 'skip' }
+            }
+
+            if (trackDirectoryMtime) {
+              try {
+                const modifiedMs = await fileSystem.getFileLastModifiedMs(
+                  entry.path
+                )
+                const signature =
+                  modifiedMs === undefined ? 'missing' : String(modifiedMs)
+                dependencySignatures.set(
+                  createDependencyPathKey(
+                    fileSystem,
+                    DIRECTORY_MTIME_DEPENDENCY_PREFIX,
+                    entry.path
+                  ),
+                  signature
+                )
+              } catch {
+                // Ignore errors when reading timestamps; fall back to listing signatures.
+              }
             }
 
             const childSnapshot = await this.#getDirectorySnapshot(
@@ -7302,6 +7284,18 @@ export class Directory<
 
           if (!passesFilter) {
             return { kind: 'skip' }
+          }
+
+          try {
+            const mtime = await fileSystem.getFileLastModifiedMs(entry.path)
+            const signature = mtime === undefined ? 'missing' : String(mtime)
+            dependencySignatures.set(
+              createDependencyPathKey(fileSystem, FILE_DEPENDENCY_PREFIX, entry.path),
+              signature
+            )
+          } catch {
+            // Ignore errors when reading timestamps; fall back to snapshot invalidation
+            // via explicit cache clearing (e.g. write/delete operations).
           }
 
           const shouldIncludeFile = await directory.#shouldIncludeFile(file)

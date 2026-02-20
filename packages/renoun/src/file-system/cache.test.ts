@@ -894,6 +894,51 @@ export type Metadata = Value`,
     }
   })
 
+  test('does not record dependencies for gitignored files excluded from snapshots', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'visible.ts': 'export const visible = true',
+      'ignored.ts': 'export const ignored = true',
+    })
+    const gitIgnoreSpy = vi
+      .spyOn(fileSystem, 'isFilePathGitIgnored')
+      .mockImplementation((filePath) => filePath.endsWith('ignored.ts'))
+
+    try {
+      const directory = new Directory({ fileSystem })
+      const entries = await directory.getEntries({
+        recursive: true,
+        includeGitIgnoredFiles: false,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      expect(
+        entries.some((entry) => entry.workspacePath.endsWith('ignored.ts'))
+      ).toBe(false)
+
+      const session = directory.getSession()
+      const snapshotKey = Array.from(session.directorySnapshots.keys()).find((key) =>
+        key.startsWith('dir:.|')
+      )
+      expect(snapshotKey).toBeDefined()
+
+      const snapshot = snapshotKey
+        ? session.directorySnapshots.get(snapshotKey)
+        : undefined
+      const dependencyKeys = snapshot?.getDependencies()
+        ? Array.from(snapshot.getDependencies()!.keys())
+        : []
+
+      expect(
+        dependencyKeys.some((key) => key.startsWith('file:') && key.endsWith('visible.ts'))
+      ).toBe(true)
+      expect(
+        dependencyKeys.some((key) => key.startsWith('file:') && key.endsWith('ignored.ts'))
+      ).toBe(false)
+    } finally {
+      gitIgnoreSpy.mockRestore()
+    }
+  })
+
   test('parses windows-style file dependency keys after cache restore', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
@@ -6452,6 +6497,55 @@ export type Metadata = Value`,
     } finally {
       warnSpy.mockRestore()
     }
+  })
+
+  test('supports disabling persisted write verification attempts', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'persistence-verification-disabled'
+    )
+    const persistedEntries = new Map<string, CacheEntry<{ value: number }>>()
+    const persistence = {
+      load: vi.fn(async (nodeKey) => persistedEntries.get(nodeKey)),
+      save: vi.fn(async (nodeKey, entry) => {
+        persistedEntries.set(nodeKey, { ...entry })
+      }),
+      delete: vi.fn(async () => undefined),
+    }
+    const store = new CacheStore({
+      snapshot,
+      persistence,
+      persistedVerificationAttempts: 0,
+    })
+    let computeCount = 0
+
+    const firstResult = await store.getOrCompute(
+      'test:persistence-verification-disabled',
+      { persist: true },
+      async (ctx) => {
+        computeCount += 1
+        await ctx.recordFileDep('/index.ts')
+        return { value: 1 }
+      }
+    )
+    const secondResult = await store.getOrCompute(
+      'test:persistence-verification-disabled',
+      { persist: true },
+      async (ctx) => {
+        computeCount += 1
+        await ctx.recordFileDep('/index.ts')
+        return { value: 2 }
+      }
+    )
+
+    expect(firstResult).toEqual({ value: 1 })
+    expect(secondResult).toEqual({ value: 1 })
+    expect(computeCount).toBe(1)
+    expect(persistence.save).toHaveBeenCalledTimes(1)
+    expect(persistence.load).toHaveBeenCalledTimes(1)
   })
 
   test('falls back gracefully without saveWithRevision when fingerprint drift is expectedly superseded', async () => {

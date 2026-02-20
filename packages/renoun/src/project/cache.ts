@@ -26,6 +26,8 @@ interface ProjectCacheState {
   nodeLocationByKey: Map<string, { filePath: string; cacheName: string }>
   dependencyRevisionByKey: Map<string, number>
   inflightByNodeKey: Map<string, Promise<unknown>>
+  lruNodeKeys: Map<string, true>
+  maxEntries: number
 }
 
 const projectCacheStateByProject = new WeakMap<Project, ProjectCacheState>()
@@ -33,6 +35,21 @@ const PROJECT_CACHE_VERSION_TOKEN = 'project-cache-v0'
 const PROJECT_CACHE_NODE_PREFIX = 'project-cache:'
 const PROJECT_CACHE_DEP_REVISION_PREFIX = 'r'
 const PROJECT_CACHE_REVISION_PRUNE_THRESHOLD = 512
+const DEFAULT_PROJECT_CACHE_MAX_ENTRIES = 8_000
+
+function getProjectCacheMaxEntries(): number {
+  const configured = process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES']
+  if (!configured) {
+    return DEFAULT_PROJECT_CACHE_MAX_ENTRIES
+  }
+
+  const parsed = Number.parseInt(configured, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_PROJECT_CACHE_MAX_ENTRIES
+  }
+
+  return parsed
+}
 
 function getProjectCacheState(project: Project): ProjectCacheState {
   const existing = projectCacheStateByProject.get(project)
@@ -46,6 +63,8 @@ function getProjectCacheState(project: Project): ProjectCacheState {
     nodeLocationByKey: new Map(),
     dependencyRevisionByKey: new Map(),
     inflightByNodeKey: new Map(),
+    lruNodeKeys: new Map(),
+    maxEntries: getProjectCacheMaxEntries(),
   }
   projectCacheStateByProject.set(project, created)
   return created
@@ -220,8 +239,51 @@ function invalidateProjectCacheEntry(
   state.graph.markNodeDirty(nodeKey)
   state.graph.unregisterNode(nodeKey)
   touchTrackedDependency(state, cacheDependencyKey)
+  state.lruNodeKeys.delete(nodeKey)
   state.nodeLocationByKey.delete(nodeKey)
   state.inflightByNodeKey.delete(nodeKey)
+}
+
+function touchProjectCacheEntry(state: ProjectCacheState, nodeKey: string): void {
+  if (state.lruNodeKeys.has(nodeKey)) {
+    state.lruNodeKeys.delete(nodeKey)
+  }
+  state.lruNodeKeys.set(nodeKey, true)
+}
+
+function enforceProjectCacheCapacity(state: ProjectCacheState): void {
+  while (state.nodeLocationByKey.size > state.maxEntries) {
+    const lruNodeKey = state.lruNodeKeys.keys().next().value as
+      | string
+      | undefined
+    if (!lruNodeKey) {
+      break
+    }
+
+    const nodeLocation = state.nodeLocationByKey.get(lruNodeKey)
+    if (!nodeLocation) {
+      state.lruNodeKeys.delete(lruNodeKey)
+      state.graph.unregisterNode(lruNodeKey)
+      state.inflightByNodeKey.delete(lruNodeKey)
+      continue
+    }
+
+    const fileMap = state.cacheByFilePath.get(nodeLocation.filePath)
+    if (fileMap) {
+      fileMap.delete(nodeLocation.cacheName)
+      if (fileMap.size === 0) {
+        state.cacheByFilePath.delete(nodeLocation.filePath)
+      }
+    }
+
+    invalidateProjectCacheEntry(
+      state,
+      nodeLocation.filePath,
+      nodeLocation.cacheName
+    )
+  }
+
+  pruneUnreferencedDependencyRevisionTokens(state)
 }
 
 function pruneDirtyProjectCacheEntries(state: ProjectCacheState): number {
@@ -251,6 +313,7 @@ function pruneDirtyProjectCacheEntries(state: ProjectCacheState): number {
       }
 
       state.graph.unregisterNode(nodeKey)
+      state.lruNodeKeys.delete(nodeKey)
       state.nodeLocationByKey.delete(nodeKey)
       fileMap.delete(nodeLocation.cacheName)
       if (fileMap.size === 0) {
@@ -318,6 +381,7 @@ export async function createProjectFileCache<Type>(
     (staticDependencies === undefined ||
       areDependencyRecordsEqual(cachedEntry.deps, staticDependencies))
   ) {
+    touchProjectCacheEntry(state, nodeKey)
     return cachedEntry.value as Type
   }
 
@@ -348,6 +412,8 @@ export async function createProjectFileCache<Type>(
     }
     liveNamespace.set(cacheName, entry)
     registerProjectCacheEntry(state, filePath, cacheName, entry)
+    touchProjectCacheEntry(state, nodeKey)
+    enforceProjectCacheCapacity(state)
     return entry.value as Type
   })()
 
@@ -404,12 +470,16 @@ export function invalidateProjectFileCache(
       state.inflightByNodeKey.delete(nodeKey)
       const fileMap = cacheByFilePath.get(normalizedFilePath)
       if (!fileMap) {
+        state.lruNodeKeys.delete(nodeKey)
+        state.nodeLocationByKey.delete(nodeKey)
         touchTrackedDependency(state, cacheDependencyKey)
         pruneDirtyProjectCacheEntries(state)
         return
       }
 
       if (!fileMap.has(cacheName)) {
+        state.lruNodeKeys.delete(nodeKey)
+        state.nodeLocationByKey.delete(nodeKey)
         touchTrackedDependency(state, cacheDependencyKey)
         pruneDirtyProjectCacheEntries(state)
         return
@@ -437,6 +507,7 @@ export function invalidateProjectFileCache(
     state.nodeLocationByKey.clear()
     state.dependencyRevisionByKey.clear()
     state.inflightByNodeKey.clear()
+    state.lruNodeKeys.clear()
     state.graph.clear()
     return
   }

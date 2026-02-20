@@ -2,9 +2,18 @@ import { cpus } from 'node:os'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
 import { getMDXSections, getMarkdownSections } from '@renoun/mdx/utils'
 
+import { CacheStore } from '../../file-system/Cache.ts'
+import { getCacheStorePersistence } from '../../file-system/CacheSqlite.ts'
+import {
+  FS_ANALYSIS_CACHE_VERSION,
+  createCacheNodeKey,
+  normalizeCachePath,
+} from '../../file-system/cache-key.ts'
 import { NodeFileSystem } from '../../file-system/NodeFileSystem.ts'
+import { FileSystemSnapshot } from '../../file-system/Snapshot.ts'
 import { getFileExports, getOutlineRanges } from '../../project/client.ts'
 import type { ProjectOptions } from '../../project/types.ts'
+import { getRootDirectory } from '../../utils/get-root-directory.ts'
 import { Semaphore } from '../../utils/Semaphore.ts'
 import { getDebugLogger } from '../../utils/debug.ts'
 import { isJavaScriptLikeExtension } from '../../utils/is-javascript-like-extension.ts'
@@ -445,6 +454,7 @@ async function warmFiles(
   }
 ): Promise<void> {
   const gate = new Semaphore(PREWARM_FILE_CACHE_CONCURRENCY)
+  const runtimeSectionsStore = createRuntimeSectionsWarmStore(options.fileSystem)
 
   await Promise.all(
     warmFiles.map(async (warmFile) => {
@@ -458,12 +468,21 @@ async function warmFiles(
         if (warmFile.methods.has('getSections')) {
           if (isJavaScriptLikeExtension(warmFile.extension)) {
             await getOutlineRanges(warmFile.absolutePath, options.projectOptions)
-          } else if (warmFile.extension === 'md') {
-            const source = await options.fileSystem.readFile(warmFile.absolutePath)
-            getMarkdownSections(source)
-          } else if (warmFile.extension === 'mdx') {
-            const source = await options.fileSystem.readFile(warmFile.absolutePath)
-            getMDXSections(source)
+          } else if (warmFile.extension === 'md' || warmFile.extension === 'mdx') {
+            const warmedRuntimeSections =
+              await warmMarkdownSectionsThroughRuntimeCacheStore(
+                warmFile,
+                runtimeSectionsStore,
+                options.fileSystem
+              )
+            if (!warmedRuntimeSections) {
+              const source = await options.fileSystem.readFile(warmFile.absolutePath)
+              if (warmFile.extension === 'md') {
+                getMarkdownSections(source)
+              } else {
+                getMDXSections(source)
+              }
+            }
           }
         }
       } finally {
@@ -471,4 +490,91 @@ async function warmFiles(
       }
     })
   )
+}
+
+function createRuntimeSectionsWarmStore(
+  fileSystem: NodeFileSystem
+):
+  | {
+      store: CacheStore
+      snapshotId: string
+    }
+  | undefined {
+  try {
+    const snapshot = new FileSystemSnapshot(fileSystem)
+    const projectRoot = resolvePrewarmProjectRoot(fileSystem)
+    const persistence = projectRoot
+      ? getCacheStorePersistence({ projectRoot })
+      : getCacheStorePersistence()
+
+    return {
+      store: new CacheStore({
+        snapshot,
+        persistence,
+      }),
+      snapshotId: snapshot.id,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function resolvePrewarmProjectRoot(fileSystem: NodeFileSystem): string | undefined {
+  try {
+    return getRootDirectory(fileSystem.getAbsolutePath('.'))
+  } catch {
+    return undefined
+  }
+}
+
+function createSectionsCacheNodeKey(
+  filePath: string,
+  extension: 'md' | 'mdx',
+  snapshotId: string
+): string {
+  return createCacheNodeKey(`${extension}.sections`, {
+    version: FS_ANALYSIS_CACHE_VERSION,
+    snapshot: snapshotId,
+    filePath: normalizeCachePath(filePath),
+  })
+}
+
+async function warmMarkdownSectionsThroughRuntimeCacheStore(
+  warmFile: WarmFileTask,
+  runtimeSectionsStore:
+    | {
+        store: CacheStore
+        snapshotId: string
+      }
+    | undefined,
+  fileSystem: NodeFileSystem
+): Promise<boolean> {
+  if (
+    !runtimeSectionsStore ||
+    (warmFile.extension !== 'md' && warmFile.extension !== 'mdx')
+  ) {
+    return false
+  }
+
+  try {
+    const nodeKey = createSectionsCacheNodeKey(
+      warmFile.absolutePath,
+      warmFile.extension,
+      runtimeSectionsStore.snapshotId
+    )
+    await runtimeSectionsStore.store.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(warmFile.absolutePath)
+        const source = await fileSystem.readFile(warmFile.absolutePath)
+        return warmFile.extension === 'mdx'
+          ? getMDXSections(source)
+          : getMarkdownSections(source)
+      }
+    )
+    return true
+  } catch {
+    return false
+  }
 }

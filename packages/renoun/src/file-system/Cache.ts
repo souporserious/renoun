@@ -81,6 +81,7 @@ export interface CacheStoreOptions {
   inflight?: Map<string, Promise<unknown>>
   computeSlotTtlMs?: number
   computeSlotPollMs?: number
+  persistedVerificationAttempts?: number
   debugPersistenceFailure?: boolean
 }
 
@@ -104,6 +105,8 @@ export interface CacheOptions {
   computeSlotTtlMs?: number
   /** Poll interval for waiting on persisted compute slots in milliseconds. */
   computeSlotPollMs?: number
+  /** Number of persisted read-back attempts after a write. Set to 0 to skip verification. */
+  persistedVerificationAttempts?: number
   /** Log detailed cache persistence failures during debugging. */
   debugCachePersistence?: boolean
   /** Enable debug logging related to cache root/path resolution. */
@@ -112,6 +115,7 @@ export interface CacheOptions {
 
 const DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS = 20_000
 const DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS = 25
+const DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS = 3
 const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
   'renoun.fs.cache.no-compute-slot-shared-value'
 )
@@ -128,6 +132,7 @@ interface CacheStoreFactoryOptions {
   inflight?: Map<string, Promise<unknown>>
   computeSlotTtlMs?: number
   computeSlotPollMs?: number
+  persistedVerificationAttempts?: number
   debugPersistenceFailure?: boolean
 }
 
@@ -141,6 +146,7 @@ export class Cache {
   readonly invalidatedPathTtlMs: number
   readonly computeSlotTtlMs: number
   readonly computeSlotPollMs: number
+  readonly persistedVerificationAttempts: number
   readonly persistence?: CacheStorePersistence
   readonly usesPersistentCache: boolean
   readonly debugCachePersistence: boolean
@@ -185,6 +191,10 @@ export class Cache {
       options.computeSlotPollMs,
       DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS
     )
+    this.persistedVerificationAttempts = normalizeNonNegativeInteger(
+      options.persistedVerificationAttempts,
+      DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS
+    )
     this.debugCachePersistence = options.debugCachePersistence === true
     this.debugSessionRoot = options.debugSessionRoot === true
   }
@@ -196,6 +206,9 @@ export class Cache {
       inflight: options.inflight,
       computeSlotTtlMs: options.computeSlotTtlMs ?? this.computeSlotTtlMs,
       computeSlotPollMs: options.computeSlotPollMs ?? this.computeSlotPollMs,
+      persistedVerificationAttempts:
+        options.persistedVerificationAttempts ??
+        this.persistedVerificationAttempts,
       debugPersistenceFailure: this.debugCachePersistence,
     })
   }
@@ -375,6 +388,7 @@ export class CacheStore {
   >()
   readonly #computeSlotTtlMs: number
   readonly #computeSlotPollMs: number
+  readonly #persistedVerificationAttempts: number
   readonly #debugPersistenceFailure: boolean
   #warnedAboutPersistenceFailure = false
   #warnedAboutUnserializableValue = false
@@ -390,6 +404,10 @@ export class CacheStore {
     this.#computeSlotPollMs = normalizePositiveInteger(
       options.computeSlotPollMs,
       DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS
+    )
+    this.#persistedVerificationAttempts = normalizeNonNegativeInteger(
+      options.persistedVerificationAttempts,
+      DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS
     )
     this.#debugPersistenceFailure = options.debugPersistenceFailure === true
 
@@ -1467,7 +1485,6 @@ export class CacheStore {
     await this.#withPersistenceIntent(nodeKey, async () => {
       const shouldDebugPersistenceFailure =
         this.#shouldDebugCachePersistenceFailure(nodeKey)
-      const maxVerificationAttempts = 3
 
       const attempt = async (
         value: unknown
@@ -1531,6 +1548,19 @@ export class CacheStore {
         } else {
           await this.#persistence!.save(nodeKey, persisted)
           this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+        }
+
+        const maxVerificationAttempts = this.#persistedVerificationAttempts
+        if (maxVerificationAttempts === 0) {
+          if (shouldDebugPersistenceFailure) {
+            this.#logPersistenceDebug(nodeKey, {
+              phase: 'save-verify',
+              details: 'verification-skipped',
+              entry,
+              expectedRevision: expectedPersistedRevision,
+            })
+          }
+          return 'verified'
         }
 
         for (
@@ -1883,6 +1913,22 @@ function normalizePositiveInteger(
 
   const parsed = Math.floor(value)
   if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback
+  }
+
+  return parsed
+}
+
+function normalizeNonNegativeInteger(
+  value: number | undefined,
+  fallback: number
+): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return fallback
+  }
+
+  const parsed = Math.floor(value)
+  if (!Number.isFinite(parsed) || parsed < 0) {
     return fallback
   }
 
