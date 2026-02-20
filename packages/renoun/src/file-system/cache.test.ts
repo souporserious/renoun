@@ -3001,6 +3001,73 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('does not persist structure cache when sort compare is a function', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'a.mdx'), '# A', 'utf8')
+      writeFileSync(join(docsDirectory, 'b.mdx'), '# B', 'utf8')
+
+      const directory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+        sort: {
+          key: 'name',
+          compare: (left: string, right: string) => left.localeCompare(right),
+        },
+      })
+
+      await directory.getStructure()
+
+      const session = directory.getSession()
+      const nodeKey = directory.getStructureCacheKey()
+      session.cache.clearMemory()
+
+      expect(await session.cache.get(nodeKey)).toBeUndefined()
+    })
+  })
+
+  test('invalidateSnapshots clears persisted snapshot rows', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+
+      const directory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+
+      await directory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const session = directory.getSession()
+      const snapshotKey = Array.from(session.directorySnapshots.keys())[0]
+      expect(snapshotKey).toBeDefined()
+
+      session.cache.clearMemory()
+      expect(await session.cache.get(snapshotKey!)).toBeDefined()
+
+      directory.invalidateSnapshots()
+
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        session.cache.clearMemory()
+        if ((await session.cache.get(snapshotKey!)) === undefined) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+
+      session.cache.clearMemory()
+      expect(await session.cache.get(snapshotKey!)).toBeUndefined()
+    })
+  })
+
   test('invalidates persisted directory snapshots when cache paths are invalidated', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')

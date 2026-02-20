@@ -5671,9 +5671,11 @@ export class Directory<
   }
 
   #canPersistStructureCache() {
-    return (
-      typeof this.#filter !== 'function' && typeof this.#sort !== 'function'
-    )
+    return isSessionSnapshotPersistable({
+      filter: this.#filter,
+      filterPattern: this.#filterPattern,
+      sort: this.#sort,
+    })
   }
 
   #getSessionSnapshotKey(mask: number) {
@@ -6113,7 +6115,38 @@ export class Directory<
       return
     }
 
+    const snapshotKeys = new Set<string>([
+      ...session.directorySnapshots.keys(),
+      ...session.directorySnapshotBuilds.keys(),
+    ])
     session.directorySnapshots.clear()
+    session.directorySnapshotBuilds.clear()
+
+    for (const snapshotKey of snapshotKeys) {
+      session.markInvalidatedDirectorySnapshotKey(snapshotKey)
+    }
+
+    void (async () => {
+      const dependencyEviction = await session.cache.deleteByDependencyPath('.')
+      if (
+        !dependencyEviction.usedDependencyIndex ||
+        dependencyEviction.hasMissingDependencyMetadata
+      ) {
+        const candidateSnapshotKeys =
+          await session.cache.listNodeKeysByPrefix('dir:')
+        if (candidateSnapshotKeys.length === 0) {
+          return
+        }
+
+        await Promise.all(
+          candidateSnapshotKeys.map((snapshotKey) =>
+            session.cache.delete(snapshotKey)
+          )
+        )
+      }
+    })().catch(() => {
+      // Best-effort cleanup for persisted snapshot rows.
+    })
   }
 
   /**
