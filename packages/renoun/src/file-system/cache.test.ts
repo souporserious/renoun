@@ -20,11 +20,12 @@ import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
 
 import {
+  Cache,
   CacheStore,
   type CacheEntry,
   type CacheStorePersistence,
   createFingerprint,
-} from './CacheStore.ts'
+} from './Cache.ts'
 import { DirectorySnapshot } from './directory-snapshot.ts'
 import {
   SqliteCacheStorePersistence,
@@ -32,7 +33,7 @@ import {
   disposeDefaultCacheStorePersistence,
   getCacheStorePersistence,
   getDefaultCacheDatabasePath,
-} from './CacheStoreSqlite.ts'
+} from './CacheSqlite.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import { Session } from './Session.ts'
@@ -115,6 +116,12 @@ class NestedCwdNodeFileSystem extends NodeFileSystem {
 
   override isFilePathGitIgnored(filePath: string): boolean {
     return false
+  }
+}
+
+class RootlessNodeFileSystem extends NestedCwdNodeFileSystem {
+  override getAbsolutePath(path: string): string {
+    return '/'
   }
 }
 
@@ -247,27 +254,9 @@ function createShortTtlComputeSlotPersistence(
 function createTempNodeFileSystem(tmpDirectory: string) {
   const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
   writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
-  return new NestedCwdNodeFileSystem(getRootDirectory(), tsConfigPath)
-}
-
-async function withTestCacheDbPath<T>(
-  tmpDirectory: string,
-  run: () => Promise<T> | T
-) {
-  const previousPath = process.env.RENOUN_FS_CACHE_DB_PATH
-  const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
-  mkdirSync(dirname(dbPath), { recursive: true })
-  process.env.RENOUN_FS_CACHE_DB_PATH = dbPath
-
-  try {
-    return await run()
-  } finally {
-    if (previousPath === undefined) {
-      delete process.env.RENOUN_FS_CACHE_DB_PATH
-    } else {
-      process.env.RENOUN_FS_CACHE_DB_PATH = previousPath
-    }
-  }
+  const fileSystem = new NestedCwdNodeFileSystem(getRootDirectory(), tsConfigPath)
+  ;(fileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+  return fileSystem
 }
 
 function createTmpRenounCacheDirectory(prefix: string) {
@@ -275,8 +264,8 @@ function createTmpRenounCacheDirectory(prefix: string) {
     getRootDirectory(),
     'packages',
     'renoun',
-    '.cache',
-    'renoun'
+    '.renoun',
+    'cache'
   )
   mkdirSync(cacheBaseDirectory, { recursive: true })
   return mkdtempSync(join(cacheBaseDirectory, prefix))
@@ -289,12 +278,11 @@ async function withProductionSqliteCache<T>(
     'renoun-cache-sqlite-worker-'
   )
   const previousNodeEnv = process.env.NODE_ENV
-
   process.env.NODE_ENV = 'production'
   disposeDefaultCacheStorePersistence()
 
   try {
-    return await withTestCacheDbPath(tmpDirectory, () => run(tmpDirectory))
+    return await run(tmpDirectory)
   } finally {
     disposeDefaultCacheStorePersistence()
     process.env.NODE_ENV = previousNodeEnv
@@ -328,6 +316,44 @@ describe('file-system cache integration', () => {
     })
 
     expect(readDirectorySpy.mock.calls.length).toBe(callsAfterFirst)
+  })
+
+  test('uses shared custom cache provider across directory instances', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': '',
+      'nested/page.mdx': '# Page',
+    })
+    const cache = new Cache()
+    const first = new Directory({ fileSystem, cache })
+    const second = new Directory({ fileSystem, cache })
+
+    expect(first.getSession()).toBe(second.getSession())
+
+    const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectory')
+    await first.getEntries({
+      recursive: true,
+      includeDirectoryNamedFiles: true,
+      includeIndexAndReadmeFiles: true,
+    })
+    const callsAfterFirst = readDirectorySpy.mock.calls.length
+    await second.getEntries({
+      recursive: true,
+      includeDirectoryNamedFiles: true,
+      includeIndexAndReadmeFiles: true,
+    })
+
+    expect(readDirectorySpy.mock.calls.length).toBe(callsAfterFirst)
+  })
+
+  test('does not share caches between different custom cache providers', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': '',
+      'nested/page.mdx': '# Page',
+    })
+    const first = new Directory({ fileSystem, cache: new Cache() })
+    const second = new Directory({ fileSystem, cache: new Cache() })
+
+    expect(first.getSession()).not.toBe(second.getSession())
   })
 
   test('keeps function-based filters isolated when function references differ', async () => {
@@ -746,9 +772,6 @@ describe('file-system cache integration', () => {
 const a = 1
 //#endregion`,
     })
-
-    const previousFsCache = process.env['RENOUN_FS_CACHE']
-    process.env['RENOUN_FS_CACHE'] = '0'
     disposeDefaultCacheStorePersistence()
 
     const outlineSpy = vi.spyOn(fileSystem, 'getOutlineRanges')
@@ -765,11 +788,6 @@ const a = 1
 
       expect(outlineSpy).toHaveBeenCalledTimes(1)
     } finally {
-      if (previousFsCache === undefined) {
-        delete process.env['RENOUN_FS_CACHE']
-      } else {
-        process.env['RENOUN_FS_CACHE'] = previousFsCache
-      }
       disposeDefaultCacheStorePersistence()
     }
   })
@@ -2037,6 +2055,44 @@ describe('cache replacement semantics', () => {
   })
 })
 
+describe('session cache persistence policy', () => {
+  test('uses persisted cache by default for Node filesystems', async () => {
+    const tempDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-session-policy-'
+    )
+    const nodeFileSystem = createTempNodeFileSystem(tempDirectory)
+    const memoryFileSystem = new InMemoryFileSystem({})
+    const explicitOffFileSystem = createTempNodeFileSystem(tempDirectory)
+
+    try {
+      expect(Session.for(nodeFileSystem).usesPersistentCache).toBe(true)
+
+      expect(Session.for(memoryFileSystem).usesPersistentCache).toBe(false)
+
+      expect(
+        Session.for(explicitOffFileSystem, undefined, new Cache())
+          .usesPersistentCache
+      ).toBe(false)
+    } finally {
+      Session.reset(nodeFileSystem)
+      Session.reset(memoryFileSystem)
+      Session.reset(explicitOffFileSystem)
+
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('uses persistent cache for node-like rootless filesystems', async () => {
+    const rootlessFileSystem = new RootlessNodeFileSystem(process.cwd())
+
+    try {
+      expect(Session.for(rootlessFileSystem).usesPersistentCache).toBe(true)
+    } finally {
+      Session.reset(rootlessFileSystem)
+    }
+  })
+})
+
 describe('sqlite cache persistence', () => {
   test('reuses persisted mdx section jsx across worker sessions', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
@@ -2630,6 +2686,7 @@ describe('sqlite cache persistence', () => {
         getRootDirectory(),
         tsConfigPath
       )
+      ;(secondFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
       const secondReadDirectory = vi.spyOn(secondFileSystem, 'readDirectory')
       const secondWorkerDirectory = new Directory({
         fileSystem: secondFileSystem,
@@ -4086,7 +4143,7 @@ export type Metadata = Value`,
 
   test('uses tmpdir as cache root when project root is filesystem root', () => {
     expect(getDefaultCacheDatabasePath('/')).toBe(
-      resolvePath(tmpdir(), '.cache', 'renoun', 'fs-cache.sqlite')
+      resolvePath(tmpdir(), '.renoun', 'cache', 'fs-cache.sqlite')
     )
   })
 
@@ -4101,13 +4158,10 @@ export type Metadata = Value`,
     symlinkSync(realRoot, aliasRoot, 'dir')
     writeFileSync(join(realRoot, 'index.ts'), 'export const value = 1', 'utf8')
 
-    const previousNodeEnv = process.env.NODE_ENV
-    const previousCachePath = process.env.RENOUN_FS_CACHE_DB_PATH
     const realFileSystem = new NodeFileSystem()
     const aliasFileSystem = new NodeFileSystem()
     ;(realFileSystem as { repoRoot: string }).repoRoot = realRoot
     ;(aliasFileSystem as { repoRoot: string }).repoRoot = aliasRoot
-    process.env.NODE_ENV = 'production'
 
     try {
       const realSession = Session.for(realFileSystem)
@@ -4138,12 +4192,6 @@ export type Metadata = Value`,
       Session.reset(realFileSystem)
       Session.reset(aliasFileSystem)
       disposeDefaultCacheStorePersistence()
-      process.env.NODE_ENV = previousNodeEnv
-      if (previousCachePath === undefined) {
-        delete process.env.RENOUN_FS_CACHE_DB_PATH
-      } else {
-        process.env.RENOUN_FS_CACHE_DB_PATH = previousCachePath
-      }
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
   })

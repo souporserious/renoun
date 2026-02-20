@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { Cache } from './Cache.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
-import { disposeDefaultCacheStorePersistence } from './CacheStoreSqlite.ts'
+import {
+  SqliteCacheStorePersistence,
+  disposeDefaultCacheStorePersistence,
+} from './CacheSqlite.ts'
 import { FileSystemSnapshot } from './Snapshot.ts'
 import { Session } from './Session.ts'
 import type { ExportHistoryGenerator, ExportHistoryReport } from './types.ts'
@@ -26,25 +30,26 @@ const SUCCESS_ARCHIVE = makeTar([
   { path: 'root/dir/a.md', content: '# title' },
 ])
 
+function createIsolatedPersistentCache() {
+  const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-git-vfs-cache-'))
+  const dbPath = join(cacheDirectory, 'fs-cache.sqlite')
+  const cache = new Cache({
+    persistence: new SqliteCacheStorePersistence({ dbPath }),
+  })
+
+  return {
+    cache,
+    cleanup() {
+      rmSync(cacheDirectory, { recursive: true, force: true })
+    },
+  }
+}
+
 describe('GitVirtualFileSystem', () => {
   const originalFetch = globalThis.fetch
-  let previousCacheDbPath: string | undefined
-  let cacheDbDirectory: string | undefined
 
   beforeEach(() => {
     vi.useRealTimers()
-
-    previousCacheDbPath = process.env.RENOUN_FS_CACHE_DB_PATH
-    cacheDbDirectory = mkdtempSync(
-      join(tmpdir(), 'renoun-git-virtual-cache-test-')
-    )
-
-    process.env.RENOUN_FS_CACHE_DB_PATH = join(
-      cacheDbDirectory,
-      '.cache',
-      'renoun',
-      'fs-cache.sqlite'
-    )
 
     disposeDefaultCacheStorePersistence()
   })
@@ -430,48 +435,54 @@ describe('GitVirtualFileSystem', () => {
 
     globalThis.fetch = mockFetch as unknown as typeof fetch
 
+    const isolatedCache = createIsolatedPersistentCache()
     const fs = new GitVirtualFileSystem({
       repository: 'owner/fallback-reparse',
       host: 'github',
+      cache: isolatedCache.cache,
     })
 
     const scanSpy = vi.spyOn(exportAnalysis, 'scanModuleExports')
 
-    await expect(
-      drain(
-        fs.getExportHistory({
-          entry: 'index.ts',
-          detectUpdates: false,
-        })
-      )
-    ).resolves.toEqual(
-      expect.objectContaining({
-        exports: expect.objectContaining({
-          './index.ts::developValue': expect.any(Array),
+    try {
+      await expect(
+        drain(
+          fs.getExportHistory({
+            entry: 'index.ts',
+            detectUpdates: false,
+          })
+        )
+      ).resolves.toEqual(
+        expect.objectContaining({
+          exports: expect.objectContaining({
+            './index.ts::developValue': expect.any(Array),
+          }),
         }),
-      })
-    )
-
-    fs.clearCache()
-
-    defaultBranch = 'main'
-    await expect(
-      drain(
-        fs.getExportHistory({
-          entry: 'index.ts',
-          detectUpdates: false,
-        })
       )
-    ).resolves.toEqual(
-      expect.objectContaining({
-        exports: expect.objectContaining({
-          './index.ts::mainValue': expect.any(Array),
-        }),
-      })
-    )
 
-    expect(scanSpy).toHaveBeenCalledTimes(2)
-    expect(fs.getCacheIdentity().ref).toBe('main')
+      fs.clearCache()
+
+      defaultBranch = 'main'
+      await expect(
+        drain(
+          fs.getExportHistory({
+            entry: 'index.ts',
+            detectUpdates: false,
+          })
+        )
+      ).resolves.toEqual(
+        expect.objectContaining({
+          exports: expect.objectContaining({
+            './index.ts::mainValue': expect.any(Array),
+          }),
+        }),
+      )
+
+      expect(scanSpy).toHaveBeenCalledTimes(2)
+      expect(fs.getCacheIdentity().ref).toBe('main')
+    } finally {
+      isolatedCache.cleanup()
+    }
   })
 
   it('prevents stale export parse reuse when fallback ref changes during concurrent export queries', async () => {
@@ -537,56 +548,64 @@ describe('GitVirtualFileSystem', () => {
 
     const sessionResetSpy = vi.spyOn(Session, 'reset')
     const scanSpy = vi.spyOn(exportAnalysis, 'scanModuleExports')
+    const isolatedCache = createIsolatedPersistentCache()
 
     const fs = new GitVirtualFileSystem({
       repository: 'owner/concurrent-ref-switch',
       host: 'github',
+      cache: isolatedCache.cache,
     })
 
-    const first = drain(
-      fs.getExportHistory({
-        entry: 'index.ts',
-        detectUpdates: false,
-      })
-    )
-    const second = drain(
-      fs.getExportHistory({
-        entry: 'index.ts',
-        detectUpdates: false,
-      })
-    )
-
-    await Promise.resolve()
-
-    if (!resolveMainArchive) {
-      throw new Error(
-        'Expected pending main archive request to be initialized.'
+    try {
+      const first = drain(
+        fs.getExportHistory({
+          entry: 'index.ts',
+          detectUpdates: false,
+        })
       )
+      const second = drain(
+        fs.getExportHistory({
+          entry: 'index.ts',
+          detectUpdates: false,
+        })
+      )
+
+      await Promise.resolve()
+
+      if (!resolveMainArchive) {
+        throw new Error(
+          'Expected pending main archive request to be initialized.'
+        )
+      }
+
+      resolveMainArchive({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response)
+
+      const [firstReport, secondReport] = await Promise.all([first, second])
+
+      expect(firstReport.exports).toEqual(
+        expect.objectContaining({
+          './index.ts::masterValue': expect.any(Array),
+        })
+      )
+      expect(secondReport.exports).toEqual(
+        expect.objectContaining({
+          './index.ts::masterValue': expect.any(Array),
+        })
+      )
+      expect(scanSpy).toHaveBeenCalledTimes(1)
+      expect(fs.getCacheIdentity().ref).toBe('master')
+      expect(sessionResetSpy.mock.calls.some((call) => call[0] === fs)).toBe(
+        true
+      )
+    } finally {
+      isolatedCache.cleanup()
     }
-
-    resolveMainArchive({
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
-      headers: createHeaders({}),
-      json: async () => ({}),
-    } as Response)
-
-    const [firstReport, secondReport] = await Promise.all([first, second])
-
-    expect(firstReport.exports).toEqual(
-      expect.objectContaining({
-        './index.ts::masterValue': expect.any(Array),
-      })
-    )
-    expect(secondReport.exports).toEqual(
-      expect.objectContaining({
-        './index.ts::masterValue': expect.any(Array),
-      })
-    )
-    expect(scanSpy).toHaveBeenCalledTimes(1)
-    expect(fs.getCacheIdentity().ref).toBe('master')
-    expect(sessionResetSpy.mock.calls.some((call) => call[0] === fs)).toBe(true)
   })
 
   it('clearCache force-resets all session families', async () => {
@@ -900,43 +919,50 @@ describe('GitVirtualFileSystem', () => {
     })
 
     globalThis.fetch = mockFetch as unknown as typeof fetch
+    const isolatedCache = createIsolatedPersistentCache()
 
-    const firstFs = new GitVirtualFileSystem({
-      repository: 'group/cached-repo',
-      host: 'gitlab',
-      baseUrl: 'https://gitlab.one',
-      ref: deterministicRef,
-    })
-    const secondFs = new GitVirtualFileSystem({
-      repository: 'group/cached-repo',
-      host: 'gitlab',
-      baseUrl: 'https://gitlab.two',
-      ref: deterministicRef,
-    })
+    try {
+      const firstFs = new GitVirtualFileSystem({
+        repository: 'group/cached-repo',
+        host: 'gitlab',
+        baseUrl: 'https://gitlab.one',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
+      const secondFs = new GitVirtualFileSystem({
+        repository: 'group/cached-repo',
+        host: 'gitlab',
+        baseUrl: 'https://gitlab.two',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
 
-    const firstMetadata = await firstFs.getGitFileMetadata('src/index.ts')
-    const secondMetadata = await secondFs.getGitFileMetadata('src/index.ts')
+      const firstMetadata = await firstFs.getGitFileMetadata('src/index.ts')
+      const secondMetadata = await secondFs.getGitFileMetadata('src/index.ts')
 
-    expect(firstMetadata.firstCommitDate?.toISOString()).toBe(
-      '2024-01-01T00:00:00.000Z'
-    )
-    expect(secondMetadata.firstCommitDate?.toISOString()).toBe(
-      '2024-02-01T00:00:00.000Z'
-    )
-
-    const firstHostCommitCalls = mockFetch.mock.calls.filter(([request]) =>
-      String(request).startsWith(
-        'https://gitlab.one/api/v4/projects/group%2Fcached-repo/repository/commits?'
+      expect(firstMetadata.firstCommitDate?.toISOString()).toBe(
+        '2024-01-01T00:00:00.000Z'
       )
-    ).length
-    const secondHostCommitCalls = mockFetch.mock.calls.filter(([request]) =>
-      String(request).startsWith(
-        'https://gitlab.two/api/v4/projects/group%2Fcached-repo/repository/commits?'
+      expect(secondMetadata.firstCommitDate?.toISOString()).toBe(
+        '2024-02-01T00:00:00.000Z'
       )
-    ).length
 
-    expect(firstHostCommitCalls).toBe(1)
-    expect(secondHostCommitCalls).toBe(1)
+      const firstHostCommitCalls = mockFetch.mock.calls.filter(([request]) =>
+        String(request).startsWith(
+          'https://gitlab.one/api/v4/projects/group%2Fcached-repo/repository/commits?'
+        )
+      ).length
+      const secondHostCommitCalls = mockFetch.mock.calls.filter(([request]) =>
+        String(request).startsWith(
+          'https://gitlab.two/api/v4/projects/group%2Fcached-repo/repository/commits?'
+        )
+      ).length
+
+      expect(firstHostCommitCalls).toBe(1)
+      expect(secondHostCommitCalls).toBe(1)
+    } finally {
+      isolatedCache.cleanup()
+    }
   })
 
   it('does not cache failed file metadata fetches', async () => {
@@ -1087,50 +1113,59 @@ describe('GitVirtualFileSystem', () => {
     })
 
     globalThis.fetch = mockFetch as unknown as typeof fetch
+    const isolatedCache = createIsolatedPersistentCache()
 
-    const firstFs = new GitVirtualFileSystem({
-      repository: 'owner/structure-cache',
-      host: 'github',
-      ref: deterministicRef,
-    })
-    const firstDirectory = new Directory({ fileSystem: firstFs })
+    try {
+      const firstFs = new GitVirtualFileSystem({
+        repository: 'owner/structure-cache',
+        host: 'github',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
+      const firstDirectory = new Directory({ fileSystem: firstFs })
 
-    const firstStructure = await firstDirectory.getStructure()
-    const firstPaths = firstStructure
-      .filter((entry) => entry.kind === 'File')
-      .map((entry) => entry.relativePath)
-      .sort()
+      const firstStructure = await firstDirectory.getStructure()
+      const firstPaths = firstStructure
+        .filter((entry) => entry.kind === 'File')
+        .map((entry) => entry.relativePath)
+        .sort()
 
-    expect(firstPaths).toEqual(['file.txt'])
+      expect(firstPaths).toEqual(['file.txt'])
 
-    const archiveCallsAfterFirstRun = mockFetch.mock.calls.filter(([request]) =>
-      String(request).includes(
-        `/repos/owner/structure-cache/tarball/${deterministicRef}`
-      )
-    ).length
-    expect(archiveCallsAfterFirstRun).toBe(1)
+      const archiveCallsAfterFirstRun = mockFetch.mock.calls.filter(
+        ([request]) =>
+          String(request).includes(
+            `/repos/owner/structure-cache/tarball/${deterministicRef}`
+          )
+      ).length
+      expect(archiveCallsAfterFirstRun).toBe(1)
 
-    const commitCallsAfterFirstRun = mockFetch.mock.calls.filter(([request]) =>
-      String(request).includes('/repos/owner/structure-cache/commits?sha=')
-    ).length
-    expect(commitCallsAfterFirstRun).toBe(1)
+      const commitCallsAfterFirstRun = mockFetch.mock.calls.filter(
+        ([request]) =>
+          String(request).includes('/repos/owner/structure-cache/commits?sha=')
+      ).length
+      expect(commitCallsAfterFirstRun).toBe(1)
 
-    const secondFs = new GitVirtualFileSystem({
-      repository: 'owner/structure-cache',
-      host: 'github',
-      ref: deterministicRef,
-    })
-    const callsBeforeSecondStructure = mockFetch.mock.calls.length
-    const secondDirectory = new Directory({ fileSystem: secondFs })
+      const secondFs = new GitVirtualFileSystem({
+        repository: 'owner/structure-cache',
+        host: 'github',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
+      const callsBeforeSecondStructure = mockFetch.mock.calls.length
+      const secondDirectory = new Directory({ fileSystem: secondFs })
 
-    const secondStructure = await secondDirectory.getStructure()
-    const secondPaths = secondStructure
-      .filter((entry) => entry.kind === 'File')
-      .map((entry) => entry.relativePath)
-      .sort()
+      const secondStructure = await secondDirectory.getStructure()
+      const secondPaths = secondStructure
+        .filter((entry) => entry.kind === 'File')
+        .map((entry) => entry.relativePath)
+        .sort()
 
-    expect(secondPaths).toEqual(firstPaths)
-    expect(mockFetch.mock.calls.length).toBe(callsBeforeSecondStructure)
+      expect(secondPaths).toEqual(firstPaths)
+      expect(mockFetch.mock.calls.length).toBe(callsBeforeSecondStructure)
+    } finally {
+      isolatedCache.cleanup()
+    }
   })
 
   it('reuses cached directory structure for deterministic refs across instances in production', async () => {
@@ -1188,12 +1223,14 @@ describe('GitVirtualFileSystem', () => {
 
     process.env.NODE_ENV = 'production'
     globalThis.fetch = mockFetch as unknown as typeof fetch
+    const isolatedCache = createIsolatedPersistentCache()
 
     try {
       const firstFs = new GitVirtualFileSystem({
         repository: 'owner/production-structure-cache',
         host: 'github',
         ref: deterministicRef,
+        cache: isolatedCache.cache,
       })
       const firstDirectory = new Directory({ fileSystem: firstFs })
 
@@ -1225,6 +1262,7 @@ describe('GitVirtualFileSystem', () => {
         repository: 'owner/production-structure-cache',
         host: 'github',
         ref: deterministicRef,
+        cache: isolatedCache.cache,
       })
       const callsBeforeSecondStructure = mockFetch.mock.calls.length
       const secondDirectory = new Directory({ fileSystem: secondFs })
@@ -1238,6 +1276,7 @@ describe('GitVirtualFileSystem', () => {
       expect(secondPaths).toEqual(firstPaths)
       expect(mockFetch.mock.calls.length).toBe(callsBeforeSecondStructure)
     } finally {
+      isolatedCache.cleanup()
       process.env.NODE_ENV = previousNodeEnv
     }
   })
@@ -1474,17 +1513,6 @@ describe('GitVirtualFileSystem', () => {
     globalThis.fetch = originalFetch
     vi.restoreAllMocks()
     disposeDefaultCacheStorePersistence()
-
-    if (cacheDbDirectory) {
-      rmSync(cacheDbDirectory, { recursive: true, force: true })
-      cacheDbDirectory = undefined
-    }
-
-    if (previousCacheDbPath === undefined) {
-      delete process.env.RENOUN_FS_CACHE_DB_PATH
-    } else {
-      process.env.RENOUN_FS_CACHE_DB_PATH = previousCacheDbPath
-    }
   })
 
   it('infers base-name entry files when entry is a directory', async () => {
@@ -1997,51 +2025,58 @@ describe('GitVirtualFileSystem', () => {
     })
 
     globalThis.fetch = mockFetch as unknown as typeof fetch
+    const isolatedCache = createIsolatedPersistentCache()
 
-    const firstFs = new GitVirtualFileSystem({
-      repository: 'owner/incremental-cache',
-      host: 'github',
-      ref: 'main',
-    })
-
-    const firstReport = await drain(
-      firstFs.getExportHistory({
-        entry: 'src/index.ts',
-        detectUpdates: false,
+    try {
+      const firstFs = new GitVirtualFileSystem({
+        repository: 'owner/incremental-cache',
+        host: 'github',
+        ref: 'main',
+        cache: isolatedCache.cache,
       })
-    )
 
-    const secondFs = new GitVirtualFileSystem({
-      repository: 'owner/incremental-cache',
-      host: 'github',
-      ref: 'main',
-    })
+      const firstReport = await drain(
+        firstFs.getExportHistory({
+          entry: 'src/index.ts',
+          detectUpdates: false,
+        })
+      )
 
-    const secondReport = await drain(
-      secondFs.getExportHistory({
-        entry: 'src/index.ts',
-        detectUpdates: false,
+      const secondFs = new GitVirtualFileSystem({
+        repository: 'owner/incremental-cache',
+        host: 'github',
+        ref: 'main',
+        cache: isolatedCache.cache,
       })
-    )
 
-    expect(secondReport.nameToId).toEqual(firstReport.nameToId)
-    expect(secondReport.exports).toEqual(firstReport.exports)
-
-    const commitHistoryCalls = mockFetch.mock.calls.filter(([request]) =>
-      String(request).includes(
-        '/repos/owner/incremental-cache/commits?sha=main'
+      const secondReport = await drain(
+        secondFs.getExportHistory({
+          entry: 'src/index.ts',
+          detectUpdates: false,
+        })
       )
-    ).length
-    const rawBlobCalls = mockFetch.mock.calls.filter(([request]) => {
-      const url = String(request)
-      return (
-        url.includes('raw.githubusercontent.com/owner/incremental-cache/') &&
-        url.includes('index.ts')
-      )
-    }).length
 
-    expect(commitHistoryCalls).toBe(2)
-    expect(rawBlobCalls).toBe(2)
+      expect(secondReport.nameToId).toEqual(firstReport.nameToId)
+      expect(secondReport.exports).toEqual(firstReport.exports)
+
+      const commitHistoryCalls = mockFetch.mock.calls.filter(([request]) =>
+        String(request).includes(
+          '/repos/owner/incremental-cache/commits?sha=main'
+        )
+      ).length
+      const rawBlobCalls = mockFetch.mock.calls.filter(([request]) => {
+        const url = String(request)
+        return (
+          url.includes('raw.githubusercontent.com/owner/incremental-cache/') &&
+          url.includes('index.ts')
+        )
+      }).length
+
+      expect(commitHistoryCalls).toBe(2)
+      expect(rawBlobCalls).toBe(2)
+    } finally {
+      isolatedCache.cleanup()
+    }
   })
 
   it('does not persist commit-history cache for abbreviated commit refs', async () => {

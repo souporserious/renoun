@@ -15,7 +15,7 @@ import {
   type CacheDependencyEvictionResult,
   type CacheEntry,
   type CacheStorePersistence,
-} from './CacheStore.ts'
+} from './Cache.ts'
 
 const SQLITE_BUSY_RETRIES = 5
 const SQLITE_BUSY_RETRY_DELAY_MS = 25
@@ -44,6 +44,8 @@ export interface CacheStoreSqliteOptions {
   schemaVersion?: number
   maxAgeMs?: number
   maxRows?: number
+  debugSessionRoot?: boolean
+  debugCachePersistence?: boolean
 }
 
 interface ResolvedSqlitePersistenceOptions {
@@ -51,23 +53,20 @@ interface ResolvedSqlitePersistenceOptions {
   schemaVersion: number
   maxAgeMs: number
   maxRows: number
+  debugSessionRoot?: boolean
+  debugCachePersistence?: boolean
 }
 
 function resolveDbPath(options: {
   dbPath?: string
   projectRoot?: string
+  debugSessionRoot?: boolean
 }): string {
   if (typeof options.dbPath === 'string' && options.dbPath.trim()) {
     return resolve(options.dbPath)
   }
-  if (
-    typeof process.env['RENOUN_FS_CACHE_DB_PATH'] === 'string' &&
-    process.env['RENOUN_FS_CACHE_DB_PATH'].trim()
-  ) {
-    return resolve(process.env['RENOUN_FS_CACHE_DB_PATH'])
-  }
 
-  if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+  if (options.debugSessionRoot === true) {
     // eslint-disable-next-line no-console
     console.log('[renoun-debug] resolveDbPath', {
       projectRoot: options.projectRoot,
@@ -76,29 +75,27 @@ function resolveDbPath(options: {
   return getDefaultCacheDatabasePath(
     options.projectRoot
       ? resolveCanonicalProjectRootPath(options.projectRoot)
-      : undefined
+      : undefined,
+    options.debugSessionRoot
   )
 }
 
-export function getDefaultCacheDatabasePath(projectRoot?: string): string {
-  const overridePath = process.env['RENOUN_FS_CACHE_DB_PATH']
-  if (typeof overridePath === 'string' && overridePath.trim()) {
-    return resolve(overridePath)
-  }
-
+export function getDefaultCacheDatabasePath(
+  projectRoot?: string,
+  debugSessionRoot?: boolean
+): string {
   let root = projectRoot
     ? resolveCanonicalProjectRootPath(projectRoot)
     : resolve(getRootDirectory())
   if (root === resolve('/')) {
     root = tmpdir()
   }
-  const path = resolve(root, '.cache', 'renoun', 'fs-cache.sqlite')
-  if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+  const path = resolve(root, '.renoun', 'cache', 'fs-cache.sqlite')
+  if (debugSessionRoot === true) {
     // eslint-disable-next-line no-console
     console.log('[renoun-debug] getDefaultCacheDatabasePath', {
       projectRoot,
       resolved: path,
-      overridePath,
     })
   }
   return path
@@ -118,6 +115,9 @@ export function getCacheStorePersistence(
   const resolvedOptions = resolveSqlitePersistenceOptions(options)
   const existing = persistenceByDbPath.get(resolvedOptions.dbPath)
   if (existing) {
+    existing.setDebugCachePersistence(
+      resolvedOptions.debugCachePersistence === true
+    )
     const existingOptions = persistenceOptionsByDbPath.get(
       resolvedOptions.dbPath
     )
@@ -139,6 +139,8 @@ export function getCacheStorePersistence(
     schemaVersion: resolvedOptions.schemaVersion,
     maxAgeMs: resolvedOptions.maxAgeMs,
     maxRows: resolvedOptions.maxRows,
+    debugSessionRoot: resolvedOptions.debugSessionRoot,
+    debugCachePersistence: resolvedOptions.debugCachePersistence,
   })
   persistenceByDbPath.set(resolvedOptions.dbPath, created)
   persistenceOptionsByDbPath.set(resolvedOptions.dbPath, resolvedOptions)
@@ -186,6 +188,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   readonly #maxRows: number
   readonly #overflowCheckInterval: number
   readonly #readyPromise: Promise<void>
+  #debugCachePersistence: boolean
   #writesSincePrune = 0
   #lastPrunedAt = 0
   #lastInflightCleanupAt = 0
@@ -197,11 +200,16 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#schemaVersion = options.schemaVersion ?? CACHE_SCHEMA_VERSION
     this.#maxAgeMs = options.maxAgeMs ?? SQLITE_DEFAULT_CACHE_MAX_AGE_MS
     this.#maxRows = options.maxRows ?? SQLITE_DEFAULT_MAX_ROWS
+    this.#debugCachePersistence = options.debugCachePersistence === true
     this.#overflowCheckInterval = Math.max(
       1,
       Math.min(SQLITE_PRUNE_WRITE_INTERVAL, Math.floor(this.#maxRows / 100))
     )
     this.#readyPromise = this.#initialize()
+  }
+
+  setDebugCachePersistence(enabled: boolean): void {
+    this.#debugCachePersistence = enabled === true
   }
 
   async acquireComputeSlot(
@@ -333,7 +341,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     if (!this.#db) {
       return undefined
     }
-    const shouldDebug = shouldDebugCachePersistenceLoadFailure(nodeKey)
+    const shouldDebug = this.#shouldDebugCachePersistenceLoadFailure(nodeKey)
     const skipFingerprintCheck = options.skipFingerprintCheck ?? false
     const now = Date.now()
     try {
@@ -1369,6 +1377,16 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
   }
 
+  #shouldDebugCachePersistenceLoadFailure(nodeKey: string): boolean {
+    if (!this.#debugCachePersistence) {
+      return false
+    }
+
+    return (
+      nodeKey.startsWith('js.exports:') || nodeKey.startsWith('mdx.sections:')
+    )
+  }
+
   #deleteRowsForNodeKeys(nodeKeys: string[]) {
     if (!this.#db || nodeKeys.length === 0) {
       return
@@ -1496,17 +1514,6 @@ function getPersistedTimestamp(value: unknown): number {
 function getPersistedRevision(value: unknown): number {
   const numberValue = Number(value)
   return Number.isFinite(numberValue) ? numberValue : Number.NaN
-}
-
-function shouldDebugCachePersistenceLoadFailure(nodeKey: string): boolean {
-  const debugEnvValue = process.env['RENOUN_DEBUG_CACHE_PERSISTENCE']
-  if (debugEnvValue !== '1' && debugEnvValue !== 'true') {
-    return false
-  }
-
-  return (
-    nodeKey.startsWith('js.exports:') || nodeKey.startsWith('mdx.sections:')
-  )
 }
 
 function logCachePersistenceLoadFailure(
@@ -1666,6 +1673,8 @@ function resolveSqlitePersistenceOptions(
     schemaVersion: options.schemaVersion ?? CACHE_SCHEMA_VERSION,
     maxAgeMs: options.maxAgeMs ?? SQLITE_DEFAULT_CACHE_MAX_AGE_MS,
     maxRows: options.maxRows ?? SQLITE_DEFAULT_MAX_ROWS,
+    debugSessionRoot: options.debugSessionRoot === true,
+    debugCachePersistence: options.debugCachePersistence === true,
   }
 }
 

@@ -8,6 +8,7 @@ import {
 import { GitFileSystem } from './GitFileSystem.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 import { Directory, File } from './entries.ts'
+import type { Cache } from './Cache.ts'
 import {
   coerceSemVer,
   compareSemVer,
@@ -48,6 +49,9 @@ export interface RepositoryConfig {
 
   /** Internal release metadata source mode. */
   releaseSource?: RepositoryReleaseSource
+
+  /** Optional cache provider for repository-backed operations. */
+  cache?: Cache
 }
 
 export interface BaseRepositoryOptions {
@@ -65,6 +69,9 @@ export interface BaseRepositoryOptions {
 
   /** Internal release metadata source mode. */
   releaseSource?: RepositoryReleaseSource
+
+  /** Optional cache provider for repository-backed operations. */
+  cache?: Cache
 }
 
 export interface CloneRepositoryOptions extends BaseRepositoryOptions {
@@ -692,8 +699,10 @@ export class Repository {
   #pendingSparsePaths: Set<string> = new Set()
   #releasePromises: Map<string, Promise<Release>> = new Map()
   #githubReleasesPromise?: Promise<any[]>
-  #releaseSource: { mode: 'remote' } | { mode: 'local-version'; version: string } =
-    { mode: 'remote' }
+  #releaseSource:
+    | { mode: 'remote' }
+    | { mode: 'local-version'; version: string } = { mode: 'remote' }
+  #cache?: Cache
 
   constructor(repository?: RepositoryOptions | RepositoryConfig | string) {
     const options =
@@ -702,6 +711,7 @@ export class Repository {
         : typeof repository === 'string'
           ? { path: repository }
           : repository
+    this.#cache = options.cache
 
     this.#releaseSource = normalizeReleaseSource(
       'releaseSource' in options ? options.releaseSource : undefined
@@ -878,6 +888,7 @@ export class Repository {
     return new Directory({
       path: path ?? '.',
       repository: this,
+      cache: this.#cache,
     })
   }
 
@@ -887,6 +898,7 @@ export class Repository {
     return new File({
       path,
       repository: this,
+      directory: this.getDirectory(directoryName(path)),
     })
   }
 
@@ -962,6 +974,7 @@ export class Repository {
     if (!this.#fileSystemConfig) {
       this.#fileSystem = new GitFileSystem({
         repository: this.#path,
+        cache: this.#cache,
       })
       return this.#fileSystem
     }
@@ -972,6 +985,7 @@ export class Repository {
         host: this.#fileSystemConfig.host,
         ref: this.#fileSystemConfig.ref,
         token: this.#fileSystemConfig.token,
+        cache: this.#cache,
       })
       return this.#fileSystem
     }
@@ -986,6 +1000,7 @@ export class Repository {
       ref: this.#fileSystemConfig.ref,
       depth: this.#fileSystemConfig.depth,
       sparse,
+      cache: this.#cache,
     })
 
     return this.#fileSystem

@@ -55,6 +55,7 @@ import type {
   FileSystemWriteFileContent,
   FileWritableStream,
 } from './FileSystem.ts'
+import type { Cache } from './Cache.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
   Repository,
@@ -4101,6 +4102,9 @@ export interface BaseDirectoryOptions<
   /** Slug casing applied to route segments. */
   slugCasing?: SlugCasing
 
+  /** Optional cache provider for directory/session-level caching. */
+  cache?: Cache
+
   /** Sort callback applied at *each* directory depth. */
   sort?: SortDescriptor<
     FileSystemEntry<ApplyDirectorySchema<LoaderTypes, NoInferType<Schema>>>
@@ -4277,9 +4281,11 @@ function shouldValidatePersistedFileDependencies(
 }
 
 function shouldPersistDirectorySnapshots(fileSystem: FileSystem): boolean {
-  const maybeIsDeterministic = (fileSystem as {
-    isPersistentCacheDeterministic?: () => boolean
-  }).isPersistentCacheDeterministic
+  const maybeIsDeterministic = (
+    fileSystem as {
+      isPersistentCacheDeterministic?: () => boolean
+    }
+  ).isPersistentCacheDeterministic
 
   if (typeof maybeIsDeterministic !== 'function') {
     return true
@@ -4579,6 +4585,7 @@ export class Directory<
         entry: FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
       ) => Promise<boolean> | boolean)
     | Minimatch
+  #cache?: Cache
   #filterCache?: WeakMap<
     FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
     boolean
@@ -4611,6 +4618,7 @@ export class Directory<
       this.#slugCasing = 'kebab'
       this.#tsConfigPath = 'tsconfig.json'
     } else {
+      this.#cache = options.cache
       const hasCustomFileSystem =
         'fileSystem' in options && options.fileSystem !== undefined
 
@@ -4778,6 +4786,7 @@ export class Directory<
       schema: this.#schema,
       loader: this.#loader,
       filter: this.#filter as any,
+      cache: this.#cache,
       sort: this.#sort,
       ...(this.#fileSystem ? { fileSystem: this.#fileSystem } : {}),
       ...(this.#repository ? { repository: this.#repository } : {}),
@@ -5611,7 +5620,7 @@ export class Directory<
   }
 
   #getSession() {
-    const current = Session.for(this.getFileSystem())
+    const current = Session.for(this.getFileSystem(), undefined, this.#cache)
     if (this.#session !== current) {
       this.#session = current
     }

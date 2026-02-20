@@ -1,21 +1,23 @@
 import { resolve } from 'node:path'
 import { realpathSync } from 'node:fs'
 
-import {
-  isAbsolutePath,
-  normalizePathKey,
-} from '../utils/path.ts'
+import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import { CacheStore } from './CacheStore.ts'
-import { getCacheStorePersistence } from './CacheStoreSqlite.ts'
+import { Cache, CacheStore } from './Cache.ts'
+import { getCacheStorePersistence } from './CacheSqlite.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
 import type { DirectorySnapshot } from './directory-snapshot.ts'
 
-const sessionsByFileSystem = new WeakMap<object, Map<string, Session>>()
+const sessionsByFileSystem = new WeakMap<
+  object,
+  Map<string, Map<string, Session>>
+>()
+const cacheIdentityByCache = new WeakMap<object, string>()
 const snapshotGenerationByFileSystem = new WeakMap<object, number>()
 const snapshotParentByFileSystem = new WeakMap<object, Map<string, string>>()
+let cacheIdentity = 0
 
 type PersistedStaleReason =
   | 'token_changed'
@@ -43,30 +45,12 @@ interface DirectorySnapshotKeyMetrics {
   rebuilds: number
 }
 
-const WORKSPACE_CHANGE_TOKEN_TTL_MS = getEnvInt(
-  'RENOUN_FS_WORKSPACE_CHANGE_TOKEN_TTL_MS',
-  250
-)
-const WORKSPACE_CHANGED_PATHS_TTL_MS = getEnvInt(
-  'RENOUN_FS_WORKSPACE_CHANGED_PATHS_TTL_MS',
-  250
-)
-const INVALIDATED_PATH_TTL_MS = getEnvInt(
-  'RENOUN_FS_INVALIDATED_PATH_TTL_MS',
-  1000
-)
-const CACHE_METRICS_TOP_KEYS_LIMIT = Math.max(
-  1,
-  getEnvInt('RENOUN_FS_CACHE_TOP_KEYS_LIMIT', 10)
-)
-const CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT = Math.max(
-  CACHE_METRICS_TOP_KEYS_LIMIT,
-  getEnvInt('RENOUN_FS_CACHE_TOP_KEYS_TRACKING_LIMIT', 250)
-)
-const CACHE_METRICS_TOP_KEYS_LOG_INTERVAL = Math.max(
-  1,
-  getEnvInt('RENOUN_FS_CACHE_TOP_KEYS_LOG_INTERVAL', 25)
-)
+const DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS = 250
+const DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS = 250
+const DEFAULT_INVALIDATED_PATH_TTL_MS = 1000
+const DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT = 10
+const DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT = 250
+const DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL = 25
 
 function collectSnapshotFamily(
   snapshotId: string,
@@ -99,15 +83,21 @@ function collectSnapshotFamily(
 }
 
 export class Session {
-  static for(fileSystem: FileSystem, snapshot?: Snapshot): Session {
+  static for(
+    fileSystem: FileSystem,
+    snapshot?: Snapshot,
+    cache?: Cache
+  ): Session {
     const generation = snapshotGenerationByFileSystem.get(fileSystem) ?? 0
     const baseSnapshot = snapshot ?? new FileSystemSnapshot(fileSystem)
     const targetSnapshot =
       generation > 0
         ? new GeneratedSnapshot(baseSnapshot, generation)
         : baseSnapshot
+    const cacheId = getCacheIdentity(cache)
     const sessionMap =
-      sessionsByFileSystem.get(fileSystem) ?? new Map<string, Session>()
+      sessionsByFileSystem.get(fileSystem) ??
+      new Map<string, Map<string, Session>>()
     const parentMap =
       snapshotParentByFileSystem.get(fileSystem) ?? new Map<string, string>()
 
@@ -122,13 +112,16 @@ export class Session {
       parentMap.set(targetSnapshot.id, targetSnapshot.baseSnapshotId)
     }
 
-    const existing = sessionMap.get(targetSnapshot.id)
+    const cacheSessions =
+      sessionMap.get(targetSnapshot.id) ?? new Map<string, Session>()
+    const existing = cacheSessions.get(cacheId)
     if (existing) {
       return existing
     }
 
-    const created = new Session(fileSystem, targetSnapshot)
-    sessionMap.set(targetSnapshot.id, created)
+    const created = new Session(fileSystem, targetSnapshot, cache)
+    cacheSessions.set(cacheId, created)
+    sessionMap.set(targetSnapshot.id, cacheSessions)
     return created
   }
 
@@ -145,11 +138,11 @@ export class Session {
       }
 
       const family = collectSnapshotFamily(snapshotId, parentMap)
-      const familySessions = Array.from(sessionMap.entries()).filter(
-        ([id]) => family.has(id)
+      const familyEntries = Array.from(sessionMap.entries()).filter(([id]) =>
+        family.has(id)
       )
 
-      if (familySessions.length === 0) {
+      if (familyEntries.length === 0) {
         if (process.env['NODE_ENV'] !== 'test') {
           console.warn(
             `[renoun] Session.reset(${String(snapshotId)}) did not match any active session family. No caches were invalidated.`
@@ -162,8 +155,10 @@ export class Session {
         snapshotGenerationByFileSystem.get(fileSystem) ?? 0
       snapshotGenerationByFileSystem.set(fileSystem, currentGeneration + 1)
 
-      for (const [id, session] of familySessions) {
-        session.reset()
+      for (const [id, cacheSessions] of familyEntries) {
+        for (const session of cacheSessions.values()) {
+          session.reset()
+        }
         sessionMap.delete(id)
         parentMap.delete(id)
       }
@@ -184,8 +179,10 @@ export class Session {
       return
     }
 
-    for (const session of sessionMap.values()) {
-      session.reset()
+    for (const cacheSessions of sessionMap.values()) {
+      for (const session of cacheSessions.values()) {
+        session.reset()
+      }
     }
 
     sessionMap.clear()
@@ -228,8 +225,14 @@ export class Session {
   >()
   readonly #recentlyInvalidatedPathTimestamps = new Map<string, number>()
   #persistedInvalidationQueue: Promise<void> = Promise.resolve()
-  readonly #cacheMetricsEnabled =
-    process.env['RENOUN_FS_CACHE_METRICS'] === '1'
+  readonly #cacheMetricsEnabled: boolean
+  readonly #cacheMetricsTopKeysLimit: number
+  readonly #cacheMetricsTopKeysTrackingLimit: number
+  readonly #cacheMetricsTopKeysLogInterval: number
+  readonly #workspaceChangeTokenTtlMs: number
+  readonly #workspaceChangedPathsTtlMs: number
+  readonly #invalidatedPathTtlMs: number
+  readonly #cacheDebugPersistence: boolean
   readonly #cacheMetricCounters: Record<CacheMetricCounter, number> = {
     memory_hit: 0,
     memory_miss: 0,
@@ -257,23 +260,71 @@ export class Session {
   >()
   #directorySnapshotRebuildEventsSinceLog = 0
 
-  private constructor(fileSystem: FileSystem, snapshot: Snapshot) {
+  private constructor(
+    fileSystem: FileSystem,
+    snapshot: Snapshot,
+    cache?: Cache
+  ) {
     this.#fileSystem = fileSystem
     this.snapshot = snapshot
+    this.#cacheMetricsEnabled = cache?.cacheMetricsEnabled === true
+    this.#cacheMetricsTopKeysLimit = normalizePositiveInteger(
+      cache?.cacheMetricsTopKeysLimit,
+      DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT
+    )
+    this.#cacheMetricsTopKeysTrackingLimit = Math.max(
+      this.#cacheMetricsTopKeysLimit,
+      normalizePositiveInteger(
+        cache?.cacheMetricsTopKeysTrackingLimit,
+        DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT
+      )
+    )
+    this.#cacheMetricsTopKeysLogInterval = normalizePositiveInteger(
+      cache?.cacheMetricsTopKeysLogInterval,
+      DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL
+    )
+    this.#workspaceChangeTokenTtlMs = normalizePositiveInteger(
+      cache?.workspaceChangeTokenTtlMs,
+      DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+    )
+    this.#workspaceChangedPathsTtlMs = normalizePositiveInteger(
+      cache?.workspaceChangedPathsTtlMs,
+      DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
+    )
+    this.#invalidatedPathTtlMs = normalizePositiveInteger(
+      cache?.invalidatedPathTtlMs,
+      DEFAULT_INVALIDATED_PATH_TTL_MS
+    )
+    this.#cacheDebugPersistence = cache?.debugCachePersistence === true
 
-    this.usesPersistentCache = shouldUseSessionCachePersistence(fileSystem)
-    const projectRoot = this.usesPersistentCache
-      ? resolveSessionProjectRoot(fileSystem)
-      : undefined
-    const persistence = projectRoot
-      ? getCacheStorePersistence({ projectRoot })
-      : undefined
+    this.usesPersistentCache = cache
+      ? cache.usesPersistentCache
+      : shouldUseSessionCachePersistence(fileSystem)
+    const persistence =
+      cache?.persistence ??
+      (this.usesPersistentCache
+        ? getCacheStorePersistence({
+            projectRoot: resolveSessionProjectRoot(
+              fileSystem,
+              cache?.debugSessionRoot
+            ),
+            debugSessionRoot: cache?.debugSessionRoot === true,
+            debugCachePersistence: cache?.debugCachePersistence === true,
+          })
+        : undefined)
 
-    this.cache = new CacheStore({
-      snapshot: this.snapshot,
-      persistence,
-      inflight: this.inflight,
-    })
+    this.cache =
+      cache?.createStore({
+        snapshot: this.snapshot,
+        inflight: this.inflight,
+        debugPersistenceFailure: this.#cacheDebugPersistence,
+      }) ??
+      new CacheStore({
+        snapshot: this.snapshot,
+        persistence,
+        inflight: this.inflight,
+        debugPersistenceFailure: this.#cacheDebugPersistence,
+      })
   }
 
   getFunctionId(value: unknown, prefix = 'fn'): string {
@@ -416,7 +467,8 @@ export class Session {
 
     this.#incrementMapCount(this.#directorySnapshotRebuildReasonTotals, reason)
 
-    let reasonCounts = this.#directorySnapshotRebuildReasonByKey.get(snapshotKey)
+    let reasonCounts =
+      this.#directorySnapshotRebuildReasonByKey.get(snapshotKey)
     if (!reasonCounts) {
       reasonCounts = new Map<string, number>()
       this.#directorySnapshotRebuildReasonByKey.set(snapshotKey, reasonCounts)
@@ -464,11 +516,12 @@ export class Session {
       const token = await lookupPromise
       this.#workspaceChangeTokenByRootPath.set(normalizedRootPath, {
         token,
-        expiresAt: Date.now() + WORKSPACE_CHANGE_TOKEN_TTL_MS,
+        expiresAt: Date.now() + this.#workspaceChangeTokenTtlMs,
       })
       return token
     } finally {
-      const latest = this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
+      const latest =
+        this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
       if (latest?.promise === lookupPromise) {
         this.#workspaceChangeTokenByRootPath.delete(normalizedRootPath)
       }
@@ -479,7 +532,8 @@ export class Session {
     rootPath: string,
     previousToken: string
   ): Promise<ReadonlySet<string> | null> {
-    const changedPathsGetter = this.#fileSystem.getWorkspaceChangedPathsSinceToken
+    const changedPathsGetter =
+      this.#fileSystem.getWorkspaceChangedPathsSinceToken
     if (typeof changedPathsGetter !== 'function') {
       return null
     }
@@ -540,7 +594,7 @@ export class Session {
       const changedPaths = await lookupPromise
       this.#workspaceChangedPathsByToken.set(cacheKey, {
         paths: changedPaths,
-        expiresAt: Date.now() + WORKSPACE_CHANGED_PATHS_TTL_MS,
+        expiresAt: Date.now() + this.#workspaceChangedPathsTtlMs,
       })
       return changedPaths
     } finally {
@@ -551,9 +605,7 @@ export class Session {
     }
   }
 
-  getRecentlyInvalidatedPaths():
-    | ReadonlySet<string>
-    | undefined {
+  getRecentlyInvalidatedPaths(): ReadonlySet<string> | undefined {
     this.#cleanupExpiredInvalidatedPaths()
 
     if (this.#recentlyInvalidatedPathTimestamps.size === 0) {
@@ -675,9 +727,8 @@ export class Session {
     this.#persistedInvalidationQueue = this.#persistedInvalidationQueue
       .catch(() => {})
       .then(async () => {
-        const dependencyEviction = await this.cache.deleteByDependencyPath(
-          normalizedPath
-        )
+        const dependencyEviction =
+          await this.cache.deleteByDependencyPath(normalizedPath)
 
         if (dependencyEviction.deletedNodeKeys.length > 0) {
           this.recordCacheMetric(
@@ -720,9 +771,7 @@ export class Session {
       return
     }
 
-    await Promise.all(
-      fallbackKeysToDelete.map((key) => this.cache.delete(key))
-    )
+    await Promise.all(fallbackKeysToDelete.map((key) => this.cache.delete(key)))
     this.recordCacheMetric(
       'invalidation_evictions_path',
       fallbackKeysToDelete.length
@@ -730,7 +779,7 @@ export class Session {
   }
 
   #cleanupExpiredInvalidatedPaths(now = Date.now()): void {
-    const expiresBefore = now - INVALIDATED_PATH_TTL_MS
+    const expiresBefore = now - this.#invalidatedPathTtlMs
     for (const [path, timestamp] of this.#recentlyInvalidatedPathTimestamps) {
       if (timestamp <= expiresBefore) {
         this.#recentlyInvalidatedPathTimestamps.delete(path)
@@ -782,7 +831,7 @@ export class Session {
   #trimDirectorySnapshotMetrics(): void {
     if (
       this.#directorySnapshotMetricsByKey.size <=
-      CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT
+      this.#cacheMetricsTopKeysTrackingLimit
     ) {
       return
     }
@@ -792,7 +841,7 @@ export class Session {
       removeKeys.push(key)
       if (
         this.#directorySnapshotMetricsByKey.size - removeKeys.length <=
-        CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT
+        this.#cacheMetricsTopKeysTrackingLimit
       ) {
         break
       }
@@ -815,7 +864,7 @@ export class Session {
     if (
       !force &&
       this.#directorySnapshotRebuildEventsSinceLog <
-        CACHE_METRICS_TOP_KEYS_LOG_INTERVAL
+        this.#cacheMetricsTopKeysLogInterval
     ) {
       return
     }
@@ -838,11 +887,12 @@ export class Session {
         }
         return first[0].localeCompare(second[0])
       })
-      .slice(0, CACHE_METRICS_TOP_KEYS_LIMIT)
+      .slice(0, this.#cacheMetricsTopKeysLimit)
 
     for (let index = 0; index < entries.length; index += 1) {
       const [snapshotKey, metrics] = entries[index]!
-      const path = extractDirectoryPathFromSnapshotKey(snapshotKey) ?? snapshotKey
+      const path =
+        extractDirectoryPathFromSnapshotKey(snapshotKey) ?? snapshotKey
       this.#emitCacheMetricLog({
         metric: 'snapshot_hot_key',
         trigger,
@@ -858,14 +908,16 @@ export class Session {
       })
     }
 
-    const reasons = Array.from(this.#directorySnapshotRebuildReasonTotals.entries())
+    const reasons = Array.from(
+      this.#directorySnapshotRebuildReasonTotals.entries()
+    )
       .sort((first, second) => {
         if (second[1] !== first[1]) {
           return second[1] - first[1]
         }
         return first[0].localeCompare(second[0])
       })
-      .slice(0, CACHE_METRICS_TOP_KEYS_LIMIT)
+      .slice(0, this.#cacheMetricsTopKeysLimit)
 
     for (const [reason, total] of reasons) {
       this.#emitCacheMetricLog({
@@ -878,7 +930,24 @@ export class Session {
   }
 }
 
-  class GeneratedSnapshot implements Snapshot {
+function getCacheIdentity(cache?: Cache): string {
+  if (!cache) {
+    return 'default'
+  }
+
+  const cached = cacheIdentityByCache.get(cache)
+  if (cached) {
+    return cached
+  }
+
+  const identity = `cache-${cacheIdentity + 1}`
+  cacheIdentityByCache.set(cache, identity)
+  cacheIdentity += 1
+
+  return identity
+}
+
+class GeneratedSnapshot implements Snapshot {
   readonly #base: Snapshot
   readonly id: string
 
@@ -994,11 +1063,14 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
   )
 }
 
-function resolveSessionProjectRoot(fileSystem: FileSystem): string {
+function resolveSessionProjectRoot(
+  fileSystem: FileSystem,
+  debug: boolean = false
+): string {
   const repoRoot = (fileSystem as any).repoRoot
   if (typeof repoRoot === 'string' && isAbsolutePath(repoRoot)) {
     const resolvedRoot = resolveCanonicalPath(repoRoot)
-    if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+    if (debug) {
       // eslint-disable-next-line no-console
       console.log('[renoun-debug] resolveSessionProjectRoot(repoRoot)', {
         repoRoot,
@@ -1012,24 +1084,28 @@ function resolveSessionProjectRoot(fileSystem: FileSystem): string {
   try {
     absoluteRoot = fileSystem.getAbsolutePath('.')
   } catch (error) {
-    if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+    if (debug) {
       // eslint-disable-next-line no-console
-      console.log('[renoun-debug] resolveSessionProjectRoot(getAbsolutePath failed)', {
-        repoRoot: typeof repoRoot === 'string' ? repoRoot : undefined,
-        error: error instanceof Error ? error.message : String(error),
-      })
+      console.log(
+        '[renoun-debug] resolveSessionProjectRoot(getAbsolutePath failed)',
+        {
+          repoRoot: typeof repoRoot === 'string' ? repoRoot : undefined,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      )
     }
   }
 
   if (!absoluteRoot) {
-    absoluteRoot = typeof repoRoot === 'string' ? resolve(repoRoot) : resolve('.')
+    absoluteRoot =
+      typeof repoRoot === 'string' ? resolve(repoRoot) : resolve('.')
   }
 
   try {
     const rootDirectory = getRootDirectory(absoluteRoot)
     return resolveCanonicalPath(rootDirectory)
   } catch (error) {
-    if (process.env['RENOUN_DEBUG_SESSION_ROOT'] === '1') {
+    if (debug) {
       // eslint-disable-next-line no-console
       console.log('[renoun-debug] resolveSessionProjectRoot(fallback)', {
         error: error instanceof Error ? error.message : String(error),
@@ -1049,53 +1125,33 @@ function resolveCanonicalPath(pathToResolve: string): string {
 }
 
 function shouldUseSessionCachePersistence(fileSystem: FileSystem): boolean {
-  const explicit = process.env['RENOUN_FS_CACHE']
   const constructorName = fileSystem.constructor?.name ?? ''
+  const isNodeBasedFileSystem =
+    constructorName === 'NodeFileSystem' ||
+    constructorName === 'NestedCwdNodeFileSystem' ||
+    constructorName.endsWith('NodeFileSystem')
+  const isGitBasedFileSystem =
+    constructorName === 'GitFileSystem' ||
+    constructorName === 'GitVirtualFileSystem' ||
+    constructorName.endsWith('GitFileSystem')
   const isInMemoryFileSystem =
     constructorName === 'InMemoryFileSystem' ||
     constructorName === 'MutableTimestampFileSystem'
-  const hasExplicitCacheDbPath =
-    typeof process.env['RENOUN_FS_CACHE_DB_PATH'] === 'string' &&
-    process.env['RENOUN_FS_CACHE_DB_PATH'].trim().length > 0
 
-  if (explicit === '1' || explicit?.toLowerCase() === 'true') {
-    return true
-  }
-
-  if (explicit === '0' || explicit?.toLowerCase() === 'false') {
+  if (isInMemoryFileSystem) {
     return false
   }
 
-  if (hasExplicitCacheDbPath && !isInMemoryFileSystem) {
-    return true
-  }
-
-  if (process.env['VITEST'] === 'true') {
-    if (isInMemoryFileSystem) {
-      return false
-    }
-
-    if (process.env['NODE_ENV'] === 'production') {
-      return true
-    }
-
-    const repoRoot = (fileSystem as { repoRoot?: unknown }).repoRoot
-    return typeof repoRoot === 'string' && repoRoot.length > 0
-  }
-
-  return process.env['NODE_ENV'] === 'production'
+  return isNodeBasedFileSystem || isGitBasedFileSystem
 }
 
-function getEnvInt(envVarName: string, fallback: number): number {
-  const value = process.env[envVarName]
-  if (!value) {
+function normalizePositiveInteger(
+  value: number | undefined,
+  fallback: number
+): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
     return fallback
   }
-
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback
-  }
-
-  return parsed
+  const parsed = Math.floor(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }

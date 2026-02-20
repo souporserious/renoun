@@ -79,6 +79,126 @@ export interface CacheStoreOptions {
   snapshot: Snapshot
   persistence?: CacheStorePersistence
   inflight?: Map<string, Promise<unknown>>
+  computeSlotTtlMs?: number
+  computeSlotPollMs?: number
+  debugPersistenceFailure?: boolean
+}
+
+export interface CacheOptions {
+  persistence?: CacheStorePersistence
+  /** Enable cache metric collection for directory snapshots. */
+  cacheMetricsEnabled?: boolean
+  /** Maximum number of hot paths tracked when logging cache metrics. */
+  cacheMetricsTopKeysLimit?: number
+  /** Soft cap for hot-key tracking set size before trimming. */
+  cacheMetricsTopKeysTrackingLimit?: number
+  /** Number of events before emitting hot-key metrics. */
+  cacheMetricsTopKeysLogInterval?: number
+  /** TTL for cached workspace change tokens in milliseconds. */
+  workspaceChangeTokenTtlMs?: number
+  /** TTL for cached changed-path lookups in milliseconds. */
+  workspaceChangedPathsTtlMs?: number
+  /** TTL for recently invalidated paths cache in milliseconds. */
+  invalidatedPathTtlMs?: number
+  /** TTL for persisted compute slots in milliseconds. */
+  computeSlotTtlMs?: number
+  /** Poll interval for waiting on persisted compute slots in milliseconds. */
+  computeSlotPollMs?: number
+  /** Log detailed cache persistence failures during debugging. */
+  debugCachePersistence?: boolean
+  /** Enable debug logging related to cache root/path resolution. */
+  debugSessionRoot?: boolean
+}
+
+const DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS = 20_000
+const DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS = 25
+const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
+  'renoun.fs.cache.no-compute-slot-shared-value'
+)
+
+const DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS = 250
+const DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS = 250
+const DEFAULT_INVALIDATED_PATH_TTL_MS = 1_000
+const DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT = 10
+const DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT = 250
+const DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL = 25
+
+interface CacheStoreFactoryOptions {
+  snapshot: Snapshot
+  inflight?: Map<string, Promise<unknown>>
+  computeSlotTtlMs?: number
+  computeSlotPollMs?: number
+  debugPersistenceFailure?: boolean
+}
+
+export class Cache {
+  readonly cacheMetricsEnabled: boolean
+  readonly cacheMetricsTopKeysLimit: number
+  readonly cacheMetricsTopKeysTrackingLimit: number
+  readonly cacheMetricsTopKeysLogInterval: number
+  readonly workspaceChangeTokenTtlMs: number
+  readonly workspaceChangedPathsTtlMs: number
+  readonly invalidatedPathTtlMs: number
+  readonly computeSlotTtlMs: number
+  readonly computeSlotPollMs: number
+  readonly persistence?: CacheStorePersistence
+  readonly usesPersistentCache: boolean
+  readonly debugCachePersistence: boolean
+  readonly debugSessionRoot: boolean
+
+  constructor(options: CacheOptions = {}) {
+    this.persistence = options.persistence
+    this.usesPersistentCache = this.persistence !== undefined
+    this.cacheMetricsEnabled = options.cacheMetricsEnabled === true
+    this.cacheMetricsTopKeysLimit = normalizePositiveInteger(
+      options.cacheMetricsTopKeysLimit,
+      DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT
+    )
+    this.cacheMetricsTopKeysTrackingLimit = Math.max(
+      this.cacheMetricsTopKeysLimit,
+      normalizePositiveInteger(
+        options.cacheMetricsTopKeysTrackingLimit,
+        DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT
+      )
+    )
+    this.cacheMetricsTopKeysLogInterval = normalizePositiveInteger(
+      options.cacheMetricsTopKeysLogInterval,
+      DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL
+    )
+    this.workspaceChangeTokenTtlMs = normalizePositiveInteger(
+      options.workspaceChangeTokenTtlMs,
+      DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+    )
+    this.workspaceChangedPathsTtlMs = normalizePositiveInteger(
+      options.workspaceChangedPathsTtlMs,
+      DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
+    )
+    this.invalidatedPathTtlMs = normalizePositiveInteger(
+      options.invalidatedPathTtlMs,
+      DEFAULT_INVALIDATED_PATH_TTL_MS
+    )
+    this.computeSlotTtlMs = normalizePositiveInteger(
+      options.computeSlotTtlMs,
+      DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS
+    )
+    this.computeSlotPollMs = normalizePositiveInteger(
+      options.computeSlotPollMs,
+      DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS
+    )
+    this.debugCachePersistence = options.debugCachePersistence === true
+    this.debugSessionRoot = options.debugSessionRoot === true
+  }
+
+  createStore(options: CacheStoreFactoryOptions): CacheStore {
+    return new CacheStore({
+      snapshot: options.snapshot,
+      persistence: this.persistence,
+      inflight: options.inflight,
+      computeSlotTtlMs: options.computeSlotTtlMs ?? this.computeSlotTtlMs,
+      computeSlotPollMs: options.computeSlotPollMs ?? this.computeSlotPollMs,
+      debugPersistenceFailure: this.debugCachePersistence,
+    })
+  }
 }
 
 const failedPersistenceEntries = new WeakMap<
@@ -96,17 +216,6 @@ const snapshotInvalidationUnsubscribeBySnapshot = new WeakMap<
   () => void
 >()
 const CONST_DEPENDENCY_PREFIX = 'const:'
-const COMPUTE_SLOT_TTL_MS = getEnvInt(
-  'RENOUN_FS_CACHE_COMPUTE_SLOT_TTL_MS',
-  20_000
-)
-const COMPUTE_SLOT_POLL_MS = getEnvInt(
-  'RENOUN_FS_CACHE_COMPUTE_SLOT_POLL_MS',
-  25
-)
-const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
-  'renoun.fs.cache.no-compute-slot-shared-value'
-)
 
 interface CacheStorePersistenceComputeSlot {
   acquireComputeSlot(
@@ -114,7 +223,11 @@ interface CacheStorePersistenceComputeSlot {
     owner: string,
     ttlMs: number
   ): Promise<boolean>
-  refreshComputeSlot?(nodeKey: string, owner: string, ttlMs: number): Promise<void>
+  refreshComputeSlot?(
+    nodeKey: string,
+    owner: string,
+    ttlMs: number
+  ): Promise<void>
   releaseComputeSlot(nodeKey: string, owner: string): Promise<void>
   getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
   /**
@@ -260,6 +373,9 @@ export class CacheStore {
     string,
     number | 'missing'
   >()
+  readonly #computeSlotTtlMs: number
+  readonly #computeSlotPollMs: number
+  readonly #debugPersistenceFailure: boolean
   #warnedAboutPersistenceFailure = false
   #warnedAboutUnserializableValue = false
 
@@ -267,6 +383,15 @@ export class CacheStore {
     this.#snapshot = options.snapshot
     this.#persistence = options.persistence
     this.#inflight = options.inflight ?? new Map<string, Promise<unknown>>()
+    this.#computeSlotTtlMs = normalizePositiveInteger(
+      options.computeSlotTtlMs,
+      DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS
+    )
+    this.#computeSlotPollMs = normalizePositiveInteger(
+      options.computeSlotPollMs,
+      DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS
+    )
+    this.#debugPersistenceFailure = options.debugPersistenceFailure === true
 
     const stores =
       snapshotDependencyPathWatchers.get(this.#snapshot) ?? new Set()
@@ -339,7 +464,10 @@ export class CacheStore {
     const memoryEntry = this.#entries.get(nodeKey)
     if (memoryEntry) {
       const fresh = await this.#isEntryFresh(nodeKey, memoryEntry, new Set())
-      await this.#recordAutomaticNodeDependency(nodeKey, memoryEntry.fingerprint)
+      await this.#recordAutomaticNodeDependency(
+        nodeKey,
+        memoryEntry.fingerprint
+      )
       return { value: memoryEntry.value as Value, fresh }
     }
 
@@ -350,7 +478,10 @@ export class CacheStore {
     }
 
     const fresh = await this.#isEntryFresh(nodeKey, persistedEntry, new Set())
-    await this.#recordAutomaticNodeDependency(nodeKey, persistedEntry.fingerprint)
+    await this.#recordAutomaticNodeDependency(
+      nodeKey,
+      persistedEntry.fingerprint
+    )
     return { value: persistedEntry.value as Value, fresh }
   }
 
@@ -388,7 +519,8 @@ export class CacheStore {
       allowLoad?: boolean
     } = {}
   ): Promise<PersistedRevisionPrecondition> {
-    const cachedPrecondition = this.#persistedRevisionPreconditionByKey.get(nodeKey)
+    const cachedPrecondition =
+      this.#persistedRevisionPreconditionByKey.get(nodeKey)
     if (cachedPrecondition !== undefined) {
       return cachedPrecondition
     }
@@ -494,9 +626,8 @@ export class CacheStore {
       return defaultResult
     }
 
-    const dependencyPathCandidates = this.#getDependencyPathCandidates(
-      dependencyPathKey
-    )
+    const dependencyPathCandidates =
+      this.#getDependencyPathCandidates(dependencyPathKey)
     const deletedNodeKeys = new Set<string>()
     let usedDependencyIndex = false
     let hasMissingDependencyMetadata = false
@@ -561,7 +692,8 @@ export class CacheStore {
 
     let relativePath = dependencyPathKey
     try {
-      relativePath = this.#snapshot.getRelativePathToWorkspace(dependencyPathKey)
+      relativePath =
+        this.#snapshot.getRelativePathToWorkspace(dependencyPathKey)
     } catch {
       return candidates
     }
@@ -572,9 +704,8 @@ export class CacheStore {
   }
 
   invalidateDependencyPath(dependencyPathKey: string): void {
-    const dependencyPathCandidates = this.#getDependencyPathCandidates(
-      dependencyPathKey
-    )
+    const dependencyPathCandidates =
+      this.#getDependencyPathCandidates(dependencyPathKey)
     const affectedNodeKeys = new Set<string>()
 
     for (const normalizedPath of dependencyPathCandidates) {
@@ -636,7 +767,7 @@ export class CacheStore {
 
     const slotTtlMs = getComputeSlotTtlMs(
       persistence,
-      options.ttlMs ?? COMPUTE_SLOT_TTL_MS
+      options.ttlMs ?? this.#computeSlotTtlMs
     )
     const owner = this.#createComputeSlotOwner()
     const acquired = await this.#acquireComputeSlot(nodeKey, owner, slotTtlMs)
@@ -831,7 +962,7 @@ export class CacheStore {
         return NO_COMPUTE_SLOT_SHARED_VALUE
       }
 
-      const sleep = Math.max(0, COMPUTE_SLOT_POLL_MS) || 0
+      const sleep = Math.max(0, this.#computeSlotPollMs) || 0
       if (sleep > 0) {
         await delay(sleep)
       }
@@ -857,7 +988,7 @@ export class CacheStore {
         return
       }
 
-      const sleep = Math.max(0, COMPUTE_SLOT_POLL_MS) || 0
+      const sleep = Math.max(0, this.#computeSlotPollMs) || 0
       if (sleep > 0) {
         await delay(sleep)
       }
@@ -922,7 +1053,8 @@ export class CacheStore {
         return depVersion
       },
       recordNodeDep: async (childNodeKey: string) => {
-        const depVersion = await this.#resolveNodeDependencyVersion(childNodeKey)
+        const depVersion =
+          await this.#resolveNodeDependencyVersion(childNodeKey)
         deps.set(`node:${childNodeKey}`, depVersion)
         return depVersion
       },
@@ -934,7 +1066,7 @@ export class CacheStore {
       !isPersistedEntryInvalid(this.#persistence, nodeKey)
     const computeSlotTtlMs = getComputeSlotTtlMs(
       this.#getComputeSlotPersistence(),
-      COMPUTE_SLOT_TTL_MS
+      this.#computeSlotTtlMs
     )
     let computeSlotOwner: string | undefined
     let stopComputeSlotHeartbeat: (() => void) | undefined
@@ -1014,9 +1146,7 @@ export class CacheStore {
     return this.#loadPersistedEntry(nodeKey)
   }
 
-  async #loadPersistedEntry(
-    nodeKey: string
-  ): Promise<CacheEntry | undefined> {
+  async #loadPersistedEntry(nodeKey: string): Promise<CacheEntry | undefined> {
     if (!this.#persistence) {
       return undefined
     }
@@ -1340,11 +1470,9 @@ export class CacheStore {
       const attempt = async (
         value: unknown
       ): Promise<'verified' | 'superseded'> => {
-        const persistenceWithRevision = this.#persistence as CacheStorePersistence & {
-          saveWithRevision?(
-            nodeKey: string,
-            entry: CacheEntry
-          ): Promise<number>
+        const persistenceWithRevision = this
+          .#persistence as CacheStorePersistence & {
+          saveWithRevision?(nodeKey: string, entry: CacheEntry): Promise<number>
           saveWithRevisionGuarded?(
             nodeKey: string,
             entry: CacheEntry,
@@ -1394,7 +1522,10 @@ export class CacheStore {
             nodeKey,
             persisted
           )
-          this.#persistedRevisionPreconditionByKey.set(nodeKey, persistedRevision)
+          this.#persistedRevisionPreconditionByKey.set(
+            nodeKey,
+            persistedRevision
+          )
         } else {
           await this.#persistence!.save(nodeKey, persisted)
           this.#persistedRevisionPreconditionByKey.delete(nodeKey)
@@ -1581,8 +1712,7 @@ export class CacheStore {
       actualRevision?: number
     }
   ) {
-    const debugEnvValue = process.env['RENOUN_DEBUG_CACHE_PERSISTENCE']
-    if (debugEnvValue !== '1' && debugEnvValue !== 'true') {
+    if (!this.#debugPersistenceFailure) {
       return
     }
 
@@ -1625,14 +1755,12 @@ export class CacheStore {
   }
 
   #shouldDebugCachePersistenceFailure(nodeKey: string): boolean {
-    const debugEnvValue = process.env['RENOUN_DEBUG_CACHE_PERSISTENCE']
-    if (debugEnvValue !== '1' && debugEnvValue !== 'true') {
+    if (!this.#debugPersistenceFailure) {
       return false
     }
 
     return (
-      nodeKey.startsWith('js.exports:') ||
-      nodeKey.startsWith('mdx.sections:')
+      nodeKey.startsWith('js.exports:') || nodeKey.startsWith('mdx.sections:')
     )
   }
 
@@ -1743,13 +1871,15 @@ function isComputeSlotTransientError(error: unknown): boolean {
   )
 }
 
-function getEnvInt(envVarName: string, fallback: number): number {
-  const value = process.env[envVarName]
-  if (!value) {
+function normalizePositiveInteger(
+  value: number | undefined,
+  fallback: number
+): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
     return fallback
   }
 
-  const parsed = Number.parseInt(value, 10)
+  const parsed = Math.floor(value)
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return fallback
   }

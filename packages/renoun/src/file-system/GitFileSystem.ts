@@ -105,6 +105,7 @@ import {
   createGitFileSystemPersistentCacheNodeKey,
   createGitRemoteRefCacheKey,
 } from './git-cache-key.ts'
+import type { Cache } from './Cache.ts'
 import { Session } from './Session.ts'
 
 export interface GitFileSystemOptions extends FileSystemOptions {
@@ -140,6 +141,9 @@ export interface GitFileSystemOptions extends FileSystemOptions {
 
   /** The maximum depth to traverse for export history. */
   maxDepth?: number
+
+  /** Optional cache provider for this filesystem's internal caches. */
+  cache?: Cache
 }
 
 interface GitObjectMeta {
@@ -811,6 +815,7 @@ export class GitFileSystem
 
   // Cache git log results (keyed by query) to avoid repeat git invocations in a single process.
   #gitLogCache = new LRUMap<string, Promise<GitLogCommit[]>>(GIT_LOG_CACHE_MAX)
+  #cache?: Cache
   #session?: Session
   #historyWarmupInFlight = new Set<string>()
 
@@ -842,6 +847,7 @@ export class GitFileSystem
     this.prepareScopeDirectories = options.sparse ?? []
     this.prepareTransport = options.transport ?? 'https'
     this.fetchRemote = options.fetchRemote ?? 'origin'
+    this.#cache = options.cache
     this.autoFetch =
       options.autoFetch ??
       (this.autoPrepare
@@ -1094,7 +1100,10 @@ export class GitFileSystem
         .update(statusLines.join('\n'))
         .digest('hex')
 
-      if (currentHead === previousHead && previousDirtyDigest === currentDirtyDigest) {
+      if (
+        currentHead === previousHead &&
+        previousDirtyDigest === currentDirtyDigest
+      ) {
         return []
       }
 
@@ -1883,7 +1892,10 @@ export class GitFileSystem
     return this.repoRoot
   }
 
-  #refreshSessionAfterRootChange(previousRepoRoot: string, resolvedRepoRoot: string) {
+  #refreshSessionAfterRootChange(
+    previousRepoRoot: string,
+    resolvedRepoRoot: string
+  ) {
     const previousResolved = resolve(previousRepoRoot)
     const nextResolved = resolve(resolvedRepoRoot)
 
@@ -1983,14 +1995,14 @@ export class GitFileSystem
 
   #getSession(): Session {
     if (!this.#session) {
-      this.#session = Session.for(this)
+      this.#session = Session.for(this, undefined, this.#cache)
     }
 
     return this.#session
   }
 
   #invalidateSessionPaths(paths: readonly string[]): void {
-    const session = Session.for(this)
+    const session = Session.for(this, undefined, this.#cache)
     for (const path of paths) {
       const normalizedPath = this.#normalizeRepoPath(path)
       if (!normalizedPath) {
@@ -2441,9 +2453,8 @@ export class GitFileSystem
       sha,
       parserFlavor,
     })
-    const persistedPayload = await session.cache.get<Record<string, ExportItem>>(
-      nodeKey
-    )
+    const persistedPayload =
+      await session.cache.get<Record<string, ExportItem>>(nodeKey)
     if (persistedPayload !== undefined) {
       const parsed = deserializeExportItemMap(persistedPayload)
       this.#exportParseCache.set(cacheKey, parsed)
@@ -2470,10 +2481,10 @@ export class GitFileSystem
         ],
       },
       async (ctx) => {
-      ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
-      return serializeExportItemMap(
-        scanModuleExports(fileNameForParser, content)
-      )
+        ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
+        return serializeExportItemMap(
+          scanModuleExports(fileNameForParser, content)
+        )
       }
     )
     const parsed = deserializeExportItemMap(parsedPayload)
@@ -3147,10 +3158,7 @@ export class GitFileSystem
 
     const latestPointer =
       await session.cache.get<ExportHistoryLatestPointer>(latestNodeKey)
-    if (
-      latestPointer?.reportNodeKey &&
-      latestPointer.lastCommitSha
-    ) {
+    if (latestPointer?.reportNodeKey && latestPointer.lastCommitSha) {
       const previousReport = await session.cache.get<ExportHistoryReport>(
         latestPointer.reportNodeKey
       )

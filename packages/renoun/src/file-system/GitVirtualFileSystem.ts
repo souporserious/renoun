@@ -21,6 +21,7 @@ import {
 } from './InMemoryFileSystem.ts'
 import { GIT_VIRTUAL_HISTORY_CACHE_VERSION } from './cache-key.ts'
 import { createGitVirtualPersistentCacheNodeKey } from './git-cache-key.ts'
+import type { Cache } from './Cache.ts'
 import type { AsyncFileSystem, WritableFileSystem } from './FileSystem.ts'
 import { Session } from './Session.ts'
 import type {
@@ -104,6 +105,9 @@ interface GitVirtualFileSystemOptions {
   include?: string[]
 
   exclude?: string[]
+
+  /** Optional cache provider for this filesystem's internal caches. */
+  cache?: Cache
 }
 
 const repoPattern = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
@@ -291,6 +295,7 @@ export class GitVirtualFileSystem
     }
   >()
   #gitBlameCache: Map<string, Promise<GitHubBlameRange[] | null>>
+  #cache?: Cache
   #session?: Session
   #ghBlameBatchQueue?: {
     path: string
@@ -339,6 +344,7 @@ export class GitVirtualFileSystem
     if (this.#token && /[\r\n]/.test(this.#token)) {
       throw new Error('[renoun] Invalid token')
     }
+    this.#cache = options.cache
     const requestedTimeout = options.timeoutMs ?? 30_000
     this.#timeoutMs = Math.min(Math.max(requestedTimeout, 0), 300_000)
     this.#maxArchiveBytes =
@@ -708,7 +714,7 @@ export class GitVirtualFileSystem
 
   #getSession(): Session {
     if (!this.#session) {
-      this.#session = Session.for(this)
+      this.#session = Session.for(this, undefined, this.#cache)
     }
 
     return this.#session

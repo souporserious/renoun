@@ -57,6 +57,7 @@ export {
   sortEntries,
   createSort,
 } from './entries.ts'
+export { Cache } from './Cache.ts'
 
 export type { PackageExportOptions, PackageOptions } from './Package.ts'
 export {

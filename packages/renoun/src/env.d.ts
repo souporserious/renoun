@@ -15,9 +15,6 @@ declare namespace NodeJS {
     RENOUN_PROJECT_WATCHERS?: '1' | '0' | 'true' | 'false'
     RENOUN_PROJECT_REFRESH_NOTIFICATIONS?: '1' | '0' | 'true' | 'false'
     RENOUN_SERVER_REFRESH_NOTIFICATIONS?: '1' | '0' | 'true' | 'false'
-    RENOUN_FS_CACHE_COMPUTE_SLOT_POLL_MS?: string
-    RENOUN_FS_CACHE_DB_PATH?: string
-    RENOUN_FS_CACHE_COMPUTE_SLOT_TTL_MS?: string
     WS_NO_BUFFER_UTIL?: string
     FIGMA_TOKEN?: string
   }

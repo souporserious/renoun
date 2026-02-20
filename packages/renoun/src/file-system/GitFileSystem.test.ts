@@ -20,11 +20,11 @@ import {
 } from './GitFileSystem'
 import { Directory, File } from './index.tsx'
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key'
-import { CacheStore } from './CacheStore'
+import { CacheStore } from './Cache.ts'
 import {
   getCacheStorePersistence,
   disposeCacheStorePersistence,
-} from './CacheStoreSqlite'
+} from './CacheSqlite.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem'
 import { FileSystemSnapshot } from './Snapshot'
 import { createGitFileSystemPersistentCacheNodeKey } from './git-cache-key'
@@ -178,17 +178,21 @@ interface TestContext {
 
 // Wrapper for concurrent tests with automatic cleanup
 function test(name: string, fn: (ctx: TestContext) => Promise<void>): void {
-  it.concurrent(name, async () => {
-    const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
-    const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
-    initRepo(repoRoot)
-    try {
-      await fn({ repoRoot, cacheDirectory })
-    } finally {
-      rmSync(repoRoot, { recursive: true, force: true })
-      rmSync(cacheDirectory, { recursive: true, force: true })
-    }
-  }, 12_000)
+  it.concurrent(
+    name,
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      initRepo(repoRoot)
+      try {
+        await fn({ repoRoot, cacheDirectory })
+      } finally {
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+      }
+    },
+    12_000
+  )
 }
 
 describe('GitFileSystem', () => {
@@ -258,7 +262,8 @@ describe('GitFileSystem', () => {
       const initialDocsToken = await store.getWorkspaceChangeToken('docs')
 
       writeFileSync(sourcePath, 'export const value = 2')
-      const docsTokenAfterSourceEdit = await store.getWorkspaceChangeToken('docs')
+      const docsTokenAfterSourceEdit =
+        await store.getWorkspaceChangeToken('docs')
 
       writeFileSync(docsPath, '# Updated')
       const docsTokenAfterDocsEdit = await store.getWorkspaceChangeToken('docs')
@@ -379,7 +384,12 @@ describe('GitFileSystem', () => {
     repoRoot,
     cacheDirectory,
   }) => {
-    const v1 = commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'v1')
+    const v1 = commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export const value = 1`,
+      'v1'
+    )
 
     const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     try {
@@ -494,24 +504,23 @@ describe('GitFileSystem', () => {
     })
 
     try {
-      using indexStore = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+      using indexStore = new GitFileSystem({
+        repository: repoRoot,
+        cacheDirectory,
+      })
       const indexReport = await drain(
         indexStore.getExportHistory({ entry: 'src/index.ts' })
       )
 
-      await seedStore.put(
-        indexReportKey,
-        indexReport,
-        {
-          persist: true,
-          deps: [
-            {
-              depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
-              depVersion: GIT_HISTORY_CACHE_VERSION,
-            },
-          ],
-        }
-      )
+      await seedStore.put(indexReportKey, indexReport, {
+        persist: true,
+        deps: [
+          {
+            depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+            depVersion: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      })
 
       await seedStore.put(
         poisonedLatestKey,
@@ -530,7 +539,10 @@ describe('GitFileSystem', () => {
         }
       )
 
-      using poisonedStore = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+      using poisonedStore = new GitFileSystem({
+        repository: repoRoot,
+        cacheDirectory,
+      })
       const poisonedReport = await drain(
         poisonedStore.getExportHistory({ entry: 'src/other.ts' })
       )
@@ -2496,10 +2508,7 @@ describe('GitFileSystem', () => {
   }) => {
     commitFile(repoRoot, '.gitignore', 'src/\n', 'ignore src directory')
     mkdirSync(join(repoRoot, 'src'), { recursive: true })
-    writeFileSync(
-      join(repoRoot, 'src', 'index.ts'),
-      'export const value = 1'
-    )
+    writeFileSync(join(repoRoot, 'src', 'index.ts'), 'export const value = 1')
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const directory = new Directory({
@@ -2619,7 +2628,9 @@ describe('GitFileSystem', () => {
     const afterReadySession = Session.for(store)
 
     expect(afterReadySession).not.toBe(beforeReadySession)
-    expect(afterReadySession.snapshot.id).not.toBe(beforeReadySession.snapshot.id)
+    expect(afterReadySession.snapshot.id).not.toBe(
+      beforeReadySession.snapshot.id
+    )
   })
 
   test('refreshes session cache when async repo readiness resolves the root', async ({
@@ -2637,6 +2648,8 @@ describe('GitFileSystem', () => {
 
     const afterReadySession = Session.for(store)
     expect(afterReadySession).not.toBe(beforeReadySession)
-    expect(afterReadySession.snapshot.id).not.toBe(beforeReadySession.snapshot.id)
+    expect(afterReadySession.snapshot.id).not.toBe(
+      beforeReadySession.snapshot.id
+    )
   })
 })

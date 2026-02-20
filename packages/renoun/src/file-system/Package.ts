@@ -22,6 +22,7 @@ import {
   createCacheNodeKey,
   normalizeCachePath,
 } from './cache-key.ts'
+import { type Cache } from './Cache.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
@@ -418,6 +419,9 @@ export interface PackageOptions<
    * will be invoked with the export path (e.g. "remark/add-sections").
    */
   loader?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
+
+  /** Optional cache provider for package-level caches. */
+  cache?: Cache
 }
 
 type PackageEntryType = 'exports' | 'imports'
@@ -1257,6 +1261,7 @@ export class Package<
   #exportOverrides?: Record<string, PackageExportOptions<Types, LoaderTypes>>
   #exportDirectories?: PackageExportDirectory<Types, LoaderTypes>[]
   #importEntries?: PackageImportEntry[]
+  #cache?: Cache
   #exportManifestEntries?: Map<string, PackageManifestEntry>
   #importManifestEntries?: Map<string, PackageManifestEntry>
 
@@ -1295,6 +1300,7 @@ export class Package<
     this.#repository = repositoryInstance
     this.#exportOverrides = options.exports
     this.#exportLoaders = options.loader
+    this.#cache = options.cache
     this.#sourceRootPath =
       options.sourcePath === null
         ? this.#packagePath
@@ -1465,7 +1471,7 @@ export class Package<
 
   /** @internal */
   getStructureCacheKey() {
-    const session = Session.for(this.#fileSystem)
+    const session = Session.for(this.#fileSystem, undefined, this.#cache)
 
     return createStructureNodeKey('structure.package', {
       version: FS_STRUCTURE_CACHE_VERSION,
@@ -1473,62 +1479,64 @@ export class Package<
       packagePath: normalizeCachePath(this.#packagePath),
       // Keep cache keys stable when the package name is inferred from
       // package.json. Include only explicit name overrides to avoid collisions.
-      explicitName: this.#hasExplicitName ? this.#name ?? null : null,
+      explicitName: this.#hasExplicitName ? (this.#name ?? null) : null,
     })
   }
 
   async getStructure(): Promise<
     Array<PackageStructure | DirectoryStructure | FileStructure>
   > {
-    const session = Session.for(this.#fileSystem)
+    const session = Session.for(this.#fileSystem, undefined, this.#cache)
     const nodeKey = this.getStructureCacheKey()
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      await ctx.recordFileDep(
-        joinPaths(this.#packagePath, 'package.json')
-      )
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(joinPaths(this.#packagePath, 'package.json'))
 
-      this.#resetManifestState()
-      this.#ensurePackageJsonLoaded()
+        this.#resetManifestState()
+        this.#ensurePackageJsonLoaded()
 
-      const packageJson = this.#packageJson
-      const name =
-        this.#name ??
-        packageJson?.name ??
-        formatNameAsTitle(baseName(this.#packagePath))
-      const relativePath = this.#fileSystem.getRelativePathToWorkspace(
-        this.#packagePath
-      )
-      const normalizedRelativePath =
-        relativePath === '.' ? '' : normalizeSlashes(relativePath)
-      const path =
-        normalizedRelativePath === ''
-          ? '/'
-          : `/${trimLeadingSlashes(normalizedRelativePath)}`
+        const packageJson = this.#packageJson
+        const name =
+          this.#name ??
+          packageJson?.name ??
+          formatNameAsTitle(baseName(this.#packagePath))
+        const relativePath = this.#fileSystem.getRelativePathToWorkspace(
+          this.#packagePath
+        )
+        const normalizedRelativePath =
+          relativePath === '.' ? '' : normalizeSlashes(relativePath)
+        const path =
+          normalizedRelativePath === ''
+            ? '/'
+            : `/${trimLeadingSlashes(normalizedRelativePath)}`
 
-      const structures: Array<
-        PackageStructure | DirectoryStructure | FileStructure
-      > = [
-        {
-          kind: 'Package',
-          name,
-          title: formatNameAsTitle(name),
-          slug: createSlug(name, 'kebab'),
-          path,
-          version: packageJson?.version,
-          description: packageJson?.description,
-          relativePath: normalizedRelativePath || '.',
-        },
-      ]
+        const structures: Array<
+          PackageStructure | DirectoryStructure | FileStructure
+        > = [
+          {
+            kind: 'Package',
+            name,
+            title: formatNameAsTitle(name),
+            slug: createSlug(name, 'kebab'),
+            path,
+            version: packageJson?.version,
+            description: packageJson?.description,
+            relativePath: normalizedRelativePath || '.',
+          },
+        ]
 
-      for (const directory of this.getExports()) {
-        const directoryStructures = await directory.getStructure()
-        structures.push(...directoryStructures)
-        await ctx.recordNodeDep(directory.getStructureCacheKey())
+        for (const directory of this.getExports()) {
+          const directoryStructures = await directory.getStructure()
+          structures.push(...directoryStructures)
+          await ctx.recordNodeDep(directory.getStructureCacheKey())
+        }
+
+        return structures
       }
-
-      return structures
-    })
+    )
   }
 
   async getExport<Key extends keyof ExportLoaders & string>(
@@ -1832,6 +1840,7 @@ export class Package<
           ...overrideOptions,
           path: directoryPath,
           fileSystem: this.#fileSystem,
+          cache: this.#cache,
           repository: this.#repository,
           loader:
             overrideOptions.loader ??

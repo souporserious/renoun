@@ -17,6 +17,7 @@ import {
   createCacheNodeKey,
   normalizeCachePath,
 } from './cache-key.ts'
+import type { Cache } from './Cache.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
@@ -211,14 +212,20 @@ export class Workspace {
   #fileSystem: FileSystem
   #workspaceRoot: string
   #workspaceRelativeRoot: string
+  #cache?: Cache
 
   constructor(
-    options: { fileSystem?: FileSystem; rootDirectory?: PathLike } = {}
+    options: {
+      fileSystem?: FileSystem
+      rootDirectory?: PathLike
+      cache?: Cache
+    } = {}
   ) {
     this.#fileSystem = options.fileSystem ?? new NodeFileSystem()
     const resolvedRoot = normalizeSlashes(
       resolveSchemePath(options.rootDirectory ?? getRootDirectory())
     )
+    this.#cache = options.cache
 
     this.#workspaceRoot = resolvedRoot.startsWith('/')
       ? resolvedRoot
@@ -279,7 +286,7 @@ export class Workspace {
 
   /** @internal */
   getStructureCacheKey() {
-    const session = Session.for(this.#fileSystem)
+    const session = Session.for(this.#fileSystem, undefined, this.#cache)
 
     return createStructureNodeKey('structure.workspace', {
       version: FS_STRUCTURE_CACHE_VERSION,
@@ -293,72 +300,83 @@ export class Workspace {
       WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
     >
   > {
-    const session = Session.for(this.#fileSystem)
+    const session = Session.for(this.#fileSystem, undefined, this.#cache)
     const nodeKey = this.getStructureCacheKey()
 
-    return session.cache.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
-      const packageResolution = this.#resolveWorkspacePackages()
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        const packageResolution = this.#resolveWorkspacePackages()
 
-      for (const workspaceManifestPath of packageResolution.workspaceManifestPaths) {
-        await ctx.recordFileDep(workspaceManifestPath)
-      }
-      for (const packageManagerDependencyPath of this.#getPackageManagerDependencyPaths()) {
-        await ctx.recordFileDep(packageManagerDependencyPath)
-      }
-      for (const scannedDirectory of packageResolution.scannedDirectories) {
-        await ctx.recordDirectoryDep(scannedDirectory)
-      }
-
-      const rootPackageJsonPath = this.#findWorkspacePath('package.json')
-      const workspacePackageJsonPath =
-        rootPackageJsonPath ??
-        this.#resolveWorkspacePath('package.json', true)
-      if (
-        !packageResolution.workspaceManifestPaths.includes(workspacePackageJsonPath)
-      ) {
-        await ctx.recordFileDep(workspacePackageJsonPath)
-      }
-
-      let workspaceName = 'workspace'
-
-      if (rootPackageJsonPath) {
-        try {
-          const packageJson = readJsonFile<{ name?: string }>(
-            this.#fileSystem,
-            rootPackageJsonPath,
-            `package.json at "${rootPackageJsonPath}"`
-          )
-          if (packageJson?.name) {
-            workspaceName = packageJson.name
-          }
-        } catch {
-          // fall back to default workspace name on read/parse errors
+        for (const workspaceManifestPath of packageResolution.workspaceManifestPaths) {
+          await ctx.recordFileDep(workspaceManifestPath)
         }
+        for (const packageManagerDependencyPath of this.#getPackageManagerDependencyPaths()) {
+          await ctx.recordFileDep(packageManagerDependencyPath)
+        }
+        for (const scannedDirectory of packageResolution.scannedDirectories) {
+          await ctx.recordDirectoryDep(scannedDirectory)
+        }
+
+        const rootPackageJsonPath = this.#findWorkspacePath('package.json')
+        const workspacePackageJsonPath =
+          rootPackageJsonPath ??
+          this.#resolveWorkspacePath('package.json', true)
+        if (
+          !packageResolution.workspaceManifestPaths.includes(
+            workspacePackageJsonPath
+          )
+        ) {
+          await ctx.recordFileDep(workspacePackageJsonPath)
+        }
+
+        let workspaceName = 'workspace'
+
+        if (rootPackageJsonPath) {
+          try {
+            const packageJson = readJsonFile<{ name?: string }>(
+              this.#fileSystem,
+              rootPackageJsonPath,
+              `package.json at "${rootPackageJsonPath}"`
+            )
+            if (packageJson?.name) {
+              workspaceName = packageJson.name
+            }
+          } catch {
+            // fall back to default workspace name on read/parse errors
+          }
+        }
+
+        const workspaceSlug = createSlug(workspaceName, 'kebab')
+
+        const structures: Array<
+          | WorkspaceStructure
+          | PackageStructure
+          | DirectoryStructure
+          | FileStructure
+        > = [
+          {
+            kind: 'Workspace',
+            name: workspaceName,
+            title: formatNameAsTitle(workspaceName),
+            slug: workspaceSlug,
+            path: '/',
+            packageManager: this.getPackageManager(),
+          },
+        ]
+
+        for (const pkg of this.#createPackages(
+          packageResolution.packageEntries
+        )) {
+          const packageStructures = await pkg.getStructure()
+          structures.push(...packageStructures)
+          await ctx.recordNodeDep(pkg.getStructureCacheKey())
+        }
+
+        return structures
       }
-
-      const workspaceSlug = createSlug(workspaceName, 'kebab')
-
-      const structures: Array<
-        WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
-      > = [
-        {
-          kind: 'Workspace',
-          name: workspaceName,
-          title: formatNameAsTitle(workspaceName),
-          slug: workspaceSlug,
-          path: '/',
-          packageManager: this.getPackageManager(),
-        },
-      ]
-
-      for (const pkg of this.#createPackages(packageResolution.packageEntries)) {
-        const packageStructures = await pkg.getStructure()
-        structures.push(...packageStructures)
-        await ctx.recordNodeDep(pkg.getStructureCacheKey())
-      }
-
-      return structures
-    })
+    )
   }
 
   getPackages(): Package[] {
@@ -372,6 +390,7 @@ export class Workspace {
           name,
           path,
           fileSystem: this.#fileSystem,
+          cache: this.#cache,
         })
     )
   }
