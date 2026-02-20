@@ -16,13 +16,26 @@ import { runValidateCommand } from './validate.ts'
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
 async function runPrewarmSafely(options?: { projectOptions?: ProjectOptions }) {
+  const startedAt = Date.now()
+  getDebugLogger().info('Renoun RPC cache prewarm started', () => ({
+    data: { status: 'running' },
+  }))
+
   try {
     const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
     await prewarmRenounRpcServerCache(options)
+
+    getDebugLogger().info('Renoun RPC cache prewarm completed', () => ({
+      data: {
+        status: 'finished',
+        durationMs: Date.now() - startedAt,
+      },
+    }))
   } catch (error) {
     getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
       data: {
         error: error instanceof Error ? error.message : String(error),
+        durationMs: Date.now() - startedAt,
       },
     }))
   }

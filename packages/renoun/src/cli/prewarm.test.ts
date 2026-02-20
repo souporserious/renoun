@@ -11,6 +11,7 @@ import {
 import type { ProjectOptions } from '../project/types.ts'
 import type { RenounPrewarmTargets } from './prewarm.ts'
 
+import { resolveSchemePath } from '../utils/path.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
 const getProjectMock = vi.fn()
@@ -245,45 +246,86 @@ describe('prewarmRenounRpcServerCache', () => {
     expect(getMDXSectionsMock).not.toHaveBeenCalled()
   })
 
-  test('does not swallow errors from directory enumeration', async () => {
+  test('continues prewarming when one directory target fails enumeration', async () => {
     project.createSourceFile(
       '/repo/src/error.ts',
       `
         import { Directory } from 'renoun'
         const failingDirectory = new Directory('/repo/failing')
+        const workingDirectory = new Directory('/repo/working')
         failingDirectory.getEntries()
+        workingDirectory.getEntries()
       `,
       { overwrite: true }
     )
 
-    readDirectoryMock.mockRejectedValue(new Error('Directory enumeration failed'))
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/failing') {
+        throw new Error('Directory enumeration failed')
+      }
 
-    await expect(
-      prewarmRenounRpcServerCache!({ projectOptions })
-    ).rejects.toThrow('Directory enumeration failed')
+      if (directoryPath === '/repo/working') {
+        return [createMockFileEntry('/repo/working/index.ts')]
+      }
+
+      return []
+    })
+
+    await expect(prewarmRenounRpcServerCache!({ projectOptions })).resolves.toBe(
+      undefined
+    )
+    expect(getFileExportsMock).toHaveBeenCalledWith(
+      '/repo/working/index.ts',
+      projectOptions
+    )
   })
 
-  test('does not swallow errors from file cache warm methods', async () => {
+  test('continues prewarming when one file cache warm method fails', async () => {
     project.createSourceFile(
       '/repo/src/error-exports.ts',
       `
         import { Directory } from 'renoun'
         const failingDirectory = new Directory('/repo/failing')
+        const workingDirectory = new Directory('/repo/working')
         failingDirectory.getEntries()
+        workingDirectory.getEntries()
       `,
       { overwrite: true }
     )
 
-    readDirectoryMock.mockImplementation(async () => [
-      createMockFileEntry('/repo/failing/index.ts'),
-    ])
-    getFileExportsMock.mockRejectedValueOnce(
-      new Error('RPC cache prewarm failed')
-    )
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/failing') {
+        return [createMockFileEntry('/repo/failing/index.ts')]
+      }
 
-    await expect(
-      prewarmRenounRpcServerCache!({ projectOptions })
-    ).rejects.toThrow('RPC cache prewarm failed')
+      if (directoryPath === '/repo/working') {
+        return [createMockFileEntry('/repo/working/index.ts')]
+      }
+
+      return []
+    })
+
+    getFileExportsMock.mockImplementation(async (filePath: string) => {
+      if (filePath === '/repo/failing/index.ts') {
+        throw new Error('RPC cache prewarm failed')
+      }
+    })
+
+    await expect(prewarmRenounRpcServerCache!({ projectOptions })).resolves.toBe(
+      undefined
+    )
+    expect(getFileExportsMock).toHaveBeenCalledWith(
+      '/repo/failing/index.ts',
+      projectOptions
+    )
+    expect(getFileExportsMock).toHaveBeenCalledWith(
+      '/repo/working/index.ts',
+      projectOptions
+    )
+    expect(getOutlineRangesMock).toHaveBeenCalledWith(
+      '/repo/working/index.ts',
+      projectOptions
+    )
   })
 
   test('bails out for unresolved Directory constructors during prewarm', async () => {
@@ -544,6 +586,32 @@ describe('collectRenounPrewarmTargets', () => {
         directoryPath: '/repo/posts',
         path: 'index',
         extensions: ['md'],
+      },
+    ])
+  })
+
+  test('resolves workspace scheme paths for Directory declarations', async () => {
+    project.createSourceFile(
+      '/repo/src/workspace-scheme.ts',
+      `
+        import { Directory } from 'renoun'
+
+        const examples = new Directory({ path: 'workspace:examples' })
+
+        examples.getEntries()
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
+
+    expect(targets.directoryGetEntries).toEqual([
+      {
+        directoryPath: resolveSchemePath('workspace:examples'),
+        recursive: false,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        filterExtensions: null,
       },
     ])
   })

@@ -4,6 +4,7 @@ import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getProject } from '../project/get-project.ts'
 import type { ProjectOptions } from '../project/types.ts'
 import { hasJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
+import { resolveSchemePath } from '../utils/path.ts'
 import {
   resolveLiteralExpression,
   type LiteralExpressionValue,
@@ -850,11 +851,15 @@ function resolveDirectoryPathFromLiteral(
 }
 
 function toAbsoluteDirectoryPath(path: string, projectDirectory: string): string {
-  if (isAbsolute(path) || path.startsWith('node:')) {
-    return path
+  const resolvedPath = path.startsWith('workspace:')
+    ? resolveSchemePath(path)
+    : path
+
+  if (isAbsolute(resolvedPath) || resolvedPath.startsWith('node:')) {
+    return resolvedPath
   }
 
-  return resolve(projectDirectory, path)
+  return resolve(projectDirectory, resolvedPath)
 }
 
 function isDirectoryConstructorExpression(
