@@ -48,6 +48,8 @@ interface DirectorySnapshotKeyMetrics {
 const DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS = 250
 const DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS = 250
 const DEFAULT_INVALIDATED_PATH_TTL_MS = 1000
+const WORKSPACE_CHANGED_PATHS_CLEANUP_INTERVAL_MS = 1000
+const WORKSPACE_CHANGED_PATHS_MAX_ENTRIES = 512
 const DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT = 10
 const DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT = 250
 const DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL = 25
@@ -223,6 +225,7 @@ export class Session {
       promise?: Promise<ReadonlySet<string> | null>
     }
   >()
+  #lastWorkspaceChangedPathsCleanupAt = 0
   readonly #recentlyInvalidatedPathTimestamps = new Map<string, number>()
   #persistedInvalidationQueue: Promise<void> = Promise.resolve()
   readonly #cacheMetricsEnabled: boolean
@@ -544,6 +547,7 @@ export class Session {
       previousToken
     )
     const now = Date.now()
+    this.#cleanupWorkspaceChangedPathsCache(now)
     const cached = this.#workspaceChangedPathsByToken.get(cacheKey)
 
     if (cached && cached.expiresAt > now) {
@@ -668,6 +672,7 @@ export class Session {
     this.#invalidatedDirectorySnapshotKeys.clear()
     this.#workspaceChangeTokenByRootPath.clear()
     this.#workspaceChangedPathsByToken.clear()
+    this.#lastWorkspaceChangedPathsCleanupAt = 0
     this.#recentlyInvalidatedPathTimestamps.clear()
     this.#persistedInvalidationQueue = Promise.resolve()
     this.#directorySnapshotMetricsByKey.clear()
@@ -784,6 +789,56 @@ export class Session {
       if (timestamp <= expiresBefore) {
         this.#recentlyInvalidatedPathTimestamps.delete(path)
       }
+    }
+  }
+
+  #cleanupWorkspaceChangedPathsCache(now = Date.now()): void {
+    if (this.#workspaceChangedPathsByToken.size === 0) {
+      return
+    }
+
+    const shouldCleanupByInterval =
+      now - this.#lastWorkspaceChangedPathsCleanupAt >=
+      WORKSPACE_CHANGED_PATHS_CLEANUP_INTERVAL_MS
+    const shouldCleanupBySize =
+      this.#workspaceChangedPathsByToken.size > WORKSPACE_CHANGED_PATHS_MAX_ENTRIES
+
+    if (!shouldCleanupByInterval && !shouldCleanupBySize) {
+      return
+    }
+
+    this.#lastWorkspaceChangedPathsCleanupAt = now
+
+    for (const [cacheKey, cached] of this.#workspaceChangedPathsByToken) {
+      if (cached.promise) {
+        continue
+      }
+
+      if (cached.expiresAt <= now) {
+        this.#workspaceChangedPathsByToken.delete(cacheKey)
+      }
+    }
+
+    if (
+      this.#workspaceChangedPathsByToken.size <=
+      WORKSPACE_CHANGED_PATHS_MAX_ENTRIES
+    ) {
+      return
+    }
+
+    let overflow =
+      this.#workspaceChangedPathsByToken.size - WORKSPACE_CHANGED_PATHS_MAX_ENTRIES
+    for (const [cacheKey, cached] of this.#workspaceChangedPathsByToken) {
+      if (overflow <= 0) {
+        break
+      }
+
+      if (cached.promise) {
+        continue
+      }
+
+      this.#workspaceChangedPathsByToken.delete(cacheKey)
+      overflow -= 1
     }
   }
 

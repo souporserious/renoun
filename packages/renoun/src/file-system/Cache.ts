@@ -1607,18 +1607,7 @@ export class CacheStore {
             )
           }
 
-          if (verified.fingerprint === entry.fingerprint) {
-            if (shouldDebugPersistenceFailure) {
-              this.#logPersistenceDebug(nodeKey, {
-                phase: 'save-verify',
-                details: 'verification-match',
-                entry,
-                verified,
-                expectedRevision: expectedPersistedRevision,
-                actualRevision: verified.revision,
-              })
-            }
-
+          const setVerifiedRevisionPrecondition = () => {
             if (
               typeof verified.revision === 'number' &&
               Number.isFinite(verified.revision)
@@ -1630,13 +1619,43 @@ export class CacheStore {
             } else {
               this.#persistedRevisionPreconditionByKey.delete(nodeKey)
             }
-            return 'verified'
           }
 
           const isRevisionSuperseding =
             typeof persistedRevision === 'number' &&
             typeof verified.revision === 'number' &&
             verified.revision > persistedRevision
+
+          if (verified.fingerprint === entry.fingerprint) {
+            if (isRevisionSuperseding) {
+              if (shouldDebugPersistenceFailure) {
+                this.#logPersistenceDebug(nodeKey, {
+                  phase: 'save-verify',
+                  details:
+                    `superseded-by-revision-fingerprint-match expectedRevision=${persistedRevision} actualRevision=${verified.revision} expectedFingerprint=${entry.fingerprint}`,
+                  entry,
+                  verified,
+                  expectedRevision: expectedPersistedRevision,
+                  actualRevision: verified.revision,
+                })
+              }
+              setVerifiedRevisionPrecondition()
+              return 'superseded'
+            }
+
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: 'verification-match',
+                entry,
+                verified,
+                expectedRevision: expectedPersistedRevision,
+                actualRevision: verified.revision,
+              })
+            }
+            setVerifiedRevisionPrecondition()
+            return 'verified'
+          }
 
           const hasWinnerTimestamp = verified.updatedAt >= entry.updatedAt
           const isSuperseded = isRevisionSuperseding || hasWinnerTimestamp
@@ -1661,17 +1680,7 @@ export class CacheStore {
           }
 
           if (isSuperseded) {
-            if (
-              typeof verified.revision === 'number' &&
-              Number.isFinite(verified.revision)
-            ) {
-              this.#persistedRevisionPreconditionByKey.set(
-                nodeKey,
-                verified.revision
-              )
-            } else {
-              this.#persistedRevisionPreconditionByKey.delete(nodeKey)
-            }
+            setVerifiedRevisionPrecondition()
             return 'superseded'
           }
 

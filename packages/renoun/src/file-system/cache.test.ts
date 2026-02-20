@@ -2501,17 +2501,17 @@ describe('sqlite cache persistence', () => {
 
       try {
         const secondEntries = await secondDirectory.getEntries({
-        recursive: false,
-        includeIndexAndReadmeFiles: true,
-      })
+          recursive: false,
+          includeIndexAndReadmeFiles: true,
+        })
 
-      expect(
-        secondEntries.some((entry) =>
-          entry.workspacePath.endsWith('index.mdx')
-        )
-      ).toBe(true)
-      expect(secondReadDirectory).toHaveBeenCalledTimes(2)
-      expect(await secondSession.cache.get(snapshotKey!)).toBeDefined()
+        expect(
+          secondEntries.some((entry) =>
+            entry.workspacePath.endsWith('index.mdx')
+          )
+        ).toBe(true)
+        expect(secondReadDirectory).toHaveBeenCalledTimes(2)
+        expect(await secondSession.cache.get(snapshotKey!)).toBeDefined()
       } finally {
         restoreSpy.mockRestore()
       }
@@ -2899,6 +2899,42 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('persists only the root snapshot key when recursively hydrating a directory', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const workspacePathKey = normalizePathKey(workspaceDirectory)
+
+      mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'advanced', 'deep-dive.mdx'),
+        '# Deep Dive',
+        'utf8'
+      )
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+
+      const directory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+
+      await directory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const session = directory.getSession()
+      const rootSnapshotKey = Array.from(session.directorySnapshots.keys()).find((key) =>
+        key.startsWith(`dir:${workspacePathKey}|`)
+      )
+      const persistedSnapshotKeys = await session.cache.listNodeKeysByPrefix('dir:')
+
+      expect(rootSnapshotKey).toBeDefined()
+      expect(persistedSnapshotKeys).toEqual([rootSnapshotKey])
+    })
+  })
+
   test('dedupes concurrent persisted snapshot rebuilds across workers', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
@@ -2991,7 +3027,7 @@ describe('sqlite cache persistence', () => {
           includeIndexAndReadmeFiles: true,
         })
 
-        expect(secondReadDirectory).toHaveBeenCalledTimes(1)
+        expect(secondReadDirectory).toHaveBeenCalledTimes(2)
       })
     } finally {
       process.env.NODE_ENV = previousNodeEnv
@@ -3160,7 +3196,7 @@ describe('sqlite cache persistence', () => {
         includeIndexAndReadmeFiles: true,
       })
 
-      expect(secondReadDirectory).toHaveBeenCalledTimes(1)
+      expect(secondReadDirectory).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -6546,6 +6582,88 @@ export type Metadata = Value`,
     expect(computeCount).toBe(1)
     expect(persistence.save).toHaveBeenCalledTimes(1)
     expect(persistence.load).toHaveBeenCalledTimes(1)
+  })
+
+  test('treats fingerprint matches as superseded when a newer persisted revision wins', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'persistence-verification-fingerprint-match-superseded'
+    )
+    type PersistedEntry = CacheEntry<{ value: number }> & { revision: number }
+    const persistedEntries = new Map<string, PersistedEntry>()
+    let nextRevision = 0
+    let shouldInjectSupersedingWinner = true
+    const nodeKey = 'test:persistence-verification-fingerprint-match-superseded'
+    const persistence = {
+      load: vi.fn(async (lookupNodeKey: string) => {
+        const current = persistedEntries.get(lookupNodeKey)
+        if (!current) {
+          return undefined
+        }
+        return { ...current }
+      }),
+      save: vi.fn(async (lookupNodeKey: string, entry: CacheEntry) => {
+        const existingRevision = persistedEntries.get(lookupNodeKey)?.revision ?? 0
+        persistedEntries.set(lookupNodeKey, {
+          ...entry,
+          revision: existingRevision,
+        } as PersistedEntry)
+      }),
+      saveWithRevision: vi.fn(async (lookupNodeKey: string, entry: CacheEntry) => {
+        nextRevision += 1
+        const writtenRevision = nextRevision
+        persistedEntries.set(lookupNodeKey, {
+          ...entry,
+          revision: writtenRevision,
+        } as PersistedEntry)
+        if (entry.value && shouldInjectSupersedingWinner) {
+          shouldInjectSupersedingWinner = false
+          nextRevision += 1
+          persistedEntries.set(lookupNodeKey, {
+            ...(entry as CacheEntry<{ value: number }>),
+            value: { value: 2 },
+            updatedAt: entry.updatedAt + 100,
+            revision: nextRevision,
+          })
+        }
+        return writtenRevision
+      }),
+      delete: vi.fn(async (lookupNodeKey: string) => {
+        persistedEntries.delete(lookupNodeKey)
+      }),
+    }
+    const store = new CacheStore({ snapshot, persistence })
+
+    let computeCount = 0
+    const firstResult = await store.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        computeCount += 1
+        ctx.recordDep('const:persistence-fingerprint-match', '1')
+        return { value: 1 }
+      }
+    )
+
+    const replayed = await store.get(nodeKey)
+
+    expect(firstResult).toEqual({ value: 1 })
+    expect(replayed).toEqual({ value: 2 })
+    expect(computeCount).toBe(1)
+    expect(persistence.saveWithRevision).toHaveBeenCalledTimes(1)
+    expect(persistence.load).toHaveBeenCalled()
+    expect(persistedEntries.get(nodeKey)).toMatchObject({
+      value: { value: 2 },
+      deps: [{ depKey: 'const:persistence-fingerprint-match', depVersion: '1' }],
+      fingerprint: createFingerprint([
+        { depKey: 'const:persistence-fingerprint-match', depVersion: '1' },
+      ]),
+      persist: true,
+      revision: 2,
+    })
   })
 
   test('falls back gracefully without saveWithRevision when fingerprint drift is expectedly superseded', async () => {

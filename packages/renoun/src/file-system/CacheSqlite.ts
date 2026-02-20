@@ -356,43 +356,53 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       // Cache reads should still work if cleanup temporarily fails.
     }
 
-    const rows = (await this.#runWithBusyRetries(() =>
+    const row = (await this.#runWithBusyRetries(() =>
       this.#db
         .prepare(
           `
             SELECT
-              e.fingerprint as fingerprint,
-              e.value_blob as value_blob,
-              e.updated_at as updated_at,
-              e.persist as persist,
-              e.revision as revision,
-              d.dep_key as dep_key,
-              d.dep_version as dep_version
-            FROM cache_entries e
-            LEFT JOIN cache_deps d ON d.node_key = e.node_key
-            WHERE e.node_key = ?
-            ORDER BY d.dep_key
+              fingerprint as fingerprint,
+              value_blob as value_blob,
+              updated_at as updated_at,
+              persist as persist,
+              revision as revision
+            FROM cache_entries
+            WHERE node_key = ?
           `
         )
-        .all(nodeKey)
-    )) as Array<{
-      fingerprint?: string
-      value_blob?: unknown
-      updated_at?: number
-      persist?: number
-      revision?: unknown
-      dep_key?: string | null
-      dep_version?: string | null
-    }>
+        .get(nodeKey)
+    )) as
+      | {
+          fingerprint?: string
+          value_blob?: unknown
+          updated_at?: number
+          persist?: number
+          revision?: unknown
+        }
+      | undefined
 
-    if (rows.length === 0) {
+    if (!row) {
       if (shouldDebug) {
         logCachePersistenceLoadFailure(nodeKey, 'no-rows')
       }
       return undefined
     }
 
-    const row = rows[0]!
+    const dependencyRows = (await this.#runWithBusyRetries(() =>
+      this.#db
+        .prepare(
+          `
+            SELECT dep_key as dep_key, dep_version as dep_version
+            FROM cache_deps
+            WHERE node_key = ?
+            ORDER BY dep_key
+          `
+        )
+        .all(nodeKey)
+    )) as Array<{
+      dep_key?: string | null
+      dep_version?: string | null
+    }>
     const storedFingerprint = getPersistedFingerprint(row.fingerprint)
     const revision = getPersistedRevision(row.revision)
     if (!storedFingerprint) {
@@ -462,7 +472,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return undefined
     }
 
-    const deps = rows
+    const deps = dependencyRows
       .filter((dependencyRow) => typeof dependencyRow.dep_key === 'string')
       .map((dependencyRow) => ({
         depKey: dependencyRow.dep_key!,

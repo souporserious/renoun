@@ -6550,7 +6550,7 @@ export class Directory<
       if (registerInSession) {
         activeSession.directorySnapshots.set(snapshotKey, snapshot)
       }
-      if (canPersist && !skipPersist) {
+      if (registerInSession && canPersist && !skipPersist) {
         await directory.#persistDirectorySnapshot(snapshotKey, snapshot)
       }
       if (registerInSession) {
