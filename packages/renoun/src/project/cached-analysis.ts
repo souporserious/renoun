@@ -18,6 +18,7 @@ import {
   Cache,
   type CacheStoreComputeContext,
   type CacheStoreConstDependency,
+  type CacheStoreStaleWhileRevalidateOptions,
 } from '../file-system/Cache.ts'
 import type { ModuleExport } from '../utils/get-file-exports.ts'
 import {
@@ -64,6 +65,7 @@ const RUNTIME_ANALYSIS_CACHE_SCOPE = 'project-analysis-runtime'
 const RUNTIME_ANALYSIS_CACHE_VERSION = '2'
 const RUNTIME_ANALYSIS_CACHE_VERSION_DEP = 'runtime-analysis-cache-version'
 const PROJECT_COMPILER_OPTIONS_DEP = 'project:compiler-options'
+const DEFAULT_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS = 2_000
 const MAX_TS_DEPENDENCY_ANALYSIS_FILES = 10_000
 const MODULE_RESOLUTION_FILE_EXTENSIONS = [
   '.ts',
@@ -120,6 +122,44 @@ function shouldUseRuntimeAnalysisCacheStore(): boolean {
   // In production static builds, direct project-file caches consistently
   // outperform runtime-analysis cache bookkeeping for cold starts.
   return process.env['NODE_ENV'] !== 'production'
+}
+
+function shouldUseRuntimeAnalysisStaleWhileRevalidate(): boolean {
+  const override = process.env['RENOUN_RUNTIME_ANALYSIS_SWR']
+  if (override === '1') {
+    return true
+  }
+  if (override === '0') {
+    return false
+  }
+
+  return process.env['NODE_ENV'] === 'development'
+}
+
+function getRuntimeAnalysisSWRMaxStaleAgeMs(): number {
+  const override = process.env['RENOUN_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS']
+  if (!override) {
+    return DEFAULT_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS
+  }
+
+  const parsed = Number.parseInt(override, 10)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS
+  }
+
+  return parsed
+}
+
+function getRuntimeAnalysisSWRReadOptions():
+  | CacheStoreStaleWhileRevalidateOptions
+  | undefined {
+  if (!shouldUseRuntimeAnalysisStaleWhileRevalidate()) {
+    return undefined
+  }
+
+  return {
+    maxStaleAgeMs: getRuntimeAnalysisSWRMaxStaleAgeMs(),
+  }
 }
 
 async function getRuntimeAnalysisSession(): Promise<
@@ -1538,6 +1578,7 @@ export async function getCachedFileExports(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, filePath)
   ) {
+    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
     const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
     const nodeKey = createRuntimeFileExportsCacheNodeKey(
       filePath,
@@ -1549,6 +1590,7 @@ export async function getCachedFileExports(
       {
         persist: true,
         constDeps: runtimeConstDeps,
+        staleWhileRevalidate,
       },
       async (context) => {
         recordConstDependencies(context, runtimeConstDeps)
@@ -1612,6 +1654,7 @@ export async function getCachedOutlineRanges(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, filePath)
   ) {
+    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
     const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
     const nodeKey = createRuntimeAnalysisCacheNodeKey(OUTLINE_RANGES_CACHE_NAME, {
       compilerOptionsVersion,
@@ -1623,6 +1666,7 @@ export async function getCachedOutlineRanges(
       {
         persist: true,
         constDeps: runtimeConstDeps,
+        staleWhileRevalidate,
       },
       async (context) => {
         recordConstDependencies(context, runtimeConstDeps)
@@ -1667,6 +1711,7 @@ export async function getCachedFileExportMetadata(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, options.filePath)
   ) {
+    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
     const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       FILE_EXPORT_METADATA_CACHE_NAME,
@@ -1685,6 +1730,7 @@ export async function getCachedFileExportMetadata(
       {
         persist: true,
         constDeps: runtimeConstDeps,
+        staleWhileRevalidate,
       },
       async (context) => {
         recordConstDependencies(context, runtimeConstDeps)
@@ -1752,6 +1798,7 @@ export async function getCachedFileExportStaticValue(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, options.filePath)
   ) {
+    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
     const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       FILE_EXPORT_STATIC_VALUE_CACHE_NAME,
@@ -1772,6 +1819,7 @@ export async function getCachedFileExportStaticValue(
       {
         persist: true,
         constDeps: runtimeConstDeps,
+        staleWhileRevalidate,
       },
       async (context) => {
         recordConstDependencies(context, runtimeConstDeps)
@@ -1839,6 +1887,10 @@ export async function getCachedFileExportText(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, options.filePath)
   ) {
+    const staleWhileRevalidate =
+      options.includeDependencies === true
+        ? undefined
+        : getRuntimeAnalysisSWRReadOptions()
     const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
     const nodeKey = createRuntimeAnalysisCacheNodeKey(FILE_EXPORT_TEXT_CACHE_NAME, {
       compilerOptionsVersion,
@@ -1853,6 +1905,7 @@ export async function getCachedFileExportText(
       {
         persist: true,
         constDeps: runtimeConstDeps,
+        staleWhileRevalidate,
       },
       async (context) => {
         recordConstDependencies(context, runtimeConstDeps)
@@ -1935,6 +1988,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
       runtimeCacheStore &&
       canUseRuntimePathCache(runtimeCacheStore, options.filePath)
     ) {
+      const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
       const runtimeConstDeps =
         getRuntimeAnalysisConstDeps(compilerOptionsVersion)
       const nodeKey = createRuntimeAnalysisCacheNodeKey(
@@ -1955,6 +2009,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
         {
           persist: true,
           constDeps: runtimeConstDeps,
+          staleWhileRevalidate,
         },
         async (context) => {
           recordConstDependencies(context, runtimeConstDeps)
@@ -2050,6 +2105,7 @@ export async function transpileCachedSourceFile(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, filePath)
   ) {
+    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
     const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       TRANSPILE_SOURCE_FILE_CACHE_NAME,
@@ -2064,6 +2120,7 @@ export async function transpileCachedSourceFile(
       {
         persist: true,
         constDeps: runtimeConstDeps,
+        staleWhileRevalidate,
       },
       async (context) => {
         recordConstDependencies(context, runtimeConstDeps)

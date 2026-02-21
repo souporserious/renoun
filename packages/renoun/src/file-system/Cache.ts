@@ -57,11 +57,20 @@ export interface CacheStoreGetOrComputeOptions {
   persist?: boolean
   constDeps?: CacheStoreConstDependency[]
   signal?: AbortSignal
+  staleWhileRevalidate?: boolean | CacheStoreStaleWhileRevalidateOptions
 }
 
 export interface CacheStorePutOptions {
   persist?: boolean
   deps?: CacheDependency[]
+}
+
+export interface CacheStoreStaleWhileRevalidateOptions {
+  /**
+   * Maximum age of stale entries that can be served while a background
+   * refresh runs. Defaults to the store's stale retention TTL.
+   */
+  maxStaleAgeMs?: number
 }
 
 export interface CacheStoreComputeContext {
@@ -85,6 +94,7 @@ export interface CacheStoreOptions {
   inflight?: Map<string, Promise<unknown>>
   computeSlotTtlMs?: number
   computeSlotPollMs?: number
+  staleRetentionTtlMs?: number
   persistedVerificationAttempts?: number
   debugPersistenceFailure?: boolean
 }
@@ -109,6 +119,8 @@ export interface CacheOptions {
   computeSlotTtlMs?: number
   /** Poll interval for waiting on persisted compute slots in milliseconds. */
   computeSlotPollMs?: number
+  /** TTL for stale cache entries retained for stale-while-revalidate reads. */
+  staleRetentionTtlMs?: number
   /** Number of persisted read-back attempts after a write. Set to 0 to skip verification. */
   persistedVerificationAttempts?: number
   /** Log detailed cache persistence failures during debugging. */
@@ -119,6 +131,7 @@ export interface CacheOptions {
 
 const DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS = 20_000
 const DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS = 25
+const DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS = 5_000
 const DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS = 3
 const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
   'renoun.fs.cache.no-compute-slot-shared-value'
@@ -137,6 +150,7 @@ interface CacheStoreFactoryOptions {
   inflight?: Map<string, Promise<unknown>>
   computeSlotTtlMs?: number
   computeSlotPollMs?: number
+  staleRetentionTtlMs?: number
   persistedVerificationAttempts?: number
   debugPersistenceFailure?: boolean
 }
@@ -206,11 +220,14 @@ function createMemoryOnlySnapshot(id: string): Snapshot {
   }
 }
 
-export function createMemoryOnlyCacheStore(options: { id?: string } = {}) {
+export function createMemoryOnlyCacheStore(
+  options: { id?: string; staleRetentionTtlMs?: number } = {}
+) {
   return new CacheStore({
     snapshot: createMemoryOnlySnapshot(
       options.id ?? DEFAULT_MEMORY_ONLY_CACHE_STORE_ID
     ),
+    staleRetentionTtlMs: options.staleRetentionTtlMs,
   })
 }
 
@@ -224,6 +241,7 @@ export class Cache {
   readonly invalidatedPathTtlMs: number
   readonly computeSlotTtlMs: number
   readonly computeSlotPollMs: number
+  readonly staleRetentionTtlMs: number
   readonly persistedVerificationAttempts: number
   readonly persistence?: CacheStorePersistence
   readonly usesPersistentCache: boolean
@@ -269,6 +287,10 @@ export class Cache {
       options.computeSlotPollMs,
       DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS
     )
+    this.staleRetentionTtlMs = normalizeNonNegativeInteger(
+      options.staleRetentionTtlMs,
+      DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS
+    )
     this.persistedVerificationAttempts = normalizeNonNegativeInteger(
       options.persistedVerificationAttempts,
       DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS
@@ -284,6 +306,8 @@ export class Cache {
       inflight: options.inflight,
       computeSlotTtlMs: options.computeSlotTtlMs ?? this.computeSlotTtlMs,
       computeSlotPollMs: options.computeSlotPollMs ?? this.computeSlotPollMs,
+      staleRetentionTtlMs:
+        options.staleRetentionTtlMs ?? this.staleRetentionTtlMs,
       persistedVerificationAttempts:
         options.persistedVerificationAttempts ??
         this.persistedVerificationAttempts,
@@ -333,6 +357,17 @@ interface PersistedCacheEntry<Value = unknown> extends CacheEntry<Value> {
 }
 
 type PersistedRevisionPrecondition = number | 'missing' | undefined
+
+interface StaleCacheEntry<Value = unknown> {
+  entry: CacheEntry<Value>
+  staleAt: number
+  expiresAt: number
+}
+
+interface NormalizedStaleWhileRevalidateOptions {
+  enabled: boolean
+  maxStaleAgeMs?: number
+}
 
 function getComputeSlotTtlMs(
   persistence: CacheStorePersistenceComputeSlot | undefined,
@@ -451,6 +486,7 @@ export class CacheStore {
   readonly #snapshot: Snapshot
   readonly #persistence?: CacheStorePersistence
   readonly #entries = new Map<string, CacheEntry>()
+  readonly #staleEntries = new Map<string, StaleCacheEntry>()
   readonly #inflight: Map<string, Promise<unknown>>
   readonly #dependencyGraph = new ReactiveDependencyGraph()
   readonly #constDepVersionByName = new Map<string, string>()
@@ -468,6 +504,7 @@ export class CacheStore {
   #globalInvalidationEpoch = 0
   readonly #computeSlotTtlMs: number
   readonly #computeSlotPollMs: number
+  readonly #staleRetentionTtlMs: number
   readonly #persistedVerificationAttempts: number
   readonly #debugPersistenceFailure: boolean
   #warnedAboutPersistenceFailure = false
@@ -484,6 +521,10 @@ export class CacheStore {
     this.#computeSlotPollMs = normalizePositiveInteger(
       options.computeSlotPollMs,
       DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS
+    )
+    this.#staleRetentionTtlMs = normalizeNonNegativeInteger(
+      options.staleRetentionTtlMs,
+      DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS
     )
     this.#persistedVerificationAttempts = normalizeNonNegativeInteger(
       options.persistedVerificationAttempts,
@@ -523,17 +564,169 @@ export class CacheStore {
     throwIfAborted(waitSignal)
     this.#registerConstDependencies(options.constDeps)
 
+    const staleWhileRevalidate = this.#normalizeStaleWhileRevalidateOptions(
+      options.staleWhileRevalidate
+    )
+    if (staleWhileRevalidate.enabled) {
+      const freshEntry = await this.#getFreshEntry(nodeKey)
+      if (freshEntry) {
+        await this.#recordAutomaticNodeDependency(nodeKey, freshEntry.fingerprint)
+        return freshEntry.value as Value
+      }
+
+      const staleEntry = this.#getRetainedStaleEntry(
+        nodeKey,
+        staleWhileRevalidate.maxStaleAgeMs
+      )
+      if (staleEntry) {
+        this.#scheduleBackgroundRefresh(nodeKey, options, compute)
+        this.#logCacheOperation('hit', nodeKey, {
+          source: 'swr',
+          stale: true,
+        })
+        await this.#recordAutomaticNodeDependency(nodeKey, staleEntry.fingerprint)
+        emitTelemetryEvent({
+          name: 'renoun.cache.swr_serve',
+          tags: {
+            nodeKey,
+          },
+          fields: {
+            ageMs: Math.max(0, Date.now() - staleEntry.updatedAt),
+          },
+        })
+        return staleEntry.value as Value
+      }
+    }
+
+    const operation = this.#ensureInflightComputation(
+      nodeKey,
+      options,
+      compute,
+      {
+        forceRefresh: false,
+      }
+    )
+    const value = await raceAbort(operation, waitSignal)
+    await this.#recordAutomaticNodeDependency(nodeKey)
+    return value
+  }
+
+  async refresh<Value>(
+    nodeKey: string,
+    options: CacheStoreGetOrComputeOptions,
+    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
+  ): Promise<Value> {
+    const waitSignal = options.signal ?? getContext()?.signal
+    throwIfAborted(waitSignal)
+    this.#registerConstDependencies(options.constDeps)
+
+    const operation = this.#ensureInflightComputation(
+      nodeKey,
+      options,
+      compute,
+      {
+        forceRefresh: true,
+      }
+    )
+    const value = await raceAbort(operation, waitSignal)
+    await this.#recordAutomaticNodeDependency(nodeKey)
+    return value
+  }
+
+  #normalizeStaleWhileRevalidateOptions(
+    staleWhileRevalidate:
+      | boolean
+      | CacheStoreStaleWhileRevalidateOptions
+      | undefined
+  ): NormalizedStaleWhileRevalidateOptions {
+    if (!staleWhileRevalidate) {
+      return { enabled: false }
+    }
+
+    if (staleWhileRevalidate === true) {
+      return {
+        enabled: true,
+      }
+    }
+
+    const maxStaleAgeMs =
+      typeof staleWhileRevalidate.maxStaleAgeMs === 'number' &&
+      Number.isFinite(staleWhileRevalidate.maxStaleAgeMs)
+        ? Math.max(0, Math.floor(staleWhileRevalidate.maxStaleAgeMs))
+        : undefined
+
+    return {
+      enabled: true,
+      maxStaleAgeMs,
+    }
+  }
+
+  #scheduleBackgroundRefresh<Value>(
+    nodeKey: string,
+    options: CacheStoreGetOrComputeOptions,
+    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
+  ): void {
+    if (this.#inflight.has(nodeKey)) {
+      return
+    }
+
+    emitTelemetryEvent({
+      name: 'renoun.cache.swr_refresh',
+      tags: {
+        nodeKey,
+      },
+      fields: {
+        background: true,
+      },
+    })
+
+    const backgroundOptions: CacheStoreGetOrComputeOptions = {
+      ...options,
+      signal: undefined,
+    }
+
+    void this.#ensureInflightComputation(nodeKey, backgroundOptions, compute, {
+      forceRefresh: true,
+    }).catch((error) => {
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'swr',
+        reason: 'background-refresh-error',
+      })
+      emitTelemetryEvent({
+        name: 'renoun.cache.swr_refresh_error',
+        tags: {
+          nodeKey,
+        },
+        fields: {
+          message:
+            error instanceof Error ? error.message : String(error ?? 'unknown'),
+        },
+      })
+    })
+  }
+
+  #ensureInflightComputation<Value>(
+    nodeKey: string,
+    options: CacheStoreGetOrComputeOptions,
+    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value,
+    executionOptions: {
+      forceRefresh: boolean
+    }
+  ): Promise<Value> {
     const inFlight = this.#inflight.get(nodeKey)
     if (inFlight) {
       this.#logCacheOperation('hit', nodeKey, {
         source: 'inflight',
       })
-      const value = await raceAbort(inFlight as Promise<Value>, waitSignal)
-      await this.#recordAutomaticNodeDependency(nodeKey)
-      return value
+      return inFlight as Promise<Value>
     }
 
-    const operation = this.#getOrCompute(nodeKey, options, compute)
+    const operation = this.#computeAndStore(
+      nodeKey,
+      options,
+      compute,
+      executionOptions
+    )
     this.#inflight.set(nodeKey, operation as Promise<unknown>)
     void operation
       .finally(() => {
@@ -543,9 +736,7 @@ export class CacheStore {
       })
       .catch(() => {})
 
-    const value = await raceAbort(operation, waitSignal)
-    await this.#recordAutomaticNodeDependency(nodeKey)
-    return value
+    return operation
   }
 
   async getFingerprint(nodeKey: string): Promise<string | undefined> {
@@ -584,6 +775,71 @@ export class CacheStore {
       persistedEntry.fingerprint
     )
     return { value: persistedEntry.value as Value, fresh }
+  }
+
+  #getRetainedStaleEntry(
+    nodeKey: string,
+    maxStaleAgeMs?: number
+  ): CacheEntry | undefined {
+    this.#pruneRetainedStaleEntries()
+    const staleEntry = this.#staleEntries.get(nodeKey)
+    if (!staleEntry) {
+      return undefined
+    }
+
+    const now = Date.now()
+    if (staleEntry.expiresAt <= now) {
+      this.#staleEntries.delete(nodeKey)
+      return undefined
+    }
+
+    if (typeof maxStaleAgeMs === 'number') {
+      const ageMs = now - staleEntry.staleAt
+      if (ageMs > maxStaleAgeMs) {
+        return undefined
+      }
+    }
+
+    return staleEntry.entry
+  }
+
+  #retainStaleEntry(
+    nodeKey: string,
+    entry: CacheEntry | undefined,
+    reason: string
+  ): void {
+    if (!entry) {
+      return
+    }
+
+    if (this.#staleRetentionTtlMs <= 0) {
+      return
+    }
+
+    this.#pruneRetainedStaleEntries()
+    const now = Date.now()
+    this.#staleEntries.set(nodeKey, {
+      entry,
+      staleAt: now,
+      expiresAt: now + this.#staleRetentionTtlMs,
+    })
+    this.#logCacheOperation('set', nodeKey, {
+      source: 'swr',
+      reason,
+      staleRetentionTtlMs: this.#staleRetentionTtlMs,
+    })
+  }
+
+  #deleteRetainedStaleEntry(nodeKey: string): void {
+    this.#staleEntries.delete(nodeKey)
+  }
+
+  #pruneRetainedStaleEntries(now = Date.now()): void {
+    for (const [key, staleEntry] of this.#staleEntries) {
+      if (staleEntry.expiresAt <= now) {
+        this.#staleEntries.delete(key)
+      }
+    }
   }
 
   #registerConstDependencies(
@@ -689,6 +945,7 @@ export class CacheStore {
     })
 
     this.#entries.set(nodeKey, entry)
+    this.#deleteRetainedStaleEntry(nodeKey)
     this.#registerEntryInGraph(nodeKey, entry)
     await this.#savePersistedEntry(nodeKey, entry, {
       expectedRevision: expectedPersistedRevision,
@@ -704,6 +961,7 @@ export class CacheStore {
     this.#dependencyGraph.markNodeDirty(nodeKey)
     this.#dependencyGraph.unregisterNode(nodeKey)
     this.#entries.delete(nodeKey)
+    this.#deleteRetainedStaleEntry(nodeKey)
     this.#inflight.delete(nodeKey)
     this.#persistenceOperationByKey.delete(nodeKey)
     this.#persistenceIntentVersionByKey.delete(nodeKey)
@@ -770,6 +1028,11 @@ export class CacheStore {
     }
 
     for (const nodeKey of deletedNodeKeys) {
+      this.#retainStaleEntry(
+        nodeKey,
+        this.#entries.get(nodeKey),
+        'delete-by-dependency-path'
+      )
       this.#bumpNodeInvalidationEpoch(nodeKey)
       this.#dependencyGraph.markNodeDirty(nodeKey)
       this.#dependencyGraph.unregisterNode(nodeKey)
@@ -824,6 +1087,11 @@ export class CacheStore {
     }
 
     for (const nodeKey of affectedNodeKeys) {
+      this.#retainStaleEntry(
+        nodeKey,
+        this.#entries.get(nodeKey),
+        'invalidate-dependency-path'
+      )
       this.#bumpNodeInvalidationEpoch(nodeKey)
       this.#dependencyGraph.markNodeDirty(nodeKey)
       this.#dependencyGraph.unregisterNode(nodeKey)
@@ -1148,6 +1416,7 @@ export class CacheStore {
     })
 
     this.#entries.set(nodeKey, entry)
+    this.#deleteRetainedStaleEntry(nodeKey)
     this.#registerEntryInGraph(nodeKey, entry)
   }
 
@@ -1170,6 +1439,7 @@ export class CacheStore {
     this.#dependencyGraph.markNodeDirty(nodeKey)
     this.#dependencyGraph.unregisterNode(nodeKey)
     this.#entries.delete(nodeKey)
+    this.#deleteRetainedStaleEntry(nodeKey)
     this.#inflight.delete(nodeKey)
     this.#persistenceOperationByKey.delete(nodeKey)
     this.#persistenceIntentVersionByKey.delete(nodeKey)
@@ -1184,19 +1454,25 @@ export class CacheStore {
 
     this.#globalInvalidationEpoch += 1
     this.#entries.clear()
+    this.#staleEntries.clear()
     this.#inflight.clear()
     this.#dependencyGraph.clear()
     this.#invalidationEpochByNodeKey.clear()
   }
 
-  async #getOrCompute<Value>(
+  async #computeAndStore<Value>(
     nodeKey: string,
     options: CacheStoreGetOrComputeOptions,
-    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
+    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value,
+    executionOptions: {
+      forceRefresh: boolean
+    }
   ): Promise<Value> {
-    const cachedEntry = await this.#getFreshEntry(nodeKey)
-    if (cachedEntry) {
-      return cachedEntry.value as Value
+    if (!executionOptions.forceRefresh) {
+      const cachedEntry = await this.#getFreshEntry(nodeKey)
+      if (cachedEntry) {
+        return cachedEntry.value as Value
+      }
     }
 
     const expectedPersistedRevision =
@@ -1208,7 +1484,7 @@ export class CacheStore {
 
     const computeWriteGuard = this.#captureNodeWriteGuard(nodeKey)
     const deps = new Map<string, string>()
-    const computeSignal = getContext()?.signal
+    const computeSignal = options.signal ?? getContext()?.signal
     const context: CacheStoreComputeContext = {
       snapshot: this.#snapshot,
       signal: computeSignal,
@@ -1321,6 +1597,7 @@ export class CacheStore {
       }
 
       this.#entries.set(nodeKey, entry)
+      this.#deleteRetainedStaleEntry(nodeKey)
       this.#registerEntryInGraph(nodeKey, entry)
       await this.#savePersistedEntry(nodeKey, entry, {
         expectedRevision: expectedPersistedRevision,
@@ -1424,6 +1701,7 @@ export class CacheStore {
 
     if (persistedEntry) {
       this.#entries.set(nodeKey, persistedEntry)
+      this.#deleteRetainedStaleEntry(nodeKey)
       this.#registerEntryInGraph(nodeKey, persistedEntry)
     }
 
@@ -1434,6 +1712,7 @@ export class CacheStore {
     const memoryEntry = this.#entries.get(nodeKey)
     if (memoryEntry) {
       if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
+        this.#retainStaleEntry(nodeKey, memoryEntry, 'memory-graph-dirty')
         this.#entries.delete(nodeKey)
         this.#dependencyGraph.unregisterNode(nodeKey)
         this.#logCacheOperation('clear', nodeKey, {
@@ -1455,6 +1734,7 @@ export class CacheStore {
           return memoryEntry
         }
 
+        this.#retainStaleEntry(nodeKey, memoryEntry, 'memory-stale')
         this.#entries.delete(nodeKey)
         this.#dependencyGraph.unregisterNode(nodeKey)
         this.#logCacheOperation('clear', nodeKey, {
@@ -1481,6 +1761,7 @@ export class CacheStore {
 
     if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
       await this.delete(nodeKey)
+      this.#retainStaleEntry(nodeKey, persistedEntry, 'persisted-graph-dirty')
       this.#logCacheOperation('clear', nodeKey, {
         source: 'persisted',
         reason: 'graph-dirty',
@@ -1503,6 +1784,7 @@ export class CacheStore {
     }
 
     await this.delete(nodeKey)
+    this.#retainStaleEntry(nodeKey, persistedEntry, 'persisted-stale')
     this.#logCacheOperation('clear', nodeKey, {
       source: 'persisted',
       reason: 'stale',
