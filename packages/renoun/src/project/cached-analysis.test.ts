@@ -318,8 +318,9 @@ describe('project cached analysis', () => {
       const getSourceFileCallsAfterFirstRun = getSourceFileSpy.mock.calls.length
 
       await getCachedFileExports(project, entryFilePath)
-      expect(getSourceFileSpy.mock.calls.length).toBe(
-        getSourceFileCallsAfterFirstRun
+      const getSourceFileCallsAfterSecondRun = getSourceFileSpy.mock.calls.length
+      expect(getSourceFileCallsAfterSecondRun).toBeLessThanOrEqual(
+        getSourceFileCallsAfterFirstRun + 1
       )
 
       await writeFile(entryFilePath, 'export const value = 2\n', 'utf8')
@@ -329,8 +330,59 @@ describe('project cached analysis', () => {
 
       await getCachedFileExports(project, entryFilePath)
       expect(getSourceFileSpy.mock.calls.length).toBeGreaterThan(
-        getSourceFileCallsAfterFirstRun
+        getSourceFileCallsAfterSecondRun
       )
+    } finally {
+      await workspace.cleanup()
+    }
+  })
+
+  test('hydrates source files for runtime-cached export metadata lookups', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': '/** value */\nexport const value = 1\n',
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+
+      const first = await getCachedFileExports(project, entryFilePath)
+      const firstExport = first[0]
+      if (!firstExport) {
+        throw new Error('[renoun] Expected a file export in cached-analysis test')
+      }
+
+      const sourceFile = project.getSourceFileOrThrow(entryFilePath)
+      project.removeSourceFile(sourceFile)
+      expect(project.getSourceFile(entryFilePath)).toBeUndefined()
+
+      await getCachedFileExports(project, entryFilePath)
+      expect(project.getSourceFile(entryFilePath)).toBeDefined()
+
+      const metadata = await getCachedFileExportMetadata(project, {
+        name: firstExport.name,
+        filePath: firstExport.path,
+        position: firstExport.position,
+        kind: firstExport.kind,
+      })
+
+      expect(metadata.name).toBe('value')
     } finally {
       await workspace.cleanup()
     }

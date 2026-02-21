@@ -15,12 +15,10 @@ import {
   serializeTypeFilterForCache,
 } from '../file-system/cache-key.ts'
 import {
-  CacheStore,
+  Cache,
   type CacheStoreComputeContext,
   type CacheStoreConstDependency,
 } from '../file-system/Cache.ts'
-import { getCacheStorePersistence } from '../file-system/CacheSqlite.ts'
-import { FileSystemSnapshot } from '../file-system/Snapshot.ts'
 import type { ModuleExport } from '../utils/get-file-exports.ts'
 import {
   getFileExports as baseGetFileExports,
@@ -45,6 +43,8 @@ import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpi
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import type { ProjectCacheDependency } from './cache.ts'
 import { createProjectFileCache, invalidateProjectFileCache } from './cache.ts'
+import type { RuntimeAnalysisSession } from './runtime-analysis-session.ts'
+import { getRuntimeAnalysisSession as getSharedRuntimeAnalysisSession } from './runtime-analysis-session.ts'
 
 const FILE_EXPORTS_CACHE_NAME = 'fileExports'
 const OUTLINE_RANGES_CACHE_NAME = 'outlineRanges'
@@ -60,7 +60,7 @@ const TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME = 'typeScriptDependencyAnalysis
 const MODULE_RESOLUTION_CACHE_NAME = 'moduleResolution'
 const PACKAGE_VERSION_DEPENDENCY_CACHE_NAME = 'packageVersionDependency'
 const RUNTIME_ANALYSIS_CACHE_SCOPE = 'project-analysis-runtime'
-const RUNTIME_ANALYSIS_CACHE_VERSION = '1'
+const RUNTIME_ANALYSIS_CACHE_VERSION = '2'
 const RUNTIME_ANALYSIS_CACHE_VERSION_DEP = 'runtime-analysis-cache-version'
 const PROJECT_COMPILER_OPTIONS_DEP = 'project:compiler-options'
 const MAX_TS_DEPENDENCY_ANALYSIS_FILES = 10_000
@@ -78,29 +78,12 @@ const MODULE_RESOLUTION_FILE_EXTENSIONS = [
 
 const { ts } = getTsMorph()
 
-interface RuntimeAnalysisCacheStore {
-  store: CacheStore
-  fileSystem: RuntimeAnalysisFileSystem
-  snapshot: FileSystemSnapshot
+type RuntimeAnalysisCacheStore = RuntimeAnalysisSession & {
+  store: RuntimeAnalysisSession['session']['cache']
+  snapshot: RuntimeAnalysisSession['session']['snapshot']
 }
 
-interface RuntimeAnalysisFileSystem {
-  getAbsolutePath(path: string): string
-  getRelativePathToWorkspace(path: string): string
-  fileExistsSync(path: string): boolean
-  readFileSync(path: string): string
-}
-
-let runtimeAnalysisCacheStore:
-  | RuntimeAnalysisCacheStore
-  | null
-  | undefined
-let runtimeAnalysisCacheStorePromise:
-  | Promise<RuntimeAnalysisCacheStore | null>
-  | undefined
-let runtimeAnalysisPersistedInvalidationQueue: Promise<void> = Promise.resolve()
-const pendingRuntimeAnalysisPersistedInvalidationPaths = new Set<string>()
-let isRuntimeAnalysisPersistedInvalidationFlushQueued = false
+let runtimeAnalysisMemoryCache: Cache | undefined
 const compilerOptionsVersionByProject = new WeakMap<
   Project,
   {
@@ -110,114 +93,55 @@ const compilerOptionsVersionByProject = new WeakMap<
 >()
 let compilerOptionsVersionEpoch = 0
 
-async function getRuntimeAnalysisCacheStore(): Promise<
+function shouldUseRuntimeAnalysisPersistence(): boolean {
+  const override = process.env['RENOUN_RUNTIME_ANALYSIS_PERSISTENCE']
+  if (override === '1') {
+    return true
+  }
+  if (override === '0') {
+    return false
+  }
+
+  // Production static builds fan out across many workers and can overwhelm
+  // SQLite with high-cardinality runtime analysis writes.
+  return process.env['NODE_ENV'] !== 'production'
+}
+
+function shouldUseRuntimeAnalysisCacheStore(): boolean {
+  const override = process.env['RENOUN_RUNTIME_ANALYSIS_CACHE']
+  if (override === '1') {
+    return true
+  }
+  if (override === '0') {
+    return false
+  }
+
+  // In production static builds, direct project-file caches consistently
+  // outperform runtime-analysis cache bookkeeping for cold starts.
+  return process.env['NODE_ENV'] !== 'production'
+}
+
+async function getRuntimeAnalysisSession(): Promise<
   RuntimeAnalysisCacheStore | undefined
 > {
-  if (runtimeAnalysisCacheStore !== undefined) {
-    return runtimeAnalysisCacheStore ?? undefined
+  if (!shouldUseRuntimeAnalysisCacheStore()) {
+    return undefined
   }
 
-  if (!runtimeAnalysisCacheStorePromise) {
-    runtimeAnalysisCacheStorePromise = (async () => {
-      try {
-        const { NodeFileSystem } = await import('../file-system/NodeFileSystem.ts')
-        const fileSystem = new NodeFileSystem()
-        const snapshot = new FileSystemSnapshot(fileSystem)
-        const projectRoot = resolveRuntimeAnalysisProjectRoot(fileSystem)
-        const persistence = projectRoot
-          ? getCacheStorePersistence({ projectRoot })
-          : getCacheStorePersistence()
+  const cache = shouldUseRuntimeAnalysisPersistence()
+    ? undefined
+    : (runtimeAnalysisMemoryCache ??= new Cache())
 
-        return {
-          store: new CacheStore({
-            snapshot,
-            persistence,
-          }),
-          fileSystem,
-          snapshot,
-        } satisfies RuntimeAnalysisCacheStore
-      } catch {
-        return null
-      }
-    })()
+  const runtimeSession = await getSharedRuntimeAnalysisSession(cache)
+  if (!runtimeSession) {
+    return undefined
   }
 
-  runtimeAnalysisCacheStore = await runtimeAnalysisCacheStorePromise
-
-  return runtimeAnalysisCacheStore ?? undefined
-}
-
-function queueRuntimeAnalysisPersistedDependencyInvalidation(
-  runtimeCacheStore: RuntimeAnalysisCacheStore,
-  path: string
-): void {
-  pendingRuntimeAnalysisPersistedInvalidationPaths.add(normalizeCachePath(path))
-  if (isRuntimeAnalysisPersistedInvalidationFlushQueued) {
-    return
+  return {
+    ...runtimeSession,
+    store: runtimeSession.session.cache,
+    snapshot: runtimeSession.session.snapshot,
   }
-
-  isRuntimeAnalysisPersistedInvalidationFlushQueued = true
-  runtimeAnalysisPersistedInvalidationQueue =
-    runtimeAnalysisPersistedInvalidationQueue
-      .catch(() => {})
-      .then(async () => {
-        isRuntimeAnalysisPersistedInvalidationFlushQueued = false
-
-        const pendingPaths = Array.from(
-          pendingRuntimeAnalysisPersistedInvalidationPaths
-        )
-        pendingRuntimeAnalysisPersistedInvalidationPaths.clear()
-        const invalidationPaths = toDedupedRuntimeInvalidationPaths(
-          pendingPaths
-        )
-
-        for (const invalidationPath of invalidationPaths) {
-          try {
-            await runtimeCacheStore.store.deleteByDependencyPath(invalidationPath)
-          } catch {
-            // Best-effort persisted invalidation.
-          }
-        }
-      })
-}
-
-function toDedupedRuntimeInvalidationPaths(paths: readonly string[]): string[] {
-  const normalizedPaths = Array.from(
-    new Set(paths.map((path) => normalizeCachePath(path)))
-  )
-  if (normalizedPaths.length === 0) {
-    return []
-  }
-
-  if (normalizedPaths.includes('.')) {
-    return ['.']
-  }
-
-  normalizedPaths.sort((first, second) => {
-    const firstDepth = first.split('/').length
-    const secondDepth = second.split('/').length
-    if (firstDepth !== secondDepth) {
-      return firstDepth - secondDepth
-    }
-    return first.localeCompare(second)
-  })
-
-  const deduped: string[] = []
-  for (const candidatePath of normalizedPaths) {
-    const coveredByExisting = deduped.some((existingPath) => {
-      return (
-        candidatePath === existingPath ||
-        candidatePath.startsWith(`${existingPath}/`)
-      )
-    })
-    if (coveredByExisting) {
-      continue
-    }
-
-    deduped.push(candidatePath)
-  }
-
-  return deduped
 }
 
 function isTypeScriptConfigPath(path: string): boolean {
@@ -231,13 +155,12 @@ export function invalidateRuntimeAnalysisCachePath(path: string): void {
   }
 
   void (async () => {
-    const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
-    if (!runtimeCacheStore) {
+    const runtimeSession = await getRuntimeAnalysisSession()
+    if (!runtimeSession) {
       return
     }
 
-    runtimeCacheStore.snapshot.invalidatePath(path)
-    queueRuntimeAnalysisPersistedDependencyInvalidation(runtimeCacheStore, path)
+    runtimeSession.session.invalidatePath(path)
   })()
 }
 
@@ -245,24 +168,13 @@ export function invalidateRuntimeAnalysisCacheAll(): void {
   compilerOptionsVersionEpoch += 1
 
   void (async () => {
-    const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
-    if (!runtimeCacheStore) {
+    const runtimeSession = await getRuntimeAnalysisSession()
+    if (!runtimeSession) {
       return
     }
 
-    runtimeCacheStore.snapshot.invalidateAll()
-    queueRuntimeAnalysisPersistedDependencyInvalidation(runtimeCacheStore, '.')
+    runtimeSession.session.invalidatePath('.')
   })()
-}
-
-function resolveRuntimeAnalysisProjectRoot(
-  fileSystem: RuntimeAnalysisFileSystem
-): string | undefined {
-  try {
-    return getRootDirectory(fileSystem.getAbsolutePath('.'))
-  } catch {
-    return undefined
-  }
 }
 
 function toSourceTextMetadataValueSignature(value: string): string {
@@ -1447,9 +1359,7 @@ async function recordFileDependencyIfPossible(
 
   try {
     const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
-    runtimeCacheStore.fileSystem.getRelativePathToWorkspace(absolutePath)
-    const dependencyVersion = await context.snapshot.contentId(absolutePath)
-    context.recordDep(`file:${absolutePath}`, dependencyVersion)
+    await context.recordFileDep(absolutePath)
   } catch {
     // Ignore non-workspace and unavailable paths.
   }
@@ -1466,9 +1376,7 @@ async function recordDirectoryDependencyIfPossible(
 
   try {
     const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
-    runtimeCacheStore.fileSystem.getRelativePathToWorkspace(absolutePath)
-    const dependencyVersion = await context.snapshot.contentId(absolutePath)
-    context.recordDep(`dir:${absolutePath}`, dependencyVersion)
+    await context.recordDirectoryDep(absolutePath)
   } catch {
     // Ignore non-workspace and unavailable paths.
   }
@@ -1500,7 +1408,7 @@ function getCompilerOptionsVersion(project: Project): string {
     return cachedVersion.version
   }
 
-  const version = stableStringify(project.getCompilerOptions())
+  const version = hashString(stableStringify(project.getCompilerOptions()))
   compilerOptionsVersionByProject.set(project, {
     version,
     epoch: compilerOptionsVersionEpoch,
@@ -1594,11 +1502,23 @@ function toResolvedTypeAtLocationCacheName(
   return `${RESOLVE_TYPE_AT_LOCATION_CACHE_NAME}:${position}:${kind}:${filterKey}`
 }
 
+function ensureProjectSourceFileLoaded(project: Project, filePath: string): void {
+  if (project.getSourceFile(filePath)) {
+    return
+  }
+
+  project.addSourceFileAtPath(filePath)
+}
+
 export async function getCachedFileExports(
   project: Project,
   filePath: string
 ): Promise<ModuleExport[]> {
-  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  // Runtime cache hits can return export metadata without touching ts-morph.
+  // Ensure callers that immediately request declaration metadata still have the source loaded.
+  ensureProjectSourceFileLoaded(project, filePath)
+
+  const runtimeCacheStore = await getRuntimeAnalysisSession()
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -1672,7 +1592,7 @@ export async function getCachedOutlineRanges(
   project: Project,
   filePath: string
 ): Promise<OutlineRange[]> {
-  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const runtimeCacheStore = await getRuntimeAnalysisSession()
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -1727,7 +1647,7 @@ export async function getCachedFileExportMetadata(
     kind: SyntaxKind
   }
 ): Promise<Awaited<ReturnType<typeof baseGetFileExportMetadata>>> {
-  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const runtimeCacheStore = await getRuntimeAnalysisSession()
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -1812,7 +1732,7 @@ export async function getCachedFileExportStaticValue(
     kind: SyntaxKind
   }
 ): Promise<Awaited<ReturnType<typeof baseGetFileExportStaticValue>>> {
-  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const runtimeCacheStore = await getRuntimeAnalysisSession()
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -1899,7 +1819,7 @@ export async function getCachedFileExportText(
     includeDependencies?: boolean
   }
 ): Promise<string> {
-  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const runtimeCacheStore = await getRuntimeAnalysisSession()
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -1997,7 +1917,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (!options.isInMemoryFileSystem) {
-    const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+    const runtimeCacheStore = await getRuntimeAnalysisSession()
     if (
       runtimeCacheStore &&
       canUseRuntimePathCache(runtimeCacheStore, options.filePath)
@@ -2110,7 +2030,7 @@ export async function transpileCachedSourceFile(
   project: Project,
   filePath: string
 ): Promise<string> {
-  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const runtimeCacheStore = await getRuntimeAnalysisSession()
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -2168,7 +2088,7 @@ export async function getCachedSourceTextMetadata(
   project: Project,
   options: Omit<GetSourceTextMetadataOptions, 'project'>
 ): Promise<SourceTextMetadata> {
-  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const runtimeCacheStore = await getRuntimeAnalysisSession()
   if (!runtimeCacheStore) {
     return baseGetSourceTextMetadata({
       ...options,
@@ -2260,7 +2180,7 @@ export async function getCachedTokens(
   project: Project,
   options: Omit<GetTokensOptions, 'project'>
 ): Promise<TokenizedLines> {
-  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const runtimeCacheStore = await getRuntimeAnalysisSession()
   if (!runtimeCacheStore) {
     return baseGetTokens({
       ...options,

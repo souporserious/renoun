@@ -19,10 +19,7 @@ export type ProjectCacheDependency =
 interface ProjectCacheRuntime {
   snapshot: ProjectCacheSnapshot
   store: CacheStore
-  nodeLocationByKey: Map<string, { filePath: string; cacheName: string }>
-  nodeKeysByFilePath: Map<string, Set<string>>
   lruNodeKeys: Map<string, true>
-  staticDependencySignatureByNodeKey: Map<string, string>
   maxEntries: number
 }
 
@@ -30,6 +27,7 @@ const projectCacheRuntimeByProject = new WeakMap<Project, ProjectCacheRuntime>()
 const PROJECT_CACHE_NODE_PREFIX = 'project-cache:'
 const PROJECT_CACHE_VERSION = 'project-cache-v1'
 const PROJECT_CACHE_VERSION_DEP = 'project-cache-version'
+const PROJECT_CACHE_DEPENDENCY_SPEC_PREFIX = 'project-cache:dependency-spec:'
 const DEFAULT_PROJECT_CACHE_MAX_ENTRIES = 8_000
 
 let nextProjectCacheSnapshotId = 0
@@ -179,10 +177,7 @@ function getProjectCacheRuntime(project: Project): ProjectCacheRuntime {
     store: new CacheStore({
       snapshot,
     }),
-    nodeLocationByKey: new Map(),
-    nodeKeysByFilePath: new Map(),
     lruNodeKeys: new Map(),
-    staticDependencySignatureByNodeKey: new Map(),
     maxEntries: getProjectCacheMaxEntries(),
   }
 
@@ -265,52 +260,20 @@ function toProjectDependencySignature(
 
 function touchProjectCacheEntry(
   runtime: ProjectCacheRuntime,
-  nodeKey: string,
-  filePath: string,
-  cacheName: string
+  nodeKey: string
 ): void {
   if (runtime.lruNodeKeys.has(nodeKey)) {
     runtime.lruNodeKeys.delete(nodeKey)
   }
   runtime.lruNodeKeys.set(nodeKey, true)
-
-  runtime.nodeLocationByKey.set(nodeKey, {
-    filePath,
-    cacheName,
-  })
-
-  let fileNodeKeys = runtime.nodeKeysByFilePath.get(filePath)
-  if (!fileNodeKeys) {
-    fileNodeKeys = new Set()
-    runtime.nodeKeysByFilePath.set(filePath, fileNodeKeys)
-  }
-  fileNodeKeys.add(nodeKey)
 }
 
 function removeProjectCacheEntry(runtime: ProjectCacheRuntime, nodeKey: string): void {
   runtime.lruNodeKeys.delete(nodeKey)
-  runtime.staticDependencySignatureByNodeKey.delete(nodeKey)
-
-  const nodeLocation = runtime.nodeLocationByKey.get(nodeKey)
-  if (!nodeLocation) {
-    return
-  }
-
-  runtime.nodeLocationByKey.delete(nodeKey)
-
-  const fileNodeKeys = runtime.nodeKeysByFilePath.get(nodeLocation.filePath)
-  if (!fileNodeKeys) {
-    return
-  }
-
-  fileNodeKeys.delete(nodeKey)
-  if (fileNodeKeys.size === 0) {
-    runtime.nodeKeysByFilePath.delete(nodeLocation.filePath)
-  }
 }
 
 async function enforceProjectCacheCapacity(runtime: ProjectCacheRuntime): Promise<void> {
-  while (runtime.nodeLocationByKey.size > runtime.maxEntries) {
+  while (runtime.lruNodeKeys.size > runtime.maxEntries) {
     const lruNodeKey = runtime.lruNodeKeys.keys().next().value as
       | string
       | undefined
@@ -371,6 +334,46 @@ function toProjectConstDeps(
   return constDeps
 }
 
+function toProjectDependencySpecConstDep(
+  nodeKey: string,
+  dependencySpecVersion: string
+): { name: string; version: string } {
+  return {
+    name: `${PROJECT_CACHE_DEPENDENCY_SPEC_PREFIX}${nodeKey}`,
+    version: dependencySpecVersion,
+  }
+}
+
+function removeProjectCacheEntriesByFilePath(
+  runtime: ProjectCacheRuntime,
+  filePath: string
+): void {
+  const nodePrefix = `${PROJECT_CACHE_NODE_PREFIX}${filePath}:`
+  for (const nodeKey of Array.from(runtime.lruNodeKeys.keys())) {
+    if (!nodeKey.startsWith(nodePrefix)) {
+      continue
+    }
+
+    removeProjectCacheEntry(runtime, nodeKey)
+    void runtime.store.delete(nodeKey)
+  }
+}
+
+function removeProjectCacheEntriesByCacheName(
+  runtime: ProjectCacheRuntime,
+  cacheName: string
+): void {
+  const cacheSuffix = `:${cacheName}`
+  for (const nodeKey of Array.from(runtime.lruNodeKeys.keys())) {
+    if (!nodeKey.endsWith(cacheSuffix)) {
+      continue
+    }
+
+    removeProjectCacheEntry(runtime, nodeKey)
+    void runtime.store.delete(nodeKey)
+  }
+}
+
 /**
  * Create (or reuse) a lazily-filled, per-file cache for the given project. This is useful
  * for caching expensive computations that are specific to a file in a project.
@@ -399,42 +402,35 @@ export async function createProjectFileCache<Type>(
       : normalizeProjectDependencies(
           dependencySpec ?? [toDefaultDependency(filePath)]
         )
-  const staticDependencySignature = staticDependencies
-    ? toProjectDependencySignature(staticDependencies)
-    : undefined
-
-  const previousStaticSignature = runtime.staticDependencySignatureByNodeKey.get(nodeKey)
-  if (staticDependencySignature === undefined) {
-    if (previousStaticSignature !== undefined) {
-      removeProjectCacheEntry(runtime, nodeKey)
-      await runtime.store.delete(nodeKey)
-    }
-  } else {
-    if (
-      previousStaticSignature !== undefined &&
-      previousStaticSignature !== staticDependencySignature
-    ) {
-      removeProjectCacheEntry(runtime, nodeKey)
-      await runtime.store.delete(nodeKey)
-    }
-    runtime.staticDependencySignatureByNodeKey.set(nodeKey, staticDependencySignature)
-  }
+  const dependencySpecVersion = staticDependencies
+    ? `static:${toProjectDependencySignature(staticDependencies)}`
+    : 'dynamic'
+  const dependencySpecConstDep = toProjectDependencySpecConstDep(
+    nodeKey,
+    dependencySpecVersion
+  )
+  const constDeps = staticDependencies
+    ? toProjectConstDeps(staticDependencies)
+    : [
+        {
+          name: PROJECT_CACHE_VERSION_DEP,
+          version: PROJECT_CACHE_VERSION,
+        },
+      ]
+  constDeps.push(dependencySpecConstDep)
 
   const value = await runtime.store.getOrCompute<Type>(
     nodeKey,
     {
       persist: false,
-      constDeps: staticDependencies
-        ? toProjectConstDeps(staticDependencies)
-        : [
-            {
-              name: PROJECT_CACHE_VERSION_DEP,
-              version: PROJECT_CACHE_VERSION,
-            },
-          ],
+      constDeps,
     },
     async (context) => {
       context.recordConstDep(PROJECT_CACHE_VERSION_DEP, PROJECT_CACHE_VERSION)
+      context.recordConstDep(
+        dependencySpecConstDep.name,
+        dependencySpecConstDep.version
+      )
 
       const computedValue = await compute()
       const dependencies =
@@ -450,7 +446,7 @@ export async function createProjectFileCache<Type>(
     }
   )
 
-  touchProjectCacheEntry(runtime, nodeKey, filePath, cacheName)
+  touchProjectCacheEntry(runtime, nodeKey)
   await enforceProjectCacheCapacity(runtime)
 
   return value
@@ -476,14 +472,7 @@ export function invalidateProjectFileCache(
   const normalizedFilePath = filePath ? normalizeProjectPath(filePath) : undefined
 
   if (normalizedFilePath && !cacheName) {
-    const directNodeKeys = runtime.nodeKeysByFilePath.get(normalizedFilePath)
-    if (directNodeKeys) {
-      for (const nodeKey of directNodeKeys) {
-        removeProjectCacheEntry(runtime, nodeKey)
-        void runtime.store.delete(nodeKey)
-      }
-    }
-
+    removeProjectCacheEntriesByFilePath(runtime, normalizedFilePath)
     runtime.snapshot.invalidatePath(normalizedFilePath)
     return
   }
@@ -496,14 +485,7 @@ export function invalidateProjectFileCache(
   }
 
   if (!normalizedFilePath && cacheName) {
-    for (const [nodeKey, nodeLocation] of runtime.nodeLocationByKey) {
-      if (nodeLocation.cacheName !== cacheName) {
-        continue
-      }
-
-      removeProjectCacheEntry(runtime, nodeKey)
-      void runtime.store.delete(nodeKey)
-    }
+    removeProjectCacheEntriesByCacheName(runtime, cacheName)
     return
   }
 
