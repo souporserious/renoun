@@ -10,6 +10,8 @@ import {
 } from '../utils/get-tokens.ts'
 import { invalidateProjectFileCache } from './cache.ts'
 import {
+  getCachedFileExports,
+  getCachedFileExportMetadata,
   getCachedFileExportStaticValue,
   getCachedFileExportText,
   getCachedSourceTextMetadata,
@@ -284,6 +286,198 @@ describe('project cached analysis', () => {
     expect(refreshed).toContain('value = 2')
   })
 
+  test('recomputes cached file exports immediately after explicit runtime invalidation', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': 'export const value = 1\n',
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+      const getSourceFileSpy = vi.spyOn(project, 'getSourceFile')
+
+      await getCachedFileExports(project, entryFilePath)
+      const getSourceFileCallsAfterFirstRun = getSourceFileSpy.mock.calls.length
+
+      await getCachedFileExports(project, entryFilePath)
+      expect(getSourceFileSpy.mock.calls.length).toBe(
+        getSourceFileCallsAfterFirstRun
+      )
+
+      await writeFile(entryFilePath, 'export const value = 2\n', 'utf8')
+      await project.getSourceFileOrThrow(entryFilePath).refreshFromFileSystem()
+      invalidateRuntimeAnalysisCachePath(entryFilePath)
+      await delay(0)
+
+      await getCachedFileExports(project, entryFilePath)
+      expect(getSourceFileSpy.mock.calls.length).toBeGreaterThan(
+        getSourceFileCallsAfterFirstRun
+      )
+    } finally {
+      await workspace.cleanup()
+    }
+  })
+
+  test('recomputes cached file export metadata immediately after explicit runtime invalidation', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': '/** one */\nexport const value = 1\n',
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+
+      const [fileExport] = getFileExports(entryFilePath, project)
+      if (!fileExport) {
+        throw new Error('[renoun] Expected a file export in cached-analysis test')
+      }
+
+      const getSourceFileSpy = vi.spyOn(project, 'getSourceFile')
+
+      const first = await getCachedFileExportMetadata(project, {
+        name: fileExport.name,
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+      })
+      const sourceFileCallsAfterFirstRun = getSourceFileSpy.mock.calls.length
+
+      const second = await getCachedFileExportMetadata(project, {
+        name: fileExport.name,
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+      })
+
+      expect(second.jsDocMetadata?.description).toBe(first.jsDocMetadata?.description)
+      expect(getSourceFileSpy.mock.calls.length).toBe(sourceFileCallsAfterFirstRun)
+
+      await writeFile(entryFilePath, '/** two */\nexport const value = 1\n', 'utf8')
+      await project.getSourceFileOrThrow(entryFilePath).refreshFromFileSystem()
+      invalidateRuntimeAnalysisCachePath(entryFilePath)
+      await delay(0)
+
+      const refreshed = await getCachedFileExportMetadata(project, {
+        name: fileExport.name,
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+      })
+
+      expect(refreshed.jsDocMetadata?.description).toBe('two')
+      expect(getSourceFileSpy.mock.calls.length).toBeGreaterThan(
+        sourceFileCallsAfterFirstRun
+      )
+    } finally {
+      await workspace.cleanup()
+    }
+  })
+
+  test('recomputes includeDependencies export text immediately after explicit runtime invalidation', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': 'const helper = 1\nexport const value = helper\n',
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+
+      const [fileExport] = getFileExports(entryFilePath, project)
+      if (!fileExport) {
+        throw new Error('[renoun] Expected a file export in cached-analysis test')
+      }
+
+      const getSourceFileOrThrowSpy = vi.spyOn(project, 'getSourceFileOrThrow')
+
+      const first = await getCachedFileExportText(project, {
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+        includeDependencies: true,
+      })
+      expect(first).toContain('helper = 1')
+      const sourceFileCallsAfterFirstRun =
+        getSourceFileOrThrowSpy.mock.calls.length
+
+      const second = await getCachedFileExportText(project, {
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+        includeDependencies: true,
+      })
+      expect(second).toContain('helper = 1')
+      expect(getSourceFileOrThrowSpy.mock.calls.length).toBe(
+        sourceFileCallsAfterFirstRun
+      )
+
+      await writeFile(entryFilePath, 'const helper = 2\nexport const value = helper\n')
+      await project.getSourceFileOrThrow(entryFilePath).refreshFromFileSystem()
+      invalidateRuntimeAnalysisCachePath(entryFilePath)
+      await delay(0)
+
+      const refreshed = await getCachedFileExportText(project, {
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+        includeDependencies: true,
+      })
+      expect(refreshed).toContain('helper = 2')
+      expect(getSourceFileOrThrowSpy.mock.calls.length).toBeGreaterThan(
+        sourceFileCallsAfterFirstRun
+      )
+    } finally {
+      await workspace.cleanup()
+    }
+  })
+
   test('tracks dependency files for cached type resolution and refreshes after dependency invalidation', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,
@@ -338,6 +532,84 @@ describe('project cached analysis', () => {
 
     expect(refreshed.dependencies).toContain(dependencyPath)
     expect(refreshed.resolvedType).toBeDefined()
+  })
+
+  test('recomputes cached type resolution immediately after explicit runtime invalidation', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts':
+        "import type { Data } from './types'\nexport const value: Data = { title: 'one' }\n",
+      'src/types.ts': 'export interface Data { title: string }\n',
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const dependencyPath = join(workspace.workspacePath, 'src/types.ts')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+
+      const [fileExport] = getFileExports(entryFilePath, project)
+      if (!fileExport) {
+        throw new Error('[renoun] Expected a file export in cached-analysis test')
+      }
+
+      const addSourceFileSpy = vi.spyOn(project, 'addSourceFileAtPath')
+
+      await resolveCachedTypeAtLocationWithDependencies(project, {
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+      })
+      const addSourceFileCallsAfterFirstRun = addSourceFileSpy.mock.calls.length
+
+      await resolveCachedTypeAtLocationWithDependencies(project, {
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+      })
+      expect(addSourceFileSpy.mock.calls.length).toBe(
+        addSourceFileCallsAfterFirstRun
+      )
+
+      await writeFile(
+        dependencyPath,
+        'export interface Data { title: string; count: number }\n',
+        'utf8'
+      )
+      await project.getSourceFileOrThrow(dependencyPath).refreshFromFileSystem()
+      invalidateRuntimeAnalysisCachePath(dependencyPath)
+      await delay(0)
+
+      const refreshed = await resolveCachedTypeAtLocationWithDependencies(
+        project,
+        {
+          filePath: entryFilePath,
+          position: fileExport.position,
+          kind: fileExport.kind,
+        }
+      )
+
+      expect(refreshed.dependencies).toContain(dependencyPath)
+      expect(addSourceFileSpy.mock.calls.length).toBeGreaterThan(
+        addSourceFileCallsAfterFirstRun
+      )
+    } finally {
+      await workspace.cleanup()
+    }
   })
 
   test('recomputes cached source metadata immediately after explicit runtime invalidation', async () => {

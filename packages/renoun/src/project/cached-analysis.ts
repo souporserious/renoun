@@ -44,12 +44,14 @@ import type { TypeFilter } from '../utils/resolve-type.ts'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import type { ProjectCacheDependency } from './cache.ts'
-import { createProjectFileCache } from './cache.ts'
+import { createProjectFileCache, invalidateProjectFileCache } from './cache.ts'
 
 const FILE_EXPORTS_CACHE_NAME = 'fileExports'
 const OUTLINE_RANGES_CACHE_NAME = 'outlineRanges'
+const FILE_EXPORT_METADATA_CACHE_NAME = 'fileExportMetadata'
 const FILE_EXPORT_STATIC_VALUE_CACHE_NAME = 'fileExportStaticValue'
 const FILE_EXPORT_TEXT_CACHE_NAME = 'fileExportText'
+const FILE_EXPORTS_TEXT_PROJECT_CACHE_NAME = 'fileExportsText'
 const RESOLVE_TYPE_AT_LOCATION_CACHE_NAME = 'resolveTypeAtLocation'
 const TRANSPILE_SOURCE_FILE_CACHE_NAME = 'transpileSourceFile'
 const TOKENS_CACHE_NAME = 'tokens'
@@ -1149,6 +1151,44 @@ function getCompilerOptionsVersion(project: Project): string {
   return stableStringify(project.getCompilerOptions())
 }
 
+function canUseRuntimePathCache(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  path: string
+): boolean {
+  try {
+    const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
+    runtimeCacheStore.fileSystem.getRelativePathToWorkspace(absolutePath)
+    return runtimeCacheStore.fileSystem.fileExistsSync(absolutePath)
+  } catch {
+    return false
+  }
+}
+
+function getRuntimeAnalysisConstDeps(
+  compilerOptionsVersion: string
+): CacheStoreConstDependency[] {
+  return [
+    {
+      name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
+      version: RUNTIME_ANALYSIS_CACHE_VERSION,
+    },
+    {
+      name: PROJECT_COMPILER_OPTIONS_DEP,
+      version: compilerOptionsVersion,
+    },
+  ]
+}
+
+function createRuntimeFileExportsCacheNodeKey(
+  filePath: string,
+  compilerOptionsVersion: string
+): string {
+  return createRuntimeAnalysisCacheNodeKey(FILE_EXPORTS_CACHE_NAME, {
+    compilerOptionsVersion,
+    filePath: normalizeCacheFilePath(filePath),
+  })
+}
+
 function toFileExportsDependencies(
   filePath: string,
   fileExports: ModuleExport[]
@@ -1201,6 +1241,65 @@ export async function getCachedFileExports(
   project: Project,
   filePath: string
 ): Promise<ModuleExport[]> {
+  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, filePath)
+  ) {
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const nodeKey = createRuntimeFileExportsCacheNodeKey(
+      filePath,
+      compilerOptionsVersion
+    )
+
+    return runtimeCacheStore.store.getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: runtimeConstDeps,
+      },
+      async (context) => {
+        recordConstDependencies(context, runtimeConstDeps)
+
+        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
+
+        const fileExports = baseGetFileExports(filePath, project)
+        const fileExportDependencies = toFileExportsDependencies(
+          filePath,
+          fileExports
+        )
+        const dependencyFilePaths: string[] = []
+        for (const dependency of fileExportDependencies) {
+          if (dependency.kind !== 'file') {
+            continue
+          }
+          dependencyFilePaths.push(dependency.path)
+        }
+
+        await recordFileDependenciesIfPossible(
+          context,
+          runtimeCacheStore,
+          dependencyFilePaths
+        )
+
+        const dependencyAnalysis =
+          await getCachedRuntimeTypeScriptDependencyAnalysis(
+            project,
+            runtimeCacheStore,
+            filePath
+          )
+        if (dependencyAnalysis) {
+          await context.recordNodeDep(dependencyAnalysis.nodeKey)
+        }
+
+        return fileExports
+      }
+    )
+  }
+
   return createProjectFileCache(
     project,
     filePath,
@@ -1241,6 +1340,55 @@ export async function getCachedFileExportMetadata(
     kind: SyntaxKind
   }
 ): Promise<Awaited<ReturnType<typeof baseGetFileExportMetadata>>> {
+  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+  ) {
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const nodeKey = createRuntimeAnalysisCacheNodeKey(
+      FILE_EXPORT_METADATA_CACHE_NAME,
+      {
+        compilerOptionsVersion,
+        name: options.name,
+        filePath: normalizeCacheFilePath(options.filePath),
+        position: options.position,
+        kind: options.kind,
+        mode: 'metadata',
+      }
+    )
+
+    return runtimeCacheStore.store.getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: runtimeConstDeps,
+      },
+      async (context) => {
+        recordConstDependencies(context, runtimeConstDeps)
+
+        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          options.filePath
+        )
+
+        await getCachedFileExports(project, options.filePath)
+
+        return baseGetFileExportMetadata(
+          options.name,
+          options.filePath,
+          options.position,
+          options.kind,
+          project
+        )
+      }
+    )
+  }
+
   return createProjectFileCache(
     project,
     options.filePath,
@@ -1313,6 +1461,58 @@ export async function getCachedFileExportText(
     includeDependencies?: boolean
   }
 ): Promise<string> {
+  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+  ) {
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const nodeKey = createRuntimeAnalysisCacheNodeKey(FILE_EXPORT_TEXT_CACHE_NAME, {
+      compilerOptionsVersion,
+      filePath: normalizeCacheFilePath(options.filePath),
+      position: options.position,
+      kind: options.kind,
+      includeDependencies: options.includeDependencies === true,
+    })
+
+    return runtimeCacheStore.store.getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: runtimeConstDeps,
+      },
+      async (context) => {
+        recordConstDependencies(context, runtimeConstDeps)
+
+        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          options.filePath
+        )
+
+        if (options.includeDependencies) {
+          // Ensure includeDependencies text generation reads fresh source state.
+          invalidateProjectFileCache(
+            project,
+            options.filePath,
+            FILE_EXPORTS_TEXT_PROJECT_CACHE_NAME
+          )
+        }
+
+        return baseGetFileExportText({
+          filePath: options.filePath,
+          position: options.position,
+          kind: options.kind,
+          includeDependencies: options.includeDependencies,
+          project,
+        })
+      }
+    )
+  }
+
   if (options.includeDependencies) {
     return baseGetFileExportText({
       filePath: options.filePath,
@@ -1357,6 +1557,78 @@ export async function resolveCachedTypeAtLocationWithDependencies(
   }
 ): Promise<ResolvedTypeAtLocationResult> {
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
+
+  if (!options.isInMemoryFileSystem) {
+    const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+    if (
+      runtimeCacheStore &&
+      canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+    ) {
+      const runtimeConstDeps =
+        getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+      const nodeKey = createRuntimeAnalysisCacheNodeKey(
+        RESOLVE_TYPE_AT_LOCATION_CACHE_NAME,
+        {
+          compilerOptionsVersion,
+          filePath: normalizeCacheFilePath(options.filePath),
+          position: options.position,
+          kind: options.kind,
+          filter: options.filter
+            ? serializeTypeFilterForCache(options.filter)
+            : 'none',
+        }
+      )
+
+      return runtimeCacheStore.store.getOrCompute(
+        nodeKey,
+        {
+          persist: true,
+          constDeps: runtimeConstDeps,
+        },
+        async (context) => {
+          recordConstDependencies(context, runtimeConstDeps)
+
+          await recordProjectConfigDependency(context, runtimeCacheStore, project)
+          await recordFileDependencyIfPossible(
+            context,
+            runtimeCacheStore,
+            options.filePath
+          )
+
+          const result = await baseResolveTypeAtLocationWithDependencies(
+            project,
+            options.filePath,
+            options.position,
+            options.kind,
+            options.filter,
+            options.isInMemoryFileSystem
+          )
+          const dependencyPaths = new Set<string>([
+            options.filePath,
+            ...(result.dependencies ?? []),
+          ])
+          await recordFileDependenciesIfPossible(
+            context,
+            runtimeCacheStore,
+            Array.from(dependencyPaths.values())
+          )
+
+          const dependencyAnalysis =
+            await getCachedRuntimeTypeScriptDependencyAnalysis(
+              project,
+              runtimeCacheStore,
+              options.filePath
+            )
+          if (dependencyAnalysis) {
+            await context.recordNodeDep(dependencyAnalysis.nodeKey)
+          }
+
+          return result
+        }
+      )
+    }
+  }
+
   return createProjectFileCache(
     project,
     options.filePath,
