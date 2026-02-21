@@ -28,6 +28,7 @@ import {
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
   getCachedTokens,
+  invalidateRuntimeAnalysisCachePath,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
@@ -68,6 +69,7 @@ function queueRefreshInvalidation(path: string): void {
     const paths = Array.from(pendingRefreshInvalidationPaths)
     pendingRefreshInvalidationPaths.clear()
     for (const pendingPath of paths) {
+      invalidateRuntimeAnalysisCachePath(pendingPath)
       invalidateProjectCachesByPath(pendingPath)
     }
   })
@@ -437,6 +439,7 @@ export async function createSourceFile(
   const project = getProject(projectOptions)
   project.createSourceFile(filePath, sourceText, { overwrite: true })
   invalidateProjectFileCache(project, filePath)
+  invalidateRuntimeAnalysisCachePath(filePath)
 }
 
 /**

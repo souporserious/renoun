@@ -920,8 +920,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             FROM cache_entries AS entry
             JOIN cache_deps AS dependency
               ON dependency.node_key = entry.node_key
-            WHERE entry.node_key LIKE 'dir:%'
-              AND (${whereClauses.join(' OR ')})
+            WHERE (${whereClauses.join(' OR ')})
             ORDER BY entry.node_key
           `
         )

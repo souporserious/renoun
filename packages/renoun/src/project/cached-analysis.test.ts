@@ -14,6 +14,7 @@ import {
   getCachedFileExportText,
   getCachedSourceTextMetadata,
   getCachedTokens,
+  invalidateRuntimeAnalysisCachePath,
   resolveCachedTypeAtLocationWithDependencies,
 } from './cached-analysis.ts'
 
@@ -337,6 +338,161 @@ describe('project cached analysis', () => {
 
     expect(refreshed.dependencies).toContain(dependencyPath)
     expect(refreshed.resolvedType).toBeDefined()
+  })
+
+  test('recomputes cached source metadata immediately after explicit runtime invalidation', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': "import { middleValue } from './middle'\nexport const value = middleValue\n",
+      'src/middle.ts': "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
+      'src/leaf.ts': "export const leafValue = 'one'\n",
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const transitiveDependencyPath = join(workspace.workspacePath, 'src/leaf.ts')
+      const entrySource = await readFile(entryFilePath, 'utf8')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+      const createSourceFileSpy = vi.spyOn(project, 'createSourceFile')
+
+      await getCachedSourceTextMetadata(project, {
+        value: entrySource,
+        filePath: entryFilePath,
+        language: 'ts',
+        shouldFormat: false,
+      })
+      await getCachedSourceTextMetadata(project, {
+        value: entrySource,
+        filePath: entryFilePath,
+        language: 'ts',
+        shouldFormat: false,
+      })
+
+      expect(createSourceFileSpy).toHaveBeenCalledTimes(1)
+
+      await writeFile(
+        transitiveDependencyPath,
+        "export const leafValue = 'two-updated'\n",
+        'utf8'
+      )
+      await project
+        .getSourceFileOrThrow(transitiveDependencyPath)
+        .refreshFromFileSystem()
+      invalidateRuntimeAnalysisCachePath(transitiveDependencyPath)
+      await delay(0)
+
+      await getCachedSourceTextMetadata(project, {
+        value: entrySource,
+        filePath: entryFilePath,
+        language: 'ts',
+        shouldFormat: false,
+      })
+
+      expect(createSourceFileSpy).toHaveBeenCalledTimes(2)
+    } finally {
+      await workspace.cleanup()
+    }
+  })
+
+  test('recomputes cached tokens immediately after explicit runtime invalidation', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': "import { middleValue } from './middle'\nexport const value = middleValue\n",
+      'src/middle.ts': "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
+      'src/leaf.ts': "export const leafValue = 'one'\n",
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const transitiveDependencyPath = join(workspace.workspacePath, 'src/leaf.ts')
+      const entrySource = await readFile(entryFilePath, 'utf8')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+      const highlighter = createHighlighter()
+
+      let metadataCalls = 0
+      const metadataCollector: GetTokensOptions['metadataCollector'] = async (
+        ...args
+      ) => {
+        metadataCalls += 1
+        return collectTypeScriptMetadata(...args)
+      }
+
+      await getCachedTokens(project, {
+        value: entrySource,
+        language: 'ts',
+        filePath: entryFilePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter,
+        metadataCollector,
+      })
+      await getCachedTokens(project, {
+        value: entrySource,
+        language: 'ts',
+        filePath: entryFilePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter,
+        metadataCollector,
+      })
+
+      expect(metadataCalls).toBe(1)
+
+      await writeFile(
+        transitiveDependencyPath,
+        "export const leafValue = 'two-updated'\n",
+        'utf8'
+      )
+      await project
+        .getSourceFileOrThrow(transitiveDependencyPath)
+        .refreshFromFileSystem()
+      invalidateRuntimeAnalysisCachePath(transitiveDependencyPath)
+      await delay(0)
+
+      await getCachedTokens(project, {
+        value: entrySource,
+        language: 'ts',
+        filePath: entryFilePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter,
+        metadataCollector,
+      })
+
+      expect(metadataCalls).toBe(2)
+    } finally {
+      await workspace.cleanup()
+    }
   })
 
   test('invalidates cached source metadata when transitive TypeScript dependencies change on disk', async () => {

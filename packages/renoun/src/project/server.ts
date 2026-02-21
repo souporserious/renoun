@@ -23,6 +23,7 @@ import {
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
   getCachedTokens,
+  invalidateRuntimeAnalysisCachePath,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
@@ -407,6 +408,7 @@ export async function createServer(options?: { port?: number }) {
         overwrite: true,
       })
       invalidateProjectFileCache(project, filePath)
+      invalidateRuntimeAnalysisCachePath(filePath)
     },
     {
       memoize: false,

@@ -4,6 +4,7 @@ import {
   createProjectFileCache,
   invalidateProjectFileCache,
 } from './cache.ts'
+import { getProject, invalidateProjectCachesByPath } from './get-project.ts'
 import type { Project } from '../utils/ts-morph.ts'
 
 describe('project file cache', () => {
@@ -825,6 +826,79 @@ describe('project file cache', () => {
     expect(firstValue).toBe('value-1')
     expect(secondValue).toBe('value-1')
     expect(calls).toBe(1)
+  })
+
+  test('invalidates descendant dependencies when parent paths are invalidated', async () => {
+    const project = getProject({
+      useInMemoryFileSystem: true,
+      projectId: `rename-parent-${Date.now()}`,
+    })
+    const cacheFilePath = `${process.cwd()}/src/consumer.ts`
+    const oldDependencyPath = `${process.cwd()}/src/features/legacy.ts`
+    const cacheName = `rename-summary-${Date.now()}`
+    let calls = 0
+
+    const first = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      cacheName,
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: oldDependencyPath,
+          },
+        ],
+      }
+    )
+    const second = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      cacheName,
+      () => 'should-not-run',
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: oldDependencyPath,
+          },
+        ],
+      }
+    )
+
+    expect(first).toBe('value-1')
+    expect(second).toBe('value-1')
+    expect(calls).toBe(1)
+
+    const affectedProjects = invalidateProjectCachesByPath(
+      `${process.cwd()}/src/features`
+    )
+    expect(affectedProjects).toBeGreaterThan(0)
+
+    const third = await createProjectFileCache(
+      project,
+      cacheFilePath,
+      cacheName,
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'file',
+            path: oldDependencyPath,
+          },
+        ],
+      }
+    )
+
+    expect(third).toBe('value-2')
+    expect(calls).toBe(2)
   })
 
 })

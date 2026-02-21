@@ -77,6 +77,7 @@ const { ts } = getTsMorph()
 interface RuntimeAnalysisCacheStore {
   store: CacheStore
   fileSystem: RuntimeAnalysisFileSystem
+  snapshot: FileSystemSnapshot
 }
 
 interface RuntimeAnalysisFileSystem {
@@ -93,6 +94,7 @@ let runtimeAnalysisCacheStore:
 let runtimeAnalysisCacheStorePromise:
   | Promise<RuntimeAnalysisCacheStore | null>
   | undefined
+let runtimeAnalysisPersistedInvalidationQueue: Promise<void> = Promise.resolve()
 
 async function getRuntimeAnalysisCacheStore(): Promise<
   RuntimeAnalysisCacheStore | undefined
@@ -118,6 +120,7 @@ async function getRuntimeAnalysisCacheStore(): Promise<
             persistence,
           }),
           fileSystem,
+          snapshot,
         } satisfies RuntimeAnalysisCacheStore
       } catch {
         return null
@@ -128,6 +131,46 @@ async function getRuntimeAnalysisCacheStore(): Promise<
   runtimeAnalysisCacheStore = await runtimeAnalysisCacheStorePromise
 
   return runtimeAnalysisCacheStore ?? undefined
+}
+
+function queueRuntimeAnalysisPersistedDependencyInvalidation(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  path: string
+): void {
+  runtimeAnalysisPersistedInvalidationQueue =
+    runtimeAnalysisPersistedInvalidationQueue
+      .catch(() => {})
+      .then(async () => {
+        try {
+          await runtimeCacheStore.store.deleteByDependencyPath(path)
+        } catch {
+          // Best-effort persisted invalidation.
+        }
+      })
+}
+
+export function invalidateRuntimeAnalysisCachePath(path: string): void {
+  void (async () => {
+    const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+    if (!runtimeCacheStore) {
+      return
+    }
+
+    runtimeCacheStore.snapshot.invalidatePath(path)
+    queueRuntimeAnalysisPersistedDependencyInvalidation(runtimeCacheStore, path)
+  })()
+}
+
+export function invalidateRuntimeAnalysisCacheAll(): void {
+  void (async () => {
+    const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+    if (!runtimeCacheStore) {
+      return
+    }
+
+    runtimeCacheStore.snapshot.invalidateAll()
+    queueRuntimeAnalysisPersistedDependencyInvalidation(runtimeCacheStore, '.')
+  })()
 }
 
 function resolveRuntimeAnalysisProjectRoot(

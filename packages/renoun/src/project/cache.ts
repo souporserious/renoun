@@ -38,6 +38,7 @@ class ProjectCacheSnapshot implements Snapshot {
   readonly id = `project-cache:${(nextProjectCacheSnapshotId += 1)}`
 
   readonly #revisionByPath = new Map<string, number>()
+  readonly #knownContentPaths = new Set<string>()
   readonly #invalidateListeners = new Set<(path: string) => void>()
 
   readDirectory(_path?: string): Promise<DirectoryEntry[]> {
@@ -89,6 +90,7 @@ class ProjectCacheSnapshot implements Snapshot {
 
   async contentId(path: string): Promise<string> {
     const normalizedPath = normalizeProjectPath(path)
+    this.#knownContentPaths.add(normalizedPath)
     return `r${this.#revisionByPath.get(normalizedPath) ?? 0}`
   }
 
@@ -97,11 +99,21 @@ class ProjectCacheSnapshot implements Snapshot {
 
     if (normalizedPath === '.') {
       this.#revisionByPath.clear()
+      this.#knownContentPaths.clear()
       this.#emitInvalidate(path)
       return
     }
 
     this.#bumpPathRevision(normalizedPath)
+
+    for (const knownContentPath of this.#knownContentPaths) {
+      if (
+        knownContentPath === normalizedPath ||
+        knownContentPath.startsWith(`${normalizedPath}/`)
+      ) {
+        this.#bumpPathRevision(knownContentPath)
+      }
+    }
 
     let currentDirectory = dirname(normalizedPath)
     while (
@@ -119,6 +131,7 @@ class ProjectCacheSnapshot implements Snapshot {
 
   invalidateAll(): void {
     this.#revisionByPath.clear()
+    this.#knownContentPaths.clear()
     this.#emitInvalidate('.')
   }
 

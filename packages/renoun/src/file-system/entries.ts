@@ -7159,6 +7159,78 @@ export class Directory<
 
     const rawEntries = await fileSystem.readDirectory(directory.#path)
     const dependencySignatures = new Map<string, string>()
+    const recordFileDependencySignature = async (path: string): Promise<void> => {
+      let dependencyKey: string
+      try {
+        dependencyKey = createDependencyPathKey(
+          fileSystem,
+          FILE_DEPENDENCY_PREFIX,
+          path
+        )
+      } catch {
+        return
+      }
+
+      try {
+        const modifiedMs = await fileSystem.getFileLastModifiedMs(path)
+        dependencySignatures.set(
+          dependencyKey,
+          modifiedMs === undefined ? 'missing' : String(modifiedMs)
+        )
+      } catch {
+        dependencySignatures.set(dependencyKey, 'missing')
+      }
+    }
+    const collectTsConfigProbePaths = (): string[] => {
+      let currentDirectoryPath: string
+      let workspaceRootPath: string
+
+      try {
+        currentDirectoryPath = normalizeSlashes(
+          fileSystem.getAbsolutePath(directory.#path)
+        )
+        workspaceRootPath = normalizeSlashes(fileSystem.getAbsolutePath('.'))
+      } catch {
+        return []
+      }
+
+      const probePaths = new Set<string>()
+      const isWithinWorkspaceRoot = (path: string) =>
+        path === workspaceRootPath || path.startsWith(`${workspaceRootPath}/`)
+
+      let currentPath = currentDirectoryPath
+      while (isWithinWorkspaceRoot(currentPath)) {
+        probePaths.add(joinPaths(currentPath, 'tsconfig.json'))
+
+        if (currentPath === workspaceRootPath) {
+          break
+        }
+
+        const parentPath = directoryName(currentPath)
+        if (!parentPath || parentPath === currentPath) {
+          break
+        }
+
+        currentPath = parentPath
+      }
+
+      if (probePaths.size === 0) {
+        probePaths.add(joinPaths(workspaceRootPath, 'tsconfig.json'))
+      }
+
+      return Array.from(probePaths)
+    }
+
+    for (const tsConfigProbePath of collectTsConfigProbePaths()) {
+      await recordFileDependencySignature(tsConfigProbePath)
+    }
+
+    try {
+      const workspaceRootPath = normalizeSlashes(fileSystem.getAbsolutePath('.'))
+      await recordFileDependencySignature(joinPaths(workspaceRootPath, '.gitignore'))
+    } catch {
+      // Ignore workspace-root lookup failures when capturing gitignore probes.
+    }
 
     const fileMetadata: FileEntryMetadata<LoaderTypes>[] = []
     const finalMetadata: DirectorySnapshotMetadataEntry<LoaderTypes>[] = []
@@ -7286,17 +7358,7 @@ export class Directory<
             return { kind: 'skip' }
           }
 
-          try {
-            const mtime = await fileSystem.getFileLastModifiedMs(entry.path)
-            const signature = mtime === undefined ? 'missing' : String(mtime)
-            dependencySignatures.set(
-              createDependencyPathKey(fileSystem, FILE_DEPENDENCY_PREFIX, entry.path),
-              signature
-            )
-          } catch {
-            // Ignore errors when reading timestamps; fall back to snapshot invalidation
-            // via explicit cache clearing (e.g. write/delete operations).
-          }
+          await recordFileDependencySignature(entry.path)
 
           const shouldIncludeFile = await directory.#shouldIncludeFile(file)
           const isIndexOrReadme = ['index', 'readme'].some((name) =>

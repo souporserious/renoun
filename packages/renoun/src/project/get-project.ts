@@ -12,6 +12,7 @@ import type { DebugContext } from '../utils/debug.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { invalidateProjectFileCache } from './cache.ts'
+import { invalidateRuntimeAnalysisCachePath } from './cached-analysis.ts'
 import {
   activeRefreshingProjects,
   completeRefreshingProjects,
@@ -161,8 +162,20 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
 
         for (const currentProject of projectsToUpdate) {
           invalidateProjectFileCache(currentProject, filePath)
+          invalidateRuntimeAnalysisCachePath(filePath)
 
           if (eventType === 'rename') {
+            const parentDirectoryPath = dirname(filePath)
+            if (parentDirectoryPath && parentDirectoryPath !== filePath) {
+              invalidateProjectFileCache(currentProject, parentDirectoryPath)
+              invalidateRuntimeAnalysisCachePath(parentDirectoryPath)
+            }
+
+            if (isDirectory) {
+              invalidateProjectFileCache(currentProject, projectDirectory)
+              invalidateRuntimeAnalysisCachePath(projectDirectory)
+            }
+
             if (existsSync(filePath)) {
               if (isDirectory) {
                 currentProject.addDirectoryAtPath(filePath)

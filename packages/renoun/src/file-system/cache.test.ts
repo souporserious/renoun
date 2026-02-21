@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   renameSync,
@@ -253,7 +254,9 @@ function createShortTtlComputeSlotPersistence(
 
 function createTempNodeFileSystem(tmpDirectory: string) {
   const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
-  writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+  if (!existsSync(tsConfigPath)) {
+    writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+  }
   const fileSystem = new NestedCwdNodeFileSystem(getRootDirectory(), tsConfigPath)
   ;(fileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
   return fileSystem
@@ -935,6 +938,79 @@ export type Metadata = Value`,
         dependencyKeys.some((key) => key.startsWith('file:') && key.endsWith('ignored.ts'))
       ).toBe(false)
     } finally {
+      gitIgnoreSpy.mockRestore()
+    }
+  })
+
+  test('revalidates snapshots when workspace .gitignore dependency signatures change', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    const fileSystem = new MutableTimestampFileSystem({
+      '.gitignore': '# initial',
+      'docs/visible.ts': 'export const visible = true',
+      'docs/ignored.ts': 'export const ignored = true',
+    })
+    fileSystem.setLastModified('.gitignore', 1)
+    let shouldIgnoreIgnoredFile = false
+    const gitIgnoreSpy = vi
+      .spyOn(fileSystem, 'isFilePathGitIgnored')
+      .mockImplementation((filePath) => {
+        const normalizedPath = normalizePathKey(filePath)
+        if (normalizedPath.endsWith('docs/ignored.ts')) {
+          return shouldIgnoreIgnoredFile
+        }
+
+        return false
+      })
+
+    try {
+      const directory = new Directory({
+        fileSystem,
+        path: 'docs',
+      })
+      const firstEntries = await directory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+      expect(
+        firstEntries.some((entry) => entry.workspacePath.endsWith('ignored.ts'))
+      ).toBe(true)
+
+      const session = directory.getSession()
+      const snapshotKey = Array.from(session.directorySnapshots.keys()).find((key) =>
+        key.startsWith(`dir:${normalizePathKey('docs')}|`)
+      )
+      expect(snapshotKey).toBeDefined()
+
+      const firstSnapshot = snapshotKey
+        ? session.directorySnapshots.get(snapshotKey)
+        : undefined
+      const firstDependencyKeys = firstSnapshot?.getDependencies()
+        ? Array.from(firstSnapshot.getDependencies()!.keys())
+        : []
+      expect(
+        firstDependencyKeys.some(
+          (dependencyKey) =>
+            dependencyKey.startsWith('file:') &&
+            dependencyKey.endsWith('.gitignore')
+        )
+      ).toBe(true)
+
+      shouldIgnoreIgnoredFile = true
+      fileSystem.setLastModified('.gitignore', 2)
+
+      const secondEntries = await directory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+      expect(
+        secondEntries.some((entry) => entry.workspacePath.endsWith('ignored.ts'))
+      ).toBe(false)
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+
       gitIgnoreSpy.mockRestore()
     }
   })
@@ -2820,6 +2896,88 @@ describe('sqlite cache persistence', () => {
       expect(
         secondEntries.some((entry) => entry.workspacePath.endsWith('new.mdx'))
       ).toBe(true)
+    })
+  })
+
+  test('revalidates persisted snapshots when tsconfig probes are created, updated, and deleted', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      const workspaceRelativeRoot = relativePath(getRootDirectory(), tmpDirectory)
+      const examplesFileName = 'button.examples.tsx'
+      const examplesRelativePath = `${workspaceRelativeRoot}/docs/${examplesFileName}`
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'index.tsx'), 'export const value = true', 'utf8')
+      writeFileSync(
+        join(docsDirectory, examplesFileName),
+        'export const sample = true',
+        'utf8'
+      )
+
+      const createWorkerFileSystem = () => {
+        const fileSystem = new NestedCwdNodeFileSystem(
+          getRootDirectory(),
+          tsConfigPath
+        )
+        ;(fileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+        return fileSystem
+      }
+      const getVisibleEntries = async () => {
+        const directory = new Directory({
+          fileSystem: createWorkerFileSystem(),
+          path: workspaceDirectory,
+        })
+        const entries = await directory.getEntries({
+          includeIndexAndReadmeFiles: true,
+        })
+        return entries
+          .filter((entry): entry is File => entry instanceof File)
+          .map((entry) => normalizePathKey(entry.workspacePath))
+          .sort((first, second) => first.localeCompare(second))
+      }
+
+      const firstEntries = await getVisibleEntries()
+      expect(firstEntries).toContain(normalizePathKey(examplesRelativePath))
+
+      writeFileSync(
+        tsConfigPath,
+        JSON.stringify(
+          {
+            exclude: ['docs/**/*.examples.tsx'],
+          },
+          null,
+          2
+        ),
+        'utf8'
+      )
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      const secondEntries = await getVisibleEntries()
+      expect(secondEntries).not.toContain(normalizePathKey(examplesRelativePath))
+
+      writeFileSync(
+        tsConfigPath,
+        JSON.stringify(
+          {
+            exclude: [],
+          },
+          null,
+          2
+        ),
+        'utf8'
+      )
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      const thirdEntries = await getVisibleEntries()
+      expect(thirdEntries).toContain(normalizePathKey(examplesRelativePath))
+
+      rmSync(tsConfigPath, { force: true })
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      const fourthEntries = await getVisibleEntries()
+      expect(fourthEntries).toContain(normalizePathKey(examplesRelativePath))
     })
   })
 
@@ -6422,6 +6580,59 @@ export type Metadata = Value`,
       expect(
         await store.get<{ value: string }>(unaffectedNodeKey)
       ).toEqual({ value: 'unaffected' })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('evicts non-directory persisted entries by dependency path', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-path-eviction-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'src/components/button.ts': 'export const button = 1',
+        'src/other/value.ts': 'export const value = 1',
+      }),
+      'sqlite-path-eviction'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+    const affectedNodeKey = 'analysis:components'
+    const unaffectedNodeKey = 'analysis:other'
+
+    try {
+      const affectedDepVersion = await snapshot.contentId('src/components/button.ts')
+      const unaffectedDepVersion = await snapshot.contentId('src/other/value.ts')
+
+      await store.put(affectedNodeKey, { value: 'affected' }, {
+        persist: true,
+        deps: [
+          {
+            depKey: 'file:src/components/button.ts',
+            depVersion: affectedDepVersion,
+          },
+        ],
+      })
+      await store.put(unaffectedNodeKey, { value: 'unaffected' }, {
+        persist: true,
+        deps: [
+          {
+            depKey: 'file:src/other/value.ts',
+            depVersion: unaffectedDepVersion,
+          },
+        ],
+      })
+
+      const eviction = await store.deleteByDependencyPath('src/components')
+      expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
+      expect(eviction.deletedNodeKeys).not.toContain(unaffectedNodeKey)
+
+      expect(await store.get(affectedNodeKey)).toBeUndefined()
+      expect(await store.get(unaffectedNodeKey)).toEqual({
+        value: 'unaffected',
+      })
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }

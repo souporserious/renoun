@@ -3,6 +3,7 @@ import { createSlug } from '@renoun/mdx/utils'
 
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import {
   directoryName,
   joinPaths,
@@ -206,6 +207,12 @@ interface WorkspacePackageResolution {
   packageEntries: Array<{ name?: string; path: string }>
   scannedDirectories: string[]
   workspaceManifestPaths: string[]
+  packageManifestPaths: string[]
+}
+
+interface WorkspacePackageResolutionCacheEntry {
+  resolution: WorkspacePackageResolution
+  dependencySignatures: Map<string, string>
 }
 
 export class Workspace {
@@ -213,6 +220,7 @@ export class Workspace {
   #workspaceRoot: string
   #workspaceRelativeRoot: string
   #cache?: Cache
+  #workspacePackageResolutionCache?: WorkspacePackageResolutionCacheEntry
 
   constructor(
     options: {
@@ -414,9 +422,125 @@ export class Workspace {
     return Array.from(dependencyPaths)
   }
 
+  #createWorkspaceFileDependencySignature(path: string): string {
+    try {
+      const modifiedMs = this.#fileSystem.getFileLastModifiedMsSync(path)
+      if (modifiedMs !== undefined) {
+        return `mtime:${String(modifiedMs)}`
+      }
+    } catch {
+      // Fall back to content and existence checks.
+    }
+
+    if (!safeFileExistsSync(this.#fileSystem, path)) {
+      return 'missing'
+    }
+
+    try {
+      const contents = readTextFile(this.#fileSystem, path)
+      return `content:${hashString(contents)}:${contents.length}`
+    } catch {
+      return 'exists'
+    }
+  }
+
+  #createWorkspaceDirectoryDependencySignature(path: string): string {
+    try {
+      const modifiedMs = this.#fileSystem.getFileLastModifiedMsSync(path)
+      if (modifiedMs !== undefined) {
+        return `mtime:${String(modifiedMs)}`
+      }
+    } catch {
+      // Fall back to directory listing signatures when metadata is unavailable.
+    }
+
+    if (!safeFileExistsSync(this.#fileSystem, path)) {
+      return 'missing'
+    }
+
+    const listingEntries = safeReadDirectory(this.#fileSystem, path)
+      .map((entry) => `${entry.isDirectory ? 'd' : entry.isFile ? 'f' : 'o'}:${entry.name}`)
+      .sort((first, second) => first.localeCompare(second))
+
+    return `listing:${hashString(stableStringify(listingEntries))}:${listingEntries.length}`
+  }
+
+  #createWorkspacePackageResolutionDependencySignatures(
+    resolution: WorkspacePackageResolution
+  ): Map<string, string> {
+    const dependencySignatures = new Map<string, string>()
+    const fileDependencyPaths = new Set<string>([
+      ...resolution.workspaceManifestPaths,
+      ...resolution.packageManifestPaths,
+      ...this.#getPackageManagerDependencyPaths(),
+    ])
+    const directoryDependencyPaths = new Set<string>(resolution.scannedDirectories)
+
+    const sortedFileDependencyPaths = Array.from(fileDependencyPaths).sort((a, b) =>
+      normalizeCachePath(a).localeCompare(normalizeCachePath(b))
+    )
+    const sortedDirectoryDependencyPaths = Array.from(directoryDependencyPaths).sort(
+      (a, b) => normalizeCachePath(a).localeCompare(normalizeCachePath(b))
+    )
+
+    for (const dependencyPath of sortedFileDependencyPaths) {
+      dependencySignatures.set(
+        `file:${dependencyPath}`,
+        this.#createWorkspaceFileDependencySignature(dependencyPath)
+      )
+    }
+
+    for (const dependencyPath of sortedDirectoryDependencyPaths) {
+      dependencySignatures.set(
+        `dir:${dependencyPath}`,
+        this.#createWorkspaceDirectoryDependencySignature(dependencyPath)
+      )
+    }
+
+    return dependencySignatures
+  }
+
+  #areWorkspacePackageResolutionDependenciesFresh(
+    dependencySignatures: Map<string, string>
+  ): boolean {
+    for (const [dependencyKey, previousSignature] of dependencySignatures) {
+      if (dependencyKey.startsWith('file:')) {
+        const dependencyPath = dependencyKey.slice('file:'.length)
+        const nextSignature =
+          this.#createWorkspaceFileDependencySignature(dependencyPath)
+        if (nextSignature !== previousSignature) {
+          return false
+        }
+        continue
+      }
+
+      if (dependencyKey.startsWith('dir:')) {
+        const dependencyPath = dependencyKey.slice('dir:'.length)
+        const nextSignature =
+          this.#createWorkspaceDirectoryDependencySignature(dependencyPath)
+        if (nextSignature !== previousSignature) {
+          return false
+        }
+      }
+    }
+
+    return true
+  }
+
   #resolveWorkspacePackages(): WorkspacePackageResolution {
+    const cachedResolution = this.#workspacePackageResolutionCache
+    if (
+      cachedResolution &&
+      this.#areWorkspacePackageResolutionDependenciesFresh(
+        cachedResolution.dependencySignatures
+      )
+    ) {
+      return cachedResolution.resolution
+    }
+
     const packageEntries: { name?: string; path: string }[] = []
     const scannedDirectories = new Set<string>()
+    const packageManifestPaths = new Set<string>()
     const workspaceRoot = this.#workspaceRelativeRoot || this.#workspaceRoot
     const { patterns, manifestPaths } = buildWorkspacePatternsWithSources(
       this.#fileSystem,
@@ -427,6 +551,7 @@ export class Workspace {
       const rootPackageJsonPath = this.#findWorkspacePath('package.json')
 
       if (rootPackageJsonPath) {
+        packageManifestPaths.add(rootPackageJsonPath)
         const packageJson = readJsonFile<PackageJson>(
           this.#fileSystem,
           rootPackageJsonPath,
@@ -438,11 +563,18 @@ export class Workspace {
         })
       }
 
-      return {
+      const resolution: WorkspacePackageResolution = {
         packageEntries,
         scannedDirectories: Array.from(scannedDirectories),
         workspaceManifestPaths: manifestPaths,
+        packageManifestPaths: Array.from(packageManifestPaths),
       }
+      this.#workspacePackageResolutionCache = {
+        resolution,
+        dependencySignatures:
+          this.#createWorkspacePackageResolutionDependencySignatures(resolution),
+      }
+      return resolution
     }
 
     const matchers = patterns.map(
@@ -473,6 +605,7 @@ export class Workspace {
           matchers.some((matcher) => matcher.match(normalized || '.')) &&
           packageJsonPath
         ) {
+          packageManifestPaths.add(packageJsonPath)
           const packageJson = readJsonFile<PackageJson>(
             this.#fileSystem,
             packageJsonPath,
@@ -505,11 +638,19 @@ export class Workspace {
       }
     }
 
-    return {
+    const resolution: WorkspacePackageResolution = {
       packageEntries,
       scannedDirectories: Array.from(scannedDirectories),
       workspaceManifestPaths: manifestPaths,
+      packageManifestPaths: Array.from(packageManifestPaths),
     }
+    this.#workspacePackageResolutionCache = {
+      resolution,
+      dependencySignatures:
+        this.#createWorkspacePackageResolutionDependencySignatures(resolution),
+    }
+
+    return resolution
   }
 
   #findWorkspacePath(path: string) {
