@@ -7,7 +7,7 @@ import {
   getFileExportText,
   getFileExportStaticValue,
   getOutlineRanges,
-  resolveTypeAtLocation,
+  resolveTypeAtLocationWithDependencies,
 } from '../project/client.ts'
 import type { ProjectOptions } from '../project/types.ts'
 import {
@@ -17,6 +17,8 @@ import {
   relativePath,
   removeAllExtensions,
   removeOrderPrefixes,
+  trimLeadingDotSlash,
+  trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
 import { parseJsonWithComments } from '../utils/parse-json-with-comments.ts'
@@ -118,6 +120,41 @@ export abstract class BaseFileSystem {
   #tsConfigPromise?: Promise<TsConfig | undefined>
   #exclude?: Minimatch[]
 
+  /**
+   * Optional workspace change token used for fast cache revalidation.
+   *
+   * Implementations should return a deterministic token for a scoped root path
+   * or `null` when a token cannot be produced.
+   */
+  getWorkspaceChangeToken?(rootPath: string): Promise<string | null>
+
+  /**
+   * Optional stable identity used to scope persistent cache keys for different
+   * file-system backends that may expose the same workspace-relative paths.
+   */
+  getCacheIdentity?(): unknown
+
+  /**
+   * Optional hint indicating whether persisted cache entries are deterministic
+   * for the current file-system state.
+   *
+   * Returning `false` allows callers to skip persistence for cache domains that
+   * cannot be safely revalidated (for example moving branch refs).
+   */
+  isPersistentCacheDeterministic?(): boolean
+
+  /**
+   * Optional changed-path resolver used when a workspace token changes.
+   *
+   * Implementations should return workspace-relative POSIX paths that changed
+   * since `previousToken`, scoped to `rootPath`. Return `null` when the change
+   * set cannot be determined.
+   */
+  getWorkspaceChangedPathsSinceToken?(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null>
+
   constructor(options: FileSystemOptions = {}) {
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
   }
@@ -141,13 +178,9 @@ export abstract class BaseFileSystem {
       return joinPaths('/', options.basePath)
     }
 
-    const resolvedPath = removeAllExtensions(
-      removeOrderPrefixes(rootRelativePath)
+    const resolvedPath = trimTrailingSlashes(
+      trimLeadingDotSlash(removeAllExtensions(removeOrderPrefixes(rootRelativePath)))
     )
-      // remove leading dot
-      .replace(/^\.\//, '')
-      // remove trailing slash
-      .replace(/\/$/, '')
 
     return joinPaths('/', options.basePath, resolvedPath)
   }
@@ -386,19 +419,35 @@ export abstract class BaseFileSystem {
     )
   }
 
-  resolveTypeAtLocation(
+  resolveTypeAtLocationWithDependencies(
     filePath: string,
     position: number,
     kind: SyntaxKind,
     filter?: TypeFilter
   ) {
-    return resolveTypeAtLocation(
+    return resolveTypeAtLocationWithDependencies(
       filePath,
       position,
       kind,
       filter,
       this.getProjectOptions()
     )
+  }
+
+  async resolveTypeAtLocation(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind,
+    filter?: TypeFilter
+  ) {
+    const result = await this.resolveTypeAtLocationWithDependencies(
+      filePath,
+      position,
+      kind,
+      filter
+    )
+
+    return result.resolvedType
   }
 }
 

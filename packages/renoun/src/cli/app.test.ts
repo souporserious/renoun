@@ -72,7 +72,34 @@ vi.mock('./framework.ts', () => ({
   resolveFrameworkBinFile: resolveFrameworkBinFileMock,
 }))
 
+const prewarmRenounRpcServerCacheMock = vi.fn(async () => undefined)
+
+vi.mock('./prewarm.ts', () => ({
+  prewarmRenounRpcServerCache: prewarmRenounRpcServerCacheMock,
+}))
+
 let runAppCommand: (typeof import('./app.ts'))['runAppCommand']
+
+async function waitForAssertion(
+  assertion: () => void,
+  options: { timeoutMs?: number; intervalMs?: number } = {}
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 2_000
+  const intervalMs = options.intervalMs ?? 20
+  const deadline = Date.now() + timeoutMs
+
+  while (true) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      if (Date.now() >= deadline) {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+}
 
 beforeAll(async () => {
   ;({ runAppCommand: runAppCommand } = await import('./app.ts'))
@@ -178,6 +205,14 @@ describe('runAppCommand integration', () => {
       expect(exitCode).toBe(0)
 
       expect(createServerMock).toHaveBeenCalledTimes(1)
+      await waitForAssertion(() => {
+        expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
+      })
+      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
+        projectOptions: {
+          tsConfigFilePath: join(projectRoot, 'tsconfig.json'),
+        },
+      })
       expect(getPortMock).toHaveBeenCalled()
       expect(getIdMock).toHaveBeenCalled()
       expect(serverCleanupMock).toHaveBeenCalledTimes(1)

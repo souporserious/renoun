@@ -120,6 +120,7 @@
     "dev": "node ./scripts/dev.ts",
     "grammars": "node ./scripts/grammars.ts",
     "theme": "node ./scripts/theme.ts",
+    "typecheck:tests": "vitest --run --typecheck",
     "test": "vitest --typecheck",
     "bench": "vitest bench"
   },
@@ -161,6 +162,7 @@
   "dependencies": {
     "@mdx-js/mdx": "3.1.1",
     "@renoun/mdx": "workspace:*",
+    "alien-signals": "^3.1.2",
     "fast-ignore": "1.1.3",
     "minimatch": "10.1.2",
     "oniguruma-to-es": "4.3.4",

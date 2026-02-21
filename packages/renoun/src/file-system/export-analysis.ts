@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { ts } from 'ts-morph'
 
-import { normalizePath, joinPaths } from '../utils/path.ts'
+import { normalizePath, joinPaths, trimLeadingDotSlash } from '../utils/path.ts'
 import { hasJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
 import type { DirectoryEntry } from './types.ts'
 
@@ -128,11 +128,30 @@ export function formatExportId(file: string, name: string): string {
 
 /**
  * Get the cache key for export parsing.
- * @param sha The blob SHA
+ * @param digest The content/blob digest
+ * @param parserFlavor The parser flavor (usually derived from file extension)
  * @returns The cache key
  */
-export function getExportParseCacheKey(sha: string): string {
-  return sha
+export function getExportParseCacheKey(
+  digest: string,
+  parserFlavor: string = 'unknown'
+): string {
+  return `${digest}\x00${parserFlavor || 'unknown'}`
+}
+
+/**
+ * Derive a stable parser flavor from a file name.
+ * @param fileName The file name
+ * @returns A lowercased extension-like parser flavor
+ */
+export function getParserFlavorFromFileName(fileName: string): string {
+  const index = fileName.lastIndexOf('.')
+  if (index === -1) {
+    return 'unknown'
+  }
+
+  const parsed = fileName.slice(index + 1).toLowerCase()
+  return parsed || 'unknown'
 }
 
 /**
@@ -795,39 +814,6 @@ export async function mapWithLimit<Type, Result>(
   return results
 }
 
-/** LRU Map implementation. */
-export class LRUMap<Key, Value> extends Map<Key, Value> {
-  #maxSize: number
-
-  constructor(maxSize: number) {
-    super()
-    this.#maxSize = maxSize
-  }
-
-  get(key: Key): Value | undefined {
-    const value = super.get(key)
-    if (value !== undefined) {
-      super.delete(key)
-      super.set(key, value)
-    }
-    return value
-  }
-
-  set(key: Key, value: Value): this {
-    if (super.has(key)) {
-      super.delete(key)
-    }
-    super.set(key, value)
-    if (super.size > this.#maxSize) {
-      const oldest = super.keys().next().value
-      if (oldest !== undefined) {
-        super.delete(oldest)
-      }
-    }
-    return this
-  }
-}
-
 /**
  * Check if a path looks like a file path (has an extension).
  */
@@ -1325,8 +1311,7 @@ export function checkAndCollapseOscillation<
  * Normalizes a path and strips a leading `./` prefix.
  */
 function normalizeEntryPath(path: string): string {
-  const normalized = normalizePath(path)
-  return normalized.startsWith('./') ? normalized.slice(2) : normalized
+  return trimLeadingDotSlash(normalizePath(path))
 }
 
 /**

@@ -1,5 +1,6 @@
 import { resolve as resolvePath } from 'node:path'
 import { Minimatch } from 'minimatch'
+import { createElement, Fragment, isValidElement, type ReactNode } from 'react'
 import type { MDXContent, SlugCasing } from '@renoun/mdx'
 import {
   createSlug,
@@ -29,18 +30,23 @@ import {
 import {
   baseName,
   directoryName,
-  ensureRelativePath,
   extensionName,
   joinPaths,
+  isAbsolutePath,
   normalizeSlashes,
   resolveSchemePath,
   removeExtension,
   removeAllExtensions,
   removeOrderPrefixes,
   relativePath,
+  ensureRelativePath,
+  normalizePathKey,
+  trimLeadingCurrentDirPrefix,
+  trimLeadingDotPrefix,
+  trimLeadingSlashes,
+  trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
-import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
 import { Semaphore } from '../utils/Semaphore.ts'
 import type {
@@ -49,6 +55,7 @@ import type {
   FileSystemWriteFileContent,
   FileWritableStream,
 } from './FileSystem.ts'
+import type { Cache } from './Cache.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
   Repository,
@@ -67,16 +74,29 @@ import {
 import {
   DirectorySnapshot,
   createDirectorySnapshot,
+  type DirectorySnapshotRestoreFactory,
   type DirectorySnapshotDirectoryMetadata,
+  type PersistedEntryMetadata,
+  type PersistedDirectoryEntry,
+  type PersistedDirectorySnapshotV1,
+  isPersistedDirectorySnapshotV1,
 } from './directory-snapshot.ts'
 import {
-  defaultLoaders,
+  FS_ANALYSIS_CACHE_VERSION,
+  FS_STRUCTURE_CACHE_VERSION,
+  createCacheNodeKey,
+  normalizeCachePath,
+  serializeTypeFilterForCache,
+} from './cache-key.ts'
+import { Session } from './Session.ts'
+import {
   isGlobModuleMap,
   isRuntimeLoader,
   unwrapModuleResult,
   type GlobModuleMap,
-} from './loaders.ts'
+} from './loader-core.ts'
 import { inferMediaType } from './mime.ts'
+import type { Snapshot } from './Snapshot.ts'
 import {
   applyModuleSchemaToModule,
   isStandardSchema,
@@ -94,16 +114,9 @@ import type {
   ModuleExportStructure,
   ContentSection,
   Section,
-  GitAuthor,
   GitMetadata,
   GitExportMetadata,
 } from './types.ts'
-
-const typedDefaultLoaders = defaultLoaders as unknown as {
-  md: ModuleLoader<any>
-  mdx: ModuleLoader<any>
-  [extension: string]: ModuleLoader<any>
-}
 
 /** A function that resolves the module runtime. */
 type ModuleRuntimeResult<Value> =
@@ -233,6 +246,35 @@ type ApplyFileSchemaOption<
 type ModuleLoader<Exports extends ModuleExports = ModuleExports> =
   ModuleRuntimeLoader<Exports>
 
+type RuntimeDefaultLoaders = {
+  md: ModuleLoader<any>
+  mdx: ModuleLoader<any>
+  [extension: string]: ModuleLoader<any>
+}
+
+let runtimeDefaultLoadersPromise: Promise<RuntimeDefaultLoaders> | undefined
+
+async function getRuntimeDefaultLoaders(): Promise<RuntimeDefaultLoaders> {
+  if (!runtimeDefaultLoadersPromise) {
+    runtimeDefaultLoadersPromise = import('./loader-runtime.ts').then(
+      ({ defaultLoaders }) => defaultLoaders as unknown as RuntimeDefaultLoaders
+    )
+  }
+
+  return runtimeDefaultLoadersPromise
+}
+
+async function getRuntimeDefaultLoader(
+  extension: string | undefined
+): Promise<ModuleLoader<any> | undefined> {
+  if (extension !== 'md' && extension !== 'mdx') {
+    return undefined
+  }
+
+  const runtimeLoaders = await getRuntimeDefaultLoaders()
+  return runtimeLoaders[extension]
+}
+
 interface GitMetadataProvider {
   getGitFileMetadata(path: string): Promise<GitMetadata>
 }
@@ -275,6 +317,67 @@ function createEmptyGitExportMetadata(): GitExportMetadata {
   return {
     firstCommitDate: undefined,
     lastCommitDate: undefined,
+  }
+}
+
+type GitAuthorCacheSignature = {
+  name: string
+  email?: string
+  commitCount: number
+  firstCommitDate?: string
+  lastCommitDate?: string
+}
+
+type GitMetadataCacheSignature = {
+  firstCommitDate?: string
+  lastCommitDate?: string
+  authors: GitAuthorCacheSignature[]
+}
+
+type GitExportMetadataCacheSignature = {
+  firstCommitDate?: string
+  lastCommitDate?: string
+  firstCommitHash?: string
+  lastCommitHash?: string
+}
+
+function toGitMetadataDateValue(value?: Date): string | undefined {
+  if (!(value instanceof Date)) {
+    return undefined
+  }
+
+  const unix = value.getTime()
+  if (Number.isNaN(unix)) {
+    return undefined
+  }
+
+  return value.toISOString()
+}
+
+function createGitMetadataCacheSignature(
+  metadata: GitMetadata
+): GitMetadataCacheSignature {
+  return {
+    firstCommitDate: toGitMetadataDateValue(metadata.firstCommitDate),
+    lastCommitDate: toGitMetadataDateValue(metadata.lastCommitDate),
+    authors: metadata.authors.map((author) => ({
+      name: author.name,
+      email: author.email,
+      commitCount: author.commitCount,
+      firstCommitDate: toGitMetadataDateValue(author.firstCommitDate),
+      lastCommitDate: toGitMetadataDateValue(author.lastCommitDate),
+    })),
+  }
+}
+
+function createGitExportMetadataCacheSignature(
+  metadata: GitExportMetadata
+): GitExportMetadataCacheSignature {
+  return {
+    firstCommitDate: toGitMetadataDateValue(metadata.firstCommitDate),
+    lastCommitDate: toGitMetadataDateValue(metadata.lastCommitDate),
+    firstCommitHash: metadata.firstCommitHash,
+    lastCommitHash: metadata.lastCommitHash,
   }
 }
 
@@ -478,7 +581,7 @@ function createGlobRuntimeLoader(
   glob: GlobModuleMap<any>
 ): ModuleRuntimeLoader<any> {
   return async (_path: string, file: any) => {
-    const relative = normalizeSlashes(file.relativePath).replace(/^\.\/?/, '')
+    const relative = trimLeadingDotPrefix(normalizeSlashes(file.relativePath))
     const candidates = [relative, `./${relative}`, `/${relative}`]
 
     let importer: (() => Promise<any>) | undefined
@@ -510,9 +613,7 @@ function createGlobRuntimeLoader(
       return await importer()
     } catch (error) {
       // If the importer exists but fails to parse fall back to a default loader for that extension when available.
-      const fallback = file?.extension
-        ? typedDefaultLoaders[file.extension]
-        : undefined
+      const fallback = await getRuntimeDefaultLoader(file?.extension)
       if (fallback) {
         return fallback(_path, file)
       }
@@ -649,6 +750,11 @@ export class File<
   #byteLength: number
   #schema?: DirectorySchemaOption
   #type: string
+  #structureGitMetadataSignature: GitMetadataCacheSignature
+  #structureGitMetadata?: GitMetadata
+  #structureWorkspaceChangeToken?: string
+  #structureCacheNodeKey?: string
+  #structureCacheSessionKey?: string
 
   constructor(options: FileOptions<DirectoryTypes, Path, any>) {
     // Parse path and extension to determine MIME type
@@ -710,6 +816,9 @@ export class File<
     this.#byteLength = byteLength
     this.#schema = options.schema
     this.#type = type
+    this.#structureGitMetadataSignature = createGitMetadataCacheSignature(
+      createEmptyGitMetadata()
+    )
 
     if (match) {
       this.#order = match[1]
@@ -886,7 +995,7 @@ export class File<
       remainingPath = remainingPath.slice(repeatedPrefix.length)
     }
 
-    const finalPath = remainingPath.replace(/^\/+/, '')
+    const finalPath = trimLeadingSlashes(remainingPath)
 
     if (!finalPath) {
       return joinPaths(scope, rawPath)
@@ -1004,36 +1113,109 @@ export class File<
     })
   }
 
-  /** Get the first local git commit date of the file. */
-  async getFirstCommitDate() {
+  async #loadGitMetadata(): Promise<GitMetadata> {
     const fileSystem = this.#directory.getFileSystem()
-    const gitMetadata = await getGitFileMetadataForPath(
+    return getGitFileMetadataForPath(
       this.#directory.getRepositoryIfAvailable(),
       fileSystem,
       this.#path
     )
+  }
+
+  async #loadGitMetadataForStructure(): Promise<GitMetadata> {
+    try {
+      return await this.#loadGitMetadata()
+    } catch {
+      return createEmptyGitMetadata()
+    }
+  }
+
+  async #getCurrentWorkspaceChangeToken(): Promise<string | undefined> {
+    const session = this.#directory.getSession()
+    const token = await session.getWorkspaceChangeToken(
+      this.#directory.getRootPath()
+    )
+    return token ?? undefined
+  }
+
+  protected async resolveStructureCacheState(session: Session): Promise<{
+    nodeKey: string
+    gitMetadata: GitMetadata
+  }> {
+    const cacheSessionKey = this.#getStructureCacheSessionKey()
+    const cachedNodeKey = this.#structureCacheNodeKey
+    const cachedGitMetadata = this.#structureGitMetadata
+    const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
+    const canUseCachedMetadata =
+      this.#structureCacheSessionKey === cacheSessionKey &&
+      cachedNodeKey !== undefined &&
+      cachedGitMetadata !== undefined &&
+      cachedWorkspaceChangeToken !== undefined
+
+    if (canUseCachedMetadata) {
+      const currentWorkspaceChangeToken =
+        await this.#getCurrentWorkspaceChangeToken()
+      if (
+        currentWorkspaceChangeToken !== undefined &&
+        cachedWorkspaceChangeToken === currentWorkspaceChangeToken
+      ) {
+        return {
+          nodeKey: cachedNodeKey,
+          gitMetadata: cachedGitMetadata,
+        }
+      }
+    }
+
+    const gitMetadata = await this.#loadGitMetadataForStructure()
+    this.#structureGitMetadata = gitMetadata
+    this.#structureGitMetadataSignature =
+      createGitMetadataCacheSignature(gitMetadata)
+    const nodeKey = this.getStructureCacheKey()
+    const currentWorkspaceChangeToken =
+      await this.#getCurrentWorkspaceChangeToken()
+    this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+    this.#structureCacheSessionKey = cacheSessionKey
+
+    if (
+      this.#structureCacheNodeKey &&
+      this.#structureCacheNodeKey !== nodeKey
+    ) {
+      await session.cache.delete(this.#structureCacheNodeKey)
+    }
+
+    this.#structureCacheNodeKey = nodeKey
+    return { nodeKey, gitMetadata }
+  }
+
+  #getStructureCacheSessionKey() {
+    const session = this.#directory.getSession()
+
+    return createCacheNodeKey('structure.file', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.absolutePath),
+      extension: this.extension,
+    })
+  }
+
+  /** Get the first local git commit date of the file. */
+  async getFirstCommitDate() {
+    const session = this.#directory.getSession()
+    const { gitMetadata } = await this.resolveStructureCacheState(session)
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last local git commit date of the file. */
   async getLastCommitDate() {
-    const fileSystem = this.#directory.getFileSystem()
-    const gitMetadata = await getGitFileMetadataForPath(
-      this.#directory.getRepositoryIfAvailable(),
-      fileSystem,
-      this.#path
-    )
+    const session = this.#directory.getSession()
+    const { gitMetadata } = await this.resolveStructureCacheState(session)
     return gitMetadata.lastCommitDate
   }
 
   /** Get the local git authors of the file. */
   async getAuthors() {
-    const fileSystem = this.#directory.getFileSystem()
-    const gitMetadata = await getGitFileMetadataForPath(
-      this.#directory.getRepositoryIfAvailable(),
-      fileSystem,
-      this.#path
-    )
+    const session = this.#directory.getSession()
+    const { gitMetadata } = await this.resolveStructureCacheState(session)
     return gitMetadata.authors
   }
 
@@ -1077,20 +1259,11 @@ export class File<
     return [previous, next]
   }
 
-  protected async getFileStructureBase(): Promise<FileStructure> {
-    let firstCommitDate: Date | undefined
-    let lastCommitDate: Date | undefined
-    let authors: GitAuthor[] | undefined
-
-    try {
-      ;[firstCommitDate, lastCommitDate, authors] = await Promise.all([
-        this.getFirstCommitDate().catch(() => undefined),
-        this.getLastCommitDate().catch(() => undefined),
-        this.getAuthors().catch(() => undefined),
-      ])
-    } catch {
-      // Swallow git errors to keep structure generation resilient.
-    }
+  protected async getFileStructureBase(
+    gitMetadata?: GitMetadata
+  ): Promise<FileStructure> {
+    const resolvedGitMetadata =
+      gitMetadata ?? (await this.#loadGitMetadataForStructure())
 
     return {
       kind: 'File',
@@ -1101,14 +1274,39 @@ export class File<
       relativePath: this.workspacePath,
       extension: this.extension,
       depth: this.depth,
-      firstCommitDate,
-      lastCommitDate,
-      authors,
+      firstCommitDate: resolvedGitMetadata.firstCommitDate,
+      lastCommitDate: resolvedGitMetadata.lastCommitDate,
+      authors: resolvedGitMetadata.authors,
     }
   }
 
+  /** @internal */
+  getStructureCacheKey() {
+    const session = this.#directory.getSession()
+
+    return createCacheNodeKey('structure.file', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.absolutePath),
+      extension: this.extension,
+      gitMetadata: this.#structureGitMetadataSignature,
+    })
+  }
+
   async getStructure(): Promise<FileStructure> {
-    return this.getFileStructureBase()
+    const session = this.#directory.getSession()
+    const { nodeKey, gitMetadata } =
+      await this.resolveStructureCacheState(session)
+    const filePath = this.absolutePath
+
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        return this.getFileStructureBase(gitMetadata)
+      }
+    )
   }
 
   /** Read the file contents as bytes. */
@@ -1170,13 +1368,15 @@ export class File<
   async write(content: FileSystemWriteFileContent): Promise<void> {
     const fileSystem = this.#directory.getFileSystem()
     await fileSystem.writeFile(this.#path, content)
-    this.#directory.invalidateSnapshots()
+    this.invalidateCachedValues()
+    this.#directory.getSession().invalidatePath(this.#path)
   }
 
   /** Create a writable stream for this file. */
   writeStream(): FileWritableStream {
     const fileSystem = this.#directory.getFileSystem()
-    this.#directory.invalidateSnapshots()
+    this.invalidateCachedValues()
+    this.#directory.getSession().invalidatePath(this.#path)
     return fileSystem.writeFileStream(this.#path)
   }
 
@@ -1184,7 +1384,18 @@ export class File<
   async delete(): Promise<void> {
     const fileSystem = this.#directory.getFileSystem()
     await fileSystem.deleteFile(this.#path)
-    this.#directory.invalidateSnapshots()
+    this.invalidateCachedValues()
+    this.#directory.getSession().invalidatePath(this.#path)
+  }
+
+  protected invalidateCachedValues(): void {
+    this.#structureGitMetadata = undefined
+    this.#structureWorkspaceChangeToken = undefined
+    this.#structureCacheNodeKey = undefined
+    this.#structureCacheSessionKey = undefined
+    this.#structureGitMetadataSignature = createGitMetadataCacheSignature(
+      createEmptyGitMetadata()
+    )
   }
 
   /** Check if this file exists in the file system. */
@@ -1387,6 +1598,11 @@ export class JSONFile<
 
     return value
   }
+
+  protected override invalidateCachedValues(): void {
+    super.invalidateCachedValues()
+    this.#dataPromise = undefined
+  }
 }
 
 /** Error for when a module export cannot be found. */
@@ -1463,9 +1679,14 @@ export class ModuleExport<Value> {
   #loader?: ModuleLoader<any>
   #slugCasing: SlugCasing
   #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
+  #structureGitMetadata?: GitExportMetadata
+  #structureWorkspaceChangeToken?: string
+  #structureCacheSessionKey?: string
   #staticPromise?: Promise<Value>
   #runtimePromise?: Promise<Value>
   #isComponent: boolean | undefined
+  #structureGitMetadataSignature: GitExportMetadataCacheSignature
+  #structureCacheNodeKey?: string
 
   constructor(
     name: string,
@@ -1477,6 +1698,9 @@ export class ModuleExport<Value> {
     this.#file = file
     this.#loader = loader
     this.#slugCasing = slugCasing ?? 'kebab'
+    this.#structureGitMetadataSignature = createGitExportMetadataCacheSignature(
+      createEmptyGitExportMetadata()
+    )
   }
 
   static async init<Value>(
@@ -1514,13 +1738,32 @@ export class ModuleExport<Value> {
       return undefined
     }
 
-    const fileSystem = this.#file.getParent().getFileSystem()
+    const directory = this.#file.getParent()
+    const fileSystem = directory.getFileSystem()
+    const session = directory.getSession()
+    const filePath = location.path
+    const cacheFilePath = normalizeCachePath(filePath)
+    const nodeKey = createCacheNodeKey('js.export.metadata', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      exportName: this.#name,
+      filePath: cacheFilePath,
+      position: location.position,
+      kind: location.kind,
+    })
 
-    this.#metadata = await fileSystem.getFileExportMetadata(
-      this.#name,
-      location.path,
-      location.position,
-      location.kind
+    this.#metadata = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        return fileSystem.getFileExportMetadata(
+          this.#name,
+          location.path,
+          location.position,
+          location.kind
+        )
+      }
     )
 
     return this.#metadata
@@ -1537,6 +1780,20 @@ export class ModuleExport<Value> {
       return this.#name === 'default' ? this.#file.name : this.#name
     }
     return this.#metadata?.name || this.#name
+  }
+
+  clearCachedValues(): void {
+    this.#metadata = undefined
+    this.#staticPromise = undefined
+    this.#runtimePromise = undefined
+    this.#structureGitMetadata = undefined
+    this.#isComponent = undefined
+    this.#structureCacheNodeKey = undefined
+    this.#structureCacheSessionKey = undefined
+    this.#structureWorkspaceChangeToken = undefined
+    this.#structureGitMetadataSignature = createGitExportMetadataCacheSignature(
+      createEmptyGitExportMetadata()
+    )
   }
 
   /** The export name formatted as a title. */
@@ -1588,13 +1845,32 @@ export class ModuleExport<Value> {
       )
     }
 
-    const fileSystem = this.#file.getParent().getFileSystem()
+    const directory = this.#file.getParent()
+    const fileSystem = directory.getFileSystem()
+    const session = directory.getSession()
+    const filePath = location.path
+    const cacheFilePath = normalizeCachePath(filePath)
+    const nodeKey = createCacheNodeKey('js.export.text', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: cacheFilePath,
+      position: location.position,
+      kind: location.kind,
+      includeDependencies: includeDependencies ?? false,
+    })
 
-    return fileSystem.getFileExportText(
-      location.path,
-      location.position,
-      location.kind,
-      includeDependencies
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        return fileSystem.getFileExportText(
+          location.path,
+          location.position,
+          location.kind,
+          includeDependencies
+        )
+      }
     )
   }
 
@@ -1660,12 +1936,11 @@ export class ModuleExport<Value> {
     })
   }
 
-  /** Get the first git commit date that touched this export. */
-  async getFirstCommitDate() {
+  async #loadGitExportMetadata(): Promise<GitExportMetadata> {
     const metadata = await this.getStaticMetadata()
 
     if (!metadata?.location) {
-      return undefined
+      return createEmptyGitExportMetadata()
     }
 
     const startLine = metadata.location.position.start.line
@@ -1673,49 +1948,137 @@ export class ModuleExport<Value> {
     const location = await this.#getLocation()
 
     if (location === undefined) {
-      return undefined
+      return createEmptyGitExportMetadata()
     }
 
     const directory = this.#file.getParent()
     const fileSystem = directory.getFileSystem()
-    const gitMetadata = await getGitExportMetadataForPath(
+    return getGitExportMetadataForPath(
       directory.getRepositoryIfAvailable(),
       fileSystem,
       location.path,
       startLine,
       endLine
     )
+  }
 
+  async #loadGitExportMetadataForStructure(): Promise<GitExportMetadata> {
+    try {
+      return await this.#loadGitExportMetadata()
+    } catch {
+      return createEmptyGitExportMetadata()
+    }
+  }
+
+  async #getCurrentWorkspaceChangeToken(): Promise<string | undefined> {
+    const directory = this.#file.getParent()
+    const session = directory.getSession()
+    const token = await session.getWorkspaceChangeToken(directory.getRootPath())
+    return token ?? undefined
+  }
+
+  async #resolveStructureCacheNodeKey(session: Session): Promise<{
+    nodeKey: string
+    gitMetadata: GitExportMetadata
+  }> {
+    const cacheSessionKey = this.#getStructureCacheSessionKey()
+    const cachedNodeKey = this.#structureCacheNodeKey
+    const cachedGitMetadata = this.#structureGitMetadata
+    const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
+    const canUseCachedMetadata =
+      this.#structureCacheSessionKey === cacheSessionKey &&
+      cachedNodeKey !== undefined &&
+      cachedGitMetadata !== undefined &&
+      cachedWorkspaceChangeToken !== undefined
+
+    if (canUseCachedMetadata) {
+      const currentWorkspaceChangeToken =
+        await this.#getCurrentWorkspaceChangeToken()
+      if (
+        currentWorkspaceChangeToken !== undefined &&
+        cachedWorkspaceChangeToken === currentWorkspaceChangeToken
+      ) {
+        return {
+          nodeKey: cachedNodeKey,
+          gitMetadata: cachedGitMetadata,
+        }
+      }
+    }
+
+    const gitMetadata = await this.#loadGitExportMetadataForStructure()
+    this.#structureGitMetadata = gitMetadata
+    this.#structureGitMetadataSignature =
+      createGitExportMetadataCacheSignature(gitMetadata)
+    const nodeKey = this.getStructureCacheKey()
+    const currentWorkspaceChangeToken =
+      await this.#getCurrentWorkspaceChangeToken()
+    this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+    this.#structureCacheSessionKey = cacheSessionKey
+
+    if (
+      this.#structureCacheNodeKey &&
+      this.#structureCacheNodeKey !== nodeKey
+    ) {
+      await session.cache.delete(this.#structureCacheNodeKey)
+    }
+
+    this.#structureCacheNodeKey = nodeKey
+    return { nodeKey, gitMetadata }
+  }
+
+  #getStructureCacheSessionKey() {
+    const directory = this.#file.getParent()
+    const session = directory.getSession()
+
+    return createCacheNodeKey('structure.module-export', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.#file.absolutePath),
+      exportName: this.#name,
+    })
+  }
+
+  /** Get the first git commit date that touched this export. */
+  async getFirstCommitDate() {
+    const { gitMetadata } = await this.#resolveStructureCacheNodeKey(
+      this.#file.getParent().getSession()
+    )
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last git commit date that touched this export. */
   async getLastCommitDate() {
-    const metadata = await this.getStaticMetadata()
-
-    if (!metadata?.location) {
-      return undefined
-    }
-
-    const startLine = metadata.location.position.start.line
-    const endLine = Math.max(startLine, metadata.location.position.end.line)
-    const location = await this.#getLocation()
-
-    if (location === undefined) {
-      return undefined
-    }
-
-    const directory = this.#file.getParent()
-    const fileSystem = directory.getFileSystem()
-    const gitMetadata = await getGitExportMetadataForPath(
-      directory.getRepositoryIfAvailable(),
-      fileSystem,
-      location.path,
-      startLine,
-      endLine
+    const { gitMetadata } = await this.#resolveStructureCacheNodeKey(
+      this.#file.getParent().getSession()
     )
-
     return gitMetadata.lastCommitDate
+  }
+
+  #getTypeNodeKey(filter?: TypeFilter) {
+    const directory = this.#file.getParent()
+    const session = directory.getSession()
+
+    return createCacheNodeKey('ts.type', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.#file.absolutePath),
+      exportName: this.#name,
+      filter: filter ? serializeTypeFilterForCache(filter) : 'none',
+    })
+  }
+
+  /** @internal */
+  getStructureCacheKey() {
+    const directory = this.#file.getParent()
+    const session = directory.getSession()
+
+    return createCacheNodeKey('structure.module-export', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.#file.absolutePath),
+      exportName: this.#name,
+      gitMetadata: this.#structureGitMetadataSignature,
+    })
   }
 
   /** Get the resolved type of the export. */
@@ -1728,13 +2091,32 @@ export class ModuleExport<Value> {
       )
     }
 
-    const fileSystem = this.#file.getParent().getFileSystem()
+    const directory = this.#file.getParent()
+    const fileSystem = directory.getFileSystem()
+    const session = directory.getSession()
+    const nodeKey = this.#getTypeNodeKey(filter)
 
-    return fileSystem.resolveTypeAtLocation(
-      location.path,
-      location.position,
-      location.kind,
-      filter
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        const typeResolution =
+          await fileSystem.resolveTypeAtLocationWithDependencies(
+            location.path,
+            location.position,
+            location.kind,
+            filter
+          )
+        const dependencyPaths = typeResolution.dependencies.length
+          ? typeResolution.dependencies
+          : [location.path]
+
+        for (const dependencyPath of dependencyPaths) {
+          await ctx.recordFileDep(dependencyPath)
+        }
+
+        return typeResolution.resolvedType
+      }
     )
   }
 
@@ -1758,11 +2140,30 @@ export class ModuleExport<Value> {
       )
     }
 
-    const fileSystem = this.#file.getParent().getFileSystem()
-    const staticValue = fileSystem.getFileExportStaticValue(
-      location.path,
-      location.position,
-      location.kind
+    const directory = this.#file.getParent()
+    const fileSystem = directory.getFileSystem()
+    const session = directory.getSession()
+    const filePath = location.path
+    const cacheFilePath = normalizeCachePath(filePath)
+    const nodeKey = createCacheNodeKey('js.export.static-value', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      exportName: this.#name,
+      filePath: cacheFilePath,
+      position: location.position,
+      kind: location.kind,
+    })
+    const staticValue = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        return fileSystem.getFileExportStaticValue(
+          location.path,
+          location.position,
+          location.kind
+        )
+      }
     )
 
     if (staticValue === undefined) {
@@ -1908,63 +2309,77 @@ export class ModuleExport<Value> {
   }
 
   async getStructure(): Promise<ModuleExportStructure> {
-    let resolvedType: Kind | undefined
-    let firstCommitDate: Date | undefined
-    let lastCommitDate: Date | undefined
+    const directory = this.#file.getParent()
+    const session = directory.getSession()
+    const { nodeKey, gitMetadata } =
+      await this.#resolveStructureCacheNodeKey(session)
+    const filePath = this.#file.absolutePath
+    let typeResolutionFailed = false
 
-    try {
-      resolvedType = await this.getType()
-    } catch {
-      // Ignore type resolution failures for structure generation.
-    }
+    const structure = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
 
-    try {
-      ;[firstCommitDate, lastCommitDate] = await Promise.all([
-        this.getFirstCommitDate().catch(() => undefined),
-        this.getLastCommitDate().catch(() => undefined),
-      ])
-    } catch {
-      // Ignore git errors for structure generation.
-    }
+        let resolvedType: Kind | undefined
 
-    const tags = this.getTags()
-    const normalizedTags =
-      tags?.map((tag) => {
-        const text = tag.text as unknown
-        let value: string | undefined
-
-        if (Array.isArray(text)) {
-          value = text
-            .map((part: any) => (typeof part === 'string' ? part : part?.text))
-            .filter(Boolean)
-            .join('')
-            .trim()
-        } else if (typeof text === 'string') {
-          value = text
+        try {
+          resolvedType = await this.getType()
+          await ctx.recordNodeDep(this.#getTypeNodeKey())
+        } catch {
+          // Ignore type resolution failures for structure generation.
+          typeResolutionFailed = true
         }
+
+        const tags = this.getTags()
+        const normalizedTags =
+          tags?.map((tag) => {
+            const text = tag.text as unknown
+            let value: string | undefined
+
+            if (Array.isArray(text)) {
+              value = text
+                .map((part: any) =>
+                  typeof part === 'string' ? part : part?.text
+                )
+                .filter(Boolean)
+                .join('')
+                .trim()
+            } else if (typeof text === 'string') {
+              value = text
+            }
+
+            return {
+              name: tag.name,
+              value: value && value.length > 0 ? value : undefined,
+            }
+          }) ?? undefined
+
+        const slug = this.slug
+        const pathname = this.#file.getPathname()
 
         return {
-          name: tag.name,
-          value: value && value.length > 0 ? value : undefined,
+          kind: 'ModuleExport' as const,
+          name: this.name,
+          title: this.title,
+          slug,
+          path: `${pathname}#${slug}`,
+          relativePath: `${this.#file.workspacePath}#${slug}`,
+          description: this.description,
+          tags: normalizedTags,
+          resolvedType,
+          firstCommitDate: gitMetadata.firstCommitDate,
+          lastCommitDate: gitMetadata.lastCommitDate,
         }
-      }) ?? undefined
+      }
+    )
 
-    const slug = this.slug
-    const filePath = this.#file.getPathname()
-
-    return {
-      kind: 'ModuleExport',
-      name: this.name,
-      title: this.title,
-      slug,
-      path: `${filePath}#${slug}`,
-      relativePath: `${this.#file.workspacePath}#${slug}`,
-      description: this.description,
-      tags: normalizedTags,
-      resolvedType,
-      firstCommitDate,
-      lastCommitDate,
+    if (typeResolutionFailed) {
+      await session.cache.delete(nodeKey)
     }
+
+    return structure
   }
 }
 
@@ -1996,17 +2411,23 @@ export class JavaScriptFile<
   }: JavaScriptFileOptions<Types, DirectoryTypes, Path>) {
     super(fileOptions)
 
-    if (loader === undefined) {
-      const extension = this.extension
-
-      if (extension) {
-        this.#loader = typedDefaultLoaders[extension]
-      }
-    } else {
+    if (loader !== undefined) {
       this.#loader = loader
     }
 
     this.#slugCasing = fileOptions.slugCasing ?? 'kebab'
+  }
+
+  protected override invalidateCachedValues(): void {
+    super.invalidateCachedValues()
+
+    for (const fileExport of this.#exports.values()) {
+      fileExport.clearCachedValues()
+    }
+
+    this.#exports.clear()
+    this.#modulePromise = undefined
+    this.#sections = undefined
   }
 
   #getModule() {
@@ -2080,8 +2501,41 @@ export class JavaScriptFile<
 
   /** Get all export names and positions from the JavaScript file. */
   async #getExports() {
-    const fileSystem = this.getParent().getFileSystem()
-    return fileSystem.getFileExports(this.absolutePath)
+    const directory = this.getParent()
+    const fileSystem = directory.getFileSystem()
+    const session = directory.getSession()
+    const filePath = this.absolutePath
+    const cacheFilePath = normalizeCachePath(filePath)
+    const nodeKey = createCacheNodeKey('js.exports', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      dependencyVersion: 2,
+      snapshot: session.snapshot.id,
+      filePath: cacheFilePath,
+    })
+
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        const fileExports = await fileSystem.getFileExports(this.absolutePath)
+        const dependencyPaths = new Set<string>([filePath])
+
+        for (const fileExport of fileExports) {
+          if (
+            typeof fileExport.path === 'string' &&
+            fileExport.path.length > 0
+          ) {
+            dependencyPaths.add(fileExport.path)
+          }
+        }
+
+        for (const dependencyPath of dependencyPaths) {
+          await ctx.recordFileDep(dependencyPath)
+        }
+
+        return fileExports
+      }
+    )
   }
 
   /** Get all exports from the JavaScript file. */
@@ -2281,8 +2735,25 @@ export class JavaScriptFile<
 
   /** Get the outlining ranges in the JavaScript file. */
   async getOutlineRanges(): Promise<OutlineRange[]> {
-    const fileSystem = this.getParent().getFileSystem()
-    return fileSystem.getOutlineRanges(this.absolutePath)
+    const directory = this.getParent()
+    const fileSystem = directory.getFileSystem()
+    const session = directory.getSession()
+    const filePath = this.absolutePath
+    const cacheFilePath = normalizeCachePath(filePath)
+    const nodeKey = createCacheNodeKey('js.outline', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: cacheFilePath,
+    })
+
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        return fileSystem.getOutlineRanges(this.absolutePath)
+      }
+    )
   }
 
   /** Get foldable ranges in the JavaScript file (IDE-style folding). */
@@ -2292,21 +2763,39 @@ export class JavaScriptFile<
   }
 
   override async getStructure(): Promise<FileStructure> {
-    const base = await this.getFileStructureBase()
-    const fileExports = await this.getExports()
-    const exports: ModuleExportStructure[] = []
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const { nodeKey, gitMetadata } =
+      await this.resolveStructureCacheState(session)
+    const filePath = this.absolutePath
 
-    for (const fileExport of fileExports) {
-      if (typeof (fileExport as any).getStructure === 'function') {
-        const exportStructure = await (fileExport as any).getStructure()
-        exports.push(exportStructure)
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+
+        const base = await this.getFileStructureBase(gitMetadata)
+        const fileExports = await this.getExports()
+        const exports: ModuleExportStructure[] = []
+
+        for (const fileExport of fileExports) {
+          if (typeof (fileExport as any).getStructure === 'function') {
+            const exportStructure = await (fileExport as any).getStructure()
+            exports.push(exportStructure)
+          }
+
+          if (typeof (fileExport as any).getStructureCacheKey === 'function') {
+            await ctx.recordNodeDep((fileExport as any).getStructureCacheKey())
+          }
+        }
+
+        return {
+          ...base,
+          exports: exports.length > 0 ? exports : undefined,
+        }
       }
-    }
-
-    return {
-      ...base,
-      exports: exports.length > 0 ? exports : undefined,
-    }
+    )
   }
 
   /** Check if an export exists statically in the JavaScript file. */
@@ -2373,6 +2862,11 @@ export class MDXModuleExport<Value> {
 
   get title() {
     return formatNameAsTitle(this.name)
+  }
+
+  clearCachedValues(): void {
+    this.#staticPromise = undefined
+    this.#runtimePromise = undefined
   }
 
   get slug() {
@@ -2550,6 +3044,285 @@ export interface MDXFileOptions<
   loader?: ModuleLoader<{ default: MDXContent } & Types>
 }
 
+const RENOUN_SECTION_JSX_MARKER = '__renounSectionJsx'
+
+interface SectionJsxFragment {
+  [RENOUN_SECTION_JSX_MARKER]: 'react-fragment'
+  children: SectionJsxValue[]
+}
+
+interface SectionJsxElement {
+  [RENOUN_SECTION_JSX_MARKER]: 'react-element'
+  type: string
+  props: Record<string, SectionJsxValue>
+  children: SectionJsxValue[]
+}
+
+type SectionJsxValue =
+  | null
+  | string
+  | number
+  | boolean
+  | SectionJsxFragment
+  | SectionJsxElement
+  | SectionJsxValue[]
+  | { [key: string]: SectionJsxValue }
+
+type PersistedContentSection = Omit<ContentSection, 'children' | 'jsx'> & {
+  children?: PersistedContentSection[]
+  jsx?: SectionJsxValue
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') {
+    return false
+  }
+
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+function isSectionJsxMarker(
+  value: unknown
+): value is SectionJsxFragment | SectionJsxElement {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>)[RENOUN_SECTION_JSX_MARKER] !== undefined
+  )
+}
+
+function isSerializedSectionJsxFragment(
+  value: SectionJsxFragment | SectionJsxElement
+): value is SectionJsxFragment {
+  return value[RENOUN_SECTION_JSX_MARKER] === 'react-fragment'
+}
+
+function isSerializedSectionJsxElement(
+  value: SectionJsxFragment | SectionJsxElement
+): value is SectionJsxElement {
+  return value[RENOUN_SECTION_JSX_MARKER] === 'react-element'
+}
+
+function isReactFragmentType(value: unknown): boolean {
+  return typeof value === 'symbol' && value.description === 'react.fragment'
+}
+
+function encodeSectionJsxValue(value: ReactNode): SectionJsxValue | undefined {
+  if (value === null) {
+    return null
+  }
+
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value
+  }
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (Array.isArray(value)) {
+    const encodedValues = value
+      .map((child) => encodeSectionJsxValue(child))
+      .filter((child) => child !== undefined)
+
+    return encodedValues
+  }
+
+  if (isValidElement(value)) {
+    const sectionJsxElement = value as {
+      type: unknown
+      props?: Record<string, unknown>
+    }
+    const type = sectionJsxElement.type
+    const rawProps = sectionJsxElement.props ?? {}
+
+    if (type === Fragment || isReactFragmentType(type)) {
+      const children = encodeSectionJsxValue(rawProps['children'] as ReactNode)
+
+      return {
+        [RENOUN_SECTION_JSX_MARKER]: 'react-fragment',
+        children:
+          children === undefined
+            ? []
+            : Array.isArray(children)
+              ? children
+              : [children],
+      }
+    }
+
+    if (typeof type !== 'string') {
+      return undefined
+    }
+
+    const props: Record<string, SectionJsxValue> = {}
+
+    for (const [key, propValue] of Object.entries(rawProps)) {
+      if (key === 'children') {
+        continue
+      }
+
+      const encodedProp = encodeSectionJsxValue(propValue as ReactNode)
+      if (encodedProp !== undefined) {
+        props[key] = encodedProp
+      }
+    }
+
+    const children = encodeSectionJsxValue(rawProps['children'] as ReactNode)
+
+    return {
+      [RENOUN_SECTION_JSX_MARKER]: 'react-element',
+      type,
+      props,
+      children:
+        children === undefined
+          ? []
+          : Array.isArray(children)
+            ? children
+            : [children],
+    }
+  }
+
+  if (isPlainObject(value)) {
+    const encodedProps: Record<string, SectionJsxValue> = {}
+
+    for (const [key, propValue] of Object.entries(value)) {
+      const encodedProp = encodeSectionJsxValue(propValue as ReactNode)
+      if (encodedProp !== undefined) {
+        encodedProps[key] = encodedProp
+      }
+    }
+
+    return encodedProps
+  }
+
+  return undefined
+}
+
+function decodeSectionJsxValue(value: unknown): ReactNode {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value
+  }
+
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (isValidElement(value)) {
+    return value
+  }
+
+  if (isSectionJsxMarker(value)) {
+    const markerValue = value
+    const children = Array.isArray(markerValue.children)
+      ? markerValue.children
+      : []
+    const decodedChildren = children.map((child) =>
+      decodeSectionJsxValue(child)
+    )
+
+    if (isSerializedSectionJsxFragment(value)) {
+      return createElement(Fragment, undefined, ...decodedChildren)
+    }
+
+    if (isSerializedSectionJsxElement(value)) {
+      const props: Record<string, unknown> = {}
+      const rawProps = value.props ?? {}
+
+      for (const [key, propValue] of Object.entries(rawProps)) {
+        props[key] = decodeSectionJsxValue(propValue)
+      }
+
+      return createElement(value.type, props, ...decodedChildren)
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((child) => decodeSectionJsxValue(child))
+  }
+
+  if (isPlainObject(value)) {
+    const decoded: Record<string, unknown> = {}
+    for (const [key, propValue] of Object.entries(value)) {
+      decoded[key] = decodeSectionJsxValue(propValue)
+    }
+
+    return decoded as unknown as ReactNode
+  }
+
+  return undefined
+}
+
+function serializeSectionForCache(
+  section: ContentSection
+): PersistedContentSection {
+  const { children, jsx, ...rest } = section
+  const persisted: PersistedContentSection = {
+    ...rest,
+  }
+
+  if (children !== undefined) {
+    persisted.children = children.map(serializeSectionForCache)
+  }
+
+  if (jsx !== undefined) {
+    const encodedJsx = encodeSectionJsxValue(jsx)
+    if (encodedJsx !== undefined) {
+      persisted.jsx = encodedJsx
+    }
+  }
+
+  return persisted
+}
+
+function serializeSectionsForCache(
+  sections: ContentSection[]
+): PersistedContentSection[] {
+  return sections.map(serializeSectionForCache)
+}
+
+function deserializeSectionFromCache(
+  section: PersistedContentSection
+): ContentSection {
+  const { children, jsx, ...rest } = section
+  const decoded: ContentSection = {
+    ...rest,
+  }
+
+  if (children !== undefined) {
+    decoded.children = children.map(deserializeSectionFromCache)
+  }
+
+  if (jsx !== undefined) {
+    const decodedJsx = decodeSectionJsxValue(jsx)
+    if (decodedJsx !== undefined) {
+      decoded.jsx = decodedJsx as ContentSection['jsx']
+    }
+  }
+
+  return decoded
+}
+
+function deserializeSectionsFromCache(sections: unknown): ContentSection[] {
+  if (!Array.isArray(sections)) {
+    return []
+  }
+
+  return sections.map((section) =>
+    deserializeSectionFromCache(section as PersistedContentSection)
+  )
+}
+
 /** An MDX file in the file system. */
 export class MDXFile<
   Types extends Record<string, any> = { default: MDXContent },
@@ -2573,13 +3346,24 @@ export class MDXFile<
   }: MDXFileOptions<{ default: MDXContent } & Types, DirectoryTypes, Path>) {
     super(fileOptions)
 
-    if (loader === undefined) {
-      this.#loader = typedDefaultLoaders.mdx
-    } else {
+    if (loader !== undefined) {
       this.#loader = loader
     }
 
     this.#slugCasing = fileOptions.slugCasing ?? 'kebab'
+  }
+
+  protected override invalidateCachedValues(): void {
+    super.invalidateCachedValues()
+    for (const fileExport of this.#exports.values()) {
+      fileExport.clearCachedValues()
+    }
+    this.#exports.clear()
+    this.#sections = undefined
+    this.#modulePromise = undefined
+    this.#rawSource = undefined
+    this.#parsedSource = undefined
+    this.#resolvingFrontmatter = false
   }
 
   async #getRawSource() {
@@ -2610,29 +3394,63 @@ export class MDXFile<
     return this.#getRawSource()
   }
 
-  async getFrontmatter(): Promise<Record<string, unknown> | undefined> {
-    if (!this.#resolvingFrontmatter) {
-      try {
-        this.#resolvingFrontmatter = true
-        const frontmatter = (await this.getExportValue(
-          'frontmatter' as any
-        )) as Record<string, unknown> | undefined
+  #getFrontmatterCacheNodeKey() {
+    const session = this.getParent().getSession()
+    return createCacheNodeKey('mdx.frontmatter', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.absolutePath),
+    })
+  }
 
-        if (frontmatter !== undefined) {
-          return frontmatter
-        }
-      } catch (error) {
-        if (!(error instanceof ModuleExportNotFoundError)) {
-          throw error
-        }
-      } finally {
-        this.#resolvingFrontmatter = false
-      }
+  #getSectionsCacheNodeKey() {
+    const session = this.getParent().getSession()
+    return createCacheNodeKey('mdx.sections', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.absolutePath),
+    })
+  }
+
+  async getFrontmatter(): Promise<Record<string, unknown> | undefined> {
+    if (this.#resolvingFrontmatter) {
+      const result = await this.#getSourceWithFrontmatter()
+      return result.frontmatter
     }
 
-    const result = await this.#getSourceWithFrontmatter()
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const filePath = this.absolutePath
+    const nodeKey = this.#getFrontmatterCacheNodeKey()
 
-    return result.frontmatter
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+
+        try {
+          this.#resolvingFrontmatter = true
+          const frontmatter = (await this.getExportValue(
+            'frontmatter' as any
+          )) as Record<string, unknown> | undefined
+
+          if (frontmatter !== undefined) {
+            return frontmatter
+          }
+        } catch (error) {
+          if (!(error instanceof ModuleExportNotFoundError)) {
+            throw error
+          }
+        } finally {
+          this.#resolvingFrontmatter = false
+        }
+
+        const result = await this.#getSourceWithFrontmatter()
+
+        return result.frontmatter
+      }
+    )
   }
 
   async getChatGPTUrl(): Promise<string> {
@@ -2715,41 +3533,77 @@ export class MDXFile<
   /** Get sections parsed from the MDX content based on headings. */
   async getSections(): Promise<ContentSection[]> {
     if (!this.#sections) {
-      try {
-        this.#sections = await this.getExport('sections' as any).then(
-          (fileExport) => fileExport.getValue()
-        )
-      } catch (error) {
-        if (!(error instanceof ModuleExportNotFoundError)) {
-          throw error
-        }
-      }
+      const directory = this.getParent()
+      const session = directory.getSession()
+      const filePath = this.absolutePath
+      const nodeKey = this.#getSectionsCacheNodeKey()
 
-      if (!this.#sections) {
-        const source = await this.getText()
-        this.#sections = getMDXSections(source) as ContentSection[]
-      }
+      const persistedSections = await session.cache.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (ctx) => {
+          await ctx.recordFileDep(filePath)
+
+          let resolvedSections: ContentSection[] | undefined
+
+          try {
+            resolvedSections = await this.getExport('sections' as any).then(
+              (fileExport) => fileExport.getValue()
+            )
+          } catch (error) {
+            if (!(error instanceof ModuleExportNotFoundError)) {
+              throw error
+            }
+          }
+
+          if (!resolvedSections) {
+            const source = await this.getText()
+            resolvedSections = getMDXSections(source) as ContentSection[]
+          }
+
+          return serializeSectionsForCache(resolvedSections)
+        }
+      )
+
+      this.#sections = deserializeSectionsFromCache(persistedSections)
     }
 
     return this.#sections ?? []
   }
 
   override async getStructure(): Promise<FileStructure> {
-    const base = await this.getFileStructureBase()
-    const [frontmatter, sections] = await Promise.all([
-      this.getFrontmatter().catch(() => undefined),
-      this.getSections().catch(() => undefined),
-    ])
-    const description =
-      (frontmatter?.['description'] as string | undefined) ??
-      (sections && sections.length > 0 ? sections[0]!.title : undefined)
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const { nodeKey, gitMetadata } =
+      await this.resolveStructureCacheState(session)
+    const filePath = this.absolutePath
 
-    return {
-      ...base,
-      frontmatter,
-      sections,
-      description,
-    }
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+
+        const base = await this.getFileStructureBase(gitMetadata)
+        const [frontmatter, sections] = await Promise.all([
+          this.getFrontmatter().catch(() => undefined),
+          this.getSections().catch(() => undefined),
+        ])
+        await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
+        await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
+
+        const description =
+          (frontmatter?.['description'] as string | undefined) ??
+          (sections && sections.length > 0 ? sections[0]!.title : undefined)
+
+        return {
+          ...base,
+          frontmatter,
+          sections,
+          description,
+        }
+      }
+    )
   }
 
   /** Check if an export exists at runtime in the MDX file. */
@@ -2803,19 +3657,30 @@ export class MDXFile<
   }
 
   #getModule() {
-    if (this.#loader === undefined) {
-      const parentPath = this.getParent().relativePath
-
-      throw new Error(
-        `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
-      )
-    }
-
     const path = removeExtension(this.relativePath)
-    const loader = this.#loader
     let executeModuleLoader: () => Promise<any>
 
     executeModuleLoader = async () => {
+      let loader = this.#loader
+
+      if (loader === undefined) {
+        loader = (await getRuntimeDefaultLoader('mdx')) as
+          | ModuleLoader<{ default: MDXContent } & Types>
+          | undefined
+
+        if (loader) {
+          this.#loader = loader
+        }
+      }
+
+      if (loader === undefined) {
+        const parentPath = this.getParent().relativePath
+
+        throw new Error(
+          `[renoun] An mdx loader for the parent Directory at ${parentPath} is not defined.`
+        )
+      }
+
       const moduleValue = await unwrapModuleResult(loader(path, this))
       const schemaOption =
         this.schema ??
@@ -2872,7 +3737,7 @@ export class MarkdownFile<
   Extension extends string = ExtractFileExtension<Path>,
   SchemaOption extends DirectorySchemaOption | undefined = undefined,
 > extends File<DirectoryTypes, Path, Extension> {
-  #loader: ModuleLoader<{ default: MDXContent } & Types>
+  #loader?: ModuleLoader<{ default: MDXContent } & Types>
   #sections?: ContentSection[]
   #modulePromise?: Promise<any>
   #rawSource?: Promise<string>
@@ -2889,7 +3754,19 @@ export class MarkdownFile<
     SchemaOption
   >) {
     super(fileOptions)
-    this.#loader = loader ?? typedDefaultLoaders.md
+
+    if (loader !== undefined) {
+      this.#loader = loader
+    }
+  }
+
+  protected override invalidateCachedValues(): void {
+    super.invalidateCachedValues()
+    this.#modulePromise = undefined
+    this.#rawSource = undefined
+    this.#parsedSource = undefined
+    this.#sections = undefined
+    this.#resolvingFrontmatter = false
   }
 
   async #getRawSource() {
@@ -2920,28 +3797,62 @@ export class MarkdownFile<
     return this.#getRawSource()
   }
 
-  async getFrontmatter(): Promise<Record<string, unknown> | undefined> {
-    if (!this.#resolvingFrontmatter) {
-      try {
-        this.#resolvingFrontmatter = true
-        const frontmatter = (await this.getExportValue(
-          'frontmatter' as any
-        )) as Record<string, unknown> | undefined
+  #getFrontmatterCacheNodeKey() {
+    const session = this.getParent().getSession()
+    return createCacheNodeKey('md.frontmatter', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.absolutePath),
+    })
+  }
 
-        if (frontmatter !== undefined) {
-          return frontmatter
-        }
-      } catch (error) {
-        if (!(error instanceof ModuleExportNotFoundError)) {
-          throw error
-        }
-      } finally {
-        this.#resolvingFrontmatter = false
-      }
+  #getSectionsCacheNodeKey() {
+    const session = this.getParent().getSession()
+    return createCacheNodeKey('md.sections', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizeCachePath(this.absolutePath),
+    })
+  }
+
+  async getFrontmatter(): Promise<Record<string, unknown> | undefined> {
+    if (this.#resolvingFrontmatter) {
+      const result = await this.#getSourceWithFrontmatter()
+      return result.frontmatter
     }
 
-    const result = await this.#getSourceWithFrontmatter()
-    return result.frontmatter
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const filePath = this.absolutePath
+    const nodeKey = this.#getFrontmatterCacheNodeKey()
+
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+
+        try {
+          this.#resolvingFrontmatter = true
+          const frontmatter = (await this.getExportValue(
+            'frontmatter' as any
+          )) as Record<string, unknown> | undefined
+
+          if (frontmatter !== undefined) {
+            return frontmatter
+          }
+        } catch (error) {
+          if (!(error instanceof ModuleExportNotFoundError)) {
+            throw error
+          }
+        } finally {
+          this.#resolvingFrontmatter = false
+        }
+
+        const result = await this.#getSourceWithFrontmatter()
+        return result.frontmatter
+      }
+    )
   }
 
   async getChatGPTUrl(): Promise<string> {
@@ -2960,9 +3871,27 @@ export class MarkdownFile<
 
   #getModule() {
     const path = removeExtension(this.relativePath)
-    const loader = this.#loader
-
     const executeModuleLoader = async () => {
+      let loader = this.#loader
+
+      if (loader === undefined) {
+        loader = (await getRuntimeDefaultLoader('md')) as
+          | ModuleLoader<{ default: MDXContent } & Types>
+          | undefined
+
+        if (loader) {
+          this.#loader = loader
+        }
+      }
+
+      if (loader === undefined) {
+        const parentPath = this.getParent().relativePath
+
+        throw new Error(
+          `[renoun] A markdown loader for the parent Directory at ${parentPath} is not defined.`
+        )
+      }
+
       const moduleValue = await unwrapModuleResult(loader(path, this))
       const schemaOption =
         this.schema ??
@@ -2998,28 +3927,57 @@ export class MarkdownFile<
   /** Get sections parsed from the markdown content based on headings. */
   async getSections(): Promise<ContentSection[]> {
     if (!this.#sections) {
-      const source = await this.getText()
-      this.#sections = getMarkdownSections(source) as ContentSection[]
+      const directory = this.getParent()
+      const session = directory.getSession()
+      const filePath = this.absolutePath
+      const nodeKey = this.#getSectionsCacheNodeKey()
+
+      this.#sections = await session.cache.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (ctx) => {
+          await ctx.recordFileDep(filePath)
+          const source = await this.getText()
+          return getMarkdownSections(source) as ContentSection[]
+        }
+      )
     }
     return this.#sections ?? []
   }
 
   override async getStructure(): Promise<FileStructure> {
-    const base = await this.getFileStructureBase()
-    const [frontmatter, sections] = await Promise.all([
-      this.getFrontmatter().catch(() => undefined),
-      this.getSections().catch(() => undefined),
-    ])
-    const description =
-      (frontmatter?.['description'] as string | undefined) ??
-      (sections && sections.length > 0 ? sections[0]!.title : undefined)
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const { nodeKey, gitMetadata } =
+      await this.resolveStructureCacheState(session)
+    const filePath = this.absolutePath
 
-    return {
-      ...base,
-      frontmatter,
-      sections,
-      description,
-    }
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+
+        const base = await this.getFileStructureBase(gitMetadata)
+        const [frontmatter, sections] = await Promise.all([
+          this.getFrontmatter().catch(() => undefined),
+          this.getSections().catch(() => undefined),
+        ])
+        await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
+        await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
+
+        const description =
+          (frontmatter?.['description'] as string | undefined) ??
+          (sections && sections.length > 0 ? sections[0]!.title : undefined)
+
+        return {
+          ...base,
+          frontmatter,
+          sections,
+          description,
+        }
+      }
+    )
   }
 
   /** Get the runtime value of an export in the Markdown file. (Permissive signature for union compatibility.) */
@@ -3144,6 +4102,9 @@ export interface BaseDirectoryOptions<
   /** Slug casing applied to route segments. */
   slugCasing?: SlugCasing
 
+  /** Optional cache provider for directory/session-level caching. */
+  cache?: Cache
+
   /** Sort callback applied at *each* directory depth. */
   sort?: SortDescriptor<
     FileSystemEntry<ApplyDirectorySchema<LoaderTypes, NoInferType<Schema>>>
@@ -3215,14 +4176,14 @@ export type DirectoryOptions<
   | GitDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
   | FileSystemDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
 
-const enum DirectorySnapshotOptionBit {
-  Recursive = 1 << 0,
-  IncludeDirectoryNamedFiles = 1 << 1,
-  IncludeIndexAndReadmeFiles = 1 << 2,
-  IncludeGitIgnoredFiles = 1 << 3,
-  IncludeTsConfigExcludedFiles = 1 << 4,
-  IncludeHiddenFiles = 1 << 5,
-}
+const DIRECTORY_SNAPSHOT_OPTION_BIT = {
+  Recursive: 1 << 0,
+  IncludeDirectoryNamedFiles: 1 << 1,
+  IncludeIndexAndReadmeFiles: 1 << 2,
+  IncludeGitIgnoredFiles: 1 << 3,
+  IncludeTsConfigExcludedFiles: 1 << 4,
+  IncludeHiddenFiles: 1 << 5,
+} as const
 
 interface NormalizedDirectoryEntriesOptions {
   recursive: boolean
@@ -3240,6 +4201,7 @@ type DirectorySnapshotMetadataEntry<LoaderTypes extends Record<string, any>> =
 interface FileEntryMetadata<LoaderTypes extends Record<string, any>> {
   kind: 'File'
   entry: FileSystemEntry<LoaderTypes>
+  path: string
   includeInFinal: boolean
   isGitIgnored: boolean
   isIndexOrReadme: boolean
@@ -3252,6 +4214,7 @@ interface FileEntryMetadata<LoaderTypes extends Record<string, any>> {
 interface DirectoryEntryMetadata<LoaderTypes extends Record<string, any>> {
   kind: 'Directory'
   entry: Directory<LoaderTypes>
+  path: string
   includeInFinal: boolean
   passesFilterSelf: boolean
   snapshot: DirectorySnapshot<
@@ -3264,30 +4227,323 @@ function createOptionsMask(options: NormalizedDirectoryEntriesOptions) {
   let mask = 0
 
   if (options.recursive) {
-    mask |= DirectorySnapshotOptionBit.Recursive
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.Recursive
   }
 
   if (options.includeDirectoryNamedFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeDirectoryNamedFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeDirectoryNamedFiles
   }
 
   if (options.includeIndexAndReadmeFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeIndexAndReadmeFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeIndexAndReadmeFiles
   }
 
   if (options.includeGitIgnoredFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeGitIgnoredFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeGitIgnoredFiles
   }
 
   if (options.includeTsConfigExcludedFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeTsConfigExcludedFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeTsConfigExcludedFiles
   }
 
   if (options.includeHiddenFiles) {
-    mask |= DirectorySnapshotOptionBit.IncludeHiddenFiles
+    mask |= DIRECTORY_SNAPSHOT_OPTION_BIT.IncludeHiddenFiles
   }
 
   return mask
+}
+
+const DIRECTORY_DEPENDENCY_PREFIX = 'dir:'
+const DIRECTORY_MTIME_DEPENDENCY_PREFIX = 'dir-mtime:'
+const FILE_DEPENDENCY_PREFIX = 'file:'
+const PRODUCTION_SNAPSHOT_REVALIDATE_INTERVAL_MS = 250
+const DIRECTORY_SNAPSHOT_COORDINATION_KEY_PREFIX = 'dir:resolve:'
+const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
+
+function shouldTrackDirectoryMtime(fileSystem: FileSystem): boolean {
+  const constructorName = fileSystem.constructor?.name ?? ''
+  return (
+    constructorName === 'NodeFileSystem' ||
+    constructorName === 'NestedCwdNodeFileSystem' ||
+    constructorName === 'GitFileSystem'
+  )
+}
+
+function shouldValidatePersistedFileDependencies(
+  fileSystem: FileSystem
+): boolean {
+  const constructorName = fileSystem.constructor?.name ?? ''
+  return (
+    constructorName === 'NodeFileSystem' ||
+    constructorName === 'NestedCwdNodeFileSystem' ||
+    constructorName === 'InMemoryFileSystem'
+  )
+}
+
+function shouldPersistDirectorySnapshots(fileSystem: FileSystem): boolean {
+  const maybeIsDeterministic = (
+    fileSystem as {
+      isPersistentCacheDeterministic?: () => boolean
+    }
+  ).isPersistentCacheDeterministic
+
+  if (typeof maybeIsDeterministic !== 'function') {
+    return true
+  }
+
+  try {
+    return maybeIsDeterministic.call(fileSystem)
+  } catch {
+    return false
+  }
+}
+
+function normalizeWorkspacePathKey(
+  fileSystem: FileSystem,
+  path: string
+): string {
+  return normalizePathKey(fileSystem.getRelativePathToWorkspace(path))
+}
+
+function createDependencyPathKey(
+  fileSystem: FileSystem,
+  prefix: string,
+  path: string
+): string {
+  return `${prefix}${normalizeWorkspacePathKey(fileSystem, path)}`
+}
+
+function extractDependencyPathKey(depKey: string): string | undefined {
+  if (depKey.startsWith(FILE_DEPENDENCY_PREFIX)) {
+    return normalizePathKey(depKey.slice(FILE_DEPENDENCY_PREFIX.length))
+  }
+
+  if (depKey.startsWith(DIRECTORY_DEPENDENCY_PREFIX)) {
+    return normalizePathKey(depKey.slice(DIRECTORY_DEPENDENCY_PREFIX.length))
+  }
+
+  if (depKey.startsWith(DIRECTORY_MTIME_DEPENDENCY_PREFIX)) {
+    return normalizePathKey(
+      depKey.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
+    )
+  }
+
+  return undefined
+}
+
+function collectDependencyPathKeys(
+  dependencySignatures: Iterable<[string, string]>
+): Set<string> {
+  const dependencyPathKeys = new Set<string>()
+
+  for (const [dependencyKey] of dependencySignatures) {
+    const dependencyPathKey = extractDependencyPathKey(dependencyKey)
+    if (dependencyPathKey) {
+      dependencyPathKeys.add(dependencyPathKey)
+    }
+  }
+
+  return dependencyPathKeys
+}
+
+function toDirectorySnapshotDependencyIndexKey(depKey: string): string {
+  return `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${depKey}:1`
+}
+
+function toDirectorySnapshotDependencyIndexEntries(
+  dependencySignatures: Iterable<[string, string]>
+): Array<{ depKey: string; depVersion: string }> {
+  const dependencyEntries: Array<{ depKey: string; depVersion: string }> = []
+  for (const [dependencyKey] of dependencySignatures) {
+    dependencyEntries.push({
+      depKey: toDirectorySnapshotDependencyIndexKey(dependencyKey),
+      depVersion: '1',
+    })
+  }
+
+  dependencyEntries.sort((first, second) =>
+    first.depKey.localeCompare(second.depKey)
+  )
+
+  return dependencyEntries
+}
+
+function toFileSystemPathFromPathKey(pathKey: string): string {
+  const normalizedInput = normalizeSlashes(pathKey)
+  if (
+    normalizedInput.startsWith('/') ||
+    /^[A-Za-z]:\//.test(normalizedInput) ||
+    normalizedInput.startsWith('//')
+  ) {
+    return normalizedInput
+  }
+
+  const normalizedPathKey = normalizePathKey(normalizedInput)
+  return normalizedPathKey === '.' ? '.' : ensureRelativePath(normalizedPathKey)
+}
+
+function pathKeySetsIntersect(
+  firstSet: ReadonlySet<string>,
+  secondSet: ReadonlySet<string>
+): boolean {
+  if (firstSet.size === 0 || secondSet.size === 0) {
+    return false
+  }
+
+  for (const firstPath of firstSet) {
+    for (const secondPath of secondSet) {
+      if (pathKeysIntersect(firstPath, secondPath)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+function mergeKnownPathKeySets(
+  firstSet: ReadonlySet<string> | null,
+  secondSet: ReadonlySet<string> | undefined
+): ReadonlySet<string> | undefined {
+  if (firstSet === null) {
+    return secondSet
+  }
+
+  if (!secondSet || secondSet.size === 0) {
+    return firstSet
+  }
+
+  const merged = new Set(firstSet)
+  for (const path of secondSet) {
+    merged.add(path)
+  }
+
+  return merged
+}
+
+function isTrustedWorkspaceChangeToken(
+  token: string | null | undefined
+): boolean {
+  if (!token) {
+    return false
+  }
+
+  return !token.includes(';ignored-only:1')
+}
+
+function pathKeysIntersect(firstPath: string, secondPath: string): boolean {
+  const firstKey = normalizePathKey(firstPath)
+  const secondKey = normalizePathKey(secondPath)
+  if (firstKey === '.' || secondKey === '.') {
+    return true
+  }
+
+  return (
+    firstKey === secondKey ||
+    firstKey.startsWith(`${secondKey}/`) ||
+    secondKey.startsWith(`${firstKey}/`)
+  )
+}
+
+function isSessionSnapshotPersistable(options: {
+  filter?: unknown
+  filterPattern?: string
+  sort?: unknown
+}): boolean {
+  if (
+    typeof options.filter === 'function' &&
+    options.filterPattern === undefined
+  ) {
+    return false
+  }
+
+  if (typeof options.sort === 'function') {
+    return false
+  }
+
+  if (Array.isArray(options.sort)) {
+    return false
+  }
+
+  if (
+    typeof options.sort === 'object' &&
+    options.sort !== null &&
+    'key' in options.sort
+  ) {
+    const sortDescriptor = options.sort as {
+      key?: unknown
+      compare?: unknown
+    }
+
+    if (typeof sortDescriptor.key !== 'string') {
+      return false
+    }
+
+    if (typeof sortDescriptor.compare === 'function') {
+      return false
+    }
+
+    return true
+  }
+
+  if (typeof options.sort === 'object' && options.sort !== null) {
+    return false
+  }
+
+  return true
+}
+
+async function getDirectoryEntryListingSignature(
+  snapshot: Snapshot,
+  fileSystem: FileSystem,
+  entry: {
+    path: string
+    isDirectory: boolean
+    isFile: boolean
+  }
+): Promise<string> {
+  try {
+    const contentId = await snapshot.contentId(entry.path)
+    if (contentId && contentId !== 'missing') {
+      return `content:${contentId}`
+    }
+  } catch {
+    // Fall back to metadata-based signature.
+  }
+
+  const [modifiedMs, byteLength] = await Promise.all([
+    fileSystem.getFileLastModifiedMs(entry.path).catch(() => undefined),
+    fileSystem.getFileByteLength(entry.path).catch(() => undefined),
+  ])
+
+  if (modifiedMs !== undefined || byteLength !== undefined) {
+    return `mtime:${String(modifiedMs ?? 'missing')};size:${String(byteLength ?? 'missing')}`
+  }
+
+  return 'missing'
+}
+
+function createDirectoryListingSignature(
+  entries: ReadonlyArray<{
+    name: string
+    isDirectory: boolean
+    isFile: boolean
+    signature?: string
+  }>
+): string {
+  if (entries.length === 0) {
+    return ''
+  }
+
+  const encodedEntries = entries
+    .map((entry) => {
+      const entryType = entry.isDirectory ? 'd' : entry.isFile ? 'f' : 'o'
+      const signature = entry.signature ? `sig:${entry.signature}` : ''
+      return `${entryType}:${entry.name}|${signature}`
+    })
+    .sort()
+
+  return encodedEntries.join('\u0000')
 }
 
 /** A directory containing files and subdirectories in the file system. */
@@ -3329,12 +4585,16 @@ export class Directory<
         entry: FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
       ) => Promise<boolean> | boolean)
     | Minimatch
+  #cache?: Cache
   #filterCache?: WeakMap<
     FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>,
     boolean
   >
   #simpleFilter?: { recursive: boolean; extensions: Set<string> }
   #sort?: any
+  #structureGitMetadata?: GitMetadata
+  #structureWorkspaceChangeToken?: string
+  #structureCacheSessionKey?: string
 
   constructor(
     options?: GitDirectoryOptions<Types, LoaderTypes, Loaders, Schema, Filter>
@@ -3358,24 +4618,14 @@ export class Directory<
       this.#slugCasing = 'kebab'
       this.#tsConfigPath = 'tsconfig.json'
     } else {
+      this.#cache = options.cache
+      const hasCustomFileSystem =
+        'fileSystem' in options && options.fileSystem !== undefined
+
       if (options.path) {
         const resolved = resolveSchemePath(options.path)
         if (resolved.startsWith('/')) {
-          // If the resolved path is inside the workspace, store a workspace‑relative path
-          const workspaceRoot = normalizeSlashes(getRootDirectory())
-          const absoluteResolved = normalizeSlashes(resolved)
-          if (
-            absoluteResolved === workspaceRoot ||
-            absoluteResolved.startsWith(
-              workspaceRoot.endsWith('/') ? workspaceRoot : `${workspaceRoot}/`
-            )
-          ) {
-            // Store absolute (workspace‑anchored) path to avoid cwd coupling
-            this.#path = absoluteResolved
-          } else {
-            // Keep external absolute path as is
-            this.#path = resolved
-          }
+          this.#path = resolved
         } else {
           this.#path = ensureRelativePath(resolved)
         }
@@ -3396,9 +4646,6 @@ export class Directory<
         getClosestFile('tsconfig.json', this.#path) ??
         'tsconfig.json'
       this.#slugCasing = options.slugCasing ?? 'kebab'
-
-      const hasCustomFileSystem =
-        'fileSystem' in options && options.fileSystem !== undefined
 
       const repositoryOption = normalizeRepositoryInput(options.repository)
 
@@ -3539,6 +4786,7 @@ export class Directory<
       schema: this.#schema,
       loader: this.#loader,
       filter: this.#filter as any,
+      cache: this.#cache,
       sort: this.#sort,
       ...(this.#fileSystem ? { fileSystem: this.#fileSystem } : {}),
       ...(this.#repository ? { repository: this.#repository } : {}),
@@ -3562,6 +4810,7 @@ export class Directory<
     directory.#pathLookup = this.#pathLookup
     directory.#resolvedLoaders = this.#resolvedLoaders
     directory.#hasExplicitLoader = this.#hasExplicitLoader
+    directory.#session = this.#session
 
     return directory
   }
@@ -3661,11 +4910,10 @@ export class Directory<
     if (repository) {
       const normalizedRepository = normalizeRepositoryInput(repository)
       if (normalizedRepository) {
-        this.#repository = normalizedRepository
         const sparsePath = this.#fileSystem
           ? this.#fileSystem.getRelativePathToWorkspace(this.#path)
           : this.#path
-        this.#repository.registerSparsePath(sparsePath)
+        normalizedRepository.registerSparsePath(sparsePath)
         return normalizedRepository
       }
     }
@@ -3702,8 +4950,7 @@ export class Directory<
 
     for (const entry of rawEntries) {
       // Always include index/readme and directory‑named files during traversal.
-      const entryKey =
-        entry.isDirectory || true ? entry.path : removeAllExtensions(entry.path)
+      const entryKey = entry.path
 
       if (entriesMap.has(entryKey)) {
         continue
@@ -3760,9 +5007,9 @@ export class Directory<
   ): Promise<FileSystemEntry<LoaderTypes>> {
     // Fast path try direct path lookup without hydrating the directory.
     if (segments.length > 0) {
-      const directoryWorkspacePath = directory.workspacePath
-        .replace(/^\.\/?/, '')
-        .replace(/\/$/, '')
+      const directoryWorkspacePath = trimTrailingSlashes(
+        trimLeadingDotPrefix(directory.workspacePath)
+      )
       const targetPath =
         (directoryWorkspacePath ? directoryWorkspacePath + '/' : '') +
         segments.join('/')
@@ -4215,10 +5462,7 @@ export class Directory<
   async getDirectory(path: string | string[]): Promise<Directory<LoaderTypes>> {
     const segments = Array.isArray(path)
       ? path.map(normalizeSlashes)
-      : normalizeSlashes(path)
-          .replace(/^\.\/?/, '')
-          .split('/')
-          .filter(Boolean)
+      : trimLeadingDotPrefix(normalizeSlashes(path)).split('/').filter(Boolean)
     let currentDirectory = this as Directory<LoaderTypes>
 
     while (segments.length > 0) {
@@ -4344,11 +5588,8 @@ export class Directory<
     }
   }
 
-  #snapshotCache = new Map<
-    number,
-    DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
-  >()
   #pathLookup = new Map<string, FileSystemEntry<LoaderTypes>>()
+  #session?: Session
 
   /**
    * Add an entry to the path lookup table. This avoids the need to traverse the
@@ -4359,14 +5600,14 @@ export class Directory<
     this.#pathLookup.set(routePath, entry)
 
     // Remove leading and trailing slashes
-    const normalizedPath = routePath.replace(/^\.\/?/, '').replace(/\/$/, '')
+    const normalizedPath = trimTrailingSlashes(trimLeadingDotPrefix(routePath))
     this.#pathLookup.set(normalizedPath, entry)
     // Also index by workspace-relative filesystem path so lookups by raw path
     // (e.g. "fixtures/docs/index") can short-circuit hydration.
     const workspacePath = entry.workspacePath
-    const normalizedWorkspacePath = workspacePath
-      .replace(/^\.\/?/, '')
-      .replace(/\/$/, '')
+    const normalizedWorkspacePath = trimTrailingSlashes(
+      trimLeadingDotPrefix(workspacePath)
+    )
     this.#pathLookup.set(normalizedWorkspacePath, entry)
     // For files, also index the workspace path without extensions to match
     // extension-agnostic lookups.
@@ -4378,8 +5619,534 @@ export class Directory<
     }
   }
 
-  invalidateSnapshots() {
-    this.#snapshotCache.clear()
+  #getSession() {
+    const current = Session.for(this.getFileSystem(), undefined, this.#cache)
+    if (this.#session !== current) {
+      this.#session = current
+    }
+
+    return this.#session
+  }
+
+  /** @internal */
+  getSession() {
+    return this.#getSession()
+  }
+
+  #getFilterSignature() {
+    if (this.#filterPattern) {
+      return `pattern:${this.#filterPattern}`
+    }
+
+    const filter = this.#filter
+    if (!filter) {
+      return 'filter:none'
+    }
+
+    if (typeof filter === 'function') {
+      return this.#getSession().getFunctionId(filter, 'filter')
+    }
+
+    if (filter instanceof Minimatch) {
+      return `pattern:${filter.pattern}`
+    }
+
+    return `filter:${this.#getSession().createValueSignature(filter, 'filter')}`
+  }
+
+  #getSortSignature() {
+    if (!this.#sort) {
+      return 'sort:none'
+    }
+
+    if (typeof this.#sort === 'function') {
+      return this.#getSession().getFunctionId(this.#sort, 'sort')
+    }
+
+    if (typeof this.#sort === 'string') {
+      return `sort:string:${this.#sort}`
+    }
+
+    return `sort:${this.#getSession().createValueSignature(this.#sort, 'sort')}`
+  }
+
+  #canPersistStructureCache() {
+    return isSessionSnapshotPersistable({
+      filter: this.#filter,
+      filterPattern: this.#filterPattern,
+      sort: this.#sort,
+    })
+  }
+
+  #getSessionSnapshotKey(mask: number) {
+    return this.#getSession().createDirectorySnapshotKey({
+      directoryPath: this.absolutePath,
+      mask,
+      filterSignature: this.#getFilterSignature(),
+      sortSignature: this.#getSortSignature(),
+      basePathname: this.#basePathname,
+      rootPath: this.getRootPath(),
+    })
+  }
+
+  #getParentDirectoryPath(path: string): string {
+    const normalizedPath = this.#normalizeSnapshotPath(path)
+
+    if (!normalizedPath || normalizedPath === '.') {
+      return '.'
+    }
+
+    const parentPath = directoryName(normalizedPath)
+    if (!parentPath) {
+      return '.'
+    }
+
+    return this.#normalizeSnapshotPath(parentPath)
+  }
+
+  #normalizeSnapshotPath(path: string): string {
+    const normalizedPath = trimLeadingCurrentDirPrefix(normalizeSlashes(path))
+
+    if (!normalizedPath || normalizedPath === '.') {
+      return '.'
+    }
+
+    if (normalizedPath === '/') {
+      return '/'
+    }
+
+    let end = normalizedPath.length
+
+    while (end > 0 && normalizedPath[end - 1] === '/') {
+      end -= 1
+    }
+
+    return end === normalizedPath.length
+      ? normalizedPath
+      : normalizedPath.slice(0, end)
+  }
+
+  #normalizePersistedSnapshotPath(path: string | undefined): string {
+    if (typeof path !== 'string') {
+      return '.'
+    }
+
+    const normalizedPath = this.#normalizeSnapshotPath(path)
+    if (!normalizedPath || normalizedPath === '.') {
+      return '.'
+    }
+
+    if (normalizedPath === '/') {
+      return '.'
+    }
+
+    const isAbsolutePath = normalizedPath.startsWith('/')
+    const normalizedSegments: string[] = []
+
+    for (const segment of normalizedPath.split('/')) {
+      if (!segment || segment === '.') {
+        continue
+      }
+
+      if (segment === '..') {
+        if (normalizedSegments.length > 0) {
+          const parentSegment = normalizedSegments.at(-1)!
+          if (parentSegment !== '..') {
+            normalizedSegments.pop()
+            continue
+          }
+        }
+
+        if (isAbsolutePath) {
+          continue
+        }
+
+        normalizedSegments.push('..')
+        continue
+      }
+
+      normalizedSegments.push(segment)
+    }
+
+    if (isAbsolutePath) {
+      return `/${normalizedSegments.join('/')}`
+    }
+
+    if (normalizedSegments.length === 0) {
+      return '.'
+    }
+
+    return normalizedSegments.join('/')
+  }
+
+  #normalizePersistedSnapshotRootPath(path: string): string {
+    const normalizedPath = this.#normalizePersistedSnapshotPath(path)
+    if (!normalizedPath || normalizedPath === '.') {
+      return this.#normalizeWorkspaceRelativeSnapshotPath(this.getRootPath())
+    }
+
+    return normalizedPath
+  }
+
+  #normalizePersistedEntryPathForRestore(path: string | undefined): string {
+    if (typeof path !== 'string') {
+      return ''
+    }
+
+    const normalizedPath = this.#normalizeWorkspaceRelativeSnapshotPath(path)
+    const rootPath = this.#normalizeWorkspaceRelativeSnapshotPath(
+      this.getRootPath()
+    )
+    const rootPrefix = `${rootPath}/`
+
+    if (rootPath === '.') {
+      return normalizedPath
+    }
+
+    if (normalizedPath === rootPath || normalizedPath.startsWith(rootPrefix)) {
+      const relativeToRootPath = relativePath(rootPath, normalizedPath)
+
+      if (!relativeToRootPath || relativeToRootPath === '.') {
+        return normalizedPath
+      }
+
+      if (relativeToRootPath === '..' || relativeToRootPath.startsWith('../')) {
+        return ''
+      }
+
+      return normalizedPath
+    }
+
+    return ''
+  }
+
+  #normalizePersistedDirectorySnapshot(
+    persisted: PersistedDirectorySnapshotV1
+  ): PersistedDirectorySnapshotV1 {
+    const normalizedEntries: PersistedDirectoryEntry[] = []
+    const normalizedFlatEntries: Array<{
+      kind: 'file' | 'directory'
+      path: string
+    }> = []
+    const normalizedFlatEntryKeys = new Set<string>()
+    const normalizedEntryKeys = new Set<string>()
+
+    for (const flatEntry of persisted.flatEntries) {
+      const normalizedFlatPath = this.#normalizePersistedEntryPathForRestore(
+        flatEntry.path
+      )
+
+      if (!normalizedFlatPath) {
+        continue
+      }
+
+      const flatKey = `${flatEntry.kind}:${normalizedFlatPath}`
+      if (normalizedFlatEntryKeys.has(flatKey)) {
+        continue
+      }
+
+      normalizedFlatEntries.push({
+        kind: flatEntry.kind,
+        path: normalizedFlatPath,
+      })
+      normalizedFlatEntryKeys.add(flatKey)
+    }
+
+    for (const entry of persisted.entries) {
+      const normalizedEntryPath = this.#normalizePersistedEntryPathForRestore(
+        entry.path
+      )
+
+      if (!normalizedEntryPath) {
+        continue
+      }
+
+      const entryKey = `${entry.kind}:${normalizedEntryPath}`
+      if (normalizedEntryKeys.has(entryKey)) {
+        continue
+      }
+      normalizedEntryKeys.add(entryKey)
+
+      if (entry.kind === 'file') {
+        normalizedEntries.push({
+          ...entry,
+          path: normalizedEntryPath,
+        })
+
+        const normalizedFlatKey = `file:${normalizedEntryPath}`
+        if (!normalizedFlatEntryKeys.has(normalizedFlatKey)) {
+          normalizedFlatEntries.push({
+            kind: 'file',
+            path: normalizedEntryPath,
+          })
+          normalizedFlatEntryKeys.add(normalizedFlatKey)
+        }
+
+        continue
+      }
+
+      const normalizedSnapshot = this.#normalizePersistedDirectorySnapshot(
+        entry.snapshot
+      )
+      const normalizedFlatKey = `directory:${normalizedEntryPath}`
+      if (!normalizedFlatEntryKeys.has(normalizedFlatKey)) {
+        normalizedFlatEntries.push({
+          kind: 'directory',
+          path: normalizedEntryPath,
+        })
+        normalizedFlatEntryKeys.add(normalizedFlatKey)
+      }
+
+      normalizedEntries.push({
+        kind: 'directory',
+        path: normalizedEntryPath,
+        snapshot: normalizedSnapshot,
+      })
+    }
+
+    const normalizedPath = this.#normalizePersistedSnapshotRootPath(
+      persisted.path
+    )
+
+    return {
+      ...persisted,
+      path: normalizedPath,
+      entries: normalizedEntries,
+      flatEntries: normalizedFlatEntries,
+    }
+  }
+
+  #normalizeWorkspaceRelativeSnapshotPath(path: string | undefined): string {
+    if (typeof path !== 'string') {
+      return '.'
+    }
+
+    const originalPath = normalizeSlashes(path)
+    const normalizedPath = this.#normalizeSnapshotPath(originalPath)
+    if (!normalizedPath || normalizedPath === '.') {
+      return '.'
+    }
+
+    const isDotRelativePath =
+      originalPath === '.' ||
+      originalPath === '..' ||
+      originalPath.startsWith('./') ||
+      originalPath.startsWith('../') ||
+      normalizedPath === '..' ||
+      normalizedPath.startsWith('../')
+
+    // Preserve workspace-relative keys as-is. Re-resolving these through
+    // getAbsolutePath() can incorrectly prefix the current cwd (for example
+    // "apps/site/packages/..."), which then corrupts persisted snapshot paths.
+    if (!isAbsolutePath(normalizedPath) && !isDotRelativePath) {
+      return this.#normalizePersistedSnapshotPath(normalizedPath)
+    }
+
+    const pathForAbsoluteResolution = isDotRelativePath
+      ? originalPath
+      : normalizedPath
+
+    if (isAbsolutePath(normalizedPath)) {
+      const absolutePath = this.getFileSystem().getAbsolutePath(
+        pathForAbsoluteResolution
+      )
+      const workspaceRelativePath =
+        this.getFileSystem().getRelativePathToWorkspace(absolutePath)
+      return this.#normalizePersistedSnapshotPath(workspaceRelativePath)
+    }
+
+    const absolutePath = this.getFileSystem().getAbsolutePath(
+      pathForAbsoluteResolution
+    )
+    const workspaceRelativePath =
+      this.getFileSystem().getRelativePathToWorkspace(absolutePath)
+    return this.#normalizePersistedSnapshotPath(workspaceRelativePath)
+  }
+
+  #restoreSnapshotEntryPath(path: string): string {
+    const rootPath = this.getRootPath()
+    const normalizedRootPath = this.#normalizeSnapshotPath(rootPath)
+    const rootPathKey = this.#normalizeWorkspaceRelativeSnapshotPath(rootPath)
+    let workspaceRelativePath =
+      this.#normalizeWorkspaceRelativeSnapshotPath(path)
+
+    let isWorkspaceRelativePath =
+      rootPathKey === '.' ||
+      workspaceRelativePath === rootPathKey ||
+      workspaceRelativePath.startsWith(`${rootPathKey}/`)
+
+    if (!isWorkspaceRelativePath) {
+      // Fall back to the normalized path form when the path cannot be
+      // bound to the current workspace root key.
+      return ensureRelativePath(workspaceRelativePath)
+    }
+
+    const relativeToRootPath =
+      rootPathKey === '.'
+        ? workspaceRelativePath
+        : relativePath(rootPathKey, workspaceRelativePath)
+
+    if (!relativeToRootPath || relativeToRootPath === '.') {
+      return normalizedRootPath
+    }
+
+    const restoredPath =
+      rootPathKey === '.'
+        ? relativeToRootPath
+        : this.#joinSnapshotPaths(normalizedRootPath, relativeToRootPath)
+
+    const rootUsesAbsolutePaths =
+      normalizedRootPath.startsWith('/') ||
+      /^[A-Za-z]:\//.test(normalizedRootPath) ||
+      normalizedRootPath.startsWith('//')
+
+    if (rootUsesAbsolutePaths) {
+      return restoredPath
+    }
+
+    return ensureRelativePath(restoredPath)
+  }
+
+  #joinSnapshotPaths(basePath: string, childPath: string): string {
+    const normalizedBasePath = trimTrailingSlashes(normalizeSlashes(basePath))
+    const normalizedChildPath = trimLeadingSlashes(normalizeSlashes(childPath))
+
+    if (!normalizedBasePath || normalizedBasePath === '.') {
+      return normalizedChildPath || '.'
+    }
+
+    if (!normalizedChildPath || normalizedChildPath === '.') {
+      return normalizedBasePath
+    }
+
+    return `${normalizedBasePath}/${normalizedChildPath}`
+  }
+
+  #resolveSnapshotDirectoryByPath(path: string): Directory<LoaderTypes> {
+    const normalizedPath = this.#normalizeSnapshotPath(path)
+    const basePath = this.#normalizeSnapshotPath(this.#path)
+
+    if (!normalizedPath || normalizedPath === '.') {
+      return this
+    }
+
+    if (normalizedPath === basePath) {
+      return this
+    }
+
+    let directory: Directory<LoaderTypes> = this
+    const lineage: string[] = []
+    const seen = new Set<string>()
+    let currentPath = normalizedPath
+
+    while (
+      currentPath !== '.' &&
+      currentPath !== '/' &&
+      currentPath !== basePath &&
+      !seen.has(currentPath)
+    ) {
+      seen.add(currentPath)
+      lineage.push(currentPath)
+
+      const parentPath = this.#getParentDirectoryPath(currentPath)
+      if (parentPath === currentPath) {
+        break
+      }
+
+      currentPath = parentPath
+    }
+
+    let current = directory
+    for (let index = lineage.length - 1; index >= 0; index -= 1) {
+      current = current.#duplicate({ path: lineage[index] })
+    }
+
+    return current
+  }
+
+  #createDirectorySnapshotFile(
+    directory: Directory<LoaderTypes>,
+    path: string,
+    options?: { byteLength?: number }
+  ): FileSystemEntry<LoaderTypes> {
+    const sharedOptions = {
+      path,
+      directory: directory as Directory<
+        LoaderTypes,
+        WithDefaultTypes<LoaderTypes>,
+        ModuleLoaders,
+        undefined
+      >,
+      basePathname: this.#basePathname,
+      slugCasing: this.#slugCasing,
+      byteLength: options?.byteLength,
+    } as const
+
+    const extension = extensionName(path).slice(1)
+    const loader = directory.#resolveLoaderForExtension(extension) as
+      | ModuleLoader<LoaderTypes[any]>
+      | ModuleRuntimeLoader<any>
+      | undefined
+
+    if (extension === 'md') {
+      return new MarkdownFile({ ...sharedOptions, loader })
+    }
+
+    if (extension === 'mdx') {
+      return new MDXFile({ ...sharedOptions, loader })
+    }
+
+    if (extension === 'json') {
+      return new JSONFile(sharedOptions)
+    }
+
+    if (isJavaScriptLikeExtension(extension)) {
+      return new JavaScriptFile({ ...sharedOptions, loader })
+    }
+
+    return new File(sharedOptions)
+  }
+
+  invalidateSnapshots(path?: string) {
+    const session = this.#getSession()
+
+    if (path) {
+      session.invalidatePath(path)
+      return
+    }
+
+    const snapshotKeys = new Set<string>([
+      ...session.directorySnapshots.keys(),
+      ...session.directorySnapshotBuilds.keys(),
+    ])
+    session.directorySnapshots.clear()
+    session.directorySnapshotBuilds.clear()
+
+    for (const snapshotKey of snapshotKeys) {
+      session.markInvalidatedDirectorySnapshotKey(snapshotKey)
+    }
+
+    void (async () => {
+      const dependencyEviction = await session.cache.deleteByDependencyPath('.')
+      if (
+        !dependencyEviction.usedDependencyIndex ||
+        dependencyEviction.hasMissingDependencyMetadata
+      ) {
+        const candidateSnapshotKeys =
+          await session.cache.listNodeKeysByPrefix('dir:')
+        if (candidateSnapshotKeys.length === 0) {
+          return
+        }
+
+        await Promise.all(
+          candidateSnapshotKeys.map((snapshotKey) =>
+            session.cache.delete(snapshotKey)
+          )
+        )
+      }
+    })().catch(() => {
+      // Best-effort cleanup for persisted snapshot rows.
+    })
   }
 
   /**
@@ -4469,20 +6236,6 @@ export class Directory<
 
     const normalized = directory.#normalizeEntriesOptions(entriesOptions)
     const mask = createOptionsMask(normalized)
-
-    const cachedSnapshot = directory.#snapshotCache.get(mask)
-    if (cachedSnapshot) {
-      if (process.env.NODE_ENV === 'development') {
-        const isStale = await directory.#isSnapshotStale(cachedSnapshot)
-        if (!isStale) {
-          return cachedSnapshot.materialize() as any
-        }
-        directory.#snapshotCache.delete(mask)
-      } else {
-        return cachedSnapshot.materialize() as any
-      }
-    }
-
     const snapshot = await directory.#hydrateDirectorySnapshot(
       directory,
       normalized,
@@ -4493,39 +6246,69 @@ export class Directory<
   }
 
   async getStructure(): Promise<Array<DirectoryStructure | FileStructure>> {
-    const relativePath = this.workspacePath
-    const path = this.getPathname()
+    const session = this.#getSession()
+    const nodeKey = this.getStructureCacheKey()
+    const directoryPath = this.absolutePath
+    const persist = this.#canPersistStructureCache()
 
-    const structures: Array<DirectoryStructure | FileStructure> = [
-      {
-        kind: 'Directory',
-        name: this.name,
-        title: this.title,
-        slug: this.slug,
-        path,
-        relativePath,
-        depth: this.depth,
-      },
-    ]
+    return session.cache.getOrCompute(nodeKey, { persist }, async (ctx) => {
+      await ctx.recordDirectoryDep(directoryPath)
 
-    const entries = await this.getEntries({
-      includeDirectoryNamedFiles: true,
-      includeIndexAndReadmeFiles: true,
-    })
+      const relativePath = this.workspacePath
+      const path = this.getPathname()
 
-    for (const entry of entries) {
-      if (typeof (entry as any).getStructure === 'function') {
-        const entryStructure = await (entry as any).getStructure()
-        // Directories return arrays, files return single structures
-        if (Array.isArray(entryStructure)) {
-          structures.push(...entryStructure)
-        } else {
-          structures.push(entryStructure)
+      const structures: Array<DirectoryStructure | FileStructure> = [
+        {
+          kind: 'Directory',
+          name: this.name,
+          title: this.title,
+          slug: this.slug,
+          path,
+          relativePath,
+          depth: this.depth,
+        },
+      ]
+
+      const entries = await this.getEntries({
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+      })
+
+      for (const entry of entries) {
+        if (typeof (entry as any).getStructure === 'function') {
+          const entryStructure = await (entry as any).getStructure()
+          // Directories return arrays, files return single structures
+          if (Array.isArray(entryStructure)) {
+            structures.push(...entryStructure)
+          } else {
+            structures.push(entryStructure)
+          }
+        }
+
+        if (typeof (entry as any).getStructureCacheKey === 'function') {
+          await ctx.recordNodeDep((entry as any).getStructureCacheKey())
+        } else if (entry instanceof File) {
+          await ctx.recordFileDep(entry.absolutePath)
         }
       }
-    }
 
-    return structures
+      return structures
+    })
+  }
+
+  /** @internal */
+  getStructureCacheKey() {
+    const session = this.#getSession()
+
+    return createCacheNodeKey('structure.directory', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      directoryPath: normalizeCachePath(this.absolutePath),
+      filterSignature: this.#getFilterSignature(),
+      sortSignature: this.#getSortSignature(),
+      basePathname: this.#basePathname ?? null,
+      rootPath: this.getRootPath(),
+    })
   }
 
   #normalizeEntriesOptions(options?: {
@@ -4554,8 +6337,535 @@ export class Directory<
   ): Promise<
     DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
   > {
-    const { snapshot } = await this.#buildSnapshot(directory, options, mask)
+    const snapshot = await directory.#getDirectorySnapshot(
+      directory,
+      options,
+      mask
+    )
     return snapshot
+  }
+
+  async #getDirectorySnapshot(
+    directory: Directory<LoaderTypes>,
+    options: NormalizedDirectoryEntriesOptions,
+    mask: number,
+    registerInSession = true
+  ): Promise<
+    DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
+  > {
+    const session = directory.#getSession()
+    const snapshotKey = directory.#getSessionSnapshotKey(mask)
+    session.recordDirectorySnapshotLookup(snapshotKey)
+    const cachedSnapshot = registerInSession
+      ? session.directorySnapshots.get(snapshotKey)
+      : undefined
+    const canPersist =
+      isSessionSnapshotPersistable({
+        filter: directory.#filter,
+        filterPattern: directory.#filterPattern,
+        sort: directory.#sort,
+      }) &&
+      session.usesPersistentCache &&
+      shouldPersistDirectorySnapshots(directory.getFileSystem())
+    const wasPathInvalidated =
+      registerInSession &&
+      session.isDirectorySnapshotKeyInvalidated(snapshotKey)
+    const hasPendingInvalidation = !registerInSession
+      ? session.hasInvalidatedDirectorySnapshotKeys()
+      : false
+
+    const existingBuild = registerInSession
+      ? session.directorySnapshotBuilds.get(snapshotKey)
+      : undefined
+    if (existingBuild) {
+      return existingBuild.then((metadata) => metadata.snapshot)
+    }
+
+    const build: Promise<{
+      snapshot: DirectorySnapshot<
+        Directory<LoaderTypes>,
+        FileSystemEntry<LoaderTypes>
+      >
+      shouldIncludeSelf: boolean
+      skipPersist?: boolean
+    }> = cachedSnapshot
+      ? (async () => {
+          if (wasPathInvalidated) {
+            session.recordCacheMetric('memory_miss')
+            session.recordDirectorySnapshotMiss(snapshotKey, 'memory')
+            session.directorySnapshots.delete(snapshotKey)
+            session.recordCacheMetric('rebuild_count')
+            session.recordDirectorySnapshotRebuild(snapshotKey, 'invalidated')
+            return directory.#buildSnapshot(directory, options, mask)
+          }
+
+          const isStale = await directory.#isCachedSnapshotStale(cachedSnapshot)
+          if (!isStale) {
+            session.recordCacheMetric('memory_hit')
+            session.recordDirectorySnapshotHit(snapshotKey, 'memory')
+            return {
+              snapshot: cachedSnapshot,
+              shouldIncludeSelf: cachedSnapshot.shouldIncludeSelf,
+              skipPersist: true,
+            }
+          }
+
+          session.recordCacheMetric('memory_miss')
+          session.recordDirectorySnapshotMiss(snapshotKey, 'memory')
+          session.directorySnapshots.delete(snapshotKey)
+          session.recordCacheMetric('rebuild_count')
+          session.recordDirectorySnapshotRebuild(snapshotKey, 'memory_stale')
+          return directory.#buildSnapshot(directory, options, mask)
+        })()
+      : (async () => {
+          session.recordCacheMetric('memory_miss')
+          session.recordDirectorySnapshotMiss(snapshotKey, 'memory')
+
+          if (wasPathInvalidated || hasPendingInvalidation) {
+            session.recordCacheMetric('rebuild_count')
+            session.recordDirectorySnapshotRebuild(
+              snapshotKey,
+              wasPathInvalidated ? 'invalidated' : 'pending_invalidation'
+            )
+            return directory.#buildSnapshot(directory, options, mask)
+          }
+
+          if (!canPersist) {
+            session.recordPersistedStaleReason('policy_nonpersistable')
+            session.recordCacheMetric('rebuild_count')
+            session.recordDirectorySnapshotRebuild(
+              snapshotKey,
+              'policy_nonpersistable'
+            )
+            return {
+              ...(await directory.#buildSnapshot(directory, options, mask)),
+              skipPersist: true,
+            }
+          }
+
+          const restorePersistedSnapshot = async () => {
+            const restored = await directory.#restorePersistedDirectorySnapshot(
+              snapshotKey,
+              {
+                validateFileDependencies:
+                  registerInSession &&
+                  shouldValidatePersistedFileDependencies(
+                    directory.getFileSystem()
+                  ),
+                validateDirectoryDependencies: true,
+              }
+            )
+
+            if (!restored) {
+              return undefined
+            }
+
+            return {
+              snapshot: restored,
+              shouldIncludeSelf: restored.shouldIncludeSelf,
+              skipPersist: true,
+            } as const
+          }
+
+          if (!registerInSession) {
+            const restoredSnapshot = await restorePersistedSnapshot()
+            if (restoredSnapshot) {
+              return restoredSnapshot
+            }
+
+            session.recordCacheMetric('rebuild_count')
+            session.recordDirectorySnapshotRebuild(
+              snapshotKey,
+              'persisted_unavailable'
+            )
+            return directory.#buildSnapshot(directory, options, mask)
+          }
+
+          const coordinationKey =
+            directory.#getPersistedSnapshotCoordinationKey()
+          let coordinatedResult:
+            | {
+                snapshot: DirectorySnapshot<
+                  Directory<LoaderTypes>,
+                  FileSystemEntry<LoaderTypes>
+                >
+                shouldIncludeSelf: boolean
+                skipPersist?: boolean
+              }
+            | undefined
+
+          await session.cache.withComputeSlot(coordinationKey, {
+            leader: async () => {
+              const restoredSnapshot = await restorePersistedSnapshot()
+              if (restoredSnapshot) {
+                coordinatedResult = restoredSnapshot
+                return
+              }
+
+              session.recordCacheMetric('rebuild_count')
+              session.recordDirectorySnapshotRebuild(
+                snapshotKey,
+                'persisted_unavailable'
+              )
+              const builtSnapshot = await directory.#buildSnapshot(
+                directory,
+                options,
+                mask
+              )
+              await directory.#persistDirectorySnapshot(
+                snapshotKey,
+                builtSnapshot.snapshot
+              )
+              coordinatedResult = {
+                ...builtSnapshot,
+                skipPersist: true,
+              }
+            },
+            follower: async () => {
+              const restoredSnapshot = await restorePersistedSnapshot()
+              if (restoredSnapshot) {
+                coordinatedResult = restoredSnapshot
+              }
+            },
+          })
+
+          if (coordinatedResult) {
+            return coordinatedResult
+          }
+
+          session.recordCacheMetric('rebuild_count')
+          session.recordDirectorySnapshotRebuild(
+            snapshotKey,
+            'coordination_fallback'
+          )
+          return directory.#buildSnapshot(directory, options, mask)
+        })()
+
+    if (registerInSession) {
+      session.directorySnapshotBuilds.set(snapshotKey, build)
+    }
+    try {
+      const { snapshot, skipPersist } = await build
+      const activeSession = directory.#getSession()
+      if (registerInSession) {
+        activeSession.directorySnapshots.set(snapshotKey, snapshot)
+      }
+      if (registerInSession && canPersist && !skipPersist) {
+        await directory.#persistDirectorySnapshot(snapshotKey, snapshot)
+      }
+      if (registerInSession) {
+        activeSession.clearDirectorySnapshotKeyInvalidation(snapshotKey)
+      }
+      return snapshot
+    } finally {
+      if (registerInSession) {
+        const activeSession = directory.#getSession()
+        const activeBuild =
+          activeSession.directorySnapshotBuilds.get(snapshotKey)
+        if (activeBuild === build) {
+          activeSession.directorySnapshotBuilds.delete(snapshotKey)
+        }
+
+        if (activeSession !== session) {
+          const previousBuild = session.directorySnapshotBuilds.get(snapshotKey)
+          if (previousBuild === build) {
+            session.directorySnapshotBuilds.delete(snapshotKey)
+          }
+        }
+      }
+    }
+  }
+
+  #getPersistedSnapshotCoordinationKey(): string {
+    const rootPathKey = this.#normalizeWorkspaceRelativeSnapshotPath(
+      this.getRootPath()
+    )
+    return `${DIRECTORY_SNAPSHOT_COORDINATION_KEY_PREFIX}${rootPathKey}`
+  }
+
+  async #restorePersistedDirectorySnapshot(
+    snapshotKey: string,
+    options?: {
+      validateFileDependencies?: boolean
+      validateDirectoryDependencies?: boolean
+    }
+  ): Promise<
+    | DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
+    | undefined
+  > {
+    const session = this.#getSession()
+    const persisted =
+      await session.cache.get<PersistedDirectorySnapshotV1>(snapshotKey)
+    if (!persisted) {
+      session.recordCacheMetric('persisted_miss')
+      session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
+      return undefined
+    }
+
+    if (!isPersistedDirectorySnapshotV1(persisted)) {
+      session.recordCacheMetric('persisted_miss')
+      session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
+      session.recordPersistedStaleReason('shape_mismatch')
+      await session.cache.delete(snapshotKey)
+      return undefined
+    }
+
+    const restorePersistedSnapshot = async (
+      workspaceChangeToken: string | null
+    ): Promise<
+      | DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
+      | undefined
+    > => {
+      try {
+        const restored = this.#restorePersistedDirectorySnapshotPayload(
+          persisted,
+          workspaceChangeToken
+        )
+        if (!this.#isRestoredSnapshotWithinRootScope(restored)) {
+          throw new Error('restored snapshot path scope mismatch')
+        }
+        session.recordCacheMetric('persisted_hit')
+        session.recordDirectorySnapshotHit(snapshotKey, 'persisted')
+        return restored
+      } catch (error) {
+        await session.cache.delete(snapshotKey)
+        session.recordCacheMetric('persisted_miss')
+        session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
+        session.recordPersistedStaleReason('shape_mismatch')
+        if (process.env['NODE_ENV'] !== 'test') {
+          console.warn(
+            '[renoun] Failed to restore persisted directory snapshot',
+            { snapshotKey, cause: String((error as Error)?.message ?? error) }
+          )
+        }
+        return undefined
+      }
+    }
+
+    const validateFileDependencies = options?.validateFileDependencies ?? true
+    const validateDirectoryDependencies =
+      options?.validateDirectoryDependencies ?? true
+    const shouldValidateDirectoryDependencies =
+      validateDirectoryDependencies &&
+      shouldTrackDirectoryMtime(this.getFileSystem())
+
+    const currentWorkspaceToken = await session.getWorkspaceChangeToken(
+      this.getRootPath()
+    )
+    const persistedWorkspaceToken = persisted.workspaceChangeToken ?? null
+    const currentTokenIsTrusted = isTrustedWorkspaceChangeToken(
+      currentWorkspaceToken
+    )
+    const persistedTokenIsTrusted = isTrustedWorkspaceChangeToken(
+      persistedWorkspaceToken
+    )
+    const persistWorkspaceToken = async (token: string) => {
+      await session.cache.put(
+        snapshotKey,
+        {
+          ...persisted,
+          workspaceChangeToken: token,
+        },
+        {
+          persist: true,
+          deps: toDirectorySnapshotDependencyIndexEntries(
+            persisted.dependencySignatures
+          ),
+        }
+      )
+    }
+
+    const canUseTokenFastPath =
+      currentWorkspaceToken !== null &&
+      persistedWorkspaceToken !== null &&
+      currentTokenIsTrusted &&
+      persistedTokenIsTrusted
+
+    if (canUseTokenFastPath) {
+      const changedPathsSinceToken =
+        await session.getWorkspaceChangedPathsSinceToken(
+          this.getRootPath(),
+          persistedWorkspaceToken
+        )
+      const knownChangedPathKeys = mergeKnownPathKeySets(
+        changedPathsSinceToken,
+        session.getRecentlyInvalidatedPaths()
+      )
+
+      if (knownChangedPathKeys) {
+        const dependencyPathKeys =
+          this.#collectPersistedDependencyPathKeys(persisted)
+        const hasIntersectingDependency =
+          dependencyPathKeys.size > 0 &&
+          pathKeySetsIntersect(dependencyPathKeys, knownChangedPathKeys)
+
+        if (!hasIntersectingDependency) {
+          await persistWorkspaceToken(currentWorkspaceToken)
+          return await restorePersistedSnapshot(currentWorkspaceToken)
+        }
+
+        await session.cache.delete(snapshotKey)
+        session.recordCacheMetric('persisted_miss')
+        session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
+        session.recordPersistedStaleReason('token_changed')
+        return undefined
+      }
+    }
+
+    if (validateFileDependencies || shouldValidateDirectoryDependencies) {
+      const isStale = await this.#isPersistedSnapshotStaleByFileDependencies(
+        persisted,
+        {
+          validateFileDependencies,
+          validateDirectoryDependencies: shouldValidateDirectoryDependencies,
+        }
+      )
+      if (isStale) {
+        await session.cache.delete(snapshotKey)
+        session.recordCacheMetric('persisted_miss')
+        session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
+        session.recordPersistedStaleReason('dep_changed')
+        return undefined
+      }
+    }
+
+    if (
+      currentWorkspaceToken &&
+      persistedWorkspaceToken &&
+      currentWorkspaceToken !== persistedWorkspaceToken &&
+      currentTokenIsTrusted
+    ) {
+      await persistWorkspaceToken(currentWorkspaceToken)
+    }
+
+    return await restorePersistedSnapshot(
+      currentWorkspaceToken ?? persistedWorkspaceToken
+    )
+  }
+
+  #collectPersistedDependencyPathKeys(
+    snapshot: PersistedDirectorySnapshotV1
+  ): Set<string> {
+    return collectDependencyPathKeys(snapshot.dependencySignatures)
+  }
+
+  #isRestoredSnapshotWithinRootScope(
+    snapshot: DirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >
+  ): boolean {
+    const rootPathKey = this.#normalizeWorkspaceRelativeSnapshotPath(
+      this.getRootPath()
+    )
+
+    if (rootPathKey === '.') {
+      return true
+    }
+
+    const rootPrefix = `${rootPathKey}/`
+    for (const entry of snapshot.materialize()) {
+      const entryPathKey = this.#normalizeWorkspaceRelativeSnapshotPath(
+        entry.workspacePath
+      )
+      if (entryPathKey === '.') {
+        continue
+      }
+
+      if (entryPathKey === rootPathKey) {
+        continue
+      }
+
+      if (entryPathKey.startsWith(rootPrefix)) {
+        continue
+      }
+
+      if (process.env['RENOUN_DEBUG_RESTORED_SCOPE'] === '1') {
+        console.log('[restored-snapshot-scope-mismatch]', {
+          rootPathKey,
+          entryPathKey,
+          workspacePath: entry.workspacePath,
+        })
+      }
+
+      return false
+    }
+
+    return true
+  }
+
+  #restorePersistedDirectorySnapshotPayload(
+    persisted: PersistedDirectorySnapshotV1,
+    workspaceChangeToken: string | null
+  ): DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>> {
+    const normalizedPersistedSnapshot =
+      this.#normalizePersistedDirectorySnapshot(persisted)
+
+    const snapshot = DirectorySnapshot.fromPersistedSnapshot(
+      normalizedPersistedSnapshot,
+      {
+        createDirectory: (path) => {
+          const restoredPath = this.#restoreSnapshotEntryPath(path)
+          return this.#resolveSnapshotDirectoryByPath(restoredPath)
+        },
+        createFile: (path, restoreOptions) => {
+          const restoredPath = this.#restoreSnapshotEntryPath(path)
+          const parentPath = this.#getParentDirectoryPath(restoredPath)
+          const restoredParentPath = this.#restoreSnapshotEntryPath(parentPath)
+          const parentDirectory =
+            this.#resolveSnapshotDirectoryByPath(restoredParentPath)
+          let byteLength = restoreOptions?.byteLength
+          if (byteLength === undefined) {
+            const fileSystem = this.getFileSystem()
+            try {
+              byteLength = fileSystem.getFileByteLengthSync(restoredPath)
+            } catch {
+              // Fall back to construction-time byte length resolution.
+            }
+          }
+          return this.#createDirectorySnapshotFile(
+            parentDirectory,
+            restoredPath,
+            {
+              byteLength,
+            }
+          )
+        },
+      } satisfies DirectorySnapshotRestoreFactory<
+        Directory<LoaderTypes>,
+        FileSystemEntry<LoaderTypes>
+      >
+    )
+
+    snapshot.setWorkspaceChangeToken(workspaceChangeToken)
+
+    return snapshot
+  }
+
+  async #persistDirectorySnapshot(
+    snapshotKey: string,
+    snapshot: DirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >
+  ): Promise<void> {
+    const session = this.#getSession()
+    const currentToken = snapshot.getWorkspaceChangeToken()
+    if (currentToken === undefined) {
+      const token = await session.getWorkspaceChangeToken(this.getRootPath())
+      snapshot.setWorkspaceChangeToken(token)
+    }
+
+    const dependencies = snapshot.getDependencies()
+    const dependencyEntries = dependencies
+      ? toDirectorySnapshotDependencyIndexEntries(dependencies.entries())
+      : []
+    const persisted = snapshot.toPersistedSnapshot()
+
+    await session.cache.put(snapshotKey, persisted, {
+      persist: true,
+      deps: dependencyEntries,
+    })
   }
 
   async #isSnapshotStale(
@@ -4569,19 +6879,268 @@ export class Directory<
       return false
     }
 
+    return this.#isDependencySignaturesStale(dependencies)
+  }
+
+  async #isPersistedSnapshotStaleByFileDependencies(
+    snapshot: PersistedDirectorySnapshotV1,
+    options: {
+      validateFileDependencies: boolean
+      validateDirectoryDependencies: boolean
+    }
+  ): Promise<boolean> {
     const fileSystem = this.getFileSystem()
 
-    for (const [path, previousModified] of dependencies) {
-      const currentModified = await fileSystem.getFileLastModifiedMs(path)
+    for (const [
+      pathWithType,
+      previousSignature,
+    ] of snapshot.dependencySignatures) {
+      const isFileDependency = pathWithType.startsWith(FILE_DEPENDENCY_PREFIX)
+      const isDirectoryMtimeDependency = pathWithType.startsWith(
+        DIRECTORY_MTIME_DEPENDENCY_PREFIX
+      )
+
+      if (isFileDependency && !options.validateFileDependencies) {
+        continue
+      }
+
       if (
-        currentModified === undefined ||
-        currentModified !== previousModified
+        isDirectoryMtimeDependency &&
+        !options.validateDirectoryDependencies
       ) {
+        continue
+      }
+
+      if (!isFileDependency && !isDirectoryMtimeDependency) {
+        continue
+      }
+
+      const pathKey = isFileDependency
+        ? pathWithType.slice(FILE_DEPENDENCY_PREFIX.length)
+        : pathWithType.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
+      const fileSystemPath = toFileSystemPathFromPathKey(pathKey)
+      const currentModified =
+        await fileSystem.getFileLastModifiedMs(fileSystemPath)
+      const currentSignature =
+        currentModified === undefined ? 'missing' : String(currentModified)
+
+      if (currentSignature !== previousSignature) {
         return true
       }
     }
 
     return false
+  }
+
+  async #isDependencySignaturesStale(
+    dependencies: ReadonlyMap<string, string>
+  ): Promise<boolean> {
+    const fileSystem = this.getFileSystem()
+    const trackDirectoryMtime = shouldTrackDirectoryMtime(fileSystem)
+    for (const [pathWithType, previousSignature] of dependencies.entries()) {
+      const isDirectoryListing = pathWithType.startsWith(
+        DIRECTORY_DEPENDENCY_PREFIX
+      )
+      const isDirectoryMtime = pathWithType.startsWith(
+        DIRECTORY_MTIME_DEPENDENCY_PREFIX
+      )
+
+      if (isDirectoryMtime && !trackDirectoryMtime) {
+        continue
+      }
+
+      const pathKey = isDirectoryListing
+        ? pathWithType.slice(DIRECTORY_DEPENDENCY_PREFIX.length)
+        : isDirectoryMtime
+          ? pathWithType.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
+          : pathWithType.startsWith(FILE_DEPENDENCY_PREFIX)
+            ? pathWithType.slice(FILE_DEPENDENCY_PREFIX.length)
+            : pathWithType
+      const fileSystemPath = toFileSystemPathFromPathKey(pathKey)
+
+      let currentSignature: string
+
+      if (isDirectoryListing) {
+        let entries:
+          | ReadonlyArray<{
+              name: string
+              path: string
+              isDirectory: boolean
+              isFile: boolean
+            }>
+          | undefined
+
+        try {
+          entries = await fileSystem.readDirectory(fileSystemPath)
+        } catch {
+          return true
+        }
+
+        currentSignature = await this.#createDirectoryListingSignature(
+          fileSystem,
+          entries
+        )
+      } else {
+        const currentModified =
+          await fileSystem.getFileLastModifiedMs(fileSystemPath)
+        currentSignature =
+          currentModified === undefined ? 'missing' : String(currentModified)
+      }
+
+      if (currentSignature !== previousSignature) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  async #createDirectoryListingSignature(
+    fileSystem: FileSystem,
+    entries: ReadonlyArray<{
+      name: string
+      path: string
+      isDirectory: boolean
+      isFile: boolean
+    }>
+  ): Promise<string> {
+    const session = this.#getSession()
+
+    const signatureEntries = await Promise.all(
+      entries.map(async (entry) => {
+        const signature = await getDirectoryEntryListingSignature(
+          session.snapshot,
+          fileSystem,
+          entry
+        )
+
+        return {
+          name: entry.name,
+          isDirectory: entry.isDirectory,
+          isFile: entry.isFile,
+          path: entry.path,
+          signature,
+        }
+      })
+    )
+
+    return createDirectoryListingSignature(signatureEntries)
+  }
+
+  async #isSnapshotFreshByWorkspaceToken(
+    snapshot: DirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >,
+    options?: { markValidatedAt?: number }
+  ): Promise<boolean | null> {
+    const cachedWorkspaceToken = snapshot.getWorkspaceChangeToken()
+    if (!cachedWorkspaceToken) {
+      return null
+    }
+    const cachedTokenIsTrusted =
+      isTrustedWorkspaceChangeToken(cachedWorkspaceToken)
+    const session = this.#getSession()
+    const currentWorkspaceToken = await session.getWorkspaceChangeToken(
+      this.getRootPath()
+    )
+    if (!currentWorkspaceToken) {
+      return null
+    }
+    const currentTokenIsTrusted = isTrustedWorkspaceChangeToken(
+      currentWorkspaceToken
+    )
+
+    if (currentWorkspaceToken === cachedWorkspaceToken) {
+      if (!cachedTokenIsTrusted || !currentTokenIsTrusted) {
+        return null
+      }
+      if (options?.markValidatedAt !== undefined) {
+        snapshot.markValidated(options.markValidatedAt)
+      }
+      return true
+    }
+
+    if (!cachedTokenIsTrusted || !currentTokenIsTrusted) {
+      return null
+    }
+
+    const changedPathsSinceToken =
+      await session.getWorkspaceChangedPathsSinceToken(
+        this.getRootPath(),
+        cachedWorkspaceToken
+      )
+    const knownChangedPathKeys = mergeKnownPathKeySets(
+      changedPathsSinceToken,
+      session.getRecentlyInvalidatedPaths()
+    )
+    if (!knownChangedPathKeys) {
+      return null
+    }
+
+    const dependencies = snapshot.getDependencies()
+    const dependencyPathKeys = dependencies
+      ? collectDependencyPathKeys(dependencies.entries())
+      : new Set<string>()
+    const hasIntersectingDependency =
+      dependencyPathKeys.size > 0 &&
+      pathKeySetsIntersect(dependencyPathKeys, knownChangedPathKeys)
+
+    if (!hasIntersectingDependency) {
+      snapshot.setWorkspaceChangeToken(currentWorkspaceToken)
+      if (options?.markValidatedAt !== undefined) {
+        snapshot.markValidated(options.markValidatedAt)
+      }
+      return true
+    }
+
+    return false
+  }
+
+  async #isCachedSnapshotStale(
+    snapshot: DirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >
+  ): Promise<boolean> {
+    if (process.env.NODE_ENV !== 'development') {
+      const now = Date.now()
+      if (
+        now - snapshot.getLastValidatedAt() <
+        PRODUCTION_SNAPSHOT_REVALIDATE_INTERVAL_MS
+      ) {
+        return false
+      }
+
+      const workspaceTokenFreshness =
+        await this.#isSnapshotFreshByWorkspaceToken(snapshot, {
+          markValidatedAt: now,
+        })
+      if (workspaceTokenFreshness === true) {
+        return false
+      }
+      if (workspaceTokenFreshness === false) {
+        return true
+      }
+
+      const stale = await this.#isSnapshotStale(snapshot)
+      if (!stale) {
+        snapshot.markValidated(now)
+      }
+
+      return stale
+    }
+
+    const workspaceTokenFreshness =
+      await this.#isSnapshotFreshByWorkspaceToken(snapshot)
+    if (workspaceTokenFreshness === true) {
+      return false
+    }
+    if (workspaceTokenFreshness === false) {
+      return true
+    }
+
+    return this.#isSnapshotStale(snapshot)
   }
 
   async #buildSnapshot(
@@ -4595,17 +7154,83 @@ export class Directory<
     >
     shouldIncludeSelf: boolean
   }> {
-    const cached = directory.#snapshotCache.get(mask)
-    if (cached) {
-      return { snapshot: cached, shouldIncludeSelf: cached.shouldIncludeSelf }
+    const fileSystem = directory.getFileSystem()
+    const trackDirectoryMtime = shouldTrackDirectoryMtime(fileSystem)
+
+    const rawEntries = await fileSystem.readDirectory(directory.#path)
+    const dependencySignatures = new Map<string, string>()
+    const recordFileDependencySignature = async (path: string): Promise<void> => {
+      let dependencyKey: string
+      try {
+        dependencyKey = createDependencyPathKey(
+          fileSystem,
+          FILE_DEPENDENCY_PREFIX,
+          path
+        )
+      } catch {
+        return
+      }
+
+      try {
+        const modifiedMs = await fileSystem.getFileLastModifiedMs(path)
+        dependencySignatures.set(
+          dependencyKey,
+          modifiedMs === undefined ? 'missing' : String(modifiedMs)
+        )
+      } catch {
+        dependencySignatures.set(dependencyKey, 'missing')
+      }
+    }
+    const collectTsConfigProbePaths = (): string[] => {
+      let currentDirectoryPath: string
+      let workspaceRootPath: string
+
+      try {
+        currentDirectoryPath = normalizeSlashes(
+          fileSystem.getAbsolutePath(directory.#path)
+        )
+        workspaceRootPath = normalizeSlashes(fileSystem.getAbsolutePath('.'))
+      } catch {
+        return []
+      }
+
+      const probePaths = new Set<string>()
+      const isWithinWorkspaceRoot = (path: string) =>
+        path === workspaceRootPath || path.startsWith(`${workspaceRootPath}/`)
+
+      let currentPath = currentDirectoryPath
+      while (isWithinWorkspaceRoot(currentPath)) {
+        probePaths.add(joinPaths(currentPath, 'tsconfig.json'))
+
+        if (currentPath === workspaceRootPath) {
+          break
+        }
+
+        const parentPath = directoryName(currentPath)
+        if (!parentPath || parentPath === currentPath) {
+          break
+        }
+
+        currentPath = parentPath
+      }
+
+      if (probePaths.size === 0) {
+        probePaths.add(joinPaths(workspaceRootPath, 'tsconfig.json'))
+      }
+
+      return Array.from(probePaths)
     }
 
-    const fileSystem = directory.getFileSystem()
-    const rawEntries = await fileSystem.readDirectory(directory.#path)
-    const dependencyTimestamps: Map<string, number> | undefined =
-      process.env.NODE_ENV === 'development'
-        ? new Map<string, number>()
-        : undefined
+    for (const tsConfigProbePath of collectTsConfigProbePaths()) {
+      await recordFileDependencySignature(tsConfigProbePath)
+    }
+
+    try {
+      const workspaceRootPath = normalizeSlashes(fileSystem.getAbsolutePath('.'))
+      await recordFileDependencySignature(joinPaths(workspaceRootPath, '.gitignore'))
+    } catch {
+      // Ignore workspace-root lookup failures when capturing gitignore probes.
+    }
 
     const fileMetadata: FileEntryMetadata<LoaderTypes>[] = []
     const finalMetadata: DirectorySnapshotMetadataEntry<LoaderTypes>[] = []
@@ -4642,18 +7267,6 @@ export class Directory<
             return { kind: 'skip' }
           }
 
-          if (dependencyTimestamps) {
-            try {
-              const mtime = await fileSystem.getFileLastModifiedMs(entry.path)
-              if (mtime !== undefined) {
-                dependencyTimestamps.set(entry.path, mtime)
-              }
-            } catch {
-              // Ignore errors when reading timestamps; fall back to snapshot invalidation
-              // via explicit cache clearing (e.g. write/delete operations).
-            }
-          }
-
           const isGitIgnored = fileSystem.isFilePathGitIgnored(entry.path)
 
           if (isGitIgnored && !options.includeGitIgnoredFiles) {
@@ -4670,15 +7283,7 @@ export class Directory<
             if (isTsConfigExcluded && !options.includeTsConfigExcludedFiles) {
               return { kind: 'skip' }
             }
-
             const subdirectory = directory.#duplicate({ path: entry.path })
-
-            const { snapshot: childSnapshot } = await this.#buildSnapshot(
-              subdirectory,
-              options,
-              mask
-            )
-
             const passesFilterSelf =
               directory.#simpleFilter?.recursive === true
                 ? true
@@ -4686,8 +7291,47 @@ export class Directory<
                   ? await directory.#passesFilter(subdirectory)
                   : true
 
+            if (!options.recursive && !passesFilterSelf) {
+              return { kind: 'skip' }
+            }
+
+            if (trackDirectoryMtime) {
+              try {
+                const modifiedMs = await fileSystem.getFileLastModifiedMs(
+                  entry.path
+                )
+                const signature =
+                  modifiedMs === undefined ? 'missing' : String(modifiedMs)
+                dependencySignatures.set(
+                  createDependencyPathKey(
+                    fileSystem,
+                    DIRECTORY_MTIME_DEPENDENCY_PREFIX,
+                    entry.path
+                  ),
+                  signature
+                )
+              } catch {
+                // Ignore errors when reading timestamps; fall back to listing signatures.
+              }
+            }
+
+            const childSnapshot = await this.#getDirectorySnapshot(
+              subdirectory,
+              options,
+              mask,
+              false
+            )
+
+            const childDependencies = childSnapshot.getDependencies()
+            if (childDependencies && childDependencies.size > 0) {
+              for (const [childPath, childSignature] of childDependencies) {
+                dependencySignatures.set(childPath, childSignature)
+              }
+            }
+
             const metadata: DirectoryEntryMetadata<LoaderTypes> = {
               kind: 'Directory',
+              path: entry.path,
               entry: subdirectory,
               includeInFinal: true,
               passesFilterSelf,
@@ -4701,33 +7345,10 @@ export class Directory<
             return { kind: 'skip' }
           }
 
-          const sharedOptions = {
-            path: entry.path,
-            directory: directory as Directory<
-              LoaderTypes,
-              WithDefaultTypes<LoaderTypes>,
-              ModuleLoaders,
-              undefined
-            >,
-            basePathname: directory.#basePathname,
-            slugCasing: directory.#slugCasing,
-          } as const
-
-          const extension = extensionName(entry.name).slice(1)
-          const loader = directory.#resolveLoaderForExtension(extension) as
-            | ModuleLoader<LoaderTypes[any]>
-            | undefined
-
-          const file =
-            extension === 'md'
-              ? new MarkdownFile({ ...sharedOptions, loader })
-              : extension === 'mdx'
-                ? new MDXFile({ ...sharedOptions, loader })
-                : extension === 'json'
-                  ? new JSONFile(sharedOptions)
-                  : isJavaScriptLikeExtension(extension)
-                    ? new JavaScriptFile({ ...sharedOptions, loader })
-                    : new File(sharedOptions)
+          const file = directory.#createDirectorySnapshotFile(
+            directory,
+            entry.path
+          )
 
           const passesFilter = directory.#filter
             ? await directory.#passesFilter(file)
@@ -4736,6 +7357,8 @@ export class Directory<
           if (!passesFilter) {
             return { kind: 'skip' }
           }
+
+          await recordFileDependencySignature(entry.path)
 
           const shouldIncludeFile = await directory.#shouldIncludeFile(file)
           const isIndexOrReadme = ['index', 'readme'].some((name) =>
@@ -4772,6 +7395,7 @@ export class Directory<
 
           const metadata: FileEntryMetadata<LoaderTypes> = {
             kind: 'File',
+            path: entry.path,
             entry: file,
             includeInFinal,
             isGitIgnored,
@@ -4826,10 +7450,40 @@ export class Directory<
       directory.#addPathLookup(result.metadata.entry)
     }
 
-    let shouldIncludeSelf = false
+    dependencySignatures.set(
+      createDependencyPathKey(
+        fileSystem,
+        DIRECTORY_DEPENDENCY_PREFIX,
+        directory.#path
+      ),
+      await this.#createDirectoryListingSignature(fileSystem, rawEntries)
+    )
+    if (trackDirectoryMtime) {
+      try {
+        const directoryModifiedMs = await fileSystem.getFileLastModifiedMs(
+          directory.#path
+        )
+        dependencySignatures.set(
+          createDependencyPathKey(
+            fileSystem,
+            DIRECTORY_MTIME_DEPENDENCY_PREFIX,
+            directory.#path
+          ),
+          directoryModifiedMs === undefined
+            ? 'missing'
+            : String(directoryModifiedMs)
+        )
+      } catch {
+        // Ignore errors when reading directory timestamps.
+      }
+    }
 
+    let shouldIncludeSelf = false
     for (const metadata of fileMetadata) {
-      if (!metadata.isGitIgnored && metadata.shouldIncludeFile) {
+      if (
+        (options.includeGitIgnoredFiles || !metadata.isGitIgnored) &&
+        metadata.shouldIncludeFile
+      ) {
         shouldIncludeSelf = true
         break
       }
@@ -4884,6 +7538,7 @@ export class Directory<
       const childrenEntries = options.recursive
         ? childSnapshot.materialize()
         : []
+
       const hasVisibleDescendant = options.recursive
         ? childrenEntries.length > 0
         : childSnapshot.hasVisibleDescendant
@@ -4916,6 +7571,43 @@ export class Directory<
       }
     }
 
+    const persistedEntries: PersistedEntryMetadata<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >[] = []
+
+    for (const metadata of immediateMetadata) {
+      if (metadata.kind === 'Directory') {
+        const entryPath = this.#normalizeWorkspaceRelativeSnapshotPath(
+          metadata.entry.workspacePath
+        )
+
+        persistedEntries.push({
+          kind: 'directory',
+          path: entryPath,
+          entry: metadata.entry,
+          snapshot: metadata.snapshot,
+        })
+        continue
+      }
+
+      const entryPath = this.#normalizeWorkspaceRelativeSnapshotPath(
+        metadata.entry.workspacePath
+      )
+
+      persistedEntries.push({
+        kind: 'file',
+        path: entryPath,
+        byteLength:
+          metadata.entry instanceof File ? metadata.entry.size : undefined,
+        entry: metadata.entry,
+      })
+    }
+
+    const workspaceChangeToken = await directory
+      .#getSession()
+      .getWorkspaceChangeToken(directory.getRootPath())
+
     const snapshot = createDirectorySnapshot<
       Directory<LoaderTypes>,
       FileSystemEntry<LoaderTypes>
@@ -4924,10 +7616,13 @@ export class Directory<
       directories: directoriesMap,
       shouldIncludeSelf,
       hasVisibleDescendant: entriesResult.length > 0,
-      dependencies: dependencyTimestamps,
+      dependencies: dependencySignatures,
+      path: directory.#normalizeWorkspaceRelativeSnapshotPath(directory.#path),
+      filterSignature: directory.#getFilterSignature(),
+      sortSignature: directory.#getSortSignature(),
+      workspaceChangeToken,
+      persistedEntries,
     })
-
-    directory.#snapshotCache.set(mask, snapshot)
 
     return { snapshot, shouldIncludeSelf }
   }
@@ -5100,36 +7795,86 @@ export class Directory<
     })
   }
 
-  /** Get the first local git commit date of this directory. */
-  async getFirstCommitDate() {
+  async #loadGitMetadata(): Promise<GitMetadata> {
     const fileSystem = this.getFileSystem()
-    const gitMetadata = await getGitFileMetadataForPath(
+    return getGitFileMetadataForPath(
       this.getRepositoryIfAvailable(),
       fileSystem,
       this.#path
     )
+  }
+
+  async #loadGitMetadataForStructure(): Promise<GitMetadata> {
+    try {
+      return await this.#loadGitMetadata()
+    } catch {
+      return createEmptyGitMetadata()
+    }
+  }
+
+  async #getCurrentWorkspaceChangeToken(): Promise<string | undefined> {
+    const token = await this.#getSession().getWorkspaceChangeToken(
+      this.getRootPath()
+    )
+    return token ?? undefined
+  }
+
+  async #resolveStructureGitMetadata(): Promise<GitMetadata> {
+    const cacheSessionKey = this.#getStructureCacheSessionKey()
+    const cachedGitMetadata = this.#structureGitMetadata
+    const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
+    const canUseCachedMetadata =
+      this.#structureCacheSessionKey === cacheSessionKey &&
+      cachedWorkspaceChangeToken !== undefined &&
+      cachedGitMetadata !== undefined
+
+    if (canUseCachedMetadata) {
+      const currentWorkspaceChangeToken =
+        await this.#getCurrentWorkspaceChangeToken()
+      if (
+        currentWorkspaceChangeToken !== undefined &&
+        cachedWorkspaceChangeToken === currentWorkspaceChangeToken
+      ) {
+        return cachedGitMetadata
+      }
+    }
+
+    const gitMetadata = await this.#loadGitMetadataForStructure()
+    this.#structureGitMetadata = gitMetadata
+    const currentWorkspaceChangeToken =
+      await this.#getCurrentWorkspaceChangeToken()
+    this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+    this.#structureCacheSessionKey = cacheSessionKey
+
+    return gitMetadata
+  }
+
+  #getStructureCacheSessionKey() {
+    const session = this.#getSession()
+
+    return createCacheNodeKey('structure.directory', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      directoryPath: normalizeCachePath(this.absolutePath),
+      rootPath: this.getRootPath(),
+    })
+  }
+
+  /** Get the first local git commit date of this directory. */
+  async getFirstCommitDate() {
+    const gitMetadata = await this.#resolveStructureGitMetadata()
     return gitMetadata.firstCommitDate
   }
 
   /** Get the last local git commit date of this directory. */
   async getLastCommitDate() {
-    const fileSystem = this.getFileSystem()
-    const gitMetadata = await getGitFileMetadataForPath(
-      this.getRepositoryIfAvailable(),
-      fileSystem,
-      this.#path
-    )
+    const gitMetadata = await this.#resolveStructureGitMetadata()
     return gitMetadata.lastCommitDate
   }
 
   /** Get the local git authors of this directory. */
   async getAuthors() {
-    const fileSystem = this.getFileSystem()
-    const gitMetadata = await getGitFileMetadataForPath(
-      this.getRepositoryIfAvailable(),
-      fileSystem,
-      this.#path
-    )
+    const gitMetadata = await this.#resolveStructureGitMetadata()
     return gitMetadata.authors
   }
 

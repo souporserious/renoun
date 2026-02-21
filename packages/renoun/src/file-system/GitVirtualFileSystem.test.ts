@@ -1,9 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { gzipSync } from 'node:zlib'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
+import { Cache } from './Cache.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
+import {
+  SqliteCacheStorePersistence,
+  disposeDefaultCacheStorePersistence,
+} from './CacheSqlite.ts'
+import { FileSystemSnapshot } from './Snapshot.ts'
+import { Session } from './Session.ts'
 import type { ExportHistoryGenerator, ExportHistoryReport } from './types.ts'
 import { Directory } from './index.tsx'
+import * as exportAnalysis from './export-analysis.ts'
 
 /** Drain a generator to get the final report. */
 async function drain(
@@ -19,11 +30,28 @@ const SUCCESS_ARCHIVE = makeTar([
   { path: 'root/dir/a.md', content: '# title' },
 ])
 
+function createIsolatedPersistentCache() {
+  const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-git-vfs-cache-'))
+  const dbPath = join(cacheDirectory, 'fs-cache.sqlite')
+  const cache = new Cache({
+    persistence: new SqliteCacheStorePersistence({ dbPath }),
+  })
+
+  return {
+    cache,
+    cleanup() {
+      rmSync(cacheDirectory, { recursive: true, force: true })
+    },
+  }
+}
+
 describe('GitVirtualFileSystem', () => {
   const originalFetch = globalThis.fetch
 
   beforeEach(() => {
     vi.useRealTimers()
+
+    disposeDefaultCacheStorePersistence()
   })
 
   it('builds encoded URLs for each host and self-hosted GitLab', async () => {
@@ -115,6 +143,65 @@ describe('GitVirtualFileSystem', () => {
     ).rejects.toThrow('Unexpected content-type')
   })
 
+  it('keeps fetch failures consistent in development and production', async () => {
+    const archiveRequest = '/repos/owner/env-consistency/tarball/main'
+    const requestFailure = async (nodeEnv: string) => {
+      const previousNodeEnv = process.env.NODE_ENV
+      process.env.NODE_ENV = nodeEnv
+
+      const mockFetch = vi.fn(async (input: unknown) => {
+        const url = String(input)
+
+        if (url.includes(archiveRequest)) {
+          return {
+            ok: false,
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: createHeaders({}),
+            json: async () => ({}),
+          } as Response
+        }
+
+        return {
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+          headers: createHeaders({}),
+          json: async () => ({}),
+        } as Response
+      })
+
+      globalThis.fetch = mockFetch as unknown as typeof fetch
+
+      try {
+        const fs = new GitVirtualFileSystem({
+          repository: 'owner/env-consistency',
+          host: 'github',
+          ref: 'main',
+        })
+
+        try {
+          await fs.readFile('file.txt')
+          throw new Error('Expected read failure')
+        } catch (error) {
+          return {
+            message: error instanceof Error ? error.message : String(error),
+            calls: mockFetch.mock.calls.length,
+          }
+        }
+      } finally {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+
+    const development = await requestFailure('development')
+    const production = await requestFailure('production')
+
+    expect(production.message).toBe(development.message)
+    expect(development.calls).toBeGreaterThan(0)
+    expect(production.calls).toBeGreaterThan(0)
+  })
+
   it('abort in-flight load on clearCache', async () => {
     const firstArchive = makeTar([{ path: 'root/file.txt', content: 'v1' }])
     const secondArchive = makeTar([{ path: 'root/file.txt', content: 'after' }])
@@ -147,10 +234,1285 @@ describe('GitVirtualFileSystem', () => {
     await expect(fs.readFile('file.txt')).resolves.toBe('after')
   })
 
+  it('clearCache invalidates branch-scoped session cache entries', async () => {
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const a = 1` },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/clear-cache-repo/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/clear-cache-repo/commits/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ sha: 'c2' }),
+        } as Response
+      }
+
+      if (
+        url.includes('/repos/owner/clear-cache-repo/commits?sha=main') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: 'c2',
+              commit: {
+                author: { date: '2024-02-01T00:00:00Z' },
+              },
+            },
+            {
+              sha: 'c1',
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      if (
+        url.includes('raw.githubusercontent.com/owner/clear-cache-repo/c1/') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1`,
+        } as Response
+      }
+
+      if (
+        url.includes('raw.githubusercontent.com/owner/clear-cache-repo/c2/') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1; export const b = 2`,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/clear-cache-repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    await drain(
+      fs.getExportHistory({
+        entry: 'src/index.ts',
+        detectUpdates: false,
+      })
+    )
+
+    fs.clearCache()
+
+    await drain(
+      fs.getExportHistory({
+        entry: 'src/index.ts',
+        detectUpdates: false,
+      })
+    )
+
+    const commitHistoryCalls = mockFetch.mock.calls.filter(([request]) =>
+      String(request).includes('/repos/owner/clear-cache-repo/commits?sha=main')
+    ).length
+
+    expect(commitHistoryCalls).toBe(2)
+  })
+
+  it('recomputes export parsing after ref fallback switches branches', async () => {
+    let defaultBranch = 'develop'
+    const developArchive = makeTar([
+      { path: 'root/index.ts', content: 'export const developValue = 1' },
+    ])
+    const mainArchive = makeTar([
+      { path: 'root/index.ts', content: 'export const mainValue = 2' },
+    ])
+
+    const getArchive = (branch: string) => {
+      if (branch === 'develop') {
+        return developArchive
+      }
+      if (branch === 'main') {
+        return mainArchive
+      }
+      return undefined
+    }
+
+    const mockFetch = vi.fn().mockImplementation(async (input: unknown) => {
+      const url = String(input)
+
+      if (url === 'https://api.github.com/repos/owner/fallback-reparse') {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ default_branch: defaultBranch }),
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/fallback-reparse/commits?sha=')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [],
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/fallback-reparse/tarball/')) {
+        const ref = url.split('/tarball/')[1]
+        const archive = getArchive(ref)
+
+        if (!archive) {
+          return {
+            ok: false,
+            status: 404,
+            statusText: 'Not Found',
+            headers: createHeaders({}),
+            text: async () => '',
+          } as Response
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => archive,
+        } as unknown as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const isolatedCache = createIsolatedPersistentCache()
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/fallback-reparse',
+      host: 'github',
+      cache: isolatedCache.cache,
+    })
+
+    const scanSpy = vi.spyOn(exportAnalysis, 'scanModuleExports')
+
+    try {
+      await expect(
+        drain(
+          fs.getExportHistory({
+            entry: 'index.ts',
+            detectUpdates: false,
+          })
+        )
+      ).resolves.toEqual(
+        expect.objectContaining({
+          exports: expect.objectContaining({
+            './index.ts::developValue': expect.any(Array),
+          }),
+        }),
+      )
+
+      fs.clearCache()
+
+      defaultBranch = 'main'
+      await expect(
+        drain(
+          fs.getExportHistory({
+            entry: 'index.ts',
+            detectUpdates: false,
+          })
+        )
+      ).resolves.toEqual(
+        expect.objectContaining({
+          exports: expect.objectContaining({
+            './index.ts::mainValue': expect.any(Array),
+          }),
+        }),
+      )
+
+      expect(scanSpy).toHaveBeenCalledTimes(2)
+      expect(fs.getCacheIdentity().ref).toBe('main')
+    } finally {
+      isolatedCache.cleanup()
+    }
+  })
+
+  it('prevents stale export parse reuse when fallback ref changes during concurrent export queries', async () => {
+    let resolveMainArchive:
+      | ((response: Response | PromiseLike<Response>) => void)
+      | undefined
+    const mainArchive = new Promise<Response>((resolve) => {
+      resolveMainArchive = resolve
+    })
+    const masterArchive = makeTar([
+      { path: 'root/index.ts', content: 'export const masterValue = 2' },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url === 'https://api.github.com/repos/owner/concurrent-ref-switch') {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ default_branch: 'main' }),
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/concurrent-ref-switch/commits?sha=')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [],
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/concurrent-ref-switch/tarball/main')) {
+        return mainArchive
+      }
+
+      if (url.includes('/repos/owner/concurrent-ref-switch/tarball/master')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(masterArchive).buffer,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const sessionResetSpy = vi.spyOn(Session, 'reset')
+    const scanSpy = vi.spyOn(exportAnalysis, 'scanModuleExports')
+    const isolatedCache = createIsolatedPersistentCache()
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/concurrent-ref-switch',
+      host: 'github',
+      cache: isolatedCache.cache,
+    })
+
+    try {
+      const first = drain(
+        fs.getExportHistory({
+          entry: 'index.ts',
+          detectUpdates: false,
+        })
+      )
+      const second = drain(
+        fs.getExportHistory({
+          entry: 'index.ts',
+          detectUpdates: false,
+        })
+      )
+
+      await Promise.resolve()
+
+      if (!resolveMainArchive) {
+        throw new Error(
+          'Expected pending main archive request to be initialized.'
+        )
+      }
+
+      resolveMainArchive({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response)
+
+      const [firstReport, secondReport] = await Promise.all([first, second])
+
+      expect(firstReport.exports).toEqual(
+        expect.objectContaining({
+          './index.ts::masterValue': expect.any(Array),
+        })
+      )
+      expect(secondReport.exports).toEqual(
+        expect.objectContaining({
+          './index.ts::masterValue': expect.any(Array),
+        })
+      )
+      expect(scanSpy).toHaveBeenCalledTimes(1)
+      expect(fs.getCacheIdentity().ref).toBe('master')
+      expect(sessionResetSpy.mock.calls.some((call) => call[0] === fs)).toBe(
+        true
+      )
+    } finally {
+      isolatedCache.cleanup()
+    }
+  })
+
+  it('clearCache force-resets all session families', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: createHeaders({
+        'content-type': 'application/octet-stream',
+      }),
+      arrayBuffer: async () => SUCCESS_ARCHIVE,
+    } as unknown as Response)
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const sessionResetSpy = vi.spyOn(Session, 'reset')
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/clear-cache-force',
+      host: 'github',
+      ref: 'main',
+    })
+
+    await fs.readFile('file.txt')
+
+    const activeSession = Session.for(fs)
+    const alternateSnapshot = new FileSystemSnapshot(
+      fs,
+      `${activeSession.snapshot.id}:clear-cache-force-alt`
+    )
+    const alternateSession = Session.for(fs, alternateSnapshot)
+
+    const activeClear = vi.spyOn(activeSession.cache, 'clearMemory')
+    const alternateClear = vi.spyOn(alternateSession.cache, 'clearMemory')
+
+    fs.clearCache()
+
+    expect(sessionResetSpy).toHaveBeenCalledTimes(1)
+    const [resetFileSystem, resetFamilyId] = sessionResetSpy.mock.calls[0] ?? []
+    expect(resetFileSystem).toBe(fs)
+    expect(resetFamilyId).toBeUndefined()
+
+    expect(activeClear).toHaveBeenCalledTimes(1)
+    expect(alternateClear).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets existing sessions when ref fallback switches branches', async () => {
+    let resolveMainArchive:
+      | ((response: Response | PromiseLike<Response>) => void)
+      | undefined
+    const mainArchive = new Promise<Response>((resolve) => {
+      resolveMainArchive = resolve
+    })
+    const masterArchive = makeTar([
+      { path: 'root/file.txt', content: 'fallback' },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/ref-fallback/tarball/main')) {
+        return mainArchive
+      }
+
+      if (url.includes('/repos/owner/ref-fallback/tarball/master')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(masterArchive).buffer,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const sessionResetSpy = vi.spyOn(Session, 'reset')
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/ref-fallback',
+      host: 'github',
+      ref: 'main',
+    })
+    const directory = new Directory({ fileSystem: fs })
+    const entriesPromise = directory.getEntries({
+      includeIndexAndReadmeFiles: true,
+    })
+
+    await Promise.resolve()
+
+    if (!resolveMainArchive) {
+      throw new Error(
+        'Expected pending main archive request to be initialized.'
+      )
+    }
+
+    resolveMainArchive({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+      headers: createHeaders({}),
+      json: async () => ({}),
+    } as Response)
+
+    await expect(entriesPromise).resolves.toBeDefined()
+    expect(fs.getCacheIdentity().ref).toBe('master')
+    expect(sessionResetSpy.mock.calls.some((call) => call[0] === fs)).toBe(true)
+  })
+
+  it('clearCache settles in-flight GitHub blame requests', async () => {
+    const archive = makeTar([{ path: 'root/file.txt', content: 'hello' }])
+    let graphQlCalls = 0
+
+    const mockFetch = vi.fn(async (input: unknown, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/clear-cache-blame/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (url === 'https://api.github.com/graphql') {
+        graphQlCalls += 1
+
+        return new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal
+
+          if (signal?.aborted) {
+            reject(new Error('aborted'))
+            return
+          }
+
+          signal?.addEventListener(
+            'abort',
+            () => {
+              reject(new Error('aborted'))
+            },
+            { once: true }
+          )
+        })
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/clear-cache-blame',
+      host: 'github',
+      token: 'token',
+      ref: 'main',
+    })
+
+    vi.spyOn(fs, 'getGitFileMetadata').mockResolvedValue({
+      authors: [],
+      firstCommitDate: new Date('2024-01-01T00:00:00Z'),
+      lastCommitDate: new Date('2024-02-01T00:00:00Z'),
+    })
+
+    await fs.readFile('file.txt')
+
+    const inFlight = fs.getGitExportMetadata('/file.txt', 1, 1)
+    for (let attempt = 0; attempt < 20 && graphQlCalls === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+
+    fs.clearCache()
+
+    const settled = await Promise.race([
+      inFlight.then(
+        () => 'resolved',
+        () => 'rejected'
+      ),
+      new Promise<'timeout'>((resolve) =>
+        setTimeout(() => resolve('timeout'), 200)
+      ),
+    ])
+
+    expect(graphQlCalls).toBeGreaterThan(0)
+    expect(settled).not.toBe('timeout')
+  })
+
+  it('creates distinct session snapshots per repository for cache isolation', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+      arrayBuffer: async () => SUCCESS_ARCHIVE,
+    })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const first = new GitVirtualFileSystem({
+      repository: 'owner/snapshot-a',
+      host: 'github',
+      ref: 'main',
+    })
+    const second = new GitVirtualFileSystem({
+      repository: 'owner/snapshot-b',
+      host: 'github',
+      ref: 'main',
+    })
+
+    const firstSnapshotId = new FileSystemSnapshot(first).id
+    const secondSnapshotId = new FileSystemSnapshot(second).id
+
+    expect(firstSnapshotId).not.toBe(secondSnapshotId)
+
+    await Promise.all([first.readFile('file.txt'), second.readFile('file.txt')])
+  })
+
+  it('isolates persisted gitlab cache entries by baseUrl', async () => {
+    const deterministicRef = 'a'.repeat(40)
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const value = 1` },
+    ])
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (
+        url.includes(
+          `/api/v4/projects/group%2Fcached-repo/repository/archive.tar.gz?sha=${deterministicRef}`
+        )
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (
+        url.startsWith(
+          'https://gitlab.one/api/v4/projects/group%2Fcached-repo/repository/commits?'
+        ) &&
+        url.includes('path=src%2Findex.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              id: 'one',
+              committed_date: '2024-01-01T00:00:00Z',
+              author_name: 'One',
+              author_email: 'one@example.com',
+            },
+          ],
+        } as Response
+      }
+
+      if (
+        url.startsWith(
+          'https://gitlab.two/api/v4/projects/group%2Fcached-repo/repository/commits?'
+        ) &&
+        url.includes('path=src%2Findex.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              id: 'two',
+              committed_date: '2024-02-01T00:00:00Z',
+              author_name: 'Two',
+              author_email: 'two@example.com',
+            },
+          ],
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+    const isolatedCache = createIsolatedPersistentCache()
+
+    try {
+      const firstFs = new GitVirtualFileSystem({
+        repository: 'group/cached-repo',
+        host: 'gitlab',
+        baseUrl: 'https://gitlab.one',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
+      const secondFs = new GitVirtualFileSystem({
+        repository: 'group/cached-repo',
+        host: 'gitlab',
+        baseUrl: 'https://gitlab.two',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
+
+      const firstMetadata = await firstFs.getGitFileMetadata('src/index.ts')
+      const secondMetadata = await secondFs.getGitFileMetadata('src/index.ts')
+
+      expect(firstMetadata.firstCommitDate?.toISOString()).toBe(
+        '2024-01-01T00:00:00.000Z'
+      )
+      expect(secondMetadata.firstCommitDate?.toISOString()).toBe(
+        '2024-02-01T00:00:00.000Z'
+      )
+
+      const firstHostCommitCalls = mockFetch.mock.calls.filter(([request]) =>
+        String(request).startsWith(
+          'https://gitlab.one/api/v4/projects/group%2Fcached-repo/repository/commits?'
+        )
+      ).length
+      const secondHostCommitCalls = mockFetch.mock.calls.filter(([request]) =>
+        String(request).startsWith(
+          'https://gitlab.two/api/v4/projects/group%2Fcached-repo/repository/commits?'
+        )
+      ).length
+
+      expect(firstHostCommitCalls).toBe(1)
+      expect(secondHostCommitCalls).toBe(1)
+    } finally {
+      isolatedCache.cleanup()
+    }
+  })
+
+  it('does not cache failed file metadata fetches', async () => {
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const value = 1` },
+    ])
+
+    let metadataAttempts = 0
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/metadata-retry/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/metadata-retry/commits/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ sha: 'c2' }),
+        } as Response
+      }
+
+      if (
+        url.includes('/repos/owner/metadata-retry/commits?sha=main') &&
+        url.includes('src%2Findex.ts')
+      ) {
+        metadataAttempts += 1
+
+        if (metadataAttempts <= 3) {
+          return {
+            ok: false,
+            status: 500,
+            statusText: 'Internal Server Error',
+            headers: createHeaders({}),
+            json: async () => ({}),
+          } as Response
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: 'c2',
+              commit: {
+                author: { date: '2024-02-01T00:00:00Z' },
+                committer: { date: '2024-02-01T00:00:00Z' },
+              },
+            },
+            {
+              sha: 'c1',
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+                committer: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/metadata-retry',
+      host: 'github',
+      ref: 'main',
+    })
+
+    const firstMetadata = await fs.getGitFileMetadata('src/index.ts')
+    const secondMetadata = await fs.getGitFileMetadata('src/index.ts')
+
+    expect(firstMetadata.authors).toEqual([])
+    expect(secondMetadata.authors.length).toBeGreaterThan(0)
+    expect(metadataAttempts).toBe(4)
+  })
+
+  it('reuses cached directory structure for deterministic refs across instances', async () => {
+    const deterministicRef = 'f'.repeat(40)
+    const archive = makeTar([{ path: 'root/file.txt', content: 'hello' }])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (
+        url.includes(`/repos/owner/structure-cache/tarball/${deterministicRef}`)
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (
+        url.includes('/repos/owner/structure-cache/commits?sha=') &&
+        url.includes('file.txt')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: deterministicRef,
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+    const isolatedCache = createIsolatedPersistentCache()
+
+    try {
+      const firstFs = new GitVirtualFileSystem({
+        repository: 'owner/structure-cache',
+        host: 'github',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
+      const firstDirectory = new Directory({ fileSystem: firstFs })
+
+      const firstStructure = await firstDirectory.getStructure()
+      const firstPaths = firstStructure
+        .filter((entry) => entry.kind === 'File')
+        .map((entry) => entry.relativePath)
+        .sort()
+
+      expect(firstPaths).toEqual(['file.txt'])
+
+      const archiveCallsAfterFirstRun = mockFetch.mock.calls.filter(
+        ([request]) =>
+          String(request).includes(
+            `/repos/owner/structure-cache/tarball/${deterministicRef}`
+          )
+      ).length
+      expect(archiveCallsAfterFirstRun).toBe(1)
+
+      const commitCallsAfterFirstRun = mockFetch.mock.calls.filter(
+        ([request]) =>
+          String(request).includes('/repos/owner/structure-cache/commits?sha=')
+      ).length
+      expect(commitCallsAfterFirstRun).toBe(1)
+
+      const secondFs = new GitVirtualFileSystem({
+        repository: 'owner/structure-cache',
+        host: 'github',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
+      const callsBeforeSecondStructure = mockFetch.mock.calls.length
+      const secondDirectory = new Directory({ fileSystem: secondFs })
+
+      const secondStructure = await secondDirectory.getStructure()
+      const secondPaths = secondStructure
+        .filter((entry) => entry.kind === 'File')
+        .map((entry) => entry.relativePath)
+        .sort()
+
+      expect(secondPaths).toEqual(firstPaths)
+      expect(mockFetch.mock.calls.length).toBe(callsBeforeSecondStructure)
+    } finally {
+      isolatedCache.cleanup()
+    }
+  })
+
+  it('reuses cached directory structure for deterministic refs across instances in production', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    const deterministicRef = 'e'.repeat(40)
+    const archive = makeTar([{ path: 'root/file.txt', content: 'hello' }])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (
+        url.includes(
+          `/repos/owner/production-structure-cache/tarball/${deterministicRef}`
+        )
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (
+        url.includes('/repos/owner/production-structure-cache/commits?sha=') &&
+        url.includes('file.txt')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: deterministicRef,
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    process.env.NODE_ENV = 'production'
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+    const isolatedCache = createIsolatedPersistentCache()
+
+    try {
+      const firstFs = new GitVirtualFileSystem({
+        repository: 'owner/production-structure-cache',
+        host: 'github',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
+      const firstDirectory = new Directory({ fileSystem: firstFs })
+
+      const firstStructure = await firstDirectory.getStructure()
+      const firstPaths = firstStructure
+        .filter((entry) => entry.kind === 'File')
+        .map((entry) => entry.relativePath)
+        .sort()
+
+      expect(firstPaths).toEqual(['file.txt'])
+
+      const archiveCallsAfterFirstRun = mockFetch.mock.calls.filter(
+        ([request]) =>
+          String(request).includes(
+            `/repos/owner/production-structure-cache/tarball/${deterministicRef}`
+          )
+      ).length
+      expect(archiveCallsAfterFirstRun).toBe(1)
+
+      const commitCallsAfterFirstRun = mockFetch.mock.calls.filter(
+        ([request]) =>
+          String(request).includes(
+            '/repos/owner/production-structure-cache/commits?sha='
+          )
+      ).length
+      expect(commitCallsAfterFirstRun).toBe(1)
+
+      const secondFs = new GitVirtualFileSystem({
+        repository: 'owner/production-structure-cache',
+        host: 'github',
+        ref: deterministicRef,
+        cache: isolatedCache.cache,
+      })
+      const callsBeforeSecondStructure = mockFetch.mock.calls.length
+      const secondDirectory = new Directory({ fileSystem: secondFs })
+
+      const secondStructure = await secondDirectory.getStructure()
+      const secondPaths = secondStructure
+        .filter((entry) => entry.kind === 'File')
+        .map((entry) => entry.relativePath)
+        .sort()
+
+      expect(secondPaths).toEqual(firstPaths)
+      expect(mockFetch.mock.calls.length).toBe(callsBeforeSecondStructure)
+    } finally {
+      isolatedCache.cleanup()
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
+  it('does not cache failed GitHub blame responses', async () => {
+    const blameDate = '2024-01-15T00:00:00Z'
+    let graphQlAttempts = 0
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/blame-retry/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => SUCCESS_ARCHIVE,
+        } as unknown as Response
+      }
+
+      if (url === 'https://api.github.com/graphql') {
+        graphQlAttempts += 1
+
+        if (graphQlAttempts === 1) {
+          return {
+            ok: false,
+            status: 500,
+            statusText: 'Internal Server Error',
+            headers: createHeaders({}),
+            json: async () => ({}),
+          } as Response
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({
+            data: {
+              repository: {
+                f0: {
+                  blame: {
+                    ranges: [
+                      {
+                        startingLine: 1,
+                        endingLine: 1,
+                        commit: { oid: 'abc123', committedDate: blameDate },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          }),
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => ({}),
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/blame-retry',
+      host: 'github',
+      token: 'token',
+      ref: 'main',
+    })
+
+    vi.spyOn(fs, 'getGitFileMetadata').mockResolvedValue({
+      authors: [],
+      firstCommitDate: new Date('2024-01-01T00:00:00Z'),
+      lastCommitDate: new Date('2024-02-01T00:00:00Z'),
+    })
+
+    const firstMetadata = await fs.getGitExportMetadata('/file.txt', 1, 1)
+    const secondMetadata = await fs.getGitExportMetadata('/file.txt', 1, 1)
+
+    expect(firstMetadata.firstCommitDate?.toISOString()).toBe(
+      '2024-01-01T00:00:00.000Z'
+    )
+    expect(firstMetadata.lastCommitDate?.toISOString()).toBe(
+      '2024-02-01T00:00:00.000Z'
+    )
+    expect(secondMetadata.firstCommitDate?.toISOString()).toBe(
+      '2024-01-15T00:00:00.000Z'
+    )
+    expect(secondMetadata.lastCommitDate?.toISOString()).toBe(
+      '2024-01-15T00:00:00.000Z'
+    )
+    expect(graphQlAttempts).toBe(2)
+  })
+
+  it('does not persist failed file-at-commit fetches', async () => {
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const a = 1` },
+    ])
+
+    let c1FetchAttempts = 0
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/blob-retry/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/blob-retry/commits/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ sha: 'c2' }),
+        } as Response
+      }
+
+      if (
+        url.includes('/repos/owner/blob-retry/commits?sha=main') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: 'c2',
+              commit: {
+                author: { date: '2024-02-01T00:00:00Z' },
+              },
+            },
+            {
+              sha: 'c1',
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      if (
+        url.includes('raw.githubusercontent.com/owner/blob-retry/c1/') &&
+        url.includes('index.ts')
+      ) {
+        c1FetchAttempts += 1
+
+        if (c1FetchAttempts === 1) {
+          return {
+            ok: false,
+            status: 500,
+            statusText: 'Internal Server Error',
+            headers: createHeaders({}),
+            text: async () => '',
+          } as Response
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1`,
+        } as Response
+      }
+
+      if (
+        url.includes('raw.githubusercontent.com/owner/blob-retry/c2/') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1; export const b = 2`,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/blob-retry',
+      host: 'github',
+      ref: 'main',
+    })
+
+    await drain(
+      fs.getExportHistory({
+        entry: 'src/index.ts',
+        detectUpdates: false,
+      })
+    )
+    await drain(
+      fs.getExportHistory({
+        entry: 'src/index.ts',
+        detectUpdates: true,
+      })
+    )
+
+    expect(c1FetchAttempts).toBe(2)
+  })
+
   afterEach(() => {
     vi.useRealTimers()
     globalThis.fetch = originalFetch
     vi.restoreAllMocks()
+    disposeDefaultCacheStorePersistence()
   })
 
   it('infers base-name entry files when entry is a directory', async () => {
@@ -564,6 +1926,622 @@ describe('GitVirtualFileSystem', () => {
     expect(byObject.exports[objectBId!]?.[0]?.sha).toBe('c2')
   })
 
+  it('recomputes branch commit history while reusing immutable blob lookups across instances', async () => {
+    const commitTwo = 'c2abcdefffffffffffffffffffffffffffffffff'
+    const commitOne = 'c1abcdefffffffffffffffffffffffffffffffff'
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const a = 1` },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/incremental-cache/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/incremental-cache/commits/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ sha: commitTwo }),
+        } as Response
+      }
+
+      if (
+        url.includes('/repos/owner/incremental-cache/commits?sha=main') &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: commitTwo,
+              commit: {
+                author: { date: '2024-02-01T00:00:00Z' },
+              },
+            },
+            {
+              sha: commitOne,
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      if (
+        url.includes(
+          `raw.githubusercontent.com/owner/incremental-cache/${commitOne}/`
+        ) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1`,
+        } as Response
+      }
+
+      if (
+        url.includes(
+          `raw.githubusercontent.com/owner/incremental-cache/${commitTwo}/`
+        ) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1; export const b = 2`,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+    const isolatedCache = createIsolatedPersistentCache()
+
+    try {
+      const firstFs = new GitVirtualFileSystem({
+        repository: 'owner/incremental-cache',
+        host: 'github',
+        ref: 'main',
+        cache: isolatedCache.cache,
+      })
+
+      const firstReport = await drain(
+        firstFs.getExportHistory({
+          entry: 'src/index.ts',
+          detectUpdates: false,
+        })
+      )
+
+      const secondFs = new GitVirtualFileSystem({
+        repository: 'owner/incremental-cache',
+        host: 'github',
+        ref: 'main',
+        cache: isolatedCache.cache,
+      })
+
+      const secondReport = await drain(
+        secondFs.getExportHistory({
+          entry: 'src/index.ts',
+          detectUpdates: false,
+        })
+      )
+
+      expect(secondReport.nameToId).toEqual(firstReport.nameToId)
+      expect(secondReport.exports).toEqual(firstReport.exports)
+
+      const commitHistoryCalls = mockFetch.mock.calls.filter(([request]) =>
+        String(request).includes(
+          '/repos/owner/incremental-cache/commits?sha=main'
+        )
+      ).length
+      const rawBlobCalls = mockFetch.mock.calls.filter(([request]) => {
+        const url = String(request)
+        return (
+          url.includes('raw.githubusercontent.com/owner/incremental-cache/') &&
+          url.includes('index.ts')
+        )
+      }).length
+
+      expect(commitHistoryCalls).toBe(2)
+      expect(rawBlobCalls).toBe(2)
+    } finally {
+      isolatedCache.cleanup()
+    }
+  })
+
+  it('does not persist commit-history cache for abbreviated commit refs', async () => {
+    const shortRef = 'c2abcde'
+    const commitTwo = 'c2abcdefffffffffffffffffffffffffffffffff'
+    const commitOne = 'c1abcdefffffffffffffffffffffffffffffffff'
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const a = 1` },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes(`/repos/owner/abbrev-cache/tarball/${shortRef}`)) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (url.includes(`/repos/owner/abbrev-cache/commits/${shortRef}`)) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ sha: commitTwo }),
+        } as Response
+      }
+
+      if (
+        url.includes(`/repos/owner/abbrev-cache/commits?sha=${shortRef}`) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: commitTwo,
+              commit: {
+                author: { date: '2024-02-01T00:00:00Z' },
+              },
+            },
+            {
+              sha: commitOne,
+              commit: {
+                author: { date: '2024-01-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      if (
+        url.includes(
+          `raw.githubusercontent.com/owner/abbrev-cache/${commitOne}/`
+        ) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1`,
+        } as Response
+      }
+
+      if (
+        url.includes(
+          `raw.githubusercontent.com/owner/abbrev-cache/${commitTwo}/`
+        ) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1; export const b = 2`,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const firstFs = new GitVirtualFileSystem({
+      repository: 'owner/abbrev-cache',
+      host: 'github',
+      ref: shortRef,
+    })
+    await drain(
+      firstFs.getExportHistory({
+        entry: 'src/index.ts',
+        detectUpdates: false,
+      })
+    )
+
+    const secondFs = new GitVirtualFileSystem({
+      repository: 'owner/abbrev-cache',
+      host: 'github',
+      ref: shortRef,
+    })
+    await drain(
+      secondFs.getExportHistory({
+        entry: 'src/index.ts',
+        detectUpdates: false,
+      })
+    )
+
+    const commitHistoryCalls = mockFetch.mock.calls.filter(([request]) =>
+      String(request).includes(
+        `/repos/owner/abbrev-cache/commits?sha=${shortRef}`
+      )
+    ).length
+
+    expect(commitHistoryCalls).toBe(2)
+  })
+
+  it('does not persist file-at-commit cache for non-deterministic start refs', async () => {
+    const commitTwo = 'c2abcdefffffffffffffffffffffffffffffffff'
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export const a = 1` },
+    ])
+    let mainRefVersion = 1
+    let rawMainFetches = 0
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/start-ref-cache/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (
+        url.includes(`/repos/owner/start-ref-cache/commits?sha=${commitTwo}`) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: commitTwo,
+              commit: {
+                author: { date: '2024-02-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      if (
+        url.includes(`/repos/owner/start-ref-cache/compare/main...${commitTwo}`)
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({
+            status: 'ahead',
+            commits: [{ sha: commitTwo }],
+          }),
+        } as Response
+      }
+
+      if (
+        url.includes('raw.githubusercontent.com/owner/start-ref-cache/main/') &&
+        url.includes('index.ts')
+      ) {
+        rawMainFetches += 1
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () =>
+            mainRefVersion === 1
+              ? `export const a = 1`
+              : `export const a = 1; export const b = 2`,
+        } as Response
+      }
+
+      if (
+        url.includes(
+          `raw.githubusercontent.com/owner/start-ref-cache/${commitTwo}/`
+        ) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1; export const b = 2`,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const firstFs = new GitVirtualFileSystem({
+      repository: 'owner/start-ref-cache',
+      host: 'github',
+      ref: 'main',
+    })
+    const firstReport = await drain(
+      firstFs.getExportHistory({
+        entry: 'src/index.ts',
+        ref: { start: 'main', end: commitTwo },
+        detectUpdates: false,
+      })
+    )
+
+    const firstBId = firstReport.nameToId['b']?.[0]
+    expect(firstBId).toBeDefined()
+    expect(
+      firstReport.exports[firstBId!]?.some((change) => change.kind === 'Added')
+    ).toBe(true)
+
+    mainRefVersion = 2
+
+    const secondFs = new GitVirtualFileSystem({
+      repository: 'owner/start-ref-cache',
+      host: 'github',
+      ref: 'main',
+    })
+    const secondReport = await drain(
+      secondFs.getExportHistory({
+        entry: 'src/index.ts',
+        ref: { start: 'main', end: commitTwo },
+        detectUpdates: false,
+      })
+    )
+
+    const secondBId = secondReport.nameToId['b']?.[0]
+    expect(secondBId).toBeDefined()
+    expect(
+      secondReport.exports[secondBId!]?.some(
+        (change) => change.kind === 'Added'
+      ) ?? false
+    ).toBe(false)
+    expect(rawMainFetches).toBe(2)
+  })
+
+  it('does not persist recursive file-at-commit cache for non-deterministic start refs', async () => {
+    const commitTwo = 'c2abcdefffffffffffffffffffffffffffffffff'
+    const archive = makeTar([
+      { path: 'root/.keep', content: `` },
+      { path: 'root/src/index.ts', content: `export * from './child'` },
+      { path: 'root/src/child.ts', content: `export const a = 1` },
+    ])
+    let mainChildVersion = 1
+    let rawMainChildFetches = 0
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/start-ref-recursive-cache/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => Uint8Array.from(archive).buffer,
+        } as Response
+      }
+
+      if (
+        url.includes(
+          `/repos/owner/start-ref-recursive-cache/commits?sha=${commitTwo}`
+        ) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [
+            {
+              sha: commitTwo,
+              commit: {
+                author: { date: '2024-02-01T00:00:00Z' },
+              },
+            },
+          ],
+        } as Response
+      }
+
+      if (
+        url.includes(
+          `/repos/owner/start-ref-recursive-cache/compare/main...${commitTwo}`
+        )
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({
+            status: 'ahead',
+            commits: [{ sha: commitTwo }],
+          }),
+        } as Response
+      }
+
+      if (
+        url.includes(
+          'raw.githubusercontent.com/owner/start-ref-recursive-cache/main/'
+        ) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export * from './child'`,
+        } as Response
+      }
+
+      if (
+        url.includes(
+          'raw.githubusercontent.com/owner/start-ref-recursive-cache/main/'
+        ) &&
+        url.includes('child.ts')
+      ) {
+        rawMainChildFetches += 1
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () =>
+            mainChildVersion === 1
+              ? `export const a = 1`
+              : `export const a = 1; export const b = 2`,
+        } as Response
+      }
+
+      if (
+        url.includes(
+          `raw.githubusercontent.com/owner/start-ref-recursive-cache/${commitTwo}/`
+        ) &&
+        url.includes('index.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export * from './child'`,
+        } as Response
+      }
+
+      if (
+        url.includes(
+          `raw.githubusercontent.com/owner/start-ref-recursive-cache/${commitTwo}/`
+        ) &&
+        url.includes('child.ts')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          text: async () => `export const a = 1; export const b = 2`,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const firstFs = new GitVirtualFileSystem({
+      repository: 'owner/start-ref-recursive-cache',
+      host: 'github',
+      ref: 'main',
+    })
+    const firstReport = await drain(
+      firstFs.getExportHistory({
+        entry: 'src/index.ts',
+        ref: { start: 'main', end: commitTwo },
+        detectUpdates: false,
+      })
+    )
+
+    const firstBId = firstReport.nameToId['b']?.[0]
+    expect(firstBId).toBeDefined()
+    expect(
+      firstReport.exports[firstBId!]?.some((change) => change.kind === 'Added')
+    ).toBe(true)
+
+    mainChildVersion = 2
+
+    const secondFs = new GitVirtualFileSystem({
+      repository: 'owner/start-ref-recursive-cache',
+      host: 'github',
+      ref: 'main',
+    })
+    const secondReport = await drain(
+      secondFs.getExportHistory({
+        entry: 'src/index.ts',
+        ref: { start: 'main', end: commitTwo },
+        detectUpdates: false,
+      })
+    )
+
+    const secondBId = secondReport.nameToId['b']?.[0]
+    expect(secondBId).toBeDefined()
+    expect(
+      secondReport.exports[secondBId!]?.some(
+        (change) => change.kind === 'Added'
+      ) ?? false
+    ).toBe(false)
+    expect(rawMainChildFetches).toBe(2)
+  })
+
   it('fetches git metadata for files when using GitVirtualFileSystem', async () => {
     const commitHistory = [
       {
@@ -598,24 +2576,51 @@ describe('GitVirtualFileSystem', () => {
       },
     ]
 
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        headers: createHeaders({ 'content-type': 'application/octet-stream' }),
-        arrayBuffer: async () => SUCCESS_ARCHIVE,
-        url: 'https://codeload.github.com/owner/repo/tarball/main',
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/repo/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => SUCCESS_ARCHIVE,
+          url: 'https://codeload.github.com/owner/repo/tarball/main',
+        } as unknown as Response
+      }
+
+      if (url.includes('/repos/owner/repo/commits/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ sha: 'c0ffee' }),
+        } as Response
+      }
+
+      if (url.includes('/repos/owner/repo/commits')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => commitHistory,
+          url: 'https://api.github.com/repos/owner/repo/commits',
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
         headers: createHeaders({}),
-        json: async () => commitHistory,
-        url: 'https://api.github.com/repos/owner/repo/commits',
-      })
+        text: async () => '',
+      } as Response
+    })
 
     globalThis.fetch = mockFetch
 
@@ -632,8 +2637,10 @@ describe('GitVirtualFileSystem', () => {
     const lastCommitDate = await file.getLastCommitDate()
     const authors = await file.getAuthors()
 
-    expect(mockFetch).toHaveBeenCalledTimes(2)
-    const commitRequest = mockFetch.mock.calls[1]![0]
+    expect(mockFetch).toHaveBeenCalledTimes(3)
+    const commitRequest = mockFetch.mock.calls.find(([request]) =>
+      String(request).includes('/repos/owner/repo/commits?')
+    )![0]
     expect(commitRequest).toContain('/repos/owner/repo/commits')
     expect(commitRequest).toContain('path=dir%2Fa.md')
 
@@ -656,38 +2663,69 @@ describe('GitVirtualFileSystem', () => {
 
   it('uses ranged blame queries for export metadata when authenticated', async () => {
     const blameDate = '2024-02-01T00:00:00Z'
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        headers: createHeaders({ 'content-type': 'application/octet-stream' }),
-        arrayBuffer: async () => SUCCESS_ARCHIVE,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        headers: createHeaders({}),
-        json: async () => ({
-          data: {
-            repository: {
-              f0: {
-                blame: {
-                  ranges: [
-                    {
-                      startingLine: 5,
-                      endingLine: 6,
-                      commit: { oid: 'abc123', committedDate: blameDate },
-                    },
-                  ],
+    const mockFetch = vi.fn(async (input: unknown, init: any = {}) => {
+      const url = String(input)
+      const body = init?.body
+
+      if (url.includes('/repos/owner/repo/commits/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ sha: 'c0ffee' }),
+        } as Response
+      }
+
+      if (String(url).endsWith('/repos/owner/repo/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => SUCCESS_ARCHIVE,
+        } as unknown as Response
+      }
+
+      if (
+        typeof body === 'string' &&
+        body.includes('blame(startLine: $start0, endLine: $end0)')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({
+            data: {
+              repository: {
+                f0: {
+                  blame: {
+                    ranges: [
+                      {
+                        startingLine: 5,
+                        endingLine: 6,
+                        commit: { oid: 'abc123', committedDate: blameDate },
+                      },
+                    ],
+                  },
                 },
               },
             },
-          },
-        }),
-      })
+          }),
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
 
     globalThis.fetch = mockFetch
     const fs = new GitVirtualFileSystem({
@@ -709,8 +2747,11 @@ describe('GitVirtualFileSystem', () => {
     const metadata = await metadataPromise
     vi.useRealTimers()
 
-    const [, graphqlCall] = mockFetch.mock.calls
-    const requestBody = JSON.parse(graphqlCall![1].body as string)
+    const graphqlCall = mockFetch.mock.calls.find((call): boolean => {
+      const body = call[1] as { body?: string }
+      return typeof body?.body === 'string' && body.body.includes('blame(')
+    })![1]
+    const requestBody = JSON.parse(graphqlCall.body as string)
 
     expect(requestBody.query).toContain(
       'blame(startLine: $start0, endLine: $end0)'
@@ -723,38 +2764,98 @@ describe('GitVirtualFileSystem', () => {
 
   it('reuses cached superset blame ranges for nested export requests', async () => {
     const blameDate = '2024-02-02T00:00:00Z'
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        headers: createHeaders({ 'content-type': 'application/octet-stream' }),
-        arrayBuffer: async () => SUCCESS_ARCHIVE,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        headers: createHeaders({}),
-        json: async () => ({
-          data: {
-            repository: {
-              f0: {
-                blame: {
-                  ranges: [
-                    {
-                      startingLine: 1,
-                      endingLine: 10,
-                      commit: { oid: 'def456', committedDate: blameDate },
-                    },
-                  ],
+    const mockFetch = vi.fn(async (input: unknown, init: any = {}) => {
+      const url = String(input)
+      const body = init?.body
+
+      if (url.includes('/repos/owner/repo/commits/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({ sha: 'c0ffee' }),
+        } as Response
+      }
+
+      if (String(url).endsWith('/repos/owner/repo/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => SUCCESS_ARCHIVE,
+        } as unknown as Response
+      }
+
+      if (
+        typeof body === 'string' &&
+        body.includes('blame(startLine: $start0, endLine: $end0)')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({
+            data: {
+              repository: {
+                f0: {
+                  blame: {
+                    ranges: [
+                      {
+                        startingLine: 1,
+                        endingLine: 10,
+                        commit: { oid: 'def456', committedDate: blameDate },
+                      },
+                    ],
+                  },
                 },
               },
             },
-          },
-        }),
-      })
+          }),
+        } as Response
+      }
+
+      if (
+        typeof body === 'string' &&
+        body.includes('blame(startLine: $start1, endLine: $end1)')
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => ({
+            data: {
+              repository: {
+                f0: {
+                  blame: {
+                    ranges: [
+                      {
+                        startingLine: 1,
+                        endingLine: 10,
+                        commit: { oid: 'def456', committedDate: blameDate },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          }),
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
 
     globalThis.fetch = mockFetch
     vi.useFakeTimers()
@@ -780,7 +2881,7 @@ describe('GitVirtualFileSystem', () => {
     await vi.runAllTimersAsync()
     const nestedMetadata = await nestedMetadataPromise
 
-    expect(mockFetch).toHaveBeenCalledTimes(2)
+    expect(mockFetch).toHaveBeenCalledTimes(3)
     expect(nestedMetadata.firstCommitDate?.toISOString()).toBe(
       '2024-02-02T00:00:00.000Z'
     )

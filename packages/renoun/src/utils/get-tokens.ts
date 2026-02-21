@@ -222,6 +222,7 @@ export async function getTokens({
 
       const rootDirectory = getRootDirectory()
       const baseDirectory = process.cwd().replace(rootDirectory, '')
+      const quickInfoCache = new Map<string, QuickInfoEntry>()
       let previousTokenStart = 0
       let parsedTokens: Token[][] = tokens.map((line) => {
         // increment position for line breaks if the line is empty
@@ -302,7 +303,8 @@ export async function getTokens({
                     filePath,
                     token.start,
                     rootDirectory,
-                    baseDirectory
+                    baseDirectory,
+                    quickInfoCache
                   )
                 : undefined
 
@@ -508,7 +510,6 @@ interface QuickInfoEntry {
   documentationText: string
 }
 
-const quickInfoCache = new Map<string, QuickInfoEntry>()
 const MAX_QUICK_INFO_CACHE_SIZE = 2000
 
 /** Get the quick info a token */
@@ -517,10 +518,11 @@ function getQuickInfo(
   filePath: string,
   tokenStart: number,
   rootDirectory: string,
-  baseDirectory: string
+  baseDirectory: string,
+  quickInfoCache: Map<string, QuickInfoEntry>
 ) {
   const cacheKey = `${filePath}:${tokenStart}`
-  const cachedQuickInfo = getCachedQuickInfo(cacheKey)
+  const cachedQuickInfo = getCachedQuickInfo(quickInfoCache, cacheKey)
 
   if (cachedQuickInfo) {
     return cachedQuickInfo
@@ -552,12 +554,15 @@ function getQuickInfo(
     documentationText,
   }
 
-  setCachedQuickInfo(cacheKey, result)
+  setCachedQuickInfo(quickInfoCache, cacheKey, result)
 
   return result
 }
 
-function getCachedQuickInfo(cacheKey: string) {
+function getCachedQuickInfo(
+  quickInfoCache: Map<string, QuickInfoEntry>,
+  cacheKey: string
+) {
   const cachedQuickInfo = quickInfoCache.get(cacheKey)
 
   if (!cachedQuickInfo) {
@@ -571,7 +576,11 @@ function getCachedQuickInfo(cacheKey: string) {
   return cachedQuickInfo
 }
 
-function setCachedQuickInfo(cacheKey: string, value: QuickInfoEntry) {
+function setCachedQuickInfo(
+  quickInfoCache: Map<string, QuickInfoEntry>,
+  cacheKey: string,
+  value: QuickInfoEntry
+) {
   if (
     MAX_QUICK_INFO_CACHE_SIZE !== Number.POSITIVE_INFINITY &&
     quickInfoCache.size >= MAX_QUICK_INFO_CACHE_SIZE

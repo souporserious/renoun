@@ -40,8 +40,12 @@ import { Writable } from 'node:stream'
 import {
   ensureRelativePath,
   joinPaths,
+  normalizePathKey,
   normalizeSlashes,
   relativePath,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
+  trimTrailingSlashes,
 } from '../utils/path.ts'
 import {
   hasJavaScriptLikeExtension,
@@ -81,11 +85,11 @@ import {
   RENAME_PATH_DICE_MIN,
   parseExportId,
   formatExportId,
+  getParserFlavorFromFileName,
   getExportParseCacheKey,
   scanModuleExports,
   isUnderScope,
   mapWithLimit,
-  LRUMap,
   looksLikeFilePath,
   buildExportComparisonMaps,
   detectSameFileRenames,
@@ -95,6 +99,12 @@ import {
   checkAndCollapseOscillation,
   selectEntryFiles,
 } from './export-analysis.ts'
+import { GIT_HISTORY_CACHE_VERSION } from './cache-key.ts'
+import {
+  createGitFileSystemPersistentCacheNodeKey,
+} from './git-cache-key.ts'
+import type { Cache } from './Cache.ts'
+import { Session } from './Session.ts'
 
 export interface GitFileSystemOptions extends FileSystemOptions {
   /** Repository source - remote URL or local path. */
@@ -129,6 +139,9 @@ export interface GitFileSystemOptions extends FileSystemOptions {
 
   /** The maximum depth to traverse for export history. */
   maxDepth?: number
+
+  /** Optional cache provider for this filesystem's internal caches. */
+  cache?: Cache
 }
 
 interface GitObjectMeta {
@@ -158,11 +171,20 @@ interface FileExportIndex {
 interface GitLogCommit {
   sha: string
   unix: number
+  authorName?: string
+  authorEmail?: string
   tags?: string[]
 }
 
 interface ExportHistoryCommit extends GitLogCommit {
   release?: string
+}
+
+interface ReverseReExportGraphPayload {
+  generatedAt: string
+  commitSha: string
+  entries: string[]
+  edges: Record<string, string[]>
 }
 
 interface NormalizedExportHistoryRefScope {
@@ -174,16 +196,15 @@ interface NormalizedExportHistoryRefScope {
   previousReleaseTag?: string
 }
 
-const FILE_META_CACHE_MAX = 1000
-const FILE_INDEX_CACHE_MAX = 1000
-const EXPORT_HISTORY_CACHE_MAX = 200
-const GIT_LOG_CACHE_MAX = 128
 const REMOTE_REF_CACHE_TTL_MS = 60_000
 const REMOTE_REF_TIMEOUT_MS = 8_000
-const remoteRefCache = new Map<
-  string,
-  { remoteSha: string | null; checkedAt: number }
->()
+const REF_IDENTITY_CACHE_TTL_MS = 60_000
+
+type RefIdentity = {
+  identity: string
+  deterministic: boolean
+  checkedAt: number
+}
 
 interface PrepareRepoOptions {
   spec: string
@@ -748,10 +769,6 @@ export class GitFileSystem
   #repoRootPromise: Promise<string> | null = null
   #closed = false
 
-  // File metadata memoization
-  #fileMetaPromises = new Map<string, Promise<GitFileMetadata>>()
-  #fileMetaCache = new LRUMap<string, GitFileMetadata>(FILE_META_CACHE_MAX)
-
   // Lazily resolved commit SHA for `this.ref`
   #refCommit: string | null = null
   #refCommitPromise: Promise<string> | null = null
@@ -759,30 +776,15 @@ export class GitFileSystem
   readonly #worktreeEnabled: boolean
   #worktreeRootChecked = false
   #worktreeRootExists = false
-  #worktreeIgnoreCache = new Map<string, boolean>()
 
   // Singleton promise to prevent parallel unshallow operations
   #unshallowPromise: Promise<void> | null = null
   #isShallowChecked = false
   #isShallow = false
 
-  // Parsed exports cache (blob SHA -> scanExports result).
-  // Shared by getExportHistory and buildFileExportIndex.
-  // Uses LRUMap for O(1) eviction instead of manual pruning.
-  #exportParseCache = new LRUMap<string, Map<string, ExportItem>>(10_000)
-
-  // In-memory cache for file export indices (diskPath -> index)
-  #fileExportIndexMemory = new LRUMap<string, FileExportIndex>(
-    FILE_INDEX_CACHE_MAX
-  )
-
-  // In-memory cache for export history reports (diskPath -> report)
-  #exportHistoryMemory = new LRUMap<string, ExportHistoryReport>(
-    EXPORT_HISTORY_CACHE_MAX
-  )
-
-  // Cache git log results (keyed by query) to avoid repeat git invocations in a single process.
-  #gitLogCache = new LRUMap<string, Promise<GitLogCommit[]>>(GIT_LOG_CACHE_MAX)
+  #cache?: Cache
+  #session?: Session
+  #historyWarmupInFlight = new Set<string>()
 
   constructor(options: GitFileSystemOptions) {
     super(options)
@@ -812,6 +814,7 @@ export class GitFileSystem
     this.prepareScopeDirectories = options.sparse ?? []
     this.prepareTransport = options.transport ?? 'https'
     this.fetchRemote = options.fetchRemote ?? 'origin'
+    this.#cache = options.cache
     this.autoFetch =
       options.autoFetch ??
       (this.autoPrepare
@@ -902,11 +905,194 @@ export class GitFileSystem
   }
 
   getRelativePathToWorkspace(path: string): string {
-    const absolutePath = this.getAbsolutePath(path)
+    const normalizedPath = normalizeSlashes(String(path))
+    const isAlreadyAbsolutePath =
+      normalizedPath.startsWith('/') ||
+      /^[A-Za-z]:\//.test(normalizedPath) ||
+      normalizedPath.startsWith('//')
+    const absolutePath = isAlreadyAbsolutePath
+      ? resolve(normalizedPath)
+      : this.getAbsolutePath(path)
     const relativeToRepo = relativePath(this.repoRoot, absolutePath)
-    return normalizeSlashes(
-      relativeToRepo.startsWith('./') ? relativeToRepo.slice(2) : relativeToRepo
-    )
+    return trimLeadingDotSlash(relativeToRepo)
+  }
+
+  async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    try {
+      await this.#ensureRepoReady()
+
+      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
+        cwd: this.repoRoot,
+        maxBuffer: this.maxBufferBytes,
+        verbose: false,
+      })
+      if (headResult.status !== 0) {
+        return null
+      }
+
+      const headCommit = headResult.stdout.trim()
+      if (!headCommit) {
+        return null
+      }
+
+      const relativeRoot = this.#normalizeRepoPath(rootPath)
+      const statusScope = relativeRoot || '.'
+      const statusResult = await spawnWithResult(
+        'git',
+        [
+          'status',
+          '--porcelain=1',
+          '--untracked-files=all',
+          '--ignored=matching',
+          '--ignore-submodules=all',
+          '--',
+          statusScope,
+        ],
+        {
+          cwd: this.repoRoot,
+          maxBuffer: this.maxBufferBytes,
+          verbose: false,
+        }
+      )
+      if (statusResult.status !== 0) {
+        return null
+      }
+
+      const statusLines = statusResult.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0)
+        .sort((first, second) => first.localeCompare(second))
+      const ignoredOnly =
+        statusLines.length > 0 &&
+        statusLines.every((line) => line.startsWith('!! '))
+      const dirtyDigest = createHash('sha1')
+        .update(statusLines.join('\n'))
+        .digest('hex')
+
+      return `head:${headCommit};dirty:${dirtyDigest};count:${statusLines.length};ignored-only:${ignoredOnly ? 1 : 0}`
+    } catch {
+      return null
+    }
+  }
+
+  async getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null> {
+    try {
+      await this.#ensureRepoReady()
+
+      const previousHead = this.#extractHeadFromWorkspaceToken(previousToken)
+      if (!previousHead) {
+        return null
+      }
+      const previousDirtyDigest =
+        this.#extractDirtyDigestFromWorkspaceToken(previousToken)
+
+      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
+        cwd: this.repoRoot,
+        maxBuffer: this.maxBufferBytes,
+        verbose: false,
+      })
+      if (headResult.status !== 0) {
+        return null
+      }
+
+      const currentHead = headResult.stdout.trim()
+      if (!currentHead) {
+        return null
+      }
+
+      const relativeRoot = this.#normalizeRepoPath(rootPath)
+      const statusScope = relativeRoot || '.'
+      const changedPaths = new Set<string>()
+
+      if (currentHead !== previousHead) {
+        const diffResult = await spawnWithResult(
+          'git',
+          [
+            'diff',
+            '--name-only',
+            '--no-renames',
+            `${previousHead}..${currentHead}`,
+            '--',
+            statusScope,
+          ],
+          {
+            cwd: this.repoRoot,
+            maxBuffer: this.maxBufferBytes,
+            verbose: false,
+          }
+        )
+        if (diffResult.status !== 0) {
+          return null
+        }
+
+        for (const line of diffResult.stdout
+          .split(/\r?\n/)
+          .map((entry) => normalizeSlashes(entry.trim()))
+          .filter((entry) => entry.length > 0)) {
+          changedPaths.add(line)
+        }
+      }
+
+      const statusResult = await spawnWithResult(
+        'git',
+        [
+          'status',
+          '--porcelain=1',
+          '--untracked-files=all',
+          '--ignored=matching',
+          '--ignore-submodules=all',
+          '--',
+          statusScope,
+        ],
+        {
+          cwd: this.repoRoot,
+          maxBuffer: this.maxBufferBytes,
+          verbose: false,
+        }
+      )
+      if (statusResult.status !== 0) {
+        return null
+      }
+
+      const statusLines = statusResult.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0)
+        .sort((first, second) => first.localeCompare(second))
+      const currentDirtyDigest = createHash('sha1')
+        .update(statusLines.join('\n'))
+        .digest('hex')
+
+      if (
+        currentHead === previousHead &&
+        previousDirtyDigest === currentDirtyDigest
+      ) {
+        return []
+      }
+
+      for (const path of this.#extractChangedPathsFromStatusOutput(
+        statusResult.stdout
+      )) {
+        const normalizedPath = normalizeSlashes(path)
+        if (normalizedPath.length > 0) {
+          changedPaths.add(normalizedPath)
+        }
+      }
+
+      return Array.from(changedPaths)
+        .map((path) =>
+          normalizePathKey(
+            this.getRelativePathToWorkspace(this.#resolveRepoAbsolutePath(path))
+          )
+        )
+        .sort((first, second) => first.localeCompare(second))
+    } catch {
+      return null
+    }
   }
 
   readDirectorySync(path: string = '.'): DirectoryEntry[] {
@@ -1002,10 +1188,31 @@ export class GitFileSystem
     return this.getFileByteLengthSync(path)
   }
 
+  async getContentId(path: string): Promise<string | undefined> {
+    await this.#ensureRepoReady()
+    const relativePath = this.#normalizeRepoPath(path)
+    const worktreePath = this.#resolveWorktreePath(relativePath, 'any')
+
+    // Prefer filesystem metadata/content hashing for live worktree files.
+    if (worktreePath) {
+      return undefined
+    }
+
+    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    const blobMeta = await this.#git!.getBlobMeta(spec)
+
+    if (!blobMeta) {
+      return undefined
+    }
+
+    return `git-blob:${blobMeta.sha}`
+  }
+
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {
     this.#ensureRepoReadySync()
     const absolutePath = this.#resolveRepoAbsolutePath(path)
     writeFileSync(absolutePath, normalizeWriteContent(content))
+    this.#invalidateSessionPaths([path])
   }
 
   async writeFile(
@@ -1015,12 +1222,16 @@ export class GitFileSystem
     await this.#ensureRepoReady()
     const absolutePath = this.#resolveRepoAbsolutePath(path)
     await writeFile(absolutePath, normalizeWriteContent(content))
+    this.#invalidateSessionPaths([path])
   }
 
   writeFileStream(path: string): FileWritableStream {
     this.#ensureRepoReadySync()
     const absolutePath = this.#resolveRepoAbsolutePath(path)
     const stream = createWriteStream(absolutePath, { flags: 'w' })
+    stream.on('finish', () => {
+      this.#invalidateSessionPaths([path])
+    })
     return Writable.toWeb(stream) as FileWritableStream
   }
 
@@ -1126,18 +1337,21 @@ export class GitFileSystem
     this.#ensureRepoReadySync()
     const absolutePath = this.#resolveRepoAbsolutePath(path)
     rmSync(absolutePath, { force: true })
+    this.#invalidateSessionPaths([path])
   }
 
   async deleteFile(path: string): Promise<void> {
     await this.#ensureRepoReady()
     const absolutePath = this.#resolveRepoAbsolutePath(path)
     await rm(absolutePath, { force: true })
+    this.#invalidateSessionPaths([path])
   }
 
   async createDirectory(path: string): Promise<void> {
     await this.#ensureRepoReady()
     const absolutePath = this.#resolveRepoAbsolutePath(path)
     await mkdir(absolutePath, { recursive: true })
+    this.#invalidateSessionPaths([path])
   }
 
   async rename(
@@ -1165,6 +1379,7 @@ export class GitFileSystem
       await mkdir(targetDirectory, { recursive: true })
     }
     await rename(sourcePath, targetPath)
+    this.#invalidateSessionPaths([source, target])
   }
 
   async copy(
@@ -1193,6 +1408,7 @@ export class GitFileSystem
       force: overwrite,
       errorOnExist: !overwrite,
     })
+    this.#invalidateSessionPaths([source, target])
   }
 
   isFilePathGitIgnored(filePath: string): boolean {
@@ -1218,6 +1434,13 @@ export class GitFileSystem
       return
     }
     this.#closed = true
+    this.#historyWarmupInFlight.clear()
+    if (this.#session) {
+      Session.reset(this, this.#session.snapshot.id)
+      this.#session = undefined
+    } else {
+      Session.reset(this)
+    }
     this.#git?.close()
   }
 
@@ -1239,6 +1462,64 @@ export class GitFileSystem
     }
     assertSafeRepoPath(relative)
     return relative
+  }
+
+  #extractHeadFromWorkspaceToken(token: string): string | null {
+    const match = /^head:([^;]+);/.exec(token)
+    return match?.[1] ?? null
+  }
+
+  #extractDirtyDigestFromWorkspaceToken(token: string): string | null {
+    const match = /;dirty:([^;]+);/.exec(token)
+    return match?.[1] ?? null
+  }
+
+  #decodeGitStatusPath(path: string): string {
+    const trimmed = path.trim()
+    if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) {
+      return normalizeSlashes(trimmed)
+    }
+
+    const unquoted = trimmed
+      .slice(1, -1)
+      .replace(/\\\"/g, '"')
+      .replace(/\\\\/g, '\\')
+
+    return normalizeSlashes(unquoted)
+  }
+
+  #extractChangedPathsFromStatusOutput(output: string): string[] {
+    const changedPaths: string[] = []
+    const lines = output
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0)
+
+    for (const line of lines) {
+      if (line.length <= 3) {
+        continue
+      }
+
+      const rawPath = line.slice(3).trim()
+      if (!rawPath) {
+        continue
+      }
+
+      if (rawPath.includes(' -> ')) {
+        const [fromPath, toPath] = rawPath.split(' -> ')
+        if (fromPath) {
+          changedPaths.push(this.#decodeGitStatusPath(fromPath))
+        }
+        if (toPath) {
+          changedPaths.push(this.#decodeGitStatusPath(toPath))
+        }
+        continue
+      }
+
+      changedPaths.push(this.#decodeGitStatusPath(rawPath))
+    }
+
+    return changedPaths
   }
 
   #hasWorktreeRoot(): boolean {
@@ -1292,14 +1573,7 @@ export class GitFileSystem
       return false
     }
 
-    const cached = this.#worktreeIgnoreCache.get(relativePath)
-    if (cached !== undefined) {
-      return !cached
-    }
-
-    const ignored = this.isFilePathGitIgnored(relativePath)
-    this.#worktreeIgnoreCache.set(relativePath, ignored)
-    return !ignored
+    return true
   }
 
   #resolveRepoAbsolutePath(path: string): string {
@@ -1418,7 +1692,7 @@ export class GitFileSystem
     const directoryEntries: DirectoryEntry[] = []
     const base =
       relativePath && relativePath !== '.'
-        ? normalizeSlashes(relativePath).replace(/\/$/, '')
+        ? trimTrailingSlashes(normalizeSlashes(relativePath))
         : ''
 
     for (const entry of entries) {
@@ -1446,7 +1720,7 @@ export class GitFileSystem
     const directoryEntries: DirectoryEntry[] = []
     const base =
       relativePath && relativePath !== '.'
-        ? normalizeSlashes(relativePath).replace(/\/$/, '')
+        ? trimTrailingSlashes(normalizeSlashes(relativePath))
         : ''
 
     for (const entry of entries) {
@@ -1570,10 +1844,10 @@ export class GitFileSystem
       prepared = true
     }
 
+    this.#refreshSessionAfterRootChange(this.repoRoot, resolved)
     this.repoRoot = resolved
     this.#worktreeRootChecked = false
     this.#worktreeRootExists = false
-    this.#worktreeIgnoreCache.clear()
     if (!this.#git) {
       this.#git = new GitObjectStore(this.repoRoot)
     }
@@ -1583,6 +1857,21 @@ export class GitFileSystem
     this.#ensureCachedScopeSync(scopeDirectories)
     this.#repoReady = true
     return this.repoRoot
+  }
+
+  #refreshSessionAfterRootChange(
+    previousRepoRoot: string,
+    resolvedRepoRoot: string
+  ) {
+    const previousResolved = resolve(previousRepoRoot)
+    const nextResolved = resolve(resolvedRepoRoot)
+
+    if (previousResolved === nextResolved) {
+      return
+    }
+
+    Session.reset(this)
+    this.#session = undefined
   }
 
   #ensureCachedScopeSync(scopeDirectories: string[]) {
@@ -1671,6 +1960,457 @@ export class GitFileSystem
     }
   }
 
+  #getSession(): Session {
+    if (!this.#session) {
+      this.#session = Session.for(this, undefined, this.#cache)
+    }
+
+    return this.#session
+  }
+
+  #invalidateSessionPaths(paths: readonly string[]): void {
+    const session = Session.for(this, undefined, this.#cache)
+    for (const path of paths) {
+      const normalizedPath = this.#normalizeRepoPath(path)
+      if (!normalizedPath) {
+        continue
+      }
+      session.invalidatePath(normalizedPath)
+
+      const parentDirectory = dirname(normalizedPath)
+      if (
+        parentDirectory &&
+        parentDirectory !== '.' &&
+        parentDirectory !== '/'
+      ) {
+        session.invalidatePath(parentDirectory)
+      }
+    }
+  }
+
+  #clearRefCaches(reason: string): void {
+    void reason
+    this.#refCommit = null
+    this.#refCommitPromise = null
+    this.#historyWarmupInFlight.clear()
+
+    const session = this.#session
+    if (session) {
+      this.#session = undefined
+      Session.reset(this, session.snapshot.id)
+    } else {
+      Session.reset(this)
+    }
+  }
+
+  #createPersistentCacheNodeKey(scope: string, payload: unknown): string {
+    return createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: GIT_HISTORY_CACHE_VERSION,
+      repository: this.repository,
+      repoRoot: this.repoRoot,
+      namespace: scope,
+      payload,
+    })
+  }
+
+  async #replacePersistentNode<Value>(
+    session: Session,
+    nodeKey: string,
+    value: Value
+  ): Promise<void> {
+    await session.cache.put(nodeKey, value, {
+      persist: true,
+      deps: [
+        {
+          depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+          depVersion: GIT_HISTORY_CACHE_VERSION,
+        },
+      ],
+    })
+  }
+
+  async #getRefCacheIdentity(ref: string): Promise<{
+    identity: string
+    deterministic: boolean
+  }>
+  async #getRefCacheIdentity(
+    ref: string,
+    options: { forceRefresh?: boolean }
+  ): Promise<{
+    identity: string
+    deterministic: boolean
+  }>
+  async #getRefCacheIdentity(
+    ref: string,
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<{
+    identity: string
+    deterministic: boolean
+  }> {
+    const normalizedRef = ref.trim()
+    const now = Date.now()
+    const forceRefresh = options.forceRefresh === true
+    const nodeKey = this.#createPersistentCacheNodeKey('ref-identity', {
+      ref: normalizedRef,
+    })
+    const session = this.#getSession()
+    const cached = await session.cache.get<RefIdentity>(nodeKey)
+
+    if (!forceRefresh && cached && now - cached.checkedAt < REF_IDENTITY_CACHE_TTL_MS) {
+      return {
+        identity: cached.identity,
+        deterministic: cached.deterministic,
+      }
+    }
+
+    const next = await this.#resolveRefCacheIdentity(normalizedRef, cached)
+    await this.#getSession().cache.put(nodeKey, next, {
+      persist: false,
+    })
+
+    return {
+      identity: next.identity,
+      deterministic: next.deterministic,
+    }
+  }
+
+  async #resolveRefCacheIdentity(
+    ref: string,
+    cached?: RefIdentity
+  ): Promise<RefIdentity> {
+    let identity = ref
+    let deterministic = false
+
+    try {
+      const resolved = await this.#resolveRefToCommit(ref)
+      if (resolved) {
+        identity = resolved
+        deterministic = true
+      }
+    } catch {
+      if (cached !== undefined) {
+        return {
+          identity: cached.identity,
+          deterministic: cached.deterministic,
+          checkedAt: Date.now(),
+        }
+      }
+    }
+
+    const next: RefIdentity = {
+      identity,
+      deterministic,
+      checkedAt: Date.now(),
+    }
+
+    if (cached && cached.identity !== next.identity) {
+      this.#clearRefCaches(
+        '[renoun] Git ref identity changed; clearing in-memory ref caches.'
+      )
+    }
+
+    return next
+  }
+
+  async #getGitLogRefCacheIdentity(ref: string): Promise<{
+    identity: string
+    deterministic: boolean
+  }> {
+    const rangeMatch = ref.match(/^(.+?)(\.\.\.?)(.+)$/)
+    if (!rangeMatch) {
+      return this.#getRefCacheIdentity(ref)
+    }
+
+    const left = await this.#getRefCacheIdentity(rangeMatch[1].trim())
+    const right = await this.#getRefCacheIdentity(rangeMatch[3].trim())
+
+    return {
+      identity: `${left.identity}${rangeMatch[2]}${right.identity}`,
+      deterministic: left.deterministic && right.deterministic,
+    }
+  }
+
+  async #getAncestorBarrelEntryCandidates(
+    filePath: string,
+    commitSha: string
+  ): Promise<string[]> {
+    const git = this.#git
+    if (!git) {
+      return []
+    }
+
+    const normalizedFilePath = normalizePath(filePath)
+    const candidates: string[] = []
+    const visitedDirectories = new Set<string>()
+    let currentDirectory = normalizePath(dirname(normalizedFilePath))
+
+    while (currentDirectory && !visitedDirectories.has(currentDirectory)) {
+      visitedDirectories.add(currentDirectory)
+
+      for (const indexFile of INDEX_FILE_CANDIDATES) {
+        const candidate =
+          currentDirectory === '.'
+            ? normalizePath(indexFile)
+            : joinPath(currentDirectory, indexFile)
+
+        if (candidate === normalizedFilePath) {
+          continue
+        }
+        if (!hasJavaScriptLikeExtension(candidate)) {
+          continue
+        }
+
+        const meta = await git.getBlobMeta(`${commitSha}:${candidate}`)
+        if (meta?.type === 'blob') {
+          candidates.push(candidate)
+          break
+        }
+      }
+
+      if (currentDirectory === '.') {
+        break
+      }
+
+      const parentDirectory = normalizePath(dirname(currentDirectory))
+      if (parentDirectory === currentDirectory) {
+        break
+      }
+      currentDirectory = parentDirectory || '.'
+    }
+
+    return Array.from(new Set(candidates))
+  }
+
+  async #getOrBuildReverseReExportGraph(options: {
+    commitSha: string
+    entryFiles: string[]
+    scopeDirectories: string[]
+    maxDepth: number
+  }): Promise<Map<string, Set<string>>> {
+    const sortedEntries = [
+      ...new Set(options.entryFiles.map(normalizePath)),
+    ].sort()
+    if (sortedEntries.length === 0) {
+      return new Map()
+    }
+
+    const sortedScopeDirectories = [
+      ...new Set(options.scopeDirectories.map(normalizePath)),
+    ].sort()
+    const session = this.#getSession()
+    const nodeKey = this.#createPersistentCacheNodeKey(
+      'reverse-reexport-graph',
+      {
+        commitSha: options.commitSha,
+        entries: sortedEntries,
+        scopeDirectories: sortedScopeDirectories,
+        maxDepth: options.maxDepth,
+      }
+    )
+
+    const payload =
+      await session.cache.getOrCompute<ReverseReExportGraphPayload>(
+        nodeKey,
+        {
+          persist: true,
+          constDeps: [
+            {
+              name: 'git-file-system-cache',
+              version: GIT_HISTORY_CACHE_VERSION,
+            },
+          ],
+        },
+        async (ctx) => {
+          ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
+
+          const reverseGraph = new Map<string, Set<string>>()
+          const graphParseWarnings: string[] = []
+          const git = this.#git!
+          const sharedMetaCache = new Map<string, GitObjectMeta | null>()
+          const sharedResolveCache = new Map<string, string | null>()
+          const sharedBlobCache = new Map<string, Map<string, ExportItem>>()
+          const sharedBlobShaResolveCache = new Map<string, string>()
+          const sharedCacheStats = { hits: 0, misses: 0 }
+          const getOrParseBlobExports = async (
+            sha: string,
+            filePathForParser: string
+          ) =>
+            this.#getOrParseExportsForBlob(sha, filePathForParser, async () => {
+              return git.repoPath
+                ? readBlobSync(git.repoPath, sha)
+                : git.getBlobContentBySha(sha)
+            })
+
+          await mapWithLimit(sortedEntries, 3, async (entryFile) => {
+            const context: CollectContext = {
+              git,
+              commit: options.commitSha,
+              maxDepth: options.maxDepth,
+              blobCache: sharedBlobCache,
+              getOrParseBlobExports,
+              scopeDirectories: sortedScopeDirectories,
+              parseWarnings: graphParseWarnings,
+              cacheStats: sharedCacheStats,
+              metaCache: sharedMetaCache,
+              resolveCache: sharedResolveCache,
+              blobShaResolveCache: sharedBlobShaResolveCache,
+              repoPath: git.repoPath,
+              reverseReExportGraph: reverseGraph,
+            }
+
+            await collectExportsFromFile(context, entryFile, 0, new Set())
+          })
+
+          return {
+            generatedAt: new Date().toISOString(),
+            commitSha: options.commitSha,
+            entries: sortedEntries,
+            edges: serializeReverseReExportGraph(reverseGraph),
+          }
+        }
+      )
+
+    return deserializeReverseReExportGraph(payload.edges)
+  }
+
+  #getRelatedBarrelEntries(
+    filePath: string,
+    reverseGraph: Map<string, Set<string>>,
+    barrelCandidates: string[]
+  ): string[] {
+    const normalizedFilePath = normalizePath(filePath)
+    const barrelSet = new Set(
+      barrelCandidates.map((entry) => normalizePath(entry))
+    )
+    const relatedEntries = new Set<string>()
+    const queue = [normalizedFilePath]
+    const visited = new Set<string>()
+
+    while (queue.length > 0) {
+      const currentPath = queue.shift()!
+      if (visited.has(currentPath)) {
+        continue
+      }
+      visited.add(currentPath)
+
+      const parents = reverseGraph.get(currentPath)
+      if (!parents) {
+        continue
+      }
+
+      for (const parent of parents) {
+        if (barrelSet.has(parent)) {
+          relatedEntries.add(parent)
+        }
+        if (!visited.has(parent)) {
+          queue.push(parent)
+        }
+      }
+    }
+
+    return Array.from(relatedEntries).sort()
+  }
+
+  async #scheduleRelatedBarrelHistoryWarmup(options: {
+    entryFiles: string[]
+    commitSha: string
+    scopeDirectories: string[]
+    ref: ExportHistoryOptions['ref']
+    limit?: number
+    maxDepth: number
+    detectUpdates: boolean
+    updateMode: 'body' | 'signature'
+  }): Promise<void> {
+    if (options.entryFiles.length !== 1) {
+      return
+    }
+
+    const sourceEntryFile = normalizePath(options.entryFiles[0] ?? '')
+    if (!sourceEntryFile || !looksLikeFilePath(sourceEntryFile)) {
+      return
+    }
+
+    const barrelCandidates = await this.#getAncestorBarrelEntryCandidates(
+      sourceEntryFile,
+      options.commitSha
+    )
+
+    if (barrelCandidates.length === 0) {
+      return
+    }
+
+    const warmupScopeDirectories = Array.from(
+      new Set([
+        ...options.scopeDirectories.map((path) => normalizePath(path)),
+        ...barrelCandidates.map((entry) => normalizePath(dirname(entry))),
+      ])
+    ).sort()
+
+    const reverseGraph = await this.#getOrBuildReverseReExportGraph({
+      commitSha: options.commitSha,
+      entryFiles: barrelCandidates,
+      scopeDirectories: warmupScopeDirectories,
+      maxDepth: options.maxDepth,
+    })
+    const relatedEntries = this.#getRelatedBarrelEntries(
+      sourceEntryFile,
+      reverseGraph,
+      barrelCandidates
+    )
+      .filter((entry) => entry !== sourceEntryFile)
+      .slice(0, 2)
+
+    if (relatedEntries.length === 0) {
+      return
+    }
+
+    for (const relatedEntry of relatedEntries) {
+      const warmupKey = this.#createPersistentCacheNodeKey(
+        'public-api-warmup',
+        {
+          commitSha: options.commitSha,
+          entry: relatedEntry,
+          ref: options.ref ?? null,
+          limit: options.limit ?? null,
+          maxDepth: options.maxDepth,
+          detectUpdates: options.detectUpdates,
+          updateMode: options.updateMode,
+        }
+      )
+
+      if (this.#historyWarmupInFlight.has(warmupKey)) {
+        continue
+      }
+
+      this.#historyWarmupInFlight.add(warmupKey)
+      queueMicrotask(() => {
+        void (async () => {
+          if (this.#closed) {
+            return
+          }
+
+          const warmupGenerator = this.getExportHistory({
+            entry: relatedEntry,
+            ref: options.ref,
+            limit: options.limit,
+            maxDepth: options.maxDepth,
+            detectUpdates: options.detectUpdates,
+            updateMode: options.updateMode,
+            __skipWarmup: true,
+          } as ExportHistoryOptions & { __skipWarmup: true })
+
+          await drainExportHistoryGenerator(warmupGenerator)
+        })()
+          .catch(() => {
+            // Warmup is opportunistic; ignore failures.
+          })
+          .finally(() => {
+            this.#historyWarmupInFlight.delete(warmupKey)
+          })
+      })
+    }
+  }
+
   async #getOrParseExportsForBlob(
     sha: string,
     fileNameForParser: string,
@@ -1678,20 +2418,45 @@ export class GitFileSystem
   ): Promise<Map<string, ExportItem>> {
     assertSafeGitArg(sha, 'sha')
 
-    const cacheKey = getExportParseCacheKey(sha)
-    const cached = this.#exportParseCache.get(cacheKey)
-    if (cached) {
-      return cached
+    const parserFlavor = getParserFlavorFromFileName(fileNameForParser)
+    const session = this.#getSession()
+    const nodeKey = this.#createPersistentCacheNodeKey('blob-exports', {
+      sha,
+      parserFlavor,
+    })
+    const persistedPayload =
+      await session.cache.get<Record<string, ExportItem>>(nodeKey)
+    if (persistedPayload !== undefined) {
+      return deserializeExportItemMap(persistedPayload)
     }
 
     const content = await getContent()
     if (content == null) {
+      // Treat missing content as a transient miss and avoid persisting an empty payload.
       return new Map()
     }
 
-    const parsed = scanModuleExports(fileNameForParser, content)
-    this.#exportParseCache.set(cacheKey, parsed)
-    return parsed
+    const parsedPayload = await session.cache.getOrCompute<
+      Record<string, ExportItem>
+    >(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: [
+          {
+            name: 'git-file-system-cache',
+            version: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
+        ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
+        return serializeExportItemMap(
+          scanModuleExports(fileNameForParser, content)
+        )
+      }
+    )
+    return deserializeExportItemMap(parsedPayload)
   }
 
   async #gitLogCached(
@@ -1700,21 +2465,50 @@ export class GitFileSystem
     options: { reverse?: boolean; limit?: number; follow?: boolean } = {}
   ): Promise<GitLogCommit[]> {
     await this.#ensureRepoReady()
-    const paths = Array.isArray(path) ? path.join('\x00') : path
-    const key = `${ref}\x01${paths}\x01${options.reverse ? 1 : 0}\x01${options.limit ?? ''}\x01${options.follow ? 1 : 0}`
+    const normalizedPath = Array.isArray(path)
+      ? Array.from(
+          new Set(
+            path.map((entry) => normalizePath(String(entry))).filter(Boolean)
+          )
+        ).sort()
+      : normalizePath(String(path))
+    const { identity: refIdentity, deterministic } =
+      await this.#getGitLogRefCacheIdentity(ref)
+    const pathsKey = Array.isArray(normalizedPath)
+      ? normalizedPath.join('\x00')
+      : normalizedPath
+    const key = `${refIdentity}\x01${pathsKey}\x01${options.reverse ? 1 : 0}\x01${options.limit ?? ''}\x01${options.follow ? 1 : 0}`
+    const nodeKey = this.#createPersistentCacheNodeKey('git-log', {
+      refIdentity,
+      key,
+      path: normalizedPath,
+      reverse: Boolean(options.reverse),
+      limit: options.limit ?? null,
+      follow: Boolean(options.follow),
+    })
 
-    let cachedLog = this.#gitLogCache.get(key)
-    if (!cachedLog) {
-      cachedLog = gitLogForPath(this.repoRoot, ref, path, {
-        reverse: Boolean(options.reverse),
-        limit: options.limit,
-        follow: Boolean(options.follow),
-        maxBufferBytes: this.maxBufferBytes,
-      })
-      this.#gitLogCache.set(key, cachedLog)
-    }
+    return this.#getSession().cache.getOrCompute(
+      nodeKey,
+      {
+        persist: deterministic,
+        constDeps: [
+          {
+            name: 'git-file-system-cache',
+            version: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
+        ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
 
-    return cachedLog
+        return gitLogForPath(this.repoRoot, ref, normalizedPath, {
+          reverse: Boolean(options.reverse),
+          limit: options.limit,
+          follow: Boolean(options.follow),
+          maxBufferBytes: this.maxBufferBytes,
+        })
+      }
+    )
   }
 
   async #gitRenameNewToOldBetween(
@@ -2108,6 +2902,10 @@ export class GitFileSystem
   ): ExportHistoryGenerator {
     const _startMs = Date.now()
     this.#assertOpen()
+    const internalOptions = options as ExportHistoryOptions & {
+      __skipWarmup?: boolean
+    }
+    const skipWarmup = internalOptions.__skipWarmup === true
 
     yield {
       type: 'progress',
@@ -2221,6 +3019,34 @@ export class GitFileSystem
     const limit = options.limit
     const detectUpdates = options.detectUpdates ?? true
     const updateMode = options.updateMode ?? 'signature'
+    const git = this.#git!
+    const canonicalEntries: string[] = []
+
+    for (const source of uniqueEntrySources) {
+      if (looksLikeFilePath(source)) {
+        canonicalEntries.push(normalizePath(source))
+        continue
+      }
+
+      const inferred = await inferEntryFile(
+        this.repoRoot,
+        git,
+        endCommit,
+        source
+      )
+      if (inferred.length > 0) {
+        canonicalEntries.push(...inferred.map((entry) => normalizePath(entry)))
+      }
+    }
+
+    const uniqueEntryRelatives = Array.from(new Set(canonicalEntries))
+    if (uniqueEntryRelatives.length === 0) {
+      throw new Error(`Could not resolve any entry files.`)
+    }
+
+    const session = this.#getSession()
+    const sortedScopeDirectories = [...scopeDirectories].sort()
+    const sortedEntryRelatives = [...uniqueEntryRelatives].sort()
     const keyObject = {
       ref: options.ref ?? null,
       refScope: normalizedRefScope.source,
@@ -2229,35 +3055,45 @@ export class GitFileSystem
       release: targetReleaseTag ?? null,
       startRef: startRef ?? null,
       startCommit: startCommit ?? null,
-      include: scopeDirectories,
+      include: sortedScopeDirectories,
       limit,
       maxDepth,
       detectUpdates,
       updateMode,
-      entry: uniqueEntrySources,
+      entry: sortedEntryRelatives,
     }
     type ExportHistoryLatestPointer = {
-      diskPath: string
+      reportNodeKey: string
       lastCommitSha: string
     }
-    const diskKey = JSON.stringify(keyObject)
-    const diskPath = this.#cachePath(['public-api'], diskKey)
+    const reportNodeKey = this.#createPersistentCacheNodeKey(
+      'public-api-report',
+      keyObject
+    )
     const baseKeyObject = { ...keyObject, refCommit: null, startCommit: null }
-    const latestPath = this.#cachePath(
-      ['public-api-latest'],
-      JSON.stringify(baseKeyObject)
+    const latestNodeKey = this.#createPersistentCacheNodeKey(
+      'public-api-latest',
+      baseKeyObject
     )
 
-    // Memory cache first (this also helps subsequent calls in-process)
-    const memoryHit = this.#exportHistoryMemory.get(diskPath)
-    if (memoryHit) {
-      return memoryHit
+    const cachedReport = await session.cache.get<ExportHistoryReport>(reportNodeKey)
+    if (cachedReport) {
+      return cachedReport
     }
 
-    const diskHit = this.#readCache<ExportHistoryReport>(diskPath)
-    if (diskHit) {
-      this.#exportHistoryMemory.set(diskPath, diskHit)
-      return diskHit
+    if (!skipWarmup) {
+      void this.#scheduleRelatedBarrelHistoryWarmup({
+        entryFiles: uniqueEntryRelatives,
+        commitSha: endCommit,
+        scopeDirectories: sortedScopeDirectories,
+        ref: options.ref,
+        limit,
+        maxDepth,
+        detectUpdates,
+        updateMode,
+      }).catch(() => {
+        // Warmup is opportunistic; ignore failures.
+      })
     }
 
     let resumeReport: ExportHistoryReport | null = null
@@ -2265,12 +3101,26 @@ export class GitFileSystem
     let resumeSnapshot: ExportHistoryReport['lastExportSnapshot'] | null = null
 
     const latestPointer =
-      this.#readCache<ExportHistoryLatestPointer>(latestPath)
-    if (latestPointer?.diskPath && latestPointer.lastCommitSha) {
-      const previousReport = this.#readCache<ExportHistoryReport>(
-        latestPointer.diskPath
+      await session.cache.get<ExportHistoryLatestPointer>(latestNodeKey)
+    if (latestPointer?.reportNodeKey && latestPointer.lastCommitSha) {
+      const previousReport = await session.cache.get<ExportHistoryReport>(
+        latestPointer.reportNodeKey
       )
-      if (previousReport?.lastCommitSha && previousReport.lastExportSnapshot) {
+      const hasSameEntrySelection = Array.isArray(previousReport?.entryFiles)
+        ? previousReport.entryFiles.length === sortedEntryRelatives.length &&
+          [...previousReport.entryFiles]
+            .sort()
+            .every(
+              (entryFile, index) => entryFile === sortedEntryRelatives[index]
+            )
+        : false
+      if (
+        previousReport?.repo === this.repoRoot &&
+        hasSameEntrySelection &&
+        previousReport.lastCommitSha &&
+        previousReport.lastExportSnapshot &&
+        previousReport.lastCommitSha === latestPointer.lastCommitSha
+      ) {
         const isAncestor = await this.#gitIsAncestorCommit(
           previousReport.lastCommitSha,
           endCommit
@@ -2295,14 +3145,13 @@ export class GitFileSystem
 
     if (contentCommits.length === 0) {
       if (resumeReport) {
-        this.#writeCache(diskPath, resumeReport)
+        await this.#replacePersistentNode(session, reportNodeKey, resumeReport)
         if (resumeReport.lastCommitSha) {
-          this.#writeCache(latestPath, {
-            diskPath,
+          await this.#replacePersistentNode(session, latestNodeKey, {
+            reportNodeKey,
             lastCommitSha: resumeReport.lastCommitSha,
           })
         }
-        this.#exportHistoryMemory.set(diskPath, resumeReport)
         return resumeReport
       }
       throw new Error(
@@ -2350,29 +3199,6 @@ export class GitFileSystem
 
     // Prepare processing
     const latestCommit = uniqueCommits[uniqueCommits.length - 1].sha
-    const entryRelatives: string[] = []
-
-    const git = this.#git!
-    for (const source of uniqueEntrySources) {
-      if (looksLikeFilePath(source)) {
-        entryRelatives.push(source)
-        continue
-      }
-      const inferred = await inferEntryFile(
-        this.repoRoot,
-        git,
-        latestCommit,
-        source
-      )
-      if (inferred) {
-        entryRelatives.push(...inferred)
-      }
-    }
-
-    const uniqueEntryRelatives = Array.from(new Set(entryRelatives))
-    if (uniqueEntryRelatives.length === 0) {
-      throw new Error(`Could not resolve any entry files.`)
-    }
 
     yield {
       type: 'progress',
@@ -2381,8 +3207,9 @@ export class GitFileSystem
       totalCommits: uniqueCommits.length,
     } satisfies ExportHistoryProgressEvent
 
-    // shared parse cache (blob SHA -> parsed exports) so later module metadata does not redo parsing work.
-    const blobCache = this.#exportParseCache
+    // Shared per-run parse cache (blob SHA -> parsed exports) so later
+    // module metadata work does not redo parsing in this run.
+    const blobCache = new Map<string, Map<string, ExportItem>>()
     const exports: ExportHistoryReport['exports'] =
       resumeReport?.exports ?? Object.create(null)
     const parseWarnings: string[] = resumeReport?.parseWarnings
@@ -2395,6 +3222,15 @@ export class GitFileSystem
     let previousResolvedPaths: Map<string, string | null> | null = null
     let cacheHits = 0
     let cacheMisses = 0
+    const getOrParseBlobExports = async (
+      sha: string,
+      filePathForParser: string
+    ) =>
+      this.#getOrParseExportsForBlob(sha, filePathForParser, async () => {
+        return git.repoPath
+          ? readBlobSync(git.repoPath, sha)
+          : git.getBlobContentBySha(sha)
+      })
 
     if (resumeSnapshot) {
       previousExports = deserializeExportSnapshot(resumeSnapshot)
@@ -2420,6 +3256,7 @@ export class GitFileSystem
       const context: CollectContext = {
         maxDepth,
         blobCache,
+        getOrParseBlobExports,
         scopeDirectories,
         parseWarnings,
         git,
@@ -3062,9 +3899,11 @@ export class GitFileSystem
         console.log(`[GitFileSystem] parseWarnings=${parseWarnings.length}`)
     }
 
-    this.#writeCache(diskPath, report)
-    this.#writeCache(latestPath, { diskPath, lastCommitSha: latestCommit })
-    this.#exportHistoryMemory.set(diskPath, report)
+    await this.#replacePersistentNode(session, reportNodeKey, report)
+    await this.#replacePersistentNode(session, latestNodeKey, {
+      reportNodeKey,
+      lastCommitSha: latestCommit,
+    })
     return report
   }
 
@@ -3093,24 +3932,25 @@ export class GitFileSystem
 
     await this.#ensureNotShallow()
 
-    const key = `${refCommit}|${relativePath}`
-    const cached = this.#fileMetaCache.get(key)
-    if (cached) {
-      return cached
-    }
-
-    let promise = this.#fileMetaPromises.get(key)
-    if (!promise) {
-      promise = this.#buildFileMetadata(refCommit, relativePath)
-      this.#fileMetaPromises.set(key, promise)
-    }
-
     try {
-      const result = await promise
-      this.#fileMetaCache.set(key, result)
-      return result
-    } finally {
-      this.#fileMetaPromises.delete(key)
+      return await this.#buildFileMetadata(refCommit, relativePath)
+    } catch (error: unknown) {
+      if (this.verbose) {
+        console.warn(
+          `[GitFileSystem] git log failed for ${relativePath}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      }
+
+      // Do not cache fallback metadata so transient git failures can recover.
+      return {
+        kind: 'file',
+        path: relativePath,
+        ref: this.ref,
+        refCommit,
+        authors: [],
+      } satisfies GitFileMetadata
     }
   }
 
@@ -3236,10 +4076,10 @@ export class GitFileSystem
         prepared = true
       }
 
+      this.#refreshSessionAfterRootChange(this.repoRoot, resolved)
       this.repoRoot = resolved
       this.#worktreeRootChecked = false
       this.#worktreeRootExists = false
-      this.#worktreeIgnoreCache.clear()
       if (!this.#git) {
         this.#git = new GitObjectStore(this.repoRoot)
       }
@@ -3352,9 +4192,15 @@ export class GitFileSystem
   async #getRemoteRefSha(remote: string, ref: string): Promise<string | null> {
     const safeRemote = assertSafeGitArg(remote, 'remote')
     const safeRef = assertSafeGitArg(ref, 'ref')
-
-    const cacheKey = `${this.repoRoot}\x00${safeRemote}\x00${safeRef}`
-    const cached = remoteRefCache.get(cacheKey)
+    const session = this.#getSession()
+    const nodeKey = this.#createPersistentCacheNodeKey('remote-ref', {
+      remote: safeRemote,
+      ref: safeRef,
+    })
+    const cached = await session.cache.get<{
+      remoteSha: string | null
+      checkedAt: number
+    }>(nodeKey)
     const now = Date.now()
     if (cached && now - cached.checkedAt < REMOTE_REF_CACHE_TTL_MS) {
       return cached.remoteSha
@@ -3383,7 +4229,11 @@ export class GitFileSystem
           `[GitFileSystem] ls-remote failed (${remote} ${ref}): ${msg}`
         )
       }
-      remoteRefCache.set(cacheKey, { remoteSha: null, checkedAt: now })
+      await session.cache.put(
+        nodeKey,
+        { remoteSha: null, checkedAt: now },
+        { persist: false }
+      )
       return null
     }
 
@@ -3419,13 +4269,29 @@ export class GitFileSystem
         }
       }
     }
-    remoteRefCache.set(cacheKey, { remoteSha, checkedAt: now })
+    await session.cache.put(
+      nodeKey,
+      { remoteSha, checkedAt: now },
+      { persist: false }
+    )
     return remoteSha
   }
 
   async #getRefCommit(): Promise<string> {
     if (this.#refCommit) {
-      return this.#refCommit
+      const { identity, deterministic } = await this.#getRefCacheIdentity(
+        this.ref,
+        { forceRefresh: true }
+      )
+      if (deterministic && identity === this.#refCommit) {
+        return this.#refCommit
+      }
+      if (!deterministic) {
+        return this.#refCommit
+      }
+      this.#clearRefCaches(
+        '[renoun] Ref commit changed in git; invalidating cached in-memory ref data.'
+      )
     }
     if (this.#refCommitPromise) {
       return this.#refCommitPromise
@@ -3433,7 +4299,13 @@ export class GitFileSystem
 
     this.#refCommitPromise = (async () => {
       await this.#ensureRepoReady()
-      let resolved = await this.#resolveRefToCommit(this.ref)
+      const { identity, deterministic } = await this.#getRefCacheIdentity(
+        this.ref,
+        { forceRefresh: true }
+      )
+      let resolved = deterministic
+        ? identity
+        : await this.#resolveRefToCommit(this.ref)
       if (resolved && !this.autoFetch) {
         return (this.#refCommit = resolved)
       }
@@ -3661,32 +4533,6 @@ export class GitFileSystem
       .filter(Boolean)
   }
 
-  #cachePath(parts: string[], key: string) {
-    const repoKey = sha1(this.repoRoot).slice(0, 12)
-    const dir = join(this.cacheDirectory, repoKey, ...parts)
-    mkdirSync(dir, { recursive: true })
-    const name = sha1(key) + '.json'
-    return join(dir, name)
-  }
-
-  #readCache<T = unknown>(path: string): T | null {
-    try {
-      if (!existsSync(path)) return null
-      const raw = readFileSync(path, 'utf8')
-      return JSON.parse(raw) as T
-    } catch {
-      return null
-    }
-  }
-
-  #writeCache(path: string, report: unknown) {
-    try {
-      writeFileSync(path, JSON.stringify(report, null, 2), 'utf8')
-    } catch {
-      // ignore cache errors
-    }
-  }
-
   #normalizeToRepoPath(inputPath: string) {
     const path = String(inputPath)
     const absolutePath = isAbsoluteLike(path) ? resolve(path) : null
@@ -3697,196 +4543,106 @@ export class GitFileSystem
     }
 
     relativePath = relativePath.split(sep).join('/')
-    relativePath = relativePath.replace(/^\.?\//, '')
+    relativePath = trimLeadingSlashes(trimLeadingDotSlash(relativePath))
     relativePath = normalizePath(relativePath)
     assertSafeRepoPath(relativePath)
     return relativePath
-  }
-
-  #readFileMetaCache(path: string): GitFileMetadata | null {
-    try {
-      if (!existsSync(path)) {
-        return null
-      }
-      const raw = readFileSync(path, 'utf8')
-      const parsed = JSON.parse(raw)
-
-      const authors: GitAuthor[] = Array.isArray(parsed.authors)
-        ? parsed.authors.map((a: any) => ({
-            name: String(a.name ?? ''),
-            email: String(a.email ?? ''),
-            commitCount: Number(a.commitCount ?? 0) || 0,
-            firstCommitDate: a.firstCommitDate
-              ? new Date(a.firstCommitDate)
-              : undefined,
-            lastCommitDate: a.lastCommitDate
-              ? new Date(a.lastCommitDate)
-              : undefined,
-          }))
-        : []
-
-      return {
-        kind: 'file',
-        path: String(parsed.path ?? ''),
-        ref: String(parsed.ref ?? this.ref),
-        refCommit: String(parsed.refCommit ?? ''),
-        firstCommitDate: parsed.firstCommitDate
-          ? new Date(parsed.firstCommitDate).toISOString()
-          : undefined,
-        lastCommitDate: parsed.lastCommitDate
-          ? new Date(parsed.lastCommitDate).toISOString()
-          : undefined,
-        firstCommitHash: parsed.firstCommitHash ?? undefined,
-        lastCommitHash: parsed.lastCommitHash ?? undefined,
-        authors,
-      }
-    } catch {
-      return null
-    }
-  }
-
-  #writeFileMetaCache(path: string, meta: GitFileMetadata) {
-    try {
-      writeFileSync(
-        path,
-        JSON.stringify(
-          {
-            ...meta,
-            firstCommitDate: meta.firstCommitDate,
-            lastCommitDate: meta.lastCommitDate,
-            authors: meta.authors.map((author) => ({
-              ...author,
-              firstCommitDate: author.firstCommitDate?.toISOString(),
-              lastCommitDate: author.lastCommitDate?.toISOString(),
-            })),
-            writtenAt: new Date().toISOString(),
-          },
-          null,
-          2
-        ),
-        'utf8'
-      )
-    } catch {
-      // ignore cache errors
-    }
   }
 
   async #buildFileMetadata(
     refCommit: string,
     relativePath: string
   ): Promise<GitFileMetadata> {
-    const diskKey = `${refCommit}|${relativePath}`
-    const diskPath = this.#cachePath(['file-meta'], diskKey)
+    const session = this.#getSession()
+    const nodeKey = this.#createPersistentCacheNodeKey('file-meta', {
+      refCommit,
+      path: relativePath,
+    })
 
-    const diskHit = this.#readFileMetaCache(diskPath)
-    if (diskHit) {
-      return diskHit
-    }
+    return session.cache.getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: [
+          {
+            name: 'git-file-system-cache',
+            version: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
+        ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
 
-    const safeRefCommit = assertSafeGitArg(refCommit, 'refCommit')
-    // `git log` is newest-first by default
-    const args = [
-      'log',
-      '--format=%H%x00%at%x00%aN%x00%aE',
-      '--no-patch',
-      '--follow',
-      safeRefCommit,
-      '--',
-      relativePath,
-    ]
+        const commits = await this.#gitLogCached(refCommit, relativePath, {
+          reverse: true,
+          follow: true,
+        })
 
-    try {
-      const stdout = await spawnAsync('git', args, {
-        cwd: this.repoRoot,
-        maxBuffer: this.maxBufferBytes,
-      })
+        if (commits.length === 0) {
+          return {
+            kind: 'file',
+            path: relativePath,
+            ref: this.ref,
+            refCommit,
+            authors: [],
+          } satisfies GitFileMetadata
+        }
 
-      const lines = String(stdout).trim().split('\n').filter(Boolean)
-      if (lines.length === 0) {
+        const authorsByEmail = new Map<string, GitAuthor>()
+        const oldest = commits[0]
+        const newest = commits[commits.length - 1]
+
+        for (const commit of commits) {
+          if (!commit.sha || !Number.isFinite(commit.unix)) {
+            continue
+          }
+
+          const name = commit.authorName ?? ''
+          const email = commit.authorEmail ?? ''
+          const key = email || name || 'unknown'
+          const stamp = new Date(commit.unix * 1000)
+
+          const existing = authorsByEmail.get(key)
+          if (!existing) {
+            authorsByEmail.set(key, {
+              name,
+              email,
+              commitCount: 1,
+              firstCommitDate: stamp,
+              lastCommitDate: stamp,
+            })
+          } else {
+            existing.commitCount += 1
+            if (!existing.firstCommitDate || stamp < existing.firstCommitDate) {
+              existing.firstCommitDate = stamp
+            }
+            if (!existing.lastCommitDate || stamp > existing.lastCommitDate) {
+              existing.lastCommitDate = stamp
+            }
+          }
+        }
+
+        const authors = Array.from(authorsByEmail.values())
+          .filter((author) => author.commitCount > 0)
+          .sort((authorA, authorB) => authorB.commitCount - authorA.commitCount)
+
         return {
           kind: 'file',
           path: relativePath,
           ref: this.ref,
           refCommit,
-          authors: [],
-        }
+          firstCommitDate: oldest
+            ? new Date(oldest.unix * 1000).toISOString()
+            : undefined,
+          lastCommitDate: newest
+            ? new Date(newest.unix * 1000).toISOString()
+            : undefined,
+          firstCommitHash: oldest?.sha,
+          lastCommitHash: newest?.sha,
+          authors,
+        } satisfies GitFileMetadata
       }
-
-      const authorsByEmail = new Map<string, GitAuthor>()
-      let newest: { hash: string; unix: number } | null = null
-      let oldest: { hash: string; unix: number } | null = null
-
-      for (const line of lines) {
-        const [hash, unixRaw, nameRaw, emailRaw] = line.split('\0')
-        const unix = Number(unixRaw)
-        if (!hash || !Number.isFinite(unix)) continue
-
-        if (!newest) {
-          newest = { hash, unix }
-        }
-        oldest = { hash, unix }
-
-        const name = nameRaw ?? ''
-        const email = emailRaw ?? ''
-        const key = email || name || 'unknown'
-        const stamp = new Date(unix * 1000)
-
-        const existing = authorsByEmail.get(key)
-        if (!existing) {
-          authorsByEmail.set(key, {
-            name,
-            email,
-            commitCount: 1,
-            firstCommitDate: stamp,
-            lastCommitDate: stamp,
-          })
-        } else {
-          existing.commitCount += 1
-          if (!existing.firstCommitDate || stamp < existing.firstCommitDate) {
-            existing.firstCommitDate = stamp
-          }
-          if (!existing.lastCommitDate || stamp > existing.lastCommitDate) {
-            existing.lastCommitDate = stamp
-          }
-        }
-      }
-
-      const authors = Array.from(authorsByEmail.values())
-        .filter((author) => author.commitCount > 0)
-        .sort((authorA, authorB) => authorB.commitCount - authorA.commitCount)
-
-      const meta: GitFileMetadata = {
-        kind: 'file',
-        path: relativePath,
-        ref: this.ref,
-        refCommit,
-        firstCommitDate: oldest
-          ? new Date(oldest.unix * 1000).toISOString()
-          : undefined,
-        lastCommitDate: newest
-          ? new Date(newest.unix * 1000).toISOString()
-          : undefined,
-        firstCommitHash: oldest?.hash,
-        lastCommitHash: newest?.hash,
-        authors,
-      }
-
-      this.#writeFileMetaCache(diskPath, meta)
-      return meta
-    } catch (error: unknown) {
-      if (this.verbose) {
-        console.warn(
-          `[GitFileSystem] git log failed for ${relativePath}: ${error instanceof Error ? error.message : String(error)}`
-        )
-      }
-      return {
-        kind: 'file',
-        path: relativePath,
-        ref: this.ref,
-        refCommit,
-        authors: [],
-      }
-    }
+    )
   }
 
   async #buildFileExportIndex(
@@ -3896,110 +4652,94 @@ export class GitFileSystem
     // Limit scanning results to exports that exist at HEAD (accurate + faster).
     headExportNames: Set<string>
   ): Promise<FileExportIndex> {
-    const diskKey = `${refCommit}|${relPath}|${headSha}`
-    const diskPath = this.#cachePath(['file-index'], diskKey)
-
-    const memoryHit = this.#fileExportIndexMemory.get(diskPath)
-    if (memoryHit) {
-      return memoryHit
-    }
-
-    const diskHit = readFileExportIndex(diskPath)
-    if (diskHit) {
-      this.#fileExportIndexMemory.set(diskPath, diskHit)
-      return diskHit
-    }
-
-    if (this.verbose)
-      console.log(`[GitFileSystem] building file index for ${relPath}…`)
-
-    const commits = await this.#gitLogCached(refCommit, relPath, {
-      reverse: true,
-      follow: true,
-    })
-
-    // Shared parse cache across operations
-    const perExport: FileExportIndex['perExport'] = Object.create(null)
-
-    // Helper to fetch/parse with shared cache
-    const getExportsBySha = async (sha: string) => {
-      return this.#getOrParseExportsForBlob(sha, relPath, () =>
-        this.#git!.getBlobContentBySha(sha)
-      )
-    }
-
-    for (const commit of commits) {
-      const meta = await this.#git!.getBlobMeta(`${commit.sha}:${relPath}`)
-      if (!meta) {
-        continue
-      }
-      if (meta.size > MAX_PARSE_BYTES) {
-        continue
-      }
-
-      const exportsMap = await getExportsBySha(meta.sha)
-
-      const stampDate = new Date(commit.unix * 1000).toISOString()
-      for (const [name] of exportsMap) {
-        if (name.startsWith('__STAR__')) {
-          continue
-        }
-        if (!headExportNames.has(name)) {
-          continue
-        }
-
-        const previousExport = perExport[name]
-        if (!previousExport) {
-          perExport[name] = {
-            firstCommitDate: stampDate,
-            lastCommitDate: stampDate,
-            firstCommitHash: commit.sha,
-            lastCommitHash: commit.sha,
-          }
-        } else {
-          previousExport.lastCommitDate = stampDate
-          previousExport.lastCommitHash = commit.sha
-        }
-      }
-    }
-
-    const index: FileExportIndex = {
-      builtAt: new Date().toISOString(),
-      repoRoot: this.repoRoot,
-      ref: this.ref,
+    const sortedHeadExportNames = Array.from(headExportNames).sort()
+    const nodeKey = this.#createPersistentCacheNodeKey('file-index', {
       refCommit,
       path: relPath,
-      headBlobSha: headSha,
-      perExport,
-    }
+      headSha,
+      headExportNames: sortedHeadExportNames,
+    })
 
-    try {
-      writeFileSync(diskPath, JSON.stringify(index, null, 2), 'utf8')
-    } catch {
-      // ignore cache errors
-    }
+    const session = this.#getSession()
+    return session.cache.getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: [
+          {
+            name: 'git-file-system-cache',
+            version: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
+        ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
 
-    this.#fileExportIndexMemory.set(diskPath, index)
-    return index
-  }
-}
+        if (this.verbose) {
+          console.log(`[GitFileSystem] building file index for ${relPath}…`)
+        }
 
-function readFileExportIndex(path: string): FileExportIndex | null {
-  try {
-    if (!existsSync(path)) {
-      return null
-    }
-    const raw = readFileSync(path, 'utf8')
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed.path !== 'string') {
-      return null
-    }
-    if (typeof parsed.refCommit !== 'string') {
-      return null
-    }
-    return parsed
-  } catch {
-    return null
+        const commits = await this.#gitLogCached(refCommit, relPath, {
+          reverse: true,
+          follow: true,
+        })
+
+        // Shared parse cache across operations
+        const perExport: FileExportIndex['perExport'] = Object.create(null)
+
+        // Helper to fetch/parse with shared cache
+        const getExportsBySha = async (sha: string) => {
+          return this.#getOrParseExportsForBlob(sha, relPath, () =>
+            this.#git!.getBlobContentBySha(sha)
+          )
+        }
+
+        for (const commit of commits) {
+          const meta = await this.#git!.getBlobMeta(`${commit.sha}:${relPath}`)
+          if (!meta) {
+            continue
+          }
+          if (meta.size > MAX_PARSE_BYTES) {
+            continue
+          }
+
+          const exportsMap = await getExportsBySha(meta.sha)
+
+          const stampDate = new Date(commit.unix * 1000).toISOString()
+          for (const [name] of exportsMap) {
+            if (name.startsWith('__STAR__')) {
+              continue
+            }
+            if (!headExportNames.has(name)) {
+              continue
+            }
+
+            const previousExport = perExport[name]
+            if (!previousExport) {
+              perExport[name] = {
+                firstCommitDate: stampDate,
+                lastCommitDate: stampDate,
+                firstCommitHash: commit.sha,
+                lastCommitHash: commit.sha,
+              }
+            } else {
+              previousExport.lastCommitDate = stampDate
+              previousExport.lastCommitHash = commit.sha
+            }
+          }
+        }
+
+        return {
+          builtAt: new Date().toISOString(),
+          repoRoot: this.repoRoot,
+          ref: this.ref,
+          refCommit,
+          path: relPath,
+          headBlobSha: headSha,
+          perExport,
+        } satisfies FileExportIndex
+      }
+    )
   }
 }
 
@@ -4519,6 +5259,10 @@ interface CollectContext {
   commit: string
   maxDepth: number
   blobCache: Map<string, Map<string, ExportItem>>
+  getOrParseBlobExports?: (
+    sha: string,
+    filePath: string
+  ) => Promise<Map<string, ExportItem>>
   scopeDirectories: string[]
   parseWarnings: string[]
   cacheStats: { hits: number; misses: number }
@@ -4528,6 +5272,8 @@ interface CollectContext {
   blobShaResolveCache: Map<string, string>
   /** Repo path for sync blob reads (bypasses event loop). */
   repoPath?: string
+  /** Optional reverse edge map: source file -> re-exporting file(s). */
+  reverseReExportGraph?: Map<string, Set<string>>
 }
 
 async function getBlobMetaCached(context: CollectContext, specifier: string) {
@@ -4586,20 +5332,25 @@ async function collectExportsFromFile(
   }
 
   // Get raw exports from cache or parse them
-  const cacheKey = getExportParseCacheKey(meta.sha)
+  const parserFlavor = getParserFlavorFromFileName(filePath)
+  const cacheKey = getExportParseCacheKey(meta.sha, parserFlavor)
   let rawExports = blobCache.get(cacheKey)
   if (rawExports) {
     cacheStats.hits++
   } else {
     cacheStats.misses++
-    // Prefer sync read when repoPath is available (bypasses event loop)
-    const content = context.repoPath
-      ? readBlobSync(context.repoPath, meta.sha)
-      : await git.getBlobContentBySha(meta.sha)
-    if (content === null) {
-      return results
+    if (context.getOrParseBlobExports) {
+      rawExports = await context.getOrParseBlobExports(meta.sha, filePath)
+    } else {
+      // Prefer sync read when repoPath is available (bypasses event loop)
+      const content = context.repoPath
+        ? readBlobSync(context.repoPath, meta.sha)
+        : await git.getBlobContentBySha(meta.sha)
+      if (content === null) {
+        return results
+      }
+      rawExports = scanModuleExports(filePath, content)
     }
-    rawExports = scanModuleExports(filePath, content)
     blobCache.set(cacheKey, rawExports)
   }
 
@@ -4656,6 +5407,22 @@ async function collectExportsFromFile(
   const resolutionMap = new Map<string, string | null>()
   for (const { fromPath, resolved } of resolutionResults) {
     resolutionMap.set(fromPath, resolved)
+  }
+
+  if (context.reverseReExportGraph) {
+    for (const [, , fromPath] of allExternalExports) {
+      const resolved = resolutionMap.get(fromPath)
+      if (!resolved) {
+        continue
+      }
+
+      let parents = context.reverseReExportGraph.get(resolved)
+      if (!parents) {
+        parents = new Set<string>()
+        context.reverseReExportGraph.set(resolved, parents)
+      }
+      parents.add(filePath)
+    }
   }
 
   // Collect exports from unique resolved paths that need recursive collection
@@ -4913,13 +5680,12 @@ async function gitLogForPath(
     reverse?: boolean
     limit?: number
     maxBufferBytes?: number
-    includeAuthors?: boolean
     follow?: boolean
   } = {}
 ): Promise<GitLogCommit[]> {
   const safeRef = assertSafeGitArg(ref, 'ref')
-  // Added %D to get ref names (tags, branches)
-  const args = ['log', '--format=%H%x00%at%x00%D']
+  // Include author identity + %D for ref names (tags, branches).
+  const args = ['log', '--format=%H%x00%at%x00%aN%x00%aE%x00%D']
   if (reverse) {
     args.push('--reverse')
   }
@@ -4972,7 +5738,7 @@ async function gitLogForPath(
     if (!line) {
       return
     }
-    const [sha, unix, refs] = line.split('\0')
+    const [sha, unix, authorName, authorEmail, refs] = line.split('\0')
 
     let tags: string[] | undefined
     if (refs) {
@@ -4986,6 +5752,8 @@ async function gitLogForPath(
     commits.push({
       sha,
       unix: Number(unix),
+      authorName: authorName || undefined,
+      authorEmail: authorEmail || undefined,
       tags: tags?.length ? tags : undefined,
     })
   })
@@ -5068,6 +5836,58 @@ async function inferEntryFile(
   })
 }
 
+function serializeExportItemMap(
+  map: Map<string, ExportItem>
+): Record<string, ExportItem> {
+  const record: Record<string, ExportItem> = Object.create(null)
+
+  for (const [name, item] of map) {
+    record[name] = item
+  }
+
+  return record
+}
+
+function deserializeExportItemMap(
+  record: Record<string, ExportItem>
+): Map<string, ExportItem> {
+  return new Map<string, ExportItem>(Object.entries(record))
+}
+
+function serializeReverseReExportGraph(
+  graph: Map<string, Set<string>>
+): Record<string, string[]> {
+  const payload: Record<string, string[]> = Object.create(null)
+
+  for (const [sourceFile, reExportingFiles] of graph) {
+    payload[sourceFile] = Array.from(reExportingFiles).sort()
+  }
+
+  return payload
+}
+
+function deserializeReverseReExportGraph(
+  payload: Record<string, string[]>
+): Map<string, Set<string>> {
+  const graph = new Map<string, Set<string>>()
+
+  for (const [sourceFile, reExportingFiles] of Object.entries(payload)) {
+    graph.set(sourceFile, new Set(reExportingFiles))
+  }
+
+  return graph
+}
+
+async function drainExportHistoryGenerator(
+  generator: ExportHistoryGenerator
+): Promise<ExportHistoryReport> {
+  let result = await generator.next()
+  while (!result.done) {
+    result = await generator.next()
+  }
+  return result.value
+}
+
 function joinPath(...parts: string[]) {
   return normalizePath(
     join(...parts)
@@ -5081,10 +5901,6 @@ function normalizePath(path: string) {
   if (normalized.length > 1 && normalized.endsWith('/'))
     return normalized.slice(0, -1)
   return normalized
-}
-
-function sha1(input: string) {
-  return createHash('sha1').update(input).digest('hex')
 }
 
 function isAbsoluteLike(path: string) {
@@ -5225,13 +6041,6 @@ function getRemoteRefShaSync(
   const safeRemote = assertSafeGitArg(remote, 'remote')
   const safeRef = assertSafeGitArg(ref, 'ref')
 
-  const cacheKey = `${repoRoot}\x00${safeRemote}\x00${safeRef}`
-  const cached = remoteRefCache.get(cacheKey)
-  const now = Date.now()
-  if (cached && now - cached.checkedAt < REMOTE_REF_CACHE_TTL_MS) {
-    return cached.remoteSha
-  }
-
   const result = spawnSync('git', ['ls-remote', safeRemote, safeRef], {
     cwd: repoRoot,
     stdio: 'pipe',
@@ -5239,7 +6048,6 @@ function getRemoteRefShaSync(
     shell: false,
   })
   if (result.status !== 0) {
-    remoteRefCache.set(cacheKey, { remoteSha: null, checkedAt: now })
     return null
   }
 
@@ -5275,7 +6083,6 @@ function getRemoteRefShaSync(
       }
     }
   }
-  remoteRefCache.set(cacheKey, { remoteSha, checkedAt: now })
   return remoteSha
 }
 
@@ -5293,7 +6100,7 @@ function parseLsTreeOutput(output: string, basePath: string): DirectoryEntry[] {
   const normalizedBase = normalizeSlashes(basePath || '')
   const base =
     normalizedBase && normalizedBase !== '.'
-      ? normalizedBase.replace(/\/$/, '')
+      ? trimTrailingSlashes(normalizedBase)
       : ''
   const records = String(output).split('\0').filter(Boolean)
 

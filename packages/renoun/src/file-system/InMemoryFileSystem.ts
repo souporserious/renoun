@@ -1,10 +1,18 @@
 import ignore from 'fast-ignore'
+import { randomUUID } from 'node:crypto'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
 import { createSourceFile, transpileSourceFile } from '../project/client.ts'
 import type { ProjectOptions } from '../project/types.ts'
 import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
-import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.ts'
+import {
+  joinPaths,
+  normalizePath,
+  normalizeSlashes,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
+  trimTrailingSlashes,
+} from '../utils/path.ts'
 import {
   BaseFileSystem,
   type FileReadableStream,
@@ -50,6 +58,7 @@ export class InMemoryFileSystem
   implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
 {
   #projectOptions: ProjectOptions
+  #cacheIdentity: string
   #files: Map<string, InMemoryEntry>
   #ignore: ReturnType<typeof ignore> | undefined
   #syncedSourceFiles: Set<string>
@@ -67,6 +76,7 @@ export class InMemoryFileSystem
         module: tsMorph.ts.ModuleKind.CommonJS,
       },
     }
+    this.#cacheIdentity = randomUUID()
     this.#syncedSourceFiles = new Set()
     this.#pendingSourceFileWrites = new Map()
     this.#files = new Map(
@@ -171,7 +181,7 @@ export class InMemoryFileSystem
     }
 
     const normalized = normalizeSlashes(filePath)
-    const relativePath = normalized.replace(/^\/+/, '')
+    const relativePath = trimLeadingSlashes(normalized)
     const entry =
       this.getFileEntry(relativePath) ?? this.getFileEntry(normalized)
 
@@ -306,6 +316,10 @@ export class InMemoryFileSystem
     return this.#projectOptions
   }
 
+  getCacheIdentity(): unknown {
+    return this.#cacheIdentity
+  }
+
   transpileFile(path: string) {
     const normalized = normalizeSlashes(path)
     return transpileSourceFile(normalized, this.#projectOptions)
@@ -323,8 +337,7 @@ export class InMemoryFileSystem
   }
 
   getRelativePathToWorkspace(path: string) {
-    const normalized = normalizeSlashes(path)
-    return normalized.startsWith('./') ? normalized.slice(2) : normalized
+    return trimLeadingDotSlash(path)
   }
 
   getFiles(): Map<string, InMemoryEntry> {
@@ -371,7 +384,7 @@ export class InMemoryFileSystem
 
       const entryName = segments.at(0)!
       const normalizedEntryPath = basePath
-        ? `${basePath.replace(/\/$/, '')}/${entryName}`
+        ? `${trimTrailingSlashes(basePath)}/${entryName}`
         : entryName
 
       if (addedPaths.has(normalizedEntryPath)) {
@@ -692,7 +705,7 @@ export class InMemoryFileSystem
       }
     }
 
-    const normalized = normalizeSlashes(filePath).replace(/^\.\//, '')
+    const normalized = trimLeadingDotSlash(filePath)
     return this.#ignore(normalized)
   }
 

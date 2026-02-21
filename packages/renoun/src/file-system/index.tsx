@@ -33,7 +33,7 @@ export type {
   CollectionOptions,
   SortDescriptor,
   LoadersToExtensions,
-} from './entries.tsx'
+} from './entries.ts'
 
 export {
   File,
@@ -56,7 +56,8 @@ export {
   resolveFileFromEntry,
   sortEntries,
   createSort,
-} from './entries.tsx'
+} from './entries.ts'
+export { Cache } from './Cache.ts'
 
 export type { PackageExportOptions, PackageOptions } from './Package.ts'
 export {

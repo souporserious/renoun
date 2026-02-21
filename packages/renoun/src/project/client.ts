@@ -15,20 +15,110 @@ import type {
   SourceTextMetadata,
 } from '../utils/get-source-text-metadata.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
-import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
-import type { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.ts'
+import type { TypeFilter } from '../utils/resolve-type.ts'
+import type {
+  ResolvedTypeAtLocationResult,
+} from '../utils/resolve-type-at-location.ts'
 import type { DistributiveOmit } from '../types.ts'
+import {
+  getCachedFileExportText,
+  getCachedFileExportMetadata,
+  getCachedFileExportStaticValue,
+  getCachedFileExports,
+  getCachedOutlineRanges,
+  getCachedSourceTextMetadata,
+  getCachedTokens,
+  invalidateRuntimeAnalysisCachePath,
+  resolveCachedTypeAtLocationWithDependencies,
+  transpileCachedSourceFile,
+} from './cached-analysis.ts'
+import { invalidateProjectFileCache } from './cache.ts'
 import { WebSocketClient } from './rpc/client.ts'
-import { getProject } from './get-project.ts'
+import { getProject, invalidateProjectCachesByPath } from './get-project.ts'
 import type { ProjectOptions } from './types.ts'
 
 let client: WebSocketClient | undefined
+const pendingRefreshInvalidationPaths = new Set<string>()
+let isRefreshInvalidationFlushQueued = false
 
 function getClient(): WebSocketClient | undefined {
   if (!client && process.env.RENOUN_SERVER_PORT) {
     client = new WebSocketClient(process.env.RENOUN_SERVER_ID!)
+    if (shouldConsumeRefreshNotifications()) {
+      client.on('notification', (message) => {
+        if (!isRefreshNotification(message)) {
+          return
+        }
+
+        queueRefreshInvalidation(message.data.filePath)
+      })
+    }
   }
   return client
+}
+
+function queueRefreshInvalidation(path: string): void {
+  pendingRefreshInvalidationPaths.add(path)
+  if (isRefreshInvalidationFlushQueued) {
+    return
+  }
+
+  isRefreshInvalidationFlushQueued = true
+  queueMicrotask(() => {
+    isRefreshInvalidationFlushQueued = false
+    const paths = Array.from(pendingRefreshInvalidationPaths)
+    pendingRefreshInvalidationPaths.clear()
+    for (const pendingPath of paths) {
+      invalidateRuntimeAnalysisCachePath(pendingPath)
+      invalidateProjectCachesByPath(pendingPath)
+    }
+  })
+}
+
+function shouldConsumeRefreshNotifications(): boolean {
+  const override = parseBooleanEnv(process.env.RENOUN_PROJECT_REFRESH_NOTIFICATIONS)
+  if (override !== undefined) {
+    return override
+  }
+
+  return true
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '1' || normalized === 'true') {
+    return true
+  }
+
+  if (normalized === '0' || normalized === 'false') {
+    return false
+  }
+
+  return undefined
+}
+
+function isRefreshNotification(
+  value: unknown
+): value is { type: 'refresh'; data: { filePath: string } } {
+  if (value === null || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as { type?: unknown; data?: unknown }
+  if (candidate.type !== 'refresh') {
+    return false
+  }
+
+  if (candidate.data === null || typeof candidate.data !== 'object') {
+    return false
+  }
+
+  const data = candidate.data as { filePath?: unknown }
+  return typeof data.filePath === 'string' && data.filePath.length > 0
 }
 
 /**
@@ -55,14 +145,7 @@ export async function getSourceTextMetadata(
   const { projectOptions, ...getSourceTextMetadataOptions } = options
   const project = getProject(projectOptions)
 
-  return import('../utils/get-source-text-metadata.ts').then(
-    ({ getSourceTextMetadata }) => {
-      return getSourceTextMetadata({
-        ...getSourceTextMetadataOptions,
-        project,
-      })
-    }
-  )
+  return getCachedSourceTextMetadata(project, getSourceTextMetadataOptions)
 }
 
 let currentHighlighter: { current: Highlighter | null } = { current: null }
@@ -84,6 +167,49 @@ function untilHighlighterLoaded(
   })
 
   return highlighterPromise
+}
+
+/**
+ * Resolve the type of an expression at a specific location.
+ * @internal
+ */
+export async function resolveTypeAtLocationWithDependencies(
+  filePath: string,
+  position: number,
+  kind: SyntaxKind,
+  filter?: TypeFilter,
+  projectOptions?: ProjectOptions
+): Promise<ResolvedTypeAtLocationResult> {
+  const client = getClient()
+
+  if (client) {
+    return client.callMethod<
+      {
+        filePath: string
+        position: number
+        kind: SyntaxKind
+        filter?: TypeFilter
+        projectOptions?: ProjectOptions
+      },
+      ResolvedTypeAtLocationResult
+    >('resolveTypeAtLocationWithDependencies', {
+      filePath,
+      position,
+      kind,
+      filter,
+      projectOptions,
+    })
+  }
+
+  const project = getProject(projectOptions)
+
+  return resolveCachedTypeAtLocationWithDependencies(project, {
+    filePath,
+    position,
+    kind,
+    filter,
+    isInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+  })
 }
 
 /**
@@ -113,67 +239,15 @@ export async function getTokens(
     languages,
   })
 
-  return import('../utils/get-tokens.ts').then(({ getTokens }) => {
-    if (currentHighlighter.current === null) {
-      throw new Error('[renoun] Highlighter is not initialized in "getTokens"')
-    }
-
-    return getTokens({
-      ...getTokensOptions,
-      highlighter: currentHighlighter.current,
-      project,
-    })
-  })
-}
-
-/**
- * Resolve the type of an expression at a specific location.
- * @internal
- */
-export async function resolveTypeAtLocation(
-  filePath: string,
-  position: number,
-  kind: SyntaxKind,
-  filter?: TypeFilter,
-  projectOptions?: ProjectOptions
-): Promise<Kind | undefined> {
-  const client = getClient()
-  if (client) {
-    return client.callMethod<
-      {
-        filePath: string
-        position: number
-        kind: SyntaxKind
-        filter?: string
-        projectOptions?: ProjectOptions
-      },
-      ReturnType<typeof baseResolveTypeAtLocation>
-    >('resolveTypeAtLocation', {
-      filePath,
-      position,
-      kind,
-      filter: filter ? JSON.stringify(filter) : undefined,
-      projectOptions,
-    })
+  if (currentHighlighter.current === null) {
+    throw new Error('[renoun] Highlighter is not initialized in "getTokens"')
   }
 
-  return import('../utils/resolve-type-at-location.ts').then(
-    async ({ resolveTypeAtLocation }) => {
-      const project = getProject(projectOptions)
-
-      return resolveTypeAtLocation(
-        project,
-        filePath,
-        position,
-        kind,
-        filter,
-        projectOptions?.useInMemoryFileSystem
-      )
-    }
-  )
+  return getCachedTokens(project, {
+    ...getTokensOptions,
+    highlighter: currentHighlighter.current,
+  })
 }
-
-const fileExportsCache = new Map<string, ModuleExport[]>()
 
 /**
  * Get the exports of a file.
@@ -183,18 +257,9 @@ export async function getFileExports(
   filePath: string,
   projectOptions?: ProjectOptions
 ) {
-  let cacheKey: string
-
-  if (process.env.NODE_ENV === 'production') {
-    cacheKey = filePath + getProjectOptionsCacheKey(projectOptions)
-    if (fileExportsCache.has(cacheKey)) {
-      return fileExportsCache.get(cacheKey)!
-    }
-  }
-
   const client = getClient()
   if (client) {
-    const fileExports = await client.callMethod<
+    return client.callMethod<
       {
         filePath: string
         projectOptions?: ProjectOptions
@@ -204,24 +269,10 @@ export async function getFileExports(
       filePath,
       projectOptions,
     })
-
-    if (process.env.NODE_ENV === 'production') {
-      fileExportsCache.set(cacheKey!, fileExports)
-    }
-
-    return fileExports
   }
 
-  return import('../utils/get-file-exports.ts').then(({ getFileExports }) => {
-    const project = getProject(projectOptions)
-    const fileExports = getFileExports(filePath, project)
-
-    if (process.env.NODE_ENV === 'production') {
-      fileExportsCache.set(cacheKey, fileExports)
-    }
-
-    return fileExports
-  })
+  const project = getProject(projectOptions)
+  return getCachedFileExports(project, filePath)
 }
 
 /**
@@ -240,12 +291,8 @@ export async function getOutlineRanges(
     >('getOutlineRanges', { filePath, projectOptions })
   }
 
-  return import('../utils/get-outline-ranges.ts').then(
-    ({ getOutlineRanges }) => {
-      const project = getProject(projectOptions)
-      return getOutlineRanges(filePath, project)
-    }
-  )
+  const project = getProject(projectOptions)
+  return getCachedOutlineRanges(project, filePath)
 }
 
 /**
@@ -279,12 +326,13 @@ export async function getFileExportMetadata(
     })
   }
 
-  return import('../utils/get-file-exports.ts').then(
-    ({ getFileExportMetadata }) => {
-      const project = getProject(projectOptions)
-      return getFileExportMetadata(name, filePath, position, kind, project)
-    }
-  )
+  const project = getProject(projectOptions)
+  return getCachedFileExportMetadata(project, {
+    name,
+    filePath,
+    position,
+    kind,
+  })
 }
 
 /**
@@ -315,12 +363,12 @@ export async function getFileExportStaticValue(
     })
   }
 
-  return import('../utils/get-file-export-static-value.ts').then(
-    ({ getFileExportStaticValue }) => {
-      const project = getProject(projectOptions)
-      return getFileExportStaticValue(filePath, position, kind, project)
-    }
-  )
+  const project = getProject(projectOptions)
+  return getCachedFileExportStaticValue(project, {
+    filePath,
+    position,
+    kind,
+  })
 }
 
 /**
@@ -354,18 +402,13 @@ export async function getFileExportText(
     })
   }
 
-  return import('../utils/get-file-export-text.ts').then(
-    ({ getFileExportText }) => {
-      const project = getProject(projectOptions)
-      return getFileExportText({
-        filePath,
-        position,
-        kind,
-        includeDependencies,
-        project,
-      })
-    }
-  )
+  const project = getProject(projectOptions)
+  return getCachedFileExportText(project, {
+    filePath,
+    position,
+    kind,
+    includeDependencies,
+  })
 }
 
 /**
@@ -395,6 +438,8 @@ export async function createSourceFile(
 
   const project = getProject(projectOptions)
   project.createSourceFile(filePath, sourceText, { overwrite: true })
+  invalidateProjectFileCache(project, filePath)
+  invalidateRuntimeAnalysisCachePath(filePath)
 }
 
 /**
@@ -421,11 +466,7 @@ export async function transpileSourceFile(
 
   const project = getProject(projectOptions)
 
-  return import('../utils/transpile-source-file.ts').then(
-    ({ transpileSourceFile }) => {
-      return transpileSourceFile(filePath, project)
-    }
-  )
+  return transpileCachedSourceFile(project, filePath)
 }
 
 /**

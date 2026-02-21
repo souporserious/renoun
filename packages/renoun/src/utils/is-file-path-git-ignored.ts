@@ -3,7 +3,7 @@ import { join, relative } from 'node:path'
 import ignore from 'fast-ignore'
 
 import { getRootDirectory } from './get-root-directory.ts'
-import { normalizeSlashes } from './path.ts'
+import { normalizeSlashes, trimLeadingDotSlash } from './path.ts'
 
 let ignoreManager: ReturnType<typeof ignore>
 
@@ -18,9 +18,9 @@ export function isFilePathGitIgnored(filePath: string): boolean {
     return true
   }
 
-  const relativePath = normalizeSlashes(
-    relative(getRootDirectory(), filePath)
-  ).replace(/^\.\//, '')
+  const relativePath = trimLeadingDotSlash(
+    normalizeSlashes(relative(getRootDirectory(), filePath))
+  )
 
   if (!ignoreManager) {
     const gitignorePatterns = getGitIgnorePatterns()

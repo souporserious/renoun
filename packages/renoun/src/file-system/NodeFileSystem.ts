@@ -10,6 +10,8 @@ import {
   realpathSync,
   type Dirent,
 } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { spawn } from 'node:child_process'
 import {
   access,
   mkdir,
@@ -23,7 +25,13 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
-import { ensureRelativePath, relativePath } from '../utils/path.ts'
+import {
+  ensureRelativePath,
+  normalizePathKey,
+  normalizeSlashes,
+  relativePath,
+  trimLeadingDotSlash,
+} from '../utils/path.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
@@ -38,11 +46,22 @@ import {
 } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
 
+const GIT_MAX_BUFFER_BYTES = 100 * 1024 * 1024
+
 export class NodeFileSystem
   extends BaseFileSystem
   implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
 {
   #tsConfigPath: string
+  readonly #gitRootCache = new Map<string, string | null>()
+  readonly #workspaceChangeTokenInFlight = new Map<
+    string,
+    Promise<string | null>
+  >()
+  readonly #workspaceChangedPathsInFlight = new Map<
+    string,
+    Promise<readonly string[] | null>
+  >()
 
   constructor(options: FileSystemOptions = {}) {
     super(options)
@@ -57,15 +76,18 @@ export class NodeFileSystem
 
   /** Asserts that the provided path is within the workspace root. */
   #assertWithinWorkspace(path: string) {
+    this.#assertWithinWorkspacePath(this.getAbsolutePath(path))
+  }
+
+  #assertWithinWorkspacePath(absolutePath: string) {
     const rootDirectory = getRootDirectory()
-    const absolutePath = this.getAbsolutePath(path)
     const relativeToRoot = relativePath(rootDirectory, absolutePath)
 
     if (relativeToRoot.startsWith('..') || relativeToRoot.startsWith('../')) {
       throw new Error(
         `[renoun] Attempted to access a path outside of the workspace root.\n` +
           `  Workspace root: ${rootDirectory}\n` +
-          `  Provided path:  ${path}\n` +
+          `  Provided path:  ${absolutePath}\n` +
           `  Resolved path:  ${absolutePath}\n` +
           'Accessing files outside of the workspace is not allowed.'
       )
@@ -80,7 +102,7 @@ export class NodeFileSystem
         `[renoun] Attempted to access a path outside of the workspace root via symlink.\n` +
           `  Workspace root:       ${rootDirectory}\n` +
           `  Workspace real path:  ${realWorkspaceRoot}\n` +
-          `  Provided path:        ${path}\n` +
+          `  Provided path:        ${absolutePath}\n` +
           `  Resolved path:        ${absolutePath}\n` +
           `  Real target path:     ${realTargetPath}\n` +
           'Accessing files outside of the workspace is not allowed.'
@@ -105,13 +127,389 @@ export class NodeFileSystem
     return resolve(realExistingPath, ...segmentsToAppend)
   }
 
+  #findGitRoot(startPath: string): string | null {
+    let currentPath = startPath
+    const visitedPaths: string[] = []
+
+    while (true) {
+      if (this.#gitRootCache.has(currentPath)) {
+        const cached = this.#gitRootCache.get(currentPath) ?? null
+        for (const path of visitedPaths) {
+          this.#gitRootCache.set(path, cached)
+        }
+        return cached
+      }
+
+      visitedPaths.push(currentPath)
+
+      if (existsSync(join(currentPath, '.git'))) {
+        for (const path of visitedPaths) {
+          this.#gitRootCache.set(path, currentPath)
+        }
+        return currentPath
+      }
+
+      const parentPath = dirname(currentPath)
+      if (parentPath === currentPath) {
+        break
+      }
+      currentPath = parentPath
+    }
+
+    for (const path of visitedPaths) {
+      this.#gitRootCache.set(path, null)
+    }
+    return null
+  }
+
+  #extractHeadFromWorkspaceToken(token: string): string | null {
+    const match = /^head:([^;]+);/.exec(token)
+    return match?.[1] ?? null
+  }
+
+  #extractDirtyDigestFromWorkspaceToken(token: string): string | null {
+    const match = /;dirty:([^;]+);/.exec(token)
+    return match?.[1] ?? null
+  }
+
+  #decodeGitStatusPath(path: string): string {
+    const trimmed = path.trim()
+    if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) {
+      return normalizeSlashes(trimmed)
+    }
+
+    const unquoted = trimmed
+      .slice(1, -1)
+      .replace(/\\\"/g, '"')
+      .replace(/\\\\/g, '\\')
+
+    return normalizeSlashes(unquoted)
+  }
+
+  #extractChangedPathsFromStatusOutput(output: string): string[] {
+    const changedPaths: string[] = []
+    const lines = output
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0)
+
+    for (const line of lines) {
+      if (line.length <= 3) {
+        continue
+      }
+
+      const rawPath = line.slice(3).trim()
+      if (!rawPath) {
+        continue
+      }
+
+      if (rawPath.includes(' -> ')) {
+        const [fromPath, toPath] = rawPath.split(' -> ')
+        if (fromPath) {
+          changedPaths.push(this.#decodeGitStatusPath(fromPath))
+        }
+        if (toPath) {
+          changedPaths.push(this.#decodeGitStatusPath(toPath))
+        }
+        continue
+      }
+
+      changedPaths.push(this.#decodeGitStatusPath(rawPath))
+    }
+
+    return changedPaths
+  }
+
   getAbsolutePath(path: string): string {
-    return resolve(path)
+    const absolutePath = resolve(path)
+
+    if (process.env['RENOUN_DEBUG_ABS_PATH'] === '1') {
+      if (path.includes('tmp-renoun-')) {
+        // eslint-disable-next-line no-console
+        console.log('[renoun-debug-abs]', {
+          input: path,
+          absolutePath,
+          cwd: process.cwd(),
+          normalized: absolutePath,
+        })
+      }
+    }
+    return absolutePath
   }
 
   getRelativePathToWorkspace(path: string) {
     const rootDirectory = getRootDirectory()
-    return relativePath(rootDirectory, this.getAbsolutePath(path))
+    return trimLeadingDotSlash(
+      relativePath(rootDirectory, this.getAbsolutePath(path))
+    )
+  }
+
+  async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    try {
+      const absoluteRootPath = this.getAbsolutePath(rootPath)
+      const inflightKey = createWorkspaceCacheKey(absoluteRootPath)
+
+      const existingInflight = this.#workspaceChangeTokenInFlight.get(inflightKey)
+      if (existingInflight) {
+        return await existingInflight
+      }
+
+      const lookupPromise = this.#getWorkspaceChangeTokenByAbsolutePath(
+        absoluteRootPath
+      )
+      this.#workspaceChangeTokenInFlight.set(inflightKey, lookupPromise)
+
+      try {
+        return await lookupPromise
+      } finally {
+        const latest = this.#workspaceChangeTokenInFlight.get(inflightKey)
+        if (latest === lookupPromise) {
+          this.#workspaceChangeTokenInFlight.delete(inflightKey)
+        }
+      }
+    } catch {
+      return null
+    }
+  }
+
+  #getWorkspaceChangeTokenByAbsolutePath(
+    absoluteRootPath: string
+  ): Promise<string | null> {
+    return (async () => {
+      const gitRoot = this.#findGitRoot(absoluteRootPath)
+      if (!gitRoot) {
+        return null
+      }
+
+      const relativeRootPath = relativePath(gitRoot, absoluteRootPath)
+      if (
+        relativeRootPath === '..' ||
+        relativeRootPath.startsWith('../')
+      ) {
+        return null
+      }
+
+      const scopePath = relativeRootPath === '.' ? '.' : relativeRootPath
+
+      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
+        cwd: gitRoot,
+        maxBuffer: GIT_MAX_BUFFER_BYTES,
+        shell: false,
+      })
+      if (headResult.status !== 0) {
+        return null
+      }
+
+      const headCommit = headResult.stdout.trim()
+      if (!headCommit) {
+        return null
+      }
+
+      const statusResult = await spawnWithResult(
+        'git',
+        [
+          'status',
+          '--porcelain=1',
+          '--untracked-files=all',
+          '--ignored=matching',
+          '--ignore-submodules=all',
+          '--',
+          scopePath,
+        ],
+        {
+          cwd: gitRoot,
+          maxBuffer: GIT_MAX_BUFFER_BYTES,
+          shell: false,
+        }
+      )
+      if (statusResult.status !== 0) {
+        return null
+      }
+
+      const statusLines = statusResult.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0)
+        .sort((first, second) => first.localeCompare(second))
+      const ignoredOnly =
+        statusLines.length > 0 &&
+        statusLines.every((line) => line.startsWith('!! '))
+      const dirtyDigest = createHash('sha1')
+        .update(statusLines.join('\n'))
+        .digest('hex')
+
+      return `head:${headCommit};dirty:${dirtyDigest};count:${statusLines.length};ignored-only:${ignoredOnly ? 1 : 0}`
+    })().catch(() => null)
+  }
+
+  async getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null> {
+    try {
+      const absoluteRootPath = this.getAbsolutePath(rootPath)
+      const inflightKey = createWorkspaceChangedPathsCacheKey(
+        absoluteRootPath,
+        previousToken
+      )
+      const existingInflight =
+        this.#workspaceChangedPathsInFlight.get(inflightKey)
+      if (existingInflight) {
+        return existingInflight
+      }
+
+      const lookupPromise =
+        this.#getWorkspaceChangedPathsSinceTokenByAbsolutePath(
+          absoluteRootPath,
+          previousToken
+        )
+      this.#workspaceChangedPathsInFlight.set(inflightKey, lookupPromise)
+
+      try {
+        return await lookupPromise
+      } finally {
+        const latest = this.#workspaceChangedPathsInFlight.get(inflightKey)
+        if (latest === lookupPromise) {
+          this.#workspaceChangedPathsInFlight.delete(inflightKey)
+        }
+      }
+    } catch {
+      return null
+    }
+  }
+
+  #getWorkspaceChangedPathsSinceTokenByAbsolutePath(
+    absoluteRootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null> {
+    return (async () => {
+      const previousHead = this.#extractHeadFromWorkspaceToken(previousToken)
+      if (!previousHead) {
+        return null
+      }
+
+      const previousDirtyDigest =
+        this.#extractDirtyDigestFromWorkspaceToken(previousToken)
+
+      const gitRoot = this.#findGitRoot(absoluteRootPath)
+      if (!gitRoot) {
+        return null
+      }
+
+      const relativeRootPath = relativePath(gitRoot, absoluteRootPath)
+      if (relativeRootPath === '..' || relativeRootPath.startsWith('../')) {
+        return null
+      }
+
+      const scopePath = relativeRootPath === '.' ? '.' : relativeRootPath
+
+      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
+        cwd: gitRoot,
+        maxBuffer: GIT_MAX_BUFFER_BYTES,
+        shell: false,
+      })
+      if (headResult.status !== 0) {
+        return null
+      }
+
+      const currentHead = headResult.stdout.trim()
+      if (!currentHead) {
+        return null
+      }
+
+      const changedPaths = new Set<string>()
+      const diffResultPromise =
+        currentHead !== previousHead
+          ? spawnWithResult(
+              'git',
+              [
+                'diff',
+                '--name-only',
+                '--no-renames',
+                `${previousHead}..${currentHead}`,
+                '--',
+                scopePath,
+              ],
+              {
+                cwd: gitRoot,
+                maxBuffer: GIT_MAX_BUFFER_BYTES,
+                shell: false,
+              }
+            )
+          : Promise.resolve<SpawnResult | null>(null)
+      const statusResultPromise = spawnWithResult(
+        'git',
+        [
+          'status',
+          '--porcelain=1',
+          '--untracked-files=all',
+          '--ignored=matching',
+          '--ignore-submodules=all',
+          '--',
+          scopePath,
+        ],
+        {
+          cwd: gitRoot,
+          maxBuffer: GIT_MAX_BUFFER_BYTES,
+          shell: false,
+        }
+      )
+      const [statusResult, diffResult] = await Promise.all([
+        statusResultPromise,
+        diffResultPromise,
+      ])
+
+      if (statusResult.status !== 0) {
+        return null
+      }
+
+      if (currentHead !== previousHead) {
+        if (!diffResult || diffResult.status !== 0) {
+          return null
+        }
+
+        const diffPaths = diffResult.stdout
+          .split(/\r?\n/)
+          .map((line) => normalizeSlashes(line.trim()))
+          .filter((line) => line.length > 0)
+
+        for (const diffPath of diffPaths) {
+          changedPaths.add(diffPath)
+        }
+      }
+
+      const statusLines = statusResult.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0)
+        .sort((first, second) => first.localeCompare(second))
+      const currentDirtyDigest = createHash('sha1')
+        .update(statusLines.join('\n'))
+        .digest('hex')
+
+      if (currentHead === previousHead && previousDirtyDigest === currentDirtyDigest) {
+        return []
+      }
+
+      for (const statusPath of this.#extractChangedPathsFromStatusOutput(
+        statusResult.stdout
+      )) {
+        const normalizedStatusPath = normalizeSlashes(statusPath)
+        if (normalizedStatusPath.length > 0) {
+          changedPaths.add(normalizedStatusPath)
+        }
+      }
+
+      const workspaceRelativePaths = Array.from(changedPaths)
+        .map((path) =>
+          normalizePathKey(
+            this.getRelativePathToWorkspace(resolve(gitRoot, path))
+          )
+        )
+        .sort((first, second) => first.localeCompare(second))
+
+      return workspaceRelativePaths
+    })().catch(() => null)
   }
 
   #processDirectoryEntries(
@@ -137,46 +535,54 @@ export class NodeFileSystem
 
   readDirectorySync(path: string = '.'): DirectoryEntry[] {
     this.#assertWithinWorkspace(path)
-    const entries = readdirSync(path, { withFileTypes: true })
+    const absolutePath = this.getAbsolutePath(path)
+    const entries = readdirSync(absolutePath, { withFileTypes: true })
     return this.#processDirectoryEntries(entries, path)
   }
 
   async readDirectory(path: string = '.'): Promise<DirectoryEntry[]> {
     this.#assertWithinWorkspace(path)
-    const entries = await readdir(path, { withFileTypes: true })
+    const absolutePath = this.getAbsolutePath(path)
+    const entries = await readdir(absolutePath, { withFileTypes: true })
     return this.#processDirectoryEntries(entries, path)
   }
 
   readFileSync(path: string): string {
     this.#assertWithinWorkspace(path)
-    return readFileSync(path, 'utf-8')
+    const absolutePath = this.getAbsolutePath(path)
+    return readFileSync(absolutePath, 'utf-8')
   }
 
   async readFile(path: string): Promise<string> {
     this.#assertWithinWorkspace(path)
-    return readFile(path, 'utf-8')
+    const absolutePath = this.getAbsolutePath(path)
+    return readFile(absolutePath, 'utf-8')
   }
 
   readFileBinarySync(path: string): Uint8Array {
     this.#assertWithinWorkspace(path)
-    return readFileSync(path)
+    const absolutePath = this.getAbsolutePath(path)
+    return readFileSync(absolutePath)
   }
 
   async readFileBinary(path: string): Promise<Uint8Array> {
     this.#assertWithinWorkspace(path)
-    return readFile(path)
+    const absolutePath = this.getAbsolutePath(path)
+    return readFile(absolutePath)
   }
 
   readFileStream(path: string): FileReadableStream {
     this.#assertWithinWorkspace(path)
-    const stream = createReadStream(path)
+    const absolutePath = this.getAbsolutePath(path)
+    const stream = createReadStream(absolutePath)
     return Readable.toWeb(stream) as FileReadableStream
   }
 
   getFileByteLengthSync(path: string): number | undefined {
     this.#assertWithinWorkspace(path)
+    const absolutePath = this.getAbsolutePath(path)
     try {
-      return statSync(path).size
+      return statSync(absolutePath).size
     } catch {
       return undefined
     }
@@ -184,8 +590,9 @@ export class NodeFileSystem
 
   async getFileByteLength(path: string): Promise<number | undefined> {
     this.#assertWithinWorkspace(path)
+    const absolutePath = this.getAbsolutePath(path)
     try {
-      const stats = await stat(path)
+      const stats = await stat(absolutePath)
       return stats.size
     } catch {
       return undefined
@@ -194,7 +601,8 @@ export class NodeFileSystem
 
   writeFileSync(path: string, content: FileSystemWriteFileContent): void {
     this.#assertWithinWorkspace(path)
-    writeFileSync(path, normalizeWriteContent(content))
+    const absolutePath = this.getAbsolutePath(path)
+    writeFileSync(absolutePath, normalizeWriteContent(content))
   }
 
   async writeFile(
@@ -202,24 +610,28 @@ export class NodeFileSystem
     content: FileSystemWriteFileContent
   ): Promise<void> {
     this.#assertWithinWorkspace(path)
-    await writeFile(path, normalizeWriteContent(content))
+    const absolutePath = this.getAbsolutePath(path)
+    await writeFile(absolutePath, normalizeWriteContent(content))
   }
 
   writeFileStream(path: string): FileWritableStream {
     this.#assertWithinWorkspace(path)
-    const stream = createWriteStream(path, { flags: 'w' })
+    const absolutePath = this.getAbsolutePath(path)
+    const stream = createWriteStream(absolutePath, { flags: 'w' })
     return Writable.toWeb(stream) as FileWritableStream
   }
 
   fileExistsSync(path: string): boolean {
     this.#assertWithinWorkspace(path)
-    return existsSync(path)
+    const absolutePath = this.getAbsolutePath(path)
+    return existsSync(absolutePath)
   }
 
   async fileExists(path: string): Promise<boolean> {
     this.#assertWithinWorkspace(path)
+    const absolutePath = this.getAbsolutePath(path)
     try {
-      await access(path)
+      await access(absolutePath)
       return true
     } catch {
       return false
@@ -228,17 +640,20 @@ export class NodeFileSystem
 
   deleteFileSync(path: string): void {
     this.#assertWithinWorkspace(path)
-    rmSync(path, { force: true })
+    const absolutePath = this.getAbsolutePath(path)
+    rmSync(absolutePath, { force: true })
   }
 
   async deleteFile(path: string): Promise<void> {
     this.#assertWithinWorkspace(path)
-    await rm(path, { force: true })
+    const absolutePath = this.getAbsolutePath(path)
+    await rm(absolutePath, { force: true })
   }
 
   async createDirectory(path: string): Promise<void> {
     this.#assertWithinWorkspace(path)
-    await mkdir(path, { recursive: true })
+    const absolutePath = this.getAbsolutePath(path)
+    await mkdir(absolutePath, { recursive: true })
   }
 
   async rename(
@@ -246,31 +661,34 @@ export class NodeFileSystem
     target: string,
     options?: { overwrite?: boolean }
   ): Promise<void> {
-    this.#assertWithinWorkspace(source)
-    this.#assertWithinWorkspace(target)
+    const absoluteSource = this.getAbsolutePath(source)
+    const absoluteTarget = this.getAbsolutePath(target)
 
-    if (source === target) {
+    this.#assertWithinWorkspacePath(absoluteSource)
+    this.#assertWithinWorkspacePath(absoluteTarget)
+
+    if (absoluteSource === absoluteTarget) {
       return
     }
 
     const overwrite = options?.overwrite ?? false
 
-    if (!overwrite && (await this.fileExists(target))) {
+    if (!overwrite && (await this.fileExists(absoluteTarget))) {
       throw new Error(
         `[renoun] Cannot rename because target already exists: ${target}`
       )
     }
 
     if (overwrite) {
-      await rm(target, { recursive: true, force: true })
+      await rm(absoluteTarget, { recursive: true, force: true })
     }
 
-    const targetDirectory = dirname(target)
+    const targetDirectory = dirname(absoluteTarget)
     if (targetDirectory && targetDirectory !== '.' && targetDirectory !== '/') {
       await mkdir(targetDirectory, { recursive: true })
     }
 
-    await rename(source, target)
+    await rename(absoluteSource, absoluteTarget)
   }
 
   async copy(
@@ -278,27 +696,34 @@ export class NodeFileSystem
     target: string,
     options?: { overwrite?: boolean }
   ): Promise<void> {
-    this.#assertWithinWorkspace(source)
-    this.#assertWithinWorkspace(target)
+    const absoluteSource = this.getAbsolutePath(source)
+    const absoluteTarget = this.getAbsolutePath(target)
+
+    this.#assertWithinWorkspacePath(absoluteSource)
+    this.#assertWithinWorkspacePath(absoluteTarget)
 
     const overwrite = options?.overwrite ?? false
 
-    if (!overwrite && (await this.fileExists(target))) {
+    if (absoluteSource === absoluteTarget) {
+      return
+    }
+
+    if (!overwrite && (await this.fileExists(absoluteTarget))) {
       throw new Error(
         `[renoun] Cannot copy because target already exists: ${target}`
       )
     }
 
     if (overwrite) {
-      await rm(target, { recursive: true, force: true })
+      await rm(absoluteTarget, { recursive: true, force: true })
     }
 
-    const targetDirectory = dirname(target)
+    const targetDirectory = dirname(absoluteTarget)
     if (targetDirectory && targetDirectory !== '.' && targetDirectory !== '/') {
       await mkdir(targetDirectory, { recursive: true })
     }
 
-    await cp(source, target, {
+    await cp(absoluteSource, absoluteTarget, {
       recursive: true,
       force: overwrite,
       errorOnExist: !overwrite,
@@ -311,8 +736,9 @@ export class NodeFileSystem
 
   getFileLastModifiedMsSync(path: string): number | undefined {
     this.#assertWithinWorkspace(path)
+    const absolutePath = this.getAbsolutePath(path)
     try {
-      return statSync(path).mtimeMs
+      return statSync(absolutePath).mtimeMs
     } catch {
       return undefined
     }
@@ -320,8 +746,9 @@ export class NodeFileSystem
 
   async getFileLastModifiedMs(path: string): Promise<number | undefined> {
     this.#assertWithinWorkspace(path)
+    const absolutePath = this.getAbsolutePath(path)
     try {
-      const stats = await stat(path)
+      const stats = await stat(absolutePath)
       return stats.mtimeMs
     } catch {
       return undefined
@@ -350,4 +777,93 @@ function normalizeWriteContent(
   }
 
   throw new Error('[renoun] Unsupported content type for writeFile')
+}
+
+function createWorkspaceCacheKey(absoluteRootPath: string): string {
+  return JSON.stringify([absoluteRootPath])
+}
+
+function createWorkspaceChangedPathsCacheKey(
+  absoluteRootPath: string,
+  previousToken: string
+): string {
+  return JSON.stringify([absoluteRootPath, previousToken])
+}
+
+interface SpawnResult {
+  status: number | null
+  stdout: string
+  stderr: string
+}
+
+function spawnWithResult(
+  command: string,
+  args: string[],
+  options: {
+    cwd: string
+    maxBuffer?: number
+    verbose?: boolean
+    shell?: boolean
+  }
+): Promise<SpawnResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      stdio: 'pipe',
+      shell: options.shell ?? false,
+    })
+
+    let stdout = ''
+    let stderr = ''
+    const maxBuffer = options.maxBuffer ?? GIT_MAX_BUFFER_BYTES
+    let totalBytes = 0
+    let settled = false
+
+    const finish = (error?: Error, result?: SpawnResult) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(result!)
+    }
+
+    const onData = (chunk: Buffer, isStdout: boolean) => {
+      totalBytes += chunk.length
+      if (totalBytes > maxBuffer) {
+        child.kill()
+        finish(
+          new Error(
+            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${args.join(
+              ' '
+            )}`
+          )
+        )
+        return
+      }
+
+      const text = chunk.toString()
+      if (isStdout) {
+        stdout += text
+        if (options.verbose) {
+          process.stdout.write(text)
+        }
+      } else {
+        stderr += text
+        if (options.verbose) {
+          process.stderr.write(text)
+        }
+      }
+    }
+
+    child.stdout?.on('data', (chunk) => onData(chunk, true))
+    child.stderr?.on('data', (chunk) => onData(chunk, false))
+    child.on('error', (error) => finish(error))
+    child.on('close', (code) =>
+      finish(undefined, { status: code, stdout, stderr })
+    )
+  })
 }

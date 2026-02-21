@@ -8,7 +8,7 @@ import {
   existsSync,
   symlinkSync,
 } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, relative } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
@@ -18,6 +18,17 @@ import {
   ensureCacheClone,
   ensureCacheCloneSync,
 } from './GitFileSystem'
+import { Directory, File } from './index.tsx'
+import { GIT_HISTORY_CACHE_VERSION } from './cache-key'
+import { CacheStore } from './Cache.ts'
+import {
+  getCacheStorePersistence,
+  disposeCacheStorePersistence,
+} from './CacheSqlite.ts'
+import { InMemoryFileSystem } from './InMemoryFileSystem'
+import { FileSystemSnapshot } from './Snapshot'
+import { createGitFileSystemPersistentCacheNodeKey } from './git-cache-key'
+import { Session } from './Session'
 import type { ExportHistoryGenerator, ExportHistoryReport } from './types'
 
 /** Drain a generator to get the final report. */
@@ -99,6 +110,14 @@ function initRepo(cwd: string) {
   git(cwd, ['-c', 'init.defaultBranch=main', 'init'])
   // Disable sparse-checkout to avoid CI issues where it may be enabled globally
   git(cwd, ['config', 'core.sparseCheckout', 'false'])
+  // Ensure worktree-level sparse settings are also cleared.
+  git(cwd, ['config', '--worktree', 'core.sparseCheckout', 'false'])
+  git(cwd, ['config', '--worktree', 'core.sparseCheckoutCone', 'false'])
+  const sparseCheckoutPath = join(cwd, '.git', 'info', 'sparse-checkout')
+  if (existsSync(sparseCheckoutPath)) {
+    rmSync(sparseCheckoutPath, { force: true })
+  }
+  git(cwd, ['sparse-checkout', 'disable'])
 }
 
 function commitFile(
@@ -111,6 +130,8 @@ function commitFile(
   const path = join(repo, filename)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
+  // Use --sparse so staging works even if a sparse-checkout config is active.
+  // It is a no-op when sparse-checkout is disabled and avoids CI-specific failures.
   git(repo, ['add', '--sparse', filename])
   git(repo, ['commit', '--no-gpg-sign', '-m', message], identity)
 
@@ -157,20 +178,104 @@ interface TestContext {
 
 // Wrapper for concurrent tests with automatic cleanup
 function test(name: string, fn: (ctx: TestContext) => Promise<void>): void {
-  it.concurrent(name, async () => {
-    const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
-    const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
-    initRepo(repoRoot)
-    try {
-      await fn({ repoRoot, cacheDirectory })
-    } finally {
-      rmSync(repoRoot, { recursive: true, force: true })
-      rmSync(cacheDirectory, { recursive: true, force: true })
-    }
-  })
+  it.concurrent(
+    name,
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      initRepo(repoRoot)
+      try {
+        await fn({ repoRoot, cacheDirectory })
+      } finally {
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+      }
+    },
+    12_000
+  )
 }
 
 describe('GitFileSystem', () => {
+  test('returns a stable workspace change token when tree state is unchanged', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const firstToken = await store.getWorkspaceChangeToken('.')
+      const secondToken = await store.getWorkspaceChangeToken('.')
+
+      expect(firstToken).toBeTruthy()
+      expect(firstToken).toBe(secondToken)
+    } finally {
+      store.close()
+    }
+  })
+
+  test('changes workspace token for dirty and untracked updates', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+
+    const trackedPath = join(repoRoot, 'src/index.ts')
+    const untrackedPath = join(repoRoot, 'src/new-file.ts')
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const cleanToken = await store.getWorkspaceChangeToken('.')
+
+      writeFileSync(trackedPath, `export const value = 2`)
+      const dirtyToken = await store.getWorkspaceChangeToken('.')
+
+      writeFileSync(untrackedPath, `export const created = true`)
+      const untrackedToken = await store.getWorkspaceChangeToken('.')
+
+      expect(cleanToken).toBeTruthy()
+      expect(dirtyToken).toBeTruthy()
+      expect(untrackedToken).toBeTruthy()
+      expect(dirtyToken).not.toBe(cleanToken)
+      expect(untrackedToken).not.toBe(dirtyToken)
+    } finally {
+      store.close()
+    }
+  })
+
+  test('scopes workspace change token by requested root path', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFiles(
+      repoRoot,
+      [
+        { filename: 'docs/page.mdx', content: '# Page' },
+        { filename: 'src/index.ts', content: 'export const value = 1' },
+      ],
+      'init'
+    )
+
+    const sourcePath = join(repoRoot, 'src/index.ts')
+    const docsPath = join(repoRoot, 'docs/page.mdx')
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const initialDocsToken = await store.getWorkspaceChangeToken('docs')
+
+      writeFileSync(sourcePath, 'export const value = 2')
+      const docsTokenAfterSourceEdit =
+        await store.getWorkspaceChangeToken('docs')
+
+      writeFileSync(docsPath, '# Updated')
+      const docsTokenAfterDocsEdit = await store.getWorkspaceChangeToken('docs')
+
+      expect(initialDocsToken).toBeTruthy()
+      expect(docsTokenAfterSourceEdit).toBe(initialDocsToken)
+      expect(docsTokenAfterDocsEdit).not.toBe(initialDocsToken)
+    } finally {
+      store.close()
+    }
+  })
+
   test('correctly tracks export additions and removals', async ({
     repoRoot,
     cacheDirectory,
@@ -272,6 +377,210 @@ describe('GitFileSystem', () => {
       expect(getPrimaryId(report2, 'b')).toBeDefined()
     } finally {
       store2.close()
+    }
+  })
+
+  test('re-resolves ref commits for long-lived file-system instances', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    const v1 = commitFile(
+      repoRoot,
+      'src/index.ts',
+      `export const value = 1`,
+      'v1'
+    )
+
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const firstMetadata = await store.getFileMetadata('src/index.ts')
+      expect(firstMetadata.refCommit).toBe(v1.hash)
+
+      const v2 = commitFile(
+        repoRoot,
+        'src/index.ts',
+        `export const value = 2`,
+        'v2'
+      )
+
+      const secondMetadata = await store.getFileMetadata('src/index.ts')
+      expect(secondMetadata.refCommit).toBe(v2.hash)
+      expect(secondMetadata.refCommit).not.toBe(firstMetadata.refCommit)
+    } finally {
+      store.close()
+    }
+  })
+
+  test('reuses export-history cache across store instances when ref is unchanged', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'v1')
+
+    const store1 = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    let report1: ExportHistoryReport
+    try {
+      report1 = await drain(store1.getExportHistory({ entry: 'src/index.ts' }))
+    } finally {
+      store1.close()
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25))
+
+    const store2 = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const report2 = await drain(
+        store2.getExportHistory({ entry: 'src/index.ts' })
+      )
+
+      expect(report2.generatedAt).toBe(report1.generatedAt)
+      expect(report2.lastCommitSha).toBe(report1.lastCommitSha)
+      expect(report2.nameToId).toEqual(report1.nameToId)
+    } finally {
+      store2.close()
+    }
+  })
+
+  test('recomputes export-history when public-api-latest pointer is for a different request', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFiles(
+      repoRoot,
+      [
+        { filename: 'src/index.ts', content: `export const index = 1` },
+        { filename: 'src/other.ts', content: `export const other = 1` },
+      ],
+      'init'
+    )
+
+    const endRef = 'HEAD'
+    const endCommit = git(repoRoot, ['rev-parse', endRef])
+    const commonCacheBase = {
+      ref: null,
+      refScope: 'default',
+      endRef,
+      release: null,
+      startRef: null,
+      startCommit: null,
+      include: ['src'],
+      limit: undefined,
+      maxDepth: 25,
+      detectUpdates: true,
+      updateMode: 'signature',
+    }
+
+    const indexReportKey = createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: GIT_HISTORY_CACHE_VERSION,
+      repository: repoRoot,
+      repoRoot,
+      namespace: 'public-api-report',
+      payload: {
+        ...commonCacheBase,
+        refCommit: endCommit,
+        entry: ['src/index.ts'],
+      },
+    })
+
+    const poisonedLatestKey = createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: GIT_HISTORY_CACHE_VERSION,
+      repository: repoRoot,
+      repoRoot,
+      namespace: 'public-api-latest',
+      payload: {
+        ...commonCacheBase,
+        refCommit: null,
+        entry: ['src/other.ts'],
+      },
+    })
+
+    const persistence = getCacheStorePersistence({ projectRoot: repoRoot })
+    const seedStore = new CacheStore({
+      snapshot: new FileSystemSnapshot(
+        new InMemoryFileSystem({ 'seed.ts': 'export {}' }),
+        'seed-snapshot'
+      ),
+      persistence,
+    })
+
+    try {
+      using indexStore = new GitFileSystem({
+        repository: repoRoot,
+        cacheDirectory,
+      })
+      const indexReport = await drain(
+        indexStore.getExportHistory({ entry: 'src/index.ts' })
+      )
+
+      await seedStore.put(indexReportKey, indexReport, {
+        persist: true,
+        deps: [
+          {
+            depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+            depVersion: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      })
+
+      await seedStore.put(
+        poisonedLatestKey,
+        {
+          reportNodeKey: indexReportKey,
+          lastCommitSha: indexReport.lastCommitSha!,
+        },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+              depVersion: GIT_HISTORY_CACHE_VERSION,
+            },
+          ],
+        }
+      )
+
+      using poisonedStore = new GitFileSystem({
+        repository: repoRoot,
+        cacheDirectory,
+      })
+      const poisonedReport = await drain(
+        poisonedStore.getExportHistory({ entry: 'src/other.ts' })
+      )
+
+      expect(poisonedReport.entryFiles).toContain('src/other.ts')
+      expect(poisonedReport.entryFiles).not.toContain('src/index.ts')
+    } finally {
+      disposeCacheStorePersistence({ projectRoot: repoRoot })
+    }
+  })
+
+  test('does not persist fallback file metadata after transient git-log failures', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/a.ts', `export const a = 1`, 'a')
+    const commit = commitFile(repoRoot, 'src/b.ts', `export const b = 1`, 'b')
+
+    const store = new GitFileSystem({
+      repository: repoRoot,
+      cacheDirectory,
+    })
+
+    try {
+      // Warm up ref/repo state before forcing a tiny log buffer.
+      await store.getFileMetadata('src/a.ts')
+
+      const originalMaxBufferBytes = store.maxBufferBytes
+      ;(store as any).maxBufferBytes = 1
+      const fallback = await store.getFileMetadata('src/b.ts')
+      ;(store as any).maxBufferBytes = originalMaxBufferBytes
+
+      expect(fallback.authors).toEqual([])
+      const recovered = await store.getFileMetadata('src/b.ts')
+      expect(recovered.authors.length).toBeGreaterThan(0)
+      expect(recovered.lastCommitHash).toBe(commit.hash)
+    } finally {
+      store.close()
     }
   })
 
@@ -1242,7 +1551,7 @@ describe('GitFileSystem', () => {
 
     git(repoRoot, ['mv', 'src/a.ts', 'src/b.ts'])
     writeFileSync(join(repoRoot, 'src/index.ts'), `export { core } from './b'`)
-    git(repoRoot, ['add', '--sparse', 'src/index.ts'])
+    git(repoRoot, ['add', 'src/index.ts'])
     git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'rename file'])
     const renameCommitHash = git(repoRoot, ['log', '-1', '--format=%H'])
 
@@ -1402,7 +1711,7 @@ describe('GitFileSystem', () => {
       join(repoRoot, 'src/index.ts'),
       `export { buildValidator } from './new'`
     )
-    git(repoRoot, ['add', '--sparse', 'src/new.ts', 'src/index.ts'])
+    git(repoRoot, ['add', 'src/new.ts', 'src/index.ts'])
     git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'move and rename'])
     const renameCommitHash = git(repoRoot, ['log', '-1', '--format=%H'])
 
@@ -2191,5 +2500,156 @@ describe('GitFileSystem', () => {
     const fooUpdated = fooHistory.find((c) => c.kind === 'Updated')
     expect(fooUpdated).toBeDefined()
     expect(fooUpdated!.sha).toBe(c2.hash)
+  })
+
+  test('includes files from ignored directories when includeGitIgnoredFiles is enabled', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, '.gitignore', 'src/\n', 'ignore src directory')
+    mkdirSync(join(repoRoot, 'src'), { recursive: true })
+    writeFileSync(join(repoRoot, 'src', 'index.ts'), 'export const value = 1')
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const directory = new Directory({
+      fileSystem: store,
+      tsConfigPath: 'tsconfig.json',
+    })
+
+    const listFiles = async (includeGitIgnoredFiles: boolean) => {
+      const entries = await directory.getEntries({
+        recursive: true,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        includeGitIgnoredFiles,
+        includeTsConfigExcludedFiles: true,
+      })
+
+      return entries
+        .filter((entry) => entry instanceof File)
+        .map((entry) => entry.relativePath)
+        .sort()
+    }
+
+    expect(await listFiles(false)).toEqual([])
+    expect(await listFiles(true)).toEqual(['src/index.ts'])
+  })
+
+  test('invalidates shared production cache state for write/delete/rename/copy mutations', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+
+    disposeCacheStorePersistence({ projectRoot: repoRoot })
+
+    const listFiles = async (directory: Directory) => {
+      const entries = await directory.getEntries({
+        recursive: true,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        includeGitIgnoredFiles: true,
+        includeTsConfigExcludedFiles: true,
+      })
+
+      return entries
+        .filter((entry) => entry instanceof File)
+        .map((entry) => entry.relativePath)
+        .sort()
+    }
+
+    try {
+      using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+      const writerDirectory = new Directory({
+        fileSystem: store,
+        tsConfigPath: 'tsconfig.json',
+      })
+      const readerDirectory = new Directory({
+        fileSystem: store,
+        tsConfigPath: 'tsconfig.json',
+      })
+
+      const initialEntries = await listFiles(writerDirectory)
+      expect(initialEntries).toEqual(['src/index.ts'])
+
+      const initialFile = await writerDirectory.getFile('src/index', 'ts')
+      expect(await initialFile.getText()).toContain('value = 1')
+
+      await store.writeFile('src/index.ts', `export const value = 2`)
+      const afterWrite = await readerDirectory.getFile('src/index', 'ts')
+      expect(await afterWrite.getText()).toContain('value = 2')
+
+      await store.rename('src/index.ts', 'src/renamed.ts')
+      const entriesAfterRename = await listFiles(writerDirectory)
+      const renamedDirect = await readerDirectory
+        .getFile('src/renamed', 'ts')
+        .then(
+          async (file) => ({
+            exists: true,
+            text: await file.getText(),
+          }),
+          () => ({ exists: false, text: undefined as string | undefined })
+        )
+      expect(entriesAfterRename).toEqual(['src/renamed.ts'])
+      const renamedFile = await readerDirectory.getFile('src/renamed', 'ts')
+      expect(await renamedFile.getText()).toContain('value = 2')
+      expect(renamedDirect.text).toContain('value = 2')
+      expect(renamedDirect.exists).toBe(true)
+
+      await store.copy('src/renamed.ts', 'src/copied.ts')
+      const entriesAfterCopy = await listFiles(writerDirectory)
+      expect(entriesAfterCopy).toEqual(['src/copied.ts', 'src/renamed.ts'])
+      const copiedFile = await readerDirectory.getFile('src/copied', 'ts')
+      expect(await copiedFile.getText()).toContain('value = 2')
+
+      await store.deleteFile('src/copied.ts')
+      const entriesAfterDelete = await listFiles(readerDirectory)
+      expect(entriesAfterDelete).toEqual(['src/renamed.ts'])
+
+      await store.deleteFile('src/renamed.ts')
+      const entriesAfterFinalDelete = await listFiles(readerDirectory)
+      expect(entriesAfterFinalDelete).toEqual([])
+    } finally {
+      disposeCacheStorePersistence({ projectRoot: repoRoot })
+    }
+  })
+
+  test('refreshes session cache when sync repo readiness resolves the root', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'index.ts', 'export const value = 1', 'init')
+
+    const repository = relative(process.cwd(), repoRoot)
+    const store = new GitFileSystem({ repository, cacheDirectory })
+    const beforeReadySession = Session.for(store)
+
+    store.readDirectorySync('.')
+    const afterReadySession = Session.for(store)
+
+    expect(afterReadySession).not.toBe(beforeReadySession)
+    expect(afterReadySession.snapshot.id).not.toBe(
+      beforeReadySession.snapshot.id
+    )
+  })
+
+  test('refreshes session cache when async repo readiness resolves the root', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'index.ts', 'export const value = 1', 'init')
+
+    const repository = relative(process.cwd(), repoRoot)
+    const store = new GitFileSystem({ repository, cacheDirectory })
+    const beforeReadySession = Session.for(store)
+
+    const metadata = await store.getMetadata('index.ts')
+    expect(metadata.kind).toBe('module')
+
+    const afterReadySession = Session.for(store)
+    expect(afterReadySession).not.toBe(beforeReadySession)
+    expect(afterReadySession.snapshot.id).not.toBe(
+      beforeReadySession.snapshot.id
+    )
   })
 })

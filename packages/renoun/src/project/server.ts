@@ -1,4 +1,4 @@
-import { watch } from 'node:fs'
+import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import { getTsMorph } from '../utils/ts-morph.ts'
 import type { SyntaxKind as TsMorphSyntaxKind } from '../utils/ts-morph.ts'
@@ -9,31 +9,123 @@ import {
 } from '../utils/create-highlighter.ts'
 import type { ConfigurationOptions } from '../components/Config/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
-import {
-  getFileExports as baseGetFileExports,
-  getFileExportMetadata as baseGetFileExportMetadata,
-} from '../utils/get-file-exports.ts'
-import { getOutlineRanges as baseGetOutlineRanges } from '../utils/get-outline-ranges.ts'
-import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import {
-  getTokens as baseGetTokens,
-  type GetTokensOptions,
-} from '../utils/get-tokens.ts'
-import {
-  getSourceTextMetadata as baseGetSourceTextMetadata,
-  type GetSourceTextMetadataOptions,
-} from '../utils/get-source-text-metadata.ts'
+import type { GetTokensOptions } from '../utils/get-tokens.ts'
+import type { GetSourceTextMetadataOptions } from '../utils/get-source-text-metadata.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
-import { resolveTypeAtLocation as baseResolveTypeAtLocation } from '../utils/resolve-type-at-location.ts'
-import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
+import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
-import { getProject } from './get-project.ts'
+import {
+  getCachedFileExportText,
+  getCachedFileExportMetadata,
+  getCachedFileExportStaticValue,
+  getCachedFileExports,
+  getCachedOutlineRanges,
+  getCachedSourceTextMetadata,
+  getCachedTokens,
+  invalidateRuntimeAnalysisCachePath,
+  resolveCachedTypeAtLocationWithDependencies,
+  transpileCachedSourceFile,
+} from './cached-analysis.ts'
+import { invalidateProjectFileCache } from './cache.ts'
+import { disposeProjectWatchers, getProject } from './get-project.ts'
 import type { ProjectOptions } from './types.ts'
 
 const { SyntaxKind } = getTsMorph()
 
 let currentHighlighter: Promise<Highlighter> | null = null
+let activeProjectServers = 0
+
+interface ResolveTypeAtLocationRpcRequest {
+  filePath: string
+  position: number
+  kind: TsMorphSyntaxKind
+  filter?: TypeFilter | string
+  projectOptions?: ProjectOptions
+}
+
+function parseTypeFilter(filter?: TypeFilter | string): TypeFilter | undefined {
+  if (filter === undefined) {
+    return undefined
+  }
+
+  const parsedFilter = typeof filter === 'string' ? parseTypeFilterJson(filter) : filter
+
+  if (!isValidTypeFilter(parsedFilter)) {
+    throw new Error(
+      '[renoun] Invalid type filter payload. Expected a TypeFilter object or JSON stringified TypeFilter.'
+    )
+  }
+
+  return parsedFilter
+}
+
+function parseTypeFilterJson(value: string) {
+  try {
+    return JSON.parse(value)
+  } catch {
+    throw new Error('[renoun] Invalid type filter JSON payload.')
+  }
+}
+
+function isValidTypeFilter(value: unknown): value is TypeFilter {
+  if (Array.isArray(value)) {
+    return value.every(isValidFilterDescriptor)
+  }
+
+  return isValidFilterDescriptor(value)
+}
+
+function isValidFilterDescriptor(value: unknown): value is TypeFilter {
+  if (!isObject(value)) {
+    return false
+  }
+
+  const candidate = value as {
+    moduleSpecifier?: unknown
+    types?: unknown
+  }
+
+  if (
+    candidate.moduleSpecifier !== undefined &&
+    typeof candidate.moduleSpecifier !== 'string'
+  ) {
+    return false
+  }
+
+  if (!Array.isArray(candidate.types)) {
+    return false
+  }
+
+  for (const typeEntry of candidate.types) {
+    if (!isObject(typeEntry)) {
+      return false
+    }
+
+    const candidateType = typeEntry as {
+      name?: unknown
+      properties?: unknown
+    }
+
+    if (typeof candidateType.name !== 'string') {
+      return false
+    }
+
+    if (
+      candidateType.properties !== undefined &&
+      (!Array.isArray(candidateType.properties) ||
+        !candidateType.properties.every((property) => typeof property === 'string'))
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+}
 
 /**
  * Create a WebSocket server that improves the performance of renoun components and
@@ -42,24 +134,49 @@ let currentHighlighter: Promise<Highlighter> | null = null
 export async function createServer(options?: { port?: number }) {
   const server = new WebSocketServer({ port: options?.port })
   const port = await server.getPort()
+  activeProjectServers += 1
 
   process.env.RENOUN_SERVER_PORT = String(port)
 
-  if (process.env.NODE_ENV === 'development') {
-    const rootDirectory = getRootDirectory()
+  const rootDirectory = getRootDirectory()
+  const rootWatcher = shouldEmitRefreshNotifications()
+    ? watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
+        if (!fileName) return
 
-    watch(rootDirectory, { recursive: true }, (_, fileName) => {
-      if (!fileName) return
+        const filePath = join(rootDirectory, fileName)
 
-      const filePath = join(rootDirectory, fileName)
+        if (isFilePathGitIgnored(filePath)) {
+          return
+        }
 
-      if (isFilePathGitIgnored(filePath)) {
-        return
-      }
+        /* Notify the client to refresh when files change. */
+        server.sendNotification({
+          type: 'refresh',
+          data: {
+            eventType,
+            filePath,
+          },
+        })
+      })
+    : undefined
 
-      /* Notify the client to refresh when files change. */
-      server.sendNotification({ type: 'refresh' })
-    })
+  const originalCleanup = server.cleanup.bind(server)
+  let cleanedUp = false
+  server.cleanup = () => {
+    if (cleanedUp) {
+      return
+    }
+    cleanedUp = true
+
+    if (rootWatcher) {
+      closeWatcher(rootWatcher)
+    }
+    activeProjectServers = Math.max(0, activeProjectServers - 1)
+    if (activeProjectServers === 0) {
+      disposeProjectWatchers()
+    }
+
+    originalCleanup()
   }
 
   server.registerMethod(
@@ -72,10 +189,7 @@ export async function createServer(options?: { port?: number }) {
     }) {
       const project = getProject(projectOptions)
 
-      return baseGetSourceTextMetadata({
-        ...options,
-        project,
-      })
+      return getCachedSourceTextMetadata(project, options)
     },
     {
       memoize: true,
@@ -103,10 +217,9 @@ export async function createServer(options?: { port?: number }) {
 
       const highlighter = await currentHighlighter
 
-      return baseGetTokens({
+      return getCachedTokens(project, {
         ...options,
         highlighter,
-        project,
       })
     },
     {
@@ -116,20 +229,14 @@ export async function createServer(options?: { port?: number }) {
   )
 
   server.registerMethod(
-    'resolveTypeAtLocation',
-    async function resolveTypeAtLocation({
+    'resolveTypeAtLocationWithDependencies',
+    async function resolveTypeAtLocationWithDependencies({
       projectOptions,
       filter,
       ...options
-    }: {
-      filePath: string
-      position: number
-      kind: TsMorphSyntaxKind
-      filter?: string
-      projectOptions?: ProjectOptions
-    }) {
+    }: ResolveTypeAtLocationRpcRequest) {
       return getDebugLogger().trackOperation(
-        'server.resolveTypeAtLocation',
+        'server.resolveTypeAtLocationWithDependencies',
         async () => {
           const project = getProject(projectOptions)
 
@@ -142,14 +249,13 @@ export async function createServer(options?: { port?: number }) {
             },
           }))
 
-          return baseResolveTypeAtLocation(
-            project,
-            options.filePath,
-            options.position,
-            options.kind,
-            filter ? JSON.parse(filter) : undefined,
-            projectOptions?.useInMemoryFileSystem
-          )
+          return resolveCachedTypeAtLocationWithDependencies(project, {
+            filePath: options.filePath,
+            position: options.position,
+            kind: options.kind,
+            filter: parseTypeFilter(filter),
+            isInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+          })
         },
         {
           data: {
@@ -161,9 +267,6 @@ export async function createServer(options?: { port?: number }) {
       )
     },
     {
-      // Type resolution already has its own dependency-aware cache
-      // (see `resolve-type-at-location.ts`). Avoid RPC-level memoization
-      // so changes to source or its dependencies are always reflected.
       memoize: false,
       concurrency: 3,
     }
@@ -179,10 +282,10 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileExports(filePath, project)
+      return getCachedFileExports(project, filePath)
     },
     {
-      memoize: true,
+      memoize: false,
       concurrency: 25,
     }
   )
@@ -197,10 +300,10 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetOutlineRanges(filePath, project)
+      return getCachedOutlineRanges(project, filePath)
     },
     {
-      memoize: true,
+      memoize: false,
       concurrency: 25,
     }
   )
@@ -221,10 +324,15 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileExportMetadata(name, filePath, position, kind, project)
+      return getCachedFileExportMetadata(project, {
+        name,
+        filePath,
+        position,
+        kind,
+      })
     },
     {
-      memoize: true,
+      memoize: false,
       concurrency: 25,
     }
   )
@@ -245,16 +353,15 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseGetFileExportText({
+      return getCachedFileExportText(project, {
         filePath,
         position,
         kind,
         includeDependencies,
-        project,
       })
     },
     {
-      memoize: true,
+      memoize: false,
       concurrency: 25,
     }
   )
@@ -273,9 +380,15 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      const { getFileExportStaticValue } =
-        await import('../utils/get-file-export-static-value.ts')
-      return getFileExportStaticValue(filePath, position, kind, project)
+      return getCachedFileExportStaticValue(project, {
+        filePath,
+        position,
+        kind,
+      })
+    },
+    {
+      memoize: false,
+      concurrency: 25,
     }
   )
 
@@ -294,6 +407,12 @@ export async function createServer(options?: { port?: number }) {
       project.createSourceFile(filePath, sourceText, {
         overwrite: true,
       })
+      invalidateProjectFileCache(project, filePath)
+      invalidateRuntimeAnalysisCachePath(filePath)
+    },
+    {
+      memoize: false,
+      concurrency: 1,
     }
   )
 
@@ -307,9 +426,47 @@ export async function createServer(options?: { port?: number }) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
-      return baseTranspileSourceFile(filePath, project)
+      return transpileCachedSourceFile(project, filePath)
+    },
+    {
+      memoize: false,
+      concurrency: 25,
     }
   )
 
   return server
+}
+
+function closeWatcher(watcher: FSWatcher): void {
+  try {
+    watcher.close()
+  } catch {
+    // Ignore watcher close errors during server shutdown.
+  }
+}
+
+function shouldEmitRefreshNotifications(): boolean {
+  const override = parseBooleanEnv(process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS)
+  if (override !== undefined) {
+    return override
+  }
+
+  return true
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '1' || normalized === 'true') {
+    return true
+  }
+
+  if (normalized === '0' || normalized === 'false') {
+    return false
+  }
+
+  return undefined
 }

@@ -14,13 +14,14 @@ import {
 } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
+import { spawn } from 'node:child_process'
 
 import { createServer } from '../project/server.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
-import { spawn } from 'node:child_process'
+import { runPrewarmSafely } from './prewarm-runner.ts'
 
 function mergeDependencySections(
   appPackageJson: Record<string, unknown>,
@@ -427,6 +428,14 @@ export async function runAppCommand({
     server = await createServer()
     const port = String(await server.getPort())
     const id = server.getId()
+
+    if (command === 'dev') {
+      void runPrewarmSafely({
+        projectOptions: {
+          tsConfigFilePath: join(projectRoot, 'tsconfig.json'),
+        },
+      })
+    }
 
     if (resolvedExample.framework === 'next') {
       const runtimeNext = await getInstalledPackageVersion({

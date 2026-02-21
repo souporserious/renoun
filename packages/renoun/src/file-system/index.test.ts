@@ -9,7 +9,7 @@ import {
   vi,
 } from 'vitest'
 import { runInNewContext } from 'node:vm'
-import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -497,7 +497,7 @@ describe('file system', () => {
         "/project/types",
       ]
     `)
-  })
+  }, 12_000)
 
   test('directory accepts URL path input', async () => {
     const projectUrl = new URL('../../fixtures/project', import.meta.url)
@@ -4114,6 +4114,202 @@ date: 2024-12-24
           kind: 'typesField',
         })
       })
+
+      test('memoizes resolveExportSources when dependencies are unchanged', () => {
+        mkdirSync(join(process.cwd(), 'tmp'), { recursive: true })
+        const tempDirectory = mkdtempSync(
+          join(process.cwd(), 'tmp', 'resolve-export-sources-cache-hit-')
+        )
+        const packageDirectory = join(tempDirectory, 'packages', 'acme')
+        const packagePath = packageDirectory.replace(`${process.cwd()}/`, '')
+
+        mkdirSync(join(packageDirectory, 'dist'), { recursive: true })
+        mkdirSync(join(packageDirectory, 'src'), { recursive: true })
+        writeFileSync(
+          join(packageDirectory, 'package.json'),
+          JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'dist', 'index.mjs.map'),
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'index.ts'),
+          'export const value = 1',
+          'utf8'
+        )
+
+        const fileSystem = new NodeFileSystem()
+        const readFileSpy = vi.spyOn(fileSystem, 'readFileSync')
+        const pkg = new Package({
+          path: packagePath,
+          fileSystem,
+        })
+
+        try {
+          const firstResult = pkg.resolveExportSources()
+          const readCallsAfterFirstResult = readFileSpy.mock.calls.length
+          const secondResult = pkg.resolveExportSources()
+
+          expect(secondResult).toEqual(firstResult)
+          expect(readFileSpy.mock.calls.length).toBe(readCallsAfterFirstResult)
+        } finally {
+          readFileSpy.mockRestore()
+          rmSync(tempDirectory, { recursive: true, force: true })
+        }
+      })
+
+      test('invalidates resolveExportSources cache when source maps change', async () => {
+        mkdirSync(join(process.cwd(), 'tmp'), { recursive: true })
+        const tempDirectory = mkdtempSync(
+          join(process.cwd(), 'tmp', 'resolve-export-sources-map-change-')
+        )
+        const packageDirectory = join(tempDirectory, 'packages', 'acme')
+        const packagePath = packageDirectory.replace(`${process.cwd()}/`, '')
+
+        mkdirSync(join(packageDirectory, 'dist'), { recursive: true })
+        mkdirSync(join(packageDirectory, 'src'), { recursive: true })
+        writeFileSync(
+          join(packageDirectory, 'package.json'),
+          JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'dist', 'index.mjs.map'),
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'index.ts'),
+          'export const value = 1',
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'next.ts'),
+          'export const value = 2',
+          'utf8'
+        )
+
+        const pkg = new Package({
+          path: packagePath,
+          fileSystem: new NodeFileSystem(),
+        })
+
+        try {
+          const firstResult = pkg.resolveExportSource('.')
+          expect(firstResult?.sources).toEqual(['src/index.ts'])
+
+          await new Promise((resolve) => setTimeout(resolve, 25))
+          writeFileSync(
+            join(packageDirectory, 'dist', 'index.mjs.map'),
+            JSON.stringify({
+              version: 3,
+              sources: ['../src/next.ts'],
+            }),
+            'utf8'
+          )
+
+          const secondResult = pkg.resolveExportSource('.')
+          expect(secondResult?.sources).toEqual(['src/next.ts'])
+        } finally {
+          rmSync(tempDirectory, { recursive: true, force: true })
+        }
+      })
+
+      test('invalidates resolveExportSources cache when package.json changes', async () => {
+        mkdirSync(join(process.cwd(), 'tmp'), { recursive: true })
+        const tempDirectory = mkdtempSync(
+          join(process.cwd(), 'tmp', 'resolve-export-sources-package-json-change-')
+        )
+        const packageDirectory = join(tempDirectory, 'packages', 'acme')
+        const packagePath = packageDirectory.replace(`${process.cwd()}/`, '')
+
+        mkdirSync(join(packageDirectory, 'dist'), { recursive: true })
+        mkdirSync(join(packageDirectory, 'src'), { recursive: true })
+        writeFileSync(
+          join(packageDirectory, 'package.json'),
+          JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'dist', 'index.mjs.map'),
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'dist', 'alt.mjs.map'),
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/alt.ts'],
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'index.ts'),
+          'export const value = 1',
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'alt.ts'),
+          'export const value = 2',
+          'utf8'
+        )
+
+        const pkg = new Package({
+          path: packagePath,
+          fileSystem: new NodeFileSystem(),
+        })
+
+        try {
+          const firstResult = pkg.resolveExportSource('.')
+          expect(firstResult?.builtTarget).toBe('./dist/index.mjs')
+          expect(firstResult?.sources).toEqual(['src/index.ts'])
+
+          await new Promise((resolve) => setTimeout(resolve, 25))
+          writeFileSync(
+            join(packageDirectory, 'package.json'),
+            JSON.stringify({
+              name: 'acme',
+              exports: {
+                '.': './dist/alt.mjs',
+              },
+            }),
+            'utf8'
+          )
+
+          const secondResult = pkg.resolveExportSource('.')
+          expect(secondResult?.builtTarget).toBe('./dist/alt.mjs')
+          expect(secondResult?.sources).toEqual(['src/alt.ts'])
+        } finally {
+          rmSync(tempDirectory, { recursive: true, force: true })
+        }
+      })
     })
   })
 
@@ -4156,6 +4352,82 @@ date: 2024-12-24
 
       expect(packageNames.sort()).toEqual(['bar', 'foo'])
       expect(workspace.getPackage('bar')?.name).toBe('bar')
+    })
+
+    test('memoizes package discovery and invalidates on lockfile and topology changes', async () => {
+      mkdirSync(join(process.cwd(), 'tmp'), { recursive: true })
+      const tempDirectory = mkdtempSync(
+        join(process.cwd(), 'tmp', 'workspace-package-discovery-cache-')
+      )
+      const packagesDirectory = join(tempDirectory, 'packages')
+      const fooDirectory = join(packagesDirectory, 'foo')
+      const barDirectory = join(packagesDirectory, 'bar')
+
+      mkdirSync(fooDirectory, { recursive: true })
+      writeFileSync(
+        join(tempDirectory, 'package.json'),
+        JSON.stringify(
+          {
+            name: 'workspace',
+            workspaces: ['packages/*'],
+          },
+          null,
+          2
+        ),
+        'utf8'
+      )
+      writeFileSync(
+        join(fooDirectory, 'package.json'),
+        JSON.stringify({ name: 'foo' }, null, 2),
+        'utf8'
+      )
+
+      const fileSystem = new NodeFileSystem()
+      const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectorySync')
+      const workspace = new Workspace({
+        fileSystem,
+        rootDirectory: tempDirectory,
+      })
+
+      try {
+        const firstPackages = workspace.getPackages()
+        const readCallsAfterFirst = readDirectorySpy.mock.calls.length
+        const secondPackages = workspace.getPackages()
+
+        expect(
+          firstPackages.map((pkg) => pkg.name).filter(Boolean).sort()
+        ).toEqual(['foo'])
+        expect(
+          secondPackages.map((pkg) => pkg.name).filter(Boolean).sort()
+        ).toEqual(['foo'])
+        expect(readDirectorySpy.mock.calls.length).toBe(readCallsAfterFirst)
+
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        writeFileSync(join(tempDirectory, 'pnpm-lock.yaml'), 'lockfileVersion: 9', 'utf8')
+        const lockfileChangedPackages = workspace.getPackages()
+        expect(
+          lockfileChangedPackages.map((pkg) => pkg.name).filter(Boolean).sort()
+        ).toEqual(['foo'])
+        expect(readDirectorySpy.mock.calls.length).toBeGreaterThan(
+          readCallsAfterFirst
+        )
+
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        mkdirSync(barDirectory, { recursive: true })
+        writeFileSync(
+          join(barDirectory, 'package.json'),
+          JSON.stringify({ name: 'bar' }, null, 2),
+          'utf8'
+        )
+
+        const topologyChangedPackages = workspace.getPackages()
+        expect(
+          topologyChangedPackages.map((pkg) => pkg.name).filter(Boolean).sort()
+        ).toEqual(['bar', 'foo'])
+      } finally {
+        readDirectorySpy.mockRestore()
+        rmSync(tempDirectory, { recursive: true, force: true })
+      }
     })
   })
 

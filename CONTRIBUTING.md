@@ -11,6 +11,7 @@ First, thank you for considering contributing to **renoun**! Your contributions 
   - [Submitting Pull Requests](#submitting-pull-requests)
 - [License](#license)
 - [Getting Help](#getting-help)
+- [Benchmarking](#benchmarking)
 - [Debugging](#debugging)
 
 ---
@@ -89,6 +90,28 @@ If you need any assistance or have questions about contributing, feel free to re
 - **GitHub Discussions**: [Join the discussion](https://github.com/souporserious/renoun/discussions)
 
 Thank you for your interest in contributing to renoun! Your support is greatly appreciated 🙏
+
+---
+
+## Benchmarking
+
+To benchmark cold vs warm `@apps/site` build performance (including cache hit/miss stats), run:
+
+```bash
+pnpm bench:site
+```
+
+Useful options:
+
+```bash
+# one cold run + three warm runs, write machine-readable output
+pnpm bench:site -- --warm-runs 3 --json tmp/site-benchmark.json
+
+# focus on timing only (disable cache hit/miss parsing)
+pnpm bench:site -- --no-cache-stats
+```
+
+The command clears cold-state cache paths before each cold run, then runs warm builds back-to-back and prints a summary delta.
 
 ---
 

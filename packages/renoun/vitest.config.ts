@@ -5,5 +5,8 @@ export default defineConfig({
   plugins: [mdx()],
   test: {
     testTimeout: 15_000,
+    watch: {
+      ignore: ['**/tmp/**', '**/.cache', '**/.cache/**'],
+    },
   },
 })

@@ -8,6 +8,7 @@
     "build:site": "pnpm build --filter=@apps/site",
     "build:examples": "pnpm build --filter=@examples/*",
     "build:example": "bash -c 'pnpm build --filter=@examples/$1'",
+    "bench:site": "node ./scripts/bench-site-build.mjs",
     "dev": "turbo run dev",
     "dev:site": "pnpm dev --filter=renoun --filter=@apps/site",
     "dev:examples": "pnpm dev --filter=renoun --filter=@examples/*",
