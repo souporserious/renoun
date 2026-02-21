@@ -1529,7 +1529,10 @@ export class CacheStore {
       }
     }
 
-    return !this.#dependencyGraph.isNodeDirty(nodeKey)
+    // The node may subscribe to child-node version signals while we lazily load
+    // dependencies during this freshness pass. As long as every dependency
+    // version matches, this entry is fresh.
+    return true
   }
 
   async #resolveDepVersion(

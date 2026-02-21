@@ -115,6 +115,11 @@ export class ReactiveDependencyGraph {
 
   setDependencyVersion(depKey: string, depVersion: string): void {
     const dependencySignal = this.#getDependencySignal(depKey)
+    const currentVersion = runUntracked(() => dependencySignal())
+    if (currentVersion === depVersion) {
+      return
+    }
+
     runUntracked(() => {
       dependencySignal(depVersion)
     })

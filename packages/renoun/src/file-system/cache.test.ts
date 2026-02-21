@@ -348,6 +348,55 @@ describe('file-system cache integration', () => {
     expect(readDirectorySpy.mock.calls.length).toBe(callsAfterFirst)
   })
 
+  test('keeps persisted parent entries fresh when node dependency fingerprint matches', async () => {
+    const childNodeKey = 'child'
+    const childDeps: Array<{ depKey: string; depVersion: string }> = []
+    const childEntry: CacheEntry<{ node: 'child' }> = {
+      value: { node: 'child' },
+      deps: childDeps,
+      fingerprint: createFingerprint(childDeps),
+      persist: true,
+      updatedAt: Date.now(),
+    }
+    const parentDeps = [
+      {
+        depKey: `node:${childNodeKey}`,
+        depVersion: childEntry.fingerprint,
+      },
+    ]
+    const parentEntry: CacheEntry<{ node: 'parent' }> = {
+      value: { node: 'parent' },
+      deps: parentDeps,
+      fingerprint: createFingerprint(parentDeps),
+      persist: true,
+      updatedAt: Date.now(),
+    }
+    const persistedEntries = new Map<string, CacheEntry>([
+      [childNodeKey, childEntry],
+      ['parent', parentEntry],
+    ])
+    const persistence: CacheStorePersistence = {
+      async load(nodeKey) {
+        return persistedEntries.get(nodeKey)
+      },
+      async save(nodeKey, entry) {
+        persistedEntries.set(nodeKey, entry)
+      },
+      async delete(nodeKey) {
+        persistedEntries.delete(nodeKey)
+      },
+    }
+    const store = new CacheStore({
+      snapshot: new FileSystemSnapshot(new InMemoryFileSystem({})),
+      persistence,
+    })
+
+    const result = await store.getWithFreshness<{ node: 'parent' }>('parent')
+
+    expect(result.value).toEqual({ node: 'parent' })
+    expect(result.fresh).toBe(true)
+  })
+
   test('does not share caches between different custom cache providers', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': '',
