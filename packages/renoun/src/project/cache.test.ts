@@ -49,6 +49,56 @@ describe('project file cache', () => {
     expect(calls).toBe(2)
   })
 
+  test('invalidates file cache entries with const-only dependencies', async () => {
+    const project = {} as unknown as Project
+    const filePath = '/project/src/index.ts'
+    let calls = 0
+
+    const first = await createProjectFileCache(
+      project,
+      filePath,
+      'constOnly',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'const',
+            name: 'schema-version',
+            version: '1',
+          },
+        ],
+      }
+    )
+
+    invalidateProjectFileCache(project, filePath)
+
+    const second = await createProjectFileCache(
+      project,
+      filePath,
+      'constOnly',
+      () => {
+        calls += 1
+        return `value-${calls}`
+      },
+      {
+        deps: [
+          {
+            kind: 'const',
+            name: 'schema-version',
+            version: '1',
+          },
+        ],
+      }
+    )
+
+    expect(first).toBe('value-1')
+    expect(second).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
   test('invalidates only one cache namespace for a file path', async () => {
     const project = {} as unknown as Project
     const filePath = '/project/src/index.ts'

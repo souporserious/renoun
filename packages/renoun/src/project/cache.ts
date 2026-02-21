@@ -480,6 +480,7 @@ export function invalidateProjectFileCache(
     if (directNodeKeys) {
       for (const nodeKey of directNodeKeys) {
         removeProjectCacheEntry(runtime, nodeKey)
+        void runtime.store.delete(nodeKey)
       }
     }
 
