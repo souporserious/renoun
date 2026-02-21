@@ -45,11 +45,9 @@ import {
   parseExportId,
   formatExportId,
   getParserFlavorFromFileName,
-  getExportParseCacheKey,
   scanModuleExports,
   isUnderScope,
   looksLikeFilePath,
-  LRUMap,
   mapWithLimit,
   buildExportComparisonMaps,
   detectSameFileRenames,
@@ -287,14 +285,6 @@ export class GitVirtualFileSystem
   #symlinkMap: Map<string, string>
   #include?: string[]
   #exclude?: string[]
-  #gitMetadataMirror = new Map<
-    string,
-    {
-      metadata: GitMetadata
-      commitHashes: { firstCommitHash?: string; lastCommitHash?: string }
-    }
-  >()
-  #gitBlameCache: Map<string, Promise<GitHubBlameRange[] | null>>
   #cache?: Cache
   #session?: Session
   #ghBlameBatchQueue?: {
@@ -307,14 +297,6 @@ export class GitVirtualFileSystem
   #ghBlameAbortControllers = new Set<AbortController>()
   #ghBlameBatchFlushScheduled = false
   #ghBlameBatchFlushing = false
-  #refIdentityCache = new Map<
-    string,
-    { identity: string; deterministic: boolean; checkedAt: number }
-  >()
-  #refIdentityLookupInflight = new Map<
-    string,
-    Promise<{ identity: string; deterministic: boolean }>
-  >()
 
   constructor(options: GitVirtualFileSystemOptions) {
     if (!options.host) {
@@ -375,7 +357,6 @@ export class GitVirtualFileSystem
     this.#exclude = options.exclude
 
     this.#symlinkMap = new Map()
-    this.#gitBlameCache = new Map()
     this.#initPromise = this.#loadArchive().catch((error) => {
       this.#initPromise = undefined
       throw error
@@ -600,9 +581,6 @@ export class GitVirtualFileSystem
   }
 
   #clearRefCaches(cancelMessage: string) {
-    this.#gitMetadataMirror.clear()
-    this.#gitBlameCache.clear()
-    this.#exportParseCache.clear()
     const pendingBlameQueue = this.#ghBlameBatchQueue ?? []
     if (pendingBlameQueue.length > 0) {
       const error = new Error(cancelMessage)
@@ -744,40 +722,118 @@ export class GitVirtualFileSystem
     })
   }
 
+  #createBlameRangeKeyPrefix(refIdentity: string, path: string): string {
+    const normalizedPath = normalizeSlashes(path)
+    const namespacePrefix = [
+      'blame-range',
+      encodeURIComponent(this.#host),
+      encodeURIComponent(this.#apiBaseUrl),
+      encodeURIComponent(this.#repository),
+      encodeURIComponent(refIdentity),
+      encodeURIComponent(normalizedPath),
+      '',
+    ].join(':')
+    return `git-virtual:${GIT_VIRTUAL_HISTORY_CACHE_VERSION}:${namespacePrefix}`
+  }
+
+  #createBlameRangeNodeKey(
+    refIdentity: string,
+    path: string,
+    startLine: number | undefined,
+    endLine: number | undefined
+  ): string {
+    const normalizedPath = normalizeSlashes(path)
+    const namespace = [
+      'blame-range',
+      encodeURIComponent(this.#host),
+      encodeURIComponent(this.#apiBaseUrl),
+      encodeURIComponent(this.#repository),
+      encodeURIComponent(refIdentity),
+      encodeURIComponent(normalizedPath),
+      startLine === undefined ? 'all' : String(startLine),
+      endLine === undefined ? 'all' : String(endLine),
+    ].join(':')
+
+    return this.#createPersistentCacheNodeKey(namespace, null)
+  }
+
+  #parseBlameRangeFromNodeKey(
+    nodeKey: string,
+    keyPrefix: string
+  ): { startLine?: number; endLine?: number } | undefined {
+    if (!nodeKey.startsWith(keyPrefix)) {
+      return undefined
+    }
+
+    const remainder = nodeKey.slice(keyPrefix.length)
+    const hashSeparatorIndex = remainder.lastIndexOf(':')
+    if (hashSeparatorIndex === -1) {
+      return undefined
+    }
+    const rangePayload = remainder.slice(0, hashSeparatorIndex)
+    const separatorIndex = rangePayload.indexOf(':')
+    if (separatorIndex === -1) {
+      return undefined
+    }
+
+    const startSegment = rangePayload.slice(0, separatorIndex)
+    const endSegment = rangePayload.slice(separatorIndex + 1)
+
+    const startLine =
+      startSegment === 'all' ? undefined : Number.parseInt(startSegment, 10)
+    const endLine =
+      endSegment === 'all' ? undefined : Number.parseInt(endSegment, 10)
+
+    if (
+      (startLine !== undefined && !Number.isFinite(startLine)) ||
+      (endLine !== undefined && !Number.isFinite(endLine))
+    ) {
+      return undefined
+    }
+
+    return { startLine, endLine }
+  }
+
   async #getRefCacheIdentity(ref: string): Promise<{
     identity: string
     deterministic: boolean
   }> {
     const normalizedRef = ref.trim()
     const now = Date.now()
-    const cached = this.#refIdentityCache.get(normalizedRef)
+    const nodeKey = this.#createPersistentCacheNodeKey('ref-identity', {
+      ref: normalizedRef,
+    })
+    const session = this.#getSession()
+    const cached = await session.cache.get<{
+      identity: string
+      deterministic: boolean
+      checkedAt: number
+    }>(nodeKey)
 
     if (cached && now - cached.checkedAt < GIT_VIRTUAL_REF_IDENTITY_TTL_MS) {
       return cached
     }
 
-    const inFlight =
-      this.#refIdentityLookupInflight.get(normalizedRef) ??
-      this.#resolveRefCacheIdentity(normalizedRef)
+    const next = await this.#resolveRefCacheIdentity(normalizedRef, cached)
+    await this.#getSession().cache.put(nodeKey, next, {
+      persist: false,
+    })
 
-    if (!this.#refIdentityLookupInflight.has(normalizedRef)) {
-      this.#refIdentityLookupInflight.set(normalizedRef, inFlight)
-    }
-
-    try {
-      return await inFlight
-    } finally {
-      if (this.#refIdentityLookupInflight.get(normalizedRef) === inFlight) {
-        this.#refIdentityLookupInflight.delete(normalizedRef)
-      }
-    }
+    return next
   }
 
-  async #resolveRefCacheIdentity(ref: string): Promise<{
+  async #resolveRefCacheIdentity(
+    ref: string,
+    cached?: {
+      identity: string
+      deterministic: boolean
+      checkedAt: number
+    }
+  ): Promise<{
     identity: string
     deterministic: boolean
+    checkedAt: number
   }> {
-    const cached = this.#refIdentityCache.get(ref)
     const isCommitSha = isFullCommitSha(ref)
     let identity = ref
     let deterministic = false
@@ -790,11 +846,10 @@ export class GitVirtualFileSystem
       }
     } catch {
       if (cached !== undefined) {
-        this.#refIdentityCache.set(ref, {
+        return {
           ...cached,
           checkedAt: Date.now(),
-        })
-        return cached
+        }
       }
     }
 
@@ -810,7 +865,6 @@ export class GitVirtualFileSystem
       )
     }
 
-    this.#refIdentityCache.set(ref, next)
     return next
   }
 
@@ -876,12 +930,6 @@ export class GitVirtualFileSystem
   async #getGitFileMetadataPayload(
     normalizedPath: string
   ): Promise<GitFileMetadataPayload> {
-    const mirrorKey = `${this.#ref}::${normalizedPath}`
-    const mirrored = this.#gitMetadataMirror.get(mirrorKey)
-    if (mirrored) {
-      return mirrored
-    }
-
     const { identity: refIdentity, deterministic } =
       await this.#getRefCacheIdentity(this.#ref)
     const session = this.#getSession()
@@ -919,8 +967,6 @@ export class GitVirtualFileSystem
           }
         }
       )
-
-      this.#gitMetadataMirror.set(mirrorKey, payload)
       return payload
     } catch {
       // Treat host/network failures as uncached fallbacks so a later retry can recover.
@@ -1184,19 +1230,23 @@ export class GitVirtualFileSystem
     }
 
     startLine = normalizedStart
+    const { identity: refIdentity, deterministic } = await this.#getRefCacheIdentity(
+      this.#ref
+    )
+    const session = this.#getSession()
+    const keyPrefix = this.#createBlameRangeKeyPrefix(refIdentity, path)
+    const candidateNodeKeys = await session.cache.listNodeKeysByPrefix(keyPrefix)
 
-    const cacheKey = `${this.#ref}::${path}::${startLine ?? ''}-${
-      normalizedEnd ?? ''
-    }`
+    let bestCandidateNodeKey: string | undefined
+    let bestCandidateWidth = Number.POSITIVE_INFINITY
 
-    const rangePrefix = `${this.#ref}::${path}::`
-    for (const [key, promise] of this.#gitBlameCache) {
-      if (!key.startsWith(rangePrefix)) continue
-      const [, , range] = key.split('::')
-      const [cachedStartStr, cachedEndStr] = range.split('-')
-      const cachedStart = cachedStartStr ? Number(cachedStartStr) : undefined
-      const cachedEnd = cachedEndStr ? Number(cachedEndStr) : undefined
+    for (const candidateNodeKey of candidateNodeKeys) {
+      const range = this.#parseBlameRangeFromNodeKey(candidateNodeKey, keyPrefix)
+      if (!range) {
+        continue
+      }
 
+      const { startLine: cachedStart, endLine: cachedEnd } = range
       const coversRequestedStart =
         startLine === undefined
           ? cachedStart === undefined
@@ -1206,64 +1256,58 @@ export class GitVirtualFileSystem
           ? cachedEnd === undefined
           : cachedEnd === undefined || cachedEnd >= normalizedEnd
 
-      if (coversRequestedStart && coversRequestedEnd) {
-        this.#gitBlameCache.set(cacheKey, promise)
-        const cached = await promise
+      if (!coversRequestedStart || !coversRequestedEnd) {
+        continue
+      }
+
+      const spanStart = cachedStart ?? 1
+      const spanEnd = cachedEnd ?? Number.MAX_SAFE_INTEGER
+      const width = spanEnd - spanStart
+
+      if (width < bestCandidateWidth) {
+        bestCandidateWidth = width
+        bestCandidateNodeKey = candidateNodeKey
+      }
+    }
+
+    if (bestCandidateNodeKey) {
+      const cached = await session.cache.get<GitHubBlameRange[] | null>(
+        bestCandidateNodeKey
+      )
+      if (cached !== undefined) {
         return cached ?? null
       }
     }
 
-    if (!this.#gitBlameCache.has(cacheKey)) {
-      const { identity: refIdentity, deterministic } =
-        await this.#getRefCacheIdentity(this.#ref)
-      const session = this.#getSession()
-      const nodeKey = this.#createPersistentCacheNodeKey('blame-range', {
-        refIdentity,
-        path,
-        startLine: startLine ?? null,
-        endLine: normalizedEnd ?? null,
-      })
-
-      this.#gitBlameCache.set(
-        cacheKey,
-        session.cache.getOrCompute(
-          nodeKey,
-          {
-            persist: deterministic,
-            constDeps: [
-              {
-                name: 'git-virtual-cache',
-                version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
-              },
-            ],
-          },
-          async (ctx) => {
-            ctx.recordConstDep(
-              'git-virtual-cache',
-              GIT_VIRTUAL_HISTORY_CACHE_VERSION
-            )
-            return this.#enqueueGitHubBlameRequest(
-              path,
-              startLine,
-              normalizedEnd
-            )
-          }
-        )
-      )
-    }
-
-    const cached = this.#gitBlameCache.get(cacheKey)
-    if (!cached) {
-      return null
-    }
+    const exactNodeKey = this.#createBlameRangeNodeKey(
+      refIdentity,
+      path,
+      startLine,
+      normalizedEnd
+    )
 
     try {
-      return (await cached) ?? null
+      const ranges = await session.cache.getOrCompute(
+        exactNodeKey,
+        {
+          persist: deterministic,
+          constDeps: [
+            {
+              name: 'git-virtual-cache',
+              version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+            },
+          ],
+        },
+        async (ctx) => {
+          ctx.recordConstDep(
+            'git-virtual-cache',
+            GIT_VIRTUAL_HISTORY_CACHE_VERSION
+          )
+          return this.#enqueueGitHubBlameRequest(path, startLine, normalizedEnd)
+        }
+      )
+      return ranges ?? null
     } catch {
-      // Avoid pinning failed blame lookups in memory; allow retries.
-      if (this.#gitBlameCache.get(cacheKey) === cached) {
-        this.#gitBlameCache.delete(cacheKey)
-      }
       return null
     }
   }
@@ -2959,9 +3003,6 @@ export class GitVirtualFileSystem
     )
   }
 
-  // LRU cache for parsed exports by content hash (shared across calls)
-  #exportParseCache = new LRUMap<string, Map<string, ExportItem>>(500)
-
   /** Get the export history of a repository based on a set of entry files. */
   async *getExportHistory(
     options: ExportHistoryOptions = {}
@@ -3317,17 +3358,18 @@ export class GitVirtualFileSystem
   ): Promise<Map<string, ExportItem>> {
     const contentHash = this.#hashContent(content)
     const parserFlavor = getParserFlavorFromFileName(filePath)
-    const cacheKey = getExportParseCacheKey(contentHash, parserFlavor)
-    const cached = this.#exportParseCache.get(cacheKey)
-    if (cached) {
-      return cached
-    }
-
     const session = this.#getSession()
     const nodeKey = this.#createPersistentCacheNodeKey('blob-exports', {
       contentHash,
       parserFlavor,
     })
+    const cachedPayload = await session.cache.get<Record<string, ExportItem>>(
+      nodeKey
+    )
+    if (cachedPayload !== undefined) {
+      return deserializeExportItemMap(cachedPayload)
+    }
+
     const payload = await session.cache.getOrCompute<
       Record<string, ExportItem>
     >(
@@ -3349,9 +3391,7 @@ export class GitVirtualFileSystem
         return serializeExportItemMap(scanModuleExports(filePath, content))
       }
     )
-    const parsed = deserializeExportItemMap(payload)
-    this.#exportParseCache.set(cacheKey, parsed)
-    return parsed
+    return deserializeExportItemMap(payload)
   }
 
   async #collectExportsForCurrentSnapshot(

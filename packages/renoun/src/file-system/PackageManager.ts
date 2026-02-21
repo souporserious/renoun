@@ -2,6 +2,8 @@ import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
+import { createMemoryOnlyCacheStore } from './Cache.ts'
+import { createPersistentCacheNodeKey } from './cache-key.ts'
 import {
   PACKAGE_MANAGERS,
   isPackageManagerName,
@@ -35,13 +37,48 @@ export type DetectionSource =
   | 'available'
   | 'default'
 
-const cache = {
-  available: new Map<PackageManagerName, boolean>(),
-  versions: new Map<PackageManagerName, string | null>(),
-  detected: new Map<
-    string,
-    { name: PackageManagerName; source: DetectionSource; version?: string }
-  >(),
+type DetectResult = {
+  name: PackageManagerName
+  source: DetectionSource
+  version?: string
+}
+
+const PACKAGE_MANAGER_CACHE_DOMAIN = 'package-manager'
+const PACKAGE_MANAGER_CACHE_VERSION = '1'
+const packageManagerCacheStore = createMemoryOnlyCacheStore({
+  id: 'package-manager-memory-cache',
+})
+
+function createPackageManagerCacheNodeKey(
+  namespace: string,
+  payload: unknown
+): string {
+  return createPersistentCacheNodeKey({
+    domain: PACKAGE_MANAGER_CACHE_DOMAIN,
+    domainVersion: PACKAGE_MANAGER_CACHE_VERSION,
+    namespace,
+    payload,
+  })
+}
+
+function getCachedPackageManagerValue<Value>(
+  namespace: string,
+  payload: unknown
+): Value | undefined {
+  const nodeKey = createPackageManagerCacheNodeKey(namespace, payload)
+  if (!packageManagerCacheStore.hasSync(nodeKey)) {
+    return undefined
+  }
+  return packageManagerCacheStore.getSync<Value>(nodeKey)
+}
+
+function setCachedPackageManagerValue<Value>(
+  namespace: string,
+  payload: unknown,
+  value: Value
+): void {
+  const nodeKey = createPackageManagerCacheNodeKey(namespace, payload)
+  packageManagerCacheStore.setSync(nodeKey, value)
 }
 
 /**
@@ -134,8 +171,11 @@ function commandExists(command: string): boolean {
 }
 
 function getVersion(pm: PackageManagerName): string | null {
-  if (cache.versions.has(pm)) {
-    return cache.versions.get(pm)!
+  const cachedVersion = getCachedPackageManagerValue<string | null>('version', {
+    pm,
+  })
+  if (cachedVersion !== undefined) {
+    return cachedVersion
   }
 
   try {
@@ -144,21 +184,24 @@ function getVersion(pm: PackageManagerName): string | null {
       stdio: ['pipe', 'pipe', 'ignore'],
     }).trim()
 
-    cache.versions.set(pm, version)
+    setCachedPackageManagerValue('version', { pm }, version)
     return version
   } catch {
-    cache.versions.set(pm, null)
+    setCachedPackageManagerValue('version', { pm }, null)
     return null
   }
 }
 
 function checkAvailable(pm: PackageManagerName): boolean {
-  if (cache.available.has(pm)) {
-    return cache.available.get(pm)!
+  const cachedAvailability = getCachedPackageManagerValue<boolean>('available', {
+    pm,
+  })
+  if (cachedAvailability !== undefined) {
+    return cachedAvailability
   }
 
   const available = commandExists(pm)
-  cache.available.set(pm, available)
+  setCachedPackageManagerValue('available', { pm }, available)
   return available
 }
 
@@ -213,34 +256,37 @@ function findUpLockfile(startDir: string): PackageManagerName | null {
   return null
 }
 
-function detect(options: DetectOptions = {}): {
-  name: PackageManagerName
-  source: DetectionSource
-  version?: string
-} {
+function detect(options: DetectOptions = {}): DetectResult {
   const {
     cwd = process.cwd(),
     traverse = true,
     fallbackToAvailable = true,
   } = options
   const resolvedCwd = resolve(cwd)
-  const cacheKey = `${resolvedCwd}:${traverse}:${fallbackToAvailable}`
-
-  if (cache.detected.has(cacheKey)) {
-    return cache.detected.get(cacheKey)!
+  const detectionCachePayload = {
+    cwd: resolvedCwd,
+    traverse,
+    fallbackToAvailable,
+  }
+  const cachedDetection = getCachedPackageManagerValue<DetectResult>(
+    'detect',
+    detectionCachePayload
+  )
+  if (cachedDetection) {
+    return cachedDetection
   }
 
   const fromField = detectFromPackageJson(resolvedCwd)
   if (fromField) {
     const result = { ...fromField, source: 'packageManager-field' as const }
-    cache.detected.set(cacheKey, result)
+    setCachedPackageManagerValue('detect', detectionCachePayload, result)
     return result
   }
 
   const fromLockfile = detectFromLockfile(resolvedCwd)
   if (fromLockfile) {
     const result = { name: fromLockfile, source: 'lockfile' as const }
-    cache.detected.set(cacheKey, result)
+    setCachedPackageManagerValue('detect', detectionCachePayload, result)
     return result
   }
 
@@ -248,7 +294,7 @@ function detect(options: DetectOptions = {}): {
     const fromParent = findUpLockfile(resolve(resolvedCwd, '..'))
     if (fromParent) {
       const result = { name: fromParent, source: 'lockfile' as const }
-      cache.detected.set(cacheKey, result)
+      setCachedPackageManagerValue('detect', detectionCachePayload, result)
       return result
     }
   }
@@ -258,14 +304,14 @@ function detect(options: DetectOptions = {}): {
     for (const pm of preferred) {
       if (checkAvailable(pm)) {
         const result = { name: pm, source: 'available' as const }
-        cache.detected.set(cacheKey, result)
+        setCachedPackageManagerValue('detect', detectionCachePayload, result)
         return result
       }
     }
   }
 
   const result = { name: 'npm' as const, source: 'default' as const }
-  cache.detected.set(cacheKey, result)
+  setCachedPackageManagerValue('detect', detectionCachePayload, result)
   return result
 }
 
@@ -329,9 +375,7 @@ export class PackageManager {
    * Clear the internal cache.
    */
   static clearCache(): void {
-    cache.available.clear()
-    cache.versions.clear()
-    cache.detected.clear()
+    packageManagerCacheStore.clearMemory()
   }
 
   /**

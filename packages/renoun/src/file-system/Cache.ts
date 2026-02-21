@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 import { delay } from '../utils/delay.ts'
-import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { hashString } from '../utils/stable-serialization.ts'
@@ -126,6 +125,7 @@ const DEFAULT_INVALIDATED_PATH_TTL_MS = 1_000
 const DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT = 10
 const DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT = 250
 const DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL = 25
+const DEFAULT_MEMORY_ONLY_CACHE_STORE_ID = 'memory-only-cache-store'
 
 interface CacheStoreFactoryOptions {
   snapshot: Snapshot
@@ -134,6 +134,79 @@ interface CacheStoreFactoryOptions {
   computeSlotPollMs?: number
   persistedVerificationAttempts?: number
   debugPersistenceFailure?: boolean
+}
+
+function createUnsupportedMemoryOnlySnapshotReadError(method: string): never {
+  throw new Error(
+    `[renoun] Memory-only cache snapshots do not support ${method}.`
+  )
+}
+
+function createMemoryOnlySnapshot(id: string): Snapshot {
+  const invalidateListeners = new Set<(path: string) => void>()
+
+  return {
+    id,
+    async readDirectory() {
+      return createUnsupportedMemoryOnlySnapshotReadError('readDirectory')
+    },
+    async readFile() {
+      return createUnsupportedMemoryOnlySnapshotReadError('readFile')
+    },
+    async readFileBinary() {
+      return createUnsupportedMemoryOnlySnapshotReadError('readFileBinary')
+    },
+    readFileStream() {
+      return createUnsupportedMemoryOnlySnapshotReadError('readFileStream')
+    },
+    async fileExists() {
+      return createUnsupportedMemoryOnlySnapshotReadError('fileExists')
+    },
+    async getFileLastModifiedMs() {
+      return createUnsupportedMemoryOnlySnapshotReadError(
+        'getFileLastModifiedMs'
+      )
+    },
+    async getFileByteLength() {
+      return createUnsupportedMemoryOnlySnapshotReadError('getFileByteLength')
+    },
+    isFilePathGitIgnored() {
+      return false
+    },
+    async isFilePathExcludedFromTsConfigAsync() {
+      return false
+    },
+    getRelativePathToWorkspace(path: string) {
+      return normalizeCachePathKey(path)
+    },
+    async contentId(path: string) {
+      return `memory:${normalizeCachePathKey(path)}`
+    },
+    invalidatePath(path: string) {
+      for (const listener of invalidateListeners) {
+        listener(path)
+      }
+    },
+    invalidateAll() {
+      for (const listener of invalidateListeners) {
+        listener('.')
+      }
+    },
+    onInvalidate(listener: (path: string) => void) {
+      invalidateListeners.add(listener)
+      return () => {
+        invalidateListeners.delete(listener)
+      }
+    },
+  }
+}
+
+export function createMemoryOnlyCacheStore(options: { id?: string } = {}) {
+  return new CacheStore({
+    snapshot: createMemoryOnlySnapshot(
+      options.id ?? DEFAULT_MEMORY_ONLY_CACHE_STORE_ID
+    ),
+  })
 }
 
 export class Cache {
@@ -746,7 +819,7 @@ export class CacheStore {
   }
 
   async listNodeKeysByPrefix(prefix: string): Promise<string[]> {
-    const normalizedPrefix = normalizeSlashes(prefix)
+    const normalizedPrefix = normalizeCacheSlashes(prefix)
     const memoryKeys = Array.from(this.#entries.keys()).filter((nodeKey) =>
       nodeKey.startsWith(normalizedPrefix)
     )
@@ -1016,6 +1089,69 @@ export class CacheStore {
   #createComputeSlotOwner(): string {
     const randomSuffix = Math.random().toString(36).slice(2)
     return `${process.pid}:${Date.now()}:${randomSuffix}`
+  }
+
+  hasSync(nodeKey: string): boolean {
+    return this.#entries.has(nodeKey)
+  }
+
+  getSync<Value>(nodeKey: string): Value | undefined {
+    const entry = this.#entries.get(nodeKey)
+    if (!entry) {
+      this.#logCacheOperation('miss', nodeKey, {
+        source: 'memory-sync',
+      })
+      return undefined
+    }
+
+    this.#logCacheOperation('hit', nodeKey, {
+      source: 'memory-sync',
+      persist: entry.persist,
+    })
+    return entry.value as Value
+  }
+
+  setSync<Value>(nodeKey: string, value: Value): void {
+    const entry: CacheEntry<Value> = {
+      value,
+      deps: [],
+      fingerprint: createFingerprint([]),
+      persist: false,
+      updatedAt: Date.now(),
+    }
+
+    this.#logCacheOperation('set', nodeKey, {
+      source: 'manual-put-sync',
+      persist: false,
+      dependencies: 0,
+    })
+
+    this.#entries.set(nodeKey, entry)
+    this.#registerEntryInGraph(nodeKey, entry)
+  }
+
+  getOrComputeSync<Value>(nodeKey: string, compute: () => Value): Value {
+    if (this.#entries.has(nodeKey)) {
+      return this.getSync<Value>(nodeKey)!
+    }
+
+    const value = compute()
+    this.setSync(nodeKey, value)
+    return value
+  }
+
+  deleteSync(nodeKey: string): void {
+    this.#logCacheOperation('clear', nodeKey, {
+      source: 'explicit-sync',
+    })
+
+    this.#dependencyGraph.markNodeDirty(nodeKey)
+    this.#dependencyGraph.unregisterNode(nodeKey)
+    this.#entries.delete(nodeKey)
+    this.#inflight.delete(nodeKey)
+    this.#persistenceOperationByKey.delete(nodeKey)
+    this.#persistenceIntentVersionByKey.delete(nodeKey)
+    this.#persistedRevisionPreconditionByKey.delete(nodeKey)
   }
 
   clearMemory(): void {
@@ -1847,7 +1983,51 @@ export function createFingerprint(dependencies: CacheDependency[]): string {
 }
 
 function normalizeDepPath(path: string): string {
-  return normalizePathKey(path)
+  return normalizeCachePathKey(path)
+}
+
+function normalizeCacheSlashes(path: string): string {
+  return path.replaceAll('\\', '/')
+}
+
+function trimLeadingDotSlashForCache(path: string): string {
+  const normalized = normalizeCacheSlashes(path)
+  if (
+    normalized.length >= 2 &&
+    normalized.charCodeAt(0) === 46 &&
+    normalized.charCodeAt(1) === 47
+  ) {
+    let start = 2
+    while (start < normalized.length && normalized.charCodeAt(start) === 47) {
+      start++
+    }
+    return normalized.slice(start)
+  }
+
+  return normalized
+}
+
+function trimLeadingSlashesForCache(value: string): string {
+  let start = 0
+  while (start < value.length && value.charCodeAt(start) === 47) {
+    start++
+  }
+  return value.slice(start)
+}
+
+function trimTrailingSlashesForCache(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end--
+  }
+  return value.slice(0, end)
+}
+
+function normalizeCachePathKey(path: string): string {
+  const key = trimTrailingSlashesForCache(
+    trimLeadingSlashesForCache(trimLeadingDotSlashForCache(path))
+  )
+  return key === '' ? '.' : key
 }
 
 function isUnserializablePersistenceValueError(error: unknown): boolean {

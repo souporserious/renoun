@@ -1,6 +1,12 @@
+import { dirname } from 'node:path'
+
+import { CacheStore, type CacheStoreComputeContext } from '../file-system/Cache.ts'
+import type { FileReadableStream } from '../file-system/FileSystem.ts'
+import type { Snapshot } from '../file-system/Snapshot.ts'
+import type { DirectoryEntry } from '../file-system/types.ts'
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { Project } from '../utils/ts-morph.ts'
-import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
 
 import { waitForRefreshingProjects } from './refresh.ts'
 
@@ -10,32 +16,129 @@ export type ProjectCacheDependency =
   | { kind: 'const'; name: string; version: string }
   | { kind: 'cache'; filePath: string; cacheName: string }
 
-interface ProjectCacheEntry {
-  value: unknown
-  deps: ProjectCacheDependencyRecord[]
-}
-
-interface ProjectCacheDependencyRecord {
-  depKey: string
-  depVersion: string
-}
-
-interface ProjectCacheState {
-  cacheByFilePath: Map<string, Map<string, ProjectCacheEntry>>
-  graph: ReactiveDependencyGraph
+interface ProjectCacheRuntime {
+  snapshot: ProjectCacheSnapshot
+  store: CacheStore
   nodeLocationByKey: Map<string, { filePath: string; cacheName: string }>
-  dependencyRevisionByKey: Map<string, number>
-  inflightByNodeKey: Map<string, Promise<unknown>>
+  nodeKeysByFilePath: Map<string, Set<string>>
   lruNodeKeys: Map<string, true>
+  staticDependencySignatureByNodeKey: Map<string, string>
   maxEntries: number
 }
 
-const projectCacheStateByProject = new WeakMap<Project, ProjectCacheState>()
-const PROJECT_CACHE_VERSION_TOKEN = 'project-cache-v0'
+const projectCacheRuntimeByProject = new WeakMap<Project, ProjectCacheRuntime>()
 const PROJECT_CACHE_NODE_PREFIX = 'project-cache:'
-const PROJECT_CACHE_DEP_REVISION_PREFIX = 'r'
-const PROJECT_CACHE_REVISION_PRUNE_THRESHOLD = 512
+const PROJECT_CACHE_VERSION = 'project-cache-v1'
+const PROJECT_CACHE_VERSION_DEP = 'project-cache-version'
 const DEFAULT_PROJECT_CACHE_MAX_ENTRIES = 8_000
+
+let nextProjectCacheSnapshotId = 0
+
+class ProjectCacheSnapshot implements Snapshot {
+  readonly id = `project-cache:${(nextProjectCacheSnapshotId += 1)}`
+
+  readonly #revisionByPath = new Map<string, number>()
+  readonly #invalidateListeners = new Set<(path: string) => void>()
+
+  readDirectory(_path?: string): Promise<DirectoryEntry[]> {
+    throw new Error('[renoun] Project cache snapshots do not support readDirectory')
+  }
+
+  readFile(_path: string): Promise<string> {
+    throw new Error('[renoun] Project cache snapshots do not support readFile')
+  }
+
+  readFileBinary(_path: string): Promise<Uint8Array> {
+    throw new Error('[renoun] Project cache snapshots do not support readFileBinary')
+  }
+
+  readFileStream(_path: string): FileReadableStream {
+    throw new Error('[renoun] Project cache snapshots do not support readFileStream')
+  }
+
+  fileExists(_path: string): Promise<boolean> {
+    throw new Error('[renoun] Project cache snapshots do not support fileExists')
+  }
+
+  getFileLastModifiedMs(_path: string): Promise<number | undefined> {
+    throw new Error(
+      '[renoun] Project cache snapshots do not support getFileLastModifiedMs'
+    )
+  }
+
+  getFileByteLength(_path: string): Promise<number | undefined> {
+    throw new Error(
+      '[renoun] Project cache snapshots do not support getFileByteLength'
+    )
+  }
+
+  isFilePathGitIgnored(_path: string): boolean {
+    return false
+  }
+
+  isFilePathExcludedFromTsConfigAsync(
+    _path: string,
+    _isDirectory?: boolean
+  ): Promise<boolean> {
+    return Promise.resolve(false)
+  }
+
+  getRelativePathToWorkspace(path: string): string {
+    return normalizeProjectPath(path)
+  }
+
+  async contentId(path: string): Promise<string> {
+    const normalizedPath = normalizeProjectPath(path)
+    return `r${this.#revisionByPath.get(normalizedPath) ?? 0}`
+  }
+
+  invalidatePath(path: string): void {
+    const normalizedPath = normalizeProjectPath(path)
+
+    if (normalizedPath === '.') {
+      this.#revisionByPath.clear()
+      this.#emitInvalidate(path)
+      return
+    }
+
+    this.#bumpPathRevision(normalizedPath)
+
+    let currentDirectory = dirname(normalizedPath)
+    while (
+      currentDirectory &&
+      currentDirectory !== '.' &&
+      currentDirectory !== '/' &&
+      currentDirectory !== normalizedPath
+    ) {
+      this.#bumpPathRevision(currentDirectory)
+      currentDirectory = dirname(currentDirectory)
+    }
+
+    this.#emitInvalidate(path)
+  }
+
+  invalidateAll(): void {
+    this.#revisionByPath.clear()
+    this.#emitInvalidate('.')
+  }
+
+  onInvalidate(listener: (path: string) => void): () => void {
+    this.#invalidateListeners.add(listener)
+    return () => {
+      this.#invalidateListeners.delete(listener)
+    }
+  }
+
+  #bumpPathRevision(path: string): void {
+    this.#revisionByPath.set(path, (this.#revisionByPath.get(path) ?? 0) + 1)
+  }
+
+  #emitInvalidate(path: string): void {
+    for (const listener of this.#invalidateListeners) {
+      listener(path)
+    }
+  }
+}
 
 function getProjectCacheMaxEntries(): number {
   const configured = process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES']
@@ -51,156 +154,36 @@ function getProjectCacheMaxEntries(): number {
   return parsed
 }
 
-function getProjectCacheState(project: Project): ProjectCacheState {
-  const existing = projectCacheStateByProject.get(project)
+function getProjectCacheRuntime(project: Project): ProjectCacheRuntime {
+  const existing = projectCacheRuntimeByProject.get(project)
   if (existing) {
     return existing
   }
 
-  const created: ProjectCacheState = {
-    cacheByFilePath: new Map(),
-    graph: new ReactiveDependencyGraph(),
+  const snapshot = new ProjectCacheSnapshot()
+  const created: ProjectCacheRuntime = {
+    snapshot,
+    store: new CacheStore({
+      snapshot,
+    }),
     nodeLocationByKey: new Map(),
-    dependencyRevisionByKey: new Map(),
-    inflightByNodeKey: new Map(),
+    nodeKeysByFilePath: new Map(),
     lruNodeKeys: new Map(),
+    staticDependencySignatureByNodeKey: new Map(),
     maxEntries: getProjectCacheMaxEntries(),
   }
-  projectCacheStateByProject.set(project, created)
+
+  projectCacheRuntimeByProject.set(project, created)
   return created
 }
 
 function normalizeProjectPath(path: string): string {
-  return normalizePathKey(normalizeSlashes(path))
-}
-
-function toFileDependencyKey(path: string): string {
-  return `file:${normalizeProjectPath(path)}`
-}
-
-function toDirectoryDependencyKey(path: string): string {
-  return `dir:${normalizeProjectPath(path)}`
-}
-
-function toCacheDependencyKey(filePath: string, cacheName: string): string {
-  return `cache:${normalizeProjectPath(filePath)}:${cacheName}`
+  const normalizedPath = normalizePathKey(normalizeSlashes(path))
+  return normalizedPath.length > 0 ? normalizedPath : '.'
 }
 
 function toProjectCacheNodeKey(filePath: string, cacheName: string): string {
-  return `project-cache:${normalizeProjectPath(filePath)}:${cacheName}`
-}
-
-function toDependencyRevisionToken(revision: number): string {
-  return `${PROJECT_CACHE_DEP_REVISION_PREFIX}${revision}`
-}
-
-function getDependencyRevisionToken(
-  state: ProjectCacheState,
-  depKey: string
-): string {
-  return toDependencyRevisionToken(state.dependencyRevisionByKey.get(depKey) ?? 0)
-}
-
-function bumpDependencyRevisionToken(state: ProjectCacheState, depKey: string): string {
-  const nextRevision = (state.dependencyRevisionByKey.get(depKey) ?? 0) + 1
-  state.dependencyRevisionByKey.set(depKey, nextRevision)
-  return toDependencyRevisionToken(nextRevision)
-}
-
-function touchTrackedDependency(state: ProjectCacheState, depKey: string): void {
-  if (!state.graph.hasDependencyReferences(depKey)) {
-    state.dependencyRevisionByKey.delete(depKey)
-    return
-  }
-
-  bumpDependencyRevisionToken(state, depKey)
-  state.graph.touchDependency(depKey)
-}
-
-function pruneUnreferencedDependencyRevisionTokens(state: ProjectCacheState): void {
-  if (state.dependencyRevisionByKey.size < PROJECT_CACHE_REVISION_PRUNE_THRESHOLD) {
-    return
-  }
-
-  for (const depKey of state.dependencyRevisionByKey.keys()) {
-    if (!state.graph.hasDependencyReferences(depKey)) {
-      state.dependencyRevisionByKey.delete(depKey)
-    }
-  }
-}
-
-function bumpPathDependencyRevisionTokens(
-  state: ProjectCacheState,
-  pathKey: string
-): void {
-  for (const dependencyKey of state.graph.getPathDependencyKeys(pathKey)) {
-    bumpDependencyRevisionToken(state, dependencyKey)
-  }
-}
-
-function toDependencyRecord(
-  state: ProjectCacheState,
-  dependency: ProjectCacheDependency
-): ProjectCacheDependencyRecord {
-  switch (dependency.kind) {
-    case 'file': {
-      const depKey = toFileDependencyKey(dependency.path)
-      return { depKey, depVersion: getDependencyRevisionToken(state, depKey) }
-    }
-    case 'directory': {
-      const depKey = toDirectoryDependencyKey(dependency.path)
-      return { depKey, depVersion: getDependencyRevisionToken(state, depKey) }
-    }
-    case 'const': {
-      const depKey = `const:${dependency.name}:${dependency.version}`
-      return { depKey, depVersion: dependency.version }
-    }
-    case 'cache': {
-      const depKey = toCacheDependencyKey(
-        dependency.filePath,
-        dependency.cacheName
-      )
-      return { depKey, depVersion: getDependencyRevisionToken(state, depKey) }
-    }
-  }
-}
-
-function compareDependencyRecord(
-  first: ProjectCacheDependencyRecord,
-  second: ProjectCacheDependencyRecord
-): number {
-  const keyCompare = first.depKey.localeCompare(second.depKey)
-  if (keyCompare !== 0) {
-    return keyCompare
-  }
-
-  return first.depVersion.localeCompare(second.depVersion)
-}
-
-function normalizeDependencyRecords(
-  dependencies: ProjectCacheDependencyRecord[]
-): ProjectCacheDependencyRecord[] {
-  return [...dependencies].sort(compareDependencyRecord)
-}
-
-function areDependencyRecordsEqual(
-  first: ProjectCacheDependencyRecord[],
-  second: ProjectCacheDependencyRecord[]
-): boolean {
-  if (first.length !== second.length) {
-    return false
-  }
-
-  for (let index = 0; index < first.length; index += 1) {
-    if (
-      first[index].depKey !== second[index].depKey ||
-      first[index].depVersion !== second[index].depVersion
-    ) {
-      return false
-    }
-  }
-
-  return true
+  return `${PROJECT_CACHE_NODE_PREFIX}${normalizeProjectPath(filePath)}:${cacheName}`
 }
 
 function toDefaultDependency(filePath: string): ProjectCacheDependency {
@@ -210,132 +193,169 @@ function toDefaultDependency(filePath: string): ProjectCacheDependency {
   }
 }
 
-function registerProjectCacheEntry(
-  state: ProjectCacheState,
-  filePath: string,
-  cacheName: string,
-  entry: ProjectCacheEntry
-): void {
-  const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
-  for (const dependency of entry.deps) {
-    state.graph.setDependencyVersion(dependency.depKey, dependency.depVersion)
+function normalizeProjectDependency(
+  dependency: ProjectCacheDependency
+): ProjectCacheDependency {
+  switch (dependency.kind) {
+    case 'file':
+      return {
+        kind: 'file',
+        path: normalizeProjectPath(dependency.path),
+      }
+    case 'directory':
+      return {
+        kind: 'directory',
+        path: normalizeProjectPath(dependency.path),
+      }
+    case 'const':
+      return {
+        kind: 'const',
+        name: dependency.name,
+        version: dependency.version,
+      }
+    case 'cache':
+      return {
+        kind: 'cache',
+        filePath: normalizeProjectPath(dependency.filePath),
+        cacheName: dependency.cacheName,
+      }
   }
-  state.graph.registerNode(
-    nodeKey,
-    entry.deps.map((dependency) => dependency.depKey)
-  )
-  state.graph.markNodeVersion(nodeKey, PROJECT_CACHE_VERSION_TOKEN)
-  state.graph.touchDependency(toCacheDependencyKey(filePath, cacheName))
-  state.nodeLocationByKey.set(nodeKey, { filePath, cacheName })
 }
 
-function invalidateProjectCacheEntry(
-  state: ProjectCacheState,
+function normalizeProjectDependencies(
+  dependencies: ProjectCacheDependency[]
+): ProjectCacheDependency[] {
+  return dependencies.map(normalizeProjectDependency)
+}
+
+function toProjectDependencySignature(
+  dependencies: ProjectCacheDependency[]
+): string {
+  const normalizedDependencies = normalizeProjectDependencies(dependencies)
+  const sortable = normalizedDependencies.map((dependency) => {
+    switch (dependency.kind) {
+      case 'file':
+        return `file:${dependency.path}`
+      case 'directory':
+        return `directory:${dependency.path}`
+      case 'const':
+        return `const:${dependency.name}:${dependency.version}`
+      case 'cache':
+        return `cache:${dependency.filePath}:${dependency.cacheName}`
+    }
+  })
+
+  sortable.sort()
+
+  return hashString(stableStringify(sortable))
+}
+
+function touchProjectCacheEntry(
+  runtime: ProjectCacheRuntime,
+  nodeKey: string,
   filePath: string,
   cacheName: string
 ): void {
-  const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
-  const cacheDependencyKey = toCacheDependencyKey(filePath, cacheName)
-  state.graph.markNodeDirty(nodeKey)
-  state.graph.unregisterNode(nodeKey)
-  touchTrackedDependency(state, cacheDependencyKey)
-  state.lruNodeKeys.delete(nodeKey)
-  state.nodeLocationByKey.delete(nodeKey)
-  state.inflightByNodeKey.delete(nodeKey)
-}
-
-function touchProjectCacheEntry(state: ProjectCacheState, nodeKey: string): void {
-  if (state.lruNodeKeys.has(nodeKey)) {
-    state.lruNodeKeys.delete(nodeKey)
+  if (runtime.lruNodeKeys.has(nodeKey)) {
+    runtime.lruNodeKeys.delete(nodeKey)
   }
-  state.lruNodeKeys.set(nodeKey, true)
+  runtime.lruNodeKeys.set(nodeKey, true)
+
+  runtime.nodeLocationByKey.set(nodeKey, {
+    filePath,
+    cacheName,
+  })
+
+  let fileNodeKeys = runtime.nodeKeysByFilePath.get(filePath)
+  if (!fileNodeKeys) {
+    fileNodeKeys = new Set()
+    runtime.nodeKeysByFilePath.set(filePath, fileNodeKeys)
+  }
+  fileNodeKeys.add(nodeKey)
 }
 
-function enforceProjectCacheCapacity(state: ProjectCacheState): void {
-  while (state.nodeLocationByKey.size > state.maxEntries) {
-    const lruNodeKey = state.lruNodeKeys.keys().next().value as
+function removeProjectCacheEntry(runtime: ProjectCacheRuntime, nodeKey: string): void {
+  runtime.lruNodeKeys.delete(nodeKey)
+  runtime.staticDependencySignatureByNodeKey.delete(nodeKey)
+
+  const nodeLocation = runtime.nodeLocationByKey.get(nodeKey)
+  if (!nodeLocation) {
+    return
+  }
+
+  runtime.nodeLocationByKey.delete(nodeKey)
+
+  const fileNodeKeys = runtime.nodeKeysByFilePath.get(nodeLocation.filePath)
+  if (!fileNodeKeys) {
+    return
+  }
+
+  fileNodeKeys.delete(nodeKey)
+  if (fileNodeKeys.size === 0) {
+    runtime.nodeKeysByFilePath.delete(nodeLocation.filePath)
+  }
+}
+
+async function enforceProjectCacheCapacity(runtime: ProjectCacheRuntime): Promise<void> {
+  while (runtime.nodeLocationByKey.size > runtime.maxEntries) {
+    const lruNodeKey = runtime.lruNodeKeys.keys().next().value as
       | string
       | undefined
     if (!lruNodeKey) {
-      break
+      return
     }
 
-    const nodeLocation = state.nodeLocationByKey.get(lruNodeKey)
-    if (!nodeLocation) {
-      state.lruNodeKeys.delete(lruNodeKey)
-      state.graph.unregisterNode(lruNodeKey)
-      state.inflightByNodeKey.delete(lruNodeKey)
+    removeProjectCacheEntry(runtime, lruNodeKey)
+    await runtime.store.delete(lruNodeKey)
+  }
+}
+
+async function recordProjectDependencies(
+  context: CacheStoreComputeContext,
+  dependencies: readonly ProjectCacheDependency[]
+): Promise<void> {
+  for (const dependency of dependencies) {
+    switch (dependency.kind) {
+      case 'file':
+        await context.recordFileDep(dependency.path)
+        break
+      case 'directory':
+        await context.recordDirectoryDep(dependency.path)
+        break
+      case 'const':
+        context.recordConstDep(dependency.name, dependency.version)
+        break
+      case 'cache':
+        await context.recordNodeDep(
+          toProjectCacheNodeKey(dependency.filePath, dependency.cacheName)
+        )
+        break
+    }
+  }
+}
+
+function toProjectConstDeps(
+  dependencies: readonly ProjectCacheDependency[]
+): Array<{ name: string; version: string }> {
+  const constDeps: Array<{ name: string; version: string }> = [
+    {
+      name: PROJECT_CACHE_VERSION_DEP,
+      version: PROJECT_CACHE_VERSION,
+    },
+  ]
+
+  for (const dependency of dependencies) {
+    if (dependency.kind !== 'const') {
       continue
     }
 
-    const fileMap = state.cacheByFilePath.get(nodeLocation.filePath)
-    if (fileMap) {
-      fileMap.delete(nodeLocation.cacheName)
-      if (fileMap.size === 0) {
-        state.cacheByFilePath.delete(nodeLocation.filePath)
-      }
-    }
-
-    invalidateProjectCacheEntry(
-      state,
-      nodeLocation.filePath,
-      nodeLocation.cacheName
-    )
+    constDeps.push({
+      name: dependency.name,
+      version: dependency.version,
+    })
   }
 
-  pruneUnreferencedDependencyRevisionTokens(state)
-}
-
-function pruneDirtyProjectCacheEntries(state: ProjectCacheState): number {
-  const visitedNodeKeys = new Set<string>()
-  let prunedEntries = 0
-
-  while (true) {
-    let foundPendingNode = false
-    for (const nodeKey of state.graph.getDirtyNodeKeys(PROJECT_CACHE_NODE_PREFIX)) {
-      if (visitedNodeKeys.has(nodeKey)) {
-        continue
-      }
-      foundPendingNode = true
-      visitedNodeKeys.add(nodeKey)
-
-      const nodeLocation = state.nodeLocationByKey.get(nodeKey)
-      if (!nodeLocation) {
-        state.graph.unregisterNode(nodeKey)
-        continue
-      }
-
-      const fileMap = state.cacheByFilePath.get(nodeLocation.filePath)
-      if (!fileMap || !fileMap.has(nodeLocation.cacheName)) {
-        state.nodeLocationByKey.delete(nodeKey)
-        state.graph.unregisterNode(nodeKey)
-        continue
-      }
-
-      state.graph.unregisterNode(nodeKey)
-      state.lruNodeKeys.delete(nodeKey)
-      state.nodeLocationByKey.delete(nodeKey)
-      fileMap.delete(nodeLocation.cacheName)
-      if (fileMap.size === 0) {
-        state.cacheByFilePath.delete(nodeLocation.filePath)
-      }
-
-      const cacheDependencyKey = toCacheDependencyKey(
-        nodeLocation.filePath,
-        nodeLocation.cacheName
-      )
-      touchTrackedDependency(state, cacheDependencyKey)
-      prunedEntries += 1
-    }
-
-    if (!foundPendingNode) {
-      break
-    }
-  }
-
-  pruneUnreferencedDependencyRevisionTokens(state)
-
-  return prunedEntries
+  return constDeps
 }
 
 /**
@@ -355,76 +375,72 @@ export async function createProjectFileCache<Type>(
 ): Promise<Type> {
   await waitForRefreshingProjects()
 
-  const state = getProjectCacheState(project)
+  const runtime = getProjectCacheRuntime(project)
   const filePath = normalizeProjectPath(fileName)
-  let namespace = state.cacheByFilePath.get(filePath)
-  if (!namespace) {
-    namespace = new Map()
-    state.cacheByFilePath.set(filePath, namespace)
-  }
-
   const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
-  const cachedEntry = namespace.get(cacheName) as ProjectCacheEntry | undefined
+
   const dependencySpec = options?.deps
   const staticDependencies =
     typeof dependencySpec === 'function'
       ? undefined
-      : normalizeDependencyRecords(
-          (dependencySpec ?? [toDefaultDependency(filePath)]).map(
-            (dependency) => toDependencyRecord(state, dependency)
-          )
+      : normalizeProjectDependencies(
+          dependencySpec ?? [toDefaultDependency(filePath)]
+        )
+  const staticDependencySignature = staticDependencies
+    ? toProjectDependencySignature(staticDependencies)
+    : undefined
+
+  const previousStaticSignature = runtime.staticDependencySignatureByNodeKey.get(nodeKey)
+  if (staticDependencySignature === undefined) {
+    if (previousStaticSignature !== undefined) {
+      removeProjectCacheEntry(runtime, nodeKey)
+      await runtime.store.delete(nodeKey)
+    }
+  } else {
+    if (
+      previousStaticSignature !== undefined &&
+      previousStaticSignature !== staticDependencySignature
+    ) {
+      removeProjectCacheEntry(runtime, nodeKey)
+      await runtime.store.delete(nodeKey)
+    }
+    runtime.staticDependencySignatureByNodeKey.set(nodeKey, staticDependencySignature)
+  }
+
+  const value = await runtime.store.getOrCompute<Type>(
+    nodeKey,
+    {
+      persist: false,
+      constDeps: staticDependencies
+        ? toProjectConstDeps(staticDependencies)
+        : [
+            {
+              name: PROJECT_CACHE_VERSION_DEP,
+              version: PROJECT_CACHE_VERSION,
+            },
+          ],
+    },
+    async (context) => {
+      context.recordConstDep(PROJECT_CACHE_VERSION_DEP, PROJECT_CACHE_VERSION)
+
+      const computedValue = await compute()
+      const dependencies =
+        staticDependencies ??
+        normalizeProjectDependencies(
+          typeof dependencySpec === 'function'
+            ? dependencySpec(computedValue)
+            : [toDefaultDependency(filePath)]
         )
 
-  if (
-    cachedEntry &&
-    !state.graph.isNodeDirty(nodeKey) &&
-    (staticDependencies === undefined ||
-      areDependencyRecordsEqual(cachedEntry.deps, staticDependencies))
-  ) {
-    touchProjectCacheEntry(state, nodeKey)
-    return cachedEntry.value as Type
-  }
-
-  const inFlight = state.inflightByNodeKey.get(nodeKey)
-  if (inFlight) {
-    return (await inFlight) as Type
-  }
-
-  const operation = (async () => {
-    const computedValue = await compute()
-    const dependencies =
-      staticDependencies ??
-      normalizeDependencyRecords(
-        (typeof dependencySpec === 'function'
-          ? dependencySpec(computedValue)
-          : [toDefaultDependency(filePath)]
-        ).map((dependency) => toDependencyRecord(state, dependency))
-      )
-
-    const entry: ProjectCacheEntry = {
-      value: computedValue,
-      deps: dependencies,
+      await recordProjectDependencies(context, dependencies)
+      return computedValue
     }
-    let liveNamespace = state.cacheByFilePath.get(filePath)
-    if (!liveNamespace) {
-      liveNamespace = new Map()
-      state.cacheByFilePath.set(filePath, liveNamespace)
-    }
-    liveNamespace.set(cacheName, entry)
-    registerProjectCacheEntry(state, filePath, cacheName, entry)
-    touchProjectCacheEntry(state, nodeKey)
-    enforceProjectCacheCapacity(state)
-    return entry.value as Type
-  })()
+  )
 
-  state.inflightByNodeKey.set(nodeKey, operation as Promise<unknown>)
-  try {
-    return await operation
-  } finally {
-    if (state.inflightByNodeKey.get(nodeKey) === operation) {
-      state.inflightByNodeKey.delete(nodeKey)
-    }
-  }
+  touchProjectCacheEntry(runtime, nodeKey, filePath, cacheName)
+  await enforceProjectCacheCapacity(runtime)
+
+  return value
 }
 
 /** Invalidates cached project analysis results. */
@@ -439,117 +455,44 @@ export function invalidateProjectFileCache(
   filePath?: string,
   cacheName?: string
 ) {
-  const state = projectCacheStateByProject.get(project)
+  const runtime = projectCacheRuntimeByProject.get(project)
+  if (!runtime) {
+    return
+  }
 
-  if (!state) return
-
-  const cacheByFilePath = state.cacheByFilePath
   const normalizedFilePath = filePath ? normalizeProjectPath(filePath) : undefined
 
-  if (normalizedFilePath) {
-    if (!cacheName) {
-      const fileMap = cacheByFilePath.get(normalizedFilePath)
-      if (fileMap) {
-        for (const cachedCacheName of fileMap.keys()) {
-          state.inflightByNodeKey.delete(
-            toProjectCacheNodeKey(normalizedFilePath, cachedCacheName)
-          )
-        }
+  if (normalizedFilePath && !cacheName) {
+    const directNodeKeys = runtime.nodeKeysByFilePath.get(normalizedFilePath)
+    if (directNodeKeys) {
+      for (const nodeKey of directNodeKeys) {
+        removeProjectCacheEntry(runtime, nodeKey)
       }
-      bumpPathDependencyRevisionTokens(state, normalizedFilePath)
-      state.graph.touchPathDependencies(normalizedFilePath)
-      pruneDirtyProjectCacheEntries(state)
     }
 
-    if (cacheName) {
-      const cacheDependencyKey = toCacheDependencyKey(
-        normalizedFilePath,
-        cacheName
-      )
-      const nodeKey = toProjectCacheNodeKey(normalizedFilePath, cacheName)
-      state.inflightByNodeKey.delete(nodeKey)
-      const fileMap = cacheByFilePath.get(normalizedFilePath)
-      if (!fileMap) {
-        state.lruNodeKeys.delete(nodeKey)
-        state.nodeLocationByKey.delete(nodeKey)
-        touchTrackedDependency(state, cacheDependencyKey)
-        pruneDirtyProjectCacheEntries(state)
-        return
+    runtime.snapshot.invalidatePath(normalizedFilePath)
+    return
+  }
+
+  if (normalizedFilePath && cacheName) {
+    const nodeKey = toProjectCacheNodeKey(normalizedFilePath, cacheName)
+    removeProjectCacheEntry(runtime, nodeKey)
+    void runtime.store.delete(nodeKey)
+    return
+  }
+
+  if (!normalizedFilePath && cacheName) {
+    for (const [nodeKey, nodeLocation] of runtime.nodeLocationByKey) {
+      if (nodeLocation.cacheName !== cacheName) {
+        continue
       }
 
-      if (!fileMap.has(cacheName)) {
-        state.lruNodeKeys.delete(nodeKey)
-        state.nodeLocationByKey.delete(nodeKey)
-        touchTrackedDependency(state, cacheDependencyKey)
-        pruneDirtyProjectCacheEntries(state)
-        return
-      }
-
-      invalidateProjectCacheEntry(state, normalizedFilePath, cacheName)
-      fileMap.delete(cacheName)
-
-      if (fileMap.size === 0) {
-        cacheByFilePath.delete(normalizedFilePath)
-      }
-
-      return
+      removeProjectCacheEntry(runtime, nodeKey)
+      void runtime.store.delete(nodeKey)
     }
     return
   }
 
-  if (!cacheName) {
-    for (const [cachedFilePath, fileMap] of cacheByFilePath) {
-      for (const cachedCacheName of fileMap.keys()) {
-        invalidateProjectCacheEntry(state, cachedFilePath, cachedCacheName)
-      }
-    }
-    cacheByFilePath.clear()
-    state.nodeLocationByKey.clear()
-    state.dependencyRevisionByKey.clear()
-    state.inflightByNodeKey.clear()
-    state.lruNodeKeys.clear()
-    state.graph.clear()
-    return
-  }
-
-  for (const [cachedFilePath, fileMap] of [...cacheByFilePath.entries()]) {
-    if (!fileMap.has(cacheName)) {
-      continue
-    }
-
-    state.inflightByNodeKey.delete(toProjectCacheNodeKey(cachedFilePath, cacheName))
-    invalidateProjectCacheEntry(state, cachedFilePath, cacheName)
-    fileMap.delete(cacheName)
-
-    if (fileMap.size === 0) {
-      cacheByFilePath.delete(cachedFilePath)
-    }
-  }
-
-  pruneUnreferencedDependencyRevisionTokens(state)
-}
-
-export function __getProjectCacheDependencyVersionForTesting(
-  project: Project,
-  dependency:
-    | { kind: 'file'; path: string }
-    | { kind: 'directory'; path: string }
-    | { kind: 'cache'; filePath: string; cacheName: string }
-): string {
-  const state = getProjectCacheState(project)
-
-  switch (dependency.kind) {
-    case 'file':
-      return getDependencyRevisionToken(state, toFileDependencyKey(dependency.path))
-    case 'directory':
-      return getDependencyRevisionToken(
-        state,
-        toDirectoryDependencyKey(dependency.path)
-      )
-    case 'cache':
-      return getDependencyRevisionToken(
-        state,
-        toCacheDependencyKey(dependency.filePath, dependency.cacheName)
-      )
-  }
+  runtime.snapshot.invalidateAll()
+  projectCacheRuntimeByProject.delete(project)
 }

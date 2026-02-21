@@ -90,7 +90,6 @@ import {
   scanModuleExports,
   isUnderScope,
   mapWithLimit,
-  LRUMap,
   looksLikeFilePath,
   buildExportComparisonMaps,
   detectSameFileRenames,
@@ -103,7 +102,6 @@ import {
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key.ts'
 import {
   createGitFileSystemPersistentCacheNodeKey,
-  createGitRemoteRefCacheKey,
 } from './git-cache-key.ts'
 import type { Cache } from './Cache.ts'
 import { Session } from './Session.ts'
@@ -198,17 +196,9 @@ interface NormalizedExportHistoryRefScope {
   previousReleaseTag?: string
 }
 
-const FILE_META_CACHE_MAX = 1000
-const FILE_INDEX_CACHE_MAX = 1000
-const EXPORT_HISTORY_CACHE_MAX = 200
-const GIT_LOG_CACHE_MAX = 128
 const REMOTE_REF_CACHE_TTL_MS = 60_000
 const REMOTE_REF_TIMEOUT_MS = 8_000
 const REF_IDENTITY_CACHE_TTL_MS = 60_000
-const remoteRefCache = new Map<
-  string,
-  { remoteSha: string | null; checkedAt: number }
->()
 
 type RefIdentity = {
   identity: string
@@ -779,15 +769,9 @@ export class GitFileSystem
   #repoRootPromise: Promise<string> | null = null
   #closed = false
 
-  // File metadata memoization
-  #fileMetaPromises = new Map<string, Promise<GitFileMetadata>>()
-  #fileMetaCache = new LRUMap<string, GitFileMetadata>(FILE_META_CACHE_MAX)
-
   // Lazily resolved commit SHA for `this.ref`
   #refCommit: string | null = null
   #refCommitPromise: Promise<string> | null = null
-  #refIdentityCache = new Map<string, RefIdentity>()
-  #refIdentityLookupInflight = new Map<string, Promise<RefIdentity>>()
   readonly #refIsExplicit: boolean
   readonly #worktreeEnabled: boolean
   #worktreeRootChecked = false
@@ -798,23 +782,6 @@ export class GitFileSystem
   #isShallowChecked = false
   #isShallow = false
 
-  // Parsed exports cache (blob SHA -> scanExports result).
-  // Shared by getExportHistory and buildFileExportIndex.
-  // Uses LRUMap for O(1) eviction instead of manual pruning.
-  #exportParseCache = new LRUMap<string, Map<string, ExportItem>>(10_000)
-
-  // In-memory cache for file export indices (nodeKey -> index)
-  #fileExportIndexMemory = new LRUMap<string, FileExportIndex>(
-    FILE_INDEX_CACHE_MAX
-  )
-
-  // In-memory cache for export history reports (nodeKey -> report)
-  #exportHistoryMemory = new LRUMap<string, ExportHistoryReport>(
-    EXPORT_HISTORY_CACHE_MAX
-  )
-
-  // Cache git log results (keyed by query) to avoid repeat git invocations in a single process.
-  #gitLogCache = new LRUMap<string, Promise<GitLogCommit[]>>(GIT_LOG_CACHE_MAX)
   #cache?: Cache
   #session?: Session
   #historyWarmupInFlight = new Set<string>()
@@ -2025,12 +1992,6 @@ export class GitFileSystem
     void reason
     this.#refCommit = null
     this.#refCommitPromise = null
-    this.#fileMetaCache.clear()
-    this.#fileMetaPromises.clear()
-    this.#gitLogCache.clear()
-    this.#fileExportIndexMemory.clear()
-    this.#exportHistoryMemory.clear()
-    this.#exportParseCache.clear()
     this.#historyWarmupInFlight.clear()
 
     const session = this.#session
@@ -2071,41 +2032,52 @@ export class GitFileSystem
   async #getRefCacheIdentity(ref: string): Promise<{
     identity: string
     deterministic: boolean
+  }>
+  async #getRefCacheIdentity(
+    ref: string,
+    options: { forceRefresh?: boolean }
+  ): Promise<{
+    identity: string
+    deterministic: boolean
+  }>
+  async #getRefCacheIdentity(
+    ref: string,
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<{
+    identity: string
+    deterministic: boolean
   }> {
     const normalizedRef = ref.trim()
     const now = Date.now()
-    const cached = this.#refIdentityCache.get(normalizedRef)
+    const forceRefresh = options.forceRefresh === true
+    const nodeKey = this.#createPersistentCacheNodeKey('ref-identity', {
+      ref: normalizedRef,
+    })
+    const session = this.#getSession()
+    const cached = await session.cache.get<RefIdentity>(nodeKey)
 
-    if (cached && now - cached.checkedAt < REF_IDENTITY_CACHE_TTL_MS) {
+    if (!forceRefresh && cached && now - cached.checkedAt < REF_IDENTITY_CACHE_TTL_MS) {
       return {
         identity: cached.identity,
         deterministic: cached.deterministic,
       }
     }
 
-    const inFlight =
-      this.#refIdentityLookupInflight.get(normalizedRef) ??
-      this.#resolveRefCacheIdentity(normalizedRef)
+    const next = await this.#resolveRefCacheIdentity(normalizedRef, cached)
+    await this.#getSession().cache.put(nodeKey, next, {
+      persist: false,
+    })
 
-    if (!this.#refIdentityLookupInflight.has(normalizedRef)) {
-      this.#refIdentityLookupInflight.set(normalizedRef, inFlight)
-    }
-
-    try {
-      const result = await inFlight
-      return {
-        identity: result.identity,
-        deterministic: result.deterministic,
-      }
-    } finally {
-      if (this.#refIdentityLookupInflight.get(normalizedRef) === inFlight) {
-        this.#refIdentityLookupInflight.delete(normalizedRef)
-      }
+    return {
+      identity: next.identity,
+      deterministic: next.deterministic,
     }
   }
 
-  async #resolveRefCacheIdentity(ref: string): Promise<RefIdentity> {
-    const cached = this.#refIdentityCache.get(ref)
+  async #resolveRefCacheIdentity(
+    ref: string,
+    cached?: RefIdentity
+  ): Promise<RefIdentity> {
     let identity = ref
     let deterministic = false
 
@@ -2117,11 +2089,6 @@ export class GitFileSystem
       }
     } catch {
       if (cached !== undefined) {
-        this.#refIdentityCache.set(ref, {
-          identity: cached.identity,
-          deterministic: cached.deterministic,
-          checkedAt: Date.now(),
-        })
         return {
           identity: cached.identity,
           deterministic: cached.deterministic,
@@ -2142,7 +2109,6 @@ export class GitFileSystem
       )
     }
 
-    this.#refIdentityCache.set(ref, next)
     return next
   }
 
@@ -2262,15 +2228,26 @@ export class GitFileSystem
           const git = this.#git!
           const sharedMetaCache = new Map<string, GitObjectMeta | null>()
           const sharedResolveCache = new Map<string, string | null>()
+          const sharedBlobCache = new Map<string, Map<string, ExportItem>>()
           const sharedBlobShaResolveCache = new Map<string, string>()
           const sharedCacheStats = { hits: 0, misses: 0 }
+          const getOrParseBlobExports = async (
+            sha: string,
+            filePathForParser: string
+          ) =>
+            this.#getOrParseExportsForBlob(sha, filePathForParser, async () => {
+              return git.repoPath
+                ? readBlobSync(git.repoPath, sha)
+                : git.getBlobContentBySha(sha)
+            })
 
           await mapWithLimit(sortedEntries, 3, async (entryFile) => {
             const context: CollectContext = {
               git,
               commit: options.commitSha,
               maxDepth: options.maxDepth,
-              blobCache: this.#exportParseCache,
+              blobCache: sharedBlobCache,
+              getOrParseBlobExports,
               scopeDirectories: sortedScopeDirectories,
               parseWarnings: graphParseWarnings,
               cacheStats: sharedCacheStats,
@@ -2442,12 +2419,6 @@ export class GitFileSystem
     assertSafeGitArg(sha, 'sha')
 
     const parserFlavor = getParserFlavorFromFileName(fileNameForParser)
-    const cacheKey = getExportParseCacheKey(sha, parserFlavor)
-    const cached = this.#exportParseCache.get(cacheKey)
-    if (cached) {
-      return cached
-    }
-
     const session = this.#getSession()
     const nodeKey = this.#createPersistentCacheNodeKey('blob-exports', {
       sha,
@@ -2456,9 +2427,7 @@ export class GitFileSystem
     const persistedPayload =
       await session.cache.get<Record<string, ExportItem>>(nodeKey)
     if (persistedPayload !== undefined) {
-      const parsed = deserializeExportItemMap(persistedPayload)
-      this.#exportParseCache.set(cacheKey, parsed)
-      return parsed
+      return deserializeExportItemMap(persistedPayload)
     }
 
     const content = await getContent()
@@ -2487,10 +2456,7 @@ export class GitFileSystem
         )
       }
     )
-    const parsed = deserializeExportItemMap(parsedPayload)
-
-    this.#exportParseCache.set(cacheKey, parsed)
-    return parsed
+    return deserializeExportItemMap(parsedPayload)
   }
 
   async #gitLogCached(
@@ -2512,51 +2478,37 @@ export class GitFileSystem
       ? normalizedPath.join('\x00')
       : normalizedPath
     const key = `${refIdentity}\x01${pathsKey}\x01${options.reverse ? 1 : 0}\x01${options.limit ?? ''}\x01${options.follow ? 1 : 0}`
+    const nodeKey = this.#createPersistentCacheNodeKey('git-log', {
+      refIdentity,
+      key,
+      path: normalizedPath,
+      reverse: Boolean(options.reverse),
+      limit: options.limit ?? null,
+      follow: Boolean(options.follow),
+    })
 
-    let cachedLog = this.#gitLogCache.get(key)
-    if (!cachedLog) {
-      const session = this.#getSession()
-      const nodeKey = this.#createPersistentCacheNodeKey('git-log', {
-        refIdentity,
-        path: normalizedPath,
-        reverse: Boolean(options.reverse),
-        limit: options.limit ?? null,
-        follow: Boolean(options.follow),
-      })
+    return this.#getSession().cache.getOrCompute(
+      nodeKey,
+      {
+        persist: deterministic,
+        constDeps: [
+          {
+            name: 'git-file-system-cache',
+            version: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
+        ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
 
-      const logPromise = session.cache.getOrCompute(
-        nodeKey,
-        {
-          persist: deterministic,
-          constDeps: [
-            {
-              name: 'git-file-system-cache',
-              version: GIT_HISTORY_CACHE_VERSION,
-            },
-          ],
-        },
-        async (ctx) => {
-          ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
-
-          return gitLogForPath(this.repoRoot, ref, normalizedPath, {
-            reverse: Boolean(options.reverse),
-            limit: options.limit,
-            follow: Boolean(options.follow),
-            maxBufferBytes: this.maxBufferBytes,
-          })
-        }
-      )
-
-      cachedLog = logPromise.catch((error) => {
-        if (this.#gitLogCache.get(key) === cachedLog) {
-          this.#gitLogCache.delete(key)
-        }
-        throw error
-      })
-      this.#gitLogCache.set(key, cachedLog)
-    }
-
-    return cachedLog
+        return gitLogForPath(this.repoRoot, ref, normalizedPath, {
+          reverse: Boolean(options.reverse),
+          limit: options.limit,
+          follow: Boolean(options.follow),
+          maxBufferBytes: this.maxBufferBytes,
+        })
+      }
+    )
   }
 
   async #gitRenameNewToOldBetween(
@@ -3124,17 +3076,9 @@ export class GitFileSystem
       baseKeyObject
     )
 
-    // Memory cache first (this also helps subsequent calls in-process)
-    const memoryHit = this.#exportHistoryMemory.get(reportNodeKey)
-    if (memoryHit) {
-      return memoryHit
-    }
-
-    const persistedHit =
-      await session.cache.get<ExportHistoryReport>(reportNodeKey)
-    if (persistedHit) {
-      this.#exportHistoryMemory.set(reportNodeKey, persistedHit)
-      return persistedHit
+    const cachedReport = await session.cache.get<ExportHistoryReport>(reportNodeKey)
+    if (cachedReport) {
+      return cachedReport
     }
 
     if (!skipWarmup) {
@@ -3208,7 +3152,6 @@ export class GitFileSystem
             lastCommitSha: resumeReport.lastCommitSha,
           })
         }
-        this.#exportHistoryMemory.set(reportNodeKey, resumeReport)
         return resumeReport
       }
       throw new Error(
@@ -3264,8 +3207,9 @@ export class GitFileSystem
       totalCommits: uniqueCommits.length,
     } satisfies ExportHistoryProgressEvent
 
-    // shared parse cache (blob SHA -> parsed exports) so later module metadata does not redo parsing work.
-    const blobCache = this.#exportParseCache
+    // Shared per-run parse cache (blob SHA -> parsed exports) so later
+    // module metadata work does not redo parsing in this run.
+    const blobCache = new Map<string, Map<string, ExportItem>>()
     const exports: ExportHistoryReport['exports'] =
       resumeReport?.exports ?? Object.create(null)
     const parseWarnings: string[] = resumeReport?.parseWarnings
@@ -3278,6 +3222,15 @@ export class GitFileSystem
     let previousResolvedPaths: Map<string, string | null> | null = null
     let cacheHits = 0
     let cacheMisses = 0
+    const getOrParseBlobExports = async (
+      sha: string,
+      filePathForParser: string
+    ) =>
+      this.#getOrParseExportsForBlob(sha, filePathForParser, async () => {
+        return git.repoPath
+          ? readBlobSync(git.repoPath, sha)
+          : git.getBlobContentBySha(sha)
+      })
 
     if (resumeSnapshot) {
       previousExports = deserializeExportSnapshot(resumeSnapshot)
@@ -3303,6 +3256,7 @@ export class GitFileSystem
       const context: CollectContext = {
         maxDepth,
         blobCache,
+        getOrParseBlobExports,
         scopeDirectories,
         parseWarnings,
         git,
@@ -3950,7 +3904,6 @@ export class GitFileSystem
       reportNodeKey,
       lastCommitSha: latestCommit,
     })
-    this.#exportHistoryMemory.set(reportNodeKey, report)
     return report
   }
 
@@ -3979,22 +3932,8 @@ export class GitFileSystem
 
     await this.#ensureNotShallow()
 
-    const key = `${refCommit}|${relativePath}`
-    const cached = this.#fileMetaCache.get(key)
-    if (cached) {
-      return cached
-    }
-
-    let promise = this.#fileMetaPromises.get(key)
-    if (!promise) {
-      promise = this.#buildFileMetadata(refCommit, relativePath)
-      this.#fileMetaPromises.set(key, promise)
-    }
-
     try {
-      const result = await promise
-      this.#fileMetaCache.set(key, result)
-      return result
+      return await this.#buildFileMetadata(refCommit, relativePath)
     } catch (error: unknown) {
       if (this.verbose) {
         console.warn(
@@ -4012,8 +3951,6 @@ export class GitFileSystem
         refCommit,
         authors: [],
       } satisfies GitFileMetadata
-    } finally {
-      this.#fileMetaPromises.delete(key)
     }
   }
 
@@ -4255,13 +4192,15 @@ export class GitFileSystem
   async #getRemoteRefSha(remote: string, ref: string): Promise<string | null> {
     const safeRemote = assertSafeGitArg(remote, 'remote')
     const safeRef = assertSafeGitArg(ref, 'ref')
-
-    const cacheKey = createGitRemoteRefCacheKey({
-      repoRoot: this.repoRoot,
+    const session = this.#getSession()
+    const nodeKey = this.#createPersistentCacheNodeKey('remote-ref', {
       remote: safeRemote,
       ref: safeRef,
     })
-    const cached = remoteRefCache.get(cacheKey)
+    const cached = await session.cache.get<{
+      remoteSha: string | null
+      checkedAt: number
+    }>(nodeKey)
     const now = Date.now()
     if (cached && now - cached.checkedAt < REMOTE_REF_CACHE_TTL_MS) {
       return cached.remoteSha
@@ -4290,7 +4229,11 @@ export class GitFileSystem
           `[GitFileSystem] ls-remote failed (${remote} ${ref}): ${msg}`
         )
       }
-      remoteRefCache.set(cacheKey, { remoteSha: null, checkedAt: now })
+      await session.cache.put(
+        nodeKey,
+        { remoteSha: null, checkedAt: now },
+        { persist: false }
+      )
       return null
     }
 
@@ -4326,14 +4269,19 @@ export class GitFileSystem
         }
       }
     }
-    remoteRefCache.set(cacheKey, { remoteSha, checkedAt: now })
+    await session.cache.put(
+      nodeKey,
+      { remoteSha, checkedAt: now },
+      { persist: false }
+    )
     return remoteSha
   }
 
   async #getRefCommit(): Promise<string> {
     if (this.#refCommit) {
-      const { identity, deterministic } = await this.#resolveRefCacheIdentity(
-        this.ref
+      const { identity, deterministic } = await this.#getRefCacheIdentity(
+        this.ref,
+        { forceRefresh: true }
       )
       if (deterministic && identity === this.#refCommit) {
         return this.#refCommit
@@ -4351,8 +4299,9 @@ export class GitFileSystem
 
     this.#refCommitPromise = (async () => {
       await this.#ensureRepoReady()
-      const { identity, deterministic } = await this.#resolveRefCacheIdentity(
-        this.ref
+      const { identity, deterministic } = await this.#getRefCacheIdentity(
+        this.ref,
+        { forceRefresh: true }
       )
       let resolved = deterministic
         ? identity
@@ -4711,13 +4660,8 @@ export class GitFileSystem
       headExportNames: sortedHeadExportNames,
     })
 
-    const memoryHit = this.#fileExportIndexMemory.get(nodeKey)
-    if (memoryHit) {
-      return memoryHit
-    }
-
     const session = this.#getSession()
-    const index = await session.cache.getOrCompute(
+    return session.cache.getOrCompute(
       nodeKey,
       {
         persist: true,
@@ -4796,9 +4740,6 @@ export class GitFileSystem
         } satisfies FileExportIndex
       }
     )
-
-    this.#fileExportIndexMemory.set(nodeKey, index)
-    return index
   }
 }
 
@@ -5318,6 +5259,10 @@ interface CollectContext {
   commit: string
   maxDepth: number
   blobCache: Map<string, Map<string, ExportItem>>
+  getOrParseBlobExports?: (
+    sha: string,
+    filePath: string
+  ) => Promise<Map<string, ExportItem>>
   scopeDirectories: string[]
   parseWarnings: string[]
   cacheStats: { hits: number; misses: number }
@@ -5394,14 +5339,18 @@ async function collectExportsFromFile(
     cacheStats.hits++
   } else {
     cacheStats.misses++
-    // Prefer sync read when repoPath is available (bypasses event loop)
-    const content = context.repoPath
-      ? readBlobSync(context.repoPath, meta.sha)
-      : await git.getBlobContentBySha(meta.sha)
-    if (content === null) {
-      return results
+    if (context.getOrParseBlobExports) {
+      rawExports = await context.getOrParseBlobExports(meta.sha, filePath)
+    } else {
+      // Prefer sync read when repoPath is available (bypasses event loop)
+      const content = context.repoPath
+        ? readBlobSync(context.repoPath, meta.sha)
+        : await git.getBlobContentBySha(meta.sha)
+      if (content === null) {
+        return results
+      }
+      rawExports = scanModuleExports(filePath, content)
     }
-    rawExports = scanModuleExports(filePath, content)
     blobCache.set(cacheKey, rawExports)
   }
 
@@ -6092,17 +6041,6 @@ function getRemoteRefShaSync(
   const safeRemote = assertSafeGitArg(remote, 'remote')
   const safeRef = assertSafeGitArg(ref, 'ref')
 
-  const cacheKey = createGitRemoteRefCacheKey({
-    repoRoot,
-    remote: safeRemote,
-    ref: safeRef,
-  })
-  const cached = remoteRefCache.get(cacheKey)
-  const now = Date.now()
-  if (cached && now - cached.checkedAt < REMOTE_REF_CACHE_TTL_MS) {
-    return cached.remoteSha
-  }
-
   const result = spawnSync('git', ['ls-remote', safeRemote, safeRef], {
     cwd: repoRoot,
     stdio: 'pipe',
@@ -6110,7 +6048,6 @@ function getRemoteRefShaSync(
     shell: false,
   })
   if (result.status !== 0) {
-    remoteRefCache.set(cacheKey, { remoteSha: null, checkedAt: now })
     return null
   }
 
@@ -6146,7 +6083,6 @@ function getRemoteRefShaSync(
       }
     }
   }
-  remoteRefCache.set(cacheKey, { remoteSha, checkedAt: now })
   return remoteSha
 }
 

@@ -814,39 +814,6 @@ export async function mapWithLimit<Type, Result>(
   return results
 }
 
-/** LRU Map implementation. */
-export class LRUMap<Key, Value> extends Map<Key, Value> {
-  #maxSize: number
-
-  constructor(maxSize: number) {
-    super()
-    this.#maxSize = maxSize
-  }
-
-  get(key: Key): Value | undefined {
-    const value = super.get(key)
-    if (value !== undefined) {
-      super.delete(key)
-      super.set(key, value)
-    }
-    return value
-  }
-
-  set(key: Key, value: Value): this {
-    if (super.has(key)) {
-      super.delete(key)
-    }
-    super.set(key, value)
-    if (super.size > this.#maxSize) {
-      const oldest = super.keys().next().value
-      if (oldest !== undefined) {
-        super.delete(oldest)
-      }
-    }
-    return this
-  }
-}
-
 /**
  * Check if a path looks like a file path (has an extension).
  */
