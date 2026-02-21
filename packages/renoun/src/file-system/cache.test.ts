@@ -25,6 +25,7 @@ import {
   CacheStore,
   type CacheEntry,
   type CacheStorePersistence,
+  createMemoryOnlyCacheStore,
   createFingerprint,
 } from './Cache.ts'
 import { DirectorySnapshot } from './directory-snapshot.ts'
@@ -1856,6 +1857,18 @@ updated content`
 
     secondStore.dispose()
     expect(invalidateListeners.size).toBe(0)
+  })
+
+  test('throws when using a disposed cache store', async () => {
+    const store = createMemoryOnlyCacheStore()
+
+    await store.put('test:disposed', 'value', { persist: false })
+    store.dispose()
+
+    await expect(
+      store.getOrCompute('test:disposed', { persist: false }, async () => 'next')
+    ).rejects.toThrow(/disposed/i)
+    expect(() => store.getSync('test:disposed')).toThrow(/disposed/i)
   })
 
   test('resets a full snapshot lineage when reset is targeted at an ancestor', async () => {

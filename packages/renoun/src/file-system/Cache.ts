@@ -598,11 +598,22 @@ export class CacheStore {
     this.clearMemory()
   }
 
+  #assertNotDisposed(operation: string): void {
+    if (!this.#disposed) {
+      return
+    }
+
+    throw new Error(
+      `[renoun] Cache store operation "${operation}" cannot continue because the store has been disposed.`
+    )
+  }
+
   async getOrCompute<Value>(
     nodeKey: string,
     options: CacheStoreGetOrComputeOptions,
     compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
   ): Promise<Value> {
+    this.#assertNotDisposed('getOrCompute')
     const waitSignal = options.signal ?? getContext()?.signal
     throwIfAborted(waitSignal)
     this.#registerConstDependencies(options.constDeps)
@@ -669,6 +680,7 @@ export class CacheStore {
     options: CacheStoreGetOrComputeOptions,
     compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
   ): Promise<Value> {
+    this.#assertNotDisposed('refresh')
     const waitSignal = options.signal ?? getContext()?.signal
     throwIfAborted(waitSignal)
     this.#registerConstDependencies(options.constDeps)
@@ -719,6 +731,10 @@ export class CacheStore {
     options: CacheStoreGetOrComputeOptions,
     compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
   ): void {
+    if (this.#disposed) {
+      return
+    }
+
     if (this.#inflight.has(nodeKey)) {
       return
     }
@@ -797,11 +813,13 @@ export class CacheStore {
   }
 
   async getFingerprint(nodeKey: string): Promise<string | undefined> {
+    this.#assertNotDisposed('getFingerprint')
     const entry = await this.#getFreshEntry(nodeKey)
     return entry?.fingerprint
   }
 
   async get<Value>(nodeKey: string): Promise<Value | undefined> {
+    this.#assertNotDisposed('get')
     const entry = await this.#getFreshEntry(nodeKey)
     await this.#recordAutomaticNodeDependency(nodeKey, entry?.fingerprint)
     return entry?.value as Value | undefined
@@ -810,6 +828,7 @@ export class CacheStore {
   async getWithFreshness<Value>(
     nodeKey: string
   ): Promise<{ value: Value | undefined; fresh: boolean }> {
+    this.#assertNotDisposed('getWithFreshness')
     const memoryEntry = this.#entries.get(nodeKey)
     if (memoryEntry) {
       const fresh = await this.#isEntryFresh(nodeKey, memoryEntry, new Set())
@@ -976,6 +995,7 @@ export class CacheStore {
     value: Value,
     options: CacheStorePutOptions = {}
   ): Promise<void> {
+    this.#assertNotDisposed('put')
     this.#registerConstDependencyRecords(options.deps)
     const expectedPersistedRevision =
       options.persist === true
@@ -1010,6 +1030,7 @@ export class CacheStore {
   }
 
   async delete(nodeKey: string): Promise<void> {
+    this.#assertNotDisposed('delete')
     this.#logCacheOperation('clear', nodeKey, {
       source: 'explicit',
     })
@@ -1036,6 +1057,7 @@ export class CacheStore {
   async deleteByDependencyPath(
     dependencyPathKey: string
   ): Promise<CacheDependencyEvictionResult> {
+    this.#assertNotDisposed('deleteByDependencyPath')
     const persistence = this.#persistence
     const defaultResult: CacheDependencyEvictionResult = {
       deletedNodeKeys: [],
@@ -1131,6 +1153,7 @@ export class CacheStore {
   }
 
   invalidateDependencyPath(dependencyPathKey: string): void {
+    this.#assertNotDisposed('invalidateDependencyPath')
     const dependencyPathCandidates =
       this.#getDependencyPathCandidates(dependencyPathKey)
     const affectedNodeKeys = new Set<string>()
@@ -1161,6 +1184,7 @@ export class CacheStore {
   }
 
   async listNodeKeysByPrefix(prefix: string): Promise<string[]> {
+    this.#assertNotDisposed('listNodeKeysByPrefix')
     const normalizedPrefix = normalizeCacheSlashes(prefix)
     const memoryKeys = Array.from(this.#entries.keys()).filter((nodeKey) =>
       nodeKey.startsWith(normalizedPrefix)
@@ -1192,6 +1216,7 @@ export class CacheStore {
       ttlMs?: number
     }
   ): Promise<'leader' | 'follower'> {
+    this.#assertNotDisposed('withComputeSlot')
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence) {
       await options.leader()
@@ -1438,10 +1463,12 @@ export class CacheStore {
   }
 
   hasSync(nodeKey: string): boolean {
+    this.#assertNotDisposed('hasSync')
     return this.#entries.has(nodeKey)
   }
 
   getSync<Value>(nodeKey: string): Value | undefined {
+    this.#assertNotDisposed('getSync')
     const entry = this.#entries.get(nodeKey)
     if (!entry) {
       this.#logCacheOperation('miss', nodeKey, {
@@ -1458,6 +1485,7 @@ export class CacheStore {
   }
 
   setSync<Value>(nodeKey: string, value: Value): void {
+    this.#assertNotDisposed('setSync')
     const entry: CacheEntry<Value> = {
       value,
       deps: [],
@@ -1478,6 +1506,7 @@ export class CacheStore {
   }
 
   getOrComputeSync<Value>(nodeKey: string, compute: () => Value): Value {
+    this.#assertNotDisposed('getOrComputeSync')
     if (this.#entries.has(nodeKey)) {
       return this.getSync<Value>(nodeKey)!
     }
@@ -1488,6 +1517,7 @@ export class CacheStore {
   }
 
   deleteSync(nodeKey: string): void {
+    this.#assertNotDisposed('deleteSync')
     this.#logCacheOperation('clear', nodeKey, {
       source: 'explicit-sync',
     })

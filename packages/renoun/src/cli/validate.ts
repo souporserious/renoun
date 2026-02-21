@@ -1209,6 +1209,18 @@ async function fetchLiveWithRetry(
   )
 }
 
+function getLiveValidationErrorStatus(error: unknown): number | string {
+  if (error instanceof RenounNetworkError && typeof error.status === 'number') {
+    return error.status
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return 'network error'
+}
+
 function formatLinkPosition(position?: LinkPosition) {
   if (
     !position ||
@@ -1281,7 +1293,7 @@ async function runLiveValidation(
         url: normalizedUrl,
         originUrl: trace.at(-1) ?? normalizedUrl,
         html: '',
-        status: error instanceof Error ? error.message : 'network error',
+        status: getLiveValidationErrorStatus(error),
         trace: currentTrace,
       })
     }
@@ -1387,7 +1399,7 @@ async function checkLiveLink(
       url: normalized,
       originUrl: link.originUrl,
       html: link.html,
-      status: error instanceof Error ? error.message : 'network error',
+      status: getLiveValidationErrorStatus(error),
       trace,
     })
   }

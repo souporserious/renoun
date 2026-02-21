@@ -790,6 +790,9 @@ export class Session {
           await this.#runBroadPersistedInvalidationFallback(normalizedPath)
         }
       })
+      .catch(() => {
+        // Best-effort persisted invalidation.
+      })
   }
 
   async #runBroadPersistedInvalidationFallback(
@@ -941,6 +944,14 @@ export class Session {
       fields: metricFields,
       telemetry: this.#telemetry,
     })
+
+    const orderedEntries = Object.entries(fields).sort(([first], [second]) =>
+      first.localeCompare(second)
+    )
+    const message = orderedEntries
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .join(' ')
+    console.log(`[renoun-fs-cache-metrics] ${message}`)
   }
 
   #getDirectorySnapshotKeyMetrics(

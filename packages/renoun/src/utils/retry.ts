@@ -1,9 +1,9 @@
 import {
+  createAbortError,
   RenounNetworkError,
   RenounTimeoutError,
   isAbortError,
 } from './errors.ts'
-import { raceAbort } from './concurrency.ts'
 import { getContext, throwIfAborted } from './operation-context.ts'
 import { emitTelemetryEvent } from './telemetry.ts'
 
@@ -122,12 +122,33 @@ async function sleep(delayMs: number, signal?: AbortSignal): Promise<void> {
     return
   }
 
-  await raceAbort(
-    new Promise<void>((resolve) => {
+  if (!signal) {
+    await new Promise<void>((resolve) => {
       setTimeout(resolve, delayMs)
-    }),
-    signal
-  )
+    })
+    return
+  }
+
+  throwIfAborted(signal)
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup()
+      resolve()
+    }, delayMs)
+
+    const onAbort = () => {
+      clearTimeout(timer)
+      cleanup()
+      reject(createAbortError(signal.reason))
+    }
+
+    const cleanup = () => {
+      signal.removeEventListener('abort', onAbort)
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 export async function retry<Type>(
