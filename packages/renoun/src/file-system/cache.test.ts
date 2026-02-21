@@ -38,7 +38,7 @@ import {
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import { Session } from './Session.ts'
-import { FileSystemSnapshot } from './Snapshot.ts'
+import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
 import { Directory, File, Package, Workspace } from './index.tsx'
 import type { FileStructure, GitExportMetadata, GitMetadata } from './types.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
@@ -1783,6 +1783,79 @@ updated content`
 
     expect(secondSession).toBe(firstSession)
     expect(secondSession.snapshot.id).toBe(firstSnapshotId)
+  })
+
+  test('disposes cache stores during session reset', () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const session = Session.for(fileSystem)
+    const disposeSpy = vi.spyOn(session.cache, 'dispose')
+
+    Session.reset(fileSystem, session.snapshot.id)
+
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test('unsubscribes snapshot invalidation listeners when cache stores are disposed', () => {
+    const invalidateListeners = new Set<(path: string) => void>()
+    const snapshot = {
+      id: 'dispose-listener-cleanup',
+      async readDirectory() {
+        return []
+      },
+      async readFile() {
+        return ''
+      },
+      async readFileBinary() {
+        return new Uint8Array(0)
+      },
+      readFileStream() {
+        throw new Error('readFileStream is not required for this test')
+      },
+      async fileExists() {
+        return false
+      },
+      async getFileLastModifiedMs() {
+        return undefined
+      },
+      async getFileByteLength() {
+        return undefined
+      },
+      isFilePathGitIgnored() {
+        return false
+      },
+      async isFilePathExcludedFromTsConfigAsync() {
+        return false
+      },
+      getRelativePathToWorkspace(path: string) {
+        return normalizePathKey(path)
+      },
+      async contentId(path: string) {
+        return `content:${normalizePathKey(path)}`
+      },
+      invalidatePath(path: string) {
+        for (const listener of invalidateListeners) {
+          listener(path)
+        }
+      },
+      onInvalidate(listener: (path: string) => void) {
+        invalidateListeners.add(listener)
+        return () => {
+          invalidateListeners.delete(listener)
+        }
+      },
+    } satisfies Snapshot
+    const firstStore = new CacheStore({ snapshot })
+    const secondStore = new CacheStore({ snapshot })
+
+    expect(invalidateListeners.size).toBe(1)
+
+    firstStore.dispose()
+    expect(invalidateListeners.size).toBe(1)
+
+    secondStore.dispose()
+    expect(invalidateListeners.size).toBe(0)
   })
 
   test('resets a full snapshot lineage when reset is targeted at an ancestor', async () => {

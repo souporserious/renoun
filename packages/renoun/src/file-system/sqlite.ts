@@ -3,22 +3,17 @@ const SQLITE_EXPERIMENTAL_WARNING = `SQLite is an experimental feature and might
 type SqliteModule = typeof import('node:sqlite')
 
 let sqliteModulePromise: Promise<SqliteModule> | null = null
-let warningFilterInstalled = false
 
-function installSqliteExperimentalWarningFilter() {
+function loadSqliteModuleWithoutWarningNoise(): Promise<SqliteModule> {
   if (
-    warningFilterInstalled ||
     typeof process === 'undefined' ||
     typeof process.emitWarning !== 'function'
   ) {
-    return
+    return import('node:sqlite')
   }
 
-  warningFilterInstalled = true
-
-  const originalEmitWarning = process.emitWarning.bind(process)
-
-  process.emitWarning = ((...args: Parameters<typeof process.emitWarning>) => {
+  const originalEmitWarning = process.emitWarning
+  const filteredEmitWarning = ((...args: Parameters<typeof process.emitWarning>) => {
     const [warning] = args
 
     const message =
@@ -35,15 +30,23 @@ function installSqliteExperimentalWarningFilter() {
       return
     }
 
-    return originalEmitWarning(...args)
+    return originalEmitWarning.apply(process, args)
   }) as typeof process.emitWarning
+  process.emitWarning = filteredEmitWarning
+
+  return import('node:sqlite').finally(() => {
+    if (process.emitWarning === filteredEmitWarning) {
+      process.emitWarning = originalEmitWarning
+    }
+  })
 }
 
 export async function loadSqliteModule(): Promise<SqliteModule> {
-  installSqliteExperimentalWarningFilter()
-
   if (!sqliteModulePromise) {
-    sqliteModulePromise = import('node:sqlite')
+    sqliteModulePromise = loadSqliteModuleWithoutWarningNoise().catch((error) => {
+      sqliteModulePromise = null
+      throw error
+    })
   }
 
   return sqliteModulePromise

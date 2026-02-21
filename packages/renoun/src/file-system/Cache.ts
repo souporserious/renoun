@@ -522,6 +522,7 @@ export class CacheStore {
   readonly #debugPersistenceFailure: boolean
   #warnedAboutPersistenceFailure = false
   #warnedAboutUnserializableValue = false
+  #disposed = false
 
   constructor(options: CacheStoreOptions) {
     this.#snapshot = options.snapshot
@@ -567,6 +568,34 @@ export class CacheStore {
       }
     })
     snapshotInvalidationUnsubscribeBySnapshot.set(this.#snapshot, unsubscribe)
+  }
+
+  dispose(): void {
+    if (this.#disposed) {
+      return
+    }
+    this.#disposed = true
+
+    const stores = snapshotDependencyPathWatchers.get(this.#snapshot)
+    if (stores) {
+      stores.delete(this)
+      if (stores.size === 0) {
+        snapshotDependencyPathWatchers.delete(this.#snapshot)
+        const unsubscribe = snapshotInvalidationUnsubscribeBySnapshot.get(
+          this.#snapshot
+        )
+        snapshotInvalidationUnsubscribeBySnapshot.delete(this.#snapshot)
+        if (unsubscribe) {
+          try {
+            unsubscribe()
+          } catch {
+            // Ignore unsubscription failures during cache-store teardown.
+          }
+        }
+      }
+    }
+
+    this.clearMemory()
   }
 
   async getOrCompute<Value>(

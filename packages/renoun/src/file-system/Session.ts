@@ -711,7 +711,7 @@ export class Session {
     this.#directorySnapshotRebuildReasonTotals.clear()
     this.#directorySnapshotRebuildReasonByKey.clear()
     this.#directorySnapshotRebuildEventsSinceLog = 0
-    this.cache.clearMemory()
+    this.cache.dispose()
     if (typeof this.snapshot.invalidateAll === 'function') {
       this.snapshot.invalidateAll()
       return
