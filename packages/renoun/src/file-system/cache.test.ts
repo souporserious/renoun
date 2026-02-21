@@ -6732,6 +6732,60 @@ export type Metadata = Value`,
     }
   })
 
+  test('evicts persisted entries keyed by absolute dependency paths', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-absolute-path-eviction-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+        'src/other/value.ts': 'export const other = 1',
+      }),
+      'sqlite-absolute-path-eviction'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+    const affectedNodeKey = 'analysis:absolute'
+    const unaffectedNodeKey = 'analysis:relative'
+    const absoluteDependencyPath =
+      '/Users/example/project/src/components/button.ts'
+
+    try {
+      const unaffectedDepVersion = await snapshot.contentId('src/other/value.ts')
+
+      await store.put(affectedNodeKey, { value: 'affected' }, {
+        persist: true,
+        deps: [
+          {
+            depKey: `file:${absoluteDependencyPath}`,
+            depVersion: 'missing',
+          },
+        ],
+      })
+      await store.put(unaffectedNodeKey, { value: 'unaffected' }, {
+        persist: true,
+        deps: [
+          {
+            depKey: 'file:src/other/value.ts',
+            depVersion: unaffectedDepVersion,
+          },
+        ],
+      })
+
+      const eviction = await store.deleteByDependencyPath(absoluteDependencyPath)
+      expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
+      expect(eviction.deletedNodeKeys).not.toContain(unaffectedNodeKey)
+
+      expect(await store.get(affectedNodeKey)).toBeUndefined()
+      expect(await store.get(unaffectedNodeKey)).toEqual({
+        value: 'unaffected',
+      })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('continues with in-memory cache when persistence writes fail', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',

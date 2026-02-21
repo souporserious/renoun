@@ -58,6 +58,7 @@ const TOKENS_CACHE_NAME = 'tokens'
 const SOURCE_TEXT_METADATA_CACHE_NAME = 'sourceTextMetadata'
 const TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME = 'typeScriptDependencyAnalysis'
 const MODULE_RESOLUTION_CACHE_NAME = 'moduleResolution'
+const PACKAGE_VERSION_DEPENDENCY_CACHE_NAME = 'packageVersionDependency'
 const RUNTIME_ANALYSIS_CACHE_SCOPE = 'project-analysis-runtime'
 const RUNTIME_ANALYSIS_CACHE_VERSION = '1'
 const RUNTIME_ANALYSIS_CACHE_VERSION_DEP = 'runtime-analysis-cache-version'
@@ -100,6 +101,14 @@ let runtimeAnalysisCacheStorePromise:
 let runtimeAnalysisPersistedInvalidationQueue: Promise<void> = Promise.resolve()
 const pendingRuntimeAnalysisPersistedInvalidationPaths = new Set<string>()
 let isRuntimeAnalysisPersistedInvalidationFlushQueued = false
+const compilerOptionsVersionByProject = new WeakMap<
+  Project,
+  {
+    version: string
+    epoch: number
+  }
+>()
+let compilerOptionsVersionEpoch = 0
 
 async function getRuntimeAnalysisCacheStore(): Promise<
   RuntimeAnalysisCacheStore | undefined
@@ -211,7 +220,16 @@ function toDedupedRuntimeInvalidationPaths(paths: readonly string[]): string[] {
   return deduped
 }
 
+function isTypeScriptConfigPath(path: string): boolean {
+  const normalizedPath = normalizeCachePath(path)
+  return /(^|\/)tsconfig(\..+)?\.json$/i.test(normalizedPath)
+}
+
 export function invalidateRuntimeAnalysisCachePath(path: string): void {
+  if (isTypeScriptConfigPath(path)) {
+    compilerOptionsVersionEpoch += 1
+  }
+
   void (async () => {
     const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
     if (!runtimeCacheStore) {
@@ -224,6 +242,8 @@ export function invalidateRuntimeAnalysisCachePath(path: string): void {
 }
 
 export function invalidateRuntimeAnalysisCacheAll(): void {
+  compilerOptionsVersionEpoch += 1
+
   void (async () => {
     const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
     if (!runtimeCacheStore) {
@@ -330,6 +350,12 @@ interface RuntimeTypeScriptDependencyAnalysisResult {
 }
 
 interface PackageVersionDependencyResolution {
+  dependencyFilePaths: string[]
+  dependencyNodeKeys: string[]
+}
+
+interface CachedPackageVersionDependencyResult {
+  nodeKey: string
   dependencyFilePaths: string[]
 }
 
@@ -601,16 +627,24 @@ async function getSourceFileDependencyLinks(
   const seenLinkKeys = new Set<string>()
   const containingFilePath = sourceFile.getFilePath()
   const moduleSpecifiers = collectSourceFileModuleSpecifiers(sourceFile)
+  const resolvedModuleSpecifiers = await Promise.all(
+    moduleSpecifiers.map(async (moduleSpecifier) => {
+      const resolution = await resolveModuleSpecifierSourceFilePath(
+        project,
+        runtimeCacheStore,
+        compilerOptionsVersion,
+        containingFilePath,
+        moduleSpecifier,
+        moduleResolutionByKey
+      )
+      return {
+        moduleSpecifier,
+        resolution,
+      }
+    })
+  )
 
-  for (const moduleSpecifier of moduleSpecifiers) {
-    const resolution = await resolveModuleSpecifierSourceFilePath(
-      project,
-      runtimeCacheStore,
-      compilerOptionsVersion,
-      containingFilePath,
-      moduleSpecifier,
-      moduleResolutionByKey
-    )
+  for (const { moduleSpecifier, resolution } of resolvedModuleSpecifiers) {
     const linkKey = `${moduleSpecifier}:${resolution.sourceFilePath ?? 'missing'}:${resolution.moduleResolutionNodeKey ?? 'none'}`
     if (seenLinkKeys.has(linkKey)) {
       continue
@@ -1134,56 +1168,166 @@ function resolveInstalledPackageManifestPath(
   return undefined
 }
 
-function resolvePackageVersionDependencies(
-  runtimeCacheStore: RuntimeAnalysisCacheStore,
-  packageDependencies: TypeScriptDependencyAnalysis['packageDependencies']
-): PackageVersionDependencyResolution {
-  if (packageDependencies.length === 0) {
-    return {
-      dependencyFilePaths: [],
-    }
-  }
+function createRuntimePackageVersionDependencyCacheNodeKey(payload: {
+  compilerOptionsVersion: string
+  importerPath: string
+  packageName: string
+}): string {
+  return createRuntimeAnalysisCacheNodeKey(PACKAGE_VERSION_DEPENDENCY_CACHE_NAME, {
+    compilerOptionsVersion: payload.compilerOptionsVersion,
+    importerPath: normalizeCachePath(payload.importerPath),
+    packageName: payload.packageName,
+  })
+}
 
+async function resolveCachedPackageVersionDependencyForImporter(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  compilerOptionsVersion: string,
+  packageName: string,
+  importerPath: string
+): Promise<CachedPackageVersionDependencyResult | undefined> {
   const workspaceRootPath = getWorkspaceRootPath(runtimeCacheStore)
   if (!workspaceRootPath) {
-    return {
-      dependencyFilePaths: [],
-    }
+    return undefined
   }
 
-  const packageManifestByPath = new Map<string, PackageManifest | null>()
-  const dependencyFilePaths = new Set<string>()
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+  const nodeKey = createRuntimePackageVersionDependencyCacheNodeKey({
+    compilerOptionsVersion,
+    importerPath,
+    packageName,
+  })
+  const packagePathSegments = packageName.split('/')
+  const scopeSegment = packagePathSegments[0]?.startsWith('@')
+    ? packagePathSegments[0]
+    : undefined
 
-  for (const packageDependency of packageDependencies) {
-    for (const importerPath of packageDependency.importerPaths) {
+  const value = await runtimeCacheStore.store.getOrCompute(
+    nodeKey,
+    {
+      persist: true,
+      constDeps: runtimeConstDeps,
+    },
+    async (context) => {
+      recordConstDependencies(context, runtimeConstDeps)
+
+      await recordFileDependencyIfPossible(context, runtimeCacheStore, importerPath)
+
+      const ancestorDirectories = getAncestorDirectoriesInWorkspace(
+        runtimeCacheStore,
+        workspaceRootPath,
+        importerPath
+      )
+      for (const directoryPath of ancestorDirectories) {
+        await recordDirectoryDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          directoryPath
+        )
+
+        const nodeModulesPath = join(directoryPath, 'node_modules')
+        await recordDirectoryDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          nodeModulesPath
+        )
+
+        if (scopeSegment) {
+          await recordDirectoryDependencyIfPossible(
+            context,
+            runtimeCacheStore,
+            join(nodeModulesPath, scopeSegment)
+          )
+        }
+      }
+
+      const packageManifestByPath = new Map<string, PackageManifest | null>()
       const declaredPackageManifestPath = resolveDeclaredPackageManifestPath(
         runtimeCacheStore,
         packageManifestByPath,
         workspaceRootPath,
         importerPath,
-        packageDependency.packageName
+        packageName
       )
-
-      if (declaredPackageManifestPath) {
-        dependencyFilePaths.add(declaredPackageManifestPath)
-      }
-
       const installedPackageManifestPath = resolveInstalledPackageManifestPath(
         runtimeCacheStore,
         packageManifestByPath,
         workspaceRootPath,
         importerPath,
-        packageDependency.packageName
+        packageName
       )
 
-      if (installedPackageManifestPath) {
-        dependencyFilePaths.add(installedPackageManifestPath)
+      const dependencyFilePaths = Array.from(
+        new Set(
+          [
+            declaredPackageManifestPath,
+            installedPackageManifestPath,
+          ].filter((path): path is string => typeof path === 'string')
+        )
+      )
+      await recordFileDependenciesIfPossible(
+        context,
+        runtimeCacheStore,
+        dependencyFilePaths
+      )
+
+      return {
+        dependencyFilePaths,
       }
+    }
+  )
+
+  return {
+    nodeKey,
+    dependencyFilePaths: value.dependencyFilePaths,
+  }
+}
+
+async function resolvePackageVersionDependencies(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  compilerOptionsVersion: string,
+  packageDependencies: TypeScriptDependencyAnalysis['packageDependencies']
+): Promise<PackageVersionDependencyResolution> {
+  if (packageDependencies.length === 0) {
+    return {
+      dependencyFilePaths: [],
+      dependencyNodeKeys: [],
+    }
+  }
+
+  const dependencyFilePaths = new Set<string>()
+  const dependencyNodeKeys = new Set<string>()
+  const resolveTasks: Promise<CachedPackageVersionDependencyResult | undefined>[] =
+    []
+
+  for (const packageDependency of packageDependencies) {
+    for (const importerPath of packageDependency.importerPaths) {
+      resolveTasks.push(
+        resolveCachedPackageVersionDependencyForImporter(
+          runtimeCacheStore,
+          compilerOptionsVersion,
+          packageDependency.packageName,
+          importerPath
+        )
+      )
+    }
+  }
+
+  const resolvedDependencies = await Promise.all(resolveTasks)
+  for (const resolvedDependency of resolvedDependencies) {
+    if (!resolvedDependency) {
+      continue
+    }
+
+    dependencyNodeKeys.add(resolvedDependency.nodeKey)
+    for (const dependencyFilePath of resolvedDependency.dependencyFilePaths) {
+      dependencyFilePaths.add(dependencyFilePath)
     }
   }
 
   return {
     dependencyFilePaths: Array.from(dependencyFilePaths.values()),
+    dependencyNodeKeys: Array.from(dependencyNodeKeys.values()),
   }
 }
 
@@ -1238,10 +1382,15 @@ async function getCachedRuntimeTypeScriptDependencyAnalysis(
         await context.recordNodeDep(moduleResolutionNodeKey)
       }
 
-      const packageVersionDependencies = resolvePackageVersionDependencies(
+      const packageVersionDependencies = await resolvePackageVersionDependencies(
         runtimeCacheStore,
+        compilerOptionsVersion,
         typeScriptDependencies.packageDependencies
       )
+
+      for (const packageDependencyNodeKey of packageVersionDependencies.dependencyNodeKeys) {
+        await context.recordNodeDep(packageDependencyNodeKey)
+      }
 
       const dependencyFilePaths = Array.from(
         new Set<string>([
@@ -1346,7 +1495,17 @@ async function recordProjectConfigDependency(
 }
 
 function getCompilerOptionsVersion(project: Project): string {
-  return stableStringify(project.getCompilerOptions())
+  const cachedVersion = compilerOptionsVersionByProject.get(project)
+  if (cachedVersion && cachedVersion.epoch === compilerOptionsVersionEpoch) {
+    return cachedVersion.version
+  }
+
+  const version = stableStringify(project.getCompilerOptions())
+  compilerOptionsVersionByProject.set(project, {
+    version,
+    epoch: compilerOptionsVersionEpoch,
+  })
+  return version
 }
 
 function canUseRuntimePathCache(

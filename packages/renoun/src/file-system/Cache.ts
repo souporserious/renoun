@@ -783,8 +783,8 @@ export class CacheStore {
     const candidates = new Set<string>()
 
     const addPathCandidate = (path: string) => {
-      const normalizedPath = normalizeDepPath(path)
-      candidates.add(normalizedPath)
+      candidates.add(normalizeDepPath(path))
+      candidates.add(normalizeDepPathPreservingAbsolute(path))
     }
 
     addPathCandidate(dependencyPathKey)
@@ -2036,6 +2036,42 @@ export function createFingerprint(dependencies: CacheDependency[]): string {
 
 function normalizeDepPath(path: string): string {
   return normalizeCachePathKey(path)
+}
+
+function trimTrailingSlashesPreservingRootForCache(value: string): string {
+  let end = value.length
+  while (end > 1 && value.charCodeAt(end - 1) === 47) {
+    end--
+  }
+  return value.slice(0, end)
+}
+
+function normalizeDepPathPreservingAbsolute(path: string): string {
+  const normalizedSlashes = normalizeCacheSlashes(path)
+  const trimmedTrailing = trimTrailingSlashesPreservingRootForCache(
+    normalizedSlashes
+  )
+  if (trimmedTrailing.length === 0) {
+    return '.'
+  }
+
+  if (
+    trimmedTrailing.length >= 2 &&
+    trimmedTrailing.charCodeAt(0) === 46 &&
+    trimmedTrailing.charCodeAt(1) === 47
+  ) {
+    let start = 2
+    while (
+      start < trimmedTrailing.length &&
+      trimmedTrailing.charCodeAt(start) === 47
+    ) {
+      start++
+    }
+    const relative = trimmedTrailing.slice(start)
+    return relative.length > 0 ? relative : '.'
+  }
+
+  return trimmedTrailing
 }
 
 function normalizeCacheSlashes(path: string): string {

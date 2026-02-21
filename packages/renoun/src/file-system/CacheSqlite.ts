@@ -848,48 +848,50 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
     }
 
-    const normalizedPathKey = normalizePathKey(dependencyPathKey)
+    const dependencyPathKeys = getDependencyPathKeyVariants(dependencyPathKey)
     const dependencyPrefixes = ['file:', 'dir:', 'dir-mtime:'] as const
     const exactDependencyKeys = new Set<string>()
     const descendantDependencyPatterns: string[] = []
     const toDirectorySnapshotDepIndexKey = (depKey: string) =>
       `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${depKey}:1`
 
-    for (const prefix of dependencyPrefixes) {
-      const exactDependencyKey = `${prefix}${normalizedPathKey}`
-      exactDependencyKeys.add(exactDependencyKey)
-      exactDependencyKeys.add(
-        toDirectorySnapshotDepIndexKey(exactDependencyKey)
-      )
+    for (const dependencyPath of dependencyPathKeys) {
+      for (const prefix of dependencyPrefixes) {
+        const exactDependencyKey = `${prefix}${dependencyPath}`
+        exactDependencyKeys.add(exactDependencyKey)
+        exactDependencyKeys.add(
+          toDirectorySnapshotDepIndexKey(exactDependencyKey)
+        )
 
-      if (normalizedPathKey === '.') {
-        descendantDependencyPatterns.push(`${escapeSqlLikePattern(prefix)}%`)
-        descendantDependencyPatterns.push(
-          `${escapeSqlLikePattern(DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX + prefix)}%:1`
+        if (dependencyPath === '.') {
+          descendantDependencyPatterns.push(`${escapeSqlLikePattern(prefix)}%`)
+          descendantDependencyPatterns.push(
+            `${escapeSqlLikePattern(DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX + prefix)}%:1`
+          )
+        } else {
+          descendantDependencyPatterns.push(
+            `${escapeSqlLikePattern(`${prefix}${dependencyPath}`)}/%`
+          )
+          descendantDependencyPatterns.push(
+            `${escapeSqlLikePattern(
+              `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${prefix}${dependencyPath}`
+            )}/%:1`
+          )
+        }
+      }
+
+      for (const ancestorPath of getAncestorPathKeys(dependencyPath)) {
+        const directoryDependencyKey = `dir:${ancestorPath}`
+        const directoryMtimeDependencyKey = `dir-mtime:${ancestorPath}`
+        exactDependencyKeys.add(directoryDependencyKey)
+        exactDependencyKeys.add(directoryMtimeDependencyKey)
+        exactDependencyKeys.add(
+          toDirectorySnapshotDepIndexKey(directoryDependencyKey)
         )
-      } else {
-        descendantDependencyPatterns.push(
-          `${escapeSqlLikePattern(`${prefix}${normalizedPathKey}`)}/%`
-        )
-        descendantDependencyPatterns.push(
-          `${escapeSqlLikePattern(
-            `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${prefix}${normalizedPathKey}`
-          )}/%:1`
+        exactDependencyKeys.add(
+          toDirectorySnapshotDepIndexKey(directoryMtimeDependencyKey)
         )
       }
-    }
-
-    for (const ancestorPath of getAncestorPathKeys(normalizedPathKey)) {
-      const directoryDependencyKey = `dir:${ancestorPath}`
-      const directoryMtimeDependencyKey = `dir-mtime:${ancestorPath}`
-      exactDependencyKeys.add(directoryDependencyKey)
-      exactDependencyKeys.add(directoryMtimeDependencyKey)
-      exactDependencyKeys.add(
-        toDirectorySnapshotDepIndexKey(directoryDependencyKey)
-      )
-      exactDependencyKeys.add(
-        toDirectorySnapshotDepIndexKey(directoryMtimeDependencyKey)
-      )
     }
 
     const exactDependencyList = Array.from(exactDependencyKeys).sort()
@@ -1520,17 +1522,69 @@ function escapeSqlLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`)
 }
 
+function normalizeAbsolutePathKey(path: string): string {
+  const normalizedPath = path.replaceAll('\\', '/')
+  if (normalizedPath === '') {
+    return '.'
+  }
+
+  if (
+    normalizedPath.length >= 2 &&
+    normalizedPath.charCodeAt(0) === 46 &&
+    normalizedPath.charCodeAt(1) === 47
+  ) {
+    let start = 2
+    while (
+      start < normalizedPath.length &&
+      normalizedPath.charCodeAt(start) === 47
+    ) {
+      start += 1
+    }
+    return trimTrailingSlashes(normalizedPath.slice(start))
+  }
+
+  return trimTrailingSlashes(normalizedPath)
+}
+
+function trimTrailingSlashes(path: string): string {
+  let end = path.length
+  while (end > 1 && path.charCodeAt(end - 1) === 47) {
+    end -= 1
+  }
+  const trimmed = path.slice(0, end)
+  return trimmed === '' ? '.' : trimmed
+}
+
+function getDependencyPathKeyVariants(path: string): string[] {
+  const keyVariants = new Set<string>()
+  keyVariants.add(normalizePathKey(path))
+  keyVariants.add(normalizeAbsolutePathKey(path))
+  return Array.from(keyVariants).filter((value) => value.length > 0)
+}
+
 function getAncestorPathKeys(path: string): string[] {
-  const normalized = normalizePathKey(path)
-  if (normalized === '.') {
+  const normalizedPath = normalizeAbsolutePathKey(path)
+  if (normalizedPath === '.') {
     return ['.']
   }
 
-  const segments = normalized.split('/')
+  const hasLeadingSlash = normalizedPath.startsWith('/')
+  const withoutRoot = hasLeadingSlash ? normalizedPath.slice(1) : normalizedPath
+  if (withoutRoot.length === 0) {
+    return ['.']
+  }
+
+  const segments = withoutRoot.split('/')
   const ancestors = ['.']
+  if (hasLeadingSlash) {
+    ancestors.push('/')
+  }
 
   for (let index = 0; index < segments.length - 1; index += 1) {
-    const ancestor = segments.slice(0, index + 1).join('/')
+    const relativeAncestor = segments.slice(0, index + 1).join('/')
+    const ancestor = hasLeadingSlash
+      ? `/${relativeAncestor}`
+      : relativeAncestor
     ancestors.push(ancestor)
   }
 
