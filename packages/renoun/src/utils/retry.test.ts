@@ -43,4 +43,32 @@ describe('retry', () => {
       name: 'AbortError',
     })
   })
+
+  test('supports custom delay selection', async () => {
+    const selectedDelays: number[] = []
+    let attempts = 0
+
+    await retry(
+      async () => {
+        attempts += 1
+        if (attempts < 2) {
+          throw new RenounNetworkError('rate limited', {
+            status: 429,
+          })
+        }
+      },
+      {
+        retries: 2,
+        minDelayMs: 1,
+        maxDelayMs: 10,
+        jitter: 0,
+        getDelayMs: (_error, _attempt, _defaultDelayMs) => 7,
+        onRetry: ({ delayMs }) => {
+          selectedDelays.push(delayMs)
+        },
+      }
+    )
+
+    expect(selectedDelays).toEqual([7])
+  })
 })

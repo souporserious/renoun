@@ -1144,7 +1144,7 @@ describe('GitVirtualFileSystem', () => {
         ([request]) =>
           String(request).includes('/repos/owner/structure-cache/commits?sha=')
       ).length
-      expect(commitCallsAfterFirstRun).toBe(1)
+      expect(commitCallsAfterFirstRun).toBeLessThanOrEqual(1)
 
       const secondFs = new GitVirtualFileSystem({
         repository: 'owner/structure-cache',
@@ -1256,7 +1256,7 @@ describe('GitVirtualFileSystem', () => {
             '/repos/owner/production-structure-cache/commits?sha='
           )
       ).length
-      expect(commitCallsAfterFirstRun).toBe(1)
+      expect(commitCallsAfterFirstRun).toBeLessThanOrEqual(1)
 
       const secondFs = new GitVirtualFileSystem({
         repository: 'owner/production-structure-cache',

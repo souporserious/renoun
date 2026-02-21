@@ -16,6 +16,8 @@ import {
 
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { retry } from '../utils/retry.ts'
+import { RenounNetworkError } from '../utils/errors.ts'
 import {
   normalizeSlashes,
   trimLeadingCurrentDirPrefix,
@@ -25,6 +27,7 @@ import {
 
 const MAX_WAIT_TIME = 30_000
 const PING_INTERVAL = 2_000
+const LIVE_FETCH_MAX_ATTEMPTS = 3
 
 const MDX_EXTENSIONS = new Set(['.mdx'])
 const PROTOCOL_PATTERN = /^[a-zA-Z][a-zA-Z+-.]*:/
@@ -1155,6 +1158,55 @@ function isLikelyUrl(value: string): boolean {
   }
 }
 
+function isRetryableLiveFetchStatus(status: number): boolean {
+  return (
+    status === 408 ||
+    status === 425 ||
+    status === 429 ||
+    (status >= 500 && status !== 501)
+  )
+}
+
+async function fetchLiveWithRetry(
+  url: string,
+  init: RequestInit = {},
+  options: { maxAttempts?: number } = {}
+): Promise<Response> {
+  const maxAttempts = Math.max(1, options.maxAttempts ?? LIVE_FETCH_MAX_ATTEMPTS)
+  const method = String(init.method ?? 'GET').toUpperCase()
+
+  return retry(
+    async () => {
+      const response = await fetch(url, init)
+      if (isRetryableLiveFetchStatus(response.status)) {
+        throw new RenounNetworkError(
+          `[renoun] Live validation request failed with status ${response.status}.`,
+          {
+            status: response.status,
+            url,
+            method,
+            retryable: true,
+          }
+        )
+      }
+      return response
+    },
+    {
+      retries: Math.max(0, maxAttempts - 1),
+      minDelayMs: 150,
+      maxDelayMs: 2_000,
+      factor: 2,
+      jitter: 0.25,
+      shouldRetry: (error) => {
+        if (error instanceof RenounNetworkError) {
+          return error.retryable !== false
+        }
+        return error instanceof TypeError
+      },
+    }
+  )
+}
+
 function formatLinkPosition(position?: LinkPosition) {
   if (
     !position ||
@@ -1188,7 +1240,7 @@ async function runLiveValidation(
     const currentTrace = [...trace, normalizedUrl]
 
     try {
-      const response = await fetch(normalizedUrl)
+      const response = await fetchLiveWithRetry(normalizedUrl)
       if (!response.ok) {
         brokenLinks.push({
           url: normalizedUrl,
@@ -1245,7 +1297,11 @@ async function waitForServerReady(baseUrl: string) {
 
   while (Date.now() <= deadline) {
     try {
-      const response = await fetch(baseUrl, { method: 'GET' })
+      const response = await fetchLiveWithRetry(
+        baseUrl,
+        { method: 'GET' },
+        { maxAttempts: 1 }
+      )
       if (response.ok) {
         return
       }
@@ -1312,7 +1368,7 @@ async function checkLiveLink(
   checked.add(normalized)
 
   try {
-    const response = await fetch(normalized)
+    const response = await fetchLiveWithRetry(normalized)
     if (!response.ok) {
       brokenLinks.push({
         url: normalized,

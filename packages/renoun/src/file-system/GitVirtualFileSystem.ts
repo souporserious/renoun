@@ -11,6 +11,8 @@ import {
   trimLeadingSlashes,
 } from '../utils/path.ts'
 import { Semaphore } from '../utils/Semaphore.ts'
+import { retry } from '../utils/retry.ts'
+import { RenounNetworkError, RenounTimeoutError } from '../utils/errors.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -217,8 +219,61 @@ const clamp = (ms: number, max = 60_000) => Math.min(Math.max(ms, 0), max)
 const RATE_LIMIT_GUIDANCE =
   'Try providing a personal access token or retry later.'
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+interface FetchRetryFailureRateLimit {
+  type: 'rateLimit'
+  status: number
+  retryAfterMs?: number
+}
+
+interface FetchRetryFailureResponse {
+  type: 'response'
+  status: number
+  url: string
+}
+
+interface FetchRetryFailureError {
+  type: 'error'
+  error: unknown
+}
+
+type FetchRetryFailure =
+  | FetchRetryFailureRateLimit
+  | FetchRetryFailureResponse
+  | FetchRetryFailureError
+
+type FetchAuthMode = 'auto' | 'none' | 'force'
+
+interface FetchWithRetryOptions {
+  maxAttempts?: number
+  init?: Omit<RequestInit, 'headers' | 'signal' | 'redirect' | 'referrerPolicy'>
+  headers?: HeadersInit
+  authMode?: FetchAuthMode
+}
+
+class GitVirtualFetchRetryError extends RenounNetworkError {
+  readonly failureType: FetchRetryFailureRateLimit['type'] | FetchRetryFailureResponse['type']
+  readonly retryAfterMs?: number
+
+  constructor(options: {
+    failureType: 'rateLimit' | 'response'
+    status: number
+    url: string
+    retryAfterMs?: number
+  }) {
+    super(
+      options.failureType === 'rateLimit'
+        ? `[renoun] Request was rate limited with status ${options.status}.`
+        : `[renoun] Request failed with status ${options.status}.`,
+      {
+        status: options.status,
+        url: options.url,
+        retryable: true,
+      }
+    )
+    this.name = 'GitVirtualFetchRetryError'
+    this.failureType = options.failureType
+    this.retryAfterMs = options.retryAfterMs
+  }
 }
 
 function getResetDelayMs(
@@ -1746,27 +1801,36 @@ export class GitVirtualFileSystem
     this.#ghBlameAbortControllers.add(controller)
     const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
     try {
-      const response = await fetch(graphqlUrl, {
-        method: 'POST',
-        headers: {
-          ...this.#apiHeaders,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ query, variables }),
-        signal: controller.signal,
-        referrerPolicy: 'no-referrer',
-      })
-      if (!response.ok) {
-        if (isTransientHttpStatus(response.status)) {
-          const error = new Error(
-            `[renoun] GitHub blame request failed with status ${response.status}.`
-          )
-          for (const item of batch) {
-            item.reject(error)
+      const response = await retry(
+        async () => {
+          const nextResponse = await fetch(graphqlUrl, {
+            method: 'POST',
+            headers: {
+              ...this.#apiHeaders,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query, variables }),
+            signal: controller.signal,
+            referrerPolicy: 'no-referrer',
+          })
+          if (!nextResponse.ok && isTransientHttpStatus(nextResponse.status)) {
+            throw new RenounNetworkError(
+              `[renoun] GitHub blame request failed with status ${nextResponse.status}.`,
+              {
+                status: nextResponse.status,
+                url: graphqlUrl,
+                retryable: true,
+              }
+            )
           }
-          return
+          return nextResponse
+        },
+        {
+          retries: 0,
+          signal: controller.signal,
         }
-
+      )
+      if (!response.ok) {
         for (const item of batch) {
           item.resolve(null)
         }
@@ -2051,212 +2115,291 @@ export class GitVirtualFileSystem
   }
 
   /** Fetch with retry and rate-limit handling. */
-  async #fetchWithRetry(url: string, maxAttempts = 3): Promise<Response> {
-    type FetchFailure =
-      | { type: 'rateLimit'; status: number; retryAfterMs?: number }
-      | { type: 'response'; status: number; url: string }
-      | { type: 'error'; error: unknown }
-
-    let lastFailure: FetchFailure | undefined
+  async #fetchWithRetry(
+    url: string,
+    options: number | FetchWithRetryOptions = 3
+  ): Promise<Response> {
+    const normalizedOptions: FetchWithRetryOptions =
+      typeof options === 'number' ? { maxAttempts: options } : options
+    const maxAttempts = Math.max(1, normalizedOptions.maxAttempts ?? 3)
+    const authMode = normalizedOptions.authMode ?? 'auto'
+    const requestInit = normalizedOptions.init
+    const requestHeaders: Record<string, string> = {}
+    new Headers(normalizedOptions.headers).forEach((value, key) => {
+      requestHeaders[key] = value
+    })
+    let lastFailure: FetchRetryFailure | undefined
     let notifiedFirstRetryFailure = false
     let notifiedRateLimit = false
 
-    for (let attempt = 0; attempt < Math.max(1, maxAttempts); attempt++) {
-      let skipBackoff = false
-      const controller = new AbortController()
-      this.#currentFetch = controller
-      const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
+    try {
+      return await retry(
+        async (attempt) => {
+          const controller = new AbortController()
+          this.#currentFetch = controller
+          let timedOut = false
+          const timer = setTimeout(() => {
+            timedOut = true
+            controller.abort()
+          }, this.#timeoutMs)
 
-      try {
-        this.#assertAllowed(url)
-        let currentUrl = url
-        let redirects = 0
-        while (true) {
-          const origin = new URL(currentUrl).origin
-          const useAuth = this.#originPolicy.auth.has(origin)
-          const response = await fetch(currentUrl, {
-            headers: useAuth ? this.#apiHeaders : this.#noAuthHeaders,
-            signal: controller.signal,
-            referrerPolicy: 'no-referrer',
-            redirect: 'manual',
-          })
+          try {
+            this.#assertAllowed(url)
+            let currentUrl = url
+            let redirects = 0
 
-          if (!response) {
-            throw new Error('[renoun] Too many redirects')
-          }
+            while (true) {
+              const origin = new URL(currentUrl).origin
+              const useAuth =
+                authMode === 'force'
+                  ? true
+                  : authMode === 'none'
+                    ? false
+                    : this.#originPolicy.auth.has(origin)
+              const headers = {
+                ...(useAuth ? this.#apiHeaders : this.#noAuthHeaders),
+                ...requestHeaders,
+              }
 
-          if (response.status >= 300 && response.status < 400) {
-            const loc = response.headers.get('Location')
-            if (!loc) {
-              throw new Error('[renoun] Missing redirect location')
-            }
-            const nextUrl = new URL(loc, currentUrl).toString()
-            this.#assertAllowed(nextUrl)
-            currentUrl = nextUrl
-            redirects++
-            if (redirects > 2) {
-              throw new Error('[renoun] Too many redirects')
-            }
-            continue
-          }
+              const response = await fetch(currentUrl, {
+                ...requestInit,
+                headers,
+                signal: controller.signal,
+                referrerPolicy: 'no-referrer',
+                redirect: 'manual',
+              })
 
-          // If we already followed too many redirects and still didn't land, fail
-          if (redirects >= 2) {
-            throw new Error('[renoun] Too many redirects')
-          }
+              if (!response) {
+                throw new Error('[renoun] Too many redirects')
+              }
 
-          if (this.#isRateLimited(response)) {
-            let rawMs: number | undefined
-            const retryAfterHeader = response.headers.get('Retry-After')
-            if (retryAfterHeader) {
-              const seconds = Number(retryAfterHeader)
-              if (!Number.isNaN(seconds)) {
-                rawMs = seconds * 1_000
-              } else {
-                const date = Date.parse(retryAfterHeader)
-                if (!Number.isNaN(date)) {
-                  rawMs = Math.max(date - Date.now(), 0)
+              if (response.status >= 300 && response.status < 400) {
+                const location = response.headers.get('Location')
+                if (!location) {
+                  throw new Error('[renoun] Missing redirect location')
                 }
+                const nextUrl = new URL(location, currentUrl).toString()
+                this.#assertAllowed(nextUrl)
+                currentUrl = nextUrl
+                redirects += 1
+                if (redirects > 2) {
+                  throw new Error('[renoun] Too many redirects')
+                }
+                continue
               }
-            }
-            if (rawMs === undefined) {
-              const resetMs = getResetDelayMs(response, this.#host)
-              if (resetMs !== undefined) {
-                rawMs = resetMs
-              }
-            }
-            const retryAfter = rawMs !== undefined ? clamp(rawMs) : undefined
 
-            if (retryAfter !== undefined) {
-              lastFailure = {
-                type: 'rateLimit',
-                status: response.status,
-                retryAfterMs: retryAfter,
+              if (redirects >= 2) {
+                throw new Error('[renoun] Too many redirects')
               }
-              if (!notifiedRateLimit) {
-                const hostName = this.#formatHostName()
-                const waitSeconds = Math.ceil(retryAfter / 1_000)
+
+              if (this.#isRateLimited(response)) {
+                let retryAfterMs = getResetDelayMs(response, this.#host)
+                const retryAfterHeader = response.headers.get('Retry-After')
+                if (retryAfterHeader) {
+                  const seconds = Number(retryAfterHeader)
+                  if (!Number.isNaN(seconds)) {
+                    retryAfterMs = seconds * 1_000
+                  } else {
+                    const date = Date.parse(retryAfterHeader)
+                    if (!Number.isNaN(date)) {
+                      retryAfterMs = Math.max(date - Date.now(), 0)
+                    }
+                  }
+                }
+                const retryAfter =
+                  retryAfterMs !== undefined ? clamp(retryAfterMs) : undefined
+
+                lastFailure = {
+                  type: 'rateLimit',
+                  status: response.status,
+                  retryAfterMs: retryAfter,
+                }
+                throw new GitVirtualFetchRetryError({
+                  failureType: 'rateLimit',
+                  status: response.status,
+                  url: response.url || currentUrl,
+                  retryAfterMs: retryAfter,
+                })
+              }
+
+              if (response.status >= 500 && response.status !== 501) {
+                lastFailure = {
+                  type: 'response',
+                  status: response.status,
+                  url: response.url || currentUrl,
+                }
+                if (attempt >= maxAttempts) {
+                  return response
+                }
+                throw new GitVirtualFetchRetryError({
+                  failureType: 'response',
+                  status: response.status,
+                  url: response.url || currentUrl,
+                })
+              }
+
+              return response
+            }
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              (error.message.includes('Too many redirects') ||
+                error.message.includes('Missing redirect location') ||
+                error.message.includes('Redirected to disallowed origin'))
+            ) {
+              throw error
+            }
+
+            if (error instanceof GitVirtualFetchRetryError) {
+              throw error
+            }
+
+            const mappedError =
+              timedOut && !(error instanceof RenounTimeoutError)
+                ? new RenounTimeoutError(
+                    `Request timed out after ${this.#timeoutMs}ms`,
+                    {
+                      timeoutMs: this.#timeoutMs,
+                      cause: error,
+                    }
+                  )
+                : error
+            lastFailure = { type: 'error', error: mappedError }
+            throw mappedError
+          } finally {
+            clearTimeout(timer)
+            if (this.#currentFetch === controller) {
+              this.#currentFetch = undefined
+            }
+          }
+        },
+        {
+          retries: Math.max(0, maxAttempts - 1),
+          minDelayMs: 200,
+          maxDelayMs: 60_000,
+          factor: 2,
+          jitter: 0.35,
+          shouldRetry: (error) => {
+            if (error instanceof GitVirtualFetchRetryError) {
+              return true
+            }
+
+            if (
+              error instanceof RenounNetworkError &&
+              error.retryable === false
+            ) {
+              return false
+            }
+
+            if (
+              error instanceof RenounTimeoutError ||
+              this.#isIgnorableNetworkAbortError(error) ||
+              error instanceof TypeError
+            ) {
+              return true
+            }
+
+            return false
+          },
+          getDelayMs: (error, attempt, _defaultDelayMs) => {
+            if (
+              error instanceof GitVirtualFetchRetryError &&
+              error.failureType === 'rateLimit' &&
+              error.retryAfterMs !== undefined
+            ) {
+              return clamp(error.retryAfterMs)
+            }
+
+            return 2 ** (attempt - 1) * 200 + Math.random() * 100
+          },
+          onRetry: ({ error, attempt, delayMs }) => {
+            if (
+              error instanceof GitVirtualFetchRetryError &&
+              error.failureType === 'rateLimit' &&
+              !notifiedRateLimit
+            ) {
+              const hostName = this.#formatHostName()
+              const waitSeconds = Math.ceil(delayMs / 1_000)
+              const waitMessage = waitSeconds
+                ? ` Waiting about ${waitSeconds} seconds before trying again.`
+                : ''
+              console.warn(
+                `[renoun] ${hostName} is rate limiting this request.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
+              )
+              notifiedRateLimit = true
+            }
+
+            if (
+              attempt === 2 &&
+              !notifiedFirstRetryFailure &&
+              lastFailure &&
+              !(lastFailure.type === 'rateLimit' && notifiedRateLimit)
+            ) {
+              const hostName = this.#formatHostName()
+              let details: string
+              if (lastFailure.type === 'rateLimit') {
+                const waitSeconds =
+                  lastFailure.retryAfterMs !== undefined
+                    ? Math.ceil(lastFailure.retryAfterMs / 1_000)
+                    : undefined
                 const waitMessage = waitSeconds
                   ? ` Waiting about ${waitSeconds} seconds before trying again.`
                   : ''
-                console.warn(
-                  `[renoun] ${hostName} is rate limiting this request.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
-                )
-                notifiedRateLimit = true
+                details = `We're still being rate limited by ${hostName}.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
+              } else if (lastFailure.type === 'response') {
+                details = `The host responded with status ${lastFailure.status}.`
+              } else {
+                const message =
+                  lastFailure.error instanceof Error
+                    ? lastFailure.error.message
+                    : 'an unknown error'
+                details = `Encountered ${message} while contacting ${hostName}.`
               }
-              await sleep(retryAfter)
-              // Honor server-advised delay exactly; skip client-side backoff
-              skipBackoff = true
-              break
+              console.warn(`[renoun] Fetch retry is still failing. ${details}`)
+              notifiedFirstRetryFailure = true
             }
-          }
-
-          if (response.status >= 500 && response.status !== 501) {
-            lastFailure = {
-              type: 'response',
-              status: response.status,
-              url: response.url,
-            }
-            if (attempt === maxAttempts - 1) {
-              return response
-            }
-          } else {
-            return response
-          }
-          break
+          },
         }
-      } catch (error) {
-        // Non-retriable redirect/auth errors should surface immediately
-        if (
-          error instanceof Error &&
-          (error.message.includes('Too many redirects') ||
-            error.message.includes('Missing redirect location') ||
-            error.message.includes('Redirected to disallowed origin'))
-        ) {
-          throw error
-        }
-        lastFailure = { type: 'error', error }
-        if (attempt === maxAttempts - 1) {
-          throw error
-        }
-      } finally {
-        clearTimeout(timer)
-        if (this.#currentFetch === controller) {
-          this.#currentFetch = undefined
-        }
-      }
-
-      if (
-        attempt === 1 &&
-        !notifiedFirstRetryFailure &&
-        lastFailure &&
-        !(lastFailure.type === 'rateLimit' && notifiedRateLimit)
-      ) {
-        const hostName = this.#formatHostName()
-        let details: string
-        if (lastFailure.type === 'rateLimit') {
-          const waitSeconds =
-            lastFailure.retryAfterMs !== undefined
-              ? Math.ceil(lastFailure.retryAfterMs / 1_000)
-              : undefined
-          const waitMessage = waitSeconds
-            ? ` Waiting about ${waitSeconds} seconds before trying again.`
+      )
+    } catch (error) {
+      const hostName = this.#formatHostName()
+      if (lastFailure?.type === 'rateLimit') {
+        const waitMessage =
+          lastFailure.retryAfterMs !== undefined
+            ? ` after waiting about ${Math.ceil(lastFailure.retryAfterMs / 1_000)} seconds`
             : ''
-          details = `We're still being rate limited by ${hostName}.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
-        } else if (lastFailure.type === 'response') {
-          details = `The host responded with status ${lastFailure.status}.`
-        } else {
-          const message =
-            lastFailure.error instanceof Error
-              ? lastFailure.error.message
-              : 'an unknown error'
-          details = `Encountered ${message} while contacting ${hostName}.`
-        }
-        console.warn(`[renoun] Fetch retry is still failing. ${details}`)
-        notifiedFirstRetryFailure = true
-      }
-
-      if (skipBackoff) {
-        continue
-      }
-      const backoff = 2 ** attempt * 200 + Math.random() * 100
-      await sleep(backoff)
-    }
-
-    const hostName = this.#formatHostName()
-    if (lastFailure?.type === 'rateLimit') {
-      const waitMessage =
-        lastFailure.retryAfterMs !== undefined
-          ? ` after waiting about ${Math.ceil(lastFailure.retryAfterMs / 1_000)} seconds`
-          : ''
-      throw new Error(
-        `[renoun] Fetch failed because ${hostName} rate limited the request${waitMessage}. ${RATE_LIMIT_GUIDANCE}`
-      )
-    }
-    if (lastFailure?.type === 'response') {
-      const host = (() => {
-        try {
-          return new URL(lastFailure.url).host
-        } catch {
-          return this.#formatHostName()
-        }
-      })()
-      throw new Error(
-        `[renoun] Fetch failed with status ${lastFailure.status} from ${host}.`
-      )
-    }
-    if (lastFailure?.type === 'error') {
-      if (lastFailure.error instanceof Error) {
         throw new Error(
-          `[renoun] Failed to fetch after ${maxAttempts} attempts: ${lastFailure.error.message}`
+          `[renoun] Fetch failed because ${hostName} rate limited the request${waitMessage}. ${RATE_LIMIT_GUIDANCE}`
         )
       }
-      throw new Error(
-        `[renoun] Failed to fetch after ${maxAttempts} attempts due to an unknown error`
-      )
-    }
+      if (lastFailure?.type === 'response') {
+        const host = (() => {
+          try {
+            return new URL(lastFailure.url).host
+          } catch {
+            return this.#formatHostName()
+          }
+        })()
+        throw new Error(
+          `[renoun] Fetch failed with status ${lastFailure.status} from ${host}.`
+        )
+      }
+      if (lastFailure?.type === 'error') {
+        if (lastFailure.error instanceof Error) {
+          throw new Error(
+            `[renoun] Failed to fetch after ${maxAttempts} attempts: ${lastFailure.error.message}`
+          )
+        }
+        throw new Error(
+          `[renoun] Failed to fetch after ${maxAttempts} attempts due to an unknown error`
+        )
+      }
 
-    throw new Error(`[renoun] Failed to fetch after ${maxAttempts} attempts`)
+      if (error instanceof Error) {
+        throw error
+      }
+      throw new Error(`[renoun] Failed to fetch after ${maxAttempts} attempts`)
+    }
   }
 
   async #ensureInitialized() {
@@ -2628,10 +2771,8 @@ export class GitVirtualFileSystem
         const release = await gate.acquire()
         try {
           const url = buildUrl(path)
-          this.#assertAllowed(url)
-          const response = await fetch(url, {
-            headers: this.#noAuthHeaders,
-            referrerPolicy: 'no-referrer',
+          const response = await this.#fetchWithRetry(url, {
+            authMode: 'none',
           })
           if (!response.ok) return
           const arrayBuffer = await response.arrayBuffer()
@@ -4663,9 +4804,8 @@ export class GitVirtualFileSystem
       case 'github': {
         if (!this.#ownerEncoded || !this.#repoEncoded) return null
         const url = `https://raw.githubusercontent.com/${this.#ownerEncoded}/${this.#repoEncoded}/${encodeURIComponent(commitSha)}/${encodeURIComponent(filePath)}`
-        const response = await fetch(url, {
-          headers: this.#noAuthHeaders,
-          referrerPolicy: 'no-referrer',
+        const response = await this.#fetchWithRetry(url, {
+          authMode: 'none',
         })
         if (!response.ok) {
           if (isMissingResourceStatus(response.status)) {
@@ -4707,9 +4847,8 @@ export class GitVirtualFileSystem
       case 'bitbucket': {
         if (!this.#ownerEncoded || !this.#repoEncoded) return null
         const url = `https://bitbucket.org/${this.#ownerEncoded}/${this.#repoEncoded}/raw/${encodeURIComponent(commitSha)}/${encodeURIComponent(filePath)}`
-        const response = await fetch(url, {
-          headers: this.#noAuthHeaders,
-          referrerPolicy: 'no-referrer',
+        const response = await this.#fetchWithRetry(url, {
+          authMode: 'none',
         })
         if (!response.ok) {
           if (isMissingResourceStatus(response.status)) {

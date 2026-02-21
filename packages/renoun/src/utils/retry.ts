@@ -15,6 +15,11 @@ export interface RetryOptions {
   jitter?: number
   signal?: AbortSignal
   shouldRetry?: (error: unknown, attempt: number) => boolean
+  getDelayMs?: (
+    error: unknown,
+    attempt: number,
+    defaultDelayMs: number
+  ) => number
   onRetry?: (info: {
     error: unknown
     attempt: number
@@ -37,6 +42,11 @@ interface ResolvedRetryOptions {
   jitter: number
   signal?: AbortSignal
   shouldRetry: (error: unknown, attempt: number) => boolean
+  getDelayMs: (
+    error: unknown,
+    attempt: number,
+    defaultDelayMs: number
+  ) => number
   onRetry: (info: {
     error: unknown
     attempt: number
@@ -96,6 +106,17 @@ function computeDelayMs(attempt: number, options: ResolvedRetryOptions): number 
   return Math.max(0, Math.round(jittered))
 }
 
+function normalizeDelayMs(
+  delayMs: number,
+  fallback: number,
+  maxDelayMs: number
+): number {
+  if (!Number.isFinite(delayMs) || delayMs < 0) {
+    return fallback
+  }
+  return Math.min(maxDelayMs, Math.max(0, Math.round(delayMs)))
+}
+
 async function sleep(delayMs: number, signal?: AbortSignal): Promise<void> {
   if (delayMs <= 0) {
     return
@@ -127,6 +148,7 @@ export async function retry<Type>(
     jitter: Math.max(0, Math.min(1, options.jitter ?? DEFAULT_JITTER)),
     signal: options.signal ?? getContext()?.signal,
     shouldRetry: options.shouldRetry ?? defaultShouldRetry,
+    getDelayMs: options.getDelayMs ?? ((_, __, defaultDelayMs) => defaultDelayMs),
     onRetry: options.onRetry ?? (() => {}),
   }
 
@@ -163,7 +185,12 @@ export async function retry<Type>(
         throw error
       }
 
-      const delayMs = computeDelayMs(attempt, resolvedOptions)
+      const computedDelayMs = computeDelayMs(attempt, resolvedOptions)
+      const delayMs = normalizeDelayMs(
+        resolvedOptions.getDelayMs(error, attempt, computedDelayMs),
+        computedDelayMs,
+        resolvedOptions.maxDelayMs
+      )
       resolvedOptions.onRetry({
         error,
         attempt,
