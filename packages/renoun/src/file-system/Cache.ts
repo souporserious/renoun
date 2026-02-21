@@ -3,7 +3,10 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { delay } from '../utils/delay.ts'
 import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
 import { getDebugLogger } from '../utils/debug.ts'
+import { raceAbort } from '../utils/concurrency.ts'
+import { getContext, throwIfAborted } from '../utils/operation-context.ts'
 import { hashString } from '../utils/stable-serialization.ts'
+import { emitTelemetryEvent } from '../utils/telemetry.ts'
 import type { Snapshot } from './Snapshot.ts'
 import { summarizePersistedValue } from './cache-persistence-debug.ts'
 
@@ -53,6 +56,7 @@ export interface CacheStorePersistence {
 export interface CacheStoreGetOrComputeOptions {
   persist?: boolean
   constDeps?: CacheStoreConstDependency[]
+  signal?: AbortSignal
 }
 
 export interface CacheStorePutOptions {
@@ -62,6 +66,7 @@ export interface CacheStorePutOptions {
 
 export interface CacheStoreComputeContext {
   readonly snapshot: Snapshot
+  readonly signal?: AbortSignal
   recordDep(depKey: string, depVersion: string): void
   recordConstDep(name: string, version: string): void
   recordFileDep(path: string): Promise<string>
@@ -514,6 +519,8 @@ export class CacheStore {
     options: CacheStoreGetOrComputeOptions,
     compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
   ): Promise<Value> {
+    const waitSignal = options.signal ?? getContext()?.signal
+    throwIfAborted(waitSignal)
     this.#registerConstDependencies(options.constDeps)
 
     const inFlight = this.#inflight.get(nodeKey)
@@ -521,23 +528,24 @@ export class CacheStore {
       this.#logCacheOperation('hit', nodeKey, {
         source: 'inflight',
       })
-      const value = await (inFlight as Promise<Value>)
+      const value = await raceAbort(inFlight as Promise<Value>, waitSignal)
       await this.#recordAutomaticNodeDependency(nodeKey)
       return value
     }
 
     const operation = this.#getOrCompute(nodeKey, options, compute)
     this.#inflight.set(nodeKey, operation as Promise<unknown>)
+    void operation
+      .finally(() => {
+        if (this.#inflight.get(nodeKey) === operation) {
+          this.#inflight.delete(nodeKey)
+        }
+      })
+      .catch(() => {})
 
-    try {
-      const value = await operation
-      await this.#recordAutomaticNodeDependency(nodeKey)
-      return value
-    } finally {
-      if (this.#inflight.get(nodeKey) === operation) {
-        this.#inflight.delete(nodeKey)
-      }
-    }
+    const value = await raceAbort(operation, waitSignal)
+    await this.#recordAutomaticNodeDependency(nodeKey)
+    return value
   }
 
   async getFingerprint(nodeKey: string): Promise<string | undefined> {
@@ -1040,12 +1048,14 @@ export class CacheStore {
   async #waitForInFlightValue<Value>(
     nodeKey: string
   ): Promise<Value | typeof NO_COMPUTE_SLOT_SHARED_VALUE> {
+    const signal = getContext()?.signal
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence) {
       return NO_COMPUTE_SLOT_SHARED_VALUE
     }
 
     while (true) {
+      throwIfAborted(signal)
       const freshEntry = await this.#getFreshEntry(nodeKey)
       if (freshEntry) {
         return freshEntry.value as Value
@@ -1064,19 +1074,21 @@ export class CacheStore {
 
       const sleep = Math.max(0, this.#computeSlotPollMs) || 0
       if (sleep > 0) {
-        await delay(sleep)
+        await raceAbort(delay(sleep), signal)
       }
       continue
     }
   }
 
   async #waitForComputeSlotRelease(nodeKey: string): Promise<void> {
+    const signal = getContext()?.signal
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence) {
       return
     }
 
     while (true) {
+      throwIfAborted(signal)
       let inFlightOwner: string | undefined
       try {
         inFlightOwner = await persistence.getComputeSlotOwner(nodeKey)
@@ -1090,7 +1102,7 @@ export class CacheStore {
 
       const sleep = Math.max(0, this.#computeSlotPollMs) || 0
       if (sleep > 0) {
-        await delay(sleep)
+        await raceAbort(delay(sleep), signal)
       }
     }
   }
@@ -1196,8 +1208,10 @@ export class CacheStore {
 
     const computeWriteGuard = this.#captureNodeWriteGuard(nodeKey)
     const deps = new Map<string, string>()
+    const computeSignal = getContext()?.signal
     const context: CacheStoreComputeContext = {
       snapshot: this.#snapshot,
+      signal: computeSignal,
       recordDep(depKey, depVersion) {
         deps.set(depKey, depVersion)
       },
@@ -1261,10 +1275,12 @@ export class CacheStore {
     }
 
     try {
+      const computeStartedAt = Date.now()
       const value = await this.#activeComputeScope.run(
         { nodeKey, deps },
         async () => compute(context)
       )
+      const computeDurationMs = Date.now() - computeStartedAt
 
       const dependencyEntries = Array.from(deps.entries())
         .map(([depKey, depVersion]) => ({ depKey, depVersion }))
@@ -1283,6 +1299,17 @@ export class CacheStore {
         source: 'compute',
         persist: entry.persist,
         dependencies: dependencyEntries.length,
+      })
+      emitTelemetryEvent({
+        name: 'renoun.cache.compute',
+        tags: {
+          nodeKey,
+          persist: String(entry.persist),
+        },
+        fields: {
+          durationMs: computeDurationMs,
+          dependencies: dependencyEntries.length,
+        },
       })
 
       if (!this.#isNodeWriteGuardCurrent(nodeKey, computeWriteGuard)) {
@@ -1488,11 +1515,39 @@ export class CacheStore {
     nodeKey: string,
     data?: Record<string, unknown>
   ): void {
-    if (!getDebugLogger().isEnabled('debug')) {
-      return
+    const source =
+      typeof data?.['source'] === 'string' && data['source'].length > 0
+        ? data['source']
+        : undefined
+    const tags: Record<string, string> = {
+      nodeKey,
+    }
+    if (source) {
+      tags['source'] = source
     }
 
-    getDebugLogger().logCacheOperation(operation, nodeKey, data)
+    const fields: Record<string, unknown> = {}
+    if (data) {
+      for (const [key, value] of Object.entries(data)) {
+        if (
+          typeof value === 'number' ||
+          typeof value === 'string' ||
+          typeof value === 'boolean'
+        ) {
+          fields[key] = value
+        }
+      }
+    }
+
+    emitTelemetryEvent({
+      name: `renoun.cache.${operation}`,
+      tags,
+      fields,
+    })
+
+    if (getDebugLogger().isEnabled('debug')) {
+      getDebugLogger().logCacheOperation(operation, nodeKey, data)
+    }
   }
 
   async #resolveNodeDependencyVersion(nodeKey: string): Promise<string> {

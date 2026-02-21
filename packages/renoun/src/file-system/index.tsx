@@ -101,3 +101,27 @@ export type {
   ExportHistoryProgressEvent,
   ExportHistoryGenerator,
 } from './types.ts'
+
+export type { OperationContext } from '../utils/operation-context.ts'
+export {
+  runWithContext,
+  getContext as getOperationContext,
+  throwIfAborted,
+} from '../utils/operation-context.ts'
+export type { Telemetry, TelemetryEvent } from '../utils/telemetry.ts'
+export {
+  RenounAbortError,
+  RenounCacheError,
+  RenounNetworkError,
+  RenounTimeoutError,
+  isAbortError,
+  toPublicError,
+} from '../utils/errors.ts'
+export { retry, type RetryOptions } from '../utils/retry.ts'
+export {
+  mapConcurrent,
+  forEachConcurrent,
+  raceAbort,
+  createConcurrentQueue,
+  type ConcurrentMapOptions,
+} from '../utils/concurrency.ts'

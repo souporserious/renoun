@@ -3,6 +3,7 @@ import { ts } from 'ts-morph'
 
 import { normalizePath, joinPaths, trimLeadingDotSlash } from '../utils/path.ts'
 import { hasJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
+import { mapConcurrent } from '../utils/concurrency.ts'
 import type { DirectoryEntry } from './types.ts'
 
 /** Separator used in export IDs (format: "path/to/file.ts::exportName") */
@@ -797,21 +798,14 @@ export async function mapWithLimit<Type, Result>(
   limit: number,
   fn: (item: Type) => Promise<Result>
 ): Promise<Result[]> {
-  const results: Result[] = new Array(items.length)
-  let nextIndex = 0
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const index = nextIndex++
-      results[index] = await fn(items[index])
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(limit, items.length) }, () =>
-    worker()
+  return mapConcurrent(
+    items,
+    {
+      concurrency: limit,
+      stopOnError: true,
+    },
+    async (item) => fn(item)
   )
-  await Promise.all(workers)
-  return results
 }
 
 /**

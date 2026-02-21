@@ -4,6 +4,7 @@ import { realpathSync } from 'node:fs'
 import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { emitTelemetryEvent } from '../utils/telemetry.ts'
 import { Cache, CacheStore } from './Cache.ts'
 import { getCacheStorePersistence } from './CacheSqlite.ts'
 import type { FileSystem } from './FileSystem.ts'
@@ -461,6 +462,14 @@ export class Session {
   }
 
   recordDirectorySnapshotRebuild(snapshotKey: string, reason: string): void {
+    emitTelemetryEvent({
+      name: 'renoun.cache.directory_snapshot_rebuild',
+      tags: {
+        snapshotKey,
+        reason,
+      },
+    })
+
     if (!this.#cacheMetricsEnabled) {
       return
     }
@@ -657,6 +666,16 @@ export class Session {
       this.recordCacheMetric('invalidation_evictions_path', expiredKeys.size)
     }
 
+    emitTelemetryEvent({
+      name: 'renoun.cache.invalidate_path',
+      tags: {
+        path: normalizedPath,
+      },
+      fields: {
+        invalidatedEntries: expiredKeys.size,
+      },
+    })
+
     for (const key of expiredKeys) {
       void this.cache.delete(key)
     }
@@ -740,6 +759,15 @@ export class Session {
             'invalidation_evictions_dep_index',
             dependencyEviction.deletedNodeKeys.length
           )
+          emitTelemetryEvent({
+            name: 'renoun.cache.invalidate_dependency_index',
+            tags: {
+              path: normalizedPath,
+            },
+            fields: {
+              invalidatedEntries: dependencyEviction.deletedNodeKeys.length,
+            },
+          })
         }
 
         if (
@@ -781,6 +809,15 @@ export class Session {
       'invalidation_evictions_path',
       fallbackKeysToDelete.length
     )
+    emitTelemetryEvent({
+      name: 'renoun.cache.invalidate_fallback',
+      tags: {
+        path: normalizedPath,
+      },
+      fields: {
+        invalidatedEntries: fallbackKeysToDelete.length,
+      },
+    })
   }
 
   #cleanupExpiredInvalidatedPaths(now = Date.now()): void {

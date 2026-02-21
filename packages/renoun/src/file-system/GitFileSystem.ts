@@ -47,6 +47,7 @@ import {
   trimLeadingSlashes,
   trimTrailingSlashes,
 } from '../utils/path.ts'
+import { createConcurrentQueue } from '../utils/concurrency.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -6369,41 +6370,4 @@ function assertSafeFsPath(value: string, label: string): string {
   return s
 }
 
-class TaskQueue {
-  concurrency: number
-  running = 0
-  queue: (() => void)[] = []
-
-  constructor(concurrency: number) {
-    if (concurrency < 1) throw new Error('Concurrency must be at least 1')
-    this.concurrency = concurrency
-  }
-
-  run<Type>(task: () => Promise<Type>): Promise<Type> {
-    return new Promise((resolve, reject) => {
-      const runTask = async () => {
-        this.running++
-        try {
-          resolve(await task())
-        } catch (error) {
-          reject(error)
-        } finally {
-          this.running--
-          if (this.queue.length > 0) {
-            // Schedule next task asynchronously to avoid deep recursion
-            const next = this.queue.shift()!
-            queueMicrotask(next)
-          }
-        }
-      }
-
-      if (this.running < this.concurrency) {
-        runTask()
-      } else {
-        this.queue.push(runTask)
-      }
-    })
-  }
-}
-
-const taskQueue = new TaskQueue(10)
+const taskQueue = createConcurrentQueue(10)
