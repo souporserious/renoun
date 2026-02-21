@@ -6,7 +6,12 @@ import { getDebugLogger } from '../utils/debug.ts'
 import { raceAbort } from '../utils/concurrency.ts'
 import { getContext, throwIfAborted } from '../utils/operation-context.ts'
 import { hashString } from '../utils/stable-serialization.ts'
-import { emitTelemetryEvent } from '../utils/telemetry.ts'
+import {
+  emitTelemetryCounter,
+  emitTelemetryEvent,
+  emitTelemetryHistogram,
+} from '../utils/telemetry.ts'
+import type { Telemetry } from '../utils/telemetry.ts'
 import type { Snapshot } from './Snapshot.ts'
 import { summarizePersistedValue } from './cache-persistence-debug.ts'
 
@@ -92,6 +97,7 @@ export interface CacheStoreOptions {
   snapshot: Snapshot
   persistence?: CacheStorePersistence
   inflight?: Map<string, Promise<unknown>>
+  telemetry?: Telemetry
   computeSlotTtlMs?: number
   computeSlotPollMs?: number
   staleRetentionTtlMs?: number
@@ -101,6 +107,7 @@ export interface CacheStoreOptions {
 
 export interface CacheOptions {
   persistence?: CacheStorePersistence
+  telemetry?: Telemetry
   /** Enable cache metric collection for directory snapshots. */
   cacheMetricsEnabled?: boolean
   /** Maximum number of hot paths tracked when logging cache metrics. */
@@ -148,6 +155,7 @@ const DEFAULT_MEMORY_ONLY_CACHE_STORE_ID = 'memory-only-cache-store'
 interface CacheStoreFactoryOptions {
   snapshot: Snapshot
   inflight?: Map<string, Promise<unknown>>
+  telemetry?: Telemetry
   computeSlotTtlMs?: number
   computeSlotPollMs?: number
   staleRetentionTtlMs?: number
@@ -221,17 +229,19 @@ function createMemoryOnlySnapshot(id: string): Snapshot {
 }
 
 export function createMemoryOnlyCacheStore(
-  options: { id?: string; staleRetentionTtlMs?: number } = {}
+  options: { id?: string; staleRetentionTtlMs?: number; telemetry?: Telemetry } = {}
 ) {
   return new CacheStore({
     snapshot: createMemoryOnlySnapshot(
       options.id ?? DEFAULT_MEMORY_ONLY_CACHE_STORE_ID
     ),
     staleRetentionTtlMs: options.staleRetentionTtlMs,
+    telemetry: options.telemetry,
   })
 }
 
 export class Cache {
+  readonly telemetry?: Telemetry
   readonly cacheMetricsEnabled: boolean
   readonly cacheMetricsTopKeysLimit: number
   readonly cacheMetricsTopKeysTrackingLimit: number
@@ -250,6 +260,7 @@ export class Cache {
 
   constructor(options: CacheOptions = {}) {
     this.persistence = options.persistence
+    this.telemetry = options.telemetry
     this.usesPersistentCache = this.persistence !== undefined
     this.cacheMetricsEnabled = options.cacheMetricsEnabled === true
     this.cacheMetricsTopKeysLimit = normalizePositiveInteger(
@@ -304,6 +315,7 @@ export class Cache {
       snapshot: options.snapshot,
       persistence: this.persistence,
       inflight: options.inflight,
+      telemetry: options.telemetry ?? this.telemetry,
       computeSlotTtlMs: options.computeSlotTtlMs ?? this.computeSlotTtlMs,
       computeSlotPollMs: options.computeSlotPollMs ?? this.computeSlotPollMs,
       staleRetentionTtlMs:
@@ -485,6 +497,7 @@ function parseConstDependencyKey(
 export class CacheStore {
   readonly #snapshot: Snapshot
   readonly #persistence?: CacheStorePersistence
+  readonly #telemetry?: Telemetry
   readonly #entries = new Map<string, CacheEntry>()
   readonly #staleEntries = new Map<string, StaleCacheEntry>()
   readonly #inflight: Map<string, Promise<unknown>>
@@ -513,6 +526,7 @@ export class CacheStore {
   constructor(options: CacheStoreOptions) {
     this.#snapshot = options.snapshot
     this.#persistence = options.persistence
+    this.#telemetry = options.telemetry
     this.#inflight = options.inflight ?? new Map<string, Promise<unknown>>()
     this.#computeSlotTtlMs = normalizePositiveInteger(
       options.computeSlotTtlMs,
@@ -579,6 +593,7 @@ export class CacheStore {
         staleWhileRevalidate.maxStaleAgeMs
       )
       if (staleEntry) {
+        const namespace = getCacheTelemetryNamespace(nodeKey)
         this.#scheduleBackgroundRefresh(nodeKey, options, compute)
         this.#logCacheOperation('hit', nodeKey, {
           source: 'swr',
@@ -588,11 +603,20 @@ export class CacheStore {
         emitTelemetryEvent({
           name: 'renoun.cache.swr_serve',
           tags: {
-            nodeKey,
+            namespace,
           },
           fields: {
             ageMs: Math.max(0, Date.now() - staleEntry.updatedAt),
+            nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
           },
+          telemetry: this.#telemetry,
+        })
+        emitTelemetryCounter({
+          name: 'renoun.cache.swr_serve_count',
+          tags: {
+            namespace,
+          },
+          telemetry: this.#telemetry,
         })
         return staleEntry.value as Value
       }
@@ -673,11 +697,13 @@ export class CacheStore {
     emitTelemetryEvent({
       name: 'renoun.cache.swr_refresh',
       tags: {
-        nodeKey,
+        namespace: getCacheTelemetryNamespace(nodeKey),
       },
       fields: {
         background: true,
+        nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
       },
+      telemetry: this.#telemetry,
     })
 
     const backgroundOptions: CacheStoreGetOrComputeOptions = {
@@ -695,12 +721,14 @@ export class CacheStore {
       emitTelemetryEvent({
         name: 'renoun.cache.swr_refresh_error',
         tags: {
-          nodeKey,
+          namespace: getCacheTelemetryNamespace(nodeKey),
         },
         fields: {
+          nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
           message:
             error instanceof Error ? error.message : String(error ?? 'unknown'),
         },
+        telemetry: this.#telemetry,
       })
     })
   }
@@ -1576,16 +1604,36 @@ export class CacheStore {
         persist: entry.persist,
         dependencies: dependencyEntries.length,
       })
+      const namespace = getCacheTelemetryNamespace(nodeKey)
       emitTelemetryEvent({
         name: 'renoun.cache.compute',
         tags: {
-          nodeKey,
+          namespace,
           persist: String(entry.persist),
         },
         fields: {
+          nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
           durationMs: computeDurationMs,
           dependencies: dependencyEntries.length,
         },
+        telemetry: this.#telemetry,
+      })
+      emitTelemetryHistogram({
+        name: 'renoun.cache.compute_ms',
+        value: computeDurationMs,
+        tags: {
+          namespace,
+          persist: String(entry.persist),
+        },
+        telemetry: this.#telemetry,
+      })
+      emitTelemetryCounter({
+        name: 'renoun.cache.compute_count',
+        tags: {
+          namespace,
+          persist: String(entry.persist),
+        },
+        telemetry: this.#telemetry,
       })
 
       if (!this.#isNodeWriteGuardCurrent(nodeKey, computeWriteGuard)) {
@@ -1802,7 +1850,8 @@ export class CacheStore {
         ? data['source']
         : undefined
     const tags: Record<string, string> = {
-      nodeKey,
+      namespace: getCacheTelemetryNamespace(nodeKey),
+      operation,
     }
     if (source) {
       tags['source'] = source
@@ -1820,11 +1869,19 @@ export class CacheStore {
         }
       }
     }
+    fields['nodeKeyHash'] = getCacheTelemetryNodeKeyHash(nodeKey)
+
+    emitTelemetryCounter({
+      name: 'renoun.cache.operation_count',
+      tags,
+      telemetry: this.#telemetry,
+    })
 
     emitTelemetryEvent({
       name: `renoun.cache.${operation}`,
       tags,
       fields,
+      telemetry: this.#telemetry,
     })
 
     if (getDebugLogger().isEnabled('debug')) {
@@ -2369,6 +2426,49 @@ export function createFingerprint(dependencies: CacheDependency[]): string {
   })
 
   return hashString(lines.join('\n'))
+}
+
+function getCacheTelemetryNodeKeyHash(nodeKey: string): string {
+  return hashString(nodeKey).slice(0, 12)
+}
+
+function isLikelyCacheNodeHash(segment: string): boolean {
+  return /^[a-f0-9]{8,}$/i.test(segment)
+}
+
+function isLikelyCacheVersion(segment: string): boolean {
+  return (
+    segment.length > 0 &&
+    segment.length <= 32 &&
+    /^[a-z0-9._-]+$/i.test(segment) &&
+    !isLikelyCacheNodeHash(segment)
+  )
+}
+
+function getCacheTelemetryNamespace(nodeKey: string): string {
+  const segments = nodeKey.split(':')
+  if (segments.length === 0) {
+    return 'unknown'
+  }
+
+  if (
+    segments.length >= 4 &&
+    isLikelyCacheVersion(segments[1] ?? '') &&
+    isLikelyCacheNodeHash(segments[segments.length - 1] ?? '')
+  ) {
+    return `${segments[0]}:${segments[2]}`
+  }
+
+  if (
+    segments.length === 3 &&
+    isLikelyCacheNodeHash(segments[2] ?? '') &&
+    segments[0] &&
+    segments[1]
+  ) {
+    return `${segments[0]}:${segments[1]}`
+  }
+
+  return segments[0] ?? 'unknown'
 }
 
 function normalizeDepPath(path: string): string {

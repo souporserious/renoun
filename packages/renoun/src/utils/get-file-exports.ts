@@ -7,6 +7,12 @@ import { getDebugLogger } from './debug.ts'
 import { getDeclarationLocation } from './get-declaration-location.ts'
 import { getExportPosition } from './get-export-position.ts'
 import { getJsDocMetadata } from './get-js-doc-metadata.ts'
+import { hashString } from './stable-serialization.ts'
+import {
+  emitTelemetryCounter,
+  emitTelemetryEvent,
+  emitTelemetryHistogram,
+} from './telemetry.ts'
 
 export interface ModuleExport {
   name: string
@@ -32,9 +38,15 @@ export function getFileExports(
   filePath: string,
   project: Project
 ): ModuleExport[] {
-  return getDebugLogger().trackOperation(
-    'get-file-exports',
-    () => {
+  const startedAt = performance.now()
+  const fields = {
+    filePathHash: hashString(filePath).slice(0, 12),
+  }
+
+  try {
+    const exports = getDebugLogger().trackOperation(
+      'get-file-exports',
+      () => {
       let sourceFile = project.getSourceFile(filePath)
 
       if (!sourceFile) {
@@ -130,9 +142,40 @@ export function getFileExports(
       }
 
       return exportDeclarations
-    },
-    { data: { filePath } }
-  ) as ModuleExport[]
+      },
+      { data: { filePath } }
+    ) as ModuleExport[]
+
+    const durationMs = performance.now() - startedAt
+    emitTelemetryHistogram({
+      name: 'renoun.analysis.file_exports_ms',
+      value: durationMs,
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.file_exports',
+      fields: {
+        ...fields,
+        durationMs,
+        exportCount: exports.length,
+      },
+    })
+
+    return exports
+  } catch (error) {
+    const durationMs = performance.now() - startedAt
+    emitTelemetryCounter({
+      name: 'renoun.analysis.file_exports_error_count',
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.file_exports_error',
+      fields: {
+        ...fields,
+        durationMs,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+      },
+    })
+    throw error
+  }
 }
 
 /**
@@ -245,9 +288,16 @@ export async function getFileExportMetadata(
   kind: SyntaxKind,
   project: Project
 ) {
-  return getDebugLogger().trackOperation(
-    'get-file-export-metadata',
-    async () => {
+  const startedAt = performance.now()
+  const fields = {
+    filePathHash: hashString(filePath).slice(0, 12),
+    kind: tsMorph.SyntaxKind[kind],
+  }
+
+  try {
+    const metadata = await getDebugLogger().trackOperation(
+      'get-file-export-metadata',
+      async () => {
       const sourceFile = project.getSourceFile(filePath)
 
       if (!sourceFile) {
@@ -285,11 +335,55 @@ export async function getFileExportMetadata(
       }))
 
       return metadata
-    },
-    {
-      data: { name, filePath, position, kind: tsMorph.SyntaxKind[kind] },
-    }
-  )
+      },
+      {
+        data: { name, filePath, position, kind: tsMorph.SyntaxKind[kind] },
+      }
+    )
+
+    const durationMs = performance.now() - startedAt
+    emitTelemetryHistogram({
+      name: 'renoun.analysis.file_export_metadata_ms',
+      value: durationMs,
+      tags: {
+        kind: fields.kind,
+      },
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.file_export_metadata',
+      tags: {
+        kind: fields.kind,
+      },
+      fields: {
+        ...fields,
+        durationMs,
+        hasJsDoc: Boolean(metadata.jsDocMetadata),
+        hasLocation: Boolean(metadata.location),
+      },
+    })
+
+    return metadata
+  } catch (error) {
+    const durationMs = performance.now() - startedAt
+    emitTelemetryCounter({
+      name: 'renoun.analysis.file_export_metadata_error_count',
+      tags: {
+        kind: fields.kind,
+      },
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.file_export_metadata_error',
+      tags: {
+        kind: fields.kind,
+      },
+      fields: {
+        ...fields,
+        durationMs,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+      },
+    })
+    throw error
+  }
 }
 
 /** Get the name of an export declaration, accounting for default exports. */

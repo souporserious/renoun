@@ -1,5 +1,11 @@
 import { getDebugLogger } from './debug.ts'
 import type { DeclarationPosition } from './get-declaration-location.ts'
+import { hashString } from './stable-serialization.ts'
+import {
+  emitTelemetryCounter,
+  emitTelemetryEvent,
+  emitTelemetryHistogram,
+} from './telemetry.ts'
 import type { Project, ts } from './ts-morph.ts'
 
 export interface OutlineRange {
@@ -16,9 +22,13 @@ export function getOutlineRanges(
   filePath: string,
   project: Project
 ): OutlineRange[] {
-  return getDebugLogger().trackOperation(
-    'get-outline-ranges',
-    (): OutlineRange[] => {
+  const startedAt = performance.now()
+  const filePathHash = hashString(filePath).slice(0, 12)
+
+  try {
+    const ranges = getDebugLogger().trackOperation(
+      'get-outline-ranges',
+      (): OutlineRange[] => {
       let sourceFile = project.getSourceFile(filePath)
 
       if (!sourceFile) {
@@ -46,9 +56,40 @@ export function getOutlineRanges(
           },
         }
       })
-    },
-    { data: { filePath } }
-  ) as OutlineRange[]
+      },
+      { data: { filePath } }
+    ) as OutlineRange[]
+
+    const durationMs = performance.now() - startedAt
+    emitTelemetryHistogram({
+      name: 'renoun.analysis.outline_ranges_ms',
+      value: durationMs,
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.outline_ranges',
+      fields: {
+        filePathHash,
+        durationMs,
+        rangeCount: ranges.length,
+      },
+    })
+
+    return ranges
+  } catch (error) {
+    const durationMs = performance.now() - startedAt
+    emitTelemetryCounter({
+      name: 'renoun.analysis.outline_ranges_error_count',
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.outline_ranges_error',
+      fields: {
+        filePathHash,
+        durationMs,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+      },
+    })
+    throw error
+  }
 }
 
 /** Returns whether a position is within an outlining range. */

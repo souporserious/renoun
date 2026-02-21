@@ -12,6 +12,11 @@ import { getRootDirectory } from './get-root-directory.ts'
 import { isJsxOnly } from './is-jsx-only.ts'
 import { generatedFilenames } from './get-source-text-metadata.ts'
 import { splitTokenByRanges } from './split-tokens-by-ranges.ts'
+import {
+  emitTelemetryCounter,
+  emitTelemetryEvent,
+  emitTelemetryHistogram,
+} from './telemetry.ts'
 import { attachPublicError, RENOUN_PUBLIC_ERROR_CODES } from './public-error.ts'
 import {
   validateLanguageFileCompatibility,
@@ -127,236 +132,317 @@ export async function getTokens({
     filePath,
     value.length,
     async () => {
-      // Validate language/filePath pairing to prevent syntax highlighting issues
-      if (filePath && language !== 'plaintext') {
-        validateLanguageFileCompatibility(language, filePath)
-      }
+      const telemetryStartedAt = performance.now()
+      let telemetryLanguage = language
+      let telemetryTypeScriptFile = false
 
-      if (
-        language === 'plaintext' ||
-        language === 'text' ||
-        language === 'txt' ||
-        language === 'diff' // TODO: add support for diff highlighting
-      ) {
-        return [
-          [
-            {
-              value,
-              start: 0,
-              end: value.length,
-              hasTextStyles: false,
-              isBaseColor: true,
-              isDeprecated: false,
-              isWhiteSpace: false,
-              isSymbol: false,
-              style: {},
-            } satisfies Token,
-          ],
-        ]
-      }
+      const emitSuccessTelemetry = (
+        lines: TokenizedLines,
+        fields: {
+          totalTokens?: number
+          symbolCount?: number
+          diagnosticCount?: number
+          themeCount?: number
+        } = {}
+      ): void => {
+        const durationMs = performance.now() - telemetryStartedAt
+        const tags = {
+          language: telemetryLanguage,
+          hasFilePath: filePath ? 'true' : 'false',
+          isTypeScriptFile: telemetryTypeScriptFile ? 'true' : 'false',
+        }
+        const totalTokens =
+          fields.totalTokens ??
+          lines.reduce((sum, line) => sum + line.length, 0)
 
-      if (highlighter === null) {
-        throw new Error(
-          '[renoun] Highlighter was not initialized. Ensure that the highlighter is created before calling "getTokens".'
-        )
-      }
-
-      const finalLanguage = getLanguage(language)
-      const isTypeScriptFile = filePath
-        ? isJavaScriptTypeScriptFile(filePath)
-        : false
-      const jsxOnly = isTypeScriptFile ? isJsxOnly(value) : false
-
-      let themeNames: string[] =
-        typeof themeConfig === 'string'
-          ? [themeConfig]
-          : themeConfig
-            ? (Object.values(themeConfig) as Array<string | [string, any]>).map(
-                (themeVariant) =>
-                  typeof themeVariant === 'string'
-                    ? themeVariant
-                    : themeVariant[0]
-              )
-            : []
-
-      // Fallback to the built-in default theme when none is configured
-      if (themeNames.length === 0) {
-        themeNames = ['default']
-      }
-
-      const tsMetadataPromise = isTypeScriptFile
-        ? metadataCollector(project, filePath, jsxOnly, allowErrors, showErrors)
-        : Promise.resolve<TypeScriptMetadata>({
-            sourceFile: undefined,
-            diagnostics: [],
-            symbolMetadata: [],
-          })
-
-      const tokensPromise = getDebugLogger().trackOperation(
-        'highlighter',
-        () =>
-          highlighter.tokenize(
-            value,
-            finalLanguage as TextMateLanguages,
-            themeNames
-          ),
-        {
-          data: {
-            language: finalLanguage,
+        emitTelemetryHistogram({
+          name: 'renoun.analysis.tokens_ms',
+          value: durationMs,
+          tags,
+        })
+        emitTelemetryEvent({
+          name: 'renoun.analysis.tokens',
+          tags,
+          fields: {
+            durationMs,
             valueLength: value.length,
-            themeCount: themeNames.length,
+            tokenLines: lines.length,
+            totalTokens,
+            symbolCount: fields.symbolCount ?? 0,
+            diagnosticCount: fields.diagnosticCount ?? 0,
+            themeCount: fields.themeCount ?? 0,
           },
-        }
-      )
+        })
+      }
 
-      const [tokens, tsMetadata] = await Promise.all([
-        tokensPromise,
-        tsMetadataPromise,
-      ])
-
-      const {
-        sourceFile,
-        diagnostics: sourceFileDiagnostics,
-        symbolMetadata,
-      } = tsMetadata
-
-      const rootDirectory = getRootDirectory()
-      const baseDirectory = process.cwd().replace(rootDirectory, '')
-      const quickInfoCache = new Map<string, QuickInfoEntry>()
-      let previousTokenStart = 0
-      let parsedTokens: Token[][] = tokens.map((line) => {
-        // increment position for line breaks if the line is empty
-        if (line.length === 0) {
-          previousTokenStart += 1
+      const emitErrorTelemetry = (error: unknown): void => {
+        const durationMs = performance.now() - telemetryStartedAt
+        const tags = {
+          language: telemetryLanguage,
+          hasFilePath: filePath ? 'true' : 'false',
+          isTypeScriptFile: telemetryTypeScriptFile ? 'true' : 'false',
         }
 
-        return line.flatMap((baseToken, tokenIndex) => {
-          const tokenStart = previousTokenStart
-          const tokenEnd = tokenStart + baseToken.value.length
-          const lastToken = tokenIndex === line.length - 1
+        emitTelemetryCounter({
+          name: 'renoun.analysis.tokens_error_count',
+          tags,
+        })
+        emitTelemetryEvent({
+          name: 'renoun.analysis.tokens_error',
+          tags,
+          fields: {
+            durationMs,
+            errorName: error instanceof Error ? error.name : 'UnknownError',
+          },
+        })
+      }
 
-          // account for newlines
-          previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
+      try {
+        // Validate language/filePath pairing to prevent syntax highlighting issues
+        if (filePath && language !== 'plaintext') {
+          validateLanguageFileCompatibility(language, filePath)
+        }
 
-          const initialToken: Token = {
-            value: baseToken.value,
-            start: tokenStart,
-            end: tokenEnd,
-            hasTextStyles: baseToken.hasTextStyles,
-            isBaseColor: baseToken.isBaseColor,
-            isWhiteSpace: baseToken.isWhiteSpace,
-            isDeprecated: false,
-            isSymbol: false,
-            style: baseToken.style,
-          }
+        if (
+          language === 'plaintext' ||
+          language === 'text' ||
+          language === 'txt' ||
+          language === 'diff' // TODO: add support for diff highlighting
+        ) {
+          const plainTextTokens: TokenizedLines = [
+            [
+              {
+                value,
+                start: 0,
+                end: value.length,
+                hasTextStyles: false,
+                isBaseColor: true,
+                isDeprecated: false,
+                isWhiteSpace: false,
+                isSymbol: false,
+                style: {},
+              } satisfies Token,
+            ],
+          ]
+          emitSuccessTelemetry(plainTextTokens)
+          return plainTextTokens
+        }
 
-          // Split this token further if it intersects symbol ranges
-          let processedTokens: Tokens = []
+        if (highlighter === null) {
+          throw new Error(
+            '[renoun] Highlighter was not initialized. Ensure that the highlighter is created before calling "getTokens".'
+          )
+        }
 
-          if (symbolMetadata.length) {
-            const symbol = symbolMetadata.find((range) => {
-              return range.start >= tokenStart && range.end <= tokenEnd
+        const finalLanguage = getLanguage(language)
+        telemetryLanguage = finalLanguage
+        const isTypeScriptFile = filePath
+          ? isJavaScriptTypeScriptFile(filePath)
+          : false
+        telemetryTypeScriptFile = isTypeScriptFile
+        const jsxOnly = isTypeScriptFile ? isJsxOnly(value) : false
+
+        let themeNames: string[] =
+          typeof themeConfig === 'string'
+            ? [themeConfig]
+            : themeConfig
+              ? (Object.values(themeConfig) as Array<string | [string, any]>).map(
+                  (themeVariant) =>
+                    typeof themeVariant === 'string'
+                      ? themeVariant
+                      : themeVariant[0]
+                )
+              : []
+
+        // Fallback to the built-in default theme when none is configured
+        if (themeNames.length === 0) {
+          themeNames = ['default']
+        }
+
+        const tsMetadataPromise = isTypeScriptFile
+          ? metadataCollector(project, filePath, jsxOnly, allowErrors, showErrors)
+          : Promise.resolve<TypeScriptMetadata>({
+              sourceFile: undefined,
+              diagnostics: [],
+              symbolMetadata: [],
             })
-            const inFullRange = symbol
-              ? symbol.start === tokenStart && symbol.end === tokenEnd
-              : false
 
-            if (symbol) {
-              initialToken.isDeprecated = symbol.isDeprecated
-            }
+        const tokensPromise = getDebugLogger().trackOperation(
+          'highlighter',
+          () =>
+            highlighter.tokenize(
+              value,
+              finalLanguage as TextMateLanguages,
+              themeNames
+            ),
+          {
+            data: {
+              language: finalLanguage,
+              valueLength: value.length,
+              themeCount: themeNames.length,
+            },
+          }
+        )
 
-            if (symbol && !inFullRange) {
-              processedTokens = splitTokenByRanges(initialToken, symbolMetadata)
-            } else {
-              processedTokens.push({
-                ...initialToken,
-                isSymbol: inFullRange,
-              })
-            }
-          } else {
-            processedTokens.push(initialToken)
+        const [tokens, tsMetadata] = await Promise.all([
+          tokensPromise,
+          tsMetadataPromise,
+        ])
+
+        const {
+          sourceFile,
+          diagnostics: sourceFileDiagnostics,
+          symbolMetadata,
+        } = tsMetadata
+
+        const rootDirectory = getRootDirectory()
+        const baseDirectory = process.cwd().replace(rootDirectory, '')
+        const quickInfoCache = new Map<string, QuickInfoEntry>()
+        let previousTokenStart = 0
+        let parsedTokens: Token[][] = tokens.map((line) => {
+          // increment position for line breaks if the line is empty
+          if (line.length === 0) {
+            previousTokenStart += 1
           }
 
-          return processedTokens.map((token) => {
-            if (!token.isSymbol) {
-              return token
+          return line.flatMap((baseToken, tokenIndex) => {
+            const tokenStart = previousTokenStart
+            const tokenEnd = tokenStart + baseToken.value.length
+            const lastToken = tokenIndex === line.length - 1
+
+            // account for newlines
+            previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
+
+            const initialToken: Token = {
+              value: baseToken.value,
+              start: tokenStart,
+              end: tokenEnd,
+              hasTextStyles: baseToken.hasTextStyles,
+              isBaseColor: baseToken.isBaseColor,
+              isWhiteSpace: baseToken.isWhiteSpace,
+              isDeprecated: false,
+              isSymbol: false,
+              style: baseToken.style,
             }
 
-            const diagnostics = sourceFileDiagnostics
-              .filter((diagnostic) => {
-                const start = diagnostic.getStart()
-                const length = diagnostic.getLength()
-                if (!start || !length) {
-                  return false
-                }
-                const end = start + length
-                return token.start >= start && token.end <= end
+            // Split this token further if it intersects symbol ranges
+            let processedTokens: Tokens = []
+
+            if (symbolMetadata.length) {
+              const symbol = symbolMetadata.find((range) => {
+                return range.start >= tokenStart && range.end <= tokenEnd
               })
-              .map((diagnostic) => ({
-                code: diagnostic.getCode(),
-                message: getDiagnosticMessageText(diagnostic.getMessageText()),
-              }))
-            const quickInfo =
-              sourceFile && filePath
-                ? getQuickInfo(
-                    sourceFile,
-                    filePath,
-                    token.start,
-                    rootDirectory,
-                    baseDirectory,
-                    quickInfoCache
-                  )
-                : undefined
+              const inFullRange = symbol
+                ? symbol.start === tokenStart && symbol.end === tokenEnd
+                : false
 
-            return {
-              ...token,
-              quickInfo,
-              diagnostics: diagnostics.length ? diagnostics : undefined,
+              if (symbol) {
+                initialToken.isDeprecated = symbol.isDeprecated
+              }
+
+              if (symbol && !inFullRange) {
+                processedTokens = splitTokenByRanges(initialToken, symbolMetadata)
+              } else {
+                processedTokens.push({
+                  ...initialToken,
+                  isSymbol: inFullRange,
+                })
+              }
+            } else {
+              processedTokens.push(initialToken)
             }
+
+            return processedTokens.map((token) => {
+              if (!token.isSymbol) {
+                return token
+              }
+
+              const diagnostics = sourceFileDiagnostics
+                .filter((diagnostic) => {
+                  const start = diagnostic.getStart()
+                  const length = diagnostic.getLength()
+                  if (!start || !length) {
+                    return false
+                  }
+                  const end = start + length
+                  return token.start >= start && token.end <= end
+                })
+                .map((diagnostic) => ({
+                  code: diagnostic.getCode(),
+                  message: getDiagnosticMessageText(diagnostic.getMessageText()),
+                }))
+              const quickInfo =
+                sourceFile && filePath
+                  ? getQuickInfo(
+                      sourceFile,
+                      filePath,
+                      token.start,
+                      rootDirectory,
+                      baseDirectory,
+                      quickInfoCache
+                    )
+                  : undefined
+
+              return {
+                ...token,
+                quickInfo,
+                diagnostics: diagnostics.length ? diagnostics : undefined,
+              }
+            })
           })
         })
-      })
 
-      // Remove leading imports and whitespace for jsx only code blocks
-      if (jsxOnly) {
-        const firstJsxLineIndex = parsedTokens.findIndex((line) =>
-          line.find((token) => token.value === '<')
-        )
-        if (firstJsxLineIndex > 0) {
-          parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+        // Remove leading imports and whitespace for jsx only code blocks
+        if (jsxOnly) {
+          const firstJsxLineIndex = parsedTokens.findIndex((line) =>
+            line.find((token) => token.value === '<')
+          )
+          if (firstJsxLineIndex > 0) {
+            parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+          }
         }
-      }
 
-      if (
-        allowErrors !== true &&
-        sourceFile &&
-        sourceFileDiagnostics.length > 0
-      ) {
-        throwDiagnosticErrors(
-          filePath,
-          sourceFile,
-          sourceFileDiagnostics,
-          parsedTokens
+        if (
+          allowErrors !== true &&
+          sourceFile &&
+          sourceFileDiagnostics.length > 0
+        ) {
+          throwDiagnosticErrors(
+            filePath,
+            sourceFile,
+            sourceFileDiagnostics,
+            parsedTokens
+          )
+        }
+
+        // Log summary statistics for performance monitoring
+        const totalTokens = parsedTokens.reduce(
+          (sum: number, line: Token[]) => sum + line.length,
+          0
         )
+
+        getDebugLogger().logTokenProcessing(
+          finalLanguage,
+          filePath,
+          value.length,
+          parsedTokens.length,
+          totalTokens,
+          symbolMetadata.length,
+          sourceFileDiagnostics.length
+        )
+
+        emitSuccessTelemetry(parsedTokens, {
+          totalTokens,
+          symbolCount: symbolMetadata.length,
+          diagnosticCount: sourceFileDiagnostics.length,
+          themeCount: themeNames.length,
+        })
+
+        return parsedTokens
+      } catch (error) {
+        emitErrorTelemetry(error)
+        throw error
       }
-
-      // Log summary statistics for performance monitoring
-      const totalTokens = parsedTokens.reduce(
-        (sum: number, line: Token[]) => sum + line.length,
-        0
-      )
-
-      getDebugLogger().logTokenProcessing(
-        finalLanguage,
-        filePath,
-        value.length,
-        parsedTokens.length,
-        totalTokens,
-        symbolMetadata.length,
-        sourceFileDiagnostics.length
-      )
-
-      return parsedTokens
     }
   )
 }

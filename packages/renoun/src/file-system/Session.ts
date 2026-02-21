@@ -6,6 +6,7 @@ import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { forEachConcurrent } from '../utils/concurrency.ts'
 import { emitTelemetryEvent } from '../utils/telemetry.ts'
+import type { Telemetry } from '../utils/telemetry.ts'
 import { Cache, CacheStore } from './Cache.ts'
 import { getCacheStorePersistence } from './CacheSqlite.ts'
 import type { FileSystem } from './FileSystem.ts'
@@ -238,6 +239,7 @@ export class Session {
   readonly #workspaceChangedPathsTtlMs: number
   readonly #invalidatedPathTtlMs: number
   readonly #cacheDebugPersistence: boolean
+  readonly #telemetry?: Telemetry
   readonly #cacheMetricCounters: Record<CacheMetricCounter, number> = {
     memory_hit: 0,
     memory_miss: 0,
@@ -301,6 +303,7 @@ export class Session {
       DEFAULT_INVALIDATED_PATH_TTL_MS
     )
     this.#cacheDebugPersistence = cache?.debugCachePersistence === true
+    this.#telemetry = cache?.telemetry
 
     this.usesPersistentCache = cache
       ? cache.usesPersistentCache
@@ -322,12 +325,14 @@ export class Session {
       cache?.createStore({
         snapshot: this.snapshot,
         inflight: this.inflight,
+        telemetry: this.#telemetry,
         debugPersistenceFailure: this.#cacheDebugPersistence,
       }) ??
       new CacheStore({
         snapshot: this.snapshot,
         persistence,
         inflight: this.inflight,
+        telemetry: this.#telemetry,
         debugPersistenceFailure: this.#cacheDebugPersistence,
       })
   }
@@ -463,12 +468,19 @@ export class Session {
   }
 
   recordDirectorySnapshotRebuild(snapshotKey: string, reason: string): void {
+    const snapshotPath =
+      extractDirectoryPathFromSnapshotKey(snapshotKey) ?? snapshotKey
     emitTelemetryEvent({
       name: 'renoun.cache.directory_snapshot_rebuild',
       tags: {
-        snapshotKey,
         reason,
       },
+      fields: {
+        snapshotKeyHash: toTelemetryHash(snapshotKey),
+        pathHash: toTelemetryHash(snapshotPath),
+        pathDepth: getTelemetryPathDepth(snapshotPath),
+      },
+      telemetry: this.#telemetry,
     })
 
     if (!this.#cacheMetricsEnabled) {
@@ -669,12 +681,12 @@ export class Session {
 
     emitTelemetryEvent({
       name: 'renoun.cache.invalidate_path',
-      tags: {
-        path: normalizedPath,
-      },
       fields: {
+        pathHash: toTelemetryHash(normalizedPath),
+        pathDepth: getTelemetryPathDepth(normalizedPath),
         invalidatedEntries: expiredKeys.size,
       },
+      telemetry: this.#telemetry,
     })
 
     for (const key of expiredKeys) {
@@ -762,12 +774,12 @@ export class Session {
           )
           emitTelemetryEvent({
             name: 'renoun.cache.invalidate_dependency_index',
-            tags: {
-              path: normalizedPath,
-            },
             fields: {
+              pathHash: toTelemetryHash(normalizedPath),
+              pathDepth: getTelemetryPathDepth(normalizedPath),
               invalidatedEntries: dependencyEviction.deletedNodeKeys.length,
             },
+            telemetry: this.#telemetry,
           })
         }
 
@@ -819,12 +831,12 @@ export class Session {
     )
     emitTelemetryEvent({
       name: 'renoun.cache.invalidate_fallback',
-      tags: {
-        path: normalizedPath,
-      },
       fields: {
+        pathHash: toTelemetryHash(normalizedPath),
+        pathDepth: getTelemetryPathDepth(normalizedPath),
         invalidatedEntries: fallbackKeysToDelete.length,
       },
+      telemetry: this.#telemetry,
     })
   }
 
@@ -892,13 +904,43 @@ export class Session {
       return
     }
 
-    const orderedEntries = Object.entries(fields).sort(([first], [second]) =>
-      first.localeCompare(second)
-    )
-    const message = orderedEntries
-      .map(([key, value]) => `${key}=${String(value)}`)
-      .join(' ')
-    console.log(`[renoun-fs-cache-metrics] ${message}`)
+    const metricName =
+      typeof fields['metric'] === 'string' ? fields['metric'] : 'unknown'
+    const tags: Record<string, string> = {
+      metric: metricName,
+    }
+    const metricFields: Record<string, unknown> = {}
+
+    for (const [key, value] of Object.entries(fields)) {
+      if (key === 'metric') {
+        continue
+      }
+
+      if ((key === 'reason' || key === 'trigger') && typeof value === 'string') {
+        tags[key] = value
+        continue
+      }
+
+      if (key === 'path' && typeof value === 'string') {
+        metricFields['pathHash'] = toTelemetryHash(value)
+        metricFields['pathDepth'] = getTelemetryPathDepth(value)
+        continue
+      }
+
+      if (key === 'snapshotKey' && typeof value === 'string') {
+        metricFields['snapshotKeyHash'] = toTelemetryHash(value)
+        continue
+      }
+
+      metricFields[key] = value
+    }
+
+    emitTelemetryEvent({
+      name: 'renoun.fs.cache.metric',
+      tags,
+      fields: metricFields,
+      telemetry: this.#telemetry,
+    })
   }
 
   #getDirectorySnapshotKeyMetrics(
@@ -1125,6 +1167,18 @@ class GeneratedSnapshot implements Snapshot {
 function normalizeSessionPath(fileSystem: FileSystem, path: string): string {
   const relativePath = fileSystem.getRelativePathToWorkspace(path)
   return normalizePathKey(relativePath)
+}
+
+function toTelemetryHash(value: string): string {
+  return hashString(value).slice(0, 12)
+}
+
+function getTelemetryPathDepth(path: string): number {
+  if (path === '.') {
+    return 0
+  }
+
+  return path.split('/').filter((segment) => segment.length > 0).length
 }
 
 function createWorkspaceChangedPathsCacheKey(
