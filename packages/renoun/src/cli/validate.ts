@@ -18,6 +18,7 @@ import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { retry } from '../utils/retry.ts'
 import { RenounNetworkError } from '../utils/errors.ts'
+import { forEachConcurrent } from '../utils/concurrency.ts'
 import {
   normalizeSlashes,
   trimLeadingCurrentDirPrefix,
@@ -28,6 +29,7 @@ import {
 const MAX_WAIT_TIME = 30_000
 const PING_INTERVAL = 2_000
 const LIVE_FETCH_MAX_ATTEMPTS = 3
+const LIVE_LINK_CHECK_CONCURRENCY = 20
 
 const MDX_EXTENSIONS = new Set(['.mdx'])
 const PROTOCOL_PATTERN = /^[a-zA-Z][a-zA-Z+-.]*:/
@@ -1263,10 +1265,12 @@ async function runLiveValidation(
       const internalLinks = links.filter((link) =>
         isSameOrigin(link.url, baseOrigin)
       )
-      await Promise.all(
-        links.map((link) =>
-          checkLiveLink(link, checkedLinks, brokenLinks, currentTrace)
-        )
+      await forEachConcurrent(
+        links,
+        {
+          concurrency: LIVE_LINK_CHECK_CONCURRENCY,
+        },
+        (link) => checkLiveLink(link, checkedLinks, brokenLinks, currentTrace)
       )
 
       for (const link of internalLinks) {

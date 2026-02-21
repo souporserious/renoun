@@ -48,7 +48,7 @@ import {
   type PathLike,
 } from '../utils/path.ts'
 import type { Kind, TypeFilter } from '../utils/resolve-type.ts'
-import { Semaphore } from '../utils/Semaphore.ts'
+import { forEachConcurrent, mapConcurrent } from '../utils/concurrency.ts'
 import type {
   BaseFileSystem,
   FileSystem,
@@ -2542,10 +2542,13 @@ export class JavaScriptFile<
   async getExports() {
     const fileExports = await this.#getExports()
 
-    const exports = await Promise.all(
-      fileExports.map((exportMetadata) =>
+    const exports = await mapConcurrent(
+      fileExports,
+      {
+        concurrency: 8,
+      },
+      (exportMetadata) =>
         this.getExport(exportMetadata.name as Extract<keyof Types, string>)
-      )
     )
 
     // Optionally filter out @internal exports based on tsconfig `stripInternal`
@@ -6138,10 +6141,13 @@ export class Directory<
           return
         }
 
-        await Promise.all(
-          candidateSnapshotKeys.map((snapshotKey) =>
-            session.cache.delete(snapshotKey)
-          )
+        await forEachConcurrent(
+          candidateSnapshotKeys,
+          {
+            concurrency: 25,
+            stopOnError: false,
+          },
+          (snapshotKey) => session.cache.delete(snapshotKey)
         )
       }
     })().catch(() => {
@@ -7006,8 +7012,12 @@ export class Directory<
   ): Promise<string> {
     const session = this.#getSession()
 
-    const signatureEntries = await Promise.all(
-      entries.map(async (entry) => {
+    const signatureEntries = await mapConcurrent(
+      entries,
+      {
+        concurrency: 16,
+      },
+      async (entry) => {
         const signature = await getDirectoryEntryListingSignature(
           session.snapshot,
           fileSystem,
@@ -7021,7 +7031,7 @@ export class Directory<
           path: entry.path,
           signature,
         }
-      })
+      }
     )
 
     return createDirectoryListingSignature(signatureEntries)
@@ -7254,13 +7264,12 @@ export class Directory<
         }
       | { kind: 'skip' }
 
-    const concurrency = Math.min(8, rawEntries.length || 1)
-    const gate = new Semaphore(concurrency)
-
-    const entryResults = await Promise.all(
-      rawEntries.map(async (entry): Promise<DirectoryBuildResult> => {
-        const release = await gate.acquire()
-        try {
+    const entryResults = await mapConcurrent(
+      rawEntries,
+      {
+        concurrency: Math.min(8, rawEntries.length || 1),
+      },
+      async (entry): Promise<DirectoryBuildResult> => {
           // Skip hidden files and directories (names starting with `.`) unless explicitly included
           const isHiddenFile = entry.name.startsWith('.')
           if (isHiddenFile && !options.includeHiddenFiles) {
@@ -7414,10 +7423,7 @@ export class Directory<
             metadata,
             includeInFinal,
           }
-        } finally {
-          release()
-        }
-      })
+      }
     )
 
     for (const result of entryResults) {
@@ -8605,24 +8611,25 @@ export async function sortEntries<ExtensionTypes extends Record<string, any>>(
     keyExtractor = exportKeyFactory(key.split('.'))
   }
 
-  const keyResolvers: Promise<void>[] = []
+  await forEachConcurrent(
+    entries,
+    {
+      concurrency: 16,
+    },
+    async (entry) => {
+      if (cache.has(entry)) {
+        return
+      }
 
-  for (const entry of entries) {
-    if (!cache.has(entry)) {
-      keyResolvers.push(
-        Promise.resolve(keyExtractor(entry)).then((key) => {
-          cache.set(entry, key)
+      const keyValue = await keyExtractor(entry)
+      cache.set(entry, keyValue)
 
-          // default to descending (newest first) when a Date is detected
-          if (!directionProvided && key instanceof Date) {
-            direction = 'descending'
-          }
-        })
-      )
+      // default to descending (newest first) when a Date is detected
+      if (!directionProvided && keyValue instanceof Date) {
+        direction = 'descending'
+      }
     }
-  }
-
-  await Promise.all(keyResolvers)
+  )
 
   const sign = direction === 'descending' ? -1 : 1
 

@@ -41,6 +41,7 @@ import {
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
+import { mapConcurrent } from '../utils/concurrency.ts'
 import type { ProjectCacheDependency } from './cache.ts'
 import { createProjectFileCache, invalidateProjectFileCache } from './cache.ts'
 import type { RuntimeAnalysisSession } from './runtime-analysis-session.ts'
@@ -539,8 +540,12 @@ async function getSourceFileDependencyLinks(
   const seenLinkKeys = new Set<string>()
   const containingFilePath = sourceFile.getFilePath()
   const moduleSpecifiers = collectSourceFileModuleSpecifiers(sourceFile)
-  const resolvedModuleSpecifiers = await Promise.all(
-    moduleSpecifiers.map(async (moduleSpecifier) => {
+  const resolvedModuleSpecifiers = await mapConcurrent(
+    moduleSpecifiers,
+    {
+      concurrency: 16,
+    },
+    async (moduleSpecifier) => {
       const resolution = await resolveModuleSpecifierSourceFilePath(
         project,
         runtimeCacheStore,
@@ -553,7 +558,7 @@ async function getSourceFileDependencyLinks(
         moduleSpecifier,
         resolution,
       }
-    })
+    }
   )
 
   for (const { moduleSpecifier, resolution } of resolvedModuleSpecifiers) {
@@ -1209,23 +1214,31 @@ async function resolvePackageVersionDependencies(
 
   const dependencyFilePaths = new Set<string>()
   const dependencyNodeKeys = new Set<string>()
-  const resolveTasks: Promise<CachedPackageVersionDependencyResult | undefined>[] =
+  const resolveRequests: Array<{ packageName: string; importerPath: string }> =
     []
 
   for (const packageDependency of packageDependencies) {
     for (const importerPath of packageDependency.importerPaths) {
-      resolveTasks.push(
-        resolveCachedPackageVersionDependencyForImporter(
-          runtimeCacheStore,
-          compilerOptionsVersion,
-          packageDependency.packageName,
-          importerPath
-        )
-      )
+      resolveRequests.push({
+        packageName: packageDependency.packageName,
+        importerPath,
+      })
     }
   }
 
-  const resolvedDependencies = await Promise.all(resolveTasks)
+  const resolvedDependencies = await mapConcurrent(
+    resolveRequests,
+    {
+      concurrency: 20,
+    },
+    ({ packageName, importerPath }) =>
+      resolveCachedPackageVersionDependencyForImporter(
+        runtimeCacheStore,
+        compilerOptionsVersion,
+        packageName,
+        importerPath
+      )
+  )
   for (const resolvedDependency of resolvedDependencies) {
     if (!resolvedDependency) {
       continue

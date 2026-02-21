@@ -10,7 +10,7 @@ import {
   trimLeadingDotSlash,
   trimLeadingSlashes,
 } from '../utils/path.ts'
-import { Semaphore } from '../utils/Semaphore.ts'
+import { forEachConcurrent, mapConcurrent } from '../utils/concurrency.ts'
 import { retry } from '../utils/retry.ts'
 import { RenounNetworkError, RenounTimeoutError } from '../utils/errors.ts'
 import {
@@ -50,7 +50,6 @@ import {
   scanModuleExports,
   isUnderScope,
   looksLikeFilePath,
-  mapWithLimit,
   buildExportComparisonMaps,
   detectSameFileRenames,
   detectCrossFileRenames,
@@ -125,6 +124,13 @@ const MAX_GITHUB_BLAME_LINE = 1_000_000
 
 const MAX_GITHUB_BLAME_BATCH = 20
 const GIT_VIRTUAL_REF_IDENTITY_TTL_MS = 60_000
+const GIT_VIRTUAL_EXPORT_METADATA_CONCURRENCY = 8
+const GIT_VIRTUAL_SUBSET_FETCH_CONCURRENCY = 8
+const GIT_VIRTUAL_ENTRY_RESOLUTION_CONCURRENCY = 8
+const GIT_VIRTUAL_HISTORY_FETCH_CONCURRENCY = 10
+const GIT_VIRTUAL_ENTRY_EXPORT_CONCURRENCY = 6
+const GIT_VIRTUAL_MODULE_RESOLUTION_CONCURRENCY = 8
+const GIT_VIRTUAL_CHILD_EXPORT_COLLECTION_CONCURRENCY = 5
 
 const TAR_TYPE_FLAGS = {
   NormalFile: 0x00,
@@ -1199,15 +1205,19 @@ export class GitVirtualFileSystem
 
     // Process exports with line numbers in parallel (batched blame)
     if (exportsWithLines.length > 0) {
-      const blameResults = await Promise.all(
-        exportsWithLines.map(async (exportItem) => {
+      const blameResults = await mapConcurrent(
+        exportsWithLines,
+        {
+          concurrency: GIT_VIRTUAL_EXPORT_METADATA_CONCURRENCY,
+        },
+        async (exportItem) => {
           const metadata = await this.getGitExportMetadata(
             base.path,
             exportItem.startLine!,
             exportItem.endLine!
           )
           return { name: exportItem.name, metadata }
-        })
+        }
       )
 
       for (const { name, metadata } of blameResults) {
@@ -2764,20 +2774,28 @@ export class GitVirtualFileSystem
     files.clear()
     if (toFetch.length === 0) return true
 
-    const concurrency = 8
-    const gate = new Semaphore(Math.min(concurrency, toFetch.length))
-    await Promise.all(
-      toFetch.map(async ({ path }) => {
-        const release = await gate.acquire()
+    await forEachConcurrent(
+      toFetch,
+      {
+        concurrency: Math.min(
+          GIT_VIRTUAL_SUBSET_FETCH_CONCURRENCY,
+          toFetch.length
+        ),
+      },
+      async ({ path }) => {
+        const url = buildUrl(path)
         try {
-          const url = buildUrl(path)
           const response = await this.#fetchWithRetry(url, {
             authMode: 'none',
           })
-          if (!response.ok) return
+          if (!response.ok) {
+            return
+          }
           const arrayBuffer = await response.arrayBuffer()
           const buffer = new Uint8Array(arrayBuffer)
-          if (buffer.length > this.#maxFileBytes) return
+          if (buffer.length > this.#maxFileBytes) {
+            return
+          }
           const content: InMemoryFileContent = this.#isBinaryBuffer(buffer)
             ? { kind: 'Binary', content: buffer, encoding: 'binary' }
             : new TextDecoder('utf-8').decode(buffer)
@@ -2786,10 +2804,8 @@ export class GitVirtualFileSystem
           if (!this.#isIgnorableNetworkAbortError(error)) {
             throw error
           }
-        } finally {
-          release()
         }
-      })
+      }
     )
     return this.getFiles().size > 0
   }
@@ -3208,13 +3224,17 @@ export class GitVirtualFileSystem
     const updateMode = options.updateMode ?? 'signature'
 
     // Resolve entry files in parallel
-    const entryRelatives = await Promise.all(
-      uniqueEntrySources.map(async (source) => {
+    const entryRelatives = await mapConcurrent(
+      uniqueEntrySources,
+      {
+        concurrency: GIT_VIRTUAL_ENTRY_RESOLUTION_CONCURRENCY,
+      },
+      async (source) => {
         if (looksLikeFilePath(source)) {
           return [source]
         }
         return this.#inferEntryFiles(source)
-      })
+      }
     )
 
     const uniqueEntryRelatives = Array.from(
@@ -3332,8 +3352,7 @@ export class GitVirtualFileSystem
     const reversedCommits = [...commitHistory].reverse()
 
     // Pre-fetch all file contents in parallel batches
-    // This significantly reduces the number of sequential API calls
-    const FETCH_BATCH_SIZE = 10
+    // This significantly reduces the number of sequential API calls.
     const fileContentCache = new Map<string, string | null>()
 
     // Build list of all (commit, file) pairs we need to fetch
@@ -3344,17 +3363,23 @@ export class GitVirtualFileSystem
       }
     }
 
-    // Fetch in parallel batches with concurrency limit
-    await mapWithLimit(fetchTasks, FETCH_BATCH_SIZE, async (task) => {
-      const cacheKey = `${task.commitSha}:${task.filePath}`
-      if (!fileContentCache.has(cacheKey)) {
-        const content = await this.#fetchFileAtCommit(
-          task.filePath,
-          task.commitSha
-        )
-        fileContentCache.set(cacheKey, content)
+    // Fetch in parallel with a bounded concurrency limit.
+    await forEachConcurrent(
+      fetchTasks,
+      {
+        concurrency: GIT_VIRTUAL_HISTORY_FETCH_CONCURRENCY,
+      },
+      async (task) => {
+        const cacheKey = `${task.commitSha}:${task.filePath}`
+        if (!fileContentCache.has(cacheKey)) {
+          const content = await this.#fetchFileAtCommit(
+            task.filePath,
+            task.commitSha
+          )
+          fileContentCache.set(cacheKey, content)
+        }
       }
-    })
+    )
 
     yield {
       type: 'progress',
@@ -3389,8 +3414,12 @@ export class GitVirtualFileSystem
       const commitExports = new Map<string, Map<string, ExportItem>>()
 
       // Process entry files in parallel
-      const entryResults = await Promise.all(
-        uniqueEntryRelatives.map(async (entryRelative) => {
+      const entryResults = await mapConcurrent(
+        uniqueEntryRelatives,
+        {
+          concurrency: GIT_VIRTUAL_ENTRY_EXPORT_CONCURRENCY,
+        },
+        async (entryRelative) => {
           const cacheKey = `${commit.sha}:${entryRelative}`
           const content = fileContentCache.get(cacheKey)
           if (!content) return null
@@ -3412,7 +3441,7 @@ export class GitVirtualFileSystem
           )
 
           return { entryRelative, exports: entryExportMap }
-        })
+        }
       )
 
       // Merge entry results into commitExports
@@ -3543,8 +3572,12 @@ export class GitVirtualFileSystem
   ): Promise<Map<string, Map<string, ExportItem>>> {
     const currentExports = new Map<string, Map<string, ExportItem>>()
 
-    const results = await Promise.all(
-      entryRelatives.map(async (entryRelative) => {
+    const results = await mapConcurrent(
+      entryRelatives,
+      {
+        concurrency: GIT_VIRTUAL_ENTRY_EXPORT_CONCURRENCY,
+      },
+      async (entryRelative) => {
         const entryExportMap = await this.#collectExportsFromFile(
           entryRelative,
           0,
@@ -3555,7 +3588,7 @@ export class GitVirtualFileSystem
           new Set()
         )
         return { entryRelative, exports: entryExportMap }
-      })
+      }
     )
 
     for (const result of results) {
@@ -3584,8 +3617,12 @@ export class GitVirtualFileSystem
   ): Promise<Map<string, Map<string, ExportItem>>> {
     const currentExports = new Map<string, Map<string, ExportItem>>()
 
-    const results = await Promise.all(
-      entryRelatives.map(async (entryRelative) => {
+    const results = await mapConcurrent(
+      entryRelatives,
+      {
+        concurrency: GIT_VIRTUAL_ENTRY_EXPORT_CONCURRENCY,
+      },
+      async (entryRelative) => {
         const cacheKey = `${ref}:${entryRelative}`
         let content = fileContentCache.get(cacheKey)
         if (content === undefined) {
@@ -3615,7 +3652,7 @@ export class GitVirtualFileSystem
           fileContentCache
         )
         return { exports: entryExportMap }
-      })
+      }
     )
 
     for (const result of results) {
@@ -3924,11 +3961,15 @@ export class GitVirtualFileSystem
       ...new Set(allExternalExports.map(([, , fromPath]) => fromPath)),
     ]
 
-    const resolutionResults = await Promise.all(
-      uniqueFromPaths.map(async (fromPath) => ({
+    const resolutionResults = await mapConcurrent(
+      uniqueFromPaths,
+      {
+        concurrency: GIT_VIRTUAL_MODULE_RESOLUTION_CONCURRENCY,
+      },
+      async (fromPath) => ({
         fromPath,
         resolved: await this.#resolveModulePath(baseDirectory, fromPath),
-      }))
+      })
     )
 
     const resolutionMap = new Map<string, string | null>()
@@ -3961,8 +4002,12 @@ export class GitVirtualFileSystem
     )
 
     // Fetch and parse in parallel
-    const collectionResults = await Promise.all(
-      pathsToCollect.map(async (resolved) => {
+    const collectionResults = await mapConcurrent(
+      pathsToCollect,
+      {
+        concurrency: GIT_VIRTUAL_CHILD_EXPORT_COLLECTION_CONCURRENCY,
+      },
+      async (resolved) => {
         const cacheKey = `${commitSha}:${resolved}`
         let content = fileContentCache.get(cacheKey)
 
@@ -3991,7 +4036,7 @@ export class GitVirtualFileSystem
         )
 
         return { resolved, exports: childExports }
-      })
+      }
     )
 
     for (const { resolved, exports: childExports } of collectionResults) {
@@ -4167,11 +4212,15 @@ export class GitVirtualFileSystem
       ...new Set(allExternalExports.map(([, , fromPath]) => fromPath)),
     ]
 
-    const resolutionResults = await Promise.all(
-      uniqueFromPaths.map(async (fromPath) => ({
+    const resolutionResults = await mapConcurrent(
+      uniqueFromPaths,
+      {
+        concurrency: GIT_VIRTUAL_MODULE_RESOLUTION_CONCURRENCY,
+      },
+      async (fromPath) => ({
         fromPath,
         resolved: await this.#resolveModulePath(baseDirectory, fromPath),
-      }))
+      })
     )
 
     const resolutionMap = new Map<string, string | null>()
@@ -4204,8 +4253,12 @@ export class GitVirtualFileSystem
     )
 
     // Fetch and parse in parallel
-    const collectionResults = await Promise.all(
-      pathsToCollect.map(async (resolved) => {
+    const collectionResults = await mapConcurrent(
+      pathsToCollect,
+      {
+        concurrency: GIT_VIRTUAL_CHILD_EXPORT_COLLECTION_CONCURRENCY,
+      },
+      async (resolved) => {
         let content: string | null = null
         try {
           if (commitSha) {
@@ -4235,7 +4288,7 @@ export class GitVirtualFileSystem
         )
 
         return { resolved, exports: childExports }
-      })
+      }
     )
 
     for (const { resolved, exports: childExports } of collectionResults) {

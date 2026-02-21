@@ -14,7 +14,7 @@ import { FileSystemSnapshot } from '../../file-system/Snapshot.ts'
 import { getFileExports, getOutlineRanges } from '../../project/client.ts'
 import type { ProjectOptions } from '../../project/types.ts'
 import { getRootDirectory } from '../../utils/get-root-directory.ts'
-import { Semaphore } from '../../utils/Semaphore.ts'
+import { forEachConcurrent } from '../../utils/concurrency.ts'
 import { getDebugLogger } from '../../utils/debug.ts'
 import { isJavaScriptLikeExtension } from '../../utils/is-javascript-like-extension.ts'
 import type {
@@ -138,12 +138,13 @@ async function collectWarmFilesFromDirectoryTargets(
   }
 ): Promise<Map<string, WarmFileTask>> {
   const warmFilesByPath = new Map<string, WarmFileTask>()
-  const gate = new Semaphore(PREWARM_FILE_CACHE_CONCURRENCY)
 
-  await Promise.all(
-    directoryTargets.map(async (request) => {
-      const release = await gate.acquire()
-
+  await forEachConcurrent(
+    directoryTargets,
+    {
+      concurrency: PREWARM_FILE_CACHE_CONCURRENCY,
+    },
+    async (request) => {
       try {
         const absoluteDirectoryPath = options.fileSystem.getAbsolutePath(
           request.directoryPath
@@ -200,10 +201,8 @@ async function collectWarmFilesFromDirectoryTargets(
             },
           })
         )
-      } finally {
-        release()
       }
-    })
+    }
   )
 
   return warmFilesByPath
@@ -219,12 +218,13 @@ async function collectWarmFilesFromGetFileTargets(
 ): Promise<Map<string, WarmFileTask>> {
   const warmFilesByPath = new Map<string, WarmFileTask>()
   const deduplicatedTargets = dedupeGetFileTargets(getFileTargets)
-  const gate = new Semaphore(PREWARM_FILE_CACHE_CONCURRENCY)
 
-  await Promise.all(
-    Array.from(deduplicatedTargets.values()).map(async (request) => {
-      const release = await gate.acquire()
-
+  await forEachConcurrent(
+    Array.from(deduplicatedTargets.values()),
+    {
+      concurrency: PREWARM_FILE_CACHE_CONCURRENCY,
+    },
+    async (request) => {
       try {
         const filePath = await resolveGetFileRequestPath(
           options.fileSystem,
@@ -264,10 +264,8 @@ async function collectWarmFilesFromGetFileTargets(
             },
           })
         )
-      } finally {
-        release()
       }
-    })
+    }
   )
 
   return warmFilesByPath
@@ -480,78 +478,66 @@ async function warmFiles(
     logger: ReturnType<typeof getDebugLogger>
   }
 ): Promise<void> {
-  const gate = new Semaphore(PREWARM_FILE_CACHE_CONCURRENCY)
   const runtimeSectionsStore = createRuntimeSectionsWarmStore(options.fileSystem)
 
-  await Promise.all(
-    warmFiles.map(async (warmFile) => {
-      const release = await gate.acquire()
-
-      try {
-        if (warmFile.methods.has('getExports')) {
-          try {
-            await getFileExports(warmFile.absolutePath, options.projectOptions)
-          } catch (error) {
-            options.logger.warn(
-              'Skipping renoun getFileExports prewarm target',
-              () => ({
-                data: {
-                  filePath: warmFile.absolutePath,
-                  error: formatPrewarmError(error),
-                },
-              })
-            )
-          }
+  await forEachConcurrent(
+    warmFiles,
+    {
+      concurrency: PREWARM_FILE_CACHE_CONCURRENCY,
+    },
+    async (warmFile) => {
+      if (warmFile.methods.has('getExports')) {
+        try {
+          await getFileExports(warmFile.absolutePath, options.projectOptions)
+        } catch (error) {
+          options.logger.warn('Skipping renoun getFileExports prewarm target', () => ({
+            data: {
+              filePath: warmFile.absolutePath,
+              error: formatPrewarmError(error),
+            },
+          }))
         }
-
-        if (warmFile.methods.has('getSections')) {
-          if (isJavaScriptLikeExtension(warmFile.extension)) {
-            try {
-              await getOutlineRanges(warmFile.absolutePath, options.projectOptions)
-            } catch (error) {
-              options.logger.warn(
-                'Skipping renoun getOutlineRanges prewarm target',
-                () => ({
-                  data: {
-                    filePath: warmFile.absolutePath,
-                    error: formatPrewarmError(error),
-                  },
-                })
-              )
-            }
-          } else if (warmFile.extension === 'md' || warmFile.extension === 'mdx') {
-            try {
-              const warmedRuntimeSections =
-                await warmMarkdownSectionsThroughRuntimeCacheStore(
-                  warmFile,
-                  runtimeSectionsStore,
-                  options.fileSystem
-                )
-              if (!warmedRuntimeSections) {
-                const source = await options.fileSystem.readFile(warmFile.absolutePath)
-                if (warmFile.extension === 'md') {
-                  getMarkdownSections(source)
-                } else {
-                  getMDXSections(source)
-                }
-              }
-            } catch (error) {
-              options.logger.warn(
-                'Skipping renoun markdown sections prewarm target',
-                () => ({
-                  data: {
-                    filePath: warmFile.absolutePath,
-                    error: formatPrewarmError(error),
-                  },
-                })
-              )
-            }
-          }
-        }
-      } finally {
-        release()
       }
-    })
+
+      if (warmFile.methods.has('getSections')) {
+        if (isJavaScriptLikeExtension(warmFile.extension)) {
+          try {
+            await getOutlineRanges(warmFile.absolutePath, options.projectOptions)
+          } catch (error) {
+            options.logger.warn('Skipping renoun getOutlineRanges prewarm target', () => ({
+              data: {
+                filePath: warmFile.absolutePath,
+                error: formatPrewarmError(error),
+              },
+            }))
+          }
+        } else if (warmFile.extension === 'md' || warmFile.extension === 'mdx') {
+          try {
+            const warmedRuntimeSections =
+              await warmMarkdownSectionsThroughRuntimeCacheStore(
+                warmFile,
+                runtimeSectionsStore,
+                options.fileSystem
+              )
+            if (!warmedRuntimeSections) {
+              const source = await options.fileSystem.readFile(warmFile.absolutePath)
+              if (warmFile.extension === 'md') {
+                getMarkdownSections(source)
+              } else {
+                getMDXSections(source)
+              }
+            }
+          } catch (error) {
+            options.logger.warn('Skipping renoun markdown sections prewarm target', () => ({
+              data: {
+                filePath: warmFile.absolutePath,
+                error: formatPrewarmError(error),
+              },
+            }))
+          }
+        }
+      }
+    }
   )
 }
 

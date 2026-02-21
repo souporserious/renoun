@@ -3,7 +3,6 @@ import { ts } from 'ts-morph'
 
 import { normalizePath, joinPaths, trimLeadingDotSlash } from '../utils/path.ts'
 import { hasJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
-import { mapConcurrent } from '../utils/concurrency.ts'
 import type { DirectoryEntry } from './types.ts'
 
 /** Separator used in export IDs (format: "path/to/file.ts::exportName") */
@@ -787,24 +786,6 @@ export function isUnderScope(file: string, scope: string | string[]): boolean {
   return (
     normalizedFile === normalizedScope ||
     normalizedFile.startsWith(normalizedScope + '/')
-  )
-}
-
-/**
- * Maps items with a concurrency limit, starting new work as slots free up.
- */
-export async function mapWithLimit<Type, Result>(
-  items: Type[],
-  limit: number,
-  fn: (item: Type) => Promise<Result>
-): Promise<Result[]> {
-  return mapConcurrent(
-    items,
-    {
-      concurrency: limit,
-      stopOnError: true,
-    },
-    async (item) => fn(item)
   )
 }
 

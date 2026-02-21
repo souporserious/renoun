@@ -47,7 +47,7 @@ import {
   trimLeadingSlashes,
   trimTrailingSlashes,
 } from '../utils/path.ts'
-import { createConcurrentQueue } from '../utils/concurrency.ts'
+import { createConcurrentQueue, mapConcurrent } from '../utils/concurrency.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -90,7 +90,6 @@ import {
   getExportParseCacheKey,
   scanModuleExports,
   isUnderScope,
-  mapWithLimit,
   looksLikeFilePath,
   buildExportComparisonMaps,
   detectSameFileRenames,
@@ -2242,25 +2241,31 @@ export class GitFileSystem
                 : git.getBlobContentBySha(sha)
             })
 
-          await mapWithLimit(sortedEntries, 3, async (entryFile) => {
-            const context: CollectContext = {
-              git,
-              commit: options.commitSha,
-              maxDepth: options.maxDepth,
-              blobCache: sharedBlobCache,
-              getOrParseBlobExports,
-              scopeDirectories: sortedScopeDirectories,
-              parseWarnings: graphParseWarnings,
-              cacheStats: sharedCacheStats,
-              metaCache: sharedMetaCache,
-              resolveCache: sharedResolveCache,
-              blobShaResolveCache: sharedBlobShaResolveCache,
-              repoPath: git.repoPath,
-              reverseReExportGraph: reverseGraph,
-            }
+          await mapConcurrent(
+            sortedEntries,
+            {
+              concurrency: 3,
+            },
+            async (entryFile) => {
+              const context: CollectContext = {
+                git,
+                commit: options.commitSha,
+                maxDepth: options.maxDepth,
+                blobCache: sharedBlobCache,
+                getOrParseBlobExports,
+                scopeDirectories: sortedScopeDirectories,
+                parseWarnings: graphParseWarnings,
+                cacheStats: sharedCacheStats,
+                metaCache: sharedMetaCache,
+                resolveCache: sharedResolveCache,
+                blobShaResolveCache: sharedBlobShaResolveCache,
+                repoPath: git.repoPath,
+                reverseReExportGraph: reverseGraph,
+              }
 
-            await collectExportsFromFile(context, entryFile, 0, new Set())
-          })
+              await collectExportsFromFile(context, entryFile, 0, new Set())
+            }
+          )
 
           return {
             generatedAt: new Date().toISOString(),
@@ -2848,30 +2853,28 @@ export class GitFileSystem
     // Run git rev-list calls in parallel batches, scoped to our paths
     // This is similar to sparse checkout - only get commits touching our entry paths
     const REV_LIST_BATCH = 30
-    const rangeResults: Array<{ tag: string; commits: string[] }> = []
-
-    for (let index = 0; index < tagRanges.length; index += REV_LIST_BATCH) {
-      const batch = tagRanges.slice(index, index + REV_LIST_BATCH)
-      const batchResults = await Promise.all(
-        batch.map(async ({ tag, range }) => {
-          try {
-            // Add -- <paths> to only get commits that touch our scope directories
-            const args = ['rev-list', range, '--', ...scopeDirectories]
-            const result = await spawnAsync('git', args, {
-              cwd: this.repoRoot,
-              maxBuffer: this.maxBufferBytes,
-            })
-            return {
-              tag,
-              commits: result.trim().split('\n').filter(Boolean),
-            }
-          } catch {
-            return { tag, commits: [] }
+    const rangeResults = await mapConcurrent(
+      tagRanges,
+      {
+        concurrency: REV_LIST_BATCH,
+      },
+      async ({ tag, range }) => {
+        try {
+          // Add -- <paths> to only get commits that touch our scope directories
+          const args = ['rev-list', range, '--', ...scopeDirectories]
+          const result = await spawnAsync('git', args, {
+            cwd: this.repoRoot,
+            maxBuffer: this.maxBufferBytes,
+          })
+          return {
+            tag,
+            commits: result.trim().split('\n').filter(Boolean),
           }
-        })
-      )
-      rangeResults.push(...batchResults)
-    }
+        } catch {
+          return { tag, commits: [] }
+        }
+      }
+    )
 
     // Process results - only store commits we actually need
     let mappedCount = 0
@@ -3755,10 +3758,14 @@ export class GitFileSystem
         }
       }
 
-      const [baselineResult, ...firstBatchResults] = await Promise.all([
+      const [baselineResult, firstBatchResults] = await Promise.all([
         processCommit(baselineCommit, baselineTree ?? undefined),
-        ...firstBatch.map((commit) =>
-          processCommit(commit, firstBatchTrees.get(commit.sha))
+        mapConcurrent(
+          firstBatch,
+          {
+            concurrency: BATCH_SIZE,
+          },
+          (commit) => processCommit(commit, firstBatchTrees.get(commit.sha))
         ),
       ])
 
@@ -5396,9 +5403,11 @@ async function collectExportsFromFile(
     ...new Set(allExternalExports.map(([, , fromPath]) => fromPath)),
   ]
 
-  const resolutionResults = await mapWithLimit(
+  const resolutionResults = await mapConcurrent(
     uniqueFromPaths,
-    8,
+    {
+      concurrency: 8,
+    },
     async (fromPath) => ({
       fromPath,
       resolved: await resolveModule(context, baseDirectory, fromPath),
@@ -5442,9 +5451,11 @@ async function collectExportsFromFile(
   }
 
   const pathsArray = Array.from(pathsNeedingCollection)
-  const collectionResults = await mapWithLimit(
+  const collectionResults = await mapConcurrent(
     pathsArray,
-    5,
+    {
+      concurrency: 5,
+    },
     async (resolved) => ({
       resolved,
       exports: await collectExportsFromFile(

@@ -9,6 +9,7 @@ import { toRegExp } from 'oniguruma-to-es'
 
 import type { Languages, ScopeName } from '../grammars/index.ts'
 import { grammars } from '../grammars/index.ts'
+import { mapConcurrent } from './concurrency.ts'
 
 /** The options for the TextMate registry. */
 export interface RegistryOptions<Theme extends string> {
@@ -319,8 +320,12 @@ export class Tokenizer<Theme extends string> {
     const themeColorMaps: string[][] = []
     const states: StateStack[] = []
 
-    const themeInitializationResults = await Promise.all(
-      themes.map(async (themeName, themeIndex) => {
+    const themeInitializationResults = await mapConcurrent(
+      themes,
+      {
+        concurrency: 4,
+      },
+      async (themeName, themeIndex) => {
         let registry = this.#registries.get(themeName)
 
         if (!registry) {
@@ -352,7 +357,7 @@ export class Tokenizer<Theme extends string> {
           registry,
           themeIndex,
         }
-      })
+      }
     )
 
     for (const {
@@ -374,32 +379,33 @@ export class Tokenizer<Theme extends string> {
       }> = []
       const boundarySet = new Set<number>()
 
-      const lineTokenizationResults = await Promise.all(
-        themeGrammars.map((grammar, themeIndex) => {
+      const lineTokenizationResults = await mapConcurrent(
+        themeGrammars,
+        {
+          concurrency: 4,
+        },
+        async (grammar, themeIndex) => {
           if (!grammar) {
-            return Promise.resolve({
+            return {
               themeIndex,
               ruleStack: states[themeIndex],
               tokens: new Uint32Array(),
-            })
+            }
           }
 
           const previousState = states[themeIndex]
+          const lineResult = grammar.tokenizeLine2(
+            lineText,
+            previousState,
+            timeLimit
+          )
 
-          return Promise.resolve().then(() => {
-            const lineResult = grammar.tokenizeLine2(
-              lineText,
-              previousState,
-              timeLimit
-            )
-
-            return {
-              themeIndex,
-              ruleStack: lineResult.ruleStack,
-              tokens: lineResult.tokens,
-            }
-          })
-        })
+          return {
+            themeIndex,
+            ruleStack: lineResult.ruleStack,
+            tokens: lineResult.tokens,
+          }
+        }
       )
 
       for (const { themeIndex, tokens, ruleStack } of lineTokenizationResults) {

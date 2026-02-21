@@ -4,6 +4,7 @@ import { realpathSync } from 'node:fs'
 import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { forEachConcurrent } from '../utils/concurrency.ts'
 import { emitTelemetryEvent } from '../utils/telemetry.ts'
 import { Cache, CacheStore } from './Cache.ts'
 import { getCacheStorePersistence } from './CacheSqlite.ts'
@@ -804,7 +805,14 @@ export class Session {
       return
     }
 
-    await Promise.all(fallbackKeysToDelete.map((key) => this.cache.delete(key)))
+    await forEachConcurrent(
+      fallbackKeysToDelete,
+      {
+        concurrency: 25,
+        stopOnError: false,
+      },
+      (key) => this.cache.delete(key)
+    )
     this.recordCacheMetric(
       'invalidation_evictions_path',
       fallbackKeysToDelete.length

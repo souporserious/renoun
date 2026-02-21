@@ -5,6 +5,7 @@ import { remarkPlugins } from '@renoun/mdx/remark'
 
 import { getTokens } from '../../project/client.ts'
 import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.ts'
+import { createConcurrentQueue } from '../../utils/concurrency.ts'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.ts'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
 import { Markdown, type MarkdownProps } from '../Markdown.tsx'
@@ -39,18 +40,10 @@ const mdxProps = {
   remarkPlugins,
 } satisfies Omit<MarkdownProps, 'children'>
 
-let queue: Promise<unknown> = Promise.resolve()
+const quickInfoQueue = createConcurrentQueue(1)
 
 function enqueueQuickInfo<T>(task: () => Promise<T>) {
-  const next = queue.then(
-    () => task(),
-    () => task()
-  )
-  queue = next.then(
-    () => undefined,
-    () => undefined
-  )
-  return next
+  return quickInfoQueue.run(task)
 }
 
 async function renderQuickInfo({
