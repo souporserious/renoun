@@ -14,10 +14,12 @@ import {
   getCachedFileExportMetadata,
   getCachedFileExportStaticValue,
   getCachedFileExportText,
+  getCachedOutlineRanges,
   getCachedSourceTextMetadata,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
   resolveCachedTypeAtLocationWithDependencies,
+  transpileCachedSourceFile,
 } from './cached-analysis.ts'
 
 const { Project } = getTsMorph()
@@ -400,6 +402,154 @@ describe('project cached analysis', () => {
       expect(getSourceFileSpy.mock.calls.length).toBeGreaterThan(
         sourceFileCallsAfterFirstRun
       )
+    } finally {
+      await workspace.cleanup()
+    }
+  })
+
+  test('recomputes cached outline ranges immediately after explicit runtime invalidation', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts':
+        'export function one() {\n  if (true) {\n    return 1\n  }\n}\n',
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+
+      const first = await getCachedOutlineRanges(project, entryFilePath)
+      const second = await getCachedOutlineRanges(project, entryFilePath)
+      expect(second).toEqual(first)
+
+      await writeFile(
+        entryFilePath,
+        'export function one() {\n  if (true) {\n    return 1\n  }\n}\n\nexport function two() {\n  return 2\n}\n',
+        'utf8'
+      )
+      await project.getSourceFileOrThrow(entryFilePath).refreshFromFileSystem()
+      invalidateRuntimeAnalysisCachePath(entryFilePath)
+      await delay(0)
+
+      const refreshed = await getCachedOutlineRanges(project, entryFilePath)
+      expect(refreshed).not.toEqual(first)
+    } finally {
+      await workspace.cleanup()
+    }
+  })
+
+  test('recomputes cached static export values immediately after explicit runtime invalidation', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': 'export const value = 1\n',
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+
+      const [fileExport] = getFileExports(entryFilePath, project)
+      if (!fileExport) {
+        throw new Error('[renoun] Expected a file export in cached-analysis test')
+      }
+
+      const first = await getCachedFileExportStaticValue(project, {
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+      })
+      const second = await getCachedFileExportStaticValue(project, {
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+      })
+      expect(first).toBe(1)
+      expect(second).toBe(1)
+
+      await writeFile(entryFilePath, 'export const value = 2\n', 'utf8')
+      await project.getSourceFileOrThrow(entryFilePath).refreshFromFileSystem()
+      invalidateRuntimeAnalysisCachePath(entryFilePath)
+      await delay(0)
+
+      const refreshed = await getCachedFileExportStaticValue(project, {
+        filePath: entryFilePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+      })
+      expect(refreshed).toBe(2)
+    } finally {
+      await workspace.cleanup()
+    }
+  })
+
+  test('recomputes transpiled output immediately after explicit runtime invalidation', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': 'export const value = 1 as const\n',
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+
+      const first = await transpileCachedSourceFile(project, entryFilePath)
+      const second = await transpileCachedSourceFile(project, entryFilePath)
+      expect(second).toBe(first)
+      expect(first).toContain('value = 1')
+
+      await writeFile(entryFilePath, 'export const value = 2 as const\n', 'utf8')
+      await project.getSourceFileOrThrow(entryFilePath).refreshFromFileSystem()
+      invalidateRuntimeAnalysisCachePath(entryFilePath)
+      await delay(0)
+
+      const refreshed = await transpileCachedSourceFile(project, entryFilePath)
+      expect(refreshed).not.toBe(first)
+      expect(refreshed).toContain('value = 2')
     } finally {
       await workspace.cleanup()
     }
@@ -1145,6 +1295,84 @@ describe('project cached analysis', () => {
       ).toBe(false)
     } finally {
       consoleWarnSpy.mockRestore()
+      await workspace.cleanup()
+    }
+  })
+
+  test('invalidates cached tokens when a previously unresolved import becomes resolvable', async () => {
+    const workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': "import { dep } from './dep'\nexport const value = dep\n",
+    })
+
+    try {
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const dependencyPath = join(workspace.workspacePath, 'src/dep.ts')
+      const entrySource = await readFile(entryFilePath, 'utf8')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+      const highlighter = createHighlighter()
+
+      let metadataCalls = 0
+      const metadataCollector: GetTokensOptions['metadataCollector'] = async (
+        ...args
+      ) => {
+        metadataCalls += 1
+        return collectTypeScriptMetadata(...args)
+      }
+
+      await getCachedTokens(project, {
+        value: entrySource,
+        language: 'ts',
+        filePath: entryFilePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter,
+        metadataCollector,
+      })
+      await getCachedTokens(project, {
+        value: entrySource,
+        language: 'ts',
+        filePath: entryFilePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter,
+        metadataCollector,
+      })
+
+      expect(metadataCalls).toBe(1)
+
+      await writeFile(dependencyPath, 'export const dep = 1\n', 'utf8')
+      project.addSourceFileAtPath(dependencyPath)
+      invalidateRuntimeAnalysisCachePath(dependencyPath)
+      await delay(0)
+
+      await getCachedTokens(project, {
+        value: entrySource,
+        language: 'ts',
+        filePath: entryFilePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter,
+        metadataCollector,
+      })
+
+      expect(metadataCalls).toBe(2)
+    } finally {
       await workspace.cleanup()
     }
   })

@@ -57,6 +57,7 @@ const TRANSPILE_SOURCE_FILE_CACHE_NAME = 'transpileSourceFile'
 const TOKENS_CACHE_NAME = 'tokens'
 const SOURCE_TEXT_METADATA_CACHE_NAME = 'sourceTextMetadata'
 const TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME = 'typeScriptDependencyAnalysis'
+const MODULE_RESOLUTION_CACHE_NAME = 'moduleResolution'
 const RUNTIME_ANALYSIS_CACHE_SCOPE = 'project-analysis-runtime'
 const RUNTIME_ANALYSIS_CACHE_VERSION = '1'
 const RUNTIME_ANALYSIS_CACHE_VERSION_DEP = 'runtime-analysis-cache-version'
@@ -97,6 +98,8 @@ let runtimeAnalysisCacheStorePromise:
   | Promise<RuntimeAnalysisCacheStore | null>
   | undefined
 let runtimeAnalysisPersistedInvalidationQueue: Promise<void> = Promise.resolve()
+const pendingRuntimeAnalysisPersistedInvalidationPaths = new Set<string>()
+let isRuntimeAnalysisPersistedInvalidationFlushQueued = false
 
 async function getRuntimeAnalysisCacheStore(): Promise<
   RuntimeAnalysisCacheStore | undefined
@@ -139,16 +142,73 @@ function queueRuntimeAnalysisPersistedDependencyInvalidation(
   runtimeCacheStore: RuntimeAnalysisCacheStore,
   path: string
 ): void {
+  pendingRuntimeAnalysisPersistedInvalidationPaths.add(normalizeCachePath(path))
+  if (isRuntimeAnalysisPersistedInvalidationFlushQueued) {
+    return
+  }
+
+  isRuntimeAnalysisPersistedInvalidationFlushQueued = true
   runtimeAnalysisPersistedInvalidationQueue =
     runtimeAnalysisPersistedInvalidationQueue
       .catch(() => {})
       .then(async () => {
-        try {
-          await runtimeCacheStore.store.deleteByDependencyPath(path)
-        } catch {
-          // Best-effort persisted invalidation.
+        isRuntimeAnalysisPersistedInvalidationFlushQueued = false
+
+        const pendingPaths = Array.from(
+          pendingRuntimeAnalysisPersistedInvalidationPaths
+        )
+        pendingRuntimeAnalysisPersistedInvalidationPaths.clear()
+        const invalidationPaths = toDedupedRuntimeInvalidationPaths(
+          pendingPaths
+        )
+
+        for (const invalidationPath of invalidationPaths) {
+          try {
+            await runtimeCacheStore.store.deleteByDependencyPath(invalidationPath)
+          } catch {
+            // Best-effort persisted invalidation.
+          }
         }
       })
+}
+
+function toDedupedRuntimeInvalidationPaths(paths: readonly string[]): string[] {
+  const normalizedPaths = Array.from(
+    new Set(paths.map((path) => normalizeCachePath(path)))
+  )
+  if (normalizedPaths.length === 0) {
+    return []
+  }
+
+  if (normalizedPaths.includes('.')) {
+    return ['.']
+  }
+
+  normalizedPaths.sort((first, second) => {
+    const firstDepth = first.split('/').length
+    const secondDepth = second.split('/').length
+    if (firstDepth !== secondDepth) {
+      return firstDepth - secondDepth
+    }
+    return first.localeCompare(second)
+  })
+
+  const deduped: string[] = []
+  for (const candidatePath of normalizedPaths) {
+    const coveredByExisting = deduped.some((existingPath) => {
+      return (
+        candidatePath === existingPath ||
+        candidatePath.startsWith(`${existingPath}/`)
+      )
+    })
+    if (coveredByExisting) {
+      continue
+    }
+
+    deduped.push(candidatePath)
+  }
+
+  return deduped
 }
 
 export function invalidateRuntimeAnalysisCachePath(path: string): void {
@@ -243,6 +303,7 @@ function normalizeCacheFilePath(path: string | undefined): string | undefined {
 interface SourceFileDependencyLink {
   moduleSpecifier: string
   sourceFilePath?: string
+  moduleResolutionNodeKey?: string
 }
 
 interface SourceFileDependencyLinksResult {
@@ -251,10 +312,16 @@ interface SourceFileDependencyLinksResult {
 
 interface TypeScriptDependencyAnalysis {
   dependencyFilePaths: string[]
+  moduleResolutionNodeKeys: string[]
   packageDependencies: Array<{
     packageName: string
     importerPaths: string[]
   }>
+}
+
+interface ModuleSpecifierResolutionResult {
+  sourceFilePath?: string
+  moduleResolutionNodeKey?: string
 }
 
 interface RuntimeTypeScriptDependencyAnalysisResult {
@@ -371,30 +438,16 @@ function resolveSourceFileByPathCandidates(
   return undefined
 }
 
-function resolveModuleSpecifierSourceFilePath(
+function resolveModuleSpecifierSourceFilePathUncached(
   project: Project,
   containingFilePath: string,
-  moduleSpecifier: string,
-  moduleResolutionByKey: Map<string, string | null>
+  normalizedModuleSpecifier: string
 ): string | undefined {
-  const normalizedModuleSpecifier = normalizeModuleSpecifier(moduleSpecifier)
-  if (!normalizedModuleSpecifier) {
-    return undefined
-  }
-
-  const cacheKey = `${normalizeCachePath(containingFilePath)}:${normalizedModuleSpecifier}`
-  const cachedResolution = moduleResolutionByKey.get(cacheKey)
-  if (cachedResolution !== undefined) {
-    return cachedResolution ?? undefined
-  }
-
   const resolvedModuleSpecifierSourceFile = project.getSourceFile(
     normalizedModuleSpecifier
   )
   if (resolvedModuleSpecifierSourceFile) {
-    const resolvedFilePath = resolvedModuleSpecifierSourceFile.getFilePath()
-    moduleResolutionByKey.set(cacheKey, resolvedFilePath)
-    return resolvedFilePath
+    return resolvedModuleSpecifierSourceFile.getFilePath()
   }
 
   if (isModuleSpecifierRelativeOrAbsolute(normalizedModuleSpecifier)) {
@@ -408,7 +461,6 @@ function resolveModuleSpecifierSourceFilePath(
       baseCandidatePath
     )
     if (resolvedCandidateSourceFilePath) {
-      moduleResolutionByKey.set(cacheKey, resolvedCandidateSourceFilePath)
       return resolvedCandidateSourceFilePath
     }
   }
@@ -423,37 +475,143 @@ function resolveModuleSpecifierSourceFilePath(
     const resolvedFileName = resolutionResult.resolvedModule?.resolvedFileName
     if (resolvedFileName) {
       const resolvedSourceFile = project.getSourceFile(resolvedFileName)
-      const resolvedSourceFilePath =
-        resolvedSourceFile?.getFilePath() ?? resolvedFileName
-      moduleResolutionByKey.set(cacheKey, resolvedSourceFilePath)
-      return resolvedSourceFilePath
+      return resolvedSourceFile?.getFilePath() ?? resolvedFileName
     }
   } catch {
     // Ignore module resolution failures and leave dependency unresolved.
   }
 
-  moduleResolutionByKey.set(cacheKey, null)
   return undefined
 }
 
-function getSourceFileDependencyLinks(
+function createRuntimeModuleResolutionCacheNodeKey(payload: {
+  compilerOptionsVersion: string
+  containingFilePath: string
+  moduleSpecifier: string
+}): string {
+  return createRuntimeAnalysisCacheNodeKey(MODULE_RESOLUTION_CACHE_NAME, {
+    compilerOptionsVersion: payload.compilerOptionsVersion,
+    containingFilePath: normalizeCachePath(payload.containingFilePath),
+    moduleSpecifier: payload.moduleSpecifier,
+  })
+}
+
+async function resolveModuleSpecifierSourceFilePath(
   project: Project,
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  compilerOptionsVersion: string,
+  containingFilePath: string,
+  moduleSpecifier: string,
+  moduleResolutionByKey: Map<string, ModuleSpecifierResolutionResult>
+): Promise<ModuleSpecifierResolutionResult> {
+  const normalizedModuleSpecifier = normalizeModuleSpecifier(moduleSpecifier)
+  if (!normalizedModuleSpecifier) {
+    return {}
+  }
+
+  const cacheKey = `${normalizeCachePath(containingFilePath)}:${normalizedModuleSpecifier}`
+  if (moduleResolutionByKey.has(cacheKey)) {
+    return moduleResolutionByKey.get(cacheKey) ?? {}
+  }
+
+  const shouldUseRuntimeCache =
+    isModuleSpecifierRelativeOrAbsolute(normalizedModuleSpecifier) &&
+    canUseRuntimePathCache(runtimeCacheStore, containingFilePath)
+
+  if (!shouldUseRuntimeCache) {
+    const sourceFilePath = resolveModuleSpecifierSourceFilePathUncached(
+      project,
+      containingFilePath,
+      normalizedModuleSpecifier
+    )
+    const resolution: ModuleSpecifierResolutionResult = {
+      sourceFilePath,
+    }
+    moduleResolutionByKey.set(cacheKey, resolution)
+    return resolution
+  }
+
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+  const moduleResolutionNodeKey = createRuntimeModuleResolutionCacheNodeKey({
+    compilerOptionsVersion,
+    containingFilePath,
+    moduleSpecifier: normalizedModuleSpecifier,
+  })
+
+  const value = await runtimeCacheStore.store.getOrCompute(
+    moduleResolutionNodeKey,
+    {
+      persist: true,
+      constDeps: runtimeConstDeps,
+    },
+    async (context) => {
+      recordConstDependencies(context, runtimeConstDeps)
+
+      await recordProjectConfigDependency(context, runtimeCacheStore, project)
+      await recordFileDependencyIfPossible(
+        context,
+        runtimeCacheStore,
+        containingFilePath
+      )
+
+      if (isModuleSpecifierRelativeOrAbsolute(normalizedModuleSpecifier)) {
+        const baseCandidatePath = normalizedModuleSpecifier.startsWith('.')
+          ? join(dirname(containingFilePath), normalizedModuleSpecifier)
+          : normalizedModuleSpecifier
+        await recordDirectoryDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          dirname(baseCandidatePath)
+        )
+      }
+
+      const sourceFilePath = resolveModuleSpecifierSourceFilePathUncached(
+        project,
+        containingFilePath,
+        normalizedModuleSpecifier
+      )
+      await recordFileDependencyIfPossible(
+        context,
+        runtimeCacheStore,
+        sourceFilePath
+      )
+
+      return {
+        sourceFilePath: sourceFilePath ?? null,
+      }
+    }
+  )
+
+  const resolution: ModuleSpecifierResolutionResult = {
+    sourceFilePath: value.sourceFilePath ?? undefined,
+    moduleResolutionNodeKey,
+  }
+  moduleResolutionByKey.set(cacheKey, resolution)
+  return resolution
+}
+
+async function getSourceFileDependencyLinks(
+  project: Project,
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  compilerOptionsVersion: string,
   sourceFile: SourceFile,
-  moduleResolutionByKey: Map<string, string | null>
-): SourceFileDependencyLinksResult {
+  moduleResolutionByKey: Map<string, ModuleSpecifierResolutionResult>
+): Promise<SourceFileDependencyLinksResult> {
   const links: SourceFileDependencyLink[] = []
   const seenLinkKeys = new Set<string>()
   const containingFilePath = sourceFile.getFilePath()
   const moduleSpecifiers = collectSourceFileModuleSpecifiers(sourceFile)
 
   for (const moduleSpecifier of moduleSpecifiers) {
-    const sourceFilePath = resolveModuleSpecifierSourceFilePath(
+    const resolution = await resolveModuleSpecifierSourceFilePath(
       project,
+      runtimeCacheStore,
+      compilerOptionsVersion,
       containingFilePath,
       moduleSpecifier,
       moduleResolutionByKey
     )
-    const linkKey = `${moduleSpecifier}:${sourceFilePath ?? 'missing'}`
+    const linkKey = `${moduleSpecifier}:${resolution.sourceFilePath ?? 'missing'}:${resolution.moduleResolutionNodeKey ?? 'none'}`
     if (seenLinkKeys.has(linkKey)) {
       continue
     }
@@ -461,7 +619,8 @@ function getSourceFileDependencyLinks(
 
     links.push({
       moduleSpecifier,
-      sourceFilePath,
+      sourceFilePath: resolution.sourceFilePath,
+      moduleResolutionNodeKey: resolution.moduleResolutionNodeKey,
     })
   }
 
@@ -602,35 +761,38 @@ function getPackageNameFromModuleSpecifier(
   return packageName || undefined
 }
 
-function collectTypeScriptDependencyAnalysis(
+async function collectTypeScriptDependencyAnalysis(
   project: Project,
   runtimeCacheStore: RuntimeAnalysisCacheStore,
   filePath: string
-): TypeScriptDependencyAnalysis {
+): Promise<TypeScriptDependencyAnalysis> {
   const sourceFile = project.getSourceFile(filePath)
   const projectDependencyBoundaryPath = getProjectDependencyBoundaryPath(project)
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (!sourceFile) {
     return {
       dependencyFilePaths: [],
+      moduleResolutionNodeKeys: [],
       packageDependencies: [],
     }
   }
 
   const dependencyPaths = new Set<string>()
+  const moduleResolutionNodeKeys = new Set<string>()
   const packageImportersByName = new Map<string, Set<string>>()
   const visitedSourceFilePaths = new Set<string>()
   const sourceFileQueue: SourceFile[] = [sourceFile]
-  const moduleResolutionByKey = new Map<string, string | null>()
+  const moduleResolutionByKey = new Map<string, ModuleSpecifierResolutionResult>()
   const dependencyLinksBySourceFilePath = new Map<
     string,
-    SourceFileDependencyLinksResult
+    Promise<SourceFileDependencyLinksResult>
   >()
   let dependencyAnalysisLimitReached = false
 
   const getDependencyLinksForSourceFile = (
     targetSourceFile: SourceFile
-  ): SourceFileDependencyLinksResult => {
+  ): Promise<SourceFileDependencyLinksResult> => {
     const sourceFilePathKey = normalizeCachePath(targetSourceFile.getFilePath())
     const cachedLinks = dependencyLinksBySourceFilePath.get(sourceFilePathKey)
     if (cachedLinks) {
@@ -639,6 +801,8 @@ function collectTypeScriptDependencyAnalysis(
 
     const resolvedLinks = getSourceFileDependencyLinks(
       project,
+      runtimeCacheStore,
+      compilerOptionsVersion,
       targetSourceFile,
       moduleResolutionByKey
     )
@@ -662,7 +826,12 @@ function collectTypeScriptDependencyAnalysis(
 
     visitedSourceFilePaths.add(normalizedCurrentSourceFilePath)
 
-    for (const link of getDependencyLinksForSourceFile(currentSourceFile).links) {
+    for (const link of (await getDependencyLinksForSourceFile(currentSourceFile))
+      .links) {
+      if (link.moduleResolutionNodeKey) {
+        moduleResolutionNodeKeys.add(link.moduleResolutionNodeKey)
+      }
+
       const dependencyPath = link.sourceFilePath
       const normalizedDependencyPath =
         typeof dependencyPath === 'string'
@@ -731,7 +900,12 @@ function collectTypeScriptDependencyAnalysis(
       }
       dependencyPaths.add(projectSourceFilePath)
 
-      for (const link of getDependencyLinksForSourceFile(projectSourceFile).links) {
+      for (const link of (await getDependencyLinksForSourceFile(projectSourceFile))
+        .links) {
+        if (link.moduleResolutionNodeKey) {
+          moduleResolutionNodeKeys.add(link.moduleResolutionNodeKey)
+        }
+
         const dependencyPath = link.sourceFilePath
         const normalizedDependencyPath =
           typeof dependencyPath === 'string'
@@ -777,6 +951,7 @@ function collectTypeScriptDependencyAnalysis(
 
   return {
     dependencyFilePaths: Array.from(dependencyPaths.values()),
+    moduleResolutionNodeKeys: Array.from(moduleResolutionNodeKeys.values()),
     packageDependencies,
   }
 }
@@ -1053,11 +1228,15 @@ async function getCachedRuntimeTypeScriptDependencyAnalysis(
       await recordProjectConfigDependency(context, runtimeCacheStore, project)
       await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
 
-      const typeScriptDependencies = collectTypeScriptDependencyAnalysis(
+      const typeScriptDependencies = await collectTypeScriptDependencyAnalysis(
         project,
         runtimeCacheStore,
         filePath
       )
+
+      for (const moduleResolutionNodeKey of typeScriptDependencies.moduleResolutionNodeKeys) {
+        await context.recordNodeDep(moduleResolutionNodeKey)
+      }
 
       const packageVersionDependencies = resolvePackageVersionDependencies(
         runtimeCacheStore,
@@ -1122,6 +1301,25 @@ async function recordFileDependencyIfPossible(
     runtimeCacheStore.fileSystem.getRelativePathToWorkspace(absolutePath)
     const dependencyVersion = await context.snapshot.contentId(absolutePath)
     context.recordDep(`file:${absolutePath}`, dependencyVersion)
+  } catch {
+    // Ignore non-workspace and unavailable paths.
+  }
+}
+
+async function recordDirectoryDependencyIfPossible(
+  context: CacheStoreComputeContext,
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  path: string | undefined
+): Promise<void> {
+  if (!path) {
+    return
+  }
+
+  try {
+    const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
+    runtimeCacheStore.fileSystem.getRelativePathToWorkspace(absolutePath)
+    const dependencyVersion = await context.snapshot.contentId(absolutePath)
+    context.recordDep(`dir:${absolutePath}`, dependencyVersion)
   } catch {
     // Ignore non-workspace and unavailable paths.
   }
@@ -1315,6 +1513,36 @@ export async function getCachedOutlineRanges(
   project: Project,
   filePath: string
 ): Promise<OutlineRange[]> {
+  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, filePath)
+  ) {
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const nodeKey = createRuntimeAnalysisCacheNodeKey(OUTLINE_RANGES_CACHE_NAME, {
+      compilerOptionsVersion,
+      filePath: normalizeCacheFilePath(filePath),
+    })
+
+    return runtimeCacheStore.store.getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: runtimeConstDeps,
+      },
+      async (context) => {
+        recordConstDependencies(context, runtimeConstDeps)
+
+        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
+
+        return baseGetOutlineRanges(filePath, project)
+      }
+    )
+  }
+
   return createProjectFileCache(
     project,
     filePath,
@@ -1425,6 +1653,57 @@ export async function getCachedFileExportStaticValue(
     kind: SyntaxKind
   }
 ): Promise<Awaited<ReturnType<typeof baseGetFileExportStaticValue>>> {
+  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+  ) {
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const nodeKey = createRuntimeAnalysisCacheNodeKey(
+      FILE_EXPORT_STATIC_VALUE_CACHE_NAME,
+      {
+        compilerOptionsVersion,
+        filePath: normalizeCacheFilePath(options.filePath),
+        position: options.position,
+        kind: options.kind,
+      }
+    )
+    const fileExportsNodeKey = createRuntimeFileExportsCacheNodeKey(
+      options.filePath,
+      compilerOptionsVersion
+    )
+
+    return runtimeCacheStore.store.getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: runtimeConstDeps,
+      },
+      async (context) => {
+        recordConstDependencies(context, runtimeConstDeps)
+
+        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          options.filePath
+        )
+
+        await getCachedFileExports(project, options.filePath)
+        await context.recordNodeDep(fileExportsNodeKey)
+
+        return baseGetFileExportStaticValue(
+          options.filePath,
+          options.position,
+          options.kind,
+          project
+        )
+      }
+    )
+  }
+
   return createProjectFileCache(
     project,
     options.filePath,
@@ -1672,6 +1951,39 @@ export async function transpileCachedSourceFile(
   project: Project,
   filePath: string
 ): Promise<string> {
+  const runtimeCacheStore = await getRuntimeAnalysisCacheStore()
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, filePath)
+  ) {
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const nodeKey = createRuntimeAnalysisCacheNodeKey(
+      TRANSPILE_SOURCE_FILE_CACHE_NAME,
+      {
+        compilerOptionsVersion,
+        filePath: normalizeCacheFilePath(filePath),
+      }
+    )
+
+    return runtimeCacheStore.store.getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: runtimeConstDeps,
+      },
+      async (context) => {
+        recordConstDependencies(context, runtimeConstDeps)
+
+        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
+
+        return baseTranspileSourceFile(filePath, project)
+      }
+    )
+  }
+
   return createProjectFileCache(
     project,
     filePath,

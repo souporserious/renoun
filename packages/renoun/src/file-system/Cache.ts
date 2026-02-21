@@ -459,6 +459,8 @@ export class CacheStore {
     string,
     number | 'missing'
   >()
+  readonly #invalidationEpochByNodeKey = new Map<string, number>()
+  #globalInvalidationEpoch = 0
   readonly #computeSlotTtlMs: number
   readonly #computeSlotPollMs: number
   readonly #persistedVerificationAttempts: number
@@ -690,9 +692,14 @@ export class CacheStore {
       source: 'explicit',
     })
 
+    this.#bumpNodeInvalidationEpoch(nodeKey)
     this.#dependencyGraph.markNodeDirty(nodeKey)
     this.#dependencyGraph.unregisterNode(nodeKey)
     this.#entries.delete(nodeKey)
+    this.#inflight.delete(nodeKey)
+    this.#persistenceOperationByKey.delete(nodeKey)
+    this.#persistenceIntentVersionByKey.delete(nodeKey)
+    this.#persistedRevisionPreconditionByKey.delete(nodeKey)
     if (!this.#persistence) {
       return
     }
@@ -755,6 +762,7 @@ export class CacheStore {
     }
 
     for (const nodeKey of deletedNodeKeys) {
+      this.#bumpNodeInvalidationEpoch(nodeKey)
       this.#dependencyGraph.markNodeDirty(nodeKey)
       this.#dependencyGraph.unregisterNode(nodeKey)
       this.#entries.delete(nodeKey)
@@ -808,6 +816,7 @@ export class CacheStore {
     }
 
     for (const nodeKey of affectedNodeKeys) {
+      this.#bumpNodeInvalidationEpoch(nodeKey)
       this.#dependencyGraph.markNodeDirty(nodeKey)
       this.#dependencyGraph.unregisterNode(nodeKey)
       this.#entries.delete(nodeKey)
@@ -1145,6 +1154,7 @@ export class CacheStore {
       source: 'explicit-sync',
     })
 
+    this.#bumpNodeInvalidationEpoch(nodeKey)
     this.#dependencyGraph.markNodeDirty(nodeKey)
     this.#dependencyGraph.unregisterNode(nodeKey)
     this.#entries.delete(nodeKey)
@@ -1160,9 +1170,11 @@ export class CacheStore {
       size: this.#entries.size,
     })
 
+    this.#globalInvalidationEpoch += 1
     this.#entries.clear()
     this.#inflight.clear()
     this.#dependencyGraph.clear()
+    this.#invalidationEpochByNodeKey.clear()
   }
 
   async #getOrCompute<Value>(
@@ -1182,6 +1194,7 @@ export class CacheStore {
           })
         : undefined
 
+    const computeWriteGuard = this.#captureNodeWriteGuard(nodeKey)
     const deps = new Map<string, string>()
     const context: CacheStoreComputeContext = {
       snapshot: this.#snapshot,
@@ -1272,6 +1285,14 @@ export class CacheStore {
         dependencies: dependencyEntries.length,
       })
 
+      if (!this.#isNodeWriteGuardCurrent(nodeKey, computeWriteGuard)) {
+        this.#logCacheOperation('clear', nodeKey, {
+          source: 'compute',
+          reason: 'stale-after-invalidation',
+        })
+        return value
+      }
+
       this.#entries.set(nodeKey, entry)
       this.#registerEntryInGraph(nodeKey, entry)
       await this.#savePersistedEntry(nodeKey, entry, {
@@ -1285,6 +1306,34 @@ export class CacheStore {
         await this.#releaseComputeSlot(nodeKey, computeSlotOwner)
       }
     }
+  }
+
+  #bumpNodeInvalidationEpoch(nodeKey: string): void {
+    const nextEpoch = (this.#invalidationEpochByNodeKey.get(nodeKey) ?? 0) + 1
+    this.#invalidationEpochByNodeKey.set(nodeKey, nextEpoch)
+  }
+
+  #captureNodeWriteGuard(nodeKey: string): {
+    globalEpoch: number
+    nodeEpoch: number
+  } {
+    return {
+      globalEpoch: this.#globalInvalidationEpoch,
+      nodeEpoch: this.#invalidationEpochByNodeKey.get(nodeKey) ?? 0,
+    }
+  }
+
+  #isNodeWriteGuardCurrent(
+    nodeKey: string,
+    guard: {
+      globalEpoch: number
+      nodeEpoch: number
+    }
+  ): boolean {
+    return (
+      guard.globalEpoch === this.#globalInvalidationEpoch &&
+      guard.nodeEpoch === (this.#invalidationEpochByNodeKey.get(nodeKey) ?? 0)
+    )
   }
 
   async #getEntry(nodeKey: string): Promise<CacheEntry | undefined> {

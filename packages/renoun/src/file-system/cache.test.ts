@@ -2223,6 +2223,51 @@ describe('cache replacement semantics', () => {
 
     expect(await store.get<string>(nodeKey)).toBe('second')
   })
+
+  test('does not persist stale in-flight compute results after explicit delete', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'replacement-delete-inflight'
+    )
+    const store = new CacheStore({ snapshot })
+    const nodeKey = 'test:replacement-delete-inflight'
+
+    const started = createDeferredPromise()
+    const release = createDeferredPromise()
+
+    const staleCompute = store.getOrCompute(
+      nodeKey,
+      { persist: false },
+      async (ctx) => {
+        await ctx.recordFileDep('/index.ts')
+        started.resolve()
+        await release.promise
+        return 'stale'
+      }
+    )
+
+    await started.promise
+    await store.delete(nodeKey)
+
+    const freshValue = await store.getOrCompute(
+      nodeKey,
+      { persist: false },
+      async (ctx) => {
+        await ctx.recordFileDep('/index.ts')
+        return 'fresh'
+      }
+    )
+
+    release.resolve()
+    const staleValue = await staleCompute
+
+    expect(staleValue).toBe('stale')
+    expect(freshValue).toBe('fresh')
+    expect(await store.get<string>(nodeKey)).toBe('fresh')
+  })
 })
 
 describe('session cache persistence policy', () => {
