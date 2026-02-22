@@ -196,6 +196,35 @@ export class NodeFileSystem
     }
   }
 
+  #toGitStatusScopePath(relativeRootPath: string): string {
+    if (!relativeRootPath || relativeRootPath === '.') {
+      return '.'
+    }
+
+    return relativeRootPath
+  }
+
+  async #shouldIncludeIgnoredStatus(
+    gitRoot: string,
+    scopePath: string
+  ): Promise<boolean> {
+    if (scopePath === '.') {
+      return false
+    }
+
+    const ignoredResult = await spawnWithResult(
+      'git',
+      ['check-ignore', '-q', '--', scopePath],
+      {
+        cwd: gitRoot,
+        maxBuffer: GIT_MAX_BUFFER_BYTES,
+        shell: false,
+      }
+    )
+
+    return ignoredResult.status === 0
+  }
+
   getAbsolutePath(path: string): string {
     const absolutePath = resolve(path)
 
@@ -265,7 +294,11 @@ export class NodeFileSystem
         return null
       }
 
-      const scopePath = relativeRootPath === '.' ? '.' : relativeRootPath
+      const scopePath = this.#toGitStatusScopePath(relativeRootPath)
+      const includeIgnoredStatuses = await this.#shouldIncludeIgnoredStatus(
+        gitRoot,
+        scopePath
+      )
 
       const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
         cwd: gitRoot,
@@ -288,7 +321,7 @@ export class NodeFileSystem
           '--porcelain=1',
           '-z',
           '--untracked-files=all',
-          '--ignored=matching',
+          ...(includeIgnoredStatuses ? ['--ignored=matching'] : []),
           '--ignore-submodules=all',
           '--',
           scopePath,
@@ -369,7 +402,11 @@ export class NodeFileSystem
         return null
       }
 
-      const scopePath = relativeRootPath === '.' ? '.' : relativeRootPath
+      const scopePath = this.#toGitStatusScopePath(relativeRootPath)
+      const includeIgnoredStatuses = await this.#shouldIncludeIgnoredStatus(
+        gitRoot,
+        scopePath
+      )
 
       const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
         cwd: gitRoot,
@@ -413,7 +450,7 @@ export class NodeFileSystem
           '--porcelain=1',
           '-z',
           '--untracked-files=all',
-          '--ignored=matching',
+          ...(includeIgnoredStatuses ? ['--ignored=matching'] : []),
           '--ignore-submodules=all',
           '--',
           scopePath,

@@ -4262,6 +4262,9 @@ const FILE_DEPENDENCY_PREFIX = 'file:'
 const PRODUCTION_SNAPSHOT_REVALIDATE_INTERVAL_MS = 250
 const DIRECTORY_SNAPSHOT_COORDINATION_KEY_PREFIX = 'dir:resolve:'
 const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
+const WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER = ';ignored-only:1'
+const WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER =
+  ';include-gitignored:1'
 
 function shouldTrackDirectoryMtime(fileSystem: FileSystem): boolean {
   const constructorName = fileSystem.constructor?.name ?? ''
@@ -4424,6 +4427,20 @@ function mergeKnownPathKeySets(
   return merged
 }
 
+function markWorkspaceTokenForGitIgnoredSnapshots(
+  token: string | null | undefined
+): string | null {
+  if (!token) {
+    return null
+  }
+
+  if (token.includes(WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER)) {
+    return token
+  }
+
+  return `${token}${WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER}`
+}
+
 function isTrustedWorkspaceChangeToken(
   token: string | null | undefined
 ): boolean {
@@ -4431,7 +4448,10 @@ function isTrustedWorkspaceChangeToken(
     return false
   }
 
-  return !token.includes(';ignored-only:1')
+  return (
+    !token.includes(WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER) &&
+    !token.includes(WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER)
+  )
 }
 
 function pathKeysIntersect(firstPath: string, secondPath: string): boolean {
@@ -6459,6 +6479,7 @@ export class Directory<
                     directory.getFileSystem()
                   ),
                 validateDirectoryDependencies: true,
+                includeGitIgnoredFiles: options.includeGitIgnoredFiles,
               }
             )
 
@@ -6594,6 +6615,7 @@ export class Directory<
     options?: {
       validateFileDependencies?: boolean
       validateDirectoryDependencies?: boolean
+      includeGitIgnoredFiles?: boolean
     }
   ): Promise<
     | DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>>
@@ -6655,10 +6677,18 @@ export class Directory<
       validateDirectoryDependencies &&
       shouldTrackDirectoryMtime(this.getFileSystem())
 
-    const currentWorkspaceToken = await session.getWorkspaceChangeToken(
+    const requiresIgnoredDependencyValidation =
+      options?.includeGitIgnoredFiles ?? false
+    const currentWorkspaceTokenRaw = await session.getWorkspaceChangeToken(
       this.getRootPath()
     )
-    const persistedWorkspaceToken = persisted.workspaceChangeToken ?? null
+    const currentWorkspaceToken = requiresIgnoredDependencyValidation
+      ? markWorkspaceTokenForGitIgnoredSnapshots(currentWorkspaceTokenRaw)
+      : currentWorkspaceTokenRaw
+    const persistedWorkspaceTokenRaw = persisted.workspaceChangeToken ?? null
+    const persistedWorkspaceToken = requiresIgnoredDependencyValidation
+      ? markWorkspaceTokenForGitIgnoredSnapshots(persistedWorkspaceTokenRaw)
+      : persistedWorkspaceTokenRaw
     const currentTokenIsTrusted = isTrustedWorkspaceChangeToken(
       currentWorkspaceToken
     )
@@ -7610,9 +7640,12 @@ export class Directory<
       })
     }
 
-    const workspaceChangeToken = await directory
+    const workspaceChangeTokenRaw = await directory
       .#getSession()
       .getWorkspaceChangeToken(directory.getRootPath())
+    const workspaceChangeToken = options.includeGitIgnoredFiles
+      ? markWorkspaceTokenForGitIgnoredSnapshots(workspaceChangeTokenRaw)
+      : workspaceChangeTokenRaw
 
     const snapshot = createDirectorySnapshot<
       Directory<LoaderTypes>,

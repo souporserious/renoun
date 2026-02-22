@@ -242,6 +242,42 @@ describe('GitFileSystem', () => {
     }
   })
 
+  test('ignores gitignored-only changes in workspace token checks', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFiles(
+      repoRoot,
+      [
+        { filename: '.gitignore', content: 'ignored/\n' },
+        { filename: 'src/index.ts', content: 'export const value = 1' },
+      ],
+      'init'
+    )
+
+    const ignoredPath = join(repoRoot, 'ignored', 'scratch.txt')
+    mkdirSync(join(repoRoot, 'ignored'), { recursive: true })
+    writeFileSync(ignoredPath, 'first')
+
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const previousToken = await store.getWorkspaceChangeToken('.')
+      expect(previousToken).toBeTruthy()
+
+      writeFileSync(ignoredPath, 'second')
+      const nextToken = await store.getWorkspaceChangeToken('.')
+      expect(nextToken).toBe(previousToken)
+
+      const changedPaths = await store.getWorkspaceChangedPathsSinceToken(
+        '.',
+        previousToken!
+      )
+      expect(changedPaths ?? []).toEqual([])
+    } finally {
+      store.close()
+    }
+  })
+
   test('scopes workspace change token by requested root path', async ({
     repoRoot,
     cacheDirectory,

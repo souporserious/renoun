@@ -5,6 +5,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'vitest'
 
@@ -41,6 +42,23 @@ function concatenate(chunks: Uint8Array[]): Uint8Array {
   }
 
   return combined
+}
+
+function runGit(cwd: string, args: string[]): string {
+  const result = spawnSync('git', args, {
+    cwd,
+    stdio: 'pipe',
+    encoding: 'utf8',
+    shell: false,
+  })
+
+  if (result.status !== 0) {
+    throw new Error(
+      `[NodeFileSystem.test] git ${args.join(' ')} failed\n${result.stderr}`
+    )
+  }
+
+  return result.stdout.trim()
 }
 
 describe('NodeFileSystem', () => {
@@ -243,6 +261,32 @@ describe('NodeFileSystem', () => {
     } finally {
       process.chdir(previousCwd)
       rmSync(rootOnlyPath, { force: true })
+    }
+  })
+
+  test('returns workspace change tokens for repository root paths', async () => {
+    const repoRoot = mkdtempSync(join(baseTmpDirectory, 'node-fs-git-'))
+
+    try {
+      runGit(repoRoot, ['init'])
+      runGit(repoRoot, ['config', 'user.name', 'Renoun Tests'])
+      runGit(repoRoot, ['config', 'user.email', 'tests@renoun.dev'])
+
+      const trackedPath = join(repoRoot, 'tracked.ts')
+      writeFileSync(trackedPath, 'export const value = 1\n')
+      runGit(repoRoot, ['add', 'tracked.ts'])
+      runGit(repoRoot, ['commit', '-m', 'init'])
+
+      const initialToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
+      expect(initialToken).toBeTruthy()
+
+      writeFileSync(trackedPath, 'export const value = 2\n')
+      const updatedToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
+
+      expect(updatedToken).toBeTruthy()
+      expect(updatedToken).not.toBe(initialToken)
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true })
     }
   })
 

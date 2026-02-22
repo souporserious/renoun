@@ -941,6 +941,9 @@ export class GitFileSystem
 
       const relativeRoot = this.#normalizeRepoPath(rootPath)
       const statusScope = relativeRoot || '.'
+      const includeIgnoredStatuses = await this.#shouldIncludeIgnoredStatus(
+        statusScope
+      )
       const statusResult = await spawnWithResult(
         'git',
         [
@@ -948,7 +951,7 @@ export class GitFileSystem
           '--porcelain=1',
           '-z',
           '--untracked-files=all',
-          '--ignored=matching',
+          ...(includeIgnoredStatuses ? ['--ignored=matching'] : []),
           '--ignore-submodules=all',
           '--',
           statusScope,
@@ -1002,6 +1005,9 @@ export class GitFileSystem
 
       const relativeRoot = this.#normalizeRepoPath(rootPath)
       const statusScope = relativeRoot || '.'
+      const includeIgnoredStatuses = await this.#shouldIncludeIgnoredStatus(
+        statusScope
+      )
       const changedPaths = new Set<string>()
       const diffResultPromise =
         currentHead !== previousHead
@@ -1030,7 +1036,7 @@ export class GitFileSystem
           '--porcelain=1',
           '-z',
           '--untracked-files=all',
-          '--ignored=matching',
+          ...(includeIgnoredStatuses ? ['--ignored=matching'] : []),
           '--ignore-submodules=all',
           '--',
           statusScope,
@@ -1461,6 +1467,24 @@ export class GitFileSystem
     }
     assertSafeRepoPath(relative)
     return relative
+  }
+
+  async #shouldIncludeIgnoredStatus(statusScope: string): Promise<boolean> {
+    if (statusScope === '.') {
+      return false
+    }
+
+    const ignoredResult = await spawnWithResult(
+      'git',
+      ['check-ignore', '-q', '--', statusScope],
+      {
+        cwd: this.repoRoot,
+        maxBuffer: this.maxBufferBytes,
+        verbose: false,
+      }
+    )
+
+    return ignoredResult.status === 0
   }
 
   #extractHeadFromWorkspaceToken(token: string): string | null {

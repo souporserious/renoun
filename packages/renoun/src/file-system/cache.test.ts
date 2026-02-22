@@ -2743,6 +2743,77 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('revalidates includeGitIgnoredFiles snapshots when ignored dependencies change with unchanged token', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      const ignoredFilePath = join(docsDirectory, 'ignored.ts')
+      const stableToken = `stable-token:${normalizePathKey(workspaceDirectory)}`
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(ignoredFilePath, 'export const ignored = 1', 'utf8')
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const createWorkerFileSystem = () => {
+        const fileSystem = new NestedCwdNodeFileSystem(
+          getRootDirectory(),
+          tsConfigPath
+        )
+        vi.spyOn(fileSystem, 'getWorkspaceChangeToken').mockResolvedValue(
+          stableToken
+        )
+        vi.spyOn(fileSystem, 'getWorkspaceChangedPathsSinceToken').mockImplementation(
+          async (_rootPath, previousToken) =>
+            previousToken === stableToken ? [] : null
+        )
+        vi.spyOn(fileSystem, 'isFilePathGitIgnored').mockImplementation(
+          (filePath) => normalizePathKey(filePath).endsWith('docs/ignored.ts')
+        )
+        return fileSystem
+      }
+
+      const firstFileSystem = createWorkerFileSystem()
+      const firstWorkerDirectory = new Directory({
+        fileSystem: firstFileSystem,
+        path: workspaceDirectory,
+      })
+
+      const firstEntries = await firstWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+        includeGitIgnoredFiles: true,
+      })
+      expect(
+        firstEntries.some((entry) => entry.workspacePath.endsWith('ignored.ts'))
+      ).toBe(true)
+
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      writeFileSync(ignoredFilePath, 'export const ignored = 2', 'utf8')
+
+      const secondFileSystem = createWorkerFileSystem()
+      const secondStatLookup = vi.spyOn(
+        secondFileSystem,
+        'getFileLastModifiedMs'
+      )
+      const secondWorkerDirectory = new Directory({
+        fileSystem: secondFileSystem,
+        path: workspaceDirectory,
+      })
+
+      const secondEntries = await secondWorkerDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+        includeGitIgnoredFiles: true,
+      })
+
+      expect(
+        secondEntries.some((entry) => entry.workspacePath.endsWith('ignored.ts'))
+      ).toBe(true)
+      expect(secondStatLookup.mock.calls.length).toBeGreaterThan(0)
+    })
+  })
+
   test('rebuilds persisted snapshots when hydration throws at restore-time', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
