@@ -821,7 +821,7 @@ export class Session {
   async #runBroadPersistedInvalidationFallback(
     normalizedPath: string
   ): Promise<void> {
-    const candidateKeys = await this.cache.listNodeKeysByPrefix('dir:')
+    const candidateKeys = await this.cache.listNodeKeysByPrefix('')
     if (candidateKeys.length === 0) {
       return
     }
@@ -831,6 +831,7 @@ export class Session {
     for (const key of candidateKeys) {
       const directoryPath = extractDirectoryPathFromSnapshotKey(key)
       if (!directoryPath) {
+        fallbackKeysToDelete.push(key)
         continue
       }
 

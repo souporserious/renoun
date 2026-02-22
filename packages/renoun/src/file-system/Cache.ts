@@ -1594,9 +1594,7 @@ export class CacheStore {
 
     const expectedPersistedRevision =
       options.persist === true
-        ? await this.#capturePersistedRevisionPrecondition(nodeKey, {
-            allowLoad: false,
-          })
+        ? await this.#capturePersistedRevisionPrecondition(nodeKey)
         : undefined
 
     const computeWriteGuard = this.#captureNodeWriteGuard(nodeKey)

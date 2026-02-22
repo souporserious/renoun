@@ -3725,6 +3725,7 @@ describe('sqlite cache persistence', () => {
       const affectedSnapshotKey = `dir:${affectedSnapshotPathKey}|fallback-affected`
       const unaffectedSnapshotKey =
         `dir:${unrelatedSnapshotPathKey}|fallback-unrelated`
+      const nonDirectoryFallbackKey = 'analysis:fallback-metadata-missing'
 
       await session.cache.put(affectedSnapshotKey, {
         version: 1,
@@ -3757,17 +3758,35 @@ describe('sqlite cache persistence', () => {
         persist: true,
         deps: [],
       })
+      await session.cache.put(
+        nonDirectoryFallbackKey,
+        {
+          value: 'metadata-missing',
+        },
+        {
+          persist: true,
+          deps: [],
+        }
+      )
 
       expect(await session.cache.get(affectedSnapshotKey)).toBeDefined()
       expect(await session.cache.get(unaffectedSnapshotKey)).toBeDefined()
+      expect(await session.cache.get(nonDirectoryFallbackKey)).toBeDefined()
 
       session.invalidatePath(join(docsDirectory, 'guides', 'index.mdx'))
 
       for (let attempt = 0; attempt < 20; attempt += 1) {
         const affectedResult = await session.cache.get(affectedSnapshotKey)
         const unaffectedResult = await session.cache.get(unaffectedSnapshotKey)
+        const nonDirectoryResult = await session.cache.get(
+          nonDirectoryFallbackKey
+        )
 
-        if (affectedResult === undefined && unaffectedResult !== undefined) {
+        if (
+          affectedResult === undefined &&
+          unaffectedResult !== undefined &&
+          nonDirectoryResult === undefined
+        ) {
           break
         }
         await new Promise((resolve) => setTimeout(resolve, 25))
@@ -3775,6 +3794,7 @@ describe('sqlite cache persistence', () => {
 
       expect(await session.cache.get(affectedSnapshotKey)).toBeUndefined()
       expect(await session.cache.get(unaffectedSnapshotKey)).toBeDefined()
+      expect(await session.cache.get(nonDirectoryFallbackKey)).toBeUndefined()
     })
   })
 
@@ -5725,6 +5745,116 @@ export type Metadata = Value`,
     }
   })
 
+  test('re-checks stale sqlite rows inside prune transactions before deleting', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-prune-transaction-race-')
+    )
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-prune-transaction-race'
+      )
+      const maxAgeMs = 1_000
+      const persistence = new SqliteCacheStorePersistence({
+        dbPath,
+        maxRows: 200,
+        maxAgeMs,
+      })
+      const store = new CacheStore({ snapshot, persistence })
+      const staleNodeKey = 'test:prune-transaction-race:stale'
+
+      await store.put(
+        staleNodeKey,
+        { value: 'stale' },
+        {
+          persist: true,
+          deps: [{ depKey: 'const:prune-transaction-race:stale', depVersion: '1' }],
+        }
+      )
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const setupDb = new DatabaseSync(dbPath)
+      try {
+        setupDb
+          .prepare(
+            `
+              UPDATE cache_entries
+              SET last_accessed_at = ?
+              WHERE node_key = ?
+            `
+          )
+          .run(Date.now() - maxAgeMs - 5_000, staleNodeKey)
+      } finally {
+        setupDb.close()
+      }
+
+      vi.setSystemTime(Date.now() + 6 * 60 * 1_000)
+
+      const originalExec = DatabaseSync.prototype.exec
+      let beginCount = 0
+      const refreshedLastAccessedAt = Date.now() + maxAgeMs + 60_000
+      DatabaseSync.prototype.exec = function patchedExec(
+        this: unknown,
+        sql: string
+      ): unknown {
+        if (sql.trim().toUpperCase() === 'BEGIN IMMEDIATE') {
+          beginCount += 1
+          if (beginCount === 2) {
+            const touchDb = new DatabaseSync(dbPath)
+            try {
+              touchDb
+                .prepare(
+                  `
+                    UPDATE cache_entries
+                    SET last_accessed_at = ?
+                    WHERE node_key = ?
+                  `
+                )
+                .run(refreshedLastAccessedAt, staleNodeKey)
+            } finally {
+              touchDb.close()
+            }
+          }
+        }
+
+        return originalExec.call(this, sql)
+      }
+
+      try {
+        await store.put(
+          'test:prune-transaction-race:trigger',
+          { value: 'trigger' },
+          {
+            persist: true,
+            deps: [{ depKey: 'const:prune-transaction-race:trigger', depVersion: '1' }],
+          }
+        )
+      } finally {
+        DatabaseSync.prototype.exec = originalExec
+      }
+
+      expect(beginCount).toBeGreaterThanOrEqual(2)
+      expect(await persistence.load(staleNodeKey)).toBeDefined()
+    } finally {
+      vi.useRealTimers()
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('keeps dependency rows aligned with pruned cache entries', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-prune-aligned-')
@@ -6237,6 +6367,130 @@ export type Metadata = Value`,
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
+  })
+
+  test('loads persisted revision preconditions during refresh so guarded writes stay active', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'sqlite-refresh-guarded-precondition'
+    )
+    type PersistedEntry = CacheEntry<{ value: string }> & { revision: number }
+    const persistedEntries = new Map<string, PersistedEntry>()
+    const nodeKey = 'test:sqlite-refresh-guarded-precondition'
+    const baselineDeps = [{ depKey: 'const:refresh-guarded:baseline', depVersion: '1' }]
+    persistedEntries.set(nodeKey, {
+      value: { value: 'baseline' },
+      deps: baselineDeps,
+      fingerprint: createFingerprint(baselineDeps),
+      persist: true,
+      updatedAt: Date.now(),
+      revision: 7,
+    })
+
+    const load = vi.fn(async (lookupNodeKey: string) => {
+      const current = persistedEntries.get(lookupNodeKey)
+      return current ? { ...current } : undefined
+    })
+    const saveWithRevision = vi.fn(
+      async (lookupNodeKey: string, entry: CacheEntry) => {
+        const nextRevision =
+          (persistedEntries.get(lookupNodeKey)?.revision ?? 0) + 1
+        persistedEntries.set(lookupNodeKey, {
+          ...(entry as CacheEntry<{ value: string }>),
+          revision: nextRevision,
+        })
+        return nextRevision
+      }
+    )
+    const saveWithRevisionGuarded = vi.fn(
+      async (
+        lookupNodeKey: string,
+        entry: CacheEntry,
+        options: {
+          expectedRevision: number | 'missing'
+        }
+      ) => {
+        const currentRevision = persistedEntries.get(lookupNodeKey)?.revision
+        if (options.expectedRevision === 'missing') {
+          if (typeof currentRevision === 'number') {
+            return {
+              applied: false,
+              revision: currentRevision,
+            }
+          }
+
+          persistedEntries.set(lookupNodeKey, {
+            ...(entry as CacheEntry<{ value: string }>),
+            revision: 1,
+          })
+          return {
+            applied: true,
+            revision: 1,
+          }
+        }
+
+        if (currentRevision !== options.expectedRevision) {
+          return {
+            applied: false,
+            revision: typeof currentRevision === 'number' ? currentRevision : 0,
+          }
+        }
+
+        const nextRevision = currentRevision + 1
+        persistedEntries.set(lookupNodeKey, {
+          ...(entry as CacheEntry<{ value: string }>),
+          revision: nextRevision,
+        })
+        return {
+          applied: true,
+          revision: nextRevision,
+        }
+      }
+    )
+    const persistence: CacheStorePersistence = {
+      load,
+      save: vi.fn(async (lookupNodeKey: string, entry: CacheEntry) => {
+        await saveWithRevision(lookupNodeKey, entry)
+      }),
+      saveWithRevision,
+      saveWithRevisionGuarded,
+      delete: vi.fn(async (lookupNodeKey: string) => {
+        persistedEntries.delete(lookupNodeKey)
+      }),
+    }
+    const store = new CacheStore({ snapshot, persistence })
+
+    const result = await store.refresh(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        ctx.recordDep('const:refresh-guarded:fresh', '1')
+        return {
+          value: 'fresh',
+        }
+      }
+    )
+
+    expect(result).toEqual({ value: 'fresh' })
+    expect(load).toHaveBeenCalled()
+    expect(saveWithRevisionGuarded).toHaveBeenCalledTimes(1)
+    expect(saveWithRevisionGuarded).toHaveBeenCalledWith(
+      nodeKey,
+      expect.objectContaining({
+        persist: true,
+      }),
+      {
+        expectedRevision: 7,
+      }
+    )
+    expect(saveWithRevision).not.toHaveBeenCalled()
+    expect(persistedEntries.get(nodeKey)).toMatchObject({
+      value: { value: 'fresh' },
+      revision: 8,
+    })
   })
 
   test('reconciles in-memory values to the persisted winner when guarded writes are superseded', async () => {
@@ -6916,6 +7170,39 @@ export type Metadata = Value`,
       expect(await store.get(unaffectedNodeKey)).toEqual({
         value: 'unaffected',
       })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('reports missing dependency metadata for non-directory persisted rows', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-missing-deps-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'src/components/button.ts': 'export const button = 1',
+      }),
+      'sqlite-missing-deps'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+
+    try {
+      await store.put(
+        'analysis:metadata-missing',
+        { value: 'missing' },
+        {
+          persist: true,
+          deps: [],
+        }
+      )
+
+      const eviction = await store.deleteByDependencyPath('src/components')
+      expect(eviction.usedDependencyIndex).toBe(true)
+      expect(eviction.hasMissingDependencyMetadata).toBe(true)
+      expect(eviction.deletedNodeKeys).toEqual([])
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }

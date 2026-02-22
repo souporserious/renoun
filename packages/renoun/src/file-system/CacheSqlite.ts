@@ -959,12 +959,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             SELECT EXISTS(
               SELECT 1
               FROM cache_entries AS entry
-              WHERE entry.node_key LIKE 'dir:%'
-                AND NOT EXISTS (
-                  SELECT 1
-                  FROM cache_deps AS dependency
-                  WHERE dependency.node_key = entry.node_key
-                )
+              WHERE NOT EXISTS (
+                SELECT 1
+                FROM cache_deps AS dependency
+                WHERE dependency.node_key = entry.node_key
+              )
             ) as has_missing
           `
         )
@@ -1356,24 +1355,25 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const staleBefore = Date.now() - this.#maxAgeMs
-    const staleNodes = this.#db
-      .prepare(
-        `
-          SELECT node_key
-          FROM cache_entries
-          WHERE last_accessed_at < ?
-        `
-      )
-      .all(staleBefore) as Array<{ node_key?: string }>
-    const staleNodeKeys = staleNodes
-      .map((row) => row.node_key)
-      .filter((nodeKey: string | undefined): nodeKey is string => {
-        return typeof nodeKey === 'string'
-      })
-    const staleCount = staleNodeKeys.length
 
     this.#db.exec('BEGIN IMMEDIATE')
     try {
+      const staleNodes = this.#db
+        .prepare(
+          `
+            SELECT node_key
+            FROM cache_entries
+            WHERE last_accessed_at < ?
+          `
+        )
+        .all(staleBefore) as Array<{ node_key?: string }>
+      const staleNodeKeys = staleNodes
+        .map((row) => row.node_key)
+        .filter((nodeKey: string | undefined): nodeKey is string => {
+          return typeof nodeKey === 'string'
+        })
+      const staleCount = staleNodeKeys.length
+
       if (staleCount > 0) {
         this.#deleteRowsForNodeKeys(staleNodeKeys)
       }
