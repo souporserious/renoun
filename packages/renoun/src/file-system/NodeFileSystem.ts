@@ -44,6 +44,10 @@ import {
   type SyncFileSystem,
   type WritableFileSystem,
 } from './FileSystem.ts'
+import {
+  parseGitStatusPorcelainV1Z,
+  parseNullTerminatedGitPathList,
+} from './git-status.ts'
 import type { DirectoryEntry } from './types.ts'
 
 const GIT_MAX_BUFFER_BYTES = 100 * 1024 * 1024
@@ -172,52 +176,24 @@ export class NodeFileSystem
     return match?.[1] ?? null
   }
 
-  #decodeGitStatusPath(path: string): string {
-    const trimmed = path.trim()
-    if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) {
-      return normalizeSlashes(trimmed)
+  #createWorkspaceStatusDigest(
+    entries: ReturnType<typeof parseGitStatusPorcelainV1Z>
+  ) {
+    const digestLines = entries
+      .map((entry) => {
+        const normalizedPaths = entry.paths.map((path) => normalizeSlashes(path))
+        return `${entry.status} ${normalizedPaths.join('\u0001')}`
+      })
+      .sort((first, second) => first.localeCompare(second))
+    const ignoredOnly =
+      entries.length > 0 && entries.every((entry) => entry.status === '!!')
+    const digest = createHash('sha1').update(digestLines.join('\n')).digest('hex')
+
+    return {
+      digest,
+      ignoredOnly,
+      count: entries.length,
     }
-
-    const unquoted = trimmed
-      .slice(1, -1)
-      .replace(/\\\"/g, '"')
-      .replace(/\\\\/g, '\\')
-
-    return normalizeSlashes(unquoted)
-  }
-
-  #extractChangedPathsFromStatusOutput(output: string): string[] {
-    const changedPaths: string[] = []
-    const lines = output
-      .split(/\r?\n/)
-      .map((line) => line.trimEnd())
-      .filter((line) => line.length > 0)
-
-    for (const line of lines) {
-      if (line.length <= 3) {
-        continue
-      }
-
-      const rawPath = line.slice(3).trim()
-      if (!rawPath) {
-        continue
-      }
-
-      if (rawPath.includes(' -> ')) {
-        const [fromPath, toPath] = rawPath.split(' -> ')
-        if (fromPath) {
-          changedPaths.push(this.#decodeGitStatusPath(fromPath))
-        }
-        if (toPath) {
-          changedPaths.push(this.#decodeGitStatusPath(toPath))
-        }
-        continue
-      }
-
-      changedPaths.push(this.#decodeGitStatusPath(rawPath))
-    }
-
-    return changedPaths
   }
 
   getAbsolutePath(path: string): string {
@@ -310,6 +286,7 @@ export class NodeFileSystem
         [
           'status',
           '--porcelain=1',
+          '-z',
           '--untracked-files=all',
           '--ignored=matching',
           '--ignore-submodules=all',
@@ -326,19 +303,10 @@ export class NodeFileSystem
         return null
       }
 
-      const statusLines = statusResult.stdout
-        .split(/\r?\n/)
-        .map((line) => line.trimEnd())
-        .filter((line) => line.length > 0)
-        .sort((first, second) => first.localeCompare(second))
-      const ignoredOnly =
-        statusLines.length > 0 &&
-        statusLines.every((line) => line.startsWith('!! '))
-      const dirtyDigest = createHash('sha1')
-        .update(statusLines.join('\n'))
-        .digest('hex')
+      const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
+      const statusDigest = this.#createWorkspaceStatusDigest(statusEntries)
 
-      return `head:${headCommit};dirty:${dirtyDigest};count:${statusLines.length};ignored-only:${ignoredOnly ? 1 : 0}`
+      return `head:${headCommit};dirty:${statusDigest.digest};count:${statusDigest.count};ignored-only:${statusDigest.ignoredOnly ? 1 : 0}`
     })().catch(() => null)
   }
 
@@ -426,6 +394,7 @@ export class NodeFileSystem
                 'diff',
                 '--name-only',
                 '--no-renames',
+                '-z',
                 `${previousHead}..${currentHead}`,
                 '--',
                 scopePath,
@@ -442,6 +411,7 @@ export class NodeFileSystem
         [
           'status',
           '--porcelain=1',
+          '-z',
           '--untracked-files=all',
           '--ignored=matching',
           '--ignore-submodules=all',
@@ -468,9 +438,8 @@ export class NodeFileSystem
           return null
         }
 
-        const diffPaths = diffResult.stdout
-          .split(/\r?\n/)
-          .map((line) => normalizeSlashes(line.trim()))
+        const diffPaths = parseNullTerminatedGitPathList(diffResult.stdout)
+          .map((line) => normalizeSlashes(line))
           .filter((line) => line.length > 0)
 
         for (const diffPath of diffPaths) {
@@ -478,25 +447,19 @@ export class NodeFileSystem
         }
       }
 
-      const statusLines = statusResult.stdout
-        .split(/\r?\n/)
-        .map((line) => line.trimEnd())
-        .filter((line) => line.length > 0)
-        .sort((first, second) => first.localeCompare(second))
-      const currentDirtyDigest = createHash('sha1')
-        .update(statusLines.join('\n'))
-        .digest('hex')
+      const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
+      const statusDigest = this.#createWorkspaceStatusDigest(statusEntries)
 
-      if (currentHead === previousHead && previousDirtyDigest === currentDirtyDigest) {
+      if (currentHead === previousHead && previousDirtyDigest === statusDigest.digest) {
         return []
       }
 
-      for (const statusPath of this.#extractChangedPathsFromStatusOutput(
-        statusResult.stdout
-      )) {
-        const normalizedStatusPath = normalizeSlashes(statusPath)
-        if (normalizedStatusPath.length > 0) {
-          changedPaths.add(normalizedStatusPath)
+      for (const statusEntry of statusEntries) {
+        for (const statusPath of statusEntry.paths) {
+          const normalizedStatusPath = normalizeSlashes(statusPath)
+          if (normalizedStatusPath.length > 0) {
+            changedPaths.add(normalizedStatusPath)
+          }
         }
       }
 

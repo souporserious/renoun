@@ -443,6 +443,12 @@ const fileSystem = new GitFileSystem({
 - Read files at any git ref (branches, tags, commits)
 - Works in sparse checkouts
 
+#### Cache persistence availability
+
+renoun works correctly even when SQLite is unavailable. SQLite is an optional upgrade used for persistent cache reuse across process restarts and better cache coordination across workers.
+
+If SQLite (`node:sqlite`) is missing or fails to initialize, renoun automatically falls back to in-memory cache behavior. Queries and metadata remain accurate, but cache state becomes process-local and non-persistent.
+
 #### Comparison with `GitVirtualFileSystem`
 
 | Feature       | GitFileSystem         | GitVirtualFileSystem |

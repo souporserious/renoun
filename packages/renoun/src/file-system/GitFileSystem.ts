@@ -103,6 +103,10 @@ import { GIT_HISTORY_CACHE_VERSION } from './cache-key.ts'
 import {
   createGitFileSystemPersistentCacheNodeKey,
 } from './git-cache-key.ts'
+import {
+  parseGitStatusPorcelainV1Z,
+  parseNullTerminatedGitPathList,
+} from './git-status.ts'
 import type { Cache } from './Cache.ts'
 import { Session } from './Session.ts'
 
@@ -942,6 +946,7 @@ export class GitFileSystem
         [
           'status',
           '--porcelain=1',
+          '-z',
           '--untracked-files=all',
           '--ignored=matching',
           '--ignore-submodules=all',
@@ -958,19 +963,10 @@ export class GitFileSystem
         return null
       }
 
-      const statusLines = statusResult.stdout
-        .split(/\r?\n/)
-        .map((line) => line.trimEnd())
-        .filter((line) => line.length > 0)
-        .sort((first, second) => first.localeCompare(second))
-      const ignoredOnly =
-        statusLines.length > 0 &&
-        statusLines.every((line) => line.startsWith('!! '))
-      const dirtyDigest = createHash('sha1')
-        .update(statusLines.join('\n'))
-        .digest('hex')
+      const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
+      const statusDigest = this.#createWorkspaceStatusDigest(statusEntries)
 
-      return `head:${headCommit};dirty:${dirtyDigest};count:${statusLines.length};ignored-only:${ignoredOnly ? 1 : 0}`
+      return `head:${headCommit};dirty:${statusDigest.digest};count:${statusDigest.count};ignored-only:${statusDigest.ignoredOnly ? 1 : 0}`
     } catch {
       return null
     }
@@ -1007,41 +1003,32 @@ export class GitFileSystem
       const relativeRoot = this.#normalizeRepoPath(rootPath)
       const statusScope = relativeRoot || '.'
       const changedPaths = new Set<string>()
-
-      if (currentHead !== previousHead) {
-        const diffResult = await spawnWithResult(
-          'git',
-          [
-            'diff',
-            '--name-only',
-            '--no-renames',
-            `${previousHead}..${currentHead}`,
-            '--',
-            statusScope,
-          ],
-          {
-            cwd: this.repoRoot,
-            maxBuffer: this.maxBufferBytes,
-            verbose: false,
-          }
-        )
-        if (diffResult.status !== 0) {
-          return null
-        }
-
-        for (const line of diffResult.stdout
-          .split(/\r?\n/)
-          .map((entry) => normalizeSlashes(entry.trim()))
-          .filter((entry) => entry.length > 0)) {
-          changedPaths.add(line)
-        }
-      }
-
-      const statusResult = await spawnWithResult(
+      const diffResultPromise =
+        currentHead !== previousHead
+          ? spawnWithResult(
+              'git',
+              [
+                'diff',
+                '--name-only',
+                '--no-renames',
+                '-z',
+                `${previousHead}..${currentHead}`,
+                '--',
+                statusScope,
+              ],
+              {
+                cwd: this.repoRoot,
+                maxBuffer: this.maxBufferBytes,
+                verbose: false,
+              }
+            )
+          : Promise.resolve<SpawnResult | null>(null)
+      const statusResultPromise = spawnWithResult(
         'git',
         [
           'status',
           '--porcelain=1',
+          '-z',
           '--untracked-files=all',
           '--ignored=matching',
           '--ignore-submodules=all',
@@ -1054,32 +1041,44 @@ export class GitFileSystem
           verbose: false,
         }
       )
+      const [statusResult, diffResult] = await Promise.all([
+        statusResultPromise,
+        diffResultPromise,
+      ])
       if (statusResult.status !== 0) {
         return null
       }
 
-      const statusLines = statusResult.stdout
-        .split(/\r?\n/)
-        .map((line) => line.trimEnd())
-        .filter((line) => line.length > 0)
-        .sort((first, second) => first.localeCompare(second))
-      const currentDirtyDigest = createHash('sha1')
-        .update(statusLines.join('\n'))
-        .digest('hex')
+      if (currentHead !== previousHead) {
+        if (!diffResult || diffResult.status !== 0) {
+          return null
+        }
+
+        const diffPaths = parseNullTerminatedGitPathList(diffResult.stdout)
+          .map((line) => normalizeSlashes(line))
+          .filter((line) => line.length > 0)
+
+        for (const diffPath of diffPaths) {
+          changedPaths.add(diffPath)
+        }
+      }
+
+      const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
+      const statusDigest = this.#createWorkspaceStatusDigest(statusEntries)
 
       if (
         currentHead === previousHead &&
-        previousDirtyDigest === currentDirtyDigest
+        previousDirtyDigest === statusDigest.digest
       ) {
         return []
       }
 
-      for (const path of this.#extractChangedPathsFromStatusOutput(
-        statusResult.stdout
-      )) {
-        const normalizedPath = normalizeSlashes(path)
-        if (normalizedPath.length > 0) {
-          changedPaths.add(normalizedPath)
+      for (const statusEntry of statusEntries) {
+        for (const statusPath of statusEntry.paths) {
+          const normalizedStatusPath = normalizeSlashes(statusPath)
+          if (normalizedStatusPath.length > 0) {
+            changedPaths.add(normalizedStatusPath)
+          }
         }
       }
 
@@ -1474,52 +1473,24 @@ export class GitFileSystem
     return match?.[1] ?? null
   }
 
-  #decodeGitStatusPath(path: string): string {
-    const trimmed = path.trim()
-    if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) {
-      return normalizeSlashes(trimmed)
+  #createWorkspaceStatusDigest(
+    entries: ReturnType<typeof parseGitStatusPorcelainV1Z>
+  ) {
+    const digestLines = entries
+      .map((entry) => {
+        const normalizedPaths = entry.paths.map((path) => normalizeSlashes(path))
+        return `${entry.status} ${normalizedPaths.join('\u0001')}`
+      })
+      .sort((first, second) => first.localeCompare(second))
+    const ignoredOnly =
+      entries.length > 0 && entries.every((entry) => entry.status === '!!')
+    const digest = createHash('sha1').update(digestLines.join('\n')).digest('hex')
+
+    return {
+      digest,
+      ignoredOnly,
+      count: entries.length,
     }
-
-    const unquoted = trimmed
-      .slice(1, -1)
-      .replace(/\\\"/g, '"')
-      .replace(/\\\\/g, '\\')
-
-    return normalizeSlashes(unquoted)
-  }
-
-  #extractChangedPathsFromStatusOutput(output: string): string[] {
-    const changedPaths: string[] = []
-    const lines = output
-      .split(/\r?\n/)
-      .map((line) => line.trimEnd())
-      .filter((line) => line.length > 0)
-
-    for (const line of lines) {
-      if (line.length <= 3) {
-        continue
-      }
-
-      const rawPath = line.slice(3).trim()
-      if (!rawPath) {
-        continue
-      }
-
-      if (rawPath.includes(' -> ')) {
-        const [fromPath, toPath] = rawPath.split(' -> ')
-        if (fromPath) {
-          changedPaths.push(this.#decodeGitStatusPath(fromPath))
-        }
-        if (toPath) {
-          changedPaths.push(this.#decodeGitStatusPath(toPath))
-        }
-        continue
-      }
-
-      changedPaths.push(this.#decodeGitStatusPath(rawPath))
-    }
-
-    return changedPaths
   }
 
   #hasWorktreeRoot(): boolean {

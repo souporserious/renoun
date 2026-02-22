@@ -276,6 +276,83 @@ describe('GitFileSystem', () => {
     }
   })
 
+  test('tracks unicode file names in workspace changed paths', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+
+    const unicodeRelativePath = 'src/café.ts'
+    const unicodeAbsolutePath = join(repoRoot, unicodeRelativePath)
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const previousToken = await store.getWorkspaceChangeToken('.')
+      expect(previousToken).toBeTruthy()
+
+      writeFileSync(unicodeAbsolutePath, 'export const cafe = 1')
+      const changedPaths = await store.getWorkspaceChangedPathsSinceToken(
+        '.',
+        previousToken!
+      )
+
+      expect(changedPaths ?? []).toContain(unicodeRelativePath)
+    } finally {
+      store.close()
+    }
+  })
+
+  test('tracks unicode file names across committed head changes', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+
+    const unicodeRelativePath = 'src/café.ts'
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const previousToken = await store.getWorkspaceChangeToken('.')
+      expect(previousToken).toBeTruthy()
+
+      commitFile(repoRoot, unicodeRelativePath, 'export const cafe = 2', 'add cafe')
+      const changedPaths = await store.getWorkspaceChangedPathsSinceToken(
+        '.',
+        previousToken!
+      )
+
+      expect(changedPaths ?? []).toContain(unicodeRelativePath)
+    } finally {
+      store.close()
+    }
+  })
+
+  test('does not split dirty filenames containing " -> " as renames', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    const arrowPath = 'src/feature -> docs.ts'
+    commitFile(repoRoot, arrowPath, `export const value = 1`, 'init')
+
+    const absoluteArrowPath = join(repoRoot, arrowPath)
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const previousToken = await store.getWorkspaceChangeToken('.')
+      expect(previousToken).toBeTruthy()
+
+      writeFileSync(absoluteArrowPath, 'export const value = 2')
+      const changedPaths = await store.getWorkspaceChangedPathsSinceToken(
+        '.',
+        previousToken!
+      )
+      const nextPaths = changedPaths ?? []
+
+      expect(nextPaths).toContain(arrowPath)
+      expect(nextPaths).not.toContain('src/feature')
+      expect(nextPaths).not.toContain('docs.ts')
+    } finally {
+      store.close()
+    }
+  })
+
   test('correctly tracks export additions and removals', async ({
     repoRoot,
     cacheDirectory,

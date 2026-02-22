@@ -1100,7 +1100,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             error instanceof Error ? error.message : String(error)
           )
           console.warn(
-            `[renoun] Falling back to in-memory FileSystem cache because SQLite initialization failed: ${
+            `[renoun] SQLite persistence is unavailable; renoun will continue with in-memory FileSystem cache only (persistent cache reuse and cross-worker cache coordination are disabled): ${
               error instanceof Error ? error.message : String(error)
             }`
           )
