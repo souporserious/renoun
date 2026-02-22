@@ -231,6 +231,7 @@ export class Session {
   #lastWorkspaceChangedPathsCleanupAt = 0
   readonly #recentlyInvalidatedPathTimestamps = new Map<string, number>()
   #persistedInvalidationQueue: Promise<void> = Promise.resolve()
+  #warnedAboutPersistedInvalidationFailure = false
   readonly #cacheMetricsEnabled: boolean
   readonly #cacheMetricsTopKeysLimit: number
   readonly #cacheMetricsTopKeysTrackingLimit: number
@@ -790,8 +791,30 @@ export class Session {
           await this.#runBroadPersistedInvalidationFallback(normalizedPath)
         }
       })
-      .catch(() => {
-        // Best-effort persisted invalidation.
+      .catch((error) => {
+        const errorMessage =
+          error instanceof Error && error.message.length > 0
+            ? error.message
+            : String(error ?? 'unknown error')
+        emitTelemetryEvent({
+          name: 'renoun.cache.invalidate_error',
+          fields: {
+            pathHash: toTelemetryHash(normalizedPath),
+            pathDepth: getTelemetryPathDepth(normalizedPath),
+            message: errorMessage,
+          },
+          telemetry: this.#telemetry,
+        })
+
+        if (
+          !this.#warnedAboutPersistedInvalidationFailure &&
+          process.env['NODE_ENV'] !== 'test'
+        ) {
+          this.#warnedAboutPersistedInvalidationFailure = true
+          console.warn(
+            `[renoun] Persisted cache invalidation failed; continuing with best-effort invalidation only: ${errorMessage}`
+          )
+        }
       })
   }
 

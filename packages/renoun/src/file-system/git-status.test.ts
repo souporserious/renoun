@@ -27,11 +27,12 @@ describe('git-status parser', () => {
     ])
   })
 
-  test('preserves unicode paths and parses rename records', () => {
+  test('preserves unicode paths and parses rename records from porcelain-z output', () => {
     const output = [
       '?? src/café.ts',
-      'R  src/old-name.ts',
-      'src/new-name.ts',
+      // `git status --porcelain=1 -z` emits destination then source for renames.
+      'R  src/new-name.ts',
+      'src/old-name.ts',
     ].join('\0') + '\0'
 
     const entries = parseGitStatusPorcelainV1Z(output)
@@ -43,7 +44,7 @@ describe('git-status parser', () => {
       },
       {
         status: 'R ',
-        paths: ['src/old-name.ts', 'src/new-name.ts'],
+        paths: ['src/new-name.ts', 'src/old-name.ts'],
       },
     ])
   })

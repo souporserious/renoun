@@ -335,7 +335,25 @@ export async function withTelemetrySpan<Type>(
   }
 
   if (telemetry.span && !options.fieldsOnSuccess) {
-    return Promise.resolve(telemetry.span(name, fn, tags))
+    let spanResult: Promise<Type> | Type | undefined
+    try {
+      return await Promise.resolve(
+        telemetry.span(
+          name,
+          () => {
+            spanResult = fn()
+            return spanResult
+          },
+          tags
+        )
+      )
+    } catch (error) {
+      reportTelemetryFailure(telemetry, `span(${name})`, error)
+      if (spanResult !== undefined) {
+        return await Promise.resolve(spanResult)
+      }
+      return fn()
+    }
   }
 
   const startedAt = Date.now()

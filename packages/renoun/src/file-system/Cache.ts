@@ -10,6 +10,7 @@ import {
   emitTelemetryCounter,
   emitTelemetryEvent,
   emitTelemetryHistogram,
+  getGlobalTelemetry,
 } from '../utils/telemetry.ts'
 import type { Telemetry } from '../utils/telemetry.ts'
 import type { Snapshot } from './Snapshot.ts'
@@ -1933,47 +1934,75 @@ export class CacheStore {
     nodeKey: string,
     data?: Record<string, unknown>
   ): void {
-    const source =
-      typeof data?.['source'] === 'string' && data['source'].length > 0
-        ? data['source']
-        : undefined
-    const tags: Record<string, string> = {
-      namespace: getCacheTelemetryNamespace(nodeKey),
-      operation,
-    }
-    if (source) {
-      tags['source'] = source
+    const debugLogger = getDebugLogger()
+    const debugEnabled = debugLogger.isEnabled('debug')
+    const telemetry =
+      this.#telemetry ?? getContext()?.telemetry ?? getGlobalTelemetry()
+
+    let telemetryEnabled = false
+    if (telemetry) {
+      if (typeof telemetry.enabled === 'function') {
+        try {
+          telemetryEnabled = telemetry.enabled('metrics')
+        } catch {
+          // Fall through to emission so helper-level reporting can warn once.
+          telemetryEnabled = true
+        }
+      } else {
+        telemetryEnabled = true
+      }
+    } else if (debugEnabled) {
+      // Without an explicit sink, telemetry falls back to the debug sink.
+      telemetryEnabled = true
     }
 
-    const fields: Record<string, unknown> = {}
-    if (data) {
-      for (const [key, value] of Object.entries(data)) {
-        if (
-          typeof value === 'number' ||
-          typeof value === 'string' ||
-          typeof value === 'boolean'
-        ) {
-          fields[key] = value
+    if (!debugEnabled && !telemetryEnabled) {
+      return
+    }
+
+    if (telemetryEnabled) {
+      const source =
+        typeof data?.['source'] === 'string' && data['source'].length > 0
+          ? data['source']
+          : undefined
+      const tags: Record<string, string> = {
+        namespace: getCacheTelemetryNamespace(nodeKey),
+        operation,
+      }
+      if (source) {
+        tags['source'] = source
+      }
+
+      const fields: Record<string, unknown> = {}
+      if (data) {
+        for (const [key, value] of Object.entries(data)) {
+          if (
+            typeof value === 'number' ||
+            typeof value === 'string' ||
+            typeof value === 'boolean'
+          ) {
+            fields[key] = value
+          }
         }
       }
+      fields['nodeKeyHash'] = getCacheTelemetryNodeKeyHash(nodeKey)
+
+      emitTelemetryCounter({
+        name: 'renoun.cache.operation_count',
+        tags,
+        telemetry,
+      })
+
+      emitTelemetryEvent({
+        name: `renoun.cache.${operation}`,
+        tags,
+        fields,
+        telemetry,
+      })
     }
-    fields['nodeKeyHash'] = getCacheTelemetryNodeKeyHash(nodeKey)
 
-    emitTelemetryCounter({
-      name: 'renoun.cache.operation_count',
-      tags,
-      telemetry: this.#telemetry,
-    })
-
-    emitTelemetryEvent({
-      name: `renoun.cache.${operation}`,
-      tags,
-      fields,
-      telemetry: this.#telemetry,
-    })
-
-    if (getDebugLogger().isEnabled('debug')) {
-      getDebugLogger().logCacheOperation(operation, nodeKey, data)
+    if (debugEnabled) {
+      debugLogger.logCacheOperation(operation, nodeKey, data)
     }
   }
 

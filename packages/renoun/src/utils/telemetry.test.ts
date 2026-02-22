@@ -5,6 +5,7 @@ import {
   emitTelemetryEvent,
   emitTelemetryHistogram,
   type Telemetry,
+  withTelemetrySpan,
 } from './telemetry.ts'
 
 describe('telemetry', () => {
@@ -91,6 +92,27 @@ describe('telemetry', () => {
       })
     }).not.toThrow()
     expect(emitSpy).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test('falls back to direct execution when span hook throws', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fn = vi.fn(async () => 'ok')
+    const telemetry: Telemetry = {
+      emit() {},
+      span(_name, spanFn) {
+        void spanFn()
+        throw new Error('span sink failed')
+      },
+    }
+
+    await expect(
+      withTelemetrySpan('renoun.test.span', fn, undefined, {
+        telemetry,
+      })
+    ).resolves.toBe('ok')
+
+    expect(fn).toHaveBeenCalledTimes(1)
     expect(warnSpy).toHaveBeenCalledTimes(1)
   })
 })
