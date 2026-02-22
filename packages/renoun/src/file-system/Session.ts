@@ -50,6 +50,8 @@ interface DirectorySnapshotKeyMetrics {
 
 const DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS = 250
 const DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS = 250
+const DEFAULT_PERSISTENT_WORKSPACE_CHANGE_TOKEN_TTL_MS = 0
+const DEFAULT_PERSISTENT_WORKSPACE_CHANGED_PATHS_TTL_MS = 0
 const DEFAULT_INVALIDATED_PATH_TTL_MS = 1000
 const WORKSPACE_CHANGED_PATHS_CLEANUP_INTERVAL_MS = 1000
 const WORKSPACE_CHANGED_PATHS_MAX_ENTRIES = 512
@@ -197,7 +199,6 @@ export class Session {
 
   readonly #fileSystem: FileSystem
   readonly snapshot: Snapshot
-  readonly usesPersistentCache: boolean
   readonly inflight = new Map<string, Promise<unknown>>()
   readonly cache: CacheStore
   readonly directorySnapshots = new Map<string, DirectorySnapshot<any, any>>()
@@ -275,6 +276,9 @@ export class Session {
   ) {
     this.#fileSystem = fileSystem
     this.snapshot = snapshot
+    const prefersPersistentCache = cache
+      ? cache.usesPersistentCache
+      : shouldUseSessionCachePersistence(fileSystem)
     this.#cacheMetricsEnabled = cache?.cacheMetricsEnabled === true
     this.#cacheMetricsTopKeysLimit = normalizePositiveInteger(
       cache?.cacheMetricsTopKeysLimit,
@@ -291,13 +295,17 @@ export class Session {
       cache?.cacheMetricsTopKeysLogInterval,
       DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL
     )
-    this.#workspaceChangeTokenTtlMs = normalizePositiveInteger(
+    this.#workspaceChangeTokenTtlMs = normalizeNonNegativeInteger(
       cache?.workspaceChangeTokenTtlMs,
-      DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+      prefersPersistentCache
+        ? DEFAULT_PERSISTENT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+        : DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
     )
-    this.#workspaceChangedPathsTtlMs = normalizePositiveInteger(
+    this.#workspaceChangedPathsTtlMs = normalizeNonNegativeInteger(
       cache?.workspaceChangedPathsTtlMs,
-      DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
+      prefersPersistentCache
+        ? DEFAULT_PERSISTENT_WORKSPACE_CHANGED_PATHS_TTL_MS
+        : DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
     )
     this.#invalidatedPathTtlMs = normalizePositiveInteger(
       cache?.invalidatedPathTtlMs,
@@ -306,12 +314,9 @@ export class Session {
     this.#cacheDebugPersistence = cache?.debugCachePersistence === true
     this.#telemetry = cache?.telemetry
 
-    this.usesPersistentCache = cache
-      ? cache.usesPersistentCache
-      : shouldUseSessionCachePersistence(fileSystem)
     const persistence =
       cache?.persistence ??
-      (this.usesPersistentCache
+      (prefersPersistentCache
         ? getCacheStorePersistence({
             projectRoot: resolveSessionProjectRoot(
               fileSystem,
@@ -336,6 +341,10 @@ export class Session {
         telemetry: this.#telemetry,
         debugPersistenceFailure: this.#cacheDebugPersistence,
       })
+  }
+
+  get usesPersistentCache(): boolean {
+    return this.cache.usesPersistentCache
   }
 
   getFunctionId(value: unknown, prefix = 'fn'): string {
@@ -511,6 +520,15 @@ export class Session {
       return null
     }
 
+    if (this.#workspaceChangeTokenTtlMs <= 0) {
+      try {
+        const token = await tokenGetter.call(this.#fileSystem, rootPath)
+        return typeof token === 'string' ? token : null
+      } catch {
+        return null
+      }
+    }
+
     const normalizedRootPath = normalizeSessionPath(this.#fileSystem, rootPath)
     const now = Date.now()
     const cached = this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
@@ -562,6 +580,34 @@ export class Session {
       this.#fileSystem.getWorkspaceChangedPathsSinceToken
     if (typeof changedPathsGetter !== 'function') {
       return null
+    }
+
+    if (this.#workspaceChangedPathsTtlMs <= 0) {
+      try {
+        const changedPaths = await changedPathsGetter.call(
+          this.#fileSystem,
+          rootPath,
+          previousToken
+        )
+        if (!Array.isArray(changedPaths)) {
+          return null
+        }
+
+        const normalizedPaths = new Set<string>()
+        for (const changedPath of changedPaths) {
+          if (typeof changedPath !== 'string') {
+            continue
+          }
+
+          const normalizedPath = isAbsolutePath(changedPath)
+            ? normalizeSessionPath(this.#fileSystem, changedPath)
+            : normalizePathKey(changedPath)
+          normalizedPaths.add(normalizedPath)
+        }
+        return normalizedPaths
+      } catch {
+        return null
+      }
     }
 
     const normalizedRootPath = normalizeSessionPath(this.#fileSystem, rootPath)
@@ -694,7 +740,9 @@ export class Session {
       void this.cache.delete(key)
     }
 
-    this.#queuePersistedDependencyInvalidation(normalizedPath)
+    if (this.usesPersistentCache) {
+      this.#queuePersistedDependencyInvalidation(normalizedPath)
+    }
   }
 
   reset(): void {
@@ -1343,4 +1391,15 @@ function normalizePositiveInteger(
   }
   const parsed = Math.floor(value)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function normalizeNonNegativeInteger(
+  value: number | undefined,
+  fallback: number
+): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return fallback
+  }
+  const parsed = Math.floor(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }

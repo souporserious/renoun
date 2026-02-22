@@ -191,6 +191,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   readonly #overflowCheckInterval: number
   readonly #readyPromise: Promise<void>
   #debugCachePersistence: boolean
+  #availability: 'initializing' | 'available' | 'unavailable' = 'initializing'
   #writesSincePrune = 0
   #lastPrunedAt = 0
   #lastInflightCleanupAt = 0
@@ -213,6 +214,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
   setDebugCachePersistence(enabled: boolean): void {
     this.#debugCachePersistence = enabled === true
+  }
+
+  isAvailable(): boolean {
+    return this.#availability !== 'unavailable'
   }
 
   async acquireComputeSlot(
@@ -1065,6 +1070,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
 
         this.#db = db
+        this.#availability = 'available'
         await this.#runPruneWithRetries()
         return
       } catch (error) {
@@ -1090,6 +1096,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           continue
         }
 
+        this.#availability = 'unavailable'
         if (!warnedAboutSqliteFallback) {
           warnedAboutSqliteFallback = true
           // eslint-disable-next-line no-console
@@ -1437,6 +1444,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#pruneInFlight = undefined
     this.#lastAccessTouchAtByNodeKey.clear()
     this.#db = undefined
+    this.#availability = 'unavailable'
 
     if (db && typeof db.close === 'function') {
       db.close()

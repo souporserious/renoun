@@ -57,6 +57,11 @@ export interface CacheStorePersistence {
     dependencyPathKey: string
   ): Promise<CacheDependencyEvictionResult>
   listNodeKeysByPrefix?(prefix: string): Promise<string[]>
+  /**
+   * Returns whether persistence is currently usable. This may flip to `false`
+   * when an optional backend (for example SQLite) fails to initialize.
+   */
+  isAvailable?(): boolean
 }
 
 export interface CacheStoreGetOrComputeOptions {
@@ -117,9 +122,9 @@ export interface CacheOptions {
   cacheMetricsTopKeysTrackingLimit?: number
   /** Number of events before emitting hot-key metrics. */
   cacheMetricsTopKeysLogInterval?: number
-  /** TTL for cached workspace change tokens in milliseconds. */
+  /** TTL for cached workspace change tokens in milliseconds. Set to 0 to disable caching. */
   workspaceChangeTokenTtlMs?: number
-  /** TTL for cached changed-path lookups in milliseconds. */
+  /** TTL for cached changed-path lookups in milliseconds. Set to 0 to disable caching. */
   workspaceChangedPathsTtlMs?: number
   /** TTL for recently invalidated paths cache in milliseconds. */
   invalidatedPathTtlMs?: number
@@ -256,14 +261,12 @@ export class Cache {
   readonly staleRetentionTtlMs: number
   readonly persistedVerificationAttempts: number
   readonly persistence?: CacheStorePersistence
-  readonly usesPersistentCache: boolean
   readonly debugCachePersistence: boolean
   readonly debugSessionRoot: boolean
 
   constructor(options: CacheOptions = {}) {
     this.persistence = options.persistence
     this.telemetry = options.telemetry
-    this.usesPersistentCache = this.persistence !== undefined
     this.cacheMetricsEnabled = options.cacheMetricsEnabled === true
     this.cacheMetricsTopKeysLimit = normalizePositiveInteger(
       options.cacheMetricsTopKeysLimit,
@@ -280,11 +283,11 @@ export class Cache {
       options.cacheMetricsTopKeysLogInterval,
       DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL
     )
-    this.workspaceChangeTokenTtlMs = normalizePositiveInteger(
+    this.workspaceChangeTokenTtlMs = normalizeNonNegativeInteger(
       options.workspaceChangeTokenTtlMs,
       DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
     )
-    this.workspaceChangedPathsTtlMs = normalizePositiveInteger(
+    this.workspaceChangedPathsTtlMs = normalizeNonNegativeInteger(
       options.workspaceChangedPathsTtlMs,
       DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
     )
@@ -310,6 +313,10 @@ export class Cache {
     )
     this.debugCachePersistence = options.debugCachePersistence === true
     this.debugSessionRoot = options.debugSessionRoot === true
+  }
+
+  get usesPersistentCache(): boolean {
+    return isCacheStorePersistenceAvailable(this.persistence)
   }
 
   createStore(options: CacheStoreFactoryOptions): CacheStore {
@@ -402,7 +409,7 @@ function getComputeSlotHeartbeatMs(slotTtlMs: number): number {
 function isCacheStorePersistenceComputeSlot(
   persistence: CacheStorePersistence | undefined
 ): persistence is CacheStorePersistence & CacheStorePersistenceComputeSlot {
-  if (!persistence) {
+  if (!isCacheStorePersistenceAvailable(persistence)) {
     return false
   }
 
@@ -412,6 +419,24 @@ function isCacheStorePersistenceComputeSlot(
     typeof candidate.releaseComputeSlot === 'function' &&
     typeof candidate.getComputeSlotOwner === 'function'
   )
+}
+
+function isCacheStorePersistenceAvailable(
+  persistence: CacheStorePersistence | undefined
+): persistence is CacheStorePersistence {
+  if (!persistence) {
+    return false
+  }
+
+  if (typeof persistence.isAvailable !== 'function') {
+    return true
+  }
+
+  try {
+    return persistence.isAvailable() !== false
+  } catch {
+    return false
+  }
 }
 
 function getFailedPersistenceEntries(
@@ -570,6 +595,18 @@ export class CacheStore {
       }
     })
     snapshotInvalidationUnsubscribeBySnapshot.set(this.#snapshot, unsubscribe)
+  }
+
+  get usesPersistentCache(): boolean {
+    return isCacheStorePersistenceAvailable(this.#persistence)
+  }
+
+  #getPersistence(): CacheStorePersistence | undefined {
+    if (!isCacheStorePersistenceAvailable(this.#persistence)) {
+      return undefined
+    }
+
+    return this.#persistence
   }
 
   dispose(): void {
@@ -967,12 +1004,13 @@ export class CacheStore {
       return undefined
     }
 
-    if (!this.#persistence) {
+    const persistence = this.#getPersistence()
+    if (!persistence) {
       return undefined
     }
 
     try {
-      const persistedEntry = (await this.#persistence.load(nodeKey, {
+      const persistedEntry = (await persistence.load(nodeKey, {
         skipFingerprintCheck: true,
         skipLastAccessedUpdate: true,
       })) as PersistedCacheEntry | undefined
@@ -1049,11 +1087,12 @@ export class CacheStore {
     this.#persistenceOperationByKey.delete(nodeKey)
     this.#persistenceIntentVersionByKey.delete(nodeKey)
     this.#persistedRevisionPreconditionByKey.delete(nodeKey)
-    if (!this.#persistence) {
+    const persistence = this.#getPersistence()
+    if (!persistence) {
       return
     }
 
-    markPersistedEntryInvalid(this.#persistence, nodeKey)
+    markPersistedEntryInvalid(persistence, nodeKey)
     await this.#withPersistenceIntent(nodeKey, () =>
       this.#clearPersistedCacheEntry(nodeKey)
     )
@@ -1063,7 +1102,7 @@ export class CacheStore {
     dependencyPathKey: string
   ): Promise<CacheDependencyEvictionResult> {
     this.#assertNotDisposed('deleteByDependencyPath')
-    const persistence = this.#persistence
+    const persistence = this.#getPersistence()
     const defaultResult: CacheDependencyEvictionResult = {
       deletedNodeKeys: [],
       usedDependencyIndex: false,
@@ -1125,7 +1164,7 @@ export class CacheStore {
       this.#persistenceOperationByKey.delete(nodeKey)
       this.#persistenceIntentVersionByKey.delete(nodeKey)
       this.#persistedRevisionPreconditionByKey.delete(nodeKey)
-      clearPersistedEntryInvalidation(this.#persistence, nodeKey)
+      clearPersistedEntryInvalidation(persistence, nodeKey)
     }
 
     return {
@@ -1186,7 +1225,7 @@ export class CacheStore {
       this.#persistenceOperationByKey.delete(nodeKey)
       this.#persistenceIntentVersionByKey.delete(nodeKey)
       this.#persistedRevisionPreconditionByKey.delete(nodeKey)
-      markPersistedEntryInvalid(this.#persistence, nodeKey)
+      markPersistedEntryInvalid(this.#getPersistence(), nodeKey)
     }
   }
 
@@ -1197,7 +1236,7 @@ export class CacheStore {
       nodeKey.startsWith(normalizedPrefix)
     )
 
-    const persistence = this.#persistence
+    const persistence = this.#getPersistence()
     if (!persistence?.listNodeKeysByPrefix) {
       return Array.from(new Set(memoryKeys)).sort()
     }
@@ -1319,25 +1358,27 @@ export class CacheStore {
   }
 
   async #clearPersistedCacheEntry(nodeKey: string): Promise<void> {
-    if (!this.#persistence) {
+    const persistence = this.#getPersistence()
+    if (!persistence) {
       return
     }
 
     try {
-      await this.#persistence.delete(nodeKey)
+      await persistence.delete(nodeKey)
     } catch (error) {
       this.#warnPersistenceFailure(`cleanup(${nodeKey})`, error)
-      markPersistedEntryInvalid(this.#persistence, nodeKey)
+      markPersistedEntryInvalid(persistence, nodeKey)
       return
     }
 
     this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
-    clearPersistedEntryInvalidation(this.#persistence, nodeKey)
+    clearPersistedEntryInvalidation(persistence, nodeKey)
   }
 
   #cleanupPersistedEntry(nodeKey: string): Promise<void> {
-    markPersistedEntryInvalid(this.#persistence, nodeKey)
-    if (!this.#persistence) {
+    const persistence = this.#getPersistence()
+    markPersistedEntryInvalid(persistence, nodeKey)
+    if (!persistence) {
       return Promise.resolve()
     }
 
@@ -1345,7 +1386,7 @@ export class CacheStore {
   }
 
   #getComputeSlotPersistence(): CacheStorePersistenceComputeSlot | undefined {
-    const persistence = this.#persistence
+    const persistence = this.#getPersistence()
     if (!isCacheStorePersistenceComputeSlot(persistence)) {
       return undefined
     }
@@ -1632,10 +1673,11 @@ export class CacheStore {
       },
     }
 
+    const persistence = this.#getPersistence()
     const shouldCoordinate =
       options.persist === true &&
-      !!this.#persistence &&
-      !isPersistedEntryInvalid(this.#persistence, nodeKey)
+      !!persistence &&
+      !isPersistedEntryInvalid(persistence, nodeKey)
     const computeSlotTtlMs = getComputeSlotTtlMs(
       this.#getComputeSlotPersistence(),
       this.#computeSlotTtlMs
@@ -1789,11 +1831,12 @@ export class CacheStore {
   }
 
   async #loadPersistedEntry(nodeKey: string): Promise<CacheEntry | undefined> {
-    if (!this.#persistence) {
+    const persistence = this.#getPersistence()
+    if (!persistence) {
       return undefined
     }
 
-    if (isPersistedEntryInvalid(this.#persistence, nodeKey)) {
+    if (isPersistedEntryInvalid(persistence, nodeKey)) {
       this.#logCacheOperation('clear', nodeKey, {
         source: 'persisted-entry',
         reason: 'in-process-invalid',
@@ -1803,7 +1846,7 @@ export class CacheStore {
 
     let persistedEntry: PersistedCacheEntry | undefined
     try {
-      persistedEntry = await this.#persistence.load(nodeKey)
+      persistedEntry = await persistence.load(nodeKey)
     } catch (error) {
       this.#warnPersistenceFailure(`load(${nodeKey})`, error)
       return undefined
@@ -1879,7 +1922,7 @@ export class CacheStore {
       }
     }
 
-    if (!this.#persistence) {
+    if (!this.#getPersistence()) {
       this.#logCacheOperation('miss', nodeKey, {
         source: 'memory',
       })
@@ -2165,8 +2208,9 @@ export class CacheStore {
       expectedRevision?: PersistedRevisionPrecondition
     } = {}
   ): Promise<void> {
-    clearPersistedEntryInvalidation(this.#persistence, nodeKey)
-    if (!this.#persistence) {
+    const persistence = this.#getPersistence()
+    clearPersistedEntryInvalidation(persistence, nodeKey)
+    if (!persistence) {
       return
     }
 
@@ -2186,8 +2230,7 @@ export class CacheStore {
       const attempt = async (
         value: unknown
       ): Promise<'verified' | 'superseded'> => {
-        const persistenceWithRevision = this
-          .#persistence as CacheStorePersistence & {
+        const persistenceWithRevision = persistence as CacheStorePersistence & {
           saveWithRevision?(nodeKey: string, entry: CacheEntry): Promise<number>
           saveWithRevisionGuarded?(
             nodeKey: string,
@@ -2243,7 +2286,7 @@ export class CacheStore {
             persistedRevision
           )
         } else {
-          await this.#persistence!.save(nodeKey, persisted)
+          await persistence.save(nodeKey, persisted)
           this.#persistedRevisionPreconditionByKey.delete(nodeKey)
         }
 
@@ -2265,7 +2308,7 @@ export class CacheStore {
           verifyAttempt < maxVerificationAttempts;
           verifyAttempt += 1
         ) {
-          const verified = (await this.#persistence!.load(nodeKey, {
+          const verified = (await persistence.load(nodeKey, {
             skipFingerprintCheck: true,
             skipLastAccessedUpdate: true,
           })) as PersistedCacheEntry | undefined
@@ -2395,7 +2438,7 @@ export class CacheStore {
         const result = await attempt(entry.value)
 
         if (result === 'verified') {
-          clearPersistedEntryInvalidation(this.#persistence, nodeKey)
+          clearPersistedEntryInvalidation(persistence, nodeKey)
           return
         }
 
@@ -2403,7 +2446,7 @@ export class CacheStore {
         if (!persistedWinner) {
           entry.persist = false
         }
-        clearPersistedEntryInvalidation(this.#persistence, nodeKey)
+        clearPersistedEntryInvalidation(persistence, nodeKey)
         return
       } catch (error) {
         if (shouldDebugPersistenceFailure) {
@@ -2418,7 +2461,7 @@ export class CacheStore {
           this.#warnUnserializableValue(nodeKey, error)
           await this.#clearPersistedCacheEntry(nodeKey)
           entry.persist = false
-          markPersistedEntryInvalid(this.#persistence, nodeKey)
+          markPersistedEntryInvalid(persistence, nodeKey)
           return
         }
 
@@ -2427,7 +2470,7 @@ export class CacheStore {
 
         await this.#cleanupPersistedEntry(nodeKey)
         entry.persist = false
-        markPersistedEntryInvalid(this.#persistence, nodeKey)
+        markPersistedEntryInvalid(persistence, nodeKey)
         if (
           cleanupError &&
           !isUnserializablePersistenceValueError(cleanupError)

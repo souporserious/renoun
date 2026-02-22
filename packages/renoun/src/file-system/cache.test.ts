@@ -4868,6 +4868,7 @@ export type Metadata = Value`,
       await ctx.recordFileDep('/index.ts')
       return { value: 1 }
     })
+    expect(firstStore.usesPersistentCache).toBe(false)
 
     const secondStore = new CacheStore({ snapshot, persistence })
     await secondStore.getOrCompute(nodeKey, { persist: true }, async (ctx) => {
@@ -4875,6 +4876,7 @@ export type Metadata = Value`,
       await ctx.recordFileDep('/index.ts')
       return { value: 2 }
     })
+    expect(secondStore.usesPersistentCache).toBe(false)
 
     expect(computeCount).toBe(2)
   })
