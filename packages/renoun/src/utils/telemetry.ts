@@ -138,6 +138,7 @@ export const NoopTelemetry: Telemetry = {
 
 let globalTelemetry: Telemetry | undefined
 const debugTelemetrySink = createDebugTelemetrySink()
+const warnedTelemetryFailureBySink = new WeakSet<Telemetry>()
 
 export function setGlobalTelemetry(telemetry: Telemetry | undefined): void {
   globalTelemetry = telemetry
@@ -151,6 +152,52 @@ function resolveTelemetry(explicit?: Telemetry): Telemetry {
   return explicit ?? getContext()?.telemetry ?? globalTelemetry ?? debugTelemetrySink
 }
 
+function toTelemetryErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.length > 0) {
+    return error.message
+  }
+  return String(error ?? 'unknown error')
+}
+
+function reportTelemetryFailure(
+  telemetry: Telemetry,
+  operation: string,
+  error: unknown
+): void {
+  if (telemetry === debugTelemetrySink) {
+    return
+  }
+
+  const errorMessage = toTelemetryErrorMessage(error)
+
+  if (!warnedTelemetryFailureBySink.has(telemetry)) {
+    warnedTelemetryFailureBySink.add(telemetry)
+    try {
+      console.warn(
+        `[renoun] Telemetry sink failed during ${operation}. Continuing without failing the caller: ${errorMessage}`
+      )
+    } catch {
+      // Ignore logging failures while reporting telemetry sink errors.
+    }
+  }
+
+  if (!getDebugLogger().isEnabled('debug')) {
+    return
+  }
+
+  try {
+    getDebugLogger().debug('Telemetry sink failure', () => ({
+      operation: 'telemetry',
+      data: {
+        telemetryOperation: operation,
+        error: errorMessage,
+      },
+    }))
+  } catch {
+    // Ignore debug-logging failures while reporting telemetry sink errors.
+  }
+}
+
 function isTelemetryEnabled(
   telemetry: Telemetry | undefined,
   level: TelemetryLevel = 'metrics'
@@ -159,17 +206,26 @@ function isTelemetryEnabled(
     return false
   }
   if (typeof telemetry.enabled === 'function') {
-    return telemetry.enabled(level)
+    try {
+      return telemetry.enabled(level)
+    } catch (error) {
+      reportTelemetryFailure(telemetry, 'enabled', error)
+      return false
+    }
   }
   return true
 }
 
 function emitViaTelemetry(telemetry: Telemetry, event: TelemetryEvent): void {
-  if (telemetry.event) {
-    telemetry.event(event.name, event.fields, event.tags)
-    return
+  try {
+    if (telemetry.event) {
+      telemetry.event(event.name, event.fields, event.tags)
+      return
+    }
+    telemetry.emit(event)
+  } catch (error) {
+    reportTelemetryFailure(telemetry, `emit(${event.name})`, error)
   }
-  telemetry.emit(event)
 }
 
 export function emitTelemetryEvent(event: {
@@ -211,7 +267,11 @@ export function emitTelemetryCounter(options: {
 
   const tags = mergeTags(getContext()?.tags, options.tags)
   if (telemetry.counter) {
-    telemetry.counter(options.name, options.value ?? 1, tags)
+    try {
+      telemetry.counter(options.name, options.value ?? 1, tags)
+    } catch (error) {
+      reportTelemetryFailure(telemetry, `counter(${options.name})`, error)
+    }
     return
   }
 
@@ -240,7 +300,11 @@ export function emitTelemetryHistogram(options: {
 
   const tags = mergeTags(getContext()?.tags, options.tags)
   if (telemetry.histogram) {
-    telemetry.histogram(options.name, options.value, tags)
+    try {
+      telemetry.histogram(options.name, options.value, tags)
+    } catch (error) {
+      reportTelemetryFailure(telemetry, `histogram(${options.name})`, error)
+    }
     return
   }
 
