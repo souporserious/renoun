@@ -15,7 +15,6 @@ import {
   serializeTypeFilterForCache,
 } from '../file-system/cache-key.ts'
 import {
-  Cache,
   type CacheStoreComputeContext,
   type CacheStoreConstDependency,
   type CacheStoreStaleWhileRevalidateOptions,
@@ -86,7 +85,6 @@ type RuntimeAnalysisCacheStore = RuntimeAnalysisSession & {
   snapshot: RuntimeAnalysisSession['session']['snapshot']
 }
 
-let runtimeAnalysisMemoryCache: Cache | undefined
 const compilerOptionsVersionByProject = new WeakMap<
   Project,
   {
@@ -96,84 +94,22 @@ const compilerOptionsVersionByProject = new WeakMap<
 >()
 let compilerOptionsVersionEpoch = 0
 
-function shouldUseRuntimeAnalysisPersistence(): boolean {
-  const override = process.env['RENOUN_RUNTIME_ANALYSIS_PERSISTENCE']
-  if (override === '1') {
-    return true
-  }
-  if (override === '0') {
-    return false
-  }
-
-  // Production static builds fan out across many workers and can overwhelm
-  // SQLite with high-cardinality runtime analysis writes.
-  return process.env['NODE_ENV'] !== 'production'
-}
-
-function shouldUseRuntimeAnalysisCacheStore(): boolean {
-  const override = process.env['RENOUN_RUNTIME_ANALYSIS_CACHE']
-  if (override === '1') {
-    return true
-  }
-  if (override === '0') {
-    return false
-  }
-
-  // In production static builds, direct project-file caches consistently
-  // outperform runtime-analysis cache bookkeeping for cold starts.
-  return process.env['NODE_ENV'] !== 'production'
-}
-
-function shouldUseRuntimeAnalysisStaleWhileRevalidate(): boolean {
-  const override = process.env['RENOUN_RUNTIME_ANALYSIS_SWR']
-  if (override === '1') {
-    return true
-  }
-  if (override === '0') {
-    return false
-  }
-
-  return process.env['NODE_ENV'] === 'development'
-}
-
-function getRuntimeAnalysisSWRMaxStaleAgeMs(): number {
-  const override = process.env['RENOUN_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS']
-  if (!override) {
-    return DEFAULT_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS
-  }
-
-  const parsed = Number.parseInt(override, 10)
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return DEFAULT_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS
-  }
-
-  return parsed
-}
-
 function getRuntimeAnalysisSWRReadOptions():
   | CacheStoreStaleWhileRevalidateOptions
   | undefined {
-  if (!shouldUseRuntimeAnalysisStaleWhileRevalidate()) {
+  if (process.env['NODE_ENV'] !== 'development') {
     return undefined
   }
 
   return {
-    maxStaleAgeMs: getRuntimeAnalysisSWRMaxStaleAgeMs(),
+    maxStaleAgeMs: DEFAULT_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS,
   }
 }
 
 async function getRuntimeAnalysisSession(): Promise<
   RuntimeAnalysisCacheStore | undefined
 > {
-  if (!shouldUseRuntimeAnalysisCacheStore()) {
-    return undefined
-  }
-
-  const cache = shouldUseRuntimeAnalysisPersistence()
-    ? undefined
-    : (runtimeAnalysisMemoryCache ??= new Cache())
-
-  const runtimeSession = await getSharedRuntimeAnalysisSession(cache)
+  const runtimeSession = await getSharedRuntimeAnalysisSession()
   if (!runtimeSession) {
     return undefined
   }

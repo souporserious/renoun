@@ -5,9 +5,6 @@ import { getTsMorph } from '../utils/ts-morph.ts'
 const { Project } = getTsMorph()
 
 const ORIGINAL_NODE_ENV = process.env['NODE_ENV']
-const ORIGINAL_RUNTIME_CACHE = process.env['RENOUN_RUNTIME_ANALYSIS_CACHE']
-const ORIGINAL_RUNTIME_PERSISTENCE =
-  process.env['RENOUN_RUNTIME_ANALYSIS_PERSISTENCE']
 
 function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) {
@@ -34,20 +31,13 @@ async function readCachedSourceTextMetadata(): Promise<void> {
 describe('project cached analysis runtime defaults', () => {
   afterEach(() => {
     restoreEnv('NODE_ENV', ORIGINAL_NODE_ENV)
-    restoreEnv('RENOUN_RUNTIME_ANALYSIS_CACHE', ORIGINAL_RUNTIME_CACHE)
-    restoreEnv(
-      'RENOUN_RUNTIME_ANALYSIS_PERSISTENCE',
-      ORIGINAL_RUNTIME_PERSISTENCE
-    )
     vi.restoreAllMocks()
     vi.resetModules()
     vi.doUnmock('./runtime-analysis-session.ts')
   })
 
-  test('does not initialize runtime analysis session by default in production', async () => {
+  test('initializes runtime analysis session by default in production', async () => {
     process.env['NODE_ENV'] = 'production'
-    delete process.env['RENOUN_RUNTIME_ANALYSIS_CACHE']
-    delete process.env['RENOUN_RUNTIME_ANALYSIS_PERSISTENCE']
 
     const runtimeSessionSpy = vi.fn(async () => undefined)
     vi.doMock('./runtime-analysis-session.ts', () => ({
@@ -56,13 +46,11 @@ describe('project cached analysis runtime defaults', () => {
 
     await readCachedSourceTextMetadata()
 
-    expect(runtimeSessionSpy).not.toHaveBeenCalled()
+    expect(runtimeSessionSpy).toHaveBeenCalledTimes(1)
   })
 
   test('initializes runtime analysis session by default in development', async () => {
     process.env['NODE_ENV'] = 'development'
-    delete process.env['RENOUN_RUNTIME_ANALYSIS_CACHE']
-    delete process.env['RENOUN_RUNTIME_ANALYSIS_PERSISTENCE']
 
     const runtimeSessionSpy = vi.fn(async () => undefined)
     vi.doMock('./runtime-analysis-session.ts', () => ({

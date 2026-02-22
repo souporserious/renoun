@@ -12,7 +12,11 @@ import {
 } from '../utils/path.ts'
 import { forEachConcurrent, mapConcurrent } from '../utils/concurrency.ts'
 import { retry } from '../utils/retry.ts'
-import { RenounNetworkError, RenounTimeoutError } from '../utils/errors.ts'
+import {
+  isRetryableNetworkTypeError,
+  RenounNetworkError,
+  RenounTimeoutError,
+} from '../utils/errors.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -2304,7 +2308,7 @@ export class GitVirtualFileSystem
             if (
               error instanceof RenounTimeoutError ||
               this.#isIgnorableNetworkAbortError(error) ||
-              error instanceof TypeError
+              isRetryableNetworkTypeError(error)
             ) {
               return true
             }

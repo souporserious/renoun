@@ -61,6 +61,30 @@ export class RenounCacheError extends Error {
   }
 }
 
+const RETRYABLE_NETWORK_TYPE_ERROR_MESSAGE_MARKERS = [
+  'fetch',
+  'network',
+  'socket',
+  'timeout',
+  'timed out',
+  'econn',
+  'enotfound',
+  'eai_again',
+  'connection',
+  'tls',
+]
+
+const RETRYABLE_NETWORK_ERROR_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EPIPE',
+])
+
 function toAbortReason(reason: unknown): string {
   if (typeof reason === 'string' && reason.length > 0) {
     return reason
@@ -104,6 +128,40 @@ export function isAbortError(error: unknown): boolean {
     return (error as { name?: unknown }).name === 'AbortError'
   }
   return false
+}
+
+export function isRetryableNetworkTypeError(error: unknown): boolean {
+  if (!(error instanceof TypeError)) {
+    return false
+  }
+
+  const message = error.message.toLowerCase()
+  if (
+    RETRYABLE_NETWORK_TYPE_ERROR_MESSAGE_MARKERS.some((marker) =>
+      message.includes(marker)
+    )
+  ) {
+    return true
+  }
+
+  const cause = (error as { cause?: unknown }).cause
+  if (!cause || typeof cause !== 'object') {
+    return false
+  }
+
+  const candidateCause = cause as { code?: unknown; errno?: unknown }
+  const causeCode =
+    typeof candidateCause.code === 'string'
+      ? candidateCause.code.toUpperCase()
+      : typeof candidateCause.errno === 'string'
+        ? candidateCause.errno.toUpperCase()
+        : undefined
+
+  if (!causeCode) {
+    return false
+  }
+
+  return RETRYABLE_NETWORK_ERROR_CODES.has(causeCode)
 }
 
 export function toPublicError(error: unknown): Error {

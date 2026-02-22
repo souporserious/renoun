@@ -17,7 +17,10 @@ import {
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { retry } from '../utils/retry.ts'
-import { RenounNetworkError } from '../utils/errors.ts'
+import {
+  isRetryableNetworkTypeError,
+  RenounNetworkError,
+} from '../utils/errors.ts'
 import { forEachConcurrent } from '../utils/concurrency.ts'
 import {
   normalizeSlashes,
@@ -1203,7 +1206,7 @@ async function fetchLiveWithRetry(
         if (error instanceof RenounNetworkError) {
           return error.retryable !== false
         }
-        return error instanceof TypeError
+        return isRetryableNetworkTypeError(error)
       },
     }
   )

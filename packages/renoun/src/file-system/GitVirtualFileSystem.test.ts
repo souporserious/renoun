@@ -3189,6 +3189,43 @@ describe('GitVirtualFileSystem', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2)
   })
 
+  it('does not retry non-network TypeError fetch failures', async () => {
+    const mockFetch = vi.fn().mockRejectedValue(new TypeError('invalid invocation'))
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    await expect(fs.readFile('file.txt')).rejects.toThrow('invalid invocation')
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries network-like TypeError fetch failures', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: createHeaders({}),
+        arrayBuffer: async () => SUCCESS_ARCHIVE,
+      })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    await expect(fs.readFile('file.txt')).resolves.toBe('hello')
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+
   it('clearCache clears files and reloads on next read', async () => {
     const first = makeTar([{ path: 'root/file.txt', content: 'v1' }])
     const second = makeTar([{ path: 'root/file.txt', content: 'v2' }])
