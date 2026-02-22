@@ -2298,6 +2298,10 @@ export class GitVirtualFileSystem
               return true
             }
 
+            if (this.#isIgnorableNetworkAbortError(error)) {
+              return false
+            }
+
             if (
               error instanceof RenounNetworkError &&
               error.retryable === false
@@ -2307,7 +2311,6 @@ export class GitVirtualFileSystem
 
             if (
               error instanceof RenounTimeoutError ||
-              this.#isIgnorableNetworkAbortError(error) ||
               isRetryableNetworkTypeError(error)
             ) {
               return true
@@ -2399,6 +2402,12 @@ export class GitVirtualFileSystem
         )
       }
       if (lastFailure?.type === 'error') {
+        if (this.#isIgnorableNetworkAbortError(lastFailure.error)) {
+          if (lastFailure.error instanceof Error) {
+            throw lastFailure.error
+          }
+          throw new Error('[renoun] Fetch aborted')
+        }
         if (lastFailure.error instanceof Error) {
           throw new Error(
             `[renoun] Failed to fetch after ${maxAttempts} attempts: ${lastFailure.error.message}`

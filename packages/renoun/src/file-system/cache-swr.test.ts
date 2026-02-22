@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 
 import { createMemoryOnlyCacheStore } from './Cache.ts'
+import { runWithContext } from '../utils/operation-context.ts'
 
 function createDeferred() {
   let resolve!: () => void
@@ -151,5 +152,66 @@ test('refresh forces recompute even when a fresh entry exists', async () => {
   )
 
   expect(cachedValue).toBe('value:2')
+  expect(computeCount).toBe(2)
+})
+
+test('background swr refresh is detached from request abort context', async () => {
+  const store = createMemoryOnlyCacheStore({
+    staleRetentionTtlMs: 5_000,
+  })
+  const nodeKey = 'node:swr-background-detached-signal'
+  let valueVersion = '1'
+  let computeCount = 0
+
+  await store.getOrCompute(
+    nodeKey,
+    { persist: false },
+    async (context) => {
+      computeCount += 1
+      await context.recordFileDep('index.ts')
+      return `value:${valueVersion}`
+    }
+  )
+
+  valueVersion = '2'
+  store.invalidateDependencyPath('index.ts')
+
+  const refreshStarted = createDeferred()
+  const refreshGate = createDeferred()
+  const controller = new AbortController()
+
+  const staleValue = await runWithContext({ signal: controller.signal }, () =>
+    store.getOrCompute(
+      nodeKey,
+      {
+        persist: false,
+        staleWhileRevalidate: true,
+      },
+      async (context) => {
+        computeCount += 1
+        await context.recordFileDep('index.ts')
+        refreshStarted.resolve()
+        await refreshGate.promise
+        return `value:${valueVersion}`
+      }
+    )
+  )
+
+  expect(staleValue).toBe('value:1')
+  await refreshStarted.promise
+
+  controller.abort()
+  refreshGate.resolve()
+
+  const freshValue = await store.getOrCompute(
+    nodeKey,
+    { persist: false },
+    async () => {
+      computeCount += 1
+      return 'unexpected'
+    }
+  )
+
+  expect(freshValue).toBe('value:2')
   expect(computeCount).toBe(2)
 })

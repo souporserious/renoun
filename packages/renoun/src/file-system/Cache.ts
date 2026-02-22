@@ -139,6 +139,7 @@ export interface CacheOptions {
 const DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS = 20_000
 const DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS = 25
 const DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS = 5_000
+const NEVER_ABORT_SIGNAL = new AbortController().signal
 const DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS = 3
 const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
   'renoun.fs.cache.no-compute-slot-shared-value'
@@ -755,7 +756,8 @@ export class CacheStore {
 
     const backgroundOptions: CacheStoreGetOrComputeOptions = {
       ...options,
-      signal: undefined,
+      // Detach background refresh from request-scoped abort context.
+      signal: NEVER_ABORT_SIGNAL,
     }
 
     void this.#ensureInflightComputation(nodeKey, backgroundOptions, compute, {

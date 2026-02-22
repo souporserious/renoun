@@ -234,6 +234,42 @@ describe('GitVirtualFileSystem', () => {
     await expect(fs.readFile('file.txt')).resolves.toBe('after')
   })
 
+  it('does not retry aborted archive fetch when clearCache cancels in-flight load', async () => {
+    const mockFetch = vi.fn((_input: unknown, init?: RequestInit) => {
+      const signal = init?.signal
+      return new Promise<Response>((_resolve, reject) => {
+        const rejectWithAbort = () => {
+          const abortError = new Error('aborted')
+          abortError.name = 'AbortError'
+          reject(abortError)
+        }
+
+        if (signal?.aborted) {
+          rejectWithAbort()
+          return
+        }
+
+        signal?.addEventListener('abort', rejectWithAbort, { once: true })
+      })
+    })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    const readPromise = fs.readFile('file.txt')
+    await Promise.resolve()
+    fs.clearCache()
+
+    await expect(readPromise).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
   it('clearCache invalidates branch-scoped session cache entries', async () => {
     const archive = makeTar([
       { path: 'root/.keep', content: `` },
