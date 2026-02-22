@@ -145,7 +145,79 @@ export async function forEachConcurrent<Type>(
   options: ConcurrentMapOptions,
   fn: (item: Type, index: number) => Promise<void> | void
 ): Promise<void> {
-  await mapConcurrent(items, options, fn)
+  if (items.length === 0) {
+    return
+  }
+
+  const concurrency = Math.min(
+    normalizeConcurrency(options.concurrency),
+    items.length
+  )
+  const signal = options.signal ?? getContext()?.signal
+  const stopOnError = options.stopOnError !== false
+  const errors: unknown[] = []
+  let firstError: unknown
+  let nextIndex = 0
+
+  emitTelemetryEvent({
+    name: 'renoun.concurrency.foreach.start',
+    fields: {
+      items: items.length,
+      concurrency,
+      stopOnError,
+    },
+  })
+
+  const startedAt = Date.now()
+
+  async function worker() {
+    while (true) {
+      if (stopOnError && firstError !== undefined) {
+        return
+      }
+
+      throwIfAborted(signal)
+
+      const currentIndex = nextIndex
+      if (currentIndex >= items.length) {
+        return
+      }
+
+      nextIndex += 1
+
+      try {
+        await fn(items[currentIndex]!, currentIndex)
+      } catch (error) {
+        if (stopOnError) {
+          if (firstError === undefined) {
+            firstError = error
+          }
+          return
+        }
+        errors.push(error)
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()))
+
+  emitTelemetryEvent({
+    name: 'renoun.concurrency.foreach.end',
+    fields: {
+      items: items.length,
+      concurrency,
+      durationMs: Date.now() - startedAt,
+      errors: errors.length + (firstError === undefined ? 0 : 1),
+    },
+  })
+
+  if (firstError !== undefined) {
+    throw firstError
+  }
+
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'forEachConcurrent failed')
+  }
 }
 
 export function createConcurrentQueue(concurrency: number): ConcurrentQueue {

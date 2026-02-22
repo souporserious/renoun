@@ -105,7 +105,9 @@ function shouldUseRuntimeAnalysisPersistence(): boolean {
     return false
   }
 
-  return true
+  // Production static builds fan out across many workers and can overwhelm
+  // SQLite with high-cardinality runtime analysis writes.
+  return process.env['NODE_ENV'] !== 'production'
 }
 
 function shouldUseRuntimeAnalysisCacheStore(): boolean {
@@ -117,7 +119,9 @@ function shouldUseRuntimeAnalysisCacheStore(): boolean {
     return false
   }
 
-  return true
+  // In production static builds, direct project-file caches consistently
+  // outperform runtime-analysis cache bookkeeping for cold starts.
+  return process.env['NODE_ENV'] !== 'production'
 }
 
 function shouldUseRuntimeAnalysisStaleWhileRevalidate(): boolean {

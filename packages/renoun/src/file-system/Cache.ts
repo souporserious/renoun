@@ -575,6 +575,8 @@ export class CacheStore {
       return
     }
     this.#disposed = true
+    this.#persistenceIntentVersionByKey.clear()
+    this.#persistedRevisionPreconditionByKey.clear()
 
     const stores = snapshotDependencyPathWatchers.get(this.#snapshot)
     if (stores) {
@@ -1268,14 +1270,37 @@ export class CacheStore {
 
     const operation = previous
       .catch(() => {})
-      .then(() => {
+      .then(async () => {
+        if (this.#disposed) {
+          return
+        }
+
         if (
           this.#persistenceIntentVersionByKey.get(nodeKey) !== currentVersion
         ) {
           return
         }
 
-        return task()
+        let taskError: unknown
+        let hasTaskError = false
+        try {
+          await task()
+        } catch (error) {
+          taskError = error
+          hasTaskError = true
+        } finally {
+          if (this.#disposed) {
+            try {
+              await this.#clearPersistedCacheEntry(nodeKey)
+            } catch {
+              // Best-effort cleanup for writes that complete during disposal.
+            }
+          }
+        }
+
+        if (hasTaskError) {
+          throw taskError
+        }
       })
 
     this.#persistenceOperationByKey.set(nodeKey, operation)

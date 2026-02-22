@@ -1871,6 +1871,38 @@ updated content`
     expect(() => store.getSync('test:disposed')).toThrow(/disposed/i)
   })
 
+  test('cleans persisted writes that complete after disposal', async () => {
+    const nodeKey = 'test:dispose-persistence-race'
+    const saveStarted = createDeferredPromise()
+    const releaseSave = createDeferredPromise()
+    const persistedEntries = new Map<string, CacheEntry>()
+    const persistence: CacheStorePersistence = {
+      async load(key) {
+        return persistedEntries.get(key)
+      },
+      async save(key, entry) {
+        saveStarted.resolve()
+        await releaseSave.promise
+        persistedEntries.set(key, entry)
+      },
+      async delete(key) {
+        persistedEntries.delete(key)
+      },
+    }
+    const store = new CacheStore({
+      snapshot: new FileSystemSnapshot(new InMemoryFileSystem({})),
+      persistence,
+    })
+
+    const writePromise = store.put(nodeKey, { value: 1 }, { persist: true })
+    await saveStarted.promise
+    store.dispose()
+    releaseSave.resolve()
+    await writePromise
+
+    expect(await persistence.load(nodeKey)).toBeUndefined()
+  })
+
   test('resets a full snapshot lineage when reset is targeted at an ancestor', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
