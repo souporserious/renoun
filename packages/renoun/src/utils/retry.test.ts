@@ -71,4 +71,48 @@ describe('retry', () => {
 
     expect(selectedDelays).toEqual([7])
   })
+
+  test('retries network-like TypeError failures by default', async () => {
+    let attempts = 0
+
+    const value = await retry(
+      async () => {
+        attempts += 1
+        if (attempts < 2) {
+          throw new TypeError('fetch failed')
+        }
+        return 'ok'
+      },
+      {
+        retries: 2,
+        minDelayMs: 1,
+        maxDelayMs: 1,
+        jitter: 0,
+      }
+    )
+
+    expect(value).toBe('ok')
+    expect(attempts).toBe(2)
+  })
+
+  test('does not retry non-network TypeError failures by default', async () => {
+    let attempts = 0
+
+    await expect(
+      retry(
+        async () => {
+          attempts += 1
+          throw new TypeError('invalid invocation')
+        },
+        {
+          retries: 3,
+          minDelayMs: 1,
+          maxDelayMs: 1,
+          jitter: 0,
+        }
+      )
+    ).rejects.toBeInstanceOf(TypeError)
+
+    expect(attempts).toBe(1)
+  })
 })

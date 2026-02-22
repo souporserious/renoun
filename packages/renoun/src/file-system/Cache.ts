@@ -1119,6 +1119,7 @@ export class CacheStore {
       this.#inflight.delete(nodeKey)
       this.#persistenceOperationByKey.delete(nodeKey)
       this.#persistenceIntentVersionByKey.delete(nodeKey)
+      this.#persistedRevisionPreconditionByKey.delete(nodeKey)
       clearPersistedEntryInvalidation(this.#persistence, nodeKey)
     }
 
@@ -1179,6 +1180,7 @@ export class CacheStore {
       this.#inflight.delete(nodeKey)
       this.#persistenceOperationByKey.delete(nodeKey)
       this.#persistenceIntentVersionByKey.delete(nodeKey)
+      this.#persistedRevisionPreconditionByKey.delete(nodeKey)
       markPersistedEntryInvalid(this.#persistence, nodeKey)
     }
   }

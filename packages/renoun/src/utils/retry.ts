@@ -72,6 +72,52 @@ function normalizePositiveNumber(value: number | undefined, fallback: number) {
   return value
 }
 
+function isRetryableNetworkTypeError(error: TypeError): boolean {
+  const message = error.message.toLowerCase()
+  if (
+    message.includes('fetch') ||
+    message.includes('network') ||
+    message.includes('socket') ||
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('econn') ||
+    message.includes('enotfound') ||
+    message.includes('eai_again') ||
+    message.includes('connection') ||
+    message.includes('tls')
+  ) {
+    return true
+  }
+
+  const cause = (error as { cause?: unknown }).cause
+  if (!cause || typeof cause !== 'object') {
+    return false
+  }
+
+  const candidateCause = cause as { code?: unknown; errno?: unknown }
+  const causeCode =
+    typeof candidateCause.code === 'string'
+      ? candidateCause.code.toUpperCase()
+      : typeof candidateCause.errno === 'string'
+        ? candidateCause.errno.toUpperCase()
+        : undefined
+
+  if (!causeCode) {
+    return false
+  }
+
+  return (
+    causeCode === 'ECONNRESET' ||
+    causeCode === 'ECONNREFUSED' ||
+    causeCode === 'ETIMEDOUT' ||
+    causeCode === 'ENOTFOUND' ||
+    causeCode === 'EAI_AGAIN' ||
+    causeCode === 'EHOSTUNREACH' ||
+    causeCode === 'ENETUNREACH' ||
+    causeCode === 'EPIPE'
+  )
+}
+
 function defaultShouldRetry(error: unknown): boolean {
   if (isAbortError(error)) {
     return false
@@ -92,7 +138,7 @@ function defaultShouldRetry(error: unknown): boolean {
   }
 
   if (error instanceof TypeError) {
-    return true
+    return isRetryableNetworkTypeError(error)
   }
 
   return false

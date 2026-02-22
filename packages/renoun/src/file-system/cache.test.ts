@@ -6818,6 +6818,64 @@ export type Metadata = Value`,
     }
   })
 
+  test('persists subsequent puts after dependency-path eviction removes persisted rows', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-path-eviction-repersist-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'src/components/button.ts': 'export const button = 1',
+      }),
+      'sqlite-path-eviction-repersist'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+    const nodeKey = 'analysis:components:repersist'
+
+    try {
+      const depVersion = await snapshot.contentId('src/components/button.ts')
+
+      await store.put(nodeKey, { value: 'before-eviction' }, {
+        persist: true,
+        deps: [
+          {
+            depKey: 'file:src/components/button.ts',
+            depVersion,
+          },
+        ],
+      })
+
+      const persistedBeforeEviction = await persistence.load(nodeKey)
+      expect(persistedBeforeEviction?.persist).toBe(true)
+      expect(persistedBeforeEviction?.value).toEqual({
+        value: 'before-eviction',
+      })
+
+      const eviction = await store.deleteByDependencyPath('src/components')
+      expect(eviction.deletedNodeKeys).toContain(nodeKey)
+      expect(await persistence.load(nodeKey)).toBeUndefined()
+
+      await store.put(nodeKey, { value: 'after-eviction' }, {
+        persist: true,
+        deps: [
+          {
+            depKey: 'file:src/components/button.ts',
+            depVersion,
+          },
+        ],
+      })
+
+      const persistedAfterEviction = await persistence.load(nodeKey)
+      expect(persistedAfterEviction?.persist).toBe(true)
+      expect(persistedAfterEviction?.value).toEqual({
+        value: 'after-eviction',
+      })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('evicts persisted entries keyed by absolute dependency paths', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-sqlite-absolute-path-eviction-')
