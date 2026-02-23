@@ -951,7 +951,6 @@ describe('project cached analysis', () => {
         .getSourceFileOrThrow(transitiveDependencyPath)
         .refreshFromFileSystem()
       invalidateRuntimeAnalysisCachePath(transitiveDependencyPath)
-      await delay(0)
 
       await getCachedTokens(project, {
         value: entrySource,

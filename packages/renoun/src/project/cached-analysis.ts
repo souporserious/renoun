@@ -93,6 +93,7 @@ const compilerOptionsVersionByProject = new WeakMap<
   }
 >()
 let compilerOptionsVersionEpoch = 0
+let runtimeAnalysisInvalidationQueue: Promise<void> = Promise.resolve()
 
 function getRuntimeAnalysisSWRReadOptions():
   | CacheStoreStaleWhileRevalidateOptions
@@ -106,7 +107,7 @@ function getRuntimeAnalysisSWRReadOptions():
   }
 }
 
-async function getRuntimeAnalysisSession(): Promise<
+async function getRuntimeAnalysisSessionUnchecked(): Promise<
   RuntimeAnalysisCacheStore | undefined
 > {
   const runtimeSession = await getSharedRuntimeAnalysisSession()
@@ -121,6 +122,26 @@ async function getRuntimeAnalysisSession(): Promise<
   }
 }
 
+function enqueueRuntimeAnalysisInvalidation(
+  task: () => Promise<void>
+): void {
+  runtimeAnalysisInvalidationQueue = runtimeAnalysisInvalidationQueue
+    .catch(() => {})
+    .then(task)
+    .catch(() => {})
+}
+
+async function waitForRuntimeAnalysisInvalidations(): Promise<void> {
+  await runtimeAnalysisInvalidationQueue
+}
+
+async function getRuntimeAnalysisSession(): Promise<
+  RuntimeAnalysisCacheStore | undefined
+> {
+  await waitForRuntimeAnalysisInvalidations()
+  return getRuntimeAnalysisSessionUnchecked()
+}
+
 function isTypeScriptConfigPath(path: string): boolean {
   const normalizedPath = normalizeCachePath(path)
   return /(^|\/)tsconfig(\..+)?\.json$/i.test(normalizedPath)
@@ -131,27 +152,27 @@ export function invalidateRuntimeAnalysisCachePath(path: string): void {
     compilerOptionsVersionEpoch += 1
   }
 
-  void (async () => {
-    const runtimeSession = await getRuntimeAnalysisSession()
+  enqueueRuntimeAnalysisInvalidation(async () => {
+    const runtimeSession = await getRuntimeAnalysisSessionUnchecked()
     if (!runtimeSession) {
       return
     }
 
     runtimeSession.session.invalidatePath(path)
-  })()
+  })
 }
 
 export function invalidateRuntimeAnalysisCacheAll(): void {
   compilerOptionsVersionEpoch += 1
 
-  void (async () => {
-    const runtimeSession = await getRuntimeAnalysisSession()
+  enqueueRuntimeAnalysisInvalidation(async () => {
+    const runtimeSession = await getRuntimeAnalysisSessionUnchecked()
     if (!runtimeSession) {
       return
     }
 
     runtimeSession.session.invalidatePath('.')
-  })()
+  })
 }
 
 function toSourceTextMetadataValueSignature(value: string): string {
