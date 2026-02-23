@@ -7054,7 +7054,7 @@ export type Metadata = Value`,
     }
   }, 12000)
 
-  test('duplicates long-running sqlite compute work without a heartbeat refresh', async () => {
+  test('reuses sqlite compute work without heartbeat when the leader finishes within owner grace', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-sqlite-slot-no-heartbeat-')
     )
@@ -7080,7 +7080,7 @@ export type Metadata = Value`,
         { persist: true },
         async () => {
           computeCount += 1
-          await new Promise((resolve) => setTimeout(resolve, 220))
+          await new Promise((resolve) => setTimeout(resolve, 180))
           return 'first'
         }
       )
@@ -7093,7 +7093,59 @@ export type Metadata = Value`,
         { persist: true },
         async () => {
           computeCount += 1
-          await new Promise((resolve) => setTimeout(resolve, 220))
+          return 'second'
+        }
+      )
+
+      const [firstResult, secondResult] = await Promise.all([first, second])
+
+      expect(firstResult).toBe('first')
+      expect(secondResult).toBe('first')
+      expect(computeCount).toBe(1)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
+  test('duplicates sqlite compute work without heartbeat after owner grace elapses', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-no-heartbeat-stale-owner-')
+    )
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'sqlite-compute-slot-no-heartbeat-stale-owner'
+    )
+    const persistence = createShortTtlComputeSlotPersistence(dbPath, {
+      slotTtlMs: 60,
+      withHeartbeat: false,
+    })
+    const firstStore = new CacheStore({ snapshot, persistence })
+    const secondStore = new CacheStore({ snapshot, persistence })
+
+    try {
+      let computeCount = 0
+      const first = firstStore.getOrCompute(
+        'test:sqlite-compute-slot-no-heartbeat-stale-owner',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          await new Promise((resolve) => setTimeout(resolve, 650))
+          return 'first'
+        }
+      )
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20)
+      })
+      const second = secondStore.getOrCompute(
+        'test:sqlite-compute-slot-no-heartbeat-stale-owner',
+        { persist: true },
+        async () => {
+          computeCount += 1
           return 'second'
         }
       )

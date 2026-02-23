@@ -144,6 +144,8 @@ export interface CacheOptions {
 
 const DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS = 20_000
 const DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS = 25
+const DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_MAX_MS = 5_000
+const DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_TTL_MULTIPLIER = 4
 const DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS = 5_000
 const NEVER_ABORT_SIGNAL = new AbortController().signal
 const DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS = 3
@@ -404,6 +406,22 @@ function getComputeSlotTtlMs(
 
 function getComputeSlotHeartbeatMs(slotTtlMs: number): number {
   return Math.min(1000, Math.max(1, Math.floor(slotTtlMs / 2)))
+}
+
+function getComputeSlotOwnerGraceMs(slotTtlMs: number): number {
+  const scaledGraceMs =
+    slotTtlMs * DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_TTL_MULTIPLIER
+  if (!Number.isFinite(scaledGraceMs) || scaledGraceMs <= 0) {
+    return 0
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_MAX_MS,
+      Math.floor(scaledGraceMs)
+    )
+  )
 }
 
 function isCacheStorePersistenceComputeSlot(
@@ -1467,13 +1485,16 @@ export class CacheStore {
   }
 
   async #waitForInFlightValue<Value>(
-    nodeKey: string
+    nodeKey: string,
+    slotTtlMs: number
   ): Promise<Value | typeof NO_COMPUTE_SLOT_SHARED_VALUE> {
     const signal = getContext()?.signal
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence) {
       return NO_COMPUTE_SLOT_SHARED_VALUE
     }
+    const ownerGraceMs = getComputeSlotOwnerGraceMs(slotTtlMs)
+    let firstObservedOwnerAt: number | undefined
 
     while (true) {
       throwIfAborted(signal)
@@ -1489,11 +1510,30 @@ export class CacheStore {
         return NO_COMPUTE_SLOT_SHARED_VALUE
       }
 
-      if (!inFlightOwner) {
+      const now = Date.now()
+
+      if (inFlightOwner) {
+        if (firstObservedOwnerAt === undefined) {
+          firstObservedOwnerAt = now
+        }
+      } else if (
+        firstObservedOwnerAt === undefined ||
+        ownerGraceMs <= 0 ||
+        now - firstObservedOwnerAt >= ownerGraceMs
+      ) {
         return NO_COMPUTE_SLOT_SHARED_VALUE
       }
 
-      const sleep = Math.max(0, this.#computeSlotPollMs) || 0
+      const sleep =
+        firstObservedOwnerAt === undefined || ownerGraceMs <= 0
+          ? this.#computeSlotPollMs
+          : Math.max(
+              1,
+              Math.min(
+                this.#computeSlotPollMs,
+                ownerGraceMs - Math.max(0, now - firstObservedOwnerAt)
+              )
+            )
       if (sleep > 0) {
         await raceAbort(delay(sleep), signal)
       }
@@ -1521,7 +1561,7 @@ export class CacheStore {
         return
       }
 
-      const sleep = Math.max(0, this.#computeSlotPollMs) || 0
+      const sleep = this.#computeSlotPollMs
       if (sleep > 0) {
         await raceAbort(delay(sleep), signal)
       }
@@ -1693,7 +1733,10 @@ export class CacheStore {
         computeSlotTtlMs
       )
       if (!acquired) {
-        const sharedValue = await this.#waitForInFlightValue<Value>(nodeKey)
+        const sharedValue = await this.#waitForInFlightValue<Value>(
+          nodeKey,
+          computeSlotTtlMs
+        )
         if (sharedValue !== NO_COMPUTE_SLOT_SHARED_VALUE) {
           return sharedValue
         }
