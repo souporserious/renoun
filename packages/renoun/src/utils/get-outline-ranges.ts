@@ -29,33 +29,33 @@ export function getOutlineRanges(
     const ranges = getDebugLogger().trackOperation(
       'get-outline-ranges',
       (): OutlineRange[] => {
-      let sourceFile = project.getSourceFile(filePath)
+        let sourceFile = project.getSourceFile(filePath)
 
-      if (!sourceFile) {
-        sourceFile = project.addSourceFileAtPath(filePath)
-      }
-
-      const outliningSpans =
-        project
-          .getLanguageService()
-          .compilerObject.getOutliningSpans(sourceFile.getFilePath()) ?? []
-
-      return outliningSpans.map((span) => {
-        const start = span.textSpan.start
-        const end = span.textSpan.start + span.textSpan.length
-
-        return {
-          bannerText: span.bannerText,
-          autoCollapse: span.autoCollapse,
-          kind: span.kind,
-          textSpan: span.textSpan,
-          hintSpan: span.hintSpan,
-          position: {
-            start: sourceFile.getLineAndColumnAtPos(start),
-            end: sourceFile.getLineAndColumnAtPos(end),
-          },
+        if (!sourceFile) {
+          sourceFile = project.addSourceFileAtPath(filePath)
         }
-      })
+
+        const outliningSpans =
+          project
+            .getLanguageService()
+            .compilerObject.getOutliningSpans(sourceFile.getFilePath()) ?? []
+
+        return outliningSpans.map((span) => {
+          const start = span.textSpan.start
+          const end = span.textSpan.start + span.textSpan.length
+
+          return {
+            bannerText: span.bannerText,
+            autoCollapse: span.autoCollapse,
+            kind: span.kind,
+            textSpan: span.textSpan,
+            hintSpan: span.hintSpan,
+            position: {
+              start: sourceFile.getLineAndColumnAtPos(start),
+              end: sourceFile.getLineAndColumnAtPos(end),
+            },
+          }
+        })
       },
       { data: { filePath } }
     ) as OutlineRange[]

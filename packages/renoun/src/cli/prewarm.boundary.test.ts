@@ -42,7 +42,9 @@ describe('CLI prewarm import boundary', () => {
   })
 })
 
-async function collectReachableFiles(entrypoints: string[]): Promise<Set<string>> {
+async function collectReachableFiles(
+  entrypoints: string[]
+): Promise<Set<string>> {
   const reachable = new Set<string>()
   const pending = [...entrypoints]
 
@@ -73,7 +75,10 @@ async function collectReachableFiles(entrypoints: string[]): Promise<Set<string>
   return reachable
 }
 
-function getRuntimeImportSpecifiers(sourceText: string, filePath: string): string[] {
+function getRuntimeImportSpecifiers(
+  sourceText: string,
+  filePath: string
+): string[] {
   const sourceFile = ts.createSourceFile(
     filePath,
     sourceText,
@@ -85,14 +90,24 @@ function getRuntimeImportSpecifiers(sourceText: string, filePath: string): strin
 
   const visitNode = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node)) {
-      if (!node.importClause?.isTypeOnly && ts.isStringLiteral(node.moduleSpecifier)) {
+      if (
+        !node.importClause?.isTypeOnly &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      ) {
         specifiers.push(node.moduleSpecifier.text)
       }
     } else if (ts.isExportDeclaration(node)) {
-      if (!node.isTypeOnly && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      if (
+        !node.isTypeOnly &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      ) {
         specifiers.push(node.moduleSpecifier.text)
       }
-    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword
+    ) {
       const firstArgument = node.arguments[0]
       if (firstArgument && ts.isStringLiteralLike(firstArgument)) {
         specifiers.push(firstArgument.text)

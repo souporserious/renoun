@@ -261,7 +261,9 @@ interface FetchWithRetryOptions {
 }
 
 class GitVirtualFetchRetryError extends RenounNetworkError {
-  readonly failureType: FetchRetryFailureRateLimit['type'] | FetchRetryFailureResponse['type']
+  readonly failureType:
+    | FetchRetryFailureRateLimit['type']
+    | FetchRetryFailureResponse['type']
   readonly retryAfterMs?: number
 
   constructor(options: {
@@ -1034,7 +1036,6 @@ export class GitVirtualFileSystem
       )
       return payload
     } catch {
-      // Treat host/network failures as uncached fallbacks so a later retry can recover.
       return {
         metadata: this.#createEmptyGitMetadata(),
         commitHashes: {},
@@ -1299,18 +1300,21 @@ export class GitVirtualFileSystem
     }
 
     startLine = normalizedStart
-    const { identity: refIdentity, deterministic } = await this.#getRefCacheIdentity(
-      this.#ref
-    )
+    const { identity: refIdentity, deterministic } =
+      await this.#getRefCacheIdentity(this.#ref)
     const session = this.#getSession()
     const keyPrefix = this.#createBlameRangeKeyPrefix(refIdentity, path)
-    const candidateNodeKeys = await session.cache.listNodeKeysByPrefix(keyPrefix)
+    const candidateNodeKeys =
+      await session.cache.listNodeKeysByPrefix(keyPrefix)
 
     let bestCandidateNodeKey: string | undefined
     let bestCandidateWidth = Number.POSITIVE_INFINITY
 
     for (const candidateNodeKey of candidateNodeKeys) {
-      const range = this.#parseBlameRangeFromNodeKey(candidateNodeKey, keyPrefix)
+      const range = this.#parseBlameRangeFromNodeKey(
+        candidateNodeKey,
+        keyPrefix
+      )
       if (!range) {
         continue
       }
@@ -1740,7 +1744,6 @@ export class GitVirtualFileSystem
           return
         }
 
-        // Take up to batch size and drain until empty to avoid timer-based deadlocks.
         const batch = queue.splice(0, MAX_GITHUB_BLAME_BATCH)
         if (batch.length === 0) {
           return
@@ -3365,7 +3368,6 @@ export class GitVirtualFileSystem
     const reversedCommits = [...commitHistory].reverse()
 
     // Pre-fetch all file contents in parallel batches
-    // This significantly reduces the number of sequential API calls.
     const fileContentCache = new Map<string, string | null>()
 
     // Build list of all (commit, file) pairs we need to fetch
@@ -3376,7 +3378,6 @@ export class GitVirtualFileSystem
       }
     }
 
-    // Fetch in parallel with a bounded concurrency limit.
     await forEachConcurrent(
       fetchTasks,
       {
@@ -3546,9 +3547,8 @@ export class GitVirtualFileSystem
       contentHash,
       parserFlavor,
     })
-    const cachedPayload = await session.cache.get<Record<string, ExportItem>>(
-      nodeKey
-    )
+    const cachedPayload =
+      await session.cache.get<Record<string, ExportItem>>(nodeKey)
     if (cachedPayload !== undefined) {
       return deserializeExportItemMap(cachedPayload)
     }
@@ -3640,7 +3640,6 @@ export class GitVirtualFileSystem
         let content = fileContentCache.get(cacheKey)
         if (content === undefined) {
           content = await this.#fetchFileAtCommit(entryRelative, ref, {
-            // `ref` in the baseline can be a moving branch/tag, so keep it in-memory only.
             persist: false,
           })
           fileContentCache.set(cacheKey, content)
@@ -4857,7 +4856,6 @@ export class GitVirtualFileSystem
         }
       )
     } catch {
-      // Treat transient fetch errors as uncached misses so later retries can recover.
       return null
     }
   }

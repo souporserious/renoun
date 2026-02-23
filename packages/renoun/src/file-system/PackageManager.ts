@@ -193,9 +193,12 @@ function getVersion(pm: PackageManagerName): string | null {
 }
 
 function checkAvailable(pm: PackageManagerName): boolean {
-  const cachedAvailability = getCachedPackageManagerValue<boolean>('available', {
-    pm,
-  })
+  const cachedAvailability = getCachedPackageManagerValue<boolean>(
+    'available',
+    {
+      pm,
+    }
+  )
   if (cachedAvailability !== undefined) {
     return cachedAvailability
   }

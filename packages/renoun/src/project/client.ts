@@ -16,9 +16,7 @@ import type {
 } from '../utils/get-source-text-metadata.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
-import type {
-  ResolvedTypeAtLocationResult,
-} from '../utils/resolve-type-at-location.ts'
+import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
 import type { DistributiveOmit } from '../types.ts'
 import {
   getCachedFileExportText,
@@ -76,7 +74,9 @@ function queueRefreshInvalidation(path: string): void {
 }
 
 function shouldConsumeRefreshNotifications(): boolean {
-  const override = parseBooleanEnv(process.env.RENOUN_PROJECT_REFRESH_NOTIFICATIONS)
+  const override = parseBooleanEnv(
+    process.env.RENOUN_PROJECT_REFRESH_NOTIFICATIONS
+  )
   if (override !== undefined) {
     return override
   }

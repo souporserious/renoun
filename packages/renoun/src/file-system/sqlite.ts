@@ -13,7 +13,9 @@ function loadSqliteModuleWithoutWarningNoise(): Promise<SqliteModule> {
   }
 
   const originalEmitWarning = process.emitWarning
-  const filteredEmitWarning = ((...args: Parameters<typeof process.emitWarning>) => {
+  const filteredEmitWarning = ((
+    ...args: Parameters<typeof process.emitWarning>
+  ) => {
     const [warning] = args
 
     const message =
@@ -43,10 +45,12 @@ function loadSqliteModuleWithoutWarningNoise(): Promise<SqliteModule> {
 
 export async function loadSqliteModule(): Promise<SqliteModule> {
   if (!sqliteModulePromise) {
-    sqliteModulePromise = loadSqliteModuleWithoutWarningNoise().catch((error) => {
-      sqliteModulePromise = null
-      throw error
-    })
+    sqliteModulePromise = loadSqliteModuleWithoutWarningNoise().catch(
+      (error) => {
+        sqliteModulePromise = null
+        throw error
+      }
+    )
   }
 
   return sqliteModulePromise

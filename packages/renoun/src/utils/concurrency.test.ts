@@ -32,7 +32,10 @@ describe('concurrency utilities', () => {
 
   test('raceAbort rejects when the signal is aborted first', async () => {
     const controller = new AbortController()
-    const task = raceAbort(delay(50).then(() => 'done'), controller.signal)
+    const task = raceAbort(
+      delay(50).then(() => 'done'),
+      controller.signal
+    )
 
     controller.abort()
 
@@ -68,17 +71,13 @@ describe('concurrency utilities', () => {
     const items = [0, 1, 2, 3, 4, 5]
     const visited: number[] = []
 
-    await forEachConcurrent(
-      items,
-      { concurrency: 2 },
-      async (item) => {
-        running += 1
-        maxRunning = Math.max(maxRunning, running)
-        await delay(5)
-        visited.push(item)
-        running -= 1
-      }
-    )
+    await forEachConcurrent(items, { concurrency: 2 }, async (item) => {
+      running += 1
+      maxRunning = Math.max(maxRunning, running)
+      await delay(5)
+      visited.push(item)
+      running -= 1
+    })
 
     expect(visited.sort((first, second) => first - second)).toEqual(items)
     expect(maxRunning).toBeLessThanOrEqual(2)

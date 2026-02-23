@@ -42,8 +42,6 @@ describe('serializeTypeFilterForCache', () => {
           },
           {
             name: 'beta',
-            // missing properties should normalize the same as an explicit `undefined`.
-            // Intentionally left unconfigured.
           },
         ],
       },

@@ -110,7 +110,6 @@ function initRepo(cwd: string) {
   git(cwd, ['-c', 'init.defaultBranch=main', 'init'])
   // Disable sparse-checkout to avoid CI issues where it may be enabled globally
   git(cwd, ['config', 'core.sparseCheckout', 'false'])
-  // Ensure worktree-level sparse settings are also cleared.
   git(cwd, ['config', '--worktree', 'core.sparseCheckout', 'false'])
   git(cwd, ['config', '--worktree', 'core.sparseCheckoutCone', 'false'])
   const sparseCheckoutPath = join(cwd, '.git', 'info', 'sparse-checkout')
@@ -130,8 +129,6 @@ function commitFile(
   const path = join(repo, filename)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
-  // Use --sparse so staging works even if a sparse-checkout config is active.
-  // It is a no-op when sparse-checkout is disabled and avoids CI-specific failures.
   git(repo, ['add', '--sparse', filename])
   git(repo, ['commit', '--no-gpg-sign', '-m', message], identity)
 
@@ -349,7 +346,12 @@ describe('GitFileSystem', () => {
       const previousToken = await store.getWorkspaceChangeToken('.')
       expect(previousToken).toBeTruthy()
 
-      commitFile(repoRoot, unicodeRelativePath, 'export const cafe = 2', 'add cafe')
+      commitFile(
+        repoRoot,
+        unicodeRelativePath,
+        'export const cafe = 2',
+        'add cafe'
+      )
       const changedPaths = await store.getWorkspaceChangedPathsSinceToken(
         '.',
         previousToken!
@@ -680,7 +682,6 @@ describe('GitFileSystem', () => {
     })
 
     try {
-      // Warm up ref/repo state before forcing a tiny log buffer.
       await store.getFileMetadata('src/a.ts')
 
       const originalMaxBufferBytes = store.maxBufferBytes

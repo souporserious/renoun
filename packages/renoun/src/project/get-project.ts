@@ -116,7 +116,10 @@ export function getProject(options?: ProjectOptions) {
 }
 
 function ensureProjectDirectoryWatcher(projectDirectory: string): void {
-  if (!shouldEnableProjectWatchers() || directoryWatchers.has(projectDirectory)) {
+  if (
+    !shouldEnableProjectWatchers() ||
+    directoryWatchers.has(projectDirectory)
+  ) {
     return
   }
 
@@ -198,7 +201,9 @@ export function invalidateProjectCachesByPath(path: string): number {
   let affectedProjects = 0
 
   for (const [projectDirectory, projectsByDirectory] of directoryToProjects) {
-    if (!pathsIntersect(normalizeComparablePath(projectDirectory), normalizedPath)) {
+    if (
+      !pathsIntersect(normalizeComparablePath(projectDirectory), normalizedPath)
+    ) {
       continue
     }
 

@@ -181,13 +181,17 @@ export class NodeFileSystem
   ) {
     const digestLines = entries
       .map((entry) => {
-        const normalizedPaths = entry.paths.map((path) => normalizeSlashes(path))
+        const normalizedPaths = entry.paths.map((path) =>
+          normalizeSlashes(path)
+        )
         return `${entry.status} ${normalizedPaths.join('\u0001')}`
       })
       .sort((first, second) => first.localeCompare(second))
     const ignoredOnly =
       entries.length > 0 && entries.every((entry) => entry.status === '!!')
-    const digest = createHash('sha1').update(digestLines.join('\n')).digest('hex')
+    const digest = createHash('sha1')
+      .update(digestLines.join('\n'))
+      .digest('hex')
 
     return {
       digest,
@@ -254,14 +258,14 @@ export class NodeFileSystem
       const absoluteRootPath = this.getAbsolutePath(rootPath)
       const inflightKey = createWorkspaceCacheKey(absoluteRootPath)
 
-      const existingInflight = this.#workspaceChangeTokenInFlight.get(inflightKey)
+      const existingInflight =
+        this.#workspaceChangeTokenInFlight.get(inflightKey)
       if (existingInflight) {
         return await existingInflight
       }
 
-      const lookupPromise = this.#getWorkspaceChangeTokenByAbsolutePath(
-        absoluteRootPath
-      )
+      const lookupPromise =
+        this.#getWorkspaceChangeTokenByAbsolutePath(absoluteRootPath)
       this.#workspaceChangeTokenInFlight.set(inflightKey, lookupPromise)
 
       try {
@@ -287,10 +291,7 @@ export class NodeFileSystem
       }
 
       const relativeRootPath = relativePath(gitRoot, absoluteRootPath)
-      if (
-        relativeRootPath === '..' ||
-        relativeRootPath.startsWith('../')
-      ) {
+      if (relativeRootPath === '..' || relativeRootPath.startsWith('../')) {
         return null
       }
 
@@ -487,7 +488,10 @@ export class NodeFileSystem
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
       const statusDigest = this.#createWorkspaceStatusDigest(statusEntries)
 
-      if (currentHead === previousHead && previousDirtyDigest === statusDigest.digest) {
+      if (
+        currentHead === previousHead &&
+        previousDirtyDigest === statusDigest.digest
+      ) {
         return []
       }
 

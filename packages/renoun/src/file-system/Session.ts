@@ -930,7 +930,8 @@ export class Session {
       now - this.#lastWorkspaceChangedPathsCleanupAt >=
       WORKSPACE_CHANGED_PATHS_CLEANUP_INTERVAL_MS
     const shouldCleanupBySize =
-      this.#workspaceChangedPathsByToken.size > WORKSPACE_CHANGED_PATHS_MAX_ENTRIES
+      this.#workspaceChangedPathsByToken.size >
+      WORKSPACE_CHANGED_PATHS_MAX_ENTRIES
 
     if (!shouldCleanupByInterval && !shouldCleanupBySize) {
       return
@@ -956,7 +957,8 @@ export class Session {
     }
 
     let overflow =
-      this.#workspaceChangedPathsByToken.size - WORKSPACE_CHANGED_PATHS_MAX_ENTRIES
+      this.#workspaceChangedPathsByToken.size -
+      WORKSPACE_CHANGED_PATHS_MAX_ENTRIES
     for (const [cacheKey, cached] of this.#workspaceChangedPathsByToken) {
       if (overflow <= 0) {
         break
@@ -988,7 +990,10 @@ export class Session {
         continue
       }
 
-      if ((key === 'reason' || key === 'trigger') && typeof value === 'string') {
+      if (
+        (key === 'reason' || key === 'trigger') &&
+        typeof value === 'string'
+      ) {
         tags[key] = value
         continue
       }

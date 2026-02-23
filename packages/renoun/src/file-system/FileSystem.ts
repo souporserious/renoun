@@ -179,7 +179,9 @@ export abstract class BaseFileSystem {
     }
 
     const resolvedPath = trimTrailingSlashes(
-      trimLeadingDotSlash(removeAllExtensions(removeOrderPrefixes(rootRelativePath)))
+      trimLeadingDotSlash(
+        removeAllExtensions(removeOrderPrefixes(rootRelativePath))
+      )
     )
 
     return joinPaths('/', options.basePath, resolvedPath)

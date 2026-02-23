@@ -10,7 +10,10 @@ export interface ConcurrentMapOptions {
 }
 
 export interface ConcurrentQueue {
-  run<Type>(task: () => Promise<Type>, options?: { signal?: AbortSignal }): Promise<Type>
+  run<Type>(
+    task: () => Promise<Type>,
+    options?: { signal?: AbortSignal }
+  ): Promise<Type>
   getQueueLength(): number
   getRunningCount(): number
 }

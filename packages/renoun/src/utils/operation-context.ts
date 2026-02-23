@@ -59,7 +59,9 @@ export function getContext(): OperationContext | undefined {
 }
 
 export function getOperationLogger(): OperationLogger {
-  return getContext()?.logger ?? (getDebugLogger() as unknown as OperationLogger)
+  return (
+    getContext()?.logger ?? (getDebugLogger() as unknown as OperationLogger)
+  )
 }
 
 export function throwIfAborted(signal?: AbortSignal): void {

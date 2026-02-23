@@ -19,8 +19,6 @@ const renounFileSystemWorkspacePath = fileURLToPath(
 const renounPackageRootPath = fileURLToPath(new URL('../../', import.meta.url))
 const originalTestCwd = process.cwd()
 
-// Keep ts-morph module resolution stable when this test file is executed
-// from the monorepo root during package-wide test runs.
 if (originalTestCwd !== renounPackageRootPath) {
   process.chdir(renounPackageRootPath)
 }

@@ -123,10 +123,16 @@ export async function collectRenounPrewarmTargets(
   project: Project,
   projectOptions?: ProjectOptions
 ): Promise<RenounPrewarmTargets> {
-  const directoryDeclarations = new Map<TsMorphSymbol, RenounDirectoryDeclaration>()
+  const directoryDeclarations = new Map<
+    TsMorphSymbol,
+    RenounDirectoryDeclaration
+  >()
   const collectionRawEntries = new Map<TsMorphSymbol, Expression[]>()
   const collectionAliases = new Map<TsMorphSymbol, RenounAliases>()
-  const collectionDeclarations = new Map<TsMorphSymbol, RenounCollectionDeclaration>()
+  const collectionDeclarations = new Map<
+    TsMorphSymbol,
+    RenounCollectionDeclaration
+  >()
 
   const getEntriesRequests = new Map<string, DirectoryEntriesRequest>()
   const getFileRequests: FileRequest[] = []
@@ -173,22 +179,20 @@ export async function collectRenounPrewarmTargets(
   }
 
   for (const [collectionSymbol, rawEntries] of collectionRawEntries.entries()) {
-    const aliases = collectionAliases.get(collectionSymbol) ?? EMPTY_RENOUN_ALIASES
+    const aliases =
+      collectionAliases.get(collectionSymbol) ?? EMPTY_RENOUN_ALIASES
 
     const resolvedEntries = rawEntries
       .map((entryExpression) =>
-        resolveCollectionEntryReference(
-          entryExpression,
-          {
-            directories: directoryDeclarations,
-            collections: collectionDeclarations,
-            projectDirectory,
-            aliases,
-          }
-        )
+        resolveCollectionEntryReference(entryExpression, {
+          directories: directoryDeclarations,
+          collections: collectionDeclarations,
+          projectDirectory,
+          aliases,
+        })
       )
-      .filter((entry): entry is RenounCollectionEntryReference =>
-        entry !== undefined
+      .filter(
+        (entry): entry is RenounCollectionEntryReference => entry !== undefined
       )
 
     collectionDeclarations.set(collectionSymbol, {
@@ -347,7 +351,10 @@ function collectRenounDeclarations(
         }
 
         if (
-          isDirectoryConstructorExpression(referenceExpression.getExpression(), aliases)
+          isDirectoryConstructorExpression(
+            referenceExpression.getExpression(),
+            aliases
+          )
         ) {
           const path = resolveDirectoryPathFromNewExpression(
             referenceExpression,
@@ -367,9 +374,8 @@ function collectRenounDeclarations(
             aliases
           )
         ) {
-          const entries = resolveCollectionEntriesFromNewExpression(
-            referenceExpression
-          )
+          const entries =
+            resolveCollectionEntriesFromNewExpression(referenceExpression)
 
           collectionRawEntries.set(symbol, entries)
           collectionAliases.set(symbol, aliases)
@@ -411,7 +417,9 @@ function isLikelyRenounSourceFile(sourceFile: SourceFile): boolean {
   )
 }
 
-function resolveCollectionEntriesFromNewExpression(newExpression: Expression): Expression[] {
+function resolveCollectionEntriesFromNewExpression(
+  newExpression: Expression
+): Expression[] {
   const expression = resolveReferenceExpression(newExpression)
   if (!Node.isNewExpression(expression)) {
     return []
@@ -659,9 +667,7 @@ function resolveFileExtensionArgument(
   return undefined
 }
 
-function resolveDirectoryGetEntriesOptions(
-  callExpression: CallExpression
-): {
+function resolveDirectoryGetEntriesOptions(callExpression: CallExpression): {
   recursive: boolean
   includeDirectoryNamedFiles: boolean
   includeIndexAndReadmeFiles: boolean
@@ -719,7 +725,9 @@ function resolveDirectoryGetEntriesOptions(
   }
 }
 
-function parseFilterExtensions(filterValue: string | undefined): Set<string> | null {
+function parseFilterExtensions(
+  filterValue: string | undefined
+): Set<string> | null {
   if (!filterValue) {
     return null
   }
@@ -855,10 +863,7 @@ function resolveDirectoryPathFromNewExpression(
     return undefined
   }
 
-  return resolveDirectoryPathFromLiteral(
-    firstArgument,
-    projectDirectory
-  )
+  return resolveDirectoryPathFromLiteral(firstArgument, projectDirectory)
 }
 
 function resolveDirectoryPathFromLiteral(
@@ -888,7 +893,10 @@ function resolveDirectoryPathFromLiteral(
   return undefined
 }
 
-function toAbsoluteDirectoryPath(path: string, projectDirectory: string): string {
+function toAbsoluteDirectoryPath(
+  path: string,
+  projectDirectory: string
+): string {
   const resolvedPath = path.startsWith('workspace:')
     ? resolveSchemePath(path)
     : path
@@ -966,8 +974,7 @@ function shouldSkipSourceFile(filePath: string): boolean {
   const normalizedPath = filePath.replace(/\\/g, '/')
 
   return (
-    normalizedPath.includes(NODE_MODULES_PATH) ||
-    isFilePathGitIgnored(filePath)
+    normalizedPath.includes(NODE_MODULES_PATH) || isFilePathGitIgnored(filePath)
   )
 }
 
@@ -996,7 +1003,10 @@ function getPrewarmWorkspaceGateStore(
   workspaceRootPath: string
 ): CacheStore {
   if (!prewarmWorkspaceGateStoreByKey) {
-    prewarmWorkspaceGateStoreByKey = new Map<string, PrewarmWorkspaceGateStore>()
+    prewarmWorkspaceGateStoreByKey = new Map<
+      string,
+      PrewarmWorkspaceGateStore
+    >()
   }
 
   const existing = prewarmWorkspaceGateStoreByKey.get(gateKey)
@@ -1038,7 +1048,8 @@ async function resolvePrewarmWorkspaceGate(
         : process.cwd()
     )
     const workspaceToken =
-      (await getWorkspaceChangeToken.call(fileSystem, workspaceRootPath)) ?? null
+      (await getWorkspaceChangeToken.call(fileSystem, workspaceRootPath)) ??
+      null
     if (!workspaceToken) {
       return undefined
     }
@@ -1124,7 +1135,9 @@ export async function prewarmRenounRpcServerCache(options?: {
     return
   }
 
-  const workspaceGate = await resolvePrewarmWorkspaceGate(options?.projectOptions)
+  const workspaceGate = await resolvePrewarmWorkspaceGate(
+    options?.projectOptions
+  )
   if (!workspaceGate) {
     await runPrewarmAnalysis(options)
     return
@@ -1151,11 +1164,14 @@ export async function prewarmRenounRpcServerCache(options?: {
   )
 
   if (!didExecutePrewarm) {
-    logger.debug('Skipping renoun prewarm because workspace token is unchanged', () => ({
-      data: {
-        workspaceRootPath: workspaceGate.workspaceRootPath,
-      },
-    }))
+    logger.debug(
+      'Skipping renoun prewarm because workspace token is unchanged',
+      () => ({
+        data: {
+          workspaceRootPath: workspaceGate.workspaceRootPath,
+        },
+      })
+    )
   }
 }
 
@@ -1174,7 +1190,9 @@ function mergeCollectionGetEntriesRequest(
       includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
       includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
       filterExtensions:
-        options.filterExtensions === null ? null : new Set(options.filterExtensions),
+        options.filterExtensions === null
+          ? null
+          : new Set(options.filterExtensions),
     })
     return
   }

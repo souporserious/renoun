@@ -239,9 +239,6 @@ type ApplyFileSchemaOption<
     : {}
 >
 
-// (Intentionally no `InferDirectoryTypes` export: schema is applied via
-// `ApplyDirectorySchema` to avoid changing the meaning of the first generic.)
-
 /** A module loader runtime function. */
 type ModuleLoader<Exports extends ModuleExports = ModuleExports> =
   ModuleRuntimeLoader<Exports>
@@ -479,7 +476,6 @@ type WithUnknownExportsIfNoConcreteSchema<
       : UnknownModuleExports
 
 type InferDirectoryTypesFromLoaders<Loaders extends DirectoryLoader> =
-  // If `Loaders` is still the default `DirectoryLoader` union, don't infer.
   DirectoryLoader extends Loaders ? {} : InferDirectoryLoaderTypes<Loaders>
 
 type ResolveDirectoryTypes<
@@ -594,7 +590,6 @@ function createGlobRuntimeLoader(
     }
 
     if (!importer) {
-      // Fall back to suffix match (helps when glob keys include an absolute-ish prefix).
       const matchKey = Object.keys(glob).find((key) =>
         normalizeSlashes(key).endsWith(relative)
       )
@@ -612,7 +607,6 @@ function createGlobRuntimeLoader(
     try {
       return await importer()
     } catch (error) {
-      // If the importer exists but fails to parse fall back to a default loader for that extension when available.
       const fallback = await getRuntimeDefaultLoader(file?.extension)
       if (fallback) {
         return fallback(_path, file)
@@ -757,7 +751,6 @@ export class File<
   #structureCacheSessionKey?: string
 
   constructor(options: FileOptions<DirectoryTypes, Path, any>) {
-    // Parse path and extension to determine MIME type
     const resolvedPath = resolveSchemePath(options.path)
     const repository = normalizeRepositoryInput(options.repository)
     if (repository && options.directory === undefined) {
@@ -781,18 +774,13 @@ export class File<
             ? new Directory({ repository })
             : new Directory()
 
-    // Determine byte length for Blob.size compatibility.
-    // When a directory is provided with a relative path, we need to resolve the
-    // full filesystem path to look up the byte length.
     let byteLength = options.byteLength
 
     if (byteLength === undefined) {
       const fileSystem = directory.getFileSystem()
 
-      // First try the resolved path directly
       byteLength = fileSystem.getFileByteLengthSync(resolvedPath)
 
-      // If that fails and we have a directory, try combining paths
       if (byteLength === undefined && options.directory !== undefined) {
         const directoryPath = directory.workspacePath
         if (directoryPath && directoryPath !== '.') {
@@ -916,14 +904,12 @@ export class File<
         }
       }
 
-      // Remove trailing 'index' or 'readme' if present
       if (['index', 'readme'].includes(this.baseName.toLowerCase())) {
         parsedSegments.pop()
       }
 
       path = parsedSegments.join('/')
 
-      // Ensure the path always starts with a slash
       if (!path.startsWith('/')) {
         path = `/${path}`
       }
@@ -948,8 +934,6 @@ export class File<
     const fileSystem = this.#directory.getFileSystem()
     const rawPath = this.#path
 
-    // If the file path is already absolute or explicitly relative from the
-    // workspace root (`./` / `../`), delegate directly to the file system.
     if (
       rawPath.startsWith('/') ||
       rawPath.startsWith('./') ||
@@ -958,18 +942,13 @@ export class File<
       return fileSystem.getRelativePathToWorkspace(rawPath)
     }
 
-    // Base workspace-relative path for this file, ignoring any Directory prefix.
     const workspacePathForFile = fileSystem.getRelativePathToWorkspace(rawPath)
     const directoryWorkspacePath = this.#directory.workspacePath
 
-    // If the directory is at the workspace root ("" or ".") or its workspace
-    // path is unknown, the base workspace path is already correct.
     if (!directoryWorkspacePath || directoryWorkspacePath === '.') {
       return workspacePathForFile
     }
 
-    // Derive the workspace "scope" (e.g. "packages/renoun") from the base
-    // workspace path by stripping the raw path suffix when possible.
     let scope = ''
     const suffix = `/${rawPath}`
     if (workspacePathForFile.endsWith(suffix)) {
@@ -979,15 +958,10 @@ export class File<
       )
     }
 
-    // If we could not determine a scope, fall back to joining the directory
-    // workspace path with the raw file path.
     if (!scope) {
       return joinPaths(directoryWorkspacePath, rawPath)
     }
 
-    // Normalize the directory workspace path by removing any repeated
-    // occurrences of the scope prefix, then recombine:
-    // scope + "/" + (directoryWorkspacePath without leading scope segments) + rawPath
     let remainingPath = directoryWorkspacePath
     const repeatedPrefix = `${scope}/`
 
@@ -1313,7 +1287,6 @@ export class File<
   async bytes(): Promise<Uint8Array<ArrayBuffer>> {
     const fileSystem = this.#directory.getFileSystem()
     const binary = await fileSystem.readFileBinary(this.#path)
-    // Ensure ArrayBuffer-backed Uint8Array for Blob compatibility.
     const buffer = new ArrayBuffer(binary.byteLength)
     new Uint8Array(buffer).set(binary)
     return new Uint8Array(buffer)
@@ -1470,7 +1443,6 @@ type JSONPathValue<Data, Path extends string> = JSONPathValueWithSegments<
 >
 
 type JSONPropertyPath<Data> =
-  // allow numeric segments in arrays, and recurse into element type
   IsArray<Data> extends true
     ? `${number}` | `${number}.${JSONPropertyPath<Element<Data>>}`
     : // objects keys or "key.nested"
@@ -1512,7 +1484,6 @@ export class JSONFile<
     try {
       let value = JSON.parse(source) as unknown
 
-      // Optionally validate/coerce using provided schema or validator
       if (this.#schema) {
         try {
           const schema = this.#schema as any
@@ -1633,12 +1604,10 @@ function isReactComponentWrapperRuntimeValue(value: unknown) {
     return false
   }
 
-  // React element instances are not component types.
   if ($$typeof === Symbol.for('react.element')) {
     return false
   }
 
-  // Common component wrapper types.
   if (
     $$typeof === Symbol.for('react.memo') ||
     $$typeof === Symbol.for('react.forward_ref') ||
@@ -2267,7 +2236,6 @@ export class ModuleExport<Value> {
       return this.#isComponent
     }
 
-    // Fallback heuristic (no module evaluation).
     return isUppercaseFirstCharacter(this.name)
   }
 
@@ -2279,9 +2247,7 @@ export class ModuleExport<Value> {
       if (staticValue !== undefined) {
         return staticValue as Value
       }
-    } catch {
-      // ignore and fall back to runtime if possible
-    }
+    } catch {}
 
     if (this.#loader !== undefined) {
       return this.getRuntimeValue()
@@ -2328,7 +2294,6 @@ export class ModuleExport<Value> {
           resolvedType = await this.getType()
           await ctx.recordNodeDep(this.#getTypeNodeKey())
         } catch {
-          // Ignore type resolution failures for structure generation.
           typeResolutionFailed = true
         }
 
@@ -2486,7 +2451,6 @@ export class JavaScriptFile<
       this.schema ??
       resolveDirectorySchemaOption(this.getParent().getSchema(), extension)
 
-    // Module-level schemas are applied when loading the module.
     if (!schemaOption || isStandardSchema(schemaOption)) {
       return value
     }
@@ -2551,13 +2515,11 @@ export class JavaScriptFile<
         this.getExport(exportMetadata.name as Extract<keyof Types, string>)
     )
 
-    // Optionally filter out @internal exports based on tsconfig `stripInternal`
     const fileSystem = this.getParent().getFileSystem()
     if (!(await fileSystem.shouldStripInternalAsync())) {
       return exports
     }
 
-    // filter out @internal exports
     let writeIndex = 0
     for (let readIndex = 0; readIndex < exports.length; readIndex++) {
       const fileExport = exports[readIndex]
@@ -2706,8 +2668,6 @@ export class JavaScriptFile<
           id: createSlug(title, this.#slugCasing),
           title,
           children: exportNames.map((name) => ({
-            // `Reference` anchors use the actual export name (case-sensitive),
-            // so the TOC must link using the unslugified identifier.
             id: name,
             title: name,
           })),
@@ -2721,7 +2681,6 @@ export class JavaScriptFile<
       for (const { exportItem, line } of ungroupedExports) {
         sections.push({
           section: {
-            // Keep hash ids aligned with `Reference`'s rendered anchor ids.
             id: exportItem.name,
             title: exportItem.name,
           },
@@ -2910,7 +2869,6 @@ export class MDXModuleExport<Value> {
       this.#file.schema ??
       resolveDirectorySchemaOption(this.#file.getParent().getSchema(), 'mdx')
 
-    // Module-level schemas are applied when loading the module.
     if (!schemaOption || isStandardSchema(schemaOption)) {
       return value
     }
@@ -2992,9 +2950,7 @@ export class MDXModuleExport<Value> {
       if (staticValue !== undefined) {
         return staticValue as Value
       }
-    } catch {
-      // ignore and fall back to runtime if possible
-    }
+    } catch {}
 
     return this.getRuntimeValue()
   }
@@ -3623,7 +3579,6 @@ export class MDXFile<
     name: LooseExportName<{ default: MDXContent } & Types>
   ): Promise<any> {
     if (name === 'frontmatter') {
-      // Prefer an explicit `frontmatter` export if it exists.
       try {
         const exportValue = await this.getExport('frontmatter' as any).then(
           (fileExport) => fileExport.getValue()
@@ -3637,7 +3592,6 @@ export class MDXFile<
         }
       }
 
-      // Fall back to derived frontmatter (from `frontmatter` export or parsed source).
       return (await this.getFrontmatter()) ?? {}
     }
 
@@ -3700,9 +3654,6 @@ export class MDXFile<
       return moduleValue
     }
 
-    // In production we cache the resolved module for speed.
-    // In development we only dedupe in-flight loads to avoid races, but we
-    // clear the cache once the promise settles to preserve HMR behavior.
     if (this.#modulePromise) {
       return this.#modulePromise
     }
@@ -3989,7 +3940,6 @@ export class MarkdownFile<
       this.schema ??
       resolveDirectorySchemaOption(this.getParent().getSchema(), 'md')
 
-    // Module-level schemas are applied when loading the module.
     if (!schemaOption || isStandardSchema(schemaOption)) {
       return value
     }
@@ -4530,9 +4480,7 @@ async function getDirectoryEntryListingSignature(
     if (contentId && contentId !== 'missing') {
       return `content:${contentId}`
     }
-  } catch {
-    // Fall back to metadata-based signature.
-  }
+  } catch {}
 
   const [modifiedMs, byteLength] = await Promise.all([
     fileSystem.getFileLastModifiedMs(entry.path).catch(() => undefined),
@@ -4688,7 +4636,6 @@ export class Directory<
       if (typeof options.filter === 'string') {
         this.#filterPattern = options.filter
 
-        // Fast-path common extension-only patterns e.g. *.tsx, **/*.mdx, etc.
         const pattern = parseSimpleGlobPattern(options.filter)
         if (pattern) {
           const extensions = new Set(pattern.extensions)
@@ -4697,7 +4644,6 @@ export class Directory<
             extensions,
           }
 
-          // Build a cheap predicate and skip Minimatch entirely
           this.#filter = (entry: FileSystemEntry<any>) => {
             if (entry instanceof Directory) {
               return pattern.recursive
@@ -4761,7 +4707,6 @@ export class Directory<
       return this.#filter.match(entry.relativePath)
     }
 
-    // Cache decisions for non-Minimatch predicates (can be async/expensive)
     if (!this.#filterCache) {
       this.#filterCache = new WeakMap()
     }
@@ -4972,7 +4917,6 @@ export class Directory<
     const entriesMap = new Map<string, FileSystemEntry<LoaderTypes>>()
 
     for (const entry of rawEntries) {
-      // Always include index/readme and directory‑named files during traversal.
       const entryKey = entry.path
 
       if (entriesMap.has(entryKey)) {
@@ -5028,7 +4972,6 @@ export class Directory<
     segments: string[],
     allExtensions?: string[]
   ): Promise<FileSystemEntry<LoaderTypes>> {
-    // Fast path try direct path lookup without hydrating the directory.
     if (segments.length > 0) {
       const directoryWorkspacePath = trimTrailingSlashes(
         trimLeadingDotPrefix(directory.workspacePath)
@@ -5039,26 +4982,19 @@ export class Directory<
       const hit = this.#pathLookup.get(targetPath)
       if (hit) {
         const [, ...remainingSegments] = segments
-        // When there are no remaining segments, prefer files over directories
-        // to ensure sibling files are preferred (e.g., "integrations.mdx" over "integrations/").
         if (!remainingSegments.length) {
           if (hit instanceof File) {
             if (allExtensions && !allExtensions.includes(hit.extension)) {
-              // Fall through to regular resolution when extension doesn't match.
             } else {
               return hit
             }
           }
-          // If it's a directory and we have no remaining segments, fall through
-          // to check for a sibling file in the regular resolution logic.
         } else {
-          // When there are remaining segments, directories are valid intermediate paths.
           if (hit instanceof Directory) {
             return this.#findEntry(hit, remainingSegments, allExtensions)
           }
           if (hit instanceof File) {
             if (allExtensions && !allExtensions.includes(hit.extension)) {
-              // Fall through to regular resolution when extension doesn't match.
             } else {
               return hit
             }
@@ -5067,11 +5003,9 @@ export class Directory<
       }
     }
 
-    // Shallow traversal to populate the lookup map without expensive filtering.
     const entries = await this.#readDirectoryShallowForTraversal(directory)
     const [currentSegment, ...remainingSegments] = segments
 
-    // If the current segment is empty, we are at the root of this directory.
     if (!currentSegment) {
       return directory
     }
@@ -5079,10 +5013,6 @@ export class Directory<
     let fallback: FileSystemEntry<LoaderTypes> | undefined
     let matchingDirectory: Directory<LoaderTypes> | undefined
 
-    // If there are no remaining segments, prefer a file match over a directory
-    // with the same base name. This ensures sibling files are preferred over
-    // directories when both exist (e.g., "integrations.mdx" over "integrations/").
-    // Also prefer base files (without modifiers) over files with modifiers.
     if (remainingSegments.length === 0) {
       let matchingFile: File<LoaderTypes> | undefined
       let matchingFileWithModifier: File<LoaderTypes> | undefined
@@ -5090,11 +5020,9 @@ export class Directory<
         if (!(entry instanceof File)) continue
         const baseSlug = createSlug(entry.baseName, this.#slugCasing)
         if (baseSlug !== currentSegment) continue
-        // If extensions were specified, only consider matching files.
         if (allExtensions && !allExtensions.includes(entry.extension)) {
           continue
         }
-        // Prefer files without modifiers over files with modifiers.
         if (!entry.kind) {
           matchingFile = entry
         } else if (!matchingFileWithModifier) {
@@ -5130,7 +5058,6 @@ export class Directory<
         ? allExtensions.includes(entry.extension)
         : true
 
-      // e.g. "Button/examples" → modifier must match the tail segment
       if (remainingSegments.length === 1 && modifier) {
         if (
           createSlug(modifier, this.#slugCasing) === remainingSegments[0] &&
@@ -5141,9 +5068,7 @@ export class Directory<
         continue
       }
 
-      // plain "Button" (no modifier segment)
       if (remainingSegments.length === 0 && matchesExtension) {
-        // Prefer the base file, fall back to file‑with‑modifier if nothing else
         if (!fallback || (fallback instanceof File && fallback.kind)) {
           fallback = entry
         }
@@ -5349,7 +5274,6 @@ export class Directory<
       return cachedFile
     }
 
-    // normalize the incoming path
     let normalizedPath = normalizedInput
     if (typeof normalizedPath === 'string' && normalizedPath.startsWith('./')) {
       normalizedPath = normalizedPath.slice(2)
@@ -5396,9 +5320,7 @@ export class Directory<
 
     let entry = await this.#findEntry(this, segments, allExtensions)
 
-    // If we ended on a directory, try to find a representative file within it
     if (entry instanceof Directory) {
-      // Bypass the directory filter when selecting a representative file directly.
       const directoryEntries = await entry
         .#duplicate({
           filter: undefined,
@@ -5409,7 +5331,6 @@ export class Directory<
           includeTsConfigExcludedFiles: true,
         })
 
-      // Find a representative file in the directory
       let sameNameNoModifier: File<LoaderTypes> | undefined
       let sameNameWithModifier: File<LoaderTypes> | undefined
       let fallback: File<LoaderTypes> | undefined
@@ -5426,29 +5347,22 @@ export class Directory<
           ? allExtensions.includes(extension)
           : true
 
-        // Check for file that shares the directory name
         if (baseName === entry.baseName && hasValidExtension) {
           if (!directoryEntry.kind) {
-            // Prefer file without modifier (e.g. Link.tsx)
             sameNameNoModifier = directoryEntry
           } else if (!sameNameWithModifier) {
-            // Track modified file (e.g. Link.examples.tsx) as a secondary choice
             sameNameWithModifier = directoryEntry
           }
         }
 
-        // Check for index/readme as fallback
         if (
           !fallback &&
           ['index', 'readme'].includes(baseName.toLowerCase()) &&
           hasValidExtension
         ) {
           fallback = directoryEntry
-          // Don't break here as we might find a better match later
         }
 
-        // Track the first file that matches the requested extension(s) as a
-        // last-resort fallback if no better representative is found.
         if (!anyMatchingFile && hasValidExtension) {
           anyMatchingFile = directoryEntry
         }
@@ -5490,8 +5404,6 @@ export class Directory<
 
     while (segments.length > 0) {
       const currentSegment = createSlug(segments.shift()!, this.#slugCasing)
-      // Use shallow, filter-free traversal to avoid expensive recursion or
-      // export-based inclusion checks while walking segments.
       const allEntries =
         await this.#readDirectoryShallowForTraversal(currentDirectory)
       let entry: FileSystemEntry<LoaderTypes> | undefined
@@ -5577,9 +5489,7 @@ export class Directory<
             throw error
           }
         }
-      } catch {
-        // Root directory does not have a parent. Ignore.
-      }
+      } catch {}
 
       if (sameNamedSibling) {
         return sameNamedSibling
@@ -5622,18 +5532,13 @@ export class Directory<
     const routePath = entry.getPathname()
     this.#pathLookup.set(routePath, entry)
 
-    // Remove leading and trailing slashes
     const normalizedPath = trimTrailingSlashes(trimLeadingDotPrefix(routePath))
     this.#pathLookup.set(normalizedPath, entry)
-    // Also index by workspace-relative filesystem path so lookups by raw path
-    // (e.g. "fixtures/docs/index") can short-circuit hydration.
     const workspacePath = entry.workspacePath
     const normalizedWorkspacePath = trimTrailingSlashes(
       trimLeadingDotPrefix(workspacePath)
     )
     this.#pathLookup.set(normalizedWorkspacePath, entry)
-    // For files, also index the workspace path without extensions to match
-    // extension-agnostic lookups.
     if (entry instanceof File) {
       const workspacePathWithoutExtension = removeAllExtensions(
         normalizedWorkspacePath
@@ -5958,9 +5863,6 @@ export class Directory<
       normalizedPath === '..' ||
       normalizedPath.startsWith('../')
 
-    // Preserve workspace-relative keys as-is. Re-resolving these through
-    // getAbsolutePath() can incorrectly prefix the current cwd (for example
-    // "apps/site/packages/..."), which then corrupts persisted snapshot paths.
     if (!isAbsolutePath(normalizedPath) && !isDotRelativePath) {
       return this.#normalizePersistedSnapshotPath(normalizedPath)
     }
@@ -5999,8 +5901,6 @@ export class Directory<
       workspaceRelativePath.startsWith(`${rootPathKey}/`)
 
     if (!isWorkspaceRelativePath) {
-      // Fall back to the normalized path form when the path cannot be
-      // bound to the current workspace root key.
       return ensureRelativePath(workspaceRelativePath)
     }
 
@@ -6170,9 +6070,7 @@ export class Directory<
           (snapshotKey) => session.cache.delete(snapshotKey)
         )
       }
-    })().catch(() => {
-      // Best-effort cleanup for persisted snapshot rows.
-    })
+    })().catch(() => {})
   }
 
   /**
@@ -6303,7 +6201,6 @@ export class Directory<
       for (const entry of entries) {
         if (typeof (entry as any).getStructure === 'function') {
           const entryStructure = await (entry as any).getStructure()
-          // Directories return arrays, files return single structures
           if (Array.isArray(entryStructure)) {
             structures.push(...entryStructure)
           } else {
@@ -6855,9 +6752,7 @@ export class Directory<
             const fileSystem = this.getFileSystem()
             try {
               byteLength = fileSystem.getFileByteLengthSync(restoredPath)
-            } catch {
-              // Fall back to construction-time byte length resolution.
-            }
+            } catch {}
           }
           return this.#createDirectorySnapshotFile(
             parentDirectory,
@@ -7199,7 +7094,9 @@ export class Directory<
 
     const rawEntries = await fileSystem.readDirectory(directory.#path)
     const dependencySignatures = new Map<string, string>()
-    const recordFileDependencySignature = async (path: string): Promise<void> => {
+    const recordFileDependencySignature = async (
+      path: string
+    ): Promise<void> => {
       let dependencyKey: string
       try {
         dependencyKey = createDependencyPathKey(
@@ -7266,11 +7163,13 @@ export class Directory<
     }
 
     try {
-      const workspaceRootPath = normalizeSlashes(fileSystem.getAbsolutePath('.'))
-      await recordFileDependencySignature(joinPaths(workspaceRootPath, '.gitignore'))
-    } catch {
-      // Ignore workspace-root lookup failures when capturing gitignore probes.
-    }
+      const workspaceRootPath = normalizeSlashes(
+        fileSystem.getAbsolutePath('.')
+      )
+      await recordFileDependencySignature(
+        joinPaths(workspaceRootPath, '.gitignore')
+      )
+    } catch {}
 
     const fileMetadata: FileEntryMetadata<LoaderTypes>[] = []
     const finalMetadata: DirectorySnapshotMetadataEntry<LoaderTypes>[] = []
@@ -7300,159 +7199,156 @@ export class Directory<
         concurrency: Math.min(8, rawEntries.length || 1),
       },
       async (entry): Promise<DirectoryBuildResult> => {
-          // Skip hidden files and directories (names starting with `.`) unless explicitly included
-          const isHiddenFile = entry.name.startsWith('.')
-          if (isHiddenFile && !options.includeHiddenFiles) {
+        const isHiddenFile = entry.name.startsWith('.')
+        if (isHiddenFile && !options.includeHiddenFiles) {
+          return { kind: 'skip' }
+        }
+
+        const isGitIgnored = fileSystem.isFilePathGitIgnored(entry.path)
+
+        if (isGitIgnored && !options.includeGitIgnoredFiles) {
+          return { kind: 'skip' }
+        }
+
+        const isTsConfigExcluded =
+          await fileSystem.isFilePathExcludedFromTsConfigAsync(
+            entry.path,
+            entry.isDirectory
+          )
+
+        if (entry.isDirectory) {
+          if (isTsConfigExcluded && !options.includeTsConfigExcludedFiles) {
+            return { kind: 'skip' }
+          }
+          const subdirectory = directory.#duplicate({ path: entry.path })
+          const passesFilterSelf =
+            directory.#simpleFilter?.recursive === true
+              ? true
+              : directory.#filter
+                ? await directory.#passesFilter(subdirectory)
+                : true
+
+          if (!options.recursive && !passesFilterSelf) {
             return { kind: 'skip' }
           }
 
-          const isGitIgnored = fileSystem.isFilePathGitIgnored(entry.path)
-
-          if (isGitIgnored && !options.includeGitIgnoredFiles) {
-            return { kind: 'skip' }
-          }
-
-          const isTsConfigExcluded =
-            await fileSystem.isFilePathExcludedFromTsConfigAsync(
-              entry.path,
-              entry.isDirectory
-            )
-
-          if (entry.isDirectory) {
-            if (isTsConfigExcluded && !options.includeTsConfigExcludedFiles) {
-              return { kind: 'skip' }
-            }
-            const subdirectory = directory.#duplicate({ path: entry.path })
-            const passesFilterSelf =
-              directory.#simpleFilter?.recursive === true
-                ? true
-                : directory.#filter
-                  ? await directory.#passesFilter(subdirectory)
-                  : true
-
-            if (!options.recursive && !passesFilterSelf) {
-              return { kind: 'skip' }
-            }
-
-            if (trackDirectoryMtime) {
-              try {
-                const modifiedMs = await fileSystem.getFileLastModifiedMs(
+          if (trackDirectoryMtime) {
+            try {
+              const modifiedMs = await fileSystem.getFileLastModifiedMs(
+                entry.path
+              )
+              const signature =
+                modifiedMs === undefined ? 'missing' : String(modifiedMs)
+              dependencySignatures.set(
+                createDependencyPathKey(
+                  fileSystem,
+                  DIRECTORY_MTIME_DEPENDENCY_PREFIX,
                   entry.path
-                )
-                const signature =
-                  modifiedMs === undefined ? 'missing' : String(modifiedMs)
-                dependencySignatures.set(
-                  createDependencyPathKey(
-                    fileSystem,
-                    DIRECTORY_MTIME_DEPENDENCY_PREFIX,
-                    entry.path
-                  ),
-                  signature
-                )
-              } catch {
-                // Ignore errors when reading timestamps; fall back to listing signatures.
-              }
-            }
-
-            const childSnapshot = await this.#getDirectorySnapshot(
-              subdirectory,
-              options,
-              mask,
-              false
-            )
-
-            const childDependencies = childSnapshot.getDependencies()
-            if (childDependencies && childDependencies.size > 0) {
-              for (const [childPath, childSignature] of childDependencies) {
-                dependencySignatures.set(childPath, childSignature)
-              }
-            }
-
-            const metadata: DirectoryEntryMetadata<LoaderTypes> = {
-              kind: 'Directory',
-              path: entry.path,
-              entry: subdirectory,
-              includeInFinal: true,
-              passesFilterSelf,
-              snapshot: childSnapshot,
-            }
-
-            return { kind: 'directory', key: entry.path, metadata }
+                ),
+                signature
+              )
+            } catch {}
           }
 
-          if (!entry.isFile) {
-            return { kind: 'skip' }
-          }
-
-          const file = directory.#createDirectorySnapshotFile(
-            directory,
-            entry.path
+          const childSnapshot = await this.#getDirectorySnapshot(
+            subdirectory,
+            options,
+            mask,
+            false
           )
 
-          const passesFilter = directory.#filter
-            ? await directory.#passesFilter(file)
-            : true
-
-          if (!passesFilter) {
-            return { kind: 'skip' }
+          const childDependencies = childSnapshot.getDependencies()
+          if (childDependencies && childDependencies.size > 0) {
+            for (const [childPath, childSignature] of childDependencies) {
+              dependencySignatures.set(childPath, childSignature)
+            }
           }
 
-          await recordFileDependencySignature(entry.path)
-
-          const shouldIncludeFile = await directory.#shouldIncludeFile(file)
-          const isIndexOrReadme = ['index', 'readme'].some((name) =>
-            entry.name.toLowerCase().startsWith(name)
-          )
-          const isDirectoryNamedFile =
-            removeAllExtensions(entry.name) === directory.baseName
-
-          let includeInFinal = true
-
-          if (!options.includeIndexAndReadmeFiles && isIndexOrReadme) {
-            includeInFinal = false
-          }
-
-          if (!options.includeTsConfigExcludedFiles && isTsConfigExcluded) {
-            includeInFinal = false
-          }
-
-          if (
-            !options.includeDirectoryNamedFiles &&
-            !options.recursive &&
-            isDirectoryNamedFile
-          ) {
-            includeInFinal = false
-          }
-
-          if (!options.includeGitIgnoredFiles && isGitIgnored) {
-            includeInFinal = false
-          }
-
-          if (!shouldIncludeFile) {
-            includeInFinal = false
-          }
-
-          const metadata: FileEntryMetadata<LoaderTypes> = {
-            kind: 'File',
+          const metadata: DirectoryEntryMetadata<LoaderTypes> = {
+            kind: 'Directory',
             path: entry.path,
-            entry: file,
-            includeInFinal,
-            isGitIgnored,
-            isIndexOrReadme,
-            isTsConfigExcluded,
-            isDirectoryNamedFile,
-            passesFilter,
-            shouldIncludeFile,
+            entry: subdirectory,
+            includeInFinal: true,
+            passesFilterSelf,
+            snapshot: childSnapshot,
           }
 
-          return {
-            kind: 'file',
-            key: options.includeDirectoryNamedFiles
-              ? entry.path
-              : removeAllExtensions(entry.path),
-            metadata,
-            includeInFinal,
-          }
+          return { kind: 'directory', key: entry.path, metadata }
+        }
+
+        if (!entry.isFile) {
+          return { kind: 'skip' }
+        }
+
+        const file = directory.#createDirectorySnapshotFile(
+          directory,
+          entry.path
+        )
+
+        const passesFilter = directory.#filter
+          ? await directory.#passesFilter(file)
+          : true
+
+        if (!passesFilter) {
+          return { kind: 'skip' }
+        }
+
+        await recordFileDependencySignature(entry.path)
+
+        const shouldIncludeFile = await directory.#shouldIncludeFile(file)
+        const isIndexOrReadme = ['index', 'readme'].some((name) =>
+          entry.name.toLowerCase().startsWith(name)
+        )
+        const isDirectoryNamedFile =
+          removeAllExtensions(entry.name) === directory.baseName
+
+        let includeInFinal = true
+
+        if (!options.includeIndexAndReadmeFiles && isIndexOrReadme) {
+          includeInFinal = false
+        }
+
+        if (!options.includeTsConfigExcludedFiles && isTsConfigExcluded) {
+          includeInFinal = false
+        }
+
+        if (
+          !options.includeDirectoryNamedFiles &&
+          !options.recursive &&
+          isDirectoryNamedFile
+        ) {
+          includeInFinal = false
+        }
+
+        if (!options.includeGitIgnoredFiles && isGitIgnored) {
+          includeInFinal = false
+        }
+
+        if (!shouldIncludeFile) {
+          includeInFinal = false
+        }
+
+        const metadata: FileEntryMetadata<LoaderTypes> = {
+          kind: 'File',
+          path: entry.path,
+          entry: file,
+          includeInFinal,
+          isGitIgnored,
+          isIndexOrReadme,
+          isTsConfigExcluded,
+          isDirectoryNamedFile,
+          passesFilter,
+          shouldIncludeFile,
+        }
+
+        return {
+          kind: 'file',
+          key: options.includeDirectoryNamedFiles
+            ? entry.path
+            : removeAllExtensions(entry.path),
+          metadata,
+          includeInFinal,
+        }
       }
     )
 
@@ -7509,9 +7405,7 @@ export class Directory<
             ? 'missing'
             : String(directoryModifiedMs)
         )
-      } catch {
-        // Ignore errors when reading directory timestamps.
-      }
+      } catch {}
     }
 
     let shouldIncludeSelf = false
@@ -8657,7 +8551,6 @@ export async function sortEntries<ExtensionTypes extends Record<string, any>>(
       const keyValue = await keyExtractor(entry)
       cache.set(entry, keyValue)
 
-      // default to descending (newest first) when a Date is detected
       if (!directionProvided && keyValue instanceof Date) {
         direction = 'descending'
       }
@@ -8695,7 +8588,6 @@ function parseSimpleGlobPattern(
 ): { recursive: boolean; extensions: string[] } | null {
   const trimmedPattern = pattern.trim()
 
-  // *.tsx or **/*.tsx
   let matches = trimmedPattern.match(
     /^(\*\*\/)?\*\.(?<extensions>[A-Za-z0-9]+)$/
   )
@@ -8706,7 +8598,6 @@ function parseSimpleGlobPattern(
     }
   }
 
-  // *.{a,b,c} or **/*.{a,b,c}
   matches = trimmedPattern.match(
     /^(\*\*\/)?\*\.{(?<extensions>[A-Za-z0-9,\s]+)}$/
   )

@@ -1381,10 +1381,7 @@ export class Package<
   #cache?: Cache
   #exportManifestEntries?: Map<string, PackageManifestEntry>
   #importManifestEntries?: Map<string, PackageManifestEntry>
-  #resolveExportSourcesCache = new Map<
-    string,
-    ResolveExportSourcesCacheEntry
-  >()
+  #resolveExportSourcesCache = new Map<string, ResolveExportSourcesCacheEntry>()
   #packageJsonDependencySignature?: string
 
   constructor(options: PackageOptions<Types, LoaderTypes, ExportLoaders>) {
@@ -1459,7 +1456,9 @@ export class Package<
     const cached = this.#resolveExportSourcesCache.get(cacheKey)
     if (
       cached &&
-      this.#areResolveExportSourcesDependenciesFresh(cached.dependencySignatures)
+      this.#areResolveExportSourcesDependenciesFresh(
+        cached.dependencySignatures
+      )
     ) {
       return cloneResolvedExportSources(cached.results)
     }
@@ -1639,8 +1638,6 @@ export class Package<
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
       packagePath: normalizeCachePath(this.#packagePath),
-      // Keep cache keys stable when the package name is inferred from
-      // package.json. Include only explicit name overrides to avoid collisions.
       explicitName: this.#hasExplicitName ? (this.#name ?? null) : null,
     })
   }
@@ -1846,7 +1843,8 @@ export class Package<
   #createResolveExportSourcesCacheKey(
     config: ResolveExportSourcesOptions
   ): string {
-    const normalizedOptions = normalizeResolveExportSourcesOptionsForCache(config)
+    const normalizedOptions =
+      normalizeResolveExportSourcesOptionsForCache(config)
     return hashString(stableStringify(normalizedOptions))
   }
 

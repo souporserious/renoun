@@ -7,8 +7,6 @@ import type { FileReadableStream, FileSystem } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
 
 const SNAPSHOT_VERSION = 1
-// Paths resolved via metadata/missing IDs are revalidated on a short interval.
-// Explicit Session.invalidatePath() calls still invalidate immediately.
 const METADATA_CONTENT_ID_MAX_AGE_MS = 250
 const METADATA_COLLISION_GUARD_WINDOW_MS = 1_000
 const MISSING_CONTENT_ID_MAX_AGE_MS = 100
@@ -280,9 +278,7 @@ export class FileSystemSnapshot implements Snapshot {
           id: `sha1:${hash}`,
           strategy: 'file-content',
         }
-      } catch {
-        // Continue and treat the path as a potential directory.
-      }
+      } catch {}
 
       try {
         const entries = await this.readDirectory(path)
@@ -306,9 +302,7 @@ export class FileSystemSnapshot implements Snapshot {
           id: `dir:${listingHash.digest('hex')}`,
           strategy: 'directory-content',
         }
-      } catch {
-        // Continue with the next path candidate.
-      }
+      } catch {}
     }
 
     return {
@@ -376,14 +370,18 @@ export class FileSystemSnapshot implements Snapshot {
       candidates.push(normalizedCandidate)
     }
 
-    // Prefer workspace-relative paths for file systems like git/in-memory.
     addCandidate(normalizedPath)
-    // Resolve workspace-relative keys to an absolute path so cached dep keys
-    // remain valid even when process.cwd() differs from the workspace root.
-    addCandidate(this.#resolveWorkspaceAbsolutePath(normalizedPath))
-    // Fall back to the original input path for Node-style absolute paths.
+    const normalizedAbsolutePath =
+      this.#resolveWorkspaceAbsolutePath(normalizedPath)
+    if (normalizedAbsolutePath) {
+      addCandidate(normalizedAbsolutePath)
+    }
+
     addCandidate(path)
-    addCandidate(this.#resolveWorkspaceAbsolutePath(path))
+    const absolutePath = this.#resolveWorkspaceAbsolutePath(path)
+    if (absolutePath) {
+      addCandidate(absolutePath)
+    }
 
     return candidates
   }
@@ -426,9 +424,7 @@ export class FileSystemSnapshot implements Snapshot {
     for (const listener of this.#invalidateListeners) {
       try {
         listener(path)
-      } catch {
-        // Ignore listener failures so snapshot invalidation remains best-effort.
-      }
+      } catch {}
     }
   }
 }

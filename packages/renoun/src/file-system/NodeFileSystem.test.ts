@@ -129,19 +129,21 @@ describe('NodeFileSystem', () => {
   })
 
   test('rejects rename/copy targets outside the workspace root', async () => {
-    const outsideDirectory = mkdtempSync(join(rootDirectory, '..', 'node-fs-outside-'))
+    const outsideDirectory = mkdtempSync(
+      join(rootDirectory, '..', 'node-fs-outside-')
+    )
     outsideDirectories.push(outsideDirectory)
     const outsidePath = join(outsideDirectory, 'outside.txt')
     const target = join(tempDirectory, 'outside-copy.txt')
 
     writeFileSync(outsidePath, 'outside')
 
-    await expect(
-      fileSystem.rename(outsidePath, target)
-    ).rejects.toThrow(/outside of the workspace root/i)
-    await expect(
-      fileSystem.copy(outsidePath, target)
-    ).rejects.toThrow(/outside of the workspace root/i)
+    await expect(fileSystem.rename(outsidePath, target)).rejects.toThrow(
+      /outside of the workspace root/i
+    )
+    await expect(fileSystem.copy(outsidePath, target)).rejects.toThrow(
+      /outside of the workspace root/i
+    )
   })
 
   test('rename and copy respect overwrite options', async () => {

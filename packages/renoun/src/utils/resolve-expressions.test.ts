@@ -79,18 +79,21 @@ describe('resolveLiteralExpression', () => {
     })
   })
 
-  test.concurrent('array literal expressions via resolveLiteralExpression', () => {
-    const sourceFile = project.createSourceFile(
-      'test.ts',
-      'const test = [1, 2, 3];',
-      { overwrite: true }
-    )
-    const arrayLiteral = sourceFile.getFirstDescendantByKind(
-      SyntaxKind.ArrayLiteralExpression
-    )
+  test.concurrent(
+    'array literal expressions via resolveLiteralExpression',
+    () => {
+      const sourceFile = project.createSourceFile(
+        'test.ts',
+        'const test = [1, 2, 3];',
+        { overwrite: true }
+      )
+      const arrayLiteral = sourceFile.getFirstDescendantByKind(
+        SyntaxKind.ArrayLiteralExpression
+      )
 
-    expect(resolveLiteralExpression(arrayLiteral!)).toEqual([1, 2, 3])
-  })
+      expect(resolveLiteralExpression(arrayLiteral!)).toEqual([1, 2, 3])
+    }
+  )
 
   test.concurrent('parenthesized expressions', () => {
     const sourceFile = project.createSourceFile(

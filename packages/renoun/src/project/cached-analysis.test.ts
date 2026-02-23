@@ -164,7 +164,8 @@ describe('project cached analysis', () => {
       useInMemoryFileSystem: true,
     })
     const filePath = `/project/src/token-cache-hit-${Date.now()}.ts`
-    const source = "import { dependencyValue } from './dependency'\nexport const value = dependencyValue"
+    const source =
+      "import { dependencyValue } from './dependency'\nexport const value = dependencyValue"
 
     project.createSourceFile(
       '/project/src/dependency.ts',
@@ -199,7 +200,9 @@ describe('project cached analysis', () => {
       highlighter: null,
     })
 
-    expect(getSourceFileSpy.mock.calls.length).toBe(getSourceFileCallsAfterFirstRun)
+    expect(getSourceFileSpy.mock.calls.length).toBe(
+      getSourceFileCallsAfterFirstRun
+    )
   })
 
   test('recomputes cached static export values after file invalidation', async () => {
@@ -318,7 +321,8 @@ describe('project cached analysis', () => {
       const getSourceFileCallsAfterFirstRun = getSourceFileSpy.mock.calls.length
 
       await getCachedFileExports(project, entryFilePath)
-      const getSourceFileCallsAfterSecondRun = getSourceFileSpy.mock.calls.length
+      const getSourceFileCallsAfterSecondRun =
+        getSourceFileSpy.mock.calls.length
       expect(getSourceFileCallsAfterSecondRun).toBeLessThanOrEqual(
         getSourceFileCallsAfterFirstRun + 1
       )
@@ -365,7 +369,9 @@ describe('project cached analysis', () => {
       const first = await getCachedFileExports(project, entryFilePath)
       const firstExport = first[0]
       if (!firstExport) {
-        throw new Error('[renoun] Expected a file export in cached-analysis test')
+        throw new Error(
+          '[renoun] Expected a file export in cached-analysis test'
+        )
       }
 
       const sourceFile = project.getSourceFileOrThrow(entryFilePath)
@@ -415,7 +421,9 @@ describe('project cached analysis', () => {
 
       const [fileExport] = getFileExports(entryFilePath, project)
       if (!fileExport) {
-        throw new Error('[renoun] Expected a file export in cached-analysis test')
+        throw new Error(
+          '[renoun] Expected a file export in cached-analysis test'
+        )
       }
 
       const getSourceFileSpy = vi.spyOn(project, 'getSourceFile')
@@ -435,10 +443,18 @@ describe('project cached analysis', () => {
         kind: fileExport.kind,
       })
 
-      expect(second.jsDocMetadata?.description).toBe(first.jsDocMetadata?.description)
-      expect(getSourceFileSpy.mock.calls.length).toBe(sourceFileCallsAfterFirstRun)
+      expect(second.jsDocMetadata?.description).toBe(
+        first.jsDocMetadata?.description
+      )
+      expect(getSourceFileSpy.mock.calls.length).toBe(
+        sourceFileCallsAfterFirstRun
+      )
 
-      await writeFile(entryFilePath, '/** two */\nexport const value = 1\n', 'utf8')
+      await writeFile(
+        entryFilePath,
+        '/** two */\nexport const value = 1\n',
+        'utf8'
+      )
       await project.getSourceFileOrThrow(entryFilePath).refreshFromFileSystem()
       invalidateRuntimeAnalysisCachePath(entryFilePath)
       await delay(0)
@@ -532,7 +548,9 @@ describe('project cached analysis', () => {
 
       const [fileExport] = getFileExports(entryFilePath, project)
       if (!fileExport) {
-        throw new Error('[renoun] Expected a file export in cached-analysis test')
+        throw new Error(
+          '[renoun] Expected a file export in cached-analysis test'
+        )
       }
 
       const first = await getCachedFileExportStaticValue(project, {
@@ -594,7 +612,11 @@ describe('project cached analysis', () => {
       expect(second).toBe(first)
       expect(first).toContain('value = 1')
 
-      await writeFile(entryFilePath, 'export const value = 2 as const\n', 'utf8')
+      await writeFile(
+        entryFilePath,
+        'export const value = 2 as const\n',
+        'utf8'
+      )
       await project.getSourceFileOrThrow(entryFilePath).refreshFromFileSystem()
       invalidateRuntimeAnalysisCachePath(entryFilePath)
       await delay(0)
@@ -634,7 +656,9 @@ describe('project cached analysis', () => {
 
       const [fileExport] = getFileExports(entryFilePath, project)
       if (!fileExport) {
-        throw new Error('[renoun] Expected a file export in cached-analysis test')
+        throw new Error(
+          '[renoun] Expected a file export in cached-analysis test'
+        )
       }
 
       const getSourceFileOrThrowSpy = vi.spyOn(project, 'getSourceFileOrThrow')
@@ -660,7 +684,10 @@ describe('project cached analysis', () => {
         sourceFileCallsAfterFirstRun
       )
 
-      await writeFile(entryFilePath, 'const helper = 2\nexport const value = helper\n')
+      await writeFile(
+        entryFilePath,
+        'const helper = 2\nexport const value = helper\n'
+      )
       await project.getSourceFileOrThrow(entryFilePath).refreshFromFileSystem()
       invalidateRuntimeAnalysisCachePath(entryFilePath)
       await delay(0)
@@ -726,11 +753,14 @@ describe('project cached analysis', () => {
     )
     invalidateProjectFileCache(project, dependencyPath)
 
-    const refreshed = await resolveCachedTypeAtLocationWithDependencies(project, {
-      filePath,
-      position: fileExport.position,
-      kind: fileExport.kind,
-    })
+    const refreshed = await resolveCachedTypeAtLocationWithDependencies(
+      project,
+      {
+        filePath,
+        position: fileExport.position,
+        kind: fileExport.kind,
+      }
+    )
 
     expect(refreshed.dependencies).toContain(dependencyPath)
     expect(refreshed.resolvedType).toBeDefined()
@@ -766,7 +796,9 @@ describe('project cached analysis', () => {
 
       const [fileExport] = getFileExports(entryFilePath, project)
       if (!fileExport) {
-        throw new Error('[renoun] Expected a file export in cached-analysis test')
+        throw new Error(
+          '[renoun] Expected a file export in cached-analysis test'
+        )
       }
 
       const addSourceFileSpy = vi.spyOn(project, 'addSourceFileAtPath')
@@ -829,15 +861,20 @@ describe('project cached analysis', () => {
         },
         include: ['src/**/*.ts'],
       }),
-      'src/index.ts': "import { middleValue } from './middle'\nexport const value = middleValue\n",
-      'src/middle.ts': "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
+      'src/index.ts':
+        "import { middleValue } from './middle'\nexport const value = middleValue\n",
+      'src/middle.ts':
+        "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
       'src/leaf.ts': "export const leafValue = 'one'\n",
     })
 
     try {
       const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
       const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
-      const transitiveDependencyPath = join(workspace.workspacePath, 'src/leaf.ts')
+      const transitiveDependencyPath = join(
+        workspace.workspacePath,
+        'src/leaf.ts'
+      )
       const entrySource = await readFile(entryFilePath, 'utf8')
       const project = new Project({
         tsConfigFilePath,
@@ -898,15 +935,20 @@ describe('project cached analysis', () => {
         },
         include: ['src/**/*.ts'],
       }),
-      'src/index.ts': "import { middleValue } from './middle'\nexport const value = middleValue\n",
-      'src/middle.ts': "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
+      'src/index.ts':
+        "import { middleValue } from './middle'\nexport const value = middleValue\n",
+      'src/middle.ts':
+        "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
       'src/leaf.ts': "export const leafValue = 'one'\n",
     })
 
     try {
       const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
       const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
-      const transitiveDependencyPath = join(workspace.workspacePath, 'src/leaf.ts')
+      const transitiveDependencyPath = join(
+        workspace.workspacePath,
+        'src/leaf.ts'
+      )
       const entrySource = await readFile(entryFilePath, 'utf8')
       const project = new Project({
         tsConfigFilePath,
@@ -983,15 +1025,20 @@ describe('project cached analysis', () => {
         },
         include: ['src/**/*.ts'],
       }),
-      'src/index.ts': "import { middleValue } from './middle'\nexport const value = middleValue\n",
-      'src/middle.ts': "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
+      'src/index.ts':
+        "import { middleValue } from './middle'\nexport const value = middleValue\n",
+      'src/middle.ts':
+        "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
       'src/leaf.ts': "export const leafValue = 'one'\n",
     })
 
     try {
       const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
       const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
-      const transitiveDependencyPath = join(workspace.workspacePath, 'src/leaf.ts')
+      const transitiveDependencyPath = join(
+        workspace.workspacePath,
+        'src/leaf.ts'
+      )
       const entrySource = await readFile(entryFilePath, 'utf8')
       const project = new Project({
         tsConfigFilePath,
@@ -1052,15 +1099,20 @@ describe('project cached analysis', () => {
         },
         include: ['src/**/*.ts'],
       }),
-      'src/index.ts': "import { middleValue } from './middle'\nexport const value = middleValue\n",
-      'src/middle.ts': "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
+      'src/index.ts':
+        "import { middleValue } from './middle'\nexport const value = middleValue\n",
+      'src/middle.ts':
+        "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
       'src/leaf.ts': "export const leafValue = 'one'\n",
     })
 
     try {
       const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
       const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
-      const transitiveDependencyPath = join(workspace.workspacePath, 'src/leaf.ts')
+      const transitiveDependencyPath = join(
+        workspace.workspacePath,
+        'src/leaf.ts'
+      )
       const entrySource = await readFile(entryFilePath, 'utf8')
       const project = new Project({
         tsConfigFilePath,
@@ -1138,15 +1190,20 @@ describe('project cached analysis', () => {
         },
         include: ['src/**/*.ts'],
       }),
-      'src/index.ts': "const { middleValue } = require('./middle')\nexport const value = middleValue\n",
-      'src/middle.ts': "const { leafValue } = require('./leaf')\nexport const middleValue = leafValue\n",
+      'src/index.ts':
+        "const { middleValue } = require('./middle')\nexport const value = middleValue\n",
+      'src/middle.ts':
+        "const { leafValue } = require('./leaf')\nexport const middleValue = leafValue\n",
       'src/leaf.ts': "export const leafValue = 'one'\n",
     })
 
     try {
       const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
       const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
-      const transitiveDependencyPath = join(workspace.workspacePath, 'src/leaf.ts')
+      const transitiveDependencyPath = join(
+        workspace.workspacePath,
+        'src/leaf.ts'
+      )
       const entrySource = await readFile(entryFilePath, 'utf8')
       const project = new Project({
         tsConfigFilePath,
@@ -1188,7 +1245,9 @@ describe('project cached analysis', () => {
         "export const leafValue = 'two-updated'\n",
         'utf8'
       )
-      const transitiveSourceFile = project.getSourceFile(transitiveDependencyPath)
+      const transitiveSourceFile = project.getSourceFile(
+        transitiveDependencyPath
+      )
       if (transitiveSourceFile) {
         await transitiveSourceFile.refreshFromFileSystem()
       }
@@ -1225,15 +1284,20 @@ describe('project cached analysis', () => {
         },
         include: ['src/**/*.ts'],
       }),
-      'src/index.ts': "import { loadMiddleValue } from './middle'\nexport async function loadValue() { return loadMiddleValue() }\n",
-      'src/middle.ts': "export async function loadMiddleValue() { const leaf = await import('./leaf'); return leaf.leafValue }\n",
+      'src/index.ts':
+        "import { loadMiddleValue } from './middle'\nexport async function loadValue() { return loadMiddleValue() }\n",
+      'src/middle.ts':
+        "export async function loadMiddleValue() { const leaf = await import('./leaf'); return leaf.leafValue }\n",
       'src/leaf.ts': "export const leafValue = 'one'\n",
     })
 
     try {
       const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
       const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
-      const transitiveDependencyPath = join(workspace.workspacePath, 'src/leaf.ts')
+      const transitiveDependencyPath = join(
+        workspace.workspacePath,
+        'src/leaf.ts'
+      )
       const entrySource = await readFile(entryFilePath, 'utf8')
       const project = new Project({
         tsConfigFilePath,
@@ -1275,7 +1339,9 @@ describe('project cached analysis', () => {
         "export const leafValue = 'two-updated'\n",
         'utf8'
       )
-      const transitiveSourceFile = project.getSourceFile(transitiveDependencyPath)
+      const transitiveSourceFile = project.getSourceFile(
+        transitiveDependencyPath
+      )
       if (transitiveSourceFile) {
         await transitiveSourceFile.refreshFromFileSystem()
       }
@@ -1312,7 +1378,8 @@ describe('project cached analysis', () => {
         },
         include: ['src/**/*.ts'],
       }),
-      'src/index.ts': "const target = './leaf'\nconst dependency = require(target)\nexport const value = dependency.leafValue\n",
+      'src/index.ts':
+        "const target = './leaf'\nconst dependency = require(target)\nexport const value = dependency.leafValue\n",
       'src/leaf.ts': "export const leafValue = 'one'\n",
     })
 
@@ -1450,7 +1517,8 @@ describe('project cached analysis', () => {
         },
         include: ['src/**/*.ts'],
       }),
-      'src/index.ts': "import { value as dependencyValue } from 'dep-lib'\nexport const localValue = dependencyValue\n",
+      'src/index.ts':
+        "import { value as dependencyValue } from 'dep-lib'\nexport const localValue = dependencyValue\n",
       'node_modules/dep-lib/package.json': JSON.stringify(
         {
           name: 'dep-lib',
@@ -1558,7 +1626,8 @@ describe('project cached analysis', () => {
         },
         include: ['src/**/*.ts'],
       }),
-      'src/index.ts': "import { value as dependencyValue } from 'dep-lib'\nexport const localValue = dependencyValue\n",
+      'src/index.ts':
+        "import { value as dependencyValue } from 'dep-lib'\nexport const localValue = dependencyValue\n",
       'node_modules/dep-lib/package.json': JSON.stringify(
         {
           name: 'dep-lib',

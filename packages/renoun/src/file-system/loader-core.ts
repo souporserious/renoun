@@ -29,8 +29,6 @@ export function isGlobModuleMap(value: unknown): value is GlobModuleMap<any> {
     return false
   }
 
-  // Disambiguate from extension-to-loader maps like `{ mdx: (path) => import(...) }`.
-  // Glob maps use file-like keys (usually starting with `./`, `../`, `/`, or containing `/`).
   if (keys.every((key) => KNOWN_SCHEMA_EXTENSIONS.has(key))) {
     return false
   }
@@ -46,7 +44,6 @@ export function isGlobModuleMap(value: unknown): value is GlobModuleMap<any> {
     return false
   }
 
-  // Vite glob values are typically `() => Promise<Module>`.
   return keys.every((key) => {
     const entry = record[key]
     return typeof entry === 'function' && (entry as Function).length === 0

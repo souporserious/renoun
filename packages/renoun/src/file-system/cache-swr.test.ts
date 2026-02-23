@@ -23,15 +23,11 @@ test('serves stale entries while background refresh recomputes', async () => {
   let valueVersion = '1'
   let computeCount = 0
 
-  await store.getOrCompute(
-    nodeKey,
-    { persist: false },
-    async (context) => {
-      computeCount += 1
-      await context.recordFileDep('index.ts')
-      return `value:${valueVersion}`
-    }
-  )
+  await store.getOrCompute(nodeKey, { persist: false }, async (context) => {
+    computeCount += 1
+    await context.recordFileDep('index.ts')
+    return `value:${valueVersion}`
+  })
 
   valueVersion = '2'
   store.invalidateDependencyPath('index.ts')
@@ -80,15 +76,11 @@ test('skips stale reads after stale retention ttl expires', async () => {
   let valueVersion = '1'
   let computeCount = 0
 
-  await store.getOrCompute(
-    nodeKey,
-    { persist: false },
-    async (context) => {
-      computeCount += 1
-      await context.recordFileDep('index.ts')
-      return `value:${valueVersion}`
-    }
-  )
+  await store.getOrCompute(nodeKey, { persist: false }, async (context) => {
+    computeCount += 1
+    await context.recordFileDep('index.ts')
+    return `value:${valueVersion}`
+  })
 
   valueVersion = '2'
   store.invalidateDependencyPath('index.ts')
@@ -119,15 +111,11 @@ test('refresh forces recompute even when a fresh entry exists', async () => {
   let valueVersion = '1'
   let computeCount = 0
 
-  await store.getOrCompute(
-    nodeKey,
-    { persist: false },
-    async (context) => {
-      computeCount += 1
-      await context.recordFileDep('index.ts')
-      return `value:${valueVersion}`
-    }
-  )
+  await store.getOrCompute(nodeKey, { persist: false }, async (context) => {
+    computeCount += 1
+    await context.recordFileDep('index.ts')
+    return `value:${valueVersion}`
+  })
 
   valueVersion = '2'
   const refreshedValue = await store.refresh(
@@ -163,15 +151,11 @@ test('background swr refresh is detached from request abort context', async () =
   let valueVersion = '1'
   let computeCount = 0
 
-  await store.getOrCompute(
-    nodeKey,
-    { persist: false },
-    async (context) => {
-      computeCount += 1
-      await context.recordFileDep('index.ts')
-      return `value:${valueVersion}`
-    }
-  )
+  await store.getOrCompute(nodeKey, { persist: false }, async (context) => {
+    computeCount += 1
+    await context.recordFileDep('index.ts')
+    return `value:${valueVersion}`
+  })
 
   valueVersion = '2'
   store.invalidateDependencyPath('index.ts')

@@ -356,10 +356,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       await this.#runWithBusyRetries(() => {
         this.#cleanupExpiredComputeSlots(now)
       })
-    } catch {
-      // Ignore stale slot cleanup errors during reads.
-      // Cache reads should still work if cleanup temporarily fails.
-    }
+    } catch {}
 
     const row = (await this.#runWithBusyRetries(() =>
       this.#db
@@ -507,9 +504,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     if (!options.skipLastAccessedUpdate) {
       try {
         await this.#touchLastAccessed(nodeKey)
-      } catch {
-        // Ignore access-time update failures so reads can still return cached data.
-      }
+      } catch {}
     }
 
     const loadedEntry: CacheEntry & { revision: number } = {
@@ -603,17 +598,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#db.exec('COMMIT')
         try {
           await this.#maybePruneAfterWrite(now)
-        } catch {
-          // Ignore prune errors so cache writes keep succeeding.
-        }
+        } catch {}
         return Number.isFinite(revision) ? revision : 0
       } catch (error) {
         if (transactionStarted) {
           try {
             this.#db.exec('ROLLBACK')
-          } catch {
-            // Ignore rollback errors; we'll rethrow the original write error below.
-          }
+          } catch {}
         }
 
         if (
@@ -779,9 +770,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#db.exec('COMMIT')
         try {
           await this.#maybePruneAfterWrite(now)
-        } catch {
-          // Ignore prune errors so cache writes keep succeeding.
-        }
+        } catch {}
         return {
           applied: true,
           revision: Number.isFinite(revision) ? revision : 0,
@@ -790,9 +779,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         if (transactionStarted) {
           try {
             this.#db.exec('ROLLBACK')
-          } catch {
-            // Ignore rollback errors; we'll rethrow the original write error below.
-          }
+          } catch {}
         }
 
         if (
@@ -832,9 +819,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       } catch (error) {
         try {
           this.#db.exec('ROLLBACK')
-        } catch {
-          // Ignore rollback errors and rethrow the original delete error.
-        }
+        } catch {}
         throw error
       }
     })
@@ -949,9 +934,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         } catch (error) {
           try {
             this.#db.exec('ROLLBACK')
-          } catch {
-            // Ignore rollback errors and rethrow the original delete error.
-          }
+          } catch {}
           throw error
         }
       })
@@ -1016,7 +999,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
   async #initialize(): Promise<void> {
     for (let attempt = 0; attempt <= SQLITE_INIT_BUSY_RETRIES; attempt += 1) {
-      let db: any
+      let database: any
 
       try {
         await mkdir(dirname(this.#dbPath), { recursive: true })
@@ -1030,12 +1013,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           throw new Error('node:sqlite DatabaseSync is unavailable')
         }
 
-        db = new DatabaseSync(this.#dbPath)
-        db.exec(`PRAGMA journal_mode = WAL`)
-        db.exec(`PRAGMA synchronous = NORMAL`)
-        db.exec(`PRAGMA busy_timeout = 5000`)
-        db.exec(`PRAGMA foreign_keys = ON`)
-        db.exec(
+        database = new DatabaseSync(this.#dbPath)
+        database.exec(`PRAGMA journal_mode = WAL`)
+        database.exec(`PRAGMA synchronous = NORMAL`)
+        database.exec(`PRAGMA busy_timeout = 5000`)
+        database.exec(`PRAGMA foreign_keys = ON`)
+        database.exec(
           `
             CREATE TABLE IF NOT EXISTS meta (
               key TEXT PRIMARY KEY,
@@ -1044,7 +1027,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           `
         )
 
-        const schemaRow = db
+        const schemaRow = database
           .prepare(`SELECT value FROM meta WHERE key = ?`)
           .get('cache_schema_version') as { value?: string } | undefined
         const currentSchemaVersion = schemaRow?.value
@@ -1052,15 +1035,15 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           : undefined
 
         if (currentSchemaVersion !== this.#schemaVersion) {
-          db.exec(`DROP TABLE IF EXISTS cache_deps`)
-          db.exec(`DROP TABLE IF EXISTS cache_entries`)
-          db.exec(`DROP TABLE IF EXISTS cache_inflight`)
+          database.exec(`DROP TABLE IF EXISTS cache_deps`)
+          database.exec(`DROP TABLE IF EXISTS cache_entries`)
+          database.exec(`DROP TABLE IF EXISTS cache_inflight`)
         }
 
-        this.#createCacheTables(db)
+        this.#createCacheTables(database)
 
         if (currentSchemaVersion !== this.#schemaVersion) {
-          db.prepare(
+          database.prepare(
             `
               INSERT INTO meta(key, value)
               VALUES (?, ?)
@@ -1069,19 +1052,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           ).run('cache_schema_version', String(this.#schemaVersion))
         }
 
-        this.#db = db
+        this.#db = database
         this.#availability = 'available'
         await this.#runPruneWithRetries()
         return
       } catch (error) {
         this.#db = undefined
 
-        if (db && typeof db.close === 'function') {
+        if (database && typeof database.close === 'function') {
           try {
-            db.close()
-          } catch {
-            // Ignore close failures while handling initialization errors.
-          }
+            database.close()
+          } catch {}
         }
 
         if (
@@ -1117,9 +1098,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
   }
 
-  #createCacheTables(db: any) {
-    // NOTE: this timestamp is write-time only and is used as "last updated" for eviction ordering.
-    db.exec(
+  #createCacheTables(database: any) {
+    database.exec(
       `
         CREATE TABLE IF NOT EXISTS cache_entries (
           node_key TEXT PRIMARY KEY,
@@ -1132,7 +1112,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         )
       `
     )
-    db.exec(
+    database.exec(
       `
         CREATE TABLE IF NOT EXISTS cache_deps (
           node_key TEXT NOT NULL,
@@ -1143,16 +1123,16 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         )
       `
     )
-    db.exec(
+    database.exec(
       `CREATE INDEX IF NOT EXISTS cache_entries_updated_at_idx ON cache_entries(updated_at)`
     )
-    db.exec(
+    database.exec(
       `CREATE INDEX IF NOT EXISTS cache_entries_last_accessed_at_idx ON cache_entries(last_accessed_at)`
     )
-    db.exec(
+    database.exec(
       `CREATE INDEX IF NOT EXISTS cache_deps_dep_key_idx ON cache_deps(dep_key)`
     )
-    db.exec(
+    database.exec(
       `
         CREATE TABLE IF NOT EXISTS cache_inflight (
           node_key TEXT PRIMARY KEY,
@@ -1162,7 +1142,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         )
       `
     )
-    db.exec(
+    database.exec(
       `CREATE INDEX IF NOT EXISTS cache_inflight_expires_at_idx ON cache_inflight(expires_at)`
     )
   }
@@ -1432,22 +1412,20 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     } catch (error) {
       try {
         this.#db.exec('ROLLBACK')
-      } catch {
-        // Ignore rollback errors and continue.
-      }
+      } catch {}
       throw error
     }
   }
 
   close() {
-    const db = this.#db
+    const database = this.#db
     this.#pruneInFlight = undefined
     this.#lastAccessTouchAtByNodeKey.clear()
     this.#db = undefined
     this.#availability = 'unavailable'
 
-    if (db && typeof db.close === 'function') {
-      db.close()
+    if (database && typeof database.close === 'function') {
+      database.close()
     }
   }
 
@@ -1590,9 +1568,7 @@ function getAncestorPathKeys(path: string): string[] {
 
   for (let index = 0; index < segments.length - 1; index += 1) {
     const relativeAncestor = segments.slice(0, index + 1).join('/')
-    const ancestor = hasLeadingSlash
-      ? `/${relativeAncestor}`
-      : relativeAncestor
+    const ancestor = hasLeadingSlash ? `/${relativeAncestor}` : relativeAncestor
     ancestors.push(ancestor)
   }
 

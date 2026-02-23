@@ -7,7 +7,10 @@ import type { AddressInfo } from 'node:net'
 import { randomBytes } from 'node:crypto'
 
 import { getDebugLogger } from '../../utils/debug.ts'
-import { hashString, stableStringify } from '../../utils/stable-serialization.ts'
+import {
+  hashString,
+  stableStringify,
+} from '../../utils/stable-serialization.ts'
 import {
   readPublicError,
   RENOUN_PUBLIC_ERROR_CODES,
@@ -1038,11 +1041,10 @@ export class WebSocketServer {
           id: request.id,
           error: {
             code: serverError.code,
-            message:
-              isProduction
-                ? (safeProductionError?.message ??
-                  `[renoun] Internal server error while processing method "${request.method}".`)
-                : serverError.message,
+            message: isProduction
+              ? (safeProductionError?.message ??
+                `[renoun] Internal server error while processing method "${request.method}".`)
+              : serverError.message,
             data: includeStack
               ? {
                   name: original?.name,

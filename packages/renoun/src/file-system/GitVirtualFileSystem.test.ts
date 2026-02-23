@@ -493,7 +493,7 @@ describe('GitVirtualFileSystem', () => {
           exports: expect.objectContaining({
             './index.ts::developValue': expect.any(Array),
           }),
-        }),
+        })
       )
 
       fs.clearCache()
@@ -511,7 +511,7 @@ describe('GitVirtualFileSystem', () => {
           exports: expect.objectContaining({
             './index.ts::mainValue': expect.any(Array),
           }),
-        }),
+        })
       )
 
       expect(scanSpy).toHaveBeenCalledTimes(2)
@@ -3226,7 +3226,9 @@ describe('GitVirtualFileSystem', () => {
   })
 
   it('does not retry non-network TypeError fetch failures', async () => {
-    const mockFetch = vi.fn().mockRejectedValue(new TypeError('invalid invocation'))
+    const mockFetch = vi
+      .fn()
+      .mockRejectedValue(new TypeError('invalid invocation'))
     globalThis.fetch = mockFetch as unknown as typeof fetch
 
     const fs = new GitVirtualFileSystem({

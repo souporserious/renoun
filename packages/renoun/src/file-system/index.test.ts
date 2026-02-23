@@ -9,7 +9,13 @@ import {
   vi,
 } from 'vitest'
 import { runInNewContext } from 'node:vm'
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -4399,18 +4405,31 @@ date: 2024-12-24
         const secondPackages = workspace.getPackages()
 
         expect(
-          firstPackages.map((pkg) => pkg.name).filter(Boolean).sort()
+          firstPackages
+            .map((pkg) => pkg.name)
+            .filter(Boolean)
+            .sort()
         ).toEqual(['foo'])
         expect(
-          secondPackages.map((pkg) => pkg.name).filter(Boolean).sort()
+          secondPackages
+            .map((pkg) => pkg.name)
+            .filter(Boolean)
+            .sort()
         ).toEqual(['foo'])
         expect(readDirectorySpy.mock.calls.length).toBe(readCallsAfterFirst)
 
         await new Promise((resolve) => setTimeout(resolve, 25))
-        writeFileSync(join(tempDirectory, 'pnpm-lock.yaml'), 'lockfileVersion: 9', 'utf8')
+        writeFileSync(
+          join(tempDirectory, 'pnpm-lock.yaml'),
+          'lockfileVersion: 9',
+          'utf8'
+        )
         const lockfileChangedPackages = workspace.getPackages()
         expect(
-          lockfileChangedPackages.map((pkg) => pkg.name).filter(Boolean).sort()
+          lockfileChangedPackages
+            .map((pkg) => pkg.name)
+            .filter(Boolean)
+            .sort()
         ).toEqual(['foo'])
         expect(readDirectorySpy.mock.calls.length).toBeGreaterThan(
           readCallsAfterFirst
@@ -4426,7 +4445,10 @@ date: 2024-12-24
 
         const topologyChangedPackages = workspace.getPackages()
         expect(
-          topologyChangedPackages.map((pkg) => pkg.name).filter(Boolean).sort()
+          topologyChangedPackages
+            .map((pkg) => pkg.name)
+            .filter(Boolean)
+            .sort()
         ).toEqual(['bar', 'foo'])
       } finally {
         readDirectorySpy.mockRestore()

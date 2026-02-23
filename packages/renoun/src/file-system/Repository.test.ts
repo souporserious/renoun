@@ -96,9 +96,9 @@ describe('Repository', () => {
       const fileSystem = directory.getFileSystem()
       expect(getFileSystemSpy).toHaveBeenCalledTimes(1)
       expect(fileSystem).toBeInstanceOf(GitFileSystem)
-      expect(
-        (fileSystem as GitFileSystem).prepareScopeDirectories
-      ).toContain('src/nodes')
+      expect((fileSystem as GitFileSystem).prepareScopeDirectories).toContain(
+        'src/nodes'
+      )
     })
 
     test('uses the virtual file system when clone is false', () => {

@@ -4,7 +4,9 @@ import { isRetryableNetworkTypeError } from './errors.ts'
 
 describe('isRetryableNetworkTypeError', () => {
   test('returns true for network-like messages', () => {
-    expect(isRetryableNetworkTypeError(new TypeError('fetch failed'))).toBe(true)
+    expect(isRetryableNetworkTypeError(new TypeError('fetch failed'))).toBe(
+      true
+    )
   })
 
   test('returns true for known network cause codes', () => {

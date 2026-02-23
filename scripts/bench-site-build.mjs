@@ -155,7 +155,9 @@ function createOutputParser() {
   let cacheClears = 0
 
   function processLine(rawLine) {
-    const line = stripAnsi(rawLine).replace(/\u0008/g, '').trimEnd()
+    const line = stripAnsi(rawLine)
+      .replace(/\u0008/g, '')
+      .trimEnd()
     if (line.length === 0) {
       return
     }
@@ -165,7 +167,9 @@ function createOutputParser() {
       lines.shift()
     }
 
-    const compileMatch = line.match(/Compiled successfully in (\d+(?:\.\d+)?)s/i)
+    const compileMatch = line.match(
+      /Compiled successfully in (\d+(?:\.\d+)?)s/i
+    )
     if (compileMatch) {
       compileSeconds = Number.parseFloat(compileMatch[1])
     }
@@ -177,7 +181,9 @@ function createOutputParser() {
       staticSeconds = Number.parseFloat(staticMatch[1])
     }
 
-    const routeMatch = line.match(/Generating static pages .*?\((\d+)\/(\d+)\)/i)
+    const routeMatch = line.match(
+      /Generating static pages .*?\((\d+)\/(\d+)\)/i
+    )
     if (routeMatch) {
       routeTotal = Number.parseInt(routeMatch[2], 10)
     }
@@ -336,7 +342,9 @@ async function runBuild({
   const parsed = parser.finish()
   const totalCacheLookups = parsed.cacheHits + parsed.cacheMisses
   const cacheHitRate =
-    totalCacheLookups > 0 ? (parsed.cacheHits / totalCacheLookups) * 100 : undefined
+    totalCacheLookups > 0
+      ? (parsed.cacheHits / totalCacheLookups) * 100
+      : undefined
 
   return {
     runName,
@@ -383,13 +391,19 @@ function printFinalSummary(coldRuns, warmRuns) {
   const coldWallMedian = median(coldRuns.map((run) => run.wallSeconds))
   const warmWallMedian = median(warmRuns.map((run) => run.wallSeconds))
   const coldStaticMedian = median(
-    coldRuns.map((run) => run.staticSeconds).filter((value) => value !== undefined)
+    coldRuns
+      .map((run) => run.staticSeconds)
+      .filter((value) => value !== undefined)
   )
   const warmStaticMedian = median(
-    warmRuns.map((run) => run.staticSeconds).filter((value) => value !== undefined)
+    warmRuns
+      .map((run) => run.staticSeconds)
+      .filter((value) => value !== undefined)
   )
   const warmCacheHitRateAverage = average(
-    warmRuns.map((run) => run.cacheHitRate).filter((value) => value !== undefined)
+    warmRuns
+      .map((run) => run.cacheHitRate)
+      .filter((value) => value !== undefined)
   )
 
   const wallDelta =
@@ -425,7 +439,9 @@ function printFinalSummary(coldRuns, warmRuns) {
       3
     )}s | Delta: ${toFixed(staticDelta, 3)}s (${toPercent(staticDeltaPercent, 1)})`
   )
-  console.log(`- Warm average cache hit rate: ${toPercent(warmCacheHitRateAverage, 1)}`)
+  console.log(
+    `- Warm average cache hit rate: ${toPercent(warmCacheHitRateAverage, 1)}`
+  )
 }
 
 async function main() {
@@ -447,8 +463,14 @@ async function main() {
 
   if (options.dryRun) {
     const plannedRuns = [
-      ...Array.from({ length: options.coldRuns }, (_, index) => `cold-${index + 1}`),
-      ...Array.from({ length: options.warmRuns }, (_, index) => `warm-${index + 1}`),
+      ...Array.from(
+        { length: options.coldRuns },
+        (_, index) => `cold-${index + 1}`
+      ),
+      ...Array.from(
+        { length: options.warmRuns },
+        (_, index) => `warm-${index + 1}`
+      ),
     ]
     console.log(`- Planned runs: ${plannedRuns.join(', ')}`)
     return
@@ -529,9 +551,7 @@ async function main() {
 
   if (options.jsonPath) {
     const absoluteJsonPath = resolve(projectRoot, options.jsonPath)
-    await mkdir(dirname(absoluteJsonPath), { recursive: true }).catch(
-      () => {}
-    )
+    await mkdir(dirname(absoluteJsonPath), { recursive: true }).catch(() => {})
     await writeFile(absoluteJsonPath, JSON.stringify(report, null, 2), 'utf8')
     console.log(`\nWrote JSON report: ${absoluteJsonPath}`)
   }
@@ -539,7 +559,9 @@ async function main() {
 
 main().catch((error) => {
   console.error(
-    error instanceof Error ? error.message : '[bench] Unexpected benchmark error'
+    error instanceof Error
+      ? error.message
+      : '[bench] Unexpected benchmark error'
   )
   process.exit(1)
 })

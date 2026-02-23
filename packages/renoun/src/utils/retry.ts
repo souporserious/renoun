@@ -99,7 +99,10 @@ function defaultShouldRetry(error: unknown): boolean {
   return false
 }
 
-function computeDelayMs(attempt: number, options: ResolvedRetryOptions): number {
+function computeDelayMs(
+  attempt: number,
+  options: ResolvedRetryOptions
+): number {
   const exponential = options.minDelayMs * Math.pow(options.factor, attempt - 1)
   const bounded = Math.min(options.maxDelayMs, exponential)
   const jitterRange = bounded * options.jitter
@@ -170,7 +173,8 @@ export async function retry<Type>(
     jitter: Math.max(0, Math.min(1, options.jitter ?? DEFAULT_JITTER)),
     signal: options.signal ?? getContext()?.signal,
     shouldRetry: options.shouldRetry ?? defaultShouldRetry,
-    getDelayMs: options.getDelayMs ?? ((_, __, defaultDelayMs) => defaultDelayMs),
+    getDelayMs:
+      options.getDelayMs ?? ((_, __, defaultDelayMs) => defaultDelayMs),
     onRetry: options.onRetry ?? (() => {}),
   }
 

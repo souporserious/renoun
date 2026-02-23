@@ -100,9 +100,7 @@ import {
   selectEntryFiles,
 } from './export-analysis.ts'
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key.ts'
-import {
-  createGitFileSystemPersistentCacheNodeKey,
-} from './git-cache-key.ts'
+import { createGitFileSystemPersistentCacheNodeKey } from './git-cache-key.ts'
 import {
   parseGitStatusPorcelainV1Z,
   parseNullTerminatedGitPathList,
@@ -574,7 +572,7 @@ interface SpawnResult {
 /** Spawns a process and returns status code + output. */
 function spawnWithResult(
   command: string,
-  args: string[],
+  commandArguments: string[],
   options: {
     cwd: string
     maxBuffer?: number
@@ -586,7 +584,7 @@ function spawnWithResult(
   return new Promise((resolve, reject) => {
     // Always pipe so we can capture output for parsing.
     // When verbose, we also write to process.stdout/stderr.
-    const child = spawn(command, args, {
+    const child = spawn(command, commandArguments, {
       cwd: options.cwd,
       stdio: 'pipe',
       env: options.env ?? process.env,
@@ -636,7 +634,7 @@ function spawnWithResult(
         child.kill()
         finish(
           new Error(
-            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${args.join(
+            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${commandArguments.join(
               ' '
             )}`
           )
@@ -668,7 +666,7 @@ function spawnWithResult(
 
 async function spawnWithBuffer(
   command: string,
-  args: string[],
+  commandArguments: string[],
   options: {
     cwd: string
     maxBuffer?: number
@@ -677,7 +675,7 @@ async function spawnWithBuffer(
   }
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawn(command, commandArguments, {
       cwd: options.cwd,
       stdio: 'pipe',
       env: options.env ?? process.env,
@@ -695,7 +693,7 @@ async function spawnWithBuffer(
         child.kill()
         reject(
           new Error(
-            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${args.join(
+            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${commandArguments.join(
               ' '
             )}`
           )
@@ -719,7 +717,7 @@ async function spawnWithBuffer(
     child.on('close', (code) => {
       if (code !== 0) {
         reject(
-          new Error(stderr || `Command failed: ${command} ${args.join(' ')}`)
+          new Error(stderr || `Command failed: ${command} ${commandArguments.join(' ')}`)
         )
         return
       }
@@ -731,15 +729,15 @@ async function spawnWithBuffer(
 /** Spawns a process and returns the stdout. */
 async function spawnAsync(
   command: string,
-  args: string[],
+  commandArguments: string[],
   options: { cwd: string; maxBuffer?: number; verbose?: boolean }
 ): Promise<string> {
-  const result = await spawnWithResult(command, args, options)
+  const result = await spawnWithResult(command, commandArguments, options)
 
   if (result.status !== 0) {
     throw new Error(
       result.stderr ||
-        `Git exited with code ${result.status} for: ${command} ${args.join(' ')}`
+        `Git exited with code ${result.status} for: ${command} ${commandArguments.join(' ')}`
     )
   }
 
@@ -941,9 +939,8 @@ export class GitFileSystem
 
       const relativeRoot = this.#normalizeRepoPath(rootPath)
       const statusScope = relativeRoot || '.'
-      const includeIgnoredStatuses = await this.#shouldIncludeIgnoredStatus(
-        statusScope
-      )
+      const includeIgnoredStatuses =
+        await this.#shouldIncludeIgnoredStatus(statusScope)
       const statusResult = await spawnWithResult(
         'git',
         [
@@ -1005,9 +1002,8 @@ export class GitFileSystem
 
       const relativeRoot = this.#normalizeRepoPath(rootPath)
       const statusScope = relativeRoot || '.'
-      const includeIgnoredStatuses = await this.#shouldIncludeIgnoredStatus(
-        statusScope
-      )
+      const includeIgnoredStatuses =
+        await this.#shouldIncludeIgnoredStatus(statusScope)
       const changedPaths = new Set<string>()
       const diffResultPromise =
         currentHead !== previousHead
@@ -1198,7 +1194,6 @@ export class GitFileSystem
     const relativePath = this.#normalizeRepoPath(path)
     const worktreePath = this.#resolveWorktreePath(relativePath, 'any')
 
-    // Prefer filesystem metadata/content hashing for live worktree files.
     if (worktreePath) {
       return undefined
     }
@@ -1502,13 +1497,17 @@ export class GitFileSystem
   ) {
     const digestLines = entries
       .map((entry) => {
-        const normalizedPaths = entry.paths.map((path) => normalizeSlashes(path))
+        const normalizedPaths = entry.paths.map((path) =>
+          normalizeSlashes(path)
+        )
         return `${entry.status} ${normalizedPaths.join('\u0001')}`
       })
       .sort((first, second) => first.localeCompare(second))
     const ignoredOnly =
       entries.length > 0 && entries.every((entry) => entry.status === '!!')
-    const digest = createHash('sha1').update(digestLines.join('\n')).digest('hex')
+    const digest = createHash('sha1')
+      .update(digestLines.join('\n'))
+      .digest('hex')
 
     return {
       digest,
@@ -2051,7 +2050,11 @@ export class GitFileSystem
     const session = this.#getSession()
     const cached = await session.cache.get<RefIdentity>(nodeKey)
 
-    if (!forceRefresh && cached && now - cached.checkedAt < REF_IDENTITY_CACHE_TTL_MS) {
+    if (
+      !forceRefresh &&
+      cached &&
+      now - cached.checkedAt < REF_IDENTITY_CACHE_TTL_MS
+    ) {
       return {
         identity: cached.identity,
         deterministic: cached.deterministic,
@@ -2116,12 +2119,13 @@ export class GitFileSystem
       return this.#getRefCacheIdentity(ref)
     }
 
-    const left = await this.#getRefCacheIdentity(rangeMatch[1].trim())
-    const right = await this.#getRefCacheIdentity(rangeMatch[3].trim())
+    const leftIdentity = await this.#getRefCacheIdentity(rangeMatch[1].trim())
+    const rightIdentity = await this.#getRefCacheIdentity(rangeMatch[3].trim())
 
     return {
-      identity: `${left.identity}${rangeMatch[2]}${right.identity}`,
-      deterministic: left.deterministic && right.deterministic,
+      identity: `${leftIdentity.identity}${rangeMatch[2]}${rightIdentity.identity}`,
+      deterministic:
+        leftIdentity.deterministic && rightIdentity.deterministic,
     }
   }
 
@@ -2402,9 +2406,7 @@ export class GitFileSystem
 
           await drainExportHistoryGenerator(warmupGenerator)
         })()
-          .catch(() => {
-            // Warmup is opportunistic; ignore failures.
-          })
+          .catch(() => {})
           .finally(() => {
             this.#historyWarmupInFlight.delete(warmupKey)
           })
@@ -2433,7 +2435,6 @@ export class GitFileSystem
 
     const content = await getContent()
     if (content == null) {
-      // Treat missing content as a transient miss and avoid persisting an empty payload.
       return new Map()
     }
 
@@ -2519,7 +2520,7 @@ export class GitFileSystem
   ): Promise<Map<string, string>> {
     const safeOldCommit = assertSafeGitArg(oldCommit, 'oldCommit')
     const safeNewCommit = assertSafeGitArg(newCommit, 'newCommit')
-    const args = [
+    const commandArguments = [
       'diff',
       '--name-status',
       '-M',
@@ -2529,12 +2530,12 @@ export class GitFileSystem
       safeNewCommit,
     ]
     if (scopeDirectories.length) {
-      args.push('--', ...scopeDirectories)
+      commandArguments.push('--', ...scopeDirectories)
     }
 
     let stdout = ''
     try {
-      stdout = await spawnAsync('git', args, {
+      stdout = await spawnAsync('git', commandArguments, {
         cwd: this.repoRoot,
         maxBuffer: this.maxBufferBytes,
         verbose: this.verbose,
@@ -2855,9 +2856,8 @@ export class GitFileSystem
       },
       async ({ tag, range }) => {
         try {
-          // Add -- <paths> to only get commits that touch our scope directories
-          const args = ['rev-list', range, '--', ...scopeDirectories]
-          const result = await spawnAsync('git', args, {
+          const commandArguments = ['rev-list', range, '--', ...scopeDirectories]
+          const result = await spawnAsync('git', commandArguments, {
             cwd: this.repoRoot,
             maxBuffer: this.maxBufferBytes,
           })
@@ -3075,7 +3075,8 @@ export class GitFileSystem
       baseKeyObject
     )
 
-    const cachedReport = await session.cache.get<ExportHistoryReport>(reportNodeKey)
+    const cachedReport =
+      await session.cache.get<ExportHistoryReport>(reportNodeKey)
     if (cachedReport) {
       return cachedReport
     }
@@ -3090,9 +3091,7 @@ export class GitFileSystem
         maxDepth,
         detectUpdates,
         updateMode,
-      }).catch(() => {
-        // Warmup is opportunistic; ignore failures.
-      })
+      }).catch(() => {})
     }
 
     let resumeReport: ExportHistoryReport | null = null
@@ -3196,7 +3195,6 @@ export class GitFileSystem
       })
     )
 
-    // Prepare processing
     const latestCommit = uniqueCommits[uniqueCommits.length - 1].sha
 
     yield {
@@ -3206,8 +3204,6 @@ export class GitFileSystem
       totalCommits: uniqueCommits.length,
     } satisfies ExportHistoryProgressEvent
 
-    // Shared per-run parse cache (blob SHA -> parsed exports) so later
-    // module metadata work does not redo parsing in this run.
     const blobCache = new Map<string, Map<string, ExportItem>>()
     const exports: ExportHistoryReport['exports'] =
       resumeReport?.exports ?? Object.create(null)
@@ -3946,7 +3942,6 @@ export class GitFileSystem
         )
       }
 
-      // Do not cache fallback metadata so transient git failures can recover.
       return {
         kind: 'file',
         path: relativePath,
@@ -4479,7 +4474,7 @@ export class GitFileSystem
 
     const dst = `refs/remotes/${safeRemote}/${safeBranch}`
     const src = `refs/heads/${safeBranch}`
-    const args = [
+    const commandArguments = [
       'fetch',
       '--no-tags',
       '--prune',
@@ -4488,7 +4483,7 @@ export class GitFileSystem
       `+${src}:${dst}`,
     ]
 
-    const result = await spawnWithResult('git', args, {
+    const result = await spawnWithResult('git', commandArguments, {
       cwd: this.repoRoot,
       maxBuffer: this.maxBufferBytes,
     })
@@ -4687,10 +4682,8 @@ export class GitFileSystem
           follow: true,
         })
 
-        // Shared parse cache across operations
         const perExport: FileExportIndex['perExport'] = Object.create(null)
 
-        // Helper to fetch/parse with shared cache
         const getExportsBySha = async (sha: string) => {
           return this.#getOrParseExportsForBlob(sha, relPath, () =>
             this.#git!.getBlobContentBySha(sha)
@@ -5345,7 +5338,6 @@ async function collectExportsFromFile(
     if (context.getOrParseBlobExports) {
       rawExports = await context.getOrParseBlobExports(meta.sha, filePath)
     } else {
-      // Prefer sync read when repoPath is available (bypasses event loop)
       const content = context.repoPath
         ? readBlobSync(context.repoPath, meta.sha)
         : await git.getBlobContentBySha(meta.sha)
@@ -5691,26 +5683,25 @@ async function gitLogForPath(
   } = {}
 ): Promise<GitLogCommit[]> {
   const safeRef = assertSafeGitArg(ref, 'ref')
-  // Include author identity + %D for ref names (tags, branches).
-  const args = ['log', '--format=%H%x00%at%x00%aN%x00%aE%x00%D']
+  const commandArguments = ['log', '--format=%H%x00%at%x00%aN%x00%aE%x00%D']
   if (reverse) {
-    args.push('--reverse')
+    commandArguments.push('--reverse')
   }
   if (limit) {
-    args.push('-n', String(limit))
+    commandArguments.push('-n', String(limit))
   }
-  if (follow && !Array.isArray(path)) args.push('--follow')
+  if (follow && !Array.isArray(path)) commandArguments.push('--follow')
   const paths = Array.isArray(path) ? path : [path]
-  args.push(safeRef, '--', ...paths)
+  commandArguments.push(safeRef, '--', ...paths)
 
-  const child = spawn('git', args, {
+  const child = spawn('git', commandArguments, {
     cwd: repoRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,
   })
 
   if (!child.stdout) {
-    throw new Error(`Failed to spawn git log for: ${args.join(' ')}`)
+    throw new Error(`Failed to spawn git log for: ${commandArguments.join(' ')}`)
   }
 
   const commits: GitLogCommit[] = []
@@ -5774,13 +5765,13 @@ async function gitLogForPath(
 
   if (bufferExceeded) {
     throw new Error(
-      `maxBuffer exceeded (${maxBuffer} bytes) for: git ${args.join(' ')}`
+      `maxBuffer exceeded (${maxBuffer} bytes) for: git ${commandArguments.join(' ')}`
     )
   }
 
   if (exitCode !== 0) {
     throw new Error(
-      stderr || `Git exited with code ${exitCode} for: git ${args.join(' ')}`
+      stderr || `Git exited with code ${exitCode} for: git ${commandArguments.join(' ')}`
     )
   }
 

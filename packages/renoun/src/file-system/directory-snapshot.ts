@@ -43,19 +43,22 @@ export interface DirectorySnapshotRestoreFactory<DirectoryType, Entry> {
   createFile(path: string, options?: { byteLength?: number }): Entry
 }
 
-export type PersistedEntryMetadata<DirectoryType extends Entry, Entry = unknown> =
+export type PersistedEntryMetadata<
+  DirectoryType extends Entry,
+  Entry = unknown,
+> =
   | {
       kind: 'file'
       path: string
       byteLength?: number
       entry: Entry
-  }
+    }
   | {
       kind: 'directory'
       path: string
       entry: DirectoryType
       snapshot: DirectorySnapshot<DirectoryType, Entry>
-  }
+    }
 
 interface PersistedSnapshotRestoreResult<DirectoryType extends Entry, Entry> {
   snapshot: DirectorySnapshot<DirectoryType, Entry>
@@ -228,7 +231,7 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
 
   private static restorePersistedSnapshot<
     DirectoryType extends Entry,
-    Entry = unknown
+    Entry = unknown,
   >(
     payload: PersistedDirectorySnapshotV1,
     factory: DirectorySnapshotRestoreFactory<DirectoryType, Entry>
@@ -411,10 +414,7 @@ export function isPersistedDirectorySnapshotV1(
     }
 
     const typedEntry = entry as Record<string, unknown>
-    if (
-      typedEntry['kind'] !== 'file' &&
-      typedEntry['kind'] !== 'directory'
-    ) {
+    if (typedEntry['kind'] !== 'file' && typedEntry['kind'] !== 'directory') {
       return false
     }
 
@@ -446,10 +446,7 @@ export function isPersistedDirectorySnapshotV1(
     }
 
     const typedEntry = entry as Record<string, unknown>
-    if (
-      typedEntry['kind'] !== 'file' &&
-      typedEntry['kind'] !== 'directory'
-    ) {
+    if (typedEntry['kind'] !== 'file' && typedEntry['kind'] !== 'directory') {
       return false
     }
 

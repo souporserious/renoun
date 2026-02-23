@@ -1,6 +1,9 @@
 import { dirname } from 'node:path'
 
-import { CacheStore, type CacheStoreComputeContext } from '../file-system/Cache.ts'
+import {
+  CacheStore,
+  type CacheStoreComputeContext,
+} from '../file-system/Cache.ts'
 import type { FileReadableStream } from '../file-system/FileSystem.ts'
 import type { Snapshot } from '../file-system/Snapshot.ts'
 import type { DirectoryEntry } from '../file-system/types.ts'
@@ -40,7 +43,9 @@ class ProjectCacheSnapshot implements Snapshot {
   readonly #invalidateListeners = new Set<(path: string) => void>()
 
   readDirectory(_path?: string): Promise<DirectoryEntry[]> {
-    throw new Error('[renoun] Project cache snapshots do not support readDirectory')
+    throw new Error(
+      '[renoun] Project cache snapshots do not support readDirectory'
+    )
   }
 
   readFile(_path: string): Promise<string> {
@@ -48,15 +53,21 @@ class ProjectCacheSnapshot implements Snapshot {
   }
 
   readFileBinary(_path: string): Promise<Uint8Array> {
-    throw new Error('[renoun] Project cache snapshots do not support readFileBinary')
+    throw new Error(
+      '[renoun] Project cache snapshots do not support readFileBinary'
+    )
   }
 
   readFileStream(_path: string): FileReadableStream {
-    throw new Error('[renoun] Project cache snapshots do not support readFileStream')
+    throw new Error(
+      '[renoun] Project cache snapshots do not support readFileStream'
+    )
   }
 
   fileExists(_path: string): Promise<boolean> {
-    throw new Error('[renoun] Project cache snapshots do not support fileExists')
+    throw new Error(
+      '[renoun] Project cache snapshots do not support fileExists'
+    )
   }
 
   getFileLastModifiedMs(_path: string): Promise<number | undefined> {
@@ -268,11 +279,16 @@ function touchProjectCacheEntry(
   runtime.lruNodeKeys.set(nodeKey, true)
 }
 
-function removeProjectCacheEntry(runtime: ProjectCacheRuntime, nodeKey: string): void {
+function removeProjectCacheEntry(
+  runtime: ProjectCacheRuntime,
+  nodeKey: string
+): void {
   runtime.lruNodeKeys.delete(nodeKey)
 }
 
-async function enforceProjectCacheCapacity(runtime: ProjectCacheRuntime): Promise<void> {
+async function enforceProjectCacheCapacity(
+  runtime: ProjectCacheRuntime
+): Promise<void> {
   while (runtime.lruNodeKeys.size > runtime.maxEntries) {
     const lruNodeKey = runtime.lruNodeKeys.keys().next().value as
       | string
@@ -453,7 +469,10 @@ export async function createProjectFileCache<Type>(
 }
 
 /** Invalidates cached project analysis results. */
-export function invalidateProjectFileCache(project: Project, filePath?: string): void
+export function invalidateProjectFileCache(
+  project: Project,
+  filePath?: string
+): void
 export function invalidateProjectFileCache(
   project: Project,
   filePath?: string,
@@ -469,7 +488,9 @@ export function invalidateProjectFileCache(
     return
   }
 
-  const normalizedFilePath = filePath ? normalizeProjectPath(filePath) : undefined
+  const normalizedFilePath = filePath
+    ? normalizeProjectPath(filePath)
+    : undefined
 
   if (normalizedFilePath && !cacheName) {
     removeProjectCacheEntriesByFilePath(runtime, normalizedFilePath)

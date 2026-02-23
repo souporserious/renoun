@@ -57,7 +57,8 @@ const RESOLVE_TYPE_AT_LOCATION_CACHE_NAME = 'resolveTypeAtLocation'
 const TRANSPILE_SOURCE_FILE_CACHE_NAME = 'transpileSourceFile'
 const TOKENS_CACHE_NAME = 'tokens'
 const SOURCE_TEXT_METADATA_CACHE_NAME = 'sourceTextMetadata'
-const TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME = 'typeScriptDependencyAnalysis'
+const TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME =
+  'typeScriptDependencyAnalysis'
 const MODULE_RESOLUTION_CACHE_NAME = 'moduleResolution'
 const PACKAGE_VERSION_DEPENDENCY_CACHE_NAME = 'packageVersionDependency'
 const RUNTIME_ANALYSIS_CACHE_SCOPE = 'project-analysis-runtime'
@@ -122,9 +123,7 @@ async function getRuntimeAnalysisSessionUnchecked(): Promise<
   }
 }
 
-function enqueueRuntimeAnalysisInvalidation(
-  task: () => Promise<void>
-): void {
+function enqueueRuntimeAnalysisInvalidation(task: () => Promise<void>): void {
   runtimeAnalysisInvalidationQueue = runtimeAnalysisInvalidationQueue
     .catch(() => {})
     .then(task)
@@ -299,9 +298,7 @@ function getModuleSpecifierTextFromCompilerNode(
   return undefined
 }
 
-function collectSourceFileModuleSpecifiers(
-  sourceFile: SourceFile
-): string[] {
+function collectSourceFileModuleSpecifiers(sourceFile: SourceFile): string[] {
   const moduleSpecifiers = new Set<string>()
   const addModuleSpecifier = (moduleSpecifier: string | undefined): void => {
     if (!moduleSpecifier || moduleSpecifier.length === 0) {
@@ -387,10 +384,9 @@ function resolveModuleSpecifierSourceFilePathUncached(
   }
 
   if (isModuleSpecifierRelativeOrAbsolute(normalizedModuleSpecifier)) {
-    const baseCandidatePath =
-      normalizedModuleSpecifier.startsWith('.')
-        ? join(dirname(containingFilePath), normalizedModuleSpecifier)
-        : normalizedModuleSpecifier
+    const baseCandidatePath = normalizedModuleSpecifier.startsWith('.')
+      ? join(dirname(containingFilePath), normalizedModuleSpecifier)
+      : normalizedModuleSpecifier
 
     const resolvedCandidateSourceFilePath = resolveSourceFileByPathCandidates(
       project,
@@ -413,9 +409,7 @@ function resolveModuleSpecifierSourceFilePathUncached(
       const resolvedSourceFile = project.getSourceFile(resolvedFileName)
       return resolvedSourceFile?.getFilePath() ?? resolvedFileName
     }
-  } catch {
-    // Ignore module resolution failures and leave dependency unresolved.
-  }
+  } catch {}
 
   return undefined
 }
@@ -626,7 +620,9 @@ function isPathWithinRoot(path: string, rootPath: string): boolean {
   )
 }
 
-function getProjectDependencyBoundaryPath(project: Project): string | undefined {
+function getProjectDependencyBoundaryPath(
+  project: Project
+): string | undefined {
   const compilerOptions = project.getCompilerOptions() as {
     configFilePath?: string
   }
@@ -715,7 +711,8 @@ async function collectTypeScriptDependencyAnalysis(
   filePath: string
 ): Promise<TypeScriptDependencyAnalysis> {
   const sourceFile = project.getSourceFile(filePath)
-  const projectDependencyBoundaryPath = getProjectDependencyBoundaryPath(project)
+  const projectDependencyBoundaryPath =
+    getProjectDependencyBoundaryPath(project)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (!sourceFile) {
@@ -731,7 +728,10 @@ async function collectTypeScriptDependencyAnalysis(
   const packageImportersByName = new Map<string, Set<string>>()
   const visitedSourceFilePaths = new Set<string>()
   const sourceFileQueue: SourceFile[] = [sourceFile]
-  const moduleResolutionByKey = new Map<string, ModuleSpecifierResolutionResult>()
+  const moduleResolutionByKey = new Map<
+    string,
+    ModuleSpecifierResolutionResult
+  >()
   const dependencyLinksBySourceFilePath = new Map<
     string,
     Promise<SourceFileDependencyLinksResult>
@@ -766,7 +766,9 @@ async function collectTypeScriptDependencyAnalysis(
 
     const currentSourceFile = sourceFileQueue.shift()!
     const currentSourceFilePath = currentSourceFile.getFilePath()
-    const normalizedCurrentSourceFilePath = normalizeCachePath(currentSourceFilePath)
+    const normalizedCurrentSourceFilePath = normalizeCachePath(
+      currentSourceFilePath
+    )
 
     if (visitedSourceFilePaths.has(normalizedCurrentSourceFilePath)) {
       continue
@@ -774,8 +776,9 @@ async function collectTypeScriptDependencyAnalysis(
 
     visitedSourceFilePaths.add(normalizedCurrentSourceFilePath)
 
-    for (const link of (await getDependencyLinksForSourceFile(currentSourceFile))
-      .links) {
+    for (const link of (
+      await getDependencyLinksForSourceFile(currentSourceFile)
+    ).links) {
       if (link.moduleResolutionNodeKey) {
         moduleResolutionNodeKeys.add(link.moduleResolutionNodeKey)
       }
@@ -817,7 +820,9 @@ async function collectTypeScriptDependencyAnalysis(
         continue
       }
 
-      const packageName = getPackageNameFromModuleSpecifier(link.moduleSpecifier)
+      const packageName = getPackageNameFromModuleSpecifier(
+        link.moduleSpecifier
+      )
       if (!packageName) {
         continue
       }
@@ -837,7 +842,9 @@ async function collectTypeScriptDependencyAnalysis(
       if (!isWorkspacePath(runtimeCacheStore, projectSourceFilePath)) {
         continue
       }
-      if (normalizeCachePath(projectSourceFilePath).includes('/node_modules/')) {
+      if (
+        normalizeCachePath(projectSourceFilePath).includes('/node_modules/')
+      ) {
         continue
       }
       if (
@@ -848,8 +855,9 @@ async function collectTypeScriptDependencyAnalysis(
       }
       dependencyPaths.add(projectSourceFilePath)
 
-      for (const link of (await getDependencyLinksForSourceFile(projectSourceFile))
-        .links) {
+      for (const link of (
+        await getDependencyLinksForSourceFile(projectSourceFile)
+      ).links) {
         if (link.moduleResolutionNodeKey) {
           moduleResolutionNodeKeys.add(link.moduleResolutionNodeKey)
         }
@@ -872,7 +880,9 @@ async function collectTypeScriptDependencyAnalysis(
           continue
         }
 
-        const packageName = getPackageNameFromModuleSpecifier(link.moduleSpecifier)
+        const packageName = getPackageNameFromModuleSpecifier(
+          link.moduleSpecifier
+        )
         if (!packageName) {
           continue
         }
@@ -945,7 +955,8 @@ function readPackageManifest(
       return null
     }
 
-    const contents = runtimeCacheStore.fileSystem.readFileSync(packageManifestPath)
+    const contents =
+      runtimeCacheStore.fileSystem.readFileSync(packageManifestPath)
     const parsedManifest = JSON.parse(contents) as PackageManifest
     if (!parsedManifest || typeof parsedManifest !== 'object') {
       packageManifestByPath.set(normalizedPackageManifestPath, null)
@@ -978,16 +989,16 @@ function getAncestorDirectoriesInWorkspace(
   const directories: string[] = []
 
   try {
-    let currentDirectory = dirname(runtimeCacheStore.fileSystem.getAbsolutePath(filePath))
+    let currentDirectory = dirname(
+      runtimeCacheStore.fileSystem.getAbsolutePath(filePath)
+    )
     const normalizedWorkspaceRoot = normalizeCachePath(workspaceRootPath)
 
     while (true) {
       const normalizedCurrentDirectory = normalizeCachePath(currentDirectory)
       const isWithinWorkspaceRoot =
         normalizedCurrentDirectory === normalizedWorkspaceRoot ||
-        normalizedCurrentDirectory.startsWith(
-          `${normalizedWorkspaceRoot}/`
-        )
+        normalizedCurrentDirectory.startsWith(`${normalizedWorkspaceRoot}/`)
       if (!isWithinWorkspaceRoot) {
         break
       }
@@ -1087,11 +1098,14 @@ function createRuntimePackageVersionDependencyCacheNodeKey(payload: {
   importerPath: string
   packageName: string
 }): string {
-  return createRuntimeAnalysisCacheNodeKey(PACKAGE_VERSION_DEPENDENCY_CACHE_NAME, {
-    compilerOptionsVersion: payload.compilerOptionsVersion,
-    importerPath: normalizeCachePath(payload.importerPath),
-    packageName: payload.packageName,
-  })
+  return createRuntimeAnalysisCacheNodeKey(
+    PACKAGE_VERSION_DEPENDENCY_CACHE_NAME,
+    {
+      compilerOptionsVersion: payload.compilerOptionsVersion,
+      importerPath: normalizeCachePath(payload.importerPath),
+      packageName: payload.packageName,
+    }
+  )
 }
 
 async function resolveCachedPackageVersionDependencyForImporter(
@@ -1125,7 +1139,11 @@ async function resolveCachedPackageVersionDependencyForImporter(
     async (context) => {
       recordConstDependencies(context, runtimeConstDeps)
 
-      await recordFileDependencyIfPossible(context, runtimeCacheStore, importerPath)
+      await recordFileDependencyIfPossible(
+        context,
+        runtimeCacheStore,
+        importerPath
+      )
 
       const ancestorDirectories = getAncestorDirectoriesInWorkspace(
         runtimeCacheStore,
@@ -1173,10 +1191,9 @@ async function resolveCachedPackageVersionDependencyForImporter(
 
       const dependencyFilePaths = Array.from(
         new Set(
-          [
-            declaredPackageManifestPath,
-            installedPackageManifestPath,
-          ].filter((path): path is string => typeof path === 'string')
+          [declaredPackageManifestPath, installedPackageManifestPath].filter(
+            (path): path is string => typeof path === 'string'
+          )
         )
       )
       await recordFileDependenciesIfPossible(
@@ -1304,11 +1321,12 @@ async function getCachedRuntimeTypeScriptDependencyAnalysis(
         await context.recordNodeDep(moduleResolutionNodeKey)
       }
 
-      const packageVersionDependencies = await resolvePackageVersionDependencies(
-        runtimeCacheStore,
-        compilerOptionsVersion,
-        typeScriptDependencies.packageDependencies
-      )
+      const packageVersionDependencies =
+        await resolvePackageVersionDependencies(
+          runtimeCacheStore,
+          compilerOptionsVersion,
+          typeScriptDependencies.packageDependencies
+        )
 
       for (const packageDependencyNodeKey of packageVersionDependencies.dependencyNodeKeys) {
         await context.recordNodeDep(packageDependencyNodeKey)
@@ -1370,9 +1388,7 @@ async function recordFileDependencyIfPossible(
   try {
     const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
     await context.recordFileDep(absolutePath)
-  } catch {
-    // Ignore non-workspace and unavailable paths.
-  }
+  } catch {}
 }
 
 async function recordDirectoryDependencyIfPossible(
@@ -1387,9 +1403,7 @@ async function recordDirectoryDependencyIfPossible(
   try {
     const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
     await context.recordDirectoryDep(absolutePath)
-  } catch {
-    // Ignore non-workspace and unavailable paths.
-  }
+  } catch {}
 }
 
 async function recordProjectConfigDependency(
@@ -1512,7 +1526,10 @@ function toResolvedTypeAtLocationCacheName(
   return `${RESOLVE_TYPE_AT_LOCATION_CACHE_NAME}:${position}:${kind}:${filterKey}`
 }
 
-function ensureProjectSourceFileLoaded(project: Project, filePath: string): void {
+function ensureProjectSourceFileLoaded(
+  project: Project,
+  filePath: string
+): void {
   if (project.getSourceFile(filePath)) {
     return
   }
@@ -1524,8 +1541,6 @@ export async function getCachedFileExports(
   project: Project,
   filePath: string
 ): Promise<ModuleExport[]> {
-  // Runtime cache hits can return export metadata without touching ts-morph.
-  // Ensure callers that immediately request declaration metadata still have the source loaded.
   ensureProjectSourceFileLoaded(project, filePath)
 
   const runtimeCacheStore = await getRuntimeAnalysisSession()
@@ -1553,7 +1568,11 @@ export async function getCachedFileExports(
         recordConstDependencies(context, runtimeConstDeps)
 
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
-        await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          filePath
+        )
 
         const fileExports = baseGetFileExports(filePath, project)
         const fileExportDependencies = toFileExportsDependencies(
@@ -1613,10 +1632,13 @@ export async function getCachedOutlineRanges(
   ) {
     const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
     const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
-    const nodeKey = createRuntimeAnalysisCacheNodeKey(OUTLINE_RANGES_CACHE_NAME, {
-      compilerOptionsVersion,
-      filePath: normalizeCacheFilePath(filePath),
-    })
+    const nodeKey = createRuntimeAnalysisCacheNodeKey(
+      OUTLINE_RANGES_CACHE_NAME,
+      {
+        compilerOptionsVersion,
+        filePath: normalizeCacheFilePath(filePath),
+      }
+    )
 
     return runtimeCacheStore.store.getOrCompute(
       nodeKey,
@@ -1629,7 +1651,11 @@ export async function getCachedOutlineRanges(
         recordConstDependencies(context, runtimeConstDeps)
 
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
-        await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          filePath
+        )
 
         return baseGetOutlineRanges(filePath, project)
       }
@@ -1849,13 +1875,16 @@ export async function getCachedFileExportText(
         ? undefined
         : getRuntimeAnalysisSWRReadOptions()
     const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
-    const nodeKey = createRuntimeAnalysisCacheNodeKey(FILE_EXPORT_TEXT_CACHE_NAME, {
-      compilerOptionsVersion,
-      filePath: normalizeCacheFilePath(options.filePath),
-      position: options.position,
-      kind: options.kind,
-      includeDependencies: options.includeDependencies === true,
-    })
+    const nodeKey = createRuntimeAnalysisCacheNodeKey(
+      FILE_EXPORT_TEXT_CACHE_NAME,
+      {
+        compilerOptionsVersion,
+        filePath: normalizeCacheFilePath(options.filePath),
+        position: options.position,
+        kind: options.kind,
+        includeDependencies: options.includeDependencies === true,
+      }
+    )
 
     return runtimeCacheStore.store.getOrCompute(
       nodeKey,
@@ -1875,7 +1904,6 @@ export async function getCachedFileExportText(
         )
 
         if (options.includeDependencies) {
-          // Ensure includeDependencies text generation reads fresh source state.
           invalidateProjectFileCache(
             project,
             options.filePath,
@@ -1946,8 +1974,9 @@ export async function resolveCachedTypeAtLocationWithDependencies(
       canUseRuntimePathCache(runtimeCacheStore, options.filePath)
     ) {
       const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
-      const runtimeConstDeps =
-        getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+      const runtimeConstDeps = getRuntimeAnalysisConstDeps(
+        compilerOptionsVersion
+      )
       const nodeKey = createRuntimeAnalysisCacheNodeKey(
         RESOLVE_TYPE_AT_LOCATION_CACHE_NAME,
         {
@@ -1971,7 +2000,11 @@ export async function resolveCachedTypeAtLocationWithDependencies(
         async (context) => {
           recordConstDependencies(context, runtimeConstDeps)
 
-          await recordProjectConfigDependency(context, runtimeCacheStore, project)
+          await recordProjectConfigDependency(
+            context,
+            runtimeCacheStore,
+            project
+          )
           await recordFileDependencyIfPossible(
             context,
             runtimeCacheStore,
@@ -2083,7 +2116,11 @@ export async function transpileCachedSourceFile(
         recordConstDependencies(context, runtimeConstDeps)
 
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
-        await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          filePath
+        )
 
         return baseTranspileSourceFile(filePath, project)
       }
@@ -2188,9 +2225,7 @@ export async function getCachedSourceTextMetadata(
           continue
         }
 
-        if (
-          sourceTextDependencyNodeKeys.has(dependencyAnalysis.nodeKey)
-        ) {
+        if (sourceTextDependencyNodeKeys.has(dependencyAnalysis.nodeKey)) {
           continue
         }
 
@@ -2233,7 +2268,7 @@ export async function getCachedTokens(
     sourcePath:
       typeof options.sourcePath === 'string'
         ? normalizeCachePath(options.sourcePath)
-        : options.sourcePath ?? null,
+        : (options.sourcePath ?? null),
     language: options.language ?? 'plaintext',
     themeSignature: getThemeSignature(options.theme),
     themeNames: getThemeNamesForCache(options.theme),

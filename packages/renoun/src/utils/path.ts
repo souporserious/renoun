@@ -17,9 +17,7 @@ export function pathLikeToString(path: PathLike): string {
   if (typeof path === 'string' && path.startsWith('file:')) {
     try {
       return fileURLToPath(new URL(path))
-    } catch {
-      // Ignore parsing errors and fall back to the original string.
-    }
+    } catch {}
   }
 
   return path
@@ -102,7 +100,11 @@ export function trimLeadingDotsSegment(path: string): string {
   while (index < normalized.length && normalized.charCodeAt(index) === 46) {
     index++
   }
-  if (index > 0 && index < normalized.length && normalized.charCodeAt(index) === 47) {
+  if (
+    index > 0 &&
+    index < normalized.length &&
+    normalized.charCodeAt(index) === 47
+  ) {
     return normalized.slice(index + 1)
   }
   return normalized
@@ -122,7 +124,6 @@ export function isAbsolutePath(path: string): boolean {
 /** Remove leading forward slashes from a path-like string. */
 export function trimLeadingSlashes(value: string): string {
   let start = 0
-  // 47 is '/'
   while (start < value.length && value.charCodeAt(start) === 47) start++
   return value.slice(start)
 }
@@ -130,16 +131,13 @@ export function trimLeadingSlashes(value: string): string {
 /** Remove trailing forward slashes from a path-like string. */
 export function trimTrailingSlashes(value: string): string {
   let end = value.length
-  // 47 is '/'
   while (end > 0 && value.charCodeAt(end - 1) === 47) end--
   return value.slice(0, end)
 }
 
 /** Normalize a path to a stable key form (relative, no outer slashes, '.' for root). */
 export function normalizePathKey(path: string): string {
-  const key = trimTrailingSlashes(
-    trimLeadingSlashes(trimLeadingDotSlash(path))
-  )
+  const key = trimTrailingSlashes(trimLeadingSlashes(trimLeadingDotSlash(path)))
   return key === '' ? '.' : key
 }
 

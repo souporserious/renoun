@@ -49,7 +49,8 @@ function parseTypeFilter(filter?: TypeFilter | string): TypeFilter | undefined {
     return undefined
   }
 
-  const parsedFilter = typeof filter === 'string' ? parseTypeFilterJson(filter) : filter
+  const parsedFilter =
+    typeof filter === 'string' ? parseTypeFilterJson(filter) : filter
 
   if (!isValidTypeFilter(parsedFilter)) {
     throw new Error(
@@ -114,7 +115,9 @@ function isValidFilterDescriptor(value: unknown): value is TypeFilter {
     if (
       candidateType.properties !== undefined &&
       (!Array.isArray(candidateType.properties) ||
-        !candidateType.properties.every((property) => typeof property === 'string'))
+        !candidateType.properties.every(
+          (property) => typeof property === 'string'
+        ))
     ) {
       return false
     }
@@ -440,13 +443,13 @@ export async function createServer(options?: { port?: number }) {
 function closeWatcher(watcher: FSWatcher): void {
   try {
     watcher.close()
-  } catch {
-    // Ignore watcher close errors during server shutdown.
-  }
+  } catch {}
 }
 
 function shouldEmitRefreshNotifications(): boolean {
-  const override = parseBooleanEnv(process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS)
+  const override = parseBooleanEnv(
+    process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS
+  )
   if (override !== undefined) {
     return override
   }

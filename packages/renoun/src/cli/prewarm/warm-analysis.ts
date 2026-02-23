@@ -1,5 +1,12 @@
 import { cpus } from 'node:os'
-import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
+import {
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  resolve,
+} from 'node:path'
 import { getMDXSections, getMarkdownSections } from '@renoun/mdx/utils'
 
 import { CacheStore } from '../../file-system/Cache.ts'
@@ -69,11 +76,14 @@ export async function warmRenounPrewarmTargets(
   const warmFilesByPath = new Map<string, WarmFileTask>()
 
   if (targets.directoryGetEntries.length > 0) {
-    logger.debug('Collecting files from Directory#getEntries callsites', () => ({
-      data: {
-        directories: targets.directoryGetEntries.length,
-      },
-    }))
+    logger.debug(
+      'Collecting files from Directory#getEntries callsites',
+      () => ({
+        data: {
+          directories: targets.directoryGetEntries.length,
+        },
+      })
+    )
   }
 
   if (targets.fileGetFile.length > 0) {
@@ -314,11 +324,15 @@ async function collectDirectoryFilePaths(
   for (const entry of entries) {
     if (entry.isDirectory) {
       if (options.recursive) {
-        const nestedFiles = await collectDirectoryFilePaths(fileSystem, entry.path, {
-          recursive: true,
-          includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
-          includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
-        })
+        const nestedFiles = await collectDirectoryFilePaths(
+          fileSystem,
+          entry.path,
+          {
+            recursive: true,
+            includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
+            includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
+          }
+        )
         files.push(...nestedFiles)
       }
       continue
@@ -329,7 +343,9 @@ async function collectDirectoryFilePaths(
     }
 
     const absolutePath = fileSystem.getAbsolutePath(entry.path)
-    const fileBaseName = removeAllExtensions(basename(absolutePath)).toLowerCase()
+    const fileBaseName = removeAllExtensions(
+      basename(absolutePath)
+    ).toLowerCase()
 
     if (
       !options.includeIndexAndReadmeFiles &&
@@ -355,7 +371,9 @@ async function resolveGetFileRequestPath(
   fileSystem: NodeFileSystem,
   request: FileRequest
 ): Promise<string> {
-  const absoluteDirectoryPath = fileSystem.getAbsolutePath(request.directoryPath)
+  const absoluteDirectoryPath = fileSystem.getAbsolutePath(
+    request.directoryPath
+  )
   const requestedPath = isAbsolute(request.path)
     ? request.path
     : resolve(absoluteDirectoryPath, request.path)
@@ -380,8 +398,9 @@ function buildGetFileCandidates(
   const normalizedPath = resolve(requestedPath)
   const hasExplicitExtension = getFileExtension(normalizedPath) !== undefined
   const normalizedExtensions =
-    extensions?.map(normalizeExtension).filter((value): value is string => !!value) ??
-    []
+    extensions
+      ?.map(normalizeExtension)
+      .filter((value): value is string => !!value) ?? []
 
   candidates.add(normalizedPath)
 
@@ -478,7 +497,9 @@ async function warmFiles(
     logger: ReturnType<typeof getDebugLogger>
   }
 ): Promise<void> {
-  const runtimeSectionsStore = createRuntimeSectionsWarmStore(options.fileSystem)
+  const runtimeSectionsStore = createRuntimeSectionsWarmStore(
+    options.fileSystem
+  )
 
   await forEachConcurrent(
     warmFiles,
@@ -490,28 +511,40 @@ async function warmFiles(
         try {
           await getFileExports(warmFile.absolutePath, options.projectOptions)
         } catch (error) {
-          options.logger.warn('Skipping renoun getFileExports prewarm target', () => ({
-            data: {
-              filePath: warmFile.absolutePath,
-              error: formatPrewarmError(error),
-            },
-          }))
+          options.logger.warn(
+            'Skipping renoun getFileExports prewarm target',
+            () => ({
+              data: {
+                filePath: warmFile.absolutePath,
+                error: formatPrewarmError(error),
+              },
+            })
+          )
         }
       }
 
       if (warmFile.methods.has('getSections')) {
         if (isJavaScriptLikeExtension(warmFile.extension)) {
           try {
-            await getOutlineRanges(warmFile.absolutePath, options.projectOptions)
+            await getOutlineRanges(
+              warmFile.absolutePath,
+              options.projectOptions
+            )
           } catch (error) {
-            options.logger.warn('Skipping renoun getOutlineRanges prewarm target', () => ({
-              data: {
-                filePath: warmFile.absolutePath,
-                error: formatPrewarmError(error),
-              },
-            }))
+            options.logger.warn(
+              'Skipping renoun getOutlineRanges prewarm target',
+              () => ({
+                data: {
+                  filePath: warmFile.absolutePath,
+                  error: formatPrewarmError(error),
+                },
+              })
+            )
           }
-        } else if (warmFile.extension === 'md' || warmFile.extension === 'mdx') {
+        } else if (
+          warmFile.extension === 'md' ||
+          warmFile.extension === 'mdx'
+        ) {
           try {
             const warmedRuntimeSections =
               await warmMarkdownSectionsThroughRuntimeCacheStore(
@@ -520,7 +553,9 @@ async function warmFiles(
                 options.fileSystem
               )
             if (!warmedRuntimeSections) {
-              const source = await options.fileSystem.readFile(warmFile.absolutePath)
+              const source = await options.fileSystem.readFile(
+                warmFile.absolutePath
+              )
               if (warmFile.extension === 'md') {
                 getMarkdownSections(source)
               } else {
@@ -528,12 +563,15 @@ async function warmFiles(
               }
             }
           } catch (error) {
-            options.logger.warn('Skipping renoun markdown sections prewarm target', () => ({
-              data: {
-                filePath: warmFile.absolutePath,
-                error: formatPrewarmError(error),
-              },
-            }))
+            options.logger.warn(
+              'Skipping renoun markdown sections prewarm target',
+              () => ({
+                data: {
+                  filePath: warmFile.absolutePath,
+                  error: formatPrewarmError(error),
+                },
+              })
+            )
           }
         }
       }
@@ -545,9 +583,7 @@ function formatPrewarmError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function createRuntimeSectionsWarmStore(
-  fileSystem: NodeFileSystem
-):
+function createRuntimeSectionsWarmStore(fileSystem: NodeFileSystem):
   | {
       store: CacheStore
       snapshotId: string
@@ -572,7 +608,9 @@ function createRuntimeSectionsWarmStore(
   }
 }
 
-function resolvePrewarmProjectRoot(fileSystem: NodeFileSystem): string | undefined {
+function resolvePrewarmProjectRoot(
+  fileSystem: NodeFileSystem
+): string | undefined {
   try {
     return getRootDirectory(fileSystem.getAbsolutePath('.'))
   } catch {

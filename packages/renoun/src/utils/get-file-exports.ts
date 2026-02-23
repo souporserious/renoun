@@ -47,101 +47,99 @@ export function getFileExports(
     const exports = getDebugLogger().trackOperation(
       'get-file-exports',
       () => {
-      let sourceFile = project.getSourceFile(filePath)
+        let sourceFile = project.getSourceFile(filePath)
 
-      if (!sourceFile) {
-        const addStart = performance.now()
-        sourceFile = project.addSourceFileAtPath(filePath)
+        if (!sourceFile) {
+          const addStart = performance.now()
+          sourceFile = project.addSourceFileAtPath(filePath)
 
-        getDebugLogger().debug('Added source file to project', () => ({
+          getDebugLogger().debug('Added source file to project', () => ({
+            operation: 'get-file-exports',
+            data: {
+              filePath,
+              wasAdded: true,
+              duration: (performance.now() - addStart).toFixed(1),
+              projectFiles: project.getSourceFiles().length,
+            },
+          }))
+        }
+
+        const processStart = performance.now()
+        const exportDeclarations: ModuleExport[] = []
+        const exportedDeclarations = sourceFile.getExportedDeclarations()
+        const totalDeclarations = exportedDeclarations.size
+
+        getDebugLogger().debug('Processing exported declarations', () => ({
           operation: 'get-file-exports',
           data: {
             filePath,
-            wasAdded: true,
-            duration: (performance.now() - addStart).toFixed(1),
-            projectFiles: project.getSourceFiles().length,
+            totalDeclarations,
+            hasSourceFile: Boolean(sourceFile),
+            duration: (performance.now() - processStart).toFixed(1),
           },
         }))
-      }
 
-      const processStart = performance.now()
-      const exportDeclarations: ModuleExport[] = []
-      const exportedDeclarations = sourceFile.getExportedDeclarations()
-      const totalDeclarations = exportedDeclarations.size
+        for (const [name, declarations] of exportedDeclarations) {
+          const declaration = selectPreferredDeclaration(declarations)
+          let node: Node = declaration
 
-      getDebugLogger().debug('Processing exported declarations', () => ({
-        operation: 'get-file-exports',
-        data: {
-          filePath,
-          totalDeclarations,
-          hasSourceFile: Boolean(sourceFile),
-          duration: (performance.now() - processStart).toFixed(1),
-        },
-      }))
-
-      for (const [name, declarations] of exportedDeclarations) {
-        const declaration = selectPreferredDeclaration(declarations)
-        let node: Node = declaration
-
-        // export { foo } = bar
-        const exportAssignment = node.getFirstAncestorByKind(
-          tsMorph.SyntaxKind.ExportAssignment
-        )
-        if (exportAssignment && !exportAssignment.isExportEquals()) {
-          node = exportAssignment
-        }
-
-        // export const foo = 'bar'
-        if (tsMorph.Node.isVariableStatement(node)) {
-          const declarations = node.getDeclarationList().getDeclarations()
-
-          if (declarations.length > 1) {
-            throw new Error(
-              `[renoun] Multiple variable declarations found in variable statement which is not currently supported: ${node.getText()}`
-            )
-          }
-
-          node = declarations.at(0)!
-        }
-
-        // export { x } from './y'
-        if (tsMorph.Node.isExportSpecifier(node)) {
-          const exportDeclaration = node.getFirstAncestorByKind(
-            tsMorph.SyntaxKind.ExportDeclaration
+          const exportAssignment = node.getFirstAncestorByKind(
+            tsMorph.SyntaxKind.ExportAssignment
           )
-          if (exportDeclaration) {
-            node = exportDeclaration
+          if (exportAssignment && !exportAssignment.isExportEquals()) {
+            node = exportAssignment
           }
-        }
 
-        if (!exportableKinds.has(node.getKind())) {
-          continue
-        }
+          if (tsMorph.Node.isVariableStatement(node)) {
+            const declarations = node.getDeclarationList().getDeclarations()
 
-        const fileExport: ModuleExport = {
-          name,
-          path: node.getSourceFile().getFilePath(),
-          position: getExportPosition(node),
-          kind: node.getKind(),
-        }
-        let insertAt = exportDeclarations.length
+            if (declarations.length > 1) {
+              throw new Error(
+                `[renoun] Multiple variable declarations found in variable statement which is not currently supported: ${node.getText()}`
+              )
+            }
 
-        for (let index = 0; index < insertAt; index++) {
-          const existing = exportDeclarations[index]
-          const isPathBefore = fileExport.path.localeCompare(existing.path) < 0
-          const isSamePath = fileExport.path === existing.path
-          const isPositionBefore = fileExport.position < existing.position
-
-          if (isPathBefore || (isSamePath && isPositionBefore)) {
-            insertAt = index
-            break
+            node = declarations.at(0)!
           }
+
+          if (tsMorph.Node.isExportSpecifier(node)) {
+            const exportDeclaration = node.getFirstAncestorByKind(
+              tsMorph.SyntaxKind.ExportDeclaration
+            )
+            if (exportDeclaration) {
+              node = exportDeclaration
+            }
+          }
+
+          if (!exportableKinds.has(node.getKind())) {
+            continue
+          }
+
+          const fileExport: ModuleExport = {
+            name,
+            path: node.getSourceFile().getFilePath(),
+            position: getExportPosition(node),
+            kind: node.getKind(),
+          }
+          let insertAt = exportDeclarations.length
+
+          for (let index = 0; index < insertAt; index++) {
+            const existing = exportDeclarations[index]
+            const isPathBefore =
+              fileExport.path.localeCompare(existing.path) < 0
+            const isSamePath = fileExport.path === existing.path
+            const isPositionBefore = fileExport.position < existing.position
+
+            if (isPathBefore || (isSamePath && isPositionBefore)) {
+              insertAt = index
+              break
+            }
+          }
+
+          exportDeclarations.splice(insertAt, 0, fileExport)
         }
 
-        exportDeclarations.splice(insertAt, 0, fileExport)
-      }
-
-      return exportDeclarations
+        return exportDeclarations
       },
       { data: { filePath } }
     ) as ModuleExport[]
@@ -298,43 +296,43 @@ export async function getFileExportMetadata(
     const metadata = await getDebugLogger().trackOperation(
       'get-file-export-metadata',
       async () => {
-      const sourceFile = project.getSourceFile(filePath)
+        const sourceFile = project.getSourceFile(filePath)
 
-      if (!sourceFile) {
-        throw new Error(`[renoun] Source file not found: ${filePath}`)
-      }
+        if (!sourceFile) {
+          throw new Error(`[renoun] Source file not found: ${filePath}`)
+        }
 
-      const exportDeclaration = getFileExportDeclaration(
-        filePath,
-        position,
-        kind,
-        project
-      )
-
-      const metadata = {
-        name: getName(
-          sourceFile.getBaseNameWithoutExtension(),
-          name,
-          exportDeclaration
-        ),
-        environment: getEnvironment(exportDeclaration),
-        jsDocMetadata: getJsDocMetadata(exportDeclaration),
-        location: getDeclarationLocation(exportDeclaration),
-      }
-
-      getDebugLogger().info('Export metadata retrieved', () => ({
-        operation: 'get-file-export-metadata',
-        data: {
+        const exportDeclaration = getFileExportDeclaration(
           filePath,
-          exportName: name,
-          resolvedName: metadata.name,
-          environment: metadata.environment,
-          hasJsDoc: !!metadata.jsDocMetadata,
-          hasLocation: !!metadata.location,
-        },
-      }))
+          position,
+          kind,
+          project
+        )
 
-      return metadata
+        const metadata = {
+          name: getName(
+            sourceFile.getBaseNameWithoutExtension(),
+            name,
+            exportDeclaration
+          ),
+          environment: getEnvironment(exportDeclaration),
+          jsDocMetadata: getJsDocMetadata(exportDeclaration),
+          location: getDeclarationLocation(exportDeclaration),
+        }
+
+        getDebugLogger().info('Export metadata retrieved', () => ({
+          operation: 'get-file-export-metadata',
+          data: {
+            filePath,
+            exportName: name,
+            resolvedName: metadata.name,
+            environment: metadata.environment,
+            hasJsDoc: !!metadata.jsDocMetadata,
+            hasLocation: !!metadata.location,
+          },
+        }))
+
+        return metadata
       },
       {
         data: { name, filePath, position, kind: tsMorph.SyntaxKind[kind] },

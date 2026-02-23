@@ -9,9 +9,9 @@ import {
 
 describe('refresh waiter', () => {
   test('resolves many concurrent waiters without warning emissions', async () => {
-    const emitWarningSpy = vi.spyOn(process, 'emitWarning').mockImplementation(
-      () => {}
-    )
+    const emitWarningSpy = vi
+      .spyOn(process, 'emitWarning')
+      .mockImplementation(() => {})
     const previousActiveProjects = [...activeRefreshingProjects]
 
     activeRefreshingProjects.clear()

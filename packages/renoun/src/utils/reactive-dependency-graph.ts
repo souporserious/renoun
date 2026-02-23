@@ -1,9 +1,4 @@
-import {
-  effect,
-  setActiveSub,
-  signal,
-  trigger,
-} from 'alien-signals'
+import { effect, setActiveSub, signal, trigger } from 'alien-signals'
 import { normalizePathKey } from './path.ts'
 
 type MutableSignal<Value> = {
@@ -47,13 +42,19 @@ function runUntracked<Value>(task: () => Value): Value {
 }
 
 export class ReactiveDependencyGraph {
-  readonly #dependencySignals = new Map<string, MutableSignal<string | undefined>>()
+  readonly #dependencySignals = new Map<
+    string,
+    MutableSignal<string | undefined>
+  >()
   readonly #dependencySignalsPendingCleanup = new Set<string>()
   readonly #nodes = new Map<string, ReactiveNodeRecord>()
   readonly #dirtyNodeKeys = new Set<string>()
   readonly #nodeKeysByDependency = new Map<string, Set<string>>()
   readonly #dependencyRefCountByKey = new Map<string, number>()
-  readonly #indexedPathDependencyByKey = new Map<string, IndexedPathDependency>()
+  readonly #indexedPathDependencyByKey = new Map<
+    string,
+    IndexedPathDependency
+  >()
   #filePathDependencies = createPathDependencyNode()
   #directoryPathDependencies = createPathDependencyNode()
 
@@ -172,9 +173,7 @@ export class ReactiveDependencyGraph {
     return dirtyNodeKeys
   }
 
-  touchDependencies(
-    matcher: (dependencyKey: string) => boolean
-  ): number {
+  touchDependencies(matcher: (dependencyKey: string) => boolean): number {
     const dependencyKeysToTouch = new Set<string>()
     for (const dependencyKey of this.#nodeKeysByDependency.keys()) {
       if (!matcher(dependencyKey)) {
@@ -194,8 +193,9 @@ export class ReactiveDependencyGraph {
     const normalizedPath = normalizePathKey(pathKey)
     const dependencyKeysToTouch =
       this.#collectMatchingPathDependencyKeys(normalizedPath)
-    const affectedNodeKeys =
-      this.#collectAffectedNodeKeysForDependencyKeys(dependencyKeysToTouch)
+    const affectedNodeKeys = this.#collectAffectedNodeKeysForDependencyKeys(
+      dependencyKeysToTouch
+    )
 
     for (const dependencyKey of dependencyKeysToTouch) {
       this.touchDependency(dependencyKey)
@@ -215,7 +215,8 @@ export class ReactiveDependencyGraph {
 
   getPathDependencyKeys(pathKey: string): string[] {
     const normalizedPath = normalizePathKey(pathKey)
-    const dependencyKeys = this.#collectMatchingPathDependencyKeys(normalizedPath)
+    const dependencyKeys =
+      this.#collectMatchingPathDependencyKeys(normalizedPath)
     return Array.from(dependencyKeys).sort()
   }
 
@@ -321,7 +322,10 @@ export class ReactiveDependencyGraph {
     this.#incrementDependencyRefCount(dependencyKey)
   }
 
-  #detachNodeDependencies(nodeKey: string, dependencyKeys: Iterable<string>): void {
+  #detachNodeDependencies(
+    nodeKey: string,
+    dependencyKeys: Iterable<string>
+  ): void {
     for (const dependencyKey of dependencyKeys) {
       const nodeKeys = this.#nodeKeysByDependency.get(dependencyKey)
       if (!nodeKeys) {
@@ -340,7 +344,8 @@ export class ReactiveDependencyGraph {
   }
 
   #incrementDependencyRefCount(dependencyKey: string): void {
-    const nextCount = (this.#dependencyRefCountByKey.get(dependencyKey) ?? 0) + 1
+    const nextCount =
+      (this.#dependencyRefCountByKey.get(dependencyKey) ?? 0) + 1
     this.#dependencyRefCountByKey.set(dependencyKey, nextCount)
     this.#dependencySignalsPendingCleanup.delete(dependencyKey)
     if (nextCount === 1) {
@@ -386,7 +391,8 @@ export class ReactiveDependencyGraph {
   }
 
   #unindexPathDependency(dependencyKey: string): void {
-    const indexedDependency = this.#indexedPathDependencyByKey.get(dependencyKey)
+    const indexedDependency =
+      this.#indexedPathDependencyByKey.get(dependencyKey)
     if (!indexedDependency) {
       return
     }
@@ -396,11 +402,17 @@ export class ReactiveDependencyGraph {
         ? this.#filePathDependencies
         : this.#directoryPathDependencies
 
-    this.#removePathDependency(rootNode, indexedDependency.pathKey, dependencyKey)
+    this.#removePathDependency(
+      rootNode,
+      indexedDependency.pathKey,
+      dependencyKey
+    )
     this.#indexedPathDependencyByKey.delete(dependencyKey)
   }
 
-  #parsePathDependency(dependencyKey: string): IndexedPathDependency | undefined {
+  #parsePathDependency(
+    dependencyKey: string
+  ): IndexedPathDependency | undefined {
     if (dependencyKey.startsWith(DIRECTORY_SNAPSHOT_PATH_PREFIX)) {
       const dependencyPath = dependencyKey.slice(
         DIRECTORY_SNAPSHOT_PATH_PREFIX.length
@@ -415,9 +427,7 @@ export class ReactiveDependencyGraph {
         return undefined
       }
 
-      const versionSeparatedPath = dependencyPath.slice(
-        dependencyTypeIndex + 1
-      )
+      const versionSeparatedPath = dependencyPath.slice(dependencyTypeIndex + 1)
       const versionSeparatorIndex = versionSeparatedPath.lastIndexOf(':')
       if (versionSeparatorIndex <= 0) {
         return undefined
@@ -589,7 +599,8 @@ export class ReactiveDependencyGraph {
     while (currentPath !== '.' && currentPath !== '') {
       target.add(currentPath)
       const separatorIndex = currentPath.lastIndexOf('/')
-      currentPath = separatorIndex === -1 ? '.' : currentPath.slice(0, separatorIndex)
+      currentPath =
+        separatorIndex === -1 ? '.' : currentPath.slice(0, separatorIndex)
     }
   }
 

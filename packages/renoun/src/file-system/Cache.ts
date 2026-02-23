@@ -238,7 +238,11 @@ function createMemoryOnlySnapshot(id: string): Snapshot {
 }
 
 export function createMemoryOnlyCacheStore(
-  options: { id?: string; staleRetentionTtlMs?: number; telemetry?: Telemetry } = {}
+  options: {
+    id?: string
+    staleRetentionTtlMs?: number
+    telemetry?: Telemetry
+  } = {}
 ) {
   return new CacheStore({
     snapshot: createMemoryOnlySnapshot(
@@ -647,9 +651,7 @@ export class CacheStore {
         if (unsubscribe) {
           try {
             unsubscribe()
-          } catch {
-            // Ignore unsubscription failures during cache-store teardown.
-          }
+          } catch {}
         }
       }
     }
@@ -683,7 +685,10 @@ export class CacheStore {
     if (staleWhileRevalidate.enabled) {
       const freshEntry = await this.#getFreshEntry(nodeKey)
       if (freshEntry) {
-        await this.#recordAutomaticNodeDependency(nodeKey, freshEntry.fingerprint)
+        await this.#recordAutomaticNodeDependency(
+          nodeKey,
+          freshEntry.fingerprint
+        )
         return freshEntry.value as Value
       }
 
@@ -698,7 +703,10 @@ export class CacheStore {
           source: 'swr',
           stale: true,
         })
-        await this.#recordAutomaticNodeDependency(nodeKey, staleEntry.fingerprint)
+        await this.#recordAutomaticNodeDependency(
+          nodeKey,
+          staleEntry.fingerprint
+        )
         emitTelemetryEvent({
           name: 'renoun.cache.swr_serve',
           tags: {
@@ -812,7 +820,6 @@ export class CacheStore {
 
     const backgroundOptions: CacheStoreGetOrComputeOptions = {
       ...options,
-      // Detach background refresh from request-scoped abort context.
       signal: NEVER_ABORT_SIGNAL,
     }
 
@@ -1352,9 +1359,7 @@ export class CacheStore {
           if (this.#disposed) {
             try {
               await this.#clearPersistedCacheEntry(nodeKey)
-            } catch {
-              // Best-effort cleanup for writes that complete during disposal.
-            }
+            } catch {}
           }
         }
 
@@ -1465,10 +1470,7 @@ export class CacheStore {
 
     try {
       await persistence.refreshComputeSlot(nodeKey, owner, slotTtlMs)
-    } catch {
-      // Ignore heartbeat refresh failures.
-      // The slot may expire naturally and should be discovered by waiters.
-    }
+    } catch {}
   }
 
   async #releaseComputeSlot(nodeKey: string, owner: string): Promise<void> {
@@ -1679,36 +1681,36 @@ export class CacheStore {
         : undefined
 
     const computeWriteGuard = this.#captureNodeWriteGuard(nodeKey)
-    const deps = new Map<string, string>()
+    const dependencyVersions = new Map<string, string>()
     const computeSignal = options.signal ?? getContext()?.signal
     const context: CacheStoreComputeContext = {
       snapshot: this.#snapshot,
       signal: computeSignal,
       recordDep(depKey, depVersion) {
-        deps.set(depKey, depVersion)
+        dependencyVersions.set(depKey, depVersion)
       },
       recordConstDep: (name, version) => {
         this.#constDepVersionByName.set(name, version)
-        deps.set(toConstDependencyKey(name), version)
+        dependencyVersions.set(toConstDependencyKey(name), version)
       },
       recordFileDep: async (path: string) => {
         const relativePath = this.#snapshot.getRelativePathToWorkspace(path)
         const normalizedPath = normalizeDepPath(relativePath)
         const depVersion = await this.#snapshot.contentId(normalizedPath)
-        deps.set(`file:${normalizedPath}`, depVersion)
+        dependencyVersions.set(`file:${normalizedPath}`, depVersion)
         return depVersion
       },
       recordDirectoryDep: async (path: string) => {
         const relativePath = this.#snapshot.getRelativePathToWorkspace(path)
         const normalizedPath = normalizeDepPath(relativePath)
         const depVersion = await this.#snapshot.contentId(normalizedPath)
-        deps.set(`dir:${normalizedPath}`, depVersion)
+        dependencyVersions.set(`dir:${normalizedPath}`, depVersion)
         return depVersion
       },
       recordNodeDep: async (childNodeKey: string) => {
         const depVersion =
           await this.#resolveNodeDependencyVersion(childNodeKey)
-        deps.set(`node:${childNodeKey}`, depVersion)
+        dependencyVersions.set(`node:${childNodeKey}`, depVersion)
         return depVersion
       },
     }
@@ -1753,12 +1755,12 @@ export class CacheStore {
     try {
       const computeStartedAt = Date.now()
       const value = await this.#activeComputeScope.run(
-        { nodeKey, deps },
+        { nodeKey, deps: dependencyVersions },
         async () => compute(context)
       )
       const computeDurationMs = Date.now() - computeStartedAt
 
-      const dependencyEntries = Array.from(deps.entries())
+      const dependencyEntries = Array.from(dependencyVersions.entries())
         .map(([depKey, depVersion]) => ({ depKey, depVersion }))
         .sort((first, second) => first.depKey.localeCompare(second.depKey))
       const fingerprint = createFingerprint(dependencyEntries)
@@ -2029,14 +2031,12 @@ export class CacheStore {
         try {
           telemetryEnabled = telemetry.enabled('metrics')
         } catch {
-          // Fall through to emission so helper-level reporting can warn once.
           telemetryEnabled = true
         }
       } else {
         telemetryEnabled = true
       }
     } else if (debugEnabled) {
-      // Without an explicit sink, telemetry falls back to the debug sink.
       telemetryEnabled = true
     }
 
@@ -2173,9 +2173,6 @@ export class CacheStore {
       }
     }
 
-    // The node may subscribe to child-node version signals while we lazily load
-    // dependencies during this freshness pass. As long as every dependency
-    // version matches, this entry is fresh.
     return true
   }
 
@@ -2414,8 +2411,7 @@ export class CacheStore {
               if (shouldDebugPersistenceFailure) {
                 this.#logPersistenceDebug(nodeKey, {
                   phase: 'save-verify',
-                  details:
-                    `superseded-by-revision-fingerprint-match expectedRevision=${persistedRevision} actualRevision=${verified.revision} expectedFingerprint=${entry.fingerprint}`,
+                  details: `superseded-by-revision-fingerprint-match expectedRevision=${persistedRevision} actualRevision=${verified.revision} expectedFingerprint=${entry.fingerprint}`,
                   entry,
                   verified,
                   expectedRevision: expectedPersistedRevision,
@@ -2686,9 +2682,8 @@ function trimTrailingSlashesPreservingRootForCache(value: string): string {
 
 function normalizeDepPathPreservingAbsolute(path: string): string {
   const normalizedSlashes = normalizeCacheSlashes(path)
-  const trimmedTrailing = trimTrailingSlashesPreservingRootForCache(
-    normalizedSlashes
-  )
+  const trimmedTrailing =
+    trimTrailingSlashesPreservingRootForCache(normalizedSlashes)
   if (trimmedTrailing.length === 0) {
     return '.'
   }

@@ -149,7 +149,9 @@ export function getGlobalTelemetry(): Telemetry | undefined {
 }
 
 function resolveTelemetry(explicit?: Telemetry): Telemetry {
-  return explicit ?? getContext()?.telemetry ?? globalTelemetry ?? debugTelemetrySink
+  return (
+    explicit ?? getContext()?.telemetry ?? globalTelemetry ?? debugTelemetrySink
+  )
 }
 
 function toTelemetryErrorMessage(error: unknown): string {
@@ -176,9 +178,7 @@ function reportTelemetryFailure(
       console.warn(
         `[renoun] Telemetry sink failed during ${operation}. Continuing without failing the caller: ${errorMessage}`
       )
-    } catch {
-      // Ignore logging failures while reporting telemetry sink errors.
-    }
+    } catch {}
   }
 
   if (!getDebugLogger().isEnabled('debug')) {
@@ -193,9 +193,7 @@ function reportTelemetryFailure(
         error: errorMessage,
       },
     }))
-  } catch {
-    // Ignore debug-logging failures while reporting telemetry sink errors.
-  }
+  } catch {}
 }
 
 function isTelemetryEnabled(
@@ -242,11 +240,11 @@ export function emitTelemetryEvent(event: {
     return
   }
 
-  const at = typeof event.at === 'number' ? event.at : Date.now()
+  const eventTimestamp = typeof event.at === 'number' ? event.at : Date.now()
   const mergedTags = mergeTags(context?.tags, event.tags)
   const telemetryEvent: TelemetryEvent = {
     name: event.name,
-    at,
+    at: eventTimestamp,
     tags: mergedTags,
     fields: toTelemetryFields(event.fields),
   }

@@ -15,14 +15,16 @@ import { resolveSchemePath } from '../utils/path.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
 const getProjectMock = vi.fn()
-const readDirectoryMock =
-  vi.fn<
-    (
+const readDirectoryMock = vi.fn<
+  (path: string) => Promise<
+    Array<{
+      name: string
       path: string
-    ) => Promise<
-      Array<{ name: string; path: string; isDirectory: boolean; isFile: boolean }>
-    >
-  >()
+      isDirectory: boolean
+      isFile: boolean
+    }>
+  >
+>()
 const readFileMock = vi.fn<(path: string) => Promise<string>>()
 const fileExistsMock = vi.fn<(path: string) => Promise<boolean>>()
 const getFileExportsMock = vi.fn<(filePath: string) => Promise<unknown>>()
@@ -221,7 +223,9 @@ describe('prewarmRenounRpcServerCache', () => {
       ].sort()
     )
 
-    expect(getOutlineRangesMock.mock.calls.map((call) => call[0]).sort()).toEqual(
+    expect(
+      getOutlineRangesMock.mock.calls.map((call) => call[0]).sort()
+    ).toEqual(
       [
         '/repo/direct/index.ts',
         '/repo/object/main.mts',
@@ -271,7 +275,9 @@ describe('prewarmRenounRpcServerCache', () => {
       { overwrite: true }
     )
 
-    readDirectoryMock.mockResolvedValue([createMockFileEntry('/repo/posts/index.ts')])
+    readDirectoryMock.mockResolvedValue([
+      createMockFileEntry('/repo/posts/index.ts'),
+    ])
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
 
     await prewarmRenounRpcServerCache!({ projectOptions: tokenProjectOptions })
@@ -313,9 +319,9 @@ describe('prewarmRenounRpcServerCache', () => {
       return []
     })
 
-    await expect(prewarmRenounRpcServerCache!({ projectOptions })).resolves.toBe(
-      undefined
-    )
+    await expect(
+      prewarmRenounRpcServerCache!({ projectOptions })
+    ).resolves.toBe(undefined)
     expect(getFileExportsMock).toHaveBeenCalledWith(
       '/repo/working/index.ts',
       projectOptions
@@ -353,9 +359,9 @@ describe('prewarmRenounRpcServerCache', () => {
       }
     })
 
-    await expect(prewarmRenounRpcServerCache!({ projectOptions })).resolves.toBe(
-      undefined
-    )
+    await expect(
+      prewarmRenounRpcServerCache!({ projectOptions })
+    ).resolves.toBe(undefined)
     expect(getFileExportsMock).toHaveBeenCalledWith(
       '/repo/failing/index.ts',
       projectOptions
@@ -401,9 +407,7 @@ describe('prewarmRenounRpcServerCache', () => {
           isDirectory: boolean
           isFile: boolean
         }>
-      >([
-        ['/repo/known', [createMockFileEntry('/repo/known/index.ts')]],
-      ])
+      >([['/repo/known', [createMockFileEntry('/repo/known/index.ts')]]])
 
       return entriesByPath.get(directoryPath) ?? []
     })
@@ -467,10 +471,7 @@ describe('prewarmRenounRpcServerCache', () => {
           isFile: boolean
         }>
       >([
-        [
-          '/repo/src/app',
-          [createMockFileEntry('/repo/src/app/page.tsx')],
-        ],
+        ['/repo/src/app', [createMockFileEntry('/repo/src/app/page.tsx')]],
         [
           '/repo/src/app/api',
           [createMockFileEntry('/repo/src/app/api/route.ts')],

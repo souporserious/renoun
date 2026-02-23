@@ -1,9 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import {
-  createProjectFileCache,
-  invalidateProjectFileCache,
-} from './cache.ts'
+import { createProjectFileCache, invalidateProjectFileCache } from './cache.ts'
 import { getProject, invalidateProjectCachesByPath } from './get-project.ts'
 import type { Project } from '../utils/ts-morph.ts'
 
@@ -168,25 +165,44 @@ describe('project file cache', () => {
       let betaCalls = 0
       let gammaCalls = 0
 
-      await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
-        alphaCalls += 1
-        return `alpha-${alphaCalls}`
-      })
-      await createProjectFileCache(project, '/project/src/beta.ts', 'beta', () => {
-        betaCalls += 1
-        return `beta-${betaCalls}`
-      })
+      await createProjectFileCache(
+        project,
+        '/project/src/alpha.ts',
+        'alpha',
+        () => {
+          alphaCalls += 1
+          return `alpha-${alphaCalls}`
+        }
+      )
+      await createProjectFileCache(
+        project,
+        '/project/src/beta.ts',
+        'beta',
+        () => {
+          betaCalls += 1
+          return `beta-${betaCalls}`
+        }
+      )
 
-      // Touch alpha so beta becomes the least-recently-used entry.
-      await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
-        alphaCalls += 1
-        return `alpha-${alphaCalls}`
-      })
+      await createProjectFileCache(
+        project,
+        '/project/src/alpha.ts',
+        'alpha',
+        () => {
+          alphaCalls += 1
+          return `alpha-${alphaCalls}`
+        }
+      )
 
-      await createProjectFileCache(project, '/project/src/gamma.ts', 'gamma', () => {
-        gammaCalls += 1
-        return `gamma-${gammaCalls}`
-      })
+      await createProjectFileCache(
+        project,
+        '/project/src/gamma.ts',
+        'gamma',
+        () => {
+          gammaCalls += 1
+          return `gamma-${gammaCalls}`
+        }
+      )
 
       const alphaAfter = await createProjectFileCache(
         project,
@@ -228,18 +244,33 @@ describe('project file cache', () => {
     let secondCalls = 0
     let metadataCalls = 0
 
-    await createProjectFileCache(project, '/project/src/index.ts', 'fileExportsText', () => {
-      firstCalls += 1
-      return `exports-${firstCalls}`
-    })
-    await createProjectFileCache(project, '/project/src/index.ts', 'fileMetadata', () => {
-      metadataCalls += 1
-      return `metadata-${metadataCalls}`
-    })
-    await createProjectFileCache(project, '/project/src/other.ts', 'fileExportsText', () => {
-      secondCalls += 1
-      return `exports-${secondCalls}`
-    })
+    await createProjectFileCache(
+      project,
+      '/project/src/index.ts',
+      'fileExportsText',
+      () => {
+        firstCalls += 1
+        return `exports-${firstCalls}`
+      }
+    )
+    await createProjectFileCache(
+      project,
+      '/project/src/index.ts',
+      'fileMetadata',
+      () => {
+        metadataCalls += 1
+        return `metadata-${metadataCalls}`
+      }
+    )
+    await createProjectFileCache(
+      project,
+      '/project/src/other.ts',
+      'fileExportsText',
+      () => {
+        secondCalls += 1
+        return `exports-${secondCalls}`
+      }
+    )
 
     expect(firstCalls).toBe(1)
     expect(metadataCalls).toBe(1)
@@ -247,18 +278,33 @@ describe('project file cache', () => {
 
     invalidateProjectFileCache(project, undefined, 'fileExportsText')
 
-    await createProjectFileCache(project, '/project/src/index.ts', 'fileMetadata', () => {
-      metadataCalls += 1
-      return `metadata-${metadataCalls}`
-    })
-    await createProjectFileCache(project, '/project/src/index.ts', 'fileExportsText', () => {
-      firstCalls += 1
-      return `exports-${firstCalls}`
-    })
-    await createProjectFileCache(project, '/project/src/other.ts', 'fileExportsText', () => {
-      secondCalls += 1
-      return `exports-${secondCalls}`
-    })
+    await createProjectFileCache(
+      project,
+      '/project/src/index.ts',
+      'fileMetadata',
+      () => {
+        metadataCalls += 1
+        return `metadata-${metadataCalls}`
+      }
+    )
+    await createProjectFileCache(
+      project,
+      '/project/src/index.ts',
+      'fileExportsText',
+      () => {
+        firstCalls += 1
+        return `exports-${firstCalls}`
+      }
+    )
+    await createProjectFileCache(
+      project,
+      '/project/src/other.ts',
+      'fileExportsText',
+      () => {
+        secondCalls += 1
+        return `exports-${secondCalls}`
+      }
+    )
 
     expect(firstCalls).toBe(2)
     expect(secondCalls).toBe(2)
@@ -279,7 +325,6 @@ describe('project file cache', () => {
       }
     )
 
-    // File-path invalidation must not remove cache entries by namespace.
     invalidateProjectFileCache(project, 'fileExportsText')
 
     const value = await createProjectFileCache(
@@ -1002,5 +1047,4 @@ describe('project file cache', () => {
 
     expect(firstValueAgain).toBe('value-from-project-a')
   })
-
 })

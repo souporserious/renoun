@@ -351,9 +351,7 @@ export class Workspace {
             if (packageJson?.name) {
               workspaceName = packageJson.name
             }
-          } catch {
-            // fall back to default workspace name on read/parse errors
-          }
+          } catch {}
         }
 
         const workspaceSlug = createSlug(workspaceName, 'kebab')
@@ -414,8 +412,6 @@ export class Workspace {
         continue
       }
 
-      // Record the missing-path probe so cache entries invalidate when a
-      // lockfile appears later in the workspace root.
       dependencyPaths.add(this.#resolveWorkspacePath(filename, true))
     }
 
@@ -428,9 +424,7 @@ export class Workspace {
       if (modifiedMs !== undefined) {
         return `mtime:${String(modifiedMs)}`
       }
-    } catch {
-      // Fall back to content and existence checks.
-    }
+    } catch {}
 
     if (!safeFileExistsSync(this.#fileSystem, path)) {
       return 'missing'
@@ -450,16 +444,17 @@ export class Workspace {
       if (modifiedMs !== undefined) {
         return `mtime:${String(modifiedMs)}`
       }
-    } catch {
-      // Fall back to directory listing signatures when metadata is unavailable.
-    }
+    } catch {}
 
     if (!safeFileExistsSync(this.#fileSystem, path)) {
       return 'missing'
     }
 
     const listingEntries = safeReadDirectory(this.#fileSystem, path)
-      .map((entry) => `${entry.isDirectory ? 'd' : entry.isFile ? 'f' : 'o'}:${entry.name}`)
+      .map(
+        (entry) =>
+          `${entry.isDirectory ? 'd' : entry.isFile ? 'f' : 'o'}:${entry.name}`
+      )
       .sort((first, second) => first.localeCompare(second))
 
     return `listing:${hashString(stableStringify(listingEntries))}:${listingEntries.length}`
@@ -474,14 +469,16 @@ export class Workspace {
       ...resolution.packageManifestPaths,
       ...this.#getPackageManagerDependencyPaths(),
     ])
-    const directoryDependencyPaths = new Set<string>(resolution.scannedDirectories)
-
-    const sortedFileDependencyPaths = Array.from(fileDependencyPaths).sort((a, b) =>
-      normalizeCachePath(a).localeCompare(normalizeCachePath(b))
+    const directoryDependencyPaths = new Set<string>(
+      resolution.scannedDirectories
     )
-    const sortedDirectoryDependencyPaths = Array.from(directoryDependencyPaths).sort(
+
+    const sortedFileDependencyPaths = Array.from(fileDependencyPaths).sort(
       (a, b) => normalizeCachePath(a).localeCompare(normalizeCachePath(b))
     )
+    const sortedDirectoryDependencyPaths = Array.from(
+      directoryDependencyPaths
+    ).sort((a, b) => normalizeCachePath(a).localeCompare(normalizeCachePath(b)))
 
     for (const dependencyPath of sortedFileDependencyPaths) {
       dependencySignatures.set(
@@ -572,7 +569,9 @@ export class Workspace {
       this.#workspacePackageResolutionCache = {
         resolution,
         dependencySignatures:
-          this.#createWorkspacePackageResolutionDependencySignatures(resolution),
+          this.#createWorkspacePackageResolutionDependencySignatures(
+            resolution
+          ),
       }
       return resolution
     }

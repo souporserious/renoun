@@ -172,10 +172,9 @@ class TokenAwareNodeFileSystem extends NestedCwdNodeFileSystem {
     changedPaths: readonly string[] | null
   ): void {
     const normalizedRootPath = normalizePathKey(rootPath)
-    const changedPathsByToken = this.#changedPathsByToken.get(normalizedRootPath) ?? new Map<
-      string,
-      readonly string[] | null
-    >()
+    const changedPathsByToken =
+      this.#changedPathsByToken.get(normalizedRootPath) ??
+      new Map<string, readonly string[] | null>()
     changedPathsByToken.set(previousToken, changedPaths)
     this.#changedPathsByToken.set(normalizedRootPath, changedPathsByToken)
   }
@@ -237,12 +236,10 @@ function createShortTtlComputeSlotPersistence(
     computeSlotTtlMs: slotTtlMs,
     acquireComputeSlot: (nodeKey, owner) =>
       sqlitePersistence.acquireComputeSlot(nodeKey, owner, slotTtlMs),
-    getComputeSlotOwner: sqlitePersistence.getComputeSlotOwner.bind(
-      sqlitePersistence
-    ),
-    releaseComputeSlot: sqlitePersistence.releaseComputeSlot.bind(
-      sqlitePersistence
-    ),
+    getComputeSlotOwner:
+      sqlitePersistence.getComputeSlotOwner.bind(sqlitePersistence),
+    releaseComputeSlot:
+      sqlitePersistence.releaseComputeSlot.bind(sqlitePersistence),
   }
 
   if (options.withHeartbeat) {
@@ -258,7 +255,10 @@ function createTempNodeFileSystem(tmpDirectory: string) {
   if (!existsSync(tsConfigPath)) {
     writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
   }
-  const fileSystem = new NestedCwdNodeFileSystem(getRootDirectory(), tsConfigPath)
+  const fileSystem = new NestedCwdNodeFileSystem(
+    getRootDirectory(),
+    tsConfigPath
+  )
   ;(fileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
   return fileSystem
 }
@@ -639,9 +639,9 @@ describe('file-system cache integration', () => {
       })
 
       const session = guidesDirectory.getSession()
-      const guidesSnapshotKey = Array.from(session.directorySnapshots.keys()).find(
-        (key) => key.startsWith(`dir:${normalizePathKey('guides')}|`)
-      )
+      const guidesSnapshotKey = Array.from(
+        session.directorySnapshots.keys()
+      ).find((key) => key.startsWith(`dir:${normalizePathKey('guides')}|`))
       const apiSnapshotKey = Array.from(session.directorySnapshots.keys()).find(
         (key) => key.startsWith(`dir:${normalizePathKey('api')}|`)
       )
@@ -658,17 +658,16 @@ describe('file-system cache integration', () => {
       await guidesDirectory.getEntries({
         includeIndexAndReadmeFiles: true,
       })
-      const rebuildGuidesCalls = readDirectorySpy.mock.calls.slice(callsBeforeRebuild)
-      const rebuildGuidePaths = rebuildGuidesCalls.map(([path]) =>
-        String(path)
-      )
+      const rebuildGuidesCalls =
+        readDirectorySpy.mock.calls.slice(callsBeforeRebuild)
+      const rebuildGuidePaths = rebuildGuidesCalls.map(([path]) => String(path))
 
       expect(
         rebuildGuidePaths.some((path) => isGuidesDirectoryPath(path))
       ).toBe(true)
-      expect(
-        rebuildGuidePaths.every((path) => !isApiDirectoryPath(path))
-      ).toBe(true)
+      expect(rebuildGuidePaths.every((path) => !isApiDirectoryPath(path))).toBe(
+        true
+      )
       expect(session.directorySnapshots.has(guidesSnapshotKey!)).toBe(true)
 
       session.invalidatePath('guides/guide.ts')
@@ -678,7 +677,9 @@ describe('file-system cache integration', () => {
       await apiDirectory.getEntries({
         includeIndexAndReadmeFiles: true,
       })
-      expect(readDirectorySpy.mock.calls.slice(callsBeforeApiGet).length).toBe(0)
+      expect(readDirectorySpy.mock.calls.slice(callsBeforeApiGet).length).toBe(
+        0
+      )
 
       readDirectorySpy.mockRestore()
     } finally {
@@ -969,8 +970,8 @@ export type Metadata = Value`,
       ).toBe(false)
 
       const session = directory.getSession()
-      const snapshotKey = Array.from(session.directorySnapshots.keys()).find((key) =>
-        key.startsWith('dir:.|')
+      const snapshotKey = Array.from(session.directorySnapshots.keys()).find(
+        (key) => key.startsWith('dir:.|')
       )
       expect(snapshotKey).toBeDefined()
 
@@ -982,10 +983,14 @@ export type Metadata = Value`,
         : []
 
       expect(
-        dependencyKeys.some((key) => key.startsWith('file:') && key.endsWith('visible.ts'))
+        dependencyKeys.some(
+          (key) => key.startsWith('file:') && key.endsWith('visible.ts')
+        )
       ).toBe(true)
       expect(
-        dependencyKeys.some((key) => key.startsWith('file:') && key.endsWith('ignored.ts'))
+        dependencyKeys.some(
+          (key) => key.startsWith('file:') && key.endsWith('ignored.ts')
+        )
       ).toBe(false)
     } finally {
       gitIgnoreSpy.mockRestore()
@@ -1026,8 +1031,8 @@ export type Metadata = Value`,
       ).toBe(true)
 
       const session = directory.getSession()
-      const snapshotKey = Array.from(session.directorySnapshots.keys()).find((key) =>
-        key.startsWith(`dir:${normalizePathKey('docs')}|`)
+      const snapshotKey = Array.from(session.directorySnapshots.keys()).find(
+        (key) => key.startsWith(`dir:${normalizePathKey('docs')}|`)
       )
       expect(snapshotKey).toBeDefined()
 
@@ -1052,7 +1057,9 @@ export type Metadata = Value`,
         includeIndexAndReadmeFiles: true,
       })
       expect(
-        secondEntries.some((entry) => entry.workspacePath.endsWith('ignored.ts'))
+        secondEntries.some((entry) =>
+          entry.workspacePath.endsWith('ignored.ts')
+        )
       ).toBe(false)
     } finally {
       if (previousNodeEnv === undefined) {
@@ -1236,7 +1243,9 @@ export type Metadata = Value`,
       exportMetadataCalls = 0
       workspaceChangeTokenCalls = 0
 
-      override async getWorkspaceChangeToken(rootPath: string): Promise<string> {
+      override async getWorkspaceChangeToken(
+        rootPath: string
+      ): Promise<string> {
         this.workspaceChangeTokenCalls += 1
         return `token:${normalizePathKey(rootPath)}`
       }
@@ -1267,9 +1276,7 @@ export type Metadata = Value`,
     const firstExportCommitDate = await valueExport.getLastCommitDate()
     const firstWorkspaceCommitDate = await directory.getLastCommitDate()
 
-    expect(firstFileCommitDate?.toISOString()).toBe(
-      '2024-01-01T00:00:00.000Z'
-    )
+    expect(firstFileCommitDate?.toISOString()).toBe('2024-01-01T00:00:00.000Z')
     expect(firstExportCommitDate?.toISOString()).toBe(
       '2024-01-01T00:00:00.000Z'
     )
@@ -1314,9 +1321,7 @@ export type Metadata = Value`,
     const secondExportCommitDate = await valueExport.getLastCommitDate()
     const secondWorkspaceCommitDate = await directory.getLastCommitDate()
 
-    expect(secondFileCommitDate?.toISOString()).toBe(
-      '2024-02-01T00:00:00.000Z'
-    )
+    expect(secondFileCommitDate?.toISOString()).toBe('2024-02-01T00:00:00.000Z')
     expect(secondExportCommitDate?.toISOString()).toBe(
       '2024-02-01T00:00:00.000Z'
     )
@@ -1324,7 +1329,9 @@ export type Metadata = Value`,
       '2024-02-01T00:00:00.000Z'
     )
     expect(fileSystem.fileMetadataCalls).toBeGreaterThan(priorFileMetadataCalls)
-    expect(fileSystem.exportMetadataCalls).toBeGreaterThan(priorExportMetadataCalls)
+    expect(fileSystem.exportMetadataCalls).toBeGreaterThan(
+      priorExportMetadataCalls
+    )
   })
 
   test('invalidates cached markdown sections on NodeFileSystem when files change', async () => {
@@ -1441,7 +1448,6 @@ updated content`
 
     await new Promise((resolve) => setTimeout(resolve, 275))
 
-    // Keep metadata unchanged (same mtime and byte length) while changing content.
     await fileSystem.writeFile('index.ts', 'export const value = 2')
     fileSystem.setLastModified(filePath, fixedModifiedAt)
 
@@ -1866,7 +1872,11 @@ updated content`
     store.dispose()
 
     await expect(
-      store.getOrCompute('test:disposed', { persist: false }, async () => 'next')
+      store.getOrCompute(
+        'test:disposed',
+        { persist: false },
+        async () => 'next'
+      )
     ).rejects.toThrow(/disposed/i)
     expect(() => store.getSync('test:disposed')).toThrow(/disposed/i)
   })
@@ -1929,7 +1939,9 @@ updated content`
 
     expect(parentSession.inflight.has('token')).toBe(false)
     expect(childSession.inflight.has('token')).toBe(false)
-    expect(await unrelatedSession.inflight.get('token')).toBe(await unrelatedToken)
+    expect(await unrelatedSession.inflight.get('token')).toBe(
+      await unrelatedToken
+    )
   })
 
   test('does not reset unrelated :g-suffixed sessions that are not in the same explicit family', async () => {
@@ -2306,15 +2318,9 @@ describe('cache replacement semantics', () => {
       })
     }
 
-    const firstCompute = replaceWithGetOrCompute(
-      'first',
-      firstGate.promise
-    )
+    const firstCompute = replaceWithGetOrCompute('first', firstGate.promise)
     await Promise.resolve()
-    const secondCompute = replaceWithGetOrCompute(
-      'second',
-      secondGate.promise
-    )
+    const secondCompute = replaceWithGetOrCompute('second', secondGate.promise)
     await Promise.resolve()
     firstGate.resolve()
     secondGate.resolve()
@@ -2510,10 +2516,11 @@ describe('session cache persistence policy', () => {
       expect(firstToken).toBe(secondToken)
       expect(tokenLookup).toHaveBeenCalledTimes(1)
 
-      const firstChangedPaths = await session.getWorkspaceChangedPathsSinceToken(
-        'docs',
-        'outdated-token'
-      )
+      const firstChangedPaths =
+        await session.getWorkspaceChangedPathsSinceToken(
+          'docs',
+          'outdated-token'
+        )
       const secondChangedPaths =
         await session.getWorkspaceChangedPathsSinceToken(
           'docs',
@@ -2572,7 +2579,10 @@ describe('sqlite cache persistence', () => {
       expect(isValidElement(firstSections[0]!.jsx as any)).toBe(true)
 
       const secondWorkerDirectory = createWorkerDirectory()
-      const secondWorkerFile = await secondWorkerDirectory.getFile('page', 'mdx')
+      const secondWorkerFile = await secondWorkerDirectory.getFile(
+        'page',
+        'mdx'
+      )
       const secondSections = await secondWorkerFile.getSections()
 
       expect(secondSections).toHaveLength(1)
@@ -2598,11 +2608,7 @@ describe('sqlite cache persistence', () => {
         '# Getting Started',
         'utf8'
       )
-      writeFileSync(
-        join(docsDirectory, 'index.mdx'),
-        '# Home',
-        'utf8'
-      )
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
 
       const firstWorkerDirectory = new Directory({
         fileSystem: createTempNodeFileSystem(tmpDirectory),
@@ -2647,7 +2653,11 @@ describe('sqlite cache persistence', () => {
       const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
 
       mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
-      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
       writeFileSync(
         join(docsDirectory, 'guides', 'advanced', 'getting-started.mdx'),
         '# Getting Started',
@@ -2666,7 +2676,9 @@ describe('sqlite cache persistence', () => {
       })
 
       const firstSession = firstWorkerDirectory.getSession()
-      const firstSnapshotKey = Array.from(firstSession.directorySnapshots.keys())[0]
+      const firstSnapshotKey = Array.from(
+        firstSession.directorySnapshots.keys()
+      )[0]
       expect(firstSnapshotKey).toBeDefined()
 
       const persistedSnapshot = await firstSession.cache.get(firstSnapshotKey!)
@@ -2695,7 +2707,10 @@ describe('sqlite cache persistence', () => {
       ).toBe(true)
 
       const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
-      const secondReadDirectory = vi.spyOn(secondWorkerFilesystem, 'readDirectory')
+      const secondReadDirectory = vi.spyOn(
+        secondWorkerFilesystem,
+        'readDirectory'
+      )
       const secondWorkerDirectory = new Directory({
         fileSystem: secondWorkerFilesystem,
         path: workspaceDirectory,
@@ -2721,7 +2736,11 @@ describe('sqlite cache persistence', () => {
       const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
 
       mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
-      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
       writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
       writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
 
@@ -2800,7 +2819,11 @@ describe('sqlite cache persistence', () => {
       const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
 
       mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
-      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
       writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
       writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
 
@@ -2865,9 +2888,11 @@ describe('sqlite cache persistence', () => {
         vi.spyOn(fileSystem, 'getWorkspaceChangeToken').mockResolvedValue(
           stableToken
         )
-        vi.spyOn(fileSystem, 'getWorkspaceChangedPathsSinceToken').mockImplementation(
-          async (_rootPath, previousToken) =>
-            previousToken === stableToken ? [] : null
+        vi.spyOn(
+          fileSystem,
+          'getWorkspaceChangedPathsSinceToken'
+        ).mockImplementation(async (_rootPath, previousToken) =>
+          previousToken === stableToken ? [] : null
         )
         vi.spyOn(fileSystem, 'isFilePathGitIgnored').mockImplementation(
           (filePath) => normalizePathKey(filePath).endsWith('docs/ignored.ts')
@@ -2910,7 +2935,9 @@ describe('sqlite cache persistence', () => {
       })
 
       expect(
-        secondEntries.some((entry) => entry.workspacePath.endsWith('ignored.ts'))
+        secondEntries.some((entry) =>
+          entry.workspacePath.endsWith('ignored.ts')
+        )
       ).toBe(true)
       expect(secondStatLookup.mock.calls.length).toBeGreaterThan(0)
     })
@@ -2984,14 +3011,21 @@ describe('sqlite cache persistence', () => {
     process.env.NODE_ENV = 'production'
 
     try {
-    await withProductionSqliteCache(async (tmpDirectory) => {
-      const docsDirectory = join(tmpDirectory, 'docs')
-      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
-      const guidesDirectoryPath = join(workspaceDirectory, 'guides')
-      const validEntryPath = join(guidesDirectoryPath, 'index.mdx')
-      const validEntryAbsolutePath = join(docsDirectory, 'guides', 'index.mdx')
-      const guideWorkspacePathKey = normalizePathKey(guidesDirectoryPath)
-      const validSnapshotPathKey = normalizePathKey(validEntryPath)
+      await withProductionSqliteCache(async (tmpDirectory) => {
+        const docsDirectory = join(tmpDirectory, 'docs')
+        const workspaceDirectory = relativePath(
+          getRootDirectory(),
+          docsDirectory
+        )
+        const guidesDirectoryPath = join(workspaceDirectory, 'guides')
+        const validEntryPath = join(guidesDirectoryPath, 'index.mdx')
+        const validEntryAbsolutePath = join(
+          docsDirectory,
+          'guides',
+          'index.mdx'
+        )
+        const guideWorkspacePathKey = normalizePathKey(guidesDirectoryPath)
+        const validSnapshotPathKey = normalizePathKey(validEntryPath)
 
         mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
         writeFileSync(validEntryAbsolutePath, '# Guide', 'utf8')
@@ -3008,9 +3042,9 @@ describe('sqlite cache persistence', () => {
         })
 
         const firstSession = firstDirectory.getSession()
-        const snapshotKey = Array.from(firstSession.directorySnapshots.keys()).find(
-          (key) => key.startsWith(`dir:${guideWorkspacePathKey}|`)
-        )
+        const snapshotKey = Array.from(
+          firstSession.directorySnapshots.keys()
+        ).find((key) => key.startsWith(`dir:${guideWorkspacePathKey}|`))
         expect(snapshotKey).toBeDefined()
 
         const corruptedSnapshot = {
@@ -3080,15 +3114,20 @@ describe('sqlite cache persistence', () => {
             recursive: true,
             includeIndexAndReadmeFiles: true,
           })
-          const cacheKeysAfterFirstRead =
-            await secondDirectory.getSession().cache.listNodeKeysByPrefix('dir:')
+          const cacheKeysAfterFirstRead = await secondDirectory
+            .getSession()
+            .cache.listNodeKeysByPrefix('dir:')
 
           expect(
-            secondEntries.some((entry) => entry.workspacePath.endsWith('index.mdx'))
+            secondEntries.some((entry) =>
+              entry.workspacePath.endsWith('index.mdx')
+            )
           ).toBe(true)
           expect(secondReadDirectory).toHaveBeenCalledTimes(0)
           expect(warnSpy).toHaveBeenCalledTimes(0)
-          expect(await secondDirectory.getSession().cache.get(snapshotKey!)).toBeDefined()
+          expect(
+            await secondDirectory.getSession().cache.get(snapshotKey!)
+          ).toBeDefined()
           expect(cacheKeysAfterFirstRead).toContain(snapshotKey!)
 
           const retryEntries = await secondDirectory.getEntries({
@@ -3138,14 +3177,18 @@ describe('sqlite cache persistence', () => {
       })
 
       const firstSession = firstDirectory.getSession()
-      const docsWorkspacePathKey = normalizePathKey(firstDirectory.workspacePath)
-      const snapshotKey = Array.from(firstSession.directorySnapshots.keys()).find(
-        (key) => key.startsWith(`dir:${docsWorkspacePathKey}|`)
+      const docsWorkspacePathKey = normalizePathKey(
+        firstDirectory.workspacePath
       )
+      const snapshotKey = Array.from(
+        firstSession.directorySnapshots.keys()
+      ).find((key) => key.startsWith(`dir:${docsWorkspacePathKey}|`))
 
       expect(snapshotKey).toBeDefined()
 
-      const persistedSnapshot = (await firstSession.cache.get(snapshotKey!)) as {
+      const persistedSnapshot = (await firstSession.cache.get(
+        snapshotKey!
+      )) as {
         path?: unknown
       }
       expect(persistedSnapshot.path).toBe(docsWorkspacePathKey)
@@ -3242,9 +3285,8 @@ describe('sqlite cache persistence', () => {
         recursive: true,
         includeIndexAndReadmeFiles: true,
       })
-      const previousToken = await firstFileSystem.getWorkspaceChangeToken(
-        workspaceDirectory
-      )
+      const previousToken =
+        await firstFileSystem.getWorkspaceChangeToken(workspaceDirectory)
 
       writeFileSync(
         join(docsDirectory, 'guides', 'new.mdx'),
@@ -3262,7 +3304,10 @@ describe('sqlite cache persistence', () => {
         previousToken,
         [
           normalizePathKey(
-            relativePath(getRootDirectory(), join(docsDirectory, 'guides', 'new.mdx'))
+            relativePath(
+              getRootDirectory(),
+              join(docsDirectory, 'guides', 'new.mdx')
+            )
           ),
         ]
       )
@@ -3289,12 +3334,19 @@ describe('sqlite cache persistence', () => {
       const docsDirectory = join(tmpDirectory, 'docs')
       const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
       const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
-      const workspaceRelativeRoot = relativePath(getRootDirectory(), tmpDirectory)
+      const workspaceRelativeRoot = relativePath(
+        getRootDirectory(),
+        tmpDirectory
+      )
       const examplesFileName = 'button.examples.tsx'
       const examplesRelativePath = `${workspaceRelativeRoot}/docs/${examplesFileName}`
 
       mkdirSync(docsDirectory, { recursive: true })
-      writeFileSync(join(docsDirectory, 'index.tsx'), 'export const value = true', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'index.tsx'),
+        'export const value = true',
+        'utf8'
+      )
       writeFileSync(
         join(docsDirectory, examplesFileName),
         'export const sample = true',
@@ -3340,7 +3392,9 @@ describe('sqlite cache persistence', () => {
       await new Promise((resolve) => setTimeout(resolve, 300))
 
       const secondEntries = await getVisibleEntries()
-      expect(secondEntries).not.toContain(normalizePathKey(examplesRelativePath))
+      expect(secondEntries).not.toContain(
+        normalizePathKey(examplesRelativePath)
+      )
 
       writeFileSync(
         tsConfigPath,
@@ -3372,7 +3426,11 @@ describe('sqlite cache persistence', () => {
       const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
 
       mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
-      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
       writeFileSync(
         join(docsDirectory, 'guides', 'advanced', 'getting-started.mdx'),
         '# Getting Started',
@@ -3449,7 +3507,11 @@ describe('sqlite cache persistence', () => {
       const workspacePathKey = normalizePathKey(workspaceDirectory)
 
       mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
-      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
       writeFileSync(
         join(docsDirectory, 'guides', 'advanced', 'deep-dive.mdx'),
         '# Deep Dive',
@@ -3468,10 +3530,11 @@ describe('sqlite cache persistence', () => {
       })
 
       const session = directory.getSession()
-      const rootSnapshotKey = Array.from(session.directorySnapshots.keys()).find((key) =>
-        key.startsWith(`dir:${workspacePathKey}|`)
-      )
-      const persistedSnapshotKeys = await session.cache.listNodeKeysByPrefix('dir:')
+      const rootSnapshotKey = Array.from(
+        session.directorySnapshots.keys()
+      ).find((key) => key.startsWith(`dir:${workspacePathKey}|`))
+      const persistedSnapshotKeys =
+        await session.cache.listNodeKeysByPrefix('dir:')
 
       expect(rootSnapshotKey).toBeDefined()
       expect(persistedSnapshotKeys).toEqual([rootSnapshotKey])
@@ -3499,7 +3562,10 @@ describe('sqlite cache persistence', () => {
 
       const firstWorkerFileSystem = createTempNodeFileSystem(tmpDirectory)
       const secondWorkerFileSystem = createTempNodeFileSystem(tmpDirectory)
-      const firstReadDirectory = vi.spyOn(firstWorkerFileSystem, 'readDirectory')
+      const firstReadDirectory = vi.spyOn(
+        firstWorkerFileSystem,
+        'readDirectory'
+      )
       const secondReadDirectory = vi.spyOn(
         secondWorkerFileSystem,
         'readDirectory'
@@ -3524,7 +3590,8 @@ describe('sqlite cache persistence', () => {
       ])
 
       const totalDirectoryReads =
-        firstReadDirectory.mock.calls.length + secondReadDirectory.mock.calls.length
+        firstReadDirectory.mock.calls.length +
+        secondReadDirectory.mock.calls.length
       expect(totalDirectoryReads).toBe(1)
     })
   })
@@ -3536,7 +3603,10 @@ describe('sqlite cache persistence', () => {
     try {
       await withProductionSqliteCache(async (tmpDirectory) => {
         const docsDirectory = join(tmpDirectory, 'docs')
-        const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+        const workspaceDirectory = relativePath(
+          getRootDirectory(),
+          docsDirectory
+        )
 
         mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
         const childPath = join(docsDirectory, 'guides', 'intro.mdx')
@@ -3601,9 +3671,7 @@ describe('sqlite cache persistence', () => {
       const firstSession = firstWorkerDirectory.getSession()
       const snapshotKeys = Array.from(firstSession.directorySnapshots.keys())
       expect(snapshotKeys.length).toBe(1)
-      expect(
-        await firstSession.cache.get(snapshotKeys[0]!)
-      ).toBeUndefined()
+      expect(await firstSession.cache.get(snapshotKeys[0]!)).toBeUndefined()
 
       const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
       const secondReadDirectory = vi.spyOn(
@@ -3699,7 +3767,11 @@ describe('sqlite cache persistence', () => {
       const targetFile = join(docsDirectory, 'notes.md')
 
       mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
-      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
       writeFileSync(targetFile, 'note', 'utf8')
 
       const firstWorkerDirectory = new Directory({
@@ -3719,7 +3791,7 @@ describe('sqlite cache persistence', () => {
       firstSession.invalidatePath(targetFile)
 
       for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (await firstSession.cache.get(snapshotKey!) === undefined) {
+        if ((await firstSession.cache.get(snapshotKey!)) === undefined) {
           break
         }
         await new Promise((resolve) => setTimeout(resolve, 25))
@@ -3752,8 +3824,16 @@ describe('sqlite cache persistence', () => {
 
       mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
       mkdirSync(join(docsDirectory, 'api'), { recursive: true })
-      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
-      writeFileSync(join(docsDirectory, 'api', 'reference.mdx'), '# Reference', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
+      writeFileSync(
+        join(docsDirectory, 'api', 'reference.mdx'),
+        '# Reference',
+        'utf8'
+      )
 
       const fileSystem = createTempNodeFileSystem(tmpDirectory)
       const guidesDirectory = new Directory({
@@ -3791,7 +3871,7 @@ describe('sqlite cache persistence', () => {
       session.invalidatePath(join(docsDirectory, 'guides', 'intro.mdx'))
 
       for (let attempt = 0; attempt < 20; attempt += 1) {
-        if (await session.cache.get(guidesSnapshotKey!) === undefined) {
+        if ((await session.cache.get(guidesSnapshotKey!)) === undefined) {
           break
         }
         await new Promise((resolve) => setTimeout(resolve, 25))
@@ -3806,13 +3886,21 @@ describe('sqlite cache persistence', () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
       const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
-      const affectedSnapshotPathKey = normalizePathKey(join(workspaceDirectory, 'guides'))
-      const unrelatedSnapshotPathKey = normalizePathKey(join(workspaceDirectory, 'api'))
+      const affectedSnapshotPathKey = normalizePathKey(
+        join(workspaceDirectory, 'guides')
+      )
+      const unrelatedSnapshotPathKey = normalizePathKey(
+        join(workspaceDirectory, 'api')
+      )
 
       mkdirSync(docsDirectory, { recursive: true })
       mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
       mkdirSync(join(docsDirectory, 'api'), { recursive: true })
-      writeFileSync(join(docsDirectory, 'guides', 'index.mdx'), '# Guides', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'guides', 'index.mdx'),
+        '# Guides',
+        'utf8'
+      )
       writeFileSync(join(docsDirectory, 'api', 'index.mdx'), '# API', 'utf8')
 
       const directory = new Directory({
@@ -3825,41 +3913,48 @@ describe('sqlite cache persistence', () => {
 
       const session = directory.getSession()
       const affectedSnapshotKey = `dir:${affectedSnapshotPathKey}|fallback-affected`
-      const unaffectedSnapshotKey =
-        `dir:${unrelatedSnapshotPathKey}|fallback-unrelated`
+      const unaffectedSnapshotKey = `dir:${unrelatedSnapshotPathKey}|fallback-unrelated`
       const nonDirectoryFallbackKey = 'analysis:fallback-metadata-missing'
 
-      await session.cache.put(affectedSnapshotKey, {
-        version: 1,
-        path: affectedSnapshotPathKey,
-        hasVisibleDescendant: false,
-        shouldIncludeSelf: false,
-        lastValidatedAt: Date.now(),
-        filterSignature: 'filter:none',
-        sortSignature: 'sort:none',
-        dependencySignatures: [],
-        entries: [],
-        flatEntries: [],
-      }, {
-        persist: true,
-        deps: [],
-      })
+      await session.cache.put(
+        affectedSnapshotKey,
+        {
+          version: 1,
+          path: affectedSnapshotPathKey,
+          hasVisibleDescendant: false,
+          shouldIncludeSelf: false,
+          lastValidatedAt: Date.now(),
+          filterSignature: 'filter:none',
+          sortSignature: 'sort:none',
+          dependencySignatures: [],
+          entries: [],
+          flatEntries: [],
+        },
+        {
+          persist: true,
+          deps: [],
+        }
+      )
 
-      await session.cache.put(unaffectedSnapshotKey, {
-        version: 1,
-        path: unrelatedSnapshotPathKey,
-        hasVisibleDescendant: false,
-        shouldIncludeSelf: false,
-        lastValidatedAt: Date.now(),
-        filterSignature: 'filter:none',
-        sortSignature: 'sort:none',
-        dependencySignatures: [],
-        entries: [],
-        flatEntries: [],
-      }, {
-        persist: true,
-        deps: [],
-      })
+      await session.cache.put(
+        unaffectedSnapshotKey,
+        {
+          version: 1,
+          path: unrelatedSnapshotPathKey,
+          hasVisibleDescendant: false,
+          shouldIncludeSelf: false,
+          lastValidatedAt: Date.now(),
+          filterSignature: 'filter:none',
+          sortSignature: 'sort:none',
+          dependencySignatures: [],
+          entries: [],
+          flatEntries: [],
+        },
+        {
+          persist: true,
+          deps: [],
+        }
+      )
       await session.cache.put(
         nonDirectoryFallbackKey,
         {
@@ -4232,29 +4327,27 @@ export type Metadata = Value`,
               ],
             } as any,
             typeParameters: [],
-            } as any,
+          } as any,
           dependencies: [],
         } as ResolvedTypeAtLocationResult
       }
 
       try {
-        typeResolverSpy.mockImplementation(
-          async function (
-            this: NodeFileSystem,
-            filePath: string,
-            _position: number,
-            _kind: number,
-            _filter?: unknown
-          ): Promise<ResolvedTypeAtLocationResult> {
-            const dependencyPath = resolvePath(dirname(filePath), 'b.ts')
-            const dependencyContent = await this.readFile(dependencyPath)
-            const dependencyResult = resolveTypeForDependency(dependencyContent)
-            return {
-              ...dependencyResult,
-              dependencies: [dependencyPath],
-            }
+        typeResolverSpy.mockImplementation(async function (
+          this: NodeFileSystem,
+          filePath: string,
+          _position: number,
+          _kind: number,
+          _filter?: unknown
+        ): Promise<ResolvedTypeAtLocationResult> {
+          const dependencyPath = resolvePath(dirname(filePath), 'b.ts')
+          const dependencyContent = await this.readFile(dependencyPath)
+          const dependencyResult = resolveTypeForDependency(dependencyContent)
+          return {
+            ...dependencyResult,
+            dependencies: [dependencyPath],
           }
-        )
+        })
 
         const firstWorkerDirectory = new Directory({
           fileSystem: createWorkerFileSystem(),
@@ -4787,14 +4880,19 @@ export type Metadata = Value`,
   })
 
   test('throttles repeated persisted read touches to reduce sqlite write churn', async () => {
-    const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-touch-throttle-'))
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-touch-throttle-')
+    )
 
     try {
       const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
       const fileSystem = new InMemoryFileSystem({
         'index.ts': 'export const value = 1',
       })
-      const snapshot = new FileSystemSnapshot(fileSystem, 'sqlite-touch-throttle')
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-touch-throttle'
+      )
       const persistence = new SqliteCacheStorePersistence({ dbPath })
       const nodeKey = 'test:touch-throttle'
 
@@ -5053,8 +5151,12 @@ export type Metadata = Value`,
 
       expect(directPath).toBe(aliasedPath)
 
-      const realPersistence = getCacheStorePersistence({ projectRoot: realRoot })
-      const aliasPersistence = getCacheStorePersistence({ projectRoot: aliasRoot })
+      const realPersistence = getCacheStorePersistence({
+        projectRoot: realRoot,
+      })
+      const aliasPersistence = getCacheStorePersistence({
+        projectRoot: aliasRoot,
+      })
 
       expect(aliasPersistence).toBe(realPersistence)
     } finally {
@@ -5101,9 +5203,7 @@ export type Metadata = Value`,
         .run(nodeKey, 'stale-reader', staleAt - 1_000, staleAt)
 
       const rowsBefore = sqliteDb
-        .prepare(
-          `SELECT node_key FROM cache_inflight WHERE node_key = ?`
-        )
+        .prepare(`SELECT node_key FROM cache_inflight WHERE node_key = ?`)
         .all(nodeKey) as Array<{ node_key?: string }>
       sqliteDb.close()
 
@@ -5113,9 +5213,7 @@ export type Metadata = Value`,
 
       const verifiedDb = new DatabaseSync(dbPath)
       const rowsAfter = verifiedDb
-        .prepare(
-          `SELECT node_key FROM cache_inflight WHERE node_key = ?`
-        )
+        .prepare(`SELECT node_key FROM cache_inflight WHERE node_key = ?`)
         .all(nodeKey) as Array<{ node_key?: string }>
       verifiedDb.close()
 
@@ -5145,11 +5243,9 @@ export type Metadata = Value`,
 
       const unserializableValue = { value: Symbol('not-serializable') }
 
-      await store.put(
-        'test:unserializable',
-        unserializableValue,
-        { persist: true }
-      )
+      await store.put('test:unserializable', unserializableValue, {
+        persist: true,
+      })
       await store.put('test:serializable', { value: 1 }, { persist: true })
 
       const memoryValue = await store.get<typeof unserializableValue>(
@@ -5228,7 +5324,9 @@ export type Metadata = Value`,
       expect(strippedSymbolicValue).toBeUndefined()
       expect(serializableValue).toEqual({ value: 1 })
       expect(await persistence.load('test:stripped-react')).toBeUndefined()
-      expect(await persistence.load('test:stripped-react-symbolic')).toBeUndefined()
+      expect(
+        await persistence.load('test:stripped-react-symbolic')
+      ).toBeUndefined()
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
@@ -5548,7 +5646,10 @@ export type Metadata = Value`,
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
     })
-    const snapshot = new FileSystemSnapshot(fileSystem, 'persistence-delete-race')
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'persistence-delete-race'
+    )
     const nodeKey = 'test:persistence-delete-race'
     const saveStarted = createDeferredPromise()
     const allowSaveFailure = createDeferredPromise()
@@ -5724,7 +5825,6 @@ export type Metadata = Value`,
 
       await new Promise((resolve) => setTimeout(resolve, 5))
 
-      // Load "a" from a different store so sqlite access-time bookkeeping is exercised.
       await readerStore.get('test:lru:a')
       await writerStore.put(
         'test:lru:c',
@@ -5879,7 +5979,9 @@ export type Metadata = Value`,
         { value: 'stale' },
         {
           persist: true,
-          deps: [{ depKey: 'const:prune-transaction-race:stale', depVersion: '1' }],
+          deps: [
+            { depKey: 'const:prune-transaction-race:stale', depVersion: '1' },
+          ],
         }
       )
 
@@ -5944,7 +6046,12 @@ export type Metadata = Value`,
           { value: 'trigger' },
           {
             persist: true,
-            deps: [{ depKey: 'const:prune-transaction-race:trigger', depVersion: '1' }],
+            deps: [
+              {
+                depKey: 'const:prune-transaction-race:trigger',
+                depVersion: '1',
+              },
+            ],
           }
         )
       } finally {
@@ -6041,7 +6148,10 @@ export type Metadata = Value`,
       const fileSystem = new InMemoryFileSystem({
         'index.ts': 'export const value = 1',
       })
-      const snapshot = new FileSystemSnapshot(fileSystem, 'sqlite-prune-concurrent')
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-prune-concurrent'
+      )
       const persistence = new SqliteCacheStorePersistence({
         dbPath,
         maxRows: 2,
@@ -6053,15 +6163,19 @@ export type Metadata = Value`,
       await Promise.all(
         Array.from({ length: 20 }, (_, index) => {
           const writer = index % 2 === 0 ? writerOne : writerTwo
-          return writer.put(`test:prune-concurrent:${index}`, { index }, {
-            persist: true,
-            deps: [
-              {
-                depKey: `const:prune-concurrent:${index}`,
-                depVersion: String(index),
-              },
-            ],
-          })
+          return writer.put(
+            `test:prune-concurrent:${index}`,
+            { index },
+            {
+              persist: true,
+              deps: [
+                {
+                  depKey: `const:prune-concurrent:${index}`,
+                  depVersion: String(index),
+                },
+              ],
+            }
+          )
         })
       )
 
@@ -6403,9 +6517,9 @@ export type Metadata = Value`,
       expect(thirdRevision).toBe(3)
 
       const persistedAfter = await sqlitePersistence.load(nodeKey)
-      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBe(
-        thirdRevision
-      )
+      expect(
+        (persistedAfter as { revision?: number } | undefined)?.revision
+      ).toBe(thirdRevision)
       expect(persistedAfter?.value).toEqual({ value: 'third' })
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
@@ -6421,16 +6535,23 @@ export type Metadata = Value`,
       const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
       const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
       const nodeKey = 'test:sqlite-guarded-write'
-      const baselineDeps = [{ depKey: 'const:guarded:baseline', depVersion: '1' }]
-      const baselineRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
-        value: { value: 'baseline' },
-        deps: baselineDeps,
-        fingerprint: createFingerprint(baselineDeps),
-        persist: true,
-        updatedAt: Date.now(),
-      })
+      const baselineDeps = [
+        { depKey: 'const:guarded:baseline', depVersion: '1' },
+      ]
+      const baselineRevision = await sqlitePersistence.saveWithRevision(
+        nodeKey,
+        {
+          value: { value: 'baseline' },
+          deps: baselineDeps,
+          fingerprint: createFingerprint(baselineDeps),
+          persist: true,
+          updatedAt: Date.now(),
+        }
+      )
 
-      const candidateDeps = [{ depKey: 'const:guarded:candidate', depVersion: '1' }]
+      const candidateDeps = [
+        { depKey: 'const:guarded:candidate', depVersion: '1' },
+      ]
       const candidateEntry: CacheEntry = {
         value: { value: 'candidate' },
         deps: candidateDeps,
@@ -6439,25 +6560,27 @@ export type Metadata = Value`,
         updatedAt: Date.now() + 1,
       }
 
-      const missingPreconditionResult = await sqlitePersistence.saveWithRevisionGuarded(
-        nodeKey,
-        candidateEntry,
-        {
-          expectedRevision: 'missing',
-        }
-      )
+      const missingPreconditionResult =
+        await sqlitePersistence.saveWithRevisionGuarded(
+          nodeKey,
+          candidateEntry,
+          {
+            expectedRevision: 'missing',
+          }
+        )
       expect(missingPreconditionResult).toEqual({
         applied: false,
         revision: baselineRevision,
       })
 
-      const staleRevisionResult = await sqlitePersistence.saveWithRevisionGuarded(
-        nodeKey,
-        candidateEntry,
-        {
-          expectedRevision: baselineRevision - 1,
-        }
-      )
+      const staleRevisionResult =
+        await sqlitePersistence.saveWithRevisionGuarded(
+          nodeKey,
+          candidateEntry,
+          {
+            expectedRevision: baselineRevision - 1,
+          }
+        )
       expect(staleRevisionResult).toEqual({
         applied: false,
         revision: baselineRevision,
@@ -6465,9 +6588,9 @@ export type Metadata = Value`,
 
       const persistedAfter = await sqlitePersistence.load(nodeKey)
       expect(persistedAfter?.value).toEqual({ value: 'baseline' })
-      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBe(
-        baselineRevision
-      )
+      expect(
+        (persistedAfter as { revision?: number } | undefined)?.revision
+      ).toBe(baselineRevision)
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
@@ -6484,7 +6607,9 @@ export type Metadata = Value`,
     type PersistedEntry = CacheEntry<{ value: string }> & { revision: number }
     const persistedEntries = new Map<string, PersistedEntry>()
     const nodeKey = 'test:sqlite-refresh-guarded-precondition'
-    const baselineDeps = [{ depKey: 'const:refresh-guarded:baseline', depVersion: '1' }]
+    const baselineDeps = [
+      { depKey: 'const:refresh-guarded:baseline', depVersion: '1' },
+    ]
     persistedEntries.set(nodeKey, {
       value: { value: 'baseline' },
       deps: baselineDeps,
@@ -6616,13 +6741,16 @@ export type Metadata = Value`,
       const baselineDeps = [
         { depKey: 'const:sqlite-guarded-reconcile:baseline', depVersion: '1' },
       ]
-      const baselineRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
-        value: { value: 'baseline' },
-        deps: baselineDeps,
-        fingerprint: createFingerprint(baselineDeps),
-        persist: true,
-        updatedAt: Date.now(),
-      })
+      const baselineRevision = await sqlitePersistence.saveWithRevision(
+        nodeKey,
+        {
+          value: { value: 'baseline' },
+          deps: baselineDeps,
+          fingerprint: createFingerprint(baselineDeps),
+          persist: true,
+          updatedAt: Date.now(),
+        }
+      )
 
       const winnerDeps = [
         { depKey: 'const:sqlite-guarded-reconcile:winner', depVersion: '1' },
@@ -6632,7 +6760,8 @@ export type Metadata = Value`,
         load: sqlitePersistence.load.bind(sqlitePersistence),
         delete: sqlitePersistence.delete.bind(sqlitePersistence),
         save: sqlitePersistence.save.bind(sqlitePersistence),
-        saveWithRevision: sqlitePersistence.saveWithRevision.bind(sqlitePersistence),
+        saveWithRevision:
+          sqlitePersistence.saveWithRevision.bind(sqlitePersistence),
         saveWithRevisionGuarded: async (candidateNodeKey, entry, options) => {
           if (!injectedConcurrentWrite) {
             injectedConcurrentWrite = true
@@ -6671,9 +6800,9 @@ export type Metadata = Value`,
       const memoryAfter = await store.get(nodeKey)
       const persistedAfter = await sqlitePersistence.load(nodeKey)
 
-      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBe(
-        baselineRevision + 1
-      )
+      expect(
+        (persistedAfter as { revision?: number } | undefined)?.revision
+      ).toBe(baselineRevision + 1)
       expect(persistedAfter?.value).toEqual({ value: 'winner' })
       expect(memoryAfter).toEqual({ value: 'winner' })
     } finally {
@@ -6697,7 +6826,9 @@ export type Metadata = Value`,
       )
       const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
       const nodeKey = 'test:sqlite-save-supersede'
-      const staleDeps = [{ depKey: 'const:sqlite-save-supersede:stale', depVersion: '1' }]
+      const staleDeps = [
+        { depKey: 'const:sqlite-save-supersede:stale', depVersion: '1' },
+      ]
       const staleRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
         value: { value: 'baseline' },
         deps: staleDeps,
@@ -6706,7 +6837,9 @@ export type Metadata = Value`,
         updatedAt: Date.now(),
       })
 
-      const bumpDeps = [{ depKey: 'const:sqlite-save-supersede:bump', depVersion: '1' }]
+      const bumpDeps = [
+        { depKey: 'const:sqlite-save-supersede:bump', depVersion: '1' },
+      ]
       const bumpedRevision = await sqlitePersistence.saveWithRevision(nodeKey, {
         value: { value: 'bumped' },
         deps: bumpDeps,
@@ -6724,7 +6857,9 @@ export type Metadata = Value`,
       ]
       let concurrentRevision: number | undefined
       let localRevision: number | undefined
-      const localDeps = [{ depKey: 'const:sqlite-save-supersede:local', depVersion: '1' }]
+      const localDeps = [
+        { depKey: 'const:sqlite-save-supersede:local', depVersion: '1' },
+      ]
       const racingPersistence: CacheStorePersistence = {
         load: sqlitePersistence.load.bind(sqlitePersistence),
         delete: sqlitePersistence.delete.bind(sqlitePersistence),
@@ -6773,13 +6908,13 @@ export type Metadata = Value`,
       const persistedAfter = await sqlitePersistence.load(nodeKey)
       const memoryAfter = await store.get(nodeKey)
 
-      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBe(
-        concurrentRevision
-      )
+      expect(
+        (persistedAfter as { revision?: number } | undefined)?.revision
+      ).toBe(concurrentRevision)
       expect(concurrentRevision).toBeGreaterThan(staleRevision)
-      expect((persistedAfter as { revision?: number } | undefined)?.revision).toBeGreaterThan(
-        bumpedRevision
-      )
+      expect(
+        (persistedAfter as { revision?: number } | undefined)?.revision
+      ).toBeGreaterThan(bumpedRevision)
       expect(localRevision).toBeGreaterThan(bumpedRevision)
       expect(concurrentRevision).toBeGreaterThan(localRevision)
       expect(persistedAfter?.value).toEqual({ value: 'concurrent' })
@@ -6822,12 +6957,10 @@ export type Metadata = Value`,
 
           return sqlitePersistence.acquireComputeSlot(nodeKey, owner)
         },
-        getComputeSlotOwner: sqlitePersistence.getComputeSlotOwner.bind(
-          sqlitePersistence
-        ),
-        releaseComputeSlot: sqlitePersistence.releaseComputeSlot.bind(
-          sqlitePersistence
-        ),
+        getComputeSlotOwner:
+          sqlitePersistence.getComputeSlotOwner.bind(sqlitePersistence),
+        releaseComputeSlot:
+          sqlitePersistence.releaseComputeSlot.bind(sqlitePersistence),
       }
 
       const firstStore = new CacheStore({ snapshot, persistence })
@@ -6900,12 +7033,10 @@ export type Metadata = Value`,
 
           return sqlitePersistence.acquireComputeSlot(nodeKey, owner)
         },
-        getComputeSlotOwner: sqlitePersistence.getComputeSlotOwner.bind(
-          sqlitePersistence
-        ),
-        releaseComputeSlot: sqlitePersistence.releaseComputeSlot.bind(
-          sqlitePersistence
-        ),
+        getComputeSlotOwner:
+          sqlitePersistence.getComputeSlotOwner.bind(sqlitePersistence),
+        releaseComputeSlot:
+          sqlitePersistence.releaseComputeSlot.bind(sqlitePersistence),
       }
 
       const firstStore = new CacheStore({ snapshot, persistence })
@@ -6973,12 +7104,10 @@ export type Metadata = Value`,
         acquireComputeSlot: async () => {
           throw persistError
         },
-        getComputeSlotOwner: sqlitePersistence.getComputeSlotOwner.bind(
-          sqlitePersistence
-        ),
-        releaseComputeSlot: sqlitePersistence.releaseComputeSlot.bind(
-          sqlitePersistence
-        ),
+        getComputeSlotOwner:
+          sqlitePersistence.getComputeSlotOwner.bind(sqlitePersistence),
+        releaseComputeSlot:
+          sqlitePersistence.releaseComputeSlot.bind(sqlitePersistence),
       }
 
       const store = new CacheStore({ snapshot, persistence })
@@ -7239,40 +7368,50 @@ export type Metadata = Value`,
         'src/componentsXbutton/index.ts'
       )
 
-      await store.put(affectedNodeKey, { value: 'affected' }, {
-        persist: true,
-        deps: [
-          {
-            depKey: 'file:src/components_button/index.ts',
-            depVersion: affectedDepVersion,
-          },
-        ],
-      })
-      await store.put(unaffectedNodeKey, { value: 'unaffected' }, {
-        persist: true,
-        deps: [
-          {
-            depKey: 'file:src/componentsXbutton/index.ts',
-            depVersion: unaffectedDepVersion,
-          },
-        ],
-      })
+      await store.put(
+        affectedNodeKey,
+        { value: 'affected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/components_button/index.ts',
+              depVersion: affectedDepVersion,
+            },
+          ],
+        }
+      )
+      await store.put(
+        unaffectedNodeKey,
+        { value: 'unaffected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/componentsXbutton/index.ts',
+              depVersion: unaffectedDepVersion,
+            },
+          ],
+        }
+      )
 
       const prefixMatches = await store.listNodeKeysByPrefix(
         'dir:src/components_button|'
       )
       expect(prefixMatches).toEqual([affectedNodeKey])
 
-      const eviction = await store.deleteByDependencyPath('src/components_button')
+      const eviction = await store.deleteByDependencyPath(
+        'src/components_button'
+      )
       expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
       expect(eviction.deletedNodeKeys).not.toContain(unaffectedNodeKey)
 
       expect(
         await store.get<{ value: string }>(affectedNodeKey)
       ).toBeUndefined()
-      expect(
-        await store.get<{ value: string }>(unaffectedNodeKey)
-      ).toEqual({ value: 'unaffected' })
+      expect(await store.get<{ value: string }>(unaffectedNodeKey)).toEqual({
+        value: 'unaffected',
+      })
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
@@ -7296,27 +7435,38 @@ export type Metadata = Value`,
     const unaffectedNodeKey = 'analysis:other'
 
     try {
-      const affectedDepVersion = await snapshot.contentId('src/components/button.ts')
-      const unaffectedDepVersion = await snapshot.contentId('src/other/value.ts')
+      const affectedDepVersion = await snapshot.contentId(
+        'src/components/button.ts'
+      )
+      const unaffectedDepVersion =
+        await snapshot.contentId('src/other/value.ts')
 
-      await store.put(affectedNodeKey, { value: 'affected' }, {
-        persist: true,
-        deps: [
-          {
-            depKey: 'file:src/components/button.ts',
-            depVersion: affectedDepVersion,
-          },
-        ],
-      })
-      await store.put(unaffectedNodeKey, { value: 'unaffected' }, {
-        persist: true,
-        deps: [
-          {
-            depKey: 'file:src/other/value.ts',
-            depVersion: unaffectedDepVersion,
-          },
-        ],
-      })
+      await store.put(
+        affectedNodeKey,
+        { value: 'affected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/components/button.ts',
+              depVersion: affectedDepVersion,
+            },
+          ],
+        }
+      )
+      await store.put(
+        unaffectedNodeKey,
+        { value: 'unaffected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/other/value.ts',
+              depVersion: unaffectedDepVersion,
+            },
+          ],
+        }
+      )
 
       const eviction = await store.deleteByDependencyPath('src/components')
       expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
@@ -7382,15 +7532,19 @@ export type Metadata = Value`,
     try {
       const depVersion = await snapshot.contentId('src/components/button.ts')
 
-      await store.put(nodeKey, { value: 'before-eviction' }, {
-        persist: true,
-        deps: [
-          {
-            depKey: 'file:src/components/button.ts',
-            depVersion,
-          },
-        ],
-      })
+      await store.put(
+        nodeKey,
+        { value: 'before-eviction' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/components/button.ts',
+              depVersion,
+            },
+          ],
+        }
+      )
 
       const persistedBeforeEviction = await persistence.load(nodeKey)
       expect(persistedBeforeEviction?.persist).toBe(true)
@@ -7402,15 +7556,19 @@ export type Metadata = Value`,
       expect(eviction.deletedNodeKeys).toContain(nodeKey)
       expect(await persistence.load(nodeKey)).toBeUndefined()
 
-      await store.put(nodeKey, { value: 'after-eviction' }, {
-        persist: true,
-        deps: [
-          {
-            depKey: 'file:src/components/button.ts',
-            depVersion,
-          },
-        ],
-      })
+      await store.put(
+        nodeKey,
+        { value: 'after-eviction' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/components/button.ts',
+              depVersion,
+            },
+          ],
+        }
+      )
 
       const persistedAfterEviction = await persistence.load(nodeKey)
       expect(persistedAfterEviction?.persist).toBe(true)
@@ -7442,28 +7600,39 @@ export type Metadata = Value`,
       '/Users/example/project/src/components/button.ts'
 
     try {
-      const unaffectedDepVersion = await snapshot.contentId('src/other/value.ts')
+      const unaffectedDepVersion =
+        await snapshot.contentId('src/other/value.ts')
 
-      await store.put(affectedNodeKey, { value: 'affected' }, {
-        persist: true,
-        deps: [
-          {
-            depKey: `file:${absoluteDependencyPath}`,
-            depVersion: 'missing',
-          },
-        ],
-      })
-      await store.put(unaffectedNodeKey, { value: 'unaffected' }, {
-        persist: true,
-        deps: [
-          {
-            depKey: 'file:src/other/value.ts',
-            depVersion: unaffectedDepVersion,
-          },
-        ],
-      })
+      await store.put(
+        affectedNodeKey,
+        { value: 'affected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: `file:${absoluteDependencyPath}`,
+              depVersion: 'missing',
+            },
+          ],
+        }
+      )
+      await store.put(
+        unaffectedNodeKey,
+        { value: 'unaffected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/other/value.ts',
+              depVersion: unaffectedDepVersion,
+            },
+          ],
+        }
+      )
 
-      const eviction = await store.deleteByDependencyPath(absoluteDependencyPath)
+      const eviction = await store.deleteByDependencyPath(
+        absoluteDependencyPath
+      )
       expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
       expect(eviction.deletedNodeKeys).not.toContain(unaffectedNodeKey)
 
@@ -7535,7 +7704,10 @@ export type Metadata = Value`,
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
     })
-    const snapshot = new FileSystemSnapshot(fileSystem, 'persistence-verification-no-entry')
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'persistence-verification-no-entry'
+    )
     const persistedEntries = new Map<string, CacheEntry<{ value: number }>>()
     const persistence = {
       load: vi.fn(async (nodeKey) => persistedEntries.get(nodeKey)),
@@ -7655,31 +7827,34 @@ export type Metadata = Value`,
         return { ...current }
       }),
       save: vi.fn(async (lookupNodeKey: string, entry: CacheEntry) => {
-        const existingRevision = persistedEntries.get(lookupNodeKey)?.revision ?? 0
+        const existingRevision =
+          persistedEntries.get(lookupNodeKey)?.revision ?? 0
         persistedEntries.set(lookupNodeKey, {
           ...entry,
           revision: existingRevision,
         } as PersistedEntry)
       }),
-      saveWithRevision: vi.fn(async (lookupNodeKey: string, entry: CacheEntry) => {
-        nextRevision += 1
-        const writtenRevision = nextRevision
-        persistedEntries.set(lookupNodeKey, {
-          ...entry,
-          revision: writtenRevision,
-        } as PersistedEntry)
-        if (entry.value && shouldInjectSupersedingWinner) {
-          shouldInjectSupersedingWinner = false
+      saveWithRevision: vi.fn(
+        async (lookupNodeKey: string, entry: CacheEntry) => {
           nextRevision += 1
+          const writtenRevision = nextRevision
           persistedEntries.set(lookupNodeKey, {
-            ...(entry as CacheEntry<{ value: number }>),
-            value: { value: 2 },
-            updatedAt: entry.updatedAt + 100,
-            revision: nextRevision,
-          })
+            ...entry,
+            revision: writtenRevision,
+          } as PersistedEntry)
+          if (entry.value && shouldInjectSupersedingWinner) {
+            shouldInjectSupersedingWinner = false
+            nextRevision += 1
+            persistedEntries.set(lookupNodeKey, {
+              ...(entry as CacheEntry<{ value: number }>),
+              value: { value: 2 },
+              updatedAt: entry.updatedAt + 100,
+              revision: nextRevision,
+            })
+          }
+          return writtenRevision
         }
-        return writtenRevision
-      }),
+      ),
       delete: vi.fn(async (lookupNodeKey: string) => {
         persistedEntries.delete(lookupNodeKey)
       }),
@@ -7706,7 +7881,9 @@ export type Metadata = Value`,
     expect(persistence.load).toHaveBeenCalled()
     expect(persistedEntries.get(nodeKey)).toMatchObject({
       value: { value: 2 },
-      deps: [{ depKey: 'const:persistence-fingerprint-match', depVersion: '1' }],
+      deps: [
+        { depKey: 'const:persistence-fingerprint-match', depVersion: '1' },
+      ],
       fingerprint: createFingerprint([
         { depKey: 'const:persistence-fingerprint-match', depVersion: '1' },
       ]),
@@ -7781,15 +7958,25 @@ export type Metadata = Value`,
         }
       )
 
-      const secondResult = await store.get('test:persistence-verification-fallback-revisionless')
+      const secondResult = await store.get(
+        'test:persistence-verification-fallback-revisionless'
+      )
 
       expect(firstResult).toEqual({ value: 1 })
       expect(secondResult).toEqual({ value: 2 })
       expect(computeCount).toBe(1)
-      expect(persistedEntries.get('test:persistence-verification-fallback-revisionless')?.value).toEqual({
+      expect(
+        persistedEntries.get(
+          'test:persistence-verification-fallback-revisionless'
+        )?.value
+      ).toEqual({
         value: 2,
       })
-      expect(persistedEntries.get('test:persistence-verification-fallback-revisionless')).toMatchObject({
+      expect(
+        persistedEntries.get(
+          'test:persistence-verification-fallback-revisionless'
+        )
+      ).toMatchObject({
         value: { value: 2 },
         deps: [
           {

@@ -198,7 +198,6 @@ export async function getTokens({
       }
 
       try {
-        // Validate language/filePath pairing to prevent syntax highlighting issues
         if (filePath && language !== 'plaintext') {
           validateLanguageFileCompatibility(language, filePath)
         }
@@ -246,21 +245,27 @@ export async function getTokens({
           typeof themeConfig === 'string'
             ? [themeConfig]
             : themeConfig
-              ? (Object.values(themeConfig) as Array<string | [string, any]>).map(
-                  (themeVariant) =>
-                    typeof themeVariant === 'string'
-                      ? themeVariant
-                      : themeVariant[0]
+              ? (
+                  Object.values(themeConfig) as Array<string | [string, any]>
+                ).map((themeVariant) =>
+                  typeof themeVariant === 'string'
+                    ? themeVariant
+                    : themeVariant[0]
                 )
               : []
 
-        // Fallback to the built-in default theme when none is configured
         if (themeNames.length === 0) {
           themeNames = ['default']
         }
 
         const tsMetadataPromise = isTypeScriptFile
-          ? metadataCollector(project, filePath, jsxOnly, allowErrors, showErrors)
+          ? metadataCollector(
+              project,
+              filePath,
+              jsxOnly,
+              allowErrors,
+              showErrors
+            )
           : Promise.resolve<TypeScriptMetadata>({
               sourceFile: undefined,
               diagnostics: [],
@@ -300,7 +305,6 @@ export async function getTokens({
         const quickInfoCache = new Map<string, QuickInfoEntry>()
         let previousTokenStart = 0
         let parsedTokens: Token[][] = tokens.map((line) => {
-          // increment position for line breaks if the line is empty
           if (line.length === 0) {
             previousTokenStart += 1
           }
@@ -310,7 +314,6 @@ export async function getTokens({
             const tokenEnd = tokenStart + baseToken.value.length
             const lastToken = tokenIndex === line.length - 1
 
-            // account for newlines
             previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
 
             const initialToken: Token = {
@@ -325,7 +328,6 @@ export async function getTokens({
               style: baseToken.style,
             }
 
-            // Split this token further if it intersects symbol ranges
             let processedTokens: Tokens = []
 
             if (symbolMetadata.length) {
@@ -341,7 +343,10 @@ export async function getTokens({
               }
 
               if (symbol && !inFullRange) {
-                processedTokens = splitTokenByRanges(initialToken, symbolMetadata)
+                processedTokens = splitTokenByRanges(
+                  initialToken,
+                  symbolMetadata
+                )
               } else {
                 processedTokens.push({
                   ...initialToken,
@@ -369,7 +374,9 @@ export async function getTokens({
                 })
                 .map((diagnostic) => ({
                   code: diagnostic.getCode(),
-                  message: getDiagnosticMessageText(diagnostic.getMessageText()),
+                  message: getDiagnosticMessageText(
+                    diagnostic.getMessageText()
+                  ),
                 }))
               const quickInfo =
                 sourceFile && filePath
@@ -392,7 +399,6 @@ export async function getTokens({
           })
         })
 
-        // Remove leading imports and whitespace for jsx only code blocks
         if (jsxOnly) {
           const firstJsxLineIndex = parsedTokens.findIndex((line) =>
             line.find((token) => token.value === '<')
@@ -415,7 +421,6 @@ export async function getTokens({
           )
         }
 
-        // Log summary statistics for performance monitoring
         const totalTokens = parsedTokens.reduce(
           (sum: number, line: Token[]) => sum + line.length,
           0

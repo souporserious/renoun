@@ -97,8 +97,11 @@ function parsePrewarmWorkerErrorMessage(message: PrewarmWorkerMessage): string {
   return 'Prewarm worker reported an error'
 }
 
-function parsePrewarmWorkerPriority(message: PrewarmWorkerMessage): number | undefined {
-  return typeof message.priority === 'number' && Number.isFinite(message.priority)
+function parsePrewarmWorkerPriority(
+  message: PrewarmWorkerMessage
+): number | undefined {
+  return typeof message.priority === 'number' &&
+    Number.isFinite(message.priority)
     ? message.priority
     : undefined
 }
@@ -267,14 +270,17 @@ function startPrewarmRequest(request: PrewarmRequest): void {
             },
           }))
         } else {
-          getDebugLogger().warn('Renoun RPC cache prewarm worker exited', () => ({
-            data: {
-              code,
-              signal,
-              durationMs: Date.now() - startedAt,
-              execution: 'worker',
-            },
-          }))
+          getDebugLogger().warn(
+            'Renoun RPC cache prewarm worker exited',
+            () => ({
+              data: {
+                code,
+                signal,
+                durationMs: Date.now() - startedAt,
+                execution: 'worker',
+              },
+            })
+          )
         }
       }
 

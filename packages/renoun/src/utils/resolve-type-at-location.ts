@@ -75,7 +75,8 @@ export async function resolveTypeAtLocationWithDependencies(
           dependencies
         )
 
-        const duration = Math.round((performance.now() - startedAt) * 1000) / 1000
+        const duration =
+          Math.round((performance.now() - startedAt) * 1000) / 1000
         getDebugLogger().logTypeResolution(
           filePath,
           position,

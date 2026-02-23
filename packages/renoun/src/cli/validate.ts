@@ -1177,7 +1177,10 @@ async function fetchLiveWithRetry(
   init: RequestInit = {},
   options: { maxAttempts?: number } = {}
 ): Promise<Response> {
-  const maxAttempts = Math.max(1, options.maxAttempts ?? LIVE_FETCH_MAX_ATTEMPTS)
+  const maxAttempts = Math.max(
+    1,
+    options.maxAttempts ?? LIVE_FETCH_MAX_ATTEMPTS
+  )
   const method = String(init.method ?? 'GET').toUpperCase()
 
   return retry(

@@ -24,7 +24,8 @@ async function getRuntimeAnalysisFileSystem(): Promise<
   if (!runtimeAnalysisFileSystemPromise) {
     runtimeAnalysisFileSystemPromise = (async () => {
       try {
-        const { NodeFileSystem } = await import('../file-system/NodeFileSystem.ts')
+        const { NodeFileSystem } =
+          await import('../file-system/NodeFileSystem.ts')
         return new NodeFileSystem() satisfies RuntimeAnalysisFileSystem
       } catch {
         return null
