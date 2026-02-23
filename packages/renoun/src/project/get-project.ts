@@ -66,6 +66,7 @@ export function getProject(options?: ProjectOptions) {
     const previousProjectId = inMemoryProjectIds.get(projectId)
 
     if (useInMemoryFileSystem && previousProjectId !== inMemoryProjectId) {
+      invalidateProjectFileCache(existingProject)
       for (const sourceFile of existingProject.getSourceFiles()) {
         if (!sourceFile.isFromExternalLibrary()) {
           existingProject.removeSourceFile(sourceFile)

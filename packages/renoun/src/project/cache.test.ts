@@ -951,4 +951,47 @@ describe('project file cache', () => {
     expect(calls).toBe(2)
   })
 
+  test('does not reuse in-memory project cache values across projectId changes', async () => {
+    const uniqueId = Date.now()
+    const filePath = `/virtual-project-id-${uniqueId}.ts`
+    const cacheName = `project-id-isolation-${uniqueId}`
+    const projectA = getProject({
+      useInMemoryFileSystem: true,
+      projectId: `project-a-${uniqueId}`,
+    })
+
+    projectA.createSourceFile(filePath, 'export const value = 1', {
+      overwrite: true,
+    })
+
+    const firstValue = await createProjectFileCache(
+      projectA,
+      filePath,
+      cacheName,
+      () => 'value-from-project-a'
+    )
+
+    expect(firstValue).toBe('value-from-project-a')
+
+    const projectB = getProject({
+      useInMemoryFileSystem: true,
+      projectId: `project-b-${uniqueId}`,
+    })
+
+    expect(projectB).toBe(projectA)
+
+    projectB.createSourceFile(filePath, 'export const value = 2', {
+      overwrite: true,
+    })
+
+    const secondValue = await createProjectFileCache(
+      projectB,
+      filePath,
+      cacheName,
+      () => 'value-from-project-b'
+    )
+
+    expect(secondValue).toBe('value-from-project-b')
+  })
+
 })
