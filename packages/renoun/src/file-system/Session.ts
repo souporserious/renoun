@@ -239,6 +239,8 @@ export class Session {
   readonly #cacheMetricsTopKeysLogInterval: number
   readonly #workspaceChangeTokenTtlMs: number
   readonly #workspaceChangedPathsTtlMs: number
+  readonly #workspaceChangeTokenTtlConfigured: boolean
+  readonly #workspaceChangedPathsTtlConfigured: boolean
   readonly #invalidatedPathTtlMs: number
   readonly #cacheDebugPersistence: boolean
   readonly #telemetry?: Telemetry
@@ -295,6 +297,10 @@ export class Session {
       cache?.cacheMetricsTopKeysLogInterval,
       DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL
     )
+    this.#workspaceChangeTokenTtlConfigured =
+      cache?.workspaceChangeTokenTtlMs !== undefined
+    this.#workspaceChangedPathsTtlConfigured =
+      cache?.workspaceChangedPathsTtlMs !== undefined
     this.#workspaceChangeTokenTtlMs = normalizeNonNegativeInteger(
       cache?.workspaceChangeTokenTtlMs,
       prefersPersistentCache
@@ -514,26 +520,40 @@ export class Session {
     this.#maybeEmitDirectorySnapshotMetrics()
   }
 
+  #resolveWorkspaceChangeTokenTtlMs(): number {
+    if (
+      !this.#workspaceChangeTokenTtlConfigured &&
+      !this.cache.usesPersistentCache
+    ) {
+      return DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+    }
+
+    return this.#workspaceChangeTokenTtlMs
+  }
+
+  #resolveWorkspaceChangedPathsTtlMs(): number {
+    if (
+      !this.#workspaceChangedPathsTtlConfigured &&
+      !this.cache.usesPersistentCache
+    ) {
+      return DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
+    }
+
+    return this.#workspaceChangedPathsTtlMs
+  }
+
   async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
     const tokenGetter = this.#fileSystem.getWorkspaceChangeToken
     if (typeof tokenGetter !== 'function') {
       return null
     }
 
-    if (this.#workspaceChangeTokenTtlMs <= 0) {
-      try {
-        const token = await tokenGetter.call(this.#fileSystem, rootPath)
-        return typeof token === 'string' ? token : null
-      } catch {
-        return null
-      }
-    }
-
     const normalizedRootPath = normalizeSessionPath(this.#fileSystem, rootPath)
     const now = Date.now()
+    const ttlMs = this.#resolveWorkspaceChangeTokenTtlMs()
     const cached = this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
 
-    if (cached && cached.expiresAt > now) {
+    if (ttlMs > 0 && cached && cached.expiresAt > now) {
       return cached.token
     }
 
@@ -558,10 +578,12 @@ export class Session {
 
     try {
       const token = await lookupPromise
-      this.#workspaceChangeTokenByRootPath.set(normalizedRootPath, {
-        token,
-        expiresAt: Date.now() + this.#workspaceChangeTokenTtlMs,
-      })
+      if (ttlMs > 0) {
+        this.#workspaceChangeTokenByRootPath.set(normalizedRootPath, {
+          token,
+          expiresAt: Date.now() + ttlMs,
+        })
+      }
       return token
     } finally {
       const latest =
@@ -582,44 +604,17 @@ export class Session {
       return null
     }
 
-    if (this.#workspaceChangedPathsTtlMs <= 0) {
-      try {
-        const changedPaths = await changedPathsGetter.call(
-          this.#fileSystem,
-          rootPath,
-          previousToken
-        )
-        if (!Array.isArray(changedPaths)) {
-          return null
-        }
-
-        const normalizedPaths = new Set<string>()
-        for (const changedPath of changedPaths) {
-          if (typeof changedPath !== 'string') {
-            continue
-          }
-
-          const normalizedPath = isAbsolutePath(changedPath)
-            ? normalizeSessionPath(this.#fileSystem, changedPath)
-            : normalizePathKey(changedPath)
-          normalizedPaths.add(normalizedPath)
-        }
-        return normalizedPaths
-      } catch {
-        return null
-      }
-    }
-
     const normalizedRootPath = normalizeSessionPath(this.#fileSystem, rootPath)
     const cacheKey = createWorkspaceChangedPathsCacheKey(
       normalizedRootPath,
       previousToken
     )
     const now = Date.now()
+    const ttlMs = this.#resolveWorkspaceChangedPathsTtlMs()
     this.#cleanupWorkspaceChangedPathsCache(now)
     const cached = this.#workspaceChangedPathsByToken.get(cacheKey)
 
-    if (cached && cached.expiresAt > now) {
+    if (ttlMs > 0 && cached && cached.expiresAt > now) {
       return cached.paths
     }
 
@@ -665,10 +660,12 @@ export class Session {
 
     try {
       const changedPaths = await lookupPromise
-      this.#workspaceChangedPathsByToken.set(cacheKey, {
-        paths: changedPaths,
-        expiresAt: Date.now() + this.#workspaceChangedPathsTtlMs,
-      })
+      if (ttlMs > 0) {
+        this.#workspaceChangedPathsByToken.set(cacheKey, {
+          paths: changedPaths,
+          expiresAt: Date.now() + ttlMs,
+        })
+      }
       return changedPaths
     } finally {
       const latest = this.#workspaceChangedPathsByToken.get(cacheKey)

@@ -2424,6 +2424,108 @@ describe('session cache persistence policy', () => {
       Session.reset(rootlessFileSystem)
     }
   })
+
+  test('dedupes concurrent workspace token and changed-path lookups when TTL is disabled', async () => {
+    const fileSystem = new TokenAwareNodeFileSystem(
+      getRootDirectory(),
+      join(getRootDirectory(), 'tsconfig.json'),
+      'stable-token'
+    )
+    const cache = new Cache({
+      workspaceChangeTokenTtlMs: 0,
+      workspaceChangedPathsTtlMs: 0,
+    })
+    const tokenLookup = vi
+      .spyOn(fileSystem, 'getWorkspaceChangeToken')
+      .mockImplementation(async (rootPath) => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        return `token:${normalizePathKey(rootPath)}`
+      })
+    const changedPathsLookup = vi
+      .spyOn(fileSystem, 'getWorkspaceChangedPathsSinceToken')
+      .mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        return [normalizePathKey('docs/page.ts')]
+      })
+
+    try {
+      const session = Session.for(fileSystem, undefined, cache)
+      const [firstToken, secondToken] = await Promise.all([
+        session.getWorkspaceChangeToken('docs'),
+        session.getWorkspaceChangeToken('docs'),
+      ])
+
+      const [firstChangedPaths, secondChangedPaths] = await Promise.all([
+        session.getWorkspaceChangedPathsSinceToken('docs', 'prev'),
+        session.getWorkspaceChangedPathsSinceToken('docs', 'prev'),
+      ])
+
+      expect(firstToken).toBe('token:docs')
+      expect(secondToken).toBe('token:docs')
+      expect(tokenLookup).toHaveBeenCalledTimes(1)
+      expect(Array.from(firstChangedPaths ?? [])).toEqual([
+        normalizePathKey('docs/page.ts'),
+      ])
+      expect(Array.from(secondChangedPaths ?? [])).toEqual([
+        normalizePathKey('docs/page.ts'),
+      ])
+      expect(changedPathsLookup).toHaveBeenCalledTimes(1)
+    } finally {
+      Session.reset(fileSystem)
+    }
+  })
+
+  test('falls back to in-memory workspace token defaults when persistence becomes unavailable', async () => {
+    const fileSystem = new TokenAwareNodeFileSystem(
+      getRootDirectory(),
+      join(getRootDirectory(), 'tsconfig.json'),
+      'stable-token'
+    )
+    let persistenceAvailable = true
+    const persistence: CacheStorePersistence = {
+      async load() {
+        return undefined
+      },
+      async save() {},
+      async delete() {},
+      isAvailable() {
+        return persistenceAvailable
+      },
+    }
+    const cache = new Cache({ persistence })
+    const session = Session.for(fileSystem, undefined, cache)
+
+    try {
+      persistenceAvailable = false
+      expect(session.usesPersistentCache).toBe(false)
+
+      const tokenLookup = vi.spyOn(fileSystem, 'getWorkspaceChangeToken')
+      const changedPathsLookup = vi.spyOn(
+        fileSystem,
+        'getWorkspaceChangedPathsSinceToken'
+      )
+
+      const firstToken = await session.getWorkspaceChangeToken('docs')
+      const secondToken = await session.getWorkspaceChangeToken('docs')
+      expect(firstToken).toBe(secondToken)
+      expect(tokenLookup).toHaveBeenCalledTimes(1)
+
+      const firstChangedPaths = await session.getWorkspaceChangedPathsSinceToken(
+        'docs',
+        'outdated-token'
+      )
+      const secondChangedPaths =
+        await session.getWorkspaceChangedPathsSinceToken(
+          'docs',
+          'outdated-token'
+        )
+      expect(firstChangedPaths).toBeNull()
+      expect(secondChangedPaths).toBeNull()
+      expect(changedPathsLookup).toHaveBeenCalledTimes(1)
+    } finally {
+      Session.reset(fileSystem)
+    }
+  })
 })
 
 describe('sqlite cache persistence', () => {
