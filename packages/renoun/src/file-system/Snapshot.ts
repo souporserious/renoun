@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { dirname, resolve } from 'node:path'
 
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
@@ -377,10 +378,48 @@ export class FileSystemSnapshot implements Snapshot {
 
     // Prefer workspace-relative paths for file systems like git/in-memory.
     addCandidate(normalizedPath)
+    // Resolve workspace-relative keys to an absolute path so cached dep keys
+    // remain valid even when process.cwd() differs from the workspace root.
+    addCandidate(this.#resolveWorkspaceAbsolutePath(normalizedPath))
     // Fall back to the original input path for Node-style absolute paths.
     addCandidate(path)
+    addCandidate(this.#resolveWorkspaceAbsolutePath(path))
 
     return candidates
+  }
+
+  #resolveWorkspaceAbsolutePath(path: string): string | undefined {
+    try {
+      const normalizedInputPath = normalizeSlashes(path)
+      if (!normalizedInputPath || normalizedInputPath === '.') {
+        return this.#fileSystem.getAbsolutePath('.')
+      }
+
+      if (
+        normalizedInputPath.startsWith('/') ||
+        /^[A-Za-z]:\//.test(normalizedInputPath)
+      ) {
+        return this.#fileSystem.getAbsolutePath(normalizedInputPath)
+      }
+
+      const absoluteCwdPath = this.#fileSystem.getAbsolutePath('.')
+      const relativeCwdPath = normalizePathKey(
+        this.#fileSystem.getRelativePathToWorkspace(absoluteCwdPath)
+      )
+
+      let workspaceRootPath = absoluteCwdPath
+      if (relativeCwdPath !== '.') {
+        for (const segment of relativeCwdPath.split('/')) {
+          if (segment.length > 0) {
+            workspaceRootPath = dirname(workspaceRootPath)
+          }
+        }
+      }
+
+      return resolve(workspaceRootPath, normalizedInputPath)
+    } catch {
+      return undefined
+    }
   }
 
   #emitInvalidate(path: string): void {
