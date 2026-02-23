@@ -59,6 +59,8 @@ const TOKENS_CACHE_NAME = 'tokens'
 const SOURCE_TEXT_METADATA_CACHE_NAME = 'sourceTextMetadata'
 const TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME =
   'typeScriptDependencyAnalysis'
+const TYPE_SCRIPT_DEPENDENCY_FINGERPRINT_CACHE_NAME =
+  'typeScriptDependencyFingerprint'
 const MODULE_RESOLUTION_CACHE_NAME = 'moduleResolution'
 const PACKAGE_VERSION_DEPENDENCY_CACHE_NAME = 'packageVersionDependency'
 const RUNTIME_ANALYSIS_CACHE_SCOPE = 'project-analysis-runtime'
@@ -95,6 +97,24 @@ const compilerOptionsVersionByProject = new WeakMap<
 >()
 let compilerOptionsVersionEpoch = 0
 let runtimeAnalysisInvalidationQueue: Promise<void> = Promise.resolve()
+const runtimeTypeScriptDependencyAnalysisInFlightByKey = new Map<
+  string,
+  Promise<RuntimeTypeScriptDependencyAnalysisResult | undefined>
+>()
+const runtimeTypeScriptDependencyFingerprintInFlightByKey = new Map<
+  string,
+  Promise<RuntimeTypeScriptDependencyFingerprintResult | undefined>
+>()
+const runtimeTypeScriptDependencySidecarHydrationInFlightByKey = new Map<
+  string,
+  Promise<void>
+>()
+const runtimeTypeScriptDependencySidecarHydrationQueue: Array<{
+  dedupeKey: string
+  run: () => Promise<void>
+}> = []
+let runtimeTypeScriptDependencySidecarHydrationActiveCount = 0
+const RUNTIME_TS_DEPENDENCY_SIDECAR_HYDRATION_CONCURRENCY = 2
 
 function getRuntimeAnalysisSWRReadOptions():
   | CacheStoreStaleWhileRevalidateOptions
@@ -106,6 +126,10 @@ function getRuntimeAnalysisSWRReadOptions():
   return {
     maxStaleAgeMs: DEFAULT_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS,
   }
+}
+
+function shouldTrackRuntimeTypeScriptDependencies(): boolean {
+  return process.env['NODE_ENV'] !== 'production'
 }
 
 async function getRuntimeAnalysisSessionUnchecked(): Promise<
@@ -256,6 +280,20 @@ interface ModuleSpecifierResolutionResult {
 interface RuntimeTypeScriptDependencyAnalysisResult {
   nodeKey: string
   dependencyFilePaths: string[]
+}
+
+interface RuntimeTypeScriptDependencyAnalysisCacheValue {
+  dependencyFilePaths: string[]
+  moduleResolutionNodeKeys: string[]
+  packageDependencyNodeKeys: string[]
+  importResolutionFingerprint: string
+}
+
+interface RuntimeTypeScriptDependencyFingerprintResult {
+  nodeKey: string
+  importResolutionFingerprint: string
+  directDependencyFilePaths: string[]
+  packageManifestDependencyPaths: string[]
 }
 
 interface PackageVersionDependencyResolution {
@@ -1273,88 +1311,153 @@ async function resolvePackageVersionDependencies(
 async function getCachedRuntimeTypeScriptDependencyAnalysis(
   project: Project,
   runtimeCacheStore: RuntimeAnalysisCacheStore,
-  filePath: string | undefined
+  filePath: string | undefined,
+  compilerOptionsVersionProp?: string
 ): Promise<RuntimeTypeScriptDependencyAnalysisResult | undefined> {
   if (!filePath) {
     return undefined
   }
 
-  const compilerOptionsVersion = getCompilerOptionsVersion(project)
-  const normalizedFilePath = normalizeCacheFilePath(filePath)
-  const runtimeConstDeps: CacheStoreConstDependency[] = [
-    {
-      name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
-      version: RUNTIME_ANALYSIS_CACHE_VERSION,
-    },
-    {
-      name: PROJECT_COMPILER_OPTIONS_DEP,
-      version: compilerOptionsVersion,
-    },
-  ]
-  const nodeKey = createRuntimeAnalysisCacheNodeKey(
-    TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME,
-    {
-      compilerOptionsVersion,
-      filePath: normalizedFilePath,
-    }
+  const compilerOptionsVersion =
+    compilerOptionsVersionProp ?? getCompilerOptionsVersion(project)
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+  const nodeKey = createRuntimeTypeScriptDependencyAnalysisCacheNodeKey(
+    filePath,
+    compilerOptionsVersion
   )
+  const dedupeKey = createRuntimeTypeScriptDependencyTrackingDedupeKey(
+    runtimeCacheStore,
+    filePath,
+    compilerOptionsVersion
+  )
+  const pending = runtimeTypeScriptDependencyAnalysisInFlightByKey.get(dedupeKey)
+  if (pending) {
+    return pending
+  }
 
-  const value = await runtimeCacheStore.store.getOrCompute(
-    nodeKey,
-    {
-      persist: true,
-      constDeps: runtimeConstDeps,
-    },
-    async (context) => {
-      recordConstDependencies(context, runtimeConstDeps)
+  const task = runtimeCacheStore.store
+    .getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: runtimeConstDeps,
+      },
+      async (context) => {
+        recordConstDependencies(context, runtimeConstDeps)
 
-      await recordProjectConfigDependency(context, runtimeCacheStore, project)
-      await recordFileDependencyIfPossible(context, runtimeCacheStore, filePath)
-
-      const typeScriptDependencies = await collectTypeScriptDependencyAnalysis(
-        project,
-        runtimeCacheStore,
-        filePath
-      )
-
-      for (const moduleResolutionNodeKey of typeScriptDependencies.moduleResolutionNodeKeys) {
-        await context.recordNodeDep(moduleResolutionNodeKey)
-      }
-
-      const packageVersionDependencies =
-        await resolvePackageVersionDependencies(
+        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordFileDependencyIfPossible(
+          context,
           runtimeCacheStore,
-          compilerOptionsVersion,
-          typeScriptDependencies.packageDependencies
+          filePath
         )
 
-      for (const packageDependencyNodeKey of packageVersionDependencies.dependencyNodeKeys) {
-        await context.recordNodeDep(packageDependencyNodeKey)
+        const dependencyFingerprint =
+          await getCachedRuntimeTypeScriptDependencyFingerprint(
+            project,
+            runtimeCacheStore,
+            filePath,
+            compilerOptionsVersion
+          )
+        if (dependencyFingerprint) {
+          await context.recordNodeDep(dependencyFingerprint.nodeKey)
+        }
+
+        const previousAnalysis =
+          await runtimeCacheStore.store.getWithFreshness<RuntimeTypeScriptDependencyAnalysisCacheValue>(
+            nodeKey
+          )
+        const previousValue =
+          previousAnalysis.fresh === false ? previousAnalysis.value : undefined
+
+        if (
+          previousValue &&
+          dependencyFingerprint &&
+          previousValue.importResolutionFingerprint ===
+            dependencyFingerprint.importResolutionFingerprint
+        ) {
+          for (const moduleResolutionNodeKey of previousValue.moduleResolutionNodeKeys) {
+            await context.recordNodeDep(moduleResolutionNodeKey)
+          }
+          for (const packageDependencyNodeKey of previousValue.packageDependencyNodeKeys) {
+            await context.recordNodeDep(packageDependencyNodeKey)
+          }
+
+          await recordFileDependenciesIfPossible(
+            context,
+            runtimeCacheStore,
+            previousValue.dependencyFilePaths
+          )
+
+          return previousValue
+        }
+
+        const typeScriptDependencies = await collectTypeScriptDependencyAnalysis(
+          project,
+          runtimeCacheStore,
+          filePath
+        )
+
+        for (const moduleResolutionNodeKey of typeScriptDependencies.moduleResolutionNodeKeys) {
+          await context.recordNodeDep(moduleResolutionNodeKey)
+        }
+
+        const packageVersionDependencies =
+          await resolvePackageVersionDependencies(
+            runtimeCacheStore,
+            compilerOptionsVersion,
+            typeScriptDependencies.packageDependencies
+          )
+
+        for (const packageDependencyNodeKey of packageVersionDependencies.dependencyNodeKeys) {
+          await context.recordNodeDep(packageDependencyNodeKey)
+        }
+
+        const dependencyFilePaths = Array.from(
+          new Set<string>([
+            ...typeScriptDependencies.dependencyFilePaths,
+            ...packageVersionDependencies.dependencyFilePaths,
+          ])
+        )
+
+        await recordFileDependenciesIfPossible(
+          context,
+          runtimeCacheStore,
+          dependencyFilePaths
+        )
+
+        return {
+          dependencyFilePaths,
+          moduleResolutionNodeKeys: typeScriptDependencies.moduleResolutionNodeKeys,
+          packageDependencyNodeKeys: packageVersionDependencies.dependencyNodeKeys,
+          importResolutionFingerprint:
+            dependencyFingerprint?.importResolutionFingerprint ??
+            hashString(
+              stableStringify({
+                compilerOptionsVersion,
+                filePath: normalizeCacheFilePath(filePath) ?? null,
+                dependencyFilePaths: dependencyFilePaths
+                  .slice()
+                  .sort((first, second) => first.localeCompare(second)),
+              })
+            ),
+        }
       }
-
-      const dependencyFilePaths = Array.from(
-        new Set<string>([
-          ...typeScriptDependencies.dependencyFilePaths,
-          ...packageVersionDependencies.dependencyFilePaths,
-        ])
-      )
-
-      await recordFileDependenciesIfPossible(
-        context,
-        runtimeCacheStore,
-        dependencyFilePaths
-      )
-
-      return {
-        dependencyFilePaths,
+    )
+    .then((value) => ({
+      nodeKey,
+      dependencyFilePaths: value.dependencyFilePaths,
+    }))
+    .finally(() => {
+      if (
+        runtimeTypeScriptDependencyAnalysisInFlightByKey.get(dedupeKey) === task
+      ) {
+        runtimeTypeScriptDependencyAnalysisInFlightByKey.delete(dedupeKey)
       }
-    }
-  )
+    })
 
-  return {
-    nodeKey,
-    dependencyFilePaths: value.dependencyFilePaths,
-  }
+  runtimeTypeScriptDependencyAnalysisInFlightByKey.set(dedupeKey, task)
+  return task
 }
 
 function recordConstDependencies(
@@ -1466,6 +1569,388 @@ function getRuntimeAnalysisConstDeps(
       version: compilerOptionsVersion,
     },
   ]
+}
+
+function createRuntimeTypeScriptDependencyTrackingDedupeKey(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  filePath: string,
+  compilerOptionsVersion: string
+): string {
+  return `${runtimeCacheStore.snapshot.id}:${compilerOptionsVersion}:${normalizeCachePath(filePath)}`
+}
+
+function createRuntimeTypeScriptDependencyAnalysisCacheNodeKey(
+  filePath: string,
+  compilerOptionsVersion: string
+): string {
+  return createRuntimeAnalysisCacheNodeKey(
+    TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME,
+    {
+      compilerOptionsVersion,
+      filePath: normalizeCacheFilePath(filePath),
+    }
+  )
+}
+
+function createRuntimeTypeScriptDependencyFingerprintCacheNodeKey(
+  filePath: string,
+  compilerOptionsVersion: string
+): string {
+  return createRuntimeAnalysisCacheNodeKey(
+    TYPE_SCRIPT_DEPENDENCY_FINGERPRINT_CACHE_NAME,
+    {
+      compilerOptionsVersion,
+      filePath: normalizeCacheFilePath(filePath),
+    }
+  )
+}
+
+async function getSnapshotContentIdIfPossible(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  path: string | undefined
+): Promise<string | undefined> {
+  if (!path) {
+    return undefined
+  }
+
+  try {
+    const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
+    return await runtimeCacheStore.snapshot.contentId(absolutePath)
+  } catch {
+    return undefined
+  }
+}
+
+async function computeRuntimeTypeScriptDependencyFingerprint(options: {
+  project: Project
+  runtimeCacheStore: RuntimeAnalysisCacheStore
+  filePath: string
+  compilerOptionsVersion: string
+}): Promise<{
+  importResolutionFingerprint: string
+  directDependencyFilePaths: string[]
+  packageManifestDependencyPaths: string[]
+}> {
+  const { project, runtimeCacheStore, filePath, compilerOptionsVersion } =
+    options
+  const sourceFile = project.getSourceFile(filePath)
+  const rootPath = sourceFile?.getFilePath() ?? filePath
+  const moduleSpecifiers = sourceFile
+    ? Array.from(
+        new Set(
+          collectSourceFileModuleSpecifiers(sourceFile)
+            .map((moduleSpecifier) => normalizeModuleSpecifier(moduleSpecifier))
+            .filter((moduleSpecifier) => moduleSpecifier.length > 0)
+        )
+      ).sort((first, second) => first.localeCompare(second))
+    : []
+
+  const directDependencyFilePaths = new Set<string>()
+  const packageNames = new Set<string>()
+
+  for (const moduleSpecifier of moduleSpecifiers) {
+    if (isModuleSpecifierRelativeOrAbsolute(moduleSpecifier)) {
+      const resolvedDependencyPath = resolveModuleSpecifierSourceFilePathUncached(
+        project,
+        rootPath,
+        moduleSpecifier
+      )
+      if (resolvedDependencyPath) {
+        directDependencyFilePaths.add(resolvedDependencyPath)
+      }
+      continue
+    }
+
+    const packageName = getPackageNameFromModuleSpecifier(moduleSpecifier)
+    if (packageName) {
+      packageNames.add(packageName)
+    }
+  }
+
+  const packageManifestDependencyPaths = new Set<string>()
+  const workspaceRootPath = getWorkspaceRootPath(runtimeCacheStore)
+  if (workspaceRootPath) {
+    const packageManifestByPath = new Map<string, PackageManifest | null>()
+    for (const packageName of Array.from(packageNames.values()).sort((a, b) =>
+      a.localeCompare(b)
+    )) {
+      const declaredPackageManifestPath = resolveDeclaredPackageManifestPath(
+        runtimeCacheStore,
+        packageManifestByPath,
+        workspaceRootPath,
+        rootPath,
+        packageName
+      )
+      const installedPackageManifestPath = resolveInstalledPackageManifestPath(
+        runtimeCacheStore,
+        packageManifestByPath,
+        workspaceRootPath,
+        rootPath,
+        packageName
+      )
+
+      if (declaredPackageManifestPath) {
+        packageManifestDependencyPaths.add(declaredPackageManifestPath)
+      }
+      if (installedPackageManifestPath) {
+        packageManifestDependencyPaths.add(installedPackageManifestPath)
+      }
+    }
+  }
+
+  const rootPathContentId = await getSnapshotContentIdIfPossible(
+    runtimeCacheStore,
+    rootPath
+  )
+  const projectConfigPath = (project.getCompilerOptions() as {
+    configFilePath?: string
+  }).configFilePath
+  const projectConfigContentId = await getSnapshotContentIdIfPossible(
+    runtimeCacheStore,
+    projectConfigPath
+  )
+
+  const directDependencyFingerprints = await Promise.all(
+    Array.from(directDependencyFilePaths.values())
+      .sort((first, second) => first.localeCompare(second))
+      .map(async (dependencyPath) => {
+        const contentId = await getSnapshotContentIdIfPossible(
+          runtimeCacheStore,
+          dependencyPath
+        )
+        return `${normalizeCachePath(dependencyPath)}:${contentId ?? 'missing'}`
+      })
+  )
+  const packageManifestFingerprints = await Promise.all(
+    Array.from(packageManifestDependencyPaths.values())
+      .sort((first, second) => first.localeCompare(second))
+      .map(async (manifestPath) => {
+        const contentId = await getSnapshotContentIdIfPossible(
+          runtimeCacheStore,
+          manifestPath
+        )
+        return `${normalizeCachePath(manifestPath)}:${contentId ?? 'missing'}`
+      })
+  )
+
+  return {
+    importResolutionFingerprint: hashString(
+      stableStringify({
+        compilerOptionsVersion,
+        rootPath: normalizeCachePath(rootPath),
+        rootPathContentId: rootPathContentId ?? 'missing',
+        projectConfigPath: normalizeCacheFilePath(projectConfigPath) ?? null,
+        projectConfigContentId: projectConfigContentId ?? 'missing',
+        moduleSpecifiers,
+        directDependencyFingerprints,
+        packageManifestFingerprints,
+      })
+    ),
+    directDependencyFilePaths: Array.from(directDependencyFilePaths.values()),
+    packageManifestDependencyPaths: Array.from(
+      packageManifestDependencyPaths.values()
+    ),
+  }
+}
+
+async function getCachedRuntimeTypeScriptDependencyFingerprint(
+  project: Project,
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  filePath: string | undefined,
+  compilerOptionsVersion: string
+): Promise<RuntimeTypeScriptDependencyFingerprintResult | undefined> {
+  if (!filePath) {
+    return undefined
+  }
+
+  const nodeKey = createRuntimeTypeScriptDependencyFingerprintCacheNodeKey(
+    filePath,
+    compilerOptionsVersion
+  )
+  const dedupeKey = createRuntimeTypeScriptDependencyTrackingDedupeKey(
+    runtimeCacheStore,
+    filePath,
+    `${compilerOptionsVersion}:fingerprint`
+  )
+  const pending = runtimeTypeScriptDependencyFingerprintInFlightByKey.get(
+    dedupeKey
+  )
+  if (pending) {
+    return pending
+  }
+
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+  const task = runtimeCacheStore.store
+    .getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: runtimeConstDeps,
+      },
+      async (context) => {
+        recordConstDependencies(context, runtimeConstDeps)
+        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          filePath
+        )
+
+        const fingerprint = await computeRuntimeTypeScriptDependencyFingerprint({
+          project,
+          runtimeCacheStore,
+          filePath,
+          compilerOptionsVersion,
+        })
+
+        await recordFileDependenciesIfPossible(
+          context,
+          runtimeCacheStore,
+          fingerprint.directDependencyFilePaths
+        )
+        await recordFileDependenciesIfPossible(
+          context,
+          runtimeCacheStore,
+          fingerprint.packageManifestDependencyPaths
+        )
+
+        return fingerprint
+      }
+    )
+    .then((value) => ({
+      nodeKey,
+      importResolutionFingerprint: value.importResolutionFingerprint,
+      directDependencyFilePaths: value.directDependencyFilePaths,
+      packageManifestDependencyPaths: value.packageManifestDependencyPaths,
+    }))
+    .finally(() => {
+      if (
+        runtimeTypeScriptDependencyFingerprintInFlightByKey.get(dedupeKey) ===
+        task
+      ) {
+        runtimeTypeScriptDependencyFingerprintInFlightByKey.delete(dedupeKey)
+      }
+    })
+
+  runtimeTypeScriptDependencyFingerprintInFlightByKey.set(dedupeKey, task)
+  return task
+}
+
+function flushRuntimeTypeScriptDependencySidecarHydrationQueue(): void {
+  const concurrencyLimit = RUNTIME_TS_DEPENDENCY_SIDECAR_HYDRATION_CONCURRENCY
+
+  while (
+    runtimeTypeScriptDependencySidecarHydrationActiveCount < concurrencyLimit
+  ) {
+    const queuedHydration =
+      runtimeTypeScriptDependencySidecarHydrationQueue.shift()
+    if (!queuedHydration) {
+      return
+    }
+
+    runtimeTypeScriptDependencySidecarHydrationActiveCount += 1
+    void queuedHydration
+      .run()
+      .catch(() => {})
+      .finally(() => {
+        runtimeTypeScriptDependencySidecarHydrationActiveCount = Math.max(
+          0,
+          runtimeTypeScriptDependencySidecarHydrationActiveCount - 1
+        )
+        flushRuntimeTypeScriptDependencySidecarHydrationQueue()
+      })
+  }
+}
+
+function queueRuntimeTypeScriptDependencySidecarHydration(options: {
+  project: Project
+  runtimeCacheStore: RuntimeAnalysisCacheStore
+  filePath: string
+  compilerOptionsVersion: string
+}): void {
+  const dedupeKey = createRuntimeTypeScriptDependencyTrackingDedupeKey(
+    options.runtimeCacheStore,
+    options.filePath,
+    options.compilerOptionsVersion
+  )
+
+  if (
+    runtimeTypeScriptDependencySidecarHydrationInFlightByKey.has(dedupeKey)
+  ) {
+    return
+  }
+
+  let resolveHydration: () => void = () => {}
+  const hydration = new Promise<void>((resolve) => {
+    resolveHydration = resolve
+  }).finally(() => {
+    if (
+      runtimeTypeScriptDependencySidecarHydrationInFlightByKey.get(dedupeKey) ===
+      hydration
+    ) {
+      runtimeTypeScriptDependencySidecarHydrationInFlightByKey.delete(dedupeKey)
+    }
+  })
+
+  runtimeTypeScriptDependencySidecarHydrationInFlightByKey.set(
+    dedupeKey,
+    hydration
+  )
+  runtimeTypeScriptDependencySidecarHydrationQueue.push({
+    dedupeKey,
+    run: async () => {
+      try {
+        await getCachedRuntimeTypeScriptDependencyAnalysis(
+          options.project,
+          options.runtimeCacheStore,
+          options.filePath,
+          options.compilerOptionsVersion
+        )
+      } finally {
+        resolveHydration()
+      }
+    },
+  })
+  flushRuntimeTypeScriptDependencySidecarHydrationQueue()
+}
+
+async function recordRuntimeTypeScriptDependencySidecar(
+  context: CacheStoreComputeContext,
+  project: Project,
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  filePath: string | undefined,
+  compilerOptionsVersion: string
+): Promise<void> {
+  if (!filePath) {
+    return
+  }
+
+  if (process.env['NODE_ENV'] === 'test') {
+    const dependencyAnalysis = await getCachedRuntimeTypeScriptDependencyAnalysis(
+      project,
+      runtimeCacheStore,
+      filePath,
+      compilerOptionsVersion
+    )
+    if (!dependencyAnalysis) {
+      return
+    }
+
+    await context.recordNodeDep(dependencyAnalysis.nodeKey)
+    return
+  }
+
+  const nodeKey = createRuntimeTypeScriptDependencyAnalysisCacheNodeKey(
+    filePath,
+    compilerOptionsVersion
+  )
+  await context.recordNodeDep(nodeKey)
+  queueRuntimeTypeScriptDependencySidecarHydration({
+    project,
+    runtimeCacheStore,
+    filePath,
+    compilerOptionsVersion,
+  })
 }
 
 function createRuntimeFileExportsCacheNodeKey(
@@ -1593,14 +2078,14 @@ export async function getCachedFileExports(
           dependencyFilePaths
         )
 
-        const dependencyAnalysis =
-          await getCachedRuntimeTypeScriptDependencyAnalysis(
+        if (shouldTrackRuntimeTypeScriptDependencies()) {
+          await recordRuntimeTypeScriptDependencySidecar(
+            context,
             project,
             runtimeCacheStore,
-            filePath
+            filePath,
+            compilerOptionsVersion
           )
-        if (dependencyAnalysis) {
-          await context.recordNodeDep(dependencyAnalysis.nodeKey)
         }
 
         return fileExports
@@ -2029,14 +2514,14 @@ export async function resolveCachedTypeAtLocationWithDependencies(
             Array.from(dependencyPaths.values())
           )
 
-          const dependencyAnalysis =
-            await getCachedRuntimeTypeScriptDependencyAnalysis(
+          if (shouldTrackRuntimeTypeScriptDependencies()) {
+            await recordRuntimeTypeScriptDependencySidecar(
+              context,
               project,
               runtimeCacheStore,
-              options.filePath
+              options.filePath,
+              compilerOptionsVersion
             )
-          if (dependencyAnalysis) {
-            await context.recordNodeDep(dependencyAnalysis.nodeKey)
           }
 
           return result
@@ -2210,27 +2695,24 @@ export async function getCachedSourceTextMetadata(
         runtimeCacheStore,
         result.filePath
       )
-      const sourceTextDependencyNodeKeys = new Set<string>()
-      for (const dependencyAnalysisPath of [
-        options.filePath,
-        result.filePath,
-      ] as const) {
-        const dependencyAnalysis =
-          await getCachedRuntimeTypeScriptDependencyAnalysis(
+      if (shouldTrackRuntimeTypeScriptDependencies()) {
+        const sourceTextDependencyAnalysisPaths = new Set<string>()
+        if (options.filePath) {
+          sourceTextDependencyAnalysisPaths.add(options.filePath)
+        }
+        if (result.filePath) {
+          sourceTextDependencyAnalysisPaths.add(result.filePath)
+        }
+
+        for (const dependencyAnalysisPath of sourceTextDependencyAnalysisPaths) {
+          await recordRuntimeTypeScriptDependencySidecar(
+            context,
             project,
             runtimeCacheStore,
-            dependencyAnalysisPath
+            dependencyAnalysisPath,
+            compilerOptionsVersion
           )
-        if (!dependencyAnalysis) {
-          continue
         }
-
-        if (sourceTextDependencyNodeKeys.has(dependencyAnalysis.nodeKey)) {
-          continue
-        }
-
-        sourceTextDependencyNodeKeys.add(dependencyAnalysis.nodeKey)
-        await context.recordNodeDep(dependencyAnalysis.nodeKey)
       }
 
       return result
@@ -2298,14 +2780,14 @@ export async function getCachedTokens(
         project,
       })
 
-      const tokenTypeScriptDependencies =
-        await getCachedRuntimeTypeScriptDependencyAnalysis(
+      if (shouldTrackRuntimeTypeScriptDependencies()) {
+        await recordRuntimeTypeScriptDependencySidecar(
+          context,
           project,
           runtimeCacheStore,
-          options.filePath
+          options.filePath,
+          compilerOptionsVersion
         )
-      if (tokenTypeScriptDependencies) {
-        await context.recordNodeDep(tokenTypeScriptDependencies.nodeKey)
       }
 
       return result

@@ -130,6 +130,22 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
 }
 
+function getProductionRpcMemoizeOptions():
+  | false
+  | {
+      ttlMs: number
+      maxEntries: number
+    } {
+  if (process.env['NODE_ENV'] !== 'production') {
+    return false
+  }
+
+  return {
+    ttlMs: 5 * 60_000,
+    maxEntries: 2_000,
+  }
+}
+
 /**
  * Create a WebSocket server that improves the performance of renoun components and
  * utilities by processing type analysis and syntax highlighting in a separate process.
@@ -196,7 +212,7 @@ export async function createServer(options?: { port?: number }) {
     },
     {
       memoize: true,
-      concurrency: 10,
+      concurrency: 20,
     }
   )
 
@@ -227,7 +243,7 @@ export async function createServer(options?: { port?: number }) {
     },
     {
       memoize: true,
-      concurrency: 10,
+      concurrency: 16,
     }
   )
 
@@ -271,7 +287,7 @@ export async function createServer(options?: { port?: number }) {
     },
     {
       memoize: false,
-      concurrency: 3,
+      concurrency: 8,
     }
   )
 
@@ -288,7 +304,7 @@ export async function createServer(options?: { port?: number }) {
       return getCachedFileExports(project, filePath)
     },
     {
-      memoize: false,
+      memoize: getProductionRpcMemoizeOptions(),
       concurrency: 25,
     }
   )
@@ -306,7 +322,7 @@ export async function createServer(options?: { port?: number }) {
       return getCachedOutlineRanges(project, filePath)
     },
     {
-      memoize: false,
+      memoize: getProductionRpcMemoizeOptions(),
       concurrency: 25,
     }
   )
@@ -335,7 +351,7 @@ export async function createServer(options?: { port?: number }) {
       })
     },
     {
-      memoize: false,
+      memoize: getProductionRpcMemoizeOptions(),
       concurrency: 25,
     }
   )
@@ -364,7 +380,7 @@ export async function createServer(options?: { port?: number }) {
       })
     },
     {
-      memoize: false,
+      memoize: getProductionRpcMemoizeOptions(),
       concurrency: 25,
     }
   )
@@ -390,7 +406,7 @@ export async function createServer(options?: { port?: number }) {
       })
     },
     {
-      memoize: false,
+      memoize: getProductionRpcMemoizeOptions(),
       concurrency: 25,
     }
   )
