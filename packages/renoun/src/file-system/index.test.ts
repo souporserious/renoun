@@ -4116,9 +4116,9 @@ date: 2024-12-24
       })
 
       test('memoizes resolveExportSources when dependencies are unchanged', () => {
-        mkdirSync(join(process.cwd(), 'tmp'), { recursive: true })
+        mkdirSync(join(process.cwd(), '.cache'), { recursive: true })
         const tempDirectory = mkdtempSync(
-          join(process.cwd(), 'tmp', 'resolve-export-sources-cache-hit-')
+          join(process.cwd(), '.cache', 'resolve-export-sources-cache-hit-')
         )
         const packageDirectory = join(tempDirectory, 'packages', 'acme')
         const packagePath = packageDirectory.replace(`${process.cwd()}/`, '')
@@ -4170,9 +4170,9 @@ date: 2024-12-24
       })
 
       test('invalidates resolveExportSources cache when source maps change', async () => {
-        mkdirSync(join(process.cwd(), 'tmp'), { recursive: true })
+        mkdirSync(join(process.cwd(), '.cache'), { recursive: true })
         const tempDirectory = mkdtempSync(
-          join(process.cwd(), 'tmp', 'resolve-export-sources-map-change-')
+          join(process.cwd(), '.cache', 'resolve-export-sources-map-change-')
         )
         const packageDirectory = join(tempDirectory, 'packages', 'acme')
         const packagePath = packageDirectory.replace(`${process.cwd()}/`, '')
@@ -4235,9 +4235,13 @@ date: 2024-12-24
       })
 
       test('invalidates resolveExportSources cache when package.json changes', async () => {
-        mkdirSync(join(process.cwd(), 'tmp'), { recursive: true })
+        mkdirSync(join(process.cwd(), '.cache'), { recursive: true })
         const tempDirectory = mkdtempSync(
-          join(process.cwd(), 'tmp', 'resolve-export-sources-package-json-change-')
+          join(
+            process.cwd(),
+            '.cache',
+            'resolve-export-sources-package-json-change-'
+          )
         )
         const packageDirectory = join(tempDirectory, 'packages', 'acme')
         const packagePath = packageDirectory.replace(`${process.cwd()}/`, '')
@@ -4355,9 +4359,9 @@ date: 2024-12-24
     })
 
     test('memoizes package discovery and invalidates on lockfile and topology changes', async () => {
-      mkdirSync(join(process.cwd(), 'tmp'), { recursive: true })
+      mkdirSync(join(process.cwd(), '.cache'), { recursive: true })
       const tempDirectory = mkdtempSync(
-        join(process.cwd(), 'tmp', 'workspace-package-discovery-cache-')
+        join(process.cwd(), '.cache', 'workspace-package-discovery-cache-')
       )
       const packagesDirectory = join(tempDirectory, 'packages')
       const fooDirectory = join(packagesDirectory, 'foo')

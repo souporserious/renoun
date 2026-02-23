@@ -6,7 +6,24 @@ export default defineConfig({
   test: {
     testTimeout: 15_000,
     watch: {
-      ignore: ['**/tmp/**', '**/.cache', '**/.cache/**'],
+      ignore: [
+        '**/tmp/**',
+        '**/.tmp/**',
+        '**/.tmp-*',
+        '**/.cache',
+        '**/.cache/**',
+      ],
+    },
+  },
+  server: {
+    watch: {
+      ignored: [
+        '**/tmp/**',
+        '**/.tmp/**',
+        '**/.tmp-*',
+        '**/.cache',
+        '**/.cache/**',
+      ],
     },
   },
 })

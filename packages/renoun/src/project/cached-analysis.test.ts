@@ -66,9 +66,9 @@ async function createTemporaryWorkspace(
   workspacePath: string
   cleanup: () => Promise<void>
 }> {
-  const workspacePath = await mkdtemp(
-    join(process.cwd(), '.tmp-cached-analysis-')
-  )
+  const cacheDirectory = join(process.cwd(), '.cache')
+  await mkdir(cacheDirectory, { recursive: true })
+  const workspacePath = await mkdtemp(join(cacheDirectory, 'cached-analysis-'))
 
   for (const [relativePath, contents] of Object.entries(files)) {
     const absolutePath = join(workspacePath, relativePath)
