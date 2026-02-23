@@ -978,7 +978,7 @@ describe('project file cache', () => {
       projectId: `project-b-${uniqueId}`,
     })
 
-    expect(projectB).toBe(projectA)
+    expect(projectB).not.toBe(projectA)
 
     projectB.createSourceFile(filePath, 'export const value = 2', {
       overwrite: true,
@@ -992,6 +992,15 @@ describe('project file cache', () => {
     )
 
     expect(secondValue).toBe('value-from-project-b')
+
+    const firstValueAgain = await createProjectFileCache(
+      projectA,
+      filePath,
+      cacheName,
+      () => 'value-from-project-a-updated'
+    )
+
+    expect(firstValueAgain).toBe('value-from-project-a')
   })
 
 })

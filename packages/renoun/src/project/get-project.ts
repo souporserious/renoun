@@ -23,7 +23,6 @@ import type { ProjectOptions } from './types.ts'
 const { Project, ts } = getTsMorph()
 
 const projects = new Map<string, TsMorphProject>()
-const inMemoryProjectIds = new Map<string, string>()
 const directoryWatchers = new Map<string, FSWatcher>()
 const directoryToProjects = new Map<string, Set<TsMorphProject>>()
 
@@ -45,7 +44,6 @@ const defaultCompilerOptions = {
 /** Get the project associated with the provided options. */
 export function getProject(options?: ProjectOptions) {
   const projectId = getSerializedProjectOptions(options)
-  const useInMemoryFileSystem = Boolean(options?.useInMemoryFileSystem)
   const projectDirectory = options?.tsConfigFilePath
     ? resolve(dirname(options.tsConfigFilePath))
     : process.cwd()
@@ -59,21 +57,6 @@ export function getProject(options?: ProjectOptions) {
     }
     associatedProjects.add(existingProject)
     ensureProjectDirectoryWatcher(projectDirectory)
-
-    const inMemoryProjectId = useInMemoryFileSystem
-      ? (options!.projectId ?? '')
-      : ''
-    const previousProjectId = inMemoryProjectIds.get(projectId)
-
-    if (useInMemoryFileSystem && previousProjectId !== inMemoryProjectId) {
-      invalidateProjectFileCache(existingProject)
-      for (const sourceFile of existingProject.getSourceFiles()) {
-        if (!sourceFile.isFromExternalLibrary()) {
-          existingProject.removeSourceFile(sourceFile)
-        }
-      }
-      inMemoryProjectIds.set(projectId, inMemoryProjectId)
-    }
 
     getDebugLogger().debug('Reusing cached project instance', () =>
       createProjectDebugContext({
@@ -118,9 +101,6 @@ export function getProject(options?: ProjectOptions) {
   ensureProjectDirectoryWatcher(projectDirectory)
 
   projects.set(projectId, project)
-  if (useInMemoryFileSystem) {
-    inMemoryProjectIds.set(projectId, options?.projectId ?? '')
-  }
 
   getDebugLogger().info('Created new project instance', () =>
     createProjectDebugContext({
@@ -244,12 +224,7 @@ function getSerializedProjectOptions(options?: ProjectOptions) {
     return ''
   }
 
-  const normalizedOptions = {
-    ...options,
-    projectId: options.useInMemoryFileSystem ? undefined : options.projectId,
-  }
-
-  return JSON.stringify(normalizedOptions)
+  return JSON.stringify(options)
 }
 
 function shouldEnableProjectWatchers(): boolean {
@@ -262,7 +237,7 @@ function shouldEnableProjectWatchers(): boolean {
     return override
   }
 
-  return true
+  return process.env.NODE_ENV === 'development'
 }
 
 function parseBooleanEnv(value: string | undefined): boolean | undefined {

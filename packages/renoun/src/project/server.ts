@@ -451,7 +451,7 @@ function shouldEmitRefreshNotifications(): boolean {
     return override
   }
 
-  return true
+  return process.env.NODE_ENV === 'development'
 }
 
 function parseBooleanEnv(value: string | undefined): boolean | undefined {
