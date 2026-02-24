@@ -30,7 +30,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
-    "test": "vitest --typecheck"
+    "test": "vitest --run --typecheck"
   },
   "exports": {
     ".": {

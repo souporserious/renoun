@@ -120,7 +120,7 @@
     "dev": "node ./scripts/dev.ts",
     "grammars": "node ./scripts/grammars.ts",
     "theme": "node ./scripts/theme.ts",
-    "test": "vitest --typecheck",
+    "test": "vitest --run --typecheck",
     "bench": "vitest bench"
   },
   "peerDependencies": {

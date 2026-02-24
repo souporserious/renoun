@@ -28,7 +28,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
-    "test": "vitest"
+    "test": "vitest --run"
   },
   "exports": {
     ".": {
