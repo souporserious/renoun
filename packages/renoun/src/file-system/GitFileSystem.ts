@@ -717,7 +717,9 @@ async function spawnWithBuffer(
     child.on('close', (code) => {
       if (code !== 0) {
         reject(
-          new Error(stderr || `Command failed: ${command} ${commandArguments.join(' ')}`)
+          new Error(
+            stderr || `Command failed: ${command} ${commandArguments.join(' ')}`
+          )
         )
         return
       }
@@ -1857,10 +1859,7 @@ export class GitFileSystem
     previousRepoRoot: string,
     resolvedRepoRoot: string
   ) {
-    const previousResolved = resolve(previousRepoRoot)
-    const nextResolved = resolve(resolvedRepoRoot)
-
-    if (previousResolved === nextResolved) {
+    if (normalizePath(previousRepoRoot) === normalizePath(resolvedRepoRoot)) {
       return
     }
 
@@ -2124,8 +2123,7 @@ export class GitFileSystem
 
     return {
       identity: `${leftIdentity.identity}${rangeMatch[2]}${rightIdentity.identity}`,
-      deterministic:
-        leftIdentity.deterministic && rightIdentity.deterministic,
+      deterministic: leftIdentity.deterministic && rightIdentity.deterministic,
     }
   }
 
@@ -2856,7 +2854,12 @@ export class GitFileSystem
       },
       async ({ tag, range }) => {
         try {
-          const commandArguments = ['rev-list', range, '--', ...scopeDirectories]
+          const commandArguments = [
+            'rev-list',
+            range,
+            '--',
+            ...scopeDirectories,
+          ]
           const result = await spawnAsync('git', commandArguments, {
             cwd: this.repoRoot,
             maxBuffer: this.maxBufferBytes,
@@ -5701,7 +5704,9 @@ async function gitLogForPath(
   })
 
   if (!child.stdout) {
-    throw new Error(`Failed to spawn git log for: ${commandArguments.join(' ')}`)
+    throw new Error(
+      `Failed to spawn git log for: ${commandArguments.join(' ')}`
+    )
   }
 
   const commits: GitLogCommit[] = []
@@ -5771,7 +5776,8 @@ async function gitLogForPath(
 
   if (exitCode !== 0) {
     throw new Error(
-      stderr || `Git exited with code ${exitCode} for: git ${commandArguments.join(' ')}`
+      stderr ||
+        `Git exited with code ${exitCode} for: git ${commandArguments.join(' ')}`
     )
   }
 
@@ -6210,16 +6216,11 @@ function shallowRepoErrorMessage(): string {
 
 function looksLikeCacheClone(repoRoot: string, metaCacheDirectory: string) {
   const normalizedRepoRoot = normalizePath(repoRoot)
-  const homeCache = normalizePath(join(os.homedir(), '.cache'))
-  const temporaryDirectory = normalizePath(os.tmpdir())
   const normalizedMetaCache = normalizePath(metaCacheDirectory)
 
-  // First check without symlink resolution (fast path)
-  if (
-    normalizedRepoRoot.startsWith(homeCache + '/') ||
-    normalizedRepoRoot.startsWith(temporaryDirectory + '/') ||
-    normalizedRepoRoot.startsWith(normalizedMetaCache + '/')
-  ) {
+  // Fast path: only treat repositories under the configured cache directory
+  // as cached clones. Repos in generic temp locations are normal worktrees.
+  if (normalizedRepoRoot.startsWith(normalizedMetaCache + '/')) {
     return true
   }
 
