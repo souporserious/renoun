@@ -1,5 +1,11 @@
 # renoun
 
+## 11.4.0
+
+### Minor Changes
+
+- c68b5e7: Adds a new `History` component that renders the export history of a repository as a structured list of changes grouped by release, with support for custom components via the `components` prop.
+
 ## 11.3.0
 
 ### Minor Changes
