@@ -34,7 +34,6 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { createInterface } from 'node:readline'
-import os from 'node:os'
 import { Writable } from 'node:stream'
 
 import {
@@ -48,6 +47,7 @@ import {
   trimTrailingSlashes,
 } from '../utils/path.ts'
 import { createConcurrentQueue, mapConcurrent } from '../utils/concurrency.ts'
+import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -252,6 +252,23 @@ function supportsGitBackfillSync(): boolean {
   const isSupported = !output.includes('is not a git command')
   isCachedBackfillSupport = isSupported
   return isSupported
+}
+
+function resolveDefaultGitCacheDirectory(): string {
+  let rootDirectory: string
+  try {
+    rootDirectory = resolve(getRootDirectory())
+  } catch {
+    rootDirectory = resolve(process.cwd())
+  }
+
+  if (rootDirectory === resolve('/')) {
+    throw new Error(
+      '[renoun] Refusing to write Git clone cache at filesystem root "/". Run from a workspace directory or pass `cacheDirectory` explicitly.'
+    )
+  }
+
+  return resolve(rootDirectory, '.renoun', 'cache', 'git')
 }
 
 /**
@@ -808,7 +825,7 @@ export class GitFileSystem
 
     this.cacheDirectory = options.cacheDirectory
       ? resolve(String(options.cacheDirectory))
-      : resolve(os.homedir(), '.cache', 'renoun-git')
+      : resolveDefaultGitCacheDirectory()
 
     this.verbose = Boolean(options.verbose)
     this.maxBufferBytes = options.maxBufferBytes ?? 100 * 1024 * 1024

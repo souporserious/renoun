@@ -62,6 +62,8 @@ The cache layer works without SQLite. When `node:sqlite` is available, renoun ca
 
 If SQLite is unavailable, renoun falls back to in-memory cache automatically. File queries stay correct, but cache state is process-local and does not persist across restarts.
 
+Cached clone repositories default to `<workspaceRoot>/.renoun/cache/git`.
+
 ## Security
 
 - Cloning untrusted repositories can expose you to git-level CVEs. Keep your git client updated.

@@ -1,7 +1,6 @@
 import { mkdir } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
 import { deserialize, serialize } from 'node:v8'
 
 import { delay } from '../utils/delay.ts'
@@ -90,7 +89,9 @@ export function getDefaultCacheDatabasePath(
     ? resolveCanonicalProjectRootPath(projectRoot)
     : resolve(getRootDirectory())
   if (root === resolve('/')) {
-    root = tmpdir()
+    throw new Error(
+      '[renoun] Refusing to write cache database at filesystem root "/". Run from a workspace directory or pass `dbPath`/`projectRoot` explicitly.'
+    )
   }
   const path = resolve(root, '.renoun', 'cache', 'fs-cache.sqlite')
   if (debugSessionRoot === true) {

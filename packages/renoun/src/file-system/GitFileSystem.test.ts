@@ -8,7 +8,7 @@ import {
   existsSync,
   symlinkSync,
 } from 'node:fs'
-import { join, dirname, relative } from 'node:path'
+import { join, dirname, relative, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
@@ -18,6 +18,7 @@ import {
   ensureCacheClone,
   ensureCacheCloneSync,
 } from './GitFileSystem'
+import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { Directory, File } from './index.tsx'
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key'
 import { CacheStore } from './Cache.ts'
@@ -193,6 +194,17 @@ function test(name: string, fn: (ctx: TestContext) => Promise<void>): void {
 }
 
 describe('GitFileSystem', () => {
+  it('defaults clone cacheDirectory to the workspace .renoun/cache/git path', () => {
+    const store = new GitFileSystem({ repository: '.' })
+    try {
+      expect(store.cacheDirectory).toBe(
+        resolve(getRootDirectory(), '.renoun', 'cache', 'git')
+      )
+    } finally {
+      store.close()
+    }
+  })
+
   test('returns a stable workspace change token when tree state is unchanged', async ({
     repoRoot,
     cacheDirectory,

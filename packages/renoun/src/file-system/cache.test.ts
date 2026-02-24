@@ -5081,9 +5081,9 @@ export type Metadata = Value`,
     expect(computeCount).toBe(2)
   })
 
-  test('uses tmpdir as cache root when project root is filesystem root', () => {
-    expect(getDefaultCacheDatabasePath('/')).toBe(
-      resolvePath(tmpdir(), '.renoun', 'cache', 'fs-cache.sqlite')
+  test('throws when project root resolves to filesystem root', () => {
+    expect(() => getDefaultCacheDatabasePath('/')).toThrow(
+      /filesystem root "\/"/
     )
   })
 
