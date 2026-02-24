@@ -11,6 +11,7 @@ describe('project WebSocket RPC', () => {
   let server: WebSocketServer
   let client: WebSocketClient
   let maxConcurrent = 0
+  const previousServerPort = process.env.RENOUN_SERVER_PORT
 
   const randomHandler = vi.fn(() => Math.random())
 
@@ -147,6 +148,11 @@ describe('project WebSocket RPC', () => {
 
   afterAll(() => {
     server.cleanup()
+    if (previousServerPort === undefined) {
+      delete process.env.RENOUN_SERVER_PORT
+    } else {
+      process.env.RENOUN_SERVER_PORT = previousServerPort
+    }
   })
 
   it('performs a single RPC call', async () => {

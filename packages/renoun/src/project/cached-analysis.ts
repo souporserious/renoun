@@ -1,4 +1,4 @@
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type {
   SourceFile,
   SyntaxKind,
@@ -98,10 +98,12 @@ const compilerOptionsVersionByProject = new WeakMap<
   Project,
   {
     version: string
+    configPathKey: string | null
     epoch: number
   }
 >()
-let compilerOptionsVersionEpoch = 0
+const compilerOptionsVersionEpochByConfigPath = new Map<string, number>()
+let compilerOptionsVersionGlobalEpoch = 0
 let runtimeAnalysisInvalidationQueue: Promise<void> = Promise.resolve()
 const runtimeTypeScriptDependencyAnalysisInFlightByKey = new Map<
   string,
@@ -183,10 +185,33 @@ function isTypeScriptConfigPath(path: string): boolean {
   return /(^|\/)tsconfig(\..+)?\.json$/i.test(normalizedPath)
 }
 
-export function invalidateRuntimeAnalysisCachePath(path: string): void {
-  if (isTypeScriptConfigPath(path)) {
-    compilerOptionsVersionEpoch += 1
+function getTypeScriptConfigPathInvalidationKeys(path: string): string[] {
+  if (!isTypeScriptConfigPath(path)) {
+    return []
   }
+
+  const keys = new Set<string>()
+  const normalizedPath = normalizePathKey(path)
+  keys.add(normalizedPath)
+
+  if (!normalizedPath.startsWith('/')) {
+    keys.add(normalizePathKey(resolve(path)))
+  }
+
+  return Array.from(keys.values())
+}
+
+function bumpCompilerOptionsVersionEpochForConfigPath(path: string): void {
+  for (const configPathKey of getTypeScriptConfigPathInvalidationKeys(path)) {
+    compilerOptionsVersionEpochByConfigPath.set(
+      configPathKey,
+      (compilerOptionsVersionEpochByConfigPath.get(configPathKey) ?? 0) + 1
+    )
+  }
+}
+
+export function invalidateRuntimeAnalysisCachePath(path: string): void {
+  bumpCompilerOptionsVersionEpochForConfigPath(path)
 
   enqueueRuntimeAnalysisInvalidation(async () => {
     const runtimeSession = await getRuntimeAnalysisSessionUnchecked()
@@ -199,7 +224,7 @@ export function invalidateRuntimeAnalysisCachePath(path: string): void {
 }
 
 export function invalidateRuntimeAnalysisCacheAll(): void {
-  compilerOptionsVersionEpoch += 1
+  compilerOptionsVersionGlobalEpoch += 1
 
   enqueueRuntimeAnalysisInvalidation(async () => {
     const runtimeSession = await getRuntimeAnalysisSessionUnchecked()
@@ -1593,15 +1618,31 @@ async function recordProjectConfigDependency(
 }
 
 function getCompilerOptionsVersion(project: Project): string {
+  const compilerOptions = project.getCompilerOptions() as {
+    configFilePath?: string
+  }
+  const configPathKey =
+    typeof compilerOptions.configFilePath === 'string'
+      ? normalizePathKey(compilerOptions.configFilePath)
+      : null
+  const configPathEpoch = configPathKey
+    ? (compilerOptionsVersionEpochByConfigPath.get(configPathKey) ?? 0)
+    : 0
+  const epoch = compilerOptionsVersionGlobalEpoch + configPathEpoch
   const cachedVersion = compilerOptionsVersionByProject.get(project)
-  if (cachedVersion && cachedVersion.epoch === compilerOptionsVersionEpoch) {
+  if (
+    cachedVersion &&
+    cachedVersion.epoch === epoch &&
+    cachedVersion.configPathKey === configPathKey
+  ) {
     return cachedVersion.version
   }
 
-  const version = hashString(stableStringify(project.getCompilerOptions()))
+  const version = hashString(stableStringify(compilerOptions))
   compilerOptionsVersionByProject.set(project, {
     version,
-    epoch: compilerOptionsVersionEpoch,
+    configPathKey,
+    epoch,
   })
   return version
 }
