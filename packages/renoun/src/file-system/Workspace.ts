@@ -7,6 +7,7 @@ import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import {
   directoryName,
   joinPaths,
+  normalizePathKey,
   normalizeSlashes,
   normalizeWorkspaceRelativePath as normalizeWorkspaceRelative,
   resolveSchemePath,
@@ -16,7 +17,6 @@ import {
 import {
   FS_STRUCTURE_CACHE_VERSION,
   createCacheNodeKey,
-  normalizeCachePath,
 } from './cache-key.ts'
 import type { Cache } from './Cache.ts'
 import type { FileSystem } from './FileSystem.ts'
@@ -215,6 +215,24 @@ interface WorkspacePackageResolutionCacheEntry {
   dependencySignatures: Map<string, string>
 }
 
+const workspacePackageResolutionCacheByFileSystem = new WeakMap<
+  FileSystem,
+  Map<string, WorkspacePackageResolutionCacheEntry>
+>()
+
+function getWorkspacePackageResolutionSharedCache(
+  fileSystem: FileSystem
+): Map<string, WorkspacePackageResolutionCacheEntry> {
+  const existing = workspacePackageResolutionCacheByFileSystem.get(fileSystem)
+  if (existing) {
+    return existing
+  }
+
+  const created = new Map<string, WorkspacePackageResolutionCacheEntry>()
+  workspacePackageResolutionCacheByFileSystem.set(fileSystem, created)
+  return created
+}
+
 export class Workspace {
   #fileSystem: FileSystem
   #workspaceRoot: string
@@ -299,7 +317,7 @@ export class Workspace {
     return createStructureNodeKey('structure.workspace', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      workspaceRoot: normalizeCachePath(this.#workspaceRoot),
+      workspaceRoot: normalizePathKey(this.#workspaceRoot),
     })
   }
 
@@ -474,11 +492,11 @@ export class Workspace {
     )
 
     const sortedFileDependencyPaths = Array.from(fileDependencyPaths).sort(
-      (a, b) => normalizeCachePath(a).localeCompare(normalizeCachePath(b))
+      (a, b) => normalizePathKey(a).localeCompare(normalizePathKey(b))
     )
     const sortedDirectoryDependencyPaths = Array.from(
       directoryDependencyPaths
-    ).sort((a, b) => normalizeCachePath(a).localeCompare(normalizeCachePath(b)))
+    ).sort((a, b) => normalizePathKey(a).localeCompare(normalizePathKey(b)))
 
     for (const dependencyPath of sortedFileDependencyPaths) {
       dependencySignatures.set(
@@ -535,6 +553,23 @@ export class Workspace {
       return cachedResolution.resolution
     }
 
+    const sharedResolutionCache = getWorkspacePackageResolutionSharedCache(
+      this.#fileSystem
+    )
+    const sharedResolutionCacheKey = normalizePathKey(this.#workspaceRoot)
+    const sharedCachedResolution = sharedResolutionCache.get(
+      sharedResolutionCacheKey
+    )
+    if (
+      sharedCachedResolution &&
+      this.#areWorkspacePackageResolutionDependenciesFresh(
+        sharedCachedResolution.dependencySignatures
+      )
+    ) {
+      this.#workspacePackageResolutionCache = sharedCachedResolution
+      return sharedCachedResolution.resolution
+    }
+
     const packageEntries: { name?: string; path: string }[] = []
     const scannedDirectories = new Set<string>()
     const packageManifestPaths = new Set<string>()
@@ -573,6 +608,10 @@ export class Workspace {
             resolution
           ),
       }
+      sharedResolutionCache.set(
+        sharedResolutionCacheKey,
+        this.#workspacePackageResolutionCache
+      )
       return resolution
     }
 
@@ -648,6 +687,10 @@ export class Workspace {
       dependencySignatures:
         this.#createWorkspacePackageResolutionDependencySignatures(resolution),
     }
+    sharedResolutionCache.set(
+      sharedResolutionCacheKey,
+      this.#workspacePackageResolutionCache
+    )
 
     return resolution
   }

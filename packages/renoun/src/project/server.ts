@@ -212,7 +212,7 @@ export async function createServer(options?: { port?: number }) {
     },
     {
       memoize: true,
-      concurrency: 20,
+      concurrency: 32,
     }
   )
 
@@ -243,7 +243,7 @@ export async function createServer(options?: { port?: number }) {
     },
     {
       memoize: true,
-      concurrency: 16,
+      concurrency: 28,
     }
   )
 

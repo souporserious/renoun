@@ -94,6 +94,22 @@ export interface CacheStoreComputeContext {
   recordNodeDep(nodeKey: string): Promise<string>
 }
 
+export interface CacheStoreFreshnessMismatch {
+  depKey: string
+  expectedVersion: string
+  currentVersion: string | undefined
+}
+
+export interface CacheStoreGetWithFreshnessOptions {
+  includeStaleReason?: boolean
+}
+
+export interface CacheStoreGetWithFreshnessResult<Value> {
+  value: Value | undefined
+  fresh: boolean
+  staleReason?: CacheStoreFreshnessMismatch | 'graph-dirty'
+}
+
 export interface CacheStoreConstDependency {
   name: string
   version: string
@@ -893,31 +909,68 @@ export class CacheStore {
   }
 
   async getWithFreshness<Value>(
-    nodeKey: string
-  ): Promise<{ value: Value | undefined; fresh: boolean }> {
+    nodeKey: string,
+    options: CacheStoreGetWithFreshnessOptions = {}
+  ): Promise<CacheStoreGetWithFreshnessResult<Value>> {
     this.#assertNotDisposed('getWithFreshness')
+    const includeStaleReason = options.includeStaleReason === true
+
+    const staleMismatch: { value?: CacheStoreFreshnessMismatch } = {}
+    const captureMismatch = includeStaleReason
+      ? (mismatch: CacheStoreFreshnessMismatch) => {
+          if (!staleMismatch.value) {
+            staleMismatch.value = mismatch
+          }
+        }
+      : undefined
+
+    const createResult = (
+      value: Value | undefined,
+      fresh: boolean
+    ): CacheStoreGetWithFreshnessResult<Value> => {
+      if (fresh || !includeStaleReason) {
+        return { value, fresh }
+      }
+
+      return {
+        value,
+        fresh,
+        staleReason: staleMismatch.value ?? 'graph-dirty',
+      }
+    }
+
     const memoryEntry = this.#entries.get(nodeKey)
     if (memoryEntry) {
-      const fresh = await this.#isEntryFresh(nodeKey, memoryEntry, new Set())
+      const fresh = await this.#isEntryFresh(
+        nodeKey,
+        memoryEntry,
+        new Set(),
+        captureMismatch
+      )
       await this.#recordAutomaticNodeDependency(
         nodeKey,
         memoryEntry.fingerprint
       )
-      return { value: memoryEntry.value as Value, fresh }
+      return createResult(memoryEntry.value as Value, fresh)
     }
 
     const persistedEntry = await this.#loadPersistedEntry(nodeKey)
     if (!persistedEntry) {
       await this.#recordAutomaticNodeDependency(nodeKey, undefined)
-      return { value: undefined, fresh: false }
+      return createResult(undefined, false)
     }
 
-    const fresh = await this.#isEntryFresh(nodeKey, persistedEntry, new Set())
+    const fresh = await this.#isEntryFresh(
+      nodeKey,
+      persistedEntry,
+      new Set(),
+      captureMismatch
+    )
     await this.#recordAutomaticNodeDependency(
       nodeKey,
       persistedEntry.fingerprint
     )
-    return { value: persistedEntry.value as Value, fresh }
+    return createResult(persistedEntry.value as Value, fresh)
   }
 
   #getRetainedStaleEntry(
@@ -2131,9 +2184,29 @@ export class CacheStore {
   async #isEntryFresh(
     nodeKey: string,
     entry: CacheEntry,
-    visitedNodeKeys: Set<string>
+    visitedNodeKeys: Set<string>,
+    onMismatch?: (mismatch: CacheStoreFreshnessMismatch) => void
   ): Promise<boolean> {
     if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
+      if (onMismatch) {
+        const probeVisitedNodeKeys = new Set(visitedNodeKeys)
+        probeVisitedNodeKeys.add(nodeKey)
+        for (const dependency of entry.deps) {
+          const currentVersion = await this.#resolveDepVersion(
+            dependency.depKey,
+            probeVisitedNodeKeys,
+            dependency.depVersion
+          )
+          if (currentVersion !== dependency.depVersion) {
+            onMismatch({
+              depKey: dependency.depKey,
+              expectedVersion: dependency.depVersion,
+              currentVersion,
+            })
+            break
+          }
+        }
+      }
       return false
     }
 
@@ -2151,6 +2224,11 @@ export class CacheStore {
       )
 
       if (currentVersion !== dependency.depVersion) {
+        onMismatch?.({
+          depKey: dependency.depKey,
+          expectedVersion: dependency.depVersion,
+          currentVersion,
+        })
         this.#dependencyGraph.markNodeDirty(nodeKey)
         this.#dependencyGraph.touchDependency(dependency.depKey)
         if (currentVersion !== undefined) {

@@ -12,11 +12,10 @@ import { getCacheStorePersistence } from '../file-system/CacheSqlite.ts'
 import type { FileSystem } from '../file-system/FileSystem.ts'
 import {
   createPersistentCacheNodeKey,
-  normalizeCachePath,
 } from '../file-system/cache-key.ts'
 import { FileSystemSnapshot } from '../file-system/Snapshot.ts'
 import { hasJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
-import { resolveSchemePath } from '../utils/path.ts'
+import { normalizePathKey, resolveSchemePath } from '../utils/path.ts'
 import {
   resolveLiteralExpression,
   type LiteralExpressionValue,
@@ -1054,10 +1053,10 @@ async function resolvePrewarmWorkspaceGate(
       return undefined
     }
 
-    const normalizedWorkspaceRootPath = normalizeCachePath(workspaceRootPath)
+    const normalizedWorkspaceRootPath = normalizePathKey(workspaceRootPath)
     const normalizedTsConfigPath =
       typeof projectOptions?.tsConfigFilePath === 'string'
-        ? normalizeCachePath(projectOptions.tsConfigFilePath)
+        ? normalizePathKey(projectOptions.tsConfigFilePath)
         : null
     const gateKey = `${normalizedWorkspaceRootPath}::${normalizedTsConfigPath ?? 'none'}`
     const store = getPrewarmWorkspaceGateStore(

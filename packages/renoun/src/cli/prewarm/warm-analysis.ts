@@ -14,7 +14,6 @@ import { getCacheStorePersistence } from '../../file-system/CacheSqlite.ts'
 import {
   FS_ANALYSIS_CACHE_VERSION,
   createCacheNodeKey,
-  normalizeCachePath,
 } from '../../file-system/cache-key.ts'
 import { NodeFileSystem } from '../../file-system/NodeFileSystem.ts'
 import { FileSystemSnapshot } from '../../file-system/Snapshot.ts'
@@ -24,6 +23,7 @@ import { getRootDirectory } from '../../utils/get-root-directory.ts'
 import { forEachConcurrent } from '../../utils/concurrency.ts'
 import { getDebugLogger } from '../../utils/debug.ts'
 import { isJavaScriptLikeExtension } from '../../utils/is-javascript-like-extension.ts'
+import { normalizePathKey } from '../../utils/path.ts'
 import type {
   DirectoryEntriesRequest,
   FileRequest,
@@ -626,7 +626,7 @@ function createSectionsCacheNodeKey(
   return createCacheNodeKey(`${extension}.sections`, {
     version: FS_ANALYSIS_CACHE_VERSION,
     snapshot: snapshotId,
-    filePath: normalizeCachePath(filePath),
+    filePath: normalizePathKey(filePath),
   })
 }
 

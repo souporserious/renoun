@@ -1,4 +1,3 @@
-import { normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 
@@ -8,10 +7,6 @@ export const FS_ANALYSIS_CACHE_VERSION = '0'
 export const FS_STRUCTURE_CACHE_VERSION = '0'
 export const GIT_HISTORY_CACHE_VERSION = '0'
 export const GIT_VIRTUAL_HISTORY_CACHE_VERSION = '0'
-
-export function normalizeCachePath(path: string): string {
-  return normalizePathKey(path)
-}
 
 export function createCacheNodeKey(
   namespace: string,

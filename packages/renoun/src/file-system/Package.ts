@@ -7,6 +7,7 @@ import {
   directoryName,
   ensureRelativePath,
   joinPaths,
+  normalizePathKey,
   normalizeSlashes,
   normalizeWorkspaceRelativePath as normalizeWorkspaceRelative,
   relativePath,
@@ -21,7 +22,6 @@ import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import {
   FS_STRUCTURE_CACHE_VERSION,
   createCacheNodeKey,
-  normalizeCachePath,
 } from './cache-key.ts'
 import { type Cache } from './Cache.ts'
 import type { FileSystem } from './FileSystem.ts'
@@ -801,6 +801,29 @@ interface ResolveExportSourcesCacheEntry {
   dependencySignatures: Map<string, string>
 }
 
+const resolveExportSourcesSharedCacheByFileSystem = new WeakMap<
+  FileSystem,
+  Map<string, ResolveExportSourcesCacheEntry>
+>()
+
+function getResolveExportSourcesSharedCache(fileSystem: FileSystem) {
+  const existing = resolveExportSourcesSharedCacheByFileSystem.get(fileSystem)
+  if (existing) {
+    return existing
+  }
+
+  const created = new Map<string, ResolveExportSourcesCacheEntry>()
+  resolveExportSourcesSharedCacheByFileSystem.set(fileSystem, created)
+  return created
+}
+
+function createResolveExportSourcesSharedCacheKey(
+  packagePath: string,
+  cacheKey: string
+) {
+  return `${normalizePathKey(packagePath)}:${cacheKey}`
+}
+
 function toRewriteCacheSignature(
   rewrite: NonNullable<ResolveExportSourcesOptions['rewrites']>[number]
 ): { from: string; to: string } {
@@ -1453,6 +1476,11 @@ export class Package<
     config: ResolveExportSourcesOptions = {}
   ): ResolvedExportSource[] {
     const cacheKey = this.#createResolveExportSourcesCacheKey(config)
+    const sharedCache = getResolveExportSourcesSharedCache(this.#fileSystem)
+    const sharedCacheKey = createResolveExportSourcesSharedCacheKey(
+      this.#packagePath,
+      cacheKey
+    )
     const cached = this.#resolveExportSourcesCache.get(cacheKey)
     if (
       cached &&
@@ -1461,6 +1489,17 @@ export class Package<
       )
     ) {
       return cloneResolvedExportSources(cached.results)
+    }
+
+    const sharedCached = sharedCache.get(sharedCacheKey)
+    if (
+      sharedCached &&
+      this.#areResolveExportSourcesDependenciesFresh(
+        sharedCached.dependencySignatures
+      )
+    ) {
+      this.#resolveExportSourcesCache.set(cacheKey, sharedCached)
+      return cloneResolvedExportSources(sharedCached.results)
     }
 
     const packageJsonPath = joinPaths(this.#packagePath, 'package.json')
@@ -1597,10 +1636,12 @@ export class Package<
     const dependencySignatures =
       this.#createResolveExportSourcesDependencySignatures(dependencyProbePaths)
     const clonedResults = cloneResolvedExportSources(results)
-    this.#resolveExportSourcesCache.set(cacheKey, {
+    const cacheEntry: ResolveExportSourcesCacheEntry = {
       results: clonedResults,
       dependencySignatures,
-    })
+    }
+    this.#resolveExportSourcesCache.set(cacheKey, cacheEntry)
+    sharedCache.set(sharedCacheKey, cacheEntry)
 
     return cloneResolvedExportSources(clonedResults)
   }
@@ -1637,7 +1678,7 @@ export class Package<
     return createStructureNodeKey('structure.package', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      packagePath: normalizeCachePath(this.#packagePath),
+      packagePath: normalizePathKey(this.#packagePath),
       explicitName: this.#hasExplicitName ? (this.#name ?? null) : null,
     })
   }

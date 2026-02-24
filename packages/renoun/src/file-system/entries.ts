@@ -85,7 +85,6 @@ import {
   FS_ANALYSIS_CACHE_VERSION,
   FS_STRUCTURE_CACHE_VERSION,
   createCacheNodeKey,
-  normalizeCachePath,
   serializeTypeFilterForCache,
 } from './cache-key.ts'
 import { Session } from './Session.ts'
@@ -1167,7 +1166,7 @@ export class File<
     return createCacheNodeKey('structure.file', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      filePath: normalizeCachePath(this.absolutePath),
+      filePath: normalizePathKey(this.absolutePath),
       extension: this.extension,
     })
   }
@@ -1261,7 +1260,7 @@ export class File<
     return createCacheNodeKey('structure.file', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      filePath: normalizeCachePath(this.absolutePath),
+      filePath: normalizePathKey(this.absolutePath),
       extension: this.extension,
       gitMetadata: this.#structureGitMetadataSignature,
     })
@@ -1711,7 +1710,7 @@ export class ModuleExport<Value> {
     const fileSystem = directory.getFileSystem()
     const session = directory.getSession()
     const filePath = location.path
-    const cacheFilePath = normalizeCachePath(filePath)
+    const cacheFilePath = normalizePathKey(filePath)
     const nodeKey = createCacheNodeKey('js.export.metadata', {
       version: FS_ANALYSIS_CACHE_VERSION,
       snapshot: session.snapshot.id,
@@ -1818,7 +1817,7 @@ export class ModuleExport<Value> {
     const fileSystem = directory.getFileSystem()
     const session = directory.getSession()
     const filePath = location.path
-    const cacheFilePath = normalizeCachePath(filePath)
+    const cacheFilePath = normalizePathKey(filePath)
     const nodeKey = createCacheNodeKey('js.export.text', {
       version: FS_ANALYSIS_CACHE_VERSION,
       snapshot: session.snapshot.id,
@@ -2002,7 +2001,7 @@ export class ModuleExport<Value> {
     return createCacheNodeKey('structure.module-export', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      filePath: normalizeCachePath(this.#file.absolutePath),
+      filePath: normalizePathKey(this.#file.absolutePath),
       exportName: this.#name,
     })
   }
@@ -2030,7 +2029,7 @@ export class ModuleExport<Value> {
     return createCacheNodeKey('ts.type', {
       version: FS_ANALYSIS_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      filePath: normalizeCachePath(this.#file.absolutePath),
+      filePath: normalizePathKey(this.#file.absolutePath),
       exportName: this.#name,
       filter: filter ? serializeTypeFilterForCache(filter) : 'none',
     })
@@ -2044,7 +2043,7 @@ export class ModuleExport<Value> {
     return createCacheNodeKey('structure.module-export', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      filePath: normalizeCachePath(this.#file.absolutePath),
+      filePath: normalizePathKey(this.#file.absolutePath),
       exportName: this.#name,
       gitMetadata: this.#structureGitMetadataSignature,
     })
@@ -2113,7 +2112,7 @@ export class ModuleExport<Value> {
     const fileSystem = directory.getFileSystem()
     const session = directory.getSession()
     const filePath = location.path
-    const cacheFilePath = normalizeCachePath(filePath)
+    const cacheFilePath = normalizePathKey(filePath)
     const nodeKey = createCacheNodeKey('js.export.static-value', {
       version: FS_ANALYSIS_CACHE_VERSION,
       snapshot: session.snapshot.id,
@@ -2469,7 +2468,7 @@ export class JavaScriptFile<
     const fileSystem = directory.getFileSystem()
     const session = directory.getSession()
     const filePath = this.absolutePath
-    const cacheFilePath = normalizeCachePath(filePath)
+    const cacheFilePath = normalizePathKey(filePath)
     const nodeKey = createCacheNodeKey('js.exports', {
       version: FS_ANALYSIS_CACHE_VERSION,
       dependencyVersion: 2,
@@ -2701,7 +2700,7 @@ export class JavaScriptFile<
     const fileSystem = directory.getFileSystem()
     const session = directory.getSession()
     const filePath = this.absolutePath
-    const cacheFilePath = normalizeCachePath(filePath)
+    const cacheFilePath = normalizePathKey(filePath)
     const nodeKey = createCacheNodeKey('js.outline', {
       version: FS_ANALYSIS_CACHE_VERSION,
       snapshot: session.snapshot.id,
@@ -3358,7 +3357,7 @@ export class MDXFile<
     return createCacheNodeKey('mdx.frontmatter', {
       version: FS_ANALYSIS_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      filePath: normalizeCachePath(this.absolutePath),
+      filePath: normalizePathKey(this.absolutePath),
     })
   }
 
@@ -3367,7 +3366,7 @@ export class MDXFile<
     return createCacheNodeKey('mdx.sections', {
       version: FS_ANALYSIS_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      filePath: normalizeCachePath(this.absolutePath),
+      filePath: normalizePathKey(this.absolutePath),
     })
   }
 
@@ -3756,7 +3755,7 @@ export class MarkdownFile<
     return createCacheNodeKey('md.frontmatter', {
       version: FS_ANALYSIS_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      filePath: normalizeCachePath(this.absolutePath),
+      filePath: normalizePathKey(this.absolutePath),
     })
   }
 
@@ -3765,7 +3764,7 @@ export class MarkdownFile<
     return createCacheNodeKey('md.sections', {
       version: FS_ANALYSIS_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      filePath: normalizeCachePath(this.absolutePath),
+      filePath: normalizePathKey(this.absolutePath),
     })
   }
 
@@ -6226,7 +6225,7 @@ export class Directory<
     return createCacheNodeKey('structure.directory', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      directoryPath: normalizeCachePath(this.absolutePath),
+      directoryPath: normalizePathKey(this.absolutePath),
       filterSignature: this.#getFilterSignature(),
       sortSignature: this.#getSortSignature(),
       basePathname: this.#basePathname ?? null,
@@ -7788,7 +7787,7 @@ export class Directory<
     return createCacheNodeKey('structure.directory', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
-      directoryPath: normalizeCachePath(this.absolutePath),
+      directoryPath: normalizePathKey(this.absolutePath),
       rootPath: this.getRootPath(),
     })
   }
@@ -7982,9 +7981,20 @@ export class Collection<
   const Loaders extends ModuleLoaders = LoadersFromEntries<Entries>,
 > {
   #entries: Entries
+  #entriesInflight = new Map<string, Promise<Entries>>()
 
   constructor(options: CollectionOptions<Entries>) {
     this.#entries = options.entries
+  }
+
+  #toEntriesOptionsCacheKey(options?: {
+    recursive?: boolean
+    includeIndexAndReadmeFiles?: boolean
+  }) {
+    return createCacheNodeKey('collection.entries', {
+      recursive: options?.recursive === true,
+      includeIndexAndReadmeFiles: options?.includeIndexAndReadmeFiles === true,
+    })
   }
 
   /** Get all entries in the group. */
@@ -7995,42 +8005,64 @@ export class Collection<
     /** Include index and readme files in the group. */
     includeIndexAndReadmeFiles?: boolean
   }): Promise<Entries> {
-    const allEntries: FileSystemEntry<any>[] = []
+    const cacheKey = this.#toEntriesOptionsCacheKey(options)
 
-    async function findEntries(entries: FileSystemEntry<any>[]) {
-      for (const entry of entries) {
-        const lowerCaseBaseName = entry.baseName.toLowerCase()
-        const shouldSkipIndexOrReadme = options?.includeIndexAndReadmeFiles
-          ? false
-          : ['index', 'readme'].some((name) =>
-              lowerCaseBaseName.startsWith(name)
-            )
+    const inFlight = this.#entriesInflight.get(cacheKey)
+    if (inFlight) {
+      return inFlight
+    }
 
-        if (shouldSkipIndexOrReadme) {
-          continue
-        }
+    const computeEntriesPromise = (async () => {
+      const allEntries: FileSystemEntry<any>[] = []
 
-        allEntries.push(entry)
+      async function findEntries(entries: FileSystemEntry<any>[]) {
+        for (const entry of entries) {
+          const lowerCaseBaseName = entry.baseName.toLowerCase()
+          const shouldSkipIndexOrReadme = options?.includeIndexAndReadmeFiles
+            ? false
+            : ['index', 'readme'].some((name) =>
+                lowerCaseBaseName.startsWith(name)
+              )
 
-        if (options?.recursive && entry instanceof Directory) {
-          const childOptions =
-            entry.getFilterPatternKind() === 'recursive'
-              ? options
-              : ({ ...options, recursive: undefined } as typeof options)
-          const nestedEntries = await entry.getEntries(childOptions)
-          const startIndex = allEntries.length
-          const nestedLength = nestedEntries.length
-          allEntries.length = startIndex + nestedLength
-          for (let nestedIndex = 0; nestedIndex < nestedLength; ++nestedIndex) {
-            allEntries[startIndex + nestedIndex] = nestedEntries[nestedIndex]
+          if (shouldSkipIndexOrReadme) {
+            continue
+          }
+
+          allEntries.push(entry)
+
+          if (options?.recursive && entry instanceof Directory) {
+            const childOptions =
+              entry.getFilterPatternKind() === 'recursive'
+                ? options
+                : ({ ...options, recursive: undefined } as typeof options)
+            const nestedEntries = await entry.getEntries(childOptions)
+            const startIndex = allEntries.length
+            const nestedLength = nestedEntries.length
+            allEntries.length = startIndex + nestedLength
+            for (
+              let nestedIndex = 0;
+              nestedIndex < nestedLength;
+              ++nestedIndex
+            ) {
+              allEntries[startIndex + nestedIndex] = nestedEntries[nestedIndex]
+            }
           }
         }
       }
+
+      await findEntries(this.#entries)
+
+      return allEntries as Entries
+    })()
+
+    this.#entriesInflight.set(cacheKey, computeEntriesPromise)
+
+    try {
+      const entries = await computeEntriesPromise
+      return entries
+    } finally {
+      this.#entriesInflight.delete(cacheKey)
     }
-
-    await findEntries(this.#entries)
-
-    return allEntries as Entries
   }
 
   /** Get an entry in the group by its path. */

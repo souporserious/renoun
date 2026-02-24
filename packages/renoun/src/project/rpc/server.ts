@@ -17,6 +17,7 @@ import {
   type RenounPublicErrorCode,
 } from '../../utils/public-error.ts'
 import { Semaphore } from '../../utils/Semaphore.ts'
+import { startRpcBuildProfile } from './build-profile.ts'
 
 export interface WebSocketRequest {
   method: string
@@ -791,62 +792,6 @@ export class WebSocketServer {
       : optionsMerged.memoize
     let fn: (params: any) => Promise<any> | any = handler
 
-    if (memoizeOptions) {
-      const ttlMs =
-        typeof memoizeOptions === 'object' && memoizeOptions.ttlMs != null
-          ? memoizeOptions.ttlMs
-          : 60_000
-      const maxEntries =
-        typeof memoizeOptions === 'object' && memoizeOptions.maxEntries != null
-          ? memoizeOptions.maxEntries
-          : 500
-      const state = {
-        inflight: new Map<string, Promise<any>>(),
-        cache: new LRUCache<any>(maxEntries, ttlMs),
-      }
-      this.#methods.set(method, state)
-
-      const promise = async (params: any) => {
-        const key = makeKey(method, params)
-
-        // cache hit
-        const hit = state.cache!.get(key)
-        if (hit !== LRUCache.UNSET) {
-          getDebugLogger().logCacheOperation('hit', method)
-          return hit
-        }
-
-        // in-flight de-duplicate
-        const pending = state.inflight.get(key)
-        if (pending) {
-          getDebugLogger().logCacheOperation('hit', method, {
-            kind: 'in-flight',
-          })
-          return pending
-        }
-
-        // compute once
-        getDebugLogger().logCacheOperation('miss', method)
-        const promise = (async () => {
-          try {
-            const result = await handler(params)
-            state.cache!.set(key, result)
-            getDebugLogger().logCacheOperation('set', method, {
-              size: state.cache!.size(),
-            })
-            return result
-          } finally {
-            state.inflight.delete(key)
-          }
-        })()
-
-        state.inflight.set(key, promise)
-        return promise
-      }
-
-      fn = promise
-    }
-
     if (optionsMerged?.concurrency && optionsMerged.concurrency > 0) {
       const semaphore = new Semaphore(optionsMerged.concurrency)
       this.#methodSemaphores.set(method, semaphore)
@@ -884,6 +829,63 @@ export class WebSocketServer {
           release()
         }
       }
+    }
+
+    if (memoizeOptions) {
+      const ttlMs =
+        typeof memoizeOptions === 'object' && memoizeOptions.ttlMs != null
+          ? memoizeOptions.ttlMs
+          : 60_000
+      const maxEntries =
+        typeof memoizeOptions === 'object' && memoizeOptions.maxEntries != null
+          ? memoizeOptions.maxEntries
+          : 500
+      const state = {
+        inflight: new Map<string, Promise<any>>(),
+        cache: new LRUCache<any>(maxEntries, ttlMs),
+      }
+      this.#methods.set(method, state)
+      const base = fn
+
+      const promise = async (params: any) => {
+        const key = makeKey(method, params)
+
+        // cache hit
+        const hit = state.cache!.get(key)
+        if (hit !== LRUCache.UNSET) {
+          getDebugLogger().logCacheOperation('hit', method)
+          return hit
+        }
+
+        // in-flight de-duplicate
+        const pending = state.inflight.get(key)
+        if (pending) {
+          getDebugLogger().logCacheOperation('hit', method, {
+            kind: 'in-flight',
+          })
+          return pending
+        }
+
+        // compute once
+        getDebugLogger().logCacheOperation('miss', method)
+        const promise = (async () => {
+          try {
+            const result = await base(params)
+            state.cache!.set(key, result)
+            getDebugLogger().logCacheOperation('set', method, {
+              size: state.cache!.size(),
+            })
+            return result
+          } finally {
+            state.inflight.delete(key)
+          }
+        })()
+
+        state.inflight.set(key, promise)
+        return promise
+      }
+
+      fn = promise
     }
 
     this.#handlers.set(method, fn)
@@ -926,6 +928,12 @@ export class WebSocketServer {
       }
       return null
     }
+
+    const completeRpcProfile = startRpcBuildProfile(
+      request.method,
+      request.params
+    )
+    let rpcFailed = false
 
     try {
       const semaphore = this.#methodSemaphores.get(request.method)
@@ -1017,6 +1025,7 @@ export class WebSocketServer {
       }
       return null
     } catch (error) {
+      rpcFailed = true
       const timedOut =
         error instanceof TimeoutError ||
         String((error as Error)?.message).startsWith('Request timed out')
@@ -1061,6 +1070,8 @@ export class WebSocketServer {
         } satisfies WebSocketResponse
       }
       return null
+    } finally {
+      completeRpcProfile({ error: rpcFailed })
     }
   }
 

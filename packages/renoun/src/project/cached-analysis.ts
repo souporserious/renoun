@@ -9,14 +9,15 @@ import { getTsMorph } from '../utils/ts-morph.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { normalizePathKey } from '../utils/path.ts'
 import {
   createPersistentCacheNodeKey,
-  normalizeCachePath,
   serializeTypeFilterForCache,
 } from '../file-system/cache-key.ts'
 import {
   type CacheStoreComputeContext,
   type CacheStoreConstDependency,
+  type CacheStoreFreshnessMismatch,
   type CacheStoreStaleWhileRevalidateOptions,
 } from '../file-system/Cache.ts'
 import type { ModuleExport } from '../utils/get-file-exports.ts'
@@ -44,6 +45,11 @@ import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import { mapConcurrent } from '../utils/concurrency.ts'
 import type { ProjectCacheDependency } from './cache.ts'
 import { createProjectFileCache, invalidateProjectFileCache } from './cache.ts'
+import {
+  isRpcBuildProfileEnabled,
+  recordRpcCacheReuse,
+  recordRpcCacheReuseStaleReason,
+} from './rpc/build-profile.ts'
 import type { RuntimeAnalysisSession } from './runtime-analysis-session.ts'
 import { getRuntimeAnalysisSession as getSharedRuntimeAnalysisSession } from './runtime-analysis-session.ts'
 
@@ -64,7 +70,7 @@ const TYPE_SCRIPT_DEPENDENCY_FINGERPRINT_CACHE_NAME =
 const MODULE_RESOLUTION_CACHE_NAME = 'moduleResolution'
 const PACKAGE_VERSION_DEPENDENCY_CACHE_NAME = 'packageVersionDependency'
 const RUNTIME_ANALYSIS_CACHE_SCOPE = 'project-analysis-runtime'
-const RUNTIME_ANALYSIS_CACHE_VERSION = '2'
+const RUNTIME_ANALYSIS_CACHE_VERSION = '3'
 const RUNTIME_ANALYSIS_CACHE_VERSION_DEP = 'runtime-analysis-cache-version'
 const PROJECT_COMPILER_OPTIONS_DEP = 'project:compiler-options'
 const DEFAULT_RUNTIME_ANALYSIS_SWR_MAX_STALE_AGE_MS = 2_000
@@ -114,6 +120,13 @@ const runtimeTypeScriptDependencySidecarHydrationQueue: Array<{
   run: () => Promise<void>
 }> = []
 let runtimeTypeScriptDependencySidecarHydrationActiveCount = 0
+const projectConfigDependencyVersionByKey = new Map<
+  string,
+  {
+    contentId: string
+    version: string
+  }
+>()
 const RUNTIME_TS_DEPENDENCY_SIDECAR_HYDRATION_CONCURRENCY = 2
 
 function getRuntimeAnalysisSWRReadOptions():
@@ -166,7 +179,7 @@ async function getRuntimeAnalysisSession(): Promise<
 }
 
 function isTypeScriptConfigPath(path: string): boolean {
-  const normalizedPath = normalizeCachePath(path)
+  const normalizedPath = normalizePathKey(path)
   return /(^|\/)tsconfig(\..+)?\.json$/i.test(normalizedPath)
 }
 
@@ -250,7 +263,7 @@ function normalizeCacheFilePath(path: string | undefined): string | undefined {
     return undefined
   }
 
-  return normalizeCachePath(path)
+  return normalizePathKey(path)
 }
 
 interface SourceFileDependencyLink {
@@ -390,13 +403,13 @@ function resolveSourceFileByPathCandidates(
 ): string | undefined {
   const candidatePaths = new Set<string>()
   candidatePaths.add(basePath)
-  candidatePaths.add(normalizeCachePath(basePath))
+  candidatePaths.add(normalizePathKey(basePath))
 
   for (const extension of MODULE_RESOLUTION_FILE_EXTENSIONS) {
     candidatePaths.add(`${basePath}${extension}`)
-    candidatePaths.add(normalizeCachePath(`${basePath}${extension}`))
+    candidatePaths.add(normalizePathKey(`${basePath}${extension}`))
     candidatePaths.add(join(basePath, `index${extension}`))
-    candidatePaths.add(normalizeCachePath(join(basePath, `index${extension}`)))
+    candidatePaths.add(normalizePathKey(join(basePath, `index${extension}`)))
   }
 
   for (const candidatePath of candidatePaths) {
@@ -459,7 +472,7 @@ function createRuntimeModuleResolutionCacheNodeKey(payload: {
 }): string {
   return createRuntimeAnalysisCacheNodeKey(MODULE_RESOLUTION_CACHE_NAME, {
     compilerOptionsVersion: payload.compilerOptionsVersion,
-    containingFilePath: normalizeCachePath(payload.containingFilePath),
+    containingFilePath: normalizePathKey(payload.containingFilePath),
     moduleSpecifier: payload.moduleSpecifier,
   })
 }
@@ -477,7 +490,7 @@ async function resolveModuleSpecifierSourceFilePath(
     return {}
   }
 
-  const cacheKey = `${normalizeCachePath(containingFilePath)}:${normalizedModuleSpecifier}`
+  const cacheKey = `${normalizePathKey(containingFilePath)}:${normalizedModuleSpecifier}`
   if (moduleResolutionByKey.has(cacheKey)) {
     return moduleResolutionByKey.get(cacheKey) ?? {}
   }
@@ -499,7 +512,7 @@ async function resolveModuleSpecifierSourceFilePath(
     return resolution
   }
 
-  const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps()
   const moduleResolutionNodeKey = createRuntimeModuleResolutionCacheNodeKey({
     compilerOptionsVersion,
     containingFilePath,
@@ -631,7 +644,7 @@ function shouldTraverseDependencySourceFile(
 
   const dependencyPath = sourceFile.getFilePath()
 
-  if (normalizeCachePath(dependencyPath).includes('/node_modules/')) {
+  if (normalizePathKey(dependencyPath).includes('/node_modules/')) {
     return false
   }
 
@@ -646,12 +659,12 @@ function shouldTraverseDependencyPath(
     return false
   }
 
-  return !normalizeCachePath(dependencyPath).includes('/node_modules/')
+  return !normalizePathKey(dependencyPath).includes('/node_modules/')
 }
 
 function isPathWithinRoot(path: string, rootPath: string): boolean {
-  const normalizedPath = normalizeCachePath(path)
-  const normalizedRootPath = normalizeCachePath(rootPath)
+  const normalizedPath = normalizePathKey(path)
+  const normalizedRootPath = normalizePathKey(rootPath)
   return (
     normalizedPath === normalizedRootPath ||
     normalizedPath.startsWith(`${normalizedRootPath}/`)
@@ -688,7 +701,7 @@ function shouldRecordLocalWorkspaceDependencyPath(options: {
     return false
   }
 
-  const normalizedDependencyPath = normalizeCachePath(dependencyPath)
+  const normalizedDependencyPath = normalizePathKey(dependencyPath)
   if (normalizedDependencyPath.includes('/node_modules/')) {
     return false
   }
@@ -779,7 +792,7 @@ async function collectTypeScriptDependencyAnalysis(
   const getDependencyLinksForSourceFile = (
     targetSourceFile: SourceFile
   ): Promise<SourceFileDependencyLinksResult> => {
-    const sourceFilePathKey = normalizeCachePath(targetSourceFile.getFilePath())
+    const sourceFilePathKey = normalizePathKey(targetSourceFile.getFilePath())
     const cachedLinks = dependencyLinksBySourceFilePath.get(sourceFilePathKey)
     if (cachedLinks) {
       return cachedLinks
@@ -804,7 +817,7 @@ async function collectTypeScriptDependencyAnalysis(
 
     const currentSourceFile = sourceFileQueue.shift()!
     const currentSourceFilePath = currentSourceFile.getFilePath()
-    const normalizedCurrentSourceFilePath = normalizeCachePath(
+    const normalizedCurrentSourceFilePath = normalizePathKey(
       currentSourceFilePath
     )
 
@@ -824,7 +837,7 @@ async function collectTypeScriptDependencyAnalysis(
       const dependencyPath = link.sourceFilePath
       const normalizedDependencyPath =
         typeof dependencyPath === 'string'
-          ? normalizeCachePath(dependencyPath)
+          ? normalizePathKey(dependencyPath)
           : undefined
       const isLocalWorkspaceDependencyPath =
         normalizedDependencyPath !== undefined &&
@@ -881,7 +894,7 @@ async function collectTypeScriptDependencyAnalysis(
         continue
       }
       if (
-        normalizeCachePath(projectSourceFilePath).includes('/node_modules/')
+        normalizePathKey(projectSourceFilePath).includes('/node_modules/')
       ) {
         continue
       }
@@ -903,7 +916,7 @@ async function collectTypeScriptDependencyAnalysis(
         const dependencyPath = link.sourceFilePath
         const normalizedDependencyPath =
           typeof dependencyPath === 'string'
-            ? normalizeCachePath(dependencyPath)
+            ? normalizePathKey(dependencyPath)
             : undefined
         const isLocalWorkspaceDependencyPath =
           typeof dependencyPath === 'string' &&
@@ -978,7 +991,7 @@ function readPackageManifest(
   packageManifestByPath: Map<string, PackageManifest | null>,
   packageManifestPath: string
 ): PackageManifest | null {
-  const normalizedPackageManifestPath = normalizeCachePath(packageManifestPath)
+  const normalizedPackageManifestPath = normalizePathKey(packageManifestPath)
   const cachedPackageManifest = packageManifestByPath.get(
     normalizedPackageManifestPath
   )
@@ -1030,10 +1043,10 @@ function getAncestorDirectoriesInWorkspace(
     let currentDirectory = dirname(
       runtimeCacheStore.fileSystem.getAbsolutePath(filePath)
     )
-    const normalizedWorkspaceRoot = normalizeCachePath(workspaceRootPath)
+    const normalizedWorkspaceRoot = normalizePathKey(workspaceRootPath)
 
     while (true) {
-      const normalizedCurrentDirectory = normalizeCachePath(currentDirectory)
+      const normalizedCurrentDirectory = normalizePathKey(currentDirectory)
       const isWithinWorkspaceRoot =
         normalizedCurrentDirectory === normalizedWorkspaceRoot ||
         normalizedCurrentDirectory.startsWith(`${normalizedWorkspaceRoot}/`)
@@ -1140,7 +1153,7 @@ function createRuntimePackageVersionDependencyCacheNodeKey(payload: {
     PACKAGE_VERSION_DEPENDENCY_CACHE_NAME,
     {
       compilerOptionsVersion: payload.compilerOptionsVersion,
-      importerPath: normalizeCachePath(payload.importerPath),
+      importerPath: normalizePathKey(payload.importerPath),
       packageName: payload.packageName,
     }
   )
@@ -1157,7 +1170,7 @@ async function resolveCachedPackageVersionDependencyForImporter(
     return undefined
   }
 
-  const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps()
   const nodeKey = createRuntimePackageVersionDependencyCacheNodeKey({
     compilerOptionsVersion,
     importerPath,
@@ -1320,7 +1333,7 @@ async function getCachedRuntimeTypeScriptDependencyAnalysis(
 
   const compilerOptionsVersion =
     compilerOptionsVersionProp ?? getCompilerOptionsVersion(project)
-  const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps()
   const nodeKey = createRuntimeTypeScriptDependencyAnalysisCacheNodeKey(
     filePath,
     compilerOptionsVersion
@@ -1509,6 +1522,49 @@ async function recordDirectoryDependencyIfPossible(
   } catch {}
 }
 
+async function resolveProjectConfigDependencyVersion(options: {
+  runtimeCacheStore: RuntimeAnalysisCacheStore
+  configFilePath: string
+}): Promise<{ name: string; version: string } | undefined> {
+  const { runtimeCacheStore, configFilePath } = options
+
+  try {
+    const absoluteConfigPath =
+      runtimeCacheStore.fileSystem.getAbsolutePath(configFilePath)
+    const normalizedConfigPath = normalizePathKey(absoluteConfigPath)
+    const contentId = await runtimeCacheStore.snapshot.contentId(
+      normalizedConfigPath
+    )
+    const dependencyKey = `${runtimeCacheStore.snapshot.id}:${normalizedConfigPath}`
+    const cached = projectConfigDependencyVersionByKey.get(dependencyKey)
+    if (cached && cached.contentId === contentId) {
+      return {
+        name: `project-config:${normalizedConfigPath}`,
+        version: cached.version,
+      }
+    }
+
+    let version = contentId
+    try {
+      const fileContents =
+        await runtimeCacheStore.snapshot.readFile(normalizedConfigPath)
+      version = `sha1:${hashString(fileContents)}:${fileContents.length}`
+    } catch {}
+
+    projectConfigDependencyVersionByKey.set(dependencyKey, {
+      contentId,
+      version,
+    })
+
+    return {
+      name: `project-config:${normalizedConfigPath}`,
+      version,
+    }
+  } catch {
+    return undefined
+  }
+}
+
 async function recordProjectConfigDependency(
   context: CacheStoreComputeContext,
   runtimeCacheStore: RuntimeAnalysisCacheStore,
@@ -1522,10 +1578,17 @@ async function recordProjectConfigDependency(
     return
   }
 
-  await recordFileDependencyIfPossible(
-    context,
+  const projectConfigDependency = await resolveProjectConfigDependencyVersion({
     runtimeCacheStore,
-    compilerOptions.configFilePath
+    configFilePath: compilerOptions.configFilePath,
+  })
+  if (!projectConfigDependency) {
+    return
+  }
+
+  context.recordConstDep(
+    projectConfigDependency.name,
+    projectConfigDependency.version
   )
 }
 
@@ -1556,19 +1619,181 @@ function canUseRuntimePathCache(
   }
 }
 
-function getRuntimeAnalysisConstDeps(
-  compilerOptionsVersion: string
-): CacheStoreConstDependency[] {
+function shouldTrackRuntimeTypeScriptDependenciesForPath(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  filePath: string | undefined
+): filePath is string {
+  if (!filePath) {
+    return false
+  }
+
+  return canUseRuntimePathCache(runtimeCacheStore, filePath)
+}
+
+function getRuntimeAnalysisConstDeps(): CacheStoreConstDependency[] {
   return [
     {
       name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
       version: RUNTIME_ANALYSIS_CACHE_VERSION,
     },
-    {
-      name: PROJECT_COMPILER_OPTIONS_DEP,
-      version: compilerOptionsVersion,
-    },
   ]
+}
+
+function getRuntimeCacheReuseProfileTarget(options: {
+  filePath?: string
+  fallback: string
+}): string {
+  return normalizeCacheFilePath(options.filePath) ?? options.fallback
+}
+
+function getCacheContentIdKindForProfile(version: string | undefined): string {
+  if (!version) {
+    return 'unknown'
+  }
+  if (version === 'missing') {
+    return 'missing'
+  }
+  if (version.startsWith('mtime:')) {
+    return 'mtime'
+  }
+  if (version.startsWith('sha1:')) {
+    return 'sha1'
+  }
+  if (version.startsWith('dir:')) {
+    return 'dir'
+  }
+  return 'other'
+}
+
+function getCacheDepKeyKindForProfile(depKey: string): string {
+  if (depKey.startsWith('const:')) {
+    const encodedConstName = depKey.slice('const:'.length)
+    let constName = encodedConstName
+    try {
+      constName = decodeURIComponent(encodedConstName)
+    } catch {}
+
+    if (
+      constName === PROJECT_COMPILER_OPTIONS_DEP ||
+      constName.startsWith(`${PROJECT_COMPILER_OPTIONS_DEP}:`)
+    ) {
+      return 'const:project:compiler-options'
+    }
+    if (constName === RUNTIME_ANALYSIS_CACHE_VERSION_DEP) {
+      return 'const:runtime-analysis-cache-version'
+    }
+    return `const:${constName}`
+  }
+
+  if (depKey.startsWith('file:')) {
+    const path = depKey.slice('file:'.length)
+    if (path.endsWith('/tsconfig.json') || path.includes('/tsconfig.')) {
+      return 'file:project-config'
+    }
+    if (path.startsWith('_renoun/') || path.includes('/_renoun/')) {
+      return 'file:inline-generated'
+    }
+    if (path.endsWith('/package.json')) {
+      return 'file:package-manifest'
+    }
+    return 'file:other'
+  }
+
+  if (depKey.startsWith('dir:')) {
+    return 'dir:other'
+  }
+
+  if (depKey.startsWith('node:')) {
+    if (depKey.includes(TYPE_SCRIPT_DEPENDENCY_ANALYSIS_CACHE_NAME)) {
+      return 'node:ts-dependency-analysis'
+    }
+    if (depKey.includes(TYPE_SCRIPT_DEPENDENCY_FINGERPRINT_CACHE_NAME)) {
+      return 'node:ts-dependency-fingerprint'
+    }
+    if (depKey.includes(MODULE_RESOLUTION_CACHE_NAME)) {
+      return 'node:module-resolution'
+    }
+    return 'node:other'
+  }
+
+  return 'other'
+}
+
+function toRuntimeCacheReuseStaleReason(
+  staleReason: CacheStoreFreshnessMismatch | 'graph-dirty' | undefined
+): string | undefined {
+  if (!staleReason) {
+    return undefined
+  }
+  if (staleReason === 'graph-dirty') {
+    return 'graph-dirty'
+  }
+
+  const dependencyKind = getCacheDepKeyKindForProfile(staleReason.depKey)
+  const expectedKind = getCacheContentIdKindForProfile(
+    staleReason.expectedVersion
+  )
+  const currentKind = getCacheContentIdKindForProfile(staleReason.currentVersion)
+  return `${dependencyKind}:${expectedKind}->${currentKind}`
+}
+
+async function profileRuntimeCacheReuse(options: {
+  method: 'getSourceTextMetadata' | 'getTokens'
+  runtimeCacheStore: RuntimeAnalysisCacheStore | undefined
+  nodeKey: string | undefined
+  target: string
+}): Promise<void> {
+  if (!isRpcBuildProfileEnabled()) {
+    return
+  }
+
+  if (!options.runtimeCacheStore || !options.nodeKey) {
+    recordRpcCacheReuse({
+      method: options.method,
+      outcome: 'unavailable',
+      target: options.target,
+    })
+    return
+  }
+
+  try {
+    const freshness = await options.runtimeCacheStore.store.getWithFreshness(
+      options.nodeKey,
+      {
+        includeStaleReason: true,
+      }
+    )
+    if (freshness.value === undefined) {
+      recordRpcCacheReuse({
+        method: options.method,
+        outcome: 'miss',
+        target: options.target,
+      })
+      return
+    }
+
+    recordRpcCacheReuse({
+      method: options.method,
+      outcome: freshness.fresh ? 'hit' : 'stale',
+      target: options.target,
+    })
+    if (!freshness.fresh) {
+      const staleReason = toRuntimeCacheReuseStaleReason(freshness.staleReason)
+      if (staleReason) {
+        recordRpcCacheReuseStaleReason({
+          method: options.method,
+          reason: staleReason,
+          target: options.target,
+        })
+      }
+    }
+  } catch {
+    recordRpcCacheReuse({
+      method: options.method,
+      outcome: 'error',
+      target: options.target,
+    })
+  }
 }
 
 function createRuntimeTypeScriptDependencyTrackingDedupeKey(
@@ -1576,7 +1801,7 @@ function createRuntimeTypeScriptDependencyTrackingDedupeKey(
   filePath: string,
   compilerOptionsVersion: string
 ): string {
-  return `${runtimeCacheStore.snapshot.id}:${compilerOptionsVersion}:${normalizeCachePath(filePath)}`
+  return `${runtimeCacheStore.snapshot.id}:${compilerOptionsVersion}:${normalizePathKey(filePath)}`
 }
 
 function createRuntimeTypeScriptDependencyAnalysisCacheNodeKey(
@@ -1718,7 +1943,7 @@ async function computeRuntimeTypeScriptDependencyFingerprint(options: {
           runtimeCacheStore,
           dependencyPath
         )
-        return `${normalizeCachePath(dependencyPath)}:${contentId ?? 'missing'}`
+        return `${normalizePathKey(dependencyPath)}:${contentId ?? 'missing'}`
       })
   )
   const packageManifestFingerprints = await Promise.all(
@@ -1729,7 +1954,7 @@ async function computeRuntimeTypeScriptDependencyFingerprint(options: {
           runtimeCacheStore,
           manifestPath
         )
-        return `${normalizeCachePath(manifestPath)}:${contentId ?? 'missing'}`
+        return `${normalizePathKey(manifestPath)}:${contentId ?? 'missing'}`
       })
   )
 
@@ -1737,7 +1962,7 @@ async function computeRuntimeTypeScriptDependencyFingerprint(options: {
     importResolutionFingerprint: hashString(
       stableStringify({
         compilerOptionsVersion,
-        rootPath: normalizeCachePath(rootPath),
+        rootPath: normalizePathKey(rootPath),
         rootPathContentId: rootPathContentId ?? 'missing',
         projectConfigPath: normalizeCacheFilePath(projectConfigPath) ?? null,
         projectConfigContentId: projectConfigContentId ?? 'missing',
@@ -1779,7 +2004,7 @@ async function getCachedRuntimeTypeScriptDependencyFingerprint(
     return pending
   }
 
-  const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps()
   const task = runtimeCacheStore.store
     .getOrCompute(
       nodeKey,
@@ -2036,7 +2261,7 @@ export async function getCachedFileExports(
     canUseRuntimePathCache(runtimeCacheStore, filePath)
   ) {
     const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
-    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps()
     const nodeKey = createRuntimeFileExportsCacheNodeKey(
       filePath,
       compilerOptionsVersion
@@ -2116,7 +2341,7 @@ export async function getCachedOutlineRanges(
     canUseRuntimePathCache(runtimeCacheStore, filePath)
   ) {
     const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
-    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps()
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       OUTLINE_RANGES_CACHE_NAME,
       {
@@ -2180,7 +2405,7 @@ export async function getCachedFileExportMetadata(
     canUseRuntimePathCache(runtimeCacheStore, options.filePath)
   ) {
     const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
-    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps()
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       FILE_EXPORT_METADATA_CACHE_NAME,
       {
@@ -2267,7 +2492,7 @@ export async function getCachedFileExportStaticValue(
     canUseRuntimePathCache(runtimeCacheStore, options.filePath)
   ) {
     const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
-    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps()
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       FILE_EXPORT_STATIC_VALUE_CACHE_NAME,
       {
@@ -2359,7 +2584,7 @@ export async function getCachedFileExportText(
       options.includeDependencies === true
         ? undefined
         : getRuntimeAnalysisSWRReadOptions()
-    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps()
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       FILE_EXPORT_TEXT_CACHE_NAME,
       {
@@ -2459,9 +2684,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
       canUseRuntimePathCache(runtimeCacheStore, options.filePath)
     ) {
       const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
-      const runtimeConstDeps = getRuntimeAnalysisConstDeps(
-        compilerOptionsVersion
-      )
+      const runtimeConstDeps = getRuntimeAnalysisConstDeps()
       const nodeKey = createRuntimeAnalysisCacheNodeKey(
         RESOLVE_TYPE_AT_LOCATION_CACHE_NAME,
         {
@@ -2581,7 +2804,7 @@ export async function transpileCachedSourceFile(
     canUseRuntimePathCache(runtimeCacheStore, filePath)
   ) {
     const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
-    const runtimeConstDeps = getRuntimeAnalysisConstDeps(compilerOptionsVersion)
+    const runtimeConstDeps = getRuntimeAnalysisConstDeps()
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       TRANSPILE_SOURCE_FILE_CACHE_NAME,
       {
@@ -2637,8 +2860,21 @@ export async function getCachedSourceTextMetadata(
   project: Project,
   options: Omit<GetSourceTextMetadataOptions, 'project'>
 ): Promise<SourceTextMetadata> {
+  const shouldProfileRpcCacheReuse = isRpcBuildProfileEnabled()
+  const profileTarget = getRuntimeCacheReuseProfileTarget({
+    filePath: options.filePath,
+    fallback: `inline:${options.language ?? 'txt'}`,
+  })
   const runtimeCacheStore = await getRuntimeAnalysisSession()
   if (!runtimeCacheStore) {
+    if (shouldProfileRpcCacheReuse) {
+      await profileRuntimeCacheReuse({
+        method: 'getSourceTextMetadata',
+        runtimeCacheStore: undefined,
+        nodeKey: undefined,
+        target: profileTarget,
+      })
+    }
     return baseGetSourceTextMetadata({
       ...options,
       project,
@@ -2646,16 +2882,7 @@ export async function getCachedSourceTextMetadata(
   }
 
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
-  const runtimeConstDeps: CacheStoreConstDependency[] = [
-    {
-      name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
-      version: RUNTIME_ANALYSIS_CACHE_VERSION,
-    },
-    {
-      name: PROJECT_COMPILER_OPTIONS_DEP,
-      version: compilerOptionsVersion,
-    },
-  ]
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps()
   const nodeKey = createRuntimeAnalysisCacheNodeKey(
     SOURCE_TEXT_METADATA_CACHE_NAME,
     {
@@ -2668,6 +2895,15 @@ export async function getCachedSourceTextMetadata(
       valueSignature: toSourceTextMetadataValueSignature(options.value),
     }
   )
+
+  if (shouldProfileRpcCacheReuse) {
+    await profileRuntimeCacheReuse({
+      method: 'getSourceTextMetadata',
+      runtimeCacheStore,
+      nodeKey,
+      target: profileTarget,
+    })
+  }
 
   return runtimeCacheStore.store.getOrCompute(
     nodeKey,
@@ -2697,10 +2933,20 @@ export async function getCachedSourceTextMetadata(
       )
       if (shouldTrackRuntimeTypeScriptDependencies()) {
         const sourceTextDependencyAnalysisPaths = new Set<string>()
-        if (options.filePath) {
+        if (
+          shouldTrackRuntimeTypeScriptDependenciesForPath(
+            runtimeCacheStore,
+            options.filePath
+          )
+        ) {
           sourceTextDependencyAnalysisPaths.add(options.filePath)
         }
-        if (result.filePath) {
+        if (
+          shouldTrackRuntimeTypeScriptDependenciesForPath(
+            runtimeCacheStore,
+            result.filePath
+          )
+        ) {
           sourceTextDependencyAnalysisPaths.add(result.filePath)
         }
 
@@ -2724,8 +2970,24 @@ export async function getCachedTokens(
   project: Project,
   options: Omit<GetTokensOptions, 'project'>
 ): Promise<TokenizedLines> {
+  const shouldProfileRpcCacheReuse = isRpcBuildProfileEnabled()
+  const profileTarget = getRuntimeCacheReuseProfileTarget({
+    filePath: options.filePath,
+    fallback:
+      typeof options.sourcePath === 'string'
+        ? normalizePathKey(options.sourcePath)
+        : `inline:${options.language ?? 'plaintext'}`,
+  })
   const runtimeCacheStore = await getRuntimeAnalysisSession()
   if (!runtimeCacheStore) {
+    if (shouldProfileRpcCacheReuse) {
+      await profileRuntimeCacheReuse({
+        method: 'getTokens',
+        runtimeCacheStore: undefined,
+        nodeKey: undefined,
+        target: profileTarget,
+      })
+    }
     return baseGetTokens({
       ...options,
       project,
@@ -2734,22 +2996,13 @@ export async function getCachedTokens(
 
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
   const normalizedFilePath = normalizeCacheFilePath(options.filePath)
-  const runtimeConstDeps: CacheStoreConstDependency[] = [
-    {
-      name: RUNTIME_ANALYSIS_CACHE_VERSION_DEP,
-      version: RUNTIME_ANALYSIS_CACHE_VERSION,
-    },
-    {
-      name: PROJECT_COMPILER_OPTIONS_DEP,
-      version: compilerOptionsVersion,
-    },
-  ]
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps()
   const nodeKey = createRuntimeAnalysisCacheNodeKey(TOKENS_CACHE_NAME, {
     compilerOptionsVersion,
     filePath: normalizedFilePath,
     sourcePath:
       typeof options.sourcePath === 'string'
-        ? normalizeCachePath(options.sourcePath)
+        ? normalizePathKey(options.sourcePath)
         : (options.sourcePath ?? null),
     language: options.language ?? 'plaintext',
     themeSignature: getThemeSignature(options.theme),
@@ -2758,6 +3011,15 @@ export async function getCachedTokens(
     showErrors: options.showErrors ?? null,
     valueSignature: toTokenValueSignature(options.value),
   })
+
+  if (shouldProfileRpcCacheReuse) {
+    await profileRuntimeCacheReuse({
+      method: 'getTokens',
+      runtimeCacheStore,
+      nodeKey,
+      target: profileTarget,
+    })
+  }
 
   return runtimeCacheStore.store.getOrCompute(
     nodeKey,
@@ -2780,7 +3042,13 @@ export async function getCachedTokens(
         project,
       })
 
-      if (shouldTrackRuntimeTypeScriptDependencies()) {
+      if (
+        shouldTrackRuntimeTypeScriptDependencies() &&
+        shouldTrackRuntimeTypeScriptDependenciesForPath(
+          runtimeCacheStore,
+          options.filePath
+        )
+      ) {
         await recordRuntimeTypeScriptDependencySidecar(
           context,
           project,
