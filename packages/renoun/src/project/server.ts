@@ -35,6 +35,7 @@ const { SyntaxKind } = getTsMorph()
 
 let currentHighlighter: Promise<Highlighter> | null = null
 let activeProjectServers = 0
+const REFRESH_NOTIFICATION_BATCH_WINDOW_MS = 50
 
 interface ResolveTypeAtLocationRpcRequest {
   filePath: string
@@ -157,25 +158,58 @@ export async function createServer(options?: { port?: number }) {
 
   process.env.RENOUN_SERVER_PORT = String(port)
 
+  let refreshFlushTimer: NodeJS.Timeout | undefined
+  const pendingRefreshPaths = new Set<string>()
+  const pendingRefreshEventTypes = new Set<string>()
+  const flushRefreshNotifications = () => {
+    refreshFlushTimer = undefined
+    if (pendingRefreshPaths.size === 0) {
+      return
+    }
+
+    const filePaths = Array.from(pendingRefreshPaths)
+    const eventTypes = Array.from(pendingRefreshEventTypes)
+    pendingRefreshPaths.clear()
+    pendingRefreshEventTypes.clear()
+
+    server.sendNotification({
+      type: 'refresh',
+      data: {
+        eventType: eventTypes.length === 1 ? eventTypes[0] : 'batch',
+        eventTypes,
+        filePath: filePaths[0],
+        filePaths,
+      },
+    })
+  }
+
   const rootDirectory = getRootDirectory()
   const rootWatcher = shouldEmitRefreshNotifications()
     ? watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
         if (!fileName) return
 
-        const filePath = join(rootDirectory, fileName)
+        const watchedFileName = String(fileName)
+        if (!watchedFileName) {
+          return
+        }
+
+        const filePath = join(rootDirectory, watchedFileName)
 
         if (isFilePathGitIgnored(filePath)) {
           return
         }
 
-        /* Notify the client to refresh when files change. */
-        server.sendNotification({
-          type: 'refresh',
-          data: {
-            eventType,
-            filePath,
-          },
-        })
+        pendingRefreshPaths.add(filePath)
+        pendingRefreshEventTypes.add(eventType)
+        if (refreshFlushTimer) {
+          return
+        }
+
+        refreshFlushTimer = setTimeout(
+          flushRefreshNotifications,
+          REFRESH_NOTIFICATION_BATCH_WINDOW_MS
+        )
+        refreshFlushTimer.unref?.()
       })
     : undefined
 
@@ -189,6 +223,10 @@ export async function createServer(options?: { port?: number }) {
 
     if (rootWatcher) {
       closeWatcher(rootWatcher)
+    }
+    if (refreshFlushTimer) {
+      clearTimeout(refreshFlushTimer)
+      refreshFlushTimer = undefined
     }
     activeProjectServers = Math.max(0, activeProjectServers - 1)
     if (activeProjectServers === 0) {

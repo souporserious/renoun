@@ -48,7 +48,10 @@ function getClient(): WebSocketClient | undefined {
           return
         }
 
-        queueRefreshInvalidation(message.data.filePath)
+        const paths = getRefreshInvalidationPaths(message.data)
+        for (const path of paths) {
+          queueRefreshInvalidation(path)
+        }
       })
     }
   }
@@ -103,7 +106,10 @@ function parseBooleanEnv(value: string | undefined): boolean | undefined {
 
 function isRefreshNotification(
   value: unknown
-): value is { type: 'refresh'; data: { filePath: string } } {
+): value is {
+  type: 'refresh'
+  data: { filePath?: string; filePaths?: string[] }
+} {
   if (value === null || typeof value !== 'object') {
     return false
   }
@@ -117,8 +123,37 @@ function isRefreshNotification(
     return false
   }
 
-  const data = candidate.data as { filePath?: unknown }
-  return typeof data.filePath === 'string' && data.filePath.length > 0
+  const data = candidate.data as { filePath?: unknown; filePaths?: unknown }
+  const hasFilePath =
+    typeof data.filePath === 'string' && data.filePath.length > 0
+  const hasFilePaths =
+    Array.isArray(data.filePaths) &&
+    data.filePaths.some(
+      (path) => typeof path === 'string' && path.length > 0
+    )
+
+  return hasFilePath || hasFilePaths
+}
+
+function getRefreshInvalidationPaths(data: {
+  filePath?: string
+  filePaths?: string[]
+}): string[] {
+  const deduped = new Set<string>()
+
+  if (typeof data.filePath === 'string' && data.filePath.length > 0) {
+    deduped.add(data.filePath)
+  }
+
+  if (Array.isArray(data.filePaths)) {
+    for (const path of data.filePaths) {
+      if (typeof path === 'string' && path.length > 0) {
+        deduped.add(path)
+      }
+    }
+  }
+
+  return Array.from(deduped)
 }
 
 /**
