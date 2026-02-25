@@ -578,6 +578,78 @@ describe('GitFileSystem', () => {
     }
   })
 
+  test('persists rename-map entries used by export history', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFiles(
+      repoRoot,
+      [
+        { filename: 'src/index.ts', content: `export * from './old'` },
+        { filename: 'src/old.ts', content: `export const core = 1` },
+      ],
+      'init'
+    )
+    git(repoRoot, ['mv', 'src/old.ts', 'src/new.ts'])
+    writeFileSync(join(repoRoot, 'src/index.ts'), `export * from './new'`)
+    git(repoRoot, ['add', '--sparse', 'src/index.ts', 'src/new.ts'])
+    git(repoRoot, ['commit', '--no-gpg-sign', '-m', 'rename file'])
+    const renameCommit = git(repoRoot, ['log', '-1', '--format=%H'])
+
+    const store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    try {
+      const report = await drain(
+        store.getExportHistory({
+          entry: 'src/index.ts',
+        })
+      )
+      const coreId = getPrimaryId(report, 'core')
+      expect(coreId).toBeDefined()
+      const renameChange = report.exports[coreId!].find(
+        (change) => change.kind === 'Renamed'
+      )
+      expect(renameChange).toBeDefined()
+      expect(renameChange?.sha).toBe(renameCommit)
+      expect(renameChange?.previousFilePath).toBe('src/old.ts')
+    } finally {
+      store.close()
+    }
+
+    const persistence = getCacheStorePersistence({ projectRoot: repoRoot })
+    try {
+      const renameMapKeys = await persistence.listNodeKeysByPrefix(
+        `git-file-system:${GIT_HISTORY_CACHE_VERSION}:rename-map:`
+      )
+      expect(renameMapKeys.length).toBeGreaterThan(0)
+
+      let foundExpectedPair = false
+      for (const key of renameMapKeys) {
+        const persisted = await persistence.load(key)
+        const value = persisted?.value
+        if (!Array.isArray(value)) {
+          continue
+        }
+        for (const pair of value) {
+          if (
+            Array.isArray(pair) &&
+            pair[0] === 'src/new.ts' &&
+            pair[1] === 'src/old.ts'
+          ) {
+            foundExpectedPair = true
+            break
+          }
+        }
+        if (foundExpectedPair) {
+          break
+        }
+      }
+
+      expect(foundExpectedPair).toBe(true)
+    } finally {
+      disposeCacheStorePersistence({ projectRoot: repoRoot })
+    }
+  })
+
   test('recomputes export-history when public-api-latest pointer is for a different request', async ({
     repoRoot,
     cacheDirectory,

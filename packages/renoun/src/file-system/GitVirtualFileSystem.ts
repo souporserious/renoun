@@ -917,7 +917,13 @@ export class GitVirtualFileSystem
 
     const next = await this.#resolveRefCacheIdentity(normalizedRef, cached)
     await this.#getSession().cache.put(nodeKey, next, {
-      persist: false,
+      persist: true,
+      deps: [
+        {
+          depKey: `const:git-virtual-cache:${GIT_VIRTUAL_HISTORY_CACHE_VERSION}`,
+          depVersion: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+        },
+      ],
     })
 
     return next

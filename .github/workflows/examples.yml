@@ -54,6 +54,19 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Restore renoun cache
+        if: steps.detect.outputs.changed == 'true'
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
+        with:
+          path: |
+            .renoun/cache/fs-cache.sqlite
+            .renoun/cache/fs-cache.sqlite-shm
+            .renoun/cache/fs-cache.sqlite-wal
+          key: ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-
+
       - name: Install dependencies
         if: steps.detect.outputs.changed == 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts

@@ -760,6 +760,29 @@ function shouldTraverseDependencyPath(
   return !normalizePathKey(dependencyPath).includes('/node_modules/')
 }
 
+function getOrAddProjectSourceFile(
+  project: Project,
+  filePath: string
+): SourceFile | undefined {
+  const existingSourceFile = project.getSourceFile(filePath)
+  if (existingSourceFile) {
+    return existingSourceFile
+  }
+
+  try {
+    const addedSourceFile = (
+      project as Project & {
+        addSourceFileAtPathIfExists?: (path: string) => SourceFile | undefined
+      }
+    ).addSourceFileAtPathIfExists?.(filePath)
+    if (addedSourceFile) {
+      return addedSourceFile
+    }
+  } catch {}
+
+  return project.getSourceFile(filePath)
+}
+
 function isPathWithinRoot(path: string, rootPath: string): boolean {
   const normalizedPath = normalizePathKey(path)
   const normalizedRootPath = normalizePathKey(rootPath)
@@ -952,7 +975,10 @@ async function collectTypeScriptDependencyAnalysis(
       }
 
       if (isLocalWorkspaceDependencyPath && dependencyPath) {
-        const dependencySourceFile = project.getSourceFile(dependencyPath)
+        const dependencySourceFile = getOrAddProjectSourceFile(
+          project,
+          dependencyPath
+        )
         if (
           dependencySourceFile &&
           shouldTraverseDependencySourceFile(

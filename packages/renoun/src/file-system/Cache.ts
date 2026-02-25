@@ -27,6 +27,7 @@ export interface CacheEntry<Value = unknown> {
   fingerprint: string
   persist: boolean
   updatedAt: number
+  workspaceChangeToken?: string | null
 }
 
 export interface CacheDependencyEvictionResult {
@@ -34,6 +35,8 @@ export interface CacheDependencyEvictionResult {
   usedDependencyIndex: boolean
   hasMissingDependencyMetadata: boolean
   missingDependencyNodeKeys?: string[]
+  invalidationSeq?: number
+  invalidationMode?: 'structured'
 }
 
 export interface CacheStorePersistence {
@@ -170,6 +173,9 @@ const DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_TTL_MULTIPLIER = 4
 const DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS = 5_000
 const NEVER_ABORT_SIGNAL = new AbortController().signal
 const DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS = 3
+const WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER = ';ignored-only:1'
+const WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER =
+  ';include-gitignored:1'
 const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
   'renoun.fs.cache.no-compute-slot-shared-value'
 )
@@ -1140,6 +1146,14 @@ export class CacheStore {
       persist: options.persist ?? false,
       updatedAt: Date.now(),
     }
+    const workspaceTokenRootPath = resolveWorkspaceTokenRootPath(
+      dependencyEntries
+    )
+    if (entry.persist && workspaceTokenRootPath) {
+      entry.workspaceChangeToken = await this.#getWorkspaceChangeToken(
+        workspaceTokenRootPath
+      )
+    }
     if (entry.persist && dependencyEntries.length === 0) {
       this.#emitMissingDependencyMetadataSignal(nodeKey, 'manual-put')
     }
@@ -1275,6 +1289,8 @@ export class CacheStore {
     const missingDependencyNodeKeys = new Set<string>()
     let usedDependencyIndex = false
     let hasMissingDependencyMetadata = false
+    let invalidationSeq: number | undefined
+    let invalidationMode: CacheDependencyEvictionResult['invalidationMode']
 
     if (dependencyPathCandidates.size === 0) {
       return defaultResult
@@ -1305,6 +1321,15 @@ export class CacheStore {
       }
       usedDependencyIndex ||= batchResult.usedDependencyIndex
       hasMissingDependencyMetadata ||= batchResult.hasMissingDependencyMetadata
+      if (typeof batchResult.invalidationSeq === 'number') {
+        invalidationSeq = Math.max(
+          invalidationSeq ?? Number.NEGATIVE_INFINITY,
+          batchResult.invalidationSeq
+        )
+      }
+      if (batchResult.invalidationMode) {
+        invalidationMode = batchResult.invalidationMode
+      }
     } else if (persistence.deleteByDependencyPath) {
       for (const normalizedPath of dependencyPathCandidateList) {
         let result: CacheDependencyEvictionResult
@@ -1326,17 +1351,38 @@ export class CacheStore {
         }
         usedDependencyIndex ||= result.usedDependencyIndex
         hasMissingDependencyMetadata ||= result.hasMissingDependencyMetadata
+        if (typeof result.invalidationSeq === 'number') {
+          invalidationSeq = Math.max(
+            invalidationSeq ?? Number.NEGATIVE_INFINITY,
+            result.invalidationSeq
+          )
+        }
+        if (result.invalidationMode) {
+          invalidationMode = result.invalidationMode
+        }
       }
     } else {
       return defaultResult
     }
 
     if (deletedNodeKeys.size === 0) {
+      const evictionMetadata: Partial<CacheDependencyEvictionResult> = {}
+      if (
+        typeof invalidationSeq === 'number' &&
+        Number.isFinite(invalidationSeq)
+      ) {
+        evictionMetadata.invalidationSeq = invalidationSeq
+      }
+      if (invalidationMode) {
+        evictionMetadata.invalidationMode = invalidationMode
+      }
+
       return {
         ...defaultResult,
         usedDependencyIndex,
         hasMissingDependencyMetadata,
         missingDependencyNodeKeys: Array.from(missingDependencyNodeKeys),
+        ...evictionMetadata,
       }
     }
 
@@ -1358,11 +1404,20 @@ export class CacheStore {
       clearPersistedEntryInvalidation(persistence, nodeKey)
     }
 
+    const evictionMetadata: Partial<CacheDependencyEvictionResult> = {}
+    if (typeof invalidationSeq === 'number' && Number.isFinite(invalidationSeq)) {
+      evictionMetadata.invalidationSeq = invalidationSeq
+    }
+    if (invalidationMode) {
+      evictionMetadata.invalidationMode = invalidationMode
+    }
+
     return {
       deletedNodeKeys: Array.from(deletedNodeKeys),
       usedDependencyIndex,
       hasMissingDependencyMetadata,
       missingDependencyNodeKeys: Array.from(missingDependencyNodeKeys),
+      ...evictionMetadata,
     }
   }
 
@@ -1969,6 +2024,14 @@ export class CacheStore {
         persist: options.persist ?? false,
         updatedAt: Date.now(),
       }
+      const workspaceTokenRootPath = resolveWorkspaceTokenRootPath(
+        dependencyEntries
+      )
+      if (entry.persist && workspaceTokenRootPath) {
+        entry.workspaceChangeToken = await this.#getWorkspaceChangeToken(
+          workspaceTokenRootPath
+        )
+      }
       if (entry.persist && dependencyEntries.length === 0) {
         this.#emitMissingDependencyMetadataSignal(nodeKey, 'compute')
       }
@@ -2335,6 +2398,153 @@ export class CacheStore {
     computeScope.deps.set(`node:${childNodeKey}`, depVersion)
   }
 
+  async #getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    const tokenGetter = this.#snapshot.getWorkspaceChangeToken
+    if (typeof tokenGetter !== 'function') {
+      return null
+    }
+
+    const lookupRootPath = this.#resolveWorkspaceTokenLookupPath(rootPath)
+
+    try {
+      const token = await tokenGetter.call(this.#snapshot, lookupRootPath)
+      return typeof token === 'string' ? token : null
+    } catch {
+      return null
+    }
+  }
+
+  async #getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<ReadonlySet<string> | null> {
+    const changedPathsGetter = this.#snapshot.getWorkspaceChangedPathsSinceToken
+    if (typeof changedPathsGetter !== 'function') {
+      return null
+    }
+
+    const lookupRootPath = this.#resolveWorkspaceTokenLookupPath(rootPath)
+
+    try {
+      const changedPaths = await changedPathsGetter.call(
+        this.#snapshot,
+        lookupRootPath,
+        previousToken
+      )
+      if (!changedPaths) {
+        return null
+      }
+
+      return normalizeWorkspaceChangedPathKeys(changedPaths, this.#snapshot)
+    } catch {
+      return null
+    }
+  }
+
+  #getRecentlyInvalidatedPathKeys(): ReadonlySet<string> | undefined {
+    const recentlyInvalidatedPathsGetter = this.#snapshot.getRecentlyInvalidatedPaths
+    if (typeof recentlyInvalidatedPathsGetter !== 'function') {
+      return undefined
+    }
+
+    try {
+      const paths = recentlyInvalidatedPathsGetter.call(this.#snapshot)
+      if (!paths || paths.size === 0) {
+        return undefined
+      }
+
+      return normalizeWorkspaceChangedPathKeys(paths, this.#snapshot) ?? undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  #resolveWorkspaceTokenLookupPath(rootPath: string): string {
+    const normalizedRootPath = normalizeCachePathKey(rootPath)
+
+    let cwdPathKey = '.'
+    try {
+      cwdPathKey = normalizeCachePathKey(
+        this.#snapshot.getRelativePathToWorkspace('.')
+      )
+    } catch {
+      return normalizedRootPath
+    }
+
+    return toRelativePathFromBasePath(normalizedRootPath, cwdPathKey)
+  }
+
+  async #resolveWorkspaceTokenValidatedPathDependencies(
+    entry: CacheEntry
+  ): Promise<Set<string> | undefined> {
+    if (!entry.persist) {
+      return undefined
+    }
+
+    const previousToken = entry.workspaceChangeToken
+    if (!isTrustedWorkspaceChangeToken(previousToken)) {
+      return undefined
+    }
+
+    const dependencyPathKeys = collectDependencyPathKeysFromCacheDependencies(
+      entry.deps
+    )
+    const workspaceTokenRootPath = resolveWorkspaceTokenRootPath(entry.deps)
+    if (
+      dependencyPathKeys.pathKeys.size === 0 ||
+      dependencyPathKeys.depKeys.size === 0 ||
+      !workspaceTokenRootPath
+    ) {
+      return undefined
+    }
+
+    const recentlyInvalidatedPathKeys = this.#getRecentlyInvalidatedPathKeys()
+    if (
+      recentlyInvalidatedPathKeys &&
+      pathKeySetsIntersect(
+        dependencyPathKeys.pathKeys,
+        recentlyInvalidatedPathKeys
+      )
+    ) {
+      return undefined
+    }
+
+    const currentToken = await this.#getWorkspaceChangeToken(
+      workspaceTokenRootPath
+    )
+    if (!isTrustedWorkspaceChangeToken(currentToken)) {
+      return undefined
+    }
+
+    if (currentToken === previousToken) {
+      return dependencyPathKeys.depKeys
+    }
+
+    const changedPathKeys = await this.#getWorkspaceChangedPathsSinceToken(
+      workspaceTokenRootPath,
+      previousToken
+    )
+    const knownChangedPathKeys = mergeKnownPathKeySets(
+      changedPathKeys,
+      recentlyInvalidatedPathKeys
+    )
+    if (!knownChangedPathKeys) {
+      return undefined
+    }
+
+    if (
+      !pathKeySetsIntersect(
+        dependencyPathKeys.pathKeys,
+        knownChangedPathKeys
+      )
+    ) {
+      entry.workspaceChangeToken = currentToken
+      return dependencyPathKeys.depKeys
+    }
+
+    return undefined
+  }
+
   #registerEntryInGraph(nodeKey: string, entry: CacheEntry): void {
     this.#dependencyGraph.batch(() => {
       for (const dependency of entry.deps) {
@@ -2390,12 +2600,22 @@ export class CacheStore {
     }
 
     visitedNodeKeys.add(nodeKey)
+    const tokenValidatedPathDependencies =
+      await this.#resolveWorkspaceTokenValidatedPathDependencies(entry)
     const dependencyVersionsToUpdate: Array<{
       depKey: string
       depVersion: string
     }> = []
 
     for (const dependency of entry.deps) {
+      if (tokenValidatedPathDependencies?.has(dependency.depKey)) {
+        dependencyVersionsToUpdate.push({
+          depKey: dependency.depKey,
+          depVersion: dependency.depVersion,
+        })
+        continue
+      }
+
       const currentVersion = await this.#resolveDepVersion(
         dependency.depKey,
         visitedNodeKeys,
@@ -3026,6 +3246,278 @@ function normalizeCachePathKey(path: string): string {
     trimLeadingSlashesForCache(trimLeadingDotSlashForCache(path))
   )
   return key === '' ? '.' : key
+}
+
+function isAbsoluteCachePath(path: string): boolean {
+  const normalized = normalizeCacheSlashes(path)
+  return (
+    normalized.startsWith('/') ||
+    /^[A-Za-z]:\//.test(normalized) ||
+    normalized.startsWith('//')
+  )
+}
+
+function normalizeWorkspaceChangedPathKeys(
+  changedPaths: ReadonlySet<string> | readonly string[],
+  snapshot: Snapshot
+): ReadonlySet<string> | null {
+  const normalizedPaths = new Set<string>()
+  for (const changedPath of changedPaths) {
+    if (typeof changedPath !== 'string') {
+      continue
+    }
+
+    let normalizedPath: string
+    try {
+      normalizedPath = isAbsoluteCachePath(changedPath)
+        ? normalizeCachePathKey(snapshot.getRelativePathToWorkspace(changedPath))
+        : normalizeCachePathKey(changedPath)
+    } catch {
+      continue
+    }
+
+    normalizedPaths.add(normalizedPath)
+  }
+
+  return normalizedPaths
+}
+
+function extractDependencyPathKey(depKey: string): string | undefined {
+  if (depKey.startsWith('file:')) {
+    return normalizeCachePathKey(depKey.slice('file:'.length))
+  }
+
+  if (depKey.startsWith('dir:')) {
+    return normalizeCachePathKey(depKey.slice('dir:'.length))
+  }
+
+  if (depKey.startsWith('dir-mtime:')) {
+    return normalizeCachePathKey(depKey.slice('dir-mtime:'.length))
+  }
+
+  return undefined
+}
+
+function collectDependencyPathKeysFromCacheDependencies(
+  dependencies: CacheDependency[]
+): {
+  depKeys: Set<string>
+  pathKeys: Set<string>
+} {
+  const depKeys = new Set<string>()
+  const pathKeys = new Set<string>()
+
+  for (const dependency of dependencies) {
+    const dependencyPathKey = extractDependencyPathKey(dependency.depKey)
+    if (!dependencyPathKey) {
+      continue
+    }
+
+    depKeys.add(dependency.depKey)
+    pathKeys.add(dependencyPathKey)
+  }
+
+  return {
+    depKeys,
+    pathKeys,
+  }
+}
+
+function toWorkspaceTokenScopePath(depKey: string): string | undefined {
+  if (depKey.startsWith('file:')) {
+    const filePath = normalizeCachePathKey(depKey.slice('file:'.length))
+    return getParentPathKey(filePath)
+  }
+
+  if (depKey.startsWith('dir:')) {
+    return normalizeCachePathKey(depKey.slice('dir:'.length))
+  }
+
+  if (depKey.startsWith('dir-mtime:')) {
+    return normalizeCachePathKey(depKey.slice('dir-mtime:'.length))
+  }
+
+  return undefined
+}
+
+function resolveWorkspaceTokenRootPath(
+  dependencies: CacheDependency[]
+): string | undefined {
+  const scopePaths = dependencies
+    .map((dependency) => toWorkspaceTokenScopePath(dependency.depKey))
+    .filter((scopePath): scopePath is string => {
+      return typeof scopePath === 'string' && scopePath.length > 0
+    })
+
+  if (scopePaths.length === 0) {
+    return undefined
+  }
+
+  let commonScopePath = scopePaths[0]!
+  for (let index = 1; index < scopePaths.length; index += 1) {
+    commonScopePath = intersectPathPrefixes(
+      commonScopePath,
+      scopePaths[index]!
+    )
+    if (commonScopePath === '.') {
+      break
+    }
+  }
+
+  return commonScopePath
+}
+
+function getParentPathKey(path: string): string {
+  const normalizedPath = normalizeCachePathKey(path)
+  if (normalizedPath === '.') {
+    return '.'
+  }
+
+  const lastSlashIndex = normalizedPath.lastIndexOf('/')
+  if (lastSlashIndex <= 0) {
+    return '.'
+  }
+
+  return normalizedPath.slice(0, lastSlashIndex)
+}
+
+function toRelativePathFromBasePath(targetPath: string, basePath: string): string {
+  const normalizedTargetPath = normalizeCachePathKey(targetPath)
+  const normalizedBasePath = normalizeCachePathKey(basePath)
+  const targetSegments =
+    normalizedTargetPath === '.'
+      ? []
+      : normalizedTargetPath.split('/').filter((segment) => segment.length > 0)
+  const baseSegments =
+    normalizedBasePath === '.'
+      ? []
+      : normalizedBasePath.split('/').filter((segment) => segment.length > 0)
+
+  let sharedSegmentCount = 0
+  while (
+    sharedSegmentCount < targetSegments.length &&
+    sharedSegmentCount < baseSegments.length &&
+    targetSegments[sharedSegmentCount] === baseSegments[sharedSegmentCount]
+  ) {
+    sharedSegmentCount += 1
+  }
+
+  const relativeSegments: string[] = []
+  for (
+    let index = sharedSegmentCount;
+    index < baseSegments.length;
+    index += 1
+  ) {
+    relativeSegments.push('..')
+  }
+  for (
+    let index = sharedSegmentCount;
+    index < targetSegments.length;
+    index += 1
+  ) {
+    relativeSegments.push(targetSegments[index]!)
+  }
+
+  if (relativeSegments.length === 0) {
+    return '.'
+  }
+
+  return relativeSegments.join('/')
+}
+
+function intersectPathPrefixes(firstPath: string, secondPath: string): string {
+  const firstParts = normalizeCachePathKey(firstPath)
+    .split('/')
+    .filter((segment) => segment.length > 0)
+  const secondParts = normalizeCachePathKey(secondPath)
+    .split('/')
+    .filter((segment) => segment.length > 0)
+  const sharedParts: string[] = []
+  const maxLength = Math.min(firstParts.length, secondParts.length)
+
+  for (let index = 0; index < maxLength; index += 1) {
+    if (firstParts[index] !== secondParts[index]) {
+      break
+    }
+
+    sharedParts.push(firstParts[index]!)
+  }
+
+  if (sharedParts.length === 0) {
+    return '.'
+  }
+
+  return sharedParts.join('/')
+}
+
+function mergeKnownPathKeySets(
+  firstSet: ReadonlySet<string> | null | undefined,
+  secondSet: ReadonlySet<string> | null | undefined
+): ReadonlySet<string> | null {
+  if (!firstSet && !secondSet) {
+    return null
+  }
+
+  const merged = new Set<string>()
+  for (const path of firstSet ?? []) {
+    merged.add(path)
+  }
+  for (const path of secondSet ?? []) {
+    merged.add(path)
+  }
+
+  return merged
+}
+
+function pathKeySetsIntersect(
+  firstSet: ReadonlySet<string>,
+  secondSet: ReadonlySet<string>
+): boolean {
+  if (firstSet.size === 0 || secondSet.size === 0) {
+    return false
+  }
+
+  const [smallerSet, largerSet] =
+    firstSet.size <= secondSet.size
+      ? [firstSet, secondSet]
+      : [secondSet, firstSet]
+
+  for (const firstPath of smallerSet) {
+    for (const secondPath of largerSet) {
+      if (pathKeysIntersect(firstPath, secondPath)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+function pathKeysIntersect(firstPath: string, secondPath: string): boolean {
+  const firstKey = normalizeCachePathKey(firstPath)
+  const secondKey = normalizeCachePathKey(secondPath)
+  if (firstKey === '.' || secondKey === '.') {
+    return true
+  }
+
+  return (
+    firstKey === secondKey ||
+    firstKey.startsWith(`${secondKey}/`) ||
+    secondKey.startsWith(`${firstKey}/`)
+  )
+}
+
+function isTrustedWorkspaceChangeToken(
+  token: string | null | undefined
+): token is string {
+  if (!token) {
+    return false
+  }
+
+  return (
+    !token.includes(WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER) &&
+    !token.includes(WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER)
+  )
 }
 
 function isUnserializablePersistenceValueError(error: unknown): boolean {

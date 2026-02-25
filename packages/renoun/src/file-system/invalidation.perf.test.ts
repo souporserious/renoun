@@ -451,8 +451,6 @@ describe('cache invalidation optimization comparison', () => {
           name: 'baseline',
           env: {
             RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'false',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '5000',
             RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
           },
         },
@@ -460,35 +458,13 @@ describe('cache invalidation optimization comparison', () => {
           name: 'prepared_statement_lru',
           env: {
             RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'false',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '5000',
             RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '128',
-          },
-        },
-        {
-          name: 'temp_table_matcher',
-          env: {
-            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'true',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '128',
-            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
-          },
-        },
-        {
-          name: 'temp_table_matcher_aggressive_threshold_1',
-          env: {
-            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'true',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '1',
-            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
           },
         },
         {
           name: 'targeted_missing_metadata',
           env: {
             RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'true',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'false',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '5000',
             RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
           },
         },
@@ -496,16 +472,6 @@ describe('cache invalidation optimization comparison', () => {
           name: 'all_optimizations',
           env: {
             RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'true',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'true',
-            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '128',
-          },
-        },
-        {
-          name: 'all_optimizations_aggressive_threshold_1',
-          env: {
-            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'true',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'true',
-            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '1',
             RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '128',
           },
         },
@@ -574,6 +540,6 @@ describe('cache invalidation optimization comparison', () => {
         true
       )
     },
-    240_000
+    420_000
   )
 })

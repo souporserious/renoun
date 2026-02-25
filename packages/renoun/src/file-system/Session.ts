@@ -1224,6 +1224,8 @@ export class Session {
           fields: {
             pathCount: normalizedPaths.length,
             invalidatedEntries: dependencyEviction.deletedNodeKeys.length,
+            invalidationSeq: dependencyEviction.invalidationSeq,
+            invalidationMode: dependencyEviction.invalidationMode,
           },
           telemetry: this.#telemetry,
         })
@@ -1277,6 +1279,8 @@ export class Session {
             pathHash: toTelemetryHash(normalizedPath),
             pathDepth: getTelemetryPathDepth(normalizedPath),
             invalidatedEntries: dependencyEviction.deletedNodeKeys.length,
+            invalidationSeq: dependencyEviction.invalidationSeq,
+            invalidationMode: dependencyEviction.invalidationMode,
           },
           telemetry: this.#telemetry,
         })
@@ -1900,6 +1904,36 @@ class GeneratedSnapshot implements Snapshot {
 
   contentId(path: string, options?: SnapshotContentIdOptions) {
     return this.#base.contentId(path, options)
+  }
+
+  getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    const getter = this.#base.getWorkspaceChangeToken
+    if (typeof getter !== 'function') {
+      return Promise.resolve(null)
+    }
+
+    return getter.call(this.#base, rootPath)
+  }
+
+  getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<ReadonlySet<string> | null> {
+    const getter = this.#base.getWorkspaceChangedPathsSinceToken
+    if (typeof getter !== 'function') {
+      return Promise.resolve(null)
+    }
+
+    return getter.call(this.#base, rootPath, previousToken)
+  }
+
+  getRecentlyInvalidatedPaths(): ReadonlySet<string> | undefined {
+    const getter = this.#base.getRecentlyInvalidatedPaths
+    if (typeof getter !== 'function') {
+      return undefined
+    }
+
+    return getter.call(this.#base)
   }
 
   invalidatePath(path: string) {

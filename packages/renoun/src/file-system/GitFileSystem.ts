@@ -2051,9 +2051,7 @@ export class GitFileSystem
     }
 
     const next = await this.#resolveRefCacheIdentity(normalizedRef, cached)
-    await this.#getSession().cache.put(nodeKey, next, {
-      persist: false,
-    })
+    await this.#replacePersistentNode(this.#getSession(), nodeKey, next)
 
     return {
       identity: next.identity,
@@ -2508,54 +2506,87 @@ export class GitFileSystem
   ): Promise<Map<string, string>> {
     const safeOldCommit = assertSafeGitArg(oldCommit, 'oldCommit')
     const safeNewCommit = assertSafeGitArg(newCommit, 'newCommit')
-    const commandArguments = [
-      'diff',
-      '--name-status',
-      '-M',
-      '--diff-filter=R',
-      '-z',
-      safeOldCommit,
-      safeNewCommit,
-    ]
-    if (scopeDirectories.length) {
-      commandArguments.push('--', ...scopeDirectories)
-    }
+    const normalizedScopeDirectories = Array.from(
+      new Set(
+        scopeDirectories
+          .map((directory) => normalizePath(String(directory)))
+          .filter(Boolean)
+      )
+    ).sort()
+    const nodeKey = this.#createPersistentCacheNodeKey('rename-map', {
+      oldCommit: safeOldCommit,
+      newCommit: safeNewCommit,
+      scopeDirectories: normalizedScopeDirectories,
+    })
+    const mapEntries = await this.#getSession().cache.getOrCompute<
+      Array<[string, string]>
+    >(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: [
+          {
+            name: 'git-file-system-cache',
+            version: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
+        ctx.recordConstDep('git-file-system-cache', GIT_HISTORY_CACHE_VERSION)
 
-    let stdout = ''
-    try {
-      stdout = await spawnAsync('git', commandArguments, {
-        cwd: this.repoRoot,
-        maxBuffer: this.maxBufferBytes,
-        verbose: this.verbose,
-      })
-    } catch {
-      return new Map()
-    }
+        const commandArguments = [
+          'diff',
+          '--name-status',
+          '-M',
+          '--diff-filter=R',
+          '-z',
+          safeOldCommit,
+          safeNewCommit,
+        ]
+        if (normalizedScopeDirectories.length) {
+          commandArguments.push('--', ...normalizedScopeDirectories)
+        }
 
-    const out = String(stdout)
-    if (!out) {
-      return new Map()
-    }
+        let stdout = ''
+        try {
+          stdout = await spawnAsync('git', commandArguments, {
+            cwd: this.repoRoot,
+            maxBuffer: this.maxBufferBytes,
+            verbose: this.verbose,
+          })
+        } catch {
+          return []
+        }
 
-    const parts = out.split('\0').filter(Boolean)
-    const map = new Map<string, string>()
+        const out = String(stdout)
+        if (!out) {
+          return []
+        }
 
-    for (let index = 0; index < parts.length; ) {
-      const status = parts[index++]
-      if (!status) {
-        continue
+        const parts = out.split('\0').filter(Boolean)
+        const entries: Array<[string, string]> = []
+
+        for (let index = 0; index < parts.length; ) {
+          const status = parts[index++]
+          if (!status) {
+            continue
+          }
+          if (status.startsWith('R')) {
+            const oldPath = normalizePath(parts[index++] ?? '')
+            const newPath = normalizePath(parts[index++] ?? '')
+            if (oldPath && newPath) {
+              entries.push([newPath, oldPath])
+            }
+            continue
+          }
+          index++
+        }
+
+        return entries
       }
-      if (status.startsWith('R')) {
-        const oldPath = parts[index++] ?? ''
-        const newPath = parts[index++] ?? ''
-        if (oldPath && newPath)
-          map.set(normalizePath(newPath), normalizePath(oldPath))
-        continue
-      }
-      index++
-    }
+    )
 
-    return map
+    return new Map(mapEntries)
   }
 
   async #gitIsAncestorCommit(
@@ -4222,8 +4253,19 @@ export class GitFileSystem
       }
       await session.cache.put(
         nodeKey,
-        { remoteSha: null, checkedAt: now },
-        { persist: false }
+        {
+          remoteSha: null,
+          checkedAt: now,
+        },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+              depVersion: GIT_HISTORY_CACHE_VERSION,
+            },
+          ],
+        }
       )
       return null
     }
@@ -4262,8 +4304,19 @@ export class GitFileSystem
     }
     await session.cache.put(
       nodeKey,
-      { remoteSha, checkedAt: now },
-      { persist: false }
+      {
+        remoteSha,
+        checkedAt: now,
+      },
+      {
+        persist: true,
+        deps: [
+          {
+            depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+            depVersion: GIT_HISTORY_CACHE_VERSION,
+          },
+        ],
+      }
     )
     return remoteSha
   }

@@ -1,7 +1,7 @@
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 
-export const CACHE_SCHEMA_VERSION = 0
+export const CACHE_SCHEMA_VERSION = 2
 
 export const FS_ANALYSIS_CACHE_VERSION = '0'
 export const FS_STRUCTURE_CACHE_VERSION = '0'

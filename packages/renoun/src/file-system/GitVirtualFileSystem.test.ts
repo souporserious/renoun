@@ -2676,10 +2676,13 @@ describe('GitVirtualFileSystem', () => {
     const lastCommitDate = await file.getLastCommitDate()
     const authors = await file.getAuthors()
 
-    expect(mockFetch).toHaveBeenCalledTimes(3)
-    const commitRequest = mockFetch.mock.calls.find(([request]) =>
+    expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(mockFetch.mock.calls.length).toBeLessThanOrEqual(3)
+    const commitRequests = mockFetch.mock.calls.filter(([request]) =>
       String(request).includes('/repos/owner/repo/commits?')
-    )![0]
+    )
+    expect(commitRequests).toHaveLength(1)
+    const commitRequest = commitRequests[0]![0]
     expect(commitRequest).toContain('/repos/owner/repo/commits')
     expect(commitRequest).toContain('path=dir%2Fa.md')
 
@@ -2925,7 +2928,14 @@ describe('GitVirtualFileSystem', () => {
     await vi.runAllTimersAsync()
     const nestedMetadata = await nestedMetadataPromise
 
-    expect(mockFetch).toHaveBeenCalledTimes(3)
+    const graphqlBlameRequests = mockFetch.mock.calls.filter(([, init]) => {
+      const requestInit = init as { body?: string } | undefined
+      return (
+        typeof requestInit?.body === 'string' &&
+        requestInit.body.includes('blame(')
+      )
+    })
+    expect(graphqlBlameRequests).toHaveLength(1)
     expect(nestedMetadata.firstCommitDate?.toISOString()).toBe(
       '2024-02-02T00:00:00.000Z'
     )

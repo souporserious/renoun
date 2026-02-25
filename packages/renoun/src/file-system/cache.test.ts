@@ -208,6 +208,12 @@ class ThrowingByteLengthNodeFileSystem extends NestedCwdNodeFileSystem {
   }
 }
 
+class NonDeterministicNodeFileSystem extends NestedCwdNodeFileSystem {
+  isPersistentCacheDeterministic(): boolean {
+    return false
+  }
+}
+
 function createDeferredPromise() {
   let resolve!: () => void
   const promise = new Promise<void>((resolvePromise) => {
@@ -4152,6 +4158,83 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('warns and falls back when strict hermetic mode detects a non-deterministic file system', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const previousStrictHermetic = process.env.RENOUN_FS_STRICT_HERMETIC
+      process.env.RENOUN_FS_STRICT_HERMETIC = '1'
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        const docsDirectory = join(tmpDirectory, 'docs')
+        const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+        const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+
+        mkdirSync(docsDirectory, { recursive: true })
+        writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+        writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+        const firstWorkerFileSystem = new NonDeterministicNodeFileSystem(
+          getRootDirectory(),
+          tsConfigPath
+        )
+        ;(firstWorkerFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+
+        const firstWorkerDirectory = new Directory({
+          fileSystem: firstWorkerFileSystem,
+          path: workspaceDirectory,
+        })
+
+        await firstWorkerDirectory.getEntries({
+          includeIndexAndReadmeFiles: true,
+        })
+
+        const firstSession = firstWorkerDirectory.getSession()
+        const snapshotKeys = Array.from(firstSession.directorySnapshots.keys())
+        expect(snapshotKeys.length).toBe(1)
+        firstSession.cache.clearMemory()
+        expect(await firstSession.cache.get(snapshotKeys[0]!)).toBeUndefined()
+
+        const secondWorkerFileSystem = new NonDeterministicNodeFileSystem(
+          getRootDirectory(),
+          tsConfigPath
+        )
+        ;(secondWorkerFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+        const secondReadDirectory = vi.spyOn(
+          secondWorkerFileSystem,
+          'readDirectory'
+        )
+        const secondWorkerDirectory = new Directory({
+          fileSystem: secondWorkerFileSystem,
+          path: workspaceDirectory,
+        })
+
+        await secondWorkerDirectory.getEntries({
+          includeIndexAndReadmeFiles: true,
+        })
+
+        expect(secondReadDirectory).toHaveBeenCalledTimes(1)
+        expect(
+          warnSpy.mock.calls.filter(([message]) => {
+            return (
+              typeof message === 'string' &&
+              message.includes(
+                'Strict hermetic directory snapshot cache fell back because the file system marked persistent cache as non-deterministic.'
+              )
+            )
+          })
+        ).toHaveLength(1)
+      } finally {
+        warnSpy.mockRestore()
+        if (previousStrictHermetic === undefined) {
+          delete process.env.RENOUN_FS_STRICT_HERMETIC
+        } else {
+          process.env.RENOUN_FS_STRICT_HERMETIC = previousStrictHermetic
+        }
+      }
+    })
+  })
+
   test('does not persist structure cache when sort compare is a function', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
@@ -5101,6 +5184,134 @@ export type Metadata = Value`,
     }
   })
 
+  test('reuses persisted entries without dependency content checks when workspace token is unchanged', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const sourceFilePath = join(tmpDirectory, 'docs', 'index.ts')
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      mkdirSync(dirname(sourceFilePath), { recursive: true })
+      writeFileSync(sourceFilePath, 'export const value = 1', 'utf8')
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:workspace-token-fast-path-unchanged'
+
+      const firstFileSystem = new TokenAwareNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        'stable-token'
+      )
+      const firstSnapshot = new FileSystemSnapshot(
+        firstFileSystem,
+        'workspace-token-fast-path-first'
+      )
+      const firstStore = new CacheStore({ snapshot: firstSnapshot, persistence })
+      await firstStore.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (context) => {
+          await context.recordFileDep(sourceFilePath)
+          return { value: 1 }
+        }
+      )
+
+      const secondFileSystem = new TokenAwareNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        'stable-token'
+      )
+      const secondReadBinary = vi.spyOn(secondFileSystem, 'readFileBinary')
+      const secondSnapshot = new FileSystemSnapshot(
+        secondFileSystem,
+        'workspace-token-fast-path-second'
+      )
+      const secondStore = new CacheStore({
+        snapshot: secondSnapshot,
+        persistence,
+      })
+
+      const value = await secondStore.get(nodeKey)
+
+      expect(value).toEqual({ value: 1 })
+      expect(secondReadBinary).toHaveBeenCalledTimes(0)
+    })
+  })
+
+  test('falls back to dependency freshness checks when workspace token changes on intersecting paths', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const sourceFilePath = join(tmpDirectory, 'docs', 'index.ts')
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      mkdirSync(dirname(sourceFilePath), { recursive: true })
+      writeFileSync(sourceFilePath, 'export const value = 1', 'utf8')
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:workspace-token-fast-path-intersecting'
+
+      const firstFileSystem = new TokenAwareNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        'stable-token'
+      )
+      const firstSnapshot = new FileSystemSnapshot(
+        firstFileSystem,
+        'workspace-token-intersection-first'
+      )
+      const firstStore = new CacheStore({ snapshot: firstSnapshot, persistence })
+      await firstStore.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (context) => {
+          await context.recordFileDep(sourceFilePath)
+          return { value: 1 }
+        }
+      )
+      const previousToken =
+        (await firstSnapshot.getWorkspaceChangeToken?.('.')) ?? null
+      const relativeSourcePath = normalizePathKey(
+        firstSnapshot.getRelativePathToWorkspace(sourceFilePath)
+      )
+
+      writeFileSync(sourceFilePath, 'export const value = 2', 'utf8')
+
+      const secondFileSystem = new TokenAwareNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        'updated-token'
+      )
+      if (previousToken) {
+        secondFileSystem.setChangedPathsSinceToken('.', previousToken, [
+          relativeSourcePath,
+        ])
+      }
+      const secondReadBinary = vi.spyOn(secondFileSystem, 'readFileBinary')
+      const secondSnapshot = new FileSystemSnapshot(
+        secondFileSystem,
+        'workspace-token-intersection-second'
+      )
+      const secondStore = new CacheStore({
+        snapshot: secondSnapshot,
+        persistence,
+      })
+
+      let computeCount = 0
+      const value = await secondStore.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (context) => {
+          computeCount += 1
+          await context.recordFileDep(sourceFilePath)
+          return { value: 2 }
+        }
+      )
+
+      expect(value).toEqual({ value: 2 })
+      expect(computeCount).toBe(1)
+      expect(secondReadBinary.mock.calls.length).toBeGreaterThan(0)
+    })
+  })
+
   test('persist: true then persist: false on same key deletes DB row', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-persist-false-')
@@ -5858,7 +6069,7 @@ export type Metadata = Value`,
       const db = new DatabaseSync(dbPath)
       db.prepare(
         `
-          UPDATE cache_deps
+          UPDATE cache_entry_deps_v2
           SET dep_version = ?
           WHERE node_key = ? AND dep_key = ?
         `
@@ -6585,7 +6796,7 @@ export type Metadata = Value`,
                 e.node_key as node_key,
                 COUNT(d.dep_key) as deps
               FROM cache_entries e
-              LEFT JOIN cache_deps d ON d.node_key = e.node_key
+              LEFT JOIN cache_entry_deps_v2 d ON d.node_key = e.node_key
               GROUP BY e.node_key
             `
           )
@@ -6595,6 +6806,78 @@ export type Metadata = Value`,
         for (const row of rows) {
           expect(Number(row.deps ?? 0)).toBe(1)
         }
+      } finally {
+        db.close()
+      }
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('compacts structured dependency path and term rows after prune', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-prune-structured-compact-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-prune-structured-compact'
+      )
+      const persistence = new SqliteCacheStorePersistence({
+        dbPath,
+        maxRows: 3,
+        maxAgeMs: 1000 * 60 * 60,
+      })
+      const store = new CacheStore({ snapshot, persistence })
+
+      for (let index = 0; index < 24; index += 1) {
+        await store.put(
+          `test:structured-compact:${index}`,
+          { index },
+          {
+            persist: true,
+            deps: [
+              {
+                depKey: `file:/dep/${index}.ts`,
+                depVersion: String(index),
+              },
+            ],
+          }
+        )
+      }
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const db = new DatabaseSync(dbPath)
+      try {
+        const entryCountRow = db
+          .prepare(`SELECT COUNT(*) as total FROM cache_entries`)
+          .get() as { total?: number }
+        const depTermCountRow = db
+          .prepare(`SELECT COUNT(*) as total FROM dep_terms`)
+          .get() as { total?: number }
+        const depPathCountRow = db
+          .prepare(`SELECT COUNT(*) as total FROM dep_paths`)
+          .get() as { total?: number }
+
+        const entryCount = Number(entryCountRow.total ?? 0)
+        const depTermCount = Number(depTermCountRow.total ?? 0)
+        const depPathCount = Number(depPathCountRow.total ?? 0)
+
+        expect(entryCount).toBeLessThanOrEqual(3)
+        expect(depTermCount).toBeLessThanOrEqual(entryCount)
+        expect(depPathCount).toBeLessThanOrEqual(depTermCount + 3)
       } finally {
         db.close()
       }
@@ -6661,7 +6944,7 @@ export type Metadata = Value`,
           .prepare(
             `
               SELECT COUNT(*) as total
-              FROM cache_deps AS dependency
+              FROM cache_entry_deps_v2 AS dependency
               LEFT JOIN cache_entries AS entry
                 ON entry.node_key = dependency.node_key
               WHERE entry.node_key IS NULL
@@ -7903,21 +8186,49 @@ export type Metadata = Value`,
 
       const db = new DatabaseSync(dbPath)
       try {
-        const indexRows = db
-          .prepare(`PRAGMA index_list('cache_deps')`)
-          .all() as Array<{ name?: string }>
-        const indexNames = indexRows
-          .map((row) => row.name)
-          .filter((name): name is string => typeof name === 'string')
-        expect(indexNames).toContain('cache_deps_dep_key_node_key_idx')
+        const depPathsTable = db
+          .prepare(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'dep_paths'`
+          )
+          .get() as { name?: string } | undefined
+        const depPathClosureTable = db
+          .prepare(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'dep_path_closure'`
+          )
+          .get() as { name?: string } | undefined
+        const depTermsTable = db
+          .prepare(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'dep_terms'`
+          )
+          .get() as { name?: string } | undefined
+        const cacheEntryDepsV2Table = db
+          .prepare(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cache_entry_deps_v2'`
+          )
+          .get() as { name?: string } | undefined
 
-        const indexInfoRows = db
-          .prepare(`PRAGMA index_info('cache_deps_dep_key_node_key_idx')`)
+        expect(depPathsTable?.name).toBe('dep_paths')
+        expect(depPathClosureTable?.name).toBe('dep_path_closure')
+        expect(depTermsTable?.name).toBe('dep_terms')
+        expect(cacheEntryDepsV2Table?.name).toBe('cache_entry_deps_v2')
+
+        const structuredIndexRows = db
+          .prepare(`PRAGMA index_list('cache_entry_deps_v2')`)
           .all() as Array<{ name?: string }>
-        const indexColumns = indexInfoRows
+        const structuredIndexNames = structuredIndexRows
           .map((row) => row.name)
           .filter((name): name is string => typeof name === 'string')
-        expect(indexColumns).toEqual(['dep_key', 'node_key'])
+        expect(structuredIndexNames).toContain(
+          'cache_entry_deps_v2_dep_term_node_key_idx'
+        )
+
+        const structuredIndexInfoRows = db
+          .prepare(`PRAGMA index_info('cache_entry_deps_v2_dep_term_node_key_idx')`)
+          .all() as Array<{ name?: string }>
+        const structuredIndexColumns = structuredIndexInfoRows
+          .map((row) => row.name)
+          .filter((name): name is string => typeof name === 'string')
+        expect(structuredIndexColumns).toEqual(['dep_term_id', 'node_key'])
       } finally {
         db.close()
       }
@@ -7993,29 +8304,23 @@ export type Metadata = Value`,
     }
   })
 
-  test('evicts persisted entries when dependency matching uses sqlite temp tables', async () => {
-    const previousTempTableThreshold =
-      process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD']
-    const previousTempTableEnabled =
-      process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE']
-    process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD'] = '1'
-    process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE'] = 'true'
-
+  test('evicts persisted entries using structured dependency index metadata', async () => {
     const tmpDirectory = mkdtempSync(
-      join(tmpdir(), 'renoun-cache-sqlite-path-eviction-temp-table-')
+      join(tmpdir(), 'renoun-cache-sqlite-structured-path-eviction-')
     )
     const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
     const snapshot = new FileSystemSnapshot(
       new InMemoryFileSystem({
         'src/components/button.ts': 'export const button = 1',
+        'src/components/input.ts': 'export const input = 1',
         'src/other/value.ts': 'export const value = 1',
       }),
-      'sqlite-path-eviction-temp-table'
+      'sqlite-structured-path-eviction'
     )
     const persistence = new SqliteCacheStorePersistence({ dbPath })
     const store = new CacheStore({ snapshot, persistence })
-    const affectedNodeKey = 'analysis:components:temp-table'
-    const unaffectedNodeKey = 'analysis:other:temp-table'
+    const affectedNodeKey = 'analysis:components:structured'
+    const unaffectedNodeKey = 'analysis:other:structured'
 
     try {
       const affectedDepVersion = await snapshot.contentId(
@@ -8051,31 +8356,86 @@ export type Metadata = Value`,
         }
       )
 
-      const eviction = await store.deleteByDependencyPaths([
-        'src/components',
-        'src/components/button.ts',
-        'src/components/unused.ts',
-      ])
+      const eviction = await store.deleteByDependencyPath('src/components')
       expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
       expect(eviction.deletedNodeKeys).not.toContain(unaffectedNodeKey)
+      expect(eviction.invalidationMode).toBe('structured')
+      expect(typeof eviction.invalidationSeq).toBe('number')
+      expect((eviction.invalidationSeq ?? 0) > 0).toBe(true)
 
       expect(await store.get(affectedNodeKey)).toBeUndefined()
       expect(await store.get(unaffectedNodeKey)).toEqual({
         value: 'unaffected',
       })
     } finally {
-      if (previousTempTableThreshold === undefined) {
-        delete process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD']
-      } else {
-        process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD'] =
-          previousTempTableThreshold
-      }
-      if (previousTempTableEnabled === undefined) {
-        delete process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE']
-      } else {
-        process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE'] =
-          previousTempTableEnabled
-      }
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('evicts directory dependencies when invalidating an unseen descendant path', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-structured-unseen-path-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'src/components/button.ts': 'export const button = 1',
+        'src/other/value.ts': 'export const value = 1',
+      }),
+      'sqlite-structured-unseen-path'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+    const affectedNodeKey = 'dir:src/components|mask=1|sig=structured-unseen'
+    const unaffectedNodeKey = 'dir:src/other|mask=1|sig=structured-unseen'
+
+    try {
+      const affectedDirectoryDepVersion = await snapshot.contentId(
+        'src/components'
+      )
+      const unaffectedDirectoryDepVersion = await snapshot.contentId('src/other')
+
+      await store.put(
+        affectedNodeKey,
+        { value: 'affected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'dir:src/components',
+              depVersion: affectedDirectoryDepVersion,
+            },
+          ],
+        }
+      )
+      await store.put(
+        unaffectedNodeKey,
+        { value: 'unaffected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'dir:src/other',
+              depVersion: unaffectedDirectoryDepVersion,
+            },
+          ],
+        }
+      )
+
+      const eviction = await store.deleteByDependencyPath(
+        'src/components/new-file.ts'
+      )
+      expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
+      expect(eviction.deletedNodeKeys).not.toContain(unaffectedNodeKey)
+      expect(eviction.invalidationMode).toBe('structured')
+      expect(typeof eviction.invalidationSeq).toBe('number')
+      expect((eviction.invalidationSeq ?? 0) > 0).toBe(true)
+
+      expect(await store.get(affectedNodeKey)).toBeUndefined()
+      expect(await store.get(unaffectedNodeKey)).toEqual({
+        value: 'unaffected',
+      })
+    } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
   })

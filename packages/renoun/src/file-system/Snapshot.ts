@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 
-import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
+import {
+  isAbsolutePath,
+  normalizePathKey,
+  normalizeSlashes,
+} from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { FileReadableStream, FileSystem } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
@@ -10,6 +14,8 @@ const SNAPSHOT_VERSION = 1
 const METADATA_CONTENT_ID_MAX_AGE_MS = 250
 const METADATA_COLLISION_GUARD_WINDOW_MS = 1_000
 const MISSING_CONTENT_ID_MAX_AGE_MS = 100
+const WORKSPACE_TOKEN_LOOKUP_CACHE_TTL_MS = 250
+const WORKSPACE_CHANGED_PATHS_LOOKUP_CACHE_TTL_MS = 250
 
 type ContentIdStrategy =
   | 'file-system-content-id'
@@ -29,6 +35,18 @@ interface CachedContentId {
   strategy?: ContentIdStrategy
   id?: string
   updatedAt: number
+}
+
+interface CachedWorkspaceChangeToken {
+  token: string | null
+  expiresAt: number
+  promise?: Promise<string | null>
+}
+
+interface CachedWorkspaceChangedPaths {
+  paths: ReadonlySet<string> | null
+  expiresAt: number
+  promise?: Promise<ReadonlySet<string> | null>
 }
 
 function sanitizeProjectOptions(projectOptions: unknown): unknown {
@@ -68,6 +86,12 @@ export interface Snapshot {
   ): Promise<boolean>
   getRelativePathToWorkspace(path: string): string
   contentId(path: string, options?: SnapshotContentIdOptions): Promise<string>
+  getWorkspaceChangeToken?(rootPath: string): Promise<string | null>
+  getWorkspaceChangedPathsSinceToken?(
+    rootPath: string,
+    previousToken: string
+  ): Promise<ReadonlySet<string> | null>
+  getRecentlyInvalidatedPaths?(): ReadonlySet<string> | undefined
   invalidatePath(path: string): void
   invalidatePaths?(paths: Iterable<string>): void
   invalidateAll?(): void
@@ -77,6 +101,14 @@ export interface Snapshot {
 export class FileSystemSnapshot implements Snapshot {
   readonly #fileSystem: FileSystem
   readonly #contentIds = new Map<string, CachedContentId>()
+  readonly #workspaceChangeTokenByRootPath = new Map<
+    string,
+    CachedWorkspaceChangeToken
+  >()
+  readonly #workspaceChangedPathsByToken = new Map<
+    string,
+    CachedWorkspaceChangedPaths
+  >()
   readonly #invalidateListeners = new Set<(path: string) => void>()
 
   readonly id: string
@@ -212,6 +244,134 @@ export class FileSystemSnapshot implements Snapshot {
     return promise
   }
 
+  async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    const tokenGetter = this.#fileSystem.getWorkspaceChangeToken
+    if (typeof tokenGetter !== 'function') {
+      return null
+    }
+
+    const normalizedRootPath = this.#normalizeSnapshotPath(rootPath)
+    const now = Date.now()
+    const ttlMs = resolveWorkspaceTokenLookupCacheTtlMs()
+    const cached = this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
+
+    if (ttlMs > 0 && cached && cached.expiresAt > now) {
+      return cached.token
+    }
+
+    if (cached?.promise) {
+      return cached.promise
+    }
+
+    const lookupPromise = (async () => {
+      try {
+        const token = await tokenGetter.call(this.#fileSystem, rootPath)
+        return typeof token === 'string' ? token : null
+      } catch {
+        return null
+      }
+    })()
+
+    this.#workspaceChangeTokenByRootPath.set(normalizedRootPath, {
+      token: cached?.token ?? null,
+      expiresAt: now,
+      promise: lookupPromise,
+    })
+
+    try {
+      const token = await lookupPromise
+      if (ttlMs > 0) {
+        this.#workspaceChangeTokenByRootPath.set(normalizedRootPath, {
+          token,
+          expiresAt: Date.now() + ttlMs,
+        })
+      }
+      return token
+    } finally {
+      const latest =
+        this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
+      if (latest?.promise === lookupPromise) {
+        this.#workspaceChangeTokenByRootPath.delete(normalizedRootPath)
+      }
+    }
+  }
+
+  async getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<ReadonlySet<string> | null> {
+    const changedPathsGetter = this.#fileSystem.getWorkspaceChangedPathsSinceToken
+    if (typeof changedPathsGetter !== 'function') {
+      return null
+    }
+
+    const normalizedRootPath = this.#normalizeSnapshotPath(rootPath)
+    const cacheKey = `${normalizedRootPath}|${previousToken}`
+    const now = Date.now()
+    const ttlMs = resolveWorkspaceChangedPathsLookupCacheTtlMs()
+    this.#cleanupWorkspaceChangedPathsCache(now)
+    const cached = this.#workspaceChangedPathsByToken.get(cacheKey)
+
+    if (ttlMs > 0 && cached && cached.expiresAt > now) {
+      return cached.paths
+    }
+
+    if (cached?.promise) {
+      return cached.promise
+    }
+
+    const lookupPromise = (async () => {
+      try {
+        const changedPaths = await changedPathsGetter.call(
+          this.#fileSystem,
+          rootPath,
+          previousToken
+        )
+        if (!Array.isArray(changedPaths)) {
+          return null
+        }
+
+        const normalizedPaths = new Set<string>()
+        for (const changedPath of changedPaths) {
+          if (typeof changedPath !== 'string') {
+            continue
+          }
+
+          const normalizedPath = isAbsolutePath(changedPath)
+            ? this.#normalizeSnapshotPath(changedPath)
+            : normalizePathKey(changedPath)
+          normalizedPaths.add(normalizedPath)
+        }
+
+        return normalizedPaths
+      } catch {
+        return null
+      }
+    })()
+
+    this.#workspaceChangedPathsByToken.set(cacheKey, {
+      paths: cached?.paths ?? null,
+      expiresAt: now,
+      promise: lookupPromise,
+    })
+
+    try {
+      const changedPaths = await lookupPromise
+      if (ttlMs > 0) {
+        this.#workspaceChangedPathsByToken.set(cacheKey, {
+          paths: changedPaths,
+          expiresAt: Date.now() + ttlMs,
+        })
+      }
+      return changedPaths
+    } finally {
+      const latest = this.#workspaceChangedPathsByToken.get(cacheKey)
+      if (latest?.promise === lookupPromise) {
+        this.#workspaceChangedPathsByToken.delete(cacheKey)
+      }
+    }
+  }
+
   invalidatePath(path: string): void {
     this.invalidatePaths([path])
   }
@@ -236,6 +396,9 @@ export class FileSystemSnapshot implements Snapshot {
     if (normalizedPaths.length === 0) {
       return
     }
+
+    this.#workspaceChangeTokenByRootPath.clear()
+    this.#workspaceChangedPathsByToken.clear()
 
     if (normalizedPaths.includes('.')) {
       this.#contentIds.clear()
@@ -263,6 +426,8 @@ export class FileSystemSnapshot implements Snapshot {
 
   invalidateAll(): void {
     this.#contentIds.clear()
+    this.#workspaceChangeTokenByRootPath.clear()
+    this.#workspaceChangedPathsByToken.clear()
     this.#emitInvalidate('.')
   }
 
@@ -492,6 +657,23 @@ export class FileSystemSnapshot implements Snapshot {
       } catch {}
     }
   }
+
+  #cleanupWorkspaceChangedPathsCache(now = Date.now()): void {
+    const ttlMs = resolveWorkspaceChangedPathsLookupCacheTtlMs()
+    if (ttlMs <= 0) {
+      this.#workspaceChangedPathsByToken.clear()
+      return
+    }
+
+    for (const [key, cached] of this.#workspaceChangedPathsByToken) {
+      if (cached.promise) {
+        continue
+      }
+      if (cached.expiresAt <= now) {
+        this.#workspaceChangedPathsByToken.delete(key)
+      }
+    }
+  }
 }
 
 function isStrictHermeticFileSystemMode(): boolean {
@@ -508,6 +690,22 @@ function isStrictHermeticFileSystemMode(): boolean {
   }
 
   return process.env['NODE_ENV'] === 'production'
+}
+
+function resolveWorkspaceTokenLookupCacheTtlMs(): number {
+  if (process.env['CI']) {
+    return 0
+  }
+
+  return WORKSPACE_TOKEN_LOOKUP_CACHE_TTL_MS
+}
+
+function resolveWorkspaceChangedPathsLookupCacheTtlMs(): number {
+  if (process.env['CI']) {
+    return 0
+  }
+
+  return WORKSPACE_CHANGED_PATHS_LOOKUP_CACHE_TTL_MS
 }
 
 function safeGetProjectOptions(fileSystem: FileSystem): unknown {

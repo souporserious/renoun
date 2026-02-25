@@ -27,24 +27,27 @@ const SQLITE_PRUNE_WRITE_INTERVAL = 32
 const SQLITE_PRUNE_MAX_INTERVAL_MS = 1000 * 60 * 5
 const SQLITE_DELETE_BATCH_SIZE = 500
 const SQLITE_DEFAULT_PREPARED_STATEMENT_CACHE_MAX = 128
-const SQLITE_DEFAULT_DEPENDENCY_MATCH_TEMP_TABLE_THRESHOLD = 2048
-const SQLITE_DEFAULT_DEPENDENCY_MATCH_ADAPTIVE_MIN_SAMPLES = 2
-const SQLITE_DEFAULT_DEPENDENCY_MATCH_ADAPTIVE_BUCKET_SIZE = 32
 const SQLITE_INFLIGHT_TTL_MS = 20_000
 const SQLITE_INFLIGHT_CLEANUP_INTERVAL_MS = 10_000
 const SQLITE_LAST_ACCESSED_TOUCH_MIN_INTERVAL_MS = 30_000
 const SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE = 50_000
+const SQLITE_STRUCTURED_PATH_ID_CACHE_MAX_SIZE = 100_000
+const SQLITE_STRUCTURED_DEP_TERM_ID_CACHE_MAX_SIZE = 100_000
+const SQLITE_STRUCTURED_PATH_CLOSURE_SEEDED_CACHE_MAX_SIZE = 100_000
 const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
-const DEPENDENCY_MATCH_TEMP_TABLE = 'renoun_dep_match_terms'
 const MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY = 'missing_dependency_entry_count'
+const INVALIDATION_SEQUENCE_META_KEY = 'invalidation_seq'
 
-type DependencyMatchStrategy = 'dynamic' | 'temp-table'
+const STRUCTURED_DEP_KIND_FILE = 1
+const STRUCTURED_DEP_KIND_DIR = 2
+const STRUCTURED_DEP_KIND_DIR_MTIME = 3
 
-interface DependencyMatchStrategyStats {
-  dynamicSamples: number
-  dynamicTotalDurationMs: number
-  tempTableSamples: number
-  tempTableTotalDurationMs: number
+interface StructuredPathDependencyTerm {
+  kind:
+    | typeof STRUCTURED_DEP_KIND_FILE
+    | typeof STRUCTURED_DEP_KIND_DIR
+    | typeof STRUCTURED_DEP_KIND_DIR_MTIME
+  pathKey: string
 }
 
 let warnedAboutSqliteFallback = false
@@ -206,20 +209,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   readonly #maxRows: number
   readonly #overflowCheckInterval: number
   readonly #preparedStatementCacheMax: number
-  readonly #dependencyMatchTempTableThreshold: number
-  readonly #dependencyMatchTempTableEnabled: boolean
-  readonly #dependencyMatchAdaptiveEnabled: boolean
-  readonly #dependencyMatchAdaptiveMinSamples: number
-  readonly #dependencyMatchAdaptiveBucketSize: number
+  readonly #structuredIdCacheEnabled: boolean
   readonly #readyPromise: Promise<void>
   #debugCachePersistence: boolean
   #availability: 'initializing' | 'available' | 'unavailable' = 'initializing'
   #writesSincePrune = 0
   #lastPrunedAt = 0
   #lastInflightCleanupAt = 0
-  #dependencyMatchTempTableInitialized = false
-  #dependencyMatchPerfByBucket = new Map<number, DependencyMatchStrategyStats>()
   #lastAccessTouchAtByNodeKey = new Map<string, number>()
+  #pathIdByPathKey = new Map<string, number>()
+  #depTermIdByTermKey = new Map<string, number>()
+  #seededPathClosureByPathKey = new Set<string>()
   #preparedStatements = new Map<string, any>()
   #pruneInFlight?: Promise<void>
   #db: any
@@ -238,25 +238,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       'RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX',
       SQLITE_DEFAULT_PREPARED_STATEMENT_CACHE_MAX
     )
-    this.#dependencyMatchTempTableThreshold = resolvePositiveIntegerEnv(
-      'RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD',
-      SQLITE_DEFAULT_DEPENDENCY_MATCH_TEMP_TABLE_THRESHOLD
-    )
-    this.#dependencyMatchTempTableEnabled = resolveBooleanEnv(
-      'RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE',
+    this.#structuredIdCacheEnabled = resolveBooleanEnv(
+      'RENOUN_SQLITE_STRUCTURED_ID_CACHE',
       true
-    )
-    this.#dependencyMatchAdaptiveEnabled = resolveBooleanEnv(
-      'RENOUN_SQLITE_DEP_MATCH_ADAPTIVE',
-      true
-    )
-    this.#dependencyMatchAdaptiveMinSamples = resolvePositiveIntegerEnv(
-      'RENOUN_SQLITE_DEP_MATCH_ADAPTIVE_MIN_SAMPLES',
-      SQLITE_DEFAULT_DEPENDENCY_MATCH_ADAPTIVE_MIN_SAMPLES
-    )
-    this.#dependencyMatchAdaptiveBucketSize = resolvePositiveIntegerEnv(
-      'RENOUN_SQLITE_DEP_MATCH_ADAPTIVE_BUCKET_SIZE',
-      SQLITE_DEFAULT_DEPENDENCY_MATCH_ADAPTIVE_BUCKET_SIZE
     )
     this.#readyPromise = this.#initialize()
   }
@@ -416,6 +400,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
               value_blob as value_blob,
               updated_at as updated_at,
               persist as persist,
+              workspace_change_token as workspace_change_token,
               revision as revision
             FROM cache_entries
             WHERE node_key = ?
@@ -428,6 +413,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           value_blob?: unknown
           updated_at?: number
           persist?: number
+          workspace_change_token?: unknown
           revision?: unknown
         }
       | undefined
@@ -444,7 +430,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         .#prepareStatement(
           `
             SELECT dep_key as dep_key, dep_version as dep_version
-            FROM cache_deps
+            FROM cache_entry_deps_v2
             WHERE node_key = ?
             ORDER BY dep_key
           `
@@ -561,6 +547,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       deps,
       fingerprint: storedFingerprint,
       persist: Number(row.persist) === 1,
+      workspaceChangeToken:
+        typeof row.workspace_change_token === 'string'
+          ? row.workspace_change_token
+          : null,
       revision,
       updatedAt,
     }
@@ -599,15 +589,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
                 updated_at,
                 last_accessed_at,
                 persist,
+                workspace_change_token,
                 revision
               )
-              VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT revision FROM cache_entries WHERE node_key = ?), 0) + 1)
+              VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT revision FROM cache_entries WHERE node_key = ?), 0) + 1)
               ON CONFLICT(node_key) DO UPDATE SET
                 fingerprint = excluded.fingerprint,
                 value_blob = excluded.value_blob,
                 updated_at = excluded.updated_at,
                 last_accessed_at = excluded.last_accessed_at,
                 persist = excluded.persist,
+                workspace_change_token = excluded.workspace_change_token,
                 revision = excluded.revision
             `
           )
@@ -618,29 +610,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             entry.updatedAt,
             now,
             persist,
+            entry.workspaceChangeToken ?? null,
             nodeKey
           )
 
-        this.#prepareStatement(`DELETE FROM cache_deps WHERE node_key = ?`).run(
-          nodeKey
-        )
-
-        if (entry.deps.length > 0) {
-          const insertDepStatement = this.#prepareStatement(
-            `
-              INSERT INTO cache_deps (node_key, dep_key, dep_version)
-              VALUES (?, ?, ?)
-            `
-          )
-
-          for (const dependency of entry.deps) {
-            insertDepStatement.run(
-              nodeKey,
-              dependency.depKey,
-              dependency.depVersion
-            )
-          }
-        }
+        this.#replaceDependenciesForNodeKey(nodeKey, entry.deps)
 
         this.#applyMissingDependencyMetadataTransition(
           previousMissingDependencyMetadata,
@@ -732,9 +706,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
                   updated_at,
                   last_accessed_at,
                   persist,
+                  workspace_change_token,
                   revision
                 )
-                VALUES (?, ?, ?, ?, ?, ?, 1)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
               `
             )
             .run(
@@ -743,7 +718,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
               serializedValue,
               entry.updatedAt,
               now,
-              persist
+              persist,
+              entry.workspaceChangeToken ?? null
             )
         } else {
           if (
@@ -770,6 +746,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
                   updated_at = ?,
                   last_accessed_at = ?,
                   persist = ?,
+                  workspace_change_token = ?,
                   revision = ?
                 WHERE node_key = ? AND revision = ?
               `
@@ -780,6 +757,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
               entry.updatedAt,
               now,
               persist,
+              entry.workspaceChangeToken ?? null,
               nextRevision,
               nodeKey,
               options.expectedRevision
@@ -801,26 +779,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           }
         }
 
-        this.#prepareStatement(`DELETE FROM cache_deps WHERE node_key = ?`).run(
-          nodeKey
-        )
-
-        if (entry.deps.length > 0) {
-          const insertDepStatement = this.#prepareStatement(
-            `
-              INSERT INTO cache_deps (node_key, dep_key, dep_version)
-              VALUES (?, ?, ?)
-            `
-          )
-
-          for (const dependency of entry.deps) {
-            insertDepStatement.run(
-              nodeKey,
-              dependency.depKey,
-              dependency.depVersion
-            )
-          }
-        }
+        this.#replaceDependenciesForNodeKey(nodeKey, entry.deps)
 
         this.#applyMissingDependencyMetadataTransition(
           previousMissingDependencyMetadata,
@@ -960,88 +919,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
     }
 
-    const dependencyPrefixes = ['file:', 'dir:', 'dir-mtime:'] as const
-    const exactDependencyKeys = new Set<string>()
-    const descendantDependencyPatterns: string[] = []
-    const toDirectorySnapshotDepIndexKey = (depKey: string) =>
-      `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${depKey}:1`
-
-    for (const dependencyPath of dependencyPathKeyVariants) {
-      for (const prefix of dependencyPrefixes) {
-        const exactDependencyKey = `${prefix}${dependencyPath}`
-        exactDependencyKeys.add(exactDependencyKey)
-        exactDependencyKeys.add(
-          toDirectorySnapshotDepIndexKey(exactDependencyKey)
-        )
-
-        if (dependencyPath === '.') {
-          descendantDependencyPatterns.push(`${escapeSqlLikePattern(prefix)}%`)
-          descendantDependencyPatterns.push(
-            `${escapeSqlLikePattern(DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX + prefix)}%:1`
-          )
-        } else {
-          descendantDependencyPatterns.push(
-            `${escapeSqlLikePattern(`${prefix}${dependencyPath}`)}/%`
-          )
-          descendantDependencyPatterns.push(
-            `${escapeSqlLikePattern(
-              `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${prefix}${dependencyPath}`
-            )}/%:1`
-          )
-        }
-      }
-
-      for (const ancestorPath of getAncestorPathKeys(dependencyPath)) {
-        const directoryDependencyKey = `dir:${ancestorPath}`
-        const directoryMtimeDependencyKey = `dir-mtime:${ancestorPath}`
-        exactDependencyKeys.add(directoryDependencyKey)
-        exactDependencyKeys.add(directoryMtimeDependencyKey)
-        exactDependencyKeys.add(
-          toDirectorySnapshotDepIndexKey(directoryDependencyKey)
-        )
-        exactDependencyKeys.add(
-          toDirectorySnapshotDepIndexKey(directoryMtimeDependencyKey)
-        )
-      }
-    }
-
-    const exactDependencyList = Array.from(exactDependencyKeys).sort()
-    const descendantDependencyList = Array.from(
-      new Set(descendantDependencyPatterns)
-    ).sort()
-    const deletedNodeKeys = await this.#selectNodeKeysByDependencyTerms(
-      exactDependencyList,
-      descendantDependencyList
+    return this.#deleteByDependencyPathsUsingStructuredIndex(
+      Array.from(dependencyPathKeyVariants).sort()
     )
-
-    if (deletedNodeKeys.length > 0) {
-      await this.#runWithBusyRetries(() => {
-        this.#db.exec('BEGIN IMMEDIATE')
-        try {
-          this.#deleteRowsForNodeKeys(deletedNodeKeys)
-          this.#db.exec('COMMIT')
-        } catch (error) {
-          try {
-            this.#db.exec('ROLLBACK')
-          } catch {}
-          throw error
-        }
-      })
-    }
-
-    const hasMissingDependencyMetadata = await this.#runWithBusyRetries(() => {
-      return this.#getMissingDependencyMetadataCount() > 0
-    })
-    const missingDependencyNodeKeys = hasMissingDependencyMetadata
-      ? await this.#listMissingDependencyNodeKeys()
-      : []
-
-    return {
-      deletedNodeKeys,
-      usedDependencyIndex: true,
-      hasMissingDependencyMetadata,
-      missingDependencyNodeKeys,
-    }
   }
 
   async listNodeKeysByPrefix(prefix: string): Promise<string[]> {
@@ -1071,82 +951,138 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       })
   }
 
-  async #selectNodeKeysByDependencyTerms(
-    exactDependencyKeys: string[],
-    descendantDependencyPatterns: string[]
-  ): Promise<string[]> {
-    if (!this.#db) {
-      return []
+  async #deleteByDependencyPathsUsingStructuredIndex(
+    dependencyPathKeys: string[]
+  ): Promise<CacheDependencyEvictionResult> {
+    if (!this.#db || dependencyPathKeys.length === 0) {
+      return {
+        deletedNodeKeys: [],
+        usedDependencyIndex: false,
+        hasMissingDependencyMetadata: false,
+        missingDependencyNodeKeys: [],
+      }
     }
 
-    if (
-      exactDependencyKeys.length === 0 &&
-      descendantDependencyPatterns.length === 0
-    ) {
-      return []
+    const deletedNodeKeys = await this.#selectNodeKeysByStructuredDependencyPaths(
+      dependencyPathKeys
+    )
+
+    if (deletedNodeKeys.length > 0) {
+      await this.#runWithBusyRetries(() => {
+        this.#db.exec('BEGIN IMMEDIATE')
+        try {
+          this.#deleteRowsForNodeKeys(deletedNodeKeys)
+          this.#db.exec('COMMIT')
+        } catch (error) {
+          try {
+            this.#db.exec('ROLLBACK')
+          } catch {}
+          throw error
+        }
+      })
     }
 
-    const totalTerms =
-      exactDependencyKeys.length + descendantDependencyPatterns.length
-    const strategy = this.#resolveDependencyMatchStrategy(totalTerms)
-    const startedAt = Date.now()
-    const nodeKeys =
-      strategy === 'temp-table'
-        ? await this.#selectNodeKeysByDependencyTermsUsingTempTable(
-            exactDependencyKeys,
-            descendantDependencyPatterns
-          )
-        : await this.#selectNodeKeysByDependencyTermsUsingDynamicQuery(
-            exactDependencyKeys,
-            descendantDependencyPatterns
-          )
-    const durationMs = Date.now() - startedAt
-    this.#recordDependencyMatchStrategyDuration(totalTerms, strategy, durationMs)
-    return nodeKeys
+    const hasMissingDependencyMetadata = await this.#runWithBusyRetries(() => {
+      return this.#getMissingDependencyMetadataCount() > 0
+    })
+    const missingDependencyNodeKeys = hasMissingDependencyMetadata
+      ? await this.#listMissingDependencyNodeKeys()
+      : []
+    const invalidationSeq = await this.#runWithBusyRetries(() =>
+      this.#nextInvalidationSequence()
+    )
+
+    return {
+      deletedNodeKeys,
+      usedDependencyIndex: true,
+      hasMissingDependencyMetadata,
+      missingDependencyNodeKeys,
+      invalidationSeq,
+      invalidationMode: 'structured',
+    }
   }
 
-  async #selectNodeKeysByDependencyTermsUsingDynamicQuery(
-    exactDependencyKeys: string[],
-    descendantDependencyPatterns: string[]
+  async #selectNodeKeysByStructuredDependencyPaths(
+    dependencyPathKeys: string[]
   ): Promise<string[]> {
-    if (!this.#db) {
+    if (!this.#db || dependencyPathKeys.length === 0) {
       return []
     }
 
-    const whereClauses: string[] = []
-    const whereParameters: string[] = []
-
-    if (exactDependencyKeys.length > 0) {
-      whereClauses.push(
-        `dependency.dep_key IN (${exactDependencyKeys.map(() => '?').join(',')})`
+    const normalizedChangedPathKeys = Array.from(
+      new Set(
+        dependencyPathKeys
+          .map((pathKey) => normalizeAbsolutePathKey(pathKey))
+          .filter((pathKey) => pathKey.length > 0)
       )
-      whereParameters.push(...exactDependencyKeys)
-    }
-
-    if (descendantDependencyPatterns.length > 0) {
-      whereClauses.push(
-        descendantDependencyPatterns
-          .map(() => `dependency.dep_key LIKE ? ESCAPE '\\'`)
-          .join(' OR ')
-      )
-      whereParameters.push(...descendantDependencyPatterns)
-    }
-
-    if (whereClauses.length === 0) {
+    ).sort()
+    if (normalizedChangedPathKeys.length === 0) {
       return []
     }
 
-    const selectNodeKeysByDependencySql = `
-      SELECT DISTINCT entry.node_key as node_key
-      FROM cache_entries AS entry
-      JOIN cache_deps AS dependency
-        ON dependency.node_key = entry.node_key
-      WHERE (${whereClauses.join(' OR ')})
-      ORDER BY entry.node_key
+    const lookupPathKeys =
+      this.#expandStructuredDependencyLookupPathKeys(normalizedChangedPathKeys)
+    if (lookupPathKeys.length === 0) {
+      return []
+    }
+
+    const changedPathPlaceholders = normalizedChangedPathKeys
+      .map(() => '?')
+      .join(',')
+    const lookupPathPlaceholders = lookupPathKeys.map(() => '?').join(',')
+    const selectNodeKeysSql = `
+      WITH changed_paths AS (
+        SELECT path.path_id as path_id
+        FROM dep_paths AS path
+        WHERE path.path_key IN (${changedPathPlaceholders})
+      ),
+      expanded_changed_paths AS (
+        SELECT path.path_id as path_id
+        FROM dep_paths AS path
+        WHERE path.path_key IN (${lookupPathPlaceholders})
+      ),
+      descendant_paths AS (
+        SELECT DISTINCT closure.descendant_path_id as path_id
+        FROM dep_path_closure AS closure
+        JOIN changed_paths AS changed
+          ON changed.path_id = closure.ancestor_path_id
+      ),
+      ancestor_paths AS (
+        SELECT DISTINCT closure.ancestor_path_id as path_id
+        FROM dep_path_closure AS closure
+        JOIN expanded_changed_paths AS changed
+          ON changed.path_id = closure.descendant_path_id
+      ),
+      matched_terms AS (
+        SELECT term.dep_term_id as dep_term_id
+        FROM dep_terms AS term
+        WHERE term.path_id IS NOT NULL
+          AND (
+            (
+              term.dep_kind = ${STRUCTURED_DEP_KIND_FILE}
+              AND term.path_id IN (SELECT path_id FROM descendant_paths)
+            )
+            OR (
+              term.dep_kind IN (${STRUCTURED_DEP_KIND_DIR}, ${STRUCTURED_DEP_KIND_DIR_MTIME})
+              AND (
+                term.path_id IN (SELECT path_id FROM descendant_paths)
+                OR term.path_id IN (SELECT path_id FROM ancestor_paths)
+              )
+            )
+          )
+      )
+      SELECT DISTINCT deps.node_key as node_key
+      FROM cache_entry_deps_v2 AS deps
+      JOIN matched_terms AS term
+        ON term.dep_term_id = deps.dep_term_id
+      ORDER BY deps.node_key
     `
 
     const rows = (await this.#runWithBusyRetries(() =>
-      this.#prepareStatement(selectNodeKeysByDependencySql).all(...whereParameters)
+      this.#prepareStatement(selectNodeKeysSql).all(
+        ...normalizedChangedPathKeys,
+        ...lookupPathKeys
+      )
     )) as Array<{ node_key?: string }>
 
     return rows
@@ -1156,173 +1092,322 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       })
   }
 
-  async #selectNodeKeysByDependencyTermsUsingTempTable(
-    exactDependencyKeys: string[],
-    descendantDependencyPatterns: string[]
-  ): Promise<string[]> {
+  #expandStructuredDependencyLookupPathKeys(pathKeys: string[]): string[] {
+    const lookupPathKeys = new Set<string>()
+
+    for (const pathKey of pathKeys) {
+      if (pathKey.length === 0) {
+        continue
+      }
+
+      lookupPathKeys.add(pathKey)
+
+      if (pathKey === '.' || pathKey === '/') {
+        continue
+      }
+
+      for (const ancestorPathKey of getAncestorPathKeys(pathKey)) {
+        if (ancestorPathKey === '.' || ancestorPathKey === '/') {
+          continue
+        }
+        lookupPathKeys.add(ancestorPathKey)
+      }
+    }
+
+    return Array.from(lookupPathKeys).sort()
+  }
+
+  #nextInvalidationSequence(): number {
     if (!this.#db) {
-      return []
+      return 0
     }
 
-    const clearTermsSql = `DELETE FROM ${DEPENDENCY_MATCH_TEMP_TABLE}`
-    const insertTermSql = `INSERT INTO ${DEPENDENCY_MATCH_TEMP_TABLE} (dep_key, is_pattern) VALUES (?, ?)`
-    const selectNodeKeysSql = `
-      SELECT node_key
-      FROM (
-        SELECT DISTINCT entry.node_key as node_key
-        FROM cache_entries AS entry
-        JOIN cache_deps AS dependency
-          ON dependency.node_key = entry.node_key
-        JOIN ${DEPENDENCY_MATCH_TEMP_TABLE} AS term
-          ON term.is_pattern = 0
-         AND dependency.dep_key = term.dep_key
-        UNION
-        SELECT DISTINCT entry.node_key as node_key
-        FROM cache_entries AS entry
-        JOIN cache_deps AS dependency
-          ON dependency.node_key = entry.node_key
-        JOIN ${DEPENDENCY_MATCH_TEMP_TABLE} AS term
-          ON term.is_pattern = 1
-        WHERE dependency.dep_key LIKE term.dep_key ESCAPE '\\'
-      )
-      ORDER BY node_key
-    `
+    this.#prepareStatement(
+      `
+        INSERT INTO meta(key, value)
+        VALUES (?, '0')
+        ON CONFLICT(key) DO NOTHING
+      `
+    ).run(INVALIDATION_SEQUENCE_META_KEY)
+    this.#prepareStatement(
+      `
+        UPDATE meta
+        SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)
+        WHERE key = ?
+      `
+    ).run(INVALIDATION_SEQUENCE_META_KEY)
+    const row = this.#prepareStatement(
+      `SELECT value FROM meta WHERE key = ?`
+    ).get(INVALIDATION_SEQUENCE_META_KEY) as { value?: unknown } | undefined
+    const sequence = Number.parseInt(String(row?.value ?? '0'), 10)
+    if (!Number.isFinite(sequence) || sequence <= 0) {
+      return 0
+    }
 
-    return this.#runWithBusyRetries(() => {
-      this.#ensureDependencyMatchTempTable()
-      this.#prepareStatement(clearTermsSql).run()
-      const insertTerm = this.#prepareStatement(insertTermSql)
-      for (const depKey of exactDependencyKeys) {
-        insertTerm.run(depKey, 0)
-      }
-      for (const depPattern of descendantDependencyPatterns) {
-        insertTerm.run(depPattern, 1)
-      }
-
-      const rows = this.#prepareStatement(selectNodeKeysSql).all() as Array<{
-        node_key?: string
-      }>
-
-      return rows
-        .map((row) => row.node_key)
-        .filter((nodeKey: string | undefined): nodeKey is string => {
-          return typeof nodeKey === 'string'
-        })
-    })
+    return sequence
   }
 
-  #ensureDependencyMatchTempTable(): void {
-    if (!this.#db || this.#dependencyMatchTempTableInitialized) {
-      return
-    }
-
-    this.#db.exec(
-      `
-        CREATE TEMP TABLE IF NOT EXISTS ${DEPENDENCY_MATCH_TEMP_TABLE} (
-          dep_key TEXT NOT NULL,
-          is_pattern INTEGER NOT NULL
-        )
-      `
-    )
-    this.#db.exec(
-      `
-        CREATE INDEX IF NOT EXISTS ${DEPENDENCY_MATCH_TEMP_TABLE}_kind_dep_key_idx
-        ON ${DEPENDENCY_MATCH_TEMP_TABLE}(is_pattern, dep_key)
-      `
-    )
-    this.#dependencyMatchTempTableInitialized = true
-  }
-
-  #resolveDependencyMatchStrategy(totalTerms: number): DependencyMatchStrategy {
-    if (!this.#dependencyMatchTempTableEnabled) {
-      return 'dynamic'
-    }
-
-    const fallbackStrategy: DependencyMatchStrategy =
-      totalTerms >= this.#dependencyMatchTempTableThreshold
-        ? 'temp-table'
-        : 'dynamic'
-
-    if (!this.#dependencyMatchAdaptiveEnabled) {
-      return fallbackStrategy
-    }
-
-    const bucket = this.#toDependencyMatchTermsBucket(totalTerms)
-    const stats = this.#getDependencyMatchStrategyStats(bucket)
-
-    const hasEnoughDynamicSamples =
-      stats.dynamicSamples >= this.#dependencyMatchAdaptiveMinSamples
-    const hasEnoughTempTableSamples =
-      stats.tempTableSamples >= this.#dependencyMatchAdaptiveMinSamples
-
-    if (hasEnoughDynamicSamples && hasEnoughTempTableSamples) {
-      const averageDynamicDuration =
-        stats.dynamicTotalDurationMs / stats.dynamicSamples
-      const averageTempTableDuration =
-        stats.tempTableTotalDurationMs / stats.tempTableSamples
-      return averageDynamicDuration <= averageTempTableDuration
-        ? 'dynamic'
-        : 'temp-table'
-    }
-
-    const needsDynamicSamples = !hasEnoughDynamicSamples
-    const needsTempTableSamples = !hasEnoughTempTableSamples
-
-    if (needsDynamicSamples && needsTempTableSamples) {
-      return fallbackStrategy
-    }
-
-    if (needsDynamicSamples) {
-      return 'dynamic'
-    }
-    if (needsTempTableSamples) {
-      return 'temp-table'
-    }
-
-    return fallbackStrategy
-  }
-
-  #recordDependencyMatchStrategyDuration(
-    totalTerms: number,
-    strategy: DependencyMatchStrategy,
-    durationMs: number
+  #replaceDependenciesForNodeKey(
+    nodeKey: string,
+    dependencies: CacheEntry['deps']
   ): void {
-    if (!Number.isFinite(durationMs) || durationMs < 0) {
+    if (!this.#db) {
       return
     }
 
-    const bucket = this.#toDependencyMatchTermsBucket(totalTerms)
-    const stats = this.#getDependencyMatchStrategyStats(bucket)
-    if (strategy === 'temp-table') {
-      stats.tempTableSamples += 1
-      stats.tempTableTotalDurationMs += durationMs
+    this.#replaceStructuredDependenciesForNodeKey(nodeKey, dependencies)
+  }
+
+  #replaceStructuredDependenciesForNodeKey(
+    nodeKey: string,
+    dependencies: CacheEntry['deps']
+  ): void {
+    if (!this.#db) {
       return
     }
 
-    stats.dynamicSamples += 1
-    stats.dynamicTotalDurationMs += durationMs
-  }
+    this.#prepareStatement(`DELETE FROM cache_entry_deps_v2 WHERE node_key = ?`).run(
+      nodeKey
+    )
 
-  #toDependencyMatchTermsBucket(totalTerms: number): number {
-    const sanitizedTerms = Math.max(1, totalTerms)
-    const bucketSize = this.#dependencyMatchAdaptiveBucketSize
-    return Math.ceil(sanitizedTerms / bucketSize) * bucketSize
-  }
-
-  #getDependencyMatchStrategyStats(bucket: number): DependencyMatchStrategyStats {
-    const existing = this.#dependencyMatchPerfByBucket.get(bucket)
-    if (existing) {
-      return existing
+    if (dependencies.length === 0) {
+      return
     }
 
-    const created: DependencyMatchStrategyStats = {
-      dynamicSamples: 0,
-      dynamicTotalDurationMs: 0,
-      tempTableSamples: 0,
-      tempTableTotalDurationMs: 0,
+    const dedupedDependencies = new Map<string, string>()
+    for (const dependency of dependencies) {
+      if (
+        typeof dependency.depKey !== 'string' ||
+        dependency.depKey.length === 0
+      ) {
+        continue
+      }
+      dedupedDependencies.set(
+        dependency.depKey,
+        typeof dependency.depVersion === 'string' ? dependency.depVersion : ''
+      )
     }
-    this.#dependencyMatchPerfByBucket.set(bucket, created)
-    return created
+
+    if (dedupedDependencies.size === 0) {
+      return
+    }
+
+    const insertStructuredDependency = this.#prepareStatement(
+      `
+        INSERT INTO cache_entry_deps_v2 (node_key, dep_key, dep_term_id, dep_version)
+        VALUES (?, ?, ?, ?)
+      `
+    )
+
+    for (const [depKey, depVersion] of dedupedDependencies) {
+      const parsedPathTerm = this.#parseStructuredPathDependencyTerm(depKey)
+      let depTermId: number | null = null
+
+      if (parsedPathTerm) {
+        const pathId = this.#ensurePathClosureForPath(parsedPathTerm.pathKey)
+        if (Number.isFinite(pathId) && pathId > 0) {
+          const resolvedDepTermId = this.#getOrCreateDepTermId(
+            parsedPathTerm.kind,
+            pathId,
+            parsedPathTerm.pathKey
+          )
+          if (Number.isFinite(resolvedDepTermId) && resolvedDepTermId > 0) {
+            depTermId = resolvedDepTermId
+          }
+        }
+      }
+
+      insertStructuredDependency.run(nodeKey, depKey, depTermId, depVersion)
+    }
+  }
+
+  #parseStructuredPathDependencyTerm(
+    depKey: string
+  ): StructuredPathDependencyTerm | undefined {
+    const parsePathDependency = (
+      pathDependency: string
+    ): StructuredPathDependencyTerm | undefined => {
+      if (pathDependency.startsWith('file:')) {
+        return {
+          kind: STRUCTURED_DEP_KIND_FILE,
+          pathKey: normalizeAbsolutePathKey(pathDependency.slice('file:'.length)),
+        }
+      }
+
+      if (pathDependency.startsWith('dir:')) {
+        return {
+          kind: STRUCTURED_DEP_KIND_DIR,
+          pathKey: normalizeAbsolutePathKey(pathDependency.slice('dir:'.length)),
+        }
+      }
+
+      if (pathDependency.startsWith('dir-mtime:')) {
+        return {
+          kind: STRUCTURED_DEP_KIND_DIR_MTIME,
+          pathKey: normalizeAbsolutePathKey(
+            pathDependency.slice('dir-mtime:'.length)
+          ),
+        }
+      }
+
+      return undefined
+    }
+
+    if (depKey.startsWith(DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX)) {
+      const payload = depKey.slice(DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX.length)
+      const versionSeparatorIndex = payload.lastIndexOf(':')
+      if (versionSeparatorIndex <= 0) {
+        return undefined
+      }
+      return parsePathDependency(payload.slice(0, versionSeparatorIndex))
+    }
+
+    return parsePathDependency(depKey)
+  }
+
+  #ensurePathClosureForPath(pathKey: string): number {
+    if (!this.#db) {
+      return 0
+    }
+
+    const normalizedPath = normalizeAbsolutePathKey(pathKey)
+    const normalizedPathId = this.#getOrCreatePathId(normalizedPath)
+    if (!Number.isFinite(normalizedPathId) || normalizedPathId <= 0) {
+      return 0
+    }
+
+    if (
+      this.#structuredIdCacheEnabled &&
+      this.#seededPathClosureByPathKey.has(normalizedPath)
+    ) {
+      return normalizedPathId
+    }
+
+    const lineage = [...getAncestorPathKeys(normalizedPath), normalizedPath]
+    const uniqueLineage = Array.from(new Set(lineage))
+    const pathIdByPathKey = new Map<string, number>()
+
+    for (const lineagePathKey of uniqueLineage) {
+      const lineagePathId = this.#getOrCreatePathId(lineagePathKey)
+      pathIdByPathKey.set(lineagePathKey, lineagePathId)
+    }
+
+    const upsertClosure = this.#prepareStatement(
+      `
+        INSERT INTO dep_path_closure (descendant_path_id, ancestor_path_id, depth)
+        VALUES (?, ?, ?)
+        ON CONFLICT(descendant_path_id, ancestor_path_id) DO UPDATE
+        SET depth = excluded.depth
+      `
+    )
+
+    for (let descendantIndex = 0; descendantIndex < uniqueLineage.length; descendantIndex += 1) {
+      const descendantPathKey = uniqueLineage[descendantIndex]
+      const descendantPathId = pathIdByPathKey.get(descendantPathKey)
+      if (!descendantPathId) {
+        continue
+      }
+
+      for (let ancestorIndex = 0; ancestorIndex <= descendantIndex; ancestorIndex += 1) {
+        const ancestorPathKey = uniqueLineage[ancestorIndex]
+        const ancestorPathId = pathIdByPathKey.get(ancestorPathKey)
+        if (!ancestorPathId) {
+          continue
+        }
+
+        upsertClosure.run(
+          descendantPathId,
+          ancestorPathId,
+          descendantIndex - ancestorIndex
+        )
+      }
+    }
+
+    if (this.#structuredIdCacheEnabled) {
+      for (const lineagePathKey of uniqueLineage) {
+        this.#markPathClosureSeeded(lineagePathKey)
+      }
+    }
+
+    return pathIdByPathKey.get(normalizedPath) ?? normalizedPathId
+  }
+
+  #getOrCreatePathId(pathKey: string): number {
+    if (!this.#db) {
+      return 0
+    }
+
+    const normalizedPathKey = normalizeAbsolutePathKey(pathKey)
+    if (this.#structuredIdCacheEnabled) {
+      const cachedPathId = this.#pathIdByPathKey.get(normalizedPathKey)
+      if (typeof cachedPathId === 'number' && Number.isFinite(cachedPathId)) {
+        return cachedPathId
+      }
+    }
+
+    this.#prepareStatement(
+      `
+        INSERT INTO dep_paths (path_key)
+        VALUES (?)
+        ON CONFLICT(path_key) DO NOTHING
+      `
+    ).run(normalizedPathKey)
+    const row = this.#prepareStatement(
+      `SELECT path_id FROM dep_paths WHERE path_key = ?`
+    ).get(normalizedPathKey) as { path_id?: unknown } | undefined
+    const pathId = Number(row?.path_id ?? 0)
+    if (!Number.isFinite(pathId) || pathId <= 0) {
+      return 0
+    }
+
+    if (this.#structuredIdCacheEnabled) {
+      this.#setCachedPathId(normalizedPathKey, pathId)
+    }
+    return pathId
+  }
+
+  #getOrCreateDepTermId(
+    depKind: StructuredPathDependencyTerm['kind'],
+    pathId: number,
+    pathKey: string
+  ): number {
+    if (!this.#db) {
+      return 0
+    }
+
+    const termKey = `${depKind}:${pathKey}`
+    if (this.#structuredIdCacheEnabled) {
+      const cachedDepTermId = this.#depTermIdByTermKey.get(termKey)
+      if (
+        typeof cachedDepTermId === 'number' &&
+        Number.isFinite(cachedDepTermId) &&
+        cachedDepTermId > 0
+      ) {
+        return cachedDepTermId
+      }
+    }
+
+    this.#prepareStatement(
+      `
+        INSERT INTO dep_terms (dep_kind, path_id, term_key)
+        VALUES (?, ?, ?)
+        ON CONFLICT(term_key) DO UPDATE SET
+          dep_kind = excluded.dep_kind,
+          path_id = excluded.path_id
+      `
+    ).run(depKind, pathId, termKey)
+    const row = this.#prepareStatement(
+      `SELECT dep_term_id FROM dep_terms WHERE term_key = ?`
+    ).get(termKey) as { dep_term_id?: unknown } | undefined
+    const depTermId = Number(row?.dep_term_id ?? 0)
+    if (!Number.isFinite(depTermId) || depTermId <= 0) {
+      return 0
+    }
+
+    if (this.#structuredIdCacheEnabled) {
+      this.#setCachedDepTermId(termKey, depTermId)
+    }
+    return depTermId
   }
 
   async #listMissingDependencyNodeKeys(): Promise<string[]> {
@@ -1335,7 +1420,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       FROM cache_entries AS entry
       WHERE NOT EXISTS (
         SELECT 1
-        FROM cache_deps AS dependency
+        FROM cache_entry_deps_v2 AS dependency
         WHERE dependency.node_key = entry.node_key
       )
       ORDER BY entry.node_key
@@ -1390,6 +1475,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           : undefined
 
         if (currentSchemaVersion !== this.#schemaVersion) {
+          database.exec(`DROP TABLE IF EXISTS cache_entry_deps_v2`)
+          database.exec(`DROP TABLE IF EXISTS dep_terms`)
+          database.exec(`DROP TABLE IF EXISTS dep_path_closure`)
+          database.exec(`DROP TABLE IF EXISTS dep_paths`)
           database.exec(`DROP TABLE IF EXISTS cache_deps`)
           database.exec(`DROP TABLE IF EXISTS cache_entries`)
           database.exec(`DROP TABLE IF EXISTS cache_inflight`)
@@ -1409,16 +1498,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#initializeMissingDependencyMetadata(database)
 
         this.#clearPreparedStatements()
-        this.#dependencyMatchTempTableInitialized = false
-        this.#dependencyMatchPerfByBucket.clear()
+        this.#clearStructuredDependencyCaches()
         this.#db = database
         this.#availability = 'available'
         await this.#runPruneWithRetries()
         return
       } catch (error) {
         this.#clearPreparedStatements()
-        this.#dependencyMatchTempTableInitialized = false
-        this.#dependencyMatchPerfByBucket.clear()
+        this.#clearStructuredDependencyCaches()
         this.#db = undefined
 
         if (database && typeof database.close === 'function') {
@@ -1470,18 +1557,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           updated_at INTEGER NOT NULL,
           last_accessed_at INTEGER NOT NULL,
           persist INTEGER NOT NULL DEFAULT 0,
+          workspace_change_token TEXT,
           revision INTEGER NOT NULL DEFAULT 0
-        )
-      `
-    )
-    database.exec(
-      `
-        CREATE TABLE IF NOT EXISTS cache_deps (
-          node_key TEXT NOT NULL,
-          dep_key TEXT NOT NULL,
-          dep_version TEXT NOT NULL,
-          FOREIGN KEY (node_key) REFERENCES cache_entries(node_key) ON DELETE CASCADE,
-          PRIMARY KEY (node_key, dep_key)
         )
       `
     )
@@ -1492,10 +1569,66 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       `CREATE INDEX IF NOT EXISTS cache_entries_last_accessed_at_idx ON cache_entries(last_accessed_at)`
     )
     database.exec(
-      `CREATE INDEX IF NOT EXISTS cache_deps_dep_key_idx ON cache_deps(dep_key)`
+      `
+        CREATE TABLE IF NOT EXISTS dep_paths (
+          path_id INTEGER PRIMARY KEY,
+          path_key TEXT NOT NULL UNIQUE
+        )
+      `
     )
     database.exec(
-      `CREATE INDEX IF NOT EXISTS cache_deps_dep_key_node_key_idx ON cache_deps(dep_key, node_key)`
+      `
+        CREATE TABLE IF NOT EXISTS dep_path_closure (
+          descendant_path_id INTEGER NOT NULL,
+          ancestor_path_id INTEGER NOT NULL,
+          depth INTEGER NOT NULL,
+          PRIMARY KEY (descendant_path_id, ancestor_path_id),
+          FOREIGN KEY (descendant_path_id) REFERENCES dep_paths(path_id) ON DELETE CASCADE,
+          FOREIGN KEY (ancestor_path_id) REFERENCES dep_paths(path_id) ON DELETE CASCADE
+        )
+      `
+    )
+    database.exec(
+      `
+        CREATE INDEX IF NOT EXISTS dep_path_closure_ancestor_idx
+        ON dep_path_closure(ancestor_path_id, descendant_path_id)
+      `
+    )
+    database.exec(
+      `
+        CREATE TABLE IF NOT EXISTS dep_terms (
+          dep_term_id INTEGER PRIMARY KEY,
+          dep_kind INTEGER NOT NULL,
+          path_id INTEGER,
+          term_key TEXT NOT NULL UNIQUE,
+          FOREIGN KEY (path_id) REFERENCES dep_paths(path_id) ON DELETE CASCADE
+        )
+      `
+    )
+    database.exec(
+      `
+        CREATE INDEX IF NOT EXISTS dep_terms_kind_path_idx
+        ON dep_terms(dep_kind, path_id)
+      `
+    )
+    database.exec(
+      `
+        CREATE TABLE IF NOT EXISTS cache_entry_deps_v2 (
+          node_key TEXT NOT NULL,
+          dep_key TEXT NOT NULL,
+          dep_term_id INTEGER,
+          dep_version TEXT NOT NULL,
+          PRIMARY KEY (node_key, dep_key),
+          FOREIGN KEY (node_key) REFERENCES cache_entries(node_key) ON DELETE CASCADE,
+          FOREIGN KEY (dep_term_id) REFERENCES dep_terms(dep_term_id) ON DELETE CASCADE
+        )
+      `
+    )
+    database.exec(
+      `
+        CREATE INDEX IF NOT EXISTS cache_entry_deps_v2_dep_term_node_key_idx
+        ON cache_entry_deps_v2(dep_term_id, node_key)
+      `
     )
     database.exec(
       `
@@ -1520,7 +1653,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           FROM cache_entries AS entry
           WHERE NOT EXISTS (
             SELECT 1
-            FROM cache_deps AS dependency
+            FROM cache_entry_deps_v2 AS dependency
             WHERE dependency.node_key = entry.node_key
           )
         `
@@ -1545,6 +1678,16 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY,
         String(normalizedMissingDependencyCount)
       )
+
+    database
+      .prepare(
+        `
+          INSERT INTO meta(key, value)
+          VALUES (?, '0')
+          ON CONFLICT(key) DO NOTHING
+        `
+      )
+      .run(INVALIDATION_SEQUENCE_META_KEY)
   }
 
   async #maybePruneAfterWrite(
@@ -1696,6 +1839,69 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
   }
 
+  #clearStructuredDependencyCaches(): void {
+    this.#pathIdByPathKey.clear()
+    this.#depTermIdByTermKey.clear()
+    this.#seededPathClosureByPathKey.clear()
+  }
+
+  #setCachedPathId(pathKey: string, pathId: number): void {
+    if (!Number.isFinite(pathId) || pathId <= 0) {
+      return
+    }
+
+    if (this.#pathIdByPathKey.has(pathKey)) {
+      this.#pathIdByPathKey.delete(pathKey)
+    }
+    this.#pathIdByPathKey.set(pathKey, pathId)
+
+    while (
+      this.#pathIdByPathKey.size > SQLITE_STRUCTURED_PATH_ID_CACHE_MAX_SIZE
+    ) {
+      const oldestPathKey = this.#pathIdByPathKey.keys().next().value
+      if (typeof oldestPathKey !== 'string') {
+        break
+      }
+      this.#pathIdByPathKey.delete(oldestPathKey)
+    }
+  }
+
+  #setCachedDepTermId(termKey: string, depTermId: number): void {
+    if (!Number.isFinite(depTermId) || depTermId <= 0) {
+      return
+    }
+
+    if (this.#depTermIdByTermKey.has(termKey)) {
+      this.#depTermIdByTermKey.delete(termKey)
+    }
+    this.#depTermIdByTermKey.set(termKey, depTermId)
+
+    while (
+      this.#depTermIdByTermKey.size >
+      SQLITE_STRUCTURED_DEP_TERM_ID_CACHE_MAX_SIZE
+    ) {
+      const oldestTermKey = this.#depTermIdByTermKey.keys().next().value
+      if (typeof oldestTermKey !== 'string') {
+        break
+      }
+      this.#depTermIdByTermKey.delete(oldestTermKey)
+    }
+  }
+
+  #markPathClosureSeeded(pathKey: string): void {
+    this.#seededPathClosureByPathKey.add(pathKey)
+    while (
+      this.#seededPathClosureByPathKey.size >
+      SQLITE_STRUCTURED_PATH_CLOSURE_SEEDED_CACHE_MAX_SIZE
+    ) {
+      const oldestPathKey = this.#seededPathClosureByPathKey.values().next()
+      if (typeof oldestPathKey.value !== 'string') {
+        break
+      }
+      this.#seededPathClosureByPathKey.delete(oldestPathKey.value)
+    }
+  }
+
   async #runWithBusyRetries<T>(operation: () => T): Promise<T> {
     for (let attempt = 0; attempt <= SQLITE_BUSY_RETRIES; attempt += 1) {
       try {
@@ -1741,7 +1947,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return
     }
 
-    const staleBefore = Date.now() - this.#maxAgeMs
+    const pruneStartedAt = Date.now()
+    const staleBefore = pruneStartedAt - this.#maxAgeMs
 
     this.#db.exec('BEGIN IMMEDIATE')
     try {
@@ -1801,12 +2008,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
               WHERE expires_at <= ?
             `
           )
-          .all(Date.now())
+          .all(pruneStartedAt)
           .map((row: { node_key?: string }) => row.node_key)
           .filter((nodeKey: string | undefined): nodeKey is string => {
             return typeof nodeKey === 'string'
           })
       )
+
+      this.#compactStructuredDependencyTables()
 
       this.#db.exec('COMMIT')
     } catch (error) {
@@ -1817,13 +2026,84 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
   }
 
+  #compactStructuredDependencyTables(): void {
+    if (!this.#db) {
+      return
+    }
+
+    this.#prepareStatement(
+      `
+        DELETE FROM dep_terms
+        WHERE dep_term_id NOT IN (
+          SELECT DISTINCT dep_term_id
+          FROM cache_entry_deps_v2
+          WHERE dep_term_id IS NOT NULL
+        )
+      `
+    ).run()
+
+    this.#prepareStatement(
+      `
+        WITH active_term_paths AS (
+          SELECT DISTINCT path_id
+          FROM dep_terms
+          WHERE path_id IS NOT NULL
+        ),
+        live_paths AS (
+          SELECT path_id
+          FROM active_term_paths
+          UNION
+          SELECT closure.ancestor_path_id as path_id
+          FROM dep_path_closure AS closure
+          JOIN active_term_paths AS term_path
+            ON term_path.path_id = closure.descendant_path_id
+          UNION
+          SELECT closure.descendant_path_id as path_id
+          FROM dep_path_closure AS closure
+          JOIN active_term_paths AS term_path
+            ON term_path.path_id = closure.ancestor_path_id
+        )
+        DELETE FROM dep_path_closure
+        WHERE descendant_path_id NOT IN (SELECT path_id FROM live_paths)
+          OR ancestor_path_id NOT IN (SELECT path_id FROM live_paths)
+      `
+    ).run()
+
+    this.#prepareStatement(
+      `
+        WITH active_term_paths AS (
+          SELECT DISTINCT path_id
+          FROM dep_terms
+          WHERE path_id IS NOT NULL
+        ),
+        live_paths AS (
+          SELECT path_id
+          FROM active_term_paths
+          UNION
+          SELECT closure.ancestor_path_id as path_id
+          FROM dep_path_closure AS closure
+          JOIN active_term_paths AS term_path
+            ON term_path.path_id = closure.descendant_path_id
+          UNION
+          SELECT closure.descendant_path_id as path_id
+          FROM dep_path_closure AS closure
+          JOIN active_term_paths AS term_path
+            ON term_path.path_id = closure.ancestor_path_id
+        )
+        DELETE FROM dep_paths
+        WHERE path_id NOT IN (SELECT path_id FROM live_paths)
+      `
+    ).run()
+
+    this.#clearStructuredDependencyCaches()
+  }
+
   close() {
     const database = this.#db
     this.#pruneInFlight = undefined
     this.#lastAccessTouchAtByNodeKey.clear()
-    this.#dependencyMatchPerfByBucket.clear()
+    this.#clearStructuredDependencyCaches()
     this.#clearPreparedStatements()
-    this.#dependencyMatchTempTableInitialized = false
     this.#db = undefined
     this.#availability = 'unavailable'
 
@@ -1901,7 +2181,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           WHERE entry.node_key = ?
             AND NOT EXISTS (
               SELECT 1
-              FROM cache_deps AS dependency
+              FROM cache_entry_deps_v2 AS dependency
               WHERE dependency.node_key = entry.node_key
             )
         ) as is_missing
@@ -1972,7 +2252,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         WHERE entry.node_key IN (${placeholders})
           AND NOT EXISTS (
             SELECT 1
-            FROM cache_deps AS dependency
+            FROM cache_entry_deps_v2 AS dependency
             WHERE dependency.node_key = entry.node_key
           )
       `
@@ -2011,9 +2291,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       const placeholders = batch.map(() => '?').join(',')
       const missingDependencyCountForBatch =
         this.#countMissingDependencyEntriesForNodeKeys(batch)
-      const deleteDepsSql = `DELETE FROM cache_deps WHERE node_key IN (${placeholders})`
+      const deleteStructuredDepsSql = `DELETE FROM cache_entry_deps_v2 WHERE node_key IN (${placeholders})`
       const deleteEntriesSql = `DELETE FROM cache_entries WHERE node_key IN (${placeholders})`
-      this.#prepareStatement(deleteDepsSql).run(...batch)
+      this.#prepareStatement(deleteStructuredDepsSql).run(...batch)
       this.#prepareStatement(deleteEntriesSql).run(...batch)
       this.#adjustMissingDependencyMetadataCount(-missingDependencyCountForBatch)
     }
