@@ -292,6 +292,42 @@ describe('NodeFileSystem', () => {
     }
   })
 
+  test('changes workspace token when editing an already dirty file', async () => {
+    const repoRoot = mkdtempSync(join(baseTmpDirectory, 'node-fs-git-dirty-'))
+
+    try {
+      runGit(repoRoot, ['init'])
+      runGit(repoRoot, ['config', 'user.name', 'Renoun Tests'])
+      runGit(repoRoot, ['config', 'user.email', 'tests@renoun.dev'])
+
+      const trackedPath = join(repoRoot, 'tracked.ts')
+      writeFileSync(trackedPath, 'export const value = 1\n')
+      runGit(repoRoot, ['add', 'tracked.ts'])
+      runGit(repoRoot, ['commit', '-m', 'init'])
+
+      writeFileSync(trackedPath, 'export const value = 22\n')
+      const firstDirtyToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
+
+      writeFileSync(trackedPath, 'export const value = 333\n')
+      const secondDirtyToken = await fileSystem.getWorkspaceChangeToken(
+        repoRoot
+      )
+
+      expect(firstDirtyToken).toBeTruthy()
+      expect(secondDirtyToken).toBeTruthy()
+      expect(secondDirtyToken).not.toBe(firstDirtyToken)
+
+      const changedPaths = await fileSystem.getWorkspaceChangedPathsSinceToken(
+        repoRoot,
+        firstDirtyToken!
+      )
+      const expectedPath = fileSystem.getRelativePathToWorkspace(trackedPath)
+      expect(changedPaths ?? []).toContain(expectedPath)
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true })
+    }
+  })
+
   afterAll(() => {
     rmSync(tempDirectory, { recursive: true, force: true })
     for (const directory of outsideDirectories) {

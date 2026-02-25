@@ -12,6 +12,7 @@ import { getCacheStorePersistence } from './CacheSqlite.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
 import type { DirectorySnapshot } from './directory-snapshot.ts'
+import { createWorkspaceChangedPathsCacheKey } from './workspace-cache-key.ts'
 
 const sessionsByFileSystem = new WeakMap<
   object,
@@ -1266,13 +1267,6 @@ function getTelemetryPathDepth(path: string): number {
   return path.split('/').filter((segment) => segment.length > 0).length
 }
 
-function createWorkspaceChangedPathsCacheKey(
-  normalizedRootPath: string,
-  previousToken: string
-): string {
-  return JSON.stringify([normalizedRootPath, previousToken])
-}
-
 function extractDirectoryPathFromSnapshotKey(key: string): string | undefined {
   if (!key.startsWith('dir:')) {
     return undefined
@@ -1333,6 +1327,16 @@ function resolveSessionProjectRoot(
         }
       )
     }
+  }
+
+  if (absoluteRoot && resolve(absoluteRoot) === resolve('/')) {
+    if (debug) {
+      // eslint-disable-next-line no-console
+      console.log('[renoun-debug] resolveSessionProjectRoot(rootless)', {
+        absoluteRoot,
+      })
+    }
+    absoluteRoot = undefined
   }
 
   if (!absoluteRoot) {

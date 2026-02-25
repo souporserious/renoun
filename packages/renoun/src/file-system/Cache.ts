@@ -2668,7 +2668,7 @@ export class CacheStore {
     }
 
     this.#warnedAboutPersistenceFailure = true
-    console.warn(
+    getDebugLogger().warn(
       `[renoun] Cache persistence failed during ${operation}. Continuing with in-memory cache and retrying persistence: ${
         error instanceof Error ? error.message : String(error)
       }`
@@ -2681,7 +2681,7 @@ export class CacheStore {
     }
 
     this.#warnedAboutUnserializableValue = true
-    console.warn(
+    getDebugLogger().warn(
       `[renoun] Cache persistence skipped for ${nodeKey} because the value is not serializable: ${
         error instanceof Error ? error.message : String(error)
       }`

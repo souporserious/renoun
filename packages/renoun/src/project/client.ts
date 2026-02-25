@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import type { SyntaxKind } from '../utils/ts-morph.ts'
 
 import type { ConfigurationOptions } from '../components/Config/types.ts'
@@ -5,6 +6,7 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.ts'
+import { parseBooleanEnv } from '../utils/env.ts'
 import type {
   ModuleExport,
   getFileExportMetadata as baseGetFileExportMetadata,
@@ -17,6 +19,12 @@ import type {
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
+import {
+  isAbsolutePath,
+  normalizePathKey,
+  normalizeSlashes,
+} from '../utils/path.ts'
 import type { DistributiveOmit } from '../types.ts'
 import {
   getCachedFileExportText,
@@ -38,14 +46,322 @@ import type { ProjectOptions } from './types.ts'
 let client: WebSocketClient | undefined
 const pendingRefreshInvalidationPaths = new Set<string>()
 let isRefreshInvalidationFlushQueued = false
+let hasConnectedProjectServerClient = false
+let refreshResyncQueue: Promise<void> = Promise.resolve()
+let latestRefreshCursor = 0
+
+type ClientCachedRpcMethod =
+  | 'getSourceTextMetadata'
+  | 'resolveTypeAtLocationWithDependencies'
+  | 'getTokens'
+  | 'getFileExports'
+  | 'getOutlineRanges'
+  | 'getFileExportMetadata'
+  | 'getFileExportStaticValue'
+  | 'getFileExportText'
+  | 'transpileSourceFile'
+
+interface ClientRpcCacheEntry {
+  value: unknown
+  expiresAt: number
+  dependencyPaths: readonly string[]
+}
+
+interface RefreshNotificationData {
+  refreshCursor?: number
+  filePath?: string
+  filePaths?: string[]
+}
+
+interface RefreshInvalidationsSinceResponse {
+  nextCursor?: number
+  filePath?: string
+  filePaths?: string[]
+  fullRefresh?: boolean
+}
+
+const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
+  'getSourceTextMetadata',
+  'resolveTypeAtLocationWithDependencies',
+  'getTokens',
+  'getFileExports',
+  'getOutlineRanges',
+  'getFileExportMetadata',
+  'getFileExportStaticValue',
+  'getFileExportText',
+  'transpileSourceFile',
+])
+
+const CLIENT_RPC_CACHE_MAX_ENTRIES = 500
+const DEFAULT_CLIENT_RPC_CACHE_TTL_MS = 1_000
+const clientRpcCacheByKey = new Map<string, ClientRpcCacheEntry>()
+const clientRpcInFlightByKey = new Map<string, Promise<unknown>>()
+
+function shouldUseClientRpcCache(): boolean {
+  const override = parseBooleanEnv(
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE']
+  )
+  if (override !== undefined) {
+    return override
+  }
+
+  return true
+}
+
+function getClientRpcCacheTtlMs(): number {
+  const configured = process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS']
+  if (!configured) {
+    return DEFAULT_CLIENT_RPC_CACHE_TTL_MS
+  }
+
+  const parsed = Number.parseInt(configured, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0
+  }
+
+  return parsed
+}
+
+function normalizeRefreshCursor(value: unknown): number | undefined {
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < 0
+  ) {
+    return undefined
+  }
+
+  return Math.floor(value)
+}
+
+function normalizeRpcCacheKeyValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return `hash:${hashString(value)}`
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeRpcCacheKeyValue(entry))
+  }
+
+  const candidate = value as Record<string, unknown>
+  const normalized: Record<string, unknown> = {}
+  const keys = Object.keys(candidate).sort()
+  for (const key of keys) {
+    normalized[key] = normalizeRpcCacheKeyValue(candidate[key])
+  }
+  return normalized
+}
+
+function toClientRpcCacheKey(method: ClientCachedRpcMethod, params: unknown): string {
+  return hashString(
+    `${method}|${stableStringify(normalizeRpcCacheKeyValue(params))}`
+  )
+}
+
+function toComparablePath(path: string): string {
+  const normalized = normalizeSlashes(path)
+  const absolutePath = isAbsolutePath(normalized) ? normalized : resolve(normalized)
+  return normalizePathKey(absolutePath)
+}
+
+function pathsIntersect(firstPath: string, secondPath: string): boolean {
+  if (firstPath === '.' || secondPath === '.') {
+    return true
+  }
+
+  return (
+    firstPath === secondPath ||
+    firstPath.startsWith(`${secondPath}/`) ||
+    secondPath.startsWith(`${firstPath}/`)
+  )
+}
+
+function getCandidatePath(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) {
+    return undefined
+  }
+
+  return toComparablePath(value)
+}
+
+function collectClientRpcDependencyPaths(
+  method: ClientCachedRpcMethod,
+  params: unknown
+): string[] {
+  const candidate = params as {
+    filePath?: unknown
+    sourcePath?: unknown
+    projectOptions?: {
+      tsConfigFilePath?: unknown
+    }
+  }
+  const dependencyPaths = new Set<string>()
+
+  const filePath = getCandidatePath(candidate.filePath)
+  if (filePath) {
+    dependencyPaths.add(filePath)
+  }
+
+  if (method === 'getTokens') {
+    const sourcePath = getCandidatePath(candidate.sourcePath)
+    if (sourcePath) {
+      dependencyPaths.add(sourcePath)
+    }
+  }
+
+  const tsConfigFilePath = getCandidatePath(
+    candidate.projectOptions?.tsConfigFilePath
+  )
+  if (tsConfigFilePath) {
+    dependencyPaths.add(tsConfigFilePath)
+  }
+
+  return Array.from(dependencyPaths)
+}
+
+function pruneExpiredClientRpcCacheEntries(now = Date.now()): void {
+  for (const [cacheKey, entry] of clientRpcCacheByKey) {
+    if (entry.expiresAt <= now) {
+      clientRpcCacheByKey.delete(cacheKey)
+    }
+  }
+}
+
+function trimClientRpcCache(): void {
+  while (clientRpcCacheByKey.size > CLIENT_RPC_CACHE_MAX_ENTRIES) {
+    const oldestKey = clientRpcCacheByKey.keys().next().value as
+      | string
+      | undefined
+    if (!oldestKey) {
+      return
+    }
+
+    clientRpcCacheByKey.delete(oldestKey)
+  }
+}
+
+function invalidateClientRpcCacheByPath(path: string): void {
+  const normalizedPath = toComparablePath(path)
+
+  for (const [cacheKey, entry] of clientRpcCacheByKey) {
+    if (
+      entry.dependencyPaths.some((dependencyPath) =>
+        pathsIntersect(dependencyPath, normalizedPath)
+      )
+    ) {
+      clientRpcCacheByKey.delete(cacheKey)
+    }
+  }
+}
+
+async function callClientMethod<
+  Params extends Record<string, unknown>,
+  Value,
+>(
+  activeClient: WebSocketClient,
+  method: string,
+  params: Params
+): Promise<Value> {
+  if (
+    !shouldUseClientRpcCache() ||
+    !CLIENT_CACHED_RPC_METHODS.has(method as ClientCachedRpcMethod)
+  ) {
+    return activeClient.callMethod<Params, Value>(method, params)
+  }
+
+  const ttlMs = getClientRpcCacheTtlMs()
+  if (ttlMs <= 0) {
+    return activeClient.callMethod<Params, Value>(method, params)
+  }
+
+  const typedMethod = method as ClientCachedRpcMethod
+  const cacheKey = toClientRpcCacheKey(typedMethod, params)
+  const now = Date.now()
+  pruneExpiredClientRpcCacheEntries(now)
+  const cached = clientRpcCacheByKey.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    clientRpcCacheByKey.delete(cacheKey)
+    clientRpcCacheByKey.set(cacheKey, cached)
+    return cached.value as Value
+  }
+
+  const inFlight = clientRpcInFlightByKey.get(cacheKey)
+  if (inFlight) {
+    return inFlight as Promise<Value>
+  }
+
+  const request = activeClient
+    .callMethod<Params, Value>(method, params)
+    .then((value) => {
+      clientRpcCacheByKey.set(cacheKey, {
+        value,
+        expiresAt: Date.now() + ttlMs,
+        dependencyPaths: collectClientRpcDependencyPaths(typedMethod, params),
+      })
+      trimClientRpcCache()
+      return value
+    })
+    .finally(() => {
+      clientRpcInFlightByKey.delete(cacheKey)
+    })
+  clientRpcInFlightByKey.set(cacheKey, request as Promise<unknown>)
+
+  return request
+}
+
+function queueRefreshResync(activeClient: WebSocketClient): void {
+  refreshResyncQueue = refreshResyncQueue
+    .catch(() => {})
+    .then(async () => {
+      const response = await activeClient.callMethod<
+        RefreshInvalidationsSinceRequest,
+        RefreshInvalidationsSinceResponse
+      >('getRefreshInvalidationsSince', {
+        sinceCursor: latestRefreshCursor,
+      })
+
+      const nextCursor = normalizeRefreshCursor(response.nextCursor)
+      if (nextCursor !== undefined) {
+        latestRefreshCursor = Math.max(latestRefreshCursor, nextCursor)
+      }
+
+      const paths = getRefreshInvalidationPaths(response)
+      for (const path of paths) {
+        queueRefreshInvalidation(path)
+      }
+    })
+    .catch(() => {})
+}
+
+type RefreshInvalidationsSinceRequest = Record<string, unknown> & {
+  sinceCursor?: number
+}
 
 function getClient(): WebSocketClient | undefined {
   if (!client && process.env.RENOUN_SERVER_PORT) {
     client = new WebSocketClient(process.env.RENOUN_SERVER_ID!)
+    const createdClient = client
     if (shouldConsumeRefreshNotifications()) {
-      client.on('notification', (message) => {
+      createdClient.on('connected', () => {
+        if (!hasConnectedProjectServerClient) {
+          hasConnectedProjectServerClient = true
+          return
+        }
+
+        queueRefreshResync(createdClient)
+      })
+      createdClient.on('notification', (message) => {
         if (!isRefreshNotification(message)) {
           return
+        }
+
+        const refreshCursor = normalizeRefreshCursor(message.data.refreshCursor)
+        if (refreshCursor !== undefined) {
+          latestRefreshCursor = Math.max(latestRefreshCursor, refreshCursor)
         }
 
         const paths = getRefreshInvalidationPaths(message.data)
@@ -69,6 +385,9 @@ function queueRefreshInvalidation(path: string): void {
     isRefreshInvalidationFlushQueued = false
     const paths = Array.from(pendingRefreshInvalidationPaths)
     pendingRefreshInvalidationPaths.clear()
+    if (paths.length > 0) {
+      clientRpcCacheByKey.clear()
+    }
     for (const pendingPath of paths) {
       invalidateRuntimeAnalysisCachePath(pendingPath)
       invalidateProjectCachesByPath(pendingPath)
@@ -87,28 +406,11 @@ function shouldConsumeRefreshNotifications(): boolean {
   return true
 }
 
-function parseBooleanEnv(value: string | undefined): boolean | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-
-  const normalized = value.trim().toLowerCase()
-  if (normalized === '1' || normalized === 'true') {
-    return true
-  }
-
-  if (normalized === '0' || normalized === 'false') {
-    return false
-  }
-
-  return undefined
-}
-
 function isRefreshNotification(
   value: unknown
 ): value is {
   type: 'refresh'
-  data: { filePath?: string; filePaths?: string[] }
+  data: RefreshNotificationData
 } {
   if (value === null || typeof value !== 'object') {
     return false
@@ -168,12 +470,12 @@ export async function getSourceTextMetadata(
 ): Promise<SourceTextMetadata> {
   const client = getClient()
   if (client) {
-    return client.callMethod<
+    return callClientMethod<
       DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
         projectOptions?: ProjectOptions
       },
       SourceTextMetadata
-    >('getSourceTextMetadata', options)
+    >(client, 'getSourceTextMetadata', options)
   }
 
   /* Switch to synchronous analysis when building for production to prevent timeouts. */
@@ -218,7 +520,7 @@ export async function resolveTypeAtLocationWithDependencies(
   const client = getClient()
 
   if (client) {
-    return client.callMethod<
+    return callClientMethod<
       {
         filePath: string
         position: number
@@ -227,7 +529,7 @@ export async function resolveTypeAtLocationWithDependencies(
         projectOptions?: ProjectOptions
       },
       ResolvedTypeAtLocationResult
-    >('resolveTypeAtLocationWithDependencies', {
+    >(client, 'resolveTypeAtLocationWithDependencies', {
       filePath,
       position,
       kind,
@@ -259,12 +561,12 @@ export async function getTokens(
 ): Promise<TokenizedLines> {
   const client = getClient()
   if (client) {
-    return client.callMethod<
+    return callClientMethod<
       Omit<GetTokensOptions, 'highlighter' | 'project'> & {
         projectOptions?: ProjectOptions
       },
       TokenizedLines
-    >('getTokens', options)
+    >(client, 'getTokens', options)
   }
 
   const { projectOptions, languages, ...getTokensOptions } = options
@@ -294,13 +596,13 @@ export async function getFileExports(
 ) {
   const client = getClient()
   if (client) {
-    return client.callMethod<
+    return callClientMethod<
       {
         filePath: string
         projectOptions?: ProjectOptions
       },
       ModuleExport[]
-    >('getFileExports', {
+    >(client, 'getFileExports', {
       filePath,
       projectOptions,
     })
@@ -320,10 +622,10 @@ export async function getOutlineRanges(
 ): Promise<OutlineRange[]> {
   const client = getClient()
   if (client) {
-    return client.callMethod<
+    return callClientMethod<
       { filePath: string; projectOptions?: ProjectOptions },
       OutlineRange[]
-    >('getOutlineRanges', { filePath, projectOptions })
+    >(client, 'getOutlineRanges', { filePath, projectOptions })
   }
 
   const project = getProject(projectOptions)
@@ -343,7 +645,7 @@ export async function getFileExportMetadata(
 ) {
   const client = getClient()
   if (client) {
-    return client.callMethod<
+    return callClientMethod<
       {
         name: string
         filePath: string
@@ -352,7 +654,7 @@ export async function getFileExportMetadata(
         projectOptions?: ProjectOptions
       },
       Awaited<ReturnType<typeof baseGetFileExportMetadata>>
-    >('getFileExportMetadata', {
+    >(client, 'getFileExportMetadata', {
       name,
       filePath,
       position,
@@ -382,7 +684,7 @@ export async function getFileExportStaticValue(
 ) {
   const client = getClient()
   if (client) {
-    return client.callMethod<
+    return callClientMethod<
       {
         filePath: string
         position: number
@@ -390,7 +692,7 @@ export async function getFileExportStaticValue(
         projectOptions?: ProjectOptions
       },
       unknown
-    >('getFileExportStaticValue', {
+    >(client, 'getFileExportStaticValue', {
       filePath,
       position,
       kind,
@@ -419,7 +721,7 @@ export async function getFileExportText(
 ) {
   const client = getClient()
   if (client) {
-    return client.callMethod<
+    return callClientMethod<
       {
         filePath: string
         position: number
@@ -428,7 +730,7 @@ export async function getFileExportText(
         projectOptions?: ProjectOptions
       },
       string
-    >('getFileExportText', {
+    >(client, 'getFileExportText', {
       filePath,
       position,
       kind,
@@ -457,7 +759,7 @@ export async function createSourceFile(
 ) {
   const client = getClient()
   if (client) {
-    return client.callMethod<
+    await client.callMethod<
       {
         filePath: string
         sourceText: string
@@ -469,6 +771,8 @@ export async function createSourceFile(
       sourceText,
       projectOptions,
     })
+    invalidateClientRpcCacheByPath(filePath)
+    return
   }
 
   const project = getProject(projectOptions)
@@ -487,13 +791,13 @@ export async function transpileSourceFile(
 ) {
   const client = getClient()
   if (client) {
-    return client.callMethod<
+    return callClientMethod<
       {
         filePath: string
         projectOptions?: ProjectOptions
       },
       string
-    >('transpileSourceFile', {
+    >(client, 'transpileSourceFile', {
       filePath,
       projectOptions,
     })

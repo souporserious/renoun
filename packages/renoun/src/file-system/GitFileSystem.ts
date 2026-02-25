@@ -105,6 +105,7 @@ import {
   parseGitStatusPorcelainV1Z,
   parseNullTerminatedGitPathList,
 } from './git-status.ts'
+import { spawnWithResult, type SpawnResult } from './spawn.ts'
 import type { Cache } from './Cache.ts'
 import { Session } from './Session.ts'
 
@@ -580,107 +581,6 @@ function ensureCachedScopeSync(
   }
 }
 
-interface SpawnResult {
-  status: number | null
-  stdout: string
-  stderr: string
-}
-
-/** Spawns a process and returns status code + output. */
-function spawnWithResult(
-  command: string,
-  commandArguments: string[],
-  options: {
-    cwd: string
-    maxBuffer?: number
-    verbose?: boolean
-    env?: NodeJS.ProcessEnv
-    timeoutMs?: number
-  }
-): Promise<SpawnResult> {
-  return new Promise((resolve, reject) => {
-    // Always pipe so we can capture output for parsing.
-    // When verbose, we also write to process.stdout/stderr.
-    const child = spawn(command, commandArguments, {
-      cwd: options.cwd,
-      stdio: 'pipe',
-      env: options.env ?? process.env,
-      shell: false,
-    })
-
-    let stdout = ''
-    let stderr = ''
-    const maxBuffer = options.maxBuffer ?? 100 * 1024 * 1024
-    let totalBytes = 0
-    let settled = false
-    const timeoutMs = options.timeoutMs ?? 0
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-
-    const finish = (error?: Error, result?: SpawnResult) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-        timeoutId = null
-      }
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve(result!)
-    }
-
-    if (timeoutMs > 0) {
-      timeoutId = setTimeout(() => {
-        try {
-          child.kill('SIGKILL')
-        } catch {
-          // ignore
-        }
-        const timeoutMessage = `Command timed out after ${timeoutMs}ms`
-        stderr = stderr ? `${stderr}\n${timeoutMessage}` : timeoutMessage
-        finish(undefined, { status: 124, stdout, stderr })
-      }, timeoutMs)
-    }
-
-    const onData = (chunk: Buffer, isStdout: boolean) => {
-      totalBytes += chunk.length
-      if (totalBytes > maxBuffer) {
-        child.kill()
-        finish(
-          new Error(
-            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${commandArguments.join(
-              ' '
-            )}`
-          )
-        )
-        return
-      }
-      const text = chunk.toString()
-      if (isStdout) {
-        stdout += text
-        if (options.verbose) {
-          process.stdout.write(text)
-        }
-      } else {
-        stderr += text
-        if (options.verbose) {
-          process.stderr.write(text)
-        }
-      }
-    }
-    child.stdout?.on('data', (chunk) => onData(chunk, true))
-    child.stderr?.on('data', (chunk) => onData(chunk, false))
-
-    child.on('error', (error) => finish(error))
-    child.on('close', (code) =>
-      finish(undefined, { status: code, stdout, stderr })
-    )
-  })
-}
-
 async function spawnWithBuffer(
   command: string,
   commandArguments: string[],
@@ -983,7 +883,9 @@ export class GitFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = this.#createWorkspaceStatusDigest(statusEntries)
+      const statusDigest = await this.#createWorkspaceStatusDigest(
+        statusEntries
+      )
 
       return `head:${headCommit};dirty:${statusDigest.digest};count:${statusDigest.count};ignored-only:${statusDigest.ignoredOnly ? 1 : 0}`
     } catch {
@@ -1085,7 +987,9 @@ export class GitFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = this.#createWorkspaceStatusDigest(statusEntries)
+      const statusDigest = await this.#createWorkspaceStatusDigest(
+        statusEntries
+      )
 
       if (
         currentHead === previousHead &&
@@ -1511,17 +1415,32 @@ export class GitFileSystem
     return match?.[1] ?? null
   }
 
-  #createWorkspaceStatusDigest(
+  async #createWorkspaceStatusDigest(
     entries: ReturnType<typeof parseGitStatusPorcelainV1Z>
   ) {
-    const digestLines = entries
-      .map((entry) => {
-        const normalizedPaths = entry.paths.map((path) =>
-          normalizeSlashes(path)
+    const pathSignatureCache = new Map<string, Promise<string>>()
+    const digestLines = await Promise.all(
+      entries.map(async (entry) => {
+        const normalizedPaths = entry.paths.map((path) => normalizeSlashes(path))
+        const signatures = await Promise.all(
+          normalizedPaths.map((path) => {
+            const cachedSignature = pathSignatureCache.get(path)
+            if (cachedSignature) {
+              return cachedSignature
+            }
+
+            const signaturePromise = this.#createWorkspaceStatusPathSignature(
+              path
+            )
+            pathSignatureCache.set(path, signaturePromise)
+            return signaturePromise
+          })
         )
-        return `${entry.status} ${normalizedPaths.join('\u0001')}`
+
+        return `${entry.status} ${normalizedPaths.join('\u0001')} ${signatures.join('\u0001')}`
       })
-      .sort((first, second) => first.localeCompare(second))
+    )
+    digestLines.sort((first, second) => first.localeCompare(second))
     const ignoredOnly =
       entries.length > 0 && entries.every((entry) => entry.status === '!!')
     const digest = createHash('sha1')
@@ -1532,6 +1451,16 @@ export class GitFileSystem
       digest,
       ignoredOnly,
       count: entries.length,
+    }
+  }
+
+  async #createWorkspaceStatusPathSignature(relativePath: string): Promise<string> {
+    try {
+      const absolutePath = this.#resolveRepoAbsolutePath(relativePath)
+      const stats = await stat(absolutePath)
+      return `${stats.mode}:${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`
+    } catch {
+      return 'missing'
     }
   }
 

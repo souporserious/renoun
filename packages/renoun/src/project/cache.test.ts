@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'vitest'
 
 import { createProjectFileCache, invalidateProjectFileCache } from './cache.ts'
-import { getProject, invalidateProjectCachesByPath } from './get-project.ts'
+import {
+  disposeProjectWatchers,
+  getProject,
+  invalidateProjectCachesByPath,
+} from './get-project.ts'
 import type { Project } from '../utils/ts-morph.ts'
 
 describe('project file cache', () => {
@@ -1046,5 +1050,35 @@ describe('project file cache', () => {
     )
 
     expect(firstValueAgain).toBe('value-from-project-a')
+  })
+
+  test('clears tracked projects when disposing project watchers', async () => {
+    const uniqueId = Date.now()
+    const projectRoot = `/virtual-project-registry-${uniqueId}`
+    const tsConfigPath = `${projectRoot}/tsconfig.json`
+    const projectPath = `${projectRoot}/src/example.ts`
+    const project = getProject({
+      useInMemoryFileSystem: true,
+      projectId: `watcher-dispose-${uniqueId}`,
+      tsConfigFilePath: tsConfigPath,
+    })
+
+    await createProjectFileCache(project, projectPath, `entry-${uniqueId}`, () => {
+      return 'value'
+    })
+
+    expect(invalidateProjectCachesByPath(projectPath)).toBeGreaterThan(0)
+
+    disposeProjectWatchers()
+
+    expect(invalidateProjectCachesByPath(projectPath)).toBe(0)
+
+    const recreatedProject = getProject({
+      useInMemoryFileSystem: true,
+      projectId: `watcher-dispose-${uniqueId}`,
+      tsConfigFilePath: tsConfigPath,
+    })
+
+    expect(recreatedProject).not.toBe(project)
   })
 })

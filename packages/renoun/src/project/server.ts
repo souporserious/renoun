@@ -9,6 +9,7 @@ import {
 } from '../utils/create-highlighter.ts'
 import type { ConfigurationOptions } from '../components/Config/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
+import { parseBooleanEnv } from '../utils/env.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { GetTokensOptions } from '../utils/get-tokens.ts'
 import type { GetSourceTextMetadataOptions } from '../utils/get-source-text-metadata.ts'
@@ -36,6 +37,7 @@ const { SyntaxKind } = getTsMorph()
 let currentHighlighter: Promise<Highlighter> | null = null
 let activeProjectServers = 0
 const REFRESH_NOTIFICATION_BATCH_WINDOW_MS = 50
+const REFRESH_NOTIFICATION_HISTORY_LIMIT = 250
 
 interface ResolveTypeAtLocationRpcRequest {
   filePath: string
@@ -43,6 +45,17 @@ interface ResolveTypeAtLocationRpcRequest {
   kind: TsMorphSyntaxKind
   filter?: TypeFilter | string
   projectOptions?: ProjectOptions
+}
+
+interface RefreshInvalidationsSinceRequest {
+  sinceCursor?: number
+}
+
+interface RefreshInvalidationsSinceResponse {
+  nextCursor: number
+  fullRefresh: boolean
+  filePath?: string
+  filePaths?: string[]
 }
 
 function parseTypeFilter(filter?: TypeFilter | string): TypeFilter | undefined {
@@ -131,6 +144,18 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
 }
 
+function normalizeRefreshCursor(value: unknown): number | undefined {
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < 0
+  ) {
+    return undefined
+  }
+
+  return Math.floor(value)
+}
+
 function getProductionRpcMemoizeOptions():
   | false
   | {
@@ -161,6 +186,11 @@ export async function createServer(options?: { port?: number }) {
   let refreshFlushTimer: NodeJS.Timeout | undefined
   const pendingRefreshPaths = new Set<string>()
   const pendingRefreshEventTypes = new Set<string>()
+  let refreshCursor = 0
+  const refreshHistory: Array<{
+    cursor: number
+    filePaths: string[]
+  }> = []
   const flushRefreshNotifications = () => {
     refreshFlushTimer = undefined
     if (pendingRefreshPaths.size === 0) {
@@ -171,12 +201,25 @@ export async function createServer(options?: { port?: number }) {
     const eventTypes = Array.from(pendingRefreshEventTypes)
     pendingRefreshPaths.clear()
     pendingRefreshEventTypes.clear()
+    refreshCursor += 1
+
+    refreshHistory.push({
+      cursor: refreshCursor,
+      filePaths,
+    })
+    if (refreshHistory.length > REFRESH_NOTIFICATION_HISTORY_LIMIT) {
+      refreshHistory.splice(
+        0,
+        refreshHistory.length - REFRESH_NOTIFICATION_HISTORY_LIMIT
+      )
+    }
 
     server.sendNotification({
       type: 'refresh',
       data: {
         eventType: eventTypes.length === 1 ? eventTypes[0] : 'batch',
         eventTypes,
+        refreshCursor,
         filePath: filePaths[0],
         filePaths,
       },
@@ -235,6 +278,58 @@ export async function createServer(options?: { port?: number }) {
 
     originalCleanup()
   }
+
+  server.registerMethod(
+    'getRefreshInvalidationsSince',
+    async function getRefreshInvalidationsSince({
+      sinceCursor,
+    }: RefreshInvalidationsSinceRequest): Promise<RefreshInvalidationsSinceResponse> {
+      const normalizedSinceCursor = normalizeRefreshCursor(sinceCursor)
+
+      if (normalizedSinceCursor === undefined || normalizedSinceCursor >= refreshCursor) {
+        return {
+          nextCursor: refreshCursor,
+          fullRefresh: false,
+        }
+      }
+
+      const oldestAvailableCursor = refreshHistory[0]?.cursor
+      if (
+        oldestAvailableCursor !== undefined &&
+        normalizedSinceCursor < oldestAvailableCursor
+      ) {
+        return {
+          nextCursor: refreshCursor,
+          fullRefresh: true,
+          filePath: rootDirectory,
+          filePaths: [rootDirectory],
+        }
+      }
+
+      const filePaths = new Set<string>()
+      for (const entry of refreshHistory) {
+        if (entry.cursor <= normalizedSinceCursor) {
+          continue
+        }
+
+        for (const filePath of entry.filePaths) {
+          filePaths.add(filePath)
+        }
+      }
+
+      const changedPaths = Array.from(filePaths)
+      return {
+        nextCursor: refreshCursor,
+        fullRefresh: false,
+        filePath: changedPaths[0],
+        filePaths: changedPaths,
+      }
+    },
+    {
+      memoize: false,
+      concurrency: 8,
+    }
+  )
 
   server.registerMethod(
     'getSourceTextMetadata',
@@ -509,21 +604,4 @@ function shouldEmitRefreshNotifications(): boolean {
   }
 
   return process.env.NODE_ENV === 'development'
-}
-
-function parseBooleanEnv(value: string | undefined): boolean | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-
-  const normalized = value.trim().toLowerCase()
-  if (normalized === '1' || normalized === 'true') {
-    return true
-  }
-
-  if (normalized === '0' || normalized === 'false') {
-    return false
-  }
-
-  return undefined
 }

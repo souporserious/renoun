@@ -11,7 +11,6 @@ import {
   type Dirent,
 } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { spawn } from 'node:child_process'
 import {
   access,
   mkdir,
@@ -48,7 +47,12 @@ import {
   parseGitStatusPorcelainV1Z,
   parseNullTerminatedGitPathList,
 } from './git-status.ts'
+import { spawnWithResult, type SpawnResult } from './spawn.ts'
 import type { DirectoryEntry } from './types.ts'
+import {
+  createWorkspaceCacheKey,
+  createWorkspaceChangedPathsCacheKey,
+} from './workspace-cache-key.ts'
 
 const GIT_MAX_BUFFER_BYTES = 100 * 1024 * 1024
 
@@ -176,17 +180,34 @@ export class NodeFileSystem
     return match?.[1] ?? null
   }
 
-  #createWorkspaceStatusDigest(
+  async #createWorkspaceStatusDigest(
+    gitRoot: string,
     entries: ReturnType<typeof parseGitStatusPorcelainV1Z>
   ) {
-    const digestLines = entries
-      .map((entry) => {
-        const normalizedPaths = entry.paths.map((path) =>
-          normalizeSlashes(path)
+    const pathSignatureCache = new Map<string, Promise<string>>()
+    const digestLines = await Promise.all(
+      entries.map(async (entry) => {
+        const normalizedPaths = entry.paths.map((path) => normalizeSlashes(path))
+        const signatures = await Promise.all(
+          normalizedPaths.map((path) => {
+            const cachedSignature = pathSignatureCache.get(path)
+            if (cachedSignature) {
+              return cachedSignature
+            }
+
+            const signaturePromise = this.#createWorkspaceStatusPathSignature(
+              gitRoot,
+              path
+            )
+            pathSignatureCache.set(path, signaturePromise)
+            return signaturePromise
+          })
         )
-        return `${entry.status} ${normalizedPaths.join('\u0001')}`
+
+        return `${entry.status} ${normalizedPaths.join('\u0001')} ${signatures.join('\u0001')}`
       })
-      .sort((first, second) => first.localeCompare(second))
+    )
+    digestLines.sort((first, second) => first.localeCompare(second))
     const ignoredOnly =
       entries.length > 0 && entries.every((entry) => entry.status === '!!')
     const digest = createHash('sha1')
@@ -197,6 +218,21 @@ export class NodeFileSystem
       digest,
       ignoredOnly,
       count: entries.length,
+    }
+  }
+
+  async #createWorkspaceStatusPathSignature(
+    gitRoot: string,
+    relativePath: string
+  ): Promise<string> {
+    const absolutePath = resolve(gitRoot, relativePath)
+
+    try {
+      this.#assertWithinWorkspacePath(absolutePath)
+      const stats = await stat(absolutePath)
+      return `${stats.mode}:${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`
+    } catch {
+      return 'missing'
     }
   }
 
@@ -338,7 +374,10 @@ export class NodeFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = this.#createWorkspaceStatusDigest(statusEntries)
+      const statusDigest = await this.#createWorkspaceStatusDigest(
+        gitRoot,
+        statusEntries
+      )
 
       return `head:${headCommit};dirty:${statusDigest.digest};count:${statusDigest.count};ignored-only:${statusDigest.ignoredOnly ? 1 : 0}`
     })().catch(() => null)
@@ -486,7 +525,10 @@ export class NodeFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = this.#createWorkspaceStatusDigest(statusEntries)
+      const statusDigest = await this.#createWorkspaceStatusDigest(
+        gitRoot,
+        statusEntries
+      )
 
       if (
         currentHead === previousHead &&
@@ -781,93 +823,4 @@ function normalizeWriteContent(
   }
 
   throw new Error('[renoun] Unsupported content type for writeFile')
-}
-
-function createWorkspaceCacheKey(absoluteRootPath: string): string {
-  return JSON.stringify([absoluteRootPath])
-}
-
-function createWorkspaceChangedPathsCacheKey(
-  absoluteRootPath: string,
-  previousToken: string
-): string {
-  return JSON.stringify([absoluteRootPath, previousToken])
-}
-
-interface SpawnResult {
-  status: number | null
-  stdout: string
-  stderr: string
-}
-
-function spawnWithResult(
-  command: string,
-  args: string[],
-  options: {
-    cwd: string
-    maxBuffer?: number
-    verbose?: boolean
-    shell?: boolean
-  }
-): Promise<SpawnResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      stdio: 'pipe',
-      shell: options.shell ?? false,
-    })
-
-    let stdout = ''
-    let stderr = ''
-    const maxBuffer = options.maxBuffer ?? GIT_MAX_BUFFER_BYTES
-    let totalBytes = 0
-    let settled = false
-
-    const finish = (error?: Error, result?: SpawnResult) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve(result!)
-    }
-
-    const onData = (chunk: Buffer, isStdout: boolean) => {
-      totalBytes += chunk.length
-      if (totalBytes > maxBuffer) {
-        child.kill()
-        finish(
-          new Error(
-            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${args.join(
-              ' '
-            )}`
-          )
-        )
-        return
-      }
-
-      const text = chunk.toString()
-      if (isStdout) {
-        stdout += text
-        if (options.verbose) {
-          process.stdout.write(text)
-        }
-      } else {
-        stderr += text
-        if (options.verbose) {
-          process.stderr.write(text)
-        }
-      }
-    }
-
-    child.stdout?.on('data', (chunk) => onData(chunk, true))
-    child.stderr?.on('data', (chunk) => onData(chunk, false))
-    child.on('error', (error) => finish(error))
-    child.on('close', (code) =>
-      finish(undefined, { status: code, stdout, stderr })
-    )
-  })
 }

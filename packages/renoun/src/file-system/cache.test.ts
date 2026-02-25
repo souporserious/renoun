@@ -19,6 +19,7 @@ import { describe, expect, test, vi } from 'vitest'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
+import { getDebugLogger } from '../utils/debug.ts'
 
 import {
   Cache,
@@ -5491,7 +5492,9 @@ export type Metadata = Value`,
         throw new Error('disk delete failure')
       }),
     }
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnSpy = vi
+      .spyOn(getDebugLogger(), 'warn')
+      .mockImplementation(() => {})
     const store = new CacheStore({ snapshot, persistence })
 
     try {
@@ -5557,7 +5560,9 @@ export type Metadata = Value`,
         }),
       }
 
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const warnSpy = vi
+        .spyOn(getDebugLogger(), 'warn')
+        .mockImplementation(() => {})
       const failingStore = new CacheStore({
         snapshot,
         persistence: failingPersistence,
@@ -5662,7 +5667,9 @@ export type Metadata = Value`,
       }),
       delete: vi.fn(async () => undefined),
     }
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnSpy = vi
+      .spyOn(getDebugLogger(), 'warn')
+      .mockImplementation(() => {})
     const store = new CacheStore({ snapshot, persistence })
 
     try {
@@ -7659,7 +7666,9 @@ export type Metadata = Value`,
         throw new Error('disk delete failure')
       }),
     }
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnSpy = vi
+      .spyOn(getDebugLogger(), 'warn')
+      .mockImplementation(() => {})
     const store = new CacheStore({ snapshot, persistence })
     let computeCount = 0
 
@@ -7717,7 +7726,9 @@ export type Metadata = Value`,
       }),
       delete: vi.fn(async () => undefined),
     }
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnSpy = vi
+      .spyOn(getDebugLogger(), 'warn')
+      .mockImplementation(() => {})
     const store = new CacheStore({ snapshot, persistence })
     let computeCount = 0
 
@@ -7943,7 +7954,9 @@ export type Metadata = Value`,
       }),
       delete: vi.fn(async () => undefined),
     }
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnSpy = vi
+      .spyOn(getDebugLogger(), 'warn')
+      .mockImplementation(() => {})
     const store = new CacheStore({ snapshot, persistence })
     let computeCount = 0
 
@@ -8020,7 +8033,9 @@ export type Metadata = Value`,
         throw new Error('disk delete failure')
       }),
     }
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnSpy = vi
+      .spyOn(getDebugLogger(), 'warn')
+      .mockImplementation(() => {})
     const store = new CacheStore({ snapshot, persistence })
 
     try {
@@ -8066,7 +8081,9 @@ export type Metadata = Value`,
       save: vi.fn(async () => undefined),
       delete: vi.fn(async () => undefined),
     }
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnSpy = vi
+      .spyOn(getDebugLogger(), 'warn')
+      .mockImplementation(() => {})
     const store = new CacheStore({ snapshot, persistence })
     let computeCount = 0
 

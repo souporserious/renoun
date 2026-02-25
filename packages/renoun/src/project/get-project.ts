@@ -9,6 +9,7 @@ import type { FSWatcher } from 'node:fs'
 
 import { getDebugLogger } from '../utils/debug.ts'
 import type { DebugContext } from '../utils/debug.ts'
+import { parseBooleanEnv } from '../utils/env.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { invalidateProjectFileCache } from './cache.ts'
@@ -222,6 +223,8 @@ export function disposeProjectWatchers(): void {
   }
 
   directoryWatchers.clear()
+  directoryToProjects.clear()
+  projects.clear()
 }
 
 function getSerializedProjectOptions(options?: ProjectOptions) {
@@ -247,23 +250,6 @@ function shouldEnableProjectWatchers(): boolean {
   }
 
   return process.env.NODE_ENV === 'development'
-}
-
-function parseBooleanEnv(value: string | undefined): boolean | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-
-  const normalized = value.trim().toLowerCase()
-  if (normalized === '1' || normalized === 'true') {
-    return true
-  }
-
-  if (normalized === '0' || normalized === 'false') {
-    return false
-  }
-
-  return undefined
 }
 
 function normalizeComparablePath(path: string): string {

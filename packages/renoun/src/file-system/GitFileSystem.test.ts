@@ -223,7 +223,7 @@ describe('GitFileSystem', () => {
     }
   })
 
-  test('changes workspace token for dirty and untracked updates', async ({
+  test('changes workspace token for repeated dirty and untracked updates', async ({
     repoRoot,
     cacheDirectory,
   }) => {
@@ -236,16 +236,26 @@ describe('GitFileSystem', () => {
       const cleanToken = await store.getWorkspaceChangeToken('.')
 
       writeFileSync(trackedPath, `export const value = 2`)
-      const dirtyToken = await store.getWorkspaceChangeToken('.')
+      const firstDirtyToken = await store.getWorkspaceChangeToken('.')
+
+      writeFileSync(trackedPath, `export const value = 333`)
+      const secondDirtyToken = await store.getWorkspaceChangeToken('.')
+      const dirtyChangedPaths = await store.getWorkspaceChangedPathsSinceToken(
+        '.',
+        firstDirtyToken!
+      )
 
       writeFileSync(untrackedPath, `export const created = true`)
       const untrackedToken = await store.getWorkspaceChangeToken('.')
 
       expect(cleanToken).toBeTruthy()
-      expect(dirtyToken).toBeTruthy()
+      expect(firstDirtyToken).toBeTruthy()
+      expect(secondDirtyToken).toBeTruthy()
       expect(untrackedToken).toBeTruthy()
-      expect(dirtyToken).not.toBe(cleanToken)
-      expect(untrackedToken).not.toBe(dirtyToken)
+      expect(firstDirtyToken).not.toBe(cleanToken)
+      expect(secondDirtyToken).not.toBe(firstDirtyToken)
+      expect(dirtyChangedPaths ?? []).toContain('src/index.ts')
+      expect(untrackedToken).not.toBe(secondDirtyToken)
     } finally {
       store.close()
     }
