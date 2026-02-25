@@ -33,6 +33,7 @@ export interface CacheDependencyEvictionResult {
   deletedNodeKeys: string[]
   usedDependencyIndex: boolean
   hasMissingDependencyMetadata: boolean
+  missingDependencyNodeKeys?: string[]
 }
 
 export interface CacheStorePersistence {
@@ -1139,6 +1140,9 @@ export class CacheStore {
       persist: options.persist ?? false,
       updatedAt: Date.now(),
     }
+    if (entry.persist && dependencyEntries.length === 0) {
+      this.#emitMissingDependencyMetadataSignal(nodeKey, 'manual-put')
+    }
 
     this.#logCacheOperation('set', nodeKey, {
       source: 'manual-put',
@@ -1257,6 +1261,7 @@ export class CacheStore {
       deletedNodeKeys: [],
       usedDependencyIndex: false,
       hasMissingDependencyMetadata: false,
+      missingDependencyNodeKeys: [],
     }
 
     if (!persistence) {
@@ -1267,6 +1272,7 @@ export class CacheStore {
       dependencyPathKeys
     )
     const deletedNodeKeys = new Set<string>()
+    const missingDependencyNodeKeys = new Set<string>()
     let usedDependencyIndex = false
     let hasMissingDependencyMetadata = false
 
@@ -1294,6 +1300,9 @@ export class CacheStore {
       for (const nodeKey of batchResult.deletedNodeKeys) {
         deletedNodeKeys.add(nodeKey)
       }
+      for (const nodeKey of batchResult.missingDependencyNodeKeys ?? []) {
+        missingDependencyNodeKeys.add(nodeKey)
+      }
       usedDependencyIndex ||= batchResult.usedDependencyIndex
       hasMissingDependencyMetadata ||= batchResult.hasMissingDependencyMetadata
     } else if (persistence.deleteByDependencyPath) {
@@ -1312,6 +1321,9 @@ export class CacheStore {
         for (const nodeKey of result.deletedNodeKeys) {
           deletedNodeKeys.add(nodeKey)
         }
+        for (const nodeKey of result.missingDependencyNodeKeys ?? []) {
+          missingDependencyNodeKeys.add(nodeKey)
+        }
         usedDependencyIndex ||= result.usedDependencyIndex
         hasMissingDependencyMetadata ||= result.hasMissingDependencyMetadata
       }
@@ -1324,6 +1336,7 @@ export class CacheStore {
         ...defaultResult,
         usedDependencyIndex,
         hasMissingDependencyMetadata,
+        missingDependencyNodeKeys: Array.from(missingDependencyNodeKeys),
       }
     }
 
@@ -1349,6 +1362,7 @@ export class CacheStore {
       deletedNodeKeys: Array.from(deletedNodeKeys),
       usedDependencyIndex,
       hasMissingDependencyMetadata,
+      missingDependencyNodeKeys: Array.from(missingDependencyNodeKeys),
     }
   }
 
@@ -1955,6 +1969,9 @@ export class CacheStore {
         persist: options.persist ?? false,
         updatedAt: Date.now(),
       }
+      if (entry.persist && dependencyEntries.length === 0) {
+        this.#emitMissingDependencyMetadataSignal(nodeKey, 'compute')
+      }
 
       this.#logCacheOperation('set', nodeKey, {
         source: 'compute',
@@ -2015,6 +2032,32 @@ export class CacheStore {
         await this.#releaseComputeSlot(nodeKey, computeSlotOwner)
       }
     }
+  }
+
+  #emitMissingDependencyMetadataSignal(
+    nodeKey: string,
+    source: 'compute' | 'manual-put'
+  ): void {
+    const namespace = getCacheTelemetryNamespace(nodeKey)
+    emitTelemetryCounter({
+      name: 'renoun.cache.persisted_missing_dependency_metadata_count',
+      tags: {
+        namespace,
+        source,
+      },
+      telemetry: this.#telemetry,
+    })
+    emitTelemetryEvent({
+      name: 'renoun.cache.persisted_missing_dependency_metadata',
+      tags: {
+        namespace,
+        source,
+      },
+      fields: {
+        nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
+      },
+      telemetry: this.#telemetry,
+    })
   }
 
   #bumpNodeInvalidationEpoch(nodeKey: string): void {

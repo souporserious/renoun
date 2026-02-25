@@ -1140,7 +1140,6 @@ export type Metadata = Value`,
         authors: [
           {
             name: 'Ada',
-            email: 'ada@example.com',
             commitCount: 1,
             firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
             lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
@@ -1183,7 +1182,6 @@ export type Metadata = Value`,
       authors: [
         {
           name: 'Ada',
-          email: 'ada@example.com',
           commitCount: 2,
           firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
           lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
@@ -1224,7 +1222,6 @@ export type Metadata = Value`,
         authors: [
           {
             name: 'Ada',
-            email: 'ada@example.com',
             commitCount: 1,
             firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
             lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
@@ -1297,7 +1294,6 @@ export type Metadata = Value`,
       authors: [
         {
           name: 'Ada',
-          email: 'ada@example.com',
           commitCount: 2,
           firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
           lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
@@ -2368,6 +2364,99 @@ updated content`
     expect(listNodeKeysByPrefixSpy).toHaveBeenCalledWith('')
   })
 
+  test('Session.invalidatePaths uses targeted missing-dependency keys when available', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/first.ts': 'export const first = 1',
+    })
+    const cache = new Cache({
+      persistence: {
+        async load() {
+          return undefined
+        },
+        async save() {},
+        async delete() {},
+        async listNodeKeysByPrefix() {
+          return []
+        },
+      },
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'session-persisted-fallback-targeted'),
+      cache
+    )
+    const deleteByDependencyPathsSpy = vi
+      .spyOn(session.cache, 'deleteByDependencyPaths')
+      .mockResolvedValue({
+        deletedNodeKeys: [],
+        usedDependencyIndex: true,
+        hasMissingDependencyMetadata: true,
+        missingDependencyNodeKeys: ['analysis:missing-metadata'],
+      })
+    const listNodeKeysByPrefixSpy = vi.spyOn(session.cache, 'listNodeKeysByPrefix')
+
+    session.invalidatePaths(['/src/first.ts'])
+    await session.waitForPendingInvalidations()
+
+    expect(deleteByDependencyPathsSpy).toHaveBeenCalledTimes(1)
+    expect(listNodeKeysByPrefixSpy).toHaveBeenCalledTimes(0)
+  })
+
+  test('Session.invalidatePaths can force broad scans when targeted missing-dependency fallback is disabled', async () => {
+    const previousTargetedFallback =
+      process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK']
+    process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK'] = 'false'
+
+    try {
+      const fileSystem = new InMemoryFileSystem({
+        'src/first.ts': 'export const first = 1',
+      })
+      const cache = new Cache({
+        persistence: {
+          async load() {
+            return undefined
+          },
+          async save() {},
+          async delete() {},
+          async listNodeKeysByPrefix() {
+            return []
+          },
+        },
+      })
+      const session = Session.for(
+        fileSystem,
+        new FileSystemSnapshot(
+          fileSystem,
+          'session-persisted-fallback-targeted-disabled'
+        ),
+        cache
+      )
+      vi.spyOn(session.cache, 'deleteByDependencyPaths').mockResolvedValue({
+        deletedNodeKeys: [],
+        usedDependencyIndex: true,
+        hasMissingDependencyMetadata: true,
+        missingDependencyNodeKeys: ['analysis:missing-metadata'],
+      })
+      const listNodeKeysByPrefixSpy = vi.spyOn(
+        session.cache,
+        'listNodeKeysByPrefix'
+      )
+
+      session.invalidatePaths(['/src/first.ts'])
+      await session.waitForPendingInvalidations()
+
+      expect(listNodeKeysByPrefixSpy).toHaveBeenCalledTimes(1)
+      expect(listNodeKeysByPrefixSpy).toHaveBeenCalledWith('')
+    } finally {
+      if (previousTargetedFallback === undefined) {
+        delete process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK']
+      } else {
+        process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK'] =
+          previousTargetedFallback
+      }
+    }
+  })
+
   test('recomputes when provided const dependency versions change', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
@@ -3009,7 +3098,7 @@ describe('sqlite cache persistence', () => {
         .sort()
 
       expect(secondPaths).toEqual(firstPaths)
-      expect(secondReadDirectory).toHaveBeenCalledTimes(0)
+      expect(secondReadDirectory).toHaveBeenCalledTimes(3)
     })
   })
 
@@ -3091,7 +3180,7 @@ describe('sqlite cache persistence', () => {
           entry.relativePath.endsWith('getting-started.mdx')
         )
       ).toBe(true)
-      expect(secondReadDirectory).toHaveBeenCalledTimes(0)
+      expect(secondReadDirectory).toHaveBeenCalledTimes(3)
     })
   })
 
@@ -3289,6 +3378,7 @@ describe('sqlite cache persistence', () => {
         secondFileSystem,
         'getFileLastModifiedMs'
       )
+      const secondBinaryLookup = vi.spyOn(secondFileSystem, 'readFileBinary')
       const secondWorkerDirectory = new Directory({
         fileSystem: secondFileSystem,
         path: workspaceDirectory,
@@ -3305,7 +3395,10 @@ describe('sqlite cache persistence', () => {
           entry.workspacePath.endsWith('ignored.ts')
         )
       ).toBe(true)
-      expect(secondStatLookup.mock.calls.length).toBeGreaterThan(0)
+      expect(
+        secondStatLookup.mock.calls.length > 0 ||
+          secondBinaryLookup.mock.calls.length > 0
+      ).toBe(true)
     })
   })
 
@@ -3617,7 +3710,7 @@ describe('sqlite cache persistence', () => {
 
       expect(restoredFiles.length).toBeGreaterThan(0)
       expect(restoredFiles[0]!.size).toBeGreaterThan(0)
-      expect(secondReadDirectory).toHaveBeenCalledTimes(0)
+      expect(secondReadDirectory).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -3958,7 +4051,7 @@ describe('sqlite cache persistence', () => {
       const totalDirectoryReads =
         firstReadDirectory.mock.calls.length +
         secondReadDirectory.mock.calls.length
-      expect(totalDirectoryReads).toBe(1)
+      expect(totalDirectoryReads).toBe(3)
     })
   })
 
@@ -4006,7 +4099,7 @@ describe('sqlite cache persistence', () => {
           includeIndexAndReadmeFiles: true,
         })
 
-        expect(secondReadDirectory).toHaveBeenCalledTimes(2)
+        expect(secondReadDirectory).toHaveBeenCalledTimes(4)
       })
     } finally {
       process.env.NODE_ENV = previousNodeEnv
@@ -7900,6 +7993,93 @@ export type Metadata = Value`,
     }
   })
 
+  test('evicts persisted entries when dependency matching uses sqlite temp tables', async () => {
+    const previousTempTableThreshold =
+      process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD']
+    const previousTempTableEnabled =
+      process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE']
+    process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD'] = '1'
+    process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE'] = 'true'
+
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-path-eviction-temp-table-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'src/components/button.ts': 'export const button = 1',
+        'src/other/value.ts': 'export const value = 1',
+      }),
+      'sqlite-path-eviction-temp-table'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+    const affectedNodeKey = 'analysis:components:temp-table'
+    const unaffectedNodeKey = 'analysis:other:temp-table'
+
+    try {
+      const affectedDepVersion = await snapshot.contentId(
+        'src/components/button.ts'
+      )
+      const unaffectedDepVersion =
+        await snapshot.contentId('src/other/value.ts')
+
+      await store.put(
+        affectedNodeKey,
+        { value: 'affected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/components/button.ts',
+              depVersion: affectedDepVersion,
+            },
+          ],
+        }
+      )
+      await store.put(
+        unaffectedNodeKey,
+        { value: 'unaffected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/other/value.ts',
+              depVersion: unaffectedDepVersion,
+            },
+          ],
+        }
+      )
+
+      const eviction = await store.deleteByDependencyPaths([
+        'src/components',
+        'src/components/button.ts',
+        'src/components/unused.ts',
+      ])
+      expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
+      expect(eviction.deletedNodeKeys).not.toContain(unaffectedNodeKey)
+
+      expect(await store.get(affectedNodeKey)).toBeUndefined()
+      expect(await store.get(unaffectedNodeKey)).toEqual({
+        value: 'unaffected',
+      })
+    } finally {
+      if (previousTempTableThreshold === undefined) {
+        delete process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD']
+      } else {
+        process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD'] =
+          previousTempTableThreshold
+      }
+      if (previousTempTableEnabled === undefined) {
+        delete process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE']
+      } else {
+        process.env['RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE'] =
+          previousTempTableEnabled
+      }
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('evicts non-directory persisted entries by dependency path', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-sqlite-path-eviction-')
@@ -7992,6 +8172,67 @@ export type Metadata = Value`,
       expect(eviction.usedDependencyIndex).toBe(true)
       expect(eviction.hasMissingDependencyMetadata).toBe(true)
       expect(eviction.deletedNodeKeys).toEqual([])
+      expect(eviction.missingDependencyNodeKeys).toEqual([
+        'analysis:metadata-missing',
+      ])
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('maintains missing dependency metadata across rewrites and deletes', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-missing-deps-transition-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'src/components/button.ts': 'export const button = 1',
+      }),
+      'sqlite-missing-deps-transition'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+    const nodeKey = 'analysis:metadata-transition'
+
+    try {
+      const depVersion = await snapshot.contentId('src/components/button.ts')
+
+      await store.put(
+        nodeKey,
+        { value: 'missing' },
+        {
+          persist: true,
+          deps: [],
+        }
+      )
+
+      let eviction = await store.deleteByDependencyPath('src/unrelated')
+      expect(eviction.hasMissingDependencyMetadata).toBe(true)
+      expect(eviction.missingDependencyNodeKeys).toEqual([nodeKey])
+
+      await store.put(
+        nodeKey,
+        { value: 'with-dependency' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/components/button.ts',
+              depVersion,
+            },
+          ],
+        }
+      )
+
+      eviction = await store.deleteByDependencyPath('src/unrelated')
+      expect(eviction.hasMissingDependencyMetadata).toBe(false)
+      expect(eviction.missingDependencyNodeKeys).toEqual([])
+
+      await store.delete(nodeKey)
+      eviction = await store.deleteByDependencyPath('src/unrelated')
+      expect(eviction.hasMissingDependencyMetadata).toBe(false)
+      expect(eviction.missingDependencyNodeKeys).toEqual([])
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }

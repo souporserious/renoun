@@ -19,6 +19,11 @@ type ContentIdStrategy =
   | 'directory-content'
   | 'missing'
 
+export interface SnapshotContentIdOptions {
+  fresh?: boolean
+  kind?: 'any' | 'file'
+}
+
 interface CachedContentId {
   promise: Promise<string>
   strategy?: ContentIdStrategy
@@ -62,7 +67,7 @@ export interface Snapshot {
     isDirectory?: boolean
   ): Promise<boolean>
   getRelativePathToWorkspace(path: string): string
-  contentId(path: string): Promise<string>
+  contentId(path: string, options?: SnapshotContentIdOptions): Promise<string>
   invalidatePath(path: string): void
   invalidatePaths?(paths: Iterable<string>): void
   invalidateAll?(): void
@@ -143,12 +148,16 @@ export class FileSystemSnapshot implements Snapshot {
     )
   }
 
-  async contentId(path: string): Promise<string> {
+  async contentId(
+    path: string,
+    options: SnapshotContentIdOptions = {}
+  ): Promise<string> {
     const normalizedPath = this.#normalizeSnapshotPath(path)
+    const forceFresh = options.fresh === true
     const cached = this.#contentIds.get(normalizedPath)
     let previousMetadataId: string | undefined
 
-    if (cached) {
+    if (cached && !forceFresh) {
       if (
         cached.strategy === 'metadata' ||
         cached.strategy === 'metadata-guarded'
@@ -171,6 +180,14 @@ export class FileSystemSnapshot implements Snapshot {
       } else {
         return cached.promise
       }
+    } else if (
+      cached &&
+      (cached.strategy === 'metadata' || cached.strategy === 'metadata-guarded')
+    ) {
+      previousMetadataId =
+        typeof cached.id === 'string' && cached.id.startsWith('mtime:')
+          ? cached.id
+          : undefined
     }
 
     const cachedEntry: CachedContentId = {
@@ -181,6 +198,7 @@ export class FileSystemSnapshot implements Snapshot {
       this.#getContentIdLookupPaths(path, normalizedPath),
       {
         previousMetadataId,
+        kind: options.kind,
       }
     ).then((result) => {
       cachedEntry.strategy = result.strategy
@@ -259,11 +277,15 @@ export class FileSystemSnapshot implements Snapshot {
     pathCandidates: string[],
     options: {
       previousMetadataId?: string
+      kind?: 'any' | 'file'
     } = {}
   ): Promise<{
     id: string
     strategy: ContentIdStrategy
   }> {
+    const strictHermetic = isStrictHermeticFileSystemMode()
+    const expectedFile = options.kind === 'file'
+
     for (const path of pathCandidates) {
       const fileSystemContentId = await this.#getFileSystemContentId(path)
 
@@ -274,40 +296,54 @@ export class FileSystemSnapshot implements Snapshot {
         }
       }
 
-      const [lastModifiedMs, byteLength] = await Promise.all([
-        this.getFileLastModifiedMs(path).catch(() => undefined),
-        this.getFileByteLength(path).catch(() => undefined),
-      ])
+      if (strictHermetic) {
+        const hashId = await this.#createFileContentHashId(path)
+        if (hashId) {
+          return {
+            id: hashId,
+            strategy: 'file-content',
+          }
+        }
+      } else {
+        const [lastModifiedMs, byteLength] = await Promise.all([
+          this.getFileLastModifiedMs(path).catch(() => undefined),
+          this.getFileByteLength(path).catch(() => undefined),
+        ])
 
-      if (lastModifiedMs !== undefined && byteLength !== undefined) {
-        const metadataId = `mtime:${lastModifiedMs};size:${byteLength}`
-        const shouldGuardMetadataCollision =
-          options.previousMetadataId === metadataId &&
-          this.#shouldGuardMetadataCollision(lastModifiedMs)
-        if (shouldGuardMetadataCollision) {
-          const guardedHashId = await this.#createFileContentHashId(path)
-          if (guardedHashId) {
-            return {
-              id: guardedHashId,
-              strategy: 'metadata-guarded',
+        if (lastModifiedMs !== undefined && byteLength !== undefined) {
+          const metadataId = `mtime:${lastModifiedMs};size:${byteLength}`
+          const shouldGuardMetadataCollision =
+            options.previousMetadataId === metadataId &&
+            this.#shouldGuardMetadataCollision(lastModifiedMs)
+          if (shouldGuardMetadataCollision) {
+            const guardedHashId = await this.#createFileContentHashId(path)
+            if (guardedHashId) {
+              return {
+                id: guardedHashId,
+                strategy: 'metadata-guarded',
+              }
             }
+          }
+
+          return {
+            id: metadataId,
+            strategy: 'metadata',
           }
         }
 
-        return {
-          id: metadataId,
-          strategy: 'metadata',
-        }
+        try {
+          const bytes = await this.readFileBinary(path)
+          const hash = createHash('sha1').update(bytes).digest('hex')
+          return {
+            id: `sha1:${hash}`,
+            strategy: 'file-content',
+          }
+        } catch {}
       }
 
-      try {
-        const bytes = await this.readFileBinary(path)
-        const hash = createHash('sha1').update(bytes).digest('hex')
-        return {
-          id: `sha1:${hash}`,
-          strategy: 'file-content',
-        }
-      } catch {}
+      if (expectedFile) {
+        continue
+      }
 
       try {
         const entries = await this.readDirectory(path)
@@ -456,6 +492,22 @@ export class FileSystemSnapshot implements Snapshot {
       } catch {}
     }
   }
+}
+
+function isStrictHermeticFileSystemMode(): boolean {
+  const override = process.env['RENOUN_FS_STRICT_HERMETIC']?.trim()
+
+  if (override) {
+    const normalized = override.toLowerCase()
+    if (normalized === '1' || normalized === 'true') {
+      return true
+    }
+    if (normalized === '0' || normalized === 'false') {
+      return false
+    }
+  }
+
+  return process.env['NODE_ENV'] === 'production'
 }
 
 function safeGetProjectOptions(fileSystem: FileSystem): unknown {

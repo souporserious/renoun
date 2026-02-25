@@ -26,11 +26,26 @@ const SQLITE_DEFAULT_MAX_ROWS = 200_000
 const SQLITE_PRUNE_WRITE_INTERVAL = 32
 const SQLITE_PRUNE_MAX_INTERVAL_MS = 1000 * 60 * 5
 const SQLITE_DELETE_BATCH_SIZE = 500
+const SQLITE_DEFAULT_PREPARED_STATEMENT_CACHE_MAX = 128
+const SQLITE_DEFAULT_DEPENDENCY_MATCH_TEMP_TABLE_THRESHOLD = 2048
+const SQLITE_DEFAULT_DEPENDENCY_MATCH_ADAPTIVE_MIN_SAMPLES = 2
+const SQLITE_DEFAULT_DEPENDENCY_MATCH_ADAPTIVE_BUCKET_SIZE = 32
 const SQLITE_INFLIGHT_TTL_MS = 20_000
 const SQLITE_INFLIGHT_CLEANUP_INTERVAL_MS = 10_000
 const SQLITE_LAST_ACCESSED_TOUCH_MIN_INTERVAL_MS = 30_000
 const SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE = 50_000
 const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
+const DEPENDENCY_MATCH_TEMP_TABLE = 'renoun_dep_match_terms'
+const MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY = 'missing_dependency_entry_count'
+
+type DependencyMatchStrategy = 'dynamic' | 'temp-table'
+
+interface DependencyMatchStrategyStats {
+  dynamicSamples: number
+  dynamicTotalDurationMs: number
+  tempTableSamples: number
+  tempTableTotalDurationMs: number
+}
 
 let warnedAboutSqliteFallback = false
 const persistenceByDbPath = new Map<string, SqliteCacheStorePersistence>()
@@ -190,12 +205,20 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   readonly #maxAgeMs: number
   readonly #maxRows: number
   readonly #overflowCheckInterval: number
+  readonly #preparedStatementCacheMax: number
+  readonly #dependencyMatchTempTableThreshold: number
+  readonly #dependencyMatchTempTableEnabled: boolean
+  readonly #dependencyMatchAdaptiveEnabled: boolean
+  readonly #dependencyMatchAdaptiveMinSamples: number
+  readonly #dependencyMatchAdaptiveBucketSize: number
   readonly #readyPromise: Promise<void>
   #debugCachePersistence: boolean
   #availability: 'initializing' | 'available' | 'unavailable' = 'initializing'
   #writesSincePrune = 0
   #lastPrunedAt = 0
   #lastInflightCleanupAt = 0
+  #dependencyMatchTempTableInitialized = false
+  #dependencyMatchPerfByBucket = new Map<number, DependencyMatchStrategyStats>()
   #lastAccessTouchAtByNodeKey = new Map<string, number>()
   #preparedStatements = new Map<string, any>()
   #pruneInFlight?: Promise<void>
@@ -210,6 +233,30 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#overflowCheckInterval = Math.max(
       1,
       Math.min(SQLITE_PRUNE_WRITE_INTERVAL, Math.floor(this.#maxRows / 100))
+    )
+    this.#preparedStatementCacheMax = resolvePositiveIntegerEnv(
+      'RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX',
+      SQLITE_DEFAULT_PREPARED_STATEMENT_CACHE_MAX
+    )
+    this.#dependencyMatchTempTableThreshold = resolvePositiveIntegerEnv(
+      'RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD',
+      SQLITE_DEFAULT_DEPENDENCY_MATCH_TEMP_TABLE_THRESHOLD
+    )
+    this.#dependencyMatchTempTableEnabled = resolveBooleanEnv(
+      'RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE',
+      true
+    )
+    this.#dependencyMatchAdaptiveEnabled = resolveBooleanEnv(
+      'RENOUN_SQLITE_DEP_MATCH_ADAPTIVE',
+      true
+    )
+    this.#dependencyMatchAdaptiveMinSamples = resolvePositiveIntegerEnv(
+      'RENOUN_SQLITE_DEP_MATCH_ADAPTIVE_MIN_SAMPLES',
+      SQLITE_DEFAULT_DEPENDENCY_MATCH_ADAPTIVE_MIN_SAMPLES
+    )
+    this.#dependencyMatchAdaptiveBucketSize = resolvePositiveIntegerEnv(
+      'RENOUN_SQLITE_DEP_MATCH_ADAPTIVE_BUCKET_SIZE',
+      SQLITE_DEFAULT_DEPENDENCY_MATCH_ADAPTIVE_BUCKET_SIZE
     )
     this.#readyPromise = this.#initialize()
   }
@@ -239,8 +286,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     return this.#runWithBusyRetries(() => {
       this.#cleanupExpiredComputeSlots(now)
 
-      const result = this.#db
-        .prepare(
+      const result = this
+        .#prepareStatement(
           `
             INSERT INTO cache_inflight (node_key, owner, started_at, expires_at)
             VALUES (?, ?, ?, ?)
@@ -273,8 +320,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const expiresAt = now + ttlMs
 
     await this.#runWithBusyRetries(() => {
-      this.#db
-        .prepare(
+      this
+        .#prepareStatement(
           `
             UPDATE cache_inflight
             SET expires_at = ?
@@ -293,9 +340,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     await this.#runWithBusyRetries(() => {
-      this.#db
-        .prepare(`DELETE FROM cache_inflight WHERE node_key = ? AND owner = ?`)
-        .run(nodeKey, owner)
+      this.#prepareStatement(
+        `DELETE FROM cache_inflight WHERE node_key = ? AND owner = ?`
+      ).run(nodeKey, owner)
     })
   }
 
@@ -311,8 +358,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
       this.#cleanupExpiredComputeSlots(now)
 
-      const row = this.#db
-        .prepare(
+      const row = this
+        .#prepareStatement(
           `
             SELECT owner, expires_at
             FROM cache_inflight
@@ -327,9 +374,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
       const expiresAt = Number(row.expires_at)
       if (!Number.isFinite(expiresAt) || expiresAt <= now) {
-        this.#db
-          .prepare(`DELETE FROM cache_inflight WHERE node_key = ?`)
-          .run(nodeKey)
+        this.#prepareStatement(`DELETE FROM cache_inflight WHERE node_key = ?`).run(
+          nodeKey
+        )
         return undefined
       }
 
@@ -361,8 +408,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     } catch {}
 
     const row = (await this.#runWithBusyRetries(() =>
-      this.#db
-        .prepare(
+      this
+        .#prepareStatement(
           `
             SELECT
               fingerprint as fingerprint,
@@ -393,8 +440,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const dependencyRows = (await this.#runWithBusyRetries(() =>
-      this.#db
-        .prepare(
+      this
+        .#prepareStatement(
           `
             SELECT dep_key as dep_key, dep_version as dep_version
             FROM cache_deps
@@ -539,8 +586,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#db.exec('BEGIN IMMEDIATE')
         transactionStarted = true
 
-        this.#db
-          .prepare(
+        const previousMissingDependencyMetadata =
+          this.#isNodeKeyMissingDependencyMetadata(nodeKey)
+
+        this
+          .#prepareStatement(
             `
               INSERT INTO cache_entries (
                 node_key,
@@ -571,12 +621,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             nodeKey
           )
 
-        this.#db
-          .prepare(`DELETE FROM cache_deps WHERE node_key = ?`)
-          .run(nodeKey)
+        this.#prepareStatement(`DELETE FROM cache_deps WHERE node_key = ?`).run(
+          nodeKey
+        )
 
         if (entry.deps.length > 0) {
-          const insertDepStatement = this.#db.prepare(
+          const insertDepStatement = this.#prepareStatement(
             `
               INSERT INTO cache_deps (node_key, dep_key, dep_version)
               VALUES (?, ?, ?)
@@ -592,9 +642,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           }
         }
 
-        const revisionRow = this.#db
-          .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
-          .get(nodeKey) as { revision?: unknown } | undefined
+        this.#applyMissingDependencyMetadataTransition(
+          previousMissingDependencyMetadata,
+          entry.deps.length === 0
+        )
+
+        const revisionRow = this.#prepareStatement(
+          `SELECT revision FROM cache_entries WHERE node_key = ?`
+        ).get(nodeKey) as { revision?: unknown } | undefined
         const revision = getPersistedRevision(revisionRow?.revision)
 
         this.#db.exec('COMMIT')
@@ -653,12 +708,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#db.exec('BEGIN IMMEDIATE')
         transactionStarted = true
 
-        const currentRevisionRow = this.#db
-          .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
-          .get(nodeKey) as { revision?: unknown } | undefined
+        const currentRevisionRow = this.#prepareStatement(
+          `SELECT revision FROM cache_entries WHERE node_key = ?`
+        ).get(nodeKey) as { revision?: unknown } | undefined
         const currentRevision = getPersistedRevision(
           currentRevisionRow?.revision
         )
+        let previousMissingDependencyMetadata = false
 
         if (options.expectedRevision === 'missing') {
           if (Number.isFinite(currentRevision)) {
@@ -666,8 +722,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             return { applied: false, revision: currentRevision }
           }
 
-          this.#db
-            .prepare(
+          this
+            .#prepareStatement(
               `
                 INSERT INTO cache_entries (
                   node_key,
@@ -702,8 +758,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           }
 
           const nextRevision = options.expectedRevision + 1
-          const updateResult = this.#db
-            .prepare(
+          previousMissingDependencyMetadata =
+            this.#isNodeKeyMissingDependencyMetadata(nodeKey)
+          const updateResult = this
+            .#prepareStatement(
               `
                 UPDATE cache_entries
                 SET
@@ -729,9 +787,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
           const changes = Number(updateResult.changes ?? 0)
           if (changes === 0) {
-            const latestRevisionRow = this.#db
-              .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
-              .get(nodeKey) as { revision?: unknown } | undefined
+            const latestRevisionRow = this.#prepareStatement(
+              `SELECT revision FROM cache_entries WHERE node_key = ?`
+            ).get(nodeKey) as { revision?: unknown } | undefined
             const latestRevision = getPersistedRevision(
               latestRevisionRow?.revision
             )
@@ -743,12 +801,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           }
         }
 
-        this.#db
-          .prepare(`DELETE FROM cache_deps WHERE node_key = ?`)
-          .run(nodeKey)
+        this.#prepareStatement(`DELETE FROM cache_deps WHERE node_key = ?`).run(
+          nodeKey
+        )
 
         if (entry.deps.length > 0) {
-          const insertDepStatement = this.#db.prepare(
+          const insertDepStatement = this.#prepareStatement(
             `
               INSERT INTO cache_deps (node_key, dep_key, dep_version)
               VALUES (?, ?, ?)
@@ -764,9 +822,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           }
         }
 
-        const revisionRow = this.#db
-          .prepare(`SELECT revision FROM cache_entries WHERE node_key = ?`)
-          .get(nodeKey) as { revision?: unknown } | undefined
+        this.#applyMissingDependencyMetadataTransition(
+          previousMissingDependencyMetadata,
+          entry.deps.length === 0
+        )
+
+        const revisionRow = this.#prepareStatement(
+          `SELECT revision FROM cache_entries WHERE node_key = ?`
+        ).get(nodeKey) as { revision?: unknown } | undefined
         const revision = getPersistedRevision(revisionRow?.revision)
 
         this.#db.exec('COMMIT')
@@ -811,12 +874,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     await this.#runWithBusyRetries(() => {
       this.#db.exec('BEGIN IMMEDIATE')
       try {
-        this.#db
-          .prepare(`DELETE FROM cache_deps WHERE node_key = ?`)
-          .run(nodeKey)
-        this.#db
-          .prepare(`DELETE FROM cache_entries WHERE node_key = ?`)
-          .run(nodeKey)
+        this.#deleteRowsForNodeKeys([nodeKey])
         this.#db.exec('COMMIT')
       } catch (error) {
         try {
@@ -876,6 +934,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         deletedNodeKeys: [],
         usedDependencyIndex: false,
         hasMissingDependencyMetadata: false,
+        missingDependencyNodeKeys: [],
       }
     }
 
@@ -897,6 +956,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         deletedNodeKeys: [],
         usedDependencyIndex: false,
         hasMissingDependencyMetadata: false,
+        missingDependencyNodeKeys: [],
       }
     }
 
@@ -946,44 +1006,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const exactDependencyList = Array.from(exactDependencyKeys).sort()
-    const whereClauses: string[] = []
-    const whereParameters: string[] = []
-
-    if (exactDependencyList.length > 0) {
-      whereClauses.push(
-        `dependency.dep_key IN (${exactDependencyList.map(() => '?').join(',')})`
-      )
-      whereParameters.push(...exactDependencyList)
-    }
-
-    if (descendantDependencyPatterns.length > 0) {
-      whereClauses.push(
-        descendantDependencyPatterns
-          .map(() => `dependency.dep_key LIKE ? ESCAPE '\\'`)
-          .join(' OR ')
-      )
-      whereParameters.push(...descendantDependencyPatterns)
-    }
-
-    const selectNodeKeysByDependencySql = `
-      SELECT DISTINCT entry.node_key as node_key
-      FROM cache_entries AS entry
-      JOIN cache_deps AS dependency
-        ON dependency.node_key = entry.node_key
-      WHERE (${whereClauses.join(' OR ')})
-      ORDER BY entry.node_key
-    `
-    const deletedNodeKeys = await this.#runWithBusyRetries(() => {
-      const rows = this.#prepareStatement(selectNodeKeysByDependencySql).all(
-        ...whereParameters
-      ) as Array<{ node_key?: string }>
-
-      return rows
-        .map((row) => row.node_key)
-        .filter((nodeKey: string | undefined): nodeKey is string => {
-          return typeof nodeKey === 'string'
-        })
-    })
+    const descendantDependencyList = Array.from(
+      new Set(descendantDependencyPatterns)
+    ).sort()
+    const deletedNodeKeys = await this.#selectNodeKeysByDependencyTerms(
+      exactDependencyList,
+      descendantDependencyList
+    )
 
     if (deletedNodeKeys.length > 0) {
       await this.#runWithBusyRetries(() => {
@@ -1000,29 +1029,18 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       })
     }
 
-    const hasMissingDependencyMetadataSql = `
-      SELECT EXISTS(
-        SELECT 1
-        FROM cache_entries AS entry
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM cache_deps AS dependency
-          WHERE dependency.node_key = entry.node_key
-        )
-      ) as has_missing
-    `
     const hasMissingDependencyMetadata = await this.#runWithBusyRetries(() => {
-      const row = this.#prepareStatement(hasMissingDependencyMetadataSql).get() as
-        | { has_missing?: number | string | bigint }
-        | undefined
-
-      return Number(row?.has_missing ?? 0) > 0
+      return this.#getMissingDependencyMetadataCount() > 0
     })
+    const missingDependencyNodeKeys = hasMissingDependencyMetadata
+      ? await this.#listMissingDependencyNodeKeys()
+      : []
 
     return {
       deletedNodeKeys,
       usedDependencyIndex: true,
       hasMissingDependencyMetadata,
+      missingDependencyNodeKeys,
     }
   }
 
@@ -1044,6 +1062,287 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     const rows = (await this.#runWithBusyRetries(() =>
       this.#prepareStatement(listNodeKeysByPrefixSql).all(likePattern)
+    )) as Array<{ node_key?: string }>
+
+    return rows
+      .map((row) => row.node_key)
+      .filter((nodeKey: string | undefined): nodeKey is string => {
+        return typeof nodeKey === 'string'
+      })
+  }
+
+  async #selectNodeKeysByDependencyTerms(
+    exactDependencyKeys: string[],
+    descendantDependencyPatterns: string[]
+  ): Promise<string[]> {
+    if (!this.#db) {
+      return []
+    }
+
+    if (
+      exactDependencyKeys.length === 0 &&
+      descendantDependencyPatterns.length === 0
+    ) {
+      return []
+    }
+
+    const totalTerms =
+      exactDependencyKeys.length + descendantDependencyPatterns.length
+    const strategy = this.#resolveDependencyMatchStrategy(totalTerms)
+    const startedAt = Date.now()
+    const nodeKeys =
+      strategy === 'temp-table'
+        ? await this.#selectNodeKeysByDependencyTermsUsingTempTable(
+            exactDependencyKeys,
+            descendantDependencyPatterns
+          )
+        : await this.#selectNodeKeysByDependencyTermsUsingDynamicQuery(
+            exactDependencyKeys,
+            descendantDependencyPatterns
+          )
+    const durationMs = Date.now() - startedAt
+    this.#recordDependencyMatchStrategyDuration(totalTerms, strategy, durationMs)
+    return nodeKeys
+  }
+
+  async #selectNodeKeysByDependencyTermsUsingDynamicQuery(
+    exactDependencyKeys: string[],
+    descendantDependencyPatterns: string[]
+  ): Promise<string[]> {
+    if (!this.#db) {
+      return []
+    }
+
+    const whereClauses: string[] = []
+    const whereParameters: string[] = []
+
+    if (exactDependencyKeys.length > 0) {
+      whereClauses.push(
+        `dependency.dep_key IN (${exactDependencyKeys.map(() => '?').join(',')})`
+      )
+      whereParameters.push(...exactDependencyKeys)
+    }
+
+    if (descendantDependencyPatterns.length > 0) {
+      whereClauses.push(
+        descendantDependencyPatterns
+          .map(() => `dependency.dep_key LIKE ? ESCAPE '\\'`)
+          .join(' OR ')
+      )
+      whereParameters.push(...descendantDependencyPatterns)
+    }
+
+    if (whereClauses.length === 0) {
+      return []
+    }
+
+    const selectNodeKeysByDependencySql = `
+      SELECT DISTINCT entry.node_key as node_key
+      FROM cache_entries AS entry
+      JOIN cache_deps AS dependency
+        ON dependency.node_key = entry.node_key
+      WHERE (${whereClauses.join(' OR ')})
+      ORDER BY entry.node_key
+    `
+
+    const rows = (await this.#runWithBusyRetries(() =>
+      this.#prepareStatement(selectNodeKeysByDependencySql).all(...whereParameters)
+    )) as Array<{ node_key?: string }>
+
+    return rows
+      .map((row) => row.node_key)
+      .filter((nodeKey: string | undefined): nodeKey is string => {
+        return typeof nodeKey === 'string'
+      })
+  }
+
+  async #selectNodeKeysByDependencyTermsUsingTempTable(
+    exactDependencyKeys: string[],
+    descendantDependencyPatterns: string[]
+  ): Promise<string[]> {
+    if (!this.#db) {
+      return []
+    }
+
+    const clearTermsSql = `DELETE FROM ${DEPENDENCY_MATCH_TEMP_TABLE}`
+    const insertTermSql = `INSERT INTO ${DEPENDENCY_MATCH_TEMP_TABLE} (dep_key, is_pattern) VALUES (?, ?)`
+    const selectNodeKeysSql = `
+      SELECT node_key
+      FROM (
+        SELECT DISTINCT entry.node_key as node_key
+        FROM cache_entries AS entry
+        JOIN cache_deps AS dependency
+          ON dependency.node_key = entry.node_key
+        JOIN ${DEPENDENCY_MATCH_TEMP_TABLE} AS term
+          ON term.is_pattern = 0
+         AND dependency.dep_key = term.dep_key
+        UNION
+        SELECT DISTINCT entry.node_key as node_key
+        FROM cache_entries AS entry
+        JOIN cache_deps AS dependency
+          ON dependency.node_key = entry.node_key
+        JOIN ${DEPENDENCY_MATCH_TEMP_TABLE} AS term
+          ON term.is_pattern = 1
+        WHERE dependency.dep_key LIKE term.dep_key ESCAPE '\\'
+      )
+      ORDER BY node_key
+    `
+
+    return this.#runWithBusyRetries(() => {
+      this.#ensureDependencyMatchTempTable()
+      this.#prepareStatement(clearTermsSql).run()
+      const insertTerm = this.#prepareStatement(insertTermSql)
+      for (const depKey of exactDependencyKeys) {
+        insertTerm.run(depKey, 0)
+      }
+      for (const depPattern of descendantDependencyPatterns) {
+        insertTerm.run(depPattern, 1)
+      }
+
+      const rows = this.#prepareStatement(selectNodeKeysSql).all() as Array<{
+        node_key?: string
+      }>
+
+      return rows
+        .map((row) => row.node_key)
+        .filter((nodeKey: string | undefined): nodeKey is string => {
+          return typeof nodeKey === 'string'
+        })
+    })
+  }
+
+  #ensureDependencyMatchTempTable(): void {
+    if (!this.#db || this.#dependencyMatchTempTableInitialized) {
+      return
+    }
+
+    this.#db.exec(
+      `
+        CREATE TEMP TABLE IF NOT EXISTS ${DEPENDENCY_MATCH_TEMP_TABLE} (
+          dep_key TEXT NOT NULL,
+          is_pattern INTEGER NOT NULL
+        )
+      `
+    )
+    this.#db.exec(
+      `
+        CREATE INDEX IF NOT EXISTS ${DEPENDENCY_MATCH_TEMP_TABLE}_kind_dep_key_idx
+        ON ${DEPENDENCY_MATCH_TEMP_TABLE}(is_pattern, dep_key)
+      `
+    )
+    this.#dependencyMatchTempTableInitialized = true
+  }
+
+  #resolveDependencyMatchStrategy(totalTerms: number): DependencyMatchStrategy {
+    if (!this.#dependencyMatchTempTableEnabled) {
+      return 'dynamic'
+    }
+
+    const fallbackStrategy: DependencyMatchStrategy =
+      totalTerms >= this.#dependencyMatchTempTableThreshold
+        ? 'temp-table'
+        : 'dynamic'
+
+    if (!this.#dependencyMatchAdaptiveEnabled) {
+      return fallbackStrategy
+    }
+
+    const bucket = this.#toDependencyMatchTermsBucket(totalTerms)
+    const stats = this.#getDependencyMatchStrategyStats(bucket)
+
+    const hasEnoughDynamicSamples =
+      stats.dynamicSamples >= this.#dependencyMatchAdaptiveMinSamples
+    const hasEnoughTempTableSamples =
+      stats.tempTableSamples >= this.#dependencyMatchAdaptiveMinSamples
+
+    if (hasEnoughDynamicSamples && hasEnoughTempTableSamples) {
+      const averageDynamicDuration =
+        stats.dynamicTotalDurationMs / stats.dynamicSamples
+      const averageTempTableDuration =
+        stats.tempTableTotalDurationMs / stats.tempTableSamples
+      return averageDynamicDuration <= averageTempTableDuration
+        ? 'dynamic'
+        : 'temp-table'
+    }
+
+    const needsDynamicSamples = !hasEnoughDynamicSamples
+    const needsTempTableSamples = !hasEnoughTempTableSamples
+
+    if (needsDynamicSamples && needsTempTableSamples) {
+      return fallbackStrategy
+    }
+
+    if (needsDynamicSamples) {
+      return 'dynamic'
+    }
+    if (needsTempTableSamples) {
+      return 'temp-table'
+    }
+
+    return fallbackStrategy
+  }
+
+  #recordDependencyMatchStrategyDuration(
+    totalTerms: number,
+    strategy: DependencyMatchStrategy,
+    durationMs: number
+  ): void {
+    if (!Number.isFinite(durationMs) || durationMs < 0) {
+      return
+    }
+
+    const bucket = this.#toDependencyMatchTermsBucket(totalTerms)
+    const stats = this.#getDependencyMatchStrategyStats(bucket)
+    if (strategy === 'temp-table') {
+      stats.tempTableSamples += 1
+      stats.tempTableTotalDurationMs += durationMs
+      return
+    }
+
+    stats.dynamicSamples += 1
+    stats.dynamicTotalDurationMs += durationMs
+  }
+
+  #toDependencyMatchTermsBucket(totalTerms: number): number {
+    const sanitizedTerms = Math.max(1, totalTerms)
+    const bucketSize = this.#dependencyMatchAdaptiveBucketSize
+    return Math.ceil(sanitizedTerms / bucketSize) * bucketSize
+  }
+
+  #getDependencyMatchStrategyStats(bucket: number): DependencyMatchStrategyStats {
+    const existing = this.#dependencyMatchPerfByBucket.get(bucket)
+    if (existing) {
+      return existing
+    }
+
+    const created: DependencyMatchStrategyStats = {
+      dynamicSamples: 0,
+      dynamicTotalDurationMs: 0,
+      tempTableSamples: 0,
+      tempTableTotalDurationMs: 0,
+    }
+    this.#dependencyMatchPerfByBucket.set(bucket, created)
+    return created
+  }
+
+  async #listMissingDependencyNodeKeys(): Promise<string[]> {
+    if (!this.#db) {
+      return []
+    }
+
+    const listMissingDependencyNodeKeysSql = `
+      SELECT entry.node_key as node_key
+      FROM cache_entries AS entry
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM cache_deps AS dependency
+        WHERE dependency.node_key = entry.node_key
+      )
+      ORDER BY entry.node_key
+    `
+
+    const rows = (await this.#runWithBusyRetries(() =>
+      this.#prepareStatement(listMissingDependencyNodeKeysSql).all()
     )) as Array<{ node_key?: string }>
 
     return rows
@@ -1107,14 +1406,19 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             `
           ).run('cache_schema_version', String(this.#schemaVersion))
         }
+        this.#initializeMissingDependencyMetadata(database)
 
         this.#clearPreparedStatements()
+        this.#dependencyMatchTempTableInitialized = false
+        this.#dependencyMatchPerfByBucket.clear()
         this.#db = database
         this.#availability = 'available'
         await this.#runPruneWithRetries()
         return
       } catch (error) {
         this.#clearPreparedStatements()
+        this.#dependencyMatchTempTableInitialized = false
+        this.#dependencyMatchPerfByBucket.clear()
         this.#db = undefined
 
         if (database && typeof database.close === 'function') {
@@ -1208,6 +1512,41 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     )
   }
 
+  #initializeMissingDependencyMetadata(database: any): void {
+    const missingDependencyCountRow = database
+      .prepare(
+        `
+          SELECT COUNT(*) as total
+          FROM cache_entries AS entry
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM cache_deps AS dependency
+            WHERE dependency.node_key = entry.node_key
+          )
+        `
+      )
+      .get() as { total?: unknown } | undefined
+    const missingDependencyCount = Number(missingDependencyCountRow?.total ?? 0)
+    const normalizedMissingDependencyCount = Number.isFinite(
+      missingDependencyCount
+    )
+      ? Math.max(0, Math.floor(missingDependencyCount))
+      : 0
+
+    database
+      .prepare(
+        `
+          INSERT INTO meta(key, value)
+          VALUES (?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        `
+      )
+      .run(
+        MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY,
+        String(normalizedMissingDependencyCount)
+      )
+  }
+
   async #maybePruneAfterWrite(
     now: number,
     options: { skipWriteCount?: boolean; force?: boolean } = {}
@@ -1233,9 +1572,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     let shouldPrune = shouldPruneForAgeWindow
 
     if (!shouldPrune) {
-      const countRow = this.#db
-        .prepare(`SELECT COUNT(*) as total FROM cache_entries`)
-        .get() as { total?: number }
+      const countRow = this.#prepareStatement(
+        `SELECT COUNT(*) as total FROM cache_entries`
+      ).get() as { total?: number }
       const totalRows = Number(countRow?.total ?? 0)
       shouldPrune = totalRows > this.#maxRows
     }
@@ -1299,8 +1638,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     await this.#runWithBusyRetries(() => {
-      this.#db
-        .prepare(
+      this
+        .#prepareStatement(
           `
             UPDATE cache_entries
             SET last_accessed_at = CASE
@@ -1391,9 +1730,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return
     }
 
-    this.#db
-      .prepare(`DELETE FROM cache_inflight WHERE expires_at <= ?`)
-      .run(now)
+    this.#prepareStatement(`DELETE FROM cache_inflight WHERE expires_at <= ?`).run(
+      now
+    )
     this.#lastInflightCleanupAt = now
   }
 
@@ -1406,8 +1745,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     this.#db.exec('BEGIN IMMEDIATE')
     try {
-      const staleNodes = this.#db
-        .prepare(
+      const staleNodes = this
+        .#prepareStatement(
           `
             SELECT node_key
             FROM cache_entries
@@ -1426,15 +1765,15 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#deleteRowsForNodeKeys(staleNodeKeys)
       }
 
-      const countRow = this.#db
-        .prepare(`SELECT COUNT(*) as total FROM cache_entries`)
-        .get() as { total?: number }
+      const countRow = this.#prepareStatement(
+        `SELECT COUNT(*) as total FROM cache_entries`
+      ).get() as { total?: number }
       const totalRows = Number(countRow?.total ?? 0)
       const overflow = totalRows - this.#maxRows
 
       if (overflow > 0) {
-        const overflowRows = this.#db
-          .prepare(
+        const overflowRows = this
+          .#prepareStatement(
             `
               SELECT node_key
               FROM cache_entries
@@ -1454,8 +1793,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
 
       this.#deleteInflightRowsForNodeKeys(
-        this.#db
-          .prepare(
+        this
+          .#prepareStatement(
             `
               SELECT node_key
               FROM cache_inflight
@@ -1482,7 +1821,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const database = this.#db
     this.#pruneInFlight = undefined
     this.#lastAccessTouchAtByNodeKey.clear()
+    this.#dependencyMatchPerfByBucket.clear()
     this.#clearPreparedStatements()
+    this.#dependencyMatchTempTableInitialized = false
     this.#db = undefined
     this.#availability = 'unavailable'
 
@@ -1510,16 +1851,138 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     const cached = this.#preparedStatements.get(sql)
     if (cached) {
+      this.#preparedStatements.delete(sql)
+      this.#preparedStatements.set(sql, cached)
       return cached
     }
 
     const prepared = this.#db.prepare(sql)
     this.#preparedStatements.set(sql, prepared)
+    while (this.#preparedStatements.size > this.#preparedStatementCacheMax) {
+      const oldestSql = this.#preparedStatements.keys().next().value
+      if (typeof oldestSql !== 'string') {
+        break
+      }
+      const evicted = this.#preparedStatements.get(oldestSql)
+      this.#preparedStatements.delete(oldestSql)
+      this.#disposePreparedStatement(evicted)
+    }
     return prepared
   }
 
   #clearPreparedStatements(): void {
+    for (const preparedStatement of this.#preparedStatements.values()) {
+      this.#disposePreparedStatement(preparedStatement)
+    }
     this.#preparedStatements.clear()
+  }
+
+  #disposePreparedStatement(preparedStatement: any): void {
+    if (
+      preparedStatement &&
+      typeof preparedStatement.finalize === 'function'
+    ) {
+      try {
+        preparedStatement.finalize()
+      } catch {}
+    }
+  }
+
+  #isNodeKeyMissingDependencyMetadata(nodeKey: string): boolean {
+    if (!this.#db) {
+      return false
+    }
+
+    const row = this.#prepareStatement(
+      `
+        SELECT EXISTS(
+          SELECT 1
+          FROM cache_entries AS entry
+          WHERE entry.node_key = ?
+            AND NOT EXISTS (
+              SELECT 1
+              FROM cache_deps AS dependency
+              WHERE dependency.node_key = entry.node_key
+            )
+        ) as is_missing
+      `
+    ).get(nodeKey) as { is_missing?: unknown } | undefined
+
+    return Number(row?.is_missing ?? 0) > 0
+  }
+
+  #getMissingDependencyMetadataCount(): number {
+    if (!this.#db) {
+      return 0
+    }
+
+    const row = this.#prepareStatement(`SELECT value FROM meta WHERE key = ?`).get(
+      MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY
+    ) as { value?: unknown } | undefined
+    const numericValue = Number.parseInt(String(row?.value ?? '0'), 10)
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      return 0
+    }
+
+    return numericValue
+  }
+
+  #applyMissingDependencyMetadataTransition(
+    previousMissingMetadata: boolean,
+    nextMissingMetadata: boolean
+  ): void {
+    if (previousMissingMetadata === nextMissingMetadata) {
+      return
+    }
+
+    this.#adjustMissingDependencyMetadataCount(nextMissingMetadata ? 1 : -1)
+  }
+
+  #adjustMissingDependencyMetadataCount(delta: number): void {
+    if (!this.#db || delta === 0) {
+      return
+    }
+
+    this.#prepareStatement(
+      `
+        INSERT INTO meta(key, value)
+        VALUES (?, '0')
+        ON CONFLICT(key) DO NOTHING
+      `
+    ).run(MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY)
+    this.#prepareStatement(
+      `
+        UPDATE meta
+        SET value = CAST(MAX(0, CAST(value AS INTEGER) + ?) AS TEXT)
+        WHERE key = ?
+      `
+    ).run(delta, MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY)
+  }
+
+  #countMissingDependencyEntriesForNodeKeys(nodeKeys: string[]): number {
+    if (!this.#db || nodeKeys.length === 0) {
+      return 0
+    }
+
+    const placeholders = nodeKeys.map(() => '?').join(',')
+    const row = this.#prepareStatement(
+      `
+        SELECT COUNT(*) as total
+        FROM cache_entries AS entry
+        WHERE entry.node_key IN (${placeholders})
+          AND NOT EXISTS (
+            SELECT 1
+            FROM cache_deps AS dependency
+            WHERE dependency.node_key = entry.node_key
+          )
+      `
+    ).get(...nodeKeys) as { total?: unknown } | undefined
+    const count = Number(row?.total ?? 0)
+    if (!Number.isFinite(count) || count <= 0) {
+      return 0
+    }
+
+    return Math.floor(count)
   }
 
   #deleteRowsForNodeKeys(nodeKeys: string[]) {
@@ -1546,10 +2009,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
 
       const placeholders = batch.map(() => '?').join(',')
+      const missingDependencyCountForBatch =
+        this.#countMissingDependencyEntriesForNodeKeys(batch)
       const deleteDepsSql = `DELETE FROM cache_deps WHERE node_key IN (${placeholders})`
       const deleteEntriesSql = `DELETE FROM cache_entries WHERE node_key IN (${placeholders})`
       this.#prepareStatement(deleteDepsSql).run(...batch)
       this.#prepareStatement(deleteEntriesSql).run(...batch)
+      this.#adjustMissingDependencyMetadataCount(-missingDependencyCountForBatch)
     }
   }
 
@@ -1649,6 +2115,37 @@ function getAncestorPathKeys(path: string): string[] {
   }
 
   return ancestors
+}
+
+function resolvePositiveIntegerEnv(key: string, fallback: number): number {
+  const rawValue = process.env[key]
+  if (!rawValue) {
+    return fallback
+  }
+
+  const parsed = Number.parseInt(rawValue, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback
+  }
+
+  return parsed
+}
+
+function resolveBooleanEnv(key: string, fallback: boolean): boolean {
+  const rawValue = process.env[key]
+  if (rawValue === undefined) {
+    return fallback
+  }
+
+  const normalized = rawValue.trim().toLowerCase()
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+    return true
+  }
+  if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+    return false
+  }
+
+  return fallback
 }
 
 function toUint8Array(value: unknown): Uint8Array | undefined {

@@ -2582,6 +2582,7 @@ describe('GitVirtualFileSystem', () => {
     const commitHistory = [
       {
         sha: '3',
+        author: { login: 'bob' },
         commit: {
           author: {
             name: 'Bob',
@@ -2592,6 +2593,7 @@ describe('GitVirtualFileSystem', () => {
       },
       {
         sha: '2',
+        author: { login: 'alice' },
         commit: {
           author: {
             name: 'Alice',
@@ -2602,6 +2604,7 @@ describe('GitVirtualFileSystem', () => {
       },
       {
         sha: '1',
+        author: { login: 'alice' },
         commit: {
           author: {
             name: 'Alice',
@@ -2687,6 +2690,7 @@ describe('GitVirtualFileSystem', () => {
     expect(authors[0]).toMatchObject({
       name: 'Alice',
       commitCount: 2,
+      githubProfileUrl: 'https://github.com/alice',
     })
     expect(authors[0]?.firstCommitDate?.toISOString()).toBe(
       '2020-06-01T08:00:00.000Z'
@@ -2694,7 +2698,11 @@ describe('GitVirtualFileSystem', () => {
     expect(authors[0]?.lastCommitDate?.toISOString()).toBe(
       '2021-01-01T08:00:00.000Z'
     )
-    expect(authors[1]).toMatchObject({ name: 'Bob', commitCount: 1 })
+    expect(authors[1]).toMatchObject({
+      name: 'Bob',
+      commitCount: 1,
+      githubProfileUrl: 'https://github.com/bob',
+    })
   })
 
   it('uses ranged blame queries for export metadata when authenticated', async () => {

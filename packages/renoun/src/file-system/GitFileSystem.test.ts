@@ -1977,6 +1977,29 @@ describe('GitFileSystem', () => {
     expect(bob?.commitCount).toBe(1)
   })
 
+  test('derives githubProfileUrl from GitHub noreply commit emails', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/data.txt', `alpha`, 'first', {
+      name: 'Alice',
+      email: '12345+alice-dev@users.noreply.github.com',
+    })
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const meta = await store.getFileMetadata('src/data.txt')
+    const [author] = meta.authors
+
+    expect(author).toMatchObject({
+      name: 'Alice',
+      commitCount: 1,
+      githubProfileUrl: 'https://github.com/alice-dev',
+    })
+    expect(
+      'email' in ((author ?? {}) as Record<string, unknown>)
+    ).toBeFalsy()
+  })
+
   test('getModuleMetadata reports only head exports', async ({
     repoRoot,
     cacheDirectory,

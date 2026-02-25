@@ -1,4 +1,6 @@
 import React from 'react'
+import type { Session as RenounSession } from '../file-system/Session.ts'
+import { createPersistentCacheNodeKey } from '../file-system/cache-key.ts'
 
 interface SponsorEntity {
   username: string
@@ -31,6 +33,54 @@ interface FetchSponsorsOptions {
 
 const AVATAR_MIN = 64
 const AVATAR_MAX = 512
+const SPONSORS_CACHE_DOMAIN = 'component-sponsors'
+const SPONSORS_CACHE_VERSION = '2'
+const SPONSORS_CACHE_NAMESPACE = 'github-sponsors'
+const SPONSORS_CACHE_VERSION_DEP = 'component-sponsors-version'
+const SPONSORS_CACHE_TTL_BUCKET_DEP = 'component-sponsors-ttl-bucket'
+const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
+let sponsorsCacheSessionPromise: Promise<RenounSession | undefined> | undefined
+
+function createSponsorsCacheNodeKey(payload: unknown): string {
+  return createPersistentCacheNodeKey({
+    domain: SPONSORS_CACHE_DOMAIN,
+    domainVersion: SPONSORS_CACHE_VERSION,
+    namespace: SPONSORS_CACHE_NAMESPACE,
+    payload,
+  })
+}
+
+function resolveSponsorsCacheTtlMs(): number {
+  const configuredTtl = process.env['RENOUN_SPONSORS_CACHE_TTL_MS']
+  if (!configuredTtl) {
+    return DEFAULT_SPONSORS_CACHE_TTL_MS
+  }
+
+  const parsedTtl = Number.parseInt(configuredTtl, 10)
+  if (!Number.isFinite(parsedTtl)) {
+    return DEFAULT_SPONSORS_CACHE_TTL_MS
+  }
+
+  return Math.max(0, parsedTtl)
+}
+
+async function getSponsorsCacheSession(): Promise<RenounSession | undefined> {
+  if (!sponsorsCacheSessionPromise) {
+    sponsorsCacheSessionPromise = (async () => {
+      try {
+        const [{ NodeFileSystem }, { Session }] = await Promise.all([
+          import('../file-system/NodeFileSystem.ts'),
+          import('../file-system/Session.ts'),
+        ])
+        return Session.for(new NodeFileSystem())
+      } catch {
+        return undefined
+      }
+    })()
+  }
+
+  return sponsorsCacheSessionPromise
+}
 
 /** Clamp and sanitize avatar size. */
 function parseAvatarSize(sizeInPixels: number): number {
@@ -104,7 +154,7 @@ type TierResolved<Data extends object> = {
 type TierWithAmount<Data extends object> = TierInput<Data> & { amount: number }
 
 /** Single network call: fetch sponsors + sponsorable login + map tier HTML → closest tier_id link. */
-async function fetchSponsorsAndTierLinks(
+async function fetchSponsorsAndTierLinksUncached(
   options: FetchSponsorsOptions & {
     avatarSizes: readonly number[]
     manualTierIds?: ReadonlyMap<string, string>
@@ -418,6 +468,78 @@ async function fetchSponsorsAndTierLinks(
     sponsors: publicSponsors,
     defaultHref: `https://github.com/sponsors/${viewer.login}`,
   }
+}
+
+async function fetchSponsorsAndTierLinks(
+  options: FetchSponsorsOptions & {
+    avatarSizes: readonly number[]
+    manualTierIds?: ReadonlyMap<string, string>
+  }
+): Promise<{
+  hrefByTitle: Map<string, string>
+  sponsors: MaintainerSponsor[]
+  defaultHref: string
+  descriptionByTitle: Map<string, string>
+}> {
+  const normalizedAmount = Math.max(1, Math.min(100, Math.floor(options.amount)))
+  const normalizedAvatarSizes = Array.from(
+    new Set(options.avatarSizes.map((size) => parseAvatarSize(size)))
+  ).sort((left, right) => left - right)
+  const normalizedManualTierIds = options.manualTierIds
+    ? Array.from(options.manualTierIds.entries())
+        .map(([title, tierId]) => [title.toLowerCase(), String(tierId)] as const)
+        .sort(([left], [right]) => left.localeCompare(right))
+    : []
+  const normalizedManualTierMap =
+    normalizedManualTierIds.length > 0
+      ? new Map<string, string>(normalizedManualTierIds)
+      : undefined
+
+  const normalizedOptions = {
+    ...options,
+    amount: normalizedAmount,
+    avatarSizes: normalizedAvatarSizes,
+    manualTierIds: normalizedManualTierMap,
+  }
+
+  const ttlMs = resolveSponsorsCacheTtlMs()
+  if (ttlMs <= 0) {
+    return fetchSponsorsAndTierLinksUncached(normalizedOptions)
+  }
+
+  const token = process.env['GITHUB_SPONSORS_TOKEN']
+  if (!token) {
+    return fetchSponsorsAndTierLinksUncached(normalizedOptions)
+  }
+
+  const cacheSession = await getSponsorsCacheSession()
+  if (!cacheSession) {
+    return fetchSponsorsAndTierLinksUncached(normalizedOptions)
+  }
+
+  const nodeKey = createSponsorsCacheNodeKey({
+    amount: normalizedAmount,
+    avatarSizes: normalizedAvatarSizes,
+    manualTierIds: normalizedManualTierIds,
+  })
+
+  return cacheSession.cache.getOrCompute(
+    nodeKey,
+    {
+      persist: true,
+      constDeps: [
+        {
+          name: SPONSORS_CACHE_VERSION_DEP,
+          version: SPONSORS_CACHE_VERSION,
+        },
+        {
+          name: SPONSORS_CACHE_TTL_BUCKET_DEP,
+          version: String(Math.floor(Date.now() / ttlMs)),
+        },
+      ],
+    },
+    async () => fetchSponsorsAndTierLinksUncached(normalizedOptions)
+  )
 }
 
 async function fetchSponsorTiers<const Data extends object>(

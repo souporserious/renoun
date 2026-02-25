@@ -318,7 +318,7 @@ function createEmptyGitExportMetadata(): GitExportMetadata {
 
 type GitAuthorCacheSignature = {
   name: string
-  email?: string
+  githubProfileUrl?: string
   commitCount: number
   firstCommitDate?: string
   lastCommitDate?: string
@@ -358,7 +358,7 @@ function createGitMetadataCacheSignature(
     lastCommitDate: toGitMetadataDateValue(metadata.lastCommitDate),
     authors: metadata.authors.map((author) => ({
       name: author.name,
-      email: author.email,
+      githubProfileUrl: author.githubProfileUrl,
       commitCount: author.commitCount,
       firstCommitDate: toGitMetadataDateValue(author.firstCommitDate),
       lastCommitDate: toGitMetadataDateValue(author.lastCommitDate),
@@ -4235,8 +4235,51 @@ const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
 const WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER = ';ignored-only:1'
 const WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER =
   ';include-gitignored:1'
+const strictHermeticWarningKeys = new Set<string>()
+
+function isStrictHermeticFileSystemMode(): boolean {
+  const override = process.env['RENOUN_FS_STRICT_HERMETIC']?.trim()
+
+  if (override) {
+    const normalized = override.toLowerCase()
+    if (normalized === '1' || normalized === 'true') {
+      return true
+    }
+    if (normalized === '0' || normalized === 'false') {
+      return false
+    }
+  }
+
+  return process.env['NODE_ENV'] === 'production'
+}
+
+function warnStrictHermeticFallbackOnce(
+  key: string,
+  message: string,
+  details?: Record<string, unknown>
+): void {
+  if (process.env['NODE_ENV'] === 'test') {
+    return
+  }
+
+  if (strictHermeticWarningKeys.has(key)) {
+    return
+  }
+
+  strictHermeticWarningKeys.add(key)
+  if (details && Object.keys(details).length > 0) {
+    console.warn(`[renoun] ${message}`, details)
+    return
+  }
+
+  console.warn(`[renoun] ${message}`)
+}
 
 function shouldTrackDirectoryMtime(fileSystem: FileSystem): boolean {
+  if (isStrictHermeticFileSystemMode()) {
+    return false
+  }
+
   const constructorName = fileSystem.constructor?.name ?? ''
   return (
     constructorName === 'NodeFileSystem' ||
@@ -4248,6 +4291,10 @@ function shouldTrackDirectoryMtime(fileSystem: FileSystem): boolean {
 function shouldValidatePersistedFileDependencies(
   fileSystem: FileSystem
 ): boolean {
+  if (isStrictHermeticFileSystemMode()) {
+    return true
+  }
+
   const constructorName = fileSystem.constructor?.name ?? ''
   return (
     constructorName === 'NodeFileSystem' ||
@@ -4495,12 +4542,22 @@ async function getDirectoryEntryListingSignature(
     isFile: boolean
   }
 ): Promise<string> {
+  if (entry.isDirectory) {
+    return 'directory'
+  }
+
   try {
-    const contentId = await snapshot.contentId(entry.path)
+    const contentId = await snapshot.contentId(entry.path, {
+      kind: entry.isFile ? 'file' : 'any',
+    })
     if (contentId && contentId !== 'missing') {
       return `content:${contentId}`
     }
   } catch {}
+
+  if (isStrictHermeticFileSystemMode()) {
+    return 'missing'
+  }
 
   const [modifiedMs, byteLength] = await Promise.all([
     fileSystem.getFileLastModifiedMs(entry.path).catch(() => undefined),
@@ -6070,19 +6127,34 @@ export class Directory<
     }
 
     void (async () => {
-      const dependencyEviction = await session.cache.deleteByDependencyPath('.')
-      if (
-        !dependencyEviction.usedDependencyIndex ||
-        dependencyEviction.hasMissingDependencyMetadata
-      ) {
+      const dependencyEviction = await session.cache.deleteByDependencyPaths(['.'])
+      if (!dependencyEviction.usedDependencyIndex) {
         const candidateSnapshotKeys =
           await session.cache.listNodeKeysByPrefix('dir:')
         if (candidateSnapshotKeys.length === 0) {
           return
         }
-
         await session.cache.deleteMany(candidateSnapshotKeys)
+        return
       }
+
+      if (!dependencyEviction.hasMissingDependencyMetadata) {
+        return
+      }
+
+      const targetedMissingSnapshotKeys =
+        dependencyEviction.missingDependencyNodeKeys
+          ?.filter((nodeKey) => nodeKey.startsWith('dir:'))
+          .sort() ?? []
+      const fallbackSnapshotKeys =
+        targetedMissingSnapshotKeys.length > 0
+          ? targetedMissingSnapshotKeys
+          : await session.cache.listNodeKeysByPrefix('dir:')
+
+      if (fallbackSnapshotKeys.length === 0) {
+        return
+      }
+      await session.cache.deleteMany(fallbackSnapshotKeys)
     })().catch(() => {})
   }
 
@@ -6292,17 +6364,40 @@ export class Directory<
     const session = directory.#getSession()
     const snapshotKey = directory.#getSessionSnapshotKey(mask)
     session.recordDirectorySnapshotLookup(snapshotKey)
+    const fileSystem = directory.getFileSystem()
     const cachedSnapshot = registerInSession
       ? session.directorySnapshots.get(snapshotKey)
       : undefined
+    const strictHermetic = isStrictHermeticFileSystemMode()
+    const hasStaticSnapshotOptions = isSessionSnapshotPersistable({
+      filter: directory.#filter,
+      filterPattern: directory.#filterPattern,
+      sort: directory.#sort,
+    })
+    const fileSystemAllowsPersistence = shouldPersistDirectorySnapshots(fileSystem)
     const canPersist =
-      isSessionSnapshotPersistable({
-        filter: directory.#filter,
-        filterPattern: directory.#filterPattern,
-        sort: directory.#sort,
-      }) &&
+      hasStaticSnapshotOptions &&
       session.usesPersistentCache &&
-      shouldPersistDirectorySnapshots(directory.getFileSystem())
+      fileSystemAllowsPersistence
+
+    if (strictHermetic && !canPersist) {
+      if (!hasStaticSnapshotOptions) {
+        warnStrictHermeticFallbackOnce(
+          'strict-hermetic-nonpersistable-options',
+          'Strict hermetic directory snapshot cache fell back because filter/sort options are not statically capturable.'
+        )
+      } else if (!session.usesPersistentCache) {
+        warnStrictHermeticFallbackOnce(
+          'strict-hermetic-no-persistent-cache',
+          'Strict hermetic directory snapshot cache fell back because persistent cache is disabled.'
+        )
+      } else if (!fileSystemAllowsPersistence) {
+        warnStrictHermeticFallbackOnce(
+          'strict-hermetic-nondeterministic-filesystem',
+          'Strict hermetic directory snapshot cache fell back because the file system marked persistent cache as non-deterministic.'
+        )
+      }
+    }
     const wasPathInvalidated =
       registerInSession &&
       session.isDirectorySnapshotKeyInvalidated(snapshotKey)
@@ -6386,7 +6481,7 @@ export class Directory<
                 validateFileDependencies:
                   registerInSession &&
                   shouldValidatePersistedFileDependencies(
-                    directory.getFileSystem()
+                    fileSystem
                   ),
                 validateDirectoryDependencies: true,
                 includeGitIgnoredFiles: options.includeGitIgnoredFiles,
@@ -6826,6 +6921,25 @@ export class Directory<
     return this.#isDependencySignaturesStale(dependencies)
   }
 
+  async #createFileDependencySignature(
+    path: string,
+    options: {
+      fresh?: boolean
+    } = {}
+  ): Promise<string> {
+    const session = this.#getSession()
+
+    try {
+      const signature = await session.snapshot.contentId(path, {
+        fresh: options.fresh === true,
+        kind: 'file',
+      })
+      return signature || 'missing'
+    } catch {
+      return 'missing'
+    }
+  }
+
   async #isPersistedSnapshotStaleByFileDependencies(
     snapshot: PersistedDirectorySnapshotV1,
     options: {
@@ -6834,18 +6948,34 @@ export class Directory<
     }
   ): Promise<boolean> {
     const fileSystem = this.getFileSystem()
+    const strictHermetic = isStrictHermeticFileSystemMode()
 
     for (const [
       pathWithType,
       previousSignature,
     ] of snapshot.dependencySignatures) {
+      const isDirectoryListingDependency = pathWithType.startsWith(
+        DIRECTORY_DEPENDENCY_PREFIX
+      )
       const isFileDependency = pathWithType.startsWith(FILE_DEPENDENCY_PREFIX)
       const isDirectoryMtimeDependency = pathWithType.startsWith(
         DIRECTORY_MTIME_DEPENDENCY_PREFIX
       )
 
+      if (isDirectoryListingDependency && !strictHermetic) {
+        continue
+      }
+
       if (isFileDependency && !options.validateFileDependencies) {
         continue
+      }
+
+      if (isDirectoryMtimeDependency && strictHermetic) {
+        warnStrictHermeticFallbackOnce(
+          'strict-hermetic-directory-mtime-dependency',
+          'Strict hermetic mode detected legacy directory mtime dependencies and is forcing a snapshot rebuild.'
+        )
+        return true
       }
 
       if (
@@ -6855,18 +6985,58 @@ export class Directory<
         continue
       }
 
-      if (!isFileDependency && !isDirectoryMtimeDependency) {
+      if (
+        !isDirectoryListingDependency &&
+        !isFileDependency &&
+        !isDirectoryMtimeDependency
+      ) {
         continue
       }
 
-      const pathKey = isFileDependency
-        ? pathWithType.slice(FILE_DEPENDENCY_PREFIX.length)
-        : pathWithType.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
+      let pathKey: string
+      if (isDirectoryListingDependency) {
+        pathKey = pathWithType.slice(DIRECTORY_DEPENDENCY_PREFIX.length)
+      } else if (isFileDependency) {
+        pathKey = pathWithType.slice(FILE_DEPENDENCY_PREFIX.length)
+      } else {
+        pathKey = pathWithType.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
+      }
       const fileSystemPath = toFileSystemPathFromPathKey(pathKey)
-      const currentModified =
-        await fileSystem.getFileLastModifiedMs(fileSystemPath)
-      const currentSignature =
-        currentModified === undefined ? 'missing' : String(currentModified)
+      let currentSignature: string
+      if (isDirectoryListingDependency) {
+        let entries:
+          | ReadonlyArray<{
+              name: string
+              path: string
+              isDirectory: boolean
+              isFile: boolean
+            }>
+          | undefined
+
+        try {
+          entries = await fileSystem.readDirectory(fileSystemPath)
+        } catch {
+          return true
+        }
+
+        currentSignature = await this.#createDirectoryListingSignature(
+          fileSystem,
+          entries
+        )
+      } else if (isFileDependency && strictHermetic) {
+        currentSignature = await this.#createFileDependencySignature(
+          fileSystemPath,
+          {
+            fresh: true,
+          }
+        )
+      } else {
+        const currentModified = await fileSystem.getFileLastModifiedMs(
+          fileSystemPath
+        )
+        currentSignature =
+          currentModified === undefined ? 'missing' : String(currentModified)
+      }
 
       if (currentSignature !== previousSignature) {
         return true
@@ -6880,6 +7050,7 @@ export class Directory<
     dependencies: ReadonlyMap<string, string>
   ): Promise<boolean> {
     const fileSystem = this.getFileSystem()
+    const strictHermetic = isStrictHermeticFileSystemMode()
     const trackDirectoryMtime = shouldTrackDirectoryMtime(fileSystem)
     for (const [pathWithType, previousSignature] of dependencies.entries()) {
       const isDirectoryListing = pathWithType.startsWith(
@@ -6888,6 +7059,15 @@ export class Directory<
       const isDirectoryMtime = pathWithType.startsWith(
         DIRECTORY_MTIME_DEPENDENCY_PREFIX
       )
+      const isFileDependency = pathWithType.startsWith(FILE_DEPENDENCY_PREFIX)
+
+      if (isDirectoryMtime && strictHermetic) {
+        warnStrictHermeticFallbackOnce(
+          'strict-hermetic-directory-mtime-dependency',
+          'Strict hermetic mode detected legacy directory mtime dependencies and is forcing a snapshot rebuild.'
+        )
+        return true
+      }
 
       if (isDirectoryMtime && !trackDirectoryMtime) {
         continue
@@ -6897,7 +7077,7 @@ export class Directory<
         ? pathWithType.slice(DIRECTORY_DEPENDENCY_PREFIX.length)
         : isDirectoryMtime
           ? pathWithType.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
-          : pathWithType.startsWith(FILE_DEPENDENCY_PREFIX)
+          : isFileDependency
             ? pathWithType.slice(FILE_DEPENDENCY_PREFIX.length)
             : pathWithType
       const fileSystemPath = toFileSystemPathFromPathKey(pathKey)
@@ -6925,10 +7105,17 @@ export class Directory<
           entries
         )
       } else {
-        const currentModified =
-          await fileSystem.getFileLastModifiedMs(fileSystemPath)
-        currentSignature =
-          currentModified === undefined ? 'missing' : String(currentModified)
+        if (strictHermetic && isFileDependency) {
+          currentSignature = await this.#createFileDependencySignature(
+            fileSystemPath,
+            { fresh: true }
+          )
+        } else {
+          const currentModified =
+            await fileSystem.getFileLastModifiedMs(fileSystemPath)
+          currentSignature =
+            currentModified === undefined ? 'missing' : String(currentModified)
+        }
       }
 
       if (currentSignature !== previousSignature) {
@@ -7103,6 +7290,7 @@ export class Directory<
     shouldIncludeSelf: boolean
   }> {
     const fileSystem = directory.getFileSystem()
+    const strictHermetic = isStrictHermeticFileSystemMode()
     const trackDirectoryMtime = shouldTrackDirectoryMtime(fileSystem)
 
     const rawEntries = await fileSystem.readDirectory(directory.#path)
@@ -7122,11 +7310,18 @@ export class Directory<
       }
 
       try {
-        const modifiedMs = await fileSystem.getFileLastModifiedMs(path)
-        dependencySignatures.set(
-          dependencyKey,
-          modifiedMs === undefined ? 'missing' : String(modifiedMs)
-        )
+        if (strictHermetic) {
+          dependencySignatures.set(
+            dependencyKey,
+            await this.#createFileDependencySignature(path)
+          )
+        } else {
+          const modifiedMs = await fileSystem.getFileLastModifiedMs(path)
+          dependencySignatures.set(
+            dependencyKey,
+            modifiedMs === undefined ? 'missing' : String(modifiedMs)
+          )
+        }
       } catch {
         dependencySignatures.set(dependencyKey, 'missing')
       }

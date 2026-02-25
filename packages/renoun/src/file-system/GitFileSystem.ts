@@ -105,6 +105,7 @@ import {
   parseGitStatusPorcelainV1Z,
   parseNullTerminatedGitPathList,
 } from './git-status.ts'
+import { resolveGitHubUsername, toGitHubProfileUrl } from './git-author.ts'
 import { spawnWithResult, type SpawnResult } from './spawn.ts'
 import type { Cache } from './Cache.ts'
 import { Session } from './Session.ts'
@@ -272,6 +273,31 @@ function resolveDefaultGitCacheDirectory(): string {
   return resolve(rootDirectory, '.renoun', 'cache', 'git')
 }
 
+function sanitizeRepositorySpecifierForStorage(specifier: string): string {
+  const value = String(specifier)
+
+  try {
+    const url = new URL(value)
+    if (
+      url.protocol === 'http:' ||
+      url.protocol === 'https:' ||
+      url.protocol === 'ssh:' ||
+      url.protocol === 'git:' ||
+      url.protocol === 'file:'
+    ) {
+      url.username = ''
+      url.password = ''
+      url.search = ''
+      url.hash = ''
+      return url.toString()
+    }
+  } catch {
+    // ignore parsing errors - treat as opaque string
+  }
+
+  return value
+}
+
 /**
  * Ensures a local cached git clone exists for a remote spec (owner/repo or URL).
  * Clones if missing and returns the repo root.
@@ -287,9 +313,11 @@ export async function ensureCacheClone(
     depth,
   } = options
 
+  const redactedSpec = sanitizeRepositorySpecifierForStorage(spec)
+
   mkdirSync(cacheDirectory, { recursive: true })
 
-  const safeName = spec.replace(/[^a-zA-Z0-9_-]/g, '__')
+  const safeName = redactedSpec.replace(/[^a-zA-Z0-9_-]/g, '__')
   const target = join(cacheDirectory, safeName)
   const gitDir = join(target, '.git')
 
@@ -309,7 +337,7 @@ export async function ensureCacheClone(
     cloneUrl = spec
   } else {
     throw new Error(
-      `[GitFileSystem] Unsupported repository spec: ${spec}. ` +
+      `[GitFileSystem] Unsupported repository spec: ${redactedSpec}. ` +
         'Use a local path, an "owner/repo" GitHub shorthand, or a git URL (https://, ssh://, file://, git@).'
     )
   }
@@ -324,7 +352,7 @@ export async function ensureCacheClone(
 
   if (!existsSync(gitDir)) {
     if (verbose) {
-      console.log(`[GitFileSystem] Cloning ${spec} into ${target}…`)
+      console.log(`[GitFileSystem] Cloning ${redactedSpec} into ${target}…`)
     }
 
     const safeCloneUrl = assertSafeCloneUrl(cloneUrl)
@@ -353,7 +381,9 @@ export async function ensureCacheClone(
 
     if (clone.status !== 0) {
       const stderr = clone.stderr ? String(clone.stderr).trim() : ''
-      throw new Error(`Failed to clone ${spec}${stderr ? `: ${stderr}` : ''}`)
+      throw new Error(
+        `Failed to clone ${redactedSpec}${stderr ? `: ${stderr}` : ''}`
+      )
     }
   }
 
@@ -369,9 +399,11 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
     depth,
   } = options
 
+  const redactedSpec = sanitizeRepositorySpecifierForStorage(spec)
+
   mkdirSync(cacheDirectory, { recursive: true })
 
-  const safeName = spec.replace(/[^a-zA-Z0-9_-]/g, '__')
+  const safeName = redactedSpec.replace(/[^a-zA-Z0-9_-]/g, '__')
   const target = join(cacheDirectory, safeName)
   const gitDir = join(target, '.git')
 
@@ -391,7 +423,7 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
     cloneUrl = spec
   } else {
     throw new Error(
-      `[GitFileSystem] Unsupported repository spec: ${spec}. ` +
+      `[GitFileSystem] Unsupported repository spec: ${redactedSpec}. ` +
         'Use a local path, an "owner/repo" GitHub shorthand, or a git URL (https://, ssh://, file://, git@).'
     )
   }
@@ -406,7 +438,7 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
 
   if (!existsSync(gitDir)) {
     if (verbose) {
-      console.log(`[GitFileSystem] Cloning ${spec} into ${target}…`)
+      console.log(`[GitFileSystem] Cloning ${redactedSpec} into ${target}…`)
     }
 
     const safeCloneUrl = assertSafeCloneUrl(cloneUrl)
@@ -437,7 +469,9 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
 
     if (clone.status !== 0) {
       const stderr = clone.stderr ? String(clone.stderr).trim() : ''
-      throw new Error(`Failed to clone ${spec}${stderr ? `: ${stderr}` : ''}`)
+      throw new Error(
+        `Failed to clone ${redactedSpec}${stderr ? `: ${stderr}` : ''}`
+      )
     }
   }
 
@@ -746,8 +780,11 @@ export class GitFileSystem
     this.#git = null
 
     if (this.verbose) {
+      const displayRepoRoot = this.repositoryIsRemote
+        ? sanitizeRepositorySpecifierForStorage(this.repoRoot)
+        : this.repoRoot
       console.log(
-        `[GitFileSystem] initialized for ${this.repoRoot} @ ${this.ref}`
+        `[GitFileSystem] initialized for ${displayRepoRoot} @ ${this.ref}`
       )
     }
   }
@@ -883,9 +920,8 @@ export class GitFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = await this.#createWorkspaceStatusDigest(
-        statusEntries
-      )
+      const statusDigest =
+        await this.#createWorkspaceStatusDigest(statusEntries)
 
       return `head:${headCommit};dirty:${statusDigest.digest};count:${statusDigest.count};ignored-only:${statusDigest.ignoredOnly ? 1 : 0}`
     } catch {
@@ -987,9 +1023,8 @@ export class GitFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = await this.#createWorkspaceStatusDigest(
-        statusEntries
-      )
+      const statusDigest =
+        await this.#createWorkspaceStatusDigest(statusEntries)
 
       if (
         currentHead === previousHead &&
@@ -1421,7 +1456,9 @@ export class GitFileSystem
     const pathSignatureCache = new Map<string, Promise<string>>()
     const digestLines = await Promise.all(
       entries.map(async (entry) => {
-        const normalizedPaths = entry.paths.map((path) => normalizeSlashes(path))
+        const normalizedPaths = entry.paths.map((path) =>
+          normalizeSlashes(path)
+        )
         const signatures = await Promise.all(
           normalizedPaths.map((path) => {
             const cachedSignature = pathSignatureCache.get(path)
@@ -1429,9 +1466,8 @@ export class GitFileSystem
               return cachedSignature
             }
 
-            const signaturePromise = this.#createWorkspaceStatusPathSignature(
-              path
-            )
+            const signaturePromise =
+              this.#createWorkspaceStatusPathSignature(path)
             pathSignatureCache.set(path, signaturePromise)
             return signaturePromise
           })
@@ -1454,7 +1490,9 @@ export class GitFileSystem
     }
   }
 
-  async #createWorkspaceStatusPathSignature(relativePath: string): Promise<string> {
+  async #createWorkspaceStatusPathSignature(
+    relativePath: string
+  ): Promise<string> {
     try {
       const absolutePath = this.#resolveRepoAbsolutePath(relativePath)
       const stats = await stat(absolutePath)
@@ -1952,7 +1990,7 @@ export class GitFileSystem
     return createGitFileSystemPersistentCacheNodeKey({
       domainVersion: GIT_HISTORY_CACHE_VERSION,
       repository: this.repository,
-      repoRoot: this.repoRoot,
+      repoRoot: this.repositoryIsRemote ? undefined : this.repoRoot,
       namespace: scope,
       payload,
     })
@@ -4541,7 +4579,7 @@ export class GitFileSystem
           } satisfies GitFileMetadata
         }
 
-        const authorsByEmail = new Map<string, GitAuthor>()
+        const authorsByIdentity = new Map<string, GitAuthor>()
         const oldest = commits[0]
         const newest = commits[commits.length - 1]
 
@@ -4550,21 +4588,34 @@ export class GitFileSystem
             continue
           }
 
-          const name = commit.authorName ?? ''
-          const email = commit.authorEmail ?? ''
-          const key = email || name || 'unknown'
+          const name =
+            typeof commit.authorName === 'string' ? commit.authorName.trim() : ''
+          const githubUsername = resolveGitHubUsername({
+            email: commit.authorEmail,
+          })
+          const githubProfileUrl = toGitHubProfileUrl(githubUsername)
+          const displayName = name || githubUsername || 'Unknown'
+          const key = githubUsername
+            ? `github:${githubUsername.toLowerCase()}`
+            : displayName.toLowerCase()
           const stamp = new Date(commit.unix * 1000)
 
-          const existing = authorsByEmail.get(key)
+          const existing = authorsByIdentity.get(key)
           if (!existing) {
-            authorsByEmail.set(key, {
-              name,
-              email,
+            authorsByIdentity.set(key, {
+              name: displayName,
+              githubProfileUrl,
               commitCount: 1,
               firstCommitDate: stamp,
               lastCommitDate: stamp,
             })
           } else {
+            if (existing.name === 'Unknown' && displayName !== 'Unknown') {
+              existing.name = displayName
+            }
+            if (!existing.githubProfileUrl && githubProfileUrl) {
+              existing.githubProfileUrl = githubProfileUrl
+            }
             existing.commitCount += 1
             if (!existing.firstCommitDate || stamp < existing.firstCommitDate) {
               existing.firstCommitDate = stamp
@@ -4575,7 +4626,7 @@ export class GitFileSystem
           }
         }
 
-        const authors = Array.from(authorsByEmail.values())
+        const authors = Array.from(authorsByIdentity.values())
           .filter((author) => author.commitCount > 0)
           .sort((authorA, authorB) => authorB.commitCount - authorA.commitCount)
 

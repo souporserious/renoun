@@ -6,7 +6,7 @@ import type { PackageManagerName } from './PackageManager.ts'
 /** Represents a Git author with commit statistics. */
 export interface GitAuthor {
   name: string
-  email?: string
+  githubProfileUrl?: string
   commitCount: number
   firstCommitDate?: Date
   lastCommitDate?: Date

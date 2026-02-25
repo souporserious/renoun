@@ -27,6 +27,7 @@ import {
 } from './InMemoryFileSystem.ts'
 import { GIT_VIRTUAL_HISTORY_CACHE_VERSION } from './cache-key.ts'
 import { createGitVirtualPersistentCacheNodeKey } from './git-cache-key.ts'
+import { resolveGitHubUsername, toGitHubProfileUrl } from './git-author.ts'
 import type { Cache } from './Cache.ts'
 import type { AsyncFileSystem, WritableFileSystem } from './FileSystem.ts'
 import { Session } from './Session.ts'
@@ -116,6 +117,34 @@ interface GitVirtualFileSystemOptions {
 const repoPattern = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
 const gitlabRepoPattern = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/
 
+function sanitizePotentialCredentialedUrl(value: string): string {
+  const input = String(value)
+  if (!input) {
+    return input
+  }
+
+  try {
+    const url = new URL(input)
+    if (
+      url.protocol === 'http:' ||
+      url.protocol === 'https:' ||
+      url.protocol === 'ssh:' ||
+      url.protocol === 'git:' ||
+      url.protocol === 'file:'
+    ) {
+      url.username = ''
+      url.password = ''
+      url.search = ''
+      url.hash = ''
+      return url.toString()
+    }
+  } catch {
+    return input
+  }
+
+  return input
+}
+
 const MAX_ARCHIVE_SIZE_BYTES = 100 * 1024 * 1024 // 100 MiB
 const MAX_TAR_STREAM_BYTES = 150 * 1024 * 1024 // 150 MiB
 
@@ -155,6 +184,7 @@ type GitMetadataState = {
     string,
     {
       name: string
+      githubProfileUrl?: string
       commitCount: number
       firstCommitDate: Date
       lastCommitDate: Date
@@ -791,11 +821,13 @@ export class GitVirtualFileSystem
 
   #createBlameRangeKeyPrefix(refIdentity: string, path: string): string {
     const normalizedPath = normalizeSlashes(path)
+    const cacheApiBaseUrl = sanitizePotentialCredentialedUrl(this.#apiBaseUrl)
+    const cacheRepository = sanitizePotentialCredentialedUrl(this.#repository)
     const namespacePrefix = [
       'blame-range',
       encodeURIComponent(this.#host),
-      encodeURIComponent(this.#apiBaseUrl),
-      encodeURIComponent(this.#repository),
+      encodeURIComponent(cacheApiBaseUrl),
+      encodeURIComponent(cacheRepository),
       encodeURIComponent(refIdentity),
       encodeURIComponent(normalizedPath),
       '',
@@ -810,11 +842,13 @@ export class GitVirtualFileSystem
     endLine: number | undefined
   ): string {
     const normalizedPath = normalizeSlashes(path)
+    const cacheApiBaseUrl = sanitizePotentialCredentialedUrl(this.#apiBaseUrl)
+    const cacheRepository = sanitizePotentialCredentialedUrl(this.#repository)
     const namespace = [
       'blame-range',
       encodeURIComponent(this.#host),
-      encodeURIComponent(this.#apiBaseUrl),
-      encodeURIComponent(this.#repository),
+      encodeURIComponent(cacheApiBaseUrl),
+      encodeURIComponent(cacheRepository),
       encodeURIComponent(refIdentity),
       encodeURIComponent(normalizedPath),
       startLine === undefined ? 'all' : String(startLine),
@@ -1128,12 +1162,10 @@ export class GitVirtualFileSystem
     const gitMetadata = payload.metadata
     const commitHashes = payload.commitHashes
 
-    // Convert authors from GitMetadata format to GitAuthor format
-    // GitMetadata.authors has: { name, commitCount, firstCommitDate, lastCommitDate }
-    // GitAuthor needs: { name, email, commitCount, firstCommitDate?, lastCommitDate? }
+    // Convert authors from GitMetadata format to GitAuthor format.
     const authors: GitAuthor[] = gitMetadata.authors.map((author) => ({
       name: author.name,
-      email: '', // Not available from the host API author data
+      githubProfileUrl: author.githubProfileUrl,
       commitCount: author.commitCount,
       firstCommitDate: author.firstCommitDate,
       lastCommitDate: author.lastCommitDate,
@@ -1435,43 +1467,51 @@ export class GitVirtualFileSystem
     name: string | undefined,
     email: string | undefined,
     date: Date,
-    commitHash?: string
+    commitHash?: string,
+    githubLogin?: string
   ) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
       return
     }
 
-    const normalizedEmail =
-      typeof email === 'string' && email.trim()
-        ? email.trim().toLowerCase()
-        : undefined
+    const githubUsername = resolveGitHubUsername({
+      githubLogin,
+      email,
+    })
+    const githubProfileUrl = toGitHubProfileUrl(githubUsername)
     const normalizedName =
       typeof name === 'string' && name.trim()
         ? name.trim()
-        : normalizedEmail
-          ? normalizedEmail
+        : githubUsername
+          ? githubUsername
           : 'Unknown'
 
-    const key = normalizedEmail ?? normalizedName.toLowerCase() ?? 'unknown'
+    const key = githubUsername
+      ? `github:${githubUsername.toLowerCase()}`
+      : normalizedName.toLowerCase()
     const author = state.authors.get(key)
 
     if (!author) {
       state.authors.set(key, {
         name: normalizedName,
+        githubProfileUrl,
         commitCount: 1,
         firstCommitDate: date,
         lastCommitDate: date,
       })
     } else {
+      if (author.name === 'Unknown' && normalizedName !== 'Unknown') {
+        author.name = normalizedName
+      }
+      if (!author.githubProfileUrl && githubProfileUrl) {
+        author.githubProfileUrl = githubProfileUrl
+      }
       author.commitCount += 1
       if (date < author.firstCommitDate) {
         author.firstCommitDate = date
       }
       if (date > author.lastCommitDate) {
         author.lastCommitDate = date
-      }
-      if (!author.name && normalizedName) {
-        author.name = normalizedName
       }
     }
 
@@ -1625,21 +1665,35 @@ export class GitVirtualFileSystem
       }
       const author = commit?.author
       const email = typeof author?.email === 'string' ? author.email : undefined
+      const githubLogin =
+        typeof author?.user?.login === 'string' ? author.user.login : undefined
       const name =
         (typeof author?.name === 'string' ? author.name : undefined) ??
-        (typeof author?.user?.login === 'string'
-          ? author.user.login
-          : undefined)
+        githubLogin
       // Only count each commit once to approximate commit counts.
       if (oid && seenCommitOids.has(oid)) {
         // Update last/first dates even if we do not increment count again.
-        this.#updateGitMetadataState(state, name, email, date, oid)
+        this.#updateGitMetadataState(
+          state,
+          name,
+          email,
+          date,
+          oid,
+          githubLogin
+        )
         continue
       }
       if (oid) {
         seenCommitOids.add(oid)
       }
-      this.#updateGitMetadataState(state, name, email, date, oid)
+      this.#updateGitMetadataState(
+        state,
+        name,
+        email,
+        date,
+        oid,
+        githubLogin
+      )
     }
     return state.authors.size > 0
   }
@@ -1688,13 +1742,21 @@ export class GitVirtualFileSystem
         (typeof commitData?.committer?.name === 'string'
           ? commitData.committer.name
           : undefined)
+      const githubLoginCandidate =
+        (typeof commit?.author?.login === 'string'
+          ? commit.author.login
+          : undefined) ??
+        (typeof commit?.committer?.login === 'string'
+          ? commit.committer.login
+          : undefined)
 
       this.#updateGitMetadataState(
         state,
         nameCandidate,
         emailCandidate,
         date,
-        commitSha
+        commitSha,
+        githubLoginCandidate
       )
     }
   }
@@ -1928,9 +1990,9 @@ export class GitVirtualFileSystem
             ? commit.author_email
             : undefined
         const name =
-          (typeof commit?.author_name === 'string'
+          typeof commit?.author_name === 'string'
             ? commit.author_name
-            : undefined) ?? email
+            : undefined
 
         this.#updateGitMetadataState(state, name, email, date, commitSha)
       }

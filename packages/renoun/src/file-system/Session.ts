@@ -9,7 +9,11 @@ import type { Telemetry } from '../utils/telemetry.ts'
 import { Cache, CacheStore } from './Cache.ts'
 import { getCacheStorePersistence } from './CacheSqlite.ts'
 import type { FileSystem } from './FileSystem.ts'
-import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
+import {
+  FileSystemSnapshot,
+  type Snapshot,
+  type SnapshotContentIdOptions,
+} from './Snapshot.ts'
 import type { DirectorySnapshot } from './directory-snapshot.ts'
 import { createWorkspaceChangedPathsCacheKey } from './workspace-cache-key.ts'
 
@@ -38,6 +42,10 @@ type CacheMetricCounter =
   | 'rebuild_count'
   | 'invalidation_evictions_path'
   | 'invalidation_evictions_dep_index'
+  | 'invalidation_fallback_runs'
+  | 'invalidation_fallback_due_to_missing_dependency_metadata'
+  | 'invalidation_fallback_due_to_dependency_index_unavailable'
+  | 'invalidation_fallback_targeted_missing_dependency_nodes'
 
 interface DirectorySnapshotKeyMetrics {
   lookups: number
@@ -518,6 +526,7 @@ export class Session {
   readonly #workspaceChangedPathsTtlConfigured: boolean
   readonly #invalidatedPathTtlMs: number
   readonly #cacheDebugPersistence: boolean
+  readonly #targetedMissingDependencyFallbackEnabled: boolean
   readonly #telemetry?: Telemetry
   readonly #cacheMetricCounters: Record<CacheMetricCounter, number> = {
     memory_hit: 0,
@@ -527,6 +536,10 @@ export class Session {
     rebuild_count: 0,
     invalidation_evictions_path: 0,
     invalidation_evictions_dep_index: 0,
+    invalidation_fallback_runs: 0,
+    invalidation_fallback_due_to_missing_dependency_metadata: 0,
+    invalidation_fallback_due_to_dependency_index_unavailable: 0,
+    invalidation_fallback_targeted_missing_dependency_nodes: 0,
   }
   readonly #persistedStaleReasonCounters: Record<PersistedStaleReason, number> =
     {
@@ -593,6 +606,10 @@ export class Session {
       DEFAULT_INVALIDATED_PATH_TTL_MS
     )
     this.#cacheDebugPersistence = cache?.debugCachePersistence === true
+    this.#targetedMissingDependencyFallbackEnabled = resolveBooleanEnv(
+      process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK'],
+      true
+    )
     this.#telemetry = cache?.telemetry
 
     const persistence =
@@ -1216,11 +1233,22 @@ export class Session {
         !dependencyEviction.usedDependencyIndex ||
         dependencyEviction.hasMissingDependencyMetadata
       ) {
+        this.#recordPersistedFallbackTrigger({
+          pathCount: normalizedPaths.length,
+          dependencyIndexUnavailable: !dependencyEviction.usedDependencyIndex,
+          hasMissingDependencyMetadata:
+            dependencyEviction.hasMissingDependencyMetadata,
+          missingDependencyNodeKeyCount:
+            dependencyEviction.missingDependencyNodeKeys?.length ?? 0,
+        })
         await this.#runBroadPersistedInvalidationFallbackBatch(
           normalizedPaths,
           {
             includeNonDirectoryKeys:
               dependencyEviction.hasMissingDependencyMetadata,
+            missingDependencyNodeKeys:
+              dependencyEviction.missingDependencyNodeKeys,
+            forceFullScan: !dependencyEviction.usedDependencyIndex,
           }
         )
       }
@@ -1258,9 +1286,20 @@ export class Session {
         !dependencyEviction.usedDependencyIndex ||
         dependencyEviction.hasMissingDependencyMetadata
       ) {
+        this.#recordPersistedFallbackTrigger({
+          pathCount: 1,
+          dependencyIndexUnavailable: !dependencyEviction.usedDependencyIndex,
+          hasMissingDependencyMetadata:
+            dependencyEviction.hasMissingDependencyMetadata,
+          missingDependencyNodeKeyCount:
+            dependencyEviction.missingDependencyNodeKeys?.length ?? 0,
+        })
         await this.#runBroadPersistedInvalidationFallback(normalizedPath, {
           includeNonDirectoryKeys:
             dependencyEviction.hasMissingDependencyMetadata,
+          missingDependencyNodeKeys:
+            dependencyEviction.missingDependencyNodeKeys,
+          forceFullScan: !dependencyEviction.usedDependencyIndex,
         })
       }
     } catch (error) {
@@ -1294,11 +1333,28 @@ export class Session {
     normalizedPath: string,
     options: {
       includeNonDirectoryKeys?: boolean
+      missingDependencyNodeKeys?: ReadonlyArray<string>
+      forceFullScan?: boolean
     } = {}
   ): Promise<void> {
     const includeNonDirectoryKeys = options.includeNonDirectoryKeys === true
+    const forceFullScan = options.forceFullScan === true
+    const missingDependencyNodeKeys =
+      options.missingDependencyNodeKeys &&
+      options.missingDependencyNodeKeys.length > 0
+        ? Array.from(new Set(options.missingDependencyNodeKeys))
+        : undefined
+    const useTargetedMissingDependencyNodes =
+      this.#targetedMissingDependencyFallbackEnabled &&
+      includeNonDirectoryKeys &&
+      !forceFullScan &&
+      !!missingDependencyNodeKeys &&
+      missingDependencyNodeKeys.length > 0
+
     const candidateKeys = includeNonDirectoryKeys
-      ? await this.cache.listNodeKeysByPrefix('')
+      ? useTargetedMissingDependencyNodes
+        ? missingDependencyNodeKeys
+        : await this.cache.listNodeKeysByPrefix('')
       : await this.#listDirectorySnapshotFallbackCandidates(normalizedPath)
     if (candidateKeys.length === 0) {
       return
@@ -1335,6 +1391,12 @@ export class Session {
       fields: {
         pathHash: toTelemetryHash(normalizedPath),
         pathDepth: getTelemetryPathDepth(normalizedPath),
+        mode: useTargetedMissingDependencyNodes
+          ? 'targeted_missing_dependency_nodes'
+          : includeNonDirectoryKeys
+            ? 'full_key_scan'
+            : 'directory_prefix_scan',
+        candidateEntries: candidateKeys.length,
         invalidatedEntries: fallbackKeysToDelete.length,
       },
       telemetry: this.#telemetry,
@@ -1345,6 +1407,8 @@ export class Session {
     normalizedPaths: ReadonlyArray<string>,
     options: {
       includeNonDirectoryKeys?: boolean
+      missingDependencyNodeKeys?: ReadonlyArray<string>
+      forceFullScan?: boolean
     } = {}
   ): Promise<void> {
     if (normalizedPaths.length === 0) {
@@ -1352,13 +1416,28 @@ export class Session {
     }
 
     const includeNonDirectoryKeys = options.includeNonDirectoryKeys === true
+    const forceFullScan = options.forceFullScan === true
     const collapsedPaths = collapseInvalidationPaths(normalizedPaths)
     if (collapsedPaths.length === 0) {
       return
     }
 
+    const missingDependencyNodeKeys =
+      options.missingDependencyNodeKeys &&
+      options.missingDependencyNodeKeys.length > 0
+        ? Array.from(new Set(options.missingDependencyNodeKeys))
+        : undefined
+    const useTargetedMissingDependencyNodes =
+      this.#targetedMissingDependencyFallbackEnabled &&
+      includeNonDirectoryKeys &&
+      !forceFullScan &&
+      !!missingDependencyNodeKeys &&
+      missingDependencyNodeKeys.length > 0
+
     const candidateKeys = includeNonDirectoryKeys
-      ? await this.cache.listNodeKeysByPrefix('')
+      ? useTargetedMissingDependencyNodes
+        ? missingDependencyNodeKeys
+        : await this.cache.listNodeKeysByPrefix('')
       : await this.#listDirectorySnapshotFallbackCandidatesForMany(
           collapsedPaths
         )
@@ -1398,7 +1477,50 @@ export class Session {
       name: 'renoun.cache.invalidate_fallback_batch',
       fields: {
         pathCount: collapsedPaths.length,
+        mode: useTargetedMissingDependencyNodes
+          ? 'targeted_missing_dependency_nodes'
+          : includeNonDirectoryKeys
+            ? 'full_key_scan'
+            : 'directory_prefix_scan',
+        candidateEntries: candidateKeys.length,
         invalidatedEntries: fallbackKeysToDelete.length,
+      },
+      telemetry: this.#telemetry,
+    })
+  }
+
+  #recordPersistedFallbackTrigger(options: {
+    pathCount: number
+    dependencyIndexUnavailable: boolean
+    hasMissingDependencyMetadata: boolean
+    missingDependencyNodeKeyCount: number
+  }): void {
+    this.recordCacheMetric('invalidation_fallback_runs')
+
+    if (options.dependencyIndexUnavailable) {
+      this.recordCacheMetric(
+        'invalidation_fallback_due_to_dependency_index_unavailable'
+      )
+    }
+    if (options.hasMissingDependencyMetadata) {
+      this.recordCacheMetric(
+        'invalidation_fallback_due_to_missing_dependency_metadata'
+      )
+      if (options.missingDependencyNodeKeyCount > 0) {
+        this.recordCacheMetric(
+          'invalidation_fallback_targeted_missing_dependency_nodes',
+          options.missingDependencyNodeKeyCount
+        )
+      }
+    }
+
+    emitTelemetryEvent({
+      name: 'renoun.cache.invalidate_fallback_trigger',
+      fields: {
+        pathCount: options.pathCount,
+        dependencyIndexUnavailable: options.dependencyIndexUnavailable,
+        hasMissingDependencyMetadata: options.hasMissingDependencyMetadata,
+        missingDependencyNodeKeyCount: options.missingDependencyNodeKeyCount,
       },
       telemetry: this.#telemetry,
     })
@@ -1776,8 +1898,8 @@ class GeneratedSnapshot implements Snapshot {
     return this.#base.getRelativePathToWorkspace(path)
   }
 
-  contentId(path: string) {
-    return this.#base.contentId(path)
+  contentId(path: string, options?: SnapshotContentIdOptions) {
+    return this.#base.contentId(path, options)
   }
 
   invalidatePath(path: string) {
@@ -2081,4 +2203,23 @@ function normalizeNonNegativeInteger(
   }
   const parsed = Math.floor(value)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+function resolveBooleanEnv(
+  value: string | undefined,
+  fallback: boolean
+): boolean {
+  if (value === undefined) {
+    return fallback
+  }
+
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+    return true
+  }
+  if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+    return false
+  }
+
+  return fallback
 }

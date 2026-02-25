@@ -1,10 +1,15 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { join } from 'node:path'
 
 import { describe, expect, test } from 'vitest'
 
+import { Cache } from './Cache.ts'
+import { SqliteCacheStorePersistence } from './CacheSqlite.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
+import { FileSystemSnapshot } from './Snapshot.ts'
 import { Session } from './Session.ts'
 
 const DIRECTORY_COUNT = 5_000
@@ -15,9 +20,16 @@ const DEFAULT_MAX_MEAN_INVALIDATION_MS = 80
 const DEFAULT_MAX_P95_INVALIDATION_MS = 140
 const DEFAULT_MAX_DRIFT_RATIO = 3
 const DEFAULT_MAX_BASELINE_DRIFT_PERCENT = 40
+const DEFAULT_COMPARE_WARMUP_ITERATIONS = 1
+const DEFAULT_COMPARE_MEASURED_ITERATIONS = 5
+const DEFAULT_COMPARE_DIRECTORY_COUNT = 2_500
+const DEFAULT_COMPARE_MISSING_METADATA_COUNT = 256
+const DEFAULT_COMPARE_INVALIDATION_PATH_COUNT = INVALIDATION_PATH_COUNT
 
 const perfGuardTest =
   process.env['RENOUN_PERF_GUARD'] === 'true' ? test : test.skip
+const perfCompareTest =
+  process.env['RENOUN_PERF_COMPARE_INVALIDATION'] === 'true' ? test : test.skip
 
 function resolvePositiveIntegerEnv(key: string, fallback: number): number {
   const value = process.env[key]
@@ -55,6 +67,15 @@ interface InvalidationPerfMetrics {
   warmupIterations: number
 }
 
+interface InvalidationComparisonMode {
+  name: string
+  env: Record<string, string>
+}
+
+interface InvalidationComparisonMetrics extends InvalidationPerfMetrics {
+  mode: string
+}
+
 function readBaselineMetrics(path: string): InvalidationPerfMetrics | undefined {
   try {
     const rawValue = readFileSync(path, 'utf8')
@@ -86,6 +107,29 @@ function writeMetrics(path: string, metrics: InvalidationPerfMetrics): void {
   writeFileSync(path, JSON.stringify(metrics, null, 2), 'utf8')
 }
 
+async function withEnvOverrides<T>(
+  overrides: Record<string, string>,
+  run: () => Promise<T>
+): Promise<T> {
+  const previous = new Map<string, string | undefined>()
+  for (const [key, value] of Object.entries(overrides)) {
+    previous.set(key, process.env[key])
+    process.env[key] = value
+  }
+
+  try {
+    return await run()
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+  }
+}
+
 function computePercentDrift(currentValue: number, baselineValue: number): number {
   if (baselineValue <= 0) {
     return 0
@@ -94,26 +138,31 @@ function computePercentDrift(currentValue: number, baselineValue: number): numbe
   return ((currentValue - baselineValue) / baselineValue) * 100
 }
 
-function createFixtureFiles(): Record<string, string> {
+function createFixtureFiles(directoryCount: number = DIRECTORY_COUNT): Record<string, string> {
   const files: Record<string, string> = {}
-  for (let directoryIndex = 0; directoryIndex < DIRECTORY_COUNT; directoryIndex += 1) {
+  for (let directoryIndex = 0; directoryIndex < directoryCount; directoryIndex += 1) {
     files[`src/feature-${directoryIndex}/index.ts`] = `export const value = ${directoryIndex}`
   }
 
   return files
 }
 
-function createInvalidationPaths(): string[] {
-  return Array.from({ length: INVALIDATION_PATH_COUNT }, (_value, index) => {
+function createInvalidationPaths(
+  invalidationPathCount: number = INVALIDATION_PATH_COUNT
+): string[] {
+  return Array.from({ length: invalidationPathCount }, (_value, index) => {
     return `src/feature-${index}/nested/file.ts`
   })
 }
 
-function createSessionWithDirectorySnapshots(files: Record<string, string>): Session {
+function createSessionWithDirectorySnapshots(
+  files: Record<string, string>,
+  directoryCount: number = DIRECTORY_COUNT
+): Session {
   const fileSystem = new InMemoryFileSystem(files)
   const session = Session.for(fileSystem)
 
-  for (let directoryIndex = 0; directoryIndex < DIRECTORY_COUNT; directoryIndex += 1) {
+  for (let directoryIndex = 0; directoryIndex < directoryCount; directoryIndex += 1) {
     const snapshotKey = session.createDirectorySnapshotKey({
       directoryPath: `src/feature-${directoryIndex}`,
       mask: 1,
@@ -156,6 +205,125 @@ function computePercentile(samples: readonly number[], percentile: number): numb
 
   const weight = position - lowerIndex
   return lowerValue + (upperValue - lowerValue) * weight
+}
+
+async function createPersistedSession(options: {
+  directoryCount: number
+  missingMetadataCount: number
+  databasePath: string
+  snapshotId: string
+}): Promise<Session> {
+  const fixtureFiles = createFixtureFiles(options.directoryCount)
+  const fileSystem = new InMemoryFileSystem(fixtureFiles)
+  const snapshot = new FileSystemSnapshot(fileSystem, options.snapshotId)
+  const session = Session.for(
+    fileSystem,
+    snapshot,
+    new Cache({
+      persistence: new SqliteCacheStorePersistence({
+        dbPath: options.databasePath,
+      }),
+    })
+  )
+
+  for (
+    let directoryIndex = 0;
+    directoryIndex < options.directoryCount;
+    directoryIndex += 1
+  ) {
+    const depPath = `src/feature-${directoryIndex}/index.ts`
+    const depVersion = await snapshot.contentId(depPath)
+
+    await session.cache.put(
+      `analysis:persisted:${directoryIndex}`,
+      {
+        directoryIndex,
+      },
+      {
+        persist: true,
+        deps: [
+          {
+            depKey: `file:${depPath}`,
+            depVersion,
+          },
+        ],
+      }
+    )
+  }
+
+  for (
+    let missingIndex = 0;
+    missingIndex < options.missingMetadataCount;
+    missingIndex += 1
+  ) {
+    await session.cache.put(
+      `analysis:missing:${missingIndex}`,
+      {
+        missingIndex,
+      },
+      {
+        persist: true,
+        deps: [],
+      }
+    )
+  }
+
+  return session
+}
+
+async function measurePersistedInvalidationMode(options: {
+  mode: InvalidationComparisonMode
+  warmupIterations: number
+  measuredIterations: number
+  directoryCount: number
+  missingMetadataCount: number
+  invalidationPaths: string[]
+}): Promise<InvalidationComparisonMetrics> {
+  const durations: number[] = []
+  const totalIterations = options.warmupIterations + options.measuredIterations
+
+  for (let iteration = 0; iteration < totalIterations; iteration += 1) {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-invalidation-perf-compare-')
+    )
+    const databasePath = join(tmpDirectory, 'fs-cache.sqlite')
+
+    try {
+      const elapsedMs = await withEnvOverrides(options.mode.env, async () => {
+        const session = await createPersistedSession({
+          directoryCount: options.directoryCount,
+          missingMetadataCount: options.missingMetadataCount,
+          databasePath,
+          snapshotId: `perf-compare:${options.mode.name}:${iteration}`,
+        })
+
+        const startedAt = performance.now()
+        session.invalidatePaths(options.invalidationPaths)
+        await session.waitForPendingInvalidations()
+        return performance.now() - startedAt
+      })
+
+      if (iteration >= options.warmupIterations) {
+        durations.push(elapsedMs)
+      }
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }
+
+  const meanInvalidationMs = computeMean(durations)
+  const p95InvalidationMs = computePercentile(durations, 95)
+  const p95ToMeanDriftRatio =
+    p95InvalidationMs / Math.max(meanInvalidationMs, Number.EPSILON)
+
+  return {
+    mode: options.mode.name,
+    meanInvalidationMs,
+    p95InvalidationMs,
+    p95ToMeanDriftRatio,
+    measuredIterations: options.measuredIterations,
+    warmupIterations: options.warmupIterations,
+  }
 }
 
 describe('cache invalidation perf guard', () => {
@@ -246,5 +414,166 @@ describe('cache invalidation perf guard', () => {
       expect(p95ToMeanDriftRatio).toBeLessThan(maxDriftRatio)
     },
     120_000
+  )
+})
+
+describe('cache invalidation optimization comparison', () => {
+  perfCompareTest(
+    'reports persisted invalidation performance by optimization mode',
+    async () => {
+      const warmupIterations = resolvePositiveIntegerEnv(
+        'RENOUN_PERF_COMPARE_WARMUP_ITERATIONS',
+        DEFAULT_COMPARE_WARMUP_ITERATIONS
+      )
+      const measuredIterations = resolvePositiveIntegerEnv(
+        'RENOUN_PERF_COMPARE_ITERATIONS',
+        DEFAULT_COMPARE_MEASURED_ITERATIONS
+      )
+      const directoryCount = resolvePositiveIntegerEnv(
+        'RENOUN_PERF_COMPARE_DIRECTORY_COUNT',
+        DEFAULT_COMPARE_DIRECTORY_COUNT
+      )
+      const missingMetadataCount = resolvePositiveIntegerEnv(
+        'RENOUN_PERF_COMPARE_MISSING_METADATA_COUNT',
+        DEFAULT_COMPARE_MISSING_METADATA_COUNT
+      )
+      const compareInvalidationPathCount = resolvePositiveIntegerEnv(
+        'RENOUN_PERF_COMPARE_INVALIDATION_PATH_COUNT',
+        DEFAULT_COMPARE_INVALIDATION_PATH_COUNT
+      )
+
+      const invalidationPaths = createInvalidationPaths(
+        Math.min(compareInvalidationPathCount, directoryCount)
+      )
+
+      const comparisonModes: InvalidationComparisonMode[] = [
+        {
+          name: 'baseline',
+          env: {
+            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'false',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '5000',
+            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
+          },
+        },
+        {
+          name: 'prepared_statement_lru',
+          env: {
+            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'false',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '5000',
+            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '128',
+          },
+        },
+        {
+          name: 'temp_table_matcher',
+          env: {
+            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'true',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '128',
+            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
+          },
+        },
+        {
+          name: 'temp_table_matcher_aggressive_threshold_1',
+          env: {
+            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'true',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '1',
+            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
+          },
+        },
+        {
+          name: 'targeted_missing_metadata',
+          env: {
+            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'true',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'false',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '5000',
+            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
+          },
+        },
+        {
+          name: 'all_optimizations',
+          env: {
+            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'true',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'true',
+            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '128',
+          },
+        },
+        {
+          name: 'all_optimizations_aggressive_threshold_1',
+          env: {
+            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'true',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE: 'true',
+            RENOUN_SQLITE_DEP_MATCH_TEMP_TABLE_THRESHOLD: '1',
+            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '128',
+          },
+        },
+      ]
+
+      const modeMetrics: InvalidationComparisonMetrics[] = []
+      for (const mode of comparisonModes) {
+        modeMetrics.push(
+          await measurePersistedInvalidationMode({
+            mode,
+            warmupIterations,
+            measuredIterations,
+            directoryCount,
+            missingMetadataCount,
+            invalidationPaths,
+          })
+        )
+      }
+
+      const baselineMetrics = modeMetrics.find(
+        (metrics) => metrics.mode === 'baseline'
+      )
+      if (!baselineMetrics) {
+        throw new Error('missing baseline metrics')
+      }
+
+      const comparisonSummary = modeMetrics.map((metrics) => {
+        const meanImprovementPercent =
+          baselineMetrics.meanInvalidationMs <= 0
+            ? 0
+            : ((baselineMetrics.meanInvalidationMs - metrics.meanInvalidationMs) /
+                baselineMetrics.meanInvalidationMs) *
+              100
+        const p95ImprovementPercent =
+          baselineMetrics.p95InvalidationMs <= 0
+            ? 0
+            : ((baselineMetrics.p95InvalidationMs - metrics.p95InvalidationMs) /
+                baselineMetrics.p95InvalidationMs) *
+              100
+
+        return {
+          ...metrics,
+          meanImprovementPercent,
+          p95ImprovementPercent,
+        }
+      })
+
+      const metricsOutputPath = process.env['RENOUN_PERF_COMPARE_METRICS_PATH']
+      if (metricsOutputPath) {
+        mkdirSync(dirname(metricsOutputPath), { recursive: true })
+        writeFileSync(
+          metricsOutputPath,
+          JSON.stringify({ modes: comparisonSummary }, null, 2),
+          'utf8'
+        )
+      }
+
+      // eslint-disable-next-line no-console
+      console.log(
+        '[renoun-perf] cache invalidation optimization comparison',
+        JSON.stringify(comparisonSummary, null, 2)
+      )
+
+      expect(modeMetrics.length).toBe(comparisonModes.length)
+      expect(modeMetrics.every((metrics) => metrics.meanInvalidationMs > 0)).toBe(
+        true
+      )
+    },
+    240_000
   )
 })
