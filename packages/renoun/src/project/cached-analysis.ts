@@ -211,7 +211,38 @@ function bumpCompilerOptionsVersionEpochForConfigPath(path: string): void {
 }
 
 export function invalidateRuntimeAnalysisCachePath(path: string): void {
-  bumpCompilerOptionsVersionEpochForConfigPath(path)
+  invalidateRuntimeAnalysisCachePaths([path])
+}
+
+export function invalidateRuntimeAnalysisCachePaths(
+  paths: Iterable<string>
+): void {
+  const pathByNormalizedPath = new Map<string, string>()
+  for (const path of paths) {
+    if (typeof path !== 'string' || path.length === 0) {
+      continue
+    }
+
+    const normalizedPath = normalizePathKey(path)
+    if (!pathByNormalizedPath.has(normalizedPath)) {
+      pathByNormalizedPath.set(normalizedPath, path)
+    }
+  }
+
+  const normalizedPaths = collapseRuntimeAnalysisInvalidationPaths(
+    pathByNormalizedPath.keys()
+  )
+  if (normalizedPaths.length === 0) {
+    return
+  }
+
+  const pathsToInvalidate = normalizedPaths.map((normalizedPath) => {
+    return pathByNormalizedPath.get(normalizedPath) ?? normalizedPath
+  })
+
+  for (const path of pathsToInvalidate) {
+    bumpCompilerOptionsVersionEpochForConfigPath(path)
+  }
 
   enqueueRuntimeAnalysisInvalidation(async () => {
     const runtimeSession = await getRuntimeAnalysisSessionUnchecked()
@@ -219,7 +250,8 @@ export function invalidateRuntimeAnalysisCachePath(path: string): void {
       return
     }
 
-    runtimeSession.session.invalidatePath(path)
+    runtimeSession.session.invalidatePaths(pathsToInvalidate)
+    await runtimeSession.session.waitForPendingInvalidations()
   })
 }
 
@@ -232,8 +264,49 @@ export function invalidateRuntimeAnalysisCacheAll(): void {
       return
     }
 
-    runtimeSession.session.invalidatePath('.')
+    runtimeSession.session.invalidatePaths(['.'])
+    await runtimeSession.session.waitForPendingInvalidations()
   })
+}
+
+function collapseRuntimeAnalysisInvalidationPaths(
+  paths: Iterable<string>
+): string[] {
+  const normalizedPaths = Array.from(
+    new Set(
+      Array.from(paths).filter((path) => {
+        return typeof path === 'string' && path.length > 0
+      })
+    )
+  )
+  if (normalizedPaths.length === 0) {
+    return []
+  }
+
+  if (normalizedPaths.includes('.')) {
+    return ['.']
+  }
+
+  normalizedPaths.sort((firstPath, secondPath) => {
+    if (firstPath.length !== secondPath.length) {
+      return firstPath.length - secondPath.length
+    }
+
+    return firstPath.localeCompare(secondPath)
+  })
+
+  const collapsedPaths: string[] = []
+  for (const path of normalizedPaths) {
+    const isRedundant = collapsedPaths.some((existingPath) => {
+      return path === existingPath || path.startsWith(`${existingPath}/`)
+    })
+
+    if (!isRedundant) {
+      collapsedPaths.push(path)
+    }
+  }
+
+  return collapsedPaths
 }
 
 function toSourceTextMetadataValueSignature(value: string): string {

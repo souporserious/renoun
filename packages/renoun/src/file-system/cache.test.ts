@@ -1499,6 +1499,32 @@ updated content`
     expect(readFileBinarySpy).toHaveBeenCalledTimes(2)
   })
 
+  test('coalesces overlapping paths in snapshot.invalidatePaths', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'snapshot-bulk-invalidation'
+    )
+    const invalidatedPaths: string[] = []
+    const disposeListener = snapshot.onInvalidate((path) => {
+      invalidatedPaths.push(normalizePathKey(path))
+    })
+
+    const firstContentId = await snapshot.contentId('/src/index.ts')
+    await fileSystem.writeFile('src/index.ts', 'export const value = 2')
+
+    snapshot.invalidatePaths?.(['/src/index.ts', '/src', '/src/index.ts'])
+
+    const secondContentId = await snapshot.contentId('/src/index.ts')
+
+    disposeListener()
+
+    expect(invalidatedPaths).toEqual(['src'])
+    expect(secondContentId).not.toBe(firstContentId)
+  })
+
   test('clears all snapshot content IDs when resetting nested-cwd sessions', async () => {
     const tempDirectory = createTmpRenounCacheDirectory(
       'renoun-cache-session-reset-'
@@ -2101,6 +2127,247 @@ updated content`
     expect(calls).toBe(2)
   })
 
+  test('Session.invalidatePaths coalesces overlapping paths', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/index.ts': 'export const value = 1',
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'graph-batch-path-invalidation')
+    )
+    const nodeKey = 'test:graph-batch-path-invalidation'
+    let calls = 0
+
+    const firstValue = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: false },
+      async (ctx) => {
+        calls += 1
+        await ctx.recordFileDep('/src/index.ts')
+        return `value-${calls}`
+      }
+    )
+    const secondValue = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: false },
+      () => 'should-not-run'
+    )
+
+    expect(firstValue).toBe('value-1')
+    expect(secondValue).toBe('value-1')
+    expect(calls).toBe(1)
+
+    session.invalidatePaths(['/src/index.ts', '/src', '/src/index.ts'])
+
+    const thirdValue = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: false },
+      async (ctx) => {
+        calls += 1
+        await ctx.recordFileDep('/src/index.ts')
+        return `value-${calls}`
+      }
+    )
+
+    expect(thirdValue).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
+  test('Session.invalidatePaths preserves correctness when prefix index is capped', () => {
+    const previousPrefixIndexCap =
+      process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS']
+    process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS'] = '1'
+
+    try {
+      const fileSystem = new InMemoryFileSystem({})
+      const session = Session.for(
+        fileSystem,
+        new FileSystemSnapshot(fileSystem, 'session-prefix-index-cap')
+      )
+
+      const componentsKey = session.createDirectorySnapshotKey({
+        directoryPath: '/src/components',
+        mask: 1,
+        filterSignature: 'all',
+        sortSignature: 'none',
+      })
+      const buttonKey = session.createDirectorySnapshotKey({
+        directoryPath: '/src/components/button',
+        mask: 1,
+        filterSignature: 'all',
+        sortSignature: 'none',
+      })
+      const otherKey = session.createDirectorySnapshotKey({
+        directoryPath: '/src/other',
+        mask: 1,
+        filterSignature: 'all',
+        sortSignature: 'none',
+      })
+
+      session.directorySnapshots.set(componentsKey, { path: 'src/components' } as any)
+      session.directorySnapshots.set(buttonKey, { path: 'src/components/button' } as any)
+      session.directorySnapshots.set(otherKey, { path: 'src/other' } as any)
+
+      session.invalidatePaths(['/src/components/button/file.ts'])
+
+      expect(session.directorySnapshots.has(componentsKey)).toBe(false)
+      expect(session.directorySnapshots.has(buttonKey)).toBe(false)
+      expect(session.directorySnapshots.has(otherKey)).toBe(true)
+    } finally {
+      if (previousPrefixIndexCap === undefined) {
+        delete process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS']
+      } else {
+        process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS'] =
+          previousPrefixIndexCap
+      }
+    }
+  })
+
+  test('Session.invalidatePaths uses snapshot bulk invalidation when available', () => {
+    const fileSystem = new InMemoryFileSystem({})
+    const invalidateListeners = new Set<(path: string) => void>()
+    const invalidatePathSpy = vi.fn()
+    const invalidatePathsSpy = vi.fn((paths: Iterable<string>) => {
+      for (const path of paths) {
+        for (const listener of invalidateListeners) {
+          listener(path)
+        }
+      }
+    })
+    const snapshot = {
+      id: 'session-bulk-snapshot',
+      async readDirectory() {
+        return []
+      },
+      async readFile() {
+        return ''
+      },
+      async readFileBinary() {
+        return new Uint8Array(0)
+      },
+      readFileStream() {
+        throw new Error('readFileStream is not required for this test')
+      },
+      async fileExists() {
+        return false
+      },
+      async getFileLastModifiedMs() {
+        return undefined
+      },
+      async getFileByteLength() {
+        return undefined
+      },
+      isFilePathGitIgnored() {
+        return false
+      },
+      async isFilePathExcludedFromTsConfigAsync() {
+        return false
+      },
+      getRelativePathToWorkspace(path: string) {
+        return normalizePathKey(path)
+      },
+      async contentId(path: string) {
+        return `content:${normalizePathKey(path)}`
+      },
+      invalidatePath(path: string) {
+        invalidatePathSpy(path)
+        for (const listener of invalidateListeners) {
+          listener(path)
+        }
+      },
+      invalidatePaths(paths: Iterable<string>) {
+        invalidatePathsSpy(paths)
+      },
+      onInvalidate(listener: (path: string) => void) {
+        invalidateListeners.add(listener)
+        return () => {
+          invalidateListeners.delete(listener)
+        }
+      },
+    } satisfies Snapshot
+
+    const session = Session.for(fileSystem, snapshot)
+
+    session.invalidatePaths(['/src/index.ts', '/src', '/src/index.ts'])
+
+    expect(invalidatePathsSpy).toHaveBeenCalledTimes(1)
+    expect(invalidatePathsSpy).toHaveBeenCalledWith(['/src'])
+    expect(invalidatePathSpy).not.toHaveBeenCalled()
+  })
+
+  test('Session.invalidatePaths coalesces persisted invalidation queue work across calls', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/index.ts': 'export const value = 1',
+    })
+    const cache = new Cache({
+      persistence: {
+        async load() {
+          return undefined
+        },
+        async save() {},
+        async delete() {},
+      },
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'session-persisted-batch'),
+      cache
+    )
+    const deleteByDependencyPathsSpy = vi
+      .spyOn(session.cache, 'deleteByDependencyPaths')
+      .mockResolvedValue({
+        deletedNodeKeys: [],
+        usedDependencyIndex: true,
+        hasMissingDependencyMetadata: false,
+      })
+
+    session.invalidatePaths(['/src/index.ts'])
+    session.invalidatePaths(['/src'])
+    await session.waitForPendingInvalidations()
+
+    expect(deleteByDependencyPathsSpy).toHaveBeenCalledTimes(1)
+    expect(deleteByDependencyPathsSpy).toHaveBeenCalledWith(['src'])
+  })
+
+  test('Session.invalidatePaths batches broad persisted fallback scans across multiple paths', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/first.ts': 'export const first = 1',
+      'src/second.ts': 'export const second = 1',
+    })
+    const cache = new Cache({
+      persistence: {
+        async load() {
+          return undefined
+        },
+        async save() {},
+        async delete() {},
+        async listNodeKeysByPrefix() {
+          return []
+        },
+      },
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'session-persisted-fallback-batch'),
+      cache
+    )
+    const deleteByDependencyPathsSpy = vi
+      .spyOn(session.cache, 'deleteByDependencyPaths')
+      .mockResolvedValue({
+        deletedNodeKeys: [],
+        usedDependencyIndex: true,
+        hasMissingDependencyMetadata: true,
+      })
+    const listNodeKeysByPrefixSpy = vi.spyOn(session.cache, 'listNodeKeysByPrefix')
+
+    session.invalidatePaths(['/src/first.ts', '/src/second.ts'])
+    await session.waitForPendingInvalidations()
+
+    expect(deleteByDependencyPathsSpy).toHaveBeenCalledTimes(1)
+    expect(listNodeKeysByPrefixSpy).toHaveBeenCalledTimes(1)
+    expect(listNodeKeysByPrefixSpy).toHaveBeenCalledWith('')
+  })
+
   test('recomputes when provided const dependency versions change', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
@@ -2429,6 +2696,104 @@ describe('session cache persistence policy', () => {
       expect(Session.for(rootlessFileSystem).usesPersistentCache).toBe(true)
     } finally {
       Session.reset(rootlessFileSystem)
+    }
+  })
+
+  test('uses development workspace token defaults when persistent cache is enabled', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    const fileSystem = new TokenAwareNodeFileSystem(
+      getRootDirectory(),
+      join(getRootDirectory(), 'tsconfig.json'),
+      'stable-token'
+    )
+    const tokenLookup = vi
+      .spyOn(fileSystem, 'getWorkspaceChangeToken')
+      .mockImplementation(async (rootPath) => {
+        return `token:${normalizePathKey(rootPath)}`
+      })
+    const changedPathsLookup = vi
+      .spyOn(fileSystem, 'getWorkspaceChangedPathsSinceToken')
+      .mockImplementation(async () => {
+        return [normalizePathKey('docs/page.ts')]
+      })
+
+    try {
+      const session = Session.for(fileSystem)
+      expect(session.usesPersistentCache).toBe(true)
+
+      const firstToken = await session.getWorkspaceChangeToken('docs')
+      const secondToken = await session.getWorkspaceChangeToken('docs')
+      expect(firstToken).toBe('token:docs')
+      expect(secondToken).toBe('token:docs')
+      expect(tokenLookup).toHaveBeenCalledTimes(1)
+
+      const firstChangedPaths = await session.getWorkspaceChangedPathsSinceToken(
+        'docs',
+        'prev'
+      )
+      const secondChangedPaths =
+        await session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
+      expect(Array.from(firstChangedPaths ?? [])).toEqual([
+        normalizePathKey('docs/page.ts'),
+      ])
+      expect(Array.from(secondChangedPaths ?? [])).toEqual([
+        normalizePathKey('docs/page.ts'),
+      ])
+      expect(changedPathsLookup).toHaveBeenCalledTimes(1)
+    } finally {
+      Session.reset(fileSystem)
+      tokenLookup.mockRestore()
+      changedPathsLookup.mockRestore()
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+  })
+
+  test('keeps persistent workspace token defaults uncached in production', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    const fileSystem = new TokenAwareNodeFileSystem(
+      getRootDirectory(),
+      join(getRootDirectory(), 'tsconfig.json'),
+      'stable-token'
+    )
+    const tokenLookup = vi
+      .spyOn(fileSystem, 'getWorkspaceChangeToken')
+      .mockImplementation(async (rootPath) => {
+        return `token:${normalizePathKey(rootPath)}`
+      })
+    const changedPathsLookup = vi
+      .spyOn(fileSystem, 'getWorkspaceChangedPathsSinceToken')
+      .mockImplementation(async () => {
+        return [normalizePathKey('docs/page.ts')]
+      })
+
+    try {
+      const session = Session.for(fileSystem)
+      expect(session.usesPersistentCache).toBe(true)
+
+      await session.getWorkspaceChangeToken('docs')
+      await session.getWorkspaceChangeToken('docs')
+      expect(tokenLookup).toHaveBeenCalledTimes(2)
+
+      await session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
+      await session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
+      expect(changedPathsLookup).toHaveBeenCalledTimes(2)
+    } finally {
+      Session.reset(fileSystem)
+      tokenLookup.mockRestore()
+      changedPathsLookup.mockRestore()
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
     }
   })
 
@@ -7417,6 +7782,117 @@ export type Metadata = Value`,
         await store.get<{ value: string }>(affectedNodeKey)
       ).toBeUndefined()
       expect(await store.get<{ value: string }>(unaffectedNodeKey)).toEqual({
+        value: 'unaffected',
+      })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('creates a composite dependency index for dependency-path lookups', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-dep-index-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+
+      await persistence.load('test:sqlite-dep-index:init')
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const db = new DatabaseSync(dbPath)
+      try {
+        const indexRows = db
+          .prepare(`PRAGMA index_list('cache_deps')`)
+          .all() as Array<{ name?: string }>
+        const indexNames = indexRows
+          .map((row) => row.name)
+          .filter((name): name is string => typeof name === 'string')
+        expect(indexNames).toContain('cache_deps_dep_key_node_key_idx')
+
+        const indexInfoRows = db
+          .prepare(`PRAGMA index_info('cache_deps_dep_key_node_key_idx')`)
+          .all() as Array<{ name?: string }>
+        const indexColumns = indexInfoRows
+          .map((row) => row.name)
+          .filter((name): name is string => typeof name === 'string')
+        expect(indexColumns).toEqual(['dep_key', 'node_key'])
+      } finally {
+        db.close()
+      }
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('evicts persisted entries by batched dependency paths in a single call', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-path-eviction-batch-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'src/components/button.ts': 'export const button = 1',
+        'src/other/value.ts': 'export const value = 1',
+      }),
+      'sqlite-path-eviction-batch'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+    const affectedNodeKey = 'analysis:components:batch'
+    const unaffectedNodeKey = 'analysis:other:batch'
+
+    try {
+      const affectedDepVersion = await snapshot.contentId(
+        'src/components/button.ts'
+      )
+      const unaffectedDepVersion =
+        await snapshot.contentId('src/other/value.ts')
+
+      await store.put(
+        affectedNodeKey,
+        { value: 'affected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/components/button.ts',
+              depVersion: affectedDepVersion,
+            },
+          ],
+        }
+      )
+      await store.put(
+        unaffectedNodeKey,
+        { value: 'unaffected' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/other/value.ts',
+              depVersion: unaffectedDepVersion,
+            },
+          ],
+        }
+      )
+
+      const eviction = await store.deleteByDependencyPaths([
+        'src/components',
+        'src/components/button.ts',
+      ])
+      expect(eviction.deletedNodeKeys).toContain(affectedNodeKey)
+      expect(eviction.deletedNodeKeys).not.toContain(unaffectedNodeKey)
+
+      expect(await store.get(affectedNodeKey)).toBeUndefined()
+      expect(await store.get(unaffectedNodeKey)).toEqual({
         value: 'unaffected',
       })
     } finally {

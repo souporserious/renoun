@@ -64,6 +64,7 @@ export interface Snapshot {
   getRelativePathToWorkspace(path: string): string
   contentId(path: string): Promise<string>
   invalidatePath(path: string): void
+  invalidatePaths?(paths: Iterable<string>): void
   invalidateAll?(): void
   onInvalidate(listener: (path: string) => void): () => void
 }
@@ -194,24 +195,52 @@ export class FileSystemSnapshot implements Snapshot {
   }
 
   invalidatePath(path: string): void {
-    const normalizedPath = this.#normalizeSnapshotPath(path)
-    if (normalizedPath === '.') {
-      this.#contentIds.clear()
-      this.#emitInvalidate(path)
-      return
-    }
+    this.invalidatePaths([path])
+  }
 
-    for (const cachedPath of this.#contentIds.keys()) {
-      if (
-        cachedPath === normalizedPath ||
-        cachedPath.startsWith(`${normalizedPath}/`) ||
-        normalizedPath.startsWith(`${cachedPath}/`)
-      ) {
-        this.#contentIds.delete(cachedPath)
+  invalidatePaths(paths: Iterable<string>): void {
+    const snapshotPathByNormalizedPath = new Map<string, string>()
+
+    for (const path of paths) {
+      if (typeof path !== 'string' || path.length === 0) {
+        continue
+      }
+
+      const normalizedPath = this.#normalizeSnapshotPath(path)
+      if (!snapshotPathByNormalizedPath.has(normalizedPath)) {
+        snapshotPathByNormalizedPath.set(normalizedPath, path)
       }
     }
 
-    this.#emitInvalidate(path)
+    const normalizedPaths = collapseSnapshotInvalidationPaths(
+      snapshotPathByNormalizedPath.keys()
+    )
+    if (normalizedPaths.length === 0) {
+      return
+    }
+
+    if (normalizedPaths.includes('.')) {
+      this.#contentIds.clear()
+      this.#emitInvalidate(snapshotPathByNormalizedPath.get('.') ?? '.')
+      return
+    }
+
+    for (const cachedPath of Array.from(this.#contentIds.keys())) {
+      for (const normalizedPath of normalizedPaths) {
+        if (!pathsIntersect(cachedPath, normalizedPath)) {
+          continue
+        }
+
+        this.#contentIds.delete(cachedPath)
+        break
+      }
+    }
+
+    for (const normalizedPath of normalizedPaths) {
+      this.#emitInvalidate(
+        snapshotPathByNormalizedPath.get(normalizedPath) ?? normalizedPath
+      )
+    }
   }
 
   invalidateAll(): void {
@@ -454,4 +483,55 @@ function safeGetCacheIdentity(fileSystem: FileSystem): unknown {
 function safeGetStringField(value: object, key: string): string | undefined {
   const candidate = (value as any)[key]
   return typeof candidate === 'string' ? candidate : undefined
+}
+
+function pathsIntersect(firstPath: string, secondPath: string): boolean {
+  if (firstPath === '.' || secondPath === '.') {
+    return true
+  }
+
+  return (
+    firstPath === secondPath ||
+    firstPath.startsWith(`${secondPath}/`) ||
+    secondPath.startsWith(`${firstPath}/`)
+  )
+}
+
+function collapseSnapshotInvalidationPaths(paths: Iterable<string>): string[] {
+  const deduped = Array.from(
+    new Set(
+      Array.from(paths).filter((path) => {
+        return typeof path === 'string' && path.length > 0
+      })
+    )
+  ).map((path) => normalizePathKey(path))
+
+  if (deduped.length === 0) {
+    return []
+  }
+
+  if (deduped.includes('.')) {
+    return ['.']
+  }
+
+  deduped.sort((firstPath, secondPath) => {
+    if (firstPath.length !== secondPath.length) {
+      return firstPath.length - secondPath.length
+    }
+
+    return firstPath.localeCompare(secondPath)
+  })
+
+  const collapsedPaths: string[] = []
+  for (const path of deduped) {
+    const redundant = collapsedPaths.some((existingPath) => {
+      return path === existingPath || path.startsWith(`${existingPath}/`)
+    })
+
+    if (!redundant) {
+      collapsedPaths.push(path)
+    }
+  }
+
+  return collapsedPaths
 }

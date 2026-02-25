@@ -1909,12 +1909,14 @@ export class GitFileSystem
 
   #invalidateSessionPaths(paths: readonly string[]): void {
     const session = Session.for(this, undefined, this.#cache)
+    const pathsToInvalidate = new Set<string>()
+
     for (const path of paths) {
       const normalizedPath = this.#normalizeRepoPath(path)
       if (!normalizedPath) {
         continue
       }
-      session.invalidatePath(normalizedPath)
+      pathsToInvalidate.add(normalizedPath)
 
       const parentDirectory = dirname(normalizedPath)
       if (
@@ -1922,8 +1924,12 @@ export class GitFileSystem
         parentDirectory !== '.' &&
         parentDirectory !== '/'
       ) {
-        session.invalidatePath(parentDirectory)
+        pathsToInvalidate.add(parentDirectory)
       }
+    }
+
+    if (pathsToInvalidate.size > 0) {
+      session.invalidatePaths(pathsToInvalidate)
     }
   }
 

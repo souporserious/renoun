@@ -97,7 +97,9 @@ export class ReactiveDependencyGraph {
     }
 
     runUntracked(() => {
-      dirtySignal(false)
+      if (dirtySignal()) {
+        dirtySignal(false)
+      }
     })
     this.#dirtyNodeKeys.delete(nodeKey)
 
@@ -177,10 +179,13 @@ export class ReactiveDependencyGraph {
     for (const nodeKey of nodeKeys) {
       const node = this.#nodes.get(nodeKey)
       if (node) {
-        runUntracked(() => {
-          node.dirty(true)
-        })
-        this.#dirtyNodeKeys.add(nodeKey)
+        const wasDirty = runUntracked(() => node.dirty())
+        if (!wasDirty) {
+          runUntracked(() => {
+            node.dirty(true)
+          })
+          this.#dirtyNodeKeys.add(nodeKey)
+        }
       }
 
       nodeDependencyKeysToTouch.add(this.#toNodeDependencyKey(nodeKey))
@@ -230,9 +235,31 @@ export class ReactiveDependencyGraph {
   }
 
   touchPathDependencies(pathKey: string): string[] {
-    const normalizedPath = normalizePathKey(pathKey)
-    const dependencyKeysToTouch =
-      this.#collectMatchingPathDependencyKeys(normalizedPath)
+    return this.touchPathDependenciesMany([pathKey])
+  }
+
+  touchPathDependenciesMany(pathKeys: Iterable<string>): string[] {
+    const dependencyKeysToTouch = new Set<string>()
+    const normalizedPathKeys = new Set<string>()
+
+    for (const pathKey of pathKeys) {
+      const normalizedPath = normalizePathKey(pathKey)
+      if (normalizedPathKeys.has(normalizedPath)) {
+        continue
+      }
+
+      normalizedPathKeys.add(normalizedPath)
+      const pathDependencyKeys =
+        this.#collectMatchingPathDependencyKeys(normalizedPath)
+      for (const dependencyKey of pathDependencyKeys) {
+        dependencyKeysToTouch.add(dependencyKey)
+      }
+    }
+
+    if (dependencyKeysToTouch.size === 0) {
+      return []
+    }
+
     const affectedNodeKeys =
       this.#collectDirectNodeKeysForDependencyKeys(dependencyKeysToTouch)
     const dirtyNodeKeysBefore = new Set(this.#dirtyNodeKeys)

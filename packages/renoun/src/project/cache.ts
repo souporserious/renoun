@@ -23,6 +23,10 @@ interface ProjectCacheRuntime {
   snapshot: ProjectCacheSnapshot
   store: CacheStore
   lruNodeKeys: Map<string, true>
+  nodeKeysByFilePath: Map<string, Set<string>>
+  nodeKeysByPathPrefix: Map<string, Set<string>>
+  nodeKeysByCacheName: Map<string, Set<string>>
+  nodeIdentityByNodeKey: Map<string, { filePath: string; cacheName: string }>
   maxEntries: number
 }
 
@@ -104,38 +108,72 @@ class ProjectCacheSnapshot implements Snapshot {
   }
 
   invalidatePath(path: string): void {
-    const normalizedPath = normalizeProjectPath(path)
+    this.invalidatePaths([path])
+  }
 
-    if (normalizedPath === '.') {
-      this.#revisionByPath.clear()
-      this.#knownContentPaths.clear()
-      this.#emitInvalidate(path)
-      return
-    }
+  invalidatePaths(paths: Iterable<string>): void {
+    const inputPathByNormalizedPath = new Map<string, string>()
+    for (const path of paths) {
+      if (typeof path !== 'string' || path.length === 0) {
+        continue
+      }
 
-    this.#bumpPathRevision(normalizedPath)
-
-    for (const knownContentPath of this.#knownContentPaths) {
-      if (
-        knownContentPath === normalizedPath ||
-        knownContentPath.startsWith(`${normalizedPath}/`)
-      ) {
-        this.#bumpPathRevision(knownContentPath)
+      const normalizedPath = normalizeProjectPath(path)
+      if (!inputPathByNormalizedPath.has(normalizedPath)) {
+        inputPathByNormalizedPath.set(normalizedPath, path)
       }
     }
 
-    let currentDirectory = dirname(normalizedPath)
-    while (
-      currentDirectory &&
-      currentDirectory !== '.' &&
-      currentDirectory !== '/' &&
-      currentDirectory !== normalizedPath
-    ) {
-      this.#bumpPathRevision(currentDirectory)
-      currentDirectory = dirname(currentDirectory)
+    const normalizedPaths = collapseProjectInvalidationPaths(
+      inputPathByNormalizedPath.keys()
+    )
+    if (normalizedPaths.length === 0) {
+      return
     }
 
-    this.#emitInvalidate(path)
+    if (normalizedPaths.includes('.')) {
+      this.#revisionByPath.clear()
+      this.#knownContentPaths.clear()
+      this.#emitInvalidate(inputPathByNormalizedPath.get('.') ?? '.')
+      return
+    }
+
+    const knownContentPaths = Array.from(this.#knownContentPaths)
+    const pathsToBump = new Set<string>()
+
+    for (const normalizedPath of normalizedPaths) {
+      pathsToBump.add(normalizedPath)
+
+      for (const knownContentPath of knownContentPaths) {
+        if (
+          knownContentPath === normalizedPath ||
+          knownContentPath.startsWith(`${normalizedPath}/`)
+        ) {
+          pathsToBump.add(knownContentPath)
+        }
+      }
+
+      let currentDirectory = dirname(normalizedPath)
+      while (
+        currentDirectory &&
+        currentDirectory !== '.' &&
+        currentDirectory !== '/' &&
+        currentDirectory !== normalizedPath
+      ) {
+        pathsToBump.add(currentDirectory)
+        currentDirectory = dirname(currentDirectory)
+      }
+    }
+
+    for (const pathToBump of pathsToBump) {
+      this.#bumpPathRevision(pathToBump)
+    }
+
+    for (const normalizedPath of normalizedPaths) {
+      this.#emitInvalidate(
+        inputPathByNormalizedPath.get(normalizedPath) ?? normalizedPath
+      )
+    }
   }
 
   invalidateAll(): void {
@@ -189,6 +227,10 @@ function getProjectCacheRuntime(project: Project): ProjectCacheRuntime {
       snapshot,
     }),
     lruNodeKeys: new Map(),
+    nodeKeysByFilePath: new Map(),
+    nodeKeysByPathPrefix: new Map(),
+    nodeKeysByCacheName: new Map(),
+    nodeIdentityByNodeKey: new Map(),
     maxEntries: getProjectCacheMaxEntries(),
   }
 
@@ -269,10 +311,92 @@ function toProjectDependencySignature(
   return hashString(stableStringify(sortable))
 }
 
+function addToSetMap(
+  map: Map<string, Set<string>>,
+  key: string,
+  value: string
+): void {
+  let entries = map.get(key)
+  if (!entries) {
+    entries = new Set<string>()
+    map.set(key, entries)
+  }
+
+  entries.add(value)
+}
+
+function deleteFromSetMap(
+  map: Map<string, Set<string>>,
+  key: string,
+  value: string
+): void {
+  const entries = map.get(key)
+  if (!entries) {
+    return
+  }
+
+  entries.delete(value)
+  if (entries.size === 0) {
+    map.delete(key)
+  }
+}
+
+function getProjectPathPrefixes(path: string): string[] {
+  if (path === '.') {
+    return ['.']
+  }
+
+  const segments = path.split('/').filter((segment) => segment.length > 0)
+  if (segments.length === 0) {
+    return ['.']
+  }
+
+  const prefixes: string[] = []
+  let current = ''
+  for (const segment of segments) {
+    current = current.length > 0 ? `${current}/${segment}` : segment
+    prefixes.push(current)
+  }
+
+  return prefixes
+}
+
 function touchProjectCacheEntry(
   runtime: ProjectCacheRuntime,
-  nodeKey: string
+  nodeKey: string,
+  identity: {
+    filePath: string
+    cacheName: string
+  }
 ): void {
+  const existingIdentity = runtime.nodeIdentityByNodeKey.get(nodeKey)
+  if (
+    existingIdentity &&
+    (existingIdentity.filePath !== identity.filePath ||
+      existingIdentity.cacheName !== identity.cacheName)
+  ) {
+    deleteFromSetMap(
+      runtime.nodeKeysByFilePath,
+      existingIdentity.filePath,
+      nodeKey
+    )
+    for (const prefix of getProjectPathPrefixes(existingIdentity.filePath)) {
+      deleteFromSetMap(runtime.nodeKeysByPathPrefix, prefix, nodeKey)
+    }
+    deleteFromSetMap(
+      runtime.nodeKeysByCacheName,
+      existingIdentity.cacheName,
+      nodeKey
+    )
+  }
+
+  runtime.nodeIdentityByNodeKey.set(nodeKey, identity)
+  addToSetMap(runtime.nodeKeysByFilePath, identity.filePath, nodeKey)
+  for (const prefix of getProjectPathPrefixes(identity.filePath)) {
+    addToSetMap(runtime.nodeKeysByPathPrefix, prefix, nodeKey)
+  }
+  addToSetMap(runtime.nodeKeysByCacheName, identity.cacheName, nodeKey)
+
   if (runtime.lruNodeKeys.has(nodeKey)) {
     runtime.lruNodeKeys.delete(nodeKey)
   }
@@ -284,6 +408,18 @@ function removeProjectCacheEntry(
   nodeKey: string
 ): void {
   runtime.lruNodeKeys.delete(nodeKey)
+
+  const identity = runtime.nodeIdentityByNodeKey.get(nodeKey)
+  if (!identity) {
+    return
+  }
+
+  runtime.nodeIdentityByNodeKey.delete(nodeKey)
+  deleteFromSetMap(runtime.nodeKeysByFilePath, identity.filePath, nodeKey)
+  for (const prefix of getProjectPathPrefixes(identity.filePath)) {
+    deleteFromSetMap(runtime.nodeKeysByPathPrefix, prefix, nodeKey)
+  }
+  deleteFromSetMap(runtime.nodeKeysByCacheName, identity.cacheName, nodeKey)
 }
 
 async function enforceProjectCacheCapacity(
@@ -364,14 +500,18 @@ function removeProjectCacheEntriesByFilePath(
   runtime: ProjectCacheRuntime,
   filePath: string
 ): void {
-  const nodePrefix = `${PROJECT_CACHE_NODE_PREFIX}${filePath}:`
-  for (const nodeKey of Array.from(runtime.lruNodeKeys.keys())) {
-    if (!nodeKey.startsWith(nodePrefix)) {
-      continue
-    }
+  const nodeKeys = runtime.nodeKeysByPathPrefix.get(filePath)
+  if (!nodeKeys || nodeKeys.size === 0) {
+    return
+  }
 
+  const nodeKeysToDelete = Array.from(nodeKeys)
+  for (const nodeKey of nodeKeysToDelete) {
     removeProjectCacheEntry(runtime, nodeKey)
-    void runtime.store.delete(nodeKey)
+  }
+
+  if (nodeKeysToDelete.length > 0) {
+    void runtime.store.deleteMany(nodeKeysToDelete)
   }
 }
 
@@ -379,14 +519,18 @@ function removeProjectCacheEntriesByCacheName(
   runtime: ProjectCacheRuntime,
   cacheName: string
 ): void {
-  const cacheSuffix = `:${cacheName}`
-  for (const nodeKey of Array.from(runtime.lruNodeKeys.keys())) {
-    if (!nodeKey.endsWith(cacheSuffix)) {
-      continue
-    }
+  const nodeKeys = runtime.nodeKeysByCacheName.get(cacheName)
+  if (!nodeKeys || nodeKeys.size === 0) {
+    return
+  }
 
+  const nodeKeysToDelete = Array.from(nodeKeys)
+  for (const nodeKey of nodeKeysToDelete) {
     removeProjectCacheEntry(runtime, nodeKey)
-    void runtime.store.delete(nodeKey)
+  }
+
+  if (nodeKeysToDelete.length > 0) {
+    void runtime.store.deleteMany(nodeKeysToDelete)
   }
 }
 
@@ -462,7 +606,10 @@ export async function createProjectFileCache<Type>(
     }
   )
 
-  touchProjectCacheEntry(runtime, nodeKey)
+  touchProjectCacheEntry(runtime, nodeKey, {
+    filePath,
+    cacheName,
+  })
   await enforceProjectCacheCapacity(runtime)
 
   return value
@@ -493,8 +640,7 @@ export function invalidateProjectFileCache(
     : undefined
 
   if (normalizedFilePath && !cacheName) {
-    removeProjectCacheEntriesByFilePath(runtime, normalizedFilePath)
-    runtime.snapshot.invalidatePath(normalizedFilePath)
+    invalidateProjectCacheRuntimePaths(runtime, [normalizedFilePath])
     return
   }
 
@@ -512,4 +658,73 @@ export function invalidateProjectFileCache(
 
   runtime.snapshot.invalidateAll()
   projectCacheRuntimeByProject.delete(project)
+}
+
+export function invalidateProjectFileCachePaths(
+  project: Project,
+  paths: Iterable<string>
+): void {
+  const runtime = projectCacheRuntimeByProject.get(project)
+  if (!runtime) {
+    return
+  }
+
+  invalidateProjectCacheRuntimePaths(runtime, paths)
+}
+
+function invalidateProjectCacheRuntimePaths(
+  runtime: ProjectCacheRuntime,
+  paths: Iterable<string>
+): void {
+  const normalizedPaths = collapseProjectInvalidationPaths(
+    Array.from(paths).map(normalizeProjectPath)
+  )
+  if (normalizedPaths.length === 0) {
+    return
+  }
+
+  for (const normalizedPath of normalizedPaths) {
+    removeProjectCacheEntriesByFilePath(runtime, normalizedPath)
+  }
+
+  if (typeof runtime.snapshot.invalidatePaths === 'function') {
+    runtime.snapshot.invalidatePaths(normalizedPaths)
+    return
+  }
+
+  for (const normalizedPath of normalizedPaths) {
+    runtime.snapshot.invalidatePath(normalizedPath)
+  }
+}
+
+function collapseProjectInvalidationPaths(paths: Iterable<string>): string[] {
+  const normalizedPaths = Array.from(new Set(Array.from(paths)))
+  if (normalizedPaths.length === 0) {
+    return []
+  }
+
+  if (normalizedPaths.includes('.')) {
+    return ['.']
+  }
+
+  normalizedPaths.sort((firstPath, secondPath) => {
+    if (firstPath.length !== secondPath.length) {
+      return firstPath.length - secondPath.length
+    }
+
+    return firstPath.localeCompare(secondPath)
+  })
+
+  const collapsedPaths: string[] = []
+  for (const path of normalizedPaths) {
+    const isRedundant = collapsedPaths.some((existingPath) => {
+      return path === existingPath || path.startsWith(`${existingPath}/`)
+    })
+
+    if (!isRedundant) {
+      collapsedPaths.push(path)
+    }
+  }
+
+  return collapsedPaths
 }

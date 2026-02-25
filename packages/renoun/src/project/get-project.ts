@@ -12,8 +12,10 @@ import type { DebugContext } from '../utils/debug.ts'
 import { parseBooleanEnv } from '../utils/env.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
-import { invalidateProjectFileCache } from './cache.ts'
-import { invalidateRuntimeAnalysisCachePath } from './cached-analysis.ts'
+import { invalidateProjectFileCachePaths } from './cache.ts'
+import {
+  invalidateRuntimeAnalysisCachePaths,
+} from './cached-analysis.ts'
 import {
   activeRefreshingProjects,
   completeRefreshingProjects,
@@ -26,6 +28,9 @@ const { Project, ts } = getTsMorph()
 const projects = new Map<string, TsMorphProject>()
 const directoryWatchers = new Map<string, FSWatcher>()
 const directoryToProjects = new Map<string, Set<TsMorphProject>>()
+const directoryInvalidationPathQueue = new Map<string, Map<string, string>>()
+const directoryInvalidationTimers = new Map<string, NodeJS.Timeout>()
+const PROJECT_WATCHER_INVALIDATION_BATCH_WINDOW_MS = 25
 
 const defaultCompilerOptions = {
   allowJs: true,
@@ -145,22 +150,21 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
 
         if (!projectsToUpdate) return
 
+        const invalidationPaths = new Set<string>([filePath])
+        if (eventType === 'rename') {
+          const parentDirectoryPath = dirname(filePath)
+          if (parentDirectoryPath && parentDirectoryPath !== filePath) {
+            invalidationPaths.add(parentDirectoryPath)
+          }
+
+          if (isDirectory) {
+            invalidationPaths.add(projectDirectory)
+          }
+        }
+        queueProjectWatcherInvalidation(projectDirectory, invalidationPaths)
+
         for (const currentProject of projectsToUpdate) {
-          invalidateProjectFileCache(currentProject, filePath)
-          invalidateRuntimeAnalysisCachePath(filePath)
-
           if (eventType === 'rename') {
-            const parentDirectoryPath = dirname(filePath)
-            if (parentDirectoryPath && parentDirectoryPath !== filePath) {
-              invalidateProjectFileCache(currentProject, parentDirectoryPath)
-              invalidateRuntimeAnalysisCachePath(parentDirectoryPath)
-            }
-
-            if (isDirectory) {
-              invalidateProjectFileCache(currentProject, projectDirectory)
-              invalidateRuntimeAnalysisCachePath(projectDirectory)
-            }
-
             if (existsSync(filePath)) {
               if (isDirectory) {
                 currentProject.addDirectoryAtPath(filePath)
@@ -197,19 +201,94 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
   directoryWatchers.set(projectDirectory, watcher)
 }
 
+function queueProjectWatcherInvalidation(
+  projectDirectory: string,
+  paths: Iterable<string>
+): void {
+  const pendingPaths =
+    directoryInvalidationPathQueue.get(projectDirectory) ??
+    new Map<string, string>()
+  for (const path of paths) {
+    const normalizedPath = normalizeComparablePath(path)
+    if (normalizedPath.length === 0 || pendingPaths.has(normalizedPath)) {
+      continue
+    }
+
+    pendingPaths.set(normalizedPath, path)
+  }
+
+  if (pendingPaths.size === 0) {
+    return
+  }
+  directoryInvalidationPathQueue.set(projectDirectory, pendingPaths)
+
+  if (directoryInvalidationTimers.has(projectDirectory)) {
+    return
+  }
+
+  const flushTimer = setTimeout(() => {
+    directoryInvalidationTimers.delete(projectDirectory)
+    flushProjectWatcherInvalidation(projectDirectory)
+  }, PROJECT_WATCHER_INVALIDATION_BATCH_WINDOW_MS)
+  flushTimer.unref?.()
+  directoryInvalidationTimers.set(projectDirectory, flushTimer)
+}
+
+function flushProjectWatcherInvalidation(projectDirectory: string): void {
+  const pendingPaths = directoryInvalidationPathQueue.get(projectDirectory)
+  directoryInvalidationPathQueue.delete(projectDirectory)
+  if (!pendingPaths || pendingPaths.size === 0) {
+    return
+  }
+
+  const normalizedPaths = collapseInvalidationPaths(pendingPaths.keys())
+  if (normalizedPaths.length === 0) {
+    return
+  }
+
+  const pathsToInvalidate = normalizedPaths.map((normalizedPath) => {
+    return pendingPaths.get(normalizedPath) ?? normalizedPath
+  })
+
+  invalidateRuntimeAnalysisCachePaths(pathsToInvalidate)
+
+  const projectsToUpdate = directoryToProjects.get(projectDirectory)
+  if (!projectsToUpdate) {
+    return
+  }
+
+  for (const project of projectsToUpdate) {
+    invalidateProjectFileCachePaths(project, pathsToInvalidate)
+  }
+}
+
 export function invalidateProjectCachesByPath(path: string): number {
-  const normalizedPath = normalizeComparablePath(path)
+  return invalidateProjectCachesByPaths([path])
+}
+
+export function invalidateProjectCachesByPaths(
+  paths: Iterable<string>
+): number {
+  const normalizedPaths = collapseInvalidationPaths(
+    Array.from(paths).map((path) => normalizeComparablePath(path))
+  )
+  if (normalizedPaths.length === 0) {
+    return 0
+  }
+
   let affectedProjects = 0
 
   for (const [projectDirectory, projectsByDirectory] of directoryToProjects) {
-    if (
-      !pathsIntersect(normalizeComparablePath(projectDirectory), normalizedPath)
-    ) {
+    const normalizedProjectDirectory = normalizeComparablePath(projectDirectory)
+    const intersectsAnyPath = normalizedPaths.some((normalizedPath) =>
+      pathsIntersect(normalizedProjectDirectory, normalizedPath)
+    )
+    if (!intersectsAnyPath) {
       continue
     }
 
     for (const project of projectsByDirectory) {
-      invalidateProjectFileCache(project, normalizedPath)
+      invalidateProjectFileCachePaths(project, normalizedPaths)
       affectedProjects += 1
     }
   }
@@ -222,6 +301,12 @@ export function disposeProjectWatchers(): void {
     watcher.close()
   }
 
+  for (const timer of directoryInvalidationTimers.values()) {
+    clearTimeout(timer)
+  }
+
+  directoryInvalidationTimers.clear()
+  directoryInvalidationPathQueue.clear()
   directoryWatchers.clear()
   directoryToProjects.clear()
   projects.clear()
@@ -265,6 +350,37 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
     firstPath.startsWith(`${secondPath}/`) ||
     secondPath.startsWith(`${firstPath}/`)
   )
+}
+
+function collapseInvalidationPaths(paths: Iterable<string>): string[] {
+  const normalizedPaths = Array.from(new Set(Array.from(paths)))
+  if (normalizedPaths.length === 0) {
+    return []
+  }
+
+  if (normalizedPaths.includes('.')) {
+    return ['.']
+  }
+
+  normalizedPaths.sort((firstPath, secondPath) => {
+    if (firstPath.length !== secondPath.length) {
+      return firstPath.length - secondPath.length
+    }
+
+    return firstPath.localeCompare(secondPath)
+  })
+
+  const collapsedPaths: string[] = []
+  for (const path of normalizedPaths) {
+    const redundant = collapsedPaths.some((existingPath) => {
+      return path === existingPath || path.startsWith(`${existingPath}/`)
+    })
+    if (!redundant) {
+      collapsedPaths.push(path)
+    }
+  }
+
+  return collapsedPaths
 }
 
 function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {

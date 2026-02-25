@@ -35,12 +35,16 @@ import {
   getCachedSourceTextMetadata,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
+  invalidateRuntimeAnalysisCachePaths,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
 import { invalidateProjectFileCache } from './cache.ts'
 import { WebSocketClient } from './rpc/client.ts'
-import { getProject, invalidateProjectCachesByPath } from './get-project.ts'
+import {
+  getProject,
+  invalidateProjectCachesByPaths,
+} from './get-project.ts'
 import type { ProjectOptions } from './types.ts'
 
 let client: WebSocketClient | undefined
@@ -385,13 +389,13 @@ function queueRefreshInvalidation(path: string): void {
     isRefreshInvalidationFlushQueued = false
     const paths = Array.from(pendingRefreshInvalidationPaths)
     pendingRefreshInvalidationPaths.clear()
-    if (paths.length > 0) {
-      clientRpcCacheByKey.clear()
+    if (paths.length === 0) {
+      return
     }
-    for (const pendingPath of paths) {
-      invalidateRuntimeAnalysisCachePath(pendingPath)
-      invalidateProjectCachesByPath(pendingPath)
-    }
+
+    clientRpcCacheByKey.clear()
+    invalidateRuntimeAnalysisCachePaths(paths)
+    invalidateProjectCachesByPaths(paths)
   })
 }
 

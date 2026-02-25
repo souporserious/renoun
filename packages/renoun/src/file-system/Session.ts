@@ -4,7 +4,6 @@ import { realpathSync } from 'node:fs'
 import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import { forEachConcurrent } from '../utils/concurrency.ts'
 import { emitTelemetryEvent } from '../utils/telemetry.ts'
 import type { Telemetry } from '../utils/telemetry.ts'
 import { Cache, CacheStore } from './Cache.ts'
@@ -59,6 +58,24 @@ const WORKSPACE_CHANGED_PATHS_MAX_ENTRIES = 512
 const DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT = 10
 const DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT = 250
 const DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL = 25
+const DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS = 50_000
+const DIRECTORY_SNAPSHOT_PREFIX_INDEX_REENABLE_RATIO = 0.5
+
+function getDefaultPersistentWorkspaceChangeTokenTtlMs(): number {
+  if (process.env['NODE_ENV'] === 'development') {
+    return DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+  }
+
+  return DEFAULT_PERSISTENT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+}
+
+function getDefaultPersistentWorkspaceChangedPathsTtlMs(): number {
+  if (process.env['NODE_ENV'] === 'development') {
+    return DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
+  }
+
+  return DEFAULT_PERSISTENT_WORKSPACE_CHANGED_PATHS_TTL_MS
+}
 
 function collectSnapshotFamily(
   snapshotId: string,
@@ -88,6 +105,238 @@ function collectSnapshotFamily(
   }
 
   return family
+}
+
+class IndexedStringKeyMap<Value> extends Map<string, Value> {
+  readonly #onAdd: (key: string) => void
+  readonly #onDelete: (key: string) => void
+  readonly #onClear: () => void
+
+  constructor(options: {
+    onAdd: (key: string) => void
+    onDelete: (key: string) => void
+    onClear: () => void
+  }) {
+    super()
+    this.#onAdd = options.onAdd
+    this.#onDelete = options.onDelete
+    this.#onClear = options.onClear
+  }
+
+  override set(key: string, value: Value): this {
+    const existed = super.has(key)
+    super.set(key, value)
+    if (!existed) {
+      this.#onAdd(key)
+    }
+    return this
+  }
+
+  override delete(key: string): boolean {
+    const deleted = super.delete(key)
+    if (deleted) {
+      this.#onDelete(key)
+    }
+    return deleted
+  }
+
+  override clear(): void {
+    if (this.size === 0) {
+      return
+    }
+    super.clear()
+    this.#onClear()
+  }
+}
+
+class DirectorySnapshotPathIndex {
+  readonly #maxPrefixKeys: number
+  readonly #snapshotPathByKey = new Map<string, string>()
+  readonly #keysByExactPath = new Map<string, Set<string>>()
+  readonly #keysByPrefixPath = new Map<string, Set<string>>()
+  #prefixIndexEnabled = true
+
+  constructor() {
+    this.#maxPrefixKeys = resolveDirectorySnapshotPrefixIndexMaxKeys()
+  }
+
+  add(snapshotKey: string): void {
+    const snapshotPath = extractDirectoryPathFromSnapshotKey(snapshotKey)
+    if (!snapshotPath) {
+      return
+    }
+
+    const existingPath = this.#snapshotPathByKey.get(snapshotKey)
+    if (existingPath === snapshotPath) {
+      return
+    }
+    if (existingPath) {
+      this.remove(snapshotKey)
+    }
+
+    this.#snapshotPathByKey.set(snapshotKey, snapshotPath)
+    addToSetMap(this.#keysByExactPath, snapshotPath, snapshotKey)
+
+    if (snapshotPath === '.') {
+      return
+    }
+
+    if (!this.#prefixIndexEnabled) {
+      this.#maybeRebuildPrefixIndex()
+      return
+    }
+
+    for (const prefix of getPathPrefixes(snapshotPath)) {
+      addToSetMap(this.#keysByPrefixPath, prefix, snapshotKey)
+    }
+
+    this.#disablePrefixIndexIfOversized()
+  }
+
+  remove(snapshotKey: string): void {
+    const snapshotPath = this.#snapshotPathByKey.get(snapshotKey)
+    if (!snapshotPath) {
+      return
+    }
+
+    this.#snapshotPathByKey.delete(snapshotKey)
+    deleteFromSetMap(this.#keysByExactPath, snapshotPath, snapshotKey)
+
+    if (snapshotPath === '.') {
+      return
+    }
+
+    if (!this.#prefixIndexEnabled) {
+      this.#maybeRebuildPrefixIndex()
+      return
+    }
+
+    for (const prefix of getPathPrefixes(snapshotPath)) {
+      deleteFromSetMap(this.#keysByPrefixPath, prefix, snapshotKey)
+    }
+  }
+
+  clear(): void {
+    this.#snapshotPathByKey.clear()
+    this.#keysByExactPath.clear()
+    this.#keysByPrefixPath.clear()
+    this.#prefixIndexEnabled = true
+  }
+
+  getIntersectingKeys(path: string): Set<string> {
+    if (path === '.') {
+      return new Set(this.#snapshotPathByKey.keys())
+    }
+
+    if (!this.#prefixIndexEnabled) {
+      this.#maybeRebuildPrefixIndex()
+      if (!this.#prefixIndexEnabled) {
+        return this.#scanIntersectingKeys(path)
+      }
+    }
+
+    const intersectingKeys = new Set<string>()
+
+    const descendantKeys = this.#keysByPrefixPath.get(path)
+    if (descendantKeys) {
+      for (const key of descendantKeys) {
+        intersectingKeys.add(key)
+      }
+    }
+
+    for (const ancestorPath of getPathAncestors(path)) {
+      const ancestorKeys = this.#keysByExactPath.get(ancestorPath)
+      if (!ancestorKeys) {
+        continue
+      }
+      for (const key of ancestorKeys) {
+        intersectingKeys.add(key)
+      }
+    }
+
+    return intersectingKeys
+  }
+
+  #scanIntersectingKeys(path: string): Set<string> {
+    const intersectingKeys = new Set<string>()
+    for (const [snapshotKey, snapshotPath] of this.#snapshotPathByKey) {
+      if (pathsIntersect(snapshotPath, path)) {
+        intersectingKeys.add(snapshotKey)
+      }
+    }
+
+    return intersectingKeys
+  }
+
+  #disablePrefixIndexIfOversized(): void {
+    if (this.#keysByPrefixPath.size <= this.#maxPrefixKeys) {
+      return
+    }
+
+    this.#keysByPrefixPath.clear()
+    this.#prefixIndexEnabled = false
+  }
+
+  #maybeRebuildPrefixIndex(): void {
+    if (this.#prefixIndexEnabled) {
+      return
+    }
+
+    const rebuildThreshold = Math.floor(
+      this.#maxPrefixKeys * DIRECTORY_SNAPSHOT_PREFIX_INDEX_REENABLE_RATIO
+    )
+    if (this.#snapshotPathByKey.size > rebuildThreshold) {
+      return
+    }
+
+    this.#keysByPrefixPath.clear()
+    for (const [snapshotKey, snapshotPath] of this.#snapshotPathByKey) {
+      if (snapshotPath === '.') {
+        continue
+      }
+
+      for (const prefix of getPathPrefixes(snapshotPath)) {
+        addToSetMap(this.#keysByPrefixPath, prefix, snapshotKey)
+      }
+
+      if (this.#keysByPrefixPath.size > this.#maxPrefixKeys) {
+        this.#keysByPrefixPath.clear()
+        this.#prefixIndexEnabled = false
+        return
+      }
+    }
+
+    this.#prefixIndexEnabled = true
+  }
+}
+
+function addToSetMap(
+  map: Map<string, Set<string>>,
+  key: string,
+  value: string
+): void {
+  let entries = map.get(key)
+  if (!entries) {
+    entries = new Set<string>()
+    map.set(key, entries)
+  }
+  entries.add(value)
+}
+
+function deleteFromSetMap(
+  map: Map<string, Set<string>>,
+  key: string,
+  value: string
+): void {
+  const entries = map.get(key)
+  if (!entries) {
+    return
+  }
+
+  entries.delete(value)
+  if (entries.size === 0) {
+    map.delete(key)
+  }
 }
 
 export class Session {
@@ -202,15 +451,38 @@ export class Session {
   readonly snapshot: Snapshot
   readonly inflight = new Map<string, Promise<unknown>>()
   readonly cache: CacheStore
-  readonly directorySnapshots = new Map<string, DirectorySnapshot<any, any>>()
-  readonly directorySnapshotBuilds = new Map<
-    string,
+  readonly #directorySnapshotPathIndex = new DirectorySnapshotPathIndex()
+  readonly #directorySnapshotBuildPathIndex = new DirectorySnapshotPathIndex()
+  readonly directorySnapshots = new IndexedStringKeyMap<
+    DirectorySnapshot<any, any>
+  >({
+    onAdd: (snapshotKey) => {
+      this.#directorySnapshotPathIndex.add(snapshotKey)
+    },
+    onDelete: (snapshotKey) => {
+      this.#directorySnapshotPathIndex.remove(snapshotKey)
+    },
+    onClear: () => {
+      this.#directorySnapshotPathIndex.clear()
+    },
+  })
+  readonly directorySnapshotBuilds = new IndexedStringKeyMap<
     Promise<{
       snapshot: DirectorySnapshot<any, any>
       shouldIncludeSelf: boolean
       skipPersist?: boolean
     }>
-  >()
+  >({
+    onAdd: (snapshotKey) => {
+      this.#directorySnapshotBuildPathIndex.add(snapshotKey)
+    },
+    onDelete: (snapshotKey) => {
+      this.#directorySnapshotBuildPathIndex.remove(snapshotKey)
+    },
+    onClear: () => {
+      this.#directorySnapshotBuildPathIndex.clear()
+    },
+  })
   readonly #functionIds = new WeakMap<Function, string>()
   #nextFunctionId = 0
   readonly #invalidatedDirectorySnapshotKeys = new Set<string>()
@@ -232,7 +504,9 @@ export class Session {
   >()
   #lastWorkspaceChangedPathsCleanupAt = 0
   readonly #recentlyInvalidatedPathTimestamps = new Map<string, number>()
+  readonly #pendingPersistedInvalidationPaths = new Set<string>()
   #persistedInvalidationQueue: Promise<void> = Promise.resolve()
+  #persistedInvalidationDrainScheduled = false
   #warnedAboutPersistedInvalidationFailure = false
   readonly #cacheMetricsEnabled: boolean
   readonly #cacheMetricsTopKeysLimit: number
@@ -305,13 +579,13 @@ export class Session {
     this.#workspaceChangeTokenTtlMs = normalizeNonNegativeInteger(
       cache?.workspaceChangeTokenTtlMs,
       prefersPersistentCache
-        ? DEFAULT_PERSISTENT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+        ? getDefaultPersistentWorkspaceChangeTokenTtlMs()
         : DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
     )
     this.#workspaceChangedPathsTtlMs = normalizeNonNegativeInteger(
       cache?.workspaceChangedPathsTtlMs,
       prefersPersistentCache
-        ? DEFAULT_PERSISTENT_WORKSPACE_CHANGED_PATHS_TTL_MS
+        ? getDefaultPersistentWorkspaceChangedPathsTtlMs()
         : DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
     )
     this.#invalidatedPathTtlMs = normalizePositiveInteger(
@@ -686,61 +960,110 @@ export class Session {
     return new Set(this.#recentlyInvalidatedPathTimestamps.keys())
   }
 
+  async waitForPendingInvalidations(): Promise<void> {
+    await this.#persistedInvalidationQueue.catch(() => {})
+  }
+
   invalidatePath(path: string): void {
-    const normalizedPath = normalizeSessionPath(this.#fileSystem, path)
-    this.#recentlyInvalidatedPathTimestamps.set(normalizedPath, Date.now())
-    this.#cleanupExpiredInvalidatedPaths()
+    this.invalidatePaths([path])
+  }
 
-    this.snapshot.invalidatePath(path)
-
-    const expiredKeys = new Set<string>()
-
-    for (const key of this.directorySnapshots.keys()) {
-      const directoryPath = extractDirectoryPathFromSnapshotKey(key)
-      if (directoryPath === undefined) {
+  invalidatePaths(paths: Iterable<string>): void {
+    const snapshotPathByNormalizedPath = new Map<string, string>()
+    for (const path of paths) {
+      if (typeof path !== 'string' || path.length === 0) {
         continue
       }
 
-      if (pathsIntersect(directoryPath, normalizedPath)) {
-        this.directorySnapshots.delete(key)
-        this.markInvalidatedDirectorySnapshotKey(key)
-        expiredKeys.add(key)
+      const normalizedPath = normalizeSessionPath(this.#fileSystem, path)
+      if (!snapshotPathByNormalizedPath.has(normalizedPath)) {
+        snapshotPathByNormalizedPath.set(normalizedPath, path)
       }
     }
-    for (const key of this.directorySnapshotBuilds.keys()) {
-      const directoryPath = extractDirectoryPathFromSnapshotKey(key)
-      if (directoryPath === undefined) {
-        continue
+
+    const normalizedPaths = collapseInvalidationPaths(
+      snapshotPathByNormalizedPath.keys()
+    )
+
+    if (normalizedPaths.length === 0) {
+      return
+    }
+
+    const now = Date.now()
+    for (const normalizedPath of normalizedPaths) {
+      this.#recentlyInvalidatedPathTimestamps.set(normalizedPath, now)
+    }
+    this.#cleanupExpiredInvalidatedPaths(now)
+
+    const snapshotPathsToInvalidate = normalizedPaths.map((normalizedPath) => {
+      return snapshotPathByNormalizedPath.get(normalizedPath) ?? normalizedPath
+    })
+    this.cache.invalidateDependencyPaths(normalizedPaths)
+    if (typeof this.snapshot.invalidatePaths === 'function') {
+      this.snapshot.invalidatePaths(snapshotPathsToInvalidate)
+    } else {
+      for (const snapshotPath of snapshotPathsToInvalidate) {
+        this.snapshot.invalidatePath(snapshotPath)
+      }
+    }
+
+    const invalidatedEntriesByPath = new Map<string, number>()
+    const expiredKeys = new Set<string>()
+
+    for (const normalizedPath of normalizedPaths) {
+      let invalidatedEntries = 0
+      for (const snapshotKey of this.#collectIntersectingDirectorySnapshotKeys(
+        normalizedPath
+      )) {
+        const deletedSnapshot = this.directorySnapshots.delete(snapshotKey)
+        const deletedBuild = this.directorySnapshotBuilds.delete(snapshotKey)
+        if (!deletedSnapshot && !deletedBuild) {
+          continue
+        }
+
+        this.markInvalidatedDirectorySnapshotKey(snapshotKey)
+
+        if (!expiredKeys.has(snapshotKey)) {
+          expiredKeys.add(snapshotKey)
+          invalidatedEntries += 1
+        }
       }
 
-      if (pathsIntersect(directoryPath, normalizedPath)) {
-        this.directorySnapshotBuilds.delete(key)
-        this.markInvalidatedDirectorySnapshotKey(key)
-        expiredKeys.add(key)
-      }
+      invalidatedEntriesByPath.set(normalizedPath, invalidatedEntries)
     }
 
     if (expiredKeys.size > 0) {
       this.recordCacheMetric('invalidation_evictions_path', expiredKeys.size)
+      void this.cache.deleteMany(expiredKeys)
     }
 
-    emitTelemetryEvent({
-      name: 'renoun.cache.invalidate_path',
-      fields: {
-        pathHash: toTelemetryHash(normalizedPath),
-        pathDepth: getTelemetryPathDepth(normalizedPath),
-        invalidatedEntries: expiredKeys.size,
-      },
-      telemetry: this.#telemetry,
-    })
-
-    for (const key of expiredKeys) {
-      void this.cache.delete(key)
+    for (const normalizedPath of normalizedPaths) {
+      emitTelemetryEvent({
+        name: 'renoun.cache.invalidate_path',
+        fields: {
+          pathHash: toTelemetryHash(normalizedPath),
+          pathDepth: getTelemetryPathDepth(normalizedPath),
+          invalidatedEntries: invalidatedEntriesByPath.get(normalizedPath) ?? 0,
+        },
+        telemetry: this.#telemetry,
+      })
     }
 
     if (this.usesPersistentCache) {
-      this.#queuePersistedDependencyInvalidation(normalizedPath)
+      this.#queuePersistedDependencyInvalidations(normalizedPaths)
     }
+  }
+
+  #collectIntersectingDirectorySnapshotKeys(path: string): Set<string> {
+    const intersectingKeys = this.#directorySnapshotPathIndex.getIntersectingKeys(
+      path
+    )
+    for (const buildKey of this.#directorySnapshotBuildPathIndex.getIntersectingKeys(
+      path
+    )) {
+      intersectingKeys.add(buildKey)
+    }
+    return intersectingKeys
   }
 
   reset(): void {
@@ -753,7 +1076,9 @@ export class Session {
     this.#workspaceChangedPathsByToken.clear()
     this.#lastWorkspaceChangedPathsCleanupAt = 0
     this.#recentlyInvalidatedPathTimestamps.clear()
+    this.#pendingPersistedInvalidationPaths.clear()
     this.#persistedInvalidationQueue = Promise.resolve()
+    this.#persistedInvalidationDrainScheduled = false
     this.#directorySnapshotMetricsByKey.clear()
     this.#directorySnapshotRebuildReasonTotals.clear()
     this.#directorySnapshotRebuildReasonByKey.clear()
@@ -807,67 +1132,174 @@ export class Session {
     return normalizedObject
   }
 
-  #queuePersistedDependencyInvalidation(normalizedPath: string): void {
+  #queuePersistedDependencyInvalidations(
+    normalizedPaths: ReadonlyArray<string>
+  ): void {
+    let hasQueuedPath = false
+    for (const normalizedPath of normalizedPaths) {
+      if (normalizedPath.length === 0) {
+        continue
+      }
+
+      if (this.#pendingPersistedInvalidationPaths.has(normalizedPath)) {
+        continue
+      }
+
+      this.#pendingPersistedInvalidationPaths.add(normalizedPath)
+      hasQueuedPath = true
+    }
+
+    if (!hasQueuedPath) {
+      return
+    }
+
+    this.#schedulePersistedDependencyInvalidationDrain()
+  }
+
+  #schedulePersistedDependencyInvalidationDrain(): void {
+    if (this.#persistedInvalidationDrainScheduled) {
+      return
+    }
+
+    this.#persistedInvalidationDrainScheduled = true
     this.#persistedInvalidationQueue = this.#persistedInvalidationQueue
       .catch(() => {})
-      .then(async () => {
-        const dependencyEviction =
-          await this.cache.deleteByDependencyPath(normalizedPath)
+      .then(() => this.#drainPersistedDependencyInvalidations())
+  }
 
-        if (dependencyEviction.deletedNodeKeys.length > 0) {
-          this.recordCacheMetric(
-            'invalidation_evictions_dep_index',
-            dependencyEviction.deletedNodeKeys.length
-          )
-          emitTelemetryEvent({
-            name: 'renoun.cache.invalidate_dependency_index',
-            fields: {
-              pathHash: toTelemetryHash(normalizedPath),
-              pathDepth: getTelemetryPathDepth(normalizedPath),
-              invalidatedEntries: dependencyEviction.deletedNodeKeys.length,
-            },
-            telemetry: this.#telemetry,
-          })
-        }
+  async #drainPersistedDependencyInvalidations(): Promise<void> {
+    try {
+      while (this.#pendingPersistedInvalidationPaths.size > 0) {
+        const normalizedPaths = collapseInvalidationPaths(
+          this.#pendingPersistedInvalidationPaths
+        )
+        this.#pendingPersistedInvalidationPaths.clear()
 
-        if (
-          !dependencyEviction.usedDependencyIndex ||
-          dependencyEviction.hasMissingDependencyMetadata
-        ) {
-          await this.#runBroadPersistedInvalidationFallback(normalizedPath)
-        }
-      })
-      .catch((error) => {
-        const errorMessage =
-          error instanceof Error && error.message.length > 0
-            ? error.message
-            : String(error ?? 'unknown error')
+        await this.#runPersistedDependencyInvalidationsBatch(normalizedPaths)
+      }
+    } finally {
+      this.#persistedInvalidationDrainScheduled = false
+      if (this.#pendingPersistedInvalidationPaths.size > 0) {
+        this.#schedulePersistedDependencyInvalidationDrain()
+      }
+    }
+  }
+
+  async #runPersistedDependencyInvalidationsBatch(
+    normalizedPaths: ReadonlyArray<string>
+  ): Promise<void> {
+    if (normalizedPaths.length === 0) {
+      return
+    }
+
+    try {
+      const dependencyEviction = await this.cache.deleteByDependencyPaths(
+        normalizedPaths
+      )
+
+      if (dependencyEviction.deletedNodeKeys.length > 0) {
+        this.recordCacheMetric(
+          'invalidation_evictions_dep_index',
+          dependencyEviction.deletedNodeKeys.length
+        )
         emitTelemetryEvent({
-          name: 'renoun.cache.invalidate_error',
+          name: 'renoun.cache.invalidate_dependency_index_batch',
           fields: {
-            pathHash: toTelemetryHash(normalizedPath),
-            pathDepth: getTelemetryPathDepth(normalizedPath),
-            message: errorMessage,
+            pathCount: normalizedPaths.length,
+            invalidatedEntries: dependencyEviction.deletedNodeKeys.length,
           },
           telemetry: this.#telemetry,
         })
+      }
 
-        if (
-          !this.#warnedAboutPersistedInvalidationFailure &&
-          process.env['NODE_ENV'] !== 'test'
-        ) {
-          this.#warnedAboutPersistedInvalidationFailure = true
-          console.warn(
-            `[renoun] Persisted cache invalidation failed; continuing with best-effort invalidation only: ${errorMessage}`
-          )
-        }
+      if (
+        !dependencyEviction.usedDependencyIndex ||
+        dependencyEviction.hasMissingDependencyMetadata
+      ) {
+        await this.#runBroadPersistedInvalidationFallbackBatch(
+          normalizedPaths,
+          {
+            includeNonDirectoryKeys:
+              dependencyEviction.hasMissingDependencyMetadata,
+          }
+        )
+      }
+    } catch {
+      for (const normalizedPath of normalizedPaths) {
+        await this.#runPersistedDependencyInvalidation(normalizedPath)
+      }
+    }
+  }
+
+  async #runPersistedDependencyInvalidation(
+    normalizedPath: string
+  ): Promise<void> {
+    try {
+      const dependencyEviction =
+        await this.cache.deleteByDependencyPath(normalizedPath)
+
+      if (dependencyEviction.deletedNodeKeys.length > 0) {
+        this.recordCacheMetric(
+          'invalidation_evictions_dep_index',
+          dependencyEviction.deletedNodeKeys.length
+        )
+        emitTelemetryEvent({
+          name: 'renoun.cache.invalidate_dependency_index',
+          fields: {
+            pathHash: toTelemetryHash(normalizedPath),
+            pathDepth: getTelemetryPathDepth(normalizedPath),
+            invalidatedEntries: dependencyEviction.deletedNodeKeys.length,
+          },
+          telemetry: this.#telemetry,
+        })
+      }
+
+      if (
+        !dependencyEviction.usedDependencyIndex ||
+        dependencyEviction.hasMissingDependencyMetadata
+      ) {
+        await this.#runBroadPersistedInvalidationFallback(normalizedPath, {
+          includeNonDirectoryKeys:
+            dependencyEviction.hasMissingDependencyMetadata,
+        })
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error && error.message.length > 0
+          ? error.message
+          : String(error ?? 'unknown error')
+      emitTelemetryEvent({
+        name: 'renoun.cache.invalidate_error',
+        fields: {
+          pathHash: toTelemetryHash(normalizedPath),
+          pathDepth: getTelemetryPathDepth(normalizedPath),
+          message: errorMessage,
+        },
+        telemetry: this.#telemetry,
       })
+
+      if (
+        !this.#warnedAboutPersistedInvalidationFailure &&
+        process.env['NODE_ENV'] !== 'test'
+      ) {
+        this.#warnedAboutPersistedInvalidationFailure = true
+        console.warn(
+          `[renoun] Persisted cache invalidation failed; continuing with best-effort invalidation only: ${errorMessage}`
+        )
+      }
+    }
   }
 
   async #runBroadPersistedInvalidationFallback(
-    normalizedPath: string
+    normalizedPath: string,
+    options: {
+      includeNonDirectoryKeys?: boolean
+    } = {}
   ): Promise<void> {
-    const candidateKeys = await this.cache.listNodeKeysByPrefix('')
+    const includeNonDirectoryKeys = options.includeNonDirectoryKeys === true
+    const candidateKeys = includeNonDirectoryKeys
+      ? await this.cache.listNodeKeysByPrefix('')
+      : await this.#listDirectorySnapshotFallbackCandidates(normalizedPath)
     if (candidateKeys.length === 0) {
       return
     }
@@ -877,6 +1309,9 @@ export class Session {
     for (const key of candidateKeys) {
       const directoryPath = extractDirectoryPathFromSnapshotKey(key)
       if (!directoryPath) {
+        if (!includeNonDirectoryKeys) {
+          continue
+        }
         fallbackKeysToDelete.push(key)
         continue
       }
@@ -890,14 +1325,7 @@ export class Session {
       return
     }
 
-    await forEachConcurrent(
-      fallbackKeysToDelete,
-      {
-        concurrency: 25,
-        stopOnError: false,
-      },
-      (key) => this.cache.delete(key)
-    )
+    await this.cache.deleteMany(fallbackKeysToDelete)
     this.recordCacheMetric(
       'invalidation_evictions_path',
       fallbackKeysToDelete.length
@@ -911,6 +1339,126 @@ export class Session {
       },
       telemetry: this.#telemetry,
     })
+  }
+
+  async #runBroadPersistedInvalidationFallbackBatch(
+    normalizedPaths: ReadonlyArray<string>,
+    options: {
+      includeNonDirectoryKeys?: boolean
+    } = {}
+  ): Promise<void> {
+    if (normalizedPaths.length === 0) {
+      return
+    }
+
+    const includeNonDirectoryKeys = options.includeNonDirectoryKeys === true
+    const collapsedPaths = collapseInvalidationPaths(normalizedPaths)
+    if (collapsedPaths.length === 0) {
+      return
+    }
+
+    const candidateKeys = includeNonDirectoryKeys
+      ? await this.cache.listNodeKeysByPrefix('')
+      : await this.#listDirectorySnapshotFallbackCandidatesForMany(
+          collapsedPaths
+        )
+    if (candidateKeys.length === 0) {
+      return
+    }
+
+    const fallbackKeysToDelete: string[] = []
+    for (const key of candidateKeys) {
+      const directoryPath = extractDirectoryPathFromSnapshotKey(key)
+      if (!directoryPath) {
+        if (!includeNonDirectoryKeys) {
+          continue
+        }
+        fallbackKeysToDelete.push(key)
+        continue
+      }
+
+      const intersectsAnyPath = collapsedPaths.some((normalizedPath) => {
+        return pathsIntersect(directoryPath, normalizedPath)
+      })
+      if (intersectsAnyPath) {
+        fallbackKeysToDelete.push(key)
+      }
+    }
+
+    if (fallbackKeysToDelete.length === 0) {
+      return
+    }
+
+    await this.cache.deleteMany(fallbackKeysToDelete)
+    this.recordCacheMetric(
+      'invalidation_evictions_path',
+      fallbackKeysToDelete.length
+    )
+    emitTelemetryEvent({
+      name: 'renoun.cache.invalidate_fallback_batch',
+      fields: {
+        pathCount: collapsedPaths.length,
+        invalidatedEntries: fallbackKeysToDelete.length,
+      },
+      telemetry: this.#telemetry,
+    })
+  }
+
+  async #listDirectorySnapshotFallbackCandidates(
+    normalizedPath: string
+  ): Promise<string[]> {
+    const prefixes = getPersistedFallbackDirectorySnapshotPrefixes(
+      normalizedPath
+    )
+    if (prefixes.length === 0) {
+      return []
+    }
+
+    const batches = await Promise.all(
+      prefixes.map((prefix) => this.cache.listNodeKeysByPrefix(prefix))
+    )
+    const keys = new Set<string>()
+    for (const batch of batches) {
+      for (const key of batch) {
+        keys.add(key)
+      }
+    }
+    return Array.from(keys)
+  }
+
+  async #listDirectorySnapshotFallbackCandidatesForMany(
+    normalizedPaths: ReadonlyArray<string>
+  ): Promise<string[]> {
+    if (normalizedPaths.length === 0) {
+      return []
+    }
+
+    const prefixSet = new Set<string>()
+    for (const normalizedPath of normalizedPaths) {
+      const pathPrefixes = getPersistedFallbackDirectorySnapshotPrefixes(
+        normalizedPath
+      )
+      for (const prefix of pathPrefixes) {
+        prefixSet.add(prefix)
+      }
+    }
+
+    if (prefixSet.size === 0) {
+      return []
+    }
+
+    const batches = await Promise.all(
+      Array.from(prefixSet)
+        .sort()
+        .map((prefix) => this.cache.listNodeKeysByPrefix(prefix))
+    )
+    const keys = new Set<string>()
+    for (const batch of batches) {
+      for (const key of batch) {
+        keys.add(key)
+      }
+    }
+    return Array.from(keys)
   }
 
   #cleanupExpiredInvalidatedPaths(now = Date.now()): void {
@@ -1236,6 +1784,17 @@ class GeneratedSnapshot implements Snapshot {
     this.#base.invalidatePath(path)
   }
 
+  invalidatePaths(paths: Iterable<string>) {
+    if (typeof this.#base.invalidatePaths === 'function') {
+      this.#base.invalidatePaths(paths)
+      return
+    }
+
+    for (const path of paths) {
+      this.#base.invalidatePath(path)
+    }
+  }
+
   invalidateAll() {
     if (typeof this.#base.invalidateAll === 'function') {
       this.#base.invalidateAll()
@@ -1294,6 +1853,106 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
     firstPath.startsWith(`${secondPath}/`) ||
     secondPath.startsWith(`${firstPath}/`)
   )
+}
+
+function getPathPrefixes(path: string): string[] {
+  if (path === '.' || path.length === 0) {
+    return []
+  }
+
+  const segments = path.split('/').filter((segment) => segment.length > 0)
+  if (segments.length === 0) {
+    return []
+  }
+
+  const prefixes: string[] = []
+  let current = ''
+  for (const segment of segments) {
+    current = current.length > 0 ? `${current}/${segment}` : segment
+    prefixes.push(current)
+  }
+
+  return prefixes
+}
+
+function getPathAncestors(path: string): string[] {
+  if (path === '.' || path.length === 0) {
+    return ['.']
+  }
+
+  const ancestors: string[] = []
+  let current = path
+
+  while (true) {
+    ancestors.push(current)
+    if (current === '.') {
+      break
+    }
+
+    const separatorIndex = current.lastIndexOf('/')
+    if (separatorIndex <= 0) {
+      current = '.'
+      continue
+    }
+
+    current = current.slice(0, separatorIndex)
+  }
+
+  return ancestors
+}
+
+function collapseInvalidationPaths(paths: Iterable<string>): string[] {
+  const deduped = Array.from(
+    new Set(
+      Array.from(paths).filter((path) => {
+        return typeof path === 'string' && path.length > 0
+      })
+    )
+  ).map((path) => normalizePathKey(path))
+
+  if (deduped.length === 0) {
+    return []
+  }
+
+  if (deduped.includes('.')) {
+    return ['.']
+  }
+
+  deduped.sort((firstPath, secondPath) => {
+    if (firstPath.length !== secondPath.length) {
+      return firstPath.length - secondPath.length
+    }
+
+    return firstPath.localeCompare(secondPath)
+  })
+
+  const collapsedPaths: string[] = []
+  for (const path of deduped) {
+    const isRedundant = collapsedPaths.some((existingPath) => {
+      return path === existingPath || path.startsWith(`${existingPath}/`)
+    })
+
+    if (!isRedundant) {
+      collapsedPaths.push(path)
+    }
+  }
+
+  return collapsedPaths
+}
+
+function getPersistedFallbackDirectorySnapshotPrefixes(path: string): string[] {
+  if (path === '.') {
+    return ['dir:']
+  }
+
+  const prefixes = new Set<string>()
+  prefixes.add(`dir:${path}`)
+
+  for (const ancestorPath of getPathAncestors(path)) {
+    prefixes.add(`dir:${ancestorPath}`)
+  }
+
+  return Array.from(prefixes).sort()
 }
 
 function resolveSessionProjectRoot(
@@ -1357,6 +2016,20 @@ function resolveSessionProjectRoot(
     }
     return resolveCanonicalPath(absoluteRoot)
   }
+}
+
+function resolveDirectorySnapshotPrefixIndexMaxKeys(): number {
+  const configured = process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS']
+  if (!configured) {
+    return DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS
+  }
+
+  const parsed = Number.parseInt(configured, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS
+  }
+
+  return parsed
 }
 
 function resolveCanonicalPath(pathToResolve: string): string {

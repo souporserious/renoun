@@ -6081,14 +6081,7 @@ export class Directory<
           return
         }
 
-        await forEachConcurrent(
-          candidateSnapshotKeys,
-          {
-            concurrency: 25,
-            stopOnError: false,
-          },
-          (snapshotKey) => session.cache.delete(snapshotKey)
-        )
+        await session.cache.deleteMany(candidateSnapshotKeys)
       }
     })().catch(() => {})
   }

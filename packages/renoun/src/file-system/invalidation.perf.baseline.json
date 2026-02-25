@@ -1,0 +1,7 @@
+{
+  "meanInvalidationMs": 8,
+  "p95InvalidationMs": 16,
+  "p95ToMeanDriftRatio": 2,
+  "measuredIterations": 16,
+  "warmupIterations": 2
+}

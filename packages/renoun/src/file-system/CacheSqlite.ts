@@ -197,6 +197,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   #lastPrunedAt = 0
   #lastInflightCleanupAt = 0
   #lastAccessTouchAtByNodeKey = new Map<string, number>()
+  #preparedStatements = new Map<string, any>()
   #pruneInFlight?: Promise<void>
   #db: any
 
@@ -826,8 +827,47 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     })
   }
 
+  async deleteMany(nodeKeys: string[]): Promise<void> {
+    await this.#readyPromise
+
+    if (!this.#db || nodeKeys.length === 0) {
+      return
+    }
+
+    const uniqueNodeKeys = Array.from(
+      new Set(
+        nodeKeys.filter((nodeKey): nodeKey is string => {
+          return typeof nodeKey === 'string' && nodeKey.length > 0
+        })
+      )
+    )
+
+    if (uniqueNodeKeys.length === 0) {
+      return
+    }
+
+    await this.#runWithBusyRetries(() => {
+      this.#db.exec('BEGIN IMMEDIATE')
+      try {
+        this.#deleteRowsForNodeKeys(uniqueNodeKeys)
+        this.#db.exec('COMMIT')
+      } catch (error) {
+        try {
+          this.#db.exec('ROLLBACK')
+        } catch {}
+        throw error
+      }
+    })
+  }
+
   async deleteByDependencyPath(
     dependencyPathKey: string
+  ): Promise<CacheDependencyEvictionResult> {
+    return this.deleteByDependencyPaths([dependencyPathKey])
+  }
+
+  async deleteByDependencyPaths(
+    dependencyPathKeys: string[]
   ): Promise<CacheDependencyEvictionResult> {
     await this.#readyPromise
 
@@ -839,14 +879,34 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
     }
 
-    const dependencyPathKeys = getDependencyPathKeyVariants(dependencyPathKey)
+    const dependencyPathKeyVariants = new Set<string>()
+    for (const dependencyPathKey of dependencyPathKeys) {
+      if (typeof dependencyPathKey !== 'string' || dependencyPathKey.length === 0) {
+        continue
+      }
+
+      for (const variantPathKey of getDependencyPathKeyVariants(
+        dependencyPathKey
+      )) {
+        dependencyPathKeyVariants.add(variantPathKey)
+      }
+    }
+
+    if (dependencyPathKeyVariants.size === 0) {
+      return {
+        deletedNodeKeys: [],
+        usedDependencyIndex: false,
+        hasMissingDependencyMetadata: false,
+      }
+    }
+
     const dependencyPrefixes = ['file:', 'dir:', 'dir-mtime:'] as const
     const exactDependencyKeys = new Set<string>()
     const descendantDependencyPatterns: string[] = []
     const toDirectorySnapshotDepIndexKey = (depKey: string) =>
       `${DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX}${depKey}:1`
 
-    for (const dependencyPath of dependencyPathKeys) {
+    for (const dependencyPath of dependencyPathKeyVariants) {
       for (const prefix of dependencyPrefixes) {
         const exactDependencyKey = `${prefix}${dependencyPath}`
         exactDependencyKeys.add(exactDependencyKey)
@@ -905,19 +965,18 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       whereParameters.push(...descendantDependencyPatterns)
     }
 
+    const selectNodeKeysByDependencySql = `
+      SELECT DISTINCT entry.node_key as node_key
+      FROM cache_entries AS entry
+      JOIN cache_deps AS dependency
+        ON dependency.node_key = entry.node_key
+      WHERE (${whereClauses.join(' OR ')})
+      ORDER BY entry.node_key
+    `
     const deletedNodeKeys = await this.#runWithBusyRetries(() => {
-      const rows = this.#db
-        .prepare(
-          `
-            SELECT DISTINCT entry.node_key as node_key
-            FROM cache_entries AS entry
-            JOIN cache_deps AS dependency
-              ON dependency.node_key = entry.node_key
-            WHERE (${whereClauses.join(' OR ')})
-            ORDER BY entry.node_key
-          `
-        )
-        .all(...whereParameters) as Array<{ node_key?: string }>
+      const rows = this.#prepareStatement(selectNodeKeysByDependencySql).all(
+        ...whereParameters
+      ) as Array<{ node_key?: string }>
 
       return rows
         .map((row) => row.node_key)
@@ -941,22 +1000,21 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       })
     }
 
-    const hasMissingDependencyMetadata = await this.#runWithBusyRetries(() => {
-      const row = this.#db
-        .prepare(
-          `
-            SELECT EXISTS(
-              SELECT 1
-              FROM cache_entries AS entry
-              WHERE NOT EXISTS (
-                SELECT 1
-                FROM cache_deps AS dependency
-                WHERE dependency.node_key = entry.node_key
-              )
-            ) as has_missing
-          `
+    const hasMissingDependencyMetadataSql = `
+      SELECT EXISTS(
+        SELECT 1
+        FROM cache_entries AS entry
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM cache_deps AS dependency
+          WHERE dependency.node_key = entry.node_key
         )
-        .get() as { has_missing?: number | string | bigint } | undefined
+      ) as has_missing
+    `
+    const hasMissingDependencyMetadata = await this.#runWithBusyRetries(() => {
+      const row = this.#prepareStatement(hasMissingDependencyMetadataSql).get() as
+        | { has_missing?: number | string | bigint }
+        | undefined
 
       return Number(row?.has_missing ?? 0) > 0
     })
@@ -977,18 +1035,15 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     const normalizedPrefix = String(prefix)
     const likePattern = `${escapeSqlLikePattern(normalizedPrefix)}%`
+    const listNodeKeysByPrefixSql = `
+      SELECT node_key
+      FROM cache_entries
+      WHERE node_key LIKE ? ESCAPE '\\'
+      ORDER BY node_key
+    `
 
     const rows = (await this.#runWithBusyRetries(() =>
-      this.#db
-        .prepare(
-          `
-            SELECT node_key
-            FROM cache_entries
-            WHERE node_key LIKE ? ESCAPE '\\'
-            ORDER BY node_key
-          `
-        )
-        .all(likePattern)
+      this.#prepareStatement(listNodeKeysByPrefixSql).all(likePattern)
     )) as Array<{ node_key?: string }>
 
     return rows
@@ -1053,11 +1108,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           ).run('cache_schema_version', String(this.#schemaVersion))
         }
 
+        this.#clearPreparedStatements()
         this.#db = database
         this.#availability = 'available'
         await this.#runPruneWithRetries()
         return
       } catch (error) {
+        this.#clearPreparedStatements()
         this.#db = undefined
 
         if (database && typeof database.close === 'function') {
@@ -1132,6 +1189,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     )
     database.exec(
       `CREATE INDEX IF NOT EXISTS cache_deps_dep_key_idx ON cache_deps(dep_key)`
+    )
+    database.exec(
+      `CREATE INDEX IF NOT EXISTS cache_deps_dep_key_node_key_idx ON cache_deps(dep_key, node_key)`
     )
     database.exec(
       `
@@ -1422,6 +1482,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const database = this.#db
     this.#pruneInFlight = undefined
     this.#lastAccessTouchAtByNodeKey.clear()
+    this.#clearPreparedStatements()
     this.#db = undefined
     this.#availability = 'unavailable'
 
@@ -1438,6 +1499,27 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     return (
       nodeKey.startsWith('js.exports:') || nodeKey.startsWith('mdx.sections:')
     )
+  }
+
+  #prepareStatement(sql: string): any {
+    if (!this.#db) {
+      throw new Error(
+        '[renoun] SQLite prepare attempted after database initialization failed.'
+      )
+    }
+
+    const cached = this.#preparedStatements.get(sql)
+    if (cached) {
+      return cached
+    }
+
+    const prepared = this.#db.prepare(sql)
+    this.#preparedStatements.set(sql, prepared)
+    return prepared
+  }
+
+  #clearPreparedStatements(): void {
+    this.#preparedStatements.clear()
   }
 
   #deleteRowsForNodeKeys(nodeKeys: string[]) {
@@ -1464,14 +1546,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
 
       const placeholders = batch.map(() => '?').join(',')
-      this.#db
-        .prepare(`DELETE FROM cache_deps WHERE node_key IN (${placeholders})`)
-        .run(...batch)
-      this.#db
-        .prepare(
-          `DELETE FROM cache_entries WHERE node_key IN (${placeholders})`
-        )
-        .run(...batch)
+      const deleteDepsSql = `DELETE FROM cache_deps WHERE node_key IN (${placeholders})`
+      const deleteEntriesSql = `DELETE FROM cache_entries WHERE node_key IN (${placeholders})`
+      this.#prepareStatement(deleteDepsSql).run(...batch)
+      this.#prepareStatement(deleteEntriesSql).run(...batch)
     }
   }
 
@@ -1496,11 +1574,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
 
       const placeholders = batch.map(() => '?').join(',')
-      this.#db
-        .prepare(
-          `DELETE FROM cache_inflight WHERE node_key IN (${placeholders})`
-        )
-        .run(...batch)
+      const deleteInflightSql = `DELETE FROM cache_inflight WHERE node_key IN (${placeholders})`
+      this.#prepareStatement(deleteInflightSql).run(...batch)
     }
   }
 }

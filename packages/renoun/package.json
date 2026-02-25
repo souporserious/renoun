@@ -121,7 +121,9 @@
     "grammars": "node ./scripts/grammars.ts",
     "theme": "node ./scripts/theme.ts",
     "test": "vitest --run --typecheck",
-    "bench": "vitest bench"
+    "test:perf:invalidation": "vitest --run src/file-system/invalidation.perf.test.ts",
+    "bench": "vitest bench",
+    "bench:invalidation": "vitest bench src/file-system/invalidation.bench.ts"
   },
   "peerDependencies": {
     "prettier": ">=3.0.0",

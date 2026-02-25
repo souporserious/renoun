@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest'
 
-import { createProjectFileCache, invalidateProjectFileCache } from './cache.ts'
+import {
+  createProjectFileCache,
+  invalidateProjectFileCache,
+  invalidateProjectFileCachePaths,
+} from './cache.ts'
 import {
   disposeProjectWatchers,
   getProject,
@@ -98,6 +102,88 @@ describe('project file cache', () => {
     expect(first).toBe('value-1')
     expect(second).toBe('value-2')
     expect(calls).toBe(2)
+  })
+
+  test('invalidates multiple file paths in a single batch', async () => {
+    const project = {} as unknown as Project
+    const firstPath = '/project/src/first.ts'
+    const secondPath = '/project/src/second.ts'
+    let firstCalls = 0
+    let secondCalls = 0
+
+    await createProjectFileCache(project, firstPath, 'fileExportsText', () => {
+      firstCalls += 1
+      return `first-${firstCalls}`
+    })
+    await createProjectFileCache(project, secondPath, 'fileExportsText', () => {
+      secondCalls += 1
+      return `second-${secondCalls}`
+    })
+
+    invalidateProjectFileCachePaths(project, [firstPath, secondPath])
+
+    const firstValue = await createProjectFileCache(
+      project,
+      firstPath,
+      'fileExportsText',
+      () => {
+        firstCalls += 1
+        return `first-${firstCalls}`
+      }
+    )
+    const secondValue = await createProjectFileCache(
+      project,
+      secondPath,
+      'fileExportsText',
+      () => {
+        secondCalls += 1
+        return `second-${secondCalls}`
+      }
+    )
+
+    expect(firstValue).toBe('first-2')
+    expect(secondValue).toBe('second-2')
+  })
+
+  test('invalidates descendant file cache entries when a directory path is invalidated', async () => {
+    const project = {} as unknown as Project
+    const firstPath = '/project/src/components/button.ts'
+    const secondPath = '/project/src/components/input.ts'
+    let firstCalls = 0
+    let secondCalls = 0
+
+    await createProjectFileCache(project, firstPath, 'summary', () => {
+      firstCalls += 1
+      return `first-${firstCalls}`
+    })
+    await createProjectFileCache(project, secondPath, 'summary', () => {
+      secondCalls += 1
+      return `second-${secondCalls}`
+    })
+
+    invalidateProjectFileCache(project, '/project/src/components')
+
+    const firstValue = await createProjectFileCache(
+      project,
+      firstPath,
+      'summary',
+      () => {
+        firstCalls += 1
+        return `first-${firstCalls}`
+      }
+    )
+    const secondValue = await createProjectFileCache(
+      project,
+      secondPath,
+      'summary',
+      () => {
+        secondCalls += 1
+        return `second-${secondCalls}`
+      }
+    )
+
+    expect(firstValue).toBe('first-2')
+    expect(secondValue).toBe('second-2')
   })
 
   test('invalidates only one cache namespace for a file path', async () => {

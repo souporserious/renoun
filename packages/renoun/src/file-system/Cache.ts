@@ -53,8 +53,12 @@ export interface CacheStorePersistence {
     }
   ): Promise<{ applied: boolean; revision: number }>
   delete(nodeKey: string): Promise<void>
+  deleteMany?(nodeKeys: string[]): Promise<void>
   deleteByDependencyPath?(
     dependencyPathKey: string
+  ): Promise<CacheDependencyEvictionResult>
+  deleteByDependencyPaths?(
+    dependencyPathKeys: string[]
   ): Promise<CacheDependencyEvictionResult>
   listNodeKeysByPrefix?(prefix: string): Promise<string[]>
   /**
@@ -366,7 +370,7 @@ const failedPersistenceEntries = new WeakMap<
 const snapshotDependencyPathWatchers = new WeakMap<
   Snapshot,
   Set<{
-    invalidateDependencyPath(dependencyPathKey: string): void
+    invalidateDependencyPaths(dependencyPathKeys: Iterable<string>): void
   }>
 >()
 const snapshotInvalidationUnsubscribeBySnapshot = new WeakMap<
@@ -629,7 +633,7 @@ export class CacheStore {
       }
 
       for (const store of linkedStores) {
-        store.invalidateDependencyPath(path)
+        store.invalidateDependencyPaths([path])
       }
     })
     snapshotInvalidationUnsubscribeBySnapshot.set(this.#snapshot, unsubscribe)
@@ -1176,10 +1180,78 @@ export class CacheStore {
     )
   }
 
+  async deleteMany(nodeKeys: Iterable<string>): Promise<number> {
+    this.#assertNotDisposed('deleteMany')
+    const uniqueNodeKeys = Array.from(
+      new Set(
+        Array.from(nodeKeys).filter((nodeKey): nodeKey is string => {
+          return typeof nodeKey === 'string' && nodeKey.length > 0
+        })
+      )
+    )
+
+    if (uniqueNodeKeys.length === 0) {
+      return 0
+    }
+
+    this.#dependencyGraph.markNodesDirty(uniqueNodeKeys)
+    for (const nodeKey of uniqueNodeKeys) {
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'explicit-batch',
+      })
+      this.#bumpNodeInvalidationEpoch(nodeKey)
+      this.#dependencyGraph.unregisterNode(nodeKey)
+      this.#entries.delete(nodeKey)
+      this.#deleteRetainedStaleEntry(nodeKey)
+      this.#inflight.delete(nodeKey)
+      this.#persistenceOperationByKey.delete(nodeKey)
+      this.#persistenceIntentVersionByKey.delete(nodeKey)
+      this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+    }
+
+    const persistence = this.#getPersistence()
+    if (!persistence) {
+      return uniqueNodeKeys.length
+    }
+
+    for (const nodeKey of uniqueNodeKeys) {
+      markPersistedEntryInvalid(persistence, nodeKey)
+    }
+
+    if (persistence.deleteMany) {
+      try {
+        await persistence.deleteMany(uniqueNodeKeys)
+        for (const nodeKey of uniqueNodeKeys) {
+          clearPersistedEntryInvalidation(persistence, nodeKey)
+        }
+        return uniqueNodeKeys.length
+      } catch (error) {
+        this.#warnPersistenceFailure(
+          `deleteMany(${String(uniqueNodeKeys.length)})`,
+          error
+        )
+      }
+    }
+
+    for (const nodeKey of uniqueNodeKeys) {
+      await this.#withPersistenceIntent(nodeKey, () =>
+        this.#clearPersistedCacheEntry(nodeKey)
+      )
+    }
+
+    return uniqueNodeKeys.length
+  }
+
   async deleteByDependencyPath(
     dependencyPathKey: string
   ): Promise<CacheDependencyEvictionResult> {
-    this.#assertNotDisposed('deleteByDependencyPath')
+    return this.deleteByDependencyPaths([dependencyPathKey])
+  }
+
+  async deleteByDependencyPaths(
+    dependencyPathKeys: Iterable<string>
+  ): Promise<CacheDependencyEvictionResult> {
+    this.#assertNotDisposed('deleteByDependencyPaths')
     const persistence = this.#getPersistence()
     const defaultResult: CacheDependencyEvictionResult = {
       deletedNodeKeys: [],
@@ -1187,12 +1259,13 @@ export class CacheStore {
       hasMissingDependencyMetadata: false,
     }
 
-    if (!persistence?.deleteByDependencyPath) {
+    if (!persistence) {
       return defaultResult
     }
 
-    const dependencyPathCandidates =
-      this.#getDependencyPathCandidates(dependencyPathKey)
+    const dependencyPathCandidates = this.#getDependencyPathCandidatesForMany(
+      dependencyPathKeys
+    )
     const deletedNodeKeys = new Set<string>()
     let usedDependencyIndex = false
     let hasMissingDependencyMetadata = false
@@ -1201,23 +1274,49 @@ export class CacheStore {
       return defaultResult
     }
 
-    for (const normalizedPath of dependencyPathCandidates) {
-      let result: CacheDependencyEvictionResult
+    const dependencyPathCandidateList = Array.from(dependencyPathCandidates)
+    let batchResult: CacheDependencyEvictionResult | undefined
+
+    if (persistence.deleteByDependencyPaths) {
       try {
-        result = await persistence.deleteByDependencyPath(normalizedPath)
+        batchResult = await persistence.deleteByDependencyPaths(
+          dependencyPathCandidateList
+        )
       } catch (error) {
         this.#warnPersistenceFailure(
-          `deleteByDependencyPath(${normalizedPath})`,
+          `deleteByDependencyPaths(${String(dependencyPathCandidateList.length)})`,
           error
         )
-        continue
       }
+    }
 
-      for (const nodeKey of result.deletedNodeKeys) {
+    if (batchResult) {
+      for (const nodeKey of batchResult.deletedNodeKeys) {
         deletedNodeKeys.add(nodeKey)
       }
-      usedDependencyIndex ||= result.usedDependencyIndex
-      hasMissingDependencyMetadata ||= result.hasMissingDependencyMetadata
+      usedDependencyIndex ||= batchResult.usedDependencyIndex
+      hasMissingDependencyMetadata ||= batchResult.hasMissingDependencyMetadata
+    } else if (persistence.deleteByDependencyPath) {
+      for (const normalizedPath of dependencyPathCandidateList) {
+        let result: CacheDependencyEvictionResult
+        try {
+          result = await persistence.deleteByDependencyPath(normalizedPath)
+        } catch (error) {
+          this.#warnPersistenceFailure(
+            `deleteByDependencyPath(${normalizedPath})`,
+            error
+          )
+          continue
+        }
+
+        for (const nodeKey of result.deletedNodeKeys) {
+          deletedNodeKeys.add(nodeKey)
+        }
+        usedDependencyIndex ||= result.usedDependencyIndex
+        hasMissingDependencyMetadata ||= result.hasMissingDependencyMetadata
+      }
+    } else {
+      return defaultResult
     }
 
     if (deletedNodeKeys.size === 0) {
@@ -1276,18 +1375,49 @@ export class CacheStore {
     return candidates
   }
 
+  #getDependencyPathCandidatesForMany(
+    dependencyPathKeys: Iterable<string>
+  ): Set<string> {
+    const candidates = new Set<string>()
+
+    for (const dependencyPathKey of dependencyPathKeys) {
+      if (typeof dependencyPathKey !== 'string' || dependencyPathKey.length === 0) {
+        continue
+      }
+
+      for (const candidatePath of this.#getDependencyPathCandidates(
+        dependencyPathKey
+      )) {
+        candidates.add(candidatePath)
+      }
+    }
+
+    return candidates
+  }
+
   invalidateDependencyPath(dependencyPathKey: string): void {
-    this.#assertNotDisposed('invalidateDependencyPath')
-    const dependencyPathCandidates =
-      this.#getDependencyPathCandidates(dependencyPathKey)
+    this.invalidateDependencyPaths([dependencyPathKey])
+  }
+
+  invalidateDependencyPaths(dependencyPathKeys: Iterable<string>): void {
+    this.#assertNotDisposed('invalidateDependencyPaths')
+    const dependencyPathCandidates = this.#getDependencyPathCandidatesForMany(
+      dependencyPathKeys
+    )
+    if (dependencyPathCandidates.size === 0) {
+      return
+    }
+
     const affectedNodeKeys = new Set<string>()
 
-    for (const normalizedPath of dependencyPathCandidates) {
-      for (const nodeKey of this.#dependencyGraph.touchPathDependencies(
-        normalizedPath
-      )) {
-        affectedNodeKeys.add(nodeKey)
-      }
+    for (const nodeKey of this.#dependencyGraph.touchPathDependenciesMany(
+      dependencyPathCandidates
+    )) {
+      affectedNodeKeys.add(nodeKey)
+    }
+
+    if (affectedNodeKeys.size === 0) {
+      return
     }
 
     for (const nodeKey of affectedNodeKeys) {
