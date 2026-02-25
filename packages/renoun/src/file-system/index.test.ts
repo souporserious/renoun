@@ -1801,6 +1801,150 @@ describe('file system', () => {
     expect(getTextSpy).toHaveBeenCalledTimes(1)
   })
 
+  test('mdx frontmatter resolves statically without invoking runtime loader', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      frontmatter: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.mdx': [
+        "export const frontmatter = { title: 'static' }",
+        '',
+        '# Hello',
+      ].join('\n'),
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        mdx: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'mdx')) as MDXFile<
+      any,
+      any,
+      any
+    >
+
+    const frontmatter = await file.getFrontmatter()
+    const exportValue = await file.getExportValue('frontmatter')
+
+    expect(frontmatter).toEqual({ title: 'static' })
+    expect(exportValue).toEqual({ title: 'static' })
+    expect(runtimeLoader).not.toHaveBeenCalled()
+  })
+
+  test('mdx frontmatter falls back to runtime loader when static value is unavailable', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      frontmatter: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.mdx': ['export const metadata = { title: "Meta" }', '', '# Hello'].join(
+        '\n'
+      ),
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        mdx: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'mdx')) as MDXFile<
+      any,
+      any,
+      any
+    >
+
+    const frontmatter = await file.getFrontmatter()
+    const exportValue = await file.getExportValue('frontmatter')
+
+    expect(frontmatter).toEqual({ title: 'runtime' })
+    expect(exportValue).toEqual({ title: 'runtime' })
+    expect(runtimeLoader).toHaveBeenCalledTimes(1)
+  })
+
+  test('markdown frontmatter resolves from source without invoking runtime loader', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      frontmatter: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.md': ['---', 'title: static', '---', '', '# Hello'].join('\n'),
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        md: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'md')) as MarkdownFile<
+      any,
+      any,
+      any
+    >
+
+    const frontmatter = await file.getFrontmatter()
+    const exportValue = await file.getExportValue('frontmatter')
+
+    expect(frontmatter).toEqual({ title: 'static' })
+    expect(exportValue).toEqual({ title: 'static' })
+    expect(runtimeLoader).not.toHaveBeenCalled()
+  })
+
+  test('markdown frontmatter falls back to runtime loader when source frontmatter is unavailable', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      frontmatter: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.md': '# Hello',
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        md: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'md')) as MarkdownFile<
+      any,
+      any,
+      any
+    >
+
+    const frontmatter = await file.getFrontmatter()
+    const exportValue = await file.getExportValue('frontmatter')
+
+    expect(frontmatter).toEqual({ title: 'runtime' })
+    expect(exportValue).toEqual({ title: 'runtime' })
+    expect(runtimeLoader).toHaveBeenCalledTimes(1)
+  })
+
+  test('markdown source frontmatter applies schema coercion via getExportValue', async () => {
+    const directory = new Directory({
+      fileSystem: new InMemoryFileSystem({
+        'post.md': `---
+title: Hello
+date: 2024-12-24
+---
+`,
+      }),
+      schema: {
+        md: {
+          frontmatter: z.object({
+            title: z.string(),
+            date: z.coerce.date(),
+          }),
+        },
+      },
+    })
+    const file = await directory.getFile('post', 'md')
+
+    const frontmatter = await file.getExportValue('frontmatter')
+
+    frontmatter satisfies { title: string; date: Date }
+    expect(frontmatter.date).toBeInstanceOf(Date)
+  })
+
   test('mdx file provides chat urls with raw source', async () => {
     const source = ['# Hello', '', '## World'].join('\n')
     const fileSystem = new InMemoryFileSystem({

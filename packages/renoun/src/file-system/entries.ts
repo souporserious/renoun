@@ -3387,24 +3387,33 @@ export class MDXFile<
       async (ctx) => {
         await ctx.recordFileDep(filePath)
 
+        const staticFrontmatter = (await this.getStaticExportValue(
+          'frontmatter'
+        )) as Record<string, unknown> | undefined
+        if (staticFrontmatter !== undefined) {
+          return this.parseExportValue('frontmatter', staticFrontmatter)
+        }
+
+        const result = await this.#getSourceWithFrontmatter()
+        if (result.frontmatter !== undefined) {
+          return this.parseExportValue('frontmatter', result.frontmatter)
+        }
+
+        let runtimeFrontmatter: Record<string, unknown> | undefined
+
         try {
           this.#resolvingFrontmatter = true
-          const frontmatter = (await this.getExportValue(
-            'frontmatter' as any
-          )) as Record<string, unknown> | undefined
-
-          if (frontmatter !== undefined) {
-            return frontmatter
-          }
-        } catch (error) {
-          if (!(error instanceof ModuleExportNotFoundError)) {
-            throw error
-          }
+          const fileModule = await this.#getModule()
+          runtimeFrontmatter = fileModule['frontmatter'] as
+            | Record<string, unknown>
+            | undefined
         } finally {
           this.#resolvingFrontmatter = false
         }
 
-        const result = await this.#getSourceWithFrontmatter()
+        if (runtimeFrontmatter !== undefined) {
+          return this.parseExportValue('frontmatter', runtimeFrontmatter)
+        }
 
         return result.frontmatter
       }
@@ -3570,6 +3579,24 @@ export class MDXFile<
     return name in fileModule
   }
 
+  /** Parse and validate an export value using the configured schema if available. */
+  parseExportValue(name: string, value: any): any {
+    const schemaOption =
+      this.schema ??
+      resolveDirectorySchemaOption(this.getParent().getSchema(), 'mdx')
+
+    if (!schemaOption || isStandardSchema(schemaOption)) {
+      return value
+    }
+
+    return validateExportValueWithExportSchemaMap(
+      schemaOption,
+      name,
+      value,
+      this.absolutePath
+    )
+  }
+
   /** Get the runtime value of an export in the MDX file. */
   async getExportValue<
     const ExportName extends 'default' | Extract<keyof Types, string>,
@@ -3578,19 +3605,6 @@ export class MDXFile<
     name: LooseExportName<{ default: MDXContent } & Types>
   ): Promise<any> {
     if (name === 'frontmatter') {
-      try {
-        const exportValue = await this.getExport('frontmatter' as any).then(
-          (fileExport) => fileExport.getValue()
-        )
-        if (exportValue !== undefined) {
-          return exportValue
-        }
-      } catch (error) {
-        if (!(error instanceof ModuleExportNotFoundError)) {
-          throw error
-        }
-      }
-
       return (await this.getFrontmatter()) ?? {}
     }
 
@@ -3785,24 +3799,27 @@ export class MarkdownFile<
       async (ctx) => {
         await ctx.recordFileDep(filePath)
 
+        const result = await this.#getSourceWithFrontmatter()
+        if (result.frontmatter !== undefined) {
+          return this.parseExportValue('frontmatter', result.frontmatter)
+        }
+
+        let runtimeFrontmatter: Record<string, unknown> | undefined
+
         try {
           this.#resolvingFrontmatter = true
-          const frontmatter = (await this.getExportValue(
-            'frontmatter' as any
-          )) as Record<string, unknown> | undefined
-
-          if (frontmatter !== undefined) {
-            return frontmatter
-          }
-        } catch (error) {
-          if (!(error instanceof ModuleExportNotFoundError)) {
-            throw error
-          }
+          const fileModule = await this.#getModule()
+          runtimeFrontmatter = fileModule['frontmatter'] as
+            | Record<string, unknown>
+            | undefined
         } finally {
           this.#resolvingFrontmatter = false
         }
 
-        const result = await this.#getSourceWithFrontmatter()
+        if (runtimeFrontmatter !== undefined) {
+          return this.parseExportValue('frontmatter', runtimeFrontmatter)
+        }
+
         return result.frontmatter
       }
     )
@@ -3974,6 +3991,10 @@ export class MarkdownFile<
       ApplyFileSchemaOption<{ default: MDXContent } & Types, SchemaOption>
     >
   ): Promise<any> {
+    if (name === 'frontmatter') {
+      return (await this.getFrontmatter()) ?? {}
+    }
+
     const fileModule = await this.#getModule()
     if (!(name in fileModule)) {
       throw new ModuleExportNotFoundError(
