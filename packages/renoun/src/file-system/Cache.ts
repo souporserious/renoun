@@ -1228,6 +1228,8 @@ export class CacheStore {
       }
     }
 
+    this.#dependencyGraph.markNodesDirty(deletedNodeKeys)
+
     for (const nodeKey of deletedNodeKeys) {
       this.#retainStaleEntry(
         nodeKey,
@@ -1235,7 +1237,6 @@ export class CacheStore {
         'delete-by-dependency-path'
       )
       this.#bumpNodeInvalidationEpoch(nodeKey)
-      this.#dependencyGraph.markNodeDirty(nodeKey)
       this.#dependencyGraph.unregisterNode(nodeKey)
       this.#entries.delete(nodeKey)
       this.#inflight.delete(nodeKey)
@@ -1296,7 +1297,6 @@ export class CacheStore {
         'invalidate-dependency-path'
       )
       this.#bumpNodeInvalidationEpoch(nodeKey)
-      this.#dependencyGraph.markNodeDirty(nodeKey)
       this.#dependencyGraph.unregisterNode(nodeKey)
       this.#entries.delete(nodeKey)
       this.#inflight.delete(nodeKey)
@@ -2163,22 +2163,24 @@ export class CacheStore {
   }
 
   #registerEntryInGraph(nodeKey: string, entry: CacheEntry): void {
-    for (const dependency of entry.deps) {
-      if (dependency.depKey.startsWith('node:')) {
-        continue
+    this.#dependencyGraph.batch(() => {
+      for (const dependency of entry.deps) {
+        if (dependency.depKey.startsWith('node:')) {
+          continue
+        }
+
+        this.#dependencyGraph.setDependencyVersion(
+          dependency.depKey,
+          dependency.depVersion
+        )
       }
 
-      this.#dependencyGraph.setDependencyVersion(
-        dependency.depKey,
-        dependency.depVersion
+      this.#dependencyGraph.registerNode(
+        nodeKey,
+        entry.deps.map((dependency) => dependency.depKey)
       )
-    }
-
-    this.#dependencyGraph.registerNode(
-      nodeKey,
-      entry.deps.map((dependency) => dependency.depKey)
-    )
-    this.#dependencyGraph.markNodeVersion(nodeKey, entry.fingerprint)
+      this.#dependencyGraph.markNodeVersion(nodeKey, entry.fingerprint)
+    })
   }
 
   async #isEntryFresh(
@@ -2215,6 +2217,10 @@ export class CacheStore {
     }
 
     visitedNodeKeys.add(nodeKey)
+    const dependencyVersionsToUpdate: Array<{
+      depKey: string
+      depVersion: string
+    }> = []
 
     for (const dependency of entry.deps) {
       const currentVersion = await this.#resolveDepVersion(
@@ -2229,14 +2235,23 @@ export class CacheStore {
           expectedVersion: dependency.depVersion,
           currentVersion,
         })
-        this.#dependencyGraph.markNodeDirty(nodeKey)
-        this.#dependencyGraph.touchDependency(dependency.depKey)
-        if (currentVersion !== undefined) {
-          this.#dependencyGraph.setDependencyVersion(
-            dependency.depKey,
-            currentVersion
-          )
-        }
+
+        this.#dependencyGraph.batch(() => {
+          for (const versionUpdate of dependencyVersionsToUpdate) {
+            this.#dependencyGraph.setDependencyVersion(
+              versionUpdate.depKey,
+              versionUpdate.depVersion
+            )
+          }
+          this.#dependencyGraph.markNodeDirty(nodeKey)
+          this.#dependencyGraph.touchDependency(dependency.depKey)
+          if (currentVersion !== undefined) {
+            this.#dependencyGraph.setDependencyVersion(
+              dependency.depKey,
+              currentVersion
+            )
+          }
+        })
         return false
       }
 
@@ -2244,11 +2259,22 @@ export class CacheStore {
         currentVersion !== undefined &&
         !dependency.depKey.startsWith('node:')
       ) {
-        this.#dependencyGraph.setDependencyVersion(
-          dependency.depKey,
-          currentVersion
-        )
+        dependencyVersionsToUpdate.push({
+          depKey: dependency.depKey,
+          depVersion: currentVersion,
+        })
       }
+    }
+
+    if (dependencyVersionsToUpdate.length > 0) {
+      this.#dependencyGraph.batch(() => {
+        for (const versionUpdate of dependencyVersionsToUpdate) {
+          this.#dependencyGraph.setDependencyVersion(
+            versionUpdate.depKey,
+            versionUpdate.depVersion
+          )
+        }
+      })
     }
 
     return true

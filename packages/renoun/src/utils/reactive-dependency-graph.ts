@@ -1,4 +1,12 @@
-import { effect, setActiveSub, signal, trigger } from 'alien-signals'
+import {
+  effect,
+  effectScope,
+  endBatch,
+  setActiveSub,
+  signal,
+  startBatch,
+  trigger,
+} from 'alien-signals'
 import { normalizePathKey } from './path.ts'
 
 type MutableSignal<Value> = {
@@ -41,6 +49,20 @@ function runUntracked<Value>(task: () => Value): Value {
   }
 }
 
+function runBatchedUntracked(task: () => void): void {
+  const previousSub = setActiveSub(undefined)
+  startBatch()
+  try {
+    task()
+  } finally {
+    try {
+      endBatch()
+    } finally {
+      setActiveSub(previousSub)
+    }
+  }
+}
+
 export class ReactiveDependencyGraph {
   readonly #dependencySignals = new Map<
     string,
@@ -80,19 +102,30 @@ export class ReactiveDependencyGraph {
     this.#dirtyNodeKeys.delete(nodeKey)
 
     let isFirstRun = true
-    const stop = effect(() => {
-      for (const dependencyKey of normalizedDependencyKeys) {
-        const dependencySignal = this.#getDependencySignal(dependencyKey)
-        dependencySignal()
-      }
+    const stop = effectScope(() => {
+      effect(() => {
+        for (const dependencyKey of normalizedDependencyKeys) {
+          const dependencySignal = this.#getDependencySignal(dependencyKey)
+          dependencySignal()
+        }
 
-      if (isFirstRun) {
-        isFirstRun = false
-        return
-      }
+        if (isFirstRun) {
+          isFirstRun = false
+          return
+        }
 
-      dirtySignal(true)
-      this.#dirtyNodeKeys.add(nodeKey)
+        const wasDirty = runUntracked(() => dirtySignal())
+        if (wasDirty) {
+          return
+        }
+
+        runUntracked(() => {
+          dirtySignal(true)
+        })
+        this.#dirtyNodeKeys.add(nodeKey)
+        // Propagate to parents that depend on node:${nodeKey}.
+        this.#touchDependencyKeys([this.#toNodeDependencyKey(nodeKey)])
+      })
     })
 
     this.#nodes.set(nodeKey, {
@@ -127,10 +160,7 @@ export class ReactiveDependencyGraph {
   }
 
   touchDependency(depKey: string): void {
-    const dependencySignal = this.#getDependencySignal(depKey)
-    runUntracked(() => {
-      trigger(dependencySignal)
-    })
+    this.#touchDependencyKeys([depKey])
   }
 
   markNodeVersion(nodeKey: string, version: string): void {
@@ -138,15 +168,29 @@ export class ReactiveDependencyGraph {
   }
 
   markNodeDirty(nodeKey: string): void {
-    const node = this.#nodes.get(nodeKey)
-    if (node) {
-      runUntracked(() => {
-        node.dirty(true)
-      })
-      this.#dirtyNodeKeys.add(nodeKey)
+    this.markNodesDirty([nodeKey])
+  }
+
+  markNodesDirty(nodeKeys: Iterable<string>): void {
+    const nodeDependencyKeysToTouch = new Set<string>()
+
+    for (const nodeKey of nodeKeys) {
+      const node = this.#nodes.get(nodeKey)
+      if (node) {
+        runUntracked(() => {
+          node.dirty(true)
+        })
+        this.#dirtyNodeKeys.add(nodeKey)
+      }
+
+      nodeDependencyKeysToTouch.add(this.#toNodeDependencyKey(nodeKey))
     }
 
-    this.touchDependency(this.#toNodeDependencyKey(nodeKey))
+    this.#touchDependencyKeys(nodeDependencyKeysToTouch)
+  }
+
+  batch(task: () => void): void {
+    runBatchedUntracked(task)
   }
 
   isNodeDirty(nodeKey: string): boolean {
@@ -182,23 +226,23 @@ export class ReactiveDependencyGraph {
       dependencyKeysToTouch.add(dependencyKey)
     }
 
-    for (const dependencyKey of dependencyKeysToTouch) {
-      this.touchDependency(dependencyKey)
-    }
-
-    return dependencyKeysToTouch.size
+    return this.#touchDependencyKeys(dependencyKeysToTouch)
   }
 
   touchPathDependencies(pathKey: string): string[] {
     const normalizedPath = normalizePathKey(pathKey)
     const dependencyKeysToTouch =
       this.#collectMatchingPathDependencyKeys(normalizedPath)
-    const affectedNodeKeys = this.#collectAffectedNodeKeysForDependencyKeys(
-      dependencyKeysToTouch
-    )
+    const affectedNodeKeys =
+      this.#collectDirectNodeKeysForDependencyKeys(dependencyKeysToTouch)
+    const dirtyNodeKeysBefore = new Set(this.#dirtyNodeKeys)
 
-    for (const dependencyKey of dependencyKeysToTouch) {
-      this.touchDependency(dependencyKey)
+    this.#touchDependencyKeys(dependencyKeysToTouch)
+
+    for (const dirtyNodeKey of this.#dirtyNodeKeys) {
+      if (!dirtyNodeKeysBefore.has(dirtyNodeKey)) {
+        affectedNodeKeys.add(dirtyNodeKey)
+      }
     }
 
     return Array.from(affectedNodeKeys)
@@ -209,7 +253,7 @@ export class ReactiveDependencyGraph {
     const dependencyKeysToTouch =
       this.#collectMatchingPathDependencyKeys(normalizedPath)
     return Array.from(
-      this.#collectAffectedNodeKeysForDependencyKeys(dependencyKeysToTouch)
+      this.#collectDirectNodeKeysForDependencyKeys(dependencyKeysToTouch)
     )
   }
 
@@ -245,35 +289,19 @@ export class ReactiveDependencyGraph {
     return removed
   }
 
-  #collectAffectedNodeKeysForDependencyKeys(
+  #collectDirectNodeKeysForDependencyKeys(
     dependencyKeys: Iterable<string>
   ): Set<string> {
     const affectedNodeKeys = new Set<string>()
-    const dependencyKeysToVisit = Array.from(new Set(dependencyKeys))
-    const dependencyKeysVisited = new Set<string>(dependencyKeysToVisit)
 
-    while (dependencyKeysToVisit.length > 0) {
-      const dependencyKey = dependencyKeysToVisit.pop()
-      if (!dependencyKey) {
-        continue
-      }
-
+    for (const dependencyKey of dependencyKeys) {
       const nodeKeys = this.#nodeKeysByDependency.get(dependencyKey)
       if (!nodeKeys) {
         continue
       }
 
       for (const nodeKey of nodeKeys) {
-        if (affectedNodeKeys.has(nodeKey)) {
-          continue
-        }
-
         affectedNodeKeys.add(nodeKey)
-        const nodeDependencyKey = this.#toNodeDependencyKey(nodeKey)
-        if (!dependencyKeysVisited.has(nodeDependencyKey)) {
-          dependencyKeysVisited.add(nodeDependencyKey)
-          dependencyKeysToVisit.push(nodeDependencyKey)
-        }
       }
     }
 
@@ -309,6 +337,24 @@ export class ReactiveDependencyGraph {
     const created = signal<string | undefined>(undefined)
     this.#dependencySignals.set(depKey, created)
     return created
+  }
+
+  #touchDependencyKeys(dependencyKeys: Iterable<string>): number {
+    const uniqueDependencyKeys = Array.from(new Set(dependencyKeys))
+    if (uniqueDependencyKeys.length === 0) {
+      return 0
+    }
+
+    runBatchedUntracked(() => {
+      trigger(() => {
+        for (const dependencyKey of uniqueDependencyKeys) {
+          const dependencySignal = this.#getDependencySignal(dependencyKey)
+          dependencySignal()
+        }
+      })
+    })
+
+    return uniqueDependencyKeys.length
   }
 
   #linkNodeDependency(nodeKey: string, dependencyKey: string): void {

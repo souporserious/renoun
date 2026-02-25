@@ -41,4 +41,21 @@ describe('ReactiveDependencyGraph', () => {
       expect(graph.getPathDependencyKeys(`src/${index}.ts`)).toEqual([])
     }
   })
+
+  test('propagates transitive node dirtiness through node dependencies', () => {
+    const graph = new ReactiveDependencyGraph()
+
+    graph.registerNode('child', ['file:src/child.ts'])
+    graph.registerNode('parent', ['node:child'])
+    graph.registerNode('grandparent', ['node:parent'])
+
+    expect(graph.touchPathDependencies('src/child.ts').sort()).toEqual([
+      'child',
+      'grandparent',
+      'parent',
+    ])
+    expect(graph.isNodeDirty('child')).toBe(true)
+    expect(graph.isNodeDirty('parent')).toBe(true)
+    expect(graph.isNodeDirty('grandparent')).toBe(true)
+  })
 })
