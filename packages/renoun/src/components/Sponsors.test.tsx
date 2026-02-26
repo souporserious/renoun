@@ -72,22 +72,6 @@ function createGraphqlResponse(options?: {
   )
 }
 
-function createViewerLoginResponse(viewerLogin: string) {
-  return new Response(
-    JSON.stringify({
-      data: {
-        viewer: {
-          login: viewerLogin,
-        },
-      },
-    }),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }
-  )
-}
-
 function createSponsorsPageResponse(viewerLogin = 'renoun') {
   return new Response(
     `
@@ -134,16 +118,7 @@ describe('Sponsors cache', () => {
       async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
         const url = typeof input === 'string' ? input : input.toString()
         if (url === 'https://api.github.com/graphql') {
-          const query =
-            typeof init?.body === 'string'
-              ? (JSON.parse(init.body) as { query?: string }).query ?? ''
-              : ''
-
-          if (query.includes('sponsorshipsAsMaintainer')) {
-            return createGraphqlResponse()
-          }
-
-          return createViewerLoginResponse('renoun')
+          return createGraphqlResponse()
         }
 
         if (url === 'https://github.com/sponsors/renoun') {
@@ -176,7 +151,7 @@ describe('Sponsors cache', () => {
       },
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(secondResolvedTiers).toEqual(firstResolvedTiers)
     expect(secondResolvedTiers).toEqual([
       {
@@ -193,7 +168,7 @@ describe('Sponsors cache', () => {
     ])
   })
 
-  it('separates persistent cache entries across different sponsor viewer logins', async () => {
+  it('separates persistent cache entries across different sponsor tokens', async () => {
     process.env['GITHUB_SPONSORS_TOKEN'] = 'token-one'
     process.env['RENOUN_SPONSORS_CACHE_TTL_MS'] = '600000'
 
@@ -203,31 +178,18 @@ describe('Sponsors cache', () => {
         if (url === 'https://api.github.com/graphql') {
           const authorization = new Headers(init?.headers).get('Authorization')
 
-          const query =
-            typeof init?.body === 'string'
-              ? (JSON.parse(init.body) as { query?: string }).query ?? ''
-              : ''
-
           if (authorization === 'Bearer token-one') {
-            if (query.includes('sponsorshipsAsMaintainer')) {
-              return createGraphqlResponse({
-                username: 'octocat-one',
-                viewerLogin: 'renoun-one',
-              })
-            }
-
-            return createViewerLoginResponse('renoun-one')
+            return createGraphqlResponse({
+              username: 'octocat-one',
+              viewerLogin: 'renoun-one',
+            })
           }
 
           if (authorization === 'Bearer token-two') {
-            if (query.includes('sponsorshipsAsMaintainer')) {
-              return createGraphqlResponse({
-                username: 'octocat-two',
-                viewerLogin: 'renoun-two',
-              })
-            }
-
-            return createViewerLoginResponse('renoun-two')
+            return createGraphqlResponse({
+              username: 'octocat-two',
+              viewerLogin: 'renoun-two',
+            })
           }
 
           throw new Error(`Unexpected authorization header: ${authorization}`)

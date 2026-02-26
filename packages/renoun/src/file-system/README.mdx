@@ -479,9 +479,9 @@ In GitHub Actions, resolve the token once and use it in `actions/cache`:
       .renoun/cache/fs-cache.sqlite
       .renoun/cache/fs-cache.sqlite-shm
       .renoun/cache/fs-cache.sqlite-wal
-    key: ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
+    key: ${{ runner.os }}-node${{ matrix.node-version }}-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
     restore-keys: |
-      ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-
+      ${{ runner.os }}-node${{ matrix.node-version }}-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-
 ```
 
 #### Comparison with `GitVirtualFileSystem`

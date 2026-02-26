@@ -40,7 +40,9 @@ const SPONSORS_CACHE_VERSION_DEP = 'component-sponsors-version'
 const SPONSORS_CACHE_TTL_BUCKET_DEP = 'component-sponsors-ttl-bucket'
 const SPONSORS_CACHE_LOGIN_DEP = 'component-sponsors-login'
 const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
+const SPONSORS_VIEWER_LOGIN_CACHE_MAX_ENTRIES = 16
 let sponsorsCacheSessionPromise: Promise<RenounSession | undefined> | undefined
+const viewerLoginByToken = new Map<string, string>()
 
 function createSponsorsCacheNodeKey(payload: unknown): string {
   return createPersistentCacheNodeKey({
@@ -49,6 +51,35 @@ function createSponsorsCacheNodeKey(payload: unknown): string {
     namespace: SPONSORS_CACHE_NAMESPACE,
     payload,
   })
+}
+
+function cacheViewerLogin(token: string, viewerLogin: string): void {
+  if (viewerLoginByToken.get(token) === viewerLogin) {
+    return
+  }
+
+  viewerLoginByToken.delete(token)
+  viewerLoginByToken.set(token, viewerLogin)
+
+  while (viewerLoginByToken.size > SPONSORS_VIEWER_LOGIN_CACHE_MAX_ENTRIES) {
+    const oldestToken = viewerLoginByToken.keys().next().value
+    if (!oldestToken) {
+      break
+    }
+    viewerLoginByToken.delete(oldestToken)
+  }
+}
+
+function getCachedViewerLogin(token: string): string | undefined {
+  const viewerLogin = viewerLoginByToken.get(token)
+  if (!viewerLogin) {
+    return undefined
+  }
+
+  // Refresh recency so frequently used tokens stay in the small LRU cache.
+  viewerLoginByToken.delete(token)
+  viewerLoginByToken.set(token, viewerLogin)
+  return viewerLogin
 }
 
 async function fetchSponsorsViewerLogin(token: string): Promise<string> {
@@ -558,11 +589,21 @@ async function fetchSponsorsAndTierLinks(
   if (!token) {
     return fetchSponsorsAndTierLinksUncached(normalizedOptions)
   }
-  const viewerLogin = await fetchSponsorsViewerLogin(token)
 
   const cacheSession = await getSponsorsCacheSession()
   if (!cacheSession) {
     return fetchSponsorsAndTierLinksUncached(normalizedOptions)
+  }
+  const cachedViewerLogin = getCachedViewerLogin(token)
+  let viewerLogin = cachedViewerLogin
+
+  if (!viewerLogin) {
+    try {
+      viewerLogin = await fetchSponsorsViewerLogin(token)
+      cacheViewerLogin(token, viewerLogin)
+    } catch {
+      return fetchSponsorsAndTierLinksUncached(normalizedOptions)
+    }
   }
 
   const nodeKey = createSponsorsCacheNodeKey({

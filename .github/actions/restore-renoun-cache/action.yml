@@ -1,5 +1,10 @@
 name: Restore renoun cache
 description: Resolve and restore the renoun filesystem cache for CI jobs
+inputs:
+  node-version:
+    description: Node major version used by the workflow cache key segment
+    required: false
+    default: '22'
 runs:
   using: composite
   steps:
@@ -15,6 +20,6 @@ runs:
           .renoun/cache/fs-cache.sqlite
           .renoun/cache/fs-cache.sqlite-shm
           .renoun/cache/fs-cache.sqlite-wal
-        key: ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
+        key: ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
         restore-keys: |
-          ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-
+          ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-

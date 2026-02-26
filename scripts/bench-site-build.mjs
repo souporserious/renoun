@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, parse, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { performance } from 'node:perf_hooks'
 
@@ -269,8 +269,25 @@ function toPercent(value, digits = 1) {
 }
 
 async function cleanPaths(projectRoot, cleanPaths) {
+  const resolvedProjectRoot = resolve(projectRoot)
+
   for (const relativePath of cleanPaths) {
-    const absolutePath = resolve(projectRoot, relativePath)
+    const absolutePath = resolve(resolvedProjectRoot, relativePath)
+    const relativeToProjectRoot = relative(resolvedProjectRoot, absolutePath)
+    const isOutsideProjectRoot =
+      relativeToProjectRoot === '..' ||
+      relativeToProjectRoot.startsWith(`..${sep}`)
+
+    if (
+      absolutePath === resolvedProjectRoot ||
+      absolutePath === parse(absolutePath).root ||
+      isOutsideProjectRoot
+    ) {
+      throw new Error(
+        `Refusing to remove clean path outside workspace: ${relativePath} -> ${absolutePath}`
+      )
+    }
+
     await rm(absolutePath, { recursive: true, force: true })
   }
 }

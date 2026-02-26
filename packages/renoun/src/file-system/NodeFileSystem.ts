@@ -25,8 +25,6 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import {
   ensureRelativePath,
-  normalizePathKey,
-  normalizeSlashes,
   relativePath,
   trimLeadingDotSlash,
 } from '../utils/path.ts'
@@ -42,22 +40,17 @@ import {
   type SyncFileSystem,
   type WritableFileSystem,
 } from './FileSystem.ts'
-import {
-  parseGitStatusPorcelainV1Z,
-  parseNullTerminatedGitPathList,
-} from './git-status.ts'
-import { spawnWithResult, type SpawnResult } from './spawn.ts'
+import { spawnWithResult } from './spawn.ts'
 import type { DirectoryEntry } from './types.ts'
 import {
   createWorkspaceCacheKey,
   createWorkspaceChangedPathsCacheKey,
 } from './workspace-cache-key.ts'
 import {
-  createWorkspaceChangeToken,
-  createWorkspaceStatusDigest,
-  extractDirtyDigestFromWorkspaceToken,
-  extractHeadFromWorkspaceToken,
-} from './workspace-change-token.ts'
+  getWorkspaceChangedPathsSinceTokenFromGit,
+  getWorkspaceChangeTokenFromGit,
+  shouldIncludeIgnoredStatusForScope,
+} from './workspace-change-git.ts'
 
 const GIT_MAX_BUFFER_BYTES = 100 * 1024 * 1024
 const GIT_ROOT_CACHE_TTL_MS = 5 * 60 * 1000
@@ -249,27 +242,6 @@ export class NodeFileSystem
     return relativeRootPath
   }
 
-  async #shouldIncludeIgnoredStatus(
-    gitRoot: string,
-    scopePath: string
-  ): Promise<boolean> {
-    if (scopePath === '.') {
-      return false
-    }
-
-    const ignoredResult = await spawnWithResult(
-      'git',
-      ['check-ignore', '-q', '--', scopePath],
-      {
-        cwd: gitRoot,
-        maxBuffer: GIT_MAX_BUFFER_BYTES,
-        shell: false,
-      }
-    )
-
-    return ignoredResult.status === 0
-  }
-
   getAbsolutePath(path: string): string {
     const absolutePath = resolve(path)
 
@@ -337,57 +309,23 @@ export class NodeFileSystem
       }
 
       const scopePath = this.#toGitStatusScopePath(relativeRootPath)
-      const includeIgnoredStatuses = await this.#shouldIncludeIgnoredStatus(
-        gitRoot,
-        scopePath
-      )
-
-      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
-        cwd: gitRoot,
-        maxBuffer: GIT_MAX_BUFFER_BYTES,
-        shell: false,
-      })
-      if (headResult.status !== 0) {
-        return null
-      }
-
-      const headCommit = headResult.stdout.trim()
-      if (!headCommit) {
-        return null
-      }
-
-      const statusResult = await spawnWithResult(
-        'git',
-        [
-          'status',
-          '--porcelain=1',
-          '-z',
-          '--untracked-files=all',
-          ...(includeIgnoredStatuses ? ['--ignored=matching'] : []),
-          '--ignore-submodules=all',
-          '--',
-          scopePath,
-        ],
-        {
+      const runGit = (commandArguments: string[]) =>
+        spawnWithResult('git', commandArguments, {
           cwd: gitRoot,
           maxBuffer: GIT_MAX_BUFFER_BYTES,
           shell: false,
-        }
-      )
-      if (statusResult.status !== 0) {
-        return null
-      }
-
-      const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = await createWorkspaceStatusDigest({
-        entries: statusEntries,
-        getPathSignature: (relativePath) =>
-          this.#createWorkspaceStatusPathSignature(gitRoot, relativePath),
+        })
+      const includeIgnoredStatuses = await shouldIncludeIgnoredStatusForScope({
+        statusScope: scopePath,
+        runGit,
       })
 
-      return createWorkspaceChangeToken({
-        headCommit,
-        statusDigest,
+      return getWorkspaceChangeTokenFromGit({
+        statusScope: scopePath,
+        includeIgnoredStatuses,
+        runGit,
+        getPathSignature: (relativePath) =>
+          this.#createWorkspaceStatusPathSignature(gitRoot, relativePath),
       })
     })().catch(() => null)
   }
@@ -433,15 +371,6 @@ export class NodeFileSystem
     previousToken: string
   ): Promise<readonly string[] | null> {
     return (async () => {
-      const previousHead = extractHeadFromWorkspaceToken(previousToken)
-      if (!previousHead) {
-        return null
-      }
-
-      const previousDirtyDigest = extractDirtyDigestFromWorkspaceToken(
-        previousToken
-      )
-
       const gitRoot = this.#findGitRoot(absoluteRootPath)
       if (!gitRoot) {
         return null
@@ -453,119 +382,27 @@ export class NodeFileSystem
       }
 
       const scopePath = this.#toGitStatusScopePath(relativeRootPath)
-      const includeIgnoredStatuses = await this.#shouldIncludeIgnoredStatus(
-        gitRoot,
-        scopePath
-      )
-
-      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
-        cwd: gitRoot,
-        maxBuffer: GIT_MAX_BUFFER_BYTES,
-        shell: false,
-      })
-      if (headResult.status !== 0) {
-        return null
-      }
-
-      const currentHead = headResult.stdout.trim()
-      if (!currentHead) {
-        return null
-      }
-
-      const changedPaths = new Set<string>()
-      const diffResultPromise =
-        currentHead !== previousHead
-          ? spawnWithResult(
-              'git',
-              [
-                'diff',
-                '--name-only',
-                '--no-renames',
-                '-z',
-                `${previousHead}..${currentHead}`,
-                '--',
-                scopePath,
-              ],
-              {
-                cwd: gitRoot,
-                maxBuffer: GIT_MAX_BUFFER_BYTES,
-                shell: false,
-              }
-            )
-          : Promise.resolve<SpawnResult | null>(null)
-      const statusResultPromise = spawnWithResult(
-        'git',
-        [
-          'status',
-          '--porcelain=1',
-          '-z',
-          '--untracked-files=all',
-          ...(includeIgnoredStatuses ? ['--ignored=matching'] : []),
-          '--ignore-submodules=all',
-          '--',
-          scopePath,
-        ],
-        {
+      const runGit = (commandArguments: string[]) =>
+        spawnWithResult('git', commandArguments, {
           cwd: gitRoot,
           maxBuffer: GIT_MAX_BUFFER_BYTES,
           shell: false,
-        }
-      )
-      const [statusResult, diffResult] = await Promise.all([
-        statusResultPromise,
-        diffResultPromise,
-      ])
-
-      if (statusResult.status !== 0) {
-        return null
-      }
-
-      if (currentHead !== previousHead) {
-        if (!diffResult || diffResult.status !== 0) {
-          return null
-        }
-
-        const diffPaths = parseNullTerminatedGitPathList(diffResult.stdout)
-          .map((line) => normalizeSlashes(line))
-          .filter((line) => line.length > 0)
-
-        for (const diffPath of diffPaths) {
-          changedPaths.add(diffPath)
-        }
-      }
-
-      const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = await createWorkspaceStatusDigest({
-        entries: statusEntries,
-        getPathSignature: (relativePath) =>
-          this.#createWorkspaceStatusPathSignature(gitRoot, relativePath),
+        })
+      const includeIgnoredStatuses = await shouldIncludeIgnoredStatusForScope({
+        statusScope: scopePath,
+        runGit,
       })
 
-      if (
-        currentHead === previousHead &&
-        previousDirtyDigest === statusDigest.digest
-      ) {
-        return []
-      }
-
-      for (const statusEntry of statusEntries) {
-        for (const statusPath of statusEntry.paths) {
-          const normalizedStatusPath = normalizeSlashes(statusPath)
-          if (normalizedStatusPath.length > 0) {
-            changedPaths.add(normalizedStatusPath)
-          }
-        }
-      }
-
-      const workspaceRelativePaths = Array.from(changedPaths)
-        .map((path) =>
-          normalizePathKey(
-            this.getRelativePathToWorkspace(resolve(gitRoot, path))
-          )
-        )
-        .sort((first, second) => first.localeCompare(second))
-
-      return workspaceRelativePaths
+      return getWorkspaceChangedPathsSinceTokenFromGit({
+        previousToken,
+        statusScope: scopePath,
+        includeIgnoredStatuses,
+        runGit,
+        getPathSignature: (relativePath) =>
+          this.#createWorkspaceStatusPathSignature(gitRoot, relativePath),
+        toWorkspacePath: (path) =>
+          this.getRelativePathToWorkspace(resolve(gitRoot, path)),
+      })
     })().catch(() => null)
   }
 

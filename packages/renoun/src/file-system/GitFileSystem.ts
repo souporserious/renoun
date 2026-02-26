@@ -38,7 +38,6 @@ import { Writable } from 'node:stream'
 import {
   ensureRelativePath,
   joinPaths,
-  normalizePathKey,
   normalizeSlashes,
   relativePath,
   trimLeadingDotSlash,
@@ -100,20 +99,19 @@ import {
 } from './export-analysis.ts'
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key.ts'
 import { createGitFileSystemPersistentCacheNodeKey } from './git-cache-key.ts'
-import {
-  parseGitStatusPorcelainV1Z,
-  parseNullTerminatedGitPathList,
-} from './git-status.ts'
 import { resolveGitHubUsername, toGitHubProfileUrl } from './git-author.ts'
-import { spawnWithResult, type SpawnResult } from './spawn.ts'
+import {
+  spawnWithBuffer,
+  spawnWithResult,
+  spawnWithStdout,
+} from './spawn.ts'
 import type { Cache } from './Cache.ts'
 import { Session } from './Session.ts'
 import {
-  createWorkspaceChangeToken,
-  createWorkspaceStatusDigest,
-  extractDirtyDigestFromWorkspaceToken,
-  extractHeadFromWorkspaceToken,
-} from './workspace-change-token.ts'
+  getWorkspaceChangedPathsSinceTokenFromGit,
+  getWorkspaceChangeTokenFromGit,
+  shouldIncludeIgnoredStatusForScope,
+} from './workspace-change-git.ts'
 
 export interface GitFileSystemOptions extends FileSystemOptions {
   /** Repository source - remote URL or local path. */
@@ -620,88 +618,6 @@ function ensureCachedScopeSync(
   }
 }
 
-async function spawnWithBuffer(
-  command: string,
-  commandArguments: string[],
-  options: {
-    cwd: string
-    maxBuffer?: number
-    verbose?: boolean
-    env?: NodeJS.ProcessEnv
-  }
-): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, commandArguments, {
-      cwd: options.cwd,
-      stdio: 'pipe',
-      env: options.env ?? process.env,
-      shell: false,
-    })
-
-    const maxBuffer = options.maxBuffer ?? 100 * 1024 * 1024
-    let totalBytes = 0
-    const stdoutChunks: Buffer[] = []
-    let stderr = ''
-
-    child.stdout?.on('data', (chunk: Buffer) => {
-      totalBytes += chunk.length
-      if (totalBytes > maxBuffer) {
-        child.kill()
-        reject(
-          new Error(
-            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${commandArguments.join(
-              ' '
-            )}`
-          )
-        )
-        return
-      }
-      stdoutChunks.push(chunk)
-      if (options.verbose) {
-        process.stdout.write(chunk)
-      }
-    })
-
-    child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString()
-      if (options.verbose) {
-        process.stderr.write(chunk)
-      }
-    })
-
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code !== 0) {
-        reject(
-          new Error(
-            stderr || `Command failed: ${command} ${commandArguments.join(' ')}`
-          )
-        )
-        return
-      }
-      resolve(Buffer.concat(stdoutChunks))
-    })
-  })
-}
-
-/** Spawns a process and returns the stdout. */
-async function spawnAsync(
-  command: string,
-  commandArguments: string[],
-  options: { cwd: string; maxBuffer?: number; verbose?: boolean }
-): Promise<string> {
-  const result = await spawnWithResult(command, commandArguments, options)
-
-  if (result.status !== 0) {
-    throw new Error(
-      result.stderr ||
-        `Git exited with code ${result.status} for: ${command} ${commandArguments.join(' ')}`
-    )
-  }
-
-  return result.stdout
-}
-
 export class GitFileSystem
   extends BaseFileSystem
   implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
@@ -884,56 +800,25 @@ export class GitFileSystem
     try {
       await this.#ensureRepoReady()
 
-      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
-        cwd: this.repoRoot,
-        maxBuffer: this.maxBufferBytes,
-        verbose: false,
-      })
-      if (headResult.status !== 0) {
-        return null
-      }
-
-      const headCommit = headResult.stdout.trim()
-      if (!headCommit) {
-        return null
-      }
-
       const relativeRoot = this.#normalizeRepoPath(rootPath)
       const statusScope = relativeRoot || '.'
-      const includeIgnoredStatuses =
-        await this.#shouldIncludeIgnoredStatus(statusScope)
-      const statusResult = await spawnWithResult(
-        'git',
-        [
-          'status',
-          '--porcelain=1',
-          '-z',
-          '--untracked-files=all',
-          ...(includeIgnoredStatuses ? ['--ignored=matching'] : []),
-          '--ignore-submodules=all',
-          '--',
-          statusScope,
-        ],
-        {
+      const runGit = (commandArguments: string[]) =>
+        spawnWithResult('git', commandArguments, {
           cwd: this.repoRoot,
           maxBuffer: this.maxBufferBytes,
           verbose: false,
-        }
-      )
-      if (statusResult.status !== 0) {
-        return null
-      }
-
-      const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = await createWorkspaceStatusDigest({
-        entries: statusEntries,
-        getPathSignature: (relativePath) =>
-          this.#createWorkspaceStatusPathSignature(relativePath),
+        })
+      const includeIgnoredStatuses = await shouldIncludeIgnoredStatusForScope({
+        statusScope,
+        runGit,
       })
 
-      return createWorkspaceChangeToken({
-        headCommit,
-        statusDigest,
+      return getWorkspaceChangeTokenFromGit({
+        statusScope,
+        includeIgnoredStatuses,
+        runGit,
+        getPathSignature: (relativePath) =>
+          this.#createWorkspaceStatusPathSignature(relativePath),
       })
     } catch {
       return null
@@ -947,123 +832,29 @@ export class GitFileSystem
     try {
       await this.#ensureRepoReady()
 
-      const previousHead = extractHeadFromWorkspaceToken(previousToken)
-      if (!previousHead) {
-        return null
-      }
-      const previousDirtyDigest = extractDirtyDigestFromWorkspaceToken(
-        previousToken
-      )
-
-      const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
-        cwd: this.repoRoot,
-        maxBuffer: this.maxBufferBytes,
-        verbose: false,
-      })
-      if (headResult.status !== 0) {
-        return null
-      }
-
-      const currentHead = headResult.stdout.trim()
-      if (!currentHead) {
-        return null
-      }
-
       const relativeRoot = this.#normalizeRepoPath(rootPath)
       const statusScope = relativeRoot || '.'
-      const includeIgnoredStatuses =
-        await this.#shouldIncludeIgnoredStatus(statusScope)
-      const changedPaths = new Set<string>()
-      const diffResultPromise =
-        currentHead !== previousHead
-          ? spawnWithResult(
-              'git',
-              [
-                'diff',
-                '--name-only',
-                '--no-renames',
-                '-z',
-                `${previousHead}..${currentHead}`,
-                '--',
-                statusScope,
-              ],
-              {
-                cwd: this.repoRoot,
-                maxBuffer: this.maxBufferBytes,
-                verbose: false,
-              }
-            )
-          : Promise.resolve<SpawnResult | null>(null)
-      const statusResultPromise = spawnWithResult(
-        'git',
-        [
-          'status',
-          '--porcelain=1',
-          '-z',
-          '--untracked-files=all',
-          ...(includeIgnoredStatuses ? ['--ignored=matching'] : []),
-          '--ignore-submodules=all',
-          '--',
-          statusScope,
-        ],
-        {
+      const runGit = (commandArguments: string[]) =>
+        spawnWithResult('git', commandArguments, {
           cwd: this.repoRoot,
           maxBuffer: this.maxBufferBytes,
           verbose: false,
-        }
-      )
-      const [statusResult, diffResult] = await Promise.all([
-        statusResultPromise,
-        diffResultPromise,
-      ])
-      if (statusResult.status !== 0) {
-        return null
-      }
-
-      if (currentHead !== previousHead) {
-        if (!diffResult || diffResult.status !== 0) {
-          return null
-        }
-
-        const diffPaths = parseNullTerminatedGitPathList(diffResult.stdout)
-          .map((line) => normalizeSlashes(line))
-          .filter((line) => line.length > 0)
-
-        for (const diffPath of diffPaths) {
-          changedPaths.add(diffPath)
-        }
-      }
-
-      const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = await createWorkspaceStatusDigest({
-        entries: statusEntries,
-        getPathSignature: (relativePath) =>
-          this.#createWorkspaceStatusPathSignature(relativePath),
+        })
+      const includeIgnoredStatuses = await shouldIncludeIgnoredStatusForScope({
+        statusScope,
+        runGit,
       })
 
-      if (
-        currentHead === previousHead &&
-        previousDirtyDigest === statusDigest.digest
-      ) {
-        return []
-      }
-
-      for (const statusEntry of statusEntries) {
-        for (const statusPath of statusEntry.paths) {
-          const normalizedStatusPath = normalizeSlashes(statusPath)
-          if (normalizedStatusPath.length > 0) {
-            changedPaths.add(normalizedStatusPath)
-          }
-        }
-      }
-
-      return Array.from(changedPaths)
-        .map((path) =>
-          normalizePathKey(
-            this.getRelativePathToWorkspace(this.#resolveRepoAbsolutePath(path))
-          )
-        )
-        .sort((first, second) => first.localeCompare(second))
+      return getWorkspaceChangedPathsSinceTokenFromGit({
+        previousToken,
+        statusScope,
+        includeIgnoredStatuses,
+        runGit,
+        getPathSignature: (relativePath) =>
+          this.#createWorkspaceStatusPathSignature(relativePath),
+        toWorkspacePath: (path) =>
+          this.getRelativePathToWorkspace(this.#resolveRepoAbsolutePath(path)),
+      })
     } catch {
       return null
     }
@@ -1435,24 +1226,6 @@ export class GitFileSystem
     }
     assertSafeRepoPath(relative)
     return relative
-  }
-
-  async #shouldIncludeIgnoredStatus(statusScope: string): Promise<boolean> {
-    if (statusScope === '.') {
-      return false
-    }
-
-    const ignoredResult = await spawnWithResult(
-      'git',
-      ['check-ignore', '-q', '--', statusScope],
-      {
-        cwd: this.repoRoot,
-        maxBuffer: this.maxBufferBytes,
-        verbose: false,
-      }
-    )
-
-    return ignoredResult.status === 0
   }
 
   async #createWorkspaceStatusPathSignature(
@@ -2514,7 +2287,7 @@ export class GitFileSystem
 
         let stdout = ''
         try {
-          stdout = await spawnAsync('git', commandArguments, {
+          stdout = await spawnWithStdout('git', commandArguments, {
             cwd: this.repoRoot,
             maxBuffer: this.maxBufferBytes,
             verbose: this.verbose,
@@ -2564,7 +2337,7 @@ export class GitFileSystem
       'descendantCommit'
     )
     try {
-      await spawnAsync(
+      await spawnWithStdout(
         'git',
         ['merge-base', '--is-ancestor', safeAncestor, safeDescendant],
         {
@@ -2581,7 +2354,7 @@ export class GitFileSystem
 
   async #getCommitUnix(commit: string): Promise<number> {
     const safeCommit = assertSafeGitArg(commit, 'commit')
-    const out = await spawnAsync(
+    const out = await spawnWithStdout(
       'git',
       ['show', '-s', '--format=%at', safeCommit],
       {
@@ -2846,7 +2619,7 @@ export class GitFileSystem
             '--',
             ...scopeDirectories,
           ]
-          const result = await spawnAsync('git', commandArguments, {
+          const result = await spawnWithStdout('git', commandArguments, {
             cwd: this.repoRoot,
             maxBuffer: this.maxBufferBytes,
           })
@@ -4376,7 +4149,7 @@ export class GitFileSystem
   async #ensureFullHistory(): Promise<void> {
     try {
       await this.#ensureRepoReady()
-      const isShallow = await spawnAsync(
+      const isShallow = await spawnWithStdout(
         'git',
         ['rev-parse', '--is-shallow-repository'],
         {
@@ -4396,7 +4169,7 @@ export class GitFileSystem
           this.fetchRemote,
           'fetchRemote'
         )
-        await spawnAsync(
+        await spawnWithStdout(
           'git',
           ['fetch', '--unshallow', '--quiet', safeFetchRemote],
           {
@@ -4447,7 +4220,7 @@ export class GitFileSystem
     this.#isShallowChecked = true
 
     try {
-      const out = await spawnAsync(
+      const out = await spawnWithStdout(
         'git',
         ['rev-parse', '--is-shallow-repository'],
         { cwd: this.repoRoot }
@@ -4464,7 +4237,7 @@ export class GitFileSystem
     const safeRef = assertSafeGitArg(ref, 'ref')
     try {
       await this.#ensureRepoReady()
-      const out = await spawnAsync(
+      const out = await spawnWithStdout(
         'git',
         ['rev-parse', '--verify', `${safeRef}^{commit}`],
         {
@@ -5650,7 +5423,7 @@ async function getRepoRoot(inputPath: string) {
     throw new Error(`Not a directory: ${absolutePath}`)
   }
   try {
-    const out = await spawnAsync('git', ['rev-parse', '--show-toplevel'], {
+    const out = await spawnWithStdout('git', ['rev-parse', '--show-toplevel'], {
       cwd: absolutePath,
     })
     return String(out).trim()

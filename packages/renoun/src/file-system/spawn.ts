@@ -109,3 +109,88 @@ export function spawnWithResult(
     child.on('close', (status) => finish(undefined, { status, stdout, stderr }))
   })
 }
+
+/** Spawns a process and returns stdout, rejecting when the command fails. */
+export async function spawnWithStdout(
+  command: string,
+  commandArguments: string[],
+  options: SpawnWithResultOptions
+): Promise<string> {
+  const result = await spawnWithResult(command, commandArguments, options)
+
+  if (result.status !== 0) {
+    throw new Error(
+      result.stderr ||
+        `Command failed with code ${result.status}: ${command} ${commandArguments.join(
+          ' '
+        )}`
+    )
+  }
+
+  return result.stdout
+}
+
+/** Spawns a process and returns stdout as a Buffer, rejecting on failure. */
+export function spawnWithBuffer(
+  command: string,
+  commandArguments: string[],
+  options: SpawnWithResultOptions
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, commandArguments, {
+      cwd: options.cwd,
+      stdio: 'pipe',
+      env: options.env ?? process.env,
+      shell: options.shell ?? false,
+    })
+
+    const maxBuffer = options.maxBuffer ?? DEFAULT_MAX_BUFFER
+    let totalBytes = 0
+    const stdoutChunks: Buffer[] = []
+    let stderr = ''
+
+    child.stdout?.on('data', (chunk: Buffer) => {
+      totalBytes += chunk.length
+      if (totalBytes > maxBuffer) {
+        child.kill()
+        reject(
+          new Error(
+            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${commandArguments.join(
+              ' '
+            )}`
+          )
+        )
+        return
+      }
+
+      stdoutChunks.push(chunk)
+      if (options.verbose) {
+        process.stdout.write(chunk)
+      }
+    })
+
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+      if (options.verbose) {
+        process.stderr.write(chunk)
+      }
+    })
+
+    child.on('error', reject)
+    child.on('close', (status) => {
+      if (status !== 0) {
+        reject(
+          new Error(
+            stderr ||
+              `Command failed with code ${status}: ${command} ${commandArguments.join(
+                ' '
+              )}`
+          )
+        )
+        return
+      }
+
+      resolve(Buffer.concat(stdoutChunks))
+    })
+  })
+}

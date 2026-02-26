@@ -40,6 +40,8 @@ jobs:
 
             - name: Restore renoun cache
               uses: ./.github/actions/restore-renoun-cache
+              with:
+                node-version: 22
 
             - name: Install dependencies
               run: pnpm install --frozen-lockfile --ignore-scripts

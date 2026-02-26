@@ -57,6 +57,8 @@ jobs:
       - name: Restore renoun cache
         if: steps.detect.outputs.changed == 'true'
         uses: ./.github/actions/restore-renoun-cache
+        with:
+          node-version: 22
 
       - name: Install dependencies
         if: steps.detect.outputs.changed == 'true'
