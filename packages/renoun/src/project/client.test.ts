@@ -167,6 +167,88 @@ describe('project client transport guards', () => {
     expect(second).toMatchObject({ resolveTypeCallCount: 2 })
   })
 
+  test('refresh notifications invalidate dependency-aware RPC cache entries by response dependencies', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let resolveTypeCallCount = 0
+    const callMethod = vi.fn(
+      async (method: string, params?: Record<string, unknown>) => {
+        if (method === 'resolveTypeAtLocationWithDependencies') {
+          const filePath = String(params?.filePath ?? '')
+          return {
+            filePath,
+            resolveTypeCallCount: ++resolveTypeCallCount,
+            dependencies: [filePath, '/project/src/b.ts'],
+          }
+        }
+
+        if (method === 'getRefreshInvalidationsSince') {
+          return { nextCursor: 0, fullRefresh: false }
+        }
+
+        throw new Error(`Unexpected method: ${method}`)
+      }
+    )
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const first = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+    const second = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    expect(first).toMatchObject({ resolveTypeCallCount: 1 })
+    expect(second).toMatchObject({ resolveTypeCallCount: 1 })
+    expect(callMethod).toHaveBeenCalledTimes(1)
+
+    const notificationListener = listeners.get('notification')
+    expect(notificationListener).toBeTypeOf('function')
+    notificationListener!({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/b.ts'],
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const third = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    expect(third).toMatchObject({ resolveTypeCallCount: 2 })
+    expect(callMethod).toHaveBeenCalledTimes(2)
+    expect(mocks.invalidateRuntimeAnalysisCachePaths).toHaveBeenCalledWith([
+      'project/src/b.ts',
+    ])
+    expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
+      'project/src/b.ts',
+    ])
+  })
+
   test('refresh notifications invalidate only matching dependency-aware RPC cache entries', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'

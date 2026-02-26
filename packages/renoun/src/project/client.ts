@@ -297,6 +297,31 @@ function collectClientRpcDependencyPaths(
   return Array.from(dependencyPaths)
 }
 
+function collectClientRpcResponseDependencyPaths(
+  method: ClientCachedRpcMethod,
+  params: unknown,
+  value: unknown
+): string[] {
+  if (method !== 'resolveTypeAtLocationWithDependencies') {
+    return []
+  }
+
+  const candidate = value as { dependencies?: unknown }
+  if (!Array.isArray(candidate.dependencies)) {
+    return []
+  }
+
+  const rootCandidates = getProjectRootCandidates(params)
+  const dependencyPaths = new Set<string>()
+  for (const dependency of candidate.dependencies) {
+    for (const dependencyPath of getCandidatePaths(dependency, rootCandidates)) {
+      dependencyPaths.add(dependencyPath)
+    }
+  }
+
+  return Array.from(dependencyPaths)
+}
+
 function pruneExpiredClientRpcCacheEntries(now = Date.now()): void {
   for (const [cacheKey, entry] of clientRpcCacheByKey) {
     if (entry.expiresAt <= now) {
@@ -427,15 +452,28 @@ async function callClientMethod<
     clientRpcInFlightByKey.delete(cacheKey)
   }
 
-  const dependencyPaths = collectClientRpcDependencyPaths(typedMethod, params)
+  const requestDependencyPaths = collectClientRpcDependencyPaths(
+    typedMethod,
+    params
+  )
   const request = activeClient
     .callMethod<Params, Value>(method, params)
     .then((value) => {
+      const dependencyPaths = new Set(requestDependencyPaths)
+      for (const dependencyPath of collectClientRpcResponseDependencyPaths(
+        typedMethod,
+        params,
+        value
+      )) {
+        dependencyPaths.add(dependencyPath)
+      }
+      const resolvedDependencyPaths = Array.from(dependencyPaths)
+
       if (requestEpoch === clientRpcInvalidationEpoch) {
         clientRpcCacheByKey.set(cacheKey, {
           value,
           expiresAt: Date.now() + ttlMs,
-          dependencyPaths,
+          dependencyPaths: resolvedDependencyPaths,
         })
         trimClientRpcCache()
       }
@@ -449,7 +487,7 @@ async function callClientMethod<
     })
   clientRpcInFlightByKey.set(cacheKey, {
     promise: request as Promise<unknown>,
-    dependencyPaths,
+    dependencyPaths: requestDependencyPaths,
     epoch: requestEpoch,
   })
 
