@@ -523,6 +523,38 @@ describe('project cached analysis', () => {
     }
   })
 
+  test('invalidates fallback outline ranges after explicit runtime invalidation', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+    const filePath = '/project/src/fallback-outline-cache.ts'
+
+    project.createSourceFile(
+      filePath,
+      'export function one() {\n  return 1\n}\n',
+      {
+        overwrite: true,
+      }
+    )
+
+    const first = await getCachedOutlineRanges(project, filePath)
+    const second = await getCachedOutlineRanges(project, filePath)
+    expect(second).toEqual(first)
+
+    project.createSourceFile(
+      filePath,
+      'export function one() {\n  return 1\n}\n\nexport function two() {\n  return 2\n}\n',
+      {
+        overwrite: true,
+      }
+    )
+    invalidateRuntimeAnalysisCachePath(filePath)
+    await delay(0)
+
+    const refreshed = await getCachedOutlineRanges(project, filePath)
+    expect(refreshed).not.toEqual(first)
+  })
+
   test('recomputes cached static export values immediately after explicit runtime invalidation', async () => {
     const workspace = await createTemporaryWorkspace({
       'package.json': JSON.stringify({

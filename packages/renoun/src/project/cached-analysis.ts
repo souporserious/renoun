@@ -46,7 +46,11 @@ import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpi
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import { mapConcurrent } from '../utils/concurrency.ts'
 import type { ProjectCacheDependency } from './cache.ts'
-import { createProjectFileCache, invalidateProjectFileCache } from './cache.ts'
+import {
+  createProjectFileCache,
+  invalidateProjectFileCache,
+  invalidateProjectFileCachePaths,
+} from './cache.ts'
 import {
   isRpcBuildProfileEnabled,
   recordRpcCacheReuse,
@@ -108,6 +112,15 @@ const compilerOptionsVersionByProject = new WeakMap<
 const compilerOptionsVersionEpochByConfigPath = new Map<string, number>()
 let compilerOptionsVersionGlobalEpoch = 0
 let runtimeAnalysisInvalidationQueue: Promise<void> = Promise.resolve()
+const fallbackAnalysisProjectCacheRefs = new Map<number, WeakRef<Project>>()
+const fallbackAnalysisProjectIdByProject = new WeakMap<Project, number>()
+const fallbackAnalysisProjectFinalizationRegistry =
+  typeof FinalizationRegistry === 'function'
+    ? new FinalizationRegistry<number>((projectId) => {
+        fallbackAnalysisProjectCacheRefs.delete(projectId)
+      })
+    : undefined
+let fallbackAnalysisProjectIdCounter = 0
 const runtimeTypeScriptDependencyAnalysisInFlightByKey = new Map<
   string,
   Promise<RuntimeTypeScriptDependencyAnalysisResult | undefined>
@@ -197,6 +210,45 @@ async function getRuntimeAnalysisSession(): Promise<
   return getRuntimeAnalysisSessionUnchecked()
 }
 
+function trackFallbackAnalysisProject(project: Project): void {
+  if (fallbackAnalysisProjectIdByProject.has(project)) {
+    return
+  }
+
+  fallbackAnalysisProjectIdCounter += 1
+  const projectId = fallbackAnalysisProjectIdCounter
+
+  fallbackAnalysisProjectIdByProject.set(project, projectId)
+  fallbackAnalysisProjectCacheRefs.set(projectId, new WeakRef(project))
+  fallbackAnalysisProjectFinalizationRegistry?.register(project, projectId)
+}
+
+function forEachFallbackAnalysisProject(
+  callback: (project: Project) => void
+): void {
+  for (const [projectId, projectRef] of fallbackAnalysisProjectCacheRefs) {
+    const project = projectRef.deref()
+    if (!project) {
+      fallbackAnalysisProjectCacheRefs.delete(projectId)
+      continue
+    }
+
+    callback(project)
+  }
+}
+
+function invalidateFallbackAnalysisCachePaths(paths: Iterable<string>): void {
+  forEachFallbackAnalysisProject((project) => {
+    invalidateProjectFileCachePaths(project, paths)
+  })
+}
+
+function invalidateFallbackAnalysisCacheAll(): void {
+  forEachFallbackAnalysisProject((project) => {
+    invalidateProjectFileCache(project)
+  })
+}
+
 function isTypeScriptConfigPath(path: string): boolean {
   const normalizedPath = normalizePathKey(path)
   return /(^|\/)tsconfig(\..+)?\.json$/i.test(normalizedPath)
@@ -259,6 +311,8 @@ export function invalidateRuntimeAnalysisCachePaths(
     bumpCompilerOptionsVersionEpochForConfigPath(path)
   }
 
+  invalidateFallbackAnalysisCachePaths(pathsToInvalidate)
+
   enqueueRuntimeAnalysisInvalidation(async () => {
     const runtimeSession = await getRuntimeAnalysisSessionUnchecked()
     if (!runtimeSession) {
@@ -272,6 +326,8 @@ export function invalidateRuntimeAnalysisCachePaths(
 
 export function invalidateRuntimeAnalysisCacheAll(): void {
   compilerOptionsVersionGlobalEpoch += 1
+
+  invalidateFallbackAnalysisCacheAll()
 
   enqueueRuntimeAnalysisInvalidation(async () => {
     const runtimeSession = await getRuntimeAnalysisSessionUnchecked()
@@ -2433,6 +2489,7 @@ export async function getCachedFileExports(
     )
   }
 
+  trackFallbackAnalysisProject(project)
   return createProjectFileCache(
     project,
     filePath,
@@ -2487,6 +2544,7 @@ export async function getCachedOutlineRanges(
     )
   }
 
+  trackFallbackAnalysisProject(project)
   return createProjectFileCache(
     project,
     filePath,
@@ -2563,6 +2621,7 @@ export async function getCachedFileExportMetadata(
     )
   }
 
+  trackFallbackAnalysisProject(project)
   return createProjectFileCache(
     project,
     options.filePath,
@@ -2652,6 +2711,7 @@ export async function getCachedFileExportStaticValue(
     )
   }
 
+  trackFallbackAnalysisProject(project)
   return createProjectFileCache(
     project,
     options.filePath,
@@ -2757,6 +2817,7 @@ export async function getCachedFileExportText(
     })
   }
 
+  trackFallbackAnalysisProject(project)
   return createProjectFileCache(
     project,
     options.filePath,
@@ -2868,6 +2929,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
     }
   }
 
+  trackFallbackAnalysisProject(project)
   return createProjectFileCache(
     project,
     options.filePath,
@@ -2950,6 +3012,7 @@ export async function transpileCachedSourceFile(
     )
   }
 
+  trackFallbackAnalysisProject(project)
   return createProjectFileCache(
     project,
     filePath,
