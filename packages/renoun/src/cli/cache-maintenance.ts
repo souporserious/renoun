@@ -15,6 +15,37 @@ const ALLOWED_CHECKPOINT_MODES = new Set<SqliteCheckpointMode>([
   'TRUNCATE',
 ])
 
+function readRequiredOptionValue(
+  arguments_: string[],
+  index: number,
+  option: '--db-path' | '--checkpoint-mode'
+): string {
+  const value = arguments_[index + 1]
+  if (!value || value.startsWith('-')) {
+    throw new Error(
+      `[renoun] Missing value for ${option}.\n${CACHE_MAINTENANCE_USAGE}`
+    )
+  }
+  return value
+}
+
+function parseCheckpointMode(value: string): SqliteCheckpointMode {
+  if (!value) {
+    throw new Error(
+      `[renoun] Missing value for --checkpoint-mode.\n${CACHE_MAINTENANCE_USAGE}`
+    )
+  }
+
+  const normalizedMode = value.toUpperCase() as SqliteCheckpointMode
+  if (!ALLOWED_CHECKPOINT_MODES.has(normalizedMode)) {
+    throw new Error(
+      `[renoun] Unsupported checkpoint mode "${value}".\n${CACHE_MAINTENANCE_USAGE}`
+    )
+  }
+
+  return normalizedMode
+}
+
 export async function runCacheMaintenanceCommand(
   arguments_: string[] = []
 ): Promise<void> {
@@ -48,33 +79,31 @@ export async function runCacheMaintenanceCommand(
       continue
     }
     if (argument === '--db-path') {
-      const value = arguments_[index + 1]
+      dbPath = readRequiredOptionValue(arguments_, index, '--db-path')
+      index += 1
+      continue
+    }
+    if (argument.startsWith('--db-path=')) {
+      const value = argument.slice('--db-path='.length)
       if (!value) {
         throw new Error(
           `[renoun] Missing value for --db-path.\n${CACHE_MAINTENANCE_USAGE}`
         )
       }
       dbPath = value
-      index += 1
       continue
     }
     if (argument === '--checkpoint-mode') {
-      const value = arguments_[index + 1]
-      if (!value) {
-        throw new Error(
-          `[renoun] Missing value for --checkpoint-mode.\n${CACHE_MAINTENANCE_USAGE}`
-        )
-      }
-
-      const normalizedMode = value.toUpperCase() as SqliteCheckpointMode
-      if (!ALLOWED_CHECKPOINT_MODES.has(normalizedMode)) {
-        throw new Error(
-          `[renoun] Unsupported checkpoint mode "${value}".\n${CACHE_MAINTENANCE_USAGE}`
-        )
-      }
-
-      checkpointMode = normalizedMode
+      checkpointMode = parseCheckpointMode(
+        readRequiredOptionValue(arguments_, index, '--checkpoint-mode')
+      )
       index += 1
+      continue
+    }
+    if (argument.startsWith('--checkpoint-mode=')) {
+      checkpointMode = parseCheckpointMode(
+        argument.slice('--checkpoint-mode='.length)
+      )
       continue
     }
     if (argument === '--help' || argument === '-h') {
@@ -93,6 +122,15 @@ export async function runCacheMaintenanceCommand(
     vacuum: vacuum ?? false,
     checkpointMode,
   })
+
+  if (!result.available) {
+    if (shouldOutputJson) {
+      console.log(JSON.stringify(result, null, 2))
+    }
+    throw new Error(
+      `[renoun] SQLite cache maintenance is unavailable at ${result.dbPath}.`
+    )
+  }
 
   if (shouldOutputJson) {
     console.log(JSON.stringify(result, null, 2))

@@ -91,6 +91,23 @@ describe('runCacheMaintenanceCommand', () => {
     expect(payload.vacuum.executed).toBe(true)
   })
 
+  test('accepts equals-delimited option values', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runCacheMaintenanceCommand([
+      '--db-path=/tmp/custom.sqlite',
+      '--checkpoint-mode=truncate',
+    ])
+
+    expect(runSqliteCacheMaintenanceMock).toHaveBeenCalledWith({
+      dbPath: '/tmp/custom.sqlite',
+      checkpoint: true,
+      vacuum: false,
+      checkpointMode: 'TRUNCATE',
+    })
+    expect(logSpy).toHaveBeenCalledTimes(1)
+  })
+
   test('prints usage with --help', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -101,6 +118,43 @@ describe('runCacheMaintenanceCommand', () => {
       'Usage: renoun cache-maintenance'
     )
     expect(runSqliteCacheMaintenanceMock).not.toHaveBeenCalled()
+  })
+
+  test('throws when --db-path value is missing', async () => {
+    await expect(
+      runCacheMaintenanceCommand(['--db-path', '--vacuum'])
+    ).rejects.toThrow('Missing value for --db-path')
+    expect(runSqliteCacheMaintenanceMock).not.toHaveBeenCalled()
+  })
+
+  test('throws when --checkpoint-mode value is missing', async () => {
+    await expect(
+      runCacheMaintenanceCommand(['--checkpoint-mode', '--vacuum'])
+    ).rejects.toThrow('Missing value for --checkpoint-mode')
+    expect(runSqliteCacheMaintenanceMock).not.toHaveBeenCalled()
+  })
+
+  test('throws when sqlite maintenance is unavailable', async () => {
+    runSqliteCacheMaintenanceMock.mockResolvedValueOnce({
+      dbPath: '/tmp/unavailable.sqlite',
+      available: false,
+      checkpoint: {
+        executed: false,
+        mode: 'PASSIVE',
+        busy: 0,
+        logFrames: 0,
+        checkpointedFrames: 0,
+        durationMs: 0,
+      },
+      vacuum: {
+        executed: false,
+        durationMs: 0,
+      },
+    })
+
+    await expect(runCacheMaintenanceCommand()).rejects.toThrow(
+      'SQLite cache maintenance is unavailable'
+    )
   })
 
   test('throws on unknown options', async () => {

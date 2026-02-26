@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import { spawnWithBuffer } from './spawn.ts'
+import { spawnWithBuffer, spawnWithResult } from './spawn.ts'
 
 describe('spawnWithBuffer', () => {
   test('returns stdout as a buffer for successful commands', async () => {
@@ -32,6 +32,21 @@ describe('spawnWithBuffer', () => {
           '-e',
           "process.stderr.write('x'.repeat(128)); process.stdout.write('ok')",
         ],
+        {
+          cwd: process.cwd(),
+          maxBuffer: 64,
+        }
+      )
+    ).rejects.toThrow(/maxBuffer exceeded \(64 bytes\)/)
+  })
+})
+
+describe('spawnWithResult', () => {
+  test('rejects when output exceeds maxBuffer', async () => {
+    await expect(
+      spawnWithResult(
+        process.execPath,
+        ['-e', "process.stdout.write('x'.repeat(128)); process.stdout.write('ok')"],
         {
           cwd: process.cwd(),
           maxBuffer: 64,

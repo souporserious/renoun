@@ -77,7 +77,11 @@ export function spawnWithResult(
     const onData = (chunk: Buffer, isStdout: boolean) => {
       totalBytes += chunk.length
       if (totalBytes > maxBuffer) {
-        child.kill()
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // Ignore kill failures while handling maxBuffer overflow.
+        }
         finish(
           new Error(
             `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${commandArguments.join(
