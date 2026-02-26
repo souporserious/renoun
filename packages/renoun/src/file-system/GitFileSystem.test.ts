@@ -1457,6 +1457,22 @@ describe('GitFileSystem', () => {
     ).rejects.toThrow(/Invalid ref/)
   })
 
+  test('rejects refs that look like git flags', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const a = 1`, 'init')
+
+    expect(
+      () =>
+        new GitFileSystem({
+          repository: repoRoot,
+          cacheDirectory,
+          ref: '--help',
+        })
+    ).toThrow(/must not start with "-"/)
+  })
+
   test('throws when ref range start is not an ancestor of end', async ({
     repoRoot,
     cacheDirectory,

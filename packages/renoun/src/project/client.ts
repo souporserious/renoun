@@ -71,6 +71,12 @@ interface ClientRpcCacheEntry {
   dependencyPaths: readonly string[]
 }
 
+interface ClientRpcInFlightEntry {
+  promise: Promise<unknown>
+  dependencyPaths: readonly string[]
+  epoch: number
+}
+
 interface RefreshNotificationData {
   refreshCursor?: number
   filePath?: string
@@ -99,7 +105,9 @@ const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
 const CLIENT_RPC_CACHE_MAX_ENTRIES = 500
 const DEFAULT_CLIENT_RPC_CACHE_TTL_MS = 1_000
 const clientRpcCacheByKey = new Map<string, ClientRpcCacheEntry>()
-const clientRpcInFlightByKey = new Map<string, Promise<unknown>>()
+const clientRpcInFlightByKey = new Map<string, ClientRpcInFlightEntry>()
+// Bumped on refresh invalidations so stale in-flight requests cannot repopulate cache.
+let clientRpcInvalidationEpoch = 0
 
 function shouldUseClientRpcCache(): boolean {
   const override = parseBooleanEnv(
@@ -184,6 +192,15 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
   )
 }
 
+function hasPathDependencyIntersection(
+  dependencyPaths: readonly string[],
+  normalizedPath: string
+): boolean {
+  return dependencyPaths.some((dependencyPath) =>
+    pathsIntersect(dependencyPath, normalizedPath)
+  )
+}
+
 function getCandidatePath(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length === 0) {
     return undefined
@@ -248,18 +265,39 @@ function trimClientRpcCache(): void {
   }
 }
 
-function invalidateClientRpcCacheByPath(path: string): void {
+function invalidateClientRpcStateByPath(path: string): void {
   const normalizedPath = toComparablePath(path)
+  let invalidated = false
 
   for (const [cacheKey, entry] of clientRpcCacheByKey) {
-    if (
-      entry.dependencyPaths.some((dependencyPath) =>
-        pathsIntersect(dependencyPath, normalizedPath)
-      )
-    ) {
+    if (hasPathDependencyIntersection(entry.dependencyPaths, normalizedPath)) {
       clientRpcCacheByKey.delete(cacheKey)
+      invalidated = true
     }
   }
+
+  for (const [cacheKey, entry] of clientRpcInFlightByKey) {
+    if (hasPathDependencyIntersection(entry.dependencyPaths, normalizedPath)) {
+      clientRpcInFlightByKey.delete(cacheKey)
+      invalidated = true
+    }
+  }
+
+  if (invalidated) {
+    clientRpcInvalidationEpoch += 1
+  }
+}
+
+function invalidateAllClientRpcState(): void {
+  clientRpcInvalidationEpoch += 1
+  clientRpcCacheByKey.clear()
+  clientRpcInFlightByKey.clear()
+}
+
+function applyRefreshInvalidations(paths: string[]): void {
+  invalidateAllClientRpcState()
+  invalidateRuntimeAnalysisCachePaths(paths)
+  invalidateProjectCachesByPaths(paths)
 }
 
 async function callClientMethod<
@@ -284,6 +322,7 @@ async function callClientMethod<
 
   const typedMethod = method as ClientCachedRpcMethod
   const cacheKey = toClientRpcCacheKey(typedMethod, params)
+  const requestEpoch = clientRpcInvalidationEpoch
   const now = Date.now()
   pruneExpiredClientRpcCacheEntries(now)
   const cached = clientRpcCacheByKey.get(cacheKey)
@@ -295,24 +334,37 @@ async function callClientMethod<
 
   const inFlight = clientRpcInFlightByKey.get(cacheKey)
   if (inFlight) {
-    return inFlight as Promise<Value>
+    if (inFlight.epoch === requestEpoch) {
+      return inFlight.promise as Promise<Value>
+    }
+    clientRpcInFlightByKey.delete(cacheKey)
   }
 
+  const dependencyPaths = collectClientRpcDependencyPaths(typedMethod, params)
   const request = activeClient
     .callMethod<Params, Value>(method, params)
     .then((value) => {
-      clientRpcCacheByKey.set(cacheKey, {
-        value,
-        expiresAt: Date.now() + ttlMs,
-        dependencyPaths: collectClientRpcDependencyPaths(typedMethod, params),
-      })
-      trimClientRpcCache()
+      if (requestEpoch === clientRpcInvalidationEpoch) {
+        clientRpcCacheByKey.set(cacheKey, {
+          value,
+          expiresAt: Date.now() + ttlMs,
+          dependencyPaths,
+        })
+        trimClientRpcCache()
+      }
       return value
     })
     .finally(() => {
-      clientRpcInFlightByKey.delete(cacheKey)
+      const latest = clientRpcInFlightByKey.get(cacheKey)
+      if (latest?.promise === request) {
+        clientRpcInFlightByKey.delete(cacheKey)
+      }
     })
-  clientRpcInFlightByKey.set(cacheKey, request as Promise<unknown>)
+  clientRpcInFlightByKey.set(cacheKey, {
+    promise: request as Promise<unknown>,
+    dependencyPaths,
+    epoch: requestEpoch,
+  })
 
   return request
 }
@@ -393,9 +445,7 @@ function queueRefreshInvalidation(path: string): void {
       return
     }
 
-    clientRpcCacheByKey.clear()
-    invalidateRuntimeAnalysisCachePaths(paths)
-    invalidateProjectCachesByPaths(paths)
+    applyRefreshInvalidations(paths)
   })
 }
 
@@ -775,7 +825,7 @@ export async function createSourceFile(
       sourceText,
       projectOptions,
     })
-    invalidateClientRpcCacheByPath(filePath)
+    invalidateClientRpcStateByPath(filePath)
     return
   }
 

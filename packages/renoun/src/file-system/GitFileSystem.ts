@@ -6279,6 +6279,12 @@ function looksLikeGitRemoteUrl(value: string) {
  */
 const SAFE_GIT_ARG_RE = /^[a-zA-Z0-9._\-\/^{}~@+]+$/
 
+function assertNoLeadingDash(value: string, label: string): void {
+  if (value.startsWith('-')) {
+    throw new Error(`[GitFileSystem] Invalid ${label}: must not start with "-"`)
+  }
+}
+
 /**
  * Validates a git argument (ref, remote name, sha, etc.) and returns it.
  * Rejects values that don't match a strict character allowlist, preventing
@@ -6293,6 +6299,7 @@ function assertSafeGitArg(value: string, label: string): string {
   if (!stringValue) {
     throw new Error(`[GitFileSystem] Missing ${label}`)
   }
+  assertNoLeadingDash(stringValue, label)
   if (!SAFE_GIT_ARG_RE.test(stringValue)) {
     throw new Error(
       `[GitFileSystem] Invalid ${label}: contains disallowed characters`
@@ -6351,6 +6358,7 @@ function assertSafeGitSpec(specifier: string): string {
   if (!stringSpecifier) {
     throw new Error('[GitFileSystem] Invalid git spec: empty')
   }
+  assertNoLeadingDash(stringSpecifier, 'git spec')
   if (!SAFE_GIT_SPEC_RE.test(stringSpecifier)) {
     throw new Error(
       '[GitFileSystem] Invalid git spec: contains disallowed characters'
