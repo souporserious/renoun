@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import type { SyntaxKind } from '../utils/ts-morph.ts'
 
 import type { ConfigurationOptions } from '../components/Config/types.ts'
@@ -162,6 +162,47 @@ function toComparablePath(path: string): string {
   return normalizePathKey(absolutePath)
 }
 
+function getProjectRootCandidates(params: unknown): readonly string[] {
+  const roots = new Set<string>([resolve(process.cwd())])
+
+  if (!params || typeof params !== 'object') {
+    return Array.from(roots)
+  }
+
+  const candidate = params as {
+    projectOptions?: {
+      tsConfigFilePath?: unknown
+    }
+  }
+  const tsConfigFilePath = candidate.projectOptions?.tsConfigFilePath
+  if (typeof tsConfigFilePath === 'string' && tsConfigFilePath.length > 0) {
+    roots.add(resolve(dirname(tsConfigFilePath)))
+  }
+
+  return Array.from(roots)
+}
+
+function getCandidatePaths(
+  value: unknown,
+  rootCandidates: readonly string[]
+): readonly string[] {
+  if (typeof value !== 'string' || value.length === 0) {
+    return []
+  }
+
+  const normalized = normalizeSlashes(value)
+  if (isAbsolutePath(normalized)) {
+    return [normalizePathKey(normalized)]
+  }
+
+  const resolvedCandidates = new Set<string>()
+  for (const rootCandidate of rootCandidates) {
+    resolvedCandidates.add(normalizePathKey(resolve(rootCandidate, normalized)))
+  }
+
+  return Array.from(resolvedCandidates)
+}
+
 function pathsIntersect(firstPath: string, secondPath: string): boolean {
   if (firstPath === '.' || secondPath === '.') {
     return true
@@ -183,14 +224,6 @@ function hasPathDependencyIntersection(
   )
 }
 
-function getCandidatePath(value: unknown): string | undefined {
-  if (typeof value !== 'string' || value.length === 0) {
-    return undefined
-  }
-
-  return toComparablePath(value)
-}
-
 function collectClientRpcDependencyPaths(
   method: ClientCachedRpcMethod,
   params: unknown
@@ -203,23 +236,25 @@ function collectClientRpcDependencyPaths(
     }
   }
   const dependencyPaths = new Set<string>()
+  const rootCandidates = getProjectRootCandidates(params)
 
-  const filePath = getCandidatePath(candidate.filePath)
-  if (filePath) {
+  for (const filePath of getCandidatePaths(candidate.filePath, rootCandidates)) {
     dependencyPaths.add(filePath)
   }
 
   if (method === 'getTokens') {
-    const sourcePath = getCandidatePath(candidate.sourcePath)
-    if (sourcePath) {
+    for (const sourcePath of getCandidatePaths(
+      candidate.sourcePath,
+      rootCandidates
+    )) {
       dependencyPaths.add(sourcePath)
     }
   }
 
-  const tsConfigFilePath = getCandidatePath(
-    candidate.projectOptions?.tsConfigFilePath
-  )
-  if (tsConfigFilePath) {
+  for (const tsConfigFilePath of getCandidatePaths(
+    candidate.projectOptions?.tsConfigFilePath,
+    rootCandidates
+  )) {
     dependencyPaths.add(tsConfigFilePath)
   }
 

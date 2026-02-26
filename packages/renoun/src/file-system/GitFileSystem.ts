@@ -3009,7 +3009,8 @@ export class GitFileSystem
       // missed, resulting in collapsed "big commit" changes instead of
       // granular per-commit tracking. The blobCache (export parse cache)
       // is safe to share because it is keyed by blob SHA (content-addressed).
-      // See: https://github.com/souporserious/renoun/issues/XXX
+      // Historical regression: sharing per-commit lookup caches caused
+      // cross-commit stale resolution when files moved between commits.
       const context: CollectContext = {
         maxDepth,
         blobCache,
