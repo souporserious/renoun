@@ -47,7 +47,7 @@ import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import { mapConcurrent } from '../utils/concurrency.ts'
 import type { ProjectCacheDependency } from './cache.ts'
 import {
-  createProjectFileCache,
+  createProjectFileCache as createProjectFileCacheBase,
   invalidateProjectFileCache,
   invalidateProjectFileCachePaths,
 } from './cache.ts'
@@ -221,6 +221,27 @@ function trackFallbackAnalysisProject(project: Project): void {
   fallbackAnalysisProjectIdByProject.set(project, projectId)
   fallbackAnalysisProjectCacheRefs.set(projectId, new WeakRef(project))
   fallbackAnalysisProjectFinalizationRegistry?.register(project, projectId)
+}
+
+function createFallbackProjectFileCache<Type>(
+  project: Project,
+  fileName: string,
+  cacheName: string,
+  compute: () => Type | Promise<Type>,
+  options?: {
+    deps?:
+      | ProjectCacheDependency[]
+      | ((value: Type) => ProjectCacheDependency[])
+  }
+): Promise<Type> {
+  trackFallbackAnalysisProject(project)
+  return createProjectFileCacheBase(
+    project,
+    fileName,
+    cacheName,
+    compute,
+    options
+  )
 }
 
 function forEachFallbackAnalysisProject(
@@ -2489,8 +2510,7 @@ export async function getCachedFileExports(
     )
   }
 
-  trackFallbackAnalysisProject(project)
-  return createProjectFileCache(
+  return createFallbackProjectFileCache(
     project,
     filePath,
     FILE_EXPORTS_CACHE_NAME,
@@ -2544,8 +2564,7 @@ export async function getCachedOutlineRanges(
     )
   }
 
-  trackFallbackAnalysisProject(project)
-  return createProjectFileCache(
+  return createFallbackProjectFileCache(
     project,
     filePath,
     OUTLINE_RANGES_CACHE_NAME,
@@ -2621,8 +2640,7 @@ export async function getCachedFileExportMetadata(
     )
   }
 
-  trackFallbackAnalysisProject(project)
-  return createProjectFileCache(
+  return createFallbackProjectFileCache(
     project,
     options.filePath,
     toFileExportMetadataCacheName(options.name, options.position, options.kind),
@@ -2711,8 +2729,7 @@ export async function getCachedFileExportStaticValue(
     )
   }
 
-  trackFallbackAnalysisProject(project)
-  return createProjectFileCache(
+  return createFallbackProjectFileCache(
     project,
     options.filePath,
     toFileExportStaticValueCacheName(options.position, options.kind),
@@ -2817,8 +2834,7 @@ export async function getCachedFileExportText(
     })
   }
 
-  trackFallbackAnalysisProject(project)
-  return createProjectFileCache(
+  return createFallbackProjectFileCache(
     project,
     options.filePath,
     toFileExportTextCacheName(options.position, options.kind),
@@ -2929,8 +2945,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
     }
   }
 
-  trackFallbackAnalysisProject(project)
-  return createProjectFileCache(
+  return createFallbackProjectFileCache(
     project,
     options.filePath,
     toResolvedTypeAtLocationCacheName(
@@ -3012,8 +3027,7 @@ export async function transpileCachedSourceFile(
     )
   }
 
-  trackFallbackAnalysisProject(project)
-  return createProjectFileCache(
+  return createFallbackProjectFileCache(
     project,
     filePath,
     TRANSPILE_SOURCE_FILE_CACHE_NAME,
