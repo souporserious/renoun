@@ -449,6 +449,41 @@ renoun works correctly even when SQLite is unavailable. SQLite is an optional up
 
 If SQLite (`node:sqlite`) is missing or fails to initialize, renoun automatically falls back to in-memory cache behavior. Queries and metadata remain accurate, but cache state becomes process-local and non-persistent.
 
+#### Deterministic CI cache keys
+
+Use `renoun cache-token` to print a stable token for renoun's persistent file-system cache:
+
+```bash
+v1-schema2-analysis0-structure0-git0-gitvirtual0
+```
+
+The token changes only when renoun cache versions change.
+
+When renoun is already installed in a project:
+
+```bash
+pnpm exec renoun cache-token
+```
+
+In GitHub Actions, resolve the token once and use it in `actions/cache`:
+
+```yaml
+- name: Resolve renoun cache token
+  id: renoun-cache-token
+  run: echo "token=$(node packages/renoun/src/cli/index.ts cache-token)" >> "$GITHUB_OUTPUT"
+
+- name: Restore renoun cache
+  uses: actions/cache@v4
+  with:
+    path: |
+      .renoun/cache/fs-cache.sqlite
+      .renoun/cache/fs-cache.sqlite-shm
+      .renoun/cache/fs-cache.sqlite-wal
+    key: ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
+    restore-keys: |
+      ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-
+```
+
 #### Comparison with `GitVirtualFileSystem`
 
 | Feature       | GitFileSystem         | GitVirtualFileSystem |

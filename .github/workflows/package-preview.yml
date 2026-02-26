@@ -38,6 +38,10 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Resolve renoun cache token
+        id: renoun-cache-token
+        run: echo "token=$(node packages/renoun/src/cli/index.ts cache-token)" >> "$GITHUB_OUTPUT"
+
       - name: Restore renoun cache
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
         with:
@@ -45,10 +49,9 @@ jobs:
             .renoun/cache/fs-cache.sqlite
             .renoun/cache/fs-cache.sqlite-shm
             .renoun/cache/fs-cache.sqlite-wal
-          key: ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          key: ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ hashFiles('pnpm-lock.yaml') }}-
-            ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-
+            ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -131,6 +134,10 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Resolve renoun cache token
+        id: renoun-cache-token
+        run: echo "token=$(node packages/renoun/src/cli/index.ts cache-token)" >> "$GITHUB_OUTPUT"
+
       - name: Restore renoun cache
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
         with:
@@ -138,10 +145,9 @@ jobs:
             .renoun/cache/fs-cache.sqlite
             .renoun/cache/fs-cache.sqlite-shm
             .renoun/cache/fs-cache.sqlite-wal
-          key: ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          key: ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ hashFiles('pnpm-lock.yaml') }}-
-            ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-
+            ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts

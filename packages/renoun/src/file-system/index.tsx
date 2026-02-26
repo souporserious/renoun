@@ -58,6 +58,12 @@ export {
   createSort,
 } from './entries.ts'
 export { Cache } from './Cache.ts'
+export {
+  createFileSystemCacheToken,
+  FILE_SYSTEM_CACHE_TOKEN_FORMAT_VERSION,
+  getFileSystemCacheTokenParts,
+  type FileSystemCacheTokenParts,
+} from './cache-token.ts'
 
 export type { PackageExportOptions, PackageOptions } from './Package.ts'
 export {

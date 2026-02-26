@@ -87,6 +87,10 @@ import {
   createCacheNodeKey,
   serializeTypeFilterForCache,
 } from './cache-key.ts'
+import {
+  isTrustedWorkspaceChangeToken,
+  markWorkspaceTokenForGitIgnoredSnapshots,
+} from './workspace-change-token.ts'
 import { Session } from './Session.ts'
 import {
   isGlobModuleMap,
@@ -4232,9 +4236,6 @@ const FILE_DEPENDENCY_PREFIX = 'file:'
 const PRODUCTION_SNAPSHOT_REVALIDATE_INTERVAL_MS = 250
 const DIRECTORY_SNAPSHOT_COORDINATION_KEY_PREFIX = 'dir:resolve:'
 const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
-const WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER = ';ignored-only:1'
-const WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER =
-  ';include-gitignored:1'
 const strictHermeticWarningKeys = new Set<string>()
 
 function isStrictHermeticFileSystemMode(): boolean {
@@ -4442,33 +4443,6 @@ function mergeKnownPathKeySets(
   }
 
   return merged
-}
-
-function markWorkspaceTokenForGitIgnoredSnapshots(
-  token: string | null | undefined
-): string | null {
-  if (!token) {
-    return null
-  }
-
-  if (token.includes(WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER)) {
-    return token
-  }
-
-  return `${token}${WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER}`
-}
-
-function isTrustedWorkspaceChangeToken(
-  token: string | null | undefined
-): boolean {
-  if (!token) {
-    return false
-  }
-
-  return (
-    !token.includes(WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER) &&
-    !token.includes(WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER)
-  )
 }
 
 function pathKeysIntersect(firstPath: string, secondPath: string): boolean {

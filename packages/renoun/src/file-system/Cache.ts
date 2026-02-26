@@ -15,6 +15,7 @@ import {
 import type { Telemetry } from '../utils/telemetry.ts'
 import type { Snapshot } from './Snapshot.ts'
 import { summarizePersistedValue } from './cache-persistence-debug.ts'
+import { isTrustedWorkspaceChangeToken } from './workspace-change-token.ts'
 
 export interface CacheDependency {
   depKey: string
@@ -173,9 +174,6 @@ const DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_TTL_MULTIPLIER = 4
 const DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS = 5_000
 const NEVER_ABORT_SIGNAL = new AbortController().signal
 const DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS = 3
-const WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER = ';ignored-only:1'
-const WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER =
-  ';include-gitignored:1'
 const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
   'renoun.fs.cache.no-compute-slot-shared-value'
 )
@@ -3504,19 +3502,6 @@ function pathKeysIntersect(firstPath: string, secondPath: string): boolean {
     firstKey === secondKey ||
     firstKey.startsWith(`${secondKey}/`) ||
     secondKey.startsWith(`${firstKey}/`)
-  )
-}
-
-function isTrustedWorkspaceChangeToken(
-  token: string | null | undefined
-): token is string {
-  if (!token) {
-    return false
-  }
-
-  return (
-    !token.includes(WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER) &&
-    !token.includes(WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER)
   )
 }
 

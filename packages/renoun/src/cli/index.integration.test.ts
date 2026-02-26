@@ -1,6 +1,11 @@
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import {
+  createFileSystemCacheToken,
+  getFileSystemCacheTokenParts,
+} from '../file-system/cache-token.ts'
+
 const getPortMock = vi.fn(async () => 4321)
 const getIdMock = vi.fn(() => 'integration-test-server')
 const serverCleanupMock = vi.fn()
@@ -48,16 +53,54 @@ async function waitForAssertion(
 beforeEach(() => {
   originalArgv = process.argv.slice()
   originalCwd = process.cwd()
+  vi.resetModules()
   vi.clearAllMocks()
   process.chdir(originalCwd)
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   process.argv = originalArgv
   process.chdir(originalCwd)
 })
 
 describe('renoun CLI index integration', () => {
+  test('runs cache-token command through CLI entrypoint', async () => {
+    process.argv = ['node', 'renoun', 'cache-token']
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit)
+
+    await import('./index.ts')
+
+    expect(logSpy).toHaveBeenCalledWith(createFileSystemCacheToken())
+    expect(exitSpy).toHaveBeenCalledWith(0)
+  })
+
+  test('runs cache-token --json through CLI entrypoint', async () => {
+    process.argv = ['node', 'renoun', 'cache-token', '--json']
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit)
+
+    await import('./index.ts')
+
+    const payload = JSON.parse(String(logSpy.mock.calls[0]?.[0])) as {
+      token: string
+      parts: ReturnType<typeof getFileSystemCacheTokenParts>
+    }
+
+    expect(payload).toEqual({
+      token: createFileSystemCacheToken(),
+      parts: getFileSystemCacheTokenParts(),
+    })
+    expect(exitSpy).toHaveBeenCalledWith(0)
+  })
+
   test('passes project tsconfig path to prewarm in watch mode', async () => {
     process.argv = ['node', 'renoun', 'watch']
 

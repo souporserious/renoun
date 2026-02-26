@@ -2,55 +2,66 @@
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 
-import { createServer } from '../project/server.ts'
-import { getDebugLogger } from '../utils/debug.ts'
-import { runAppCommand } from './app.ts'
-import { resolveFrameworkBinFile, type Framework } from './framework.ts'
-import { runEjectCommand } from './eject.ts'
-import { runOverrideCommand } from './override.ts'
-import { runPrewarmSafely } from './prewarm-runner.ts'
-import { reorderEntries } from './reorder.ts'
-import { runThemeCommand } from './theme.ts'
-import { runValidateCommand } from './validate.ts'
+type Framework = 'next' | 'vite' | 'waku'
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
+const usageMessage =
+  `Usage:   renoun <framework> <command>    Run a framework with renoun\n` +
+  `         renoun dev                      Run a renoun app (auto-detect)\n` +
+  `         renoun <app> dev                Run a specific renoun app\n` +
+  `         renoun eject [app]              Eject a renoun app into your project\n` +
+  `         renoun override <pattern>       Copy files from app template (supports globs)\n` +
+  `         renoun theme <path>             Prune a VS Code theme JSON file\n` +
+  `         renoun cache-token [--json]     Print deterministic cache token for CI\n` +
+  `         renoun validate [path|url]      Check for broken links\n` +
+  `\n` +
+  `Examples:\n` +
+  `  renoun next dev              Run Next.js with renoun\n` +
+  `  renoun dev                   Run auto-detected renoun app\n` +
+  `  renoun @renoun/blog dev      Run @renoun/blog app\n` +
+  `  renoun eject                 Eject app into your project\n` +
+  `  renoun cache-token           Print the renoun cache token\n` +
+  `  renoun override tsconfig.json    Copy tsconfig.json from app\n` +
+  `  renoun override "ui/*.tsx"       Copy all UI components from app`
+
+function toStringArguments(
+  values: Array<string | undefined>
+): Array<string> {
+  return values.filter((value): value is string => typeof value === 'string')
+}
+
 if (firstArgument === 'help') {
-  const usageMessage =
-    `Usage:   renoun <framework> <command>    Run a framework with renoun\n` +
-    `         renoun dev                      Run a renoun app (auto-detect)\n` +
-    `         renoun <app> dev                Run a specific renoun app\n` +
-    `         renoun eject [app]              Eject a renoun app into your project\n` +
-    `         renoun override <pattern>       Copy files from app template (supports globs)\n` +
-    `         renoun theme <path>             Prune a VS Code theme JSON file\n` +
-    `         renoun validate [path|url]      Check for broken links\n` +
-    `\n` +
-    `Examples:\n` +
-    `  renoun next dev              Run Next.js with renoun\n` +
-    `  renoun dev                   Run auto-detected renoun app\n` +
-    `  renoun @renoun/blog dev      Run @renoun/blog app\n` +
-    `  renoun eject                 Eject app into your project\n` +
-    `  renoun override tsconfig.json    Copy tsconfig.json from app\n` +
-    `  renoun override "ui/*.tsx"       Copy all UI components from app`
   console.log(usageMessage)
   process.exit(0)
 }
 
 if (firstArgument === 'validate') {
-  const args = [secondArgument, ...restArguments].filter(
-    (value): value is string => typeof value === 'string'
-  )
+  const { runValidateCommand } = await import('./validate.ts')
+  const args = toStringArguments([secondArgument, ...restArguments])
   await runValidateCommand(args)
   process.exit(process.exitCode ?? 0)
 } else if (firstArgument === 'theme') {
+  const { runThemeCommand } = await import('./theme.ts')
   await runThemeCommand(secondArgument)
   process.exit(0)
+} else if (firstArgument === 'cache-token') {
+  const { runCacheTokenCommand } = await import('./cache-token.ts')
+  const args = toStringArguments([secondArgument, ...restArguments])
+
+  try {
+    await runCacheTokenCommand(args)
+    process.exit(0)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(message)
+    process.exit(1)
+  }
 } else if (firstArgument === 'dev' || firstArgument === 'build') {
+  const { runAppCommand } = await import('./app.ts')
   // Auto-detect app mode: `renoun dev` or `renoun build`
   // Forward all args as framework args (no app name detection in this mode)
-  const forwardedArgs = [secondArgument, ...restArguments].filter(
-    (value): value is string => typeof value === 'string'
-  )
+  const forwardedArgs = toStringArguments([secondArgument, ...restArguments])
   await runAppCommand({
     command: firstArgument,
     args: forwardedArgs,
@@ -62,6 +73,14 @@ if (firstArgument === 'validate') {
   firstArgument === 'vite' ||
   firstArgument === 'waku'
 ) {
+  const [{ createServer }, { getDebugLogger }, { runPrewarmSafely }] =
+    await Promise.all([
+      import('../project/server.ts'),
+      import('../utils/debug.ts'),
+      import('./prewarm-runner.ts'),
+    ])
+  const { resolveFrameworkBinFile } = await import('./framework.ts')
+
   let subProcess: ReturnType<typeof spawn> | undefined
 
   function cleanupAndExit(code: number) {
@@ -236,15 +255,15 @@ if (firstArgument === 'validate') {
   secondArgument === 'dev' ||
   secondArgument === 'build'
 ) {
-  const appArgs = [firstArgument, ...restArguments].filter(
-    (value): value is string => typeof value === 'string'
-  )
+  const { runAppCommand } = await import('./app.ts')
+  const appArgs = toStringArguments([firstArgument, ...restArguments])
   await runAppCommand({
     command: secondArgument as 'dev' | 'build',
     args: appArgs,
   })
   process.exit(process.exitCode ?? 0)
 } else if (firstArgument === 'eject') {
+  const { runEjectCommand } = await import('./eject.ts')
   try {
     await runEjectCommand({ appName: secondArgument })
     process.exit(0)
@@ -254,6 +273,7 @@ if (firstArgument === 'validate') {
     process.exit(1)
   }
 } else if (firstArgument === 'override') {
+  const { runOverrideCommand } = await import('./override.ts')
   if (!secondArgument) {
     console.error(
       '[renoun] Missing pattern. Usage: renoun override <pattern>\n' +
@@ -272,6 +292,7 @@ if (firstArgument === 'validate') {
     process.exit(1)
   }
 } else if (firstArgument === 'reorder') {
+  const { reorderEntries } = await import('./reorder.ts')
   try {
     await reorderEntries(secondArgument)
     process.exit(0)
@@ -281,6 +302,13 @@ if (firstArgument === 'validate') {
     process.exit(1)
   }
 } else if (firstArgument === 'watch') {
+  const [{ createServer }, { getDebugLogger }, { runPrewarmSafely }] =
+    await Promise.all([
+      import('../project/server.ts'),
+      import('../utils/debug.ts'),
+      import('./prewarm-runner.ts'),
+    ])
+
   if (process.env['NODE_ENV'] === undefined) {
     process.env['NODE_ENV'] = 'development'
   }

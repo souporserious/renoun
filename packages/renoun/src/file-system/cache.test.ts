@@ -3273,6 +3273,34 @@ describe('sqlite cache persistence', () => {
     ).toEqual([normalizePathKey('primary-snapshots')])
   })
 
+  test('distinguishes snapshot workspace-change path lookups when values contain separators', async () => {
+    const fileSystem = new TokenAwareNodeFileSystem(
+      getRootDirectory(),
+      join(getRootDirectory(), 'tsconfig.json'),
+      'stable-token'
+    )
+
+    fileSystem.setChangedPathsSinceToken('a|b', 'c', [
+      normalizePathKey('joined-snapshots'),
+    ])
+    fileSystem.setChangedPathsSinceToken('a', 'b|c', [
+      normalizePathKey('primary-snapshots'),
+    ])
+
+    const snapshot = new FileSystemSnapshot(fileSystem, 'separator-snapshot')
+
+    expect(
+      Array.from(
+        (await snapshot.getWorkspaceChangedPathsSinceToken('a|b', 'c')) ?? []
+      )
+    ).toEqual([normalizePathKey('joined-snapshots')])
+    expect(
+      Array.from(
+        (await snapshot.getWorkspaceChangedPathsSinceToken('a', 'b|c')) ?? []
+      )
+    ).toEqual([normalizePathKey('primary-snapshots')])
+  })
+
   test('reuses persisted snapshots when token changes without dependency-path intersection', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const docsDirectory = join(tmpDirectory, 'docs')
