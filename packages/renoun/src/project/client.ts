@@ -364,7 +364,9 @@ function hasPathDependencyIntersectionWithAnyPath(
 function invalidateClientRpcStateByNormalizedPaths(
   normalizedPaths: readonly string[]
 ): void {
-  let invalidated = false
+  // Refresh events can reference transitive dependencies that are only known
+  // after in-flight RPC responses resolve, so always advance the epoch.
+  clientRpcInvalidationEpoch += 1
 
   for (const [cacheKey, entry] of clientRpcCacheByKey) {
     if (
@@ -374,7 +376,6 @@ function invalidateClientRpcStateByNormalizedPaths(
       )
     ) {
       clientRpcCacheByKey.delete(cacheKey)
-      invalidated = true
     }
   }
 
@@ -386,12 +387,7 @@ function invalidateClientRpcStateByNormalizedPaths(
       )
     ) {
       clientRpcInFlightByKey.delete(cacheKey)
-      invalidated = true
     }
-  }
-
-  if (invalidated) {
-    clientRpcInvalidationEpoch += 1
   }
 }
 
