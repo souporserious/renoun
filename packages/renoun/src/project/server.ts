@@ -12,7 +12,6 @@ import { getDebugLogger } from '../utils/debug.ts'
 import {
   isDevelopmentEnvironment,
   isProductionEnvironment,
-  parseBooleanEnv,
 } from '../utils/env.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { GetTokensOptions } from '../utils/get-tokens.ts'
@@ -39,6 +38,10 @@ import {
   type RefreshInvalidationsSinceResponse,
   normalizeRefreshCursor,
 } from './refresh-notifications.ts'
+import {
+  resolveServerRefreshNotificationsEnvOverride,
+  setServerPortProcessEnv,
+} from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
 
 const { SyntaxKind } = getTsMorph()
@@ -172,7 +175,7 @@ export async function createServer(options?: CreateServerOptions) {
   const port = await server.getPort()
   activeProjectServers += 1
 
-  process.env.RENOUN_SERVER_PORT = String(port)
+  setServerPortProcessEnv(port)
 
   let refreshFlushTimer: NodeJS.Timeout | undefined
   const pendingRefreshPaths = new Set<string>()
@@ -611,9 +614,7 @@ function shouldEmitRefreshNotifications(
     return explicitValue
   }
 
-  const override = parseBooleanEnv(
-    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']
-  )
+  const override = resolveServerRefreshNotificationsEnvOverride()
   if (override !== undefined) {
     return override
   }

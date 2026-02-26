@@ -12,7 +12,6 @@ import type { DebugContext } from '../utils/debug.ts'
 import {
   isDevelopmentEnvironment,
   isVitestRuntime,
-  parseBooleanEnv,
 } from '../utils/env.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
@@ -26,6 +25,10 @@ import {
   completeRefreshingProjects,
   startRefreshingProjects,
 } from './refresh.ts'
+import {
+  getServerPortFromProcessEnv,
+  resolveProjectWatchersEnvOverride,
+} from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
 
 const { Project, ts } = getTsMorph()
@@ -348,11 +351,11 @@ function shouldEnableProjectWatchers(): boolean {
     return projectWatcherRuntimeOptions.enabled
   }
 
-  if (process.env['RENOUN_SERVER_PORT'] === undefined) {
+  if (getServerPortFromProcessEnv() === undefined) {
     return false
   }
 
-  const override = parseBooleanEnv(process.env['RENOUN_PROJECT_WATCHERS'])
+  const override = resolveProjectWatchersEnvOverride()
   if (override !== undefined) {
     return override
   }

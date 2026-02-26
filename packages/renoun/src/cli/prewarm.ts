@@ -2,6 +2,7 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import { getDebugLogger } from '../utils/debug.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getProject } from '../project/get-project.ts'
+import { hasServerRuntimeInProcessEnv } from '../project/runtime-env.ts'
 import type { ProjectOptions } from '../project/types.ts'
 import {
   CacheStore,
@@ -1127,10 +1128,7 @@ export async function prewarmRenounRpcServerCache(options?: {
 }): Promise<void> {
   const logger = getDebugLogger()
 
-  if (
-    process.env.RENOUN_SERVER_PORT === undefined ||
-    process.env.RENOUN_SERVER_ID === undefined
-  ) {
+  if (!hasServerRuntimeInProcessEnv()) {
     return
   }
 

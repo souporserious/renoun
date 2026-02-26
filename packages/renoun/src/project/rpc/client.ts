@@ -2,6 +2,10 @@ import { EventEmitter } from 'node:events'
 
 import { getDebugLogger } from '../../utils/debug.ts'
 import { safeAssign } from '../../utils/safe-assign.ts'
+import {
+  getServerPortForLogging,
+  getServerPortFromProcessEnv,
+} from '../runtime-env.ts'
 import type { WebSocketResponse } from './server.ts'
 
 type Request = {
@@ -220,7 +224,7 @@ export class WebSocketClient extends EventEmitter {
             {
               connectionState: this.#connectionState,
               connectionTime: formatConnectionTime(this.#connectionStartTime),
-              port: String(process.env.RENOUN_SERVER_PORT || 'unknown'),
+              port: getServerPortForLogging(),
             }
           )
         )
@@ -251,7 +255,7 @@ export class WebSocketClient extends EventEmitter {
         {
           connectionState: this.#connectionState,
           connectionTime: formatConnectionTime(this.#connectionStartTime),
-          port: process.env.RENOUN_SERVER_PORT || 'unknown',
+          port: getServerPortForLogging(),
         }
       )
       // reject all ids that would have been part of this frame
@@ -346,10 +350,10 @@ export class WebSocketClient extends EventEmitter {
     this.#connectionStartTime = performance.now()
 
     getDebugLogger().logWebSocketClientEvent('connecting', {
-      port: process.env.RENOUN_SERVER_PORT,
+      port: getServerPortFromProcessEnv(),
     })
 
-    const port = process.env.RENOUN_SERVER_PORT
+    const port = getServerPortFromProcessEnv()
     if (!port) {
       const err = new WebSocketClientError(
         '[renoun] Missing RENOUN_SERVER_PORT',
@@ -372,7 +376,7 @@ export class WebSocketClient extends EventEmitter {
         {
           connectionState: this.#connectionState,
           connectionTime: 0,
-          port: String(process.env.RENOUN_SERVER_PORT || 'unknown'),
+          port: getServerPortForLogging(),
         }
       )
       this.#connectionState = 'failed'
@@ -466,7 +470,7 @@ export class WebSocketClient extends EventEmitter {
     } else {
       const error = this.#createClientError('MAX_RETRIES_EXCEEDED', {
         connectionTime: formatConnectionTime(this.#connectionStartTime),
-        port: process.env.RENOUN_SERVER_PORT || 'unknown',
+        port: getServerPortForLogging(),
         connectionState: this.#connectionState,
         maxRetries: this.#maxRetries,
       })
@@ -493,7 +497,7 @@ export class WebSocketClient extends EventEmitter {
 
   #handleError(event: any) {
     const connectionTime = formatConnectionTime(this.#connectionStartTime)
-    const port = process.env.RENOUN_SERVER_PORT || 'unknown'
+    const port = getServerPortForLogging()
 
     // While connecting we only log; close handler will decide whether to retry
     if (this.#connectionState === 'connecting') {
@@ -625,7 +629,7 @@ export class WebSocketClient extends EventEmitter {
 
         const error = this.#createClientError('REQUEST_TIMEOUT', {
           connectionTime: formatConnectionTime(this.#connectionStartTime),
-          port: process.env.RENOUN_SERVER_PORT || 'unknown',
+          port: getServerPortForLogging(),
           connectionState: this.#connectionState,
           method,
           params,
@@ -988,7 +992,7 @@ export class WebSocketClient extends EventEmitter {
       {
         connectionState: this.#connectionState,
         connectionTime: formatConnectionTime(this.#connectionStartTime),
-        port: process.env.RENOUN_SERVER_PORT || 'unknown',
+        port: getServerPortForLogging(),
       }
     )
 

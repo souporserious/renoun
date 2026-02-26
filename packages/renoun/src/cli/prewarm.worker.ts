@@ -1,6 +1,10 @@
 import { getPriority, setPriority } from 'node:os'
 
 import type { ProjectOptions } from '../project/types.ts'
+import {
+  PREWARM_WORKER_NICENESS,
+  PREWARM_WORKER_PAYLOAD_ENV_KEY,
+} from './prewarm/constants.ts'
 import { prewarmRenounRpcServerCache } from './prewarm.ts'
 
 interface PrewarmWorkerPayload {
@@ -13,9 +17,6 @@ interface PrewarmWorkerMessage {
   error?: string
   priority?: number
 }
-
-const PREWARM_WORKER_PAYLOAD_ENV_KEY = 'RENOUN_PREWARM_WORKER_PAYLOAD'
-const PREWARM_WORKER_NICENESS = 10
 
 function parsePrewarmWorkerPayloadFromEnvironment(): PrewarmWorkerPayload {
   const rawPayload = process.env[PREWARM_WORKER_PAYLOAD_ENV_KEY]

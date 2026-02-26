@@ -18,6 +18,7 @@ import {
   isStrictHermeticFileSystemModeFromEnv,
   isTestEnvironment,
 } from '../utils/env.ts'
+import { DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX } from '../utils/cache-constants.ts'
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
 import { getClosestFile } from '../utils/get-closest-file.ts'
 import {
@@ -4241,7 +4242,6 @@ const DIRECTORY_MTIME_DEPENDENCY_PREFIX = 'dir-mtime:'
 const FILE_DEPENDENCY_PREFIX = 'file:'
 const PRODUCTION_SNAPSHOT_REVALIDATE_INTERVAL_MS = 250
 const DIRECTORY_SNAPSHOT_COORDINATION_KEY_PREFIX = 'dir:resolve:'
-const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
 const strictHermeticWarningKeys = new Set<string>()
 
 function isStrictHermeticFileSystemMode(): boolean {

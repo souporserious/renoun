@@ -1,4 +1,5 @@
 import React from 'react'
+import { getServerRuntimeFromProcessEnv } from '../../project/runtime-env.ts'
 
 /**
  * Refreshes the development server when a source file changes.
@@ -7,14 +8,13 @@ import React from 'react'
 export async function Refresh() {
   if (process.env.NODE_ENV === 'development') {
     const { RefreshClient } = await import('./RefreshClient.ts')
-    const port = process.env.RENOUN_SERVER_PORT
-    const id = process.env.RENOUN_SERVER_ID
+    const runtime = getServerRuntimeFromProcessEnv()
 
-    if (!port || !id) {
+    if (!runtime) {
       return null
     }
 
-    return <RefreshClient port={port} id={id} />
+    return <RefreshClient port={runtime.port} id={runtime.id} />
   }
 
   return null

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
+import { PROJECT_RUNTIME_ENV_KEYS } from '../project/runtime-env.ts'
 
 type Framework = 'next' | 'vite' | 'waku'
 
@@ -151,8 +152,8 @@ if (firstArgument === 'validate') {
           shell: false,
           env: {
             ...process.env,
-            RENOUN_SERVER_PORT: port,
-            RENOUN_SERVER_ID: id,
+            [PROJECT_RUNTIME_ENV_KEYS.serverPort]: port,
+            [PROJECT_RUNTIME_ENV_KEYS.serverId]: id,
           },
         })
 

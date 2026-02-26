@@ -7,7 +7,6 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
-import { parseBooleanEnv, parsePositiveIntegerEnv } from '../utils/env.ts'
 import type {
   ModuleExport,
   getFileExportMetadata as baseGetFileExportMetadata,
@@ -53,6 +52,12 @@ import {
   isRefreshNotification,
   normalizeRefreshCursor,
 } from './refresh-notifications.ts'
+import {
+  getServerRuntimeFromProcessEnv,
+  resolveProjectClientRpcCacheEnabledFromEnv,
+  resolveProjectClientRpcCacheTtlMsFromEnv,
+  resolveProjectRefreshNotificationsEnvOverride,
+} from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
 
 let client: WebSocketClient | undefined
@@ -140,9 +145,7 @@ function shouldUseClientRpcCache(): boolean {
     return projectClientRuntimeOptions.useRpcCache
   }
 
-  const override = parseBooleanEnv(
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE']
-  )
+  const override = resolveProjectClientRpcCacheEnabledFromEnv()
   if (override !== undefined) {
     return override
   }
@@ -158,17 +161,7 @@ function getClientRpcCacheTtlMs(): number {
       : 0
   }
 
-  const configured = process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS']
-  if (!configured) {
-    return DEFAULT_CLIENT_RPC_CACHE_TTL_MS
-  }
-
-  const parsed = parsePositiveIntegerEnv(configured)
-  if (parsed === undefined) {
-    return 0
-  }
-
-  return parsed
+  return resolveProjectClientRpcCacheTtlMsFromEnv(DEFAULT_CLIENT_RPC_CACHE_TTL_MS)
 }
 
 function normalizeRpcCacheKeyValue(value: unknown): unknown {
@@ -490,11 +483,10 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
 }
 
 function getClient(): WebSocketClient | undefined {
-  const serverPort = process.env.RENOUN_SERVER_PORT
-  const serverId = process.env.RENOUN_SERVER_ID
+  const serverRuntime = getServerRuntimeFromProcessEnv()
 
-  if (!client && serverPort && serverId) {
-    client = new WebSocketClient(serverId)
+  if (!client && serverRuntime) {
+    client = new WebSocketClient(serverRuntime.id)
     const createdClient = client
     if (shouldConsumeRefreshNotifications()) {
       createdClient.on('connected', () => {
@@ -551,9 +543,7 @@ function shouldConsumeRefreshNotifications(): boolean {
     return projectClientRuntimeOptions.consumeRefreshNotifications
   }
 
-  const override = parseBooleanEnv(
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS']
-  )
+  const override = resolveProjectRefreshNotificationsEnvOverride()
   if (override !== undefined) {
     return override
   }

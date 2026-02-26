@@ -8,6 +8,7 @@ import {
   resolveBooleanProcessEnv,
   resolvePositiveIntegerProcessEnv,
 } from '../utils/env.ts'
+import { DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX } from '../utils/cache-constants.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { CACHE_SCHEMA_VERSION } from './cache-key.ts'
@@ -38,7 +39,6 @@ const SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE = 50_000
 const SQLITE_STRUCTURED_PATH_ID_CACHE_MAX_SIZE = 100_000
 const SQLITE_STRUCTURED_DEP_TERM_ID_CACHE_MAX_SIZE = 100_000
 const SQLITE_STRUCTURED_PATH_CLOSURE_SEEDED_CACHE_MAX_SIZE = 100_000
-const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
 const MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY = 'missing_dependency_entry_count'
 const INVALIDATION_SEQUENCE_META_KEY = 'invalidation_seq'
 

@@ -8,6 +8,7 @@ import {
   trigger,
 } from 'alien-signals'
 import { normalizePathKey } from './path.ts'
+import { DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX } from './cache-constants.ts'
 
 type MutableSignal<Value> = {
   (): Value
@@ -30,7 +31,6 @@ interface IndexedPathDependency {
   pathKey: string
 }
 
-const DIRECTORY_SNAPSHOT_PATH_PREFIX = 'const:dir-snapshot-path:'
 const DEPENDENCY_SIGNAL_SWEEP_THRESHOLD = 1_024
 
 function createPathDependencyNode(): PathDependencyNode {
@@ -486,9 +486,9 @@ export class ReactiveDependencyGraph {
   #parsePathDependency(
     dependencyKey: string
   ): IndexedPathDependency | undefined {
-    if (dependencyKey.startsWith(DIRECTORY_SNAPSHOT_PATH_PREFIX)) {
+    if (dependencyKey.startsWith(DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX)) {
       const dependencyPath = dependencyKey.slice(
-        DIRECTORY_SNAPSHOT_PATH_PREFIX.length
+        DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX.length
       )
       const dependencyTypeIndex = dependencyPath.indexOf(':')
       if (dependencyTypeIndex === -1) {

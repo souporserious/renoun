@@ -7,6 +7,14 @@ import { raceAbort } from '../utils/concurrency.ts'
 import { getContext, throwIfAborted } from '../utils/operation-context.ts'
 import { hashString } from '../utils/stable-serialization.ts'
 import {
+  DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT,
+  DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL,
+  DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT,
+  DEFAULT_INVALIDATED_PATH_TTL_MS,
+  DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS,
+  DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS,
+} from '../utils/cache-constants.ts'
+import {
   emitTelemetryCounter,
   emitTelemetryEvent,
   emitTelemetryHistogram,
@@ -188,12 +196,6 @@ const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
   'renoun.fs.cache.no-compute-slot-shared-value'
 )
 
-const DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS = 250
-const DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS = 250
-const DEFAULT_INVALIDATED_PATH_TTL_MS = 1_000
-const DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT = 10
-const DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT = 250
-const DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL = 25
 const DEFAULT_MEMORY_ONLY_CACHE_STORE_ID = 'memory-only-cache-store'
 
 interface CacheStoreFactoryOptions {

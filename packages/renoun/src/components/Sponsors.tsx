@@ -1,6 +1,7 @@
 import React from 'react'
 import type { Session as RenounSession } from '../file-system/Session.ts'
 import { createPersistentCacheNodeKey } from '../file-system/cache-key.ts'
+import { parseIntegerEnv } from '../utils/env.ts'
 import { hashString } from '../utils/stable-serialization.ts'
 
 interface SponsorEntity {
@@ -58,13 +59,8 @@ function createSponsorsCacheNodeKey(payload: unknown): string {
 }
 
 function resolveSponsorsCacheTtlMs(): number {
-  const configuredTtl = process.env['RENOUN_SPONSORS_CACHE_TTL_MS']
-  if (!configuredTtl) {
-    return DEFAULT_SPONSORS_CACHE_TTL_MS
-  }
-
-  const parsedTtl = Number.parseInt(configuredTtl, 10)
-  if (!Number.isFinite(parsedTtl)) {
+  const parsedTtl = parseIntegerEnv(process.env['RENOUN_SPONSORS_CACHE_TTL_MS'])
+  if (parsedTtl === undefined) {
     return DEFAULT_SPONSORS_CACHE_TTL_MS
   }
 

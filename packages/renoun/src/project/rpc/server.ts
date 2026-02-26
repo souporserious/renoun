@@ -18,6 +18,10 @@ import {
 } from '../../utils/public-error.ts'
 import { Semaphore } from '../../utils/Semaphore.ts'
 import { startRpcBuildProfile } from './build-profile.ts'
+import {
+  getServerIdFromProcessEnv,
+  setServerIdProcessEnv,
+} from '../runtime-env.ts'
 
 export interface WebSocketRequest {
   method: string
@@ -439,12 +443,12 @@ export class WebSocketServer {
   constructor(options?: { port?: number }) {
     // Reuse a stable server ID within the same process so clients can
     // reconnect after an in-process server restart.
-    const serverId = process.env.RENOUN_SERVER_ID
+    const serverId = getServerIdFromProcessEnv()
     if (serverId) {
       this.#id = serverId
     } else {
       this.#id = randomBytes(16).toString('hex')
-      process.env.RENOUN_SERVER_ID = this.#id
+      setServerIdProcessEnv(this.#id)
     }
 
     this.#readyPromise = new Promise<void>((resolve, reject) => {

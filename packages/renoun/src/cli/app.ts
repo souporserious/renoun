@@ -17,6 +17,7 @@ import { basename, dirname, join } from 'node:path'
 import { spawn } from 'node:child_process'
 
 import { createServer } from '../project/server.ts'
+import { PROJECT_RUNTIME_ENV_KEYS } from '../project/runtime-env.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
@@ -500,8 +501,8 @@ export async function runAppCommand({
       env: {
         ...process.env,
         RENOUN_RUNTIME_DIRECTORY: runtimeDirectory,
-        RENOUN_SERVER_PORT: port,
-        RENOUN_SERVER_ID: id,
+        [PROJECT_RUNTIME_ENV_KEYS.serverPort]: port,
+        [PROJECT_RUNTIME_ENV_KEYS.serverId]: id,
       },
     })
 

@@ -6,8 +6,7 @@ import { fileURLToPath } from 'node:url'
 import type { ProjectOptions } from '../project/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { isVitestRuntime } from '../utils/env.ts'
-
-const PREWARM_WORKER_PAYLOAD_ENV_KEY = 'RENOUN_PREWARM_WORKER_PAYLOAD'
+import { PREWARM_WORKER_PAYLOAD_ENV_KEY } from './prewarm/constants.ts'
 
 interface PrewarmWorkerMessage {
   type?: unknown
