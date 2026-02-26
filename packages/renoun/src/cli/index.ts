@@ -15,6 +15,7 @@ const usageMessage =
   `         renoun override <pattern>       Copy files from app template (supports globs)\n` +
   `         renoun theme <path>             Prune a VS Code theme JSON file\n` +
   `         renoun cache-token [--json]     Print deterministic cache token for CI\n` +
+  `         renoun cache-maintenance [...]  Run SQLite cache checkpoint/vacuum maintenance\n` +
   `         renoun validate [path|url]      Check for broken links\n` +
   `\n` +
   `Examples:\n` +
@@ -52,6 +53,20 @@ if (firstArgument === 'validate') {
 
   try {
     await runCacheTokenCommand(args)
+    process.exit(0)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(message)
+    process.exit(1)
+  }
+} else if (firstArgument === 'cache-maintenance') {
+  const { runCacheMaintenanceCommand } = await import(
+    './cache-maintenance.ts'
+  )
+  const args = toStringArguments([secondArgument, ...restArguments])
+
+  try {
+    await runCacheMaintenanceCommand(args)
     process.exit(0)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

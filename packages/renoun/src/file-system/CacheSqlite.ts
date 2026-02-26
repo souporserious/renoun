@@ -11,6 +11,7 @@ import {
 import { DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX } from '../utils/cache-constants.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
+import { emitTelemetryCounter, emitTelemetryHistogram } from '../utils/telemetry.ts'
 import { CACHE_SCHEMA_VERSION } from './cache-key.ts'
 import { summarizePersistedValue } from './cache-persistence-debug.ts'
 import { loadSqliteModule } from './sqlite.ts'
@@ -61,6 +62,13 @@ interface StructuredPathDependencyTerm {
   pathKey: string
 }
 
+interface SqlitePruneMetrics {
+  staleRowsDeleted: number
+  overflowRowsDeleted: number
+  inflightRowsDeleted: number
+  compactionTriggered: boolean
+}
+
 let warnedAboutSqliteFallback = false
 const persistenceByDbPath = new Map<string, SqliteCacheStorePersistence>()
 const persistenceOptionsByDbPath = new Map<
@@ -87,6 +95,35 @@ interface ResolvedSqlitePersistenceOptions {
   maxRows: number
   debugSessionRoot?: boolean
   debugCachePersistence?: boolean
+}
+
+export type SqliteCheckpointMode =
+  | 'PASSIVE'
+  | 'FULL'
+  | 'RESTART'
+  | 'TRUNCATE'
+
+export interface SqliteCacheMaintenanceOptions {
+  checkpoint?: boolean
+  vacuum?: boolean
+  checkpointMode?: SqliteCheckpointMode
+}
+
+export interface SqliteCacheMaintenanceResult {
+  dbPath: string
+  available: boolean
+  checkpoint: {
+    executed: boolean
+    mode: SqliteCheckpointMode
+    busy: number
+    logFrames: number
+    checkpointedFrames: number
+    durationMs: number
+  }
+  vacuum: {
+    executed: boolean
+    durationMs: number
+  }
 }
 
 function resolveDbPath(options: {
@@ -215,6 +252,29 @@ export function disposeDefaultCacheStorePersistence() {
   disposeCacheStorePersistence()
 }
 
+export async function runSqliteCacheMaintenance(options: {
+  dbPath?: string
+  projectRoot?: string
+  checkpoint?: boolean
+  vacuum?: boolean
+  checkpointMode?: SqliteCheckpointMode
+} = {}): Promise<SqliteCacheMaintenanceResult> {
+  const persistence = new SqliteCacheStorePersistence({
+    dbPath: options.dbPath,
+    projectRoot: options.projectRoot,
+  })
+
+  try {
+    return await persistence.runMaintenance({
+      checkpoint: options.checkpoint,
+      vacuum: options.vacuum,
+      checkpointMode: options.checkpointMode,
+    })
+  } finally {
+    persistence.close()
+  }
+}
+
 export class SqliteCacheStorePersistence implements CacheStorePersistence {
   readonly #dbPath: string
   readonly #schemaVersion: number
@@ -262,6 +322,112 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
   isAvailable(): boolean {
     return this.#availability !== 'unavailable'
+  }
+
+  async runMaintenance(
+    options: SqliteCacheMaintenanceOptions = {}
+  ): Promise<SqliteCacheMaintenanceResult> {
+    await this.#readyPromise
+
+    const resolvedOptions = resolveSqliteMaintenanceOptions(options)
+    const checkpointMode = resolvedOptions.checkpointMode
+
+    const result: SqliteCacheMaintenanceResult = {
+      dbPath: this.#dbPath,
+      available: !!this.#db,
+      checkpoint: {
+        executed: false,
+        mode: checkpointMode,
+        busy: 0,
+        logFrames: 0,
+        checkpointedFrames: 0,
+        durationMs: 0,
+      },
+      vacuum: {
+        executed: false,
+        durationMs: 0,
+      },
+    }
+
+    if (!this.#db) {
+      return result
+    }
+
+    if (resolvedOptions.checkpoint) {
+      const startedAt = Date.now()
+      const checkpointRow = (await this.#runWithBusyRetries(
+        () =>
+          this.#prepareStatement(
+            `PRAGMA wal_checkpoint(${checkpointMode})`
+          ).get(),
+        {
+          operationName: 'maintenance_checkpoint',
+        }
+      )) as
+        | {
+            busy?: unknown
+            log?: unknown
+            checkpointed?: unknown
+          }
+        | undefined
+      const durationMs = Date.now() - startedAt
+      const busy = Number(checkpointRow?.busy ?? 0)
+      const logFrames = Number(checkpointRow?.log ?? 0)
+      const checkpointedFrames = Number(checkpointRow?.checkpointed ?? 0)
+
+      result.checkpoint = {
+        executed: true,
+        mode: checkpointMode,
+        busy: Number.isFinite(busy) ? busy : 0,
+        logFrames: Number.isFinite(logFrames) ? logFrames : 0,
+        checkpointedFrames: Number.isFinite(checkpointedFrames)
+          ? checkpointedFrames
+          : 0,
+        durationMs,
+      }
+
+      emitTelemetryCounter({
+        name: 'renoun.cache.sqlite.maintenance_checkpoint_count',
+        tags: {
+          mode: checkpointMode.toLowerCase(),
+        },
+      })
+      emitTelemetryHistogram({
+        name: 'renoun.cache.sqlite.maintenance_checkpoint_ms',
+        value: durationMs,
+        tags: {
+          mode: checkpointMode.toLowerCase(),
+        },
+      })
+    }
+
+    if (resolvedOptions.vacuum) {
+      const startedAt = Date.now()
+      await this.#runWithBusyRetries(
+        () => {
+          this.#db.exec('VACUUM')
+        },
+        {
+          operationName: 'maintenance_vacuum',
+        }
+      )
+      const durationMs = Date.now() - startedAt
+
+      result.vacuum = {
+        executed: true,
+        durationMs,
+      }
+
+      emitTelemetryCounter({
+        name: 'renoun.cache.sqlite.maintenance_vacuum_count',
+      })
+      emitTelemetryHistogram({
+        name: 'renoun.cache.sqlite.maintenance_vacuum_ms',
+        value: durationMs,
+      })
+    }
+
+    return result
   }
 
   async acquireComputeSlot(
@@ -402,32 +568,87 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       })
     } catch {}
 
-    const row = (await this.#runWithBusyRetries(() =>
-      this
-        .#prepareStatement(
-          `
-            SELECT
-              fingerprint as fingerprint,
-              value_blob as value_blob,
-              updated_at as updated_at,
-              persist as persist,
-              workspace_change_token as workspace_change_token,
-              revision as revision
-            FROM cache_entries
-            WHERE node_key = ?
-          `
-        )
-        .get(nodeKey)
-    )) as
-      | {
-          fingerprint?: string
-          value_blob?: unknown
-          updated_at?: number
-          persist?: number
-          workspace_change_token?: unknown
-          revision?: unknown
+    const loadedRowData = (await this.#runWithBusyRetries(() => {
+      this.#db.exec('BEGIN')
+      let transactionStarted = true
+      try {
+        const row = this
+          .#prepareStatement(
+            `
+              SELECT
+                fingerprint as fingerprint,
+                value_blob as value_blob,
+                updated_at as updated_at,
+                persist as persist,
+                workspace_change_token as workspace_change_token,
+                revision as revision
+              FROM cache_entries
+              WHERE node_key = ?
+            `
+          )
+          .get(nodeKey) as
+          | {
+              fingerprint?: string
+              value_blob?: unknown
+              updated_at?: number
+              persist?: number
+              workspace_change_token?: unknown
+              revision?: unknown
+            }
+          | undefined
+
+        let dependencyRows: Array<{
+          dep_key?: string | null
+          dep_version?: string | null
+        }> = []
+        if (row) {
+          dependencyRows = this
+            .#prepareStatement(
+              `
+                SELECT dep_key as dep_key, dep_version as dep_version
+                FROM cache_entry_deps_v2
+                WHERE node_key = ?
+                ORDER BY dep_key
+              `
+            )
+            .all(nodeKey) as Array<{
+            dep_key?: string | null
+            dep_version?: string | null
+          }>
         }
-      | undefined
+
+        this.#db.exec('COMMIT')
+        transactionStarted = false
+        return {
+          row,
+          dependencyRows,
+        }
+      } catch (error) {
+        if (transactionStarted) {
+          try {
+            this.#db.exec('ROLLBACK')
+          } catch {}
+        }
+        throw error
+      }
+    })) as {
+      row:
+        | {
+            fingerprint?: string
+            value_blob?: unknown
+            updated_at?: number
+            persist?: number
+            workspace_change_token?: unknown
+            revision?: unknown
+          }
+        | undefined
+      dependencyRows: Array<{
+        dep_key?: string | null
+        dep_version?: string | null
+      }>
+    }
+
+    const row = loadedRowData.row
 
     if (!row) {
       if (shouldDebug) {
@@ -436,21 +657,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return undefined
     }
 
-    const dependencyRows = (await this.#runWithBusyRetries(() =>
-      this
-        .#prepareStatement(
-          `
-            SELECT dep_key as dep_key, dep_version as dep_version
-            FROM cache_entry_deps_v2
-            WHERE node_key = ?
-            ORDER BY dep_key
-          `
-        )
-        .all(nodeKey)
-    )) as Array<{
-      dep_key?: string | null
-      dep_version?: string | null
-    }>
+    const dependencyRows = loadedRowData.dependencyRows
     const storedFingerprint = getPersistedFingerprint(row.fingerprint)
     const revision = getPersistedRevision(row.revision)
     if (!storedFingerprint) {
@@ -536,6 +743,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       !skipFingerprintCheck &&
       storedFingerprint !== recalculatedFingerprint
     ) {
+      emitTelemetryCounter({
+        name: 'renoun.cache.sqlite.fingerprint_mismatch_cleanup_count',
+        tags: {
+          namespace: getCacheNodeNamespace(nodeKey),
+        },
+      })
       if (shouldDebug) {
         logCachePersistenceLoadFailure(
           nodeKey,
@@ -649,13 +862,20 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           } catch {}
         }
 
-        if (
-          attempt >= SQLITE_DEFAULTS.busyRetries ||
-          !isSqliteBusyOrLockedError(error)
-        ) {
+        const busyOrLocked = isSqliteBusyOrLockedError(error)
+        if (!busyOrLocked) {
+          throw error
+        }
+        if (attempt >= SQLITE_DEFAULTS.busyRetries) {
+          this.#emitBusyRetriesExhaustedTelemetry(
+            'save_with_revision',
+            attempt + 1,
+            error
+          )
           throw error
         }
 
+        this.#emitBusyRetryTelemetry('save_with_revision', attempt + 1, error)
         await delay((attempt + 1) * SQLITE_DEFAULTS.busyRetryDelayMs)
       }
     }
@@ -817,13 +1037,24 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           } catch {}
         }
 
-        if (
-          attempt >= SQLITE_DEFAULTS.busyRetries ||
-          !isSqliteBusyOrLockedError(error)
-        ) {
+        const busyOrLocked = isSqliteBusyOrLockedError(error)
+        if (!busyOrLocked) {
+          throw error
+        }
+        if (attempt >= SQLITE_DEFAULTS.busyRetries) {
+          this.#emitBusyRetriesExhaustedTelemetry(
+            'save_with_revision_guarded',
+            attempt + 1,
+            error
+          )
           throw error
         }
 
+        this.#emitBusyRetryTelemetry(
+          'save_with_revision_guarded',
+          attempt + 1,
+          error
+        )
         await delay((attempt + 1) * SQLITE_DEFAULTS.busyRetryDelayMs)
       }
     }
@@ -999,9 +1230,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const missingDependencyNodeKeys = hasMissingDependencyMetadata
       ? await this.#listMissingDependencyNodeKeys()
       : []
-    const invalidationSeq = await this.#runWithBusyRetries(() =>
-      this.#nextInvalidationSequence()
-    )
+    const invalidationSeq =
+      deletedNodeKeys.length > 0
+        ? await this.#runWithBusyRetries(() => this.#nextInvalidationSequence())
+        : undefined
 
     return {
       deletedNodeKeys,
@@ -1465,6 +1697,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
 
         database = new DatabaseSync(this.#dbPath)
+        this.#clearPreparedStatements()
+        this.#clearStructuredDependencyCaches()
+        this.#db = database
         database.exec(`PRAGMA journal_mode = WAL`)
         database.exec(`PRAGMA synchronous = NORMAL`)
         database.exec(`PRAGMA busy_timeout = 5000`)
@@ -1485,17 +1720,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           ? Number(schemaRow.value)
           : undefined
 
-        if (currentSchemaVersion !== this.#schemaVersion) {
-          database.exec(`DROP TABLE IF EXISTS cache_entry_deps_v2`)
-          database.exec(`DROP TABLE IF EXISTS dep_terms`)
-          database.exec(`DROP TABLE IF EXISTS dep_path_closure`)
-          database.exec(`DROP TABLE IF EXISTS dep_paths`)
-          database.exec(`DROP TABLE IF EXISTS cache_deps`)
-          database.exec(`DROP TABLE IF EXISTS cache_entries`)
-          database.exec(`DROP TABLE IF EXISTS cache_inflight`)
-        }
-
         this.#createCacheTables(database)
+        this.#migrateCacheSchema(database, currentSchemaVersion)
 
         if (currentSchemaVersion !== this.#schemaVersion) {
           database.prepare(
@@ -1508,9 +1734,6 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
         this.#initializeMissingDependencyMetadata(database)
 
-        this.#clearPreparedStatements()
-        this.#clearStructuredDependencyCaches()
-        this.#db = database
         this.#availability = 'available'
         await this.#runPruneWithRetries()
         return
@@ -1529,6 +1752,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           attempt < SQLITE_DEFAULTS.initBusyRetries &&
           isSqliteBusyOrLockedError(error)
         ) {
+          this.#emitBusyRetryTelemetry('initialize', attempt + 1, error)
           const retryDelay = Math.min(
             SQLITE_DEFAULTS.initBusyRetryMaxDelayMs,
             (attempt + 1) * SQLITE_DEFAULTS.initBusyRetryDelayMs
@@ -1538,6 +1762,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
 
         this.#availability = 'unavailable'
+        emitTelemetryCounter({
+          name: 'renoun.cache.sqlite.fallback_to_memory_count',
+          tags: {
+            reason: getSqliteErrorCategory(error),
+          },
+        })
         if (!warnedAboutSqliteFallback) {
           warnedAboutSqliteFallback = true
           // eslint-disable-next-line no-console
@@ -1573,6 +1803,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         )
       `
     )
+    this.#ensureCacheEntriesColumns(database)
     database.exec(
       `CREATE INDEX IF NOT EXISTS cache_entries_updated_at_idx ON cache_entries(updated_at)`
     )
@@ -1654,6 +1885,295 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     database.exec(
       `CREATE INDEX IF NOT EXISTS cache_inflight_expires_at_idx ON cache_inflight(expires_at)`
     )
+  }
+
+  #migrateCacheSchema(
+    database: any,
+    currentSchemaVersion: number | undefined
+  ): void {
+    const migrationStartedAt = Date.now()
+    this.#ensureCacheEntriesColumns(database)
+
+    const copiedLegacyDependencyRows = this.#copyLegacyDependenciesIntoV2(database)
+    const hasNullStructuredDependencyTermIds =
+      this.#hasNullStructuredDependencyTermIds()
+    const backfilledStructuredDependencyRows =
+      copiedLegacyDependencyRows > 0 ||
+      hasNullStructuredDependencyTermIds ||
+      currentSchemaVersion !== this.#schemaVersion
+        ? this.#backfillStructuredDependencyTermIds()
+        : 0
+
+    const migrated =
+      copiedLegacyDependencyRows > 0 ||
+      backfilledStructuredDependencyRows > 0 ||
+      currentSchemaVersion !== this.#schemaVersion
+
+    if (!migrated) {
+      return
+    }
+
+    const migrationDurationMs = Date.now() - migrationStartedAt
+    emitTelemetryCounter({
+      name: 'renoun.cache.sqlite.schema_migration_count',
+      tags: {
+        from:
+          typeof currentSchemaVersion === 'number' &&
+          Number.isFinite(currentSchemaVersion)
+            ? String(currentSchemaVersion)
+            : 'unset',
+        to: String(this.#schemaVersion),
+      },
+    })
+    emitTelemetryHistogram({
+      name: 'renoun.cache.sqlite.schema_migration_ms',
+      value: migrationDurationMs,
+      tags: {
+        from:
+          typeof currentSchemaVersion === 'number' &&
+          Number.isFinite(currentSchemaVersion)
+            ? String(currentSchemaVersion)
+            : 'unset',
+        to: String(this.#schemaVersion),
+      },
+    })
+  }
+
+  #tableExists(database: any, tableName: string): boolean {
+    const row = database
+      .prepare(
+        `
+          SELECT name
+          FROM sqlite_master
+          WHERE type = 'table' AND name = ?
+        `
+      )
+      .get(tableName) as { name?: unknown } | undefined
+    return typeof row?.name === 'string'
+  }
+
+  #getTableColumnNames(database: any, tableName: string): Set<string> {
+    if (!isSafeSqliteIdentifier(tableName)) {
+      return new Set()
+    }
+
+    const rows = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+      name?: unknown
+    }>
+    const columnNames = new Set<string>()
+    for (const row of rows) {
+      if (typeof row.name === 'string') {
+        columnNames.add(row.name)
+      }
+    }
+    return columnNames
+  }
+
+  #ensureCacheEntriesColumns(database: any): void {
+    if (!this.#tableExists(database, 'cache_entries')) {
+      return
+    }
+
+    const columnNames = this.#getTableColumnNames(database, 'cache_entries')
+    const shouldBackfillLegacyPersist = !columnNames.has('persist')
+    if (!columnNames.has('persist')) {
+      database.exec(
+        `ALTER TABLE cache_entries ADD COLUMN persist INTEGER NOT NULL DEFAULT 1`
+      )
+    }
+    if (!columnNames.has('workspace_change_token')) {
+      database.exec(
+        `ALTER TABLE cache_entries ADD COLUMN workspace_change_token TEXT`
+      )
+    }
+    if (!columnNames.has('revision')) {
+      database.exec(
+        `ALTER TABLE cache_entries ADD COLUMN revision INTEGER NOT NULL DEFAULT 0`
+      )
+    }
+    if (!columnNames.has('last_accessed_at')) {
+      database.exec(
+        `ALTER TABLE cache_entries ADD COLUMN last_accessed_at INTEGER NOT NULL DEFAULT 0`
+      )
+    }
+
+    database
+      .prepare(
+        `
+          UPDATE cache_entries
+          SET last_accessed_at = updated_at
+          WHERE last_accessed_at IS NULL OR last_accessed_at <= 0
+        `
+      )
+      .run()
+
+    if (shouldBackfillLegacyPersist) {
+      database
+        .prepare(
+          `
+            UPDATE cache_entries
+            SET persist = 1
+            WHERE persist IS NULL OR persist = 0
+          `
+        )
+        .run()
+    }
+  }
+
+  #copyLegacyDependenciesIntoV2(database: any): number {
+    if (!this.#tableExists(database, 'cache_deps')) {
+      return 0
+    }
+
+    const rows = database
+      .prepare(
+        `
+          SELECT
+            deps.node_key as node_key,
+            deps.dep_key as dep_key,
+            deps.dep_version as dep_version
+          FROM cache_deps AS deps
+          JOIN cache_entries AS entry
+            ON entry.node_key = deps.node_key
+          ORDER BY deps.node_key, deps.dep_key
+        `
+      )
+      .all() as Array<{
+      node_key?: unknown
+      dep_key?: unknown
+      dep_version?: unknown
+    }>
+    if (rows.length === 0) {
+      database.exec(`DROP TABLE IF EXISTS cache_deps`)
+      return 0
+    }
+
+    const insertDependency = this.#prepareStatement(
+      `
+        INSERT INTO cache_entry_deps_v2 (node_key, dep_key, dep_term_id, dep_version)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(node_key, dep_key) DO UPDATE SET
+          dep_term_id = excluded.dep_term_id,
+          dep_version = excluded.dep_version
+      `
+    )
+
+    let copiedRowCount = 0
+    for (const row of rows) {
+      if (typeof row.node_key !== 'string' || typeof row.dep_key !== 'string') {
+        continue
+      }
+
+      const depVersion =
+        typeof row.dep_version === 'string' ? row.dep_version : String(row.dep_version ?? '')
+      const parsedDependency = this.#parseStructuredPathDependencyTerm(row.dep_key)
+      let depTermId: number | null = null
+
+      if (parsedDependency) {
+        const pathId = this.#ensurePathClosureForPath(parsedDependency.pathKey)
+        if (Number.isFinite(pathId) && pathId > 0) {
+          const resolvedDepTermId = this.#getOrCreateDepTermId(
+            parsedDependency.kind,
+            pathId,
+            parsedDependency.pathKey
+          )
+          if (Number.isFinite(resolvedDepTermId) && resolvedDepTermId > 0) {
+            depTermId = resolvedDepTermId
+          }
+        }
+      }
+
+      insertDependency.run(row.node_key, row.dep_key, depTermId, depVersion)
+      copiedRowCount += 1
+    }
+
+    database.exec(`DROP TABLE IF EXISTS cache_deps`)
+    return copiedRowCount
+  }
+
+  #hasNullStructuredDependencyTermIds(): boolean {
+    if (!this.#db) {
+      return false
+    }
+
+    const row = this
+      .#prepareStatement(
+        `
+          SELECT 1 as has_row
+          FROM cache_entry_deps_v2
+          WHERE dep_term_id IS NULL
+          LIMIT 1
+        `
+      )
+      .get() as { has_row?: unknown } | undefined
+
+    return Number(row?.has_row ?? 0) === 1
+  }
+
+  #backfillStructuredDependencyTermIds(): number {
+    if (!this.#db) {
+      return 0
+    }
+
+    const rows = this
+      .#prepareStatement(
+        `
+          SELECT node_key as node_key, dep_key as dep_key
+          FROM cache_entry_deps_v2
+          WHERE dep_term_id IS NULL
+          ORDER BY node_key, dep_key
+        `
+      )
+      .all() as Array<{ node_key?: unknown; dep_key?: unknown }>
+    if (rows.length === 0) {
+      return 0
+    }
+
+    const updateDepTermId = this.#prepareStatement(
+      `
+        UPDATE cache_entry_deps_v2
+        SET dep_term_id = ?
+        WHERE node_key = ? AND dep_key = ?
+      `
+    )
+
+    let backfilledRowCount = 0
+    for (const row of rows) {
+      if (typeof row.node_key !== 'string' || typeof row.dep_key !== 'string') {
+        continue
+      }
+
+      const parsedDependency = this.#parseStructuredPathDependencyTerm(row.dep_key)
+      if (!parsedDependency) {
+        continue
+      }
+
+      const pathId = this.#ensurePathClosureForPath(parsedDependency.pathKey)
+      if (!Number.isFinite(pathId) || pathId <= 0) {
+        continue
+      }
+
+      const depTermId = this.#getOrCreateDepTermId(
+        parsedDependency.kind,
+        pathId,
+        parsedDependency.pathKey
+      )
+      if (!Number.isFinite(depTermId) || depTermId <= 0) {
+        continue
+      }
+
+      const updateResult = updateDepTermId.run(
+        depTermId,
+        row.node_key,
+        row.dep_key
+      ) as { changes?: unknown }
+      const changes = Number(updateResult?.changes ?? 0)
+      if (Number.isFinite(changes) && changes > 0) {
+        backfilledRowCount += 1
+      }
+    }
+
+    return backfilledRowCount
   }
 
   #initializeMissingDependencyMetadata(database: any): void {
@@ -1759,22 +2279,69 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   }
 
   async #runPruneWithRetries() {
+    const pruneStartedAt = Date.now()
     for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
       try {
-        await this.#pruneStaleEntries()
+        const pruneMetrics = await this.#pruneStaleEntries()
+        const pruneDurationMs = Date.now() - pruneStartedAt
+        const retryCount = attempt
+        const deletedEntryRows =
+          pruneMetrics.staleRowsDeleted + pruneMetrics.overflowRowsDeleted
+
+        emitTelemetryCounter({
+          name: 'renoun.cache.sqlite.prune_count',
+          tags: {
+            retries: String(retryCount),
+            compaction: pruneMetrics.compactionTriggered ? 'true' : 'false',
+          },
+        })
+        emitTelemetryHistogram({
+          name: 'renoun.cache.sqlite.prune_ms',
+          value: pruneDurationMs,
+          tags: {
+            retries: String(retryCount),
+            compaction: pruneMetrics.compactionTriggered ? 'true' : 'false',
+          },
+        })
+        if (deletedEntryRows > 0) {
+          emitTelemetryCounter({
+            name: 'renoun.cache.sqlite.prune_deleted_rows',
+            value: deletedEntryRows,
+            tags: {
+              table: 'cache_entries',
+            },
+          })
+        }
+        if (pruneMetrics.inflightRowsDeleted > 0) {
+          emitTelemetryCounter({
+            name: 'renoun.cache.sqlite.prune_deleted_rows',
+            value: pruneMetrics.inflightRowsDeleted,
+            tags: {
+              table: 'cache_inflight',
+            },
+          })
+        }
+
         this.#lastPrunedAt = Date.now()
         return
       } catch (error) {
-        if (
-          attempt >= SQLITE_DEFAULTS.busyRetries ||
-          !isSqliteBusyOrLockedError(error)
-        ) {
+        const busyOrLocked = isSqliteBusyOrLockedError(error)
+        if (!busyOrLocked) {
+          throw error
+        }
+        if (attempt >= SQLITE_DEFAULTS.busyRetries) {
+          this.#emitBusyRetriesExhaustedTelemetry('prune', attempt + 1, error)
           throw error
         }
 
+        this.#emitBusyRetryTelemetry('prune', attempt + 1, error)
         await delay((attempt + 1) * SQLITE_DEFAULTS.busyRetryDelayMs)
       }
     }
+
+    throw new Error(
+      '[renoun] Exhausted SQLITE busy retries for cache pruning.'
+    )
   }
 
   async #touchLastAccessed(nodeKey: string): Promise<void> {
@@ -1913,18 +2480,65 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
   }
 
-  async #runWithBusyRetries<T>(operation: () => T): Promise<T> {
+  #emitBusyRetryTelemetry(
+    operationName: string,
+    retryIndex: number,
+    error: unknown
+  ): void {
+    emitTelemetryCounter({
+      name: 'renoun.cache.sqlite.busy_retry_count',
+      tags: {
+        operation: operationName,
+        retry: String(Math.max(1, Math.floor(retryIndex))),
+        reason: getSqliteErrorCategory(error),
+      },
+    })
+  }
+
+  #emitBusyRetriesExhaustedTelemetry(
+    operationName: string,
+    attempts: number,
+    error: unknown
+  ): void {
+    emitTelemetryCounter({
+      name: 'renoun.cache.sqlite.busy_retry_exhausted_count',
+      tags: {
+        operation: operationName,
+        reason: getSqliteErrorCategory(error),
+      },
+    })
+    emitTelemetryHistogram({
+      name: 'renoun.cache.sqlite.busy_retry_attempts',
+      value: Math.max(1, Math.floor(attempts)),
+      tags: {
+        operation: operationName,
+      },
+    })
+  }
+
+  async #runWithBusyRetries<T>(
+    operation: () => T,
+    options: { operationName?: string } = {}
+  ): Promise<T> {
+    const operationName = options.operationName ?? 'sqlite_operation'
     for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
       try {
         return operation()
       } catch (error) {
-        if (
-          attempt >= SQLITE_DEFAULTS.busyRetries ||
-          !isSqliteBusyOrLockedError(error)
-        ) {
+        const busyOrLocked = isSqliteBusyOrLockedError(error)
+        if (!busyOrLocked) {
+          throw error
+        }
+        if (attempt >= SQLITE_DEFAULTS.busyRetries) {
+          this.#emitBusyRetriesExhaustedTelemetry(
+            operationName,
+            attempt + 1,
+            error
+          )
           throw error
         }
 
+        this.#emitBusyRetryTelemetry(operationName, attempt + 1, error)
         await delay((attempt + 1) * SQLITE_DEFAULTS.busyRetryDelayMs)
       }
     }
@@ -1953,13 +2567,22 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#lastInflightCleanupAt = now
   }
 
-  async #pruneStaleEntries() {
+  async #pruneStaleEntries(): Promise<SqlitePruneMetrics> {
     if (!this.#db) {
-      return
+      return {
+        staleRowsDeleted: 0,
+        overflowRowsDeleted: 0,
+        inflightRowsDeleted: 0,
+        compactionTriggered: false,
+      }
     }
 
     const pruneStartedAt = Date.now()
     const staleBefore = pruneStartedAt - this.#maxAgeMs
+    let shouldCompactStructuredDependencyTables = false
+    let staleRowsDeleted = 0
+    let overflowRowsDeleted = 0
+    let inflightRowsDeleted = 0
 
     this.#db.exec('BEGIN IMMEDIATE')
     try {
@@ -1981,6 +2604,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
       if (staleCount > 0) {
         this.#deleteRowsForNodeKeys(staleNodeKeys)
+        shouldCompactStructuredDependencyTables = true
+        staleRowsDeleted = staleCount
       }
 
       const countRow = this.#prepareStatement(
@@ -2008,25 +2633,25 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           })
 
         this.#deleteRowsForNodeKeys(victimNodeKeys)
+        shouldCompactStructuredDependencyTables = true
+        overflowRowsDeleted = victimNodeKeys.length
       }
 
-      this.#deleteInflightRowsForNodeKeys(
-        this
-          .#prepareStatement(
-            `
-              SELECT node_key
-              FROM cache_inflight
-              WHERE expires_at <= ?
-            `
-          )
-          .all(pruneStartedAt)
-          .map((row: { node_key?: string }) => row.node_key)
-          .filter((nodeKey: string | undefined): nodeKey is string => {
-            return typeof nodeKey === 'string'
-          })
-      )
-
-      this.#compactStructuredDependencyTables()
+      const expiredInflightNodeKeys = this
+        .#prepareStatement(
+          `
+            SELECT node_key
+            FROM cache_inflight
+            WHERE expires_at <= ?
+          `
+        )
+        .all(pruneStartedAt)
+        .map((row: { node_key?: string }) => row.node_key)
+        .filter((nodeKey: string | undefined): nodeKey is string => {
+          return typeof nodeKey === 'string'
+        })
+      inflightRowsDeleted = expiredInflightNodeKeys.length
+      this.#deleteInflightRowsForNodeKeys(expiredInflightNodeKeys)
 
       this.#db.exec('COMMIT')
     } catch (error) {
@@ -2034,6 +2659,70 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#db.exec('ROLLBACK')
       } catch {}
       throw error
+    }
+
+    if (shouldCompactStructuredDependencyTables) {
+      await this.#runStructuredDependencyCompactionWithRetries()
+    }
+
+    return {
+      staleRowsDeleted,
+      overflowRowsDeleted,
+      inflightRowsDeleted,
+      compactionTriggered: shouldCompactStructuredDependencyTables,
+    }
+  }
+
+  async #runStructuredDependencyCompactionWithRetries(): Promise<void> {
+    if (!this.#db) {
+      return
+    }
+
+    const compactionStartedAt = Date.now()
+    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
+      try {
+        this.#db.exec('BEGIN IMMEDIATE')
+        try {
+          this.#compactStructuredDependencyTables()
+          this.#db.exec('COMMIT')
+          const compactionDurationMs = Date.now() - compactionStartedAt
+          emitTelemetryCounter({
+            name: 'renoun.cache.sqlite.compaction_count',
+            tags: {
+              retries: String(attempt),
+            },
+          })
+          emitTelemetryHistogram({
+            name: 'renoun.cache.sqlite.compaction_ms',
+            value: compactionDurationMs,
+            tags: {
+              retries: String(attempt),
+            },
+          })
+          return
+        } catch (error) {
+          try {
+            this.#db.exec('ROLLBACK')
+          } catch {}
+          throw error
+        }
+      } catch (error) {
+        const busyOrLocked = isSqliteBusyOrLockedError(error)
+        if (!busyOrLocked) {
+          throw error
+        }
+        if (attempt >= SQLITE_DEFAULTS.busyRetries) {
+          this.#emitBusyRetriesExhaustedTelemetry(
+            'compaction',
+            attempt + 1,
+            error
+          )
+          throw error
+        }
+
+        this.#emitBusyRetryTelemetry('compaction', attempt + 1, error)
+        await delay((attempt + 1) * SQLITE_DEFAULTS.busyRetryDelayMs)
+      }
     }
   }
 
@@ -2626,6 +3315,102 @@ function isSqliteBusyOrLockedError(error: unknown): boolean {
     normalizedMessage.includes('database table is locked') ||
     normalizedMessage.includes('database is busy')
   )
+}
+
+const SQLITE_CHECKPOINT_MODES: SqliteCheckpointMode[] = [
+  'PASSIVE',
+  'FULL',
+  'RESTART',
+  'TRUNCATE',
+]
+
+interface ResolvedSqliteMaintenanceOptions {
+  checkpoint: boolean
+  vacuum: boolean
+  checkpointMode: SqliteCheckpointMode
+}
+
+function resolveSqliteMaintenanceOptions(
+  options: SqliteCacheMaintenanceOptions
+): ResolvedSqliteMaintenanceOptions {
+  const checkpoint =
+    typeof options.checkpoint === 'boolean' ? options.checkpoint : true
+  const vacuum =
+    typeof options.vacuum === 'boolean' ? options.vacuum : false
+
+  return {
+    checkpoint,
+    vacuum,
+    checkpointMode: resolveSqliteCheckpointMode(options.checkpointMode),
+  }
+}
+
+function resolveSqliteCheckpointMode(
+  mode: SqliteCheckpointMode | undefined
+): SqliteCheckpointMode {
+  if (typeof mode !== 'string') {
+    return 'PASSIVE'
+  }
+
+  const normalizedMode = mode.toUpperCase() as SqliteCheckpointMode
+  if (SQLITE_CHECKPOINT_MODES.includes(normalizedMode)) {
+    return normalizedMode
+  }
+
+  return 'PASSIVE'
+}
+
+function getSqliteErrorCategory(error: unknown): string {
+  if (isSqliteBusyOrLockedError(error)) {
+    return 'busy_or_locked'
+  }
+
+  if (error instanceof Error) {
+    const candidateError = error as {
+      code?: unknown
+      errno?: unknown
+      resultCode?: unknown
+      extendedResultCode?: unknown
+    }
+    const rawCode =
+      candidateError.code ??
+      candidateError.errno ??
+      candidateError.resultCode ??
+      candidateError.extendedResultCode
+    if (typeof rawCode === 'number' && Number.isFinite(rawCode)) {
+      return String(Math.floor(rawCode))
+    }
+
+    if (typeof rawCode === 'string') {
+      const normalizedCode = rawCode.toLowerCase().replace(/[^a-z0-9_-]/g, '_')
+      if (normalizedCode.length > 0) {
+        return normalizedCode.slice(0, 64)
+      }
+    }
+
+    const normalizedMessage = error.message.toLowerCase()
+    if (normalizedMessage.includes('readonly')) {
+      return 'readonly'
+    }
+    if (normalizedMessage.includes('syntax')) {
+      return 'syntax'
+    }
+  }
+
+  return 'unknown'
+}
+
+function isSafeSqliteIdentifier(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value)
+}
+
+function getCacheNodeNamespace(nodeKey: string): string {
+  const separatorIndex = nodeKey.indexOf(':')
+  if (separatorIndex <= 0) {
+    return 'unknown'
+  }
+
+  return nodeKey.slice(0, separatorIndex)
 }
 
 function resolveSqlitePersistenceOptions(

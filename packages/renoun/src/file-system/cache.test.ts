@@ -1,4 +1,5 @@
 import {
+  readFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -15,11 +16,13 @@ import {
   relative as relativePath,
   resolve as resolvePath,
 } from 'node:path'
-import { describe, expect, test, vi } from 'vitest'
+import { serialize } from 'node:v8'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
+import { setGlobalTelemetry, type Telemetry } from '../utils/telemetry.ts'
 
 import {
   Cache,
@@ -36,6 +39,7 @@ import {
   disposeDefaultCacheStorePersistence,
   getCacheStorePersistence,
   getDefaultCacheDatabasePath,
+  runSqliteCacheMaintenance,
 } from './CacheSqlite.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
@@ -301,6 +305,10 @@ async function withProductionSqliteCache<T>(
     rmSync(tmpDirectory, { recursive: true, force: true })
   }
 }
+
+afterEach(() => {
+  setGlobalTelemetry(undefined)
+})
 
 describe('file-system cache integration', () => {
   test('shares directory snapshots across directory instances', async () => {
@@ -5697,7 +5705,7 @@ export type Metadata = Value`,
     }
   })
 
-  test('clears persisted rows when schema version changes', async () => {
+  test('preserves persisted rows when schema version changes', async () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-schema-'))
 
     try {
@@ -5743,13 +5751,198 @@ export type Metadata = Value`,
         }
       )
 
-      expect(computeCount).toBe(2)
+      expect(computeCount).toBe(1)
+      expect(await secondStore.get(nodeKey)).toEqual({ value: 1 })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('migrates frozen legacy sqlite fixture without warm-start regressions', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-schema-fixture-')
+    )
+    const fixtureSqlPath = join(
+      getRootDirectory(),
+      'packages',
+      'renoun',
+      'fixtures',
+      'cache',
+      'sqlite-schema-v1.sql'
+    )
+    const telemetryHistograms: Array<{
+      name: string
+      value: number
+      tags?: Record<string, string>
+    }> = []
+    setGlobalTelemetry({
+      enabled() {
+        return true
+      },
+      emit() {},
+      histogram(name, value, tags) {
+        telemetryHistograms.push({
+          name,
+          value,
+          tags,
+        })
+      },
+      counter() {},
+    })
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fixtureSql = readFileSync(fixtureSqlPath, 'utf8')
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const setupDb = new DatabaseSync(dbPath)
+      const legacyWarmNodeKey = 'test:legacy:warm-start'
+      const legacyDepsNodeKey = 'test:legacy:deps'
+      const warmValue = { marker: 'warm-start', value: 42 }
+      const depValue = { marker: 'legacy-deps', value: 7 }
+      const seededUpdatedAt = Date.now()
+      try {
+        setupDb.exec(fixtureSql)
+        setupDb
+          .prepare(
+            `
+              UPDATE cache_entries
+              SET value_blob = ?, updated_at = ?
+              WHERE node_key = ?
+            `
+          )
+          .run(serialize(warmValue), seededUpdatedAt, legacyWarmNodeKey)
+        setupDb
+          .prepare(
+            `
+              UPDATE cache_entries
+              SET value_blob = ?, updated_at = ?
+              WHERE node_key = ?
+            `
+          )
+          .run(serialize(depValue), seededUpdatedAt, legacyDepsNodeKey)
+      } finally {
+        setupDb.close()
+      }
+
+      const initializeStartedAt = Date.now()
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const loadedWarmEntry = await persistence.load(legacyWarmNodeKey, {
+        skipLastAccessedUpdate: true,
+      })
+      const initializeDurationMs = Date.now() - initializeStartedAt
+
+      expect(loadedWarmEntry?.value).toEqual(warmValue)
+      expect(loadedWarmEntry?.persist).toBe(true)
+      expect(initializeDurationMs).toBeLessThan(2_000)
+
+      const verifyDb = new DatabaseSync(dbPath)
+      try {
+        const legacyDepsTable = verifyDb
+          .prepare(
+            `
+              SELECT name
+              FROM sqlite_master
+              WHERE type = 'table' AND name = 'cache_deps'
+            `
+          )
+          .get()
+        expect(legacyDepsTable).toBeUndefined()
+
+        const migratedDepRow = verifyDb
+          .prepare(
+            `
+              SELECT dep_term_id
+              FROM cache_entry_deps_v2
+              WHERE node_key = ? AND dep_key = ?
+            `
+          )
+          .get(legacyDepsNodeKey, 'file:/fixture/dep.ts') as
+          | { dep_term_id?: unknown }
+          | undefined
+        expect(Number(migratedDepRow?.dep_term_id ?? 0)).toBeGreaterThan(0)
+
+        const migratedWarmRow = verifyDb
+          .prepare(
+            `
+              SELECT persist, revision, last_accessed_at
+              FROM cache_entries
+              WHERE node_key = ?
+            `
+          )
+          .get(legacyWarmNodeKey) as
+          | {
+              persist?: unknown
+              revision?: unknown
+              last_accessed_at?: unknown
+            }
+          | undefined
+        expect(Number(migratedWarmRow?.persist ?? 0)).toBe(1)
+        expect(Number(migratedWarmRow?.revision ?? 0)).toBe(0)
+        expect(Number(migratedWarmRow?.last_accessed_at ?? 0)).toBeGreaterThan(0)
+      } finally {
+        verifyDb.close()
+      }
+
+      const store = new CacheStore({
+        snapshot: new FileSystemSnapshot(
+          new InMemoryFileSystem({}),
+          'sqlite-schema-fixture'
+        ),
+        persistence,
+      })
+      let computeCount = 0
+      const warmStartValue = await store.getOrCompute(
+        legacyWarmNodeKey,
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return { marker: 'recomputed', value: 0 }
+        }
+      )
+
+      expect(warmStartValue).toEqual(warmValue)
+      expect(computeCount).toBe(0)
+
+      const migrationHistogram = telemetryHistograms.find((histogram) => {
+        return histogram.name === 'renoun.cache.sqlite.schema_migration_ms'
+      })
+      expect(migrationHistogram).toBeDefined()
+      expect(migrationHistogram?.tags?.from).toBe('1')
+      expect((migrationHistogram?.value ?? 0) >= 0).toBe(true)
+      expect(migrationHistogram?.value ?? 0).toBeLessThan(2_000)
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
   })
 
   test('falls back to in-memory mode when sqlite initialization fails', async () => {
+    const telemetryCounters: Array<{
+      name: string
+      value: number
+      tags?: Record<string, string>
+    }> = []
+    const telemetry: Telemetry = {
+      enabled() {
+        return true
+      },
+      emit() {},
+      counter(name, value = 1, tags) {
+        telemetryCounters.push({
+          name,
+          value,
+          tags,
+        })
+      },
+    }
+    setGlobalTelemetry(telemetry)
+
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
     })
@@ -5777,6 +5970,64 @@ export type Metadata = Value`,
     expect(secondStore.usesPersistentCache).toBe(false)
 
     expect(computeCount).toBe(2)
+    expect(
+      telemetryCounters.some(
+        (counter) => counter.name === 'renoun.cache.sqlite.fallback_to_memory_count'
+      )
+    ).toBe(true)
+  })
+
+  test('runs sqlite checkpoint and vacuum maintenance without clearing persisted rows', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-maintenance-explicit-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:sqlite-maintenance-explicit'
+      await persistence.save(nodeKey, {
+        value: { value: 1 },
+        deps: [{ depKey: 'const:maintenance:1', depVersion: '1' }],
+        fingerprint: createFingerprint([
+          { depKey: 'const:maintenance:1', depVersion: '1' },
+        ]),
+        persist: true,
+        updatedAt: Date.now(),
+      })
+
+      const result = await persistence.runMaintenance({
+        checkpoint: true,
+        vacuum: true,
+        checkpointMode: 'PASSIVE',
+      })
+
+      expect(result.available).toBe(true)
+      expect(result.checkpoint.executed).toBe(true)
+      expect(result.checkpoint.mode).toBe('PASSIVE')
+      expect(result.vacuum.executed).toBe(true)
+      expect(await persistence.load(nodeKey)).toBeDefined()
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('uses checkpoint-on and vacuum-off defaults for sqlite maintenance', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-maintenance-defaults-')
+    )
+
+    try {
+      const result = await runSqliteCacheMaintenance({
+        dbPath: join(tmpDirectory, 'fs-cache.sqlite'),
+      })
+
+      expect(result.available).toBe(true)
+      expect(result.checkpoint.executed).toBe(true)
+      expect(result.vacuum.executed).toBe(false)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
   })
 
   test('throws when project root resolves to filesystem root', () => {
@@ -6066,6 +6317,24 @@ export type Metadata = Value`,
 
   test('drops corrupted persisted entries when stored fingerprint no longer matches dependencies', async () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-corrupt-'))
+    const telemetryCounters: Array<{
+      name: string
+      value: number
+      tags?: Record<string, string>
+    }> = []
+    setGlobalTelemetry({
+      enabled() {
+        return true
+      },
+      emit() {},
+      counter(name, value = 1, tags) {
+        telemetryCounters.push({
+          name,
+          value,
+          tags,
+        })
+      },
+    })
 
     try {
       const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
@@ -6116,6 +6385,131 @@ export type Metadata = Value`,
         .get(nodeKey) as { total?: number }
       verifyDb.close()
       expect(Number(countRow.total ?? 0)).toBe(0)
+      expect(
+        telemetryCounters.some((counter) => {
+          return (
+            counter.name ===
+            'renoun.cache.sqlite.fingerprint_mismatch_cleanup_count'
+          )
+        })
+      ).toBe(true)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('loads a consistent persisted row when a concurrent writer commits between row and dependency reads', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-load-snapshot-race-')
+    )
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:load-snapshot-race'
+      const previousDeps = [
+        { depKey: 'const:load-snapshot-race:1', depVersion: '1' },
+      ]
+      const nextDeps = [{ depKey: 'const:load-snapshot-race:2', depVersion: '1' }]
+
+      await persistence.save(nodeKey, {
+        value: { value: 'initial' },
+        deps: previousDeps,
+        fingerprint: createFingerprint(previousDeps),
+        persist: true,
+        updatedAt: Date.now(),
+      })
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const nextUpdatedAt = Date.now() + 1
+      const nextFingerprint = createFingerprint(nextDeps)
+
+      const applyConcurrentWrite = () => {
+        const concurrentDb = new DatabaseSync(dbPath)
+        try {
+          concurrentDb
+            .prepare(
+              `
+                UPDATE cache_entries
+                SET
+                  fingerprint = ?,
+                  value_blob = ?,
+                  updated_at = ?,
+                  last_accessed_at = ?,
+                  revision = revision + 1
+                WHERE node_key = ?
+              `
+            )
+            .run(
+              nextFingerprint,
+              serialize({ value: 'updated' }),
+              nextUpdatedAt,
+              nextUpdatedAt,
+              nodeKey
+            )
+          concurrentDb
+            .prepare(`DELETE FROM cache_entry_deps_v2 WHERE node_key = ?`)
+            .run(nodeKey)
+          concurrentDb
+            .prepare(
+              `
+                INSERT INTO cache_entry_deps_v2 (node_key, dep_key, dep_term_id, dep_version)
+                VALUES (?, ?, NULL, ?)
+              `
+            )
+            .run(nodeKey, nextDeps[0]!.depKey, nextDeps[0]!.depVersion)
+        } finally {
+          concurrentDb.close()
+        }
+      }
+
+      const originalPrepare = DatabaseSync.prototype.prepare
+      let wroteConcurrentUpdate = false
+      DatabaseSync.prototype.prepare = function patchedPrepare(
+        this: unknown,
+        sql: string
+      ): unknown {
+        const statement = originalPrepare.call(this, sql) as {
+          all?: (...args: unknown[]) => unknown
+        }
+
+        if (
+          sql.includes('FROM cache_entry_deps_v2') &&
+          sql.includes('WHERE node_key = ?') &&
+          typeof statement.all === 'function'
+        ) {
+          const originalAll = statement.all.bind(statement)
+          statement.all = (...args: unknown[]) => {
+            if (!wroteConcurrentUpdate) {
+              applyConcurrentWrite()
+              wroteConcurrentUpdate = true
+            }
+            return originalAll(...args)
+          }
+        }
+
+        return statement
+      }
+
+      try {
+        const loaded = await persistence.load(nodeKey)
+        expect(loaded?.value).toEqual({ value: 'initial' })
+        expect(loaded?.deps).toEqual(previousDeps)
+      } finally {
+        DatabaseSync.prototype.prepare = originalPrepare
+      }
+
+      const reloaded = await persistence.load(nodeKey)
+      expect(reloaded?.value).toEqual({ value: 'updated' })
+      expect(reloaded?.deps).toEqual(nextDeps)
+      expect(reloaded?.fingerprint).toBe(nextFingerprint)
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
@@ -6909,6 +7303,135 @@ export type Metadata = Value`,
       } finally {
         db.close()
       }
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('emits prune retry and latency telemetry under prune lock contention', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-prune-telemetry-contention-')
+    )
+    const telemetryCounters: Array<{
+      name: string
+      value: number
+      tags?: Record<string, string>
+    }> = []
+    const telemetryHistograms: Array<{
+      name: string
+      value: number
+      tags?: Record<string, string>
+    }> = []
+    setGlobalTelemetry({
+      enabled() {
+        return true
+      },
+      emit() {},
+      counter(name, value = 1, tags) {
+        telemetryCounters.push({
+          name,
+          value,
+          tags,
+        })
+      },
+      histogram(name, value, tags) {
+        telemetryHistograms.push({
+          name,
+          value,
+          tags,
+        })
+      },
+    })
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const fileSystem = new InMemoryFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      const snapshot = new FileSystemSnapshot(
+        fileSystem,
+        'sqlite-prune-telemetry-contention'
+      )
+      const persistence = new SqliteCacheStorePersistence({
+        dbPath,
+        maxRows: 1,
+        maxAgeMs: 1000 * 60 * 60,
+      })
+      const store = new CacheStore({ snapshot, persistence })
+
+      const sqliteModule = (await import('node:sqlite')) as {
+        DatabaseSync?: new (path: string) => any
+      }
+      const DatabaseSync = sqliteModule.DatabaseSync
+      if (!DatabaseSync) {
+        throw new Error('node:sqlite DatabaseSync is unavailable')
+      }
+
+      const originalExec = DatabaseSync.prototype.exec
+      let injectedPruneBusy = false
+      DatabaseSync.prototype.exec = function patchedExec(
+        this: unknown,
+        sql: string
+      ): unknown {
+        if (!injectedPruneBusy && sql.trim().toUpperCase() === 'BEGIN IMMEDIATE') {
+          const stack = new Error().stack ?? ''
+          if (stack.includes('runPruneWithRetries')) {
+            injectedPruneBusy = true
+            const busyError = new Error('database is locked')
+            ;(busyError as { code?: string }).code = 'SQLITE_BUSY'
+            throw busyError
+          }
+        }
+
+        return originalExec.call(this, sql)
+      }
+
+      try {
+        await store.put(
+          'test:prune-telemetry:0',
+          { index: 0 },
+          {
+            persist: true,
+            deps: [{ depKey: 'file:/dep/0.ts', depVersion: '0' }],
+          }
+        )
+        await store.put(
+          'test:prune-telemetry:1',
+          { index: 1 },
+          {
+            persist: true,
+            deps: [{ depKey: 'file:/dep/1.ts', depVersion: '1' }],
+          }
+        )
+      } finally {
+        DatabaseSync.prototype.exec = originalExec
+      }
+
+      expect(injectedPruneBusy).toBe(true)
+      expect(
+        telemetryCounters.some((counter) => {
+          return (
+            counter.name === 'renoun.cache.sqlite.busy_retry_count' &&
+            counter.tags?.operation === 'prune'
+          )
+        })
+      ).toBe(true)
+      expect(
+        telemetryHistograms.some((histogram) => {
+          return (
+            histogram.name === 'renoun.cache.sqlite.prune_ms' &&
+            histogram.value >= 0
+          )
+        })
+      ).toBe(true)
+      expect(
+        telemetryHistograms.some((histogram) => {
+          return (
+            histogram.name === 'renoun.cache.sqlite.compaction_ms' &&
+            histogram.value >= 0
+          )
+        })
+      ).toBe(true)
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
@@ -8463,6 +8986,50 @@ export type Metadata = Value`,
       expect(await store.get(unaffectedNodeKey)).toEqual({
         value: 'unaffected',
       })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('does not bump invalidation sequence for no-op dependency path invalidations', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-structured-noop-invalidation-seq-')
+    )
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      new InMemoryFileSystem({
+        'src/components/button.ts': 'export const button = 1',
+      }),
+      'sqlite-structured-noop-invalidation-seq'
+    )
+    const persistence = new SqliteCacheStorePersistence({ dbPath })
+    const store = new CacheStore({ snapshot, persistence })
+    const nodeKey = 'analysis:components:noop-invalidation-seq'
+
+    try {
+      const depVersion = await snapshot.contentId('src/components/button.ts')
+
+      await store.put(
+        nodeKey,
+        { value: 'stable' },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: 'file:src/components/button.ts',
+              depVersion,
+            },
+          ],
+        }
+      )
+
+      const eviction = await store.deleteByDependencyPath('src/unrelated')
+      expect(eviction.deletedNodeKeys).toEqual([])
+      expect(eviction.usedDependencyIndex).toBe(true)
+      expect(eviction.hasMissingDependencyMetadata).toBe(false)
+      expect(eviction.missingDependencyNodeKeys).toEqual([])
+      expect(eviction.invalidationMode).toBe('structured')
+      expect(eviction.invalidationSeq).toBeUndefined()
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }

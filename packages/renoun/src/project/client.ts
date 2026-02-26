@@ -198,6 +198,11 @@ function toComparablePath(path: string): string {
   return normalizePathKey(absolutePath)
 }
 
+function toRuntimeInvalidationPath(path: string): string {
+  const normalized = normalizeSlashes(path)
+  return isAbsolutePath(normalized) ? normalized : resolve(normalized)
+}
+
 function getProjectRootCandidates(params: unknown): readonly string[] {
   const roots = new Set<string>([resolve(process.cwd())])
 
@@ -343,13 +348,35 @@ function trimClientRpcCache(): void {
   }
 }
 
-function normalizeInvalidationPaths(paths: Iterable<string>): string[] {
-  const comparablePaths: string[] = []
+interface NormalizedInvalidationPaths {
+  comparablePaths: string[]
+  runtimePaths: string[]
+}
+
+function normalizeInvalidationPaths(
+  paths: Iterable<string>
+): NormalizedInvalidationPaths {
+  const runtimePathByComparablePath = new Map<string, string>()
   for (const path of paths) {
-    comparablePaths.push(toComparablePath(path))
+    if (typeof path !== 'string' || path.length === 0) {
+      continue
+    }
+
+    const runtimePath = toRuntimeInvalidationPath(path)
+    const comparablePath = toComparablePath(runtimePath)
+    if (!runtimePathByComparablePath.has(comparablePath)) {
+      runtimePathByComparablePath.set(comparablePath, runtimePath)
+    }
   }
 
-  return collapseInvalidationPaths(comparablePaths)
+  const comparablePaths = collapseInvalidationPaths(
+    runtimePathByComparablePath.keys()
+  )
+  const runtimePaths = comparablePaths.map((comparablePath) => {
+    return runtimePathByComparablePath.get(comparablePath) ?? comparablePath
+  })
+
+  return { comparablePaths, runtimePaths }
 }
 
 function hasPathDependencyIntersectionWithAnyPath(
@@ -398,14 +425,14 @@ function invalidateAllClientRpcState(): void {
 }
 
 function applyRefreshInvalidations(paths: string[]): void {
-  const normalizedPaths = normalizeInvalidationPaths(paths)
-  if (normalizedPaths.length === 0) {
+  const { comparablePaths, runtimePaths } = normalizeInvalidationPaths(paths)
+  if (comparablePaths.length === 0) {
     return
   }
 
-  invalidateClientRpcStateByNormalizedPaths(normalizedPaths)
-  invalidateRuntimeAnalysisCachePaths(normalizedPaths)
-  invalidateProjectCachesByPaths(normalizedPaths)
+  invalidateClientRpcStateByNormalizedPaths(comparablePaths)
+  invalidateRuntimeAnalysisCachePaths(runtimePaths)
+  invalidateProjectCachesByPaths(comparablePaths)
 }
 
 async function callClientMethod<

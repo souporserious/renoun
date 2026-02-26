@@ -101,6 +101,22 @@ describe('renoun CLI index integration', () => {
     expect(exitSpy).toHaveBeenCalledWith(0)
   })
 
+  test('runs cache-maintenance --help through CLI entrypoint', async () => {
+    process.argv = ['node', 'renoun', 'cache-maintenance', '--help']
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit)
+
+    await import('./index.ts')
+
+    expect(String(logSpy.mock.calls[0]?.[0])).toContain(
+      'Usage: renoun cache-maintenance'
+    )
+    expect(exitSpy).toHaveBeenCalledWith(0)
+  })
+
   test('passes project tsconfig path to prewarm in watch mode', async () => {
     process.argv = ['node', 'renoun', 'watch']
 

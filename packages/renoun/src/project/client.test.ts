@@ -253,7 +253,7 @@ describe('project client transport guards', () => {
     expect(third).toMatchObject({ resolveTypeCallCount: 2 })
     expect(callMethod).toHaveBeenCalledTimes(2)
     expect(mocks.invalidateRuntimeAnalysisCachePaths).toHaveBeenCalledWith([
-      'project/src/b.ts',
+      '/project/src/b.ts',
     ])
     expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
       'project/src/b.ts',
@@ -440,7 +440,7 @@ describe('project client transport guards', () => {
     expect(secondB).toMatchObject({ resolveTypeCallCount: 1 })
     expect(callMethod).toHaveBeenCalledTimes(3)
     expect(mocks.invalidateRuntimeAnalysisCachePaths).toHaveBeenCalledWith([
-      'project/src/a.ts',
+      '/project/src/a.ts',
     ])
     expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
       'project/src/a.ts',

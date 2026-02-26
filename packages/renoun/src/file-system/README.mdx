@@ -449,6 +449,8 @@ renoun works correctly even when SQLite is unavailable. SQLite is an optional up
 
 If SQLite (`node:sqlite`) is missing or fails to initialize, renoun automatically falls back to in-memory cache behavior. Queries and metadata remain accurate, but cache state becomes process-local and non-persistent.
 
+For metric names, tags, and recommended dashboard/alert starters, see [SQLite Cache Telemetry Reference](./SQLiteCacheTelemetry.mdx).
+
 #### Deterministic CI cache keys
 
 Use `renoun cache-token` to print a stable token for renoun's persistent file-system cache:
