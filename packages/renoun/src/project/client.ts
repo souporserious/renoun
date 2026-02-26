@@ -108,6 +108,7 @@ const REFRESH_RESYNC_MAX_ATTEMPTS = 3
 const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
 const clientRpcCacheByKey = new Map<string, ClientRpcCacheEntry>()
 const clientRpcInFlightByKey = new Map<string, ClientRpcInFlightEntry>()
+const observedProjectRootCandidates = new Set<string>([resolve(process.cwd())])
 // Bumped on refresh invalidations so stale in-flight requests cannot repopulate cache.
 let clientRpcInvalidationEpoch = 0
 
@@ -223,6 +224,12 @@ function getProjectRootCandidates(params: unknown): readonly string[] {
   }
 
   return Array.from(roots)
+}
+
+function rememberProjectRootCandidates(params: unknown): void {
+  for (const rootCandidate of getProjectRootCandidates(params)) {
+    observedProjectRootCandidates.add(rootCandidate)
+  }
 }
 
 function getCandidatePaths(
@@ -426,6 +433,10 @@ function invalidateAllClientRpcState(): void {
   clientRpcInFlightByKey.clear()
 }
 
+function collectConservativeRefreshFallbackPaths(): string[] {
+  return Array.from(observedProjectRootCandidates)
+}
+
 function applyRefreshInvalidations(paths: string[]): void {
   const { comparablePaths, runtimePaths } = normalizeInvalidationPaths(paths)
   if (comparablePaths.length === 0) {
@@ -445,6 +456,8 @@ async function callClientMethod<
   method: string,
   params: Params
 ): Promise<Value> {
+  rememberProjectRootCandidates(params)
+
   if (
     !shouldUseClientRpcCache() ||
     !CLIENT_CACHED_RPC_METHODS.has(method as ClientCachedRpcMethod)
@@ -550,9 +563,11 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
           return
         } catch {
           if (attempt >= REFRESH_RESYNC_MAX_ATTEMPTS) {
-            // Conservative fallback: clear dependent client/runtime caches for the
-            // active workspace and force the next sync to request from cursor 0.
-            applyRefreshInvalidations([resolve(process.cwd())])
+            // Conservative fallback: clear client-side RPC caches and invalidate
+            // runtime/project caches for all observed project roots.
+            const fallbackPaths = collectConservativeRefreshFallbackPaths()
+            invalidateAllClientRpcState()
+            applyRefreshInvalidations(fallbackPaths)
             latestRefreshCursor = 0
             return
           }

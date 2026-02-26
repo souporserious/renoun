@@ -511,10 +511,84 @@ describe('project client transport guards', () => {
       expect(
         callMethod.mock.calls.filter(([method]) => method === 'getRefreshInvalidationsSince')
       ).toHaveLength(3)
-      expect(mocks.invalidateRuntimeAnalysisCachePaths).toHaveBeenCalledWith([
-        resolve(process.cwd()),
-      ])
+      expect(mocks.invalidateRuntimeAnalysisCachePaths).toHaveBeenCalledTimes(1)
+      expect(
+        mocks.invalidateRuntimeAnalysisCachePaths.mock.calls[0]?.[0]
+      ).toEqual([resolve(process.cwd())])
       expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledTimes(1)
+      expect(mocks.invalidateProjectCachesByPaths.mock.calls[0]?.[0]).toEqual([
+        resolve(process.cwd()).replace(/^\/+/, ''),
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('refresh resync fallback invalidates observed project roots outside cwd', async () => {
+    vi.useFakeTimers()
+    try {
+      process.env['RENOUN_SERVER_PORT'] = '4545'
+      process.env['RENOUN_SERVER_ID'] = 'server-id'
+      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+      process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+      const listeners = new Map<string, (payload: unknown) => void>()
+      const callMethod = vi.fn(
+        async (method: string, params?: Record<string, unknown>) => {
+          if (method === 'resolveTypeAtLocationWithDependencies') {
+            return {
+              filePath: String(params?.filePath ?? ''),
+              resolveTypeCallCount: 1,
+              dependencies: [String(params?.filePath ?? '')],
+            }
+          }
+
+          if (method === 'getRefreshInvalidationsSince') {
+            throw new Error('resync failed')
+          }
+
+          throw new Error(`Unexpected method: ${method}`)
+        }
+      )
+
+      mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+        return {
+          callMethod,
+          on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+            listeners.set(eventName, listener)
+          }),
+        }
+      })
+
+      const module = await import('./client.ts')
+      const externalProjectRoot = resolve('/tmp/renoun-external-project')
+
+      await module.resolveTypeAtLocationWithDependencies(
+        `${externalProjectRoot}/src/a.ts`,
+        0,
+        0 as never,
+        undefined,
+        {
+          tsConfigFilePath: `${externalProjectRoot}/tsconfig.json`,
+        }
+      )
+
+      const connectedListener = listeners.get('connected')
+      expect(connectedListener).toBeTypeOf('function')
+
+      // First connection marks the client as connected; second triggers resync.
+      connectedListener!({})
+      connectedListener!({})
+
+      await vi.runAllTimersAsync()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(mocks.invalidateRuntimeAnalysisCachePaths).toHaveBeenCalledTimes(1)
+      expect(
+        mocks.invalidateRuntimeAnalysisCachePaths.mock.calls[0]?.[0]
+      ).toEqual(expect.arrayContaining([externalProjectRoot]))
     } finally {
       vi.useRealTimers()
     }
