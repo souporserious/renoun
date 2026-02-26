@@ -10,6 +10,8 @@ import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
+import { getDebugLogger } from '../utils/debug.ts'
+import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import {
   createPersistentCacheNodeKey,
   serializeTypeFilterForCache,
@@ -88,6 +90,7 @@ const MODULE_RESOLUTION_FILE_EXTENSIONS = [
 ] as const
 
 const { ts } = getTsMorph()
+const debugLogger = getDebugLogger()
 
 type RuntimeAnalysisCacheStore = RuntimeAnalysisSession & {
   store: RuntimeAnalysisSession['session']['cache']
@@ -166,7 +169,21 @@ function enqueueRuntimeAnalysisInvalidation(task: () => Promise<void>): void {
   runtimeAnalysisInvalidationQueue = runtimeAnalysisInvalidationQueue
     .catch(() => {})
     .then(task)
-    .catch(() => {})
+    .catch((error) => {
+      debugLogger.debug('Runtime analysis invalidation task failed', () => {
+        const errorObject = error as Partial<Error> | undefined
+        return {
+          operation: 'runtime-analysis-invalidation',
+          data: {
+            errorName: errorObject?.name ?? 'UnknownError',
+            errorMessage:
+              typeof errorObject?.message === 'string'
+                ? errorObject.message
+                : String(error),
+          },
+        }
+      })
+    })
 }
 
 async function waitForRuntimeAnalysisInvalidations(): Promise<void> {
@@ -229,9 +246,7 @@ export function invalidateRuntimeAnalysisCachePaths(
     }
   }
 
-  const normalizedPaths = collapseRuntimeAnalysisInvalidationPaths(
-    pathByNormalizedPath.keys()
-  )
+  const normalizedPaths = collapseInvalidationPaths(pathByNormalizedPath.keys())
   if (normalizedPaths.length === 0) {
     return
   }
@@ -267,46 +282,6 @@ export function invalidateRuntimeAnalysisCacheAll(): void {
     runtimeSession.session.invalidatePaths(['.'])
     await runtimeSession.session.waitForPendingInvalidations()
   })
-}
-
-function collapseRuntimeAnalysisInvalidationPaths(
-  paths: Iterable<string>
-): string[] {
-  const normalizedPaths = Array.from(
-    new Set(
-      Array.from(paths).filter((path) => {
-        return typeof path === 'string' && path.length > 0
-      })
-    )
-  )
-  if (normalizedPaths.length === 0) {
-    return []
-  }
-
-  if (normalizedPaths.includes('.')) {
-    return ['.']
-  }
-
-  normalizedPaths.sort((firstPath, secondPath) => {
-    if (firstPath.length !== secondPath.length) {
-      return firstPath.length - secondPath.length
-    }
-
-    return firstPath.localeCompare(secondPath)
-  })
-
-  const collapsedPaths: string[] = []
-  for (const path of normalizedPaths) {
-    const isRedundant = collapsedPaths.some((existingPath) => {
-      return path === existingPath || path.startsWith(`${existingPath}/`)
-    })
-
-    if (!isRedundant) {
-      collapsedPaths.push(path)
-    }
-  }
-
-  return collapsedPaths
 }
 
 function toSourceTextMetadataValueSignature(value: string): string {

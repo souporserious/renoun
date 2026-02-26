@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { realpathSync } from 'node:fs'
 
+import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -1911,45 +1912,6 @@ function getPathAncestors(path: string): string[] {
   }
 
   return ancestors
-}
-
-function collapseInvalidationPaths(paths: Iterable<string>): string[] {
-  const deduped = Array.from(
-    new Set(
-      Array.from(paths).filter((path) => {
-        return typeof path === 'string' && path.length > 0
-      })
-    )
-  ).map((path) => normalizePathKey(path))
-
-  if (deduped.length === 0) {
-    return []
-  }
-
-  if (deduped.includes('.')) {
-    return ['.']
-  }
-
-  deduped.sort((firstPath, secondPath) => {
-    if (firstPath.length !== secondPath.length) {
-      return firstPath.length - secondPath.length
-    }
-
-    return firstPath.localeCompare(secondPath)
-  })
-
-  const collapsedPaths: string[] = []
-  for (const path of deduped) {
-    const isRedundant = collapsedPaths.some((existingPath) => {
-      return path === existingPath || path.startsWith(`${existingPath}/`)
-    })
-
-    if (!isRedundant) {
-      collapsedPaths.push(path)
-    }
-  }
-
-  return collapsedPaths
 }
 
 function getPersistedFallbackDirectorySnapshotPrefixes(path: string): string[] {

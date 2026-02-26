@@ -11,6 +11,7 @@ import { getDebugLogger } from '../utils/debug.ts'
 import type { DebugContext } from '../utils/debug.ts'
 import { parseBooleanEnv } from '../utils/env.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
+import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { invalidateProjectFileCachePaths } from './cache.ts'
 import {
@@ -350,37 +351,6 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
     firstPath.startsWith(`${secondPath}/`) ||
     secondPath.startsWith(`${firstPath}/`)
   )
-}
-
-function collapseInvalidationPaths(paths: Iterable<string>): string[] {
-  const normalizedPaths = Array.from(new Set(Array.from(paths)))
-  if (normalizedPaths.length === 0) {
-    return []
-  }
-
-  if (normalizedPaths.includes('.')) {
-    return ['.']
-  }
-
-  normalizedPaths.sort((firstPath, secondPath) => {
-    if (firstPath.length !== secondPath.length) {
-      return firstPath.length - secondPath.length
-    }
-
-    return firstPath.localeCompare(secondPath)
-  })
-
-  const collapsedPaths: string[] = []
-  for (const path of normalizedPaths) {
-    const redundant = collapsedPaths.some((existingPath) => {
-      return path === existingPath || path.startsWith(`${existingPath}/`)
-    })
-    if (!redundant) {
-      collapsedPaths.push(path)
-    }
-  }
-
-  return collapsedPaths
 }
 
 function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {

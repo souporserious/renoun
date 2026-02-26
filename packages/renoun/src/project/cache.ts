@@ -7,6 +7,7 @@ import {
 import type { FileReadableStream } from '../file-system/FileSystem.ts'
 import type { Snapshot } from '../file-system/Snapshot.ts'
 import type { DirectoryEntry } from '../file-system/types.ts'
+import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { Project } from '../utils/ts-morph.ts'
@@ -124,7 +125,7 @@ class ProjectCacheSnapshot implements Snapshot {
       }
     }
 
-    const normalizedPaths = collapseProjectInvalidationPaths(
+    const normalizedPaths = collapseInvalidationPaths(
       inputPathByNormalizedPath.keys()
     )
     if (normalizedPaths.length === 0) {
@@ -676,7 +677,7 @@ function invalidateProjectCacheRuntimePaths(
   runtime: ProjectCacheRuntime,
   paths: Iterable<string>
 ): void {
-  const normalizedPaths = collapseProjectInvalidationPaths(
+  const normalizedPaths = collapseInvalidationPaths(
     Array.from(paths).map(normalizeProjectPath)
   )
   if (normalizedPaths.length === 0) {
@@ -695,36 +696,4 @@ function invalidateProjectCacheRuntimePaths(
   for (const normalizedPath of normalizedPaths) {
     runtime.snapshot.invalidatePath(normalizedPath)
   }
-}
-
-function collapseProjectInvalidationPaths(paths: Iterable<string>): string[] {
-  const normalizedPaths = Array.from(new Set(Array.from(paths)))
-  if (normalizedPaths.length === 0) {
-    return []
-  }
-
-  if (normalizedPaths.includes('.')) {
-    return ['.']
-  }
-
-  normalizedPaths.sort((firstPath, secondPath) => {
-    if (firstPath.length !== secondPath.length) {
-      return firstPath.length - secondPath.length
-    }
-
-    return firstPath.localeCompare(secondPath)
-  })
-
-  const collapsedPaths: string[] = []
-  for (const path of normalizedPaths) {
-    const isRedundant = collapsedPaths.some((existingPath) => {
-      return path === existingPath || path.startsWith(`${existingPath}/`)
-    })
-
-    if (!isRedundant) {
-      collapsedPaths.push(path)
-    }
-  }
-
-  return collapsedPaths
 }

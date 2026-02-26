@@ -1,5 +1,4 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, test, vi } from 'vitest'
 
@@ -67,8 +66,10 @@ async function createTemporaryWorkspace(
   workspacePath: string
   cleanup: () => Promise<void>
 }> {
+  const cacheDirectory = join(process.cwd(), '.cache')
+  await mkdir(cacheDirectory, { recursive: true })
   const workspacePath = await mkdtemp(
-    join(tmpdir(), 'renoun-cached-analysis-test-')
+    join(cacheDirectory, 'cached-analysis-')
   )
 
   for (const [relativePath, contents] of Object.entries(files)) {
