@@ -10,7 +10,6 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import {
   createWriteStream,
   existsSync,
@@ -109,6 +108,12 @@ import { resolveGitHubUsername, toGitHubProfileUrl } from './git-author.ts'
 import { spawnWithResult, type SpawnResult } from './spawn.ts'
 import type { Cache } from './Cache.ts'
 import { Session } from './Session.ts'
+import {
+  createWorkspaceChangeToken,
+  createWorkspaceStatusDigest,
+  extractDirtyDigestFromWorkspaceToken,
+  extractHeadFromWorkspaceToken,
+} from './workspace-change-token.ts'
 
 export interface GitFileSystemOptions extends FileSystemOptions {
   /** Repository source - remote URL or local path. */
@@ -920,10 +925,16 @@ export class GitFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest =
-        await this.#createWorkspaceStatusDigest(statusEntries)
+      const statusDigest = await createWorkspaceStatusDigest({
+        entries: statusEntries,
+        getPathSignature: (relativePath) =>
+          this.#createWorkspaceStatusPathSignature(relativePath),
+      })
 
-      return `head:${headCommit};dirty:${statusDigest.digest};count:${statusDigest.count};ignored-only:${statusDigest.ignoredOnly ? 1 : 0}`
+      return createWorkspaceChangeToken({
+        headCommit,
+        statusDigest,
+      })
     } catch {
       return null
     }
@@ -936,12 +947,13 @@ export class GitFileSystem
     try {
       await this.#ensureRepoReady()
 
-      const previousHead = this.#extractHeadFromWorkspaceToken(previousToken)
+      const previousHead = extractHeadFromWorkspaceToken(previousToken)
       if (!previousHead) {
         return null
       }
-      const previousDirtyDigest =
-        this.#extractDirtyDigestFromWorkspaceToken(previousToken)
+      const previousDirtyDigest = extractDirtyDigestFromWorkspaceToken(
+        previousToken
+      )
 
       const headResult = await spawnWithResult('git', ['rev-parse', 'HEAD'], {
         cwd: this.repoRoot,
@@ -1023,8 +1035,11 @@ export class GitFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest =
-        await this.#createWorkspaceStatusDigest(statusEntries)
+      const statusDigest = await createWorkspaceStatusDigest({
+        entries: statusEntries,
+        getPathSignature: (relativePath) =>
+          this.#createWorkspaceStatusPathSignature(relativePath),
+      })
 
       if (
         currentHead === previousHead &&
@@ -1438,56 +1453,6 @@ export class GitFileSystem
     )
 
     return ignoredResult.status === 0
-  }
-
-  #extractHeadFromWorkspaceToken(token: string): string | null {
-    const match = /^head:([^;]+);/.exec(token)
-    return match?.[1] ?? null
-  }
-
-  #extractDirtyDigestFromWorkspaceToken(token: string): string | null {
-    const match = /;dirty:([^;]+);/.exec(token)
-    return match?.[1] ?? null
-  }
-
-  async #createWorkspaceStatusDigest(
-    entries: ReturnType<typeof parseGitStatusPorcelainV1Z>
-  ) {
-    const pathSignatureCache = new Map<string, Promise<string>>()
-    const digestLines = await Promise.all(
-      entries.map(async (entry) => {
-        const normalizedPaths = entry.paths.map((path) =>
-          normalizeSlashes(path)
-        )
-        const signatures = await Promise.all(
-          normalizedPaths.map((path) => {
-            const cachedSignature = pathSignatureCache.get(path)
-            if (cachedSignature) {
-              return cachedSignature
-            }
-
-            const signaturePromise =
-              this.#createWorkspaceStatusPathSignature(path)
-            pathSignatureCache.set(path, signaturePromise)
-            return signaturePromise
-          })
-        )
-
-        return `${entry.status} ${normalizedPaths.join('\u0001')} ${signatures.join('\u0001')}`
-      })
-    )
-    digestLines.sort((first, second) => first.localeCompare(second))
-    const ignoredOnly =
-      entries.length > 0 && entries.every((entry) => entry.status === '!!')
-    const digest = createHash('sha1')
-      .update(digestLines.join('\n'))
-      .digest('hex')
-
-    return {
-      digest,
-      ignoredOnly,
-      count: entries.length,
-    }
   }
 
   async #createWorkspaceStatusPathSignature(

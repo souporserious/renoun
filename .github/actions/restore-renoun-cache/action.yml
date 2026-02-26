@@ -1,0 +1,20 @@
+name: Restore renoun cache
+description: Resolve and restore the renoun filesystem cache for CI jobs
+runs:
+  using: composite
+  steps:
+    - name: Resolve renoun cache token
+      id: renoun-cache-token
+      shell: bash
+      run: echo "token=$(node packages/renoun/src/cli/index.ts cache-token)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore renoun cache
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
+      with:
+        path: |
+          .renoun/cache/fs-cache.sqlite
+          .renoun/cache/fs-cache.sqlite-shm
+          .renoun/cache/fs-cache.sqlite-wal
+        key: ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-node22-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-

@@ -18,12 +18,18 @@ async function clearSponsorsCache(): Promise<void> {
   }
 }
 
-function createGraphqlResponse() {
+function createGraphqlResponse(options?: {
+  username?: string
+  viewerLogin?: string
+}) {
+  const username = options?.username ?? 'octocat'
+  const viewerLogin = options?.viewerLogin ?? 'renoun'
+
   return new Response(
     JSON.stringify({
       data: {
         viewer: {
-          login: 'renoun',
+          login: viewerLogin,
           sponsorsListing: {
             tiers: {
               nodes: [
@@ -46,7 +52,7 @@ function createGraphqlResponse() {
               {
                 createdAt: '2024-01-01T00:00:00.000Z',
                 sponsorEntity: {
-                  username: 'octocat',
+                  username,
                   avatar_64: 'https://avatars.githubusercontent.com/u/583231?v=4',
                 },
                 tier: {
@@ -66,12 +72,28 @@ function createGraphqlResponse() {
   )
 }
 
-function createSponsorsPageResponse() {
+function createViewerLoginResponse(viewerLogin: string) {
+  return new Response(
+    JSON.stringify({
+      data: {
+        viewer: {
+          login: viewerLogin,
+        },
+      },
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  )
+}
+
+function createSponsorsPageResponse(viewerLogin = 'renoun') {
   return new Response(
     `
       <html>
         <body>
-          <a href="/sponsors/renoun/sponsorships?tier_id=12345">Sponsor</a>
+          <a href="/sponsors/${viewerLogin}/sponsorships?tier_id=12345">Sponsor</a>
           <p>Bronze tier</p>
         </body>
       </html>
@@ -109,14 +131,23 @@ describe('Sponsors cache', () => {
     process.env['RENOUN_SPONSORS_CACHE_TTL_MS'] = '600000'
 
     const fetchMock = vi.fn(
-      async (input: RequestInfo | URL): Promise<Response> => {
+      async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
         const url = typeof input === 'string' ? input : input.toString()
         if (url === 'https://api.github.com/graphql') {
-          return createGraphqlResponse()
+          const query =
+            typeof init?.body === 'string'
+              ? (JSON.parse(init.body) as { query?: string }).query ?? ''
+              : ''
+
+          if (query.includes('sponsorshipsAsMaintainer')) {
+            return createGraphqlResponse()
+          }
+
+          return createViewerLoginResponse('renoun')
         }
 
         if (url === 'https://github.com/sponsors/renoun') {
-          return createSponsorsPageResponse()
+          return createSponsorsPageResponse('renoun')
         }
 
         throw new Error(`Unexpected fetch URL: ${url}`)
@@ -145,7 +176,7 @@ describe('Sponsors cache', () => {
       },
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
     expect(secondResolvedTiers).toEqual(firstResolvedTiers)
     expect(secondResolvedTiers).toEqual([
       {
@@ -153,6 +184,111 @@ describe('Sponsors cache', () => {
         sponsors: [
           {
             username: 'octocat',
+            avatarUrl: 'https://avatars.githubusercontent.com/u/583231?v=4',
+          },
+        ],
+        title: 'Bronze',
+        description: 'Bronze tier',
+      },
+    ])
+  })
+
+  it('separates persistent cache entries across different sponsor viewer logins', async () => {
+    process.env['GITHUB_SPONSORS_TOKEN'] = 'token-one'
+    process.env['RENOUN_SPONSORS_CACHE_TTL_MS'] = '600000'
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url === 'https://api.github.com/graphql') {
+          const authorization = new Headers(init?.headers).get('Authorization')
+
+          const query =
+            typeof init?.body === 'string'
+              ? (JSON.parse(init.body) as { query?: string }).query ?? ''
+              : ''
+
+          if (authorization === 'Bearer token-one') {
+            if (query.includes('sponsorshipsAsMaintainer')) {
+              return createGraphqlResponse({
+                username: 'octocat-one',
+                viewerLogin: 'renoun-one',
+              })
+            }
+
+            return createViewerLoginResponse('renoun-one')
+          }
+
+          if (authorization === 'Bearer token-two') {
+            if (query.includes('sponsorshipsAsMaintainer')) {
+              return createGraphqlResponse({
+                username: 'octocat-two',
+                viewerLogin: 'renoun-two',
+              })
+            }
+
+            return createViewerLoginResponse('renoun-two')
+          }
+
+          throw new Error(`Unexpected authorization header: ${authorization}`)
+        }
+
+        if (url === 'https://github.com/sponsors/renoun-one') {
+          return createSponsorsPageResponse('renoun-one')
+        }
+
+        if (url === 'https://github.com/sponsors/renoun-two') {
+          return createSponsorsPageResponse('renoun-two')
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`)
+      }
+    )
+
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const tiers = [{ amount: 100, title: 'Bronze' }] as const
+
+    let firstResolvedTiers: unknown
+    await Sponsors({
+      tiers,
+      children: (resolvedTiers) => {
+        firstResolvedTiers = resolvedTiers
+        return <></>
+      },
+    })
+
+    process.env['GITHUB_SPONSORS_TOKEN'] = 'token-two'
+
+    let secondResolvedTiers: unknown
+    await Sponsors({
+      tiers,
+      children: (resolvedTiers) => {
+        secondResolvedTiers = resolvedTiers
+        return <></>
+      },
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(6)
+    expect(firstResolvedTiers).toEqual([
+      {
+        href: 'https://github.com/sponsors/renoun-one/sponsorships?tier_id=12345',
+        sponsors: [
+          {
+            username: 'octocat-one',
+            avatarUrl: 'https://avatars.githubusercontent.com/u/583231?v=4',
+          },
+        ],
+        title: 'Bronze',
+        description: 'Bronze tier',
+      },
+    ])
+    expect(secondResolvedTiers).toEqual([
+      {
+        href: 'https://github.com/sponsors/renoun-two/sponsorships?tier_id=12345',
+        sponsors: [
+          {
+            username: 'octocat-two',
             avatarUrl: 'https://avatars.githubusercontent.com/u/583231?v=4',
           },
         ],

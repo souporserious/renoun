@@ -10,7 +10,6 @@ import {
   realpathSync,
   type Dirent,
 } from 'node:fs'
-import { createHash } from 'node:crypto'
 import {
   access,
   mkdir,
@@ -53,15 +52,29 @@ import {
   createWorkspaceCacheKey,
   createWorkspaceChangedPathsCacheKey,
 } from './workspace-cache-key.ts'
+import {
+  createWorkspaceChangeToken,
+  createWorkspaceStatusDigest,
+  extractDirtyDigestFromWorkspaceToken,
+  extractHeadFromWorkspaceToken,
+} from './workspace-change-token.ts'
 
 const GIT_MAX_BUFFER_BYTES = 100 * 1024 * 1024
+const GIT_ROOT_CACHE_TTL_MS = 5 * 60 * 1000
+const GIT_ROOT_NULL_CACHE_TTL_MS = 30 * 1000
+const GIT_ROOT_CACHE_MAX_ENTRIES = 1024
+
+interface GitRootCacheEntry {
+  gitRoot: string | null
+  expiresAt: number
+}
 
 export class NodeFileSystem
   extends BaseFileSystem
   implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
 {
   #tsConfigPath: string
-  readonly #gitRootCache = new Map<string, string | null>()
+  readonly #gitRootCache = new Map<string, GitRootCacheEntry>()
   readonly #workspaceChangeTokenInFlight = new Map<
     string,
     Promise<string | null>
@@ -137,13 +150,14 @@ export class NodeFileSystem
 
   #findGitRoot(startPath: string): string | null {
     let currentPath = startPath
+    const now = Date.now()
     const visitedPaths: string[] = []
 
     while (true) {
-      if (this.#gitRootCache.has(currentPath)) {
-        const cached = this.#gitRootCache.get(currentPath) ?? null
+      const cached = this.#getCachedGitRoot(currentPath, now)
+      if (cached !== undefined) {
         for (const path of visitedPaths) {
-          this.#gitRootCache.set(path, cached)
+          this.#setCachedGitRoot(path, cached, now)
         }
         return cached
       }
@@ -152,7 +166,7 @@ export class NodeFileSystem
 
       if (existsSync(join(currentPath, '.git'))) {
         for (const path of visitedPaths) {
-          this.#gitRootCache.set(path, currentPath)
+          this.#setCachedGitRoot(path, currentPath, now)
         }
         return currentPath
       }
@@ -165,59 +179,50 @@ export class NodeFileSystem
     }
 
     for (const path of visitedPaths) {
-      this.#gitRootCache.set(path, null)
+      this.#setCachedGitRoot(path, null, now)
     }
     return null
   }
 
-  #extractHeadFromWorkspaceToken(token: string): string | null {
-    const match = /^head:([^;]+);/.exec(token)
-    return match?.[1] ?? null
+  #getCachedGitRoot(path: string, now: number): string | null | undefined {
+    const cachedEntry = this.#gitRootCache.get(path)
+    if (!cachedEntry) {
+      return undefined
+    }
+
+    if (cachedEntry.expiresAt <= now) {
+      this.#gitRootCache.delete(path)
+      return undefined
+    }
+
+    this.#gitRootCache.delete(path)
+    this.#gitRootCache.set(path, cachedEntry)
+    return cachedEntry.gitRoot
   }
 
-  #extractDirtyDigestFromWorkspaceToken(token: string): string | null {
-    const match = /;dirty:([^;]+);/.exec(token)
-    return match?.[1] ?? null
+  #setCachedGitRoot(path: string, gitRoot: string | null, now: number): void {
+    const ttlMs = gitRoot ? GIT_ROOT_CACHE_TTL_MS : GIT_ROOT_NULL_CACHE_TTL_MS
+    this.#gitRootCache.delete(path)
+    this.#gitRootCache.set(path, {
+      gitRoot,
+      expiresAt: now + ttlMs,
+    })
+    this.#trimGitRootCache(now)
   }
 
-  async #createWorkspaceStatusDigest(
-    gitRoot: string,
-    entries: ReturnType<typeof parseGitStatusPorcelainV1Z>
-  ) {
-    const pathSignatureCache = new Map<string, Promise<string>>()
-    const digestLines = await Promise.all(
-      entries.map(async (entry) => {
-        const normalizedPaths = entry.paths.map((path) => normalizeSlashes(path))
-        const signatures = await Promise.all(
-          normalizedPaths.map((path) => {
-            const cachedSignature = pathSignatureCache.get(path)
-            if (cachedSignature) {
-              return cachedSignature
-            }
+  #trimGitRootCache(now: number): void {
+    for (const [path, cachedEntry] of this.#gitRootCache) {
+      if (cachedEntry.expiresAt <= now) {
+        this.#gitRootCache.delete(path)
+      }
+    }
 
-            const signaturePromise = this.#createWorkspaceStatusPathSignature(
-              gitRoot,
-              path
-            )
-            pathSignatureCache.set(path, signaturePromise)
-            return signaturePromise
-          })
-        )
-
-        return `${entry.status} ${normalizedPaths.join('\u0001')} ${signatures.join('\u0001')}`
-      })
-    )
-    digestLines.sort((first, second) => first.localeCompare(second))
-    const ignoredOnly =
-      entries.length > 0 && entries.every((entry) => entry.status === '!!')
-    const digest = createHash('sha1')
-      .update(digestLines.join('\n'))
-      .digest('hex')
-
-    return {
-      digest,
-      ignoredOnly,
-      count: entries.length,
+    while (this.#gitRootCache.size > GIT_ROOT_CACHE_MAX_ENTRIES) {
+      const oldestPath = this.#gitRootCache.keys().next().value
+      if (oldestPath === undefined) {
+        break
+      }
+      this.#gitRootCache.delete(oldestPath)
     }
   }
 
@@ -374,12 +379,16 @@ export class NodeFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = await this.#createWorkspaceStatusDigest(
-        gitRoot,
-        statusEntries
-      )
+      const statusDigest = await createWorkspaceStatusDigest({
+        entries: statusEntries,
+        getPathSignature: (relativePath) =>
+          this.#createWorkspaceStatusPathSignature(gitRoot, relativePath),
+      })
 
-      return `head:${headCommit};dirty:${statusDigest.digest};count:${statusDigest.count};ignored-only:${statusDigest.ignoredOnly ? 1 : 0}`
+      return createWorkspaceChangeToken({
+        headCommit,
+        statusDigest,
+      })
     })().catch(() => null)
   }
 
@@ -424,13 +433,14 @@ export class NodeFileSystem
     previousToken: string
   ): Promise<readonly string[] | null> {
     return (async () => {
-      const previousHead = this.#extractHeadFromWorkspaceToken(previousToken)
+      const previousHead = extractHeadFromWorkspaceToken(previousToken)
       if (!previousHead) {
         return null
       }
 
-      const previousDirtyDigest =
-        this.#extractDirtyDigestFromWorkspaceToken(previousToken)
+      const previousDirtyDigest = extractDirtyDigestFromWorkspaceToken(
+        previousToken
+      )
 
       const gitRoot = this.#findGitRoot(absoluteRootPath)
       if (!gitRoot) {
@@ -525,10 +535,11 @@ export class NodeFileSystem
       }
 
       const statusEntries = parseGitStatusPorcelainV1Z(statusResult.stdout)
-      const statusDigest = await this.#createWorkspaceStatusDigest(
-        gitRoot,
-        statusEntries
-      )
+      const statusDigest = await createWorkspaceStatusDigest({
+        entries: statusEntries,
+        getPathSignature: (relativePath) =>
+          this.#createWorkspaceStatusPathSignature(gitRoot, relativePath),
+      })
 
       if (
         currentHead === previousHead &&

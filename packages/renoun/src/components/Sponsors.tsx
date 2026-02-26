@@ -38,6 +38,7 @@ const SPONSORS_CACHE_VERSION = '2'
 const SPONSORS_CACHE_NAMESPACE = 'github-sponsors'
 const SPONSORS_CACHE_VERSION_DEP = 'component-sponsors-version'
 const SPONSORS_CACHE_TTL_BUCKET_DEP = 'component-sponsors-ttl-bucket'
+const SPONSORS_CACHE_LOGIN_DEP = 'component-sponsors-login'
 const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
 let sponsorsCacheSessionPromise: Promise<RenounSession | undefined> | undefined
 
@@ -48,6 +49,52 @@ function createSponsorsCacheNodeKey(payload: unknown): string {
     namespace: SPONSORS_CACHE_NAMESPACE,
     payload,
   })
+}
+
+async function fetchSponsorsViewerLogin(token: string): Promise<string> {
+  const graphqlResponse = await fetch('https://api.github.com/graphql', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'renoun',
+    },
+    body: JSON.stringify({
+      query: `
+        query {
+          viewer {
+            login
+          }
+        }
+      `,
+    }),
+  })
+
+  if (!graphqlResponse.ok) {
+    throw new Error(
+      `[renoun] GitHub Sponsors request failed (${graphqlResponse.status}). ${hintForStatus(graphqlResponse.status)}`
+    )
+  }
+
+  const graphqlResponseJson = await graphqlResponse.json()
+  if (graphqlResponseJson.errors) {
+    if (process.env['NODE_ENV'] === 'development') {
+      throw new Error(
+        `[renoun] GitHub Sponsors GraphQL request failed with the following errors: ${JSON.stringify(
+          graphqlResponseJson.errors
+        )}`
+      )
+    }
+
+    throw new Error(`[renoun] GitHub Sponsors GraphQL request failed with errors.`)
+  }
+
+  const viewerLogin = graphqlResponseJson.data?.viewer?.login
+  if (typeof viewerLogin !== 'string' || viewerLogin.length === 0) {
+    throw new Error('[renoun] GitHub Sponsors GraphQL request failed to resolve viewer login.')
+  }
+
+  return viewerLogin
 }
 
 function resolveSponsorsCacheTtlMs(): number {
@@ -511,6 +558,7 @@ async function fetchSponsorsAndTierLinks(
   if (!token) {
     return fetchSponsorsAndTierLinksUncached(normalizedOptions)
   }
+  const viewerLogin = await fetchSponsorsViewerLogin(token)
 
   const cacheSession = await getSponsorsCacheSession()
   if (!cacheSession) {
@@ -521,6 +569,7 @@ async function fetchSponsorsAndTierLinks(
     amount: normalizedAmount,
     avatarSizes: normalizedAvatarSizes,
     manualTierIds: normalizedManualTierIds,
+    viewerLogin,
   })
 
   return cacheSession.cache.getOrCompute(
@@ -531,6 +580,10 @@ async function fetchSponsorsAndTierLinks(
         {
           name: SPONSORS_CACHE_VERSION_DEP,
           version: SPONSORS_CACHE_VERSION,
+        },
+        {
+          name: SPONSORS_CACHE_LOGIN_DEP,
+          version: viewerLogin,
         },
         {
           name: SPONSORS_CACHE_TTL_BUCKET_DEP,

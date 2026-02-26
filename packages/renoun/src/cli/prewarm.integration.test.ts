@@ -5,6 +5,10 @@ import { describe, expect, test } from 'vitest'
 import { getProject } from '../project/get-project.ts'
 import { collectRenounPrewarmTargets } from './prewarm.ts'
 
+const PREWARM_APP_COVERAGE_TIMEOUT_MS = process.env['CI']
+  ? 120_000
+  : 60_000
+
 const appSites = [
   {
     name: 'site',
@@ -56,18 +60,23 @@ function resolveExpectedPaths({
 
 describe('collectRenounPrewarmTargets app coverage', () => {
   test('collects granular directory and file prewarm targets for all app entrypoints', async () => {
-    const targetsByApp = await Promise.all(
-      appSites.map(async (app) => {
-        const project = getProject({
-          tsConfigFilePath: join(app.rootPath, 'tsconfig.json'),
-        })
-        const target = await collectRenounPrewarmTargets(project, {
-          tsConfigFilePath: join(app.rootPath, 'tsconfig.json'),
-        })
+    const targetsByApp: Array<{
+      app: (typeof appSites)[number]
+      target: Awaited<
+        ReturnType<typeof collectRenounPrewarmTargets>
+      >
+    }> = []
 
-        return { app, target }
+    for (const app of appSites) {
+      const project = getProject({
+        tsConfigFilePath: join(app.rootPath, 'tsconfig.json'),
       })
-    )
+      const target = await collectRenounPrewarmTargets(project, {
+        tsConfigFilePath: join(app.rootPath, 'tsconfig.json'),
+      })
+
+      targetsByApp.push({ app, target })
+    }
 
     for (const { app, target } of targetsByApp) {
       const expected = resolveExpectedPaths(app)
@@ -86,5 +95,5 @@ describe('collectRenounPrewarmTargets app coverage', () => {
         expect(discoveredFiles).toContain(expectedFile)
       }
     }
-  }, 30_000)
+  }, PREWARM_APP_COVERAGE_TIMEOUT_MS)
 })
