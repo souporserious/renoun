@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 
 import {
+  isCiEnvironment,
+  isStrictHermeticFileSystemModeFromEnv,
+} from '../utils/env.ts'
+import {
   isAbsolutePath,
   normalizePathKey,
   normalizeSlashes,
@@ -357,7 +361,7 @@ export class FileSystemSnapshot implements Snapshot {
     id: string
     strategy: ContentIdStrategy
   }> {
-    const strictHermetic = isStrictHermeticFileSystemMode()
+    const strictHermetic = isStrictHermeticFileSystemModeFromEnv()
     const expectedFile = options.kind === 'file'
 
     for (const path of pathCandidates) {
@@ -569,24 +573,8 @@ export class FileSystemSnapshot implements Snapshot {
 
 }
 
-function isStrictHermeticFileSystemMode(): boolean {
-  const override = process.env['RENOUN_FS_STRICT_HERMETIC']?.trim()
-
-  if (override) {
-    const normalized = override.toLowerCase()
-    if (normalized === '1' || normalized === 'true') {
-      return true
-    }
-    if (normalized === '0' || normalized === 'false') {
-      return false
-    }
-  }
-
-  return process.env['NODE_ENV'] === 'production'
-}
-
 function resolveWorkspaceTokenLookupCacheTtlMs(): number {
-  if (process.env['CI']) {
+  if (isCiEnvironment()) {
     return 0
   }
 
@@ -594,7 +582,7 @@ function resolveWorkspaceTokenLookupCacheTtlMs(): number {
 }
 
 function resolveWorkspaceChangedPathsLookupCacheTtlMs(): number {
-  if (process.env['CI']) {
+  if (isCiEnvironment()) {
     return 0
   }
 

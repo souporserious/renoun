@@ -7,7 +7,7 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
-import { parseBooleanEnv } from '../utils/env.ts'
+import { parseBooleanEnv, parsePositiveIntegerEnv } from '../utils/env.ts'
 import type {
   ModuleExport,
   getFileExportMetadata as baseGetFileExportMetadata,
@@ -104,7 +104,42 @@ const clientRpcInFlightByKey = new Map<string, ClientRpcInFlightEntry>()
 // Bumped on refresh invalidations so stale in-flight requests cannot repopulate cache.
 let clientRpcInvalidationEpoch = 0
 
+export interface ProjectClientRuntimeOptions {
+  useRpcCache?: boolean
+  rpcCacheTtlMs?: number
+  consumeRefreshNotifications?: boolean
+}
+
+const projectClientRuntimeOptions: ProjectClientRuntimeOptions = {}
+
+export function configureProjectClientRuntime(
+  options: ProjectClientRuntimeOptions
+): void {
+  if ('useRpcCache' in options) {
+    projectClientRuntimeOptions.useRpcCache = options.useRpcCache
+  }
+
+  if ('rpcCacheTtlMs' in options) {
+    projectClientRuntimeOptions.rpcCacheTtlMs = options.rpcCacheTtlMs
+  }
+
+  if ('consumeRefreshNotifications' in options) {
+    projectClientRuntimeOptions.consumeRefreshNotifications =
+      options.consumeRefreshNotifications
+  }
+}
+
+export function resetProjectClientRuntimeConfiguration(): void {
+  projectClientRuntimeOptions.useRpcCache = undefined
+  projectClientRuntimeOptions.rpcCacheTtlMs = undefined
+  projectClientRuntimeOptions.consumeRefreshNotifications = undefined
+}
+
 function shouldUseClientRpcCache(): boolean {
+  if (typeof projectClientRuntimeOptions.useRpcCache === 'boolean') {
+    return projectClientRuntimeOptions.useRpcCache
+  }
+
   const override = parseBooleanEnv(
     process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE']
   )
@@ -116,13 +151,20 @@ function shouldUseClientRpcCache(): boolean {
 }
 
 function getClientRpcCacheTtlMs(): number {
+  if (typeof projectClientRuntimeOptions.rpcCacheTtlMs === 'number') {
+    const normalizedTtl = Math.floor(projectClientRuntimeOptions.rpcCacheTtlMs)
+    return Number.isFinite(normalizedTtl) && normalizedTtl > 0
+      ? normalizedTtl
+      : 0
+  }
+
   const configured = process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS']
   if (!configured) {
     return DEFAULT_CLIENT_RPC_CACHE_TTL_MS
   }
 
-  const parsed = Number.parseInt(configured, 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  const parsed = parsePositiveIntegerEnv(configured)
+  if (parsed === undefined) {
     return 0
   }
 
@@ -503,8 +545,14 @@ function queueRefreshInvalidation(path: string): void {
 }
 
 function shouldConsumeRefreshNotifications(): boolean {
+  if (
+    typeof projectClientRuntimeOptions.consumeRefreshNotifications === 'boolean'
+  ) {
+    return projectClientRuntimeOptions.consumeRefreshNotifications
+  }
+
   const override = parseBooleanEnv(
-    process.env.RENOUN_PROJECT_REFRESH_NOTIFICATIONS
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS']
   )
   if (override !== undefined) {
     return override

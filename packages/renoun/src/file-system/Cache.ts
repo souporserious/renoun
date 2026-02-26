@@ -161,6 +161,16 @@ export interface CacheOptions {
   staleRetentionTtlMs?: number
   /** Number of persisted read-back attempts after a write. Set to 0 to skip verification. */
   persistedVerificationAttempts?: number
+  /**
+   * Override for targeted missing dependency invalidation fallback behavior.
+   * When omitted, Session resolves this via environment defaults.
+   */
+  targetedMissingDependencyFallback?: boolean
+  /**
+   * Maximum number of prefix keys tracked by the directory snapshot path index.
+   * Larger values use more memory but reduce fallback scans.
+   */
+  directorySnapshotPrefixIndexMaxKeys?: number
   /** Log detailed cache persistence failures during debugging. */
   debugCachePersistence?: boolean
   /** Enable debug logging related to cache root/path resolution. */
@@ -291,6 +301,8 @@ export class Cache {
   readonly computeSlotPollMs: number
   readonly staleRetentionTtlMs: number
   readonly persistedVerificationAttempts: number
+  readonly targetedMissingDependencyFallback?: boolean
+  readonly directorySnapshotPrefixIndexMaxKeys?: number
   readonly persistence?: CacheStorePersistence
   readonly debugCachePersistence: boolean
   readonly debugSessionRoot: boolean
@@ -342,6 +354,16 @@ export class Cache {
       options.persistedVerificationAttempts,
       DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS
     )
+    this.targetedMissingDependencyFallback =
+      typeof options.targetedMissingDependencyFallback === 'boolean'
+        ? options.targetedMissingDependencyFallback
+        : undefined
+    this.directorySnapshotPrefixIndexMaxKeys =
+      typeof options.directorySnapshotPrefixIndexMaxKeys === 'number' &&
+      Number.isFinite(options.directorySnapshotPrefixIndexMaxKeys) &&
+      options.directorySnapshotPrefixIndexMaxKeys > 0
+        ? Math.floor(options.directorySnapshotPrefixIndexMaxKeys)
+        : undefined
     this.debugCachePersistence = options.debugCachePersistence === true
     this.debugSessionRoot = options.debugSessionRoot === true
   }

@@ -4188,8 +4188,8 @@ describe('sqlite cache persistence', () => {
 
   test('warns and falls back when strict hermetic mode detects a non-deterministic file system', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
-      const previousStrictHermetic = process.env.RENOUN_FS_STRICT_HERMETIC
-      process.env.RENOUN_FS_STRICT_HERMETIC = '1'
+      const previousStrictHermetic = process.env['RENOUN_FS_STRICT_HERMETIC']
+      process.env['RENOUN_FS_STRICT_HERMETIC'] = '1'
 
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -4255,9 +4255,9 @@ describe('sqlite cache persistence', () => {
       } finally {
         warnSpy.mockRestore()
         if (previousStrictHermetic === undefined) {
-          delete process.env.RENOUN_FS_STRICT_HERMETIC
+          delete process.env['RENOUN_FS_STRICT_HERMETIC']
         } else {
-          process.env.RENOUN_FS_STRICT_HERMETIC = previousStrictHermetic
+          process.env['RENOUN_FS_STRICT_HERMETIC'] = previousStrictHermetic
         }
       }
     })

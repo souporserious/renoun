@@ -12,6 +12,12 @@ import {
 } from '@renoun/mdx/utils'
 
 import { getFileExportMetadata } from '../project/client.ts'
+import {
+  isDevelopmentEnvironment,
+  isProductionEnvironment,
+  isStrictHermeticFileSystemModeFromEnv,
+  isTestEnvironment,
+} from '../utils/env.ts'
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
 import { getClosestFile } from '../utils/get-closest-file.ts'
 import {
@@ -2094,7 +2100,7 @@ export class ModuleExport<Value> {
 
   /** Attempt to return a literal value for this export if it can be determined statically. */
   async getStaticValue(): Promise<Value> {
-    if (process.env.NODE_ENV === 'production') {
+    if (isProductionEnvironment()) {
       if (!this.#staticPromise) {
         this.#staticPromise = this.#getStaticValue()
       }
@@ -2189,7 +2195,7 @@ export class ModuleExport<Value> {
    * is not found or the configured schema validation for this file extension fails.
    */
   async getRuntimeValue(): Promise<Value> {
-    if (process.env.NODE_ENV === 'production') {
+    if (isProductionEnvironment()) {
       if (!this.#runtimePromise) {
         this.#runtimePromise = this.#getRuntimeValue().then((value) => {
           if (this.#isComponent === undefined) {
@@ -2431,7 +2437,7 @@ export class JavaScriptFile<
       return moduleValue
     }
 
-    if (process.env.NODE_ENV === 'production') {
+    if (isProductionEnvironment()) {
       if (this.#modulePromise) {
         return this.#modulePromise
       }
@@ -2886,7 +2892,7 @@ export class MDXModuleExport<Value> {
 
   /** Attempt to return a literal value for this export if it can be determined statically. */
   async getStaticValue(): Promise<Value> {
-    if (process.env.NODE_ENV === 'production') {
+    if (isProductionEnvironment()) {
       if (!this.#staticPromise) {
         this.#staticPromise = this.#getStaticValue()
       }
@@ -2912,7 +2918,7 @@ export class MDXModuleExport<Value> {
    * is not found or the configured schema validation for the MDX file fails.
    */
   async getRuntimeValue(): Promise<Value> {
-    if (process.env.NODE_ENV === 'production') {
+    if (isProductionEnvironment()) {
       if (!this.#runtimePromise) {
         this.#runtimePromise = this.#getRuntimeValue()
       }
@@ -3678,7 +3684,7 @@ export class MDXFile<
     const promise = executeModuleLoader()
     this.#modulePromise = promise
 
-    if (process.env.NODE_ENV !== 'production') {
+    if (!isProductionEnvironment()) {
       promise.finally(() => {
         if (this.#modulePromise === promise) {
           this.#modulePromise = undefined
@@ -3882,7 +3888,7 @@ export class MarkdownFile<
       return moduleValue
     }
 
-    if (process.env.NODE_ENV === 'production') {
+    if (isProductionEnvironment()) {
       if (this.#modulePromise) {
         return this.#modulePromise
       }
@@ -4239,19 +4245,7 @@ const DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX = 'const:dir-snapshot-path:'
 const strictHermeticWarningKeys = new Set<string>()
 
 function isStrictHermeticFileSystemMode(): boolean {
-  const override = process.env['RENOUN_FS_STRICT_HERMETIC']?.trim()
-
-  if (override) {
-    const normalized = override.toLowerCase()
-    if (normalized === '1' || normalized === 'true') {
-      return true
-    }
-    if (normalized === '0' || normalized === 'false') {
-      return false
-    }
-  }
-
-  return process.env['NODE_ENV'] === 'production'
+  return isStrictHermeticFileSystemModeFromEnv()
 }
 
 function warnStrictHermeticFallbackOnce(
@@ -4259,7 +4253,7 @@ function warnStrictHermeticFallbackOnce(
   message: string,
   details?: Record<string, unknown>
 ): void {
-  if (process.env['NODE_ENV'] === 'test') {
+  if (isTestEnvironment()) {
     return
   }
 
@@ -6639,7 +6633,7 @@ export class Directory<
         session.recordCacheMetric('persisted_miss')
         session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
         session.recordPersistedStaleReason('shape_mismatch')
-        if (process.env['NODE_ENV'] !== 'test') {
+        if (!isTestEnvironment()) {
           console.warn(
             '[renoun] Failed to restore persisted directory snapshot',
             { snapshotKey, cause: String((error as Error)?.message ?? error) }
@@ -7212,7 +7206,7 @@ export class Directory<
       FileSystemEntry<LoaderTypes>
     >
   ): Promise<boolean> {
-    if (process.env.NODE_ENV !== 'development') {
+    if (!isDevelopmentEnvironment()) {
       const now = Date.now()
       if (
         now - snapshot.getLastValidatedAt() <

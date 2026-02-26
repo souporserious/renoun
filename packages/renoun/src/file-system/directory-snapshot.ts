@@ -1,3 +1,5 @@
+import { parseBooleanEnv } from '../utils/env.ts'
+
 export interface DirectorySnapshotDirectoryMetadata<Entry = unknown> {
   hasVisibleDescendant: boolean
   materializedEntries: Entry[]
@@ -70,8 +72,10 @@ function createPersistedEntryKey(kind: 'file' | 'directory', path: string) {
 }
 
 function shouldDebugSnapshotRestoreMismatch(): boolean {
-  const debugEnvValue = process.env['RENOUN_DEBUG_DIRECTORY_SNAPSHOT_RESTORE']
-  return debugEnvValue === '1' || debugEnvValue === 'true'
+  return (
+    parseBooleanEnv(process.env['RENOUN_DEBUG_DIRECTORY_SNAPSHOT_RESTORE']) ===
+    true
+  )
 }
 
 export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {

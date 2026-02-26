@@ -9,7 +9,11 @@ import {
 } from '../utils/create-highlighter.ts'
 import type { ConfigurationOptions } from '../components/Config/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
-import { parseBooleanEnv } from '../utils/env.ts'
+import {
+  isDevelopmentEnvironment,
+  isProductionEnvironment,
+  parseBooleanEnv,
+} from '../utils/env.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { GetTokensOptions } from '../utils/get-tokens.ts'
 import type { GetSourceTextMetadataOptions } from '../utils/get-source-text-metadata.ts'
@@ -50,6 +54,11 @@ interface ResolveTypeAtLocationRpcRequest {
   kind: TsMorphSyntaxKind
   filter?: TypeFilter | string
   projectOptions?: ProjectOptions
+}
+
+export interface CreateServerOptions {
+  port?: number
+  emitRefreshNotifications?: boolean
 }
 
 function parseTypeFilter(filter?: TypeFilter | string): TypeFilter | undefined {
@@ -144,7 +153,7 @@ function getProductionRpcMemoizeOptions():
       ttlMs: number
       maxEntries: number
     } {
-  if (process.env['NODE_ENV'] !== 'production') {
+  if (!isProductionEnvironment()) {
     return false
   }
 
@@ -158,7 +167,7 @@ function getProductionRpcMemoizeOptions():
  * Create a WebSocket server that improves the performance of renoun components and
  * utilities by processing type analysis and syntax highlighting in a separate process.
  */
-export async function createServer(options?: { port?: number }) {
+export async function createServer(options?: CreateServerOptions) {
   const server = new WebSocketServer({ port: options?.port })
   const port = await server.getPort()
   activeProjectServers += 1
@@ -209,7 +218,9 @@ export async function createServer(options?: { port?: number }) {
   }
 
   const rootDirectory = getRootDirectory()
-  const rootWatcher = shouldEmitRefreshNotifications()
+  const rootWatcher = shouldEmitRefreshNotifications(
+    options?.emitRefreshNotifications
+  )
     ? watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
         if (!fileName) return
 
@@ -593,13 +604,19 @@ function closeWatcher(watcher: FSWatcher): void {
   } catch {}
 }
 
-function shouldEmitRefreshNotifications(): boolean {
+function shouldEmitRefreshNotifications(
+  explicitValue?: boolean
+): boolean {
+  if (typeof explicitValue === 'boolean') {
+    return explicitValue
+  }
+
   const override = parseBooleanEnv(
-    process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']
   )
   if (override !== undefined) {
     return override
   }
 
-  return process.env.NODE_ENV === 'development'
+  return isDevelopmentEnvironment()
 }

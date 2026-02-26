@@ -246,8 +246,8 @@ describe('project file cache', () => {
   })
 
   test('evicts least-recently-used entries when cache capacity is exceeded', async () => {
-    const previousCapacity = process.env.RENOUN_PROJECT_CACHE_MAX_ENTRIES
-    process.env.RENOUN_PROJECT_CACHE_MAX_ENTRIES = '2'
+    const previousCapacity = process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES']
+    process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES'] = '2'
 
     try {
       const project = {} as unknown as Project
@@ -320,9 +320,9 @@ describe('project file cache', () => {
       expect(gammaCalls).toBe(1)
     } finally {
       if (previousCapacity === undefined) {
-        delete process.env.RENOUN_PROJECT_CACHE_MAX_ENTRIES
+        delete process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES']
       } else {
-        process.env.RENOUN_PROJECT_CACHE_MAX_ENTRIES = previousCapacity
+        process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES'] = previousCapacity
       }
     }
   })

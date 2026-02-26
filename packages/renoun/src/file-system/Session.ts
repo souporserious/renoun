@@ -2,6 +2,12 @@ import { resolve } from 'node:path'
 import { realpathSync } from 'node:fs'
 
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
+import {
+  isDevelopmentEnvironment,
+  isTestEnvironment,
+  resolveBooleanEnv,
+  resolvePositiveIntegerProcessEnv,
+} from '../utils/env.ts'
 import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -71,7 +77,7 @@ const DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS = 50_000
 const DIRECTORY_SNAPSHOT_PREFIX_INDEX_REENABLE_RATIO = 0.5
 
 function getDefaultPersistentWorkspaceChangeTokenTtlMs(): number {
-  if (process.env['NODE_ENV'] === 'development') {
+  if (isDevelopmentEnvironment()) {
     return DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
   }
 
@@ -79,7 +85,7 @@ function getDefaultPersistentWorkspaceChangeTokenTtlMs(): number {
 }
 
 function getDefaultPersistentWorkspaceChangedPathsTtlMs(): number {
-  if (process.env['NODE_ENV'] === 'development') {
+  if (isDevelopmentEnvironment()) {
     return DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
   }
 
@@ -165,8 +171,8 @@ class DirectorySnapshotPathIndex {
   readonly #keysByPrefixPath = new Map<string, Set<string>>()
   #prefixIndexEnabled = true
 
-  constructor() {
-    this.#maxPrefixKeys = resolveDirectorySnapshotPrefixIndexMaxKeys()
+  constructor(maxPrefixKeys: number) {
+    this.#maxPrefixKeys = maxPrefixKeys
   }
 
   add(snapshotKey: string): void {
@@ -409,7 +415,7 @@ export class Session {
       )
 
       if (familyEntries.length === 0) {
-        if (process.env['NODE_ENV'] !== 'test') {
+        if (!isTestEnvironment()) {
           console.warn(
             `[renoun] Session.reset(${String(snapshotId)}) did not match any active session family. No caches were invalidated.`
           )
@@ -460,38 +466,18 @@ export class Session {
   readonly snapshot: Snapshot
   readonly inflight = new Map<string, Promise<unknown>>()
   readonly cache: CacheStore
-  readonly #directorySnapshotPathIndex = new DirectorySnapshotPathIndex()
-  readonly #directorySnapshotBuildPathIndex = new DirectorySnapshotPathIndex()
-  readonly directorySnapshots = new IndexedStringKeyMap<
+  readonly #directorySnapshotPathIndex: DirectorySnapshotPathIndex
+  readonly #directorySnapshotBuildPathIndex: DirectorySnapshotPathIndex
+  readonly directorySnapshots: IndexedStringKeyMap<
     DirectorySnapshot<any, any>
-  >({
-    onAdd: (snapshotKey) => {
-      this.#directorySnapshotPathIndex.add(snapshotKey)
-    },
-    onDelete: (snapshotKey) => {
-      this.#directorySnapshotPathIndex.remove(snapshotKey)
-    },
-    onClear: () => {
-      this.#directorySnapshotPathIndex.clear()
-    },
-  })
-  readonly directorySnapshotBuilds = new IndexedStringKeyMap<
+  >
+  readonly directorySnapshotBuilds: IndexedStringKeyMap<
     Promise<{
       snapshot: DirectorySnapshot<any, any>
       shouldIncludeSelf: boolean
       skipPersist?: boolean
     }>
-  >({
-    onAdd: (snapshotKey) => {
-      this.#directorySnapshotBuildPathIndex.add(snapshotKey)
-    },
-    onDelete: (snapshotKey) => {
-      this.#directorySnapshotBuildPathIndex.remove(snapshotKey)
-    },
-    onClear: () => {
-      this.#directorySnapshotBuildPathIndex.clear()
-    },
-  })
+  >
   readonly #functionIds = new WeakMap<Function, string>()
   #nextFunctionId = 0
   readonly #invalidatedDirectorySnapshotKeys = new Set<string>()
@@ -551,6 +537,46 @@ export class Session {
   ) {
     this.#fileSystem = fileSystem
     this.snapshot = snapshot
+    const directorySnapshotPrefixIndexMaxKeys =
+      resolveDirectorySnapshotPrefixIndexMaxKeys(
+        cache?.directorySnapshotPrefixIndexMaxKeys
+      )
+    this.#directorySnapshotPathIndex = new DirectorySnapshotPathIndex(
+      directorySnapshotPrefixIndexMaxKeys
+    )
+    this.#directorySnapshotBuildPathIndex = new DirectorySnapshotPathIndex(
+      directorySnapshotPrefixIndexMaxKeys
+    )
+    this.directorySnapshots = new IndexedStringKeyMap<
+      DirectorySnapshot<any, any>
+    >({
+      onAdd: (snapshotKey) => {
+        this.#directorySnapshotPathIndex.add(snapshotKey)
+      },
+      onDelete: (snapshotKey) => {
+        this.#directorySnapshotPathIndex.remove(snapshotKey)
+      },
+      onClear: () => {
+        this.#directorySnapshotPathIndex.clear()
+      },
+    })
+    this.directorySnapshotBuilds = new IndexedStringKeyMap<
+      Promise<{
+        snapshot: DirectorySnapshot<any, any>
+        shouldIncludeSelf: boolean
+        skipPersist?: boolean
+      }>
+    >({
+      onAdd: (snapshotKey) => {
+        this.#directorySnapshotBuildPathIndex.add(snapshotKey)
+      },
+      onDelete: (snapshotKey) => {
+        this.#directorySnapshotBuildPathIndex.remove(snapshotKey)
+      },
+      onClear: () => {
+        this.#directorySnapshotBuildPathIndex.clear()
+      },
+    })
     const prefersPersistentCache = cache
       ? cache.usesPersistentCache
       : shouldUseSessionCachePersistence(fileSystem)
@@ -591,10 +617,10 @@ export class Session {
       DEFAULT_INVALIDATED_PATH_TTL_MS
     )
     this.#cacheDebugPersistence = cache?.debugCachePersistence === true
-    this.#targetedMissingDependencyFallbackEnabled = resolveBooleanEnv(
-      process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK'],
-      true
-    )
+    this.#targetedMissingDependencyFallbackEnabled =
+      resolveTargetedMissingDependencyFallback(
+        cache?.targetedMissingDependencyFallback
+      )
     this.#telemetry = cache?.telemetry
     this.#workspaceChangeLookupCache = new WorkspaceChangeLookupCache({
       getWorkspaceTokenTtlMs: () => this.#resolveWorkspaceChangeTokenTtlMs(),
@@ -1232,7 +1258,7 @@ export class Session {
 
       if (
         !this.#warnedAboutPersistedInvalidationFailure &&
-        process.env['NODE_ENV'] !== 'test'
+        !isTestEnvironment()
       ) {
         this.#warnedAboutPersistedInvalidationFailure = true
         console.warn(
@@ -1992,18 +2018,35 @@ function resolveSessionProjectRoot(
   }
 }
 
-function resolveDirectorySnapshotPrefixIndexMaxKeys(): number {
-  const configured = process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS']
-  if (!configured) {
-    return DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS
+function resolveDirectorySnapshotPrefixIndexMaxKeys(
+  configuredMaxKeys?: number
+): number {
+  if (
+    typeof configuredMaxKeys === 'number' &&
+    Number.isFinite(configuredMaxKeys) &&
+    configuredMaxKeys > 0
+  ) {
+    return Math.floor(configuredMaxKeys)
   }
 
-  const parsed = Number.parseInt(configured, 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS
+  return resolvePositiveIntegerProcessEnv(
+    'RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS',
+    DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS
+  )
+}
+
+function resolveTargetedMissingDependencyFallback(
+  configuredValue?: boolean
+): boolean {
+  if (typeof configuredValue === 'boolean') {
+    return configuredValue
   }
 
-  return parsed
+  return resolveBooleanEnv(
+    process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK'],
+    true,
+    { allowYesNo: true }
+  )
 }
 
 function resolveCanonicalPath(pathToResolve: string): string {
@@ -2055,23 +2098,4 @@ function normalizeNonNegativeInteger(
   }
   const parsed = Math.floor(value)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
-}
-
-function resolveBooleanEnv(
-  value: string | undefined,
-  fallback: boolean
-): boolean {
-  if (value === undefined) {
-    return fallback
-  }
-
-  const normalized = value.trim().toLowerCase()
-  if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
-    return true
-  }
-  if (normalized === 'false' || normalized === '0' || normalized === 'no') {
-    return false
-  }
-
-  return fallback
 }

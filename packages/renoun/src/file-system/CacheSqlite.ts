@@ -4,6 +4,10 @@ import { dirname, resolve } from 'node:path'
 import { deserialize, serialize } from 'node:v8'
 
 import { delay } from '../utils/delay.ts'
+import {
+  resolveBooleanProcessEnv,
+  resolvePositiveIntegerProcessEnv,
+} from '../utils/env.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { CACHE_SCHEMA_VERSION } from './cache-key.ts'
@@ -63,6 +67,8 @@ export interface CacheStoreSqliteOptions {
   schemaVersion?: number
   maxAgeMs?: number
   maxRows?: number
+  preparedStatementCacheMax?: number
+  structuredIdCacheEnabled?: boolean
   debugSessionRoot?: boolean
   debugCachePersistence?: boolean
 }
@@ -234,13 +240,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       1,
       Math.min(SQLITE_PRUNE_WRITE_INTERVAL, Math.floor(this.#maxRows / 100))
     )
-    this.#preparedStatementCacheMax = resolvePositiveIntegerEnv(
-      'RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX',
-      SQLITE_DEFAULT_PREPARED_STATEMENT_CACHE_MAX
+    this.#preparedStatementCacheMax = resolvePreparedStatementCacheMax(
+      options.preparedStatementCacheMax
     )
-    this.#structuredIdCacheEnabled = resolveBooleanEnv(
-      'RENOUN_SQLITE_STRUCTURED_ID_CACHE',
-      true
+    this.#structuredIdCacheEnabled = resolveStructuredIdCacheEnabled(
+      options.structuredIdCacheEnabled
     )
     this.#readyPromise = this.#initialize()
   }
@@ -2397,35 +2401,29 @@ function getAncestorPathKeys(path: string): string[] {
   return ancestors
 }
 
-function resolvePositiveIntegerEnv(key: string, fallback: number): number {
-  const rawValue = process.env[key]
-  if (!rawValue) {
-    return fallback
+function resolvePreparedStatementCacheMax(configuredValue?: number): number {
+  if (
+    typeof configuredValue === 'number' &&
+    Number.isFinite(configuredValue) &&
+    configuredValue > 0
+  ) {
+    return Math.floor(configuredValue)
   }
 
-  const parsed = Number.parseInt(rawValue, 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback
-  }
-
-  return parsed
+  return resolvePositiveIntegerProcessEnv(
+    'RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX',
+    SQLITE_DEFAULT_PREPARED_STATEMENT_CACHE_MAX
+  )
 }
 
-function resolveBooleanEnv(key: string, fallback: boolean): boolean {
-  const rawValue = process.env[key]
-  if (rawValue === undefined) {
-    return fallback
+function resolveStructuredIdCacheEnabled(configuredValue?: boolean): boolean {
+  if (typeof configuredValue === 'boolean') {
+    return configuredValue
   }
 
-  const normalized = rawValue.trim().toLowerCase()
-  if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
-    return true
-  }
-  if (normalized === 'false' || normalized === '0' || normalized === 'no') {
-    return false
-  }
-
-  return fallback
+  return resolveBooleanProcessEnv('RENOUN_SQLITE_STRUCTURED_ID_CACHE', true, {
+    allowYesNo: true,
+  })
 }
 
 function toUint8Array(value: unknown): Uint8Array | undefined {

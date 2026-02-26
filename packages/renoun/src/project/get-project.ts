@@ -9,7 +9,11 @@ import type { FSWatcher } from 'node:fs'
 
 import { getDebugLogger } from '../utils/debug.ts'
 import type { DebugContext } from '../utils/debug.ts'
-import { parseBooleanEnv } from '../utils/env.ts'
+import {
+  isDevelopmentEnvironment,
+  isVitestRuntime,
+  parseBooleanEnv,
+} from '../utils/env.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
@@ -32,6 +36,24 @@ const directoryToProjects = new Map<string, Set<TsMorphProject>>()
 const directoryInvalidationPathQueue = new Map<string, Map<string, string>>()
 const directoryInvalidationTimers = new Map<string, NodeJS.Timeout>()
 const PROJECT_WATCHER_INVALIDATION_BATCH_WINDOW_MS = 25
+
+export interface ProjectWatcherRuntimeOptions {
+  enabled?: boolean
+}
+
+const projectWatcherRuntimeOptions: ProjectWatcherRuntimeOptions = {}
+
+export function configureProjectWatcherRuntime(
+  options: ProjectWatcherRuntimeOptions
+): void {
+  if ('enabled' in options) {
+    projectWatcherRuntimeOptions.enabled = options.enabled
+  }
+}
+
+export function resetProjectWatcherRuntimeConfiguration(): void {
+  projectWatcherRuntimeOptions.enabled = undefined
+}
 
 const defaultCompilerOptions = {
   allowJs: true,
@@ -322,29 +344,24 @@ function getSerializedProjectOptions(options?: ProjectOptions) {
 }
 
 function shouldEnableProjectWatchers(): boolean {
-  if (process.env.RENOUN_SERVER_PORT === undefined) {
+  if (typeof projectWatcherRuntimeOptions.enabled === 'boolean') {
+    return projectWatcherRuntimeOptions.enabled
+  }
+
+  if (process.env['RENOUN_SERVER_PORT'] === undefined) {
     return false
   }
 
-  const override = parseBooleanEnv(process.env.RENOUN_PROJECT_WATCHERS)
+  const override = parseBooleanEnv(process.env['RENOUN_PROJECT_WATCHERS'])
   if (override !== undefined) {
     return override
   }
 
-  if (isProjectWatcherTestRuntime()) {
+  if (isVitestRuntime()) {
     return false
   }
 
-  return process.env.NODE_ENV === 'development'
-}
-
-function isProjectWatcherTestRuntime(): boolean {
-  return (
-    process.env['VITEST'] !== undefined ||
-    process.env['VITEST_WORKER_ID'] !== undefined ||
-    process.env['NODE_ENV'] === 'test' ||
-    process.argv.some((argument) => argument.includes('vitest'))
-  )
+  return isDevelopmentEnvironment()
 }
 
 function normalizeComparablePath(path: string): string {

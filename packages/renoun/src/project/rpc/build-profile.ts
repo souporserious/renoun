@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
+import { parseBooleanEnv } from '../../utils/env.ts'
 
 type ProfileStats = {
   count: number
@@ -51,13 +52,6 @@ export type RpcCacheReuseOutcome =
   | 'unavailable'
   | 'error'
 
-const ENABLED =
-  process.env['RENOUN_BUILD_PROFILE'] === '1' ||
-  process.env['RENOUN_BUILD_PROFILE'] === 'true'
-const PROFILE_OUTPUT_PATH = process.env['RENOUN_BUILD_PROFILE_FILE']
-  ? resolve(process.cwd(), process.env['RENOUN_BUILD_PROFILE_FILE'])
-  : null
-const WORKSPACE_ROOT = process.cwd()
 const MAX_METHOD_TARGET_ENTRIES = 20_000
 const methodStats = new Map<string, ProfileStats>()
 const methodTargetStats = new Map<string, ProfileStats>()
@@ -66,16 +60,84 @@ const cacheReuseTargetStats = new Map<string, CacheReuseStats>()
 const cacheReuseStaleReasonMethodStats = new Map<string, number>()
 const cacheReuseStaleReasonTargetStats = new Map<string, number>()
 
+interface BuildProfileConfig {
+  enabled: boolean
+  profileOutputPath: string | null
+  workspaceRoot: string
+}
+
+export interface RpcBuildProfileConfigOptions {
+  enabled?: boolean
+  outputPath?: string | null
+  workspaceRoot?: string
+}
+
+const rpcBuildProfileConfigOverrides: RpcBuildProfileConfigOptions = {}
 let flushHookRegistered = false
 let flushed = false
+
+function createBuildProfileConfig(): BuildProfileConfig {
+  const enabled =
+    typeof rpcBuildProfileConfigOverrides.enabled === 'boolean'
+      ? rpcBuildProfileConfigOverrides.enabled
+      : parseBooleanEnv(process.env['RENOUN_BUILD_PROFILE']) === true
+  const workspaceRoot =
+    rpcBuildProfileConfigOverrides.workspaceRoot ?? process.cwd()
+  const profileFile =
+    rpcBuildProfileConfigOverrides.outputPath === undefined
+      ? process.env['RENOUN_BUILD_PROFILE_FILE']
+      : rpcBuildProfileConfigOverrides.outputPath
+
+  return {
+    enabled,
+    profileOutputPath:
+      typeof profileFile === 'string' && profileFile.length > 0
+        ? resolve(workspaceRoot, profileFile)
+        : null,
+    workspaceRoot,
+  }
+}
+
+let buildProfileConfig = createBuildProfileConfig()
+
+function getBuildProfileConfig(): BuildProfileConfig {
+  return buildProfileConfig
+}
+
+export function configureRpcBuildProfile(
+  options: RpcBuildProfileConfigOptions
+): void {
+  if ('enabled' in options) {
+    rpcBuildProfileConfigOverrides.enabled = options.enabled
+  }
+
+  if ('outputPath' in options) {
+    rpcBuildProfileConfigOverrides.outputPath = options.outputPath
+  }
+
+  if ('workspaceRoot' in options) {
+    rpcBuildProfileConfigOverrides.workspaceRoot = options.workspaceRoot
+  }
+
+  buildProfileConfig = createBuildProfileConfig()
+}
+
+export function resetRpcBuildProfileConfiguration(): void {
+  rpcBuildProfileConfigOverrides.enabled = undefined
+  rpcBuildProfileConfigOverrides.outputPath = undefined
+  rpcBuildProfileConfigOverrides.workspaceRoot = undefined
+  buildProfileConfig = createBuildProfileConfig()
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function normalizePath(value: string): string {
-  if (value.startsWith(WORKSPACE_ROOT)) {
-    const normalized = relative(WORKSPACE_ROOT, value)
+  const { workspaceRoot } = getBuildProfileConfig()
+
+  if (value.startsWith(workspaceRoot)) {
+    const normalized = relative(workspaceRoot, value)
     return normalized.length ? normalized : '.'
   }
   return value
@@ -252,13 +314,15 @@ function recordStaleReasonSample(stats: Map<string, number>, key: string): void 
 }
 
 function flushProfile() {
+  const { enabled, profileOutputPath, workspaceRoot } = getBuildProfileConfig()
+
   if (flushed) {
     return
   }
 
   flushed = true
 
-  if (!ENABLED || !PROFILE_OUTPUT_PATH) {
+  if (!enabled || !profileOutputPath) {
     return
   }
 
@@ -278,7 +342,7 @@ function flushProfile() {
     scope: 'rpc',
     pid: process.pid,
     createdAt: new Date().toISOString(),
-    cwd: WORKSPACE_ROOT,
+    cwd: workspaceRoot,
     methods: toFlushEntries(methodStats),
     methodTargets: toFlushEntries(methodTargetStats),
     cacheReuse: toCacheReuseFlushEntries(cacheReuseMethodStats),
@@ -291,12 +355,13 @@ function flushProfile() {
     ),
   }
 
-  mkdirSync(dirname(PROFILE_OUTPUT_PATH), { recursive: true })
-  appendFileSync(PROFILE_OUTPUT_PATH, `${JSON.stringify(payload)}\n`, 'utf8')
+  mkdirSync(dirname(profileOutputPath), { recursive: true })
+  appendFileSync(profileOutputPath, `${JSON.stringify(payload)}\n`, 'utf8')
 }
 
 export function isRpcBuildProfileEnabled(): boolean {
-  return ENABLED && Boolean(PROFILE_OUTPUT_PATH)
+  const { enabled, profileOutputPath } = getBuildProfileConfig()
+  return enabled && Boolean(profileOutputPath)
 }
 
 export function recordRpcCacheReuse(options: {
@@ -347,7 +412,9 @@ export function recordRpcCacheReuseStaleReason(options: {
 }
 
 function registerFlushHook() {
-  if (!ENABLED || !PROFILE_OUTPUT_PATH || flushHookRegistered) {
+  const { enabled, profileOutputPath } = getBuildProfileConfig()
+
+  if (!enabled || !profileOutputPath || flushHookRegistered) {
     return
   }
 
@@ -360,7 +427,7 @@ export function startRpcBuildProfile(
   method: string,
   params: unknown
 ): (options?: { error?: boolean }) => void {
-  if (!ENABLED || !PROFILE_OUTPUT_PATH) {
+  if (!isRpcBuildProfileEnabled()) {
     return () => {}
   }
 

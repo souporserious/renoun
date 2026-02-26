@@ -6,7 +6,8 @@ import { createServer } from './server.ts'
 
 const previousServerPort = process.env.RENOUN_SERVER_PORT
 const previousServerId = process.env.RENOUN_SERVER_ID
-const previousRefreshNotifications = process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS
+const previousRefreshNotifications =
+  process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']
 
 function restoreEnvironmentVariable(
   name: 'RENOUN_SERVER_PORT' | 'RENOUN_SERVER_ID' | 'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
@@ -39,7 +40,7 @@ describe('project server refresh invalidations', () => {
   })
 
   test('forces full refresh when requested cursor is ahead of the server cursor', async () => {
-    process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS = '0'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
 
     server = await createServer()
     client = new WebSocketClient(server.getId())

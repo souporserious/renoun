@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 import type { ProjectOptions } from '../project/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
+import { isVitestRuntime } from '../utils/env.ts'
 
 const PREWARM_WORKER_PAYLOAD_ENV_KEY = 'RENOUN_PREWARM_WORKER_PAYLOAD'
 
@@ -28,15 +29,6 @@ export function createDefaultPrewarmOptions(rootPath = process.cwd()): {
       tsConfigFilePath: join(rootPath, 'tsconfig.json'),
     },
   }
-}
-
-function isTestRuntime(): boolean {
-  return (
-    process.env['VITEST'] !== undefined ||
-    process.env['VITEST_WORKER_ID'] !== undefined ||
-    process.env['NODE_ENV'] === 'test' ||
-    process.argv.some((argument) => argument.includes('vitest'))
-  )
 }
 
 function resolvePrewarmWorkerEntryFilePath(): string | undefined {
@@ -170,7 +162,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
   }))
 
   const workerEntryFilePath = resolvePrewarmWorkerEntryFilePath()
-  if (isTestRuntime() || !workerEntryFilePath) {
+  if (isVitestRuntime() || !workerEntryFilePath) {
     void runPrewarmInline(request.options, startedAt).finally(() => {
       finalizeActivePrewarmRequest(request.signature)
     })

@@ -8,6 +8,7 @@ import type { FileReadableStream } from '../file-system/FileSystem.ts'
 import type { Snapshot } from '../file-system/Snapshot.ts'
 import type { DirectoryEntry } from '../file-system/types.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
+import { resolvePositiveIntegerProcessEnv } from '../utils/env.ts'
 import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { Project } from '../utils/ts-morph.ts'
@@ -202,17 +203,10 @@ class ProjectCacheSnapshot implements Snapshot {
 }
 
 function getProjectCacheMaxEntries(): number {
-  const configured = process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES']
-  if (!configured) {
-    return DEFAULT_PROJECT_CACHE_MAX_ENTRIES
-  }
-
-  const parsed = Number.parseInt(configured, 10)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return DEFAULT_PROJECT_CACHE_MAX_ENTRIES
-  }
-
-  return parsed
+  return resolvePositiveIntegerProcessEnv(
+    'RENOUN_PROJECT_CACHE_MAX_ENTRIES',
+    DEFAULT_PROJECT_CACHE_MAX_ENTRIES
+  )
 }
 
 function getProjectCacheRuntime(project: Project): ProjectCacheRuntime {

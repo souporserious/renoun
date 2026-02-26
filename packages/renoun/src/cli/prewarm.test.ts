@@ -424,7 +424,7 @@ describe('prewarmRenounRpcServerCache', () => {
       `
         import { Collection, Directory } from 'renoun'
 
-        const dynamicDirectory = process.env.RENOUN_APP_DIRECTORY
+        const dynamicDirectory = process.env['RENOUN_APP_DIRECTORY']
 
         export const appDirectory = new Directory('/repo/src/app')
         export const routeDirectory = new Directory('/repo/src/app/api')
@@ -667,7 +667,7 @@ describe('collectRenounPrewarmTargets', () => {
       `
         import { Collection, Directory } from 'renoun'
 
-        const dynamicDirectory = process.env.RENOUN_APP_DIRECTORY
+        const dynamicDirectory = process.env['RENOUN_APP_DIRECTORY']
 
         export const appDirectory = new Directory('/repo/src/app')
         export const routeDirectory = new Directory('/repo/src/app/api')

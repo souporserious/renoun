@@ -11,6 +11,11 @@ import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
+import {
+  isDevelopmentEnvironment,
+  isProductionEnvironment,
+  isTestEnvironment,
+} from '../utils/env.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import {
   createPersistentCacheNodeKey,
@@ -150,7 +155,7 @@ const RUNTIME_TS_DEPENDENCY_SIDECAR_HYDRATION_CONCURRENCY = 2
 function getRuntimeAnalysisSWRReadOptions():
   | CacheStoreStaleWhileRevalidateOptions
   | undefined {
-  if (process.env['NODE_ENV'] !== 'development') {
+  if (!isDevelopmentEnvironment()) {
     return undefined
   }
 
@@ -160,7 +165,7 @@ function getRuntimeAnalysisSWRReadOptions():
 }
 
 function shouldTrackRuntimeTypeScriptDependencies(): boolean {
-  return process.env['NODE_ENV'] !== 'production'
+  return !isProductionEnvironment()
 }
 
 async function getRuntimeAnalysisSessionUnchecked(): Promise<
@@ -2342,7 +2347,7 @@ async function recordRuntimeTypeScriptDependencySidecar(
     return
   }
 
-  if (process.env['NODE_ENV'] === 'test') {
+  if (isTestEnvironment()) {
     const dependencyAnalysis = await getCachedRuntimeTypeScriptDependencyAnalysis(
       project,
       runtimeCacheStore,
