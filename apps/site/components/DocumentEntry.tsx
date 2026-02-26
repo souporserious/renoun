@@ -27,6 +27,10 @@ async function getSiblings(
   const entries = await getCollectionEntriesForSiblings(collection)
   const path = file.getPathname()
   const index = entries.findIndex((entry) => entry.getPathname() === path)
+  if (index === -1) {
+    return file.getSiblings({ collection })
+  }
+
   const previousEntry = index > 0 ? entries[index - 1] : undefined
   const nextEntry = index < entries.length - 1 ? entries[index + 1] : undefined
 

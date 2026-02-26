@@ -151,7 +151,7 @@ describe('Sponsors cache', () => {
       },
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(secondResolvedTiers).toEqual(firstResolvedTiers)
     expect(secondResolvedTiers).toEqual([
       {
@@ -231,7 +231,7 @@ describe('Sponsors cache', () => {
       },
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(6)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
     expect(firstResolvedTiers).toEqual([
       {
         href: 'https://github.com/sponsors/renoun-one/sponsorships?tier_id=12345',

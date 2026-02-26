@@ -399,7 +399,9 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
 
       const nextCursor = normalizeRefreshCursor(response.nextCursor)
       if (nextCursor !== undefined) {
-        latestRefreshCursor = Math.max(latestRefreshCursor, nextCursor)
+        latestRefreshCursor = response.fullRefresh
+          ? nextCursor
+          : Math.max(latestRefreshCursor, nextCursor)
       }
 
       const paths = getRefreshInvalidationPaths(response)

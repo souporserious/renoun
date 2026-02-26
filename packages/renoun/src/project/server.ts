@@ -268,7 +268,23 @@ export async function createServer(options?: { port?: number }) {
     }: RefreshInvalidationsSinceRequest): Promise<RefreshInvalidationsSinceResponse> {
       const normalizedSinceCursor = normalizeRefreshCursor(sinceCursor)
 
-      if (normalizedSinceCursor === undefined || normalizedSinceCursor >= refreshCursor) {
+      if (normalizedSinceCursor === undefined) {
+        return {
+          nextCursor: refreshCursor,
+          fullRefresh: false,
+        }
+      }
+
+      if (normalizedSinceCursor > refreshCursor) {
+        return {
+          nextCursor: refreshCursor,
+          fullRefresh: true,
+          filePath: rootDirectory,
+          filePaths: [rootDirectory],
+        }
+      }
+
+      if (normalizedSinceCursor === refreshCursor) {
         return {
           nextCursor: refreshCursor,
           fullRefresh: false,

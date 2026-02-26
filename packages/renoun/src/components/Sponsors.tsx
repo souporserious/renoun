@@ -39,11 +39,9 @@ const SPONSORS_CACHE_VERSION = '2'
 const SPONSORS_CACHE_NAMESPACE = 'github-sponsors'
 const SPONSORS_CACHE_VERSION_DEP = 'component-sponsors-version'
 const SPONSORS_CACHE_TTL_BUCKET_DEP = 'component-sponsors-ttl-bucket'
-const SPONSORS_CACHE_LOGIN_DEP = 'component-sponsors-login'
+const SPONSORS_CACHE_TOKEN_DEP = 'component-sponsors-token'
 const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
-const SPONSORS_VIEWER_LOGIN_CACHE_MAX_ENTRIES = 16
 let sponsorsCacheSessionPromise: Promise<RenounSession | undefined> | undefined
-const viewerLoginByTokenHash = new Map<string, string>()
 
 function getTokenCacheKey(token: string): string {
   return hashString(token)
@@ -56,85 +54,6 @@ function createSponsorsCacheNodeKey(payload: unknown): string {
     namespace: SPONSORS_CACHE_NAMESPACE,
     payload,
   })
-}
-
-function cacheViewerLogin(token: string, viewerLogin: string): void {
-  const tokenCacheKey = getTokenCacheKey(token)
-  if (viewerLoginByTokenHash.get(tokenCacheKey) === viewerLogin) {
-    return
-  }
-
-  viewerLoginByTokenHash.delete(tokenCacheKey)
-  viewerLoginByTokenHash.set(tokenCacheKey, viewerLogin)
-
-  while (
-    viewerLoginByTokenHash.size > SPONSORS_VIEWER_LOGIN_CACHE_MAX_ENTRIES
-  ) {
-    const oldestTokenCacheKey = viewerLoginByTokenHash.keys().next().value
-    if (!oldestTokenCacheKey) {
-      break
-    }
-    viewerLoginByTokenHash.delete(oldestTokenCacheKey)
-  }
-}
-
-function getCachedViewerLogin(token: string): string | undefined {
-  const tokenCacheKey = getTokenCacheKey(token)
-  const viewerLogin = viewerLoginByTokenHash.get(tokenCacheKey)
-  if (!viewerLogin) {
-    return undefined
-  }
-
-  // Refresh recency so frequently used tokens stay in the small LRU cache.
-  viewerLoginByTokenHash.delete(tokenCacheKey)
-  viewerLoginByTokenHash.set(tokenCacheKey, viewerLogin)
-  return viewerLogin
-}
-
-async function fetchSponsorsViewerLogin(token: string): Promise<string> {
-  const graphqlResponse = await fetch('https://api.github.com/graphql', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'User-Agent': 'renoun',
-    },
-    body: JSON.stringify({
-      query: `
-        query {
-          viewer {
-            login
-          }
-        }
-      `,
-    }),
-  })
-
-  if (!graphqlResponse.ok) {
-    throw new Error(
-      `[renoun] GitHub Sponsors request failed (${graphqlResponse.status}). ${hintForStatus(graphqlResponse.status)}`
-    )
-  }
-
-  const graphqlResponseJson = await graphqlResponse.json()
-  if (graphqlResponseJson.errors) {
-    if (process.env['NODE_ENV'] === 'development') {
-      throw new Error(
-        `[renoun] GitHub Sponsors GraphQL request failed with the following errors: ${JSON.stringify(
-          graphqlResponseJson.errors
-        )}`
-      )
-    }
-
-    throw new Error(`[renoun] GitHub Sponsors GraphQL request failed with errors.`)
-  }
-
-  const viewerLogin = graphqlResponseJson.data?.viewer?.login
-  if (typeof viewerLogin !== 'string' || viewerLogin.length === 0) {
-    throw new Error('[renoun] GitHub Sponsors GraphQL request failed to resolve viewer login.')
-  }
-
-  return viewerLogin
 }
 
 function resolveSponsorsCacheTtlMs(): number {
@@ -603,23 +522,13 @@ async function fetchSponsorsAndTierLinks(
   if (!cacheSession) {
     return fetchSponsorsAndTierLinksUncached(normalizedOptions)
   }
-  const cachedViewerLogin = getCachedViewerLogin(token)
-  let viewerLogin = cachedViewerLogin
-
-  if (!viewerLogin) {
-    try {
-      viewerLogin = await fetchSponsorsViewerLogin(token)
-      cacheViewerLogin(token, viewerLogin)
-    } catch {
-      return fetchSponsorsAndTierLinksUncached(normalizedOptions)
-    }
-  }
+  const tokenCacheKey = getTokenCacheKey(token)
 
   const nodeKey = createSponsorsCacheNodeKey({
     amount: normalizedAmount,
     avatarSizes: normalizedAvatarSizes,
     manualTierIds: normalizedManualTierIds,
-    viewerLogin,
+    token: tokenCacheKey,
   })
 
   return cacheSession.cache.getOrCompute(
@@ -632,8 +541,8 @@ async function fetchSponsorsAndTierLinks(
           version: SPONSORS_CACHE_VERSION,
         },
         {
-          name: SPONSORS_CACHE_LOGIN_DEP,
-          version: viewerLogin,
+          name: SPONSORS_CACHE_TOKEN_DEP,
+          version: tokenCacheKey,
         },
         {
           name: SPONSORS_CACHE_TTL_BUCKET_DEP,
