@@ -45,6 +45,13 @@ import {
   getProject,
   invalidateProjectCachesByPaths,
 } from './get-project.ts'
+import {
+  type RefreshInvalidationsSinceRequest,
+  type RefreshInvalidationsSinceResponse,
+  getRefreshInvalidationPaths,
+  isRefreshNotification,
+  normalizeRefreshCursor,
+} from './refresh-notifications.ts'
 import type { ProjectOptions } from './types.ts'
 
 let client: WebSocketClient | undefined
@@ -75,19 +82,6 @@ interface ClientRpcInFlightEntry {
   promise: Promise<unknown>
   dependencyPaths: readonly string[]
   epoch: number
-}
-
-interface RefreshNotificationData {
-  refreshCursor?: number
-  filePath?: string
-  filePaths?: string[]
-}
-
-interface RefreshInvalidationsSinceResponse {
-  nextCursor?: number
-  filePath?: string
-  filePaths?: string[]
-  fullRefresh?: boolean
 }
 
 const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
@@ -132,18 +126,6 @@ function getClientRpcCacheTtlMs(): number {
   }
 
   return parsed
-}
-
-function normalizeRefreshCursor(value: unknown): number | undefined {
-  if (
-    typeof value !== 'number' ||
-    !Number.isFinite(value) ||
-    value < 0
-  ) {
-    return undefined
-  }
-
-  return Math.floor(value)
 }
 
 function normalizeRpcCacheKeyValue(value: unknown): unknown {
@@ -393,10 +375,6 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
     .catch(() => {})
 }
 
-type RefreshInvalidationsSinceRequest = Record<string, unknown> & {
-  sinceCursor?: number
-}
-
 function getClient(): WebSocketClient | undefined {
   if (!client && process.env.RENOUN_SERVER_PORT) {
     client = new WebSocketClient(process.env.RENOUN_SERVER_ID!)
@@ -458,58 +436,6 @@ function shouldConsumeRefreshNotifications(): boolean {
   }
 
   return true
-}
-
-function isRefreshNotification(
-  value: unknown
-): value is {
-  type: 'refresh'
-  data: RefreshNotificationData
-} {
-  if (value === null || typeof value !== 'object') {
-    return false
-  }
-
-  const candidate = value as { type?: unknown; data?: unknown }
-  if (candidate.type !== 'refresh') {
-    return false
-  }
-
-  if (candidate.data === null || typeof candidate.data !== 'object') {
-    return false
-  }
-
-  const data = candidate.data as { filePath?: unknown; filePaths?: unknown }
-  const hasFilePath =
-    typeof data.filePath === 'string' && data.filePath.length > 0
-  const hasFilePaths =
-    Array.isArray(data.filePaths) &&
-    data.filePaths.some(
-      (path) => typeof path === 'string' && path.length > 0
-    )
-
-  return hasFilePath || hasFilePaths
-}
-
-function getRefreshInvalidationPaths(data: {
-  filePath?: string
-  filePaths?: string[]
-}): string[] {
-  const deduped = new Set<string>()
-
-  if (typeof data.filePath === 'string' && data.filePath.length > 0) {
-    deduped.add(data.filePath)
-  }
-
-  if (Array.isArray(data.filePaths)) {
-    for (const path of data.filePaths) {
-      if (typeof path === 'string' && path.length > 0) {
-        deduped.add(path)
-      }
-    }
-  }
-
-  return Array.from(deduped)
 }
 
 /**

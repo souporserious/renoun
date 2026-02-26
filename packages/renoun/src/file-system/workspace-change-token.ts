@@ -6,6 +6,7 @@ import type { GitStatusPorcelainEntry } from './git-status.ts'
 export const WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER = ';ignored-only:1'
 export const WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER =
   ';include-gitignored:1'
+const WORKSPACE_HEAD_COMMIT_RE = /^[0-9a-fA-F]{7,64}$/
 
 export interface WorkspaceStatusDigest {
   digest: string
@@ -24,7 +25,12 @@ export function createWorkspaceChangeToken(options: {
 
 export function extractHeadFromWorkspaceToken(token: string): string | null {
   const match = /^head:([^;]+);/.exec(token)
-  return match?.[1] ?? null
+  const head = match?.[1]
+  if (!head) {
+    return null
+  }
+
+  return isWorkspaceHeadCommit(head) ? head : null
 }
 
 export function extractDirtyDigestFromWorkspaceToken(token: string): string | null {
@@ -57,6 +63,10 @@ export function isTrustedWorkspaceChangeToken(
     !token.includes(WORKSPACE_TOKEN_UNTRUSTED_IGNORED_ONLY_MARKER) &&
     !token.includes(WORKSPACE_TOKEN_UNTRUSTED_INCLUDE_GIT_IGNORED_MARKER)
   )
+}
+
+export function isWorkspaceHeadCommit(value: string): boolean {
+  return WORKSPACE_HEAD_COMMIT_RE.test(value)
 }
 
 export async function createWorkspaceStatusDigest(options: {

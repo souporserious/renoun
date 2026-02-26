@@ -1,6 +1,7 @@
 import React from 'react'
 import type { Session as RenounSession } from '../file-system/Session.ts'
 import { createPersistentCacheNodeKey } from '../file-system/cache-key.ts'
+import { hashString } from '../utils/stable-serialization.ts'
 
 interface SponsorEntity {
   username: string
@@ -42,7 +43,11 @@ const SPONSORS_CACHE_LOGIN_DEP = 'component-sponsors-login'
 const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
 const SPONSORS_VIEWER_LOGIN_CACHE_MAX_ENTRIES = 16
 let sponsorsCacheSessionPromise: Promise<RenounSession | undefined> | undefined
-const viewerLoginByToken = new Map<string, string>()
+const viewerLoginByTokenHash = new Map<string, string>()
+
+function getTokenCacheKey(token: string): string {
+  return hashString(token)
+}
 
 function createSponsorsCacheNodeKey(payload: unknown): string {
   return createPersistentCacheNodeKey({
@@ -54,31 +59,35 @@ function createSponsorsCacheNodeKey(payload: unknown): string {
 }
 
 function cacheViewerLogin(token: string, viewerLogin: string): void {
-  if (viewerLoginByToken.get(token) === viewerLogin) {
+  const tokenCacheKey = getTokenCacheKey(token)
+  if (viewerLoginByTokenHash.get(tokenCacheKey) === viewerLogin) {
     return
   }
 
-  viewerLoginByToken.delete(token)
-  viewerLoginByToken.set(token, viewerLogin)
+  viewerLoginByTokenHash.delete(tokenCacheKey)
+  viewerLoginByTokenHash.set(tokenCacheKey, viewerLogin)
 
-  while (viewerLoginByToken.size > SPONSORS_VIEWER_LOGIN_CACHE_MAX_ENTRIES) {
-    const oldestToken = viewerLoginByToken.keys().next().value
-    if (!oldestToken) {
+  while (
+    viewerLoginByTokenHash.size > SPONSORS_VIEWER_LOGIN_CACHE_MAX_ENTRIES
+  ) {
+    const oldestTokenCacheKey = viewerLoginByTokenHash.keys().next().value
+    if (!oldestTokenCacheKey) {
       break
     }
-    viewerLoginByToken.delete(oldestToken)
+    viewerLoginByTokenHash.delete(oldestTokenCacheKey)
   }
 }
 
 function getCachedViewerLogin(token: string): string | undefined {
-  const viewerLogin = viewerLoginByToken.get(token)
+  const tokenCacheKey = getTokenCacheKey(token)
+  const viewerLogin = viewerLoginByTokenHash.get(tokenCacheKey)
   if (!viewerLogin) {
     return undefined
   }
 
   // Refresh recency so frequently used tokens stay in the small LRU cache.
-  viewerLoginByToken.delete(token)
-  viewerLoginByToken.set(token, viewerLogin)
+  viewerLoginByTokenHash.delete(tokenCacheKey)
+  viewerLoginByTokenHash.set(tokenCacheKey, viewerLogin)
   return viewerLogin
 }
 

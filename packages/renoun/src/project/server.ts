@@ -30,6 +30,11 @@ import {
 } from './cached-analysis.ts'
 import { invalidateProjectFileCache } from './cache.ts'
 import { disposeProjectWatchers, getProject } from './get-project.ts'
+import {
+  type RefreshInvalidationsSinceRequest,
+  type RefreshInvalidationsSinceResponse,
+  normalizeRefreshCursor,
+} from './refresh-notifications.ts'
 import type { ProjectOptions } from './types.ts'
 
 const { SyntaxKind } = getTsMorph()
@@ -45,17 +50,6 @@ interface ResolveTypeAtLocationRpcRequest {
   kind: TsMorphSyntaxKind
   filter?: TypeFilter | string
   projectOptions?: ProjectOptions
-}
-
-interface RefreshInvalidationsSinceRequest {
-  sinceCursor?: number
-}
-
-interface RefreshInvalidationsSinceResponse {
-  nextCursor: number
-  fullRefresh: boolean
-  filePath?: string
-  filePaths?: string[]
 }
 
 function parseTypeFilter(filter?: TypeFilter | string): TypeFilter | undefined {
@@ -142,18 +136,6 @@ function isValidFilterDescriptor(value: unknown): value is TypeFilter {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
-}
-
-function normalizeRefreshCursor(value: unknown): number | undefined {
-  if (
-    typeof value !== 'number' ||
-    !Number.isFinite(value) ||
-    value < 0
-  ) {
-    return undefined
-  }
-
-  return Math.floor(value)
 }
 
 function getProductionRpcMemoizeOptions():

@@ -9,6 +9,7 @@ import {
   createWorkspaceStatusDigest,
   extractDirtyDigestFromWorkspaceToken,
   extractHeadFromWorkspaceToken,
+  isWorkspaceHeadCommit,
 } from './workspace-change-token.ts'
 
 type RunGit = (args: string[]) => Promise<SpawnResult>
@@ -68,7 +69,7 @@ export async function getWorkspaceChangeTokenFromGit(
   }
 
   const headCommit = headResult.stdout.trim()
-  if (!headCommit) {
+  if (!headCommit || !isWorkspaceHeadCommit(headCommit)) {
     return null
   }
 
@@ -111,7 +112,7 @@ export async function getWorkspaceChangedPathsSinceTokenFromGit(
   }
 
   const currentHead = headResult.stdout.trim()
-  if (!currentHead) {
+  if (!currentHead || !isWorkspaceHeadCommit(currentHead)) {
     return null
   }
 

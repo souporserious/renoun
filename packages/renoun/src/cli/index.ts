@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { join } from 'node:path'
 
 type Framework = 'next' | 'vite' | 'waku'
 
@@ -73,7 +72,7 @@ if (firstArgument === 'validate') {
   firstArgument === 'vite' ||
   firstArgument === 'waku'
 ) {
-  const [{ createServer }, { getDebugLogger }, { runPrewarmSafely }] =
+  const [{ createServer }, { getDebugLogger }, { createDefaultPrewarmOptions, runPrewarmSafely }] =
     await Promise.all([
       import('../project/server.ts'),
       import('../utils/debug.ts'),
@@ -129,11 +128,7 @@ if (firstArgument === 'validate') {
         }))
 
         if (!isProduction) {
-          void runPrewarmSafely({
-            projectOptions: {
-              tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
-            },
-          })
+          void runPrewarmSafely(createDefaultPrewarmOptions())
         }
 
         const frameworkBinPath = resolveFrameworkBinFile(
@@ -302,7 +297,7 @@ if (firstArgument === 'validate') {
     process.exit(1)
   }
 } else if (firstArgument === 'watch') {
-  const [{ createServer }, { getDebugLogger }, { runPrewarmSafely }] =
+  const [{ createServer }, { getDebugLogger }, { createDefaultPrewarmOptions, runPrewarmSafely }] =
     await Promise.all([
       import('../project/server.ts'),
       import('../utils/debug.ts'),
@@ -334,11 +329,7 @@ if (firstArgument === 'validate') {
         }))
       }
 
-      void runPrewarmSafely({
-        projectOptions: {
-          tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
-        },
-      })
+      void runPrewarmSafely(createDefaultPrewarmOptions())
 
       return server
     },

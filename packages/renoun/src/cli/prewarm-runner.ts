@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type { ProjectOptions } from '../project/types.ts'
@@ -17,6 +18,16 @@ interface PrewarmWorkerMessage {
 interface PrewarmRequest {
   options?: { projectOptions?: ProjectOptions }
   signature: string
+}
+
+export function createDefaultPrewarmOptions(rootPath = process.cwd()): {
+  projectOptions: Pick<ProjectOptions, 'tsConfigFilePath'>
+} {
+  return {
+    projectOptions: {
+      tsConfigFilePath: join(rootPath, 'tsconfig.json'),
+    },
+  }
 }
 
 function isTestRuntime(): boolean {

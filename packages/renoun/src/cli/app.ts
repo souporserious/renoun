@@ -21,7 +21,10 @@ import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
-import { runPrewarmSafely } from './prewarm-runner.ts'
+import {
+  createDefaultPrewarmOptions,
+  runPrewarmSafely,
+} from './prewarm-runner.ts'
 
 function mergeDependencySections(
   appPackageJson: Record<string, unknown>,
@@ -430,11 +433,7 @@ export async function runAppCommand({
     const id = server.getId()
 
     if (command === 'dev') {
-      void runPrewarmSafely({
-        projectOptions: {
-          tsConfigFilePath: join(projectRoot, 'tsconfig.json'),
-        },
-      })
+      void runPrewarmSafely(createDefaultPrewarmOptions(projectRoot))
     }
 
     if (resolvedExample.framework === 'next') {
