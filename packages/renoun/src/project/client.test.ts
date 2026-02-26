@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
+
 const mocks = vi.hoisted(() => {
   return {
     WebSocketClient: vi.fn(),
@@ -53,13 +55,13 @@ vi.mock('./cache.ts', () => ({
 }))
 
 describe('project client transport guards', () => {
-  const previousServerPort = process.env['RENOUN_SERVER_PORT']
-  const previousServerId = process.env['RENOUN_SERVER_ID']
-  const previousClientRpcCache = process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE']
-  const previousClientRpcCacheTtlMs =
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS']
-  const previousRefreshNotifications =
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS']
+  const originalEnvironment = captureProcessEnv([
+    'RENOUN_SERVER_PORT',
+    'RENOUN_SERVER_ID',
+    'RENOUN_PROJECT_CLIENT_RPC_CACHE',
+    'RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS',
+    'RENOUN_PROJECT_REFRESH_NOTIFICATIONS',
+  ])
 
   beforeEach(() => {
     vi.resetModules()
@@ -71,37 +73,7 @@ describe('project client transport guards', () => {
   })
 
   afterEach(() => {
-    if (previousServerPort === undefined) {
-      delete process.env['RENOUN_SERVER_PORT']
-    } else {
-      process.env['RENOUN_SERVER_PORT'] = previousServerPort
-    }
-
-    if (previousServerId === undefined) {
-      delete process.env['RENOUN_SERVER_ID']
-    } else {
-      process.env['RENOUN_SERVER_ID'] = previousServerId
-    }
-
-    if (previousClientRpcCache === undefined) {
-      delete process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE']
-    } else {
-      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = previousClientRpcCache
-    }
-
-    if (previousClientRpcCacheTtlMs === undefined) {
-      delete process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS']
-    } else {
-      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] =
-        previousClientRpcCacheTtlMs
-    }
-
-    if (previousRefreshNotifications === undefined) {
-      delete process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS']
-    } else {
-      process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] =
-        previousRefreshNotifications
-    }
+    restoreProcessEnv(originalEnvironment)
   })
 
   test('falls back to local analysis when server id is missing', async () => {
@@ -165,6 +137,45 @@ describe('project client transport guards', () => {
 
     expect(first).toMatchObject({ resolveTypeCallCount: 1 })
     expect(second).toMatchObject({ resolveTypeCallCount: 2 })
+  })
+
+  test('falls back to default RPC cache TTL when env value is invalid', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = 'invalid'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'false'
+
+    let resolveTypeCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'resolveTypeAtLocationWithDependencies') {
+        return { resolveTypeCallCount: ++resolveTypeCallCount }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+      }
+    })
+
+    const module = await import('./client.ts')
+    const first = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+    const second = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    expect(first).toMatchObject({ resolveTypeCallCount: 1 })
+    expect(second).toMatchObject({ resolveTypeCallCount: 1 })
+    expect(callMethod).toHaveBeenCalledTimes(1)
   })
 
   test('refresh notifications invalidate dependency-aware RPC cache entries by response dependencies', async () => {

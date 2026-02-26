@@ -1,19 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
 const { Project } = getTsMorph()
 
-const ORIGINAL_NODE_ENV = process.env['NODE_ENV']
-
-function restoreEnv(name: string, value: string | undefined): void {
-  if (value === undefined) {
-    delete process.env[name]
-    return
-  }
-
-  process.env[name] = value
-}
+const ORIGINAL_ENV = captureProcessEnv(['NODE_ENV'])
 
 async function readCachedSourceTextMetadata(): Promise<void> {
   const cachedAnalysis = await import('./cached-analysis.ts')
@@ -30,7 +22,7 @@ async function readCachedSourceTextMetadata(): Promise<void> {
 
 describe('project cached analysis runtime defaults', () => {
   afterEach(() => {
-    restoreEnv('NODE_ENV', ORIGINAL_NODE_ENV)
+    restoreProcessEnv(ORIGINAL_ENV)
     vi.restoreAllMocks()
     vi.resetModules()
     vi.doUnmock('./runtime-analysis-session.ts')

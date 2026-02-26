@@ -1,3 +1,5 @@
+import { PROCESS_ENV_KEYS } from './env-keys.ts'
+
 export function parseBooleanEnv(
   value: string | undefined,
   options: {
@@ -111,7 +113,7 @@ export function resolveNonNegativeIntegerProcessEnv(
 }
 
 export function isNodeEnv(value: 'development' | 'production' | 'test'): boolean {
-  return process.env['NODE_ENV'] === value
+  return process.env[PROCESS_ENV_KEYS.nodeEnv] === value
 }
 
 export function isDevelopmentEnvironment(): boolean {
@@ -128,19 +130,21 @@ export function isTestEnvironment(): boolean {
 
 export function isVitestRuntime(): boolean {
   return (
-    process.env['VITEST'] !== undefined ||
-    process.env['VITEST_WORKER_ID'] !== undefined ||
+    process.env[PROCESS_ENV_KEYS.vitest] !== undefined ||
+    process.env[PROCESS_ENV_KEYS.vitestWorkerId] !== undefined ||
     isNodeEnv('test') ||
     process.argv.some((argument) => argument.includes('vitest'))
   )
 }
 
 export function isCiEnvironment(): boolean {
-  return process.env['CI'] !== undefined
+  return process.env[PROCESS_ENV_KEYS.ci] !== undefined
 }
 
 export function isStrictHermeticFileSystemModeFromEnv(): boolean {
-  const override = parseBooleanEnv(process.env['RENOUN_FS_STRICT_HERMETIC'])
+  const override = parseBooleanEnv(
+    process.env[PROCESS_ENV_KEYS.renounFsStrictHermetic]
+  )
   if (override !== undefined) {
     return override
   }

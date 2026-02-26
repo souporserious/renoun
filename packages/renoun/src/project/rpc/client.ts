@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import { getDebugLogger } from '../../utils/debug.ts'
 import { safeAssign } from '../../utils/safe-assign.ts'
 import {
+  PROJECT_RUNTIME_ENV_KEYS,
   getServerPortForLogging,
   getServerPortFromProcessEnv,
 } from '../runtime-env.ts'
@@ -356,7 +357,7 @@ export class WebSocketClient extends EventEmitter {
     const port = getServerPortFromProcessEnv()
     if (!port) {
       const err = new WebSocketClientError(
-        '[renoun] Missing RENOUN_SERVER_PORT',
+        `[renoun] Missing ${PROJECT_RUNTIME_ENV_KEYS.serverPort}`,
         'UNKNOWN_ERROR',
         {
           connectionState: this.#connectionState,

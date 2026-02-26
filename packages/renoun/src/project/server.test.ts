@@ -1,25 +1,15 @@
 import { afterEach, describe, expect, test } from 'vitest'
 
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import type { RefreshInvalidationsSinceResponse } from './refresh-notifications.ts'
 import { createServer } from './server.ts'
 
-const previousServerPort = process.env.RENOUN_SERVER_PORT
-const previousServerId = process.env.RENOUN_SERVER_ID
-const previousRefreshNotifications =
-  process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']
-
-function restoreEnvironmentVariable(
-  name: 'RENOUN_SERVER_PORT' | 'RENOUN_SERVER_ID' | 'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
-  value: string | undefined
-): void {
-  if (value === undefined) {
-    delete process.env[name]
-    return
-  }
-
-  process.env[name] = value
-}
+const originalEnvironment = captureProcessEnv([
+  'RENOUN_SERVER_PORT',
+  'RENOUN_SERVER_ID',
+  'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
+])
 
 describe('project server refresh invalidations', () => {
   let client: WebSocketClient | undefined
@@ -31,12 +21,7 @@ describe('project server refresh invalidations', () => {
     client = undefined
     server = undefined
 
-    restoreEnvironmentVariable('RENOUN_SERVER_PORT', previousServerPort)
-    restoreEnvironmentVariable('RENOUN_SERVER_ID', previousServerId)
-    restoreEnvironmentVariable(
-      'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
-      previousRefreshNotifications
-    )
+    restoreProcessEnv(originalEnvironment)
   })
 
   test('forces full refresh when requested cursor is ahead of the server cursor', async () => {

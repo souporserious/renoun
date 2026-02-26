@@ -1,13 +1,14 @@
-import { parseBooleanEnv, parsePositiveIntegerEnv } from '../utils/env.ts'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { parseBooleanEnv, parseNonNegativeIntegerEnv } from '../utils/env.ts'
 
 export const PROJECT_RUNTIME_ENV_KEYS = {
-  serverId: 'RENOUN_SERVER_ID',
-  serverPort: 'RENOUN_SERVER_PORT',
-  serverRefreshNotifications: 'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
-  projectWatchers: 'RENOUN_PROJECT_WATCHERS',
-  projectClientRpcCache: 'RENOUN_PROJECT_CLIENT_RPC_CACHE',
-  projectClientRpcCacheTtlMs: 'RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS',
-  projectRefreshNotifications: 'RENOUN_PROJECT_REFRESH_NOTIFICATIONS',
+  serverId: PROCESS_ENV_KEYS.renounServerId,
+  serverPort: PROCESS_ENV_KEYS.renounServerPort,
+  serverRefreshNotifications: PROCESS_ENV_KEYS.renounServerRefreshNotifications,
+  projectWatchers: PROCESS_ENV_KEYS.renounProjectWatchers,
+  projectClientRpcCache: PROCESS_ENV_KEYS.renounProjectClientRpcCache,
+  projectClientRpcCacheTtlMs: PROCESS_ENV_KEYS.renounProjectClientRpcCacheTtlMs,
+  projectRefreshNotifications: PROCESS_ENV_KEYS.renounProjectRefreshNotifications,
 } as const
 
 export interface ProjectServerRuntime {
@@ -76,8 +77,8 @@ export function resolveProjectClientRpcCacheTtlMsFromEnv(
     return fallbackWhenMissing
   }
 
-  const parsed = parsePositiveIntegerEnv(configured)
-  return parsed ?? 0
+  const parsed = parseNonNegativeIntegerEnv(configured)
+  return parsed ?? fallbackWhenMissing
 }
 
 export function resolveProjectRefreshNotificationsEnvOverride():

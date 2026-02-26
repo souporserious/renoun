@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
+
 const watcherState = vi.hoisted(() => {
   return {
     callback:
@@ -73,11 +75,13 @@ vi.mock('node:fs', async () => {
 import { disposeProjectWatchers, getProject } from './get-project.ts'
 
 describe('project watcher invalidation batching', () => {
-  const previousServerPort = process.env['RENOUN_SERVER_PORT']
-  const previousWatcherOverride = process.env['RENOUN_PROJECT_WATCHERS']
-  const previousNodeEnv = process.env['NODE_ENV']
-  const previousVitest = process.env['VITEST']
-  const previousVitestWorkerId = process.env['VITEST_WORKER_ID']
+  const originalEnvironment = captureProcessEnv([
+    'RENOUN_SERVER_PORT',
+    'RENOUN_PROJECT_WATCHERS',
+    'NODE_ENV',
+    'VITEST',
+    'VITEST_WORKER_ID',
+  ])
 
   beforeEach(() => {
     process.env['RENOUN_SERVER_PORT'] = '3000'
@@ -89,36 +93,7 @@ describe('project watcher invalidation batching', () => {
 
   afterEach(() => {
     disposeProjectWatchers()
-
-    if (previousServerPort === undefined) {
-      delete process.env['RENOUN_SERVER_PORT']
-    } else {
-      process.env['RENOUN_SERVER_PORT'] = previousServerPort
-    }
-
-    if (previousWatcherOverride === undefined) {
-      delete process.env['RENOUN_PROJECT_WATCHERS']
-    } else {
-      process.env['RENOUN_PROJECT_WATCHERS'] = previousWatcherOverride
-    }
-
-    if (previousNodeEnv === undefined) {
-      delete process.env['NODE_ENV']
-    } else {
-      process.env['NODE_ENV'] = previousNodeEnv
-    }
-
-    if (previousVitest === undefined) {
-      delete process.env['VITEST']
-    } else {
-      process.env['VITEST'] = previousVitest
-    }
-
-    if (previousVitestWorkerId === undefined) {
-      delete process.env['VITEST_WORKER_ID']
-    } else {
-      process.env['VITEST_WORKER_ID'] = previousVitestWorkerId
-    }
+    restoreProcessEnv(originalEnvironment)
   })
 
   test('coalesces watcher storms into a single flush batch', async () => {

@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { realpathSync } from 'node:fs'
 
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import {
   isDevelopmentEnvironment,
   isTestEnvironment,
@@ -2032,7 +2033,7 @@ function resolveDirectorySnapshotPrefixIndexMaxKeys(
   }
 
   return resolvePositiveIntegerProcessEnv(
-    'RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS',
+    PROCESS_ENV_KEYS.renounDirectorySnapshotPrefixIndexMaxKeys,
     DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS
   )
 }
@@ -2045,7 +2046,7 @@ function resolveTargetedMissingDependencyFallback(
   }
 
   return resolveBooleanEnv(
-    process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK'],
+    process.env[PROCESS_ENV_KEYS.renounTargetedMissingDependencyFallback],
     true,
     { allowYesNo: true }
   )
