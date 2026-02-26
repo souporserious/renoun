@@ -1,7 +1,0 @@
-{
-  "name": "cached-analysis-test",
-  "private": true,
-  "dependencies": {
-    "dep-lib": "^1.0.0"
-  }
-}

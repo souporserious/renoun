@@ -1,1 +1,0 @@
-{"compilerOptions":{"module":"ESNext","moduleResolution":"Bundler","target":"ESNext","strict":true},"include":["src/**/*.ts"]}
