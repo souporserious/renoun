@@ -75,6 +75,9 @@ import { disposeProjectWatchers, getProject } from './get-project.ts'
 describe('project watcher invalidation batching', () => {
   const previousServerPort = process.env['RENOUN_SERVER_PORT']
   const previousWatcherOverride = process.env['RENOUN_PROJECT_WATCHERS']
+  const previousNodeEnv = process.env['NODE_ENV']
+  const previousVitest = process.env['VITEST']
+  const previousVitestWorkerId = process.env['VITEST_WORKER_ID']
 
   beforeEach(() => {
     process.env['RENOUN_SERVER_PORT'] = '3000'
@@ -97,6 +100,24 @@ describe('project watcher invalidation batching', () => {
       delete process.env['RENOUN_PROJECT_WATCHERS']
     } else {
       process.env['RENOUN_PROJECT_WATCHERS'] = previousWatcherOverride
+    }
+
+    if (previousNodeEnv === undefined) {
+      delete process.env['NODE_ENV']
+    } else {
+      process.env['NODE_ENV'] = previousNodeEnv
+    }
+
+    if (previousVitest === undefined) {
+      delete process.env['VITEST']
+    } else {
+      process.env['VITEST'] = previousVitest
+    }
+
+    if (previousVitestWorkerId === undefined) {
+      delete process.env['VITEST_WORKER_ID']
+    } else {
+      process.env['VITEST_WORKER_ID'] = previousVitestWorkerId
     }
   })
 
@@ -140,5 +161,23 @@ describe('project watcher invalidation batching', () => {
     const [, projectPaths] =
       mockedInvalidationFns.invalidateProjectFileCachePaths.mock.calls[0] ?? []
     expect(projectPaths).toEqual([`${projectDirectory}/src`])
+  })
+
+  test('does not enable watchers in vitest worker mode without explicit override', () => {
+    delete process.env['RENOUN_PROJECT_WATCHERS']
+    process.env['NODE_ENV'] = 'development'
+    delete process.env['VITEST']
+    process.env['VITEST_WORKER_ID'] = '1'
+
+    const uniqueId = Date.now()
+    const projectDirectory = `/virtual-project-no-watch-${uniqueId}`
+
+    getProject({
+      useInMemoryFileSystem: true,
+      projectId: `watcher-disabled-${uniqueId}`,
+      tsConfigFilePath: `${projectDirectory}/tsconfig.json`,
+    })
+
+    expect(watcherState.callback).toBeUndefined()
   })
 })

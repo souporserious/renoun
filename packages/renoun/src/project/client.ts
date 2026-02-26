@@ -413,8 +413,11 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
 }
 
 function getClient(): WebSocketClient | undefined {
-  if (!client && process.env.RENOUN_SERVER_PORT) {
-    client = new WebSocketClient(process.env.RENOUN_SERVER_ID!)
+  const serverPort = process.env.RENOUN_SERVER_PORT
+  const serverId = process.env.RENOUN_SERVER_ID
+
+  if (!client && serverPort && serverId) {
+    client = new WebSocketClient(serverId)
     const createdClient = client
     if (shouldConsumeRefreshNotifications()) {
       createdClient.on('connected', () => {

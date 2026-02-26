@@ -145,21 +145,72 @@ export function spawnWithBuffer(
     })
 
     const maxBuffer = options.maxBuffer ?? DEFAULT_MAX_BUFFER
+    const timeoutMs = options.timeoutMs ?? 0
     let totalBytes = 0
     const stdoutChunks: Buffer[] = []
     let stderr = ''
+    let settled = false
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+    const finish = (error?: Error, output?: Buffer) => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      if (error) {
+        reject(error)
+        return
+      }
+
+      resolve(output!)
+    }
+
+    const trackChunk = (chunk: Buffer): boolean => {
+      totalBytes += chunk.length
+      if (totalBytes <= maxBuffer) {
+        return true
+      }
+
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        // Ignore kill failures while handling maxBuffer overflow.
+      }
+
+      finish(
+        new Error(
+          `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${commandArguments.join(
+            ' '
+          )}`
+        )
+      )
+      return false
+    }
+
+    if (timeoutMs > 0) {
+      timeoutId = setTimeout(() => {
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // Ignore kill failures while handling timeout.
+        }
+
+        const timeoutMessage = `Command timed out after ${timeoutMs}ms`
+        const errorMessage = stderr
+          ? `${stderr}\n${timeoutMessage}`
+          : timeoutMessage
+        finish(new Error(errorMessage))
+      }, timeoutMs)
+    }
 
     child.stdout?.on('data', (chunk: Buffer) => {
-      totalBytes += chunk.length
-      if (totalBytes > maxBuffer) {
-        child.kill()
-        reject(
-          new Error(
-            `maxBuffer exceeded (${maxBuffer} bytes) for: ${command} ${commandArguments.join(
-              ' '
-            )}`
-          )
-        )
+      if (!trackChunk(chunk)) {
         return
       }
 
@@ -170,16 +221,20 @@ export function spawnWithBuffer(
     })
 
     child.stderr?.on('data', (chunk: Buffer) => {
+      if (!trackChunk(chunk)) {
+        return
+      }
+
       stderr += chunk.toString()
       if (options.verbose) {
         process.stderr.write(chunk)
       }
     })
 
-    child.on('error', reject)
+    child.on('error', (error) => finish(error))
     child.on('close', (status) => {
       if (status !== 0) {
-        reject(
+        finish(
           new Error(
             stderr ||
               `Command failed with code ${status}: ${command} ${commandArguments.join(
@@ -190,7 +245,7 @@ export function spawnWithBuffer(
         return
       }
 
-      resolve(Buffer.concat(stdoutChunks))
+      finish(undefined, Buffer.concat(stdoutChunks))
     })
   })
 }

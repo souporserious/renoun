@@ -1,14 +1,16 @@
+import { hashString } from '../utils/stable-serialization.ts'
+
 export function summarizePersistedValue(value: unknown): string {
   if (value === null) {
     return 'null'
   }
 
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return `${typeof value}:${value}`
+  if (typeof value === 'string') {
+    return `string(length=${value.length} sha1=${hashString(value)})`
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return `${typeof value}:${String(value)}`
   }
 
   if (typeof value === 'undefined') {
