@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
@@ -445,5 +446,77 @@ describe('project client transport guards', () => {
     expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
       'project/src/a.ts',
     ])
+  })
+
+  test('refresh resync retries and falls back to conservative invalidation when exhausted', async () => {
+    vi.useFakeTimers()
+    try {
+      process.env['RENOUN_SERVER_PORT'] = '4545'
+      process.env['RENOUN_SERVER_ID'] = 'server-id'
+      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+      process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+      const listeners = new Map<string, (payload: unknown) => void>()
+      const callMethod = vi.fn(
+        async (method: string, params?: Record<string, unknown>) => {
+          if (method === 'resolveTypeAtLocationWithDependencies') {
+            return {
+              filePath: String(params?.filePath ?? ''),
+              resolveTypeCallCount: 1,
+              dependencies: [String(params?.filePath ?? '')],
+            }
+          }
+
+          if (method === 'getRefreshInvalidationsSince') {
+            throw new Error('resync failed')
+          }
+
+          throw new Error(`Unexpected method: ${method}`)
+        }
+      )
+
+      mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+        return {
+          callMethod,
+          on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+            listeners.set(eventName, listener)
+          }),
+        }
+      })
+
+      const module = await import('./client.ts')
+
+      await module.resolveTypeAtLocationWithDependencies(
+        '/project/src/a.ts',
+        0,
+        0 as never
+      )
+
+      const connectedListener = listeners.get('connected')
+      expect(connectedListener).toBeTypeOf('function')
+
+      // First connection marks the client as connected; second triggers resync.
+      connectedListener!({})
+      connectedListener!({})
+
+      await vi.runAllTimersAsync()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(callMethod).toHaveBeenCalledWith(
+        'getRefreshInvalidationsSince',
+        expect.objectContaining({ sinceCursor: 0 })
+      )
+      expect(
+        callMethod.mock.calls.filter(([method]) => method === 'getRefreshInvalidationsSince')
+      ).toHaveLength(3)
+      expect(mocks.invalidateRuntimeAnalysisCachePaths).toHaveBeenCalledWith([
+        resolve(process.cwd()),
+      ])
+      expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

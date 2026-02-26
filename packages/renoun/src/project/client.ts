@@ -104,6 +104,8 @@ const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
 
 const CLIENT_RPC_CACHE_MAX_ENTRIES = 500
 const DEFAULT_CLIENT_RPC_CACHE_TTL_MS = 1_000
+const REFRESH_RESYNC_MAX_ATTEMPTS = 3
+const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
 const clientRpcCacheByKey = new Map<string, ClientRpcCacheEntry>()
 const clientRpcInFlightByKey = new Map<string, ClientRpcInFlightEntry>()
 // Bumped on refresh invalidations so stale in-flight requests cannot repopulate cache.
@@ -521,23 +523,47 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
   refreshResyncQueue = refreshResyncQueue
     .catch(() => {})
     .then(async () => {
-      const response = await activeClient.callMethod<
-        RefreshInvalidationsSinceRequest,
-        RefreshInvalidationsSinceResponse
-      >('getRefreshInvalidationsSince', {
-        sinceCursor: latestRefreshCursor,
-      })
+      for (
+        let attempt = 1;
+        attempt <= REFRESH_RESYNC_MAX_ATTEMPTS;
+        attempt += 1
+      ) {
+        try {
+          const response = await activeClient.callMethod<
+            RefreshInvalidationsSinceRequest,
+            RefreshInvalidationsSinceResponse
+          >('getRefreshInvalidationsSince', {
+            sinceCursor: latestRefreshCursor,
+          })
 
-      const nextCursor = normalizeRefreshCursor(response.nextCursor)
-      if (nextCursor !== undefined) {
-        latestRefreshCursor = response.fullRefresh
-          ? nextCursor
-          : Math.max(latestRefreshCursor, nextCursor)
-      }
+          const nextCursor = normalizeRefreshCursor(response.nextCursor)
+          if (nextCursor !== undefined) {
+            latestRefreshCursor = response.fullRefresh
+              ? nextCursor
+              : Math.max(latestRefreshCursor, nextCursor)
+          }
 
-      const paths = getRefreshInvalidationPaths(response)
-      for (const path of paths) {
-        queueRefreshInvalidation(path)
+          const paths = getRefreshInvalidationPaths(response)
+          for (const path of paths) {
+            queueRefreshInvalidation(path)
+          }
+          return
+        } catch {
+          if (attempt >= REFRESH_RESYNC_MAX_ATTEMPTS) {
+            // Conservative fallback: clear dependent client/runtime caches for the
+            // active workspace and force the next sync to request from cursor 0.
+            applyRefreshInvalidations([resolve(process.cwd())])
+            latestRefreshCursor = 0
+            return
+          }
+
+          await new Promise((resolveDelay) =>
+            setTimeout(
+              resolveDelay,
+              REFRESH_RESYNC_RETRY_BASE_DELAY_MS * attempt
+            )
+          )
+        }
       }
     })
     .catch(() => {})
