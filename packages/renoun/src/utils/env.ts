@@ -51,6 +51,20 @@ export function resolveBooleanProcessEnv(
   return resolveBooleanEnv(process.env[key], fallback, options)
 }
 
+export function parseBooleanProcessEnv(
+  key: string,
+  options: {
+    allowYesNo?: boolean
+  } = {}
+): boolean | undefined {
+  return parseBooleanEnv(process.env[key], options)
+}
+
+export function readNonEmptyProcessEnv(key: string): string | undefined {
+  const value = process.env[key]
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
 export function parseIntegerEnv(value: string | undefined): number | undefined {
   if (!value) {
     return undefined
@@ -58,6 +72,10 @@ export function parseIntegerEnv(value: string | undefined): number | undefined {
 
   const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) ? parsed : undefined
+}
+
+export function parseIntegerProcessEnv(key: string): number | undefined {
+  return parseIntegerEnv(process.env[key])
 }
 
 export function parsePositiveIntegerEnv(
@@ -95,6 +113,12 @@ export function parseNonNegativeIntegerEnv(
   }
 
   return parsed
+}
+
+export function parseNonNegativeIntegerProcessEnv(
+  key: string
+): number | undefined {
+  return parseNonNegativeIntegerEnv(process.env[key])
 }
 
 export function resolveNonNegativeIntegerEnv(
@@ -142,12 +166,22 @@ export function isCiEnvironment(): boolean {
 }
 
 export function isStrictHermeticFileSystemModeFromEnv(): boolean {
-  const override = parseBooleanEnv(
-    process.env[PROCESS_ENV_KEYS.renounFsStrictHermetic]
+  const override = parseBooleanProcessEnv(
+    PROCESS_ENV_KEYS.renounFsStrictHermetic
   )
   if (override !== undefined) {
     return override
   }
 
   return isProductionEnvironment()
+}
+
+export function isRenounDebugEnabled(): boolean {
+  const rawValue = process.env[PROCESS_ENV_KEYS.renounDebug]
+  const normalized = String(rawValue ?? '').toLowerCase()
+  return (
+    rawValue !== undefined &&
+    normalized !== '0' &&
+    normalized !== 'false'
+  )
 }

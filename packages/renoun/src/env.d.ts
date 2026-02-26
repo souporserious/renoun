@@ -9,6 +9,10 @@ declare namespace NodeJS {
       | 'info'
       | 'debug'
       | 'trace'
+    RENOUN_DEBUG_ABS_PATH?: string
+    RENOUN_DEBUG_PACKAGE_PATH?: string
+    RENOUN_DEBUG_DIRECTORY_SNAPSHOT_RESTORE?: string
+    RENOUN_DEBUG_RESTORED_SCOPE?: string
     RENOUN_RUNTIME_DIRECTORY?: string
     RENOUN_SERVER_ID?: string
     RENOUN_SERVER_PORT?: string

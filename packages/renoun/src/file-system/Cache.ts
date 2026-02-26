@@ -185,18 +185,23 @@ export interface CacheOptions {
   debugSessionRoot?: boolean
 }
 
-const DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS = 20_000
-const DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS = 25
-const DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_MAX_MS = 5_000
-const DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_TTL_MULTIPLIER = 4
-const DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS = 5_000
-const NEVER_ABORT_SIGNAL = new AbortController().signal
-const DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS = 3
+const CACHE_STORE_DEFAULTS = {
+  computeSlotTtlMs: 20_000,
+  computeSlotPollMs: 25,
+  computeSlotOwnerGraceMaxMs: 5_000,
+  computeSlotOwnerGraceTtlMultiplier: 4,
+  staleRetentionTtlMs: 5_000,
+  persistedVerificationAttempts: 3,
+  memoryOnlyCacheStoreId: 'memory-only-cache-store',
+} as const
+
 const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
   'renoun.fs.cache.no-compute-slot-shared-value'
 )
 
-const DEFAULT_MEMORY_ONLY_CACHE_STORE_ID = 'memory-only-cache-store'
+const CACHE_STORE_SENTINELS = {
+  neverAbortSignal: new AbortController().signal,
+} as const
 
 interface CacheStoreFactoryOptions {
   snapshot: Snapshot
@@ -283,7 +288,7 @@ export function createMemoryOnlyCacheStore(
 ) {
   return new CacheStore({
     snapshot: createMemoryOnlySnapshot(
-      options.id ?? DEFAULT_MEMORY_ONLY_CACHE_STORE_ID
+      options.id ?? CACHE_STORE_DEFAULTS.memoryOnlyCacheStoreId
     ),
     staleRetentionTtlMs: options.staleRetentionTtlMs,
     telemetry: options.telemetry,
@@ -342,19 +347,19 @@ export class Cache {
     )
     this.computeSlotTtlMs = normalizePositiveInteger(
       options.computeSlotTtlMs,
-      DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS
+      CACHE_STORE_DEFAULTS.computeSlotTtlMs
     )
     this.computeSlotPollMs = normalizePositiveInteger(
       options.computeSlotPollMs,
-      DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS
+      CACHE_STORE_DEFAULTS.computeSlotPollMs
     )
     this.staleRetentionTtlMs = normalizeNonNegativeInteger(
       options.staleRetentionTtlMs,
-      DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS
+      CACHE_STORE_DEFAULTS.staleRetentionTtlMs
     )
     this.persistedVerificationAttempts = normalizeNonNegativeInteger(
       options.persistedVerificationAttempts,
-      DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS
+      CACHE_STORE_DEFAULTS.persistedVerificationAttempts
     )
     this.targetedMissingDependencyFallback =
       typeof options.targetedMissingDependencyFallback === 'boolean'
@@ -463,7 +468,7 @@ function getComputeSlotHeartbeatMs(slotTtlMs: number): number {
 
 function getComputeSlotOwnerGraceMs(slotTtlMs: number): number {
   const scaledGraceMs =
-    slotTtlMs * DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_TTL_MULTIPLIER
+    slotTtlMs * CACHE_STORE_DEFAULTS.computeSlotOwnerGraceTtlMultiplier
   if (!Number.isFinite(scaledGraceMs) || scaledGraceMs <= 0) {
     return 0
   }
@@ -471,7 +476,7 @@ function getComputeSlotOwnerGraceMs(slotTtlMs: number): number {
   return Math.max(
     0,
     Math.min(
-      DEFAULT_CACHE_STORE_COMPUTE_SLOT_OWNER_GRACE_MAX_MS,
+      CACHE_STORE_DEFAULTS.computeSlotOwnerGraceMaxMs,
       Math.floor(scaledGraceMs)
     )
   )
@@ -629,19 +634,19 @@ export class CacheStore {
     this.#inflight = options.inflight ?? new Map<string, Promise<unknown>>()
     this.#computeSlotTtlMs = normalizePositiveInteger(
       options.computeSlotTtlMs,
-      DEFAULT_CACHE_STORE_COMPUTE_SLOT_TTL_MS
+      CACHE_STORE_DEFAULTS.computeSlotTtlMs
     )
     this.#computeSlotPollMs = normalizePositiveInteger(
       options.computeSlotPollMs,
-      DEFAULT_CACHE_STORE_COMPUTE_SLOT_POLL_MS
+      CACHE_STORE_DEFAULTS.computeSlotPollMs
     )
     this.#staleRetentionTtlMs = normalizeNonNegativeInteger(
       options.staleRetentionTtlMs,
-      DEFAULT_CACHE_STORE_STALE_RETENTION_TTL_MS
+      CACHE_STORE_DEFAULTS.staleRetentionTtlMs
     )
     this.#persistedVerificationAttempts = normalizeNonNegativeInteger(
       options.persistedVerificationAttempts,
-      DEFAULT_CACHE_STORE_PERSISTED_VERIFICATION_ATTEMPTS
+      CACHE_STORE_DEFAULTS.persistedVerificationAttempts
     )
     this.#debugPersistenceFailure = options.debugPersistenceFailure === true
 
@@ -869,7 +874,7 @@ export class CacheStore {
 
     const backgroundOptions: CacheStoreGetOrComputeOptions = {
       ...options,
-      signal: NEVER_ABORT_SIGNAL,
+      signal: CACHE_STORE_SENTINELS.neverAbortSignal,
     }
 
     void this.#ensureInflightComputation(nodeKey, backgroundOptions, compute, {

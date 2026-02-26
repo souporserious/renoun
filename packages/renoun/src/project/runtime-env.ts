@@ -1,40 +1,29 @@
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
-import { parseBooleanEnv, parseNonNegativeIntegerEnv } from '../utils/env.ts'
-
-export const PROJECT_RUNTIME_ENV_KEYS = {
-  serverId: PROCESS_ENV_KEYS.renounServerId,
-  serverPort: PROCESS_ENV_KEYS.renounServerPort,
-  serverRefreshNotifications: PROCESS_ENV_KEYS.renounServerRefreshNotifications,
-  projectWatchers: PROCESS_ENV_KEYS.renounProjectWatchers,
-  projectClientRpcCache: PROCESS_ENV_KEYS.renounProjectClientRpcCache,
-  projectClientRpcCacheTtlMs: PROCESS_ENV_KEYS.renounProjectClientRpcCacheTtlMs,
-  projectRefreshNotifications: PROCESS_ENV_KEYS.renounProjectRefreshNotifications,
-} as const
+import {
+  parseBooleanProcessEnv,
+  parseNonNegativeIntegerProcessEnv,
+  readNonEmptyProcessEnv,
+} from '../utils/env.ts'
 
 export interface ProjectServerRuntime {
   port: string
   id: string
 }
 
-function readNonEmptyProcessEnv(key: string): string | undefined {
-  const value = process.env[key]
-  return typeof value === 'string' && value.length > 0 ? value : undefined
-}
-
 export function getServerPortFromProcessEnv(): string | undefined {
-  return readNonEmptyProcessEnv(PROJECT_RUNTIME_ENV_KEYS.serverPort)
+  return readNonEmptyProcessEnv(PROCESS_ENV_KEYS.renounServerPort)
 }
 
 export function setServerPortProcessEnv(port: number | string): void {
-  process.env[PROJECT_RUNTIME_ENV_KEYS.serverPort] = String(port)
+  process.env[PROCESS_ENV_KEYS.renounServerPort] = String(port)
 }
 
 export function getServerIdFromProcessEnv(): string | undefined {
-  return readNonEmptyProcessEnv(PROJECT_RUNTIME_ENV_KEYS.serverId)
+  return readNonEmptyProcessEnv(PROCESS_ENV_KEYS.renounServerId)
 }
 
 export function setServerIdProcessEnv(id: string): void {
-  process.env[PROJECT_RUNTIME_ENV_KEYS.serverId] = id
+  process.env[PROCESS_ENV_KEYS.renounServerId] = id
 }
 
 export function getServerRuntimeFromProcessEnv():
@@ -58,41 +47,38 @@ export function getServerPortForLogging(): string {
 }
 
 export function resolveProjectWatchersEnvOverride(): boolean | undefined {
-  return parseBooleanEnv(process.env[PROJECT_RUNTIME_ENV_KEYS.projectWatchers])
+  return parseBooleanProcessEnv(PROCESS_ENV_KEYS.renounProjectWatchers)
 }
 
 export function resolveProjectClientRpcCacheEnabledFromEnv():
   | boolean
   | undefined {
-  return parseBooleanEnv(
-    process.env[PROJECT_RUNTIME_ENV_KEYS.projectClientRpcCache]
+  return parseBooleanProcessEnv(
+    PROCESS_ENV_KEYS.renounProjectClientRpcCache
   )
 }
 
 export function resolveProjectClientRpcCacheTtlMsFromEnv(
   fallbackWhenMissing: number
 ): number {
-  const configured = process.env[PROJECT_RUNTIME_ENV_KEYS.projectClientRpcCacheTtlMs]
-  if (!configured) {
-    return fallbackWhenMissing
-  }
-
-  const parsed = parseNonNegativeIntegerEnv(configured)
+  const parsed = parseNonNegativeIntegerProcessEnv(
+    PROCESS_ENV_KEYS.renounProjectClientRpcCacheTtlMs
+  )
   return parsed ?? fallbackWhenMissing
 }
 
 export function resolveProjectRefreshNotificationsEnvOverride():
   | boolean
   | undefined {
-  return parseBooleanEnv(
-    process.env[PROJECT_RUNTIME_ENV_KEYS.projectRefreshNotifications]
+  return parseBooleanProcessEnv(
+    PROCESS_ENV_KEYS.renounProjectRefreshNotifications
   )
 }
 
 export function resolveServerRefreshNotificationsEnvOverride():
   | boolean
   | undefined {
-  return parseBooleanEnv(
-    process.env[PROJECT_RUNTIME_ENV_KEYS.serverRefreshNotifications]
+  return parseBooleanProcessEnv(
+    PROCESS_ENV_KEYS.renounServerRefreshNotifications
   )
 }

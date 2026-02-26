@@ -3,6 +3,11 @@ export const PROCESS_ENV_KEYS = {
   ci: 'CI',
   vitest: 'VITEST',
   vitestWorkerId: 'VITEST_WORKER_ID',
+  renounDebug: 'RENOUN_DEBUG',
+  renounDebugAbsPath: 'RENOUN_DEBUG_ABS_PATH',
+  renounDebugPackagePath: 'RENOUN_DEBUG_PACKAGE_PATH',
+  renounDebugDirectorySnapshotRestore: 'RENOUN_DEBUG_DIRECTORY_SNAPSHOT_RESTORE',
+  renounDebugRestoredScope: 'RENOUN_DEBUG_RESTORED_SCOPE',
   renounFsStrictHermetic: 'RENOUN_FS_STRICT_HERMETIC',
   renounServerId: 'RENOUN_SERVER_ID',
   renounServerPort: 'RENOUN_SERVER_PORT',
@@ -17,4 +22,8 @@ export const PROCESS_ENV_KEYS = {
     'RENOUN_TARGETED_MISSING_DEP_FALLBACK',
   renounDirectorySnapshotPrefixIndexMaxKeys:
     'RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS',
+  renounSponsorsCacheTtlMs: 'RENOUN_SPONSORS_CACHE_TTL_MS',
+  githubSponsorsToken: 'GITHUB_SPONSORS_TOKEN',
+  renounBuildProfile: 'RENOUN_BUILD_PROFILE',
+  renounBuildProfileFile: 'RENOUN_BUILD_PROFILE_FILE',
 } as const

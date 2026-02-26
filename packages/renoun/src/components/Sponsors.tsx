@@ -1,7 +1,8 @@
 import React from 'react'
 import type { Session as RenounSession } from '../file-system/Session.ts'
 import { createPersistentCacheNodeKey } from '../file-system/cache-key.ts'
-import { parseIntegerEnv } from '../utils/env.ts'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { parseIntegerProcessEnv } from '../utils/env.ts'
 import { hashString } from '../utils/stable-serialization.ts'
 
 interface SponsorEntity {
@@ -59,7 +60,9 @@ function createSponsorsCacheNodeKey(payload: unknown): string {
 }
 
 function resolveSponsorsCacheTtlMs(): number {
-  const parsedTtl = parseIntegerEnv(process.env['RENOUN_SPONSORS_CACHE_TTL_MS'])
+  const parsedTtl = parseIntegerProcessEnv(
+    PROCESS_ENV_KEYS.renounSponsorsCacheTtlMs
+  )
   if (parsedTtl === undefined) {
     return DEFAULT_SPONSORS_CACHE_TTL_MS
   }
@@ -168,7 +171,7 @@ async function fetchSponsorsAndTierLinksUncached(
   defaultHref: string
   descriptionByTitle: Map<string, string>
 }> {
-  const token = process.env['GITHUB_SPONSORS_TOKEN']
+  const token = process.env[PROCESS_ENV_KEYS.githubSponsorsToken]
 
   if (!token) {
     // Skip erroring in Vercel/Netlify previews and CI environments
@@ -263,7 +266,7 @@ async function fetchSponsorsAndTierLinksUncached(
   const graphqlResponseJson = await graphqlResponse.json()
 
   if (graphqlResponseJson.errors) {
-    if (process.env['NODE_ENV'] === 'development') {
+    if (process.env[PROCESS_ENV_KEYS.nodeEnv] === 'development') {
       throw new Error(
         `[renoun] GitHub Sponsors GraphQL request failed with the following errors: ${JSON.stringify(
           graphqlResponseJson.errors
@@ -512,7 +515,7 @@ async function fetchSponsorsAndTierLinks(
     return fetchSponsorsAndTierLinksUncached(normalizedOptions)
   }
 
-  const token = process.env['GITHUB_SPONSORS_TOKEN']
+  const token = process.env[PROCESS_ENV_KEYS.githubSponsorsToken]
   if (!token) {
     return fetchSponsorsAndTierLinksUncached(normalizedOptions)
   }

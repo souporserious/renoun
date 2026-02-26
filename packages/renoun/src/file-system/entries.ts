@@ -12,8 +12,10 @@ import {
 } from '@renoun/mdx/utils'
 
 import { getFileExportMetadata } from '../project/client.ts'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import {
   isDevelopmentEnvironment,
+  parseBooleanProcessEnv,
   isProductionEnvironment,
   isStrictHermeticFileSystemModeFromEnv,
   isTestEnvironment,
@@ -6789,7 +6791,7 @@ export class Directory<
         continue
       }
 
-      if (process.env['RENOUN_DEBUG_RESTORED_SCOPE'] === '1') {
+      if (parseBooleanProcessEnv(PROCESS_ENV_KEYS.renounDebugRestoredScope)) {
         console.log('[restored-snapshot-scope-mismatch]', {
           rootPathKey,
           entryPathKey,

@@ -21,36 +21,43 @@ import {
   type CacheStorePersistence,
 } from './Cache.ts'
 
-const SQLITE_BUSY_RETRIES = 5
-const SQLITE_BUSY_RETRY_DELAY_MS = 25
-const SQLITE_INIT_BUSY_RETRIES = 30
-const SQLITE_INIT_BUSY_RETRY_DELAY_MS = 25
-const SQLITE_INIT_BUSY_RETRY_MAX_DELAY_MS = 250
-const SQLITE_DEFAULT_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 14
-const SQLITE_DEFAULT_MAX_ROWS = 200_000
-const SQLITE_PRUNE_WRITE_INTERVAL = 32
-const SQLITE_PRUNE_MAX_INTERVAL_MS = 1000 * 60 * 5
-const SQLITE_DELETE_BATCH_SIZE = 500
-const SQLITE_DEFAULT_PREPARED_STATEMENT_CACHE_MAX = 128
-const SQLITE_INFLIGHT_TTL_MS = 20_000
-const SQLITE_INFLIGHT_CLEANUP_INTERVAL_MS = 10_000
-const SQLITE_LAST_ACCESSED_TOUCH_MIN_INTERVAL_MS = 30_000
-const SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE = 50_000
-const SQLITE_STRUCTURED_PATH_ID_CACHE_MAX_SIZE = 100_000
-const SQLITE_STRUCTURED_DEP_TERM_ID_CACHE_MAX_SIZE = 100_000
-const SQLITE_STRUCTURED_PATH_CLOSURE_SEEDED_CACHE_MAX_SIZE = 100_000
-const MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY = 'missing_dependency_entry_count'
-const INVALIDATION_SEQUENCE_META_KEY = 'invalidation_seq'
+const SQLITE_DEFAULTS = {
+  busyRetries: 5,
+  busyRetryDelayMs: 25,
+  initBusyRetries: 30,
+  initBusyRetryDelayMs: 25,
+  initBusyRetryMaxDelayMs: 250,
+  cacheMaxAgeMs: 1000 * 60 * 60 * 24 * 14,
+  maxRows: 200_000,
+  pruneWriteInterval: 32,
+  pruneMaxIntervalMs: 1000 * 60 * 5,
+  deleteBatchSize: 500,
+  preparedStatementCacheMax: 128,
+  inflightTtlMs: 20_000,
+  inflightCleanupIntervalMs: 10_000,
+  lastAccessedTouchMinIntervalMs: 30_000,
+  lastAccessedTouchCacheMaxSize: 50_000,
+  structuredPathIdCacheMaxSize: 100_000,
+  structuredDepTermIdCacheMaxSize: 100_000,
+  structuredPathClosureSeededCacheMaxSize: 100_000,
+} as const
 
-const STRUCTURED_DEP_KIND_FILE = 1
-const STRUCTURED_DEP_KIND_DIR = 2
-const STRUCTURED_DEP_KIND_DIR_MTIME = 3
+const SQLITE_META_KEYS = {
+  missingDependencyEntryCount: 'missing_dependency_entry_count',
+  invalidationSequence: 'invalidation_seq',
+} as const
+
+const STRUCTURED_DEP_KIND = {
+  file: 1,
+  dir: 2,
+  dirMtime: 3,
+} as const
 
 interface StructuredPathDependencyTerm {
   kind:
-    | typeof STRUCTURED_DEP_KIND_FILE
-    | typeof STRUCTURED_DEP_KIND_DIR
-    | typeof STRUCTURED_DEP_KIND_DIR_MTIME
+    | typeof STRUCTURED_DEP_KIND.file
+    | typeof STRUCTURED_DEP_KIND.dir
+    | typeof STRUCTURED_DEP_KIND.dirMtime
   pathKey: string
 }
 
@@ -233,12 +240,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   constructor(options: CacheStoreSqliteOptions = {}) {
     this.#dbPath = resolveDbPath(options)
     this.#schemaVersion = options.schemaVersion ?? CACHE_SCHEMA_VERSION
-    this.#maxAgeMs = options.maxAgeMs ?? SQLITE_DEFAULT_CACHE_MAX_AGE_MS
-    this.#maxRows = options.maxRows ?? SQLITE_DEFAULT_MAX_ROWS
+    this.#maxAgeMs = options.maxAgeMs ?? SQLITE_DEFAULTS.cacheMaxAgeMs
+    this.#maxRows = options.maxRows ?? SQLITE_DEFAULTS.maxRows
     this.#debugCachePersistence = options.debugCachePersistence === true
     this.#overflowCheckInterval = Math.max(
       1,
-      Math.min(SQLITE_PRUNE_WRITE_INTERVAL, Math.floor(this.#maxRows / 100))
+      Math.min(SQLITE_DEFAULTS.pruneWriteInterval, Math.floor(this.#maxRows / 100))
     )
     this.#preparedStatementCacheMax = resolvePreparedStatementCacheMax(
       options.preparedStatementCacheMax
@@ -260,7 +267,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   async acquireComputeSlot(
     nodeKey: string,
     owner: string,
-    ttlMs: number = SQLITE_INFLIGHT_TTL_MS
+    ttlMs: number = SQLITE_DEFAULTS.inflightTtlMs
   ): Promise<boolean> {
     await this.#readyPromise
 
@@ -296,7 +303,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   async refreshComputeSlot(
     nodeKey: string,
     owner: string,
-    ttlMs: number = SQLITE_INFLIGHT_TTL_MS
+    ttlMs: number = SQLITE_DEFAULTS.inflightTtlMs
   ): Promise<void> {
     await this.#readyPromise
 
@@ -573,7 +580,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const persist = entry.persist ? 1 : 0
     const now = Date.now()
 
-    for (let attempt = 0; attempt <= SQLITE_BUSY_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
       let transactionStarted = false
 
       try {
@@ -643,13 +650,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
 
         if (
-          attempt >= SQLITE_BUSY_RETRIES ||
+          attempt >= SQLITE_DEFAULTS.busyRetries ||
           !isSqliteBusyOrLockedError(error)
         ) {
           throw error
         }
 
-        await delay((attempt + 1) * SQLITE_BUSY_RETRY_DELAY_MS)
+        await delay((attempt + 1) * SQLITE_DEFAULTS.busyRetryDelayMs)
       }
     }
 
@@ -679,7 +686,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const persist = entry.persist ? 1 : 0
     const now = Date.now()
 
-    for (let attempt = 0; attempt <= SQLITE_BUSY_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
       let transactionStarted = false
 
       try {
@@ -811,13 +818,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
 
         if (
-          attempt >= SQLITE_BUSY_RETRIES ||
+          attempt >= SQLITE_DEFAULTS.busyRetries ||
           !isSqliteBusyOrLockedError(error)
         ) {
           throw error
         }
 
-        await delay((attempt + 1) * SQLITE_BUSY_RETRY_DELAY_MS)
+        await delay((attempt + 1) * SQLITE_DEFAULTS.busyRetryDelayMs)
       }
     }
 
@@ -1063,11 +1070,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         WHERE term.path_id IS NOT NULL
           AND (
             (
-              term.dep_kind = ${STRUCTURED_DEP_KIND_FILE}
+              term.dep_kind = ${STRUCTURED_DEP_KIND.file}
               AND term.path_id IN (SELECT path_id FROM descendant_paths)
             )
             OR (
-              term.dep_kind IN (${STRUCTURED_DEP_KIND_DIR}, ${STRUCTURED_DEP_KIND_DIR_MTIME})
+              term.dep_kind IN (${STRUCTURED_DEP_KIND.dir}, ${STRUCTURED_DEP_KIND.dirMtime})
               AND (
                 term.path_id IN (SELECT path_id FROM descendant_paths)
                 OR term.path_id IN (SELECT path_id FROM ancestor_paths)
@@ -1132,17 +1139,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         VALUES (?, '0')
         ON CONFLICT(key) DO NOTHING
       `
-    ).run(INVALIDATION_SEQUENCE_META_KEY)
+    ).run(SQLITE_META_KEYS.invalidationSequence)
     this.#prepareStatement(
       `
         UPDATE meta
         SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)
         WHERE key = ?
       `
-    ).run(INVALIDATION_SEQUENCE_META_KEY)
+    ).run(SQLITE_META_KEYS.invalidationSequence)
     const row = this.#prepareStatement(
       `SELECT value FROM meta WHERE key = ?`
-    ).get(INVALIDATION_SEQUENCE_META_KEY) as { value?: unknown } | undefined
+    ).get(SQLITE_META_KEYS.invalidationSequence) as { value?: unknown } | undefined
     const sequence = Number.parseInt(String(row?.value ?? '0'), 10)
     if (!Number.isFinite(sequence) || sequence <= 0) {
       return 0
@@ -1233,21 +1240,21 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     ): StructuredPathDependencyTerm | undefined => {
       if (pathDependency.startsWith('file:')) {
         return {
-          kind: STRUCTURED_DEP_KIND_FILE,
+          kind: STRUCTURED_DEP_KIND.file,
           pathKey: normalizeAbsolutePathKey(pathDependency.slice('file:'.length)),
         }
       }
 
       if (pathDependency.startsWith('dir:')) {
         return {
-          kind: STRUCTURED_DEP_KIND_DIR,
+          kind: STRUCTURED_DEP_KIND.dir,
           pathKey: normalizeAbsolutePathKey(pathDependency.slice('dir:'.length)),
         }
       }
 
       if (pathDependency.startsWith('dir-mtime:')) {
         return {
-          kind: STRUCTURED_DEP_KIND_DIR_MTIME,
+          kind: STRUCTURED_DEP_KIND.dirMtime,
           pathKey: normalizeAbsolutePathKey(
             pathDependency.slice('dir-mtime:'.length)
           ),
@@ -1442,7 +1449,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   }
 
   async #initialize(): Promise<void> {
-    for (let attempt = 0; attempt <= SQLITE_INIT_BUSY_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.initBusyRetries; attempt += 1) {
       let database: any
 
       try {
@@ -1519,12 +1526,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
 
         if (
-          attempt < SQLITE_INIT_BUSY_RETRIES &&
+          attempt < SQLITE_DEFAULTS.initBusyRetries &&
           isSqliteBusyOrLockedError(error)
         ) {
           const retryDelay = Math.min(
-            SQLITE_INIT_BUSY_RETRY_MAX_DELAY_MS,
-            (attempt + 1) * SQLITE_INIT_BUSY_RETRY_DELAY_MS
+            SQLITE_DEFAULTS.initBusyRetryMaxDelayMs,
+            (attempt + 1) * SQLITE_DEFAULTS.initBusyRetryDelayMs
           )
           await delay(retryDelay)
           continue
@@ -1679,7 +1686,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         `
       )
       .run(
-        MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY,
+        SQLITE_META_KEYS.missingDependencyEntryCount,
         String(normalizedMissingDependencyCount)
       )
 
@@ -1691,7 +1698,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           ON CONFLICT(key) DO NOTHING
         `
       )
-      .run(INVALIDATION_SEQUENCE_META_KEY)
+      .run(SQLITE_META_KEYS.invalidationSequence)
   }
 
   async #maybePruneAfterWrite(
@@ -1708,7 +1715,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const shouldCheckOverflow =
       options.force || this.#writesSincePrune >= this.#overflowCheckInterval
     const shouldPruneForAgeWindow =
-      now - this.#lastPrunedAt >= SQLITE_PRUNE_MAX_INTERVAL_MS
+      now - this.#lastPrunedAt >= SQLITE_DEFAULTS.pruneMaxIntervalMs
 
     if (!shouldCheckOverflow && !shouldPruneForAgeWindow) {
       return
@@ -1752,20 +1759,20 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   }
 
   async #runPruneWithRetries() {
-    for (let attempt = 0; attempt <= SQLITE_BUSY_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
       try {
         await this.#pruneStaleEntries()
         this.#lastPrunedAt = Date.now()
         return
       } catch (error) {
         if (
-          attempt >= SQLITE_BUSY_RETRIES ||
+          attempt >= SQLITE_DEFAULTS.busyRetries ||
           !isSqliteBusyOrLockedError(error)
         ) {
           throw error
         }
 
-        await delay((attempt + 1) * SQLITE_BUSY_RETRY_DELAY_MS)
+        await delay((attempt + 1) * SQLITE_DEFAULTS.busyRetryDelayMs)
       }
     }
   }
@@ -1779,7 +1786,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const lastTouchedAt = this.#lastAccessTouchAtByNodeKey.get(nodeKey)
     if (
       typeof lastTouchedAt === 'number' &&
-      now - lastTouchedAt < SQLITE_LAST_ACCESSED_TOUCH_MIN_INTERVAL_MS
+      now - lastTouchedAt < SQLITE_DEFAULTS.lastAccessedTouchMinIntervalMs
     ) {
       return
     }
@@ -1812,16 +1819,16 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   #pruneLastAccessTouchCache(now: number): void {
     if (
       this.#lastAccessTouchAtByNodeKey.size <=
-      SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE
+      SQLITE_DEFAULTS.lastAccessedTouchCacheMaxSize
     ) {
       return
     }
 
-    const staleBefore = now - SQLITE_LAST_ACCESSED_TOUCH_MIN_INTERVAL_MS * 4
+    const staleBefore = now - SQLITE_DEFAULTS.lastAccessedTouchMinIntervalMs * 4
     for (const [nodeKey, touchedAt] of this.#lastAccessTouchAtByNodeKey) {
       if (
         this.#lastAccessTouchAtByNodeKey.size <=
-        SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE
+        SQLITE_DEFAULTS.lastAccessedTouchCacheMaxSize
       ) {
         break
       }
@@ -1833,7 +1840,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     while (
       this.#lastAccessTouchAtByNodeKey.size >
-      SQLITE_LAST_ACCESSED_TOUCH_CACHE_MAX_SIZE
+      SQLITE_DEFAULTS.lastAccessedTouchCacheMaxSize
     ) {
       const oldestKey = this.#lastAccessTouchAtByNodeKey.keys().next().value
       if (typeof oldestKey !== 'string') {
@@ -1860,7 +1867,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#pathIdByPathKey.set(pathKey, pathId)
 
     while (
-      this.#pathIdByPathKey.size > SQLITE_STRUCTURED_PATH_ID_CACHE_MAX_SIZE
+      this.#pathIdByPathKey.size > SQLITE_DEFAULTS.structuredPathIdCacheMaxSize
     ) {
       const oldestPathKey = this.#pathIdByPathKey.keys().next().value
       if (typeof oldestPathKey !== 'string') {
@@ -1882,7 +1889,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     while (
       this.#depTermIdByTermKey.size >
-      SQLITE_STRUCTURED_DEP_TERM_ID_CACHE_MAX_SIZE
+      SQLITE_DEFAULTS.structuredDepTermIdCacheMaxSize
     ) {
       const oldestTermKey = this.#depTermIdByTermKey.keys().next().value
       if (typeof oldestTermKey !== 'string') {
@@ -1896,7 +1903,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#seededPathClosureByPathKey.add(pathKey)
     while (
       this.#seededPathClosureByPathKey.size >
-      SQLITE_STRUCTURED_PATH_CLOSURE_SEEDED_CACHE_MAX_SIZE
+      SQLITE_DEFAULTS.structuredPathClosureSeededCacheMaxSize
     ) {
       const oldestPathKey = this.#seededPathClosureByPathKey.values().next()
       if (typeof oldestPathKey.value !== 'string') {
@@ -1907,18 +1914,18 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   }
 
   async #runWithBusyRetries<T>(operation: () => T): Promise<T> {
-    for (let attempt = 0; attempt <= SQLITE_BUSY_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
       try {
         return operation()
       } catch (error) {
         if (
-          attempt >= SQLITE_BUSY_RETRIES ||
+          attempt >= SQLITE_DEFAULTS.busyRetries ||
           !isSqliteBusyOrLockedError(error)
         ) {
           throw error
         }
 
-        await delay((attempt + 1) * SQLITE_BUSY_RETRY_DELAY_MS)
+        await delay((attempt + 1) * SQLITE_DEFAULTS.busyRetryDelayMs)
       }
     }
 
@@ -1935,7 +1942,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     if (
       !options.force &&
-      now - this.#lastInflightCleanupAt < SQLITE_INFLIGHT_CLEANUP_INTERVAL_MS
+      now - this.#lastInflightCleanupAt < SQLITE_DEFAULTS.inflightCleanupIntervalMs
     ) {
       return
     }
@@ -2201,7 +2208,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const row = this.#prepareStatement(`SELECT value FROM meta WHERE key = ?`).get(
-      MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY
+      SQLITE_META_KEYS.missingDependencyEntryCount
     ) as { value?: unknown } | undefined
     const numericValue = Number.parseInt(String(row?.value ?? '0'), 10)
     if (!Number.isFinite(numericValue) || numericValue <= 0) {
@@ -2233,14 +2240,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         VALUES (?, '0')
         ON CONFLICT(key) DO NOTHING
       `
-    ).run(MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY)
+    ).run(SQLITE_META_KEYS.missingDependencyEntryCount)
     this.#prepareStatement(
       `
         UPDATE meta
         SET value = CAST(MAX(0, CAST(value AS INTEGER) + ?) AS TEXT)
         WHERE key = ?
       `
-    ).run(delta, MISSING_DEPENDENCY_ENTRY_COUNT_META_KEY)
+    ).run(delta, SQLITE_META_KEYS.missingDependencyEntryCount)
   }
 
   #countMissingDependencyEntriesForNodeKeys(nodeKeys: string[]): number {
@@ -2282,11 +2289,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     for (
       let offset = 0;
       offset < uniqueNodeKeys.length;
-      offset += SQLITE_DELETE_BATCH_SIZE
+      offset += SQLITE_DEFAULTS.deleteBatchSize
     ) {
       const batch = uniqueNodeKeys.slice(
         offset,
-        offset + SQLITE_DELETE_BATCH_SIZE
+        offset + SQLITE_DEFAULTS.deleteBatchSize
       )
       if (batch.length === 0) {
         continue
@@ -2313,11 +2320,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     for (
       let offset = 0;
       offset < uniqueNodeKeys.length;
-      offset += SQLITE_DELETE_BATCH_SIZE
+      offset += SQLITE_DEFAULTS.deleteBatchSize
     ) {
       const batch = uniqueNodeKeys.slice(
         offset,
-        offset + SQLITE_DELETE_BATCH_SIZE
+        offset + SQLITE_DEFAULTS.deleteBatchSize
       )
       if (batch.length === 0) {
         continue
@@ -2412,7 +2419,7 @@ function resolvePreparedStatementCacheMax(configuredValue?: number): number {
 
   return resolvePositiveIntegerProcessEnv(
     'RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX',
-    SQLITE_DEFAULT_PREPARED_STATEMENT_CACHE_MAX
+    SQLITE_DEFAULTS.preparedStatementCacheMax
   )
 }
 
@@ -2627,8 +2634,8 @@ function resolveSqlitePersistenceOptions(
   return {
     dbPath: resolveDbPath(options),
     schemaVersion: options.schemaVersion ?? CACHE_SCHEMA_VERSION,
-    maxAgeMs: options.maxAgeMs ?? SQLITE_DEFAULT_CACHE_MAX_AGE_MS,
-    maxRows: options.maxRows ?? SQLITE_DEFAULT_MAX_ROWS,
+    maxAgeMs: options.maxAgeMs ?? SQLITE_DEFAULTS.cacheMaxAgeMs,
+    maxRows: options.maxRows ?? SQLITE_DEFAULTS.maxRows,
     debugSessionRoot: options.debugSessionRoot === true,
     debugCachePersistence: options.debugCachePersistence === true,
   }

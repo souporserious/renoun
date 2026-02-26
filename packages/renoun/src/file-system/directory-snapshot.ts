@@ -1,4 +1,5 @@
-import { parseBooleanEnv } from '../utils/env.ts'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { parseBooleanProcessEnv } from '../utils/env.ts'
 
 export interface DirectorySnapshotDirectoryMetadata<Entry = unknown> {
   hasVisibleDescendant: boolean
@@ -73,7 +74,7 @@ function createPersistedEntryKey(kind: 'file' | 'directory', path: string) {
 
 function shouldDebugSnapshotRestoreMismatch(): boolean {
   return (
-    parseBooleanEnv(process.env['RENOUN_DEBUG_DIRECTORY_SNAPSHOT_RESTORE']) ===
+    parseBooleanProcessEnv(PROCESS_ENV_KEYS.renounDebugDirectorySnapshotRestore) ===
     true
   )
 }

@@ -23,6 +23,8 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { parseBooleanProcessEnv } from '../utils/env.ts'
 import {
   ensureRelativePath,
   relativePath,
@@ -245,7 +247,7 @@ export class NodeFileSystem
   getAbsolutePath(path: string): string {
     const absolutePath = resolve(path)
 
-    if (process.env['RENOUN_DEBUG_ABS_PATH'] === '1') {
+    if (parseBooleanProcessEnv(PROCESS_ENV_KEYS.renounDebugAbsPath) === true) {
       if (path.includes('tmp-renoun-')) {
         // eslint-disable-next-line no-console
         console.log('[renoun-debug-abs]', {

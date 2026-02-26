@@ -6,7 +6,7 @@ import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import {
   isDevelopmentEnvironment,
   isTestEnvironment,
-  resolveBooleanEnv,
+  resolveBooleanProcessEnv,
   resolvePositiveIntegerProcessEnv,
 } from '../utils/env.ts'
 import {
@@ -72,19 +72,21 @@ interface DirectorySnapshotKeyMetrics {
   rebuilds: number
 }
 
-const DEFAULT_PERSISTENT_WORKSPACE_CHANGE_TOKEN_TTL_MS = 0
-const DEFAULT_PERSISTENT_WORKSPACE_CHANGED_PATHS_TTL_MS = 0
-const WORKSPACE_CHANGED_PATHS_CLEANUP_INTERVAL_MS = 1000
-const WORKSPACE_CHANGED_PATHS_MAX_ENTRIES = 512
-const DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS = 50_000
-const DIRECTORY_SNAPSHOT_PREFIX_INDEX_REENABLE_RATIO = 0.5
+const SESSION_CACHE_DEFAULTS = {
+  persistentWorkspaceChangeTokenTtlMs: 0,
+  persistentWorkspaceChangedPathsTtlMs: 0,
+  workspaceChangedPathsCleanupIntervalMs: 1_000,
+  workspaceChangedPathsMaxEntries: 512,
+  directorySnapshotPrefixIndexMaxKeys: 50_000,
+  directorySnapshotPrefixIndexReenableRatio: 0.5,
+} as const
 
 function getDefaultPersistentWorkspaceChangeTokenTtlMs(): number {
   if (isDevelopmentEnvironment()) {
     return DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
   }
 
-  return DEFAULT_PERSISTENT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+  return SESSION_CACHE_DEFAULTS.persistentWorkspaceChangeTokenTtlMs
 }
 
 function getDefaultPersistentWorkspaceChangedPathsTtlMs(): number {
@@ -92,7 +94,7 @@ function getDefaultPersistentWorkspaceChangedPathsTtlMs(): number {
     return DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
   }
 
-  return DEFAULT_PERSISTENT_WORKSPACE_CHANGED_PATHS_TTL_MS
+  return SESSION_CACHE_DEFAULTS.persistentWorkspaceChangedPathsTtlMs
 }
 
 function collectSnapshotFamily(
@@ -301,7 +303,8 @@ class DirectorySnapshotPathIndex {
     }
 
     const rebuildThreshold = Math.floor(
-      this.#maxPrefixKeys * DIRECTORY_SNAPSHOT_PREFIX_INDEX_REENABLE_RATIO
+      this.#maxPrefixKeys *
+        SESSION_CACHE_DEFAULTS.directorySnapshotPrefixIndexReenableRatio
     )
     if (this.#snapshotPathByKey.size > rebuildThreshold) {
       return
@@ -667,8 +670,9 @@ export class Session {
           return null
         }
       },
-      changedPathsCleanupIntervalMs: WORKSPACE_CHANGED_PATHS_CLEANUP_INTERVAL_MS,
-      changedPathsMaxEntries: WORKSPACE_CHANGED_PATHS_MAX_ENTRIES,
+      changedPathsCleanupIntervalMs:
+        SESSION_CACHE_DEFAULTS.workspaceChangedPathsCleanupIntervalMs,
+      changedPathsMaxEntries: SESSION_CACHE_DEFAULTS.workspaceChangedPathsMaxEntries,
     })
 
     const persistence =
@@ -2034,7 +2038,7 @@ function resolveDirectorySnapshotPrefixIndexMaxKeys(
 
   return resolvePositiveIntegerProcessEnv(
     PROCESS_ENV_KEYS.renounDirectorySnapshotPrefixIndexMaxKeys,
-    DEFAULT_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS
+    SESSION_CACHE_DEFAULTS.directorySnapshotPrefixIndexMaxKeys
   )
 }
 
@@ -2045,8 +2049,8 @@ function resolveTargetedMissingDependencyFallback(
     return configuredValue
   }
 
-  return resolveBooleanEnv(
-    process.env[PROCESS_ENV_KEYS.renounTargetedMissingDependencyFallback],
+  return resolveBooleanProcessEnv(
+    PROCESS_ENV_KEYS.renounTargetedMissingDependencyFallback,
     true,
     { allowYesNo: true }
   )

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { PROJECT_RUNTIME_ENV_KEYS } from '../project/runtime-env.ts'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { isRenounDebugEnabled } from '../utils/env.ts'
 
 type Framework = 'next' | 'vite' | 'waku'
 
@@ -100,8 +101,10 @@ if (firstArgument === 'validate') {
 
   const isProduction = secondArgument === 'build'
 
-  if (process.env['NODE_ENV'] === undefined) {
-    process.env['NODE_ENV'] = isProduction ? 'production' : 'development'
+  if (process.env[PROCESS_ENV_KEYS.nodeEnv] === undefined) {
+    process.env[PROCESS_ENV_KEYS.nodeEnv] = isProduction
+      ? 'production'
+      : 'development'
   }
 
   getDebugLogger().info('Starting renoun CLI', () => ({
@@ -109,10 +112,8 @@ if (firstArgument === 'validate') {
       framework: firstArgument,
       command: secondArgument,
       isProduction,
-      nodeEnv: process.env['NODE_ENV'],
-      debugEnabled:
-        process.env['RENOUN_DEBUG'] !== undefined &&
-        process.env['RENOUN_DEBUG'].toLowerCase() !== 'false',
+      nodeEnv: process.env[PROCESS_ENV_KEYS.nodeEnv],
+      debugEnabled: isRenounDebugEnabled(),
     },
   }))
 
@@ -152,8 +153,8 @@ if (firstArgument === 'validate') {
           shell: false,
           env: {
             ...process.env,
-            [PROJECT_RUNTIME_ENV_KEYS.serverPort]: port,
-            [PROJECT_RUNTIME_ENV_KEYS.serverId]: id,
+            [PROCESS_ENV_KEYS.renounServerPort]: port,
+            [PROCESS_ENV_KEYS.renounServerId]: id,
           },
         })
 
@@ -305,16 +306,14 @@ if (firstArgument === 'validate') {
       import('./prewarm-runner.ts'),
     ])
 
-  if (process.env['NODE_ENV'] === undefined) {
-    process.env['NODE_ENV'] = 'development'
+  if (process.env[PROCESS_ENV_KEYS.nodeEnv] === undefined) {
+    process.env[PROCESS_ENV_KEYS.nodeEnv] = 'development'
   }
 
   getDebugLogger().info('Starting renoun watch mode', () => ({
     data: {
-      nodeEnv: process.env['NODE_ENV'],
-      debugEnabled:
-        process.env['RENOUN_DEBUG'] !== undefined &&
-        process.env['RENOUN_DEBUG'].toLowerCase() !== 'false',
+      nodeEnv: process.env[PROCESS_ENV_KEYS.nodeEnv],
+      debugEnabled: isRenounDebugEnabled(),
     },
   }))
 

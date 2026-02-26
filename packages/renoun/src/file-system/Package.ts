@@ -1,6 +1,8 @@
 import { Minimatch } from 'minimatch'
 import { createSlug } from '@renoun/mdx/utils'
 
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { parseBooleanProcessEnv } from '../utils/env.ts'
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
 import {
   baseName,
@@ -1932,7 +1934,9 @@ export class Package<
 
   #readPackageJson(): PackageJson {
     const packageJsonPath = joinPaths(this.#packagePath, 'package.json')
-    if (process.env['RENOUN_DEBUG_PACKAGE_PATH'] === '1') {
+    if (
+      parseBooleanProcessEnv(PROCESS_ENV_KEYS.renounDebugPackagePath) === true
+    ) {
       // eslint-disable-next-line no-console
       console.log('[renoun-debug-package]', {
         packagePath: this.#packagePath,

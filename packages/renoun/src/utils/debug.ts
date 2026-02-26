@@ -1,4 +1,5 @@
 import { getRootDirectory } from './get-root-directory.ts'
+import { PROCESS_ENV_KEYS } from './env-keys.ts'
 
 export type DebugLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace'
 
@@ -390,7 +391,8 @@ class DebugLogger {
   #maxObjectKeys: number
 
   constructor() {
-    const envValue = String(process.env['RENOUN_DEBUG'] || '').toLowerCase()
+    const envValue = String(process.env[PROCESS_ENV_KEYS.renounDebug] || '')
+      .toLowerCase()
     const validLevels: DebugLevel[] = [
       'error',
       'warn',

@@ -1,6 +1,10 @@
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
-import { parseBooleanEnv } from '../../utils/env.ts'
+import { PROCESS_ENV_KEYS } from '../../utils/env-keys.ts'
+import {
+  parseBooleanProcessEnv,
+  readNonEmptyProcessEnv,
+} from '../../utils/env.ts'
 
 type ProfileStats = {
   count: number
@@ -80,12 +84,12 @@ function createBuildProfileConfig(): BuildProfileConfig {
   const enabled =
     typeof rpcBuildProfileConfigOverrides.enabled === 'boolean'
       ? rpcBuildProfileConfigOverrides.enabled
-      : parseBooleanEnv(process.env['RENOUN_BUILD_PROFILE']) === true
+      : parseBooleanProcessEnv(PROCESS_ENV_KEYS.renounBuildProfile) === true
   const workspaceRoot =
     rpcBuildProfileConfigOverrides.workspaceRoot ?? process.cwd()
   const profileFile =
     rpcBuildProfileConfigOverrides.outputPath === undefined
-      ? process.env['RENOUN_BUILD_PROFILE_FILE']
+      ? readNonEmptyProcessEnv(PROCESS_ENV_KEYS.renounBuildProfileFile)
       : rpcBuildProfileConfigOverrides.outputPath
 
   return {
