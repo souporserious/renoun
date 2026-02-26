@@ -791,7 +791,9 @@ export async function createSourceFile(
       sourceText,
       projectOptions,
     })
-    invalidateClientRpcStateByPath(filePath)
+    // Source updates can affect dependency-aware RPC results for many files.
+    // Clear client-side RPC state so stale dependent entries are not reused.
+    invalidateAllClientRpcState()
     return
   }
 
