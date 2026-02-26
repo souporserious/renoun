@@ -111,6 +111,15 @@ describe('Repository', () => {
     })
   })
 
+  describe('getFile', () => {
+    test('preserves nested workspace paths', () => {
+      const repo = new Repository('.')
+      const file = repo.getFile('packages/renoun/package.json')
+
+      expect(file.workspacePath).toBe('packages/renoun/package.json')
+    })
+  })
+
   describe('getFileUrl', () => {
     describe('GitHub host', () => {
       const repo = new Repository('owner/repo')

@@ -898,7 +898,7 @@ export class Repository {
     return new File({
       path,
       repository: this,
-      directory: this.getDirectory(directoryName(path)),
+      directory: this.getDirectory(),
     })
   }
 
