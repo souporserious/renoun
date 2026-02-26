@@ -6,6 +6,7 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.ts'
+import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import { parseBooleanEnv } from '../utils/env.ts'
 import type {
   ModuleExport,
@@ -282,19 +283,48 @@ function trimClientRpcCache(): void {
   }
 }
 
-function invalidateClientRpcStateByPath(path: string): void {
-  const normalizedPath = toComparablePath(path)
+function normalizeInvalidationPaths(paths: Iterable<string>): string[] {
+  const comparablePaths: string[] = []
+  for (const path of paths) {
+    comparablePaths.push(toComparablePath(path))
+  }
+
+  return collapseInvalidationPaths(comparablePaths)
+}
+
+function hasPathDependencyIntersectionWithAnyPath(
+  dependencyPaths: readonly string[],
+  normalizedPaths: readonly string[]
+): boolean {
+  return normalizedPaths.some((normalizedPath) =>
+    hasPathDependencyIntersection(dependencyPaths, normalizedPath)
+  )
+}
+
+function invalidateClientRpcStateByNormalizedPaths(
+  normalizedPaths: readonly string[]
+): void {
   let invalidated = false
 
   for (const [cacheKey, entry] of clientRpcCacheByKey) {
-    if (hasPathDependencyIntersection(entry.dependencyPaths, normalizedPath)) {
+    if (
+      hasPathDependencyIntersectionWithAnyPath(
+        entry.dependencyPaths,
+        normalizedPaths
+      )
+    ) {
       clientRpcCacheByKey.delete(cacheKey)
       invalidated = true
     }
   }
 
   for (const [cacheKey, entry] of clientRpcInFlightByKey) {
-    if (hasPathDependencyIntersection(entry.dependencyPaths, normalizedPath)) {
+    if (
+      hasPathDependencyIntersectionWithAnyPath(
+        entry.dependencyPaths,
+        normalizedPaths
+      )
+    ) {
       clientRpcInFlightByKey.delete(cacheKey)
       invalidated = true
     }
@@ -312,9 +342,14 @@ function invalidateAllClientRpcState(): void {
 }
 
 function applyRefreshInvalidations(paths: string[]): void {
-  invalidateAllClientRpcState()
-  invalidateRuntimeAnalysisCachePaths(paths)
-  invalidateProjectCachesByPaths(paths)
+  const normalizedPaths = normalizeInvalidationPaths(paths)
+  if (normalizedPaths.length === 0) {
+    return
+  }
+
+  invalidateClientRpcStateByNormalizedPaths(normalizedPaths)
+  invalidateRuntimeAnalysisCachePaths(normalizedPaths)
+  invalidateProjectCachesByPaths(normalizedPaths)
 }
 
 async function callClientMethod<

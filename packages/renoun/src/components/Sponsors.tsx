@@ -30,6 +30,7 @@ interface PublicSponsor {
 
 interface FetchSponsorsOptions {
   amount: number
+  userName?: string
 }
 
 const AVATAR_MIN = 64
@@ -500,12 +501,14 @@ async function fetchSponsorsAndTierLinks(
     normalizedManualTierIds.length > 0
       ? new Map<string, string>(normalizedManualTierIds)
       : undefined
+  const normalizedUserName = options.userName?.trim().toLowerCase() || undefined
 
   const normalizedOptions = {
     ...options,
     amount: normalizedAmount,
     avatarSizes: normalizedAvatarSizes,
     manualTierIds: normalizedManualTierMap,
+    userName: normalizedUserName,
   }
 
   const ttlMs = resolveSponsorsCacheTtlMs()
@@ -529,6 +532,7 @@ async function fetchSponsorsAndTierLinks(
     avatarSizes: normalizedAvatarSizes,
     manualTierIds: normalizedManualTierIds,
     token: tokenCacheKey,
+    userName: normalizedUserName,
   })
 
   return cacheSession.cache.getOrCompute(
