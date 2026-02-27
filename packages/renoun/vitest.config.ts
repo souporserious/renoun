@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [mdx()],
   test: {
     testTimeout: 15_000,
+    include: ['src/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
     watch: {
       ignore: [
         '**/tmp/**',

@@ -650,7 +650,8 @@ export function invalidateProjectFileCache(
     : undefined
 
   if (normalizedFilePath && !cacheName) {
-    invalidateProjectCacheRuntimePaths(runtime, [filePath])
+    // Preserve the caller path here, invalidateProjectCacheRuntimePaths normalizes once.
+    invalidateProjectCacheRuntimePaths(runtime, [filePath!])
     return
   }
 
