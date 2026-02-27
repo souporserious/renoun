@@ -5682,12 +5682,16 @@ export type Metadata = Value`,
         dbPath,
         maxRows: 10,
         maxAgeMs: 1_000,
+        preparedStatementCacheMax: 64,
+        structuredIdCacheEnabled: true,
       })
       await first.load('test:options:warmup')
       const second = getCacheStorePersistence({
         dbPath,
         maxRows: 10,
         maxAgeMs: 1_000,
+        preparedStatementCacheMax: 64,
+        structuredIdCacheEnabled: true,
       })
 
       expect(second).toBe(first)
@@ -5697,6 +5701,28 @@ export type Metadata = Value`,
           dbPath,
           maxRows: 20,
           maxAgeMs: 1_000,
+          preparedStatementCacheMax: 64,
+          structuredIdCacheEnabled: true,
+        })
+      ).toThrow(/already initialized with different options/)
+
+      expect(() =>
+        getCacheStorePersistence({
+          dbPath,
+          maxRows: 10,
+          maxAgeMs: 1_000,
+          preparedStatementCacheMax: 32,
+          structuredIdCacheEnabled: true,
+        })
+      ).toThrow(/already initialized with different options/)
+
+      expect(() =>
+        getCacheStorePersistence({
+          dbPath,
+          maxRows: 10,
+          maxAgeMs: 1_000,
+          preparedStatementCacheMax: 64,
+          structuredIdCacheEnabled: false,
         })
       ).toThrow(/already initialized with different options/)
     } finally {

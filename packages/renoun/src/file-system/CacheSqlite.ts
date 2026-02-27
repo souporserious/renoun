@@ -93,6 +93,8 @@ interface ResolvedSqlitePersistenceOptions {
   schemaVersion: number
   maxAgeMs: number
   maxRows: number
+  preparedStatementCacheMax?: number
+  structuredIdCacheEnabled?: boolean
   debugSessionRoot?: boolean
   debugCachePersistence?: boolean
 }
@@ -210,6 +212,8 @@ export function getCacheStorePersistence(
     schemaVersion: resolvedOptions.schemaVersion,
     maxAgeMs: resolvedOptions.maxAgeMs,
     maxRows: resolvedOptions.maxRows,
+    preparedStatementCacheMax: resolvedOptions.preparedStatementCacheMax,
+    structuredIdCacheEnabled: resolvedOptions.structuredIdCacheEnabled,
     debugSessionRoot: resolvedOptions.debugSessionRoot,
     debugCachePersistence: resolvedOptions.debugCachePersistence,
   })
@@ -3421,6 +3425,8 @@ function resolveSqlitePersistenceOptions(
     schemaVersion: options.schemaVersion ?? CACHE_SCHEMA_VERSION,
     maxAgeMs: options.maxAgeMs ?? SQLITE_DEFAULTS.cacheMaxAgeMs,
     maxRows: options.maxRows ?? SQLITE_DEFAULTS.maxRows,
+    preparedStatementCacheMax: options.preparedStatementCacheMax,
+    structuredIdCacheEnabled: options.structuredIdCacheEnabled,
     debugSessionRoot: options.debugSessionRoot === true,
     debugCachePersistence: options.debugCachePersistence === true,
   }
@@ -3433,6 +3439,8 @@ function areSqlitePersistenceOptionsEqual(
   return (
     first.schemaVersion === second.schemaVersion &&
     first.maxAgeMs === second.maxAgeMs &&
-    first.maxRows === second.maxRows
+    first.maxRows === second.maxRows &&
+    first.preparedStatementCacheMax === second.preparedStatementCacheMax &&
+    first.structuredIdCacheEnabled === second.structuredIdCacheEnabled
   )
 }

@@ -140,6 +140,163 @@ describe('project client transport guards', () => {
     expect(second).toMatchObject({ resolveTypeCallCount: 2 })
   })
 
+  test('refresh notifications invalidate getFileExportText cache when includeDependencies is enabled', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let getFileExportTextCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getFileExportText') {
+        getFileExportTextCallCount += 1
+        return `export-text-${getFileExportTextCallCount}`
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return { nextCursor: 0, fullRefresh: false }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const projectOptions = {
+      tsConfigFilePath: '/project/tsconfig.json',
+    }
+    const first = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+    const second = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+
+    expect(first).toBe('export-text-1')
+    expect(second).toBe('export-text-1')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportText')
+    ).toHaveLength(1)
+
+    const notificationListener = listeners.get('notification')
+    expect(notificationListener).toBeTypeOf('function')
+    notificationListener!({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/dep.ts'],
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const third = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+
+    expect(third).toBe('export-text-2')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportText')
+    ).toHaveLength(2)
+  })
+
+  test('refresh notifications invalidate transpileSourceFile cache conservatively', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let transpileCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'transpileSourceFile') {
+        transpileCallCount += 1
+        return `transpiled-${transpileCallCount}`
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return { nextCursor: 0, fullRefresh: false }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const projectOptions = {
+      tsConfigFilePath: '/project/tsconfig.json',
+    }
+    const first = await module.transpileSourceFile(
+      '/project/src/a.ts',
+      projectOptions
+    )
+    const second = await module.transpileSourceFile(
+      '/project/src/a.ts',
+      projectOptions
+    )
+
+    expect(first).toBe('transpiled-1')
+    expect(second).toBe('transpiled-1')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'transpileSourceFile')
+    ).toHaveLength(1)
+
+    const notificationListener = listeners.get('notification')
+    expect(notificationListener).toBeTypeOf('function')
+    notificationListener!({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/dep.ts'],
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const third = await module.transpileSourceFile(
+      '/project/src/a.ts',
+      projectOptions
+    )
+
+    expect(third).toBe('transpiled-2')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'transpileSourceFile')
+    ).toHaveLength(2)
+  })
+
   test('falls back to default RPC cache TTL when env value is invalid', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'

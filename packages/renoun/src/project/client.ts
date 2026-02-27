@@ -102,6 +102,9 @@ const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
   'transpileSourceFile',
 ])
 
+const CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY =
+  new Set<ClientCachedRpcMethod>(['transpileSourceFile'])
+
 const CLIENT_RPC_CACHE_MAX_ENTRIES = 500
 const DEFAULT_CLIENT_RPC_CACHE_TTL_MS = 1_000
 const REFRESH_RESYNC_MAX_ATTEMPTS = 3
@@ -281,6 +284,7 @@ function collectClientRpcDependencyPaths(
   const candidate = params as {
     filePath?: unknown
     sourcePath?: unknown
+    includeDependencies?: unknown
     projectOptions?: {
       tsConfigFilePath?: unknown
     }
@@ -306,6 +310,15 @@ function collectClientRpcDependencyPaths(
     rootCandidates
   )) {
     dependencyPaths.add(tsConfigFilePath)
+  }
+
+  const shouldAddConservativeRootDependency =
+    CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY.has(method) ||
+    (method === 'getFileExportText' && candidate.includeDependencies === true)
+  if (shouldAddConservativeRootDependency) {
+    for (const rootCandidate of rootCandidates) {
+      dependencyPaths.add(toComparablePath(rootCandidate))
+    }
   }
 
   return Array.from(dependencyPaths)
