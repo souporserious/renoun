@@ -4,6 +4,7 @@ import { createSlug } from '@renoun/mdx/utils'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { parseBooleanProcessEnv } from '../utils/env.ts'
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import {
   baseName,
   directoryName,
@@ -1897,7 +1898,9 @@ export class Package<
       if (modifiedMs !== undefined) {
         return `mtime:${String(modifiedMs)}`
       }
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('file-system/package', error)
+    }
 
     if (!safeFileExistsSync(this.#fileSystem, path)) {
       return 'missing'

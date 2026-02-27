@@ -1,4 +1,5 @@
 import { getDebugLogger } from './debug.ts'
+import { reportBestEffortError } from './best-effort.ts'
 import { getContext } from './operation-context.ts'
 
 export type TelemetryTags = Record<string, string>
@@ -178,7 +179,9 @@ function reportTelemetryFailure(
       console.warn(
         `[renoun] Telemetry sink failed during ${operation}. Continuing without failing the caller: ${errorMessage}`
       )
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('utils/telemetry', error)
+    }
   }
 
   if (!getDebugLogger().isEnabled('debug')) {
@@ -193,7 +196,9 @@ function reportTelemetryFailure(
         error: errorMessage,
       },
     }))
-  } catch {}
+  } catch (error) {
+    reportBestEffortError('utils/telemetry', error)
+  }
 }
 
 function isTelemetryEnabled(

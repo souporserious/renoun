@@ -13,6 +13,7 @@ import {
 } from '../utils/stable-serialization.ts'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import {
@@ -634,7 +635,9 @@ function resolveModuleSpecifierSourceFilePathUncached(
       const resolvedSourceFile = project.getSourceFile(resolvedFileName)
       return resolvedSourceFile?.getFilePath() ?? resolvedFileName
     }
-  } catch {}
+  } catch (error) {
+    reportBestEffortError('project/cached-analysis', error)
+  }
 
   return undefined
 }
@@ -851,7 +854,9 @@ function getOrAddProjectSourceFile(
     if (addedSourceFile) {
       return addedSourceFile
     }
-  } catch {}
+  } catch (error) {
+    reportBestEffortError('project/cached-analysis', error)
+  }
 
   return project.getSourceFile(filePath)
 }
@@ -1714,7 +1719,9 @@ async function recordFileDependencyIfPossible(
   try {
     const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
     await context.recordFileDep(absolutePath)
-  } catch {}
+  } catch (error) {
+    reportBestEffortError('project/cached-analysis', error)
+  }
 }
 
 async function recordDirectoryDependencyIfPossible(
@@ -1729,7 +1736,9 @@ async function recordDirectoryDependencyIfPossible(
   try {
     const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
     await context.recordDirectoryDep(absolutePath)
-  } catch {}
+  } catch (error) {
+    reportBestEffortError('project/cached-analysis', error)
+  }
 }
 
 async function resolveProjectConfigDependencyVersion(options: {
@@ -1759,7 +1768,9 @@ async function resolveProjectConfigDependencyVersion(options: {
       const fileContents =
         await runtimeCacheStore.snapshot.readFile(normalizedConfigPath)
       version = `${HASH_STRING_ALGORITHM}:${hashString(fileContents)}:${fileContents.length}`
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('project/cached-analysis', error)
+    }
 
     projectConfigDependencyVersionByKey.set(dependencyKey, {
       contentId,
@@ -1892,7 +1903,9 @@ function getCacheDepKeyKindForProfile(depKey: string): string {
     let constName = encodedConstName
     try {
       constName = decodeURIComponent(encodedConstName)
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('project/cached-analysis', error)
+    }
 
     if (
       constName === RUNTIME_ANALYSIS_CACHE_CONFIG.projectCompilerOptionsDependency ||

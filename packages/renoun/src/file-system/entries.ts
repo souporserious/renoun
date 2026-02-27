@@ -14,6 +14,7 @@ import {
 } from '@renoun/mdx/utils'
 
 import { getFileExportMetadata } from '../project/client.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import {
   isDevelopmentEnvironment,
@@ -2261,7 +2262,9 @@ export class ModuleExport<Value> {
       if (staticValue !== undefined) {
         return staticValue as Value
       }
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('file-system/entries', error)
+    }
 
     if (this.#loader !== undefined) {
       return this.getRuntimeValue()
@@ -2964,7 +2967,9 @@ export class MDXModuleExport<Value> {
       if (staticValue !== undefined) {
         return staticValue as Value
       }
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('file-system/entries', error)
+    }
 
     return this.getRuntimeValue()
   }
@@ -4576,7 +4581,9 @@ async function getDirectoryEntryListingSignature(
     if (contentId && contentId !== 'missing') {
       return `content:${contentId}`
     }
-  } catch {}
+  } catch (error) {
+    reportBestEffortError('file-system/entries', error)
+  }
 
   if (isStrictHermeticFileSystemMode()) {
     return 'missing'
@@ -5589,7 +5596,9 @@ export class Directory<
             throw error
           }
         }
-      } catch {}
+      } catch (error) {
+        reportBestEffortError('file-system/entries', error)
+      }
 
       if (sameNamedSibling) {
         return sameNamedSibling
@@ -6883,7 +6892,9 @@ export class Directory<
             const fileSystem = this.getFileSystem()
             try {
               byteLength = fileSystem.getFileByteLengthSync(restoredPath)
-            } catch {}
+            } catch (error) {
+              reportBestEffortError('file-system/entries', error)
+            }
           }
           return this.#createDirectorySnapshotFile(
             parentDirectory,
@@ -7400,7 +7411,9 @@ export class Directory<
       await recordFileDependencySignature(
         joinPaths(workspaceRootPath, '.gitignore')
       )
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('file-system/entries', error)
+    }
 
     const fileMetadata: FileEntryMetadata<LoaderTypes>[] = []
     const finalMetadata: DirectorySnapshotMetadataEntry<LoaderTypes>[] = []
@@ -7478,7 +7491,9 @@ export class Directory<
                 ),
                 signature
               )
-            } catch {}
+            } catch (error) {
+              reportBestEffortError('file-system/entries', error)
+            }
           }
 
           const childSnapshot = await this.#getDirectorySnapshot(
@@ -7636,7 +7651,9 @@ export class Directory<
             ? 'missing'
             : String(directoryModifiedMs)
         )
-      } catch {}
+      } catch (error) {
+        reportBestEffortError('file-system/entries', error)
+      }
     }
 
     let shouldIncludeSelf = false

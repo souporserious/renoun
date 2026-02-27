@@ -10,6 +10,7 @@ import {
   normalizePathKey,
   normalizeSlashes,
 } from '../utils/path.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { FileReadableStream, FileSystem } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
@@ -416,7 +417,9 @@ export class FileSystemSnapshot implements Snapshot {
             id: `sha1:${hash}`,
             strategy: 'file-content',
           }
-        } catch {}
+        } catch (error) {
+          reportBestEffortError('file-system/snapshot', error)
+        }
       }
 
       if (expectedFile) {
@@ -445,7 +448,9 @@ export class FileSystemSnapshot implements Snapshot {
           id: `dir:${listingHash.digest('hex')}`,
           strategy: 'directory-content',
         }
-      } catch {}
+      } catch (error) {
+        reportBestEffortError('file-system/snapshot', error)
+      }
     }
 
     return {
@@ -567,7 +572,9 @@ export class FileSystemSnapshot implements Snapshot {
     for (const listener of this.#invalidateListeners) {
       try {
         listener(path)
-      } catch {}
+      } catch (error) {
+        reportBestEffortError('file-system/snapshot', error)
+      }
     }
   }
 

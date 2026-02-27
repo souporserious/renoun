@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path'
 import { deserialize, serialize } from 'node:v8'
 
 import { delay } from '../utils/delay.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import {
   resolveBooleanProcessEnv,
   resolvePositiveIntegerProcessEnv,
@@ -571,7 +572,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       await this.#runWithBusyRetries(() => {
         this.#cleanupExpiredComputeSlots(now)
       })
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('file-system/cache-sqlite', error)
+    }
 
     const loadedRowData = (await this.#runWithBusyRetries(() => {
       this.#db.exec('BEGIN')
@@ -632,7 +635,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         if (transactionStarted) {
           try {
             this.#db.exec('ROLLBACK')
-          } catch {}
+          } catch (error) {
+            reportBestEffortError('file-system/cache-sqlite', error)
+          }
         }
         throw error
       }
@@ -768,7 +773,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     if (!options.skipLastAccessedUpdate) {
       try {
         await this.#touchLastAccessed(nodeKey)
-      } catch {}
+      } catch (error) {
+        reportBestEffortError('file-system/cache-sqlite', error)
+      }
     }
 
     const loadedEntry: CacheEntry & { revision: number } = {
@@ -858,13 +865,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#db.exec('COMMIT')
         try {
           await this.#maybePruneAfterWrite(now)
-        } catch {}
+        } catch (error) {
+          reportBestEffortError('file-system/cache-sqlite', error)
+        }
         return Number.isFinite(revision) ? revision : 0
       } catch (error) {
         if (transactionStarted) {
           try {
             this.#db.exec('ROLLBACK')
-          } catch {}
+          } catch (error) {
+            reportBestEffortError('file-system/cache-sqlite', error)
+          }
         }
 
         const busyOrLocked = isSqliteBusyOrLockedError(error)
@@ -1030,7 +1041,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#db.exec('COMMIT')
         try {
           await this.#maybePruneAfterWrite(now)
-        } catch {}
+        } catch (error) {
+          reportBestEffortError('file-system/cache-sqlite', error)
+        }
         return {
           applied: true,
           revision: Number.isFinite(revision) ? revision : 0,
@@ -1039,7 +1052,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         if (transactionStarted) {
           try {
             this.#db.exec('ROLLBACK')
-          } catch {}
+          } catch (error) {
+            reportBestEffortError('file-system/cache-sqlite', error)
+          }
         }
 
         const busyOrLocked = isSqliteBusyOrLockedError(error)
@@ -1085,7 +1100,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       } catch (error) {
         try {
           this.#db.exec('ROLLBACK')
-        } catch {}
+        } catch (error) {
+          reportBestEffortError('file-system/cache-sqlite', error)
+        }
         throw error
       }
     })
@@ -1118,7 +1135,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       } catch (error) {
         try {
           this.#db.exec('ROLLBACK')
-        } catch {}
+        } catch (error) {
+          reportBestEffortError('file-system/cache-sqlite', error)
+        }
         throw error
       }
     })
@@ -1223,7 +1242,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         } catch (error) {
           try {
             this.#db.exec('ROLLBACK')
-          } catch {}
+          } catch (error) {
+            reportBestEffortError('file-system/cache-sqlite', error)
+          }
           throw error
         }
       })
@@ -1750,7 +1771,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         if (database && typeof database.close === 'function') {
           try {
             database.close()
-          } catch {}
+          } catch (error) {
+            reportBestEffortError('file-system/cache-sqlite', error)
+          }
         }
 
         if (
@@ -2662,7 +2685,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     } catch (error) {
       try {
         this.#db.exec('ROLLBACK')
-      } catch {}
+      } catch (error) {
+        reportBestEffortError('file-system/cache-sqlite', error)
+      }
       throw error
     }
 
@@ -2708,7 +2733,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         } catch (error) {
           try {
             this.#db.exec('ROLLBACK')
-          } catch {}
+          } catch (error) {
+            reportBestEffortError('file-system/cache-sqlite', error)
+          }
           throw error
         }
       } catch (error) {
@@ -2869,7 +2896,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     ) {
       try {
         preparedStatement.finalize()
-      } catch {}
+      } catch (error) {
+        reportBestEffortError('file-system/cache-sqlite', error)
+      }
     }
   }
 

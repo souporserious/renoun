@@ -2,6 +2,7 @@ import { Minimatch } from 'minimatch'
 import { createSlug } from '@renoun/mdx/utils'
 
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import {
@@ -369,7 +370,9 @@ export class Workspace {
             if (packageJson?.name) {
               workspaceName = packageJson.name
             }
-          } catch {}
+          } catch (error) {
+            reportBestEffortError('file-system/workspace', error)
+          }
         }
 
         const workspaceSlug = createSlug(workspaceName, 'kebab')
@@ -442,7 +445,9 @@ export class Workspace {
       if (modifiedMs !== undefined) {
         return `mtime:${String(modifiedMs)}`
       }
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('file-system/workspace', error)
+    }
 
     if (!safeFileExistsSync(this.#fileSystem, path)) {
       return 'missing'
@@ -462,7 +467,9 @@ export class Workspace {
       if (modifiedMs !== undefined) {
         return `mtime:${String(modifiedMs)}`
       }
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('file-system/workspace', error)
+    }
 
     if (!safeFileExistsSync(this.#fileSystem, path)) {
       return 'missing'

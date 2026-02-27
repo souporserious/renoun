@@ -8,6 +8,7 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.ts'
 import type { ConfigurationOptions } from '../components/Config/types.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import {
   isDevelopmentEnvironment,
@@ -628,7 +629,9 @@ export async function createServer(options?: CreateServerOptions) {
 function closeWatcher(watcher: FSWatcher): void {
   try {
     watcher.close()
-  } catch {}
+  } catch (error) {
+    reportBestEffortError('project/server', error)
+  }
 }
 
 function shouldEmitRefreshNotifications(

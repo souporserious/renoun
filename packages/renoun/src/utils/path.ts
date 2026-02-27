@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 
 import { getRootDirectory } from './get-root-directory.ts'
+import { reportBestEffortError } from './best-effort.ts'
 
 export type PathLike = string | URL
 
@@ -17,7 +18,9 @@ export function pathLikeToString(path: PathLike): string {
   if (typeof path === 'string' && path.startsWith('file:')) {
     try {
       return fileURLToPath(new URL(path))
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('utils/path', error)
+    }
   }
 
   return path

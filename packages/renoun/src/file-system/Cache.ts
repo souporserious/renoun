@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { delay } from '../utils/delay.ts'
 import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
 import { getDebugLogger } from '../utils/debug.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import { raceAbort } from '../utils/concurrency.ts'
 import { getContext, throwIfAborted } from '../utils/operation-context.ts'
 import { hashString } from '../utils/stable-serialization.ts'
@@ -705,7 +706,9 @@ export class CacheStore {
         if (unsubscribe) {
           try {
             unsubscribe()
-          } catch {}
+          } catch (error) {
+            reportBestEffortError('file-system/cache', error)
+          }
         }
       }
     }
@@ -1638,7 +1641,9 @@ export class CacheStore {
           if (this.#disposed) {
             try {
               await this.#clearPersistedCacheEntry(nodeKey)
-            } catch {}
+            } catch (error) {
+              reportBestEffortError('file-system/cache', error)
+            }
           }
         }
 
@@ -1749,7 +1754,9 @@ export class CacheStore {
 
     try {
       await persistence.refreshComputeSlot(nodeKey, owner, slotTtlMs)
-    } catch {}
+    } catch (error) {
+      reportBestEffortError('file-system/cache', error)
+    }
   }
 
   async #releaseComputeSlot(nodeKey: string, owner: string): Promise<void> {
