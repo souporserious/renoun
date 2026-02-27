@@ -204,20 +204,20 @@ describe('runAppCommand integration', () => {
       const exitCode = await exitPromise
       expect(exitCode).toBe(0)
 
+      const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
+
       expect(createServerMock).toHaveBeenCalledTimes(1)
       await waitForAssertion(() => {
         expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
       })
       expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
         projectOptions: {
-          tsConfigFilePath: join(projectRoot, 'tsconfig.json'),
+          tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
         },
       })
       expect(getPortMock).toHaveBeenCalled()
       expect(getIdMock).toHaveBeenCalled()
       expect(serverCleanupMock).toHaveBeenCalledTimes(1)
-
-      const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
 
       expect(resolveFrameworkBinFileMock).toHaveBeenCalledWith('next', {
         fromDirectory: runtimeRoot,
