@@ -98,7 +98,10 @@ import {
   selectEntryFiles,
 } from './export-analysis.ts'
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key.ts'
-import { createGitFileSystemPersistentCacheNodeKey } from './git-cache-key.ts'
+import {
+  createGitFileSystemPersistentCacheNodeKey,
+  sanitizeCredentialedGitRemote,
+} from './git-cache-key.ts'
 import { resolveGitHubUsername, toGitHubProfileUrl } from './git-author.ts'
 import {
   spawnWithBuffer,
@@ -277,28 +280,7 @@ function resolveDefaultGitCacheDirectory(): string {
 }
 
 function sanitizeRepositorySpecifierForStorage(specifier: string): string {
-  const value = String(specifier)
-
-  try {
-    const url = new URL(value)
-    if (
-      url.protocol === 'http:' ||
-      url.protocol === 'https:' ||
-      url.protocol === 'ssh:' ||
-      url.protocol === 'git:' ||
-      url.protocol === 'file:'
-    ) {
-      url.username = ''
-      url.password = ''
-      url.search = ''
-      url.hash = ''
-      return url.toString()
-    }
-  } catch {
-    // ignore parsing errors - treat as opaque string
-  }
-
-  return value
+  return sanitizeCredentialedGitRemote(specifier)
 }
 
 /**
@@ -6146,14 +6128,27 @@ function assertSafeGitSpec(specifier: string): string {
  * (`https://`, `ssh://`, `git://`, `file://`, `git@…`) and rejects
  * control characters and leading dashes.
  */
-const SAFE_CLONE_URL_RE =
-  /^(https?:\/\/|git:\/\/|ssh:\/\/|file:\/\/|git@)[^\0\n\r]+$/
+const SAFE_CLONE_URL_RE = /^(https?:\/\/|git:\/\/|ssh:\/\/|file:\/\/)[^\0\n\r]+$/
+const SAFE_CLONE_SCP_REMOTE_RE =
+  /^git@[A-Za-z0-9.-]+:[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)+(?:\.git)?$/
 
 function assertSafeCloneUrl(url: string): string {
   const s = String(url)
-  if (!s || !SAFE_CLONE_URL_RE.test(s)) {
+  if (!s) {
     throw new Error('[GitFileSystem] Invalid clone URL')
   }
+
+  if (s.startsWith('git@')) {
+    if (!SAFE_CLONE_SCP_REMOTE_RE.test(s)) {
+      throw new Error('[GitFileSystem] Invalid clone URL')
+    }
+    return s
+  }
+
+  if (!SAFE_CLONE_URL_RE.test(s)) {
+    throw new Error('[GitFileSystem] Invalid clone URL')
+  }
+
   return s
 }
 

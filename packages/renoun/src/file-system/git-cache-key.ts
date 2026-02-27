@@ -1,6 +1,40 @@
 import { createPersistentCacheNodeKey } from './cache-key.ts'
 
-function sanitizePotentialCredentialedUrl(value: string): string {
+const SCP_REMOTE_RE = /^(?<user>[A-Za-z0-9._-]+)@(?<host>[A-Za-z0-9.-]+):(?<path>.+)$/
+
+function stripSensitiveSuffix(value: string): string {
+  const queryIndex = value.indexOf('?')
+  const hashIndex = value.indexOf('#')
+  let cutIndex = -1
+
+  if (queryIndex !== -1 && hashIndex !== -1) {
+    cutIndex = Math.min(queryIndex, hashIndex)
+  } else if (queryIndex !== -1) {
+    cutIndex = queryIndex
+  } else if (hashIndex !== -1) {
+    cutIndex = hashIndex
+  }
+
+  return cutIndex === -1 ? value : value.slice(0, cutIndex)
+}
+
+function sanitizeScpLikeRemote(value: string): string | undefined {
+  const match = SCP_REMOTE_RE.exec(value)
+  if (!match?.groups) {
+    return undefined
+  }
+
+  const user = match.groups['user']
+  const host = match.groups['host']
+  const path = stripSensitiveSuffix(match.groups['path'] ?? '')
+  if (!user || !host || !path) {
+    return undefined
+  }
+
+  return `${user}@${host}:${path}`
+}
+
+export function sanitizeCredentialedGitRemote(value: string): string {
   const input = String(value)
   if (input.length === 0) {
     return input
@@ -22,10 +56,20 @@ function sanitizePotentialCredentialedUrl(value: string): string {
       return url.toString()
     }
   } catch {
-    return input
+    const sanitizedScpRemote = sanitizeScpLikeRemote(input)
+    if (sanitizedScpRemote) {
+      return sanitizedScpRemote
+    }
+
+    return stripSensitiveSuffix(input)
   }
 
-  return input
+  const sanitizedScpRemote = sanitizeScpLikeRemote(input)
+  if (sanitizedScpRemote) {
+    return sanitizedScpRemote
+  }
+
+  return stripSensitiveSuffix(input)
 }
 
 export function createGitFileSystemPersistentCacheNodeKey(options: {
@@ -40,10 +84,10 @@ export function createGitFileSystemPersistentCacheNodeKey(options: {
     domainVersion: options.domainVersion,
     namespace: options.namespace,
     payload: {
-      repository: sanitizePotentialCredentialedUrl(options.repository),
+      repository: sanitizeCredentialedGitRemote(options.repository),
       repoRoot:
         typeof options.repoRoot === 'string'
-          ? sanitizePotentialCredentialedUrl(options.repoRoot)
+          ? sanitizeCredentialedGitRemote(options.repoRoot)
           : null,
       payload: options.payload,
     },
@@ -65,9 +109,9 @@ export function createGitVirtualPersistentCacheNodeKey(options: {
     payload: {
       host: options.host,
       apiBaseUrl: options.apiBaseUrl
-        ? sanitizePotentialCredentialedUrl(options.apiBaseUrl)
+        ? sanitizeCredentialedGitRemote(options.apiBaseUrl)
         : null,
-      repository: sanitizePotentialCredentialedUrl(options.repository),
+      repository: sanitizeCredentialedGitRemote(options.repository),
       payload: options.payload,
     },
   })

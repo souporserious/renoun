@@ -55,4 +55,48 @@ describe('git cache key sanitization', () => {
 
     expect(withSensitiveUrl).toBe(withRedactedUrl)
   })
+
+  test('redacts scp-style suffixes from cache keys', () => {
+    const withSuffix = createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: '1',
+      repository: 'git@github.com:org/repo.git?token=secret#fragment',
+      namespace: 'file-meta',
+      payload: {
+        path: 'README.md',
+      },
+    })
+
+    const withoutSuffix = createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: '1',
+      repository: 'git@github.com:org/repo.git',
+      namespace: 'file-meta',
+      payload: {
+        path: 'README.md',
+      },
+    })
+
+    expect(withSuffix).toBe(withoutSuffix)
+
+    const virtualWithSuffix = createGitVirtualPersistentCacheNodeKey({
+      domainVersion: '1',
+      host: 'gitlab',
+      repository: 'git@gitlab.com:group/repo.git?private_token=secret',
+      namespace: 'commit-history',
+      payload: {
+        ref: 'main',
+      },
+    })
+
+    const virtualWithoutSuffix = createGitVirtualPersistentCacheNodeKey({
+      domainVersion: '1',
+      host: 'gitlab',
+      repository: 'git@gitlab.com:group/repo.git',
+      namespace: 'commit-history',
+      payload: {
+        ref: 'main',
+      },
+    })
+
+    expect(virtualWithSuffix).toBe(virtualWithoutSuffix)
+  })
 })

@@ -26,7 +26,10 @@ import {
   type InMemoryFileContent,
 } from './InMemoryFileSystem.ts'
 import { GIT_VIRTUAL_HISTORY_CACHE_VERSION } from './cache-key.ts'
-import { createGitVirtualPersistentCacheNodeKey } from './git-cache-key.ts'
+import {
+  createGitVirtualPersistentCacheNodeKey,
+  sanitizeCredentialedGitRemote,
+} from './git-cache-key.ts'
 import { resolveGitHubUsername, toGitHubProfileUrl } from './git-author.ts'
 import type { Cache } from './Cache.ts'
 import type { AsyncFileSystem, WritableFileSystem } from './FileSystem.ts'
@@ -116,34 +119,6 @@ interface GitVirtualFileSystemOptions {
 
 const repoPattern = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
 const gitlabRepoPattern = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/
-
-function sanitizePotentialCredentialedUrl(value: string): string {
-  const input = String(value)
-  if (!input) {
-    return input
-  }
-
-  try {
-    const url = new URL(input)
-    if (
-      url.protocol === 'http:' ||
-      url.protocol === 'https:' ||
-      url.protocol === 'ssh:' ||
-      url.protocol === 'git:' ||
-      url.protocol === 'file:'
-    ) {
-      url.username = ''
-      url.password = ''
-      url.search = ''
-      url.hash = ''
-      return url.toString()
-    }
-  } catch {
-    return input
-  }
-
-  return input
-}
 
 const MAX_ARCHIVE_SIZE_BYTES = 100 * 1024 * 1024 // 100 MiB
 const MAX_TAR_STREAM_BYTES = 150 * 1024 * 1024 // 150 MiB
@@ -821,8 +796,8 @@ export class GitVirtualFileSystem
 
   #createBlameRangeKeyPrefix(refIdentity: string, path: string): string {
     const normalizedPath = normalizeSlashes(path)
-    const cacheApiBaseUrl = sanitizePotentialCredentialedUrl(this.#apiBaseUrl)
-    const cacheRepository = sanitizePotentialCredentialedUrl(this.#repository)
+    const cacheApiBaseUrl = sanitizeCredentialedGitRemote(this.#apiBaseUrl)
+    const cacheRepository = sanitizeCredentialedGitRemote(this.#repository)
     const namespacePrefix = [
       'blame-range',
       encodeURIComponent(this.#host),
@@ -842,8 +817,8 @@ export class GitVirtualFileSystem
     endLine: number | undefined
   ): string {
     const normalizedPath = normalizeSlashes(path)
-    const cacheApiBaseUrl = sanitizePotentialCredentialedUrl(this.#apiBaseUrl)
-    const cacheRepository = sanitizePotentialCredentialedUrl(this.#repository)
+    const cacheApiBaseUrl = sanitizeCredentialedGitRemote(this.#apiBaseUrl)
+    const cacheRepository = sanitizeCredentialedGitRemote(this.#repository)
     const namespace = [
       'blame-range',
       encodeURIComponent(this.#host),

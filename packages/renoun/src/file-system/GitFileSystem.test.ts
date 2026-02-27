@@ -2341,6 +2341,24 @@ describe('GitFileSystem', () => {
     }
   })
 
+  test('rejects scp-style clone URLs with query/hash suffixes', async ({
+    cacheDirectory,
+  }) => {
+    await expect(
+      ensureCacheClone({
+        spec: 'git@github.com:org/repo.git?token=secret#frag',
+        cacheDirectory,
+      })
+    ).rejects.toThrow('[GitFileSystem] Invalid clone URL')
+
+    expect(() =>
+      ensureCacheCloneSync({
+        spec: 'git@github.com:org/repo.git?token=secret#frag',
+        cacheDirectory,
+      })
+    ).toThrow('[GitFileSystem] Invalid clone URL')
+  })
+
   test('updates cached clone when remote ref advances', async ({
     repoRoot,
     cacheDirectory,
