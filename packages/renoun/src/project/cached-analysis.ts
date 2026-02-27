@@ -1877,9 +1877,6 @@ function getCacheContentIdKindForProfile(version: string | undefined): string {
   if (version.startsWith('mtime:')) {
     return 'mtime'
   }
-  if (version.startsWith('sha1:')) {
-    return 'sha1'
-  }
   if (version.startsWith(`${HASH_STRING_ALGORITHM}:`)) {
     return HASH_STRING_ALGORITHM
   }

@@ -3152,7 +3152,7 @@ function getPersistedFingerprint(value: unknown): string | undefined {
     return undefined
   }
 
-  if (value.length !== 40 && value.length !== HASH_STRING_HEX_LENGTH) {
+  if (value.length !== HASH_STRING_HEX_LENGTH) {
     return undefined
   }
 

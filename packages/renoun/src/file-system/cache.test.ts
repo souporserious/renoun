@@ -5799,7 +5799,7 @@ export type Metadata = Value`,
     }
   })
 
-  test('migrates frozen legacy sqlite fixture without warm-start regressions', async () => {
+  test('migrates frozen legacy sqlite fixture and drops incompatible persisted rows', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-schema-fixture-')
     )
@@ -5879,8 +5879,7 @@ export type Metadata = Value`,
       })
       const initializeDurationMs = Date.now() - initializeStartedAt
 
-      expect(loadedWarmEntry?.value).toEqual(warmValue)
-      expect(loadedWarmEntry?.persist).toBe(true)
+      expect(loadedWarmEntry).toBeUndefined()
       expect(initializeDurationMs).toBeLessThan(2_000)
 
       const verifyDb = new DatabaseSync(dbPath)
@@ -5924,9 +5923,7 @@ export type Metadata = Value`,
               last_accessed_at?: unknown
             }
           | undefined
-        expect(Number(migratedWarmRow?.persist ?? 0)).toBe(1)
-        expect(Number(migratedWarmRow?.revision ?? 0)).toBe(0)
-        expect(Number(migratedWarmRow?.last_accessed_at ?? 0)).toBeGreaterThan(0)
+        expect(migratedWarmRow).toBeUndefined()
       } finally {
         verifyDb.close()
       }
@@ -5948,8 +5945,8 @@ export type Metadata = Value`,
         }
       )
 
-      expect(warmStartValue).toEqual(warmValue)
-      expect(computeCount).toBe(0)
+      expect(warmStartValue).toEqual({ marker: 'recomputed', value: 0 })
+      expect(computeCount).toBe(1)
 
       const migrationHistogram = telemetryHistograms.find((histogram) => {
         return histogram.name === 'renoun.cache.sqlite.schema_migration_ms'
