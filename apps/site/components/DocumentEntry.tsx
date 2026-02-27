@@ -1,41 +1,8 @@
-import { cache } from 'react'
-import type { Collection, FileSystemEntry, MDXFile } from 'renoun'
+import type { Collection, MDXFile } from 'renoun'
 
 import { TableOfContents } from '@/components/TableOfContents'
+import { getDocumentEntrySiblings } from './document-entry-siblings'
 import { SiblingLink } from './SiblingLink'
-
-const getCollectionEntriesForSiblings = cache(
-  async (collection: Collection<any>): Promise<FileSystemEntry<any>[]> =>
-    collection.getEntries({ recursive: true })
-)
-
-async function getSiblings(
-  file: MDXFile<any>,
-  collection?: Collection<any>
-): Promise<[FileSystemEntry<any> | undefined, FileSystemEntry<any> | undefined]> {
-  if (!collection || process.env.NODE_ENV !== 'production') {
-    return file.getSiblings({ collection })
-  }
-
-  const isIndexOrReadme = ['index', 'readme'].includes(
-    file.baseName.toLowerCase()
-  )
-  if (isIndexOrReadme) {
-    return file.getSiblings()
-  }
-
-  const entries = await getCollectionEntriesForSiblings(collection)
-  const path = file.getPathname()
-  const index = entries.findIndex((entry) => entry.getPathname() === path)
-  if (index === -1) {
-    return file.getSiblings({ collection })
-  }
-
-  const previousEntry = index > 0 ? entries[index - 1] : undefined
-  const nextEntry = index < entries.length - 1 ? entries[index + 1] : undefined
-
-  return [previousEntry, nextEntry]
-}
 
 export async function DocumentEntry({
   file,
@@ -56,7 +23,7 @@ export async function DocumentEntry({
   const contentPromise = file.getContent()
   const sectionsPromise = file.getSections()
   const metadataPromise = file.getExportValue('metadata')
-  const siblingsPromise = getSiblings(file, collection)
+  const siblingsPromise = getDocumentEntrySiblings(file, collection)
   const updatedAtPromise = shouldRenderUpdatedAt
     ? file.getLastCommitDate()
     : Promise.resolve<Date | null>(null)
