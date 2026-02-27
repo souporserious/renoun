@@ -34,12 +34,14 @@ type ContentIdStrategy =
 export interface SnapshotContentIdOptions {
   fresh?: boolean
   kind?: 'any' | 'file'
+  strictHermetic?: boolean
 }
 
 interface CachedContentId {
   promise: Promise<string>
   strategy?: ContentIdStrategy
   id?: string
+  strictHermetic?: boolean
   updatedAt: number
 }
 
@@ -216,11 +218,14 @@ export class FileSystemSnapshot implements Snapshot {
   ): Promise<string> {
     const normalizedPath = this.#normalizeSnapshotPath(path)
     const forceFresh = options.fresh === true
+    const strictHermetic = resolveStrictHermeticMode(options.strictHermetic)
     const cached = this.#contentIds.get(normalizedPath)
     let previousMetadataId: string | undefined
 
     if (cached && !forceFresh) {
-      if (
+      if (cached.strictHermetic !== strictHermetic) {
+        this.#contentIds.delete(normalizedPath)
+      } else if (
         cached.strategy === 'metadata' ||
         cached.strategy === 'metadata-guarded'
       ) {
@@ -244,6 +249,7 @@ export class FileSystemSnapshot implements Snapshot {
       }
     } else if (
       cached &&
+      cached.strictHermetic === strictHermetic &&
       (cached.strategy === 'metadata' || cached.strategy === 'metadata-guarded')
     ) {
       previousMetadataId =
@@ -254,6 +260,7 @@ export class FileSystemSnapshot implements Snapshot {
 
     const cachedEntry: CachedContentId = {
       promise: Promise.resolve('missing'),
+      strictHermetic,
       updatedAt: Date.now(),
     }
     const promise = this.#createContentId(
@@ -261,6 +268,7 @@ export class FileSystemSnapshot implements Snapshot {
       {
         previousMetadataId,
         kind: options.kind,
+        strictHermetic,
       }
     ).then((result) => {
       cachedEntry.strategy = result.strategy
@@ -357,12 +365,13 @@ export class FileSystemSnapshot implements Snapshot {
     options: {
       previousMetadataId?: string
       kind?: 'any' | 'file'
+      strictHermetic?: boolean
     } = {}
   ): Promise<{
     id: string
     strategy: ContentIdStrategy
   }> {
-    const strictHermetic = isStrictHermeticFileSystemModeFromEnv()
+    const strictHermetic = resolveStrictHermeticMode(options.strictHermetic)
     const expectedFile = options.kind === 'file'
 
     for (const path of pathCandidates) {
@@ -578,6 +587,14 @@ export class FileSystemSnapshot implements Snapshot {
     }
   }
 
+}
+
+function resolveStrictHermeticMode(override?: boolean): boolean {
+  if (typeof override === 'boolean') {
+    return override
+  }
+
+  return isStrictHermeticFileSystemModeFromEnv()
 }
 
 function resolveWorkspaceTokenLookupCacheTtlMs(): number {

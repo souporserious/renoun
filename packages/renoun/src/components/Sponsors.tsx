@@ -2,7 +2,6 @@ import React from 'react'
 import type { Session as RenounSession } from '../file-system/Session.ts'
 import { createPersistentCacheNodeKey } from '../file-system/cache-key.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
-import { parseIntegerProcessEnv } from '../utils/env.ts'
 import { hashString } from '../utils/stable-serialization.ts'
 
 interface SponsorEntity {
@@ -33,6 +32,7 @@ interface PublicSponsor {
 interface FetchSponsorsOptions {
   amount: number
   userName?: string
+  cacheTtlMs?: number
 }
 
 const AVATAR_MIN = 64
@@ -45,6 +45,22 @@ const SPONSORS_CACHE_TTL_BUCKET_DEP = 'component-sponsors-ttl-bucket'
 const SPONSORS_CACHE_TOKEN_DEP = 'component-sponsors-token'
 const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
 let sponsorsCacheSessionPromise: Promise<RenounSession | undefined> | undefined
+
+export interface SponsorsRuntimeOptions {
+  cacheTtlMs?: number
+}
+
+const sponsorsRuntimeOptions: SponsorsRuntimeOptions = {}
+
+export function configureSponsorsRuntime(options: SponsorsRuntimeOptions): void {
+  if ('cacheTtlMs' in options) {
+    sponsorsRuntimeOptions.cacheTtlMs = options.cacheTtlMs
+  }
+}
+
+export function resetSponsorsRuntimeConfiguration(): void {
+  sponsorsRuntimeOptions.cacheTtlMs = undefined
+}
 
 function getTokenCacheKey(token: string): string {
   return hashString(token)
@@ -59,15 +75,26 @@ function createSponsorsCacheNodeKey(payload: unknown): string {
   })
 }
 
-function resolveSponsorsCacheTtlMs(): number {
-  const parsedTtl = parseIntegerProcessEnv(
-    PROCESS_ENV_KEYS.renounSponsorsCacheTtlMs
-  )
-  if (parsedTtl === undefined) {
-    return DEFAULT_SPONSORS_CACHE_TTL_MS
+function normalizeCacheTtlMs(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
   }
 
-  return Math.max(0, parsedTtl)
+  return Math.max(0, Math.floor(value))
+}
+
+function resolveSponsorsCacheTtlMs(cacheTtlMs?: number): number {
+  const configuredTtl = normalizeCacheTtlMs(cacheTtlMs)
+  if (configuredTtl !== undefined) {
+    return configuredTtl
+  }
+
+  const runtimeTtl = normalizeCacheTtlMs(sponsorsRuntimeOptions.cacheTtlMs)
+  if (runtimeTtl !== undefined) {
+    return runtimeTtl
+  }
+
+  return DEFAULT_SPONSORS_CACHE_TTL_MS
 }
 
 async function getSponsorsCacheSession(): Promise<RenounSession | undefined> {
@@ -510,7 +537,7 @@ async function fetchSponsorsAndTierLinks(
     userName: normalizedUserName,
   }
 
-  const ttlMs = resolveSponsorsCacheTtlMs()
+  const ttlMs = resolveSponsorsCacheTtlMs(options.cacheTtlMs)
   if (ttlMs <= 0) {
     return fetchSponsorsAndTierLinksUncached(normalizedOptions)
   }
@@ -682,6 +709,12 @@ export interface SponsorsProps<Data extends object> {
   /** A list of tiers with the minimum monthly amount (in USD). */
   tiers: ReadonlyArray<TierWithAmount<Data>>
 
+  /**
+   * Optional cache TTL override in milliseconds.
+   * When omitted, runtime configuration/env fallback is used.
+   */
+  cacheTtlMs?: number
+
   /** Receives tiers (with your Data) and sanitized sponsors. */
   children: (tiers: Array<TierResolved<Data>>) => React.ReactNode
 }
@@ -689,8 +722,12 @@ export interface SponsorsProps<Data extends object> {
 /** Renders a list of GitHub sponsors grouped by tier. */
 export async function Sponsors<const Data extends object>({
   tiers,
+  cacheTtlMs,
   children,
 }: SponsorsProps<Data>) {
-  const resolvedTiers = await fetchSponsorTiers<Data>(tiers, { amount: 100 })
+  const resolvedTiers = await fetchSponsorTiers<Data>(tiers, {
+    amount: 100,
+    cacheTtlMs,
+  })
   return children(resolvedTiers)
 }

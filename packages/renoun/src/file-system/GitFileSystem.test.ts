@@ -254,7 +254,7 @@ describe('GitFileSystem', () => {
       expect(untrackedToken).toBeTruthy()
       expect(firstDirtyToken).not.toBe(cleanToken)
       expect(secondDirtyToken).not.toBe(firstDirtyToken)
-      expect(dirtyChangedPaths).toBeNull()
+      expect(dirtyChangedPaths ?? []).toContain('src/index.ts')
       expect(untrackedToken).not.toBe(secondDirtyToken)
     } finally {
       store.close()

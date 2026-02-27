@@ -1,13 +1,15 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { Sponsors } from './Sponsors.tsx'
+import {
+  Sponsors,
+  resetSponsorsRuntimeConfiguration,
+} from './Sponsors.tsx'
 import { NodeFileSystem } from '../file-system/NodeFileSystem.ts'
 import { Session } from '../file-system/Session.ts'
 
 const originalFetch = globalThis.fetch
 const originalSponsorsToken = process.env['GITHUB_SPONSORS_TOKEN']
-const originalSponsorsTtl = process.env['RENOUN_SPONSORS_CACHE_TTL_MS']
 const SPONSORS_CACHE_PREFIX = 'component-sponsors:2:github-sponsors:'
 
 async function clearSponsorsCache(): Promise<void> {
@@ -96,6 +98,7 @@ describe('Sponsors cache', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    resetSponsorsRuntimeConfiguration()
 
     if (originalSponsorsToken === undefined) {
       delete process.env['GITHUB_SPONSORS_TOKEN']
@@ -103,16 +106,10 @@ describe('Sponsors cache', () => {
       process.env['GITHUB_SPONSORS_TOKEN'] = originalSponsorsToken
     }
 
-    if (originalSponsorsTtl === undefined) {
-      delete process.env['RENOUN_SPONSORS_CACHE_TTL_MS']
-    } else {
-      process.env['RENOUN_SPONSORS_CACHE_TTL_MS'] = originalSponsorsTtl
-    }
   })
 
   it('reuses cached GitHub responses for repeated identical renders', async () => {
     process.env['GITHUB_SPONSORS_TOKEN'] = `token-${Date.now()}`
-    process.env['RENOUN_SPONSORS_CACHE_TTL_MS'] = '600000'
 
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -170,7 +167,6 @@ describe('Sponsors cache', () => {
 
   it('separates persistent cache entries across different sponsor tokens', async () => {
     process.env['GITHUB_SPONSORS_TOKEN'] = 'token-one'
-    process.env['RENOUN_SPONSORS_CACHE_TTL_MS'] = '600000'
 
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -258,5 +254,41 @@ describe('Sponsors cache', () => {
         description: 'Bronze tier',
       },
     ])
+  })
+
+  it('uses cacheTtlMs prop override', async () => {
+    process.env['GITHUB_SPONSORS_TOKEN'] = `token-${Date.now()}`
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL): Promise<Response> => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url === 'https://api.github.com/graphql') {
+          return createGraphqlResponse()
+        }
+
+        if (url === 'https://github.com/sponsors/renoun') {
+          return createSponsorsPageResponse('renoun')
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`)
+      }
+    )
+
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const tiers = [{ amount: 100, title: 'Bronze' }] as const
+
+    await Sponsors({
+      tiers,
+      cacheTtlMs: 0,
+      children: () => <></>,
+    })
+    await Sponsors({
+      tiers,
+      cacheTtlMs: 0,
+      children: () => <></>,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(4)
   })
 })

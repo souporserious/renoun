@@ -2,12 +2,9 @@ import { resolve } from 'node:path'
 import { realpathSync } from 'node:fs'
 
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
-import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import {
   isDevelopmentEnvironment,
   isTestEnvironment,
-  resolveBooleanProcessEnv,
-  resolvePositiveIntegerProcessEnv,
 } from '../utils/env.ts'
 import {
   DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT,
@@ -2036,10 +2033,7 @@ function resolveDirectorySnapshotPrefixIndexMaxKeys(
     return Math.floor(configuredMaxKeys)
   }
 
-  return resolvePositiveIntegerProcessEnv(
-    PROCESS_ENV_KEYS.renounDirectorySnapshotPrefixIndexMaxKeys,
-    SESSION_CACHE_DEFAULTS.directorySnapshotPrefixIndexMaxKeys
-  )
+  return SESSION_CACHE_DEFAULTS.directorySnapshotPrefixIndexMaxKeys
 }
 
 function resolveTargetedMissingDependencyFallback(
@@ -2049,11 +2043,7 @@ function resolveTargetedMissingDependencyFallback(
     return configuredValue
   }
 
-  return resolveBooleanProcessEnv(
-    PROCESS_ENV_KEYS.renounTargetedMissingDependencyFallback,
-    true,
-    { allowYesNo: true }
-  )
+  return true
 }
 
 function resolveCanonicalPath(pathToResolve: string): string {

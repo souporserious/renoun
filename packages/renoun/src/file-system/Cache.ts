@@ -172,9 +172,14 @@ export interface CacheOptions {
   persistedVerificationAttempts?: number
   /**
    * Override for targeted missing dependency invalidation fallback behavior.
-   * When omitted, Session resolves this via environment defaults.
+   * When omitted, Session keeps targeted fallback enabled.
    */
   targetedMissingDependencyFallback?: boolean
+  /**
+   * Override strict hermetic cache mode.
+   * When omitted, file-system logic defaults to strict mode in production.
+   */
+  strictHermetic?: boolean
   /**
    * Maximum number of prefix keys tracked by the directory snapshot path index.
    * Larger values use more memory but reduce fallback scans.
@@ -310,6 +315,7 @@ export class Cache {
   readonly staleRetentionTtlMs: number
   readonly persistedVerificationAttempts: number
   readonly targetedMissingDependencyFallback?: boolean
+  readonly strictHermetic?: boolean
   readonly directorySnapshotPrefixIndexMaxKeys?: number
   readonly persistence?: CacheStorePersistence
   readonly debugCachePersistence: boolean
@@ -365,6 +371,10 @@ export class Cache {
     this.targetedMissingDependencyFallback =
       typeof options.targetedMissingDependencyFallback === 'boolean'
         ? options.targetedMissingDependencyFallback
+        : undefined
+    this.strictHermetic =
+      typeof options.strictHermetic === 'boolean'
+        ? options.strictHermetic
         : undefined
     this.directorySnapshotPrefixIndexMaxKeys =
       typeof options.directorySnapshotPrefixIndexMaxKeys === 'number' &&

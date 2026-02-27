@@ -1,11 +1,13 @@
 import { resolve } from 'node:path'
 
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test } from 'vitest'
 
 import {
+  configureProjectCacheRuntime,
   createProjectFileCache,
   invalidateProjectFileCache,
   invalidateProjectFileCachePaths,
+  resetProjectCacheRuntimeConfiguration,
 } from './cache.ts'
 import {
   disposeProjectWatchers,
@@ -15,6 +17,10 @@ import {
 import type { Project } from '../utils/ts-morph.ts'
 
 describe('project file cache', () => {
+  afterEach(() => {
+    resetProjectCacheRuntimeConfiguration()
+  })
+
   test('invalidates all file cache entries when a file path is invalidated', async () => {
     const project = {} as unknown as Project
     const filePath = '/project/src/index.ts'
@@ -247,86 +253,107 @@ describe('project file cache', () => {
     expect(fileExportsCalls).toBe(2)
   })
 
-  test('evicts least-recently-used entries when cache capacity is exceeded', async () => {
-    const previousCapacity = process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES']
-    process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES'] = '2'
+  test('uses runtime cache capacity override', async () => {
+    configureProjectCacheRuntime({ maxEntries: 2 })
 
-    try {
-      const project = {} as unknown as Project
-      let alphaCalls = 0
-      let betaCalls = 0
-      let gammaCalls = 0
+    const project = {} as unknown as Project
+    let alphaCalls = 0
+    let betaCalls = 0
+    let gammaCalls = 0
 
-      await createProjectFileCache(
-        project,
-        '/project/src/alpha.ts',
-        'alpha',
-        () => {
-          alphaCalls += 1
-          return `alpha-${alphaCalls}`
-        }
-      )
-      await createProjectFileCache(
-        project,
-        '/project/src/beta.ts',
-        'beta',
-        () => {
-          betaCalls += 1
-          return `beta-${betaCalls}`
-        }
-      )
+    await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
+      alphaCalls += 1
+      return `alpha-${alphaCalls}`
+    })
+    await createProjectFileCache(project, '/project/src/beta.ts', 'beta', () => {
+      betaCalls += 1
+      return `beta-${betaCalls}`
+    })
+    await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
+      alphaCalls += 1
+      return `alpha-${alphaCalls}`
+    })
+    await createProjectFileCache(project, '/project/src/gamma.ts', 'gamma', () => {
+      gammaCalls += 1
+      return `gamma-${gammaCalls}`
+    })
 
-      await createProjectFileCache(
-        project,
-        '/project/src/alpha.ts',
-        'alpha',
-        () => {
-          alphaCalls += 1
-          return `alpha-${alphaCalls}`
-        }
-      )
-
-      await createProjectFileCache(
-        project,
-        '/project/src/gamma.ts',
-        'gamma',
-        () => {
-          gammaCalls += 1
-          return `gamma-${gammaCalls}`
-        }
-      )
-
-      const alphaAfter = await createProjectFileCache(
-        project,
-        '/project/src/alpha.ts',
-        'alpha',
-        () => {
-          alphaCalls += 1
-          return `alpha-${alphaCalls}`
-        }
-      )
-      const betaAfter = await createProjectFileCache(
-        project,
-        '/project/src/beta.ts',
-        'beta',
-        () => {
-          betaCalls += 1
-          return `beta-${betaCalls}`
-        }
-      )
-
-      expect(alphaAfter).toBe('alpha-1')
-      expect(betaAfter).toBe('beta-2')
-      expect(alphaCalls).toBe(1)
-      expect(betaCalls).toBe(2)
-      expect(gammaCalls).toBe(1)
-    } finally {
-      if (previousCapacity === undefined) {
-        delete process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES']
-      } else {
-        process.env['RENOUN_PROJECT_CACHE_MAX_ENTRIES'] = previousCapacity
+    const alphaAfter = await createProjectFileCache(
+      project,
+      '/project/src/alpha.ts',
+      'alpha',
+      () => {
+        alphaCalls += 1
+        return `alpha-${alphaCalls}`
       }
-    }
+    )
+    const betaAfter = await createProjectFileCache(
+      project,
+      '/project/src/beta.ts',
+      'beta',
+      () => {
+        betaCalls += 1
+        return `beta-${betaCalls}`
+      }
+    )
+
+    expect(alphaAfter).toBe('alpha-1')
+    expect(betaAfter).toBe('beta-2')
+    expect(alphaCalls).toBe(1)
+    expect(betaCalls).toBe(2)
+    expect(gammaCalls).toBe(1)
+  })
+
+  test('evicts least-recently-used entries when cache capacity is exceeded', async () => {
+    configureProjectCacheRuntime({ maxEntries: 2 })
+    const project = {} as unknown as Project
+    let alphaCalls = 0
+    let betaCalls = 0
+    let gammaCalls = 0
+
+    await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
+      alphaCalls += 1
+      return `alpha-${alphaCalls}`
+    })
+    await createProjectFileCache(project, '/project/src/beta.ts', 'beta', () => {
+      betaCalls += 1
+      return `beta-${betaCalls}`
+    })
+
+    await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
+      alphaCalls += 1
+      return `alpha-${alphaCalls}`
+    })
+
+    await createProjectFileCache(project, '/project/src/gamma.ts', 'gamma', () => {
+      gammaCalls += 1
+      return `gamma-${gammaCalls}`
+    })
+
+    const alphaAfter = await createProjectFileCache(
+      project,
+      '/project/src/alpha.ts',
+      'alpha',
+      () => {
+        alphaCalls += 1
+        return `alpha-${alphaCalls}`
+      }
+    )
+    const betaAfter = await createProjectFileCache(
+      project,
+      '/project/src/beta.ts',
+      'beta',
+      () => {
+        betaCalls += 1
+        return `beta-${betaCalls}`
+      }
+    )
+
+    expect(alphaAfter).toBe('alpha-1')
+    expect(betaAfter).toBe('beta-2')
+    expect(alphaCalls).toBe(1)
+    expect(betaCalls).toBe(2)
+    expect(gammaCalls).toBe(1)
   })
 
   test('supports explicit cache-name invalidation via cacheName argument', async () => {

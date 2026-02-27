@@ -69,7 +69,8 @@ interface InvalidationPerfMetrics {
 
 interface InvalidationComparisonMode {
   name: string
-  env: Record<string, string>
+  sqlitePreparedStatementCacheMax: number
+  targetedMissingDependencyFallback: boolean
 }
 
 interface InvalidationComparisonMetrics extends InvalidationPerfMetrics {
@@ -212,6 +213,7 @@ async function createPersistedSession(options: {
   missingMetadataCount: number
   databasePath: string
   snapshotId: string
+  targetedMissingDependencyFallback: boolean
 }): Promise<Session> {
   const fixtureFiles = createFixtureFiles(options.directoryCount)
   const fileSystem = new InMemoryFileSystem(fixtureFiles)
@@ -220,6 +222,8 @@ async function createPersistedSession(options: {
     fileSystem,
     snapshot,
     new Cache({
+      targetedMissingDependencyFallback:
+        options.targetedMissingDependencyFallback,
       persistence: new SqliteCacheStorePersistence({
         dbPath: options.databasePath,
       }),
@@ -289,19 +293,28 @@ async function measurePersistedInvalidationMode(options: {
     const databasePath = join(tmpDirectory, 'fs-cache.sqlite')
 
     try {
-      const elapsedMs = await withEnvOverrides(options.mode.env, async () => {
-        const session = await createPersistedSession({
-          directoryCount: options.directoryCount,
-          missingMetadataCount: options.missingMetadataCount,
-          databasePath,
-          snapshotId: `perf-compare:${options.mode.name}:${iteration}`,
-        })
+      const elapsedMs = await withEnvOverrides(
+        {
+          RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: String(
+            options.mode.sqlitePreparedStatementCacheMax
+          ),
+        },
+        async () => {
+          const session = await createPersistedSession({
+            directoryCount: options.directoryCount,
+            missingMetadataCount: options.missingMetadataCount,
+            databasePath,
+            snapshotId: `perf-compare:${options.mode.name}:${iteration}`,
+            targetedMissingDependencyFallback:
+              options.mode.targetedMissingDependencyFallback,
+          })
 
-        const startedAt = performance.now()
-        session.invalidatePaths(options.invalidationPaths)
-        await session.waitForPendingInvalidations()
-        return performance.now() - startedAt
-      })
+          const startedAt = performance.now()
+          session.invalidatePaths(options.invalidationPaths)
+          await session.waitForPendingInvalidations()
+          return performance.now() - startedAt
+        }
+      )
 
       if (iteration >= options.warmupIterations) {
         durations.push(elapsedMs)
@@ -449,31 +462,23 @@ describe('cache invalidation optimization comparison', () => {
       const comparisonModes: InvalidationComparisonMode[] = [
         {
           name: 'baseline',
-          env: {
-            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
-            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
-          },
+          targetedMissingDependencyFallback: false,
+          sqlitePreparedStatementCacheMax: 1,
         },
         {
           name: 'prepared_statement_lru',
-          env: {
-            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'false',
-            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '128',
-          },
+          targetedMissingDependencyFallback: false,
+          sqlitePreparedStatementCacheMax: 128,
         },
         {
           name: 'targeted_missing_metadata',
-          env: {
-            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'true',
-            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '1',
-          },
+          targetedMissingDependencyFallback: true,
+          sqlitePreparedStatementCacheMax: 1,
         },
         {
           name: 'all_optimizations',
-          env: {
-            RENOUN_TARGETED_MISSING_DEP_FALLBACK: 'true',
-            RENOUN_SQLITE_PREPARED_STATEMENT_CACHE_MAX: '128',
-          },
+          targetedMissingDependencyFallback: true,
+          sqlitePreparedStatementCacheMax: 128,
         },
       ]
 

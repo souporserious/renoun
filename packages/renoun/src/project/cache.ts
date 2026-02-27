@@ -8,8 +8,6 @@ import type { FileReadableStream } from '../file-system/FileSystem.ts'
 import type { Snapshot } from '../file-system/Snapshot.ts'
 import type { DirectoryEntry } from '../file-system/types.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
-import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
-import { resolvePositiveIntegerProcessEnv } from '../utils/env.ts'
 import {
   isAbsolutePath,
   normalizePathKey,
@@ -43,6 +41,24 @@ const PROJECT_CACHE_VERSION = 'project-cache-v1'
 const PROJECT_CACHE_VERSION_DEP = 'project-cache-version'
 const PROJECT_CACHE_DEPENDENCY_SPEC_PREFIX = 'project-cache:dependency-spec:'
 const DEFAULT_PROJECT_CACHE_MAX_ENTRIES = 8_000
+
+export interface ProjectCacheRuntimeOptions {
+  maxEntries?: number
+}
+
+const projectCacheRuntimeOptions: ProjectCacheRuntimeOptions = {}
+
+export function configureProjectCacheRuntime(
+  options: ProjectCacheRuntimeOptions
+): void {
+  if ('maxEntries' in options) {
+    projectCacheRuntimeOptions.maxEntries = options.maxEntries
+  }
+}
+
+export function resetProjectCacheRuntimeConfiguration(): void {
+  projectCacheRuntimeOptions.maxEntries = undefined
+}
 
 let nextProjectCacheSnapshotId = 0
 
@@ -208,15 +224,21 @@ class ProjectCacheSnapshot implements Snapshot {
 }
 
 function getProjectCacheMaxEntries(): number {
-  return resolvePositiveIntegerProcessEnv(
-    PROCESS_ENV_KEYS.renounProjectCacheMaxEntries,
-    DEFAULT_PROJECT_CACHE_MAX_ENTRIES
-  )
+  if (
+    typeof projectCacheRuntimeOptions.maxEntries === 'number' &&
+    Number.isFinite(projectCacheRuntimeOptions.maxEntries) &&
+    projectCacheRuntimeOptions.maxEntries > 0
+  ) {
+    return Math.floor(projectCacheRuntimeOptions.maxEntries)
+  }
+
+  return DEFAULT_PROJECT_CACHE_MAX_ENTRIES
 }
 
 function getProjectCacheRuntime(project: Project): ProjectCacheRuntime {
   const existing = projectCacheRuntimeByProject.get(project)
   if (existing) {
+    existing.maxEntries = getProjectCacheMaxEntries()
     return existing
   }
 
@@ -562,6 +584,7 @@ export async function createProjectFileCache<Type>(
   await waitForRefreshingProjects()
 
   const runtime = getProjectCacheRuntime(project)
+  runtime.maxEntries = getProjectCacheMaxEntries()
   const filePath = normalizeProjectPath(fileName)
   const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
 

@@ -162,11 +162,13 @@ export async function getWorkspaceChangedPathsSinceTokenFromGit(
   })
 
   if (currentHead === previousHead) {
+    if (previousDirtyDigest === null) {
+      return null
+    }
+
     if (previousDirtyDigest === statusDigest.digest) {
       return []
     }
-
-    return null
   }
 
   for (const statusEntry of statusEntries) {

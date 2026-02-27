@@ -85,7 +85,7 @@ describe('workspace-change-git hardening', () => {
     expect(runGit).toHaveBeenCalledTimes(1)
   })
 
-  it('returns null when dirty digest drifts on the same head', async () => {
+  it('returns changed paths when dirty digest drifts on the same head', async () => {
     const headCommit = 'a'.repeat(40)
     const previousToken = createWorkspaceChangeToken({
       headCommit,
@@ -107,7 +107,7 @@ describe('workspace-change-git hardening', () => {
       if (args[0] === 'status') {
         return {
           status: 0,
-          stdout: '',
+          stdout: ' M src/index.ts\0',
           stderr: '',
         }
       }
@@ -124,7 +124,7 @@ describe('workspace-change-git hardening', () => {
       toWorkspacePath: (path) => path,
     })
 
-    expect(changedPaths).toBeNull()
+    expect(changedPaths).toEqual(['src/index.ts'])
     expect(runGit).toHaveBeenCalledTimes(2)
   })
 })

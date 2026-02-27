@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => {
     resolveCachedTypeAtLocationWithDependencies: vi.fn(),
     transpileCachedSourceFile: vi.fn(),
     invalidateProjectFileCache: vi.fn(),
+    configureProjectCacheRuntime: vi.fn(),
+    resetProjectCacheRuntimeConfiguration: vi.fn(),
   }
 })
 
@@ -52,7 +54,10 @@ vi.mock('./cached-analysis.ts', () => ({
 }))
 
 vi.mock('./cache.ts', () => ({
+  configureProjectCacheRuntime: mocks.configureProjectCacheRuntime,
   invalidateProjectFileCache: mocks.invalidateProjectFileCache,
+  resetProjectCacheRuntimeConfiguration:
+    mocks.resetProjectCacheRuntimeConfiguration,
 }))
 
 describe('project client transport guards', () => {
@@ -71,6 +76,8 @@ describe('project client transport guards', () => {
     mocks.getCachedSourceTextMetadata.mockClear()
     mocks.invalidateRuntimeAnalysisCachePaths.mockClear()
     mocks.invalidateProjectCachesByPaths.mockClear()
+    mocks.configureProjectCacheRuntime.mockClear()
+    mocks.resetProjectCacheRuntimeConfiguration.mockClear()
   })
 
   afterEach(() => {

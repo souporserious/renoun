@@ -4302,7 +4302,11 @@ function shouldEmitStrictHermeticFallbackWarningForProcessGroup(
   }
 }
 
-function isStrictHermeticFileSystemMode(): boolean {
+function resolveStrictHermeticFileSystemMode(cache?: Cache): boolean {
+  if (typeof cache?.strictHermetic === 'boolean') {
+    return cache.strictHermetic
+  }
+
   return isStrictHermeticFileSystemModeFromEnv()
 }
 
@@ -4332,8 +4336,11 @@ function warnStrictHermeticFallbackOnce(
   console.warn(`[renoun] ${message}`)
 }
 
-function shouldTrackDirectoryMtime(fileSystem: FileSystem): boolean {
-  if (isStrictHermeticFileSystemMode()) {
+function shouldTrackDirectoryMtime(
+  fileSystem: FileSystem,
+  cache?: Cache
+): boolean {
+  if (resolveStrictHermeticFileSystemMode(cache)) {
     return false
   }
 
@@ -4345,9 +4352,10 @@ function shouldTrackDirectoryMtime(fileSystem: FileSystem): boolean {
 }
 
 function shouldValidatePersistedFileDependencies(
-  fileSystem: FileSystem
+  fileSystem: FileSystem,
+  cache?: Cache
 ): boolean {
-  if (isStrictHermeticFileSystemMode()) {
+  if (resolveStrictHermeticFileSystemMode(cache)) {
     return true
   }
 
@@ -4564,6 +4572,7 @@ function isSessionSnapshotPersistable(options: {
 async function getDirectoryEntryListingSignature(
   snapshot: Snapshot,
   fileSystem: FileSystem,
+  strictHermetic: boolean,
   entry: {
     path: string
     isDirectory: boolean
@@ -4585,7 +4594,7 @@ async function getDirectoryEntryListingSignature(
     reportBestEffortError('file-system/entries', error)
   }
 
-  if (isStrictHermeticFileSystemMode()) {
+  if (strictHermetic) {
     return 'missing'
   }
 
@@ -5665,6 +5674,10 @@ export class Directory<
     return this.#session
   }
 
+  #isStrictHermeticFileSystemMode(): boolean {
+    return resolveStrictHermeticFileSystemMode(this.#cache)
+  }
+
   /** @internal */
   getSession() {
     return this.#getSession()
@@ -6400,7 +6413,7 @@ export class Directory<
     const cachedSnapshot = registerInSession
       ? session.directorySnapshots.get(snapshotKey)
       : undefined
-    const strictHermetic = isStrictHermeticFileSystemMode()
+    const strictHermetic = directory.#isStrictHermeticFileSystemMode()
     const hasStaticSnapshotOptions = isSessionSnapshotPersistable({
       filter: directory.#filter,
       filterPattern: directory.#filterPattern,
@@ -6513,7 +6526,8 @@ export class Directory<
                 validateFileDependencies:
                   registerInSession &&
                   shouldValidatePersistedFileDependencies(
-                    fileSystem
+                    fileSystem,
+                    directory.#cache
                   ),
                 validateDirectoryDependencies: true,
                 includeGitIgnoredFiles: options.includeGitIgnoredFiles,
@@ -6712,7 +6726,7 @@ export class Directory<
       options?.validateDirectoryDependencies ?? true
     const shouldValidateDirectoryDependencies =
       validateDirectoryDependencies &&
-      shouldTrackDirectoryMtime(this.getFileSystem())
+      shouldTrackDirectoryMtime(this.getFileSystem(), this.#cache)
 
     const requiresIgnoredDependencyValidation =
       options?.includeGitIgnoredFiles ?? false
@@ -6967,6 +6981,7 @@ export class Directory<
       const signature = await session.snapshot.contentId(path, {
         fresh: options.fresh === true,
         kind: 'file',
+        strictHermetic: this.#isStrictHermeticFileSystemMode(),
       })
       return signature || 'missing'
     } catch {
@@ -6982,7 +6997,7 @@ export class Directory<
     }
   ): Promise<boolean> {
     const fileSystem = this.getFileSystem()
-    const strictHermetic = isStrictHermeticFileSystemMode()
+    const strictHermetic = this.#isStrictHermeticFileSystemMode()
 
     for (const [
       pathWithType,
@@ -7084,8 +7099,11 @@ export class Directory<
     dependencies: ReadonlyMap<string, string>
   ): Promise<boolean> {
     const fileSystem = this.getFileSystem()
-    const strictHermetic = isStrictHermeticFileSystemMode()
-    const trackDirectoryMtime = shouldTrackDirectoryMtime(fileSystem)
+    const strictHermetic = this.#isStrictHermeticFileSystemMode()
+    const trackDirectoryMtime = shouldTrackDirectoryMtime(
+      fileSystem,
+      this.#cache
+    )
     for (const [pathWithType, previousSignature] of dependencies.entries()) {
       const isDirectoryListing = pathWithType.startsWith(
         DIRECTORY_DEPENDENCY_PREFIX
@@ -7170,6 +7188,7 @@ export class Directory<
     }>
   ): Promise<string> {
     const session = this.#getSession()
+    const strictHermetic = this.#isStrictHermeticFileSystemMode()
 
     const signatureEntries = await mapConcurrent(
       entries,
@@ -7180,6 +7199,7 @@ export class Directory<
         const signature = await getDirectoryEntryListingSignature(
           session.snapshot,
           fileSystem,
+          strictHermetic,
           entry
         )
 
@@ -7324,8 +7344,11 @@ export class Directory<
     shouldIncludeSelf: boolean
   }> {
     const fileSystem = directory.getFileSystem()
-    const strictHermetic = isStrictHermeticFileSystemMode()
-    const trackDirectoryMtime = shouldTrackDirectoryMtime(fileSystem)
+    const strictHermetic = this.#isStrictHermeticFileSystemMode()
+    const trackDirectoryMtime = shouldTrackDirectoryMtime(
+      fileSystem,
+      this.#cache
+    )
 
     const rawEntries = await fileSystem.readDirectory(directory.#path)
     const dependencySignatures = new Map<string, string>()

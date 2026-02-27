@@ -51,4 +51,10 @@ export {
   type NavigationComponents,
 } from './Navigation.ts'
 export { Script } from './Script.ts'
-export { Sponsors } from './Sponsors.ts'
+export {
+  Sponsors,
+  configureSponsorsRuntime,
+  resetSponsorsRuntimeConfiguration,
+  type SponsorsProps,
+  type SponsorsRuntimeOptions,
+} from './Sponsors.ts'

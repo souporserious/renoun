@@ -2184,53 +2184,44 @@ updated content`
   })
 
   test('Session.invalidatePaths preserves correctness when prefix index is capped', () => {
-    const previousPrefixIndexCap =
-      process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS']
-    process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS'] = '1'
+    const fileSystem = new InMemoryFileSystem({})
+    const cache = new Cache({
+      directorySnapshotPrefixIndexMaxKeys: 1,
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'session-prefix-index-cap'),
+      cache
+    )
 
-    try {
-      const fileSystem = new InMemoryFileSystem({})
-      const session = Session.for(
-        fileSystem,
-        new FileSystemSnapshot(fileSystem, 'session-prefix-index-cap')
-      )
+    const componentsKey = session.createDirectorySnapshotKey({
+      directoryPath: '/src/components',
+      mask: 1,
+      filterSignature: 'all',
+      sortSignature: 'none',
+    })
+    const buttonKey = session.createDirectorySnapshotKey({
+      directoryPath: '/src/components/button',
+      mask: 1,
+      filterSignature: 'all',
+      sortSignature: 'none',
+    })
+    const otherKey = session.createDirectorySnapshotKey({
+      directoryPath: '/src/other',
+      mask: 1,
+      filterSignature: 'all',
+      sortSignature: 'none',
+    })
 
-      const componentsKey = session.createDirectorySnapshotKey({
-        directoryPath: '/src/components',
-        mask: 1,
-        filterSignature: 'all',
-        sortSignature: 'none',
-      })
-      const buttonKey = session.createDirectorySnapshotKey({
-        directoryPath: '/src/components/button',
-        mask: 1,
-        filterSignature: 'all',
-        sortSignature: 'none',
-      })
-      const otherKey = session.createDirectorySnapshotKey({
-        directoryPath: '/src/other',
-        mask: 1,
-        filterSignature: 'all',
-        sortSignature: 'none',
-      })
+    session.directorySnapshots.set(componentsKey, { path: 'src/components' } as any)
+    session.directorySnapshots.set(buttonKey, { path: 'src/components/button' } as any)
+    session.directorySnapshots.set(otherKey, { path: 'src/other' } as any)
 
-      session.directorySnapshots.set(componentsKey, { path: 'src/components' } as any)
-      session.directorySnapshots.set(buttonKey, { path: 'src/components/button' } as any)
-      session.directorySnapshots.set(otherKey, { path: 'src/other' } as any)
+    session.invalidatePaths(['/src/components/button/file.ts'])
 
-      session.invalidatePaths(['/src/components/button/file.ts'])
-
-      expect(session.directorySnapshots.has(componentsKey)).toBe(false)
-      expect(session.directorySnapshots.has(buttonKey)).toBe(false)
-      expect(session.directorySnapshots.has(otherKey)).toBe(true)
-    } finally {
-      if (previousPrefixIndexCap === undefined) {
-        delete process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS']
-      } else {
-        process.env['RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS'] =
-          previousPrefixIndexCap
-      }
-    }
+    expect(session.directorySnapshots.has(componentsKey)).toBe(false)
+    expect(session.directorySnapshots.has(buttonKey)).toBe(false)
+    expect(session.directorySnapshots.has(otherKey)).toBe(true)
   })
 
   test('Session.invalidatePaths uses snapshot bulk invalidation when available', () => {
@@ -2417,58 +2408,43 @@ updated content`
   })
 
   test('Session.invalidatePaths can force broad scans when targeted missing-dependency fallback is disabled', async () => {
-    const previousTargetedFallback =
-      process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK']
-    process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK'] = 'false'
-
-    try {
-      const fileSystem = new InMemoryFileSystem({
-        'src/first.ts': 'export const first = 1',
-      })
-      const cache = new Cache({
-        persistence: {
-          async load() {
-            return undefined
-          },
-          async save() {},
-          async delete() {},
-          async listNodeKeysByPrefix() {
-            return []
-          },
+    const fileSystem = new InMemoryFileSystem({
+      'src/first.ts': 'export const first = 1',
+    })
+    const cache = new Cache({
+      targetedMissingDependencyFallback: false,
+      persistence: {
+        async load() {
+          return undefined
         },
-      })
-      const session = Session.for(
+        async save() {},
+        async delete() {},
+        async listNodeKeysByPrefix() {
+          return []
+        },
+      },
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(
         fileSystem,
-        new FileSystemSnapshot(
-          fileSystem,
-          'session-persisted-fallback-targeted-disabled'
-        ),
-        cache
-      )
-      vi.spyOn(session.cache, 'deleteByDependencyPaths').mockResolvedValue({
-        deletedNodeKeys: [],
-        usedDependencyIndex: true,
-        hasMissingDependencyMetadata: true,
-        missingDependencyNodeKeys: ['analysis:missing-metadata'],
-      })
-      const listNodeKeysByPrefixSpy = vi.spyOn(
-        session.cache,
-        'listNodeKeysByPrefix'
-      )
+        'session-persisted-fallback-targeted-disabled'
+      ),
+      cache
+    )
+    vi.spyOn(session.cache, 'deleteByDependencyPaths').mockResolvedValue({
+      deletedNodeKeys: [],
+      usedDependencyIndex: true,
+      hasMissingDependencyMetadata: true,
+      missingDependencyNodeKeys: ['analysis:missing-metadata'],
+    })
+    const listNodeKeysByPrefixSpy = vi.spyOn(session.cache, 'listNodeKeysByPrefix')
 
-      session.invalidatePaths(['/src/first.ts'])
-      await session.waitForPendingInvalidations()
+    session.invalidatePaths(['/src/first.ts'])
+    await session.waitForPendingInvalidations()
 
-      expect(listNodeKeysByPrefixSpy).toHaveBeenCalledTimes(1)
-      expect(listNodeKeysByPrefixSpy).toHaveBeenCalledWith('')
-    } finally {
-      if (previousTargetedFallback === undefined) {
-        delete process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK']
-      } else {
-        process.env['RENOUN_TARGETED_MISSING_DEP_FALLBACK'] =
-          previousTargetedFallback
-      }
-    }
+    expect(listNodeKeysByPrefixSpy).toHaveBeenCalledTimes(1)
+    expect(listNodeKeysByPrefixSpy).toHaveBeenCalledWith('')
   })
 
   test('recomputes when provided const dependency versions change', async () => {
@@ -4211,9 +4187,6 @@ describe('sqlite cache persistence', () => {
 
   test('warns and falls back when strict hermetic mode detects a non-deterministic file system', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
-      const previousStrictHermetic = process.env['RENOUN_FS_STRICT_HERMETIC']
-      process.env['RENOUN_FS_STRICT_HERMETIC'] = '1'
-
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       try {
@@ -4277,11 +4250,53 @@ describe('sqlite cache persistence', () => {
         ).toHaveLength(1)
       } finally {
         warnSpy.mockRestore()
-        if (previousStrictHermetic === undefined) {
-          delete process.env['RENOUN_FS_STRICT_HERMETIC']
-        } else {
-          process.env['RENOUN_FS_STRICT_HERMETIC'] = previousStrictHermetic
-        }
+      }
+    })
+  })
+
+  test('allows opting out of strict hermetic mode with cache option override', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        const docsDirectory = join(tmpDirectory, 'docs')
+        const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+        const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+
+        mkdirSync(docsDirectory, { recursive: true })
+        writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+        writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+        const fileSystem = new NonDeterministicNodeFileSystem(
+          getRootDirectory(),
+          tsConfigPath
+        )
+        ;(fileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+
+        const directory = new Directory({
+          fileSystem,
+          path: workspaceDirectory,
+          cache: new Cache({
+            strictHermetic: false,
+          }),
+        })
+
+        await directory.getEntries({
+          includeIndexAndReadmeFiles: true,
+        })
+
+        expect(
+          warnSpy.mock.calls.filter(([message]) => {
+            return (
+              typeof message === 'string' &&
+              message.includes(
+                'Strict hermetic directory snapshot cache fell back because the file system marked persistent cache as non-deterministic.'
+              )
+            )
+          })
+        ).toHaveLength(0)
+      } finally {
+        warnSpy.mockRestore()
       }
     })
   })

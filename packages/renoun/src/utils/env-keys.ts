@@ -8,7 +8,6 @@ export const PROCESS_ENV_KEYS = {
   renounDebugPackagePath: 'RENOUN_DEBUG_PACKAGE_PATH',
   renounDebugDirectorySnapshotRestore: 'RENOUN_DEBUG_DIRECTORY_SNAPSHOT_RESTORE',
   renounDebugRestoredScope: 'RENOUN_DEBUG_RESTORED_SCOPE',
-  renounFsStrictHermetic: 'RENOUN_FS_STRICT_HERMETIC',
   renounServerId: 'RENOUN_SERVER_ID',
   renounServerPort: 'RENOUN_SERVER_PORT',
   renounServerRefreshNotifications: 'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
@@ -16,13 +15,7 @@ export const PROCESS_ENV_KEYS = {
   renounProjectClientRpcCache: 'RENOUN_PROJECT_CLIENT_RPC_CACHE',
   renounProjectClientRpcCacheTtlMs: 'RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS',
   renounProjectRefreshNotifications: 'RENOUN_PROJECT_REFRESH_NOTIFICATIONS',
-  renounProjectCacheMaxEntries: 'RENOUN_PROJECT_CACHE_MAX_ENTRIES',
   renounPrewarmWorkerPayload: 'RENOUN_PREWARM_WORKER_PAYLOAD',
-  renounTargetedMissingDependencyFallback:
-    'RENOUN_TARGETED_MISSING_DEP_FALLBACK',
-  renounDirectorySnapshotPrefixIndexMaxKeys:
-    'RENOUN_DIRECTORY_SNAPSHOT_PREFIX_INDEX_MAX_KEYS',
-  renounSponsorsCacheTtlMs: 'RENOUN_SPONSORS_CACHE_TTL_MS',
   githubSponsorsToken: 'GITHUB_SPONSORS_TOKEN',
   renounBuildProfile: 'RENOUN_BUILD_PROFILE',
   renounBuildProfileFile: 'RENOUN_BUILD_PROFILE_FILE',

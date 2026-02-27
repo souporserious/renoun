@@ -39,7 +39,11 @@ import {
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
-import { invalidateProjectFileCache } from './cache.ts'
+import {
+  configureProjectCacheRuntime,
+  invalidateProjectFileCache,
+  resetProjectCacheRuntimeConfiguration,
+} from './cache.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import {
   getProject,
@@ -124,6 +128,7 @@ export interface ProjectClientRuntimeOptions {
   useRpcCache?: boolean
   rpcCacheTtlMs?: number
   consumeRefreshNotifications?: boolean
+  projectCacheMaxEntries?: number
 }
 
 const projectClientRuntimeOptions: ProjectClientRuntimeOptions = {}
@@ -143,12 +148,19 @@ export function configureProjectClientRuntime(
     projectClientRuntimeOptions.consumeRefreshNotifications =
       options.consumeRefreshNotifications
   }
+
+  if ('projectCacheMaxEntries' in options) {
+    configureProjectCacheRuntime({
+      maxEntries: options.projectCacheMaxEntries,
+    })
+  }
 }
 
 export function resetProjectClientRuntimeConfiguration(): void {
   projectClientRuntimeOptions.useRpcCache = undefined
   projectClientRuntimeOptions.rpcCacheTtlMs = undefined
   projectClientRuntimeOptions.consumeRefreshNotifications = undefined
+  resetProjectCacheRuntimeConfiguration()
 }
 
 function shouldUseClientRpcCache(): boolean {

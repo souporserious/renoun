@@ -166,13 +166,6 @@ export function isCiEnvironment(): boolean {
 }
 
 export function isStrictHermeticFileSystemModeFromEnv(): boolean {
-  const override = parseBooleanProcessEnv(
-    PROCESS_ENV_KEYS.renounFsStrictHermetic
-  )
-  if (override !== undefined) {
-    return override
-  }
-
   return isProductionEnvironment()
 }
 
