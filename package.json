@@ -28,7 +28,7 @@
     "geist": "catalog:",
     "playwright": "1.58.2",
     "prettier": "catalog:",
-    "turbo": "2.8.10",
+    "turbo": "2.8.11",
     "typescript": "catalog:",
     "vitest": "4.0.18"
   },

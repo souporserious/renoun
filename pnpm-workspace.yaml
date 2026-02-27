@@ -7,10 +7,10 @@ catalog:
   '@mdx-js/loader': 3.1.1
   '@mdx-js/react': 3.1.1
   '@next/mdx': 16.1.6
-  '@tailwindcss/postcss': 4.2.0
+  '@tailwindcss/postcss': 4.2.1
   '@tailwindcss/typography': 0.5.19
   '@types/mdx': 2.0.13
-  '@types/node': 25.3.0
+  '@types/node': 25.3.1
   '@types/react': 19.2.14
   '@types/react-dom': 19.2.3
   arktype: 2.1.29
@@ -21,9 +21,9 @@ catalog:
   react-aria-components: 1.15.1
   react-dom: 19.2.4
   restyle: 3.4.2
-  tailwindcss: 4.2.0
-  tm-grammars: 1.30.11
-  tm-themes: 1.11.2
+  tailwindcss: 4.2.1
+  tm-grammars: 1.31.0
+  tm-themes: 1.12.0
   ts-morph: 27.0.2
   typescript: 5.9.3
   unified: 11.0.5
