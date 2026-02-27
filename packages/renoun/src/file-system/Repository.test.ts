@@ -844,6 +844,39 @@ describe('Repository', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
+    test('encodes scoped package release tag URLs in local-version mode', async () => {
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository({
+        path: 'owner/repo',
+        releaseSource: {
+          mode: 'local-version',
+          version: '11.3.0',
+        },
+      })
+
+      const release = await repository.getRelease({
+        packageName: '@scope/renoun',
+      })
+
+      expect(release.tagName).toBe('@scope/renoun@11.3.0')
+      expect(release.name).toBe('@scope/renoun@11.3.0')
+      expect(release.htmlUrl).toBe(
+        'https://github.com/owner/repo/releases/tag/@scope%2Frenoun@11.3.0'
+      )
+      await expect(
+        repository.getReleaseUrl({ packageName: '@scope/renoun' })
+      ).resolves.toBe(
+        'https://github.com/owner/repo/releases/tag/@scope%2Frenoun@11.3.0'
+      )
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
     test('fetches release metadata from GitHub and caches results', async () => {
       const releasesPayload = [
         {

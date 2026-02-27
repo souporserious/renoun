@@ -268,6 +268,11 @@ function looksLikeRemoteUrl(value: string): boolean {
   )
 }
 
+function encodeReleaseTagPathSegment(tag: string): string {
+  // Keep '@' readable for package tags while still encoding path separators.
+  return encodeURIComponent(tag).replaceAll('%40', '@')
+}
+
 function looksLikeLocalPath(value: string): boolean {
   const trimmed = value.trim()
   return (
@@ -1047,13 +1052,14 @@ export class Repository {
 
     const base = this.#getRepositoryBaseUrl()
     const { tag } = options
+    const encodedPathTag = encodeReleaseTagPathSegment(tag)
 
     switch (this.#host) {
       case 'github':
-        return `${base}/releases/tag/${tag}`
+        return `${base}/releases/tag/${encodedPathTag}`
       case 'gitlab':
       case 'pierre':
-        return `${base}/-/releases/${tag}`
+        return `${base}/-/releases/${encodedPathTag}`
       case 'bitbucket':
         return `${base}/downloads/?tab=tags&query=${encodeURIComponent(tag)}`
       default:
