@@ -88,7 +88,7 @@ catalogs:
 overrides:
   ajv: 8.18.0
   external-editor>tmp: 0.2.4
-  minimatch: 10.2.2
+  minimatch: 10.2.4
   on-headers: 1.1.0
 
 importers:
@@ -581,8 +581,8 @@ importers:
         specifier: 2.0.0
         version: 2.0.0
       minimatch:
-        specifier: 10.2.2
-        version: 10.2.2
+        specifier: 10.2.4
+        version: 10.2.4
       oniguruma-to-es:
         specifier: 4.3.4
         version: 4.3.4
@@ -3741,8 +3741,8 @@ packages:
     resolution: {integrity: sha512-OqbOk5oEQeAZ8WXWydlu9HJjz9WVdEIvamMCcXmuqUYjTknH/sqsWvhQ3vgwKFRR1HpjvNBKQ37nbJgYzGqGcg==}
     engines: {node: '>=6'}
 
-  minimatch@10.2.2:
-    resolution: {integrity: sha512-+G4CpNBxa5MprY+04MbgOw1v7So6n5JY166pFi9KfYwT78fxScCeSNQSNzp6dpPSW2rONOps6Ocam1wFhCgoVw==}
+  minimatch@10.2.4:
+    resolution: {integrity: sha512-oRjTw/97aTBN0RHbYCdtF1MQfvusSIBQM0IZEgzl6426+8jSC0nF1a/GmnVLpfB9yyr6g6FTqWqiZVbxrtaCIg==}
     engines: {node: 18 || 20 || >=22}
 
   minimist@1.2.8:
@@ -6846,7 +6846,7 @@ snapshots:
 
   '@ts-morph/common@0.28.1':
     dependencies:
-      minimatch: 10.2.2
+      minimatch: 10.2.4
       path-browserify: 1.0.1
       tinyglobby: 0.2.15
 
@@ -8466,7 +8466,7 @@ snapshots:
 
   mimic-fn@2.1.0: {}
 
-  minimatch@10.2.2:
+  minimatch@10.2.4:
     dependencies:
       brace-expansion: 5.0.3
 
@@ -9059,7 +9059,7 @@ snapshots:
       bytes: 3.0.0
       content-disposition: 0.5.2
       mime-types: 2.1.18
-      minimatch: 10.2.2
+      minimatch: 10.2.4
       path-is-inside: 1.0.2
       path-to-regexp: 3.3.0
       range-parser: 1.2.0
