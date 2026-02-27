@@ -39,7 +39,10 @@ import type {
 } from '../utils/get-source-text-metadata.ts'
 import { getSourceTextMetadata as baseGetSourceTextMetadata } from '../utils/get-source-text-metadata.ts'
 import { getFileExportStaticValue as baseGetFileExportStaticValue } from '../utils/get-file-export-static-value.ts'
-import { getFileExportText as baseGetFileExportText } from '../utils/get-file-export-text.ts'
+import {
+  getFileExportText as baseGetFileExportText,
+  getFileExportTextResult as baseGetFileExportTextResult,
+} from '../utils/get-file-export-text.ts'
 import { getOutlineRanges as baseGetOutlineRanges } from '../utils/get-outline-ranges.ts'
 import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.ts'
 import { getTokens as baseGetTokens } from '../utils/get-tokens.ts'
@@ -2803,25 +2806,37 @@ export async function getCachedFileExportText(
       },
       async (context) => {
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
-        await recordFileDependencyIfPossible(
-          context,
-          runtimeCacheStore,
-          options.filePath
-        )
-
         if (options.includeDependencies) {
           invalidateProjectFileCache(
             project,
             options.filePath,
             RUNTIME_ANALYSIS_CACHE_NAMES.fileExportsText
           )
+          const result = await baseGetFileExportTextResult({
+            filePath: options.filePath,
+            position: options.position,
+            kind: options.kind,
+            includeDependencies: true,
+            project,
+          })
+          await recordFileDependenciesIfPossible(
+            context,
+            runtimeCacheStore,
+            result.dependencies
+          )
+          return result.text
         }
 
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          options.filePath
+        )
         return baseGetFileExportText({
           filePath: options.filePath,
           position: options.position,
           kind: options.kind,
-          includeDependencies: options.includeDependencies,
+          includeDependencies: false,
           project,
         })
       }
@@ -2829,13 +2844,14 @@ export async function getCachedFileExportText(
   }
 
   if (options.includeDependencies) {
-    return baseGetFileExportText({
+    const result = await baseGetFileExportTextResult({
       filePath: options.filePath,
       position: options.position,
       kind: options.kind,
       includeDependencies: true,
       project,
     })
+    return result.text
   }
 
   return createFallbackProjectFileCache(

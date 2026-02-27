@@ -90,6 +90,11 @@ interface ClientRpcInFlightEntry {
   epoch: number
 }
 
+interface GetFileExportTextRpcResponse {
+  text: string
+  dependencies?: string[]
+}
+
 const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
   'getSourceTextMetadata',
   'resolveTypeAtLocationWithDependencies',
@@ -313,8 +318,7 @@ function collectClientRpcDependencyPaths(
   }
 
   const shouldAddConservativeRootDependency =
-    CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY.has(method) ||
-    (method === 'getFileExportText' && candidate.includeDependencies === true)
+    CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY.has(method)
   if (shouldAddConservativeRootDependency) {
     for (const rootCandidate of rootCandidates) {
       dependencyPaths.add(toComparablePath(rootCandidate))
@@ -329,8 +333,18 @@ function collectClientRpcResponseDependencyPaths(
   params: unknown,
   value: unknown
 ): string[] {
-  if (method !== 'resolveTypeAtLocationWithDependencies') {
+  if (
+    method !== 'resolveTypeAtLocationWithDependencies' &&
+    method !== 'getFileExportText'
+  ) {
     return []
+  }
+
+  if (method === 'getFileExportText') {
+    const paramsCandidate = params as { includeDependencies?: unknown }
+    if (paramsCandidate.includeDependencies !== true) {
+      return []
+    }
   }
 
   const candidate = value as { dependencies?: unknown }
@@ -347,6 +361,34 @@ function collectClientRpcResponseDependencyPaths(
   }
 
   return Array.from(dependencyPaths)
+}
+
+function toGetFileExportTextRpcValueText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  const candidate = value as GetFileExportTextRpcResponse
+  if (typeof candidate?.text === 'string') {
+    return candidate.text
+  }
+
+  throw new Error('[renoun] Invalid getFileExportText RPC response payload.')
+}
+
+function shouldBypassClientRpcCache(
+  method: ClientCachedRpcMethod,
+  params: unknown
+): boolean {
+  if (method === 'getFileExportText') {
+    const candidate = params as { includeDependencies?: unknown }
+    return (
+      candidate.includeDependencies === true &&
+      !shouldConsumeRefreshNotifications()
+    )
+  }
+
+  return false
 }
 
 function pruneExpiredClientRpcCacheEntries(now = Date.now()): void {
@@ -484,6 +526,10 @@ async function callClientMethod<
   }
 
   const typedMethod = method as ClientCachedRpcMethod
+  if (shouldBypassClientRpcCache(typedMethod, params)) {
+    return activeClient.callMethod<Params, Value>(method, params)
+  }
+
   const cacheKey = toClientRpcCacheKey(typedMethod, params)
   const requestEpoch = clientRpcInvalidationEpoch
   const now = Date.now()
@@ -929,7 +975,7 @@ export async function getFileExportText(
 ) {
   const client = getClient()
   if (client) {
-    return callClientMethod<
+    const response = await callClientMethod<
       {
         filePath: string
         position: number
@@ -937,7 +983,7 @@ export async function getFileExportText(
         includeDependencies?: boolean
         projectOptions?: ProjectOptions
       },
-      string
+      string | GetFileExportTextRpcResponse
     >(client, 'getFileExportText', {
       filePath,
       position,
@@ -945,6 +991,8 @@ export async function getFileExportText(
       includeDependencies,
       projectOptions,
     })
+
+    return toGetFileExportTextRpcValueText(response)
   }
 
   const project = getProject(projectOptions)

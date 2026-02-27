@@ -140,7 +140,56 @@ describe('project client transport guards', () => {
     expect(second).toMatchObject({ resolveTypeCallCount: 2 })
   })
 
-  test('refresh notifications invalidate getFileExportText cache when includeDependencies is enabled', async () => {
+  test('does not cache getFileExportText results when includeDependencies is enabled', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'false'
+
+    let getFileExportTextCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getFileExportText') {
+        getFileExportTextCallCount += 1
+        return `export-text-${getFileExportTextCallCount}`
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+      }
+    })
+
+    const module = await import('./client.ts')
+    const projectOptions = {
+      tsConfigFilePath: '/project/tsconfig.json',
+    }
+    const first = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+    const second = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+
+    expect(first).toBe('export-text-1')
+    expect(second).toBe('export-text-2')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportText')
+    ).toHaveLength(2)
+  })
+
+  test('caches getFileExportText with includeDependencies when refresh notifications are enabled', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
     process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
@@ -149,18 +198,26 @@ describe('project client transport guards', () => {
 
     const listeners = new Map<string, (payload: unknown) => void>()
     let getFileExportTextCallCount = 0
-    const callMethod = vi.fn(async (method: string) => {
-      if (method === 'getFileExportText') {
-        getFileExportTextCallCount += 1
-        return `export-text-${getFileExportTextCallCount}`
-      }
+    const callMethod = vi.fn(
+      async (method: string, params?: Record<string, unknown>) => {
+        if (method === 'getFileExportText') {
+          getFileExportTextCallCount += 1
+          return {
+            text: `export-text-${getFileExportTextCallCount}`,
+            dependencies: [
+              String(params?.filePath ?? ''),
+              '/project/src/dep.ts',
+            ],
+          }
+        }
 
-      if (method === 'getRefreshInvalidationsSince') {
-        return { nextCursor: 0, fullRefresh: false }
-      }
+        if (method === 'getRefreshInvalidationsSince') {
+          return { nextCursor: 0, fullRefresh: false }
+        }
 
-      throw new Error(`Unexpected method: ${method}`)
-    })
+        throw new Error(`Unexpected method: ${method}`)
+      }
+    )
 
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
@@ -221,6 +278,162 @@ describe('project client transport guards', () => {
     expect(
       callMethod.mock.calls.filter(([method]) => method === 'getFileExportText')
     ).toHaveLength(2)
+  })
+
+  test('refresh notifications invalidate only matching includeDependencies export text cache entries', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    const getFileExportTextCallCountByFilePath = new Map<string, number>()
+    const callMethod = vi.fn(
+      async (method: string, params?: Record<string, unknown>) => {
+        if (method === 'getFileExportText') {
+          const filePath = String(params?.filePath ?? '')
+          const nextCallCount =
+            (getFileExportTextCallCountByFilePath.get(filePath) ?? 0) + 1
+          getFileExportTextCallCountByFilePath.set(filePath, nextCallCount)
+          return {
+            text: `${filePath}::export-text-${nextCallCount}`,
+            dependencies: [filePath, `${filePath}.dep.ts`],
+          }
+        }
+
+        if (method === 'getRefreshInvalidationsSince') {
+          return { nextCursor: 0, fullRefresh: false }
+        }
+
+        throw new Error(`Unexpected method: ${method}`)
+      }
+    )
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const projectOptions = {
+      tsConfigFilePath: '/project/tsconfig.json',
+    }
+    const firstA = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+    const secondA = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+    const firstB = await module.getFileExportText(
+      '/project/src/b.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+
+    expect(firstA).toBe('/project/src/a.ts::export-text-1')
+    expect(secondA).toBe('/project/src/a.ts::export-text-1')
+    expect(firstB).toBe('/project/src/b.ts::export-text-1')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportText')
+    ).toHaveLength(2)
+
+    const notificationListener = listeners.get('notification')
+    expect(notificationListener).toBeTypeOf('function')
+    notificationListener!({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/a.ts.dep.ts'],
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const thirdA = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+    const secondB = await module.getFileExportText(
+      '/project/src/b.ts',
+      0,
+      0 as never,
+      true,
+      projectOptions
+    )
+
+    expect(thirdA).toBe('/project/src/a.ts::export-text-2')
+    expect(secondB).toBe('/project/src/b.ts::export-text-1')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportText')
+    ).toHaveLength(3)
+  })
+
+  test('caches getFileExportText results when includeDependencies is disabled', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'false'
+
+    let getFileExportTextCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getFileExportText') {
+        getFileExportTextCallCount += 1
+        return `export-text-${getFileExportTextCallCount}`
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+      }
+    })
+
+    const module = await import('./client.ts')
+    const projectOptions = {
+      tsConfigFilePath: '/project/tsconfig.json',
+    }
+    const first = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      false,
+      projectOptions
+    )
+    const second = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      false,
+      projectOptions
+    )
+
+    expect(first).toBe('export-text-1')
+    expect(second).toBe('export-text-1')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportText')
+    ).toHaveLength(1)
   })
 
   test('refresh notifications invalidate transpileSourceFile cache conservatively', async () => {

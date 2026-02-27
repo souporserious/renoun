@@ -17,6 +17,7 @@ import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { GetTokensOptions } from '../utils/get-tokens.ts'
 import type { GetSourceTextMetadataOptions } from '../utils/get-source-text-metadata.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
+import { getFileExportTextResult } from '../utils/get-file-export-text.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
 import {
@@ -517,11 +518,34 @@ export async function createServer(options?: CreateServerOptions) {
       projectOptions?: ProjectOptions
     }) {
       const project = getProject(projectOptions)
+      if (includeDependencies) {
+        const [text, result] = await Promise.all([
+          getCachedFileExportText(project, {
+            filePath,
+            position,
+            kind,
+            includeDependencies: true,
+          }),
+          getFileExportTextResult({
+            filePath,
+            position,
+            kind,
+            includeDependencies: true,
+            project,
+          }),
+        ])
+
+        return {
+          text,
+          dependencies: result.dependencies,
+        }
+      }
+
       return getCachedFileExportText(project, {
         filePath,
         position,
         kind,
-        includeDependencies,
+        includeDependencies: false,
       })
     },
     {

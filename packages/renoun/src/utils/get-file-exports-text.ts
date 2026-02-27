@@ -49,6 +49,11 @@ interface FileExport {
   kind: SyntaxKind
 }
 
+interface FileExportWithDependencies extends FileExport {
+  /** File paths that this export text depends on */
+  dependencyPaths: string[]
+}
+
 /**
  * Extract all exported declarations in `filePath`,
  * returning an array of { name, text } for each export.
@@ -61,6 +66,20 @@ export function getFileExportsText(
   filePath: string,
   project: Project
 ): Array<FileExport> {
+  return getFileExportsTextWithDependencies(filePath, project).map(
+    (fileExport) => ({
+      name: fileExport.name,
+      text: fileExport.text,
+      position: fileExport.position,
+      kind: fileExport.kind,
+    })
+  )
+}
+
+export function getFileExportsTextWithDependencies(
+  filePath: string,
+  project: Project
+): Array<FileExportWithDependencies> {
   const printer = getPrinter(project)
   const sourceFile = project.getSourceFileOrThrow(filePath)
   const importMap = getImportInfo(sourceFile)
@@ -72,20 +91,26 @@ export function getFileExportsText(
   }
 
   // For each export, do a depth-first search to collect local declarations and used imports
-  const results: FileExport[] = []
+  const results: FileExportWithDependencies[] = []
   for (const exportedSymbolId of exportedSymbols) {
     const usedLocals = findAllLocalDependencies(
       exportedSymbolId,
       declarationMap
     )
+    const usedImports = getUsedImports(usedLocals, declarationMap)
     const declaration = declarationMap.get(exportedSymbolId)!
     const position = getExportPosition(declaration.node)
     const kind = declaration.node.getKind()
     const textSnippet = buildTextSnippet(
       usedLocals,
       sourceFile,
-      declarationMap,
-      printer
+      printer,
+      usedImports
+    )
+    const dependencyPaths = getDependencyPathsForUsedImports(
+      filePath,
+      usedImports,
+      importMap
     )
 
     results.push({
@@ -93,6 +118,7 @@ export function getFileExportsText(
       text: textSnippet,
       position,
       kind,
+      dependencyPaths,
     })
   }
 
@@ -411,10 +437,9 @@ function getUsedImports(
 function buildTextSnippet(
   usedLocals: Set<string>,
   sourceFile: SourceFile,
-  declarationMap: Map<string, DeclarationInfo>,
-  printer: ts.Printer
+  printer: ts.Printer,
+  usedImports: Set<string>
 ): string {
-  const usedImports = getUsedImports(usedLocals, declarationMap)
   const fileStatements = sourceFile.getStatements()
   const lines: string[] = []
 
@@ -512,6 +537,31 @@ function buildTextSnippet(
   }
 
   return outputChunks.join('').trim()
+}
+
+function getDependencyPathsForUsedImports(
+  filePath: string,
+  usedImports: Set<string>,
+  importMap: Map<string, ImportInfo>
+): string[] {
+  const dependencyPaths = new Set<string>([filePath])
+
+  for (const importAlias of usedImports) {
+    const importInfo = importMap.get(importAlias)
+    if (!importInfo) {
+      continue
+    }
+
+    const moduleSourceFile =
+      importInfo.importDeclaration.getModuleSpecifierSourceFile()
+    if (!moduleSourceFile) {
+      continue
+    }
+
+    dependencyPaths.add(moduleSourceFile.getFilePath())
+  }
+
+  return Array.from(dependencyPaths)
 }
 
 /** Remove leading JSDoc blocks from a statement's full text, leaving inline comments intact. */
