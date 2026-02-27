@@ -1,3 +1,5 @@
+import { resolve } from 'node:path'
+
 import { describe, expect, test } from 'vitest'
 
 import {
@@ -1081,6 +1083,85 @@ describe('project file cache', () => {
         ],
       }
     )
+
+    expect(third).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
+  test('invalidates relative cache entries when invalidating with absolute paths', async () => {
+    const project = {} as unknown as Project
+    const relativeFilePath = 'src/relative-entry.ts'
+    const cacheName = `relative-path-invalidation-${Date.now()}`
+    let calls = 0
+
+    const first = await createProjectFileCache(
+      project,
+      relativeFilePath,
+      cacheName,
+      () => {
+        calls += 1
+        return `value-${calls}`
+      }
+    )
+    const second = await createProjectFileCache(
+      project,
+      relativeFilePath,
+      cacheName,
+      () => 'should-not-run'
+    )
+
+    expect(first).toBe('value-1')
+    expect(second).toBe('value-1')
+    expect(calls).toBe(1)
+
+    invalidateProjectFileCachePaths(project, [resolve(process.cwd())])
+
+    const third = await createProjectFileCache(
+      project,
+      relativeFilePath,
+      cacheName,
+      () => {
+        calls += 1
+        return `value-${calls}`
+      }
+    )
+
+    expect(third).toBe('value-2')
+    expect(calls).toBe(2)
+  })
+
+  test('treats dot invalidation as a global project cache invalidation', async () => {
+    const uniqueId = Date.now()
+    const projectPath = `${process.cwd()}/src/dot-invalidation-${uniqueId}.ts`
+    const cacheName = `dot-invalidation-${uniqueId}`
+    const project = getProject({
+      useInMemoryFileSystem: true,
+      projectId: `dot-invalidation-${uniqueId}`,
+    })
+    let calls = 0
+
+    const first = await createProjectFileCache(project, projectPath, cacheName, () => {
+      calls += 1
+      return `value-${calls}`
+    })
+    const second = await createProjectFileCache(
+      project,
+      projectPath,
+      cacheName,
+      () => 'should-not-run'
+    )
+
+    expect(first).toBe('value-1')
+    expect(second).toBe('value-1')
+    expect(calls).toBe(1)
+
+    const affectedProjects = invalidateProjectCachesByPath('.')
+    expect(affectedProjects).toBeGreaterThan(0)
+
+    const third = await createProjectFileCache(project, projectPath, cacheName, () => {
+      calls += 1
+      return `value-${calls}`
+    })
 
     expect(third).toBe('value-2')
     expect(calls).toBe(2)

@@ -627,7 +627,7 @@ describe('project client transport guards', () => {
       '/project/src/b.ts',
     ])
     expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
-      'project/src/b.ts',
+      '/project/src/b.ts',
     ])
   })
 
@@ -814,7 +814,7 @@ describe('project client transport guards', () => {
       '/project/src/a.ts',
     ])
     expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
-      'project/src/a.ts',
+      '/project/src/a.ts',
     ])
   })
 
@@ -887,7 +887,7 @@ describe('project client transport guards', () => {
       ).toEqual([resolve(process.cwd())])
       expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledTimes(1)
       expect(mocks.invalidateProjectCachesByPaths.mock.calls[0]?.[0]).toEqual([
-        resolve(process.cwd()).replace(/^\/+/, ''),
+        resolve(process.cwd()),
       ])
     } finally {
       vi.useRealTimers()

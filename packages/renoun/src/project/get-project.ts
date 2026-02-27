@@ -15,7 +15,11 @@ import {
 } from '../utils/env.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
-import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
+import {
+  isAbsolutePath,
+  normalizePathKey,
+  normalizeSlashes,
+} from '../utils/path.ts'
 import { invalidateProjectFileCachePaths } from './cache.ts'
 import {
   invalidateRuntimeAnalysisCachePaths,
@@ -295,12 +299,28 @@ export function invalidateProjectCachesByPath(path: string): number {
 export function invalidateProjectCachesByPaths(
   paths: Iterable<string>
 ): number {
+  const originalPathByNormalizedPath = new Map<string, string>()
+  for (const path of paths) {
+    if (typeof path !== 'string' || path.length === 0) {
+      continue
+    }
+
+    const normalizedPath = normalizeComparablePath(path)
+    if (!originalPathByNormalizedPath.has(normalizedPath)) {
+      originalPathByNormalizedPath.set(normalizedPath, path)
+    }
+  }
+
   const normalizedPaths = collapseInvalidationPaths(
-    Array.from(paths).map((path) => normalizeComparablePath(path))
+    originalPathByNormalizedPath.keys()
   )
   if (normalizedPaths.length === 0) {
     return 0
   }
+
+  const pathsToInvalidate = normalizedPaths.map((normalizedPath) => {
+    return originalPathByNormalizedPath.get(normalizedPath) ?? normalizedPath
+  })
 
   let affectedProjects = 0
 
@@ -314,7 +334,7 @@ export function invalidateProjectCachesByPaths(
     }
 
     for (const project of projectsByDirectory) {
-      invalidateProjectFileCachePaths(project, normalizedPaths)
+      invalidateProjectFileCachePaths(project, pathsToInvalidate)
       affectedProjects += 1
     }
   }
@@ -368,10 +388,25 @@ function shouldEnableProjectWatchers(): boolean {
 }
 
 function normalizeComparablePath(path: string): string {
-  return normalizePathKey(normalizeSlashes(path))
+  const normalizedPath = normalizeSlashes(path)
+  const normalizedPathKey = normalizePathKey(normalizedPath)
+
+  if (normalizedPathKey === '.') {
+    return '.'
+  }
+
+  const comparablePath = isAbsolutePath(normalizedPath)
+    ? normalizedPath
+    : resolve(normalizedPathKey)
+
+  return normalizePathKey(normalizeSlashes(comparablePath))
 }
 
 function pathsIntersect(firstPath: string, secondPath: string): boolean {
+  if (firstPath === '.' || secondPath === '.') {
+    return true
+  }
+
   if (firstPath === secondPath) {
     return true
   }

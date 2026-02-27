@@ -500,7 +500,7 @@ function applyRefreshInvalidations(paths: string[]): void {
 
   invalidateClientRpcStateByNormalizedPaths(comparablePaths)
   invalidateRuntimeAnalysisCachePaths(runtimePaths)
-  invalidateProjectCachesByPaths(comparablePaths)
+  invalidateProjectCachesByPaths(runtimePaths)
 }
 
 async function callClientMethod<

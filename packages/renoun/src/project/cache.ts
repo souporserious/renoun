@@ -1,4 +1,4 @@
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 
 import {
   CacheStore,
@@ -10,7 +10,11 @@ import type { DirectoryEntry } from '../file-system/types.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { resolvePositiveIntegerProcessEnv } from '../utils/env.ts'
-import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
+import {
+  isAbsolutePath,
+  normalizePathKey,
+  normalizeSlashes,
+} from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { Project } from '../utils/ts-morph.ts'
 
@@ -235,8 +239,18 @@ function getProjectCacheRuntime(project: Project): ProjectCacheRuntime {
 }
 
 function normalizeProjectPath(path: string): string {
-  const normalizedPath = normalizePathKey(normalizeSlashes(path))
-  return normalizedPath.length > 0 ? normalizedPath : '.'
+  const normalizedPath = normalizeSlashes(path)
+  const normalizedPathKey = normalizePathKey(normalizedPath)
+
+  if (normalizedPathKey === '.') {
+    return '.'
+  }
+
+  const comparablePath = isAbsolutePath(normalizedPath)
+    ? normalizedPath
+    : resolve(normalizedPathKey)
+
+  return normalizePathKey(normalizeSlashes(comparablePath))
 }
 
 function toProjectCacheNodeKey(filePath: string, cacheName: string): string {
@@ -636,7 +650,7 @@ export function invalidateProjectFileCache(
     : undefined
 
   if (normalizedFilePath && !cacheName) {
-    invalidateProjectCacheRuntimePaths(runtime, [normalizedFilePath])
+    invalidateProjectCacheRuntimePaths(runtime, [filePath])
     return
   }
 

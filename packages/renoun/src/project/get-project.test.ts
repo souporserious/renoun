@@ -72,7 +72,11 @@ vi.mock('node:fs', async () => {
   }
 })
 
-import { disposeProjectWatchers, getProject } from './get-project.ts'
+import {
+  disposeProjectWatchers,
+  getProject,
+  invalidateProjectCachesByPath,
+} from './get-project.ts'
 
 describe('project watcher invalidation batching', () => {
   const originalEnvironment = captureProcessEnv([
@@ -136,6 +140,23 @@ describe('project watcher invalidation batching', () => {
     const [, projectPaths] =
       mockedInvalidationFns.invalidateProjectFileCachePaths.mock.calls[0] ?? []
     expect(projectPaths).toEqual([`${projectDirectory}/src`])
+  })
+
+  test('treats dot invalidation as global across tracked projects', () => {
+    const uniqueId = Date.now()
+    const projectDirectory = `/virtual-project-dot-${uniqueId}`
+    const project = getProject({
+      useInMemoryFileSystem: true,
+      projectId: `watcher-dot-${uniqueId}`,
+      tsConfigFilePath: `${projectDirectory}/tsconfig.json`,
+    })
+
+    const affectedProjects = invalidateProjectCachesByPath('.')
+
+    expect(affectedProjects).toBeGreaterThan(0)
+    expect(
+      mockedInvalidationFns.invalidateProjectFileCachePaths
+    ).toHaveBeenCalledWith(project, ['.'])
   })
 
   test('does not enable watchers in vitest worker mode without explicit override', () => {
