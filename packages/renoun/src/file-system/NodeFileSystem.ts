@@ -84,6 +84,18 @@ export class NodeFileSystem
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
   }
 
+  override usesPersistentCacheByDefault(): boolean {
+    return true
+  }
+
+  override usesDirectoryMtimeSnapshotDependencies(): boolean {
+    return true
+  }
+
+  override validatesPersistedFileDependenciesByDefault(): boolean {
+    return true
+  }
+
   getProjectOptions() {
     return {
       tsConfigFilePath: this.#tsConfigPath,

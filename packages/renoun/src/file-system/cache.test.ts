@@ -2792,6 +2792,21 @@ describe('session cache persistence policy', () => {
     }
   })
 
+  test('uses persistent cache policy from filesystem capability methods', async () => {
+    const AnonymousNodeFileSystem = class extends NodeFileSystem {}
+    const AnonymousInMemoryFileSystem = class extends InMemoryFileSystem {}
+    const nodeFileSystem = new AnonymousNodeFileSystem()
+    const inMemoryFileSystem = new AnonymousInMemoryFileSystem({})
+
+    try {
+      expect(Session.for(nodeFileSystem).usesPersistentCache).toBe(true)
+      expect(Session.for(inMemoryFileSystem).usesPersistentCache).toBe(false)
+    } finally {
+      Session.reset(nodeFileSystem)
+      Session.reset(inMemoryFileSystem)
+    }
+  })
+
   test('uses persistent cache for node-like rootless filesystems', async () => {
     const rootlessFileSystem = new RootlessNodeFileSystem(process.cwd())
 

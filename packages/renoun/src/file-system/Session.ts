@@ -2065,24 +2065,11 @@ function resolveCanonicalPath(pathToResolve: string): string {
 }
 
 function shouldUseSessionCachePersistence(fileSystem: FileSystem): boolean {
-  const constructorName = fileSystem.constructor?.name ?? ''
-  const isNodeBasedFileSystem =
-    constructorName === 'NodeFileSystem' ||
-    constructorName === 'NestedCwdNodeFileSystem' ||
-    constructorName.endsWith('NodeFileSystem')
-  const isGitBasedFileSystem =
-    constructorName === 'GitFileSystem' ||
-    constructorName === 'GitVirtualFileSystem' ||
-    constructorName.endsWith('GitFileSystem')
-  const isInMemoryFileSystem =
-    constructorName === 'InMemoryFileSystem' ||
-    constructorName === 'MutableTimestampFileSystem'
-
-  if (isInMemoryFileSystem) {
+  try {
+    return fileSystem.usesPersistentCacheByDefault()
+  } catch {
     return false
   }
-
-  return isNodeBasedFileSystem || isGitBasedFileSystem
 }
 
 function normalizePositiveInteger(

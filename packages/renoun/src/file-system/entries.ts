@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolve as resolvePath } from 'node:path'
 import { Minimatch } from 'minimatch'
 import { createElement, Fragment, isValidElement, type ReactNode } from 'react'
@@ -4245,6 +4247,55 @@ const FILE_DEPENDENCY_PREFIX = 'file:'
 const PRODUCTION_SNAPSHOT_REVALIDATE_INTERVAL_MS = 250
 const DIRECTORY_SNAPSHOT_COORDINATION_KEY_PREFIX = 'dir:resolve:'
 const strictHermeticWarningKeys = new Set<string>()
+const strictHermeticCrossProcessWarningKeys = new Set<string>()
+
+function sanitizeStrictHermeticWarningSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '-')
+}
+
+function shouldEmitStrictHermeticFallbackWarningForProcessGroup(
+  key: string
+): boolean {
+  const serverId = process.env[PROCESS_ENV_KEYS.renounServerId]
+  if (typeof serverId !== 'string' || serverId.trim().length === 0) {
+    return true
+  }
+
+  const processGroupKey = `${serverId}:${key}`
+  if (strictHermeticCrossProcessWarningKeys.has(processGroupKey)) {
+    return false
+  }
+
+  const markerDirectory = resolvePath(
+    tmpdir(),
+    'renoun',
+    'strict-hermetic-warning-keys',
+    sanitizeStrictHermeticWarningSegment(serverId)
+  )
+  const markerPath = resolvePath(
+    markerDirectory,
+    `${sanitizeStrictHermeticWarningSegment(key)}.marker`
+  )
+
+  try {
+    mkdirSync(markerDirectory, { recursive: true })
+    writeFileSync(markerPath, '', { flag: 'wx' })
+    strictHermeticCrossProcessWarningKeys.add(processGroupKey)
+    return true
+  } catch (error) {
+    const errorCode =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined
+
+    if (errorCode === 'EEXIST') {
+      strictHermeticCrossProcessWarningKeys.add(processGroupKey)
+      return false
+    }
+
+    return true
+  }
+}
 
 function isStrictHermeticFileSystemMode(): boolean {
   return isStrictHermeticFileSystemModeFromEnv()
@@ -4264,6 +4315,10 @@ function warnStrictHermeticFallbackOnce(
   }
 
   strictHermeticWarningKeys.add(key)
+  if (!shouldEmitStrictHermeticFallbackWarningForProcessGroup(key)) {
+    return
+  }
+
   if (details && Object.keys(details).length > 0) {
     console.warn(`[renoun] ${message}`, details)
     return
@@ -4277,12 +4332,11 @@ function shouldTrackDirectoryMtime(fileSystem: FileSystem): boolean {
     return false
   }
 
-  const constructorName = fileSystem.constructor?.name ?? ''
-  return (
-    constructorName === 'NodeFileSystem' ||
-    constructorName === 'NestedCwdNodeFileSystem' ||
-    constructorName === 'GitFileSystem'
-  )
+  try {
+    return fileSystem.usesDirectoryMtimeSnapshotDependencies()
+  } catch {
+    return false
+  }
 }
 
 function shouldValidatePersistedFileDependencies(
@@ -4292,12 +4346,11 @@ function shouldValidatePersistedFileDependencies(
     return true
   }
 
-  const constructorName = fileSystem.constructor?.name ?? ''
-  return (
-    constructorName === 'NodeFileSystem' ||
-    constructorName === 'NestedCwdNodeFileSystem' ||
-    constructorName === 'InMemoryFileSystem'
-  )
+  try {
+    return fileSystem.validatesPersistedFileDependenciesByDefault()
+  } catch {
+    return false
+  }
 }
 
 function shouldPersistDirectorySnapshots(fileSystem: FileSystem): boolean {

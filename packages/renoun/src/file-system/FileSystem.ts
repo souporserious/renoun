@@ -155,6 +155,33 @@ export abstract class BaseFileSystem {
     previousToken: string
   ): Promise<readonly string[] | null>
 
+  /**
+   * Whether this file system should use persistent cache by default.
+   *
+   * Implementations that represent real and stable storage (for example local
+   * disk or git-backed stores) should return `true`. In-memory implementations
+   * should return `false`.
+   */
+  usesPersistentCacheByDefault(): boolean {
+    return false
+  }
+
+  /**
+   * Whether directory `mtime` signatures should be tracked for snapshot
+   * dependency validation in non-strict hermetic mode.
+   */
+  usesDirectoryMtimeSnapshotDependencies(): boolean {
+    return false
+  }
+
+  /**
+   * Whether persisted snapshot file dependencies should be validated in
+   * non-strict hermetic mode.
+   */
+  validatesPersistedFileDependenciesByDefault(): boolean {
+    return false
+  }
+
   constructor(options: FileSystemOptions = {}) {
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
   }

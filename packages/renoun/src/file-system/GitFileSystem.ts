@@ -692,6 +692,18 @@ export class GitFileSystem
     }
   }
 
+  override usesPersistentCacheByDefault(): boolean {
+    return true
+  }
+
+  override usesDirectoryMtimeSnapshotDependencies(): boolean {
+    return true
+  }
+
+  override validatesPersistedFileDependenciesByDefault(): boolean {
+    return false
+  }
+
   getProjectOptions() {
     this.#ensureRepoReadySync()
     return {

@@ -435,6 +435,18 @@ export class GitVirtualFileSystem
     })
   }
 
+  override usesPersistentCacheByDefault(): boolean {
+    return true
+  }
+
+  override usesDirectoryMtimeSnapshotDependencies(): boolean {
+    return false
+  }
+
+  override validatesPersistedFileDependenciesByDefault(): boolean {
+    return false
+  }
+
   async #extractTarFromStream(
     stream: ReadableStream<Uint8Array>
   ): Promise<void> {

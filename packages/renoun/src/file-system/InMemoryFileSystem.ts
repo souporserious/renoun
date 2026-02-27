@@ -92,6 +92,18 @@ export class InMemoryFileSystem
     }
   }
 
+  override usesPersistentCacheByDefault(): boolean {
+    return false
+  }
+
+  override usesDirectoryMtimeSnapshotDependencies(): boolean {
+    return false
+  }
+
+  override validatesPersistedFileDependenciesByDefault(): boolean {
+    return true
+  }
+
   #normalizeFileContent(content: InMemoryFileContent): InMemoryFileEntry {
     if (typeof content === 'string') {
       return { kind: 'Text', content }
