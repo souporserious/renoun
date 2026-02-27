@@ -1894,9 +1894,20 @@ export class Package<
   #createResolveExportSourceDependencySignature(path: string): string {
     try {
       const modifiedMs = this.#fileSystem.getFileLastModifiedMsSync(path)
-      return modifiedMs === undefined ? 'missing' : String(modifiedMs)
-    } catch {
+      if (modifiedMs !== undefined) {
+        return `mtime:${String(modifiedMs)}`
+      }
+    } catch {}
+
+    if (!safeFileExistsSync(this.#fileSystem, path)) {
       return 'missing'
+    }
+
+    try {
+      const contents = readTextFile(this.#fileSystem, path)
+      return `content:${hashString(contents)}:${contents.length}`
+    } catch {
+      return 'exists'
     }
   }
 

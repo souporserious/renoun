@@ -1842,9 +1842,11 @@ describe('file system', () => {
       frontmatter: { title: 'runtime' },
     }))
     const fileSystem = new InMemoryFileSystem({
-      'index.mdx': ['export const metadata = { title: "Meta" }', '', '# Hello'].join(
-        '\n'
-      ),
+      'index.mdx': [
+        'export const metadata = { title: "Meta" }',
+        '',
+        '# Hello',
+      ].join('\n'),
     })
     const directory = new Directory({
       fileSystem,
@@ -4385,6 +4387,38 @@ date: 2024-12-24
         } finally {
           rmSync(tempDirectory, { recursive: true, force: true })
         }
+      })
+
+      test('invalidates resolveExportSources cache for file systems without mtimes', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+          }),
+          'node_modules/acme/dist/index.mjs.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'node_modules/acme/src/index.ts': 'export const value = 1',
+          'node_modules/acme/src/next.ts': 'export const value = 2',
+        })
+        const pkg = new Package({ name: 'acme', fileSystem })
+
+        const firstResult = pkg.resolveExportSource('.')
+        expect(firstResult?.sources).toEqual(['src/index.ts'])
+
+        fileSystem.writeFileSync(
+          'node_modules/acme/dist/index.mjs.map',
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/next.ts'],
+          })
+        )
+
+        const secondResult = pkg.resolveExportSource('.')
+        expect(secondResult?.sources).toEqual(['src/next.ts'])
       })
 
       test('invalidates resolveExportSources cache when package.json changes', async () => {
