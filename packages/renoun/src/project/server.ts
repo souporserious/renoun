@@ -66,6 +66,49 @@ export interface CreateServerOptions {
   emitRefreshNotifications?: boolean
 }
 
+interface RpcValueWithDependenciesResponse<Value> {
+  __renounClientRpcDependencies: true
+  value: Value
+  dependencies: string[]
+}
+
+function toRpcValueWithDependenciesResponse<Value>(
+  value: Value,
+  dependencies: Iterable<string>
+): RpcValueWithDependenciesResponse<Value> {
+  const dependencyPaths = new Set<string>()
+
+  for (const dependency of dependencies) {
+    if (typeof dependency === 'string' && dependency.length > 0) {
+      dependencyPaths.add(dependency)
+    }
+  }
+
+  return {
+    __renounClientRpcDependencies: true,
+    value,
+    dependencies: Array.from(dependencyPaths.values()),
+  }
+}
+
+function toFileExportDependencyPaths(
+  filePath: string,
+  fileExports: ReadonlyArray<{ path?: string }>
+): string[] {
+  const dependencyPaths = new Set<string>([filePath])
+
+  for (const fileExport of fileExports) {
+    if (
+      typeof fileExport.path === 'string' &&
+      fileExport.path.length > 0
+    ) {
+      dependencyPaths.add(fileExport.path)
+    }
+  }
+
+  return Array.from(dependencyPaths.values())
+}
+
 function parseTypeFilter(filter?: TypeFilter | string): TypeFilter | undefined {
   if (filter === undefined) {
     return undefined
@@ -175,7 +218,6 @@ function getProductionRpcMemoizeOptions():
 export async function createServer(options?: CreateServerOptions) {
   const server = new WebSocketServer({ port: options?.port })
   const port = await server.getPort()
-  activeProjectServers += 1
 
   setServerPortProcessEnv(port)
 
@@ -223,36 +265,45 @@ export async function createServer(options?: CreateServerOptions) {
   }
 
   const rootDirectory = getRootDirectory()
-  const rootWatcher = shouldEmitRefreshNotifications(
-    options?.emitRefreshNotifications
-  )
-    ? watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
-        if (!fileName) return
+  let rootWatcher: FSWatcher | undefined
+  try {
+    rootWatcher = shouldEmitRefreshNotifications(
+      options?.emitRefreshNotifications
+    )
+      ? watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
+          if (!fileName) return
 
-        const watchedFileName = String(fileName)
-        if (!watchedFileName) {
-          return
-        }
+          const watchedFileName = String(fileName)
+          if (!watchedFileName) {
+            return
+          }
 
-        const filePath = join(rootDirectory, watchedFileName)
+          const filePath = join(rootDirectory, watchedFileName)
 
-        if (isFilePathGitIgnored(filePath)) {
-          return
-        }
+          if (isFilePathGitIgnored(filePath)) {
+            return
+          }
 
-        pendingRefreshPaths.add(filePath)
-        pendingRefreshEventTypes.add(eventType)
-        if (refreshFlushTimer) {
-          return
-        }
+          pendingRefreshPaths.add(filePath)
+          pendingRefreshEventTypes.add(eventType)
+          if (refreshFlushTimer) {
+            return
+          }
 
-        refreshFlushTimer = setTimeout(
-          flushRefreshNotifications,
-          REFRESH_NOTIFICATION_BATCH_WINDOW_MS
-        )
-        refreshFlushTimer.unref?.()
-      })
-    : undefined
+          refreshFlushTimer = setTimeout(
+            flushRefreshNotifications,
+            REFRESH_NOTIFICATION_BATCH_WINDOW_MS
+          )
+          refreshFlushTimer.unref?.()
+        })
+      : undefined
+  } catch (error) {
+    reportBestEffortError('project/server', error)
+    server.cleanup()
+    throw error
+  }
+
+  activeProjectServers += 1
 
   const originalCleanup = server.cleanup.bind(server)
   let cleanedUp = false
@@ -443,12 +494,23 @@ export async function createServer(options?: CreateServerOptions) {
     async function getFileExports({
       filePath,
       projectOptions,
+      includeClientRpcDependencies,
     }: {
       filePath: string
       projectOptions?: ProjectOptions
+      includeClientRpcDependencies?: boolean
     }) {
       const project = getProject(projectOptions)
-      return getCachedFileExports(project, filePath)
+      const fileExports = await getCachedFileExports(project, filePath)
+
+      if (includeClientRpcDependencies) {
+        return toRpcValueWithDependenciesResponse(
+          fileExports,
+          toFileExportDependencyPaths(filePath, fileExports)
+        )
+      }
+
+      return fileExports
     },
     {
       memoize: getProductionRpcMemoizeOptions(),
@@ -482,20 +544,32 @@ export async function createServer(options?: CreateServerOptions) {
       position,
       kind,
       projectOptions,
+      includeClientRpcDependencies,
     }: {
       name: string
       filePath: string
       position: number
       kind: TsMorphSyntaxKind
       projectOptions?: ProjectOptions
+      includeClientRpcDependencies?: boolean
     }) {
       const project = getProject(projectOptions)
-      return getCachedFileExportMetadata(project, {
+      const metadata = await getCachedFileExportMetadata(project, {
         name,
         filePath,
         position,
         kind,
       })
+
+      if (includeClientRpcDependencies) {
+        const fileExports = await getCachedFileExports(project, filePath)
+        return toRpcValueWithDependenciesResponse(
+          metadata,
+          toFileExportDependencyPaths(filePath, fileExports)
+        )
+      }
+
+      return metadata
     },
     {
       memoize: getProductionRpcMemoizeOptions(),
@@ -562,18 +636,30 @@ export async function createServer(options?: CreateServerOptions) {
       position,
       kind,
       projectOptions,
+      includeClientRpcDependencies,
     }: {
       filePath: string
       position: number
       kind: TsMorphSyntaxKind
       projectOptions?: ProjectOptions
+      includeClientRpcDependencies?: boolean
     }) {
       const project = getProject(projectOptions)
-      return getCachedFileExportStaticValue(project, {
+      const staticValue = await getCachedFileExportStaticValue(project, {
         filePath,
         position,
         kind,
       })
+
+      if (includeClientRpcDependencies) {
+        const fileExports = await getCachedFileExports(project, filePath)
+        return toRpcValueWithDependenciesResponse(
+          staticValue,
+          toFileExportDependencyPaths(filePath, fileExports)
+        )
+      }
+
+      return staticValue
     },
     {
       memoize: getProductionRpcMemoizeOptions(),

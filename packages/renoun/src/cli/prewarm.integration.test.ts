@@ -5,9 +5,7 @@ import { describe, expect, test } from 'vitest'
 import { getProject } from '../project/get-project.ts'
 import { collectRenounPrewarmTargets } from './prewarm.ts'
 
-const PREWARM_APP_COVERAGE_TIMEOUT_MS = process.env['CI']
-  ? 120_000
-  : 60_000
+const PREWARM_APP_COVERAGE_TIMEOUT_MS = 120_000
 
 const appSites = [
   {

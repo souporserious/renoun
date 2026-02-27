@@ -638,6 +638,166 @@ describe('project client transport guards', () => {
     ])
   })
 
+  test('refresh notifications invalidate export RPC cache entries by response dependencies', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    const callCountByMethod = new Map<string, number>()
+    const nextCallCount = (method: string) => {
+      const nextCount = (callCountByMethod.get(method) ?? 0) + 1
+      callCountByMethod.set(method, nextCount)
+      return nextCount
+    }
+    const callMethod = vi.fn(
+      async (method: string, params?: Record<string, unknown>) => {
+        if (method === 'getFileExports') {
+          const callCount = nextCallCount(method)
+          return {
+            __renounClientRpcDependencies: true,
+            value: [
+              {
+                name: `export-${callCount}`,
+                path: String(params?.filePath ?? ''),
+                position: callCount,
+                kind: 0,
+              },
+            ],
+            dependencies: [String(params?.filePath ?? ''), '/project/src/dep.ts'],
+          }
+        }
+
+        if (method === 'getFileExportMetadata') {
+          const callCount = nextCallCount(method)
+          return {
+            __renounClientRpcDependencies: true,
+            value: {
+              name: `metadata-${callCount}`,
+              environment: 'isomorphic',
+              jsDocMetadata: undefined,
+              location: {
+                filePath: String(params?.filePath ?? ''),
+                position: {
+                  start: { line: 1, column: 1 },
+                  end: { line: 1, column: 1 },
+                },
+              },
+            },
+            dependencies: [String(params?.filePath ?? ''), '/project/src/dep.ts'],
+          }
+        }
+
+        if (method === 'getFileExportStaticValue') {
+          const callCount = nextCallCount(method)
+          return {
+            __renounClientRpcDependencies: true,
+            value: `static-${callCount}`,
+            dependencies: [String(params?.filePath ?? ''), '/project/src/dep.ts'],
+          }
+        }
+
+        if (method === 'getRefreshInvalidationsSince') {
+          return { nextCursor: 0, fullRefresh: false }
+        }
+
+        throw new Error(`Unexpected method: ${method}`)
+      }
+    )
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const firstExports = await module.getFileExports('/project/src/a.ts')
+    const secondExports = await module.getFileExports('/project/src/a.ts')
+    const firstMetadata = await module.getFileExportMetadata(
+      'value',
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+    const secondMetadata = await module.getFileExportMetadata(
+      'value',
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+    const firstStatic = await module.getFileExportStaticValue(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+    const secondStatic = await module.getFileExportStaticValue(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    expect(firstExports[0]?.name).toBe('export-1')
+    expect(secondExports[0]?.name).toBe('export-1')
+    expect(firstMetadata?.name).toBe('metadata-1')
+    expect(secondMetadata?.name).toBe('metadata-1')
+    expect(firstStatic).toBe('static-1')
+    expect(secondStatic).toBe('static-1')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExports')
+    ).toHaveLength(1)
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportMetadata')
+    ).toHaveLength(1)
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportStaticValue')
+    ).toHaveLength(1)
+
+    const notificationListener = listeners.get('notification')
+    expect(notificationListener).toBeTypeOf('function')
+    notificationListener!({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/dep.ts'],
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const thirdExports = await module.getFileExports('/project/src/a.ts')
+    const thirdMetadata = await module.getFileExportMetadata(
+      'value',
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+    const thirdStatic = await module.getFileExportStaticValue(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    expect(thirdExports[0]?.name).toBe('export-2')
+    expect(thirdMetadata?.name).toBe('metadata-2')
+    expect(thirdStatic).toBe('static-2')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExports')
+    ).toHaveLength(2)
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportMetadata')
+    ).toHaveLength(2)
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getFileExportStaticValue')
+    ).toHaveLength(2)
+  })
+
   test('refresh notifications prevent stale in-flight dependency-aware RPC results from being cached', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'

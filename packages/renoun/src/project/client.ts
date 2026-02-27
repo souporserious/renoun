@@ -99,6 +99,12 @@ interface GetFileExportTextRpcResponse {
   dependencies?: string[]
 }
 
+interface ClientRpcValueWithDependenciesResponse<Value> {
+  __renounClientRpcDependencies: true
+  value: Value
+  dependencies?: string[]
+}
+
 const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
   'getSourceTextMetadata',
   'resolveTypeAtLocationWithDependencies',
@@ -345,34 +351,106 @@ function collectClientRpcResponseDependencyPaths(
   params: unknown,
   value: unknown
 ): string[] {
+  const rootCandidates = getProjectRootCandidates(params)
+  const dependencyPaths = new Set<string>()
+  let responseValue = value
+
   if (
-    method !== 'resolveTypeAtLocationWithDependencies' &&
-    method !== 'getFileExportText'
+    method === 'getFileExportText' &&
+    (params as { includeDependencies?: unknown }).includeDependencies !== true
   ) {
     return []
   }
 
-  if (method === 'getFileExportText') {
-    const paramsCandidate = params as { includeDependencies?: unknown }
-    if (paramsCandidate.includeDependencies !== true) {
-      return []
+  if (isClientRpcValueWithDependenciesResponse(responseValue)) {
+    addCandidateResponseDependencyPaths(
+      responseValue.dependencies,
+      rootCandidates,
+      dependencyPaths
+    )
+    responseValue = responseValue.value
+  }
+
+  if (
+    method === 'resolveTypeAtLocationWithDependencies' ||
+    method === 'getFileExportText'
+  ) {
+    addCandidateResponseDependencyPaths(
+      (responseValue as { dependencies?: unknown }).dependencies,
+      rootCandidates,
+      dependencyPaths
+    )
+  }
+
+  if (method === 'getFileExports') {
+    const candidate = responseValue as Array<{ path?: unknown }>
+    if (Array.isArray(candidate)) {
+      for (const fileExport of candidate) {
+        for (const dependencyPath of getCandidatePaths(
+          fileExport.path,
+          rootCandidates
+        )) {
+          dependencyPaths.add(dependencyPath)
+        }
+      }
     }
   }
 
-  const candidate = value as { dependencies?: unknown }
-  if (!Array.isArray(candidate.dependencies)) {
-    return []
-  }
-
-  const rootCandidates = getProjectRootCandidates(params)
-  const dependencyPaths = new Set<string>()
-  for (const dependency of candidate.dependencies) {
-    for (const dependencyPath of getCandidatePaths(dependency, rootCandidates)) {
+  if (method === 'getFileExportMetadata') {
+    const candidate = responseValue as {
+      location?: {
+        filePath?: unknown
+      }
+    }
+    for (const dependencyPath of getCandidatePaths(
+      candidate.location?.filePath,
+      rootCandidates
+    )) {
       dependencyPaths.add(dependencyPath)
     }
   }
 
   return Array.from(dependencyPaths)
+}
+
+function addCandidateResponseDependencyPaths(
+  dependencies: unknown,
+  rootCandidates: readonly string[],
+  dependencyPaths: Set<string>
+): void {
+  if (!Array.isArray(dependencies)) {
+    return
+  }
+
+  for (const dependency of dependencies) {
+    for (const dependencyPath of getCandidatePaths(dependency, rootCandidates)) {
+      dependencyPaths.add(dependencyPath)
+    }
+  }
+}
+
+function isClientRpcValueWithDependenciesResponse<Value>(
+  value: unknown
+): value is ClientRpcValueWithDependenciesResponse<Value> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+
+  const candidate = value as {
+    __renounClientRpcDependencies?: unknown
+  }
+
+  return candidate.__renounClientRpcDependencies === true
+}
+
+function toClientRpcResponseValue<Value>(
+  value: Value | ClientRpcValueWithDependenciesResponse<Value>
+): Value {
+  if (isClientRpcValueWithDependenciesResponse<Value>(value)) {
+    return value.value
+  }
+
+  return value
 }
 
 function toGetFileExportTextRpcValueText(value: unknown): string {
@@ -862,16 +940,20 @@ export async function getFileExports(
 ) {
   const client = getClient()
   if (client) {
-    return callClientMethod<
+    const response = await callClientMethod<
       {
         filePath: string
         projectOptions?: ProjectOptions
+        includeClientRpcDependencies?: boolean
       },
-      ModuleExport[]
+      ModuleExport[] | ClientRpcValueWithDependenciesResponse<ModuleExport[]>
     >(client, 'getFileExports', {
       filePath,
       projectOptions,
+      includeClientRpcDependencies: true,
     })
+
+    return toClientRpcResponseValue(response)
   }
 
   const project = getProject(projectOptions)
@@ -911,22 +993,29 @@ export async function getFileExportMetadata(
 ) {
   const client = getClient()
   if (client) {
-    return callClientMethod<
+    const response = await callClientMethod<
       {
         name: string
         filePath: string
         position: number
         kind: SyntaxKind
         projectOptions?: ProjectOptions
+        includeClientRpcDependencies?: boolean
       },
-      Awaited<ReturnType<typeof baseGetFileExportMetadata>>
+      | Awaited<ReturnType<typeof baseGetFileExportMetadata>>
+      | ClientRpcValueWithDependenciesResponse<
+          Awaited<ReturnType<typeof baseGetFileExportMetadata>>
+        >
     >(client, 'getFileExportMetadata', {
       name,
       filePath,
       position,
       kind,
       projectOptions,
+      includeClientRpcDependencies: true,
     })
+
+    return toClientRpcResponseValue(response)
   }
 
   const project = getProject(projectOptions)
@@ -950,12 +1039,13 @@ export async function getFileExportStaticValue(
 ) {
   const client = getClient()
   if (client) {
-    return callClientMethod<
+    const response = await callClientMethod<
       {
         filePath: string
         position: number
         kind: SyntaxKind
         projectOptions?: ProjectOptions
+        includeClientRpcDependencies?: boolean
       },
       unknown
     >(client, 'getFileExportStaticValue', {
@@ -963,7 +1053,10 @@ export async function getFileExportStaticValue(
       position,
       kind,
       projectOptions,
+      includeClientRpcDependencies: true,
     })
+
+    return toClientRpcResponseValue(response)
   }
 
   const project = getProject(projectOptions)
