@@ -1,4 +1,5 @@
-import { basename, resolve } from 'node:path'
+import { basename, extname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   afterEach,
   beforeAll,
@@ -13,6 +14,15 @@ import type { RenounPrewarmTargets } from './prewarm.ts'
 
 import { resolveSchemePath } from '../utils/path.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
+
+const moduleSpecifierExtension =
+  extname(fileURLToPath(import.meta.url)) === '.js' ? '.js' : '.ts'
+
+const getProjectModuleSpecifier = `../project/get-project${moduleSpecifierExtension}`
+const nodeFileSystemModuleSpecifier = `../file-system/NodeFileSystem${moduleSpecifierExtension}`
+const projectClientModuleSpecifier = `../project/client${moduleSpecifierExtension}`
+const gitIgnoredModuleSpecifier = `../utils/is-file-path-git-ignored${moduleSpecifierExtension}`
+const prewarmModuleSpecifier = `./prewarm${moduleSpecifierExtension}`
 
 const getProjectMock = vi.fn()
 const readDirectoryMock = vi.fn<
@@ -84,26 +94,9 @@ function createMockFileEntry(path: string): {
   }
 }
 
-vi.mock('../project/get-project.ts', () => ({
-  getProject: getProjectMock,
-}))
-
-vi.mock('../file-system/NodeFileSystem.ts', () => ({
-  NodeFileSystem: MockNodeFileSystem,
-}))
-
-vi.mock('../project/client.ts', () => ({
-  getFileExports: getFileExportsMock,
-  getOutlineRanges: getOutlineRangesMock,
-}))
-
 vi.mock('@renoun/mdx/utils', () => ({
   getMarkdownSections: getMarkdownSectionsMock,
   getMDXSections: getMDXSectionsMock,
-}))
-
-vi.mock('../utils/is-file-path-git-ignored.ts', () => ({
-  isFilePathGitIgnored: isFilePathGitIgnoredMock,
 }))
 
 let prewarmRenounRpcServerCache:
@@ -117,7 +110,24 @@ let collectRenounPrewarmTargets:
   | undefined
 
 beforeAll(async () => {
-  const prewarm = await import('./prewarm.ts')
+  vi.doMock(getProjectModuleSpecifier, () => ({
+    getProject: getProjectMock,
+  }))
+
+  vi.doMock(nodeFileSystemModuleSpecifier, () => ({
+    NodeFileSystem: MockNodeFileSystem,
+  }))
+
+  vi.doMock(projectClientModuleSpecifier, () => ({
+    getFileExports: getFileExportsMock,
+    getOutlineRanges: getOutlineRangesMock,
+  }))
+
+  vi.doMock(gitIgnoredModuleSpecifier, () => ({
+    isFilePathGitIgnored: isFilePathGitIgnoredMock,
+  }))
+
+  const prewarm = await import(prewarmModuleSpecifier)
   prewarmRenounRpcServerCache = prewarm.prewarmRenounRpcServerCache
   collectRenounPrewarmTargets = prewarm.collectRenounPrewarmTargets
 })

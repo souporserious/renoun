@@ -137,15 +137,18 @@ describe('file system', () => {
     })
 
     test('applies URL directory prefix when provided with relative path', () => {
+      const fileSystem = new NodeFileSystem()
+      const expectedWorkspacePath = fileSystem.getRelativePathToWorkspace(
+        fileURLToPath(new URL('../components/Link/Link.tsx', import.meta.url))
+      )
+
       const file = new File({
         directory: new URL('../components', import.meta.url),
         path: 'Link/Link.tsx',
         byteLength: 0,
       })
 
-      expect(file.workspacePath).toBe(
-        'packages/renoun/src/components/Link/Link.tsx'
-      )
+      expect(file.workspacePath).toBe(expectedWorkspacePath)
     })
 
     test('applies directory instance prefix when provided with relative path', () => {

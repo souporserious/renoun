@@ -5,10 +5,13 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 import * as ts from 'typescript'
 
+const moduleSpecifierExtension =
+  extname(fileURLToPath(import.meta.url)) === '.js' ? '.js' : '.ts'
+
 const ENTRYPOINTS = [
-  fileURLToPath(new URL('./index.ts', import.meta.url)),
-  fileURLToPath(new URL('./app.ts', import.meta.url)),
-  fileURLToPath(new URL('./prewarm.ts', import.meta.url)),
+  fileURLToPath(new URL(`./index${moduleSpecifierExtension}`, import.meta.url)),
+  fileURLToPath(new URL(`./app${moduleSpecifierExtension}`, import.meta.url)),
+  fileURLToPath(new URL(`./prewarm${moduleSpecifierExtension}`, import.meta.url)),
 ]
 
 const RESOLUTION_EXTENSIONS = [
