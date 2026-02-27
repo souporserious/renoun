@@ -594,26 +594,13 @@ export async function createServer(options?: CreateServerOptions) {
     }) {
       const project = getProject(projectOptions)
       if (includeDependencies) {
-        const [text, result] = await Promise.all([
-          getCachedFileExportText(project, {
-            filePath,
-            position,
-            kind,
-            includeDependencies: true,
-          }),
-          getFileExportTextResult({
-            filePath,
-            position,
-            kind,
-            includeDependencies: true,
-            project,
-          }),
-        ])
-
-        return {
-          text,
-          dependencies: result.dependencies,
-        }
+        return getFileExportTextResult({
+          filePath,
+          position,
+          kind,
+          includeDependencies: true,
+          project,
+        })
       }
 
       return getCachedFileExportText(project, {
