@@ -8,6 +8,7 @@ import {
   resolveBooleanProcessEnv,
   resolvePositiveIntegerProcessEnv,
 } from '../utils/env.ts'
+import { HASH_STRING_HEX_LENGTH } from '../utils/stable-serialization.ts'
 import { DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX } from '../utils/cache-constants.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
@@ -3151,11 +3152,11 @@ function getPersistedFingerprint(value: unknown): string | undefined {
     return undefined
   }
 
-  if (value.length !== 40) {
+  if (value.length !== 40 && value.length !== HASH_STRING_HEX_LENGTH) {
     return undefined
   }
 
-  if (!/^[0-9a-f]{40}$/.test(value)) {
+  if (!/^[0-9a-f]+$/.test(value)) {
     return undefined
   }
 

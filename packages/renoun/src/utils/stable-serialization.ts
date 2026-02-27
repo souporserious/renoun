@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto'
 
+export const HASH_STRING_ALGORITHM = 'sha256' as const
+export const HASH_STRING_HEX_LENGTH = 64 as const
+
 export function stableStringify(value: unknown): string {
   if (value === undefined) {
     return 'undefined'
@@ -62,5 +65,5 @@ export function stableStringify(value: unknown): string {
 }
 
 export function hashString(input: string): string {
-  return createHash('sha1').update(input).digest('hex')
+  return createHash(HASH_STRING_ALGORITHM).update(input).digest('hex')
 }

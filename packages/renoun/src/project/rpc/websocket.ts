@@ -81,6 +81,7 @@ function wrapCallbackError(message: string, error: unknown) {
 }
 
 function createAcceptValue(key: string) {
+  // RFC 6455 requires SHA-1 for Sec-WebSocket-Accept.
   return createHash('sha1')
     .update(key + GUID)
     .digest('base64')

@@ -6,7 +6,11 @@ import type {
   ts as TsMorphTS,
 } from '../utils/ts-morph.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
-import { hashString, stableStringify } from '../utils/stable-serialization.ts'
+import {
+  HASH_STRING_ALGORITHM,
+  hashString,
+  stableStringify,
+} from '../utils/stable-serialization.ts'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
@@ -1754,7 +1758,7 @@ async function resolveProjectConfigDependencyVersion(options: {
     try {
       const fileContents =
         await runtimeCacheStore.snapshot.readFile(normalizedConfigPath)
-      version = `sha1:${hashString(fileContents)}:${fileContents.length}`
+      version = `${HASH_STRING_ALGORITHM}:${hashString(fileContents)}:${fileContents.length}`
     } catch {}
 
     projectConfigDependencyVersionByKey.set(dependencyKey, {
@@ -1875,6 +1879,9 @@ function getCacheContentIdKindForProfile(version: string | undefined): string {
   }
   if (version.startsWith('sha1:')) {
     return 'sha1'
+  }
+  if (version.startsWith(`${HASH_STRING_ALGORITHM}:`)) {
+    return HASH_STRING_ALGORITHM
   }
   if (version.startsWith('dir:')) {
     return 'dir'
