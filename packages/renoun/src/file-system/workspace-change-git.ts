@@ -161,8 +161,12 @@ export async function getWorkspaceChangedPathsSinceTokenFromGit(
     getPathSignature: options.getPathSignature,
   })
 
-  if (currentHead === previousHead && previousDirtyDigest === statusDigest.digest) {
-    return []
+  if (currentHead === previousHead) {
+    if (previousDirtyDigest === statusDigest.digest) {
+      return []
+    }
+
+    return null
   }
 
   for (const statusEntry of statusEntries) {
