@@ -71,7 +71,10 @@ import {
   recordRpcCacheReuseStaleReason,
 } from './rpc/build-profile.ts'
 import type { RuntimeAnalysisSession } from './runtime-analysis-session.ts'
-import { getRuntimeAnalysisSession as getSharedRuntimeAnalysisSession } from './runtime-analysis-session.ts'
+import {
+  getRuntimeAnalysisSession as getSharedRuntimeAnalysisSession,
+  getRuntimeAnalysisSessions as getSharedRuntimeAnalysisSessions,
+} from './runtime-analysis-session.ts'
 
 const RUNTIME_ANALYSIS_CACHE_NAMES = {
   fileExports: 'fileExports',
@@ -188,10 +191,36 @@ function shouldTrackRuntimeTypeScriptDependencies(): boolean {
   return !isProductionEnvironment()
 }
 
-async function getRuntimeAnalysisSessionUnchecked(): Promise<
+function getRuntimeAnalysisScopePath(
+  project: Project,
+  filePath?: string
+): string | undefined {
+  const compilerOptions = project.getCompilerOptions() as {
+    configFilePath?: string
+  }
+  if (
+    typeof compilerOptions.configFilePath === 'string' &&
+    compilerOptions.configFilePath.length > 0
+  ) {
+    return dirname(compilerOptions.configFilePath)
+  }
+
+  if (typeof filePath === 'string' && filePath.length > 0) {
+    return dirname(filePath)
+  }
+
+  return undefined
+}
+
+async function getRuntimeAnalysisSessionUnchecked(
+  scopePath?: string
+): Promise<
   RuntimeAnalysisCacheStore | undefined
 > {
-  const runtimeSession = await getSharedRuntimeAnalysisSession()
+  const runtimeSession = await getSharedRuntimeAnalysisSession(
+    undefined,
+    scopePath
+  )
   if (!runtimeSession) {
     return undefined
   }
@@ -201,6 +230,19 @@ async function getRuntimeAnalysisSessionUnchecked(): Promise<
     store: runtimeSession.session.cache,
     snapshot: runtimeSession.session.snapshot,
   }
+}
+
+async function getRuntimeAnalysisSessionsUnchecked(
+  paths?: Iterable<string>
+): Promise<
+  RuntimeAnalysisCacheStore[]
+> {
+  const runtimeSessions = await getSharedRuntimeAnalysisSessions(paths)
+  return runtimeSessions.map((runtimeSession) => ({
+    ...runtimeSession,
+    store: runtimeSession.session.cache,
+    snapshot: runtimeSession.session.snapshot,
+  }))
 }
 
 function enqueueRuntimeAnalysisInvalidation(task: () => Promise<void>): void {
@@ -228,11 +270,13 @@ async function waitForRuntimeAnalysisInvalidations(): Promise<void> {
   await runtimeAnalysisInvalidationQueue
 }
 
-async function getRuntimeAnalysisSession(): Promise<
+async function getRuntimeAnalysisSession(
+  scopePath?: string
+): Promise<
   RuntimeAnalysisCacheStore | undefined
 > {
   await waitForRuntimeAnalysisInvalidations()
-  return getRuntimeAnalysisSessionUnchecked()
+  return getRuntimeAnalysisSessionUnchecked(scopePath)
 }
 
 function trackFallbackAnalysisProject(project: Project): void {
@@ -360,13 +404,17 @@ export function invalidateRuntimeAnalysisCachePaths(
   invalidateFallbackAnalysisCachePaths(pathsToInvalidate)
 
   enqueueRuntimeAnalysisInvalidation(async () => {
-    const runtimeSession = await getRuntimeAnalysisSessionUnchecked()
-    if (!runtimeSession) {
+    const runtimeSessions = await getRuntimeAnalysisSessionsUnchecked(
+      pathsToInvalidate
+    )
+    if (runtimeSessions.length === 0) {
       return
     }
 
-    runtimeSession.session.invalidatePaths(pathsToInvalidate)
-    await runtimeSession.session.waitForPendingInvalidations()
+    for (const runtimeSession of runtimeSessions) {
+      runtimeSession.session.invalidatePaths(pathsToInvalidate)
+      await runtimeSession.session.waitForPendingInvalidations()
+    }
   })
 }
 
@@ -376,13 +424,15 @@ export function invalidateRuntimeAnalysisCacheAll(): void {
   invalidateFallbackAnalysisCacheAll()
 
   enqueueRuntimeAnalysisInvalidation(async () => {
-    const runtimeSession = await getRuntimeAnalysisSessionUnchecked()
-    if (!runtimeSession) {
+    const runtimeSessions = await getRuntimeAnalysisSessionsUnchecked()
+    if (runtimeSessions.length === 0) {
       return
     }
 
-    runtimeSession.session.invalidatePaths(['.'])
-    await runtimeSession.session.waitForPendingInvalidations()
+    for (const runtimeSession of runtimeSessions) {
+      runtimeSession.session.invalidatePaths(['.'])
+      await runtimeSession.session.waitForPendingInvalidations()
+    }
   })
 }
 
@@ -2484,7 +2534,9 @@ export async function getCachedFileExports(
 ): Promise<ModuleExport[]> {
   ensureProjectSourceFileLoaded(project, filePath)
 
-  const runtimeCacheStore = await getRuntimeAnalysisSession()
+  const runtimeCacheStore = await getRuntimeAnalysisSession(
+    getRuntimeAnalysisScopePath(project, filePath)
+  )
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -2561,7 +2613,9 @@ export async function getCachedOutlineRanges(
   project: Project,
   filePath: string
 ): Promise<OutlineRange[]> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession()
+  const runtimeCacheStore = await getRuntimeAnalysisSession(
+    getRuntimeAnalysisScopePath(project, filePath)
+  )
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -2622,7 +2676,9 @@ export async function getCachedFileExportMetadata(
     kind: SyntaxKind
   }
 ): Promise<Awaited<ReturnType<typeof baseGetFileExportMetadata>>> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession()
+  const runtimeCacheStore = await getRuntimeAnalysisSession(
+    getRuntimeAnalysisScopePath(project, options.filePath)
+  )
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -2706,7 +2762,9 @@ export async function getCachedFileExportStaticValue(
     kind: SyntaxKind
   }
 ): Promise<Awaited<ReturnType<typeof baseGetFileExportStaticValue>>> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession()
+  const runtimeCacheStore = await getRuntimeAnalysisSession(
+    getRuntimeAnalysisScopePath(project, options.filePath)
+  )
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -2792,7 +2850,9 @@ export async function getCachedFileExportText(
     includeDependencies?: boolean
   }
 ): Promise<string> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession()
+  const runtimeCacheStore = await getRuntimeAnalysisSession(
+    getRuntimeAnalysisScopePath(project, options.filePath)
+  )
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -2907,7 +2967,9 @@ export async function resolveCachedTypeAtLocationWithDependencies(
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (!options.isInMemoryFileSystem) {
-    const runtimeCacheStore = await getRuntimeAnalysisSession()
+    const runtimeCacheStore = await getRuntimeAnalysisSession(
+      getRuntimeAnalysisScopePath(project, options.filePath)
+    )
     if (
       runtimeCacheStore &&
       canUseRuntimePathCache(runtimeCacheStore, options.filePath)
@@ -3022,7 +3084,9 @@ export async function transpileCachedSourceFile(
   project: Project,
   filePath: string
 ): Promise<string> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession()
+  const runtimeCacheStore = await getRuntimeAnalysisSession(
+    getRuntimeAnalysisScopePath(project, filePath)
+  )
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -3088,7 +3152,9 @@ export async function getCachedSourceTextMetadata(
     filePath: options.filePath,
     fallback: `inline:${options.language ?? 'txt'}`,
   })
-  const runtimeCacheStore = await getRuntimeAnalysisSession()
+  const runtimeCacheStore = await getRuntimeAnalysisSession(
+    getRuntimeAnalysisScopePath(project, options.filePath)
+  )
   if (!runtimeCacheStore) {
     if (shouldProfileRpcCacheReuse) {
       await profileRuntimeCacheReuse({
@@ -3198,7 +3264,9 @@ export async function getCachedTokens(
         ? normalizePathKey(options.sourcePath)
         : `inline:${options.language ?? 'plaintext'}`,
   })
-  const runtimeCacheStore = await getRuntimeAnalysisSession()
+  const runtimeCacheStore = await getRuntimeAnalysisSession(
+    getRuntimeAnalysisScopePath(project, options.filePath)
+  )
   if (!runtimeCacheStore) {
     if (shouldProfileRpcCacheReuse) {
       await profileRuntimeCacheReuse({
