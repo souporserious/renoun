@@ -270,6 +270,109 @@ describe('GitVirtualFileSystem', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1)
   })
 
+  it('aborts all concurrent metadata fetches on clearCache', async () => {
+    const archive = makeTar([
+      { path: 'root/a.ts', content: 'export const a = 1' },
+      { path: 'root/b.ts', content: 'export const b = 1' },
+    ])
+    const pendingMetadataRequests: Array<{
+      url: string
+      aborted: boolean
+      resolve: (response: Response) => void
+      reject: (error: unknown) => void
+    }> = []
+    const abortedMetadataUrls: string[] = []
+
+    const mockFetch = vi.fn((input: unknown, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/repo/tarball/')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+          arrayBuffer: async () => archive,
+        } as Response)
+      }
+
+      if (url.includes('/repos/owner/repo/commits?sha=')) {
+        return new Promise<Response>((resolve, reject) => {
+          const pendingRequest = {
+            url,
+            aborted: false,
+            resolve,
+            reject,
+          }
+          pendingMetadataRequests.push(pendingRequest)
+
+          const rejectWithAbort = () => {
+            pendingRequest.aborted = true
+            abortedMetadataUrls.push(url)
+            const abortError = new Error('aborted')
+            abortError.name = 'AbortError'
+            reject(abortError)
+          }
+
+          if (init?.signal?.aborted) {
+            rejectWithAbort()
+            return
+          }
+
+          init?.signal?.addEventListener('abort', rejectWithAbort, { once: true })
+        })
+      }
+
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        json: async () => [],
+      } as Response)
+    })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fs = new GitVirtualFileSystem({
+      repository: 'owner/repo',
+      host: 'github',
+      ref: 'a'.repeat(40),
+    })
+
+    await expect(fs.readFile('a.ts')).resolves.toBe('export const a = 1')
+
+    const firstMetadataRequest = fs.getGitFileMetadata('a.ts')
+    const secondMetadataRequest = fs.getGitFileMetadata('b.ts')
+
+    for (
+      let attempt = 0;
+      attempt < 20 && pendingMetadataRequests.length < 2;
+      attempt += 1
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+
+    fs.clearCache()
+
+    // Resolve any request that was not aborted so the test never hangs.
+    for (const pendingRequest of pendingMetadataRequests) {
+      if (!pendingRequest.aborted) {
+        pendingRequest.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({}),
+          json: async () => [],
+        } as Response)
+      }
+    }
+
+    await Promise.all([firstMetadataRequest, secondMetadataRequest])
+
+    expect(pendingMetadataRequests.length).toBe(2)
+    expect(abortedMetadataUrls).toHaveLength(2)
+  })
+
   it('clearCache invalidates branch-scoped session cache entries', async () => {
     const archive = makeTar([
       { path: 'root/.keep', content: `` },

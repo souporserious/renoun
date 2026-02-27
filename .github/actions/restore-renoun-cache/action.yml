@@ -21,5 +21,3 @@ runs:
           .renoun/cache/fs-cache.sqlite-shm
           .renoun/cache/fs-cache.sqlite-wal
         key: ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
-        restore-keys: |
-          ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ github.workflow }}-${{ steps.renoun-cache-token.outputs.token }}-

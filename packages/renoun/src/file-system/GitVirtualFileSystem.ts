@@ -345,7 +345,7 @@ export class GitVirtualFileSystem
   #originPolicy: { fetch: Set<string>; auth: Set<string> }
   #ownerEncoded?: string
   #repoEncoded?: string
-  #currentFetch?: AbortController
+  #activeFetchAbortControllers = new Set<AbortController>()
   #initId = 0
   #initialized = false
   #initPromise?: Promise<void>
@@ -701,10 +701,11 @@ export class GitVirtualFileSystem
   }
 
   clearCache() {
-    if (this.#currentFetch) {
-      this.#currentFetch.abort()
-      this.#currentFetch = undefined
+    for (const controller of this.#activeFetchAbortControllers) {
+      controller.abort()
     }
+    this.#activeFetchAbortControllers.clear()
+
     this.#initId++
     const files = this.getFiles()
     files.clear()
@@ -2196,7 +2197,7 @@ export class GitVirtualFileSystem
       return await retry(
         async (attempt) => {
           const controller = new AbortController()
-          this.#currentFetch = controller
+          this.#activeFetchAbortControllers.add(controller)
           let timedOut = false
           const timer = setTimeout(() => {
             timedOut = true
@@ -2328,9 +2329,7 @@ export class GitVirtualFileSystem
             throw mappedError
           } finally {
             clearTimeout(timer)
-            if (this.#currentFetch === controller) {
-              this.#currentFetch = undefined
-            }
+            this.#activeFetchAbortControllers.delete(controller)
           }
         },
         {
