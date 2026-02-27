@@ -63,6 +63,7 @@ interface ResolveTypeAtLocationRpcRequest {
 
 export interface CreateServerOptions {
   port?: number
+  host?: 'localhost' | '127.0.0.1' | '::1'
   emitRefreshNotifications?: boolean
 }
 
@@ -216,7 +217,10 @@ function getProductionRpcMemoizeOptions():
  * utilities by processing type analysis and syntax highlighting in a separate process.
  */
 export async function createServer(options?: CreateServerOptions) {
-  const server = new WebSocketServer({ port: options?.port })
+  const server = new WebSocketServer({
+    port: options?.port,
+    host: options?.host,
+  })
   const port = await server.getPort()
 
   setServerPortProcessEnv(port)

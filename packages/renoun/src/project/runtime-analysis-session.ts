@@ -138,3 +138,16 @@ export async function getRuntimeAnalysisSessions(
 
   return sessions
 }
+
+export function resetRuntimeAnalysisSessionsForTests(): void {
+  for (const runtimeSession of runtimeAnalysisSessionByScopeKey.values()) {
+    Session.reset(
+      runtimeSession.fileSystem,
+      runtimeSession.session.snapshot.id
+    )
+  }
+
+  runtimeAnalysisSessionByScopeKey.clear()
+  runtimeAnalysisFileSystem = undefined
+  runtimeAnalysisFileSystemPromise = undefined
+}

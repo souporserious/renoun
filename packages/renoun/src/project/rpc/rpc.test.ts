@@ -6,8 +6,10 @@ import {
 } from '../../utils/public-error'
 import { WebSocketServer } from './server'
 import { WebSocketClient } from './client'
+import { TestWebSocket } from './test-websocket'
 
 describe('project WebSocket RPC', () => {
+  const previousWebSocket = globalThis.WebSocket
   let server: WebSocketServer
   let client: WebSocketClient
   let maxConcurrent = 0
@@ -16,6 +18,8 @@ describe('project WebSocket RPC', () => {
   const randomHandler = vi.fn(() => Math.random())
 
   beforeAll(async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+
     // Launch server on a random port and register methods
     server = new WebSocketServer({ port: 0 })
     await server.isReady()
@@ -146,13 +150,23 @@ describe('project WebSocket RPC', () => {
     await client.ready(2_000)
   }, 10_000)
 
-  afterAll(() => {
+  afterAll(async () => {
+    if (client) {
+      await new Promise<void>((resolve) => {
+        client.once('disconnected', () => resolve())
+        client.close()
+      })
+      client.removeAllListeners()
+    }
     server.cleanup()
+    await new Promise((resolve) => setTimeout(resolve, 50))
     if (previousServerPort === undefined) {
       delete process.env.RENOUN_SERVER_PORT
     } else {
       process.env.RENOUN_SERVER_PORT = previousServerPort
     }
+
+    globalThis.WebSocket = previousWebSocket
   })
 
   it('performs a single RPC call', async () => {
@@ -312,8 +326,9 @@ describe('project WebSocket RPC', () => {
 
   it('times out long-running calls when a custom timeout is provided', async () => {
     await expect(
-      client.callMethod<{ delay: number }, number>('slow', { delay: 1500 }, 1) // 1 second timeout
+      client.callMethod<{ delay: number }, number>('slow', { delay: 100 }, 10)
     ).rejects.toThrow(/timed out/i)
+    await new Promise((resolve) => setTimeout(resolve, 125))
   })
 
   it('expires memoised results after TTL', async () => {

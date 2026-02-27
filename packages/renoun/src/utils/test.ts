@@ -38,3 +38,12 @@ export async function withProcessEnv<T>(
     restoreProcessEnv(snapshot)
   }
 }
+
+// TODO: Remove this skip flag when Vitest detectAsyncLeaks no longer flags closed WritableStream internals as promise leaks.
+// https://main.vitest.dev/config/detectasyncleaks
+export const isDetectAsyncLeaksEnabled =
+  (
+    globalThis as {
+      __vitest_worker__?: { config?: { detectAsyncLeaks?: boolean } }
+    }
+  ).__vitest_worker__?.config?.detectAsyncLeaks === true

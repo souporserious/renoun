@@ -1,4 +1,6 @@
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+
+import { disposeDefaultCacheStorePersistence } from '../file-system/CacheSqlite.ts'
 
 async function loadRuntimeAnalysisSessionModule() {
   vi.resetModules()
@@ -6,6 +8,15 @@ async function loadRuntimeAnalysisSessionModule() {
 }
 
 describe('runtime analysis session', () => {
+  afterEach(async () => {
+    const { resetRuntimeAnalysisSessionsForTests } = await import(
+      './runtime-analysis-session.ts'
+    )
+    resetRuntimeAnalysisSessionsForTests()
+    disposeDefaultCacheStorePersistence()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+
   test('reuses the same session for identical scope paths', async () => {
     const { getRuntimeAnalysisSession } = await loadRuntimeAnalysisSessionModule()
     const scopePath = `${process.cwd()}/.cache/runtime-analysis/session-same-scope`

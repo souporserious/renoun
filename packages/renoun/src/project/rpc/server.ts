@@ -175,6 +175,11 @@ const CLOSE_TEXT: Record<number, string> = {
   1011: 'Internal Error',
   1013: 'Try Again Later',
 }
+const ALLOWED_BIND_HOSTS = ['localhost', '127.0.0.1', '::1'] as const
+
+function isAllowedBindHost(host: string): host is (typeof ALLOWED_BIND_HOSTS)[number] {
+  return (ALLOWED_BIND_HOSTS as readonly string[]).includes(host)
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   const timeoutMs = Math.min(ms, MAX_TIMEOUT_MS)
@@ -440,7 +445,7 @@ export class WebSocketServer {
     }
   }
 
-  constructor(options?: { port?: number }) {
+  constructor(options?: { port?: number; host?: string }) {
     // Reuse a stable server ID within the same process so clients can
     // reconnect after an in-process server restart.
     const serverId = getServerIdFromProcessEnv()
@@ -456,9 +461,16 @@ export class WebSocketServer {
       this.#rejectReady = reject
     })
 
+    const host = options?.host ?? 'localhost'
+    if (!isAllowedBindHost(host)) {
+      throw new Error(
+        `[renoun] Invalid WebSocket server host "${host}". Only localhost bindings are allowed.`
+      )
+    }
+
     this.#server = new WSS({
       port: options?.port ?? 0,
-      host: 'localhost',
+      host,
       backlog: 1024,
       maxPayload: MAX_PAYLOAD_BYTES,
       handleProtocols: (protocols) => {

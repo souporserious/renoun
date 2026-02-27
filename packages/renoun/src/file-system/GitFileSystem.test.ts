@@ -30,7 +30,11 @@ import { InMemoryFileSystem } from './InMemoryFileSystem'
 import { FileSystemSnapshot } from './Snapshot'
 import { createGitFileSystemPersistentCacheNodeKey } from './git-cache-key'
 import { Session } from './Session'
-import type { ExportHistoryGenerator, ExportHistoryReport } from './types'
+import type {
+  ExportHistoryGenerator,
+  ExportHistoryReport,
+  GitAuthor,
+} from './types'
 
 /** Drain a generator to get the final report. */
 async function drain(
@@ -2083,9 +2087,7 @@ describe('GitFileSystem', () => {
       commitCount: 1,
       githubProfileUrl: 'https://github.com/alice-dev',
     })
-    expect(
-      'email' in ((author ?? {}) as Record<string, unknown>)
-    ).toBeFalsy()
+    expect('email' in ((author ?? {}) as GitAuthor)).toBeFalsy()
   })
 
   test('getModuleMetadata reports only head exports', async ({
@@ -2887,15 +2889,19 @@ describe('GitFileSystem', () => {
 
     const repository = relative(process.cwd(), repoRoot)
     const store = new GitFileSystem({ repository, cacheDirectory })
-    const beforeReadySession = Session.for(store)
+    try {
+      const beforeReadySession = Session.for(store)
 
-    store.readDirectorySync('.')
-    const afterReadySession = Session.for(store)
+      store.readDirectorySync('.')
+      const afterReadySession = Session.for(store)
 
-    expect(afterReadySession).not.toBe(beforeReadySession)
-    expect(afterReadySession.snapshot.id).not.toBe(
-      beforeReadySession.snapshot.id
-    )
+      expect(afterReadySession).not.toBe(beforeReadySession)
+      expect(afterReadySession.snapshot.id).not.toBe(
+        beforeReadySession.snapshot.id
+      )
+    } finally {
+      store.close()
+    }
   })
 
   test('refreshes session cache when async repo readiness resolves the root', async ({
@@ -2906,15 +2912,19 @@ describe('GitFileSystem', () => {
 
     const repository = relative(process.cwd(), repoRoot)
     const store = new GitFileSystem({ repository, cacheDirectory })
-    const beforeReadySession = Session.for(store)
+    try {
+      const beforeReadySession = Session.for(store)
 
-    const metadata = await store.getMetadata('index.ts')
-    expect(metadata.kind).toBe('module')
+      const metadata = await store.getMetadata('index.ts')
+      expect(metadata.kind).toBe('module')
 
-    const afterReadySession = Session.for(store)
-    expect(afterReadySession).not.toBe(beforeReadySession)
-    expect(afterReadySession.snapshot.id).not.toBe(
-      beforeReadySession.snapshot.id
-    )
+      const afterReadySession = Session.for(store)
+      expect(afterReadySession).not.toBe(beforeReadySession)
+      expect(afterReadySession.snapshot.id).not.toBe(
+        beforeReadySession.snapshot.id
+      )
+    } finally {
+      store.close()
+    }
   })
 })

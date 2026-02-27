@@ -429,10 +429,7 @@ export class GitVirtualFileSystem
     this.#exclude = options.exclude
 
     this.#symlinkMap = new Map()
-    this.#initPromise = this.#loadArchive().catch((error) => {
-      this.#initPromise = undefined
-      throw error
-    })
+    this.#initPromise = this.#createInitPromise()
   }
 
   override usesPersistentCacheByDefault(): boolean {
@@ -2489,10 +2486,7 @@ export class GitVirtualFileSystem
 
     const currentInit = ++this.#initId
     if (!this.#initPromise) {
-      this.#initPromise = this.#loadArchive().catch((error) => {
-        this.#initPromise = undefined
-        throw error
-      })
+      this.#initPromise = this.#createInitPromise()
     }
 
     await this.#initPromise
@@ -2501,6 +2495,21 @@ export class GitVirtualFileSystem
       this.#initPromise = undefined
       await this.#ensureInitialized()
     }
+  }
+
+  #createInitPromise(): Promise<void> {
+    const initPromise = this.#loadArchive().catch((error) => {
+      this.#initPromise = undefined
+      throw error
+    })
+
+    // Prevent unhandled-rejection noise if initialization fails before callers await.
+    // Intentionally attach a secondary observer; awaited callers still receive the
+    // original rejection via `initPromise`.
+    void initPromise.catch(() => {
+      // noop
+    })
+    return initPromise
   }
 
   #formatHostName() {
@@ -2891,96 +2900,109 @@ export class GitVirtualFileSystem
     discard: () => Promise<void>
   }> {
     const reader = stream.getReader()
-    let buffer = new Uint8Array(0)
     let done = false
-    let rawBytesRead = 0
-    const readFromStream = async (size: number): Promise<Uint8Array> => {
-      while (buffer.length < size && !done) {
-        const { value, done: rdone } = await reader.read()
-        if (rdone) {
-          done = true
-          break
-        }
-        if (value && value.length > 0) {
-          rawBytesRead += value.length
-          if (rawBytesRead > this.#maxTarStreamBytes) {
-            throw new Error('[renoun] Archive exceeds maximum stream size')
+
+    try {
+      let buffer = new Uint8Array(0)
+      let rawBytesRead = 0
+      const readFromStream = async (size: number): Promise<Uint8Array> => {
+        while (buffer.length < size && !done) {
+          const { value, done: rdone } = await reader.read()
+          if (rdone) {
+            done = true
+            break
           }
-          const merged = new Uint8Array(buffer.length + value.length)
-          merged.set(buffer, 0)
-          merged.set(value, buffer.length)
-          buffer = merged
+          if (value && value.length > 0) {
+            rawBytesRead += value.length
+            if (rawBytesRead > this.#maxTarStreamBytes) {
+              throw new Error('[renoun] Archive exceeds maximum stream size')
+            }
+            const merged = new Uint8Array(buffer.length + value.length)
+            merged.set(buffer, 0)
+            merged.set(value, buffer.length)
+            buffer = merged
+          }
+        }
+        const out = buffer.subarray(0, Math.min(size, buffer.length))
+        buffer = buffer.subarray(out.length)
+        return out
+      }
+
+      while (true) {
+        const header = await readFromStream(512)
+        if (header.length === 0 || header.every((byte) => byte === 0)) break
+        if (header.length < 512) throw new Error('[renoun] Truncated tar header')
+        if (!this.#validTarChecksum(header)) {
+          throw new Error('[renoun] Invalid tar header checksum')
+        }
+
+        const size = this.#parseTarSize(header)
+        const typeFlag = header[156]!
+        const name = this.#readTarString(header, 0, 100)
+        const prefix = this.#readTarString(header, 345, 500)
+        const linkname = this.#readTarString(header, 157, 257)
+
+        const dataSize = size
+        const paddedSize = Math.ceil(dataSize / 512) * 512
+        let remaining = dataSize
+
+        let discarded = false
+        const readData = async (maxChunk: number): Promise<Uint8Array> => {
+          if (remaining <= 0) return new Uint8Array(0)
+          const toRead = Math.min(remaining, maxChunk)
+          const chunk = await readFromStream(toRead)
+          remaining -= chunk.length
+          return chunk
+        }
+        const discard = async () => {
+          let toSkip = remaining
+          while (toSkip > 0) {
+            const chunk = await readFromStream(Math.min(64 * 1024, toSkip))
+            if (chunk.length === 0) break
+            toSkip -= chunk.length
+          }
+          remaining = 0
+          let pad = paddedSize - dataSize
+          while (pad > 0) {
+            const chunk = await readFromStream(Math.min(64 * 1024, pad))
+            if (chunk.length === 0) break
+            pad -= chunk.length
+          }
+          discarded = true
+        }
+        const finishPadding = async () => {
+          const pad = paddedSize - dataSize
+          if (pad > 0) await readFromStream(pad)
+        }
+
+        yield {
+          header,
+          size,
+          typeFlag,
+          name,
+          prefix,
+          linkname,
+          readData,
+          discard,
+        }
+
+        // If consumer didn't fully read, ensure we consume padding
+        if (remaining > 0) {
+          await discard()
+        } else if (!discarded) {
+          await finishPadding()
         }
       }
-      const out = buffer.subarray(0, Math.min(size, buffer.length))
-      buffer = buffer.subarray(out.length)
-      return out
-    }
-
-    while (true) {
-      const header = await readFromStream(512)
-      if (header.length === 0 || header.every((byte) => byte === 0)) break
-      if (header.length < 512) throw new Error('[renoun] Truncated tar header')
-      if (!this.#validTarChecksum(header)) {
-        throw new Error('[renoun] Invalid tar header checksum')
-      }
-
-      const size = this.#parseTarSize(header)
-      const typeFlag = header[156]!
-      const name = this.#readTarString(header, 0, 100)
-      const prefix = this.#readTarString(header, 345, 500)
-      const linkname = this.#readTarString(header, 157, 257)
-
-      const dataSize = size
-      const paddedSize = Math.ceil(dataSize / 512) * 512
-      let remaining = dataSize
-
-      let discarded = false
-      const readData = async (maxChunk: number): Promise<Uint8Array> => {
-        if (remaining <= 0) return new Uint8Array(0)
-        const toRead = Math.min(remaining, maxChunk)
-        const chunk = await readFromStream(toRead)
-        remaining -= chunk.length
-        return chunk
-      }
-      const discard = async () => {
-        let toSkip = remaining
-        while (toSkip > 0) {
-          const chunk = await readFromStream(Math.min(64 * 1024, toSkip))
-          if (chunk.length === 0) break
-          toSkip -= chunk.length
+    } finally {
+      if (!done) {
+        try {
+          await reader.cancel()
+        } catch {
+          // Best-effort cancellation during teardown; keep the original extraction
+          // error if one is already in flight.
         }
-        remaining = 0
-        let pad = paddedSize - dataSize
-        while (pad > 0) {
-          const chunk = await readFromStream(Math.min(64 * 1024, pad))
-          if (chunk.length === 0) break
-          pad -= chunk.length
-        }
-        discarded = true
       }
-      const finishPadding = async () => {
-        const pad = paddedSize - dataSize
-        if (pad > 0) await readFromStream(pad)
-      }
-
-      yield {
-        header,
-        size,
-        typeFlag,
-        name,
-        prefix,
-        linkname,
-        readData,
-        discard,
-      }
-
-      // If consumer didn't fully read, ensure we consume padding
-      if (remaining > 0) {
-        await discard()
-      } else if (!discarded) {
-        await finishPadding()
-      }
+      reader.releaseLock()
     }
   }
 

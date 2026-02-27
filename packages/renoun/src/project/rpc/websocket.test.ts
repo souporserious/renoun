@@ -1,6 +1,15 @@
 import { describe, test, expect } from 'vitest'
 
 import { WebSocketServer } from './websocket'
+import { TestWebSocket } from './test-websocket'
+
+function createAsyncDisposeHandle(dispose: () => Promise<void>) {
+  return {
+    async [Symbol.asyncDispose]() {
+      await dispose()
+    },
+  }
+}
 
 async function startServer(
   options: ConstructorParameters<typeof WebSocketServer>[0] = {}
@@ -26,11 +35,75 @@ async function withServer<Type>(
   fn: (context: { server: WebSocketServer; port: number }) => Promise<Type>
 ) {
   const { server, port } = await startServer(options)
-  try {
-    return await fn({ server, port })
-  } finally {
+  await using _server = createAsyncDisposeHandle(async () => {
     await stopServer(server)
+  })
+  return await fn({ server, port })
+}
+
+async function connectClient(port: number) {
+  const client = new TestWebSocket(`ws://127.0.0.1:${port}`)
+
+  await new Promise<void>((resolve, reject) => {
+    const onOpen = () => {
+      client.removeEventListener('open', onOpen)
+      client.removeEventListener('error', onError)
+      resolve()
+    }
+    const onError = (error: Event) => {
+      client.removeEventListener('open', onOpen)
+      client.removeEventListener('error', onError)
+      reject(error)
+    }
+
+    client.addEventListener('open', onOpen)
+    client.addEventListener('error', onError)
+  })
+
+  return client
+}
+
+async function closeClient(client: TestWebSocket) {
+  if (client.readyState === TestWebSocket.CLOSED) {
+    return
   }
+
+  await new Promise<void>((resolve) => {
+    const onClose = () => {
+      client.removeEventListener('close', onClose)
+      client.removeEventListener('error', onError)
+      resolve()
+    }
+    const onError = () => {
+      client.removeEventListener('close', onClose)
+      client.removeEventListener('error', onError)
+      resolve()
+    }
+
+    client.addEventListener('close', onClose)
+    client.addEventListener('error', onError)
+
+    if (client.readyState === TestWebSocket.CONNECTING) {
+      client.addEventListener(
+        'open',
+        () => {
+          try {
+            client.close()
+          } catch {}
+        },
+        { once: true }
+      )
+      return
+    }
+
+    try {
+      client.close()
+    } catch {
+      resolve()
+    }
+  })
+
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 describe('WebSocketServer', () => {
@@ -41,14 +114,13 @@ describe('WebSocketServer', () => {
           ws.once('message', (message: string) => resolve(message))
         )
       })
-      const client = new WebSocket(`ws://127.0.0.1:${port}`)
-      await new Promise<void>((resolve, reject) => {
-        client.addEventListener('open', () => resolve())
-        client.addEventListener('error', (error) => reject(error))
+      const client = await connectClient(port)
+      await using _client = createAsyncDisposeHandle(async () => {
+        await closeClient(client)
       })
+
       client.send('hello')
       await expect(messagePromise).resolves.toBe('hello')
-      client.close()
     })
   })
 
@@ -60,14 +132,13 @@ describe('WebSocketServer', () => {
           ws.once('message', (message: string) => resolve(message))
         )
       })
-      const client = new WebSocket(`ws://127.0.0.1:${port}`)
-      await new Promise<void>((resolve, reject) => {
-        client.addEventListener('open', () => resolve())
-        client.addEventListener('error', reject)
+      const client = await connectClient(port)
+      await using _client = createAsyncDisposeHandle(async () => {
+        await closeClient(client)
       })
+
       client.send(big)
       await expect(messagePromise).resolves.toHaveLength(big.length)
-      client.close()
     })
   })
 
@@ -80,13 +151,12 @@ describe('WebSocketServer', () => {
           setTimeout(() => ws.ping(), 25)
         })
       })
-      const client = new WebSocket(`ws://127.0.0.1:${port}`)
-      await new Promise<void>((resolve, reject) => {
-        client.addEventListener('open', () => resolve())
-        client.addEventListener('error', reject)
+      const client = await connectClient(port)
+      await using _client = createAsyncDisposeHandle(async () => {
+        await closeClient(client)
       })
+
       await expect(pongPromise).resolves.toBeInstanceOf(Buffer)
-      client.close()
     })
   })
 
@@ -97,14 +167,13 @@ describe('WebSocketServer', () => {
           ws.once('close', (code: number) => resolve(code))
         )
       })
-      const client = new WebSocket(`ws://127.0.0.1:${port}`)
-      await new Promise<void>((resolve, reject) => {
-        client.addEventListener('open', () => resolve())
-        client.addEventListener('error', reject)
+      const client = await connectClient(port)
+      await using _client = createAsyncDisposeHandle(async () => {
+        await closeClient(client)
       })
+
       client.send(new Uint8Array([1, 2, 3]))
       await expect(closePromise).resolves.toBe(1003)
-      client.close()
     })
   })
 
@@ -115,14 +184,13 @@ describe('WebSocketServer', () => {
           ws.once('close', (code: number) => resolve(code))
         )
       })
-      const client = new WebSocket(`ws://127.0.0.1:${port}`)
-      await new Promise<void>((resolve, reject) => {
-        client.addEventListener('open', () => resolve())
-        client.addEventListener('error', reject)
+      const client = await connectClient(port)
+      await using _client = createAsyncDisposeHandle(async () => {
+        await closeClient(client)
       })
+
       client.send('123456') // 6 > 5
       await expect(closePromise).resolves.toBe(1009)
-      client.close()
     })
   })
 })

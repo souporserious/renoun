@@ -7,9 +7,11 @@ import {
 } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
-import { afterAll, describe, expect, test } from 'vitest'
+import { tmpdir } from 'node:os'
+import { afterAll, afterEach, describe, expect, test } from 'vitest'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { isDetectAsyncLeaksEnabled } from '../utils/test.ts'
 import { NodeFileSystem } from './NodeFileSystem'
 
 async function readStream(
@@ -24,6 +26,7 @@ async function readStream(
       chunks.push(result.value.slice())
       result = await reader.read()
     }
+    await reader.closed
   } finally {
     reader.releaseLock()
   }
@@ -61,6 +64,24 @@ function runGit(cwd: string, args: string[]): string {
   return result.stdout.trim()
 }
 
+function createDisposeHandle(dispose: () => void) {
+  return {
+    [Symbol.dispose]() {
+      dispose()
+    },
+  }
+}
+
+function createTempDirectoryHandle(prefix: string) {
+  const path = mkdtempSync(prefix)
+  return {
+    path,
+    [Symbol.dispose]() {
+      rmSync(path, { recursive: true, force: true })
+    },
+  }
+}
+
 describe('NodeFileSystem', () => {
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
@@ -70,6 +91,10 @@ describe('NodeFileSystem', () => {
   const tempDirectory = mkdtempSync(join(baseTmpDirectory, 'node-fs-'))
   const outsideDirectories: string[] = []
   const fileSystem = new NodeFileSystem()
+
+  afterEach(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  })
 
   const textFilePath = join(tempDirectory, 'text.txt')
   const binaryFilePath = join(tempDirectory, 'binary.bin')
@@ -90,19 +115,25 @@ describe('NodeFileSystem', () => {
     ])
   })
 
-  test('supports streaming writes and reads', async () => {
-    const writer = fileSystem.writeFileStream(streamFilePath).getWriter()
-    await writer.write(encoder.encode('chunk-1 '))
-    await writer.write(encoder.encode('chunk-2'))
-    await writer.close()
+  test.skipIf(isDetectAsyncLeaksEnabled)(
+    'supports streaming writes and reads',
+    async () => {
+      const writer = fileSystem.writeFileStream(streamFilePath).getWriter()
+      await writer.write(encoder.encode('chunk-1 '))
+      await writer.write(encoder.encode('chunk-2'))
+      await writer.close()
+      await writer.closed
+      writer.releaseLock()
+      await new Promise((resolve) => setTimeout(resolve, 20))
 
-    const streamContents = await readStream(
-      fileSystem.readFileStream(streamFilePath)
-    )
+      const streamContents = await readStream(
+        fileSystem.readFileStream(streamFilePath)
+      )
 
-    expect(decoder.decode(streamContents)).toBe('chunk-1 chunk-2')
-    expect(await fileSystem.readFile(streamFilePath)).toBe('chunk-1 chunk-2')
-  })
+      expect(decoder.decode(streamContents)).toBe('chunk-1 chunk-2')
+      expect(await fileSystem.readFile(streamFilePath)).toBe('chunk-1 chunk-2')
+    }
+  )
 
   test('deleteFile removes files and fileExists reflects state', async () => {
     await fileSystem.writeFile(binaryFilePath, encoder.encode('data'))
@@ -113,7 +144,7 @@ describe('NodeFileSystem', () => {
   })
 
   test('prevents path traversal via symlinks escaping the workspace', async () => {
-    const outsideDirectory = mkdtempSync(join(rootDirectory, '..', 'node-fs-'))
+    const outsideDirectory = mkdtempSync(join(tmpdir(), 'node-fs-'))
     outsideDirectories.push(outsideDirectory)
 
     const outsideFilePath = join(outsideDirectory, 'secret.txt')
@@ -129,9 +160,7 @@ describe('NodeFileSystem', () => {
   })
 
   test('rejects rename/copy targets outside the workspace root', async () => {
-    const outsideDirectory = mkdtempSync(
-      join(rootDirectory, '..', 'node-fs-outside-')
-    )
+    const outsideDirectory = mkdtempSync(join(tmpdir(), 'node-fs-outside-'))
     outsideDirectories.push(outsideDirectory)
     const outsidePath = join(outsideDirectory, 'outside.txt')
     const target = join(tempDirectory, 'outside-copy.txt')
@@ -178,21 +207,20 @@ describe('NodeFileSystem', () => {
     const source = 'canonical.txt'
     const absoluteSource = join(tempDirectory, source)
     process.chdir(tempDirectory)
-
-    try {
-      await fileSystem.writeFile(absoluteSource, 'canonical')
-
-      await expect(
-        fileSystem.rename(absoluteSource, `./${source}`)
-      ).resolves.toBeUndefined()
-      await expect(
-        fileSystem.copy(`./${source}`, absoluteSource)
-      ).resolves.toBeUndefined()
-
-      expect(await fileSystem.readFile(absoluteSource)).toBe('canonical')
-    } finally {
+    using _restoreCwd = createDisposeHandle(() => {
       process.chdir(previousCwd)
-    }
+    })
+
+    await fileSystem.writeFile(absoluteSource, 'canonical')
+
+    await expect(
+      fileSystem.rename(absoluteSource, `./${source}`)
+    ).resolves.toBeUndefined()
+    await expect(
+      fileSystem.copy(`./${source}`, absoluteSource)
+    ).resolves.toBeUndefined()
+
+    expect(await fileSystem.readFile(absoluteSource)).toBe('canonical')
   })
 
   test('copy supports recursive directories', async () => {
@@ -246,86 +274,83 @@ describe('NodeFileSystem', () => {
 
     const previousCwd = process.cwd()
     process.chdir(cwdDirectory)
-
-    try {
-      expect(fileSystem.getAbsolutePath(`root-only-${uniqueId}.txt`)).toBe(
-        join(cwdDirectory, `root-only-${uniqueId}.txt`)
-      )
-      expect(fileSystem.getAbsolutePath(sharedName)).toBe(
-        join(cwdDirectory, sharedName)
-      )
-      expect(fileSystem.getAbsolutePath(`./${sharedName}`)).toBe(
-        join(cwdDirectory, sharedName)
-      )
-      expect(fileSystem.getAbsolutePath(`./${sharedName}`)).toBe(
-        fileSystem.getAbsolutePath(sharedName)
-      )
-    } finally {
+    using _restoreCwd = createDisposeHandle(() => {
       process.chdir(previousCwd)
+    })
+    using _removeRootOnlyPath = createDisposeHandle(() => {
       rmSync(rootOnlyPath, { force: true })
-    }
+    })
+
+    expect(fileSystem.getAbsolutePath(`root-only-${uniqueId}.txt`)).toBe(
+      join(cwdDirectory, `root-only-${uniqueId}.txt`)
+    )
+    expect(fileSystem.getAbsolutePath(sharedName)).toBe(
+      join(cwdDirectory, sharedName)
+    )
+    expect(fileSystem.getAbsolutePath(`./${sharedName}`)).toBe(
+      join(cwdDirectory, sharedName)
+    )
+    expect(fileSystem.getAbsolutePath(`./${sharedName}`)).toBe(
+      fileSystem.getAbsolutePath(sharedName)
+    )
   })
 
   test('returns workspace change tokens for repository root paths', async () => {
-    const repoRoot = mkdtempSync(join(baseTmpDirectory, 'node-fs-git-'))
+    using repoRootHandle = createTempDirectoryHandle(
+      join(baseTmpDirectory, 'node-fs-git-')
+    )
+    const repoRoot = repoRootHandle.path
 
-    try {
-      runGit(repoRoot, ['init'])
-      runGit(repoRoot, ['config', 'user.name', 'Renoun Tests'])
-      runGit(repoRoot, ['config', 'user.email', 'tests@renoun.dev'])
+    runGit(repoRoot, ['init'])
+    runGit(repoRoot, ['config', 'user.name', 'Renoun Tests'])
+    runGit(repoRoot, ['config', 'user.email', 'tests@renoun.dev'])
 
-      const trackedPath = join(repoRoot, 'tracked.ts')
-      writeFileSync(trackedPath, 'export const value = 1\n')
-      runGit(repoRoot, ['add', 'tracked.ts'])
-      runGit(repoRoot, ['commit', '-m', 'init'])
+    const trackedPath = join(repoRoot, 'tracked.ts')
+    writeFileSync(trackedPath, 'export const value = 1\n')
+    runGit(repoRoot, ['add', 'tracked.ts'])
+    runGit(repoRoot, ['commit', '-m', 'init'])
 
-      const initialToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
-      expect(initialToken).toBeTruthy()
+    const initialToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
+    expect(initialToken).toBeTruthy()
 
-      writeFileSync(trackedPath, 'export const value = 2\n')
-      const updatedToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
+    writeFileSync(trackedPath, 'export const value = 2\n')
+    const updatedToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
 
-      expect(updatedToken).toBeTruthy()
-      expect(updatedToken).not.toBe(initialToken)
-    } finally {
-      rmSync(repoRoot, { recursive: true, force: true })
-    }
+    expect(updatedToken).toBeTruthy()
+    expect(updatedToken).not.toBe(initialToken)
   })
 
   test('changes workspace token when editing an already dirty file', async () => {
-    const repoRoot = mkdtempSync(join(baseTmpDirectory, 'node-fs-git-dirty-'))
+    using repoRootHandle = createTempDirectoryHandle(
+      join(baseTmpDirectory, 'node-fs-git-dirty-')
+    )
+    const repoRoot = repoRootHandle.path
 
-    try {
-      runGit(repoRoot, ['init'])
-      runGit(repoRoot, ['config', 'user.name', 'Renoun Tests'])
-      runGit(repoRoot, ['config', 'user.email', 'tests@renoun.dev'])
+    runGit(repoRoot, ['init'])
+    runGit(repoRoot, ['config', 'user.name', 'Renoun Tests'])
+    runGit(repoRoot, ['config', 'user.email', 'tests@renoun.dev'])
 
-      const trackedPath = join(repoRoot, 'tracked.ts')
-      writeFileSync(trackedPath, 'export const value = 1\n')
-      runGit(repoRoot, ['add', 'tracked.ts'])
-      runGit(repoRoot, ['commit', '-m', 'init'])
+    const trackedPath = join(repoRoot, 'tracked.ts')
+    writeFileSync(trackedPath, 'export const value = 1\n')
+    runGit(repoRoot, ['add', 'tracked.ts'])
+    runGit(repoRoot, ['commit', '-m', 'init'])
 
-      writeFileSync(trackedPath, 'export const value = 22\n')
-      const firstDirtyToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
+    writeFileSync(trackedPath, 'export const value = 22\n')
+    const firstDirtyToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
 
-      writeFileSync(trackedPath, 'export const value = 333\n')
-      const secondDirtyToken = await fileSystem.getWorkspaceChangeToken(
-        repoRoot
-      )
+    writeFileSync(trackedPath, 'export const value = 333\n')
+    const secondDirtyToken = await fileSystem.getWorkspaceChangeToken(repoRoot)
 
-      expect(firstDirtyToken).toBeTruthy()
-      expect(secondDirtyToken).toBeTruthy()
-      expect(secondDirtyToken).not.toBe(firstDirtyToken)
+    expect(firstDirtyToken).toBeTruthy()
+    expect(secondDirtyToken).toBeTruthy()
+    expect(secondDirtyToken).not.toBe(firstDirtyToken)
 
-      const changedPaths = await fileSystem.getWorkspaceChangedPathsSinceToken(
-        repoRoot,
-        firstDirtyToken!
-      )
-      const expectedPath = fileSystem.getRelativePathToWorkspace(trackedPath)
-      expect(changedPaths ?? []).toContain(expectedPath)
-    } finally {
-      rmSync(repoRoot, { recursive: true, force: true })
-    }
+    const changedPaths = await fileSystem.getWorkspaceChangedPathsSinceToken(
+      repoRoot,
+      firstDirtyToken!
+    )
+    const expectedPath = fileSystem.getRelativePathToWorkspace(trackedPath)
+    expect(changedPaths ?? []).toContain(expectedPath)
   })
 
   afterAll(() => {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
 import { WebSocketClient } from './rpc/client.ts'
+import { TestWebSocket } from './rpc/test-websocket.ts'
 import type { RefreshInvalidationsSinceResponse } from './refresh-notifications.ts'
 import { createServer } from './server.ts'
 
@@ -12,22 +13,33 @@ const originalEnvironment = captureProcessEnv([
 ])
 
 describe('project server refresh invalidations', () => {
+  const originalWebSocket = globalThis.WebSocket
   let client: WebSocketClient | undefined
   let server: Awaited<ReturnType<typeof createServer>> | undefined
 
-  afterEach(() => {
-    client?.close()
+  afterEach(async () => {
+    const activeClient = client
+    if (activeClient) {
+      await new Promise<void>((resolve) => {
+        activeClient.once('disconnected', () => resolve())
+        activeClient.close()
+      })
+      activeClient.removeAllListeners()
+    }
     server?.cleanup()
     client = undefined
     server = undefined
 
+    globalThis.WebSocket = originalWebSocket
     restoreProcessEnv(originalEnvironment)
+    await new Promise((resolve) => setTimeout(resolve, 0))
   })
 
   test('forces full refresh when requested cursor is ahead of the server cursor', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
     process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
 
-    server = await createServer()
+    server = await createServer({ host: '127.0.0.1' })
     client = new WebSocketClient(server.getId())
     await client.ready(2_000)
 

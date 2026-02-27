@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { gzipSync } from 'node:zlib'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { isDetectAsyncLeaksEnabled } from '../utils/test.ts'
 import { Cache } from './Cache.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 import {
@@ -291,9 +292,11 @@ describe('GitVirtualFileSystem', () => {
           ok: true,
           status: 200,
           statusText: 'OK',
-          headers: createHeaders({ 'content-type': 'application/octet-stream' }),
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
           arrayBuffer: async () => archive,
-        } as Response)
+        } as unknown as Response)
       }
 
       if (url.includes('/repos/owner/repo/commits?sha=')) {
@@ -319,7 +322,9 @@ describe('GitVirtualFileSystem', () => {
             return
           }
 
-          init?.signal?.addEventListener('abort', rejectWithAbort, { once: true })
+          init?.signal?.addEventListener('abort', rejectWithAbort, {
+            once: true,
+          })
         })
       }
 
@@ -1647,11 +1652,12 @@ describe('GitVirtualFileSystem', () => {
     expect(c1FetchAttempts).toBe(2)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.useRealTimers()
     globalThis.fetch = originalFetch
     vi.restoreAllMocks()
     disposeDefaultCacheStorePersistence()
+    await new Promise((resolve) => setTimeout(resolve, 50))
   })
 
   it('infers base-name entry files when entry is a directory', async () => {
@@ -3419,30 +3425,74 @@ describe('GitVirtualFileSystem', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2)
   })
 
-  it('streaming: handles gzipped tar bodies', async () => {
-    const gz = gzipSync(SUCCESS_ARCHIVE)
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(gz)
-        controller.close()
-      },
-    })
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: createHeaders({ 'content-type': 'application/gzip' }),
-      body,
-    })
-    globalThis.fetch = mockFetch
+  it.skipIf(isDetectAsyncLeaksEnabled)(
+    'streaming: handles gzipped tar bodies',
+    async () => {
+      const originalDecompressionStream = globalThis.DecompressionStream
+      using _restoreDecompressionStream = {
+        [Symbol.dispose]() {
+          globalThis.DecompressionStream = originalDecompressionStream
+        },
+      }
+      class MockDecompressionStream {
+        readonly readable: ReadableStream<Uint8Array>
+        readonly writable: WritableStream<Uint8Array>
+        #controller: ReadableStreamDefaultController<Uint8Array> | undefined
+        #chunks: Uint8Array[] = []
 
-    const fs = new GitVirtualFileSystem({
-      repository: 'owner/repo',
-      host: 'github',
-      ref: 'main',
-    })
-    await expect(fs.readFile('file.txt')).resolves.toBe('hello')
-  })
+        constructor(_format: string) {
+          this.readable = new ReadableStream<Uint8Array>({
+            start: (controller) => {
+              this.#controller = controller
+            },
+          })
+          this.writable = new WritableStream<Uint8Array>({
+            write: (chunk) => {
+              this.#chunks.push(chunk.slice())
+            },
+            close: () => {
+              const compressed = Buffer.concat(
+                this.#chunks.map((chunk) => Buffer.from(chunk))
+              )
+              this.#controller?.enqueue(gunzipSync(compressed))
+              this.#controller?.close()
+            },
+            abort: (reason) => {
+              this.#chunks.length = 0
+              this.#controller?.error(reason)
+            },
+          })
+        }
+      }
+
+      globalThis.DecompressionStream =
+        MockDecompressionStream as unknown as typeof DecompressionStream
+
+      const gz = gzipSync(SUCCESS_ARCHIVE)
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(gz)
+          controller.close()
+        },
+      })
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: createHeaders({ 'content-type': 'application/gzip' }),
+        body,
+      })
+      globalThis.fetch = mockFetch
+
+      const fs = new GitVirtualFileSystem({
+        repository: 'owner/repo',
+        host: 'github',
+        ref: 'main',
+      })
+      await expect(fs.readFile('file.txt')).resolves.toBe('hello')
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  )
 
   it('streaming: skips overlarge file and keeps smaller ones', async () => {
     const big = Buffer.alloc(8 * 1024 * 1024 + 1024, 1)
@@ -3514,19 +3564,6 @@ describe('GitVirtualFileSystem', () => {
         location: 'https://codeload.github.com/owner/repo/legacy.tar.gz/main',
       }),
       arrayBuffer: async () => new ArrayBuffer(0),
-    }
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(SUCCESS_ARCHIVE)
-        controller.close()
-      },
-    })
-    const success = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: createHeaders({ 'content-type': 'application/octet-stream' }),
-      body,
     }
 
     const mockFetch = vi

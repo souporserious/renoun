@@ -4,6 +4,32 @@ import { GitFileSystem } from './GitFileSystem'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem'
 import { Repository, type RepositoryConfig } from './Repository'
 
+function closeRepositoryFileSystem(repository: Repository) {
+  const fileSystem = repository.getFileSystem()
+  if (fileSystem instanceof GitFileSystem) {
+    fileSystem.close()
+  }
+}
+
+function createDisposeHandle(dispose: () => void) {
+  return {
+    [Symbol.dispose]() {
+      dispose()
+    },
+  }
+}
+
+function restoreNavigator(originalNavigator: unknown) {
+  if (originalNavigator === undefined) {
+    delete (globalThis as any).navigator
+  } else {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: originalNavigator,
+    })
+  }
+}
+
 describe('Repository', () => {
   describe('constructor', () => {
     test('constructs with a string "owner/repo" and defaults to GitHub host', () => {
@@ -87,6 +113,9 @@ describe('Repository', () => {
       const repo = new Repository({
         path: 'https://github.com/owner/repo',
       })
+      using _closeRepositoryFileSystem = createDisposeHandle(() => {
+        closeRepositoryFileSystem(repo)
+      })
       const getFileSystemSpy = vi.spyOn(repo, 'getFileSystem')
 
       const directory = repo.getDirectory('src/nodes')
@@ -101,19 +130,59 @@ describe('Repository', () => {
       )
     })
 
-    test('uses the virtual file system when clone is false', () => {
+    test('uses the virtual file system when clone is false', async () => {
+      const originalFetch = globalThis.fetch
+      const mockFetch = vi.fn(
+        async (input: string | URL) => {
+          const url = String(input)
+          const parsedUrl = new URL(url)
+          if (parsedUrl.pathname === '/repos/owner/repo') {
+            return {
+              ok: true,
+              status: 200,
+              statusText: 'OK',
+              headers: new Headers({
+                'content-type': 'application/json',
+              }),
+              json: async () => ({ default_branch: 'main' }),
+            }
+          }
+
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            headers: new Headers({
+              'content-type': 'application/octet-stream',
+              'content-length': '1024',
+            }),
+            arrayBuffer: async () => new Uint8Array(1024).buffer,
+          }
+        }
+      ) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+      using _restoreFetch = createDisposeHandle(() => {
+        globalThis.fetch = originalFetch
+      })
+
       const repo = new Repository({
         path: 'https://github.com/owner/repo',
         clone: false,
       })
+
       const fileSystem = repo.getFileSystem()
       expect(fileSystem).toBeInstanceOf(GitVirtualFileSystem)
+      await expect(fileSystem.readDirectory('.')).resolves.toEqual([])
+      await new Promise((resolve) => setTimeout(resolve, 20))
     })
   })
 
   describe('getFile', () => {
     test('preserves nested workspace paths', () => {
       const repo = new Repository('.')
+      using _closeRepositoryFileSystem = createDisposeHandle(() => {
+        closeRepositoryFileSystem(repo)
+      })
       const file = repo.getFile('packages/renoun/package.json')
 
       expect(file.workspacePath).toBe('packages/renoun/package.json')
@@ -965,25 +1034,17 @@ describe('Repository', () => {
       )
 
       const originalNavigator = (globalThis as any).navigator
-      try {
-        Object.defineProperty(globalThis, 'navigator', {
-          configurable: true,
-          value: { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
-        })
+      using _restoreNavigator = createDisposeHandle(() => {
+        restoreNavigator(originalNavigator)
+      })
+      Object.defineProperty(globalThis, 'navigator', {
+        configurable: true,
+        value: { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
+      })
 
-        await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
-          'https://github.com/owner/repo/releases/download/v1.2.3/cli-linux.tar.gz'
-        )
-      } finally {
-        if (originalNavigator === undefined) {
-          delete (globalThis as any).navigator
-        } else {
-          Object.defineProperty(globalThis, 'navigator', {
-            configurable: true,
-            value: originalNavigator,
-          })
-        }
-      }
+      await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
+        'https://github.com/owner/repo/releases/download/v1.2.3/cli-linux.tar.gz'
+      )
       await expect(repository.getReleaseUrl({ source: 'zip' })).resolves.toBe(
         'https://github.com/owner/repo/zipball/v1.2.3'
       )
@@ -1129,34 +1190,26 @@ describe('Repository', () => {
       globalThis.fetch = mockFetch
 
       const originalNavigator = (globalThis as any).navigator
+      using _restoreNavigator = createDisposeHandle(() => {
+        restoreNavigator(originalNavigator)
+      })
 
-      try {
-        Object.defineProperty(globalThis, 'navigator', {
-          configurable: true,
-          value: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5)' },
-        })
+      Object.defineProperty(globalThis, 'navigator', {
+        configurable: true,
+        value: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5)' },
+      })
 
-        const repository = new Repository('owner/repo')
+      const repository = new Repository('owner/repo')
 
-        await expect(
-          repository.getReleaseUrl({ asset: /linux/, refresh: true })
-        ).resolves.toBe(
-          'https://github.com/owner/repo/releases/download/v1.0.0/tool-linux.tar.gz'
-        )
+      await expect(
+        repository.getReleaseUrl({ asset: /linux/, refresh: true })
+      ).resolves.toBe(
+        'https://github.com/owner/repo/releases/download/v1.0.0/tool-linux.tar.gz'
+      )
 
-        await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
-          'https://github.com/owner/repo/releases/download/v1.0.0/tool-mac.dmg'
-        )
-      } finally {
-        if (originalNavigator === undefined) {
-          delete (globalThis as any).navigator
-        } else {
-          Object.defineProperty(globalThis, 'navigator', {
-            configurable: true,
-            value: originalNavigator,
-          })
-        }
-      }
+      await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
+        'https://github.com/owner/repo/releases/download/v1.0.0/tool-mac.dmg'
+      )
     })
 
     test('throws a descriptive error when asset selection fails', async () => {
