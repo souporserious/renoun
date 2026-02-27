@@ -1298,14 +1298,17 @@ export class Repository {
     releaseSource: { mode: 'local-version'; version: string },
     options?: GetReleaseOptions
   ): Release {
+    const packageName = options?.packageName
     const rawVersion = releaseSource.version.trim()
     const versionWithoutPrefix = rawVersion.replace(/^v/i, '')
-    const tagName = rawVersion.startsWith('v')
-      ? rawVersion
-      : `v${versionWithoutPrefix}`
+    const tagName = packageName
+      ? `${packageName}@${versionWithoutPrefix}`
+      : rawVersion.startsWith('v')
+        ? rawVersion
+        : `v${versionWithoutPrefix}`
 
-    const releaseName = options?.packageName
-      ? `${options.packageName}@${versionWithoutPrefix}`
+    const releaseName = packageName
+      ? `${packageName}@${versionWithoutPrefix}`
       : tagName
     const htmlUrl = this.getReleaseTagUrl({ tag: tagName })
 

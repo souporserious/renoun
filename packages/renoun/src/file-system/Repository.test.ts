@@ -807,7 +807,7 @@ describe('Repository', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
-    test('builds release metadata and URL from local version in local-version mode', async () => {
+    test('builds package-scoped release metadata and URL from local version in local-version mode', async () => {
       const mockFetch = vi.fn(async () => ({
         ok: true,
         status: 200,
@@ -827,10 +827,15 @@ describe('Repository', () => {
         packageName: 'renoun',
       })
 
-      expect(release.tagName).toBe('v11.3.0')
+      expect(release.tagName).toBe('renoun@11.3.0')
       expect(release.name).toBe('renoun@11.3.0')
       expect(release.htmlUrl).toBe(
-        'https://github.com/owner/repo/releases/tag/v11.3.0'
+        'https://github.com/owner/repo/releases/tag/renoun@11.3.0'
+      )
+      await expect(
+        repository.getReleaseUrl({ packageName: 'renoun' })
+      ).resolves.toBe(
+        'https://github.com/owner/repo/releases/tag/renoun@11.3.0'
       )
       expect(release.isFallback).toBe(false)
       await expect(repository.getReleaseUrl()).resolves.toBe(
