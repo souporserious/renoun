@@ -43,6 +43,20 @@ function getPrimaryKey(actionSource: string): string {
 }
 
 describe('restore-renoun-cache action', () => {
+  test('uses restore-only cache action to avoid redundant save attempts', () => {
+    const actionSource = readFileSync(
+      '.github/actions/restore-renoun-cache/action.yml',
+      'utf8'
+    )
+
+    expect(actionSource).toContain(
+      'uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
+    )
+    expect(actionSource).not.toContain(
+      'uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
+    )
+  })
+
   test('uses a commit-scoped cache key (incremental, no per-run identifiers)', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',

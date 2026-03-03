@@ -457,7 +457,9 @@ async function TokensAsync({
       // for highlighted tokens so the final stream updates this block.
       waitForWarmResult: isDevelopmentRuntime,
     })
-    const quickInfoRuntime = getServerRuntimeFromProcessEnv()
+    const quickInfoRuntime = isDevelopmentRuntime
+      ? getServerRuntimeFromProcessEnv()
+      : undefined
     const quickInfoProjectVersion = quickInfoRuntime?.id
     const lastLineIndex = tokens.length - 1
     const hasAnnotations =

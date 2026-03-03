@@ -396,19 +396,18 @@ export function invalidateProjectCachesByPaths(
 
   let affectedProjects = 0
 
-  for (const [projectDirectory, projectsByDirectory] of directoryToProjects) {
-    const normalizedProjectDirectory = normalizeComparablePath(projectDirectory)
-    const intersectsAnyPath = normalizedPaths.some((normalizedPath) =>
-      pathsIntersect(normalizedProjectDirectory, normalizedPath)
-    )
-    if (!intersectsAnyPath) {
-      continue
-    }
-
+  // Project cache dependencies may include paths outside each project's root.
+  // Invalidate every tracked project so dependency-driven cache entries refresh.
+  const projectsToInvalidate = new Set<TsMorphProject>()
+  for (const projectsByDirectory of directoryToProjects.values()) {
     for (const project of projectsByDirectory) {
-      invalidateProjectFileCachePaths(project, pathsToInvalidate)
-      affectedProjects += 1
+      projectsToInvalidate.add(project)
     }
+  }
+
+  for (const project of projectsToInvalidate) {
+    invalidateProjectFileCachePaths(project, pathsToInvalidate)
+    affectedProjects += 1
   }
 
   return affectedProjects
@@ -473,21 +472,6 @@ function normalizeComparablePath(path: string): string {
     : resolve(normalizedPathKey)
 
   return normalizePathKey(normalizeSlashes(comparablePath))
-}
-
-function pathsIntersect(firstPath: string, secondPath: string): boolean {
-  if (firstPath === '.' || secondPath === '.') {
-    return true
-  }
-
-  if (firstPath === secondPath) {
-    return true
-  }
-
-  return (
-    firstPath.startsWith(`${secondPath}/`) ||
-    secondPath.startsWith(`${firstPath}/`)
-  )
 }
 
 function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect } from 'react'
 
+import { resolveBrowserWebSocketUrl } from '../../project/rpc/browser-websocket-url.ts'
 import type { WebSocketNotification } from '../../project/rpc/server.ts'
 
 declare global {
@@ -36,14 +37,14 @@ export function RefreshClient({ port, id }: { port: string; id: string }) {
       }
     }
 
-    const ws = new WebSocket(`ws://localhost:${port}`, id)
+    const ws = new WebSocket(resolveBrowserWebSocketUrl(port), id)
     ws.addEventListener('message', handleMessage)
 
     return () => {
       ws.removeEventListener('message', handleMessage)
       ws.close()
     }
-  }, [port])
+  }, [id, port])
 
   return null
 }

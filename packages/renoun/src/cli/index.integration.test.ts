@@ -117,6 +117,24 @@ describe('renoun CLI index integration', () => {
     expect(exitSpy).toHaveBeenCalledWith(0)
   })
 
+  test('exits with usage when command is unknown', async () => {
+    process.argv = ['node', 'renoun', 'definitely-unknown-command']
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit)
+
+    await import('./index.ts')
+
+    const message = String(errorSpy.mock.calls[0]?.[0])
+    expect(message).toContain(
+      '[renoun] Unknown command "definitely-unknown-command".'
+    )
+    expect(message).toContain('Usage:')
+    expect(exitSpy).toHaveBeenCalledWith(1)
+  })
+
   test('passes project tsconfig path to prewarm in watch mode', async () => {
     process.argv = ['node', 'renoun', 'watch']
 

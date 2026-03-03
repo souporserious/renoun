@@ -33,7 +33,11 @@ function toStringArguments(
   return values.filter((value): value is string => typeof value === 'string')
 }
 
-if (firstArgument === 'help') {
+if (
+  firstArgument === 'help' ||
+  firstArgument === '--help' ||
+  firstArgument === '-h'
+) {
   console.log(usageMessage)
   process.exit(0)
 }
@@ -350,4 +354,11 @@ if (firstArgument === 'validate') {
     },
     { data: { mode: 'watch' } }
   )
+} else {
+  if (firstArgument) {
+    console.error(`[renoun] Unknown command "${firstArgument}".\n${usageMessage}`)
+  } else {
+    console.error(`[renoun] Missing command.\n${usageMessage}`)
+  }
+  process.exit(1)
 }

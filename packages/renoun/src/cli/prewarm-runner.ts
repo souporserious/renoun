@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url'
 import type { ProjectOptions } from '../project/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { isVitestRuntime } from '../utils/env.ts'
-import { PREWARM_WORKER_PAYLOAD_ENV_KEY } from './prewarm/constants.ts'
+import {
+  PREWARM_REQUEST_TIMEOUT_MS,
+  PREWARM_WORKER_PAYLOAD_ENV_KEY,
+} from './prewarm/constants.ts'
 
 interface PrewarmWorkerMessage {
   type?: unknown
@@ -16,6 +19,7 @@ interface PrewarmWorkerMessage {
 }
 
 interface PrewarmRequest {
+  id: number
   options?: { projectOptions?: ProjectOptions }
   signature: string
 }
@@ -111,9 +115,10 @@ function parsePrewarmWorkerPriority(
 
 let activePrewarmRequest: PrewarmRequest | undefined
 const pendingPrewarmRequests: PrewarmRequest[] = []
+let nextPrewarmRequestId = 0
 
-function finalizeActivePrewarmRequest(signature: string): void {
-  if (!activePrewarmRequest || activePrewarmRequest.signature !== signature) {
+function finalizeActivePrewarmRequest(requestId: number): void {
+  if (!activePrewarmRequest || activePrewarmRequest.id !== requestId) {
     return
   }
 
@@ -164,27 +169,49 @@ function startPrewarmRequest(request: PrewarmRequest): void {
     data: { status: 'running' },
   }))
 
-  const workerEntryFilePath = resolvePrewarmWorkerEntryFilePath()
-  if (isVitestRuntime() || !workerEntryFilePath) {
-    void runPrewarmInline(request.options, startedAt).finally(() => {
-      finalizeActivePrewarmRequest(request.signature)
-    })
-    return
-  }
-
   let didHandleTerminalMessage = false
   let didFinalize = false
-  const finalizeWorker = () => {
+  let prewarmWorkerProcess: ReturnType<typeof spawn> | undefined
+
+  const finalizeRequest = () => {
     if (didFinalize) {
       return
     }
 
     didFinalize = true
-    finalizeActivePrewarmRequest(request.signature)
+    clearTimeout(timeoutHandle)
+    finalizeActivePrewarmRequest(request.id)
+  }
+
+  const timeoutHandle = setTimeout(() => {
+    didHandleTerminalMessage = true
+
+    getDebugLogger().warn('Renoun RPC cache prewarm timed out', () => ({
+      data: {
+        durationMs: Date.now() - startedAt,
+        timeoutMs: PREWARM_REQUEST_TIMEOUT_MS,
+        execution: prewarmWorkerProcess ? 'worker' : 'inline',
+      },
+    }))
+
+    if (prewarmWorkerProcess && !prewarmWorkerProcess.killed) {
+      prewarmWorkerProcess.kill('SIGKILL')
+    }
+
+    finalizeRequest()
+  }, PREWARM_REQUEST_TIMEOUT_MS)
+  timeoutHandle.unref()
+
+  const workerEntryFilePath = resolvePrewarmWorkerEntryFilePath()
+  if (isVitestRuntime() || !workerEntryFilePath) {
+    void runPrewarmInline(request.options, startedAt).finally(() => {
+      finalizeRequest()
+    })
+    return
   }
 
   try {
-    const prewarmWorkerProcess = spawn(
+    prewarmWorkerProcess = spawn(
       process.execPath,
       [workerEntryFilePath],
       {
@@ -262,7 +289,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
           })
         )
       }
-      finalizeWorker()
+      finalizeRequest()
     })
 
     prewarmWorkerProcess.once('exit', (code, signal) => {
@@ -290,7 +317,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
         }
       }
 
-      finalizeWorker()
+      finalizeRequest()
     })
 
     prewarmWorkerProcess.unref()
@@ -303,7 +330,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
       },
     }))
     void runPrewarmInline(request.options, startedAt).finally(() => {
-      finalizeActivePrewarmRequest(request.signature)
+      finalizeRequest()
     })
   }
 }
@@ -312,6 +339,7 @@ export function runPrewarmSafely(options?: {
   projectOptions?: ProjectOptions
 }): void {
   const request: PrewarmRequest = {
+    id: ++nextPrewarmRequestId,
     options,
     signature: getPrewarmRequestSignature(options),
   }

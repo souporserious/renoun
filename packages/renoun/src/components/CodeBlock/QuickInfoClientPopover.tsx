@@ -4,6 +4,7 @@ import { styled, type CSSObject } from 'restyle'
 
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
+import { resolveBrowserWebSocketUrl } from '../../project/rpc/browser-websocket-url.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { QuickInfoPopover } from './QuickInfoPopover.tsx'
 import { useQuickInfoContext } from './QuickInfoProvider.tsx'
@@ -787,20 +788,53 @@ function readRpcResponseForRequest(
 async function requestQuickInfoOverWebSocket(
   request: QuickInfoRequest
 ): Promise<QuickInfoData | null> {
+  return requestRpcMethodOverWebSocket(
+    request,
+    'getQuickInfoAtPosition',
+    {
+      filePath: request.filePath,
+      position: request.position,
+    },
+    normalizeQuickInfoResult
+  )
+}
+
+async function requestDisplayTokensOverWebSocket(
+  request: QuickInfoRequest,
+  value: string,
+  tokenThemeConfig: ConfigurationOptions['theme'] | undefined
+): Promise<QuickInfoTokenizedDisplayText | null> {
+  return requestRpcMethodOverWebSocket(
+    request,
+    'getTokens',
+    {
+      value,
+      language: 'typescript',
+      theme: tokenThemeConfig,
+      allowErrors: true,
+      waitForWarmResult: true,
+    },
+    normalizeQuickInfoTokenizedDisplayText
+  )
+}
+
+async function requestRpcMethodOverWebSocket<Result>(
+  request: QuickInfoRequest,
+  method: string,
+  params: Record<string, unknown>,
+  normalizeResult: (value: unknown) => Result | null
+): Promise<Result | null> {
   if (typeof window === 'undefined' || typeof WebSocket === 'undefined') {
     return null
   }
 
   return new Promise((resolve) => {
     const requestId = nextQuickInfoRequestId++
-    // The renoun RPC server is loopback-bound by design.
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const host = 'localhost'
-    const url = `${protocol}://${host}:${request.runtime.port}`
+    const url = resolveBrowserWebSocketUrl(request.runtime.port)
     const socket = new WebSocket(url, request.runtime.id)
     let settled = false
 
-    const finalize = (value: QuickInfoData | null) => {
+    const finalize = (value: Result | null) => {
       if (settled) {
         return
       }
@@ -824,11 +858,8 @@ async function requestQuickInfoOverWebSocket(
         socket.send(
           JSON.stringify({
             id: requestId,
-            method: 'getQuickInfoAtPosition',
-            params: {
-              filePath: request.filePath,
-              position: request.position,
-            },
+            method,
+            params,
           })
         )
       } catch {
@@ -853,96 +884,7 @@ async function requestQuickInfoOverWebSocket(
           return
         }
 
-        finalize(normalizeQuickInfoResult(response.result))
-      } catch {
-        // Ignore malformed messages and continue waiting.
-      }
-    })
-
-    socket.addEventListener('error', () => {
-      finalize(null)
-    })
-
-    socket.addEventListener('close', () => {
-      finalize(null)
-    })
-  })
-}
-
-async function requestDisplayTokensOverWebSocket(
-  request: QuickInfoRequest,
-  value: string,
-  tokenThemeConfig: ConfigurationOptions['theme'] | undefined
-): Promise<QuickInfoTokenizedDisplayText | null> {
-  if (typeof window === 'undefined' || typeof WebSocket === 'undefined') {
-    return null
-  }
-
-  return new Promise((resolve) => {
-    const requestId = nextQuickInfoRequestId++
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const host = 'localhost'
-    const url = `${protocol}://${host}:${request.runtime.port}`
-    const socket = new WebSocket(url, request.runtime.id)
-    let settled = false
-
-    const finalize = (tokenizedDisplayText: QuickInfoTokenizedDisplayText | null) => {
-      if (settled) {
-        return
-      }
-
-      settled = true
-      clearTimeout(timeoutId)
-      try {
-        socket.close()
-      } catch {
-        // Ignore close failures.
-      }
-      resolve(tokenizedDisplayText)
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      finalize(null)
-    }, QUICK_INFO_REQUEST_TIMEOUT_MS)
-
-    socket.addEventListener('open', () => {
-      try {
-        socket.send(
-          JSON.stringify({
-            id: requestId,
-            method: 'getTokens',
-            params: {
-              value,
-              language: 'typescript',
-              theme: tokenThemeConfig,
-              allowErrors: true,
-              waitForWarmResult: true,
-            },
-          })
-        )
-      } catch {
-        finalize(null)
-      }
-    })
-
-    socket.addEventListener('message', (event) => {
-      if (typeof event.data !== 'string') {
-        return
-      }
-
-      try {
-        const payload = JSON.parse(event.data)
-        const response = readRpcResponseForRequest(payload, requestId)
-        if (!response) {
-          return
-        }
-
-        if (response.error) {
-          finalize(null)
-          return
-        }
-
-        finalize(normalizeQuickInfoTokenizedDisplayText(response.result))
+        finalize(normalizeResult(response.result))
       } catch {
         // Ignore malformed messages and continue waiting.
       }

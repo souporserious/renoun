@@ -20,6 +20,7 @@ function createDeferred<Value>(): Deferred<Value> {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.doUnmock('./prewarm.ts')
   vi.resetModules()
   vi.clearAllMocks()
@@ -134,5 +135,53 @@ describe('runPrewarmSafely', () => {
 
     pendingCalls.shift()!.resolve()
     await Promise.resolve()
+  })
+
+  test('times out stalled prewarm requests and continues queued work', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const calls: string[] = []
+      const pendingCalls: Array<Deferred<void>> = []
+      const prewarmMock = vi.fn(
+        (options?: { projectOptions?: { tsConfigFilePath?: string } }) => {
+          calls.push(options?.projectOptions?.tsConfigFilePath ?? 'default')
+          const deferred = createDeferred<void>()
+          pendingCalls.push(deferred)
+          return deferred.promise
+        }
+      )
+
+      vi.doMock('./prewarm.ts', () => ({
+        prewarmRenounRpcServerCache: prewarmMock,
+      }))
+
+      const [{ runPrewarmSafely }, { PREWARM_REQUEST_TIMEOUT_MS }] =
+        await Promise.all([
+          import('./prewarm-runner.ts'),
+          import('./prewarm/constants.ts'),
+        ])
+
+      runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'a.json' } })
+      runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'b.json' } })
+
+      await vi.waitFor(() => {
+        expect(prewarmMock).toHaveBeenCalledTimes(1)
+      })
+      expect(calls).toEqual(['a.json'])
+
+      await vi.advanceTimersByTimeAsync(PREWARM_REQUEST_TIMEOUT_MS)
+      await vi.waitFor(() => {
+        expect(prewarmMock).toHaveBeenCalledTimes(2)
+      })
+      expect(calls).toEqual(['a.json', 'b.json'])
+
+      for (const deferred of pendingCalls) {
+        deferred.resolve()
+      }
+      await Promise.resolve()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

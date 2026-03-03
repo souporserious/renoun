@@ -209,6 +209,36 @@ describe('project watcher invalidation batching', () => {
     ).toHaveBeenCalledWith(project, ['.'])
   })
 
+  test('invalidates dependency paths that are outside tracked project directories', () => {
+    const uniqueId = Date.now()
+    const firstProjectDirectory = `/virtual-project-deps-a-${uniqueId}`
+    const secondProjectDirectory = `/virtual-project-deps-b-${uniqueId}`
+    const firstProject = getProject({
+      useInMemoryFileSystem: true,
+      projectId: `watcher-deps-a-${uniqueId}`,
+      tsConfigFilePath: `${firstProjectDirectory}/tsconfig.json`,
+    })
+    const secondProject = getProject({
+      useInMemoryFileSystem: true,
+      projectId: `watcher-deps-b-${uniqueId}`,
+      tsConfigFilePath: `${secondProjectDirectory}/tsconfig.json`,
+    })
+    const externalDependencyPath = `/virtual-shared-deps-${uniqueId}/src/shared.ts`
+
+    const affectedProjects = invalidateProjectCachesByPath(externalDependencyPath)
+
+    expect(affectedProjects).toBe(2)
+    expect(
+      mockedInvalidationFns.invalidateProjectFileCachePaths
+    ).toHaveBeenCalledTimes(2)
+    expect(
+      mockedInvalidationFns.invalidateProjectFileCachePaths
+    ).toHaveBeenCalledWith(firstProject, [externalDependencyPath])
+    expect(
+      mockedInvalidationFns.invalidateProjectFileCachePaths
+    ).toHaveBeenCalledWith(secondProject, [externalDependencyPath])
+  })
+
   test('does not enable watchers in vitest worker mode without explicit override', () => {
     delete process.env['RENOUN_PROJECT_WATCHERS']
     process.env['NODE_ENV'] = 'development'
