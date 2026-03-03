@@ -1323,7 +1323,9 @@ export class Repository {
       name: releaseName,
       htmlUrl,
       isDraft: false,
-      isPrerelease: Boolean(coerceSemVer(tagName)?.prerelease.length),
+      isPrerelease: Boolean(
+        coerceSemVer(versionWithoutPrefix)?.prerelease.length
+      ),
       isFallback: false,
       assets: [],
     }

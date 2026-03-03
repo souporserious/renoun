@@ -946,6 +946,31 @@ describe('Repository', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
+    test('flags local-version prereleases from the version for package names with digits', async () => {
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository({
+        path: 'owner/repo',
+        releaseSource: {
+          mode: 'local-version',
+          version: '1.0.0-beta.1',
+        },
+      })
+
+      const release = await repository.getRelease({
+        packageName: '@scope2/pkg2',
+      })
+
+      expect(release.tagName).toBe('@scope2/pkg2@1.0.0-beta.1')
+      expect(release.isPrerelease).toBe(true)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
     test('fetches release metadata from GitHub and caches results', async () => {
       const releasesPayload = [
         {
