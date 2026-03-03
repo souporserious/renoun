@@ -1,15 +1,18 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
+import * as cachedAnalysis from './cached-analysis.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import { TestWebSocket } from './rpc/test-websocket.ts'
 import type { RefreshInvalidationsSinceResponse } from './refresh-notifications.ts'
 import { createServer } from './server.ts'
+import * as highlighterModule from '../utils/create-highlighter.ts'
 
 const originalEnvironment = captureProcessEnv([
   'RENOUN_SERVER_PORT',
   'RENOUN_SERVER_ID',
   'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
+  'NODE_ENV',
 ])
 
 describe('project server refresh invalidations', () => {
@@ -31,6 +34,7 @@ describe('project server refresh invalidations', () => {
     server = undefined
 
     globalThis.WebSocket = originalWebSocket
+    vi.restoreAllMocks()
     restoreProcessEnv(originalEnvironment)
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
@@ -64,5 +68,25 @@ describe('project server refresh invalidations', () => {
     })
 
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']).toBe('0')
+  })
+
+  test('does not initialize the highlighter during development startup without request config', async () => {
+    process.env['NODE_ENV'] = 'development'
+    vi.spyOn(cachedAnalysis, 'prewarmRuntimeAnalysisSession').mockResolvedValue()
+    vi.spyOn(cachedAnalysis, 'getCachedSourceTextMetadata').mockResolvedValue(
+      null as unknown as Awaited<
+        ReturnType<typeof cachedAnalysis.getCachedSourceTextMetadata>
+      >
+    )
+    const createHighlighterSpy = vi
+      .spyOn(highlighterModule, 'createHighlighter')
+      .mockResolvedValue({
+        tokenize: async () => [],
+      } as Awaited<ReturnType<typeof highlighterModule.createHighlighter>>)
+
+    server = await createServer({ host: '127.0.0.1' })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(createHighlighterSpy).not.toHaveBeenCalled()
   })
 })

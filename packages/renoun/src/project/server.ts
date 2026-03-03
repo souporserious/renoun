@@ -156,6 +156,10 @@ interface RpcValueWithDependenciesResponse<Value> {
   dependencies: string[]
 }
 
+type HighlighterInitializationOptions = Partial<
+  Pick<ConfigurationOptions, 'theme' | 'languages'>
+>
+
 function toRpcValueWithDependenciesResponse<Value>(
   value: Value,
   dependencies: Iterable<string>
@@ -497,9 +501,28 @@ export async function createServer(options?: CreateServerOptions) {
   let startupRuntimePrewarmQueued = false
   let startupRuntimePrewarmInFlight: Promise<void> = Promise.resolve()
   let latestCodeFencePrewarmThemeNames: string[] = ['default']
+  const latestHighlighterInitializationOptions: HighlighterInitializationOptions =
+    {}
   const pendingCodeFencePrewarmPathsImmediate = new Set<string>()
   const pendingCodeFencePrewarmPathsBackground = new Set<string>()
   const deferredCodeFencePrewarmPaths = new Set<string>()
+  const hasHighlighterInitializationOptions = (
+    initOptions: HighlighterInitializationOptions
+  ): boolean => {
+    return (
+      initOptions.theme !== undefined || initOptions.languages !== undefined
+    )
+  }
+  const updateHighlighterInitializationOptions = (
+    initOptions: HighlighterInitializationOptions
+  ): void => {
+    if (initOptions.theme !== undefined) {
+      latestHighlighterInitializationOptions.theme = initOptions.theme
+    }
+    if (initOptions.languages !== undefined) {
+      latestHighlighterInitializationOptions.languages = initOptions.languages
+    }
+  }
   const flushRefreshNotifications = () => {
     refreshFlushTimer = undefined
     refreshFlushDelayMs = undefined
@@ -619,7 +642,7 @@ export async function createServer(options?: CreateServerOptions) {
   }
 
   const ensureHighlighter = async (
-    options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
+    options: HighlighterInitializationOptions
   ): Promise<Highlighter | null> => {
     if (resolvedHighlighter) {
       return resolvedHighlighter
@@ -653,8 +676,9 @@ export async function createServer(options?: CreateServerOptions) {
   }
 
   const queueHighlighterInitialization = (
-    options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
+    options: HighlighterInitializationOptions
   ): void => {
+    updateHighlighterInitializationOptions(options)
     if (
       resolvedHighlighter ||
       currentHighlighter ||
@@ -665,7 +689,7 @@ export async function createServer(options?: CreateServerOptions) {
 
     queuedHighlighterInitialization = setTimeout(() => {
       queuedHighlighterInitialization = undefined
-      void ensureHighlighter(options)
+      void ensureHighlighter(latestHighlighterInitializationOptions)
     }, 0)
     queuedHighlighterInitialization.unref?.()
   }
@@ -874,7 +898,13 @@ export async function createServer(options?: CreateServerOptions) {
       }
     )
 
-    await ensureHighlighter({})
+    const shouldInitializeHighlighter =
+      Boolean(resolvedHighlighter) ||
+      Boolean(currentHighlighter) ||
+      hasHighlighterInitializationOptions(latestHighlighterInitializationOptions)
+    if (shouldInitializeHighlighter) {
+      await ensureHighlighter(latestHighlighterInitializationOptions)
+    }
 
     const markdownFiles = await collectMarkdownFilesForCodeFencePrewarm(paths)
     const discoveredLanguages = await readMarkdownCodeFenceLanguages(markdownFiles)
@@ -946,7 +976,6 @@ export async function createServer(options?: CreateServerOptions) {
 
   if (isDevelopmentEnvironment()) {
     prewarmSourceTextFormatterRuntime()
-    queueHighlighterInitialization({})
     queueCodeFenceLanguagePrewarm([rootDirectory], {
       priority: 'immediate',
     })

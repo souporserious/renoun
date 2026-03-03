@@ -211,6 +211,7 @@ export function QuickInfoClientPopover({
     }
 
     const displayText = resolvedQuickInfo.displayText
+    setResolvedDisplayTokens(null)
     void getQuickInfoDisplayTokensForRequest(
       request,
       displayText,
