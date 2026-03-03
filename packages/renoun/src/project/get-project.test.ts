@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
-import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 
 const watcherState = vi.hoisted(() => {
   return {

@@ -159,6 +159,32 @@ describe('NodeFileSystem', () => {
     )
   })
 
+  test('revalidates cached metadata paths when symlink targets change', async () => {
+    const outsideDirectory = mkdtempSync(join(tmpdir(), 'node-fs-outside-'))
+    outsideDirectories.push(outsideDirectory)
+
+    const outsideFilePath = join(outsideDirectory, 'outside.txt')
+    writeFileSync(outsideFilePath, 'outside')
+
+    const workspaceFilePath = join(tempDirectory, 'cached-metadata.txt')
+    await fileSystem.writeFile(workspaceFilePath, 'inside')
+
+    await expect(
+      fileSystem.getFileDependencyMetadata(workspaceFilePath)
+    ).resolves.toEqual(
+      expect.objectContaining({
+        byteLength: 6,
+      })
+    )
+
+    rmSync(workspaceFilePath, { force: true })
+    symlinkSync(outsideFilePath, workspaceFilePath, 'file')
+
+    await expect(
+      fileSystem.getFileDependencyMetadata(workspaceFilePath)
+    ).rejects.toThrow(/outside of the workspace root/i)
+  })
+
   test('rejects rename/copy targets outside the workspace root', async () => {
     const outsideDirectory = mkdtempSync(join(tmpdir(), 'node-fs-outside-'))
     outsideDirectories.push(outsideDirectory)

@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
-import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 
 const mocks = vi.hoisted(() => {
   return {

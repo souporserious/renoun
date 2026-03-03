@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
 const { Project } = getTsMorph()

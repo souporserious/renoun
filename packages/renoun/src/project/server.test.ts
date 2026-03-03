@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 
-import { captureProcessEnv, restoreProcessEnv } from '../utils/test-process-env.ts'
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import { TestWebSocket } from './rpc/test-websocket.ts'
 import type { RefreshInvalidationsSinceResponse } from './refresh-notifications.ts'

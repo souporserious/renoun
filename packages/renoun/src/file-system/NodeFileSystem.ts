@@ -6,6 +6,7 @@ import {
   rmSync,
   createReadStream,
   createWriteStream,
+  lstatSync,
   statSync,
   realpathSync,
   type Dirent,
@@ -127,7 +128,10 @@ export class NodeFileSystem
       ? this.#tryGetWorkspacePathAssertionCacheEntry(absolutePath, now)
       : false
     if (cacheHit) {
-      return
+      if (!this.#pathIncludesSymlinkSegment(absolutePath)) {
+        return
+      }
+      this.#workspacePathAssertionCache.delete(absolutePath)
     }
 
     const rootDirectory = getRootDirectory()
@@ -181,6 +185,40 @@ export class NodeFileSystem
     this.#workspacePathAssertionCache.delete(absolutePath)
     this.#workspacePathAssertionCache.set(absolutePath, expiresAt)
     return true
+  }
+
+  #pathIncludesSymlinkSegment(absolutePath: string): boolean {
+    const rootDirectory = getRootDirectory()
+    const relativeToRoot = relativePath(rootDirectory, absolutePath)
+
+    if (relativeToRoot === '' || relativeToRoot === '.') {
+      return false
+    }
+
+    if (relativeToRoot.startsWith('..') || relativeToRoot.startsWith('../')) {
+      return true
+    }
+
+    const segments = relativeToRoot.split(/[\\/]+/).filter(Boolean)
+    let currentPath = rootDirectory
+
+    for (const segment of segments) {
+      currentPath = join(currentPath, segment)
+
+      if (!existsSync(currentPath)) {
+        break
+      }
+
+      try {
+        if (lstatSync(currentPath).isSymbolicLink()) {
+          return true
+        }
+      } catch {
+        return true
+      }
+    }
+
+    return false
   }
 
   #setWorkspacePathAssertionCacheEntry(absolutePath: string, now: number): void {
