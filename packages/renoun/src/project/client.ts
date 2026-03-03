@@ -64,6 +64,7 @@ import {
   resolveProjectClientRpcCacheEnabledFromEnv,
   resolveProjectClientRpcCacheTtlMsFromEnv,
   resolveProjectRefreshNotificationsEnvOverride,
+  resolveServerRefreshNotificationsEnvOverride,
 } from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
 
@@ -186,6 +187,10 @@ function shouldUseClientRpcCache(): boolean {
   const override = resolveProjectClientRpcCacheEnabledFromEnv()
   if (override !== undefined) {
     return override
+  }
+
+  if (!shouldConsumeRefreshNotifications()) {
+    return false
   }
 
   return true
@@ -835,6 +840,11 @@ function queueRefreshInvalidation(path: string): void {
 }
 
 function shouldConsumeRefreshNotifications(): boolean {
+  const serverOverride = resolveServerRefreshNotificationsEnvOverride()
+  if (serverOverride === false) {
+    return false
+  }
+
   if (
     typeof projectClientRuntimeOptions.consumeRefreshNotifications === 'boolean'
   ) {
@@ -844,6 +854,10 @@ function shouldConsumeRefreshNotifications(): boolean {
   const override = resolveProjectRefreshNotificationsEnvOverride()
   if (override !== undefined) {
     return override
+  }
+
+  if (serverOverride !== undefined) {
+    return serverOverride
   }
 
   return true

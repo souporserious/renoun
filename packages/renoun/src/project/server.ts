@@ -51,6 +51,7 @@ import {
 } from './refresh-notifications.ts'
 import {
   resolveServerRefreshNotificationsEnvOverride,
+  setServerRefreshNotificationsProcessEnv,
   setServerPortProcessEnv,
 } from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
@@ -955,6 +956,7 @@ export async function createServer(options?: CreateServerOptions) {
   const emitRefreshNotifications = shouldEmitRefreshNotifications(
     options?.emitRefreshNotifications
   )
+  setServerRefreshNotificationsProcessEnv(emitRefreshNotifications)
   const unsubscribeRuntimeAnalysisBackgroundRefresh =
     onRuntimeAnalysisBackgroundRefresh((paths) => {
       if (!emitRefreshNotifications) {

@@ -55,4 +55,14 @@ describe('project server refresh invalidations', () => {
     expect(response.filePaths?.length).toBe(1)
     expect(response.filePath).toBe(response.filePaths?.[0])
   })
+
+  test('publishes the effective refresh notification mode to process env', async () => {
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
+    server = await createServer({
+      host: '127.0.0.1',
+      emitRefreshNotifications: false,
+    })
+
+    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']).toBe('0')
+  })
 })

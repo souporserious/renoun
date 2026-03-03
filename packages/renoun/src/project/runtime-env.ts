@@ -82,3 +82,11 @@ export function resolveServerRefreshNotificationsEnvOverride():
     PROCESS_ENV_KEYS.renounServerRefreshNotifications
   )
 }
+
+export function setServerRefreshNotificationsProcessEnv(
+  enabled: boolean
+): void {
+  process.env[PROCESS_ENV_KEYS.renounServerRefreshNotifications] = enabled
+    ? '1'
+    : '0'
+}
