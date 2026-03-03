@@ -4060,7 +4060,9 @@ export async function getCachedTokens(
     valueSignature: toTokenValueSignature(options.value),
   })
 
-  const resolveTokensFromRuntimeCache = async (): Promise<TokenizedLines> => {
+  const resolveTokensFromRuntimeCache = async (overrides?: {
+    waitForWarmResult?: boolean
+  }): Promise<TokenizedLines> => {
     const runtimeCacheStore = await getRuntimeAnalysisSession(
       scopePath
     )
@@ -4208,8 +4210,9 @@ export async function getCachedTokens(
       })
     }
 
+    const waitForWarmResult = overrides?.waitForWarmResult ?? options.waitForWarmResult
     const shouldServeColdFallbackForRequest =
-      options.waitForWarmResult !== true &&
+      waitForWarmResult !== true &&
       shouldServeRuntimeAnalysisColdFallback({
         value: options.value,
       })
@@ -4265,7 +4268,9 @@ export async function getCachedTokens(
     queueRuntimeAnalysisColdStartTask({
       taskKey: `tokens:${nodeKey}`,
       run: async () => {
-        await resolveTokensFromRuntimeCache()
+        await resolveTokensFromRuntimeCache({
+          waitForWarmResult: true,
+        })
       },
     })
 
