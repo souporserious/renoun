@@ -23,4 +23,3 @@ runs:
         key: ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: |
           ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-
-          ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-
