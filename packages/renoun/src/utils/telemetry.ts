@@ -339,12 +339,16 @@ export async function withTelemetrySpan<Type>(
 
   if (telemetry.span && !options.fieldsOnSuccess) {
     let spanResult: Promise<Type> | Type | undefined
+    let spanCallbackInvoked = false
+    let spanCallbackReturned = false
     try {
       return await Promise.resolve(
         telemetry.span(
           name,
           () => {
+            spanCallbackInvoked = true
             spanResult = fn()
+            spanCallbackReturned = true
             return spanResult
           },
           tags
@@ -352,8 +356,11 @@ export async function withTelemetrySpan<Type>(
       )
     } catch (error) {
       reportTelemetryFailure(telemetry, `span(${name})`, error)
-      if (spanResult !== undefined) {
-        return await Promise.resolve(spanResult)
+      if (spanCallbackReturned) {
+        return await Promise.resolve(spanResult as Promise<Type> | Type)
+      }
+      if (spanCallbackInvoked) {
+        throw error
       }
       return fn()
     }

@@ -115,4 +115,53 @@ describe('telemetry', () => {
     expect(fn).toHaveBeenCalledTimes(1)
     expect(warnSpy).toHaveBeenCalledTimes(1)
   })
+
+  test('does not rerun void operation when span hook throws after callback', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fn = vi.fn(() => {})
+    const telemetry: Telemetry = {
+      emit() {},
+      span(_name, spanFn) {
+        spanFn()
+        throw new Error('span sink failed')
+      },
+    }
+
+    await expect(
+      withTelemetrySpan('renoun.test.span.void', fn, undefined, {
+        telemetry,
+      })
+    ).resolves.toBeUndefined()
+
+    expect(fn).toHaveBeenCalledTimes(1)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test('does not rerun operation when span hook throws after sync callback error', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const operationError = new Error('operation failed')
+    const fn = vi.fn(() => {
+      throw operationError
+    })
+    const telemetry: Telemetry = {
+      emit() {},
+      span(_name, spanFn) {
+        try {
+          spanFn()
+        } catch {
+          // simulate a sink throwing while handling callback failure
+        }
+        throw new Error('span sink failed')
+      },
+    }
+
+    await expect(
+      withTelemetrySpan('renoun.test.span.sync-error', fn, undefined, {
+        telemetry,
+      })
+    ).rejects.toThrow('span sink failed')
+
+    expect(fn).toHaveBeenCalledTimes(1)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+  })
 })
