@@ -2,7 +2,11 @@ import React, { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import { getSourceTextMetadata, getTokens } from '../../project/client.ts'
+import {
+  getProjectClientRefreshVersion,
+  getSourceTextMetadata,
+  getTokens,
+} from '../../project/client.ts'
 import {
   isProductionEnvironment,
   isTestEnvironment,
@@ -460,7 +464,7 @@ async function TokensAsync({
     const quickInfoRuntime = isDevelopmentRuntime
       ? getServerRuntimeFromProcessEnv()
       : undefined
-    const quickInfoProjectVersion = quickInfoRuntime?.id
+    const quickInfoProjectVersion = getQuickInfoProjectVersion(quickInfoRuntime)
     const lastLineIndex = tokens.length - 1
     const hasAnnotations =
       annotationInstructions !== null &&
@@ -629,6 +633,16 @@ function setDevelopmentFallbackSource(cacheKey: string, value: string): void {
       )
     }
   }
+}
+
+export function getQuickInfoProjectVersion(
+  runtime: ProjectServerRuntime | undefined
+): string | undefined {
+  if (!runtime) {
+    return undefined
+  }
+
+  return `${runtime.id}:${getProjectClientRefreshVersion()}`
 }
 
 interface RenderTokenOptions {

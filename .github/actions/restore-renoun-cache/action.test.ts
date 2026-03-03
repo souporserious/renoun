@@ -35,7 +35,10 @@ function getRestoreKeys(actionSource: string): string[] {
 function getPrimaryKey(actionSource: string): string {
   const keyLine = actionSource
     .split('\n')
-    .find((line) => line.trimStart().startsWith('key:'))
+    .find(
+      (line) =>
+        line.trimStart().startsWith('key:') && line.includes('renoun-cache-')
+    )
 
   expect(keyLine).toBeDefined()
 
@@ -43,17 +46,17 @@ function getPrimaryKey(actionSource: string): string {
 }
 
 describe('restore-renoun-cache action', () => {
-  test('uses restore-only cache action to avoid redundant save attempts', () => {
+  test('uses cache action so CI restores now and saves during post-job', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',
       'utf8'
     )
 
     expect(actionSource).toContain(
-      'uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
+      'uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
     )
     expect(actionSource).not.toContain(
-      'uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
+      'uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
     )
   })
 

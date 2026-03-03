@@ -193,6 +193,7 @@ async function getNavigationEntriesWithDevSWR({
       now - cacheEntry.updatedAt <= DEV_NAVIGATION_SWR_MAX_STALE_AGE_MS
     const isCurrentInvalidationEpoch =
       cacheEntry.invalidationEpoch === devNavigationInvalidationEpoch
+    const shouldAwaitFreshEntries = !isCurrentInvalidationEpoch
 
     if (isWithinStaleWindow && isCurrentInvalidationEpoch) {
       return cacheEntry.value
@@ -218,6 +219,10 @@ async function getNavigationEntriesWithDevSWR({
             cacheEntry.refreshTask = undefined
           }
         })
+    }
+
+    if (shouldAwaitFreshEntries && cacheEntry.refreshTask) {
+      return cacheEntry.refreshTask
     }
 
     return cacheEntry.value

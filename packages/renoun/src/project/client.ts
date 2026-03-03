@@ -144,6 +144,14 @@ const observedProjectRootCandidates = new Set<string>([resolve(process.cwd())])
 // Bumped on refresh invalidations so stale in-flight requests cannot repopulate cache.
 let clientRpcInvalidationEpoch = 0
 
+/**
+ * A monotonic version that advances as refresh notifications invalidate client
+ * runtime state. UI caches can include this to avoid stale data after edits.
+ */
+export function getProjectClientRefreshVersion(): string {
+  return `${latestRefreshCursor}:${clientRpcInvalidationEpoch}`
+}
+
 export interface ProjectClientRuntimeOptions {
   useRpcCache?: boolean
   rpcCacheTtlMs?: number

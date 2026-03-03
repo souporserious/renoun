@@ -6,6 +6,7 @@ import { parseAnnotations } from '../../utils/annotations.ts'
 import { getSourceTextMetadata } from '../../project/client.ts'
 
 const mockTokens = vi.fn()
+const mockGetProjectClientRefreshVersion = vi.fn(() => '0:0')
 const symbolMock = vi.fn(
   ({
     children,
@@ -17,6 +18,9 @@ const symbolMock = vi.fn(
 vi.mock('../../project/client.ts', () => ({
   getSourceTextMetadata: vi.fn(),
   getTokens: (...args: Parameters<typeof mockTokens>) => mockTokens(...args),
+  getProjectClientRefreshVersion: (
+    ...args: Parameters<typeof mockGetProjectClientRefreshVersion>
+  ) => mockGetProjectClientRefreshVersion(...args),
 }))
 
 vi.mock('../Config/ServerConfigContext.tsx', () => ({
@@ -251,6 +255,31 @@ describe('Tokens', () => {
         process.env.NODE_ENV = previousNodeEnv
       }
     }
+  })
+
+  test('includes refresh-aware quick-info project versions', async () => {
+    mockGetProjectClientRefreshVersion.mockReset()
+    mockGetProjectClientRefreshVersion
+      .mockReturnValueOnce('0:0')
+      .mockReturnValueOnce('1:1')
+
+    const { getQuickInfoProjectVersion } = await import('./Tokens.tsx')
+
+    expect(getQuickInfoProjectVersion(undefined)).toBeUndefined()
+    expect(
+      getQuickInfoProjectVersion({
+        id: 'tokens-dev-runtime',
+        port: '43123',
+      })
+    ).toBe('tokens-dev-runtime:0:0')
+    expect(
+      getQuickInfoProjectVersion({
+        id: 'tokens-dev-runtime',
+        port: '43123',
+      })
+    ).toBe('tokens-dev-runtime:1:1')
+
+    expect(mockGetProjectClientRefreshVersion).toHaveBeenCalledTimes(2)
   })
 
   test('passes a serializable popover prop to Symbol', async () => {

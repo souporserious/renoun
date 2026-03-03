@@ -13,8 +13,8 @@ runs:
       shell: bash
       run: echo "token=$(node packages/renoun/src/cli/index.ts cache-token)" >> "$GITHUB_OUTPUT"
 
-    - name: Restore renoun cache
-      uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
+    - name: Restore and save renoun cache
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
       with:
         path: |
           .renoun/cache/fs-cache.sqlite

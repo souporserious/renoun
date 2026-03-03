@@ -95,6 +95,7 @@ const QUICK_INFO_KEYWORDS = new Set([
 const QUICK_INFO_TOKEN_PATTERN =
   /('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[\r\n]+|[ \t]+|[^\sA-Za-z0-9_$]+)/g
 const QUICK_INFO_REQUEST_TIMEOUT_MS = 12_000
+const QUICK_INFO_FETCH_CONCURRENCY = 4
 const QUICK_INFO_CACHE_MAX_ENTRIES = 1_000
 const QUICK_INFO_CACHE_TTL_MS =
   process.env.NODE_ENV === 'development' ? 15_000 : 5 * 60_000
@@ -112,7 +113,8 @@ const quickInfoDisplayTokensInFlightByKey = new Map<
   Promise<QuickInfoTokenizedDisplayText | null>
 >()
 let nextQuickInfoRequestId = 1
-let quickInfoFetchQueue: Promise<void> = Promise.resolve()
+let quickInfoFetchActiveCount = 0
+const quickInfoFetchWaiters: Array<() => void> = []
 
 function getQuickInfoTestId(
   id: 'content' | 'divider' | 'display'
@@ -482,12 +484,47 @@ async function getQuickInfoDisplayTokensForRequest(
 }
 
 function runQuickInfoFetchTask<T>(task: () => Promise<T>): Promise<T> {
-  const run = quickInfoFetchQueue.then(task, task)
-  quickInfoFetchQueue = run.then(
-    () => undefined,
-    () => undefined
-  )
-  return run
+  return acquireQuickInfoFetchSlot().then(async () => {
+    try {
+      return await task()
+    } finally {
+      releaseQuickInfoFetchSlot()
+    }
+  })
+}
+
+function acquireQuickInfoFetchSlot(): Promise<void> {
+  if (quickInfoFetchActiveCount < QUICK_INFO_FETCH_CONCURRENCY) {
+    quickInfoFetchActiveCount += 1
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => {
+    quickInfoFetchWaiters.push(() => {
+      quickInfoFetchActiveCount += 1
+      resolve()
+    })
+  })
+}
+
+function releaseQuickInfoFetchSlot(): void {
+  if (quickInfoFetchActiveCount > 0) {
+    quickInfoFetchActiveCount -= 1
+  }
+
+  const next = quickInfoFetchWaiters.shift()
+  if (next) {
+    next()
+  }
+}
+
+function hashQuickInfoDisplayText(displayText: string): string {
+  let hash = 2166136261
+  for (let index = 0; index < displayText.length; index += 1) {
+    hash ^= displayText.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 function toQuickInfoCacheKey(request: QuickInfoRequest): string {
@@ -572,9 +609,10 @@ function toQuickInfoDisplayTokensCacheKey(
   tokenThemeCacheKey: string,
   displayText: string
 ): string {
+  const displayTextHash = hashQuickInfoDisplayText(displayText)
   return `${QUICK_INFO_DISPLAY_TOKENS_CACHE_VERSION}:${toQuickInfoCacheKey(
     request
-  )}:${tokenThemeCacheKey}:${displayText}`
+  )}:${tokenThemeCacheKey}:${displayText.length}:${displayTextHash}`
 }
 
 function readQuickInfoCache(
