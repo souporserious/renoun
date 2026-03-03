@@ -127,4 +127,47 @@ describe('workspace-change-git hardening', () => {
     expect(changedPaths).toEqual(['src/index.ts'])
     expect(runGit).toHaveBeenCalledTimes(2)
   })
+
+  it('returns null when dirty digest drifts to clean on the same head', async () => {
+    const headCommit = 'a'.repeat(40)
+    const previousToken = createWorkspaceChangeToken({
+      headCommit,
+      statusDigest: {
+        digest: 'previous-dirty',
+        ignoredOnly: false,
+        count: 1,
+      },
+    })
+    const runGit = vi.fn(async (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return {
+          status: 0,
+          stdout: `${headCommit}\n`,
+          stderr: '',
+        }
+      }
+
+      if (args[0] === 'status') {
+        return {
+          status: 0,
+          stdout: '',
+          stderr: '',
+        }
+      }
+
+      throw new Error(`Unexpected git command: ${args.join(' ')}`)
+    })
+
+    const changedPaths = await getWorkspaceChangedPathsSinceTokenFromGit({
+      previousToken,
+      statusScope: '.',
+      includeIgnoredStatuses: false,
+      runGit,
+      getPathSignature: async () => 'sig',
+      toWorkspacePath: (path) => path,
+    })
+
+    expect(changedPaths).toBeNull()
+    expect(runGit).toHaveBeenCalledTimes(2)
+  })
 })

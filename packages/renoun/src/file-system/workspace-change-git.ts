@@ -160,6 +160,7 @@ export async function getWorkspaceChangedPathsSinceTokenFromGit(
     entries: statusEntries,
     getPathSignature: options.getPathSignature,
   })
+  let sameHeadDirtyDigestDrifted = false
 
   if (currentHead === previousHead) {
     if (previousDirtyDigest === null) {
@@ -169,6 +170,8 @@ export async function getWorkspaceChangedPathsSinceTokenFromGit(
     if (previousDirtyDigest === statusDigest.digest) {
       return []
     }
+
+    sameHeadDirtyDigestDrifted = true
   }
 
   for (const statusEntry of statusEntries) {
@@ -178,6 +181,10 @@ export async function getWorkspaceChangedPathsSinceTokenFromGit(
         changedPaths.add(normalizedStatusPath)
       }
     }
+  }
+
+  if (sameHeadDirtyDigestDrifted && changedPaths.size === 0) {
+    return null
   }
 
   return Array.from(changedPaths)
