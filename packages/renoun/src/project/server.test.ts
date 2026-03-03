@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
@@ -47,6 +49,7 @@ const originalEnvironment = captureProcessEnv([
   'RENOUN_SERVER_PORT',
   'RENOUN_SERVER_ID',
   'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
+  'RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE',
   'NODE_ENV',
 ])
 
@@ -103,7 +106,48 @@ describe('project server refresh invalidations', () => {
       emitRefreshNotifications: false,
     })
 
-    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']).toBe('0')
+    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']).toBe('1')
+    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
+      '0'
+    )
+  })
+
+  test('does not treat effective refresh mode as the next server override', async () => {
+    process.env['NODE_ENV'] = 'development'
+    delete process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']
+    delete process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']
+
+    const originalCwd = process.cwd()
+    const runtimeCwd = join(
+      originalCwd,
+      '.renoun',
+      'server-refresh-notification-mode'
+    )
+    mkdirSync(runtimeCwd, { recursive: true })
+    let firstServer: Awaited<ReturnType<typeof createServer>> | undefined
+    let secondServer: Awaited<ReturnType<typeof createServer>> | undefined
+
+    try {
+      process.chdir(runtimeCwd)
+      firstServer = await createServer({ host: '127.0.0.1' })
+      firstServer.cleanup()
+      firstServer = undefined
+      expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
+        '0'
+      )
+
+      process.chdir(originalCwd)
+      secondServer = await createServer({ host: '127.0.0.1' })
+      secondServer.cleanup()
+      secondServer = undefined
+      expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
+        '1'
+      )
+    } finally {
+      firstServer?.cleanup()
+      secondServer?.cleanup()
+      process.chdir(originalCwd)
+    }
   })
 
   test('does not initialize the highlighter during development startup without request config', async () => {

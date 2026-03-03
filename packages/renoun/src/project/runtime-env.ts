@@ -83,10 +83,17 @@ export function resolveServerRefreshNotificationsEnvOverride():
   )
 }
 
+export function resolveServerRefreshNotificationsEffectiveFromEnv():
+  | boolean
+  | undefined {
+  return parseBooleanProcessEnv(
+    PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective
+  )
+}
+
 export function setServerRefreshNotificationsProcessEnv(
   enabled: boolean
 ): void {
-  process.env[PROCESS_ENV_KEYS.renounServerRefreshNotifications] = enabled
-    ? '1'
-    : '0'
+  process.env[PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective] =
+    enabled ? '1' : '0'
 }

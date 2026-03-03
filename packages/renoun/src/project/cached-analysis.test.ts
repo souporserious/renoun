@@ -1094,6 +1094,7 @@ describe('project cached analysis', () => {
       allowErrors: true,
       highlighter,
       metadataCollector,
+      waitForWarmResult: true,
     })
     const metadataCallsAfterFirstRun = metadataCalls
     await getCachedTokens(project, {
@@ -1104,6 +1105,7 @@ describe('project cached analysis', () => {
       allowErrors: true,
       highlighter,
       metadataCollector,
+      waitForWarmResult: true,
     })
     const metadataCallsAfterSecondRun = metadataCalls
     expect(
@@ -1588,7 +1590,7 @@ describe('project cached analysis', () => {
     await writeFile(dependencyPath, 'export const dep = 1\n', 'utf8')
     project.addSourceFileAtPath(dependencyPath)
     invalidateRuntimeAnalysisCachePath(dependencyPath)
-    await delay(0)
+    await delay(325)
 
     const metadataCallsBeforeInvalidationRefresh = metadataCalls
     await getCachedTokens(project, {
@@ -1599,6 +1601,7 @@ describe('project cached analysis', () => {
       allowErrors: true,
       highlighter,
       metadataCollector,
+      waitForWarmResult: true,
     })
 
     if (isDetectAsyncLeaksEnabled) {
