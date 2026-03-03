@@ -20,6 +20,12 @@ async function readCachedSourceTextMetadata(): Promise<void> {
   })
 }
 
+async function waitForQueuedColdStartTask(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0)
+  })
+}
+
 describe('project cached analysis runtime defaults', () => {
   afterEach(() => {
     restoreProcessEnv(ORIGINAL_ENV)
@@ -50,6 +56,7 @@ describe('project cached analysis runtime defaults', () => {
     }))
 
     await readCachedSourceTextMetadata()
+    await waitForQueuedColdStartTask()
 
     expect(runtimeSessionSpy).toHaveBeenCalledTimes(1)
   })

@@ -125,6 +125,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
       }
     })
 
@@ -167,6 +168,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
       }
     })
 
@@ -229,6 +231,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
         on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
           listeners.set(eventName, listener)
         }),
@@ -320,6 +323,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
         on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
           listeners.set(eventName, listener)
         }),
@@ -414,6 +418,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
       }
     })
 
@@ -468,6 +473,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
         on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
           listeners.set(eventName, listener)
         }),
@@ -536,6 +542,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
       }
     })
 
@@ -587,6 +594,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
         on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
           listeners.set(eventName, listener)
         }),
@@ -710,6 +718,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
         on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
           listeners.set(eventName, listener)
         }),
@@ -814,6 +823,10 @@ describe('project client transport guards', () => {
           dependencies: string[]
         }) => void)
       | undefined
+    let resolveFirstRequestStarted: (() => void) | undefined
+    const firstRequestStarted = new Promise<void>((resolve) => {
+      resolveFirstRequestStarted = resolve
+    })
     const firstResponse = new Promise<{
       filePath: string
       resolveTypeCallCount: number
@@ -832,6 +845,7 @@ describe('project client transport guards', () => {
             dependencies: [filePath, '/project/src/b.ts'],
           }
           if (resolveTypeCallCount === 1) {
+            resolveFirstRequestStarted?.()
             return firstResponse
           }
           return response
@@ -848,6 +862,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
         on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
           listeners.set(eventName, listener)
         }),
@@ -860,6 +875,7 @@ describe('project client transport guards', () => {
       0,
       0 as never
     )
+    await firstRequestStarted
 
     const notificationListener = listeners.get('notification')
     expect(notificationListener).toBeTypeOf('function')
@@ -922,6 +938,7 @@ describe('project client transport guards', () => {
     mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
       return {
         callMethod,
+        ready: vi.fn(async () => undefined),
         on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
           listeners.set(eventName, listener)
         }),
@@ -1016,6 +1033,7 @@ describe('project client transport guards', () => {
       mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
         return {
           callMethod,
+          ready: vi.fn(async () => undefined),
           on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
             listeners.set(eventName, listener)
           }),
@@ -1092,6 +1110,7 @@ describe('project client transport guards', () => {
       mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
         return {
           callMethod,
+          ready: vi.fn(async () => undefined),
           on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
             listeners.set(eventName, listener)
           }),
