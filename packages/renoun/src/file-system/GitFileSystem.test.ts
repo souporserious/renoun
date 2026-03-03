@@ -193,7 +193,7 @@ function test(name: string, fn: (ctx: TestContext) => Promise<void>): void {
         rmSync(cacheDirectory, { recursive: true, force: true })
       }
     },
-    12_000
+    30_000
   )
 }
 

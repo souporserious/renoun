@@ -19,6 +19,7 @@ import { getDebugLogger } from '../utils/debug.ts'
 import {
   isProductionEnvironment,
   isTestEnvironment,
+  isVitestRuntime,
 } from '../utils/env.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import {
@@ -135,7 +136,9 @@ const RUNTIME_ANALYSIS_CONST_DEPS: readonly CacheStoreConstDependency[] =
   ])
 
 function isRuntimeAnalysisDevelopmentLikeEnvironment(): boolean {
-  return !isProductionEnvironment() && !isTestEnvironment()
+  return (
+    !isProductionEnvironment() && !isTestEnvironment() && !isVitestRuntime()
+  )
 }
 
 const { ts } = getTsMorph()

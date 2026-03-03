@@ -292,6 +292,8 @@ async function TokensAsync({
   annotations,
 }: TokensProps) {
   const context = getContext(Context)
+  const isDevelopmentRuntime =
+    !isProductionEnvironment() && !isTestEnvironment() && !isVitestRuntime()
   let didSettleContext = false
   const resolveContext = (resolved: Required<SourceTextMetadata>) => {
     if (!context || didSettleContext) {
@@ -378,8 +380,7 @@ async function TokensAsync({
             language
           )
         : false
-    const shouldUseInlineSourceMetadataFastPath =
-      !isProductionEnvironment() && !isTestEnvironment()
+    const shouldUseInlineSourceMetadataFastPath = isDevelopmentRuntime
     const shouldSkipInlineSourceMetadata =
       resolvedPath === undefined &&
       typeof language === 'string' &&
@@ -415,7 +416,7 @@ async function TokensAsync({
       )
     }
 
-    if (!isProductionEnvironment() && !isTestEnvironment() && resolvedPath) {
+    if (isDevelopmentRuntime && resolvedPath) {
       const cacheKey = getDevelopmentFallbackSourceCacheKey(
         resolvedPath,
         resolvedBaseDirectory
@@ -454,7 +455,7 @@ async function TokensAsync({
       languages: config.languages,
       // During development we render a suspense fallback immediately and wait
       // for highlighted tokens so the final stream updates this block.
-      waitForWarmResult: !isProductionEnvironment() && !isTestEnvironment(),
+      waitForWarmResult: isDevelopmentRuntime,
     })
     const quickInfoRuntime = getServerRuntimeFromProcessEnv()
     const quickInfoProjectVersion = quickInfoRuntime?.id

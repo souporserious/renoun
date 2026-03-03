@@ -126,7 +126,10 @@ const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
 ])
 
 const CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY =
-  new Set<ClientCachedRpcMethod>(['transpileSourceFile'])
+  new Set<ClientCachedRpcMethod>([
+    'getQuickInfoAtPosition',
+    'transpileSourceFile',
+  ])
 
 const CLIENT_RPC_CACHE_MAX_ENTRIES = 1_000
 const DEFAULT_CLIENT_RPC_CACHE_TTL_MS = 30_000

@@ -2,7 +2,11 @@ import { dirname, join, posix, isAbsolute } from 'node:path'
 import type { Project } from './ts-morph.ts'
 
 import { waitForRefreshingProjects } from '../project/refresh.ts'
-import { isProductionEnvironment, isTestEnvironment } from './env.ts'
+import {
+  isProductionEnvironment,
+  isTestEnvironment,
+  isVitestRuntime,
+} from './env.ts'
 import { formatSourceText } from './format-source-text.ts'
 import { getLanguage, type Languages } from './get-language.ts'
 import { isJsxOnly } from './is-jsx-only.ts'
@@ -199,6 +203,7 @@ export async function getSourceTextMetadata({
           nonBlocking:
             !isProductionEnvironment() &&
             !isTestEnvironment() &&
+            !isVitestRuntime() &&
             isFormattingExplicit !== true,
         }
       )

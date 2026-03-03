@@ -55,6 +55,8 @@ export interface CacheStorePersistence {
     options?: {
       skipFingerprintCheck?: boolean
       skipLastAccessedUpdate?: boolean
+      includeValue?: boolean
+      includeDeps?: boolean
     }
   ): Promise<CacheEntry | undefined>
   save(nodeKey: string, entry: CacheEntry): Promise<void>
@@ -1179,6 +1181,8 @@ export class CacheStore {
       const persistedEntry = (await persistence.load(nodeKey, {
         skipFingerprintCheck: true,
         skipLastAccessedUpdate: true,
+        includeValue: false,
+        includeDeps: false,
       })) as PersistedCacheEntry | undefined
       if (!persistedEntry) {
         this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
@@ -2929,6 +2933,8 @@ export class CacheStore {
           const verified = (await persistence.load(nodeKey, {
             skipFingerprintCheck: true,
             skipLastAccessedUpdate: true,
+            includeValue: false,
+            includeDeps: false,
           })) as PersistedCacheEntry | undefined
 
           if (!verified) {

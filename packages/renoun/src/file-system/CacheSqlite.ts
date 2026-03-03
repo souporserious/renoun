@@ -558,6 +558,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     options: {
       skipFingerprintCheck?: boolean
       skipLastAccessedUpdate?: boolean
+      includeValue?: boolean
+      includeDeps?: boolean
     } = {}
   ): Promise<CacheEntry | undefined> {
     await this.#readyPromise
@@ -567,6 +569,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
     const shouldDebug = this.#shouldDebugCachePersistenceLoadFailure(nodeKey)
     const skipFingerprintCheck = options.skipFingerprintCheck ?? false
+    const includeValue = options.includeValue ?? true
+    const includeDeps = options.includeDeps ?? true
+    const shouldSkipFingerprintCheck = skipFingerprintCheck || !includeDeps
     const now = Date.now()
     try {
       await this.#runWithBusyRetries(() => {
@@ -580,9 +585,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       this.#db.exec('BEGIN')
       let transactionStarted = true
       try {
-        const row = this
-          .#prepareStatement(
-            `
+        const loadEntrySql = includeValue
+          ? `
               SELECT
                 fingerprint as fingerprint,
                 value_blob as value_blob,
@@ -593,7 +597,18 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
               FROM cache_entries
               WHERE node_key = ?
             `
-          )
+          : `
+              SELECT
+                fingerprint as fingerprint,
+                updated_at as updated_at,
+                persist as persist,
+                workspace_change_token as workspace_change_token,
+                revision as revision
+              FROM cache_entries
+              WHERE node_key = ?
+            `
+        const row = this
+          .#prepareStatement(loadEntrySql)
           .get(nodeKey) as
           | {
               fingerprint?: string
@@ -609,7 +624,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           dep_key?: string | null
           dep_version?: string | null
         }> = []
-        if (row) {
+        if (row && includeDeps) {
           dependencyRows = this
             .#prepareStatement(
               `
@@ -695,62 +710,66 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return undefined
     }
 
-    const valueBuffer = toUint8Array(row.value_blob)
-
-    if (!valueBuffer) {
-      if (shouldDebug) {
-        logCachePersistenceLoadFailure(
-          nodeKey,
-          'missing-value-blob',
-          `type=${typeof row.value_blob} revision=${String(revision)}`
-        )
-      }
-      await this.delete(nodeKey)
-      return undefined
-    }
-
     let value: unknown
 
-    try {
-      value = deserialize(valueBuffer)
-    } catch (error) {
-      if (shouldDebug) {
-        logCachePersistenceLoadFailure(
-          nodeKey,
-          'deserialize-failed',
-          `error=${error instanceof Error ? error.message : String(error)} revision=${String(revision)}`
-        )
+    if (includeValue) {
+      const valueBuffer = toUint8Array(row.value_blob)
+
+      if (!valueBuffer) {
+        if (shouldDebug) {
+          logCachePersistenceLoadFailure(
+            nodeKey,
+            'missing-value-blob',
+            `type=${typeof row.value_blob} revision=${String(revision)}`
+          )
+        }
+        await this.delete(nodeKey)
+        return undefined
       }
-      await this.delete(nodeKey)
-      return undefined
+
+      try {
+        value = deserialize(valueBuffer)
+      } catch (error) {
+        if (shouldDebug) {
+          logCachePersistenceLoadFailure(
+            nodeKey,
+            'deserialize-failed',
+            `error=${error instanceof Error ? error.message : String(error)} revision=${String(revision)}`
+          )
+        }
+        await this.delete(nodeKey)
+        return undefined
+      }
+
+      if (containsStrippedReactElementPayload(value)) {
+        if (shouldDebug) {
+          logCachePersistenceLoadFailure(
+            nodeKey,
+            'contains-stripped-react',
+            `value=${summarizePersistedValue(value)} revision=${String(revision)}`
+          )
+        }
+        await this.delete(nodeKey)
+        return undefined
+      }
     }
 
-    if (containsStrippedReactElementPayload(value)) {
-      if (shouldDebug) {
-        logCachePersistenceLoadFailure(
-          nodeKey,
-          'contains-stripped-react',
-          `value=${summarizePersistedValue(value)} revision=${String(revision)}`
-        )
-      }
-      await this.delete(nodeKey)
-      return undefined
-    }
-
-    const deps = dependencyRows
-      .filter((dependencyRow) => typeof dependencyRow.dep_key === 'string')
-      .map((dependencyRow) => ({
-        depKey: dependencyRow.dep_key!,
-        depVersion:
-          typeof dependencyRow.dep_version === 'string'
-            ? dependencyRow.dep_version
-            : '',
-      }))
-      .sort((first, second) => first.depKey.localeCompare(second.depKey))
+    const deps = includeDeps
+      ? dependencyRows
+          .filter((dependencyRow) => typeof dependencyRow.dep_key === 'string')
+          .map((dependencyRow) => ({
+            depKey: dependencyRow.dep_key!,
+            depVersion:
+              typeof dependencyRow.dep_version === 'string'
+                ? dependencyRow.dep_version
+                : '',
+          }))
+          .sort((first, second) => first.depKey.localeCompare(second.depKey))
+      : []
 
     const recalculatedFingerprint = createFingerprint(deps)
     if (
-      !skipFingerprintCheck &&
+      !shouldSkipFingerprintCheck &&
       storedFingerprint !== recalculatedFingerprint
     ) {
       emitTelemetryCounter({

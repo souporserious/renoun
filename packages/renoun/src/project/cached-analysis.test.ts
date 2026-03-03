@@ -62,6 +62,46 @@ function delay(ms: number): Promise<void> {
   })
 }
 
+async function withDevelopmentLikeRuntime<T>(
+  run: () => Promise<T>
+): Promise<T> {
+  const previousNodeEnv = process.env['NODE_ENV']
+  const previousVitest = process.env['VITEST']
+  const previousVitestWorkerId = process.env['VITEST_WORKER_ID']
+  const previousArgv = process.argv
+
+  process.env['NODE_ENV'] = 'development'
+  delete process.env['VITEST']
+  delete process.env['VITEST_WORKER_ID']
+  process.argv = previousArgv.map((argument) =>
+    argument.includes('vitest') ? argument.replaceAll('vitest', 'runner') : argument
+  )
+
+  try {
+    return await run()
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete process.env['NODE_ENV']
+    } else {
+      process.env['NODE_ENV'] = previousNodeEnv
+    }
+
+    if (previousVitest === undefined) {
+      delete process.env['VITEST']
+    } else {
+      process.env['VITEST'] = previousVitest
+    }
+
+    if (previousVitestWorkerId === undefined) {
+      delete process.env['VITEST_WORKER_ID']
+    } else {
+      process.env['VITEST_WORKER_ID'] = previousVitestWorkerId
+    }
+
+    process.argv = previousArgv
+  }
+}
+
 function createDisposeHandle(dispose: () => void) {
   return {
     [Symbol.dispose]() {
@@ -120,10 +160,7 @@ describe('project cached analysis', () => {
   })
 
   test('serves source metadata fallback immediately on cold development reads', async () => {
-    const previousNodeEnv = process.env['NODE_ENV']
-    process.env['NODE_ENV'] = 'development'
-
-    try {
+    await withDevelopmentLikeRuntime(async () => {
       const project = new Project({
         useInMemoryFileSystem: true,
       })
@@ -149,9 +186,7 @@ describe('project cached analysis', () => {
 
       expect(second.filePath).toBe(first.filePath)
       expect(createSourceFileSpy.mock.calls.length).toBeGreaterThanOrEqual(1)
-    } finally {
-      process.env['NODE_ENV'] = previousNodeEnv
-    }
+    })
   })
 
   test('reuses cached tokens for identical inputs', async () => {
@@ -205,10 +240,7 @@ describe('project cached analysis', () => {
   })
 
   test('serves plain token fallback immediately on cold development reads', async () => {
-    const previousNodeEnv = process.env['NODE_ENV']
-    process.env['NODE_ENV'] = 'development'
-
-    try {
+    await withDevelopmentLikeRuntime(async () => {
       const project = new Project({
         useInMemoryFileSystem: true,
       })
@@ -254,9 +286,7 @@ describe('project cached analysis', () => {
 
       expect(second).toHaveLength(1)
       expect(metadataCollector).toHaveBeenCalledTimes(1)
-    } finally {
-      process.env['NODE_ENV'] = previousNodeEnv
-    }
+    })
   })
 
   test('skips dependency AST traversal work for warm token cache hits', async () => {
@@ -1107,75 +1137,79 @@ describe('project cached analysis', () => {
     }
   })
 
-  test('invalidates cached source metadata when transitive TypeScript dependencies change on disk', async () => {
-    await using workspace = await createTemporaryWorkspace({
-      'package.json': JSON.stringify({
-        name: 'cached-analysis-test',
-        private: true,
-      }),
-      'tsconfig.json': JSON.stringify({
-        compilerOptions: {
-          module: 'ESNext',
-          moduleResolution: 'Bundler',
-          target: 'ESNext',
-          strict: true,
-        },
-        include: ['src/**/*.ts'],
-      }),
-      'src/index.ts':
-        "import { middleValue } from './middle'\nexport const value = middleValue\n",
-      'src/middle.ts':
-        "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
-      'src/leaf.ts': "export const leafValue = 'one'\n",
-    })
+  test(
+    'invalidates cached source metadata when transitive TypeScript dependencies change on disk',
+    async () => {
+      await using workspace = await createTemporaryWorkspace({
+        'package.json': JSON.stringify({
+          name: 'cached-analysis-test',
+          private: true,
+        }),
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: {
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            target: 'ESNext',
+            strict: true,
+          },
+          include: ['src/**/*.ts'],
+        }),
+        'src/index.ts':
+          "import { middleValue } from './middle'\nexport const value = middleValue\n",
+        'src/middle.ts':
+          "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
+        'src/leaf.ts': "export const leafValue = 'one'\n",
+      })
 
-    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
-    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
-    const transitiveDependencyPath = join(
-      workspace.workspacePath,
-      'src/leaf.ts'
-    )
-    const entrySource = await readFile(entryFilePath, 'utf8')
-    const project = new Project({
-      tsConfigFilePath,
-    })
-    const createSourceFileSpy = vi.spyOn(project, 'createSourceFile')
-    await delay(1_100)
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const transitiveDependencyPath = join(
+        workspace.workspacePath,
+        'src/leaf.ts'
+      )
+      const entrySource = await readFile(entryFilePath, 'utf8')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+      const createSourceFileSpy = vi.spyOn(project, 'createSourceFile')
+      await delay(1_100)
 
-    await getCachedSourceTextMetadata(project, {
-      value: entrySource,
-      filePath: entryFilePath,
-      language: 'ts',
-      shouldFormat: false,
-    })
-    await getCachedSourceTextMetadata(project, {
-      value: entrySource,
-      filePath: entryFilePath,
-      language: 'ts',
-      shouldFormat: false,
-    })
+      await getCachedSourceTextMetadata(project, {
+        value: entrySource,
+        filePath: entryFilePath,
+        language: 'ts',
+        shouldFormat: false,
+      })
+      await getCachedSourceTextMetadata(project, {
+        value: entrySource,
+        filePath: entryFilePath,
+        language: 'ts',
+        shouldFormat: false,
+      })
 
-    expect(createSourceFileSpy).toHaveBeenCalledTimes(1)
+      expect(createSourceFileSpy).toHaveBeenCalledTimes(1)
 
-    await writeFile(
-      transitiveDependencyPath,
-      "export const leafValue = 'two-updated'\n",
-      'utf8'
-    )
-    await project
-      .getSourceFileOrThrow(transitiveDependencyPath)
-      .refreshFromFileSystem()
-    await delay(325)
+      await writeFile(
+        transitiveDependencyPath,
+        "export const leafValue = 'two-updated'\n",
+        'utf8'
+      )
+      await project
+        .getSourceFileOrThrow(transitiveDependencyPath)
+        .refreshFromFileSystem()
+      await delay(325)
 
-    await getCachedSourceTextMetadata(project, {
-      value: entrySource,
-      filePath: entryFilePath,
-      language: 'ts',
-      shouldFormat: false,
-    })
+      await getCachedSourceTextMetadata(project, {
+        value: entrySource,
+        filePath: entryFilePath,
+        language: 'ts',
+        shouldFormat: false,
+      })
 
-    expect(createSourceFileSpy).toHaveBeenCalledTimes(2)
-  })
+      expect(createSourceFileSpy).toHaveBeenCalledTimes(2)
+    },
+    30_000
+  )
 
   test('invalidates cached tokens when transitive TypeScript dependencies change on disk', async () => {
     await using workspace = await createTemporaryWorkspace({

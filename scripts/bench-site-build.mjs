@@ -7,7 +7,7 @@ import { dirname, join, parse, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { performance } from 'node:perf_hooks'
 
-const DEFAULT_FILTER = 'site'
+const DEFAULT_FILTER = '@apps/site'
 const DEFAULT_COLD_RUNS = 1
 const DEFAULT_WARM_RUNS = 2
 const DEFAULT_CLEAN_PATHS = [

@@ -564,6 +564,84 @@ describe('project client transport guards', () => {
     ).toHaveLength(2)
   })
 
+  test('refresh notifications invalidate quick-info cache conservatively', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let quickInfoCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getQuickInfoAtPosition') {
+        quickInfoCallCount += 1
+        return { text: `quick-info-${quickInfoCallCount}` }
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return { nextCursor: 0, fullRefresh: false }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const projectOptions = {
+      tsConfigFilePath: '/project/tsconfig.json',
+    }
+    const first = await module.getQuickInfoAtPosition(
+      '/project/src/a.ts',
+      0,
+      projectOptions
+    )
+    const second = await module.getQuickInfoAtPosition(
+      '/project/src/a.ts',
+      0,
+      projectOptions
+    )
+
+    expect(first).toMatchObject({ text: 'quick-info-1' })
+    expect(second).toMatchObject({ text: 'quick-info-1' })
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getQuickInfoAtPosition')
+    ).toHaveLength(1)
+
+    const notificationListener = listeners.get('notification')
+    expect(notificationListener).toBeTypeOf('function')
+    notificationListener!({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/dep.ts'],
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const third = await module.getQuickInfoAtPosition(
+      '/project/src/a.ts',
+      0,
+      projectOptions
+    )
+
+    expect(third).toMatchObject({ text: 'quick-info-2' })
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getQuickInfoAtPosition')
+    ).toHaveLength(2)
+  })
+
   test('falls back to default RPC cache TTL when env value is invalid', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
