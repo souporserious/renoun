@@ -1053,6 +1053,7 @@ export async function createServer(options?: CreateServerOptions) {
         })
       : undefined
   } catch (error) {
+    unsubscribeRuntimeAnalysisBackgroundRefresh()
     reportBestEffortError('project/server', error)
     server.cleanup()
     throw error
@@ -1084,6 +1085,10 @@ export async function createServer(options?: CreateServerOptions) {
     if (startupRuntimePrewarmTimer) {
       clearTimeout(startupRuntimePrewarmTimer)
       startupRuntimePrewarmTimer = undefined
+    }
+    if (queuedHighlighterInitialization) {
+      clearTimeout(queuedHighlighterInitialization)
+      queuedHighlighterInitialization = undefined
     }
     pendingCodeFencePrewarmPathsImmediate.clear()
     pendingCodeFencePrewarmPathsBackground.clear()
@@ -1187,7 +1192,8 @@ export async function createServer(options?: CreateServerOptions) {
       })
     },
     {
-      memoize: true,
+      // Keep development hover data fresh after edits while preserving production performance.
+      memoize: getProductionRpcMemoizeOptions(),
       concurrency: 24,
     }
   )

@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, watch } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
@@ -10,6 +10,7 @@ import { TestWebSocket } from './rpc/test-websocket.ts'
 import type { RefreshInvalidationsSinceResponse } from './refresh-notifications.ts'
 import { createServer } from './server.ts'
 import * as highlighterModule from '../utils/create-highlighter.ts'
+import * as quickInfoModule from '../utils/get-quick-info-at-position.ts'
 
 const watcherState = vi.hoisted(() => {
   return {
@@ -170,6 +171,50 @@ describe('project server refresh invalidations', () => {
     expect(createHighlighterSpy).not.toHaveBeenCalled()
   })
 
+  test('does not memoize quick info RPC responses for identical params in development', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['NODE_ENV'] = 'development'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+
+    const quickInfoSpy = vi
+      .spyOn(quickInfoModule, 'getQuickInfoAtPosition')
+      .mockReturnValueOnce({
+        displayText: 'first-result',
+        documentationText: '',
+      })
+      .mockReturnValueOnce({
+        displayText: 'second-result',
+        documentationText: '',
+      })
+
+    server = await createServer({ host: '127.0.0.1' })
+    client = new WebSocketClient(server.getId())
+    await client.ready(2_000)
+
+    const params = {
+      filePath: `${process.cwd()}/packages/renoun/src/project/server.ts`,
+      position: 0,
+    }
+    const first = await client.callMethod<typeof params, unknown>(
+      'getQuickInfoAtPosition',
+      params
+    )
+    const second = await client.callMethod<typeof params, unknown>(
+      'getQuickInfoAtPosition',
+      params
+    )
+
+    expect(first).toEqual({
+      displayText: 'first-result',
+      documentationText: '',
+    })
+    expect(second).toEqual({
+      displayText: 'second-result',
+      documentationText: '',
+    })
+    expect(quickInfoSpy).toHaveBeenCalledTimes(2)
+  })
+
   test('does not drop refresh invalidations when root ancestors include ignored segment names', async () => {
     globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
     process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
@@ -222,5 +267,25 @@ describe('project server refresh invalidations', () => {
     expect(notification.data?.filePaths).toEqual(
       expect.arrayContaining([`${rootDirectory}/src/example.ts`])
     )
+  })
+
+  test('unsubscribes runtime analysis refresh listener when watcher setup throws', async () => {
+    process.env['NODE_ENV'] = 'development'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
+
+    const unsubscribe = vi.fn()
+    const onRuntimeAnalysisBackgroundRefreshSpy = vi
+      .spyOn(cachedAnalysis, 'onRuntimeAnalysisBackgroundRefresh')
+      .mockReturnValue(unsubscribe)
+    vi.mocked(watch).mockImplementationOnce(() => {
+      throw new Error('watch unavailable')
+    })
+
+    await expect(createServer({ host: '127.0.0.1' })).rejects.toThrow(
+      'watch unavailable'
+    )
+
+    expect(onRuntimeAnalysisBackgroundRefreshSpy).toHaveBeenCalledTimes(1)
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 })
