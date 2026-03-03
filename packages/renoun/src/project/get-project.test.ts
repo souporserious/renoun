@@ -20,6 +20,11 @@ const mockedInvalidationFns = vi.hoisted(() => {
     invalidateRuntimeAnalysisCachePaths: vi.fn(),
   }
 })
+const mockedGitIgnoreFns = vi.hoisted(() => {
+  return {
+    isFilePathGitIgnored: vi.fn(() => false),
+  }
+})
 
 vi.mock('./cache.ts', async () => {
   const actual = await vi.importActual<typeof import('./cache.ts')>(
@@ -44,6 +49,10 @@ vi.mock('./cached-analysis.ts', async () => {
       mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths,
   }
 })
+
+vi.mock('../utils/is-file-path-git-ignored.ts', () => ({
+  isFilePathGitIgnored: mockedGitIgnoreFns.isFilePathGitIgnored,
+}))
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
@@ -92,6 +101,7 @@ describe('project watcher invalidation batching', () => {
     process.env['RENOUN_PROJECT_WATCHERS'] = 'true'
     mockedInvalidationFns.invalidateProjectFileCachePaths.mockClear()
     mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths.mockClear()
+    mockedGitIgnoreFns.isFilePathGitIgnored.mockClear()
     watcherState.callback = undefined
   })
 
@@ -120,6 +130,46 @@ describe('project watcher invalidation batching', () => {
     for (let index = 0; index < 40; index += 1) {
       await callback('rename', `src/file-${index}.ts`)
     }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 60)
+    })
+
+    expect(
+      mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths
+    ).toHaveBeenCalledTimes(1)
+    expect(
+      mockedInvalidationFns.invalidateProjectFileCachePaths
+    ).toHaveBeenCalledTimes(1)
+
+    const [runtimePaths] =
+      mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths.mock.calls[0] ??
+      []
+    expect(runtimePaths).toEqual([`${projectDirectory}/src`])
+
+    const [, projectPaths] =
+      mockedInvalidationFns.invalidateProjectFileCachePaths.mock.calls[0] ?? []
+    expect(projectPaths).toEqual([`${projectDirectory}/src`])
+  })
+
+  test('does not drop watcher invalidations when project root ancestors include ignored segment names', async () => {
+    const uniqueId = Date.now()
+    const projectDirectory = `/virtual-project-roots/build/project-${uniqueId}`
+
+    getProject({
+      useInMemoryFileSystem: true,
+      projectId: `watcher-build-root-${uniqueId}`,
+      tsConfigFilePath: `${projectDirectory}/tsconfig.json`,
+    })
+
+    const callback = watcherState.callback
+    expect(typeof callback).toBe('function')
+
+    if (!callback) {
+      throw new Error('[renoun] expected watcher callback to be defined')
+    }
+
+    await callback('rename', `src/file.ts`)
 
     await new Promise((resolve) => {
       setTimeout(resolve, 60)

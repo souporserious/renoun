@@ -622,6 +622,10 @@ function getRuntimeAnalysisSWRReadConfig(
   CacheStoreGetOrComputeOptions,
   'staleWhileRevalidate' | 'onBackgroundRefreshComplete'
 > {
+  if (isTestEnvironment()) {
+    return {}
+  }
+
   const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions({
     maxStaleAgeMs: options?.maxStaleAgeMs,
   })

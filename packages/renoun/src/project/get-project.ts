@@ -200,11 +200,16 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
     async (eventType, fileName) => {
       if (!fileName) return
 
-      const filePath = join(projectDirectory, fileName)
-
-      if (shouldIgnoreProjectWatchPath(filePath)) {
+      const watchedFileName = String(fileName)
+      if (!watchedFileName) {
         return
       }
+
+      if (shouldIgnoreProjectWatchPath(watchedFileName)) {
+        return
+      }
+
+      const filePath = join(projectDirectory, watchedFileName)
 
       if (isFilePathGitIgnored(filePath)) {
         return
@@ -212,7 +217,7 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
 
       const isDirectory = existsSync(filePath)
         ? statSync(filePath).isDirectory()
-        : extname(fileName) === ''
+        : extname(watchedFileName) === ''
 
       try {
         const projectsToUpdate = directoryToProjects.get(projectDirectory)
@@ -261,7 +266,7 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
       } catch (error) {
         if (error instanceof Error) {
           throw new Error(
-            `[renoun] An error occurred in the file system watcher while trying to ${eventType} the file path at: ${fileName}`,
+            `[renoun] An error occurred in the file system watcher while trying to ${eventType} the file path at: ${watchedFileName}`,
             { cause: error }
           )
         }

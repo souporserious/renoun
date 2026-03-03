@@ -1,6 +1,6 @@
 import { watch, type FSWatcher, type Dirent } from 'node:fs'
 import { readdir } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { getTsMorph } from '../utils/ts-morph.ts'
 import type { SyntaxKind as TsMorphSyntaxKind } from '../utils/ts-morph.ts'
 
@@ -221,6 +221,14 @@ function getThemeNamesForCodeFencePrewarm(
 
 function normalizeCodeFencePrewarmPath(path: string): string {
   return resolve(path)
+}
+
+function toRootRelativeRefreshPath(
+  filePath: string,
+  rootDirectory: string
+): string {
+  const relativePath = relative(resolve(rootDirectory), resolve(filePath))
+  return relativePath.length === 0 ? '.' : relativePath
 }
 
 async function collectMarkdownFilesUnderDirectory(
@@ -801,10 +809,15 @@ export async function createServer(options?: CreateServerOptions) {
       }
 
       const normalizedPath = normalizeCodeFencePrewarmPath(filePath)
-      if (shouldIgnoreRefreshPath(normalizedPath)) {
+      const rootRelativePath = toRootRelativeRefreshPath(
+        normalizedPath,
+        rootDirectory
+      )
+      if (shouldIgnoreRefreshPath(rootRelativePath)) {
         continue
       }
-      const isRootScopePath = normalizedPath === rootDirectory || filePath === '.'
+      const isRootScopePath =
+        normalizedPath === rootDirectory || rootRelativePath === '.'
       if (
         !isRootScopePath &&
         !isMarkdownCodeFenceSourcePath(normalizedPath)
@@ -992,7 +1005,15 @@ export async function createServer(options?: CreateServerOptions) {
         return
       }
 
-      const refreshPaths = paths.filter((path) => !shouldIgnoreRefreshPath(path))
+      const refreshPaths = paths.filter((path) => {
+        if (typeof path !== 'string' || path.length === 0) {
+          return false
+        }
+
+        return !shouldIgnoreRefreshPath(
+          toRootRelativeRefreshPath(path, rootDirectory)
+        )
+      })
       if (refreshPaths.length === 0) {
         return
       }
@@ -1012,11 +1033,11 @@ export async function createServer(options?: CreateServerOptions) {
             return
           }
 
-          const filePath = join(rootDirectory, watchedFileName)
-
-          if (shouldIgnoreRefreshPath(filePath)) {
+          if (shouldIgnoreRefreshPath(watchedFileName)) {
             return
           }
+
+          const filePath = join(rootDirectory, watchedFileName)
 
           if (isFilePathGitIgnored(filePath)) {
             return

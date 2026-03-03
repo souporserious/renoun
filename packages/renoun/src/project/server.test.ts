@@ -1,12 +1,47 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
+import * as rootDirectoryModule from '../utils/get-root-directory.ts'
 import * as cachedAnalysis from './cached-analysis.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import { TestWebSocket } from './rpc/test-websocket.ts'
 import type { RefreshInvalidationsSinceResponse } from './refresh-notifications.ts'
 import { createServer } from './server.ts'
 import * as highlighterModule from '../utils/create-highlighter.ts'
+
+const watcherState = vi.hoisted(() => {
+  return {
+    callback:
+      undefined as
+        | ((
+            eventType: string,
+            fileName: string | Buffer | null
+          ) => void)
+        | undefined,
+  }
+})
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+
+  return {
+    ...actual,
+    watch: vi.fn((...args: unknown[]) => {
+      const callback =
+        typeof args[1] === 'function' ? args[1] : args[2]
+      if (typeof callback === 'function') {
+        watcherState.callback = callback as (
+          eventType: string,
+          fileName: string | Buffer | null
+        ) => void
+      }
+
+      return {
+        close: vi.fn(),
+      } as unknown as import('node:fs').FSWatcher
+    }),
+  }
+})
 
 const originalEnvironment = captureProcessEnv([
   'RENOUN_SERVER_PORT',
@@ -35,6 +70,7 @@ describe('project server refresh invalidations', () => {
 
     globalThis.WebSocket = originalWebSocket
     vi.restoreAllMocks()
+    watcherState.callback = undefined
     restoreProcessEnv(originalEnvironment)
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
@@ -88,5 +124,59 @@ describe('project server refresh invalidations', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     expect(createHighlighterSpy).not.toHaveBeenCalled()
+  })
+
+  test('does not drop refresh invalidations when root ancestors include ignored segment names', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
+
+    const uniqueId = Date.now()
+    const rootDirectory = `/virtual-refresh-roots/build/project-${uniqueId}`
+
+    vi.spyOn(rootDirectoryModule, 'getRootDirectory').mockReturnValue(
+      rootDirectory
+    )
+
+    server = await createServer({ host: '127.0.0.1' })
+    client = new WebSocketClient(server.getId())
+    await client.ready(2_000)
+
+    const callback = watcherState.callback
+    expect(typeof callback).toBe('function')
+
+    if (!callback) {
+      throw new Error('[renoun] expected root watcher callback to be defined')
+    }
+
+    const refreshNotificationPromise = new Promise<{
+      data?: {
+        filePaths?: string[]
+      }
+      type?: string
+    }>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('[renoun] expected refresh notification'))
+      }, 1_000)
+
+      client?.once('notification', (message) => {
+        clearTimeout(timeout)
+        resolve(
+          message as {
+            data?: {
+              filePaths?: string[]
+            }
+            type?: string
+          }
+        )
+      })
+    })
+
+    callback('change', 'src/example.ts')
+    const notification = await refreshNotificationPromise
+
+    expect(notification.type).toBe('refresh')
+    expect(notification.data?.filePaths).toEqual(
+      expect.arrayContaining([`${rootDirectory}/src/example.ts`])
+    )
   })
 })
