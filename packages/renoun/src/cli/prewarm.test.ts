@@ -605,6 +605,58 @@ describe('collectRenounPrewarmTargets', () => {
     ])
   })
 
+  test('resolves nested collection entries across imported collections', async () => {
+    project = new Project({ useInMemoryFileSystem: true })
+
+    project.createSourceFile(
+      '/repo/src/root-collection.ts',
+      `
+        import { Collection } from 'renoun'
+        import { nestedCollection } from './nested-collection'
+
+        export const rootCollection = new Collection({
+          entries: [nestedCollection],
+        })
+      `,
+      { overwrite: true }
+    )
+
+    project.createSourceFile(
+      '/repo/src/nested-collection.ts',
+      `
+        import { Collection, Directory } from 'renoun'
+
+        export const contentDirectory = new Directory('/repo/content')
+        export const nestedCollection = new Collection({
+          entries: [contentDirectory],
+        })
+      `,
+      { overwrite: true }
+    )
+
+    project.createSourceFile(
+      '/repo/src/entry.ts',
+      `
+        import { rootCollection } from './root-collection'
+
+        rootCollection.getEntries()
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
+
+    expect(targets.directoryGetEntries).toEqual([
+      {
+        directoryPath: '/repo/content',
+        recursive: false,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        filterExtensions: null,
+      },
+    ])
+  })
+
   test('captures renoun imports from subpath specifiers', async () => {
     project.createSourceFile(
       '/repo/src/subpath.ts',

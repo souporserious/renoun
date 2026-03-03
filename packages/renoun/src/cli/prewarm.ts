@@ -178,6 +178,14 @@ export async function collectRenounPrewarmTargets(
     )
   }
 
+  // Seed collection declarations first so cross-file nested collections can be
+  // resolved regardless of discovery order.
+  for (const collectionSymbol of collectionRawEntries.keys()) {
+    if (!collectionDeclarations.has(collectionSymbol)) {
+      collectionDeclarations.set(collectionSymbol, { entries: [] })
+    }
+  }
+
   for (const [collectionSymbol, rawEntries] of collectionRawEntries.entries()) {
     const aliases =
       collectionAliases.get(collectionSymbol) ?? EMPTY_RENOUN_ALIASES
@@ -195,9 +203,14 @@ export async function collectRenounPrewarmTargets(
         (entry): entry is RenounCollectionEntryReference => entry !== undefined
       )
 
-    collectionDeclarations.set(collectionSymbol, {
-      entries: resolvedEntries,
-    })
+    const declaration = collectionDeclarations.get(collectionSymbol)
+    if (declaration) {
+      declaration.entries = resolvedEntries
+    } else {
+      collectionDeclarations.set(collectionSymbol, {
+        entries: resolvedEntries,
+      })
+    }
   }
 
   for (const { callExpression, methodName, aliases } of pendingCallsites) {
