@@ -4381,9 +4381,15 @@ export class GitFileSystem
           })
           const githubProfileUrl = toGitHubProfileUrl(githubUsername)
           const displayName = name || githubUsername || 'Unknown'
+          const normalizedEmail =
+            typeof commit.authorEmail === 'string'
+              ? commit.authorEmail.trim().toLowerCase()
+              : ''
           const key = githubUsername
             ? `github:${githubUsername.toLowerCase()}`
-            : displayName.toLowerCase()
+            : normalizedEmail
+              ? `email:${normalizedEmail}`
+              : displayName.toLowerCase()
           const stamp = new Date(commit.unix * 1000)
 
           const existing = authorsByIdentity.get(key)

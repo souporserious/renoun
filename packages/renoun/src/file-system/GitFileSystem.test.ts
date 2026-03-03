@@ -2069,6 +2069,50 @@ describe('GitFileSystem', () => {
     expect(bob?.commitCount).toBe(1)
   })
 
+  test('getFileMetadata distinguishes non-GitHub authors sharing a name by email', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/data.txt', `alpha`, 'first', {
+      name: 'Chris',
+      email: 'chris.one@example.com',
+    })
+    commitFile(repoRoot, 'src/data.txt', `beta`, 'second', {
+      name: 'Chris',
+      email: 'chris.two@example.com',
+    })
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const meta = await store.getFileMetadata('src/data.txt')
+
+    expect(meta.authors).toHaveLength(2)
+    expect(
+      meta.authors
+        .map((author) => author.commitCount)
+        .sort((countA, countB) => countA - countB)
+    ).toEqual([1, 1])
+  })
+
+  test('getFileMetadata aggregates non-GitHub author name changes by email', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/data.txt', `alpha`, 'first', {
+      name: 'Alicia',
+      email: 'alice@example.com',
+    })
+    commitFile(repoRoot, 'src/data.txt', `beta`, 'second', {
+      name: 'Alice',
+      email: 'alice@example.com',
+    })
+
+    using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+    const meta = await store.getFileMetadata('src/data.txt')
+
+    expect(meta.authors).toHaveLength(1)
+    expect(meta.authors[0]?.commitCount).toBe(2)
+  })
+
   test('derives githubProfileUrl from GitHub noreply commit emails', async ({
     repoRoot,
     cacheDirectory,
