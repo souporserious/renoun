@@ -32,7 +32,30 @@ function getRestoreKeys(actionSource: string): string[] {
   return restoreKeys
 }
 
+function getPrimaryKey(actionSource: string): string {
+  const keyLine = actionSource
+    .split('\n')
+    .find((line) => line.trimStart().startsWith('key:'))
+
+  expect(keyLine).toBeDefined()
+
+  return keyLine!.trim()
+}
+
 describe('restore-renoun-cache action', () => {
+  test('uses a deterministic cache key (no per-run identifiers)', () => {
+    const actionSource = readFileSync(
+      '.github/actions/restore-renoun-cache/action.yml',
+      'utf8'
+    )
+    const key = getPrimaryKey(actionSource)
+
+    expect(key).toContain("${{ steps.renoun-cache-token.outputs.token }}")
+    expect(key).toContain("${{ hashFiles('pnpm-lock.yaml') }}")
+    expect(key).not.toContain('github.run_id')
+    expect(key).not.toContain('github.run_attempt')
+  })
+
   test('keeps restore keys scoped to the lockfile hash', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',

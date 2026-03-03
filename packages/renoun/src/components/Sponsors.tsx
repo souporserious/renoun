@@ -60,6 +60,7 @@ export function configureSponsorsRuntime(options: SponsorsRuntimeOptions): void 
 
 export function resetSponsorsRuntimeConfiguration(): void {
   sponsorsRuntimeOptions.cacheTtlMs = undefined
+  sponsorsCacheSessionPromise = undefined
 }
 
 function getTokenCacheKey(token: string): string {
@@ -112,7 +113,12 @@ async function getSponsorsCacheSession(): Promise<RenounSession | undefined> {
     })()
   }
 
-  return sponsorsCacheSessionPromise
+  const session = await sponsorsCacheSessionPromise
+  if (!session) {
+    sponsorsCacheSessionPromise = undefined
+  }
+
+  return session
 }
 
 /** Clamp and sanitize avatar size. */

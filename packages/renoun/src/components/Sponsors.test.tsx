@@ -105,7 +105,6 @@ describe('Sponsors cache', () => {
     } else {
       process.env['GITHUB_SPONSORS_TOKEN'] = originalSponsorsToken
     }
-
   })
 
   it('reuses cached GitHub responses for repeated identical renders', async () => {
@@ -289,6 +288,50 @@ describe('Sponsors cache', () => {
       children: () => <></>,
     })
 
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('recovers cache session setup after a transient failure', async () => {
+    process.env['GITHUB_SPONSORS_TOKEN'] = `token-${Date.now()}`
+
+    const sessionForSpy = vi.spyOn(Session, 'for')
+    sessionForSpy.mockImplementationOnce(() => {
+      throw new Error('transient session initialization failure')
+    })
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL): Promise<Response> => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url === 'https://api.github.com/graphql') {
+          return createGraphqlResponse()
+        }
+
+        if (url === 'https://github.com/sponsors/renoun') {
+          return createSponsorsPageResponse('renoun')
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`)
+      }
+    )
+
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const tiers = [{ amount: 100, title: 'Bronze' }] as const
+
+    await Sponsors({
+      tiers,
+      children: () => <></>,
+    })
+    await Sponsors({
+      tiers,
+      children: () => <></>,
+    })
+    await Sponsors({
+      tiers,
+      children: () => <></>,
+    })
+
+    expect(sessionForSpy).toHaveBeenCalledTimes(2)
     expect(fetchMock).toHaveBeenCalledTimes(4)
   })
 })

@@ -30,12 +30,13 @@ export function createDefaultPrewarmOptions(rootPath = process.cwd()): {
   }
 }
 
-function resolvePrewarmWorkerEntryFilePath(): string | undefined {
-  const workerEntryFilePath = fileURLToPath(
-    new URL('./prewarm.worker.js', import.meta.url)
-  )
+export function resolvePrewarmWorkerEntryFilePath(): string | undefined {
+  const workerEntryFilePathCandidates = [
+    fileURLToPath(new URL('./prewarm.worker.js', import.meta.url)),
+    fileURLToPath(new URL('./prewarm.worker.ts', import.meta.url)),
+  ]
 
-  return existsSync(workerEntryFilePath) ? workerEntryFilePath : undefined
+  return workerEntryFilePathCandidates.find((path) => existsSync(path))
 }
 
 function getPrewarmRequestSignature(options?: {
