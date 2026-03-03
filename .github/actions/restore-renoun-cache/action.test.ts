@@ -43,7 +43,7 @@ function getPrimaryKey(actionSource: string): string {
 }
 
 describe('restore-renoun-cache action', () => {
-  test('uses a deterministic cache key (no per-run identifiers)', () => {
+  test('uses a commit-scoped cache key (incremental, no per-run identifiers)', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',
       'utf8'
@@ -52,21 +52,25 @@ describe('restore-renoun-cache action', () => {
 
     expect(key).toContain("${{ steps.renoun-cache-token.outputs.token }}")
     expect(key).toContain("${{ hashFiles('pnpm-lock.yaml') }}")
+    expect(key).toContain('${{ github.sha }}')
     expect(key).not.toContain('github.run_id')
     expect(key).not.toContain('github.run_attempt')
   })
 
-  test('keeps restore keys scoped to the lockfile hash', () => {
+  test('keeps restore keys scoped to the lockfile hash and key prefix', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',
       'utf8'
     )
+    const key = getPrimaryKey(actionSource).replace(/^key:\s*/, '')
     const restoreKeys = getRestoreKeys(actionSource)
 
     expect(restoreKeys.length).toBeGreaterThan(0)
 
     for (const restoreKey of restoreKeys) {
       expect(restoreKey).toContain("${{ hashFiles('pnpm-lock.yaml') }}")
+      expect(restoreKey.endsWith('-')).toBe(true)
+      expect(key.startsWith(restoreKey)).toBe(true)
     }
   })
 })

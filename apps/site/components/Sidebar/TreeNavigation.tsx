@@ -3,9 +3,7 @@ import {
   Directory,
   isDirectory,
   isJavaScriptFile,
-  isMDXFile,
   Navigation,
-  ModuleExportNotFoundError,
   type FileSystemEntry,
   type NavigationComponents,
   type NavigationProps,
@@ -15,6 +13,7 @@ import {
   SidebarCollapseContent,
   SidebarCollapseProvider,
 } from './SidebarCollapseProvider'
+import { getEntryMetadata } from './get-entry-metadata'
 import { SidebarLink } from './SidebarLink'
 
 const components: Partial<NavigationComponents> = {
@@ -111,21 +110,6 @@ const components: Partial<NavigationComponents> = {
 
 export function TreeNavigation(props: Omit<NavigationProps, 'components'>) {
   return <Navigation {...props} components={components} />
-}
-
-async function getEntryMetadata(entry: FileSystemEntry<any>) {
-  if (!isMDXFile(entry)) {
-    return undefined
-  }
-
-  try {
-    return await entry.getExportValue('metadata')
-  } catch (error) {
-    if (error instanceof ModuleExportNotFoundError) {
-      return undefined
-    }
-    throw error
-  }
 }
 
 async function getFileLabel(entry: FileSystemEntry<any>) {
