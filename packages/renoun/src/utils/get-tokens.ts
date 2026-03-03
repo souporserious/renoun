@@ -19,6 +19,10 @@ import {
 } from './telemetry.ts'
 import { attachPublicError, RENOUN_PUBLIC_ERROR_CODES } from './public-error.ts'
 import {
+  isProductionEnvironment,
+  isTestEnvironment,
+} from './env.ts'
+import {
   validateLanguageFileCompatibility,
   isJavaScriptTypeScriptFile,
 } from './validate-language-file-compatibility.ts'
@@ -115,6 +119,32 @@ export interface GetTokensOptions {
   metadataCollector?: MetadataCollector
 }
 
+export function createPlainTextTokenizedLines(value: string): TokenizedLines {
+  const normalizedValue = value.replace(/\r\n?/g, '\n')
+  const lines = normalizedValue.split('\n')
+  let offset = 0
+
+  return lines.map((line, lineIndex) => {
+    const start = offset
+    const end = start + line.length
+    offset = end + (lineIndex < lines.length - 1 ? 1 : 0)
+
+    return [
+      {
+        value: line,
+        start,
+        end,
+        hasTextStyles: false,
+        isBaseColor: true,
+        isDeprecated: false,
+        isWhiteSpace: false,
+        isSymbol: false,
+        style: {},
+      } satisfies Token,
+    ]
+  })
+}
+
 /** Converts a string of code to an array of highlighted tokens. */
 export async function getTokens({
   project,
@@ -208,21 +238,7 @@ export async function getTokens({
           language === 'txt' ||
           language === 'diff' // TODO: add support for diff highlighting
         ) {
-          const plainTextTokens: TokenizedLines = [
-            [
-              {
-                value,
-                start: 0,
-                end: value.length,
-                hasTextStyles: false,
-                isBaseColor: true,
-                isDeprecated: false,
-                isWhiteSpace: false,
-                isSymbol: false,
-                style: {},
-              } satisfies Token,
-            ],
-          ]
+          const plainTextTokens = createPlainTextTokenizedLines(value)
           emitSuccessTelemetry(plainTextTokens)
           return plainTextTokens
         }
@@ -303,6 +319,12 @@ export async function getTokens({
         const rootDirectory = getRootDirectory()
         const baseDirectory = process.cwd().replace(rootDirectory, '')
         const quickInfoCache = new Map<string, QuickInfoEntry>()
+        const shouldPopulateQuickInfo =
+          isProductionEnvironment() || isTestEnvironment()
+        let remainingQuickInfoLookups = resolveQuickInfoLookupBudget({
+          valueLength: value.length,
+          symbolCount: shouldPopulateQuickInfo ? symbolMetadata.length : 0,
+        })
         let previousTokenStart = 0
         let parsedTokens: Token[][] = tokens.map((line) => {
           if (line.length === 0) {
@@ -379,7 +401,7 @@ export async function getTokens({
                   ),
                 }))
               const quickInfo =
-                sourceFile && filePath
+                remainingQuickInfoLookups > 0 && sourceFile && filePath
                   ? getQuickInfo(
                       sourceFile,
                       filePath,
@@ -389,6 +411,9 @@ export async function getTokens({
                       quickInfoCache
                     )
                   : undefined
+              if (remainingQuickInfoLookups > 0 && sourceFile && filePath) {
+                remainingQuickInfoLookups -= 1
+              }
 
               return {
                 ...token,
@@ -602,6 +627,28 @@ interface QuickInfoEntry {
 }
 
 const MAX_QUICK_INFO_CACHE_SIZE = 2000
+const MAX_QUICK_INFO_LOOKUPS_PER_BLOCK = 160
+const MAX_QUICK_INFO_LOOKUPS_FOR_LARGE_BLOCK = 64
+const QUICK_INFO_LARGE_BLOCK_VALUE_LENGTH = 50_000
+const QUICK_INFO_LARGE_BLOCK_SYMBOL_THRESHOLD = 800
+
+export function resolveQuickInfoLookupBudget(options: {
+  valueLength: number
+  symbolCount: number
+}): number {
+  if (options.symbolCount <= 0) {
+    return 0
+  }
+
+  const isLargeBlock =
+    options.valueLength >= QUICK_INFO_LARGE_BLOCK_VALUE_LENGTH ||
+    options.symbolCount >= QUICK_INFO_LARGE_BLOCK_SYMBOL_THRESHOLD
+  const maxLookups = isLargeBlock
+    ? MAX_QUICK_INFO_LOOKUPS_FOR_LARGE_BLOCK
+    : MAX_QUICK_INFO_LOOKUPS_PER_BLOCK
+
+  return Math.min(maxLookups, options.symbolCount)
+}
 
 /** Get the quick info a token */
 function getQuickInfo(

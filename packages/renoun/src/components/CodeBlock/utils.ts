@@ -111,6 +111,11 @@ export function keepElementInView(
   popoverNode: HTMLElement,
   anchorNode: HTMLElement
 ) {
+  // Clear previous clamped size so placement measures intrinsic content size
+  // for the currently hovered symbol.
+  popoverNode.style.removeProperty('width')
+  popoverNode.style.removeProperty('height')
+
   const viewportRect = getClosestViewportRect(popoverNode)
   const popoverRect = getRectWithScroll(
     popoverNode,
@@ -136,7 +141,7 @@ export function keepElementInView(
   }
 
   if (styles.top + styles.height > viewportRect.bottom) {
-    styles.height = viewportRect.bottom - styles.top
+    styles.height = Math.max(0, viewportRect.bottom - styles.top)
   }
 
   if (styles.left < viewportRect.left) {
@@ -150,13 +155,24 @@ export function keepElementInView(
   }
 
   if (styles.left + styles.width > viewportRect.right) {
-    styles.width = viewportRect.right - styles.left
+    styles.width = Math.max(0, viewportRect.right - styles.left)
   }
+
+  const shouldSetWidth = styles.width < popoverRect.width
+  const shouldSetHeight = styles.height < popoverRect.height
 
   popoverNode.style.top = styles.top + 'px'
   popoverNode.style.left = styles.left + 'px'
-  popoverNode.style.width = styles.width + 'px'
-  popoverNode.style.height = styles.height + 'px'
+  if (shouldSetWidth) {
+    popoverNode.style.width = styles.width + 'px'
+  } else {
+    popoverNode.style.removeProperty('width')
+  }
+  if (shouldSetHeight) {
+    popoverNode.style.height = styles.height + 'px'
+  } else {
+    popoverNode.style.removeProperty('height')
+  }
 }
 
 /** @internal */

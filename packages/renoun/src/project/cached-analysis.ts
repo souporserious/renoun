@@ -17,7 +17,6 @@ import { reportBestEffortError } from '../utils/best-effort.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import {
-  isDevelopmentEnvironment,
   isProductionEnvironment,
   isTestEnvironment,
 } from '../utils/env.ts'
@@ -42,7 +41,14 @@ import type {
   GetSourceTextMetadataOptions,
   SourceTextMetadata,
 } from '../utils/get-source-text-metadata.ts'
-import { getSourceTextMetadata as baseGetSourceTextMetadata } from '../utils/get-source-text-metadata.ts'
+import {
+  getSourceTextMetadata as baseGetSourceTextMetadata,
+  getSourceTextMetadataFallback,
+} from '../utils/get-source-text-metadata.ts'
+import {
+  getSourceTextFormatterStateVersion,
+  prewarmSourceTextFormatterRuntime,
+} from '../utils/format-source-text.ts'
 import { getFileExportStaticValue as baseGetFileExportStaticValue } from '../utils/get-file-export-static-value.ts'
 import {
   getFileExportText as baseGetFileExportText,
@@ -50,11 +56,15 @@ import {
 } from '../utils/get-file-export-text.ts'
 import { getOutlineRanges as baseGetOutlineRanges } from '../utils/get-outline-ranges.ts'
 import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.ts'
-import { getTokens as baseGetTokens } from '../utils/get-tokens.ts'
+import {
+  createPlainTextTokenizedLines,
+  getTokens as baseGetTokens,
+} from '../utils/get-tokens.ts'
 import {
   resolveTypeAtLocationWithDependencies as baseResolveTypeAtLocationWithDependencies,
   type ResolvedTypeAtLocationResult,
 } from '../utils/resolve-type-at-location.ts'
+import type { Highlighter } from '../utils/create-highlighter.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
@@ -98,7 +108,9 @@ const RUNTIME_ANALYSIS_CACHE_CONFIG = {
   version: '3',
   versionDependency: 'runtime-analysis-cache-version',
   projectCompilerOptionsDependency: 'project:compiler-options',
-  defaultSwrMaxStaleAgeMs: 2_000,
+  defaultSwrMaxStaleAgeMs: 120_000,
+  sourceTextMetadataSwrMaxStaleAgeMs: 15 * 60_000,
+  tokensSwrMaxStaleAgeMs: 15 * 60_000,
   maxTypeScriptDependencyAnalysisFiles: 10_000,
   typeScriptDependencySidecarHydrationConcurrency: 2,
   moduleResolutionFileExtensions: [
@@ -121,6 +133,10 @@ const RUNTIME_ANALYSIS_CONST_DEPS: readonly CacheStoreConstDependency[] =
       version: RUNTIME_ANALYSIS_CACHE_CONFIG.version,
     },
   ])
+
+function isRuntimeAnalysisDevelopmentLikeEnvironment(): boolean {
+  return !isProductionEnvironment() && !isTestEnvironment()
+}
 
 const { ts } = getTsMorph()
 const debugLogger = getDebugLogger()
@@ -167,6 +183,28 @@ const runtimeTypeScriptDependencySidecarHydrationQueue: Array<{
   run: () => Promise<void>
 }> = []
 let runtimeTypeScriptDependencySidecarHydrationActiveCount = 0
+let runtimeAnalysisInvalidationPendingCount = 0
+const runtimeAnalysisBackgroundRefreshListeners = new Set<
+  (paths: readonly string[]) => void
+>()
+interface RuntimeAnalysisSWRPrewarmTask {
+  dependencyPaths: readonly string[]
+  run: () => Promise<void>
+  lastAccessedAt: number
+  inFlight?: Promise<void>
+}
+type RuntimeAnalysisSWRPrewarmPriority = 'immediate' | 'background'
+const runtimeAnalysisSWRPrewarmTasksByNodeKey = new Map<
+  string,
+  RuntimeAnalysisSWRPrewarmTask
+>()
+const pendingRuntimeAnalysisSWRPrewarmPathsImmediate = new Set<string>()
+const pendingRuntimeAnalysisSWRPrewarmPathsBackground = new Set<string>()
+let runtimeAnalysisSWRPrewarmFlushQueued = false
+let runtimeAnalysisSWRPrewarmFlushTimer: NodeJS.Timeout | undefined
+let runtimeAnalysisSWRPrewarmFlushDelayMs: number | undefined
+const pendingRuntimeAnalysisBackgroundRefreshPaths = new Set<string>()
+let runtimeAnalysisBackgroundRefreshFlushQueued = false
 const projectConfigDependencyVersionByKey = new Map<
   string,
   {
@@ -174,16 +212,576 @@ const projectConfigDependencyVersionByKey = new Map<
     version: string
   }
 >()
+const RUNTIME_ANALYSIS_SWR_PREWARM_MAX_ENTRIES = 512
+const RUNTIME_ANALYSIS_SWR_PREWARM_MAX_AGE_MS = 5 * 60_000
+const RUNTIME_ANALYSIS_SWR_PREWARM_CONCURRENCY = 1
+const RUNTIME_ANALYSIS_SWR_PREWARM_MAX_TASKS_PER_RUN = 16
+const RUNTIME_ANALYSIS_SWR_PREWARM_PRIORITY_DELAY_MS: Record<
+  RuntimeAnalysisSWRPrewarmPriority,
+  number
+> = {
+  immediate: 0,
+  background: 250,
+}
+const RUNTIME_ANALYSIS_DEV_COLD_FALLBACK_MAX_VALUE_LENGTH = 250_000
+const RUNTIME_ANALYSIS_DEV_COLD_RESPONSE_BUDGET_MS = 25
+const runtimeAnalysisBootstrappedScopeKeys = new Set<string>()
+const pendingRuntimeAnalysisColdStartTaskKeys = new Set<string>()
 
-function getRuntimeAnalysisSWRReadOptions():
+function getRuntimeAnalysisSWRReadOptions(options?: {
+  maxStaleAgeMs?: number
+}):
   | CacheStoreStaleWhileRevalidateOptions
   | undefined {
-  if (!isDevelopmentEnvironment()) {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
     return undefined
   }
 
+  const maxStaleAgeMs =
+    typeof options?.maxStaleAgeMs === 'number'
+      ? options.maxStaleAgeMs
+      : RUNTIME_ANALYSIS_CACHE_CONFIG.defaultSwrMaxStaleAgeMs
+
   return {
-    maxStaleAgeMs: RUNTIME_ANALYSIS_CACHE_CONFIG.defaultSwrMaxStaleAgeMs,
+    maxStaleAgeMs,
+  }
+}
+
+function prewarmSourceTextFormatterForRuntimeAnalysis(
+  _filePath?: string | false
+): void {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
+    return
+  }
+
+  prewarmSourceTextFormatterRuntime()
+}
+
+function normalizeRuntimeAnalysisRefreshPaths(
+  paths: Iterable<string>
+): string[] {
+  const pathByNormalizedPath = new Map<string, string>()
+
+  for (const path of paths) {
+    if (typeof path !== 'string' || path.length === 0) {
+      continue
+    }
+
+    const normalizedPath = normalizePathKey(path)
+    if (!pathByNormalizedPath.has(normalizedPath)) {
+      pathByNormalizedPath.set(normalizedPath, path)
+    }
+  }
+
+  const collapsedPaths = collapseInvalidationPaths(pathByNormalizedPath.keys())
+  return collapsedPaths.map((normalizedPath) => {
+    return pathByNormalizedPath.get(normalizedPath) ?? normalizedPath
+  })
+}
+
+function runtimeAnalysisPathsIntersect(
+  firstPath: string,
+  secondPath: string
+): boolean {
+  if (firstPath === '.' || secondPath === '.') {
+    return true
+  }
+
+  return (
+    firstPath === secondPath ||
+    firstPath.startsWith(`${secondPath}/`) ||
+    secondPath.startsWith(`${firstPath}/`)
+  )
+}
+
+function trimRuntimeAnalysisSWRPrewarmTasks(now = Date.now()): void {
+  for (const [nodeKey, task] of runtimeAnalysisSWRPrewarmTasksByNodeKey) {
+    if (now - task.lastAccessedAt > RUNTIME_ANALYSIS_SWR_PREWARM_MAX_AGE_MS) {
+      runtimeAnalysisSWRPrewarmTasksByNodeKey.delete(nodeKey)
+    }
+  }
+
+  if (
+    runtimeAnalysisSWRPrewarmTasksByNodeKey.size <=
+    RUNTIME_ANALYSIS_SWR_PREWARM_MAX_ENTRIES
+  ) {
+    return
+  }
+
+  const entries = Array.from(runtimeAnalysisSWRPrewarmTasksByNodeKey.entries())
+    .sort((first, second) => first[1].lastAccessedAt - second[1].lastAccessedAt)
+    .slice(
+      0,
+      runtimeAnalysisSWRPrewarmTasksByNodeKey.size -
+        RUNTIME_ANALYSIS_SWR_PREWARM_MAX_ENTRIES
+    )
+
+  for (const [nodeKey] of entries) {
+    runtimeAnalysisSWRPrewarmTasksByNodeKey.delete(nodeKey)
+  }
+}
+
+function normalizeRuntimeAnalysisPrewarmDependencyPath(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  path: string | undefined | false
+): string | undefined {
+  if (typeof path !== 'string' || path.length === 0) {
+    return undefined
+  }
+
+  try {
+    return normalizePathKey(runtimeCacheStore.fileSystem.getAbsolutePath(path))
+  } catch {
+    return normalizePathKey(path)
+  }
+}
+
+function resolveRuntimeAnalysisPrewarmDependencyPaths(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  paths: readonly (string | undefined | false)[],
+  fallbackScopePath?: string
+): string[] {
+  const dependencyPaths = new Set<string>()
+
+  for (const path of paths) {
+    const normalizedPath = normalizeRuntimeAnalysisPrewarmDependencyPath(
+      runtimeCacheStore,
+      path
+    )
+    if (normalizedPath && normalizedPath.length > 0) {
+      dependencyPaths.add(normalizedPath)
+    }
+  }
+
+  if (dependencyPaths.size > 0) {
+    return Array.from(dependencyPaths)
+  }
+
+  const fallbackPath = normalizeRuntimeAnalysisPrewarmDependencyPath(
+    runtimeCacheStore,
+    fallbackScopePath
+  )
+  if (fallbackPath && fallbackPath.length > 0) {
+    dependencyPaths.add(fallbackPath)
+  }
+
+  return Array.from(dependencyPaths)
+}
+
+function registerRuntimeAnalysisSWRPrewarmTask(options: {
+  nodeKey: string
+  dependencyPaths: readonly string[]
+  run: () => Promise<void>
+}): void {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
+    return
+  }
+
+  const now = Date.now()
+  runtimeAnalysisSWRPrewarmTasksByNodeKey.set(options.nodeKey, {
+    dependencyPaths: options.dependencyPaths,
+    run: options.run,
+    lastAccessedAt: now,
+  })
+  trimRuntimeAnalysisSWRPrewarmTasks(now)
+}
+
+async function runRuntimeAnalysisSWRPrewarm(
+  paths: readonly string[]
+): Promise<void> {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
+    return
+  }
+
+  const normalizedPaths = normalizeRuntimeAnalysisRefreshPaths(paths)
+  if (normalizedPaths.length === 0) {
+    return
+  }
+
+  trimRuntimeAnalysisSWRPrewarmTasks()
+
+  const prewarmTasks = Array.from(runtimeAnalysisSWRPrewarmTasksByNodeKey.values())
+    .filter((task) => {
+      if (task.dependencyPaths.length === 0) {
+        return false
+      }
+
+      return task.dependencyPaths.some((dependencyPath) => {
+        return normalizedPaths.some((path) => {
+          return runtimeAnalysisPathsIntersect(dependencyPath, path)
+        })
+      })
+    })
+    .sort((first, second) => second.lastAccessedAt - first.lastAccessedAt)
+    .slice(0, RUNTIME_ANALYSIS_SWR_PREWARM_MAX_TASKS_PER_RUN)
+
+  if (prewarmTasks.length === 0) {
+    return
+  }
+
+  const runTask = async (task: RuntimeAnalysisSWRPrewarmTask): Promise<void> => {
+    if (task.inFlight) {
+      return task.inFlight
+    }
+
+    let runPromise: Promise<void>
+    runPromise = task
+      .run()
+      .catch((error) => {
+        reportBestEffortError('project/cached-analysis', error)
+      })
+      .finally(() => {
+        if (task.inFlight === runPromise) {
+          task.inFlight = undefined
+        }
+      })
+
+    task.inFlight = runPromise
+    return runPromise
+  }
+
+  const activeRuns = new Set<Promise<void>>()
+  for (const task of prewarmTasks) {
+    while (activeRuns.size >= RUNTIME_ANALYSIS_SWR_PREWARM_CONCURRENCY) {
+      await Promise.race(activeRuns)
+    }
+
+    const taskPromise = runTask(task).finally(() => {
+      activeRuns.delete(taskPromise)
+    })
+    activeRuns.add(taskPromise)
+  }
+
+  if (activeRuns.size > 0) {
+    await Promise.all(activeRuns)
+  }
+}
+
+function queueRuntimeAnalysisSWRPrewarm(
+  paths: readonly string[],
+  options: {
+    priority?: RuntimeAnalysisSWRPrewarmPriority
+  } = {}
+): void {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
+    return
+  }
+
+  const priority = options.priority ?? 'background'
+  const immediateQueue = pendingRuntimeAnalysisSWRPrewarmPathsImmediate
+  const backgroundQueue = pendingRuntimeAnalysisSWRPrewarmPathsBackground
+
+  for (const path of normalizeRuntimeAnalysisRefreshPaths(paths)) {
+    if (priority === 'immediate') {
+      immediateQueue.add(path)
+      backgroundQueue.delete(path)
+      continue
+    }
+
+    if (!immediateQueue.has(path)) {
+      backgroundQueue.add(path)
+    }
+  }
+
+  if (immediateQueue.size === 0 && backgroundQueue.size === 0) {
+    return
+  }
+
+  const requestedDelayMs =
+    RUNTIME_ANALYSIS_SWR_PREWARM_PRIORITY_DELAY_MS[priority] ?? 250
+  if (
+    runtimeAnalysisSWRPrewarmFlushQueued &&
+    runtimeAnalysisSWRPrewarmFlushDelayMs !== undefined &&
+    runtimeAnalysisSWRPrewarmFlushDelayMs <= requestedDelayMs
+  ) {
+    return
+  }
+
+  if (runtimeAnalysisSWRPrewarmFlushTimer) {
+    clearTimeout(runtimeAnalysisSWRPrewarmFlushTimer)
+  }
+
+  runtimeAnalysisSWRPrewarmFlushQueued = true
+  runtimeAnalysisSWRPrewarmFlushDelayMs = requestedDelayMs
+  runtimeAnalysisSWRPrewarmFlushTimer = setTimeout(() => {
+    runtimeAnalysisSWRPrewarmFlushQueued = false
+    runtimeAnalysisSWRPrewarmFlushTimer = undefined
+    runtimeAnalysisSWRPrewarmFlushDelayMs = undefined
+
+    const pendingQueue =
+      pendingRuntimeAnalysisSWRPrewarmPathsImmediate.size > 0
+        ? pendingRuntimeAnalysisSWRPrewarmPathsImmediate
+        : pendingRuntimeAnalysisSWRPrewarmPathsBackground
+    if (pendingQueue.size === 0) {
+      return
+    }
+
+    const prewarmPaths = normalizeRuntimeAnalysisRefreshPaths(pendingQueue)
+    pendingQueue.clear()
+    if (prewarmPaths.length === 0) {
+      if (
+        pendingRuntimeAnalysisSWRPrewarmPathsImmediate.size > 0 ||
+        pendingRuntimeAnalysisSWRPrewarmPathsBackground.size > 0
+      ) {
+        queueRuntimeAnalysisSWRPrewarm([], {
+          priority:
+            pendingRuntimeAnalysisSWRPrewarmPathsImmediate.size > 0
+              ? 'immediate'
+              : 'background',
+        })
+      }
+      return
+    }
+
+    void runRuntimeAnalysisSWRPrewarm(prewarmPaths).finally(() => {
+      if (
+        pendingRuntimeAnalysisSWRPrewarmPathsImmediate.size > 0 ||
+        pendingRuntimeAnalysisSWRPrewarmPathsBackground.size > 0
+      ) {
+        queueRuntimeAnalysisSWRPrewarm([], {
+          priority:
+            pendingRuntimeAnalysisSWRPrewarmPathsImmediate.size > 0
+              ? 'immediate'
+              : 'background',
+        })
+      }
+    })
+  }, requestedDelayMs)
+  runtimeAnalysisSWRPrewarmFlushTimer.unref?.()
+}
+
+function queueRuntimeAnalysisBackgroundRefresh(
+  paths: readonly string[]
+): void {
+  if (runtimeAnalysisBackgroundRefreshListeners.size === 0) {
+    return
+  }
+
+  for (const path of paths) {
+    pendingRuntimeAnalysisBackgroundRefreshPaths.add(path)
+  }
+
+  if (runtimeAnalysisBackgroundRefreshFlushQueued) {
+    return
+  }
+
+  runtimeAnalysisBackgroundRefreshFlushQueued = true
+  queueMicrotask(() => {
+    runtimeAnalysisBackgroundRefreshFlushQueued = false
+    if (pendingRuntimeAnalysisBackgroundRefreshPaths.size === 0) {
+      return
+    }
+
+    const refreshPaths = normalizeRuntimeAnalysisRefreshPaths(
+      pendingRuntimeAnalysisBackgroundRefreshPaths
+    )
+    pendingRuntimeAnalysisBackgroundRefreshPaths.clear()
+    if (refreshPaths.length === 0) {
+      return
+    }
+
+    for (const listener of runtimeAnalysisBackgroundRefreshListeners) {
+      try {
+        listener(refreshPaths)
+      } catch (error) {
+        reportBestEffortError('project/cached-analysis', error)
+      }
+    }
+  })
+}
+
+function getRuntimeAnalysisSWRBackgroundRefreshCallback(
+  paths: readonly (string | undefined)[]
+): CacheStoreGetOrComputeOptions['onBackgroundRefreshComplete'] | undefined {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
+    return undefined
+  }
+
+  const validPaths = paths.filter((path): path is string => {
+    return typeof path === 'string' && path.length > 0
+  })
+  const normalizedPaths = normalizeRuntimeAnalysisRefreshPaths(validPaths)
+  if (normalizedPaths.length === 0) {
+    return undefined
+  }
+
+  return () => {
+    queueRuntimeAnalysisBackgroundRefresh(normalizedPaths)
+    queueRuntimeAnalysisSWRPrewarm(normalizedPaths, {
+      priority: 'background',
+    })
+  }
+}
+
+function getRuntimeAnalysisSWRReadConfig(
+  paths: readonly (string | undefined)[],
+  options?: {
+    maxStaleAgeMs?: number
+  }
+): Pick<
+  CacheStoreGetOrComputeOptions,
+  'staleWhileRevalidate' | 'onBackgroundRefreshComplete'
+> {
+  const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions({
+    maxStaleAgeMs: options?.maxStaleAgeMs,
+  })
+
+  return {
+    staleWhileRevalidate,
+    onBackgroundRefreshComplete:
+      getRuntimeAnalysisSWRBackgroundRefreshCallback(paths),
+  }
+}
+
+function shouldServeRuntimeAnalysisColdFallback(options: {
+  value: string
+  isFormattingExplicit?: boolean
+}): boolean {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
+    return false
+  }
+
+  if (options.isFormattingExplicit === true) {
+    return false
+  }
+
+  return options.value.length <= RUNTIME_ANALYSIS_DEV_COLD_FALLBACK_MAX_VALUE_LENGTH
+}
+
+function queueRuntimeAnalysisImmediateRefresh(options: {
+  dependencyPaths: readonly string[]
+  scopePath?: string
+  refresh: () => Promise<unknown>
+}): void {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
+    return
+  }
+
+  if (options.dependencyPaths.length === 0) {
+    void options.refresh().catch((error) => {
+      reportBestEffortError('project/cached-analysis', error)
+    })
+    return
+  }
+
+  const fallbackPath =
+    typeof options.scopePath === 'string' && options.scopePath.length > 0
+      ? options.scopePath
+      : '.'
+  const normalizedPaths = normalizeRuntimeAnalysisRefreshPaths(
+    options.dependencyPaths.length > 0
+      ? options.dependencyPaths
+      : [fallbackPath]
+  )
+
+  if (normalizedPaths.length === 0) {
+    void options.refresh().catch((error) => {
+      reportBestEffortError('project/cached-analysis', error)
+    })
+    return
+  }
+
+  queueRuntimeAnalysisSWRPrewarm(normalizedPaths, {
+    priority: 'immediate',
+  })
+}
+
+async function resolveWithinRuntimeAnalysisColdResponseBudget<Value>(options: {
+  promise: Promise<Value>
+  fallback: () => Value
+}): Promise<Value> {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
+    return options.promise
+  }
+
+  if (RUNTIME_ANALYSIS_DEV_COLD_RESPONSE_BUDGET_MS <= 0) {
+    return options.promise
+  }
+
+  let timeout: NodeJS.Timeout | undefined
+  const timeoutPromise = new Promise<{ timedOut: true }>((resolve) => {
+    timeout = setTimeout(() => {
+      resolve({ timedOut: true })
+    }, RUNTIME_ANALYSIS_DEV_COLD_RESPONSE_BUDGET_MS)
+    timeout.unref?.()
+  })
+  const resolved = await Promise.race([
+    options.promise.then((value) => ({
+      timedOut: false as const,
+      value,
+    })),
+    timeoutPromise,
+  ])
+
+  if (timeout) {
+    clearTimeout(timeout)
+  }
+
+  if (resolved.timedOut) {
+    void options.promise.catch((error) => {
+      reportBestEffortError('project/cached-analysis', error)
+    })
+    return options.fallback()
+  }
+
+  return resolved.value
+}
+
+function toRuntimeAnalysisBootstrappedScopeKey(scopePath?: string): string {
+  if (typeof scopePath === 'string' && scopePath.length > 0) {
+    return normalizePathKey(scopePath)
+  }
+
+  return '.'
+}
+
+function isRuntimeAnalysisScopeBootstrapped(scopePath?: string): boolean {
+  return runtimeAnalysisBootstrappedScopeKeys.has(
+    toRuntimeAnalysisBootstrappedScopeKey(scopePath)
+  )
+}
+
+function markRuntimeAnalysisScopeBootstrapped(scopePath?: string): void {
+  runtimeAnalysisBootstrappedScopeKeys.add(
+    toRuntimeAnalysisBootstrappedScopeKey(scopePath)
+  )
+}
+
+function queueRuntimeAnalysisColdStartTask(options: {
+  taskKey: string
+  run: () => Promise<void>
+}): void {
+  if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
+    void options.run().catch((error) => {
+      reportBestEffortError('project/cached-analysis', error)
+    })
+    return
+  }
+
+  if (
+    typeof options.taskKey !== 'string' ||
+    options.taskKey.length === 0 ||
+    pendingRuntimeAnalysisColdStartTaskKeys.has(options.taskKey)
+  ) {
+    return
+  }
+
+  pendingRuntimeAnalysisColdStartTaskKeys.add(options.taskKey)
+  const timer = setTimeout(() => {
+    pendingRuntimeAnalysisColdStartTaskKeys.delete(options.taskKey)
+    void options.run().catch((error) => {
+      reportBestEffortError('project/cached-analysis', error)
+    })
+  }, 0)
+  timer.unref?.()
+}
+
+export function onRuntimeAnalysisBackgroundRefresh(
+  listener: (paths: readonly string[]) => void
+): () => void {
+  runtimeAnalysisBackgroundRefreshListeners.add(listener)
+  return () => {
+    runtimeAnalysisBackgroundRefreshListeners.delete(listener)
   }
 }
 
@@ -246,6 +844,7 @@ async function getRuntimeAnalysisSessionsUnchecked(
 }
 
 function enqueueRuntimeAnalysisInvalidation(task: () => Promise<void>): void {
+  runtimeAnalysisInvalidationPendingCount += 1
   runtimeAnalysisInvalidationQueue = runtimeAnalysisInvalidationQueue
     .catch(() => {})
     .then(task)
@@ -264,10 +863,23 @@ function enqueueRuntimeAnalysisInvalidation(task: () => Promise<void>): void {
         }
       })
     })
+    .finally(() => {
+      runtimeAnalysisInvalidationPendingCount = Math.max(
+        0,
+        runtimeAnalysisInvalidationPendingCount - 1
+      )
+    })
 }
 
 async function waitForRuntimeAnalysisInvalidations(): Promise<void> {
   await runtimeAnalysisInvalidationQueue
+}
+
+function shouldBypassRuntimeAnalysisInvalidationWait(): boolean {
+  return (
+    isRuntimeAnalysisDevelopmentLikeEnvironment() &&
+    runtimeAnalysisInvalidationPendingCount > 0
+  )
 }
 
 async function getRuntimeAnalysisSession(
@@ -275,8 +887,19 @@ async function getRuntimeAnalysisSession(
 ): Promise<
   RuntimeAnalysisCacheStore | undefined
 > {
-  await waitForRuntimeAnalysisInvalidations()
+  if (!shouldBypassRuntimeAnalysisInvalidationWait()) {
+    await waitForRuntimeAnalysisInvalidations()
+  }
   return getRuntimeAnalysisSessionUnchecked(scopePath)
+}
+
+export async function prewarmRuntimeAnalysisSession(
+  scopePath?: string
+): Promise<void> {
+  const runtimeCacheStore = await getRuntimeAnalysisSession(scopePath)
+  if (runtimeCacheStore) {
+    markRuntimeAnalysisScopeBootstrapped(scopePath)
+  }
 }
 
 function trackFallbackAnalysisProject(project: Project): void {
@@ -415,6 +1038,10 @@ export function invalidateRuntimeAnalysisCachePaths(
       runtimeSession.session.invalidatePaths(pathsToInvalidate)
       await runtimeSession.session.waitForPendingInvalidations()
     }
+
+    queueRuntimeAnalysisSWRPrewarm(pathsToInvalidate, {
+      priority: 'immediate',
+    })
   })
 }
 
@@ -433,6 +1060,10 @@ export function invalidateRuntimeAnalysisCacheAll(): void {
       runtimeSession.session.invalidatePaths(['.'])
       await runtimeSession.session.waitForPendingInvalidations()
     }
+
+    queueRuntimeAnalysisSWRPrewarm(['.'], {
+      priority: 'immediate',
+    })
   })
 }
 
@@ -1747,6 +2378,26 @@ function getOrComputeRuntimeAnalysisCacheValue<Value>(
   )
 }
 
+function refreshRuntimeAnalysisCacheValue<Value>(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  nodeKey: string,
+  options: Omit<CacheStoreGetOrComputeOptions, 'constDeps'>,
+  compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
+): Promise<Value> {
+  const runtimeConstDeps = getRuntimeAnalysisConstDeps()
+  return runtimeCacheStore.store.refresh(
+    nodeKey,
+    {
+      ...options,
+      constDeps: runtimeConstDeps,
+    },
+    async (context) => {
+      recordConstDependencies(context, runtimeConstDeps)
+      return compute(context)
+    }
+  )
+}
+
 async function recordFileDependenciesIfPossible(
   context: CacheStoreComputeContext,
   runtimeCacheStore: RuntimeAnalysisCacheStore,
@@ -2543,7 +3194,7 @@ export async function getCachedFileExports(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, filePath)
   ) {
-    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([filePath])
     const nodeKey = createRuntimeFileExportsCacheNodeKey(
       filePath,
       compilerOptionsVersion
@@ -2554,7 +3205,7 @@ export async function getCachedFileExports(
       nodeKey,
       {
         persist: true,
-        staleWhileRevalidate,
+        ...swrReadConfig,
       },
       async (context) => {
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
@@ -2622,7 +3273,7 @@ export async function getCachedOutlineRanges(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, filePath)
   ) {
-    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([filePath])
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       RUNTIME_ANALYSIS_CACHE_NAMES.outlineRanges,
       {
@@ -2636,7 +3287,7 @@ export async function getCachedOutlineRanges(
       nodeKey,
       {
         persist: true,
-        staleWhileRevalidate,
+        ...swrReadConfig,
       },
       async (context) => {
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
@@ -2685,7 +3336,7 @@ export async function getCachedFileExportMetadata(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, options.filePath)
   ) {
-    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       RUNTIME_ANALYSIS_CACHE_NAMES.fileExportMetadata,
       {
@@ -2703,7 +3354,7 @@ export async function getCachedFileExportMetadata(
       nodeKey,
       {
         persist: true,
-        staleWhileRevalidate,
+        ...swrReadConfig,
       },
       async (context) => {
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
@@ -2771,7 +3422,7 @@ export async function getCachedFileExportStaticValue(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, options.filePath)
   ) {
-    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       RUNTIME_ANALYSIS_CACHE_NAMES.fileExportStaticValue,
       {
@@ -2791,7 +3442,7 @@ export async function getCachedFileExportStaticValue(
       nodeKey,
       {
         persist: true,
-        staleWhileRevalidate,
+        ...swrReadConfig,
       },
       async (context) => {
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
@@ -2859,10 +3510,7 @@ export async function getCachedFileExportText(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, options.filePath)
   ) {
-    const staleWhileRevalidate =
-      options.includeDependencies === true
-        ? undefined
-        : getRuntimeAnalysisSWRReadOptions()
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       RUNTIME_ANALYSIS_CACHE_NAMES.fileExportText,
       {
@@ -2879,7 +3527,7 @@ export async function getCachedFileExportText(
       nodeKey,
       {
         persist: true,
-        staleWhileRevalidate,
+        ...swrReadConfig,
       },
       async (context) => {
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
@@ -2974,7 +3622,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
       runtimeCacheStore &&
       canUseRuntimePathCache(runtimeCacheStore, options.filePath)
     ) {
-      const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
+      const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
       const nodeKey = createRuntimeAnalysisCacheNodeKey(
         RUNTIME_ANALYSIS_CACHE_NAMES.resolveTypeAtLocation,
         {
@@ -2993,7 +3641,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
         nodeKey,
         {
           persist: true,
-          staleWhileRevalidate,
+          ...swrReadConfig,
         },
         async (context) => {
           await recordProjectConfigDependency(
@@ -3093,7 +3741,7 @@ export async function transpileCachedSourceFile(
     runtimeCacheStore &&
     canUseRuntimePathCache(runtimeCacheStore, filePath)
   ) {
-    const staleWhileRevalidate = getRuntimeAnalysisSWRReadOptions()
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([filePath])
     const nodeKey = createRuntimeAnalysisCacheNodeKey(
       RUNTIME_ANALYSIS_CACHE_NAMES.transpileSourceFile,
       {
@@ -3107,7 +3755,7 @@ export async function transpileCachedSourceFile(
       nodeKey,
       {
         persist: true,
-        staleWhileRevalidate,
+        ...swrReadConfig,
       },
       async (context) => {
         await recordProjectConfigDependency(context, runtimeCacheStore, project)
@@ -3147,29 +3795,14 @@ export async function getCachedSourceTextMetadata(
   project: Project,
   options: Omit<GetSourceTextMetadataOptions, 'project'>
 ): Promise<SourceTextMetadata> {
+  prewarmSourceTextFormatterForRuntimeAnalysis(options.filePath)
+
   const shouldProfileRpcCacheReuse = isRpcBuildProfileEnabled()
   const profileTarget = getRuntimeCacheReuseProfileTarget({
     filePath: options.filePath,
     fallback: `inline:${options.language ?? 'txt'}`,
   })
-  const runtimeCacheStore = await getRuntimeAnalysisSession(
-    getRuntimeAnalysisScopePath(project, options.filePath)
-  )
-  if (!runtimeCacheStore) {
-    if (shouldProfileRpcCacheReuse) {
-      await profileRuntimeCacheReuse({
-        method: 'getSourceTextMetadata',
-        runtimeCacheStore: undefined,
-        nodeKey: undefined,
-        target: profileTarget,
-      })
-    }
-    return baseGetSourceTextMetadata({
-      ...options,
-      project,
-    })
-  }
-
+  const scopePath = getRuntimeAnalysisScopePath(project, options.filePath)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
   const nodeKey = createRuntimeAnalysisCacheNodeKey(
     RUNTIME_ANALYSIS_CACHE_NAMES.sourceTextMetadata,
@@ -3179,82 +3812,227 @@ export async function getCachedSourceTextMetadata(
       language: options.language ?? null,
       shouldFormat: options.shouldFormat ?? true,
       isFormattingExplicit: options.isFormattingExplicit ?? null,
+      formatterStateVersion: getSourceTextFormatterStateVersion(),
       baseDirectory: options.baseDirectory ?? null,
       valueSignature: toSourceTextMetadataValueSignature(options.value),
     }
   )
 
-  if (shouldProfileRpcCacheReuse) {
-    await profileRuntimeCacheReuse({
-      method: 'getSourceTextMetadata',
-      runtimeCacheStore,
-      nodeKey,
-      target: profileTarget,
+  const resolveSourceTextMetadataFromRuntimeCache =
+    async (): Promise<SourceTextMetadata> => {
+      const runtimeCacheStore = await getRuntimeAnalysisSession(
+        scopePath
+      )
+      if (!runtimeCacheStore) {
+        if (shouldProfileRpcCacheReuse) {
+          await profileRuntimeCacheReuse({
+            method: 'getSourceTextMetadata',
+            runtimeCacheStore: undefined,
+            nodeKey: undefined,
+            target: profileTarget,
+          })
+        }
+        return baseGetSourceTextMetadata({
+          ...options,
+          project,
+        })
+      }
+      markRuntimeAnalysisScopeBootstrapped(scopePath)
+
+      if (shouldProfileRpcCacheReuse) {
+        await profileRuntimeCacheReuse({
+          method: 'getSourceTextMetadata',
+          runtimeCacheStore,
+          nodeKey,
+          target: profileTarget,
+        })
+      }
+
+      const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath], {
+        maxStaleAgeMs:
+          RUNTIME_ANALYSIS_CACHE_CONFIG.sourceTextMetadataSwrMaxStaleAgeMs,
+      })
+      const cacheOptions: Omit<CacheStoreGetOrComputeOptions, 'constDeps'> = {
+        persist: true,
+        ...swrReadConfig,
+      }
+      const computeSourceTextMetadata = async (
+        context: CacheStoreComputeContext
+      ) => {
+        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          options.filePath
+        )
+
+        const result = await baseGetSourceTextMetadata({
+          ...options,
+          project,
+        })
+
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          result.filePath
+        )
+        if (shouldTrackRuntimeTypeScriptDependencies()) {
+          const sourceTextDependencyAnalysisPaths = new Set<string>()
+          if (
+            shouldTrackRuntimeTypeScriptDependenciesForPath(
+              runtimeCacheStore,
+              options.filePath
+            )
+          ) {
+            sourceTextDependencyAnalysisPaths.add(options.filePath)
+          }
+          if (
+            shouldTrackRuntimeTypeScriptDependenciesForPath(
+              runtimeCacheStore,
+              result.filePath
+            )
+          ) {
+            sourceTextDependencyAnalysisPaths.add(result.filePath)
+          }
+
+          for (const dependencyAnalysisPath of sourceTextDependencyAnalysisPaths) {
+            await recordRuntimeTypeScriptDependencySidecar(
+              context,
+              project,
+              runtimeCacheStore,
+              dependencyAnalysisPath,
+              compilerOptionsVersion
+            )
+          }
+        }
+
+        return result
+      }
+      const refreshSourceTextMetadata = () => {
+        return refreshRuntimeAnalysisCacheValue(
+          runtimeCacheStore,
+          nodeKey,
+          cacheOptions,
+          computeSourceTextMetadata
+        )
+      }
+
+      const prewarmDependencyPaths = resolveRuntimeAnalysisPrewarmDependencyPaths(
+        runtimeCacheStore,
+        [options.filePath],
+        scopePath
+      )
+      if (prewarmDependencyPaths.length > 0) {
+        registerRuntimeAnalysisSWRPrewarmTask({
+          nodeKey,
+          dependencyPaths: prewarmDependencyPaths,
+          run: async () => {
+            const freshness =
+              await runtimeCacheStore.store.getWithFreshness<SourceTextMetadata>(
+                nodeKey
+              )
+            if (freshness.fresh) {
+              return
+            }
+
+            await refreshSourceTextMetadata()
+          },
+        })
+      }
+
+      if (
+        shouldServeRuntimeAnalysisColdFallback({
+          value: options.value,
+          isFormattingExplicit: options.isFormattingExplicit,
+        })
+      ) {
+        if (!runtimeCacheStore.store.hasSync(nodeKey)) {
+          queueRuntimeAnalysisImmediateRefresh({
+            dependencyPaths: prewarmDependencyPaths,
+            scopePath,
+            refresh: refreshSourceTextMetadata,
+          })
+          return getSourceTextMetadataFallback({
+            project,
+            ...options,
+          })
+        }
+
+        const staleValue =
+          await runtimeCacheStore.store.getPossiblyStale<SourceTextMetadata>(
+            nodeKey
+          )
+        if (staleValue !== undefined) {
+          queueRuntimeAnalysisImmediateRefresh({
+            dependencyPaths: prewarmDependencyPaths,
+            scopePath,
+            refresh: refreshSourceTextMetadata,
+          })
+
+          return staleValue
+        }
+
+        queueRuntimeAnalysisImmediateRefresh({
+          dependencyPaths: prewarmDependencyPaths,
+          scopePath,
+          refresh: refreshSourceTextMetadata,
+        })
+        return getSourceTextMetadataFallback({
+          project,
+          ...options,
+        })
+      }
+
+      return getOrComputeRuntimeAnalysisCacheValue(
+        runtimeCacheStore,
+        nodeKey,
+        cacheOptions,
+        computeSourceTextMetadata
+      )
+    }
+
+  const shouldServeSourceTextColdFallback = shouldServeRuntimeAnalysisColdFallback({
+    value: options.value,
+    isFormattingExplicit: options.isFormattingExplicit,
+  })
+
+  if (
+    shouldServeSourceTextColdFallback &&
+    !isRuntimeAnalysisScopeBootstrapped(scopePath)
+  ) {
+    queueRuntimeAnalysisColdStartTask({
+      taskKey: `source-text:${nodeKey}`,
+      run: async () => {
+        await resolveSourceTextMetadataFromRuntimeCache()
+      },
+    })
+
+    return getSourceTextMetadataFallback({
+      project,
+      ...options,
     })
   }
 
-  return getOrComputeRuntimeAnalysisCacheValue(
-    runtimeCacheStore,
-    nodeKey,
-    {
-      persist: true,
-    },
-    async (context) => {
-      await recordProjectConfigDependency(context, runtimeCacheStore, project)
-      await recordFileDependencyIfPossible(
-        context,
-        runtimeCacheStore,
-        options.filePath
-      )
+  if (shouldServeSourceTextColdFallback) {
+    return resolveWithinRuntimeAnalysisColdResponseBudget({
+      promise: resolveSourceTextMetadataFromRuntimeCache(),
+      fallback: () =>
+        getSourceTextMetadataFallback({
+          project,
+          ...options,
+        }),
+    })
+  }
 
-      const result = await baseGetSourceTextMetadata({
-        ...options,
-        project,
-      })
-
-      await recordFileDependencyIfPossible(
-        context,
-        runtimeCacheStore,
-        result.filePath
-      )
-      if (shouldTrackRuntimeTypeScriptDependencies()) {
-        const sourceTextDependencyAnalysisPaths = new Set<string>()
-        if (
-          shouldTrackRuntimeTypeScriptDependenciesForPath(
-            runtimeCacheStore,
-            options.filePath
-          )
-        ) {
-          sourceTextDependencyAnalysisPaths.add(options.filePath)
-        }
-        if (
-          shouldTrackRuntimeTypeScriptDependenciesForPath(
-            runtimeCacheStore,
-            result.filePath
-          )
-        ) {
-          sourceTextDependencyAnalysisPaths.add(result.filePath)
-        }
-
-        for (const dependencyAnalysisPath of sourceTextDependencyAnalysisPaths) {
-          await recordRuntimeTypeScriptDependencySidecar(
-            context,
-            project,
-            runtimeCacheStore,
-            dependencyAnalysisPath,
-            compilerOptionsVersion
-          )
-        }
-      }
-
-      return result
-    }
-  )
+  return resolveSourceTextMetadataFromRuntimeCache()
 }
 
 export async function getCachedTokens(
   project: Project,
-  options: Omit<GetTokensOptions, 'project'>
+  options: Omit<GetTokensOptions, 'project'> & {
+    highlighterLoader?: () => Promise<Highlighter | null> | Highlighter | null
+    waitForWarmResult?: boolean
+  }
 ): Promise<TokenizedLines> {
   const shouldProfileRpcCacheReuse = isRpcBuildProfileEnabled()
   const profileTarget = getRuntimeCacheReuseProfileTarget({
@@ -3264,24 +4042,7 @@ export async function getCachedTokens(
         ? normalizePathKey(options.sourcePath)
         : `inline:${options.language ?? 'plaintext'}`,
   })
-  const runtimeCacheStore = await getRuntimeAnalysisSession(
-    getRuntimeAnalysisScopePath(project, options.filePath)
-  )
-  if (!runtimeCacheStore) {
-    if (shouldProfileRpcCacheReuse) {
-      await profileRuntimeCacheReuse({
-        method: 'getTokens',
-        runtimeCacheStore: undefined,
-        nodeKey: undefined,
-        target: profileTarget,
-      })
-    }
-    return baseGetTokens({
-      ...options,
-      project,
-    })
-  }
-
+  const scopePath = getRuntimeAnalysisScopePath(project, options.filePath)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
   const normalizedFilePath = normalizeCacheFilePath(options.filePath)
   const nodeKey = createRuntimeAnalysisCacheNodeKey(RUNTIME_ANALYSIS_CACHE_NAMES.tokens, {
@@ -3299,22 +4060,83 @@ export async function getCachedTokens(
     valueSignature: toTokenValueSignature(options.value),
   })
 
-  if (shouldProfileRpcCacheReuse) {
-    await profileRuntimeCacheReuse({
-      method: 'getTokens',
-      runtimeCacheStore,
-      nodeKey,
-      target: profileTarget,
-    })
-  }
+  const resolveTokensFromRuntimeCache = async (): Promise<TokenizedLines> => {
+    const runtimeCacheStore = await getRuntimeAnalysisSession(
+      scopePath
+    )
+    if (!runtimeCacheStore) {
+      if (shouldProfileRpcCacheReuse) {
+        await profileRuntimeCacheReuse({
+          method: 'getTokens',
+          runtimeCacheStore: undefined,
+          nodeKey: undefined,
+          target: profileTarget,
+        })
+      }
+      return baseGetTokens({
+        ...options,
+        project,
+      })
+    }
+    markRuntimeAnalysisScopeBootstrapped(scopePath)
 
-  return getOrComputeRuntimeAnalysisCacheValue(
-    runtimeCacheStore,
-    nodeKey,
-    {
+    if (shouldProfileRpcCacheReuse) {
+      await profileRuntimeCacheReuse({
+        method: 'getTokens',
+        runtimeCacheStore,
+        nodeKey,
+        target: profileTarget,
+      })
+    }
+
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig(
+      [
+        options.filePath,
+        typeof options.sourcePath === 'string' ? options.sourcePath : undefined,
+      ],
+      {
+        maxStaleAgeMs: RUNTIME_ANALYSIS_CACHE_CONFIG.tokensSwrMaxStaleAgeMs,
+      }
+    )
+    const cacheOptions: Omit<CacheStoreGetOrComputeOptions, 'constDeps'> = {
       persist: true,
-    },
-    async (context) => {
+      ...swrReadConfig,
+    }
+    let resolvedHighlighter: Highlighter | null = options.highlighter
+    const tokenLanguage = options.language ?? 'plaintext'
+    const isPlainTextLikeLanguage =
+      tokenLanguage === 'plaintext' ||
+      tokenLanguage === 'text' ||
+      tokenLanguage === 'txt' ||
+      tokenLanguage === 'diff'
+    const resolveHighlighterForCompute = async (): Promise<Highlighter | null> => {
+      if (resolvedHighlighter) {
+        return resolvedHighlighter
+      }
+
+      if (typeof options.highlighterLoader !== 'function') {
+        return null
+      }
+
+      try {
+        const loaded = await options.highlighterLoader()
+        resolvedHighlighter = loaded ?? null
+        return resolvedHighlighter
+      } catch {
+        return null
+      }
+    }
+    const computeTokens = async (context: CacheStoreComputeContext) => {
+      let highlighter: Highlighter | null = null
+      if (!isPlainTextLikeLanguage) {
+        highlighter = await resolveHighlighterForCompute()
+        if (!highlighter) {
+          throw new Error(
+            '[renoun] Highlighter was not initialized while refreshing cached tokens.'
+          )
+        }
+      }
+
       await recordProjectConfigDependency(context, runtimeCacheStore, project)
       await recordFileDependencyIfPossible(
         context,
@@ -3323,7 +4145,15 @@ export async function getCachedTokens(
       )
 
       const result = await baseGetTokens({
-        ...options,
+        value: options.value,
+        language: options.language,
+        filePath: options.filePath,
+        allowErrors: options.allowErrors,
+        showErrors: options.showErrors,
+        sourcePath: options.sourcePath,
+        theme: options.theme,
+        metadataCollector: options.metadataCollector,
+        highlighter,
         project,
       })
 
@@ -3345,5 +4175,109 @@ export async function getCachedTokens(
 
       return result
     }
-  )
+    const refreshTokens = () => {
+      return refreshRuntimeAnalysisCacheValue(
+        runtimeCacheStore,
+        nodeKey,
+        cacheOptions,
+        computeTokens
+      )
+    }
+
+    const prewarmDependencyPaths = resolveRuntimeAnalysisPrewarmDependencyPaths(
+      runtimeCacheStore,
+      [
+        options.filePath,
+        typeof options.sourcePath === 'string' ? options.sourcePath : undefined,
+      ],
+      scopePath
+    )
+    if (prewarmDependencyPaths.length > 0) {
+      registerRuntimeAnalysisSWRPrewarmTask({
+        nodeKey,
+        dependencyPaths: prewarmDependencyPaths,
+        run: async () => {
+          const freshness =
+            await runtimeCacheStore.store.getWithFreshness<TokenizedLines>(nodeKey)
+          if (freshness.fresh) {
+            return
+          }
+
+          await refreshTokens()
+        },
+      })
+    }
+
+    const shouldServeColdFallbackForRequest =
+      options.waitForWarmResult !== true &&
+      shouldServeRuntimeAnalysisColdFallback({
+        value: options.value,
+      })
+
+    if (shouldServeColdFallbackForRequest) {
+      if (!runtimeCacheStore.store.hasSync(nodeKey)) {
+        queueRuntimeAnalysisImmediateRefresh({
+          dependencyPaths: prewarmDependencyPaths,
+          scopePath,
+          refresh: refreshTokens,
+        })
+        return createPlainTextTokenizedLines(options.value)
+      }
+
+      const staleValue =
+        await runtimeCacheStore.store.getPossiblyStale<TokenizedLines>(nodeKey)
+      if (staleValue !== undefined) {
+        queueRuntimeAnalysisImmediateRefresh({
+          dependencyPaths: prewarmDependencyPaths,
+          scopePath,
+          refresh: refreshTokens,
+        })
+
+        return staleValue
+      }
+
+      queueRuntimeAnalysisImmediateRefresh({
+        dependencyPaths: prewarmDependencyPaths,
+        scopePath,
+        refresh: refreshTokens,
+      })
+      return createPlainTextTokenizedLines(options.value)
+    }
+
+    return getOrComputeRuntimeAnalysisCacheValue(
+      runtimeCacheStore,
+      nodeKey,
+      cacheOptions,
+      computeTokens
+    )
+  }
+
+  const shouldServeTokensColdFallback =
+    options.waitForWarmResult !== true &&
+    shouldServeRuntimeAnalysisColdFallback({
+      value: options.value,
+    })
+
+  if (
+    shouldServeTokensColdFallback &&
+    !isRuntimeAnalysisScopeBootstrapped(scopePath)
+  ) {
+    queueRuntimeAnalysisColdStartTask({
+      taskKey: `tokens:${nodeKey}`,
+      run: async () => {
+        await resolveTokensFromRuntimeCache()
+      },
+    })
+
+    return createPlainTextTokenizedLines(options.value)
+  }
+
+  if (shouldServeTokensColdFallback) {
+    return resolveWithinRuntimeAnalysisColdResponseBudget({
+      promise: resolveTokensFromRuntimeCache(),
+      fallback: () => createPlainTextTokenizedLines(options.value),
+    })
+  }
+
+  return resolveTokensFromRuntimeCache()
 }

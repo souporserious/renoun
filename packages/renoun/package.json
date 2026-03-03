@@ -121,6 +121,7 @@
     "grammars": "node ./scripts/grammars.ts",
     "theme": "node ./scripts/theme.ts",
     "test": "vitest --run --typecheck",
+    "test:browser": "vitest --config vitest.browser.config.ts --run",
     "test:perf:invalidation": "vitest --run src/file-system/invalidation.perf.test.ts",
     "bench": "vitest bench",
     "bench:invalidation": "vitest bench src/file-system/invalidation.bench.ts"

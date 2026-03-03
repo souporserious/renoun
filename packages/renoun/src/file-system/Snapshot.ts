@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 
 import {
+  isDevelopmentEnvironment,
   isCiEnvironment,
   isStrictHermeticFileSystemModeFromEnv,
 } from '../utils/env.ts'
@@ -108,6 +109,7 @@ export class FileSystemSnapshot implements Snapshot {
       getWorkspaceTokenTtlMs: () => resolveWorkspaceTokenLookupCacheTtlMs(),
       getWorkspaceChangedPathsTtlMs: () =>
         resolveWorkspaceChangedPathsLookupCacheTtlMs(),
+      serveStaleWhileRevalidate: isDevelopmentEnvironment(),
       normalizeRootPath: (rootPath) => this.#normalizeSnapshotPath(rootPath),
       normalizeChangedPath: (changedPath) => {
         return isAbsolutePath(changedPath)
@@ -393,10 +395,9 @@ export class FileSystemSnapshot implements Snapshot {
           }
         }
       } else {
-        const [lastModifiedMs, byteLength] = await Promise.all([
-          this.getFileLastModifiedMs(path).catch(() => undefined),
-          this.getFileByteLength(path).catch(() => undefined),
-        ])
+        const metadata = await this.#getFileMetadata(path)
+        const lastModifiedMs = metadata.lastModifiedMs
+        const byteLength = metadata.byteLength
 
         if (lastModifiedMs !== undefined && byteLength !== undefined) {
           const metadataId = `mtime:${lastModifiedMs};size:${byteLength}`
@@ -506,6 +507,56 @@ export class FileSystemSnapshot implements Snapshot {
       return contentId
     } catch {
       return undefined
+    }
+  }
+
+  async #getFileMetadata(path: string): Promise<{
+    lastModifiedMs: number | undefined
+    byteLength: number | undefined
+  }> {
+    const metadataProvider = this.#fileSystem as FileSystem & {
+      getFileDependencyMetadata?: (
+        path: string
+      ) => Promise<
+        | {
+            lastModifiedMs?: number
+            byteLength?: number
+          }
+        | undefined
+      >
+    }
+
+    if (typeof metadataProvider.getFileDependencyMetadata === 'function') {
+      try {
+        const metadata = await metadataProvider.getFileDependencyMetadata(path)
+        if (metadata) {
+          const lastModifiedMs =
+            typeof metadata.lastModifiedMs === 'number' &&
+            Number.isFinite(metadata.lastModifiedMs)
+              ? metadata.lastModifiedMs
+              : undefined
+          const byteLength =
+            typeof metadata.byteLength === 'number' &&
+            Number.isFinite(metadata.byteLength)
+              ? metadata.byteLength
+              : undefined
+
+          return {
+            lastModifiedMs,
+            byteLength,
+          }
+        }
+      } catch {}
+    }
+
+    const [lastModifiedMs, byteLength] = await Promise.all([
+      this.getFileLastModifiedMs(path).catch(() => undefined),
+      this.getFileByteLength(path).catch(() => undefined),
+    ])
+
+    return {
+      lastModifiedMs,
+      byteLength,
     }
   }
 

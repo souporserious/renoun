@@ -3,8 +3,16 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, test, vi } from 'vitest'
 
 import { parseAnnotations } from '../../utils/annotations.ts'
+import { getSourceTextMetadata } from '../../project/client.ts'
 
 const mockTokens = vi.fn()
+const symbolMock = vi.fn(
+  ({
+    children,
+  }: {
+    children: React.ReactNode
+  }) => <>{children}</>
+)
 
 vi.mock('../../project/client.ts', () => ({
   getSourceTextMetadata: vi.fn(),
@@ -31,6 +39,17 @@ vi.mock('../../utils/get-theme.ts', () => ({
       errorForeground: 'currentColor',
       foreground: 'currentColor',
     },
+    editorHoverWidget: {
+      border: 'transparent',
+      background: 'transparent',
+      foreground: 'currentColor',
+    },
+    panel: {
+      border: 'transparent',
+    },
+    editorError: {
+      foreground: 'currentColor',
+    },
     tokenColors: [],
     semanticTokenColors: [],
   }),
@@ -55,8 +74,8 @@ vi.mock('./QuickInfoProvider.ts', () => ({
   ),
 }))
 
-vi.mock('./Symbol.ts', () => ({
-  Symbol: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+vi.mock('./Symbol.tsx', () => ({
+  Symbol: (...args: Parameters<typeof symbolMock>) => symbolMock(...args),
 }))
 
 // The restyle CSS helper inserts inline styles into the component tree. Use a
@@ -77,43 +96,145 @@ const annotations = {
 
 describe('Tokens', () => {
   test('does not duplicate block annotations when they start at a token boundary', async () => {
-    const source = [
-      "import { createContext } from 'react'",
-      "const /*mark*/ThemeContext/**mark*/ = createContext(/*mark*/'light'/**mark*/)",
-    ].join('\n')
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'test'
 
-    const parsed = parseAnnotations(source, Object.keys(annotations))
-    const value = parsed.value
-    const identifier = 'ThemeContext'
-    const identifierStart = value.indexOf(identifier)
-    const identifierEnd = identifierStart + identifier.length
+    try {
+      const source = [
+        "import { createContext } from 'react'",
+        "const /*mark*/ThemeContext/**mark*/ = createContext(/*mark*/'light'/**mark*/)",
+      ].join('\n')
 
-    mockTokens.mockResolvedValueOnce([
-      [
-        {
-          start: 0,
-          end: identifierStart,
-          value: value.slice(0, identifierStart),
-        },
-        { start: identifierStart, end: identifierEnd, value: identifier },
-        {
-          start: identifierEnd,
-          end: value.length,
-          value: value.slice(identifierEnd),
-        },
-      ],
-    ])
+      const parsed = parseAnnotations(source, Object.keys(annotations))
+      const value = parsed.value
+      const identifier = 'ThemeContext'
+      const identifierStart = value.indexOf(identifier)
+      const identifierEnd = identifierStart + identifier.length
 
-    const { Tokens } = await import('./Tokens.tsx')
-    const element = await Tokens({
-      annotations,
-      shouldAnalyze: false,
-      children: source,
-    })
+      mockTokens.mockResolvedValueOnce([
+        [
+          {
+            start: 0,
+            end: identifierStart,
+            value: value.slice(0, identifierStart),
+          },
+          { start: identifierStart, end: identifierEnd, value: identifier },
+          {
+            start: identifierEnd,
+            end: value.length,
+            value: value.slice(identifierEnd),
+          },
+        ],
+      ])
 
-    const markup = renderToStaticMarkup(<>{element}</>)
-    const markCount = markup.match(/<mark>/g)?.length ?? 0
+      const { Tokens } = await import('./Tokens.tsx')
+      const element = await Tokens({
+        annotations,
+        shouldAnalyze: false,
+        children: source,
+      })
 
-    expect(markCount).toBe(2)
+      const markup = renderToStaticMarkup(<>{element}</>)
+      const markCount = markup.match(/<mark>/g)?.length ?? 0
+
+      expect(markCount).toBe(2)
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+  })
+
+  test('skips source metadata lookup for inline parser-less languages in development', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    try {
+      const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
+      getSourceTextMetadataMock.mockClear()
+
+      mockTokens.mockResolvedValueOnce([
+        [
+          {
+            start: 0,
+            end: 8,
+            value: 'echo hi\n',
+            hasTextStyles: false,
+            isBaseColor: true,
+            isWhiteSpace: false,
+            isDeprecated: false,
+            isSymbol: false,
+            style: {},
+          },
+        ],
+      ])
+
+      const { Tokens } = await import('./Tokens.tsx')
+
+      await Tokens({
+        children: 'echo hi\n',
+        language: 'shell',
+        shouldAnalyze: true,
+        shouldFormat: true,
+      })
+
+      expect(getSourceTextMetadataMock).not.toHaveBeenCalled()
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+  })
+
+  test('passes a serializable popover prop to Symbol', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'test'
+
+    try {
+      symbolMock.mockClear()
+      mockTokens.mockResolvedValueOnce([
+        [
+          {
+            value: 'Directory',
+            start: 0,
+            end: 9,
+            hasTextStyles: true,
+            isBaseColor: false,
+            isDeprecated: false,
+            isSymbol: true,
+            isWhiteSpace: false,
+            quickInfo: {
+              displayText: '(alias) class Directory',
+              documentationText: 'A directory in the file system.',
+            },
+            style: {},
+          },
+        ],
+      ])
+
+      const { Tokens } = await import('./Tokens.tsx')
+      const element = await Tokens({
+        children: 'Directory',
+        language: 'ts',
+        shouldAnalyze: false,
+      })
+      renderToStaticMarkup(<>{element}</>)
+
+      expect(symbolMock).toHaveBeenCalled()
+      const props = symbolMock.mock.calls[0]?.[0] as
+        | { popover?: unknown }
+        | undefined
+      expect(typeof props?.popover).not.toBe('function')
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
   })
 })

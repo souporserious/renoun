@@ -199,3 +199,78 @@ test('background swr refresh is detached from request abort context', async () =
   expect(freshValue).toBe('value:2')
   expect(computeCount).toBe(2)
 })
+
+test('invokes onBackgroundRefreshComplete when stale entry is refreshed', async () => {
+  const store = createMemoryOnlyCacheStore({
+    staleRetentionTtlMs: 5_000,
+  })
+  const nodeKey = 'node:swr-background-complete-callback'
+  let valueVersion = '1'
+
+  await store.getOrCompute(nodeKey, { persist: false }, async (context) => {
+    await context.recordFileDep('index.ts')
+    return `value:${valueVersion}`
+  })
+
+  valueVersion = '2'
+  store.invalidateDependencyPath('index.ts')
+
+  const refreshStarted = createDeferred()
+  const refreshGate = createDeferred()
+  const refreshCompleted = createDeferred()
+  let callbackCount = 0
+
+  const staleValue = await store.getOrCompute(
+    nodeKey,
+    {
+      persist: false,
+      staleWhileRevalidate: true,
+      onBackgroundRefreshComplete() {
+        callbackCount += 1
+        refreshCompleted.resolve()
+      },
+    },
+    async (context) => {
+      await context.recordFileDep('index.ts')
+      refreshStarted.resolve()
+      await refreshGate.promise
+      return `value:${valueVersion}`
+    }
+  )
+
+  expect(staleValue).toBe('value:1')
+  await refreshStarted.promise
+  refreshGate.resolve()
+  await refreshCompleted.promise
+
+  expect(callbackCount).toBe(1)
+  expect(await store.get<string>(nodeKey)).toBe('value:2')
+})
+
+test('does not invoke onBackgroundRefreshComplete when serving a fresh cache hit', async () => {
+  const store = createMemoryOnlyCacheStore({
+    staleRetentionTtlMs: 5_000,
+  })
+  const nodeKey = 'node:swr-background-complete-fresh-hit'
+  let callbackCount = 0
+
+  await store.getOrCompute(nodeKey, { persist: false }, async (context) => {
+    await context.recordFileDep('index.ts')
+    return 'value:1'
+  })
+
+  const value = await store.getOrCompute(
+    nodeKey,
+    {
+      persist: false,
+      staleWhileRevalidate: true,
+      onBackgroundRefreshComplete() {
+        callbackCount += 1
+      },
+    },
+    async () => 'value:2'
+  )
+
+  expect(value).toBe('value:1')
+  expect(callbackCount).toBe(0)
+})

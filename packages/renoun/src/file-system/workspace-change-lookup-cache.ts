@@ -22,6 +22,7 @@ export interface WorkspaceChangeLookupCacheOptions {
     rootPath: string,
     previousToken: string
   ) => Promise<readonly string[] | null>
+  serveStaleWhileRevalidate?: boolean
   changedPathsCleanupIntervalMs?: number
   changedPathsMaxEntries?: number
   clearChangedPathsWhenTtlDisabled?: boolean
@@ -41,6 +42,7 @@ export class WorkspaceChangeLookupCache {
     rootPath: string,
     previousToken: string
   ) => Promise<readonly string[] | null>
+  readonly #serveStaleWhileRevalidate: boolean
   readonly #changedPathsCleanupIntervalMs: number
   readonly #changedPathsMaxEntries?: number
   readonly #clearChangedPathsWhenTtlDisabled: boolean
@@ -61,6 +63,8 @@ export class WorkspaceChangeLookupCache {
     this.#normalizeChangedPath = options.normalizeChangedPath
     this.#lookupWorkspaceToken = options.lookupWorkspaceToken
     this.#lookupWorkspaceChangedPaths = options.lookupWorkspaceChangedPaths
+    this.#serveStaleWhileRevalidate =
+      options.serveStaleWhileRevalidate === true
     this.#changedPathsCleanupIntervalMs = Math.max(
       0,
       Math.floor(options.changedPathsCleanupIntervalMs ?? 0)
@@ -92,33 +96,142 @@ export class WorkspaceChangeLookupCache {
     }
 
     if (cached?.promise) {
+      if (
+        this.#serveStaleWhileRevalidate &&
+        ttlMs > 0 &&
+        cached.expiresAt <= now &&
+        cached.token !== null
+      ) {
+        return cached.token
+      }
       return cached.promise
     }
 
-    const lookupPromise = this.#lookupWorkspaceToken(rootPath)
+    if (ttlMs > 0 && cached && this.#serveStaleWhileRevalidate) {
+      this.#startWorkspaceTokenLookup({
+        rootPath,
+        normalizedRootPath,
+        cachedToken: cached.token,
+        startedAt: now,
+        ttlMs,
+      })
+      return cached.token
+    }
+
+    const lookupPromise = this.#startWorkspaceTokenLookup({
+      rootPath,
+      normalizedRootPath,
+      cachedToken: cached?.token ?? null,
+      startedAt: now,
+      ttlMs,
+    })
+
+    return lookupPromise
+  }
+
+  #startWorkspaceTokenLookup(options: {
+    rootPath: string
+    normalizedRootPath: string
+    cachedToken: string | null
+    startedAt: number
+    ttlMs: number
+  }): Promise<string | null> {
+    const { rootPath, normalizedRootPath, cachedToken, startedAt, ttlMs } =
+      options
+    const lookupPromise = this.#lookupWorkspaceToken(rootPath).catch(
+      () => null
+    )
 
     this.#workspaceChangeTokenByRootPath.set(normalizedRootPath, {
-      token: cached?.token ?? null,
-      expiresAt: now,
+      token: cachedToken,
+      expiresAt: startedAt,
       promise: lookupPromise,
     })
 
-    try {
-      const token = await lookupPromise
+    void lookupPromise.then((token) => {
+      const latest =
+        this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
+      if (latest?.promise !== lookupPromise) {
+        return
+      }
+
       if (ttlMs > 0) {
         this.#workspaceChangeTokenByRootPath.set(normalizedRootPath, {
           token,
           expiresAt: Date.now() + ttlMs,
         })
-      }
-      return token
-    } finally {
-      const latest =
-        this.#workspaceChangeTokenByRootPath.get(normalizedRootPath)
-      if (latest?.promise === lookupPromise) {
+      } else {
         this.#workspaceChangeTokenByRootPath.delete(normalizedRootPath)
       }
+    })
+
+    return lookupPromise
+  }
+
+  async #lookupAndNormalizeWorkspaceChangedPaths(
+    rootPath: string,
+    previousToken: string
+  ): Promise<ReadonlySet<string> | null> {
+    const changedPaths = await this.#lookupWorkspaceChangedPaths(
+      rootPath,
+      previousToken
+    )
+    if (!Array.isArray(changedPaths)) {
+      return null
     }
+
+    const normalizedPaths = new Set<string>()
+    for (const changedPath of changedPaths) {
+      if (typeof changedPath !== 'string') {
+        continue
+      }
+
+      const normalizedPath = this.#normalizeChangedPath(changedPath)
+      if (typeof normalizedPath === 'string' && normalizedPath.length > 0) {
+        normalizedPaths.add(normalizedPath)
+      }
+    }
+
+    return normalizedPaths
+  }
+  #startWorkspaceChangedPathsLookup(options: {
+    cacheKey: string
+    rootPath: string
+    previousToken: string
+    cachedPaths: ReadonlySet<string> | null
+    startedAt: number
+    ttlMs: number
+  }): Promise<ReadonlySet<string> | null> {
+    const { cacheKey, rootPath, previousToken, cachedPaths, startedAt, ttlMs } =
+      options
+    const lookupPromise = this.#lookupAndNormalizeWorkspaceChangedPaths(
+      rootPath,
+      previousToken
+    ).catch(() => null)
+
+    this.#workspaceChangedPathsByToken.set(cacheKey, {
+      paths: cachedPaths,
+      expiresAt: startedAt,
+      promise: lookupPromise,
+    })
+
+    void lookupPromise.then((paths) => {
+      const latest = this.#workspaceChangedPathsByToken.get(cacheKey)
+      if (latest?.promise !== lookupPromise) {
+        return
+      }
+
+      if (ttlMs > 0) {
+        this.#workspaceChangedPathsByToken.set(cacheKey, {
+          paths,
+          expiresAt: Date.now() + ttlMs,
+        })
+      } else {
+        this.#workspaceChangedPathsByToken.delete(cacheKey)
+      }
+    })
+
+    return lookupPromise
   }
 
   async getWorkspaceChangedPathsSinceToken(
@@ -140,54 +253,37 @@ export class WorkspaceChangeLookupCache {
     }
 
     if (cached?.promise) {
+      if (
+        this.#serveStaleWhileRevalidate &&
+        ttlMs > 0 &&
+        cached.expiresAt <= now &&
+        cached.paths !== null
+      ) {
+        return cached.paths
+      }
       return cached.promise
     }
 
-    const lookupPromise = (async () => {
-      const changedPaths = await this.#lookupWorkspaceChangedPaths(
+    if (ttlMs > 0 && cached && this.#serveStaleWhileRevalidate) {
+      this.#startWorkspaceChangedPathsLookup({
+        cacheKey,
         rootPath,
-        previousToken
-      )
-      if (!Array.isArray(changedPaths)) {
-        return null
-      }
-
-      const normalizedPaths = new Set<string>()
-      for (const changedPath of changedPaths) {
-        if (typeof changedPath !== 'string') {
-          continue
-        }
-
-        const normalizedPath = this.#normalizeChangedPath(changedPath)
-        if (typeof normalizedPath === 'string' && normalizedPath.length > 0) {
-          normalizedPaths.add(normalizedPath)
-        }
-      }
-
-      return normalizedPaths
-    })().catch(() => null)
-
-    this.#workspaceChangedPathsByToken.set(cacheKey, {
-      paths: cached?.paths ?? null,
-      expiresAt: now,
-      promise: lookupPromise,
-    })
-
-    try {
-      const changedPaths = await lookupPromise
-      if (ttlMs > 0) {
-        this.#workspaceChangedPathsByToken.set(cacheKey, {
-          paths: changedPaths,
-          expiresAt: Date.now() + ttlMs,
-        })
-      }
-      return changedPaths
-    } finally {
-      const latest = this.#workspaceChangedPathsByToken.get(cacheKey)
-      if (latest?.promise === lookupPromise) {
-        this.#workspaceChangedPathsByToken.delete(cacheKey)
-      }
+        previousToken,
+        cachedPaths: cached.paths,
+        startedAt: now,
+        ttlMs,
+      })
+      return cached.paths
     }
+
+    return this.#startWorkspaceChangedPathsLookup({
+      cacheKey,
+      rootPath,
+      previousToken,
+      cachedPaths: cached?.paths ?? null,
+      startedAt: now,
+      ttlMs,
+    })
   }
 
   #cleanupWorkspaceChangedPathsCache(now: number, ttlMs: number): void {
@@ -219,7 +315,7 @@ export class WorkspaceChangeLookupCache {
         continue
       }
 
-      if (cached.expiresAt <= now) {
+      if (cached.expiresAt <= now && !this.#serveStaleWhileRevalidate) {
         this.#workspaceChangedPathsByToken.delete(cacheKey)
       }
     }

@@ -27,23 +27,26 @@ export function Symbol({
   const isHighlighted = quickInfo?.anchorId === anchorId
 
   useEffect(() => {
-    if (symbolRef.current && quickInfo) {
-      function handleScroll() {
-        resetQuickInfo(true)
-      }
-      const controller = new AbortController()
-      const scrollTargets = getScrollableAncestors(symbolRef.current)
-      scrollTargets.forEach((target) => {
-        target.addEventListener('scroll', handleScroll, {
-          passive: true,
-          signal: controller.signal,
-        })
-      })
-      return () => {
-        controller.abort()
-      }
+    if (!symbolRef.current || !isHighlighted) {
+      return
     }
-  }, [quickInfo, resetQuickInfo])
+
+    function handleScroll() {
+      resetQuickInfo(true)
+    }
+    const controller = new AbortController()
+    const scrollTargets = getScrollableAncestors(symbolRef.current)
+    scrollTargets.forEach((target) => {
+      target.addEventListener('scroll', handleScroll, {
+        passive: true,
+        signal: controller.signal,
+      })
+    })
+
+    return () => {
+      controller.abort()
+    }
+  }, [isHighlighted, resetQuickInfo])
 
   return (
     <span

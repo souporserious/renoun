@@ -218,17 +218,6 @@ function CodeBlockWithFallback(
     baseDirectoryProp ?? baseDirectoryContext
   )
 
-  if (typeof restProps.children !== 'string') {
-    return (
-      <CodeBlockAsync
-        shouldAnalyze={shouldAnalyze}
-        unfocusedLinesOpacity={unfocusedLinesOpacity}
-        baseDirectory={baseDirectory}
-        {...restProps}
-      />
-    )
-  }
-
   const containerPadding = computeDirectionalStyles('padding', '0.5lh')
   const shouldRenderToolbar = Boolean(
     restProps.showToolbar === undefined
@@ -240,6 +229,21 @@ function CodeBlockWithFallback(
     ...normalizeComponents(restProps.components),
   }
   const Container = components.Container
+  const fallbackCodeValue =
+    typeof restProps.children === 'string'
+      ? restProps.children
+      : restProps.path
+        ? `// Loading ${pathLikeToString(restProps.path)}...`
+        : '// Loading code...'
+  const fallbackLineNumbers = Array.from(
+    {
+      length:
+        typeof restProps.children === 'string' && restProps.children.length > 0
+          ? restProps.children.split('\n').length
+          : Math.max(1, fallbackCodeValue.split('\n').length),
+    },
+    (_, index) => index + 1
+  ).join('\n')
 
   return (
     <Suspense
@@ -289,10 +293,7 @@ function CodeBlockWithFallback(
                   backgroundImage: 'inherit',
                 }}
               >
-                {Array.from(
-                  { length: restProps.children.split('\n').length },
-                  (_, index) => index + 1
-                ).join('\n')}
+                {fallbackLineNumbers}
               </FallbackLineNumbers>
             )}
 
@@ -304,7 +305,7 @@ function CodeBlockWithFallback(
                   : `${containerPadding.vertical} ${containerPadding.horizontal}`,
               }}
             >
-              {restProps.children}
+              {fallbackCodeValue}
             </Code>
           </FallbackPre>
         </Container>
@@ -474,20 +475,82 @@ async function CodeBlockAsync(
       borderRadius: 5,
     },
   } satisfies Partial<CopyButtonProps>
+  const shouldUseDevelopmentSubtreeSuspense =
+    process.env.NODE_ENV === 'development'
+  const fallbackCodeValue =
+    typeof value === 'string'
+      ? value
+      : path
+        ? `// Loading ${path}...`
+        : '// Loading code...'
+  const fallbackLineNumberCount =
+    typeof value === 'string' && value.length > 0 ? value.split('\n').length : 1
+  const fallbackLineNumbers = Array.from(
+    { length: fallbackLineNumberCount },
+    (_, index) => index + 1
+  ).join('\n')
+  const lineNumbersNode = showLineNumbers ? (
+    shouldUseDevelopmentSubtreeSuspense ? (
+      <Suspense
+        fallback={
+          <FallbackLineNumbers {...lineNumbersProps}>
+            {fallbackLineNumbers}
+          </FallbackLineNumbers>
+        }
+      >
+        <components.LineNumbers {...lineNumbersProps} />
+      </Suspense>
+    ) : (
+      <components.LineNumbers {...lineNumbersProps} />
+    )
+  ) : null
+  const tokensNode = (
+    <components.Tokens
+      path={path}
+      baseDirectory={baseDirectory}
+      language={language}
+      allowErrors={allowErrors}
+      showErrors={showErrors}
+      annotations={annotations}
+    >
+      {value}
+    </components.Tokens>
+  )
+  const shouldWrapTokensWithFallback =
+    shouldUseDevelopmentSubtreeSuspense && components.Tokens !== Tokens
+  const tokensWithFallbackNode = shouldUseDevelopmentSubtreeSuspense ? (
+    shouldWrapTokensWithFallback ? (
+      <Suspense fallback={fallbackCodeValue}>{tokensNode}</Suspense>
+    ) : (
+      tokensNode
+    )
+  ) : (
+    tokensNode
+  )
+  const toolbarNode = shouldRenderToolbar ? (
+    shouldUseDevelopmentSubtreeSuspense ? (
+      <Suspense fallback={<FallbackToolbar {...toolbarProps} />}>
+        <components.Toolbar
+          allowCopy={allowCopy === undefined ? Boolean(path) : allowCopy}
+          {...toolbarProps}
+        />
+      </Suspense>
+    ) : (
+      <components.Toolbar
+        allowCopy={allowCopy === undefined ? Boolean(path) : allowCopy}
+        {...toolbarProps}
+      />
+    )
+  ) : null
 
   return (
     <Context value={contextValue}>
       <Container {...containerProps}>
-        {shouldRenderToolbar ? (
-          <components.Toolbar
-            allowCopy={allowCopy === undefined ? Boolean(path) : allowCopy}
-            {...toolbarProps}
-          />
-        ) : null}
+        {toolbarNode}
         <components.Pre {...preProps}>
           {showLineNumbers ? (
             <>
-              <components.LineNumbers {...lineNumbersProps} />
+              {lineNumbersNode}
               <components.Code
                 css={{
                   gridColumn: 2,
@@ -496,16 +559,7 @@ async function CodeBlockAsync(
                   ...(focusedLinesStyles as any),
                 }}
               >
-                <components.Tokens
-                  path={path}
-                  baseDirectory={baseDirectory}
-                  language={language}
-                  allowErrors={allowErrors}
-                  showErrors={showErrors}
-                  annotations={annotations}
-                >
-                  {value}
-                </components.Tokens>
+                {tokensWithFallbackNode}
               </components.Code>
             </>
           ) : (
@@ -516,16 +570,7 @@ async function CodeBlockAsync(
                 ...(focusedLinesStyles as any),
               }}
             >
-              <components.Tokens
-                path={path}
-                baseDirectory={baseDirectory}
-                language={language}
-                allowErrors={allowErrors}
-                showErrors={showErrors}
-                annotations={annotations}
-              >
-                {value}
-              </components.Tokens>
+              {tokensWithFallbackNode}
             </components.Code>
           )}
           {allowCopy !== false && !shouldRenderToolbar ? (

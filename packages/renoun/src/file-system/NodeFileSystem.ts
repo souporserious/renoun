@@ -58,6 +58,8 @@ const GIT_MAX_BUFFER_BYTES = 100 * 1024 * 1024
 const GIT_ROOT_CACHE_TTL_MS = 5 * 60 * 1000
 const GIT_ROOT_NULL_CACHE_TTL_MS = 30 * 1000
 const GIT_ROOT_CACHE_MAX_ENTRIES = 1024
+const WORKSPACE_PATH_ASSERTION_CACHE_TTL_MS = 5_000
+const WORKSPACE_PATH_ASSERTION_CACHE_MAX_ENTRIES = 2_048
 
 interface GitRootCacheEntry {
   gitRoot: string | null
@@ -70,6 +72,7 @@ export class NodeFileSystem
 {
   #tsConfigPath: string
   readonly #gitRootCache = new Map<string, GitRootCacheEntry>()
+  readonly #workspacePathAssertionCache = new Map<string, number>()
   readonly #workspaceChangeTokenInFlight = new Map<
     string,
     Promise<string | null>
@@ -103,11 +106,30 @@ export class NodeFileSystem
   }
 
   /** Asserts that the provided path is within the workspace root. */
-  #assertWithinWorkspace(path: string) {
-    this.#assertWithinWorkspacePath(this.getAbsolutePath(path))
+  #assertWithinWorkspace(
+    path: string,
+    options: {
+      allowAssertionCache?: boolean
+    } = {}
+  ) {
+    this.#assertWithinWorkspacePath(this.getAbsolutePath(path), options)
   }
 
-  #assertWithinWorkspacePath(absolutePath: string) {
+  #assertWithinWorkspacePath(
+    absolutePath: string,
+    options: {
+      allowAssertionCache?: boolean
+    } = {}
+  ) {
+    const allowAssertionCache = options.allowAssertionCache === true
+    const now = Date.now()
+    const cacheHit = allowAssertionCache
+      ? this.#tryGetWorkspacePathAssertionCacheEntry(absolutePath, now)
+      : false
+    if (cacheHit) {
+      return
+    }
+
     const rootDirectory = getRootDirectory()
     const relativeToRoot = relativePath(rootDirectory, absolutePath)
 
@@ -135,6 +157,57 @@ export class NodeFileSystem
           `  Real target path:     ${realTargetPath}\n` +
           'Accessing files outside of the workspace is not allowed.'
       )
+    }
+
+    if (allowAssertionCache && realTargetPath === absolutePath) {
+      this.#setWorkspacePathAssertionCacheEntry(absolutePath, now)
+    }
+  }
+
+  #tryGetWorkspacePathAssertionCacheEntry(
+    absolutePath: string,
+    now: number
+  ): boolean {
+    const expiresAt = this.#workspacePathAssertionCache.get(absolutePath)
+    if (expiresAt === undefined) {
+      return false
+    }
+
+    if (expiresAt <= now) {
+      this.#workspacePathAssertionCache.delete(absolutePath)
+      return false
+    }
+
+    this.#workspacePathAssertionCache.delete(absolutePath)
+    this.#workspacePathAssertionCache.set(absolutePath, expiresAt)
+    return true
+  }
+
+  #setWorkspacePathAssertionCacheEntry(absolutePath: string, now: number): void {
+    this.#workspacePathAssertionCache.delete(absolutePath)
+    this.#workspacePathAssertionCache.set(
+      absolutePath,
+      now + WORKSPACE_PATH_ASSERTION_CACHE_TTL_MS
+    )
+    this.#trimWorkspacePathAssertionCache(now)
+  }
+
+  #trimWorkspacePathAssertionCache(now: number): void {
+    for (const [path, expiresAt] of this.#workspacePathAssertionCache) {
+      if (expiresAt <= now) {
+        this.#workspacePathAssertionCache.delete(path)
+      }
+    }
+
+    while (
+      this.#workspacePathAssertionCache.size >
+      WORKSPACE_PATH_ASSERTION_CACHE_MAX_ENTRIES
+    ) {
+      const oldestPath = this.#workspacePathAssertionCache.keys().next().value
+      if (oldestPath === undefined) {
+        break
+      }
+      this.#workspacePathAssertionCache.delete(oldestPath)
     }
   }
 
@@ -248,14 +321,6 @@ export class NodeFileSystem
     }
   }
 
-  #toGitStatusScopePath(relativeRootPath: string): string {
-    if (!relativeRootPath || relativeRootPath === '.') {
-      return '.'
-    }
-
-    return relativeRootPath
-  }
-
   getAbsolutePath(path: string): string {
     const absolutePath = resolve(path)
 
@@ -278,6 +343,14 @@ export class NodeFileSystem
     return trimLeadingDotSlash(
       relativePath(rootDirectory, this.getAbsolutePath(path))
     )
+  }
+
+  #toGitStatusScopePath(relativeRootPath: string): string {
+    if (!relativeRootPath || relativeRootPath === '.') {
+      return '.'
+    }
+
+    return relativeRootPath
   }
 
   async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
@@ -497,11 +570,27 @@ export class NodeFileSystem
   }
 
   async getFileByteLength(path: string): Promise<number | undefined> {
-    this.#assertWithinWorkspace(path)
+    const metadata = await this.getFileDependencyMetadata(path)
+    return metadata?.byteLength
+  }
+
+  async getFileDependencyMetadata(path: string): Promise<
+    | {
+        byteLength: number
+        lastModifiedMs: number
+      }
+    | undefined
+  > {
+    this.#assertWithinWorkspace(path, {
+      allowAssertionCache: true,
+    })
     const absolutePath = this.getAbsolutePath(path)
     try {
       const stats = await stat(absolutePath)
-      return stats.size
+      return {
+        byteLength: stats.size,
+        lastModifiedMs: stats.mtimeMs,
+      }
     } catch {
       return undefined
     }
@@ -653,14 +742,8 @@ export class NodeFileSystem
   }
 
   async getFileLastModifiedMs(path: string): Promise<number | undefined> {
-    this.#assertWithinWorkspace(path)
-    const absolutePath = this.getAbsolutePath(path)
-    try {
-      const stats = await stat(absolutePath)
-      return stats.mtimeMs
-    } catch {
-      return undefined
-    }
+    const metadata = await this.getFileDependencyMetadata(path)
+    return metadata?.lastModifiedMs
   }
 }
 

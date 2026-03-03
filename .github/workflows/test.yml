@@ -76,7 +76,9 @@ jobs:
 
           # Count affected packages, excluding screenshot (handled by separate workflow)
           PACKAGE_COUNT=$(echo "$AFFECTED" | jq '[.packages.items[] | select(.name != "@renoun/screenshot")] | length')
+          HAS_RENOUN=$(echo "$AFFECTED" | jq -r 'any(.packages.items[]?; .name == "renoun")')
           echo "package_count=$PACKAGE_COUNT" >> $GITHUB_OUTPUT
+          echo "has_renoun=$HAS_RENOUN" >> $GITHUB_OUTPUT
           echo "turbo_scm_base=$TURBO_SCM_BASE" >> $GITHUB_OUTPUT
 
           if [[ "$PACKAGE_COUNT" -gt 0 ]]; then
@@ -94,3 +96,11 @@ jobs:
         env:
           TURBO_SCM_BASE: ${{ steps.affected.outputs.turbo_scm_base }}
         run: pnpm test --filter="...[$TURBO_SCM_BASE]" --filter="!//" --filter="!@renoun/screenshot"
+
+      - name: Install Playwright Browsers
+        if: steps.affected.outputs.has_renoun == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run renoun browser regression tests
+        if: steps.affected.outputs.has_renoun == 'true'
+        run: pnpm --filter renoun test:browser

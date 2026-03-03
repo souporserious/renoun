@@ -7,6 +7,7 @@ import {
   type Highlighter,
 } from '../utils/create-highlighter.ts'
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import type {
   ModuleExport,
   getFileExportMetadata as baseGetFileExportMetadata,
@@ -20,6 +21,8 @@ import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
+import type { QuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
+import { getQuickInfoAtPosition as getQuickInfoAtPositionBase } from '../utils/get-quick-info-at-position.ts'
 import {
   isAbsolutePath,
   normalizePathKey,
@@ -70,8 +73,11 @@ let isRefreshInvalidationFlushQueued = false
 let hasConnectedProjectServerClient = false
 let refreshResyncQueue: Promise<void> = Promise.resolve()
 let latestRefreshCursor = 0
+let clientReadyProbePromise: Promise<boolean> | null = null
+let clientRpcUnavailableUntil = 0
 
 type ClientCachedRpcMethod =
+  | 'getQuickInfoAtPosition'
   | 'getSourceTextMetadata'
   | 'resolveTypeAtLocationWithDependencies'
   | 'getTokens'
@@ -106,6 +112,7 @@ interface ClientRpcValueWithDependenciesResponse<Value> {
 }
 
 const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
+  'getQuickInfoAtPosition',
   'getSourceTextMetadata',
   'resolveTypeAtLocationWithDependencies',
   'getTokens',
@@ -120,8 +127,10 @@ const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
 const CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY =
   new Set<ClientCachedRpcMethod>(['transpileSourceFile'])
 
-const CLIENT_RPC_CACHE_MAX_ENTRIES = 500
-const DEFAULT_CLIENT_RPC_CACHE_TTL_MS = 1_000
+const CLIENT_RPC_CACHE_MAX_ENTRIES = 1_000
+const DEFAULT_CLIENT_RPC_CACHE_TTL_MS = 30_000
+const SERVER_RPC_READY_TIMEOUT_MS = 500
+const SERVER_RPC_UNAVAILABLE_BACKOFF_MS = 5_000
 const REFRESH_RESYNC_MAX_ATTEMPTS = 3
 const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
 const clientRpcCacheByKey = new Map<string, ClientRpcCacheEntry>()
@@ -741,6 +750,8 @@ function getClient(): WebSocketClient | undefined {
     const createdClient = client
     if (shouldConsumeRefreshNotifications()) {
       createdClient.on('connected', () => {
+        clientRpcUnavailableUntil = 0
+
         if (!hasConnectedProjectServerClient) {
           hasConnectedProjectServerClient = true
           return
@@ -766,6 +777,42 @@ function getClient(): WebSocketClient | undefined {
     }
   }
   return client
+}
+
+async function getReadyClient(): Promise<WebSocketClient | undefined> {
+  const activeClient = getClient()
+  if (!activeClient) {
+    return undefined
+  }
+
+  // Browser callers cannot fall back to local project analysis.
+  if (typeof window !== 'undefined') {
+    return activeClient
+  }
+
+  const now = Date.now()
+  if (now < clientRpcUnavailableUntil) {
+    return undefined
+  }
+
+  if (!clientReadyProbePromise) {
+    clientReadyProbePromise = activeClient
+      .ready(SERVER_RPC_READY_TIMEOUT_MS)
+      .then(() => {
+        clientRpcUnavailableUntil = 0
+        return true
+      })
+      .catch(() => {
+        clientRpcUnavailableUntil = Date.now() + SERVER_RPC_UNAVAILABLE_BACKOFF_MS
+        return false
+      })
+      .finally(() => {
+        clientReadyProbePromise = null
+      })
+  }
+
+  const isReady = await clientReadyProbePromise
+  return isReady ? activeClient : undefined
 }
 
 function queueRefreshInvalidation(path: string): void {
@@ -812,7 +859,7 @@ export async function getSourceTextMetadata(
     projectOptions?: ProjectOptions
   }
 ): Promise<SourceTextMetadata> {
-  const client = getClient()
+  const client = await getReadyClient()
   if (client) {
     return callClientMethod<
       DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
@@ -829,13 +876,51 @@ export async function getSourceTextMetadata(
   return getCachedSourceTextMetadata(project, getSourceTextMetadataOptions)
 }
 
-let currentHighlighter: { current: Highlighter | null } = { current: null }
-let highlighterPromise: Promise<void> | null = null
+/**
+ * Resolve quick info for a symbol position in a source file.
+ * @internal
+ */
+export async function getQuickInfoAtPosition(
+  filePath: string,
+  position: number,
+  projectOptions?: ProjectOptions
+): Promise<QuickInfoAtPosition | undefined> {
+  const client = await getReadyClient()
+  if (client) {
+    return callClientMethod<
+      {
+        filePath: string
+        position: number
+        projectOptions?: ProjectOptions
+      },
+      QuickInfoAtPosition | undefined
+    >(client, 'getQuickInfoAtPosition', {
+      filePath,
+      position,
+      projectOptions,
+    })
+  }
 
-/** Wait for the highlighter to be loaded. */
-function untilHighlighterLoaded(
+  const project = getProject(projectOptions)
+  return getQuickInfoAtPositionBase({
+    project,
+    filePath,
+    position,
+  })
+}
+
+let currentHighlighter: { current: Highlighter | null } = { current: null }
+let highlighterPromise: Promise<Highlighter | null> | null = null
+let queuedHighlighterLoad: NodeJS.Timeout | null = null
+
+/** Ensure the highlighter is loaded when analysis needs it. */
+function ensureHighlighterLoaded(
   options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
-): Promise<void> {
+): Promise<Highlighter | null> {
+  if (currentHighlighter.current) {
+    return Promise.resolve(currentHighlighter.current)
+  }
+
   if (highlighterPromise) {
     return highlighterPromise
   }
@@ -843,11 +928,32 @@ function untilHighlighterLoaded(
   highlighterPromise = createHighlighter({
     theme: options.theme,
     languages: options.languages,
-  }).then((highlighter) => {
-    currentHighlighter.current = highlighter
   })
+    .then((highlighter) => {
+      currentHighlighter.current = highlighter
+      return highlighter
+    })
+    .catch((error) => {
+      highlighterPromise = null
+      reportBestEffortError('project/client', error)
+      return null
+    })
 
   return highlighterPromise
+}
+
+function queueHighlighterLoad(
+  options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
+): void {
+  if (currentHighlighter.current || highlighterPromise || queuedHighlighterLoad) {
+    return
+  }
+
+  queuedHighlighterLoad = setTimeout(() => {
+    queuedHighlighterLoad = null
+    void ensureHighlighterLoaded(options)
+  }, 0)
+  queuedHighlighterLoad.unref?.()
 }
 
 /**
@@ -861,7 +967,7 @@ export async function resolveTypeAtLocationWithDependencies(
   filter?: TypeFilter,
   projectOptions?: ProjectOptions
 ): Promise<ResolvedTypeAtLocationResult> {
-  const client = getClient()
+  const client = await getReadyClient()
 
   if (client) {
     return callClientMethod<
@@ -901,13 +1007,15 @@ export async function getTokens(
   options: Omit<GetTokensOptions, 'highlighter' | 'project'> & {
     languages?: ConfigurationOptions['languages']
     projectOptions?: ProjectOptions
+    waitForWarmResult?: boolean
   }
 ): Promise<TokenizedLines> {
-  const client = getClient()
+  const client = await getReadyClient()
   if (client) {
     return callClientMethod<
       Omit<GetTokensOptions, 'highlighter' | 'project'> & {
         projectOptions?: ProjectOptions
+        waitForWarmResult?: boolean
       },
       TokenizedLines
     >(client, 'getTokens', options)
@@ -915,18 +1023,20 @@ export async function getTokens(
 
   const { projectOptions, languages, ...getTokensOptions } = options
   const project = getProject(projectOptions)
-  await untilHighlighterLoaded({
+  queueHighlighterLoad({
     theme: getTokensOptions.theme,
     languages,
   })
 
-  if (currentHighlighter.current === null) {
-    throw new Error('[renoun] Highlighter is not initialized in "getTokens"')
-  }
-
   return getCachedTokens(project, {
     ...getTokensOptions,
     highlighter: currentHighlighter.current,
+    highlighterLoader: async () => {
+      return ensureHighlighterLoaded({
+        theme: getTokensOptions.theme,
+        languages,
+      })
+    },
   })
 }
 
@@ -938,7 +1048,7 @@ export async function getFileExports(
   filePath: string,
   projectOptions?: ProjectOptions
 ) {
-  const client = getClient()
+  const client = await getReadyClient()
   if (client) {
     const response = await callClientMethod<
       {
@@ -968,7 +1078,7 @@ export async function getOutlineRanges(
   filePath: string,
   projectOptions?: ProjectOptions
 ): Promise<OutlineRange[]> {
-  const client = getClient()
+  const client = await getReadyClient()
   if (client) {
     return callClientMethod<
       { filePath: string; projectOptions?: ProjectOptions },
@@ -991,7 +1101,7 @@ export async function getFileExportMetadata(
   kind: SyntaxKind,
   projectOptions?: ProjectOptions
 ) {
-  const client = getClient()
+  const client = await getReadyClient()
   if (client) {
     const response = await callClientMethod<
       {
@@ -1037,7 +1147,7 @@ export async function getFileExportStaticValue(
   kind: SyntaxKind,
   projectOptions?: ProjectOptions
 ) {
-  const client = getClient()
+  const client = await getReadyClient()
   if (client) {
     const response = await callClientMethod<
       {
@@ -1078,7 +1188,7 @@ export async function getFileExportText(
   includeDependencies?: boolean,
   projectOptions?: ProjectOptions
 ) {
-  const client = getClient()
+  const client = await getReadyClient()
   if (client) {
     const response = await callClientMethod<
       {
@@ -1118,7 +1228,7 @@ export async function createSourceFile(
   sourceText: string,
   projectOptions?: ProjectOptions
 ) {
-  const client = getClient()
+  const client = await getReadyClient()
   if (client) {
     await client.callMethod<
       {
@@ -1152,7 +1262,7 @@ export async function transpileSourceFile(
   filePath: string,
   projectOptions?: ProjectOptions
 ) {
-  const client = getClient()
+  const client = await getReadyClient()
   if (client) {
     return callClientMethod<
       {

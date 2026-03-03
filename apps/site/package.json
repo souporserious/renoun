@@ -4,7 +4,7 @@
   "homepage": "https://renoun.dev",
   "type": "module",
   "scripts": {
-    "dev": "next dev --webpack",
+    "dev": "renoun next dev --webpack",
     "build": "renoun next build --webpack",
     "start": "serve out"
   },

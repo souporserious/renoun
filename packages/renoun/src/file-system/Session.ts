@@ -46,6 +46,7 @@ type PersistedStaleReason =
   | 'policy_nonpersistable'
 
 type DirectorySnapshotHitSource = 'memory' | 'persisted'
+type PersistedInvalidationPriority = 'immediate' | 'background'
 
 type CacheMetricCounter =
   | 'memory_hit'
@@ -486,7 +487,8 @@ export class Session {
   readonly #invalidatedDirectorySnapshotKeys = new Set<string>()
   readonly #workspaceChangeLookupCache: WorkspaceChangeLookupCache
   readonly #recentlyInvalidatedPathTimestamps = new Map<string, number>()
-  readonly #pendingPersistedInvalidationPaths = new Set<string>()
+  readonly #pendingPersistedInvalidationPathsImmediate = new Set<string>()
+  readonly #pendingPersistedInvalidationPathsBackground = new Set<string>()
   #persistedInvalidationQueue: Promise<void> = Promise.resolve()
   #persistedInvalidationDrainScheduled = false
   #warnedAboutPersistedInvalidationFailure = false
@@ -629,6 +631,7 @@ export class Session {
       getWorkspaceTokenTtlMs: () => this.#resolveWorkspaceChangeTokenTtlMs(),
       getWorkspaceChangedPathsTtlMs: () =>
         this.#resolveWorkspaceChangedPathsTtlMs(),
+      serveStaleWhileRevalidate: isDevelopmentEnvironment(),
       normalizeRootPath: (rootPath) =>
         normalizeSessionPath(this.#fileSystem, rootPath),
       normalizeChangedPath: (changedPath) => {
@@ -922,11 +925,21 @@ export class Session {
     await this.#persistedInvalidationQueue.catch(() => {})
   }
 
-  invalidatePath(path: string): void {
-    this.invalidatePaths([path])
+  invalidatePath(
+    path: string,
+    options?: {
+      priority?: PersistedInvalidationPriority
+    }
+  ): void {
+    this.invalidatePaths([path], options)
   }
 
-  invalidatePaths(paths: Iterable<string>): void {
+  invalidatePaths(
+    paths: Iterable<string>,
+    options: {
+      priority?: PersistedInvalidationPriority
+    } = {}
+  ): void {
     const snapshotPathByNormalizedPath = new Map<string, string>()
     for (const path of paths) {
       if (typeof path !== 'string' || path.length === 0) {
@@ -1008,7 +1021,10 @@ export class Session {
     }
 
     if (this.usesPersistentCache) {
-      this.#queuePersistedDependencyInvalidations(normalizedPaths)
+      this.#queuePersistedDependencyInvalidations(
+        normalizedPaths,
+        options.priority ?? 'immediate'
+      )
     }
   }
 
@@ -1032,7 +1048,8 @@ export class Session {
     this.#invalidatedDirectorySnapshotKeys.clear()
     this.#workspaceChangeLookupCache.clear()
     this.#recentlyInvalidatedPathTimestamps.clear()
-    this.#pendingPersistedInvalidationPaths.clear()
+    this.#pendingPersistedInvalidationPathsImmediate.clear()
+    this.#pendingPersistedInvalidationPathsBackground.clear()
     this.#persistedInvalidationQueue = Promise.resolve()
     this.#persistedInvalidationDrainScheduled = false
     this.#directorySnapshotMetricsByKey.clear()
@@ -1089,19 +1106,37 @@ export class Session {
   }
 
   #queuePersistedDependencyInvalidations(
-    normalizedPaths: ReadonlyArray<string>
+    normalizedPaths: ReadonlyArray<string>,
+    priority: PersistedInvalidationPriority
   ): void {
+    const immediateQueue = this.#pendingPersistedInvalidationPathsImmediate
+    const backgroundQueue = this.#pendingPersistedInvalidationPathsBackground
     let hasQueuedPath = false
+
     for (const normalizedPath of normalizedPaths) {
       if (normalizedPath.length === 0) {
         continue
       }
 
-      if (this.#pendingPersistedInvalidationPaths.has(normalizedPath)) {
+      if (priority === 'immediate') {
+        if (immediateQueue.has(normalizedPath)) {
+          continue
+        }
+
+        immediateQueue.add(normalizedPath)
+        backgroundQueue.delete(normalizedPath)
+        hasQueuedPath = true
         continue
       }
 
-      this.#pendingPersistedInvalidationPaths.add(normalizedPath)
+      if (
+        immediateQueue.has(normalizedPath) ||
+        backgroundQueue.has(normalizedPath)
+      ) {
+        continue
+      }
+
+      backgroundQueue.add(normalizedPath)
       hasQueuedPath = true
     }
 
@@ -1125,17 +1160,27 @@ export class Session {
 
   async #drainPersistedDependencyInvalidations(): Promise<void> {
     try {
-      while (this.#pendingPersistedInvalidationPaths.size > 0) {
+      while (
+        this.#pendingPersistedInvalidationPathsImmediate.size > 0 ||
+        this.#pendingPersistedInvalidationPathsBackground.size > 0
+      ) {
+        const pendingQueue =
+          this.#pendingPersistedInvalidationPathsImmediate.size > 0
+            ? this.#pendingPersistedInvalidationPathsImmediate
+            : this.#pendingPersistedInvalidationPathsBackground
         const normalizedPaths = collapseInvalidationPaths(
-          this.#pendingPersistedInvalidationPaths
+          pendingQueue
         )
-        this.#pendingPersistedInvalidationPaths.clear()
+        pendingQueue.clear()
 
         await this.#runPersistedDependencyInvalidationsBatch(normalizedPaths)
       }
     } finally {
       this.#persistedInvalidationDrainScheduled = false
-      if (this.#pendingPersistedInvalidationPaths.size > 0) {
+      if (
+        this.#pendingPersistedInvalidationPathsImmediate.size > 0 ||
+        this.#pendingPersistedInvalidationPathsBackground.size > 0
+      ) {
         this.#schedulePersistedDependencyInvalidationDrain()
       }
     }

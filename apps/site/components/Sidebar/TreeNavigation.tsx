@@ -114,7 +114,7 @@ export function TreeNavigation(props: Omit<NavigationProps, 'components'>) {
 }
 
 async function getEntryMetadata(entry: FileSystemEntry<any>) {
-  if (!(isJavaScriptFile(entry) || isMDXFile(entry))) {
+  if (!isMDXFile(entry)) {
     return undefined
   }
 

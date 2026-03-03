@@ -87,6 +87,9 @@ export interface CacheStoreGetOrComputeOptions {
   constDeps?: CacheStoreConstDependency[]
   signal?: AbortSignal
   staleWhileRevalidate?: boolean | CacheStoreStaleWhileRevalidateOptions
+  onBackgroundRefreshComplete?: (
+    context: CacheStoreBackgroundRefreshCompleteContext
+  ) => void | Promise<void>
 }
 
 export interface CacheStorePutOptions {
@@ -100,6 +103,10 @@ export interface CacheStoreStaleWhileRevalidateOptions {
    * refresh runs. Defaults to the store's stale retention TTL.
    */
   maxStaleAgeMs?: number
+}
+
+export interface CacheStoreBackgroundRefreshCompleteContext {
+  nodeKey: string
 }
 
 export interface CacheStoreComputeContext {
@@ -889,27 +896,39 @@ export class CacheStore {
       ...options,
       signal: CACHE_STORE_SENTINELS.neverAbortSignal,
     }
+    const onBackgroundRefreshComplete = options.onBackgroundRefreshComplete
 
     void this.#ensureInflightComputation(nodeKey, backgroundOptions, compute, {
       forceRefresh: true,
-    }).catch((error) => {
-      this.#logCacheOperation('clear', nodeKey, {
-        source: 'swr',
-        reason: 'background-refresh-error',
-      })
-      emitTelemetryEvent({
-        name: 'renoun.cache.swr_refresh_error',
-        tags: {
-          namespace: getCacheTelemetryNamespace(nodeKey),
-        },
-        fields: {
-          nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
-          message:
-            error instanceof Error ? error.message : String(error ?? 'unknown'),
-        },
-        telemetry: this.#telemetry,
-      })
     })
+      .then(async () => {
+        if (!onBackgroundRefreshComplete) {
+          return
+        }
+
+        await onBackgroundRefreshComplete({ nodeKey })
+      })
+      .catch((error) => {
+        this.#logCacheOperation('clear', nodeKey, {
+          source: 'swr',
+          reason: 'background-refresh-error',
+        })
+        emitTelemetryEvent({
+          name: 'renoun.cache.swr_refresh_error',
+          tags: {
+            namespace: getCacheTelemetryNamespace(nodeKey),
+          },
+          fields: {
+            nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
+            message:
+              error instanceof Error
+                ? error.message
+                : String(error ?? 'unknown'),
+          },
+          telemetry: this.#telemetry,
+        })
+        reportBestEffortError('file-system/cache', error)
+      })
   }
 
   #ensureInflightComputation<Value>(
@@ -957,6 +976,24 @@ export class CacheStore {
     const entry = await this.#getFreshEntry(nodeKey)
     await this.#recordAutomaticNodeDependency(nodeKey, entry?.fingerprint)
     return entry?.value as Value | undefined
+  }
+
+  /**
+   * Return the latest cached value without running freshness checks.
+   * Useful for development stale-first paths that revalidate asynchronously.
+   */
+  async getPossiblyStale<Value>(nodeKey: string): Promise<Value | undefined> {
+    this.#assertNotDisposed('getPossiblyStale')
+
+    const memoryEntry = this.#entries.get(nodeKey)
+    if (memoryEntry) {
+      await this.#recordAutomaticNodeDependency(nodeKey, memoryEntry.fingerprint)
+      return memoryEntry.value as Value
+    }
+
+    const persistedEntry = await this.#loadPersistedEntry(nodeKey)
+    await this.#recordAutomaticNodeDependency(nodeKey, persistedEntry?.fingerprint)
+    return persistedEntry?.value as Value | undefined
   }
 
   async getWithFreshness<Value>(

@@ -151,6 +151,39 @@ class MutableTimestampFileSystem extends InMemoryFileSystem {
   }
 }
 
+class CombinedMetadataFileSystem extends InMemoryFileSystem {
+  #metadataCallCount = 0
+
+  getMetadataCallCount(): number {
+    return this.#metadataCallCount
+  }
+
+  async getFileDependencyMetadata(path: string): Promise<
+    | {
+        lastModifiedMs?: number
+        byteLength?: number
+      }
+    | undefined
+  > {
+    this.#metadataCallCount += 1
+    const source = await this.readFile(path)
+    return {
+      lastModifiedMs: 1_000,
+      byteLength: source.length,
+    }
+  }
+
+  override async getFileLastModifiedMs(
+    _path: string
+  ): Promise<number | undefined> {
+    throw new Error('fallback-last-modified-lookup-should-not-run')
+  }
+
+  override async getFileByteLength(_path: string): Promise<number | undefined> {
+    throw new Error('fallback-byte-length-lookup-should-not-run')
+  }
+}
+
 class TokenAwareNodeFileSystem extends NestedCwdNodeFileSystem {
   #workspaceChangeToken: string
   readonly #changedPathsByToken = new Map<
@@ -1442,6 +1475,21 @@ updated content`
     }
   })
 
+  test('uses combined file metadata lookups when provided by the file system', async () => {
+    const fileSystem = new CombinedMetadataFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(fileSystem, 'combined-metadata')
+
+    const firstContentId = await snapshot.contentId('/index.ts')
+    expect(firstContentId.startsWith('mtime:')).toBe(true)
+    expect(fileSystem.getMetadataCallCount()).toBe(1)
+
+    const secondContentId = await snapshot.contentId('/index.ts')
+    expect(secondContentId).toBe(firstContentId)
+    expect(fileSystem.getMetadataCallCount()).toBe(1)
+  })
+
   test('falls back to content hashing when metadata IDs collide within the guard window', async () => {
     const fileSystem = new MutableTimestampFileSystem({
       'index.ts': 'export const value = 1',
@@ -2330,6 +2378,70 @@ updated content`
     expect(deleteByDependencyPathsSpy).toHaveBeenCalledWith(['src'])
   })
 
+  test('Session.invalidatePaths prioritizes immediate persisted invalidations over queued background work', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/background-a.ts': 'export const value = "a"',
+      'src/background-b.ts': 'export const value = "b"',
+      'src/immediate.ts': 'export const value = "immediate"',
+    })
+    const cache = new Cache({
+      persistence: {
+        async load() {
+          return undefined
+        },
+        async save() {},
+        async delete() {},
+      },
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'session-persisted-priority'),
+      cache
+    )
+    const firstBatchStarted = createDeferredPromise()
+    const releaseFirstBatch = createDeferredPromise()
+    let callCount = 0
+    const deleteByDependencyPathsSpy = vi
+      .spyOn(session.cache, 'deleteByDependencyPaths')
+      .mockImplementation(async () => {
+        callCount += 1
+        if (callCount === 1) {
+          firstBatchStarted.resolve()
+          await releaseFirstBatch.promise
+        }
+
+        return {
+          deletedNodeKeys: [],
+          usedDependencyIndex: true,
+          hasMissingDependencyMetadata: false,
+        }
+      })
+
+    session.invalidatePaths(['/src/background-a.ts'], {
+      priority: 'background',
+    })
+    await firstBatchStarted.promise
+
+    session.invalidatePaths(['/src/background-b.ts'], {
+      priority: 'background',
+    })
+    session.invalidatePaths(['/src/immediate.ts'])
+
+    releaseFirstBatch.resolve()
+    await session.waitForPendingInvalidations()
+
+    expect(deleteByDependencyPathsSpy).toHaveBeenCalledTimes(3)
+    expect(deleteByDependencyPathsSpy.mock.calls[0]?.[0]).toEqual([
+      'src/background-a.ts',
+    ])
+    expect(deleteByDependencyPathsSpy.mock.calls[1]?.[0]).toEqual([
+      'src/immediate.ts',
+    ])
+    expect(deleteByDependencyPathsSpy.mock.calls[2]?.[0]).toEqual([
+      'src/background-b.ts',
+    ])
+  })
+
   test('Session.invalidatePaths batches broad persisted fallback scans across multiple paths', async () => {
     const fileSystem = new InMemoryFileSystem({
       'src/first.ts': 'export const first = 1',
@@ -2836,6 +2948,111 @@ describe('session cache persistence policy', () => {
         normalizePathKey('docs/page.ts'),
       ])
       expect(changedPathsLookup).toHaveBeenCalledTimes(1)
+    } finally {
+      Session.reset(fileSystem)
+      tokenLookup.mockRestore()
+      changedPathsLookup.mockRestore()
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+  })
+
+  test('serves stale workspace token and changed paths while revalidating in development', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    const fileSystem = new TokenAwareNodeFileSystem(
+      getRootDirectory(),
+      join(getRootDirectory(), 'tsconfig.json'),
+      'stable-token'
+    )
+    const tokenRefreshGate = createDeferredPromise()
+    const changedPathsRefreshGate = createDeferredPromise()
+    let tokenLookupCount = 0
+    let changedPathsLookupCount = 0
+    const tokenLookup = vi
+      .spyOn(fileSystem, 'getWorkspaceChangeToken')
+      .mockImplementation(async (rootPath) => {
+        tokenLookupCount += 1
+        if (tokenLookupCount === 1) {
+          return `token:v1:${normalizePathKey(rootPath)}`
+        }
+
+        await tokenRefreshGate.promise
+        return `token:v2:${normalizePathKey(rootPath)}`
+      })
+    const changedPathsLookup = vi
+      .spyOn(fileSystem, 'getWorkspaceChangedPathsSinceToken')
+      .mockImplementation(async (rootPath) => {
+        changedPathsLookupCount += 1
+        if (changedPathsLookupCount === 1) {
+          return [normalizePathKey(`${normalizePathKey(rootPath)}/v1.ts`)]
+        }
+
+        await changedPathsRefreshGate.promise
+        return [normalizePathKey(`${normalizePathKey(rootPath)}/v2.ts`)]
+      })
+    const cache = new Cache({
+      workspaceChangeTokenTtlMs: 5,
+      workspaceChangedPathsTtlMs: 5,
+    })
+
+    try {
+      const session = Session.for(fileSystem, undefined, cache)
+
+      const firstToken = await session.getWorkspaceChangeToken('docs')
+      const firstChangedPaths = await session.getWorkspaceChangedPathsSinceToken(
+        'docs',
+        'prev'
+      )
+      expect(firstToken).toBe('token:v1:docs')
+      expect(Array.from(firstChangedPaths ?? [])).toEqual([
+        normalizePathKey('docs/v1.ts'),
+      ])
+
+      await new Promise((resolve) => setTimeout(resolve, 15))
+
+      const staleTokenPromise = session.getWorkspaceChangeToken('docs')
+      const staleChangedPathsPromise =
+        session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
+
+      let staleTokenResolved = false
+      let staleChangedPathsResolved = false
+      void staleTokenPromise.then(() => {
+        staleTokenResolved = true
+      })
+      void staleChangedPathsPromise.then(() => {
+        staleChangedPathsResolved = true
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      expect(staleTokenResolved).toBe(true)
+      expect(staleChangedPathsResolved).toBe(true)
+
+      const staleToken = await staleTokenPromise
+      const staleChangedPaths = await staleChangedPathsPromise
+      expect(staleToken).toBe('token:v1:docs')
+      expect(Array.from(staleChangedPaths ?? [])).toEqual([
+        normalizePathKey('docs/v1.ts'),
+      ])
+
+      tokenRefreshGate.resolve()
+      changedPathsRefreshGate.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 5))
+
+      const refreshedToken = await session.getWorkspaceChangeToken('docs')
+      const refreshedChangedPaths =
+        await session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
+      expect(refreshedToken).toBe('token:v2:docs')
+      expect(Array.from(refreshedChangedPaths ?? [])).toEqual([
+        normalizePathKey('docs/v2.ts'),
+      ])
+
+      expect(tokenLookup.mock.calls.length).toBeGreaterThanOrEqual(2)
+      expect(changedPathsLookup.mock.calls.length).toBeGreaterThanOrEqual(2)
     } finally {
       Session.reset(fileSystem)
       tokenLookup.mockRestore()

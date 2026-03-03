@@ -1824,7 +1824,7 @@ describe('file system', () => {
       new Date('04/20/20'),
     ])
     expect(await objectExport.getStaticValue()).toEqual({ a: 1, b: 'x' })
-    expect(getTextSpy).toHaveBeenCalledTimes(1)
+    expect(getTextSpy).toHaveBeenCalledTimes(0)
   })
 
   test('mdx frontmatter resolves statically without invoking runtime loader', async () => {
@@ -1855,6 +1855,36 @@ describe('file system', () => {
     const exportValue = await file.getExportValue('frontmatter')
 
     expect(frontmatter).toEqual({ title: 'static' })
+    expect(exportValue).toEqual({ title: 'static' })
+    expect(runtimeLoader).not.toHaveBeenCalled()
+  })
+
+  test('mdx named exports resolve statically without invoking runtime loader', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      metadata: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.mdx': [
+        "export const metadata = { title: 'static' }",
+        '',
+        '# Hello',
+      ].join('\n'),
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        mdx: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'mdx')) as MDXFile<
+      any,
+      any,
+      any
+    >
+
+    const exportValue = await file.getExportValue('metadata')
+
     expect(exportValue).toEqual({ title: 'static' })
     expect(runtimeLoader).not.toHaveBeenCalled()
   })
@@ -3035,6 +3065,31 @@ export function identity<T>(value: T) {
 
     expect(nextFileEntry).toBeDefined()
     expect(nextFileEntry!.getPathname()).toBe('/guides/next-steps')
+  })
+
+  test('entry group getEntries caches recursive results and invalidates on session changes', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/a.mdx': '',
+      'docs/b.mdx': '',
+    })
+    const docs = new Directory({ path: 'docs', fileSystem })
+    const group = new Collection({ entries: [docs] })
+    const directoryGetEntriesSpy = vi.spyOn(docs, 'getEntries')
+
+    const first = await group.getEntries({ recursive: true })
+    const second = await group.getEntries({ recursive: true })
+
+    expect(second).toBe(first)
+    expect(directoryGetEntriesSpy).toHaveBeenCalledTimes(1)
+
+    await fileSystem.writeFile('docs/c.mdx', '')
+    docs.getSession().invalidatePath('docs/c.mdx')
+
+    const third = await group.getEntries({ recursive: true })
+
+    expect(third).not.toBe(first)
+    expect(third.some((entry) => entry.baseName === 'c')).toBe(true)
+    expect(directoryGetEntriesSpy).toHaveBeenCalledTimes(2)
   })
 
   test('multiple extensions in entry group', async () => {

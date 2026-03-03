@@ -13,18 +13,38 @@ export function QuickInfoPopover({ children }: { children: React.ReactNode }) {
   const { quickInfo, resetQuickInfo, clearTimeouts } = useQuickInfoContext()
 
   React.useLayoutEffect(() => {
-    if (ref.current && quickInfo) {
-      const popoverNode = ref.current.firstChild as HTMLElement
-      const anchorNode = document.getElementById(quickInfo.anchorId)!
-      keepElementInView(popoverNode, anchorNode)
-      return () => {
-        popoverNode.style.removeProperty('top')
-        popoverNode.style.removeProperty('left')
-        popoverNode.style.removeProperty('width')
-        popoverNode.style.removeProperty('height')
-      }
+    if (!ref.current || !quickInfo) {
+      return
     }
-  }, [quickInfo])
+
+    const popoverNode = ref.current.firstElementChild
+    if (!(popoverNode instanceof HTMLElement)) {
+      return
+    }
+
+    const anchorNode = document.getElementById(quickInfo.anchorId)
+    if (!(anchorNode instanceof HTMLElement)) {
+      return
+    }
+
+    keepElementInView(popoverNode, anchorNode)
+
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            keepElementInView(popoverNode, anchorNode)
+          })
+    resizeObserver?.observe(popoverNode)
+
+    return () => {
+      resizeObserver?.disconnect()
+      popoverNode.style.removeProperty('top')
+      popoverNode.style.removeProperty('left')
+      popoverNode.style.removeProperty('width')
+      popoverNode.style.removeProperty('height')
+    }
+  }, [children, quickInfo])
 
   return (
     <div

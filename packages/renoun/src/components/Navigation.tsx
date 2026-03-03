@@ -1,11 +1,14 @@
 import React, { Suspense } from 'react'
 
 import {
+  isDirectory,
   isFile,
   type Collection,
   type Directory,
   type FileSystemEntry,
 } from '../file-system/index.tsx'
+import { reportBestEffortError } from '../utils/best-effort.ts'
+import { isDevelopmentEnvironment } from '../utils/env.ts'
 
 export interface NavigationComponents {
   Root: React.ComponentType<{
@@ -41,6 +44,155 @@ export interface NavigationProps {
   components?: Partial<NavigationComponents>
 }
 
+interface DevNavigationEntriesCacheEntry {
+  value?: readonly FileSystemEntry<any>[]
+  updatedAt: number
+  invalidationEpoch: number
+  refreshTask?: Promise<readonly FileSystemEntry<any>[]>
+}
+
+interface SessionLikeWithInvalidation {
+  snapshot?: {
+    onInvalidate?: (
+      listener: (path: string) => void
+    ) => (() => void) | undefined
+  }
+}
+
+const DEV_NAVIGATION_SWR_MAX_STALE_AGE_MS = 30_000
+const devNavigationEntriesCacheBySource = new WeakMap<
+  Directory<any> | Collection<any>,
+  Map<string, DevNavigationEntriesCacheEntry>
+>()
+const devNavigationSessionUnsubscribeBySession = new WeakMap<
+  object,
+  () => void
+>()
+let devNavigationInvalidationEpoch = 0
+
+function getNavigationEntriesCacheBucket(
+  source: Directory<any> | Collection<any>
+): Map<string, DevNavigationEntriesCacheEntry> {
+  const existing = devNavigationEntriesCacheBySource.get(source)
+  if (existing) {
+    return existing
+  }
+
+  const created = new Map<string, DevNavigationEntriesCacheEntry>()
+  devNavigationEntriesCacheBySource.set(source, created)
+  return created
+}
+
+function trackNavigationSourceInvalidations(
+  source: Directory<any> | Collection<any>
+): void {
+  if (!isDevelopmentEnvironment()) {
+    return
+  }
+
+  if (!isDirectory(source)) {
+    return
+  }
+
+  const session = source.getSession() as SessionLikeWithInvalidation
+  if (!session || typeof session !== 'object') {
+    return
+  }
+
+  const sessionKey = session as object
+  if (devNavigationSessionUnsubscribeBySession.has(sessionKey)) {
+    return
+  }
+
+  const unsubscribe = session.snapshot?.onInvalidate?.(() => {
+    devNavigationInvalidationEpoch += 1
+  })
+
+  if (typeof unsubscribe === 'function') {
+    devNavigationSessionUnsubscribeBySession.set(sessionKey, unsubscribe)
+  }
+}
+
+async function getNavigationEntriesWithDevSWR({
+  source,
+  cacheKey,
+  readEntries,
+}: {
+  source: Directory<any> | Collection<any>
+  cacheKey: string
+  readEntries: () => Promise<readonly FileSystemEntry<any>[]>
+}): Promise<readonly FileSystemEntry<any>[]> {
+  if (!isDevelopmentEnvironment()) {
+    return readEntries()
+  }
+
+  trackNavigationSourceInvalidations(source)
+  const cacheBucket = getNavigationEntriesCacheBucket(source)
+  const cacheEntry = cacheBucket.get(cacheKey)
+  const now = Date.now()
+
+  if (cacheEntry?.value) {
+    const isWithinStaleWindow =
+      now - cacheEntry.updatedAt <= DEV_NAVIGATION_SWR_MAX_STALE_AGE_MS
+    const isCurrentInvalidationEpoch =
+      cacheEntry.invalidationEpoch === devNavigationInvalidationEpoch
+
+    if (isWithinStaleWindow && isCurrentInvalidationEpoch) {
+      return cacheEntry.value
+    }
+
+    if (!cacheEntry.refreshTask) {
+      cacheEntry.refreshTask = readEntries()
+        .then((nextEntries) => {
+          cacheEntry.value = nextEntries
+          cacheEntry.updatedAt = Date.now()
+          cacheEntry.invalidationEpoch = devNavigationInvalidationEpoch
+          return nextEntries
+        })
+        .catch((error) => {
+          reportBestEffortError('components/navigation', error)
+          return cacheEntry.value ?? []
+        })
+        .finally(() => {
+          if (cacheBucket.get(cacheKey) === cacheEntry) {
+            cacheEntry.refreshTask = undefined
+          }
+        })
+    }
+
+    return cacheEntry.value
+  }
+
+  if (cacheEntry?.refreshTask) {
+    return cacheEntry.refreshTask
+  }
+
+  const createdEntry: DevNavigationEntriesCacheEntry = {
+    updatedAt: 0,
+    invalidationEpoch: devNavigationInvalidationEpoch,
+  }
+  const refreshTask = readEntries()
+  createdEntry.refreshTask = refreshTask
+  cacheBucket.set(cacheKey, createdEntry)
+
+  try {
+    const entries = await refreshTask
+    createdEntry.value = entries
+    createdEntry.updatedAt = Date.now()
+    createdEntry.invalidationEpoch = devNavigationInvalidationEpoch
+    return entries
+  } catch (error) {
+    if (cacheBucket.get(cacheKey) === createdEntry) {
+      cacheBucket.delete(cacheKey)
+    }
+    throw error
+  } finally {
+    if (cacheBucket.get(cacheKey) === createdEntry) {
+      createdEntry.refreshTask = undefined
+    }
+  }
+}
+
 /** A navigation that displays a list of entries. */
 export const Navigation =
   process.env.NODE_ENV === 'development'
@@ -66,7 +218,10 @@ async function NavigationWithFallback({
         </components.Root>
       }
     >
-      <NavigationAsync source={source} components={componentsProp} />
+      <NavigationAsync
+        source={source}
+        components={componentsProp}
+      />
     </Suspense>
   )
 }
@@ -75,7 +230,44 @@ async function NavigationAsync({
   source,
   components: componentsProp = {},
 }: NavigationProps) {
-  const entries = await source.getEntries()
+  let entries: readonly FileSystemEntry<any>[]
+  let childrenByPath: ReadonlyMap<string, readonly FileSystemEntry<any>[]> | undefined
+
+  if (isDirectory(source)) {
+    const canUseRecursiveTree = source.getFilterPatternKind() !== 'shallow'
+
+    if (!canUseRecursiveTree) {
+      entries = await getNavigationEntriesWithDevSWR({
+        source,
+        cacheKey: 'entries:direct',
+        readEntries: () => source.getEntries(),
+      })
+    } else {
+      try {
+        const recursiveEntries = await getNavigationEntriesWithDevSWR({
+          source,
+          cacheKey: 'entries:recursive',
+          readEntries: () => source.getEntries({ recursive: true }),
+        })
+        const tree = buildNavigationTree(source.getPathname(), recursiveEntries)
+        entries = tree.rootEntries
+        childrenByPath = tree.childrenByPath
+      } catch (error) {
+        entries = await getNavigationEntriesWithDevSWR({
+          source,
+          cacheKey: 'entries:direct',
+          readEntries: () => source.getEntries(),
+        })
+        reportBestEffortError('components/navigation', error)
+      }
+    }
+  } else {
+    entries = await getNavigationEntriesWithDevSWR({
+      source,
+      cacheKey: 'entries:direct',
+      readEntries: () => source.getEntries(),
+    })
+  }
   const components: NavigationComponents = {
     ...defaultComponents,
     ...componentsProp,
@@ -84,15 +276,69 @@ async function NavigationAsync({
   return (
     <components.Root source={source}>
       <components.List entry={source} depth={0}>
-        {entries.map((entry) => (
-          <Item
-            key={entry.getPathname()}
-            entry={entry}
-            components={components}
-          />
-        ))}
+        {childrenByPath
+          ? entries.map((entry) =>
+              renderTreeItem({
+                entry,
+                components,
+                childrenByPath,
+              })
+            )
+          : entries.map((entry) => (
+              <Item
+                key={entry.getPathname()}
+                entry={entry}
+                components={components}
+              />
+            ))}
       </components.List>
     </components.Root>
+  )
+}
+
+function renderTreeItem({
+  entry,
+  components,
+  childrenByPath,
+}: {
+  entry: FileSystemEntry<any>
+  components: NavigationComponents
+  childrenByPath: ReadonlyMap<string, readonly FileSystemEntry<any>[]>
+}): React.ReactNode {
+  const pathname = entry.getPathname()
+  const depth = entry.depth + 1
+
+  if (isFile(entry)) {
+    return (
+      <components.Item key={pathname} entry={entry} depth={depth}>
+        <components.Link entry={entry} depth={depth} pathname={pathname} />
+      </components.Item>
+    )
+  }
+
+  const entries = childrenByPath.get(pathname) ?? []
+
+  if (entries.length === 0) {
+    return (
+      <components.Item key={pathname} entry={entry} depth={depth}>
+        <components.Link entry={entry} depth={depth} pathname={pathname} />
+      </components.Item>
+    )
+  }
+
+  return (
+    <components.Item key={pathname} entry={entry} depth={depth}>
+      <components.Link entry={entry} depth={depth} pathname={pathname} />
+      <components.List entry={entry} depth={depth}>
+        {entries.map((childEntry) =>
+          renderTreeItem({
+            entry: childEntry,
+            components,
+            childrenByPath,
+          })
+        )}
+      </components.List>
+    </components.Item>
   )
 }
 
@@ -139,4 +385,33 @@ async function Item({
       </components.List>
     </components.Item>
   )
+}
+
+function buildNavigationTree(
+  rootPathname: string,
+  entries: readonly FileSystemEntry<any>[]
+): {
+  rootEntries: readonly FileSystemEntry<any>[]
+  childrenByPath: ReadonlyMap<string, readonly FileSystemEntry<any>[]>
+} {
+  const childrenByPath = new Map<string, FileSystemEntry<any>[]>()
+
+  for (const entry of entries) {
+    const pathname = entry.getPathname()
+    const lastSeparatorIndex = pathname.lastIndexOf('/')
+    const parentPathname =
+      lastSeparatorIndex > 0 ? pathname.slice(0, lastSeparatorIndex) : '/'
+    const siblings = childrenByPath.get(parentPathname)
+
+    if (siblings) {
+      siblings.push(entry)
+    } else {
+      childrenByPath.set(parentPathname, [entry])
+    }
+  }
+
+  return {
+    rootEntries: childrenByPath.get(rootPathname) ?? [],
+    childrenByPath,
+  }
 }

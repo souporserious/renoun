@@ -119,6 +119,41 @@ describe('project cached analysis', () => {
     expect(createSourceFileSpy).toHaveBeenCalledTimes(1)
   })
 
+  test('serves source metadata fallback immediately on cold development reads', async () => {
+    const previousNodeEnv = process.env['NODE_ENV']
+    process.env['NODE_ENV'] = 'development'
+
+    try {
+      const project = new Project({
+        useInMemoryFileSystem: true,
+      })
+      const source = `const devFallback = ${Date.now()}`
+      const createSourceFileSpy = vi.spyOn(project, 'createSourceFile')
+
+      const first = await getCachedSourceTextMetadata(project, {
+        value: source,
+        language: 'ts',
+        shouldFormat: false,
+      })
+
+      expect(first.value).toBe(source)
+      expect(createSourceFileSpy).toHaveBeenCalledTimes(0)
+
+      await delay(400)
+
+      const second = await getCachedSourceTextMetadata(project, {
+        value: source,
+        language: 'ts',
+        shouldFormat: false,
+      })
+
+      expect(second.filePath).toBe(first.filePath)
+      expect(createSourceFileSpy.mock.calls.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      process.env['NODE_ENV'] = previousNodeEnv
+    }
+  })
+
   test('reuses cached tokens for identical inputs', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,
@@ -167,6 +202,61 @@ describe('project cached analysis', () => {
     })
 
     expect(metadataCalls).toBe(1)
+  })
+
+  test('serves plain token fallback immediately on cold development reads', async () => {
+    const previousNodeEnv = process.env['NODE_ENV']
+    process.env['NODE_ENV'] = 'development'
+
+    try {
+      const project = new Project({
+        useInMemoryFileSystem: true,
+      })
+      const filePath = `/project/src/token-fallback-${Date.now()}.ts`
+      const source = 'const first = 1\nconst second = 2'
+
+      project.createSourceFile(filePath, source, {
+        overwrite: true,
+      })
+
+      const highlighter = createHighlighter()
+      const metadataCollector = vi.fn(collectTypeScriptMetadata)
+
+      const first = await getCachedTokens(project, {
+        value: source,
+        language: 'ts',
+        filePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter: null,
+        highlighterLoader: async () => {
+          await delay(40)
+          return highlighter
+        },
+        metadataCollector,
+      })
+
+      expect(first).toHaveLength(2)
+      expect(metadataCollector).toHaveBeenCalledTimes(0)
+
+      await delay(180)
+
+      const second = await getCachedTokens(project, {
+        value: source,
+        language: 'ts',
+        filePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter: null,
+        highlighterLoader: async () => highlighter,
+        metadataCollector,
+      })
+
+      expect(second).toHaveLength(1)
+      expect(metadataCollector).toHaveBeenCalledTimes(1)
+    } finally {
+      process.env['NODE_ENV'] = previousNodeEnv
+    }
   })
 
   test('skips dependency AST traversal work for warm token cache hits', async () => {

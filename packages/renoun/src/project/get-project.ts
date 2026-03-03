@@ -24,6 +24,7 @@ import { invalidateProjectFileCachePaths } from './cache.ts'
 import {
   invalidateRuntimeAnalysisCachePaths,
 } from './cached-analysis.ts'
+import { invalidateSharedFileTextPrefixCachePaths } from './file-text-prefix-cache.ts'
 import {
   activeRefreshingProjects,
   completeRefreshingProjects,
@@ -42,7 +43,26 @@ const directoryWatchers = new Map<string, FSWatcher>()
 const directoryToProjects = new Map<string, Set<TsMorphProject>>()
 const directoryInvalidationPathQueue = new Map<string, Map<string, string>>()
 const directoryInvalidationTimers = new Map<string, NodeJS.Timeout>()
+const directoryInvalidationScheduledDelayByProject = new Map<string, number>()
+type ProjectWatcherInvalidationPriority = 'immediate' | 'background'
+const PROJECT_WATCHER_INVALIDATION_PRIORITY_DELAY_MS: Record<
+  ProjectWatcherInvalidationPriority,
+  number
+> = {
+  immediate: 0,
+  background: 25,
+}
 const PROJECT_WATCHER_INVALIDATION_BATCH_WINDOW_MS = 25
+const IGNORED_PROJECT_WATCH_PATH_SEGMENTS = new Set([
+  '.next',
+  '.renoun',
+  '.git',
+  'node_modules',
+  'out',
+  'dist',
+  'build',
+  'coverage',
+])
 
 export interface ProjectWatcherRuntimeOptions {
   enabled?: boolean
@@ -151,6 +171,21 @@ export function getProject(options?: ProjectOptions) {
   return project
 }
 
+function shouldIgnoreProjectWatchPath(filePath: string): boolean {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    return true
+  }
+
+  const pathSegments = filePath.split(/[/\\]+/)
+  for (const pathSegment of pathSegments) {
+    if (IGNORED_PROJECT_WATCH_PATH_SEGMENTS.has(pathSegment)) {
+      return true
+    }
+  }
+
+  return false
+}
+
 function ensureProjectDirectoryWatcher(projectDirectory: string): void {
   if (
     !shouldEnableProjectWatchers() ||
@@ -166,6 +201,10 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
       if (!fileName) return
 
       const filePath = join(projectDirectory, fileName)
+
+      if (shouldIgnoreProjectWatchPath(filePath)) {
+        return
+      }
 
       if (isFilePathGitIgnored(filePath)) {
         return
@@ -191,7 +230,9 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
             invalidationPaths.add(projectDirectory)
           }
         }
-        queueProjectWatcherInvalidation(projectDirectory, invalidationPaths)
+        queueProjectWatcherInvalidation(projectDirectory, invalidationPaths, {
+          priority: 'immediate',
+        })
 
         for (const currentProject of projectsToUpdate) {
           if (eventType === 'rename') {
@@ -233,7 +274,10 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
 
 function queueProjectWatcherInvalidation(
   projectDirectory: string,
-  paths: Iterable<string>
+  paths: Iterable<string>,
+  options: {
+    priority?: ProjectWatcherInvalidationPriority
+  } = {}
 ): void {
   const pendingPaths =
     directoryInvalidationPathQueue.get(projectDirectory) ??
@@ -252,16 +296,37 @@ function queueProjectWatcherInvalidation(
   }
   directoryInvalidationPathQueue.set(projectDirectory, pendingPaths)
 
-  if (directoryInvalidationTimers.has(projectDirectory)) {
+  const priority = options.priority ?? 'immediate'
+  const requestedDelayMs =
+    PROJECT_WATCHER_INVALIDATION_PRIORITY_DELAY_MS[priority] ??
+    PROJECT_WATCHER_INVALIDATION_BATCH_WINDOW_MS
+  const existingTimer = directoryInvalidationTimers.get(projectDirectory)
+  const existingDelayMs =
+    directoryInvalidationScheduledDelayByProject.get(projectDirectory)
+
+  if (
+    existingTimer &&
+    existingDelayMs !== undefined &&
+    existingDelayMs <= requestedDelayMs
+  ) {
     return
+  }
+
+  if (existingTimer) {
+    clearTimeout(existingTimer)
   }
 
   const flushTimer = setTimeout(() => {
     directoryInvalidationTimers.delete(projectDirectory)
+    directoryInvalidationScheduledDelayByProject.delete(projectDirectory)
     flushProjectWatcherInvalidation(projectDirectory)
-  }, PROJECT_WATCHER_INVALIDATION_BATCH_WINDOW_MS)
+  }, requestedDelayMs)
   flushTimer.unref?.()
   directoryInvalidationTimers.set(projectDirectory, flushTimer)
+  directoryInvalidationScheduledDelayByProject.set(
+    projectDirectory,
+    requestedDelayMs
+  )
 }
 
 function flushProjectWatcherInvalidation(projectDirectory: string): void {
@@ -281,6 +346,7 @@ function flushProjectWatcherInvalidation(projectDirectory: string): void {
   })
 
   invalidateRuntimeAnalysisCachePaths(pathsToInvalidate)
+  invalidateSharedFileTextPrefixCachePaths(pathsToInvalidate)
 
   const projectsToUpdate = directoryToProjects.get(projectDirectory)
   if (!projectsToUpdate) {
@@ -321,6 +387,7 @@ export function invalidateProjectCachesByPaths(
   const pathsToInvalidate = normalizedPaths.map((normalizedPath) => {
     return originalPathByNormalizedPath.get(normalizedPath) ?? normalizedPath
   })
+  invalidateSharedFileTextPrefixCachePaths(pathsToInvalidate)
 
   let affectedProjects = 0
 
@@ -352,6 +419,7 @@ export function disposeProjectWatchers(): void {
   }
 
   directoryInvalidationTimers.clear()
+  directoryInvalidationScheduledDelayByProject.clear()
   directoryInvalidationPathQueue.clear()
   directoryWatchers.clear()
   directoryToProjects.clear()

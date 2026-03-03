@@ -69,6 +69,7 @@ async function renderQuickInfo({
       language: 'typescript',
       languages: config.languages,
       theme: config.theme,
+      waitForWarmResult: true,
     })
     displayTextTokens = tokens
   }

@@ -1,5 +1,6 @@
-import { watch, type FSWatcher } from 'node:fs'
-import { join } from 'node:path'
+import { watch, type FSWatcher, type Dirent } from 'node:fs'
+import { readdir } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
 import { getTsMorph } from '../utils/ts-morph.ts'
 import type { SyntaxKind as TsMorphSyntaxKind } from '../utils/ts-morph.ts'
 
@@ -11,14 +12,20 @@ import type { ConfigurationOptions } from '../components/Config/types.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import {
+  collapseInvalidationPaths,
+} from '../utils/collapse-invalidation-paths.ts'
+import {
   isDevelopmentEnvironment,
   isProductionEnvironment,
 } from '../utils/env.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { GetTokensOptions } from '../utils/get-tokens.ts'
 import type { GetSourceTextMetadataOptions } from '../utils/get-source-text-metadata.ts'
+import { prewarmSourceTextFormatterRuntime } from '../utils/format-source-text.ts'
+import { mapConcurrent } from '../utils/concurrency.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getFileExportTextResult } from '../utils/get-file-export-text.ts'
+import { getQuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
 import {
@@ -30,6 +37,8 @@ import {
   getCachedSourceTextMetadata,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
+  onRuntimeAnalysisBackgroundRefresh,
+  prewarmRuntimeAnalysisSession,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
@@ -45,13 +54,86 @@ import {
   setServerPortProcessEnv,
 } from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
+import {
+  extractCodeFenceLanguagesFromMarkdown,
+  isMarkdownCodeFenceSourcePath,
+} from './markdown-code-fence-languages.ts'
+import {
+  getSharedFileTextPrefix,
+  invalidateSharedFileTextPrefixCachePath,
+} from './file-text-prefix-cache.ts'
 
 const { SyntaxKind } = getTsMorph()
 
 let currentHighlighter: Promise<Highlighter> | null = null
+let resolvedHighlighter: Highlighter | null = null
 let activeProjectServers = 0
-const REFRESH_NOTIFICATION_BATCH_WINDOW_MS = 50
+type RefreshNotificationPriority = 'immediate' | 'background'
+const REFRESH_NOTIFICATION_PRIORITY_DELAY_MS: Record<
+  RefreshNotificationPriority,
+  number
+> = {
+  immediate: 0,
+  background: 50,
+}
 const REFRESH_NOTIFICATION_HISTORY_LIMIT = 250
+const IGNORED_REFRESH_PATH_SEGMENTS = new Set([
+  '.next',
+  '.renoun',
+  '.git',
+  'node_modules',
+  'out',
+  'dist',
+  'build',
+  'coverage',
+])
+const CODE_FENCE_PREWARM_PRIORITY_DELAY_MS: Record<
+  RefreshNotificationPriority,
+  number
+> = {
+  immediate: 0,
+  background: 250,
+}
+const CODE_FENCE_PREWARM_MAX_FILE_COUNT = 200
+const CODE_FENCE_PREWARM_MAX_DIRECTORY_COUNT = 1_000
+const CODE_FENCE_PREWARM_MAX_LANGUAGE_COUNT = 24
+const CODE_FENCE_PREWARM_FILE_READ_MAX_BYTES = 256_000
+const CODE_FENCE_PREWARM_FILE_READ_CONCURRENCY = 6
+const CODE_FENCE_PREWARM_TOKENIZE_CONCURRENCY = 4
+const STARTUP_RUNTIME_PREWARM_TOKENIZE_CONCURRENCY = 4
+const STARTUP_RUNTIME_PREWARM_METADATA_CONCURRENCY = 2
+const STARTUP_RUNTIME_PREWARM_MAX_LANGUAGE_COUNT = 24
+const STARTUP_RUNTIME_PREWARM_FALLBACK_LANGUAGES = [
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'json',
+  'shell',
+  'bash',
+  'mdx',
+] as const
+
+type StartupRuntimeMetadataWarmupSample = {
+  value: string
+  language: 'ts' | 'tsx'
+  shouldFormat?: boolean
+}
+
+const STARTUP_RUNTIME_METADATA_WARMUP_SAMPLES: ReadonlyArray<
+  StartupRuntimeMetadataWarmupSample
+> = [
+  {
+    value: `export const answer = 42\n`,
+    language: 'ts',
+    shouldFormat: false,
+  },
+  {
+    value: `export function Example(){return <div />}\n`,
+    language: 'tsx',
+    shouldFormat: false,
+  },
+]
 
 interface ResolveTypeAtLocationRpcRequest {
   filePath: string
@@ -108,6 +190,176 @@ function toFileExportDependencyPaths(
   }
 
   return Array.from(dependencyPaths.values())
+}
+
+function getThemeNamesForCodeFencePrewarm(
+  themeConfig: ConfigurationOptions['theme']
+): string[] {
+  if (!themeConfig) {
+    return ['default']
+  }
+
+  if (typeof themeConfig === 'string') {
+    return [themeConfig]
+  }
+
+  if (Array.isArray(themeConfig)) {
+    return [themeConfig[0]]
+  }
+
+  const themeNames = Object.values(themeConfig).map((themeValue) =>
+    typeof themeValue === 'string' ? themeValue : themeValue[0]
+  )
+
+  return themeNames.length > 0 ? themeNames : ['default']
+}
+
+function normalizeCodeFencePrewarmPath(path: string): string {
+  return resolve(path)
+}
+
+async function collectMarkdownFilesUnderDirectory(
+  rootPath: string,
+  limit: number
+): Promise<string[]> {
+  const files: string[] = []
+  const directories: string[] = [rootPath]
+  let scannedDirectoryCount = 0
+
+  while (
+    directories.length > 0 &&
+    files.length < limit &&
+    scannedDirectoryCount < CODE_FENCE_PREWARM_MAX_DIRECTORY_COUNT
+  ) {
+    const directoryPath = directories.shift()
+    if (!directoryPath) {
+      break
+    }
+    scannedDirectoryCount += 1
+
+    let entries: Dirent[]
+    try {
+      entries = await readdir(directoryPath, { withFileTypes: true })
+    } catch {
+      continue
+    }
+
+    for (const entry of entries) {
+      if (files.length >= limit) {
+        break
+      }
+
+      const entryName = entry.name
+      if (!entryName) {
+        continue
+      }
+
+      if (IGNORED_REFRESH_PATH_SEGMENTS.has(entryName)) {
+        continue
+      }
+
+      const entryPath = join(directoryPath, entryName)
+      if (entry.isDirectory()) {
+        directories.push(entryPath)
+        continue
+      }
+
+      if (entry.isFile() && isMarkdownCodeFenceSourcePath(entryPath)) {
+        files.push(entryPath)
+      }
+    }
+  }
+
+  return files
+}
+
+async function readMarkdownCodeFenceLanguages(
+  markdownFilePaths: readonly string[]
+): Promise<string[]> {
+  if (markdownFilePaths.length === 0) {
+    return []
+  }
+
+  const languageSet = new Set<string>()
+
+  await mapConcurrent(
+    markdownFilePaths,
+    {
+      concurrency: CODE_FENCE_PREWARM_FILE_READ_CONCURRENCY,
+    },
+    async (filePath) => {
+      const sourceTextPrefix = await getSharedFileTextPrefix(
+        filePath,
+        CODE_FENCE_PREWARM_FILE_READ_MAX_BYTES
+      )
+      if (sourceTextPrefix === undefined) {
+        return
+      }
+
+      const languages = extractCodeFenceLanguagesFromMarkdown(sourceTextPrefix)
+      for (const language of languages) {
+        if (languageSet.size >= CODE_FENCE_PREWARM_MAX_LANGUAGE_COUNT) {
+          return
+        }
+
+        languageSet.add(language)
+      }
+    }
+  )
+
+  return Array.from(languageSet.values())
+}
+
+function getStartupRuntimeWarmupSourceText(language: string): string {
+  const normalizedLanguage = String(language).toLowerCase()
+
+  switch (normalizedLanguage) {
+    case 'tsx':
+      return `export function Example(){return <div />}\n`
+    case 'ts':
+      return `export const answer: number = 42\n`
+    case 'jsx':
+      return `export function Example(){return <div />}\n`
+    case 'js':
+    case 'mjs':
+    case 'cjs':
+      return `export const answer = 42\n`
+    case 'json':
+      return `{"answer":42}\n`
+    case 'yaml':
+    case 'yml':
+      return `answer: 42\n`
+    case 'html':
+      return `<div>Hello</div>\n`
+    case 'css':
+      return `.example { color: red; }\n`
+    case 'md':
+    case 'markdown':
+      return `# Heading\n`
+    case 'mdx':
+      return `export const metadata = { title: 'Example' }\n\n# Heading\n`
+    case 'shell':
+    case 'bash':
+    case 'sh':
+      return `echo "hello"\n`
+    default:
+      return `example\n`
+  }
+}
+
+function shouldIgnoreRefreshPath(filePath: string): boolean {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    return true
+  }
+
+  const pathSegments = filePath.split(/[/\\]+/)
+  for (const pathSegment of pathSegments) {
+    if (IGNORED_REFRESH_PATH_SEGMENTS.has(pathSegment)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 function parseTypeFilter(filter?: TypeFilter | string): TypeFilter | undefined {
@@ -224,8 +476,10 @@ export async function createServer(options?: CreateServerOptions) {
   const port = await server.getPort()
 
   setServerPortProcessEnv(port)
+  const rootDirectory = getRootDirectory()
 
   let refreshFlushTimer: NodeJS.Timeout | undefined
+  let refreshFlushDelayMs: number | undefined
   const pendingRefreshPaths = new Set<string>()
   const pendingRefreshEventTypes = new Set<string>()
   let refreshCursor = 0
@@ -233,8 +487,21 @@ export async function createServer(options?: CreateServerOptions) {
     cursor: number
     filePaths: string[]
   }> = []
+  let codeFencePrewarmFlushTimer: NodeJS.Timeout | undefined
+  let codeFencePrewarmFlushDelayMs: number | undefined
+  let codeFencePrewarmInFlight: Promise<void> = Promise.resolve()
+  let hasQueuedInitialCodeFencePrewarm = false
+  let queuedHighlighterInitialization: NodeJS.Timeout | undefined
+  let startupRuntimePrewarmTimer: NodeJS.Timeout | undefined
+  let startupRuntimePrewarmQueued = false
+  let startupRuntimePrewarmInFlight: Promise<void> = Promise.resolve()
+  let latestCodeFencePrewarmThemeNames: string[] = ['default']
+  const pendingCodeFencePrewarmPathsImmediate = new Set<string>()
+  const pendingCodeFencePrewarmPathsBackground = new Set<string>()
+  const deferredCodeFencePrewarmPaths = new Set<string>()
   const flushRefreshNotifications = () => {
     refreshFlushTimer = undefined
+    refreshFlushDelayMs = undefined
     if (pendingRefreshPaths.size === 0) {
       return
     }
@@ -267,13 +534,445 @@ export async function createServer(options?: CreateServerOptions) {
       },
     })
   }
+  const queueRefreshNotification = (
+    filePaths: Iterable<string>,
+    eventType: string,
+    options: {
+      priority?: RefreshNotificationPriority
+    } = {}
+  ) => {
+    let hasPath = false
 
-  const rootDirectory = getRootDirectory()
+    for (const filePath of filePaths) {
+      if (typeof filePath !== 'string' || filePath.length === 0) {
+        continue
+      }
+
+      pendingRefreshPaths.add(filePath)
+      hasPath = true
+    }
+
+    if (!hasPath) {
+      return
+    }
+
+    pendingRefreshEventTypes.add(eventType)
+    const priority = options.priority ?? 'immediate'
+    const requestedDelayMs =
+      REFRESH_NOTIFICATION_PRIORITY_DELAY_MS[priority] ?? 50
+    if (
+      refreshFlushTimer &&
+      refreshFlushDelayMs !== undefined &&
+      refreshFlushDelayMs <= requestedDelayMs
+    ) {
+      return
+    }
+
+    if (refreshFlushTimer) {
+      clearTimeout(refreshFlushTimer)
+    }
+
+    refreshFlushTimer = setTimeout(
+      flushRefreshNotifications,
+      requestedDelayMs
+    )
+    refreshFlushDelayMs = requestedDelayMs
+    refreshFlushTimer.unref?.()
+  }
+
+  const collectMarkdownFilesForCodeFencePrewarm = async (
+    paths: readonly string[]
+  ): Promise<string[]> => {
+    const markdownFiles = new Set<string>()
+    let shouldScanRoot = false
+
+    for (const path of paths) {
+      const normalizedPath = normalizeCodeFencePrewarmPath(path)
+      if (isMarkdownCodeFenceSourcePath(normalizedPath)) {
+        markdownFiles.add(normalizedPath)
+        continue
+      }
+
+      if (normalizedPath === rootDirectory || path === '.') {
+        shouldScanRoot = true
+      }
+    }
+
+    if (
+      shouldScanRoot &&
+      markdownFiles.size < CODE_FENCE_PREWARM_MAX_FILE_COUNT
+    ) {
+      const discoveredMarkdownFiles = await collectMarkdownFilesUnderDirectory(
+        rootDirectory,
+        CODE_FENCE_PREWARM_MAX_FILE_COUNT - markdownFiles.size
+      )
+      for (const markdownFilePath of discoveredMarkdownFiles) {
+        markdownFiles.add(markdownFilePath)
+      }
+    }
+
+    return Array.from(markdownFiles.values()).slice(
+      0,
+      CODE_FENCE_PREWARM_MAX_FILE_COUNT
+    )
+  }
+
+  const ensureHighlighter = async (
+    options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
+  ): Promise<Highlighter | null> => {
+    if (resolvedHighlighter) {
+      return resolvedHighlighter
+    }
+
+    if (currentHighlighter === null) {
+      currentHighlighter = createHighlighter({
+        theme: options.theme,
+        languages: options.languages,
+      })
+        .then((highlighter) => {
+          resolvedHighlighter = highlighter
+          flushDeferredCodeFencePrewarmPaths()
+          return highlighter
+        })
+        .catch((error) => {
+          currentHighlighter = null
+          resolvedHighlighter = null
+          throw error
+        })
+    }
+
+    try {
+      const highlighter = await currentHighlighter
+      resolvedHighlighter = highlighter
+      return highlighter
+    } catch (error) {
+      reportBestEffortError('project/server', error)
+      return null
+    }
+  }
+
+  const queueHighlighterInitialization = (
+    options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
+  ): void => {
+    if (
+      resolvedHighlighter ||
+      currentHighlighter ||
+      queuedHighlighterInitialization
+    ) {
+      return
+    }
+
+    queuedHighlighterInitialization = setTimeout(() => {
+      queuedHighlighterInitialization = undefined
+      void ensureHighlighter(options)
+    }, 0)
+    queuedHighlighterInitialization.unref?.()
+  }
+
+  const prewarmCodeFenceLanguages = async (
+    paths: readonly string[]
+  ): Promise<void> => {
+    if (!isDevelopmentEnvironment()) {
+      return
+    }
+
+    const markdownFilePaths = await collectMarkdownFilesForCodeFencePrewarm(paths)
+    if (markdownFilePaths.length === 0) {
+      return
+    }
+
+    if (!currentHighlighter) {
+      for (const path of markdownFilePaths) {
+        deferredCodeFencePrewarmPaths.add(path)
+      }
+      return
+    }
+
+    const highlighter = await currentHighlighter.catch(() => null)
+    if (!highlighter) {
+      return
+    }
+
+    const languages = await readMarkdownCodeFenceLanguages(markdownFilePaths)
+    if (languages.length === 0) {
+      return
+    }
+
+    const themeNames = latestCodeFencePrewarmThemeNames.length
+      ? latestCodeFencePrewarmThemeNames
+      : ['default']
+
+    await mapConcurrent(
+      languages.slice(0, CODE_FENCE_PREWARM_MAX_LANGUAGE_COUNT),
+      {
+        concurrency: CODE_FENCE_PREWARM_TOKENIZE_CONCURRENCY,
+      },
+      async (language) => {
+        try {
+          await highlighter.tokenize(' ', language as any, themeNames)
+        } catch {
+          // Ignore unsupported languages; warm only what this setup can load.
+        }
+      }
+    )
+  }
+
+  const flushCodeFenceLanguagePrewarm = () => {
+    codeFencePrewarmFlushTimer = undefined
+    codeFencePrewarmFlushDelayMs = undefined
+
+    const pendingQueue =
+      pendingCodeFencePrewarmPathsImmediate.size > 0
+        ? pendingCodeFencePrewarmPathsImmediate
+        : pendingCodeFencePrewarmPathsBackground
+    if (pendingQueue.size === 0) {
+      return
+    }
+
+    const paths = collapseInvalidationPaths(pendingQueue)
+    pendingQueue.clear()
+    if (paths.length === 0) {
+      return
+    }
+
+    codeFencePrewarmInFlight = codeFencePrewarmInFlight
+      .catch(() => {})
+      .then(() => prewarmCodeFenceLanguages(paths))
+      .catch((error) => {
+        reportBestEffortError('project/server', error)
+      })
+      .finally(() => {
+        if (
+          pendingCodeFencePrewarmPathsImmediate.size > 0 ||
+          pendingCodeFencePrewarmPathsBackground.size > 0
+        ) {
+          queueCodeFenceLanguagePrewarm([], {
+            priority:
+              pendingCodeFencePrewarmPathsImmediate.size > 0
+                ? 'immediate'
+                : 'background',
+          })
+        }
+      })
+  }
+
+  const queueCodeFenceLanguagePrewarm = (
+    filePaths: Iterable<string>,
+    options: {
+      priority?: RefreshNotificationPriority
+    } = {}
+  ) => {
+    if (!isDevelopmentEnvironment()) {
+      return
+    }
+
+    const priority = options.priority ?? 'background'
+    const immediateQueue = pendingCodeFencePrewarmPathsImmediate
+    const backgroundQueue = pendingCodeFencePrewarmPathsBackground
+
+    for (const filePath of filePaths) {
+      if (typeof filePath !== 'string' || filePath.length === 0) {
+        continue
+      }
+
+      const normalizedPath = normalizeCodeFencePrewarmPath(filePath)
+      if (shouldIgnoreRefreshPath(normalizedPath)) {
+        continue
+      }
+      const isRootScopePath = normalizedPath === rootDirectory || filePath === '.'
+      if (
+        !isRootScopePath &&
+        !isMarkdownCodeFenceSourcePath(normalizedPath)
+      ) {
+        continue
+      }
+
+      if (priority === 'immediate') {
+        immediateQueue.add(normalizedPath)
+        backgroundQueue.delete(normalizedPath)
+        continue
+      }
+
+      if (!immediateQueue.has(normalizedPath)) {
+        backgroundQueue.add(normalizedPath)
+      }
+    }
+
+    if (immediateQueue.size === 0 && backgroundQueue.size === 0) {
+      return
+    }
+
+    const requestedDelayMs =
+      CODE_FENCE_PREWARM_PRIORITY_DELAY_MS[priority] ?? 250
+    if (
+      codeFencePrewarmFlushTimer &&
+      codeFencePrewarmFlushDelayMs !== undefined &&
+      codeFencePrewarmFlushDelayMs <= requestedDelayMs
+    ) {
+      return
+    }
+
+    if (codeFencePrewarmFlushTimer) {
+      clearTimeout(codeFencePrewarmFlushTimer)
+    }
+
+    codeFencePrewarmFlushTimer = setTimeout(
+      flushCodeFenceLanguagePrewarm,
+      requestedDelayMs
+    )
+    codeFencePrewarmFlushDelayMs = requestedDelayMs
+    codeFencePrewarmFlushTimer.unref?.()
+  }
+
+  const flushDeferredCodeFencePrewarmPaths = () => {
+    if (!resolvedHighlighter) {
+      return
+    }
+
+    if (!hasQueuedInitialCodeFencePrewarm) {
+      hasQueuedInitialCodeFencePrewarm = true
+      queueCodeFenceLanguagePrewarm([rootDirectory], {
+        priority: 'immediate',
+      })
+    }
+    if (deferredCodeFencePrewarmPaths.size > 0) {
+      const deferredPaths = Array.from(deferredCodeFencePrewarmPaths)
+      deferredCodeFencePrewarmPaths.clear()
+      queueCodeFenceLanguagePrewarm(deferredPaths, {
+        priority: 'immediate',
+      })
+    }
+  }
+
+  const prewarmRuntimeAnalysisStartup = async (
+    paths: readonly string[]
+  ): Promise<void> => {
+    if (!isDevelopmentEnvironment()) {
+      return
+    }
+
+    await prewarmRuntimeAnalysisSession(rootDirectory)
+
+    const project = getProject()
+    await mapConcurrent(
+      STARTUP_RUNTIME_METADATA_WARMUP_SAMPLES,
+      {
+        concurrency: STARTUP_RUNTIME_PREWARM_METADATA_CONCURRENCY,
+      },
+      async (sample) => {
+        try {
+          await getCachedSourceTextMetadata(project, {
+            value: sample.value,
+            language: sample.language,
+            shouldFormat: sample.shouldFormat ?? false,
+            isFormattingExplicit: true,
+          })
+        } catch {
+          // Best-effort startup warmup only.
+        }
+      }
+    )
+
+    await ensureHighlighter({})
+
+    const markdownFiles = await collectMarkdownFilesForCodeFencePrewarm(paths)
+    const discoveredLanguages = await readMarkdownCodeFenceLanguages(markdownFiles)
+    const warmupLanguageSet = new Set<string>(
+      STARTUP_RUNTIME_PREWARM_FALLBACK_LANGUAGES
+    )
+
+    for (const language of discoveredLanguages) {
+      if (warmupLanguageSet.size >= STARTUP_RUNTIME_PREWARM_MAX_LANGUAGE_COUNT) {
+        break
+      }
+      warmupLanguageSet.add(language)
+    }
+
+    const warmupLanguages = Array.from(warmupLanguageSet).slice(
+      0,
+      STARTUP_RUNTIME_PREWARM_MAX_LANGUAGE_COUNT
+    )
+    if (warmupLanguages.length > 0) {
+      const highlighter = resolvedHighlighter
+      const themeNames = latestCodeFencePrewarmThemeNames.length
+        ? latestCodeFencePrewarmThemeNames
+        : ['default']
+
+      if (highlighter) {
+        await mapConcurrent(
+          warmupLanguages,
+          {
+            concurrency: STARTUP_RUNTIME_PREWARM_TOKENIZE_CONCURRENCY,
+          },
+          async (language) => {
+            try {
+              await highlighter.tokenize(
+                getStartupRuntimeWarmupSourceText(language),
+                language as any,
+                themeNames
+              )
+            } catch {
+              // Ignore unsupported languages during best-effort warmup.
+            }
+          }
+        )
+      }
+    }
+
+    queueCodeFenceLanguagePrewarm(paths, {
+      priority: 'immediate',
+    })
+  }
+
+  const queueStartupRuntimePrewarm = (paths: readonly string[]): void => {
+    if (!isDevelopmentEnvironment() || startupRuntimePrewarmQueued) {
+      return
+    }
+
+    startupRuntimePrewarmQueued = true
+    startupRuntimePrewarmTimer = setTimeout(() => {
+      startupRuntimePrewarmTimer = undefined
+
+      startupRuntimePrewarmInFlight = startupRuntimePrewarmInFlight
+        .catch(() => {})
+        .then(() => prewarmRuntimeAnalysisStartup(paths))
+        .catch((error) => {
+          reportBestEffortError('project/server', error)
+        })
+    }, 0)
+    startupRuntimePrewarmTimer.unref?.()
+  }
+
+  if (isDevelopmentEnvironment()) {
+    prewarmSourceTextFormatterRuntime()
+    queueHighlighterInitialization({})
+    queueCodeFenceLanguagePrewarm([rootDirectory], {
+      priority: 'immediate',
+    })
+    queueStartupRuntimePrewarm([rootDirectory])
+  }
+
+  const emitRefreshNotifications = shouldEmitRefreshNotifications(
+    options?.emitRefreshNotifications
+  )
+  const unsubscribeRuntimeAnalysisBackgroundRefresh =
+    onRuntimeAnalysisBackgroundRefresh((paths) => {
+      if (!emitRefreshNotifications) {
+        return
+      }
+
+      const refreshPaths = paths.filter((path) => !shouldIgnoreRefreshPath(path))
+      if (refreshPaths.length === 0) {
+        return
+      }
+
+      queueRefreshNotification(refreshPaths, 'runtime-analysis-background-refresh', {
+        priority: 'background',
+      })
+    })
   let rootWatcher: FSWatcher | undefined
   try {
-    rootWatcher = shouldEmitRefreshNotifications(
-      options?.emitRefreshNotifications
-    )
+    rootWatcher = emitRefreshNotifications
       ? watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
           if (!fileName) return
 
@@ -284,21 +983,21 @@ export async function createServer(options?: CreateServerOptions) {
 
           const filePath = join(rootDirectory, watchedFileName)
 
+          if (shouldIgnoreRefreshPath(filePath)) {
+            return
+          }
+
           if (isFilePathGitIgnored(filePath)) {
             return
           }
 
-          pendingRefreshPaths.add(filePath)
-          pendingRefreshEventTypes.add(eventType)
-          if (refreshFlushTimer) {
-            return
-          }
-
-          refreshFlushTimer = setTimeout(
-            flushRefreshNotifications,
-            REFRESH_NOTIFICATION_BATCH_WINDOW_MS
-          )
-          refreshFlushTimer.unref?.()
+          invalidateSharedFileTextPrefixCachePath(filePath)
+          queueCodeFenceLanguagePrewarm([filePath], {
+            priority: 'immediate',
+          })
+          queueRefreshNotification([filePath], eventType, {
+            priority: 'immediate',
+          })
         })
       : undefined
   } catch (error) {
@@ -323,7 +1022,24 @@ export async function createServer(options?: CreateServerOptions) {
     if (refreshFlushTimer) {
       clearTimeout(refreshFlushTimer)
       refreshFlushTimer = undefined
+      refreshFlushDelayMs = undefined
     }
+    if (codeFencePrewarmFlushTimer) {
+      clearTimeout(codeFencePrewarmFlushTimer)
+      codeFencePrewarmFlushTimer = undefined
+      codeFencePrewarmFlushDelayMs = undefined
+    }
+    if (startupRuntimePrewarmTimer) {
+      clearTimeout(startupRuntimePrewarmTimer)
+      startupRuntimePrewarmTimer = undefined
+    }
+    pendingCodeFencePrewarmPathsImmediate.clear()
+    pendingCodeFencePrewarmPathsBackground.clear()
+    deferredCodeFencePrewarmPaths.clear()
+    codeFencePrewarmInFlight = Promise.resolve()
+    startupRuntimePrewarmQueued = false
+    startupRuntimePrewarmInFlight = Promise.resolve()
+    unsubscribeRuntimeAnalysisBackgroundRefresh()
     activeProjectServers = Math.max(0, activeProjectServers - 1)
     if (activeProjectServers === 0) {
       disposeProjectWatchers()
@@ -401,6 +1117,30 @@ export async function createServer(options?: CreateServerOptions) {
   )
 
   server.registerMethod(
+    'getQuickInfoAtPosition',
+    async function getQuickInfoAtPositionRpc({
+      filePath,
+      position,
+      projectOptions,
+    }: {
+      filePath: string
+      position: number
+      projectOptions?: ProjectOptions
+    }) {
+      const project = getProject(projectOptions)
+      return getQuickInfoAtPosition({
+        project,
+        filePath,
+        position,
+      })
+    },
+    {
+      memoize: true,
+      concurrency: 24,
+    }
+  )
+
+  server.registerMethod(
     'getSourceTextMetadata',
     async function getSourceTextMetadata({
       projectOptions,
@@ -426,21 +1166,28 @@ export async function createServer(options?: CreateServerOptions) {
     }: GetTokensOptions & {
       projectOptions?: ProjectOptions
       languages?: ConfigurationOptions['languages']
+      waitForWarmResult?: boolean
     }) {
       const project = getProject(projectOptions)
+      latestCodeFencePrewarmThemeNames = getThemeNamesForCodeFencePrewarm(
+        options.theme
+      )
+      queueHighlighterInitialization({
+        theme: options.theme,
+        languages: options.languages,
+      })
 
-      if (currentHighlighter === null) {
-        currentHighlighter = createHighlighter({
-          theme: options.theme,
-          languages: options.languages,
-        })
-      }
-
-      const highlighter = await currentHighlighter
+      flushDeferredCodeFencePrewarmPaths()
 
       return getCachedTokens(project, {
         ...options,
-        highlighter,
+        highlighter: resolvedHighlighter,
+        highlighterLoader: async () => {
+          return ensureHighlighter({
+            theme: options.theme,
+            languages: options.languages,
+          })
+        },
       })
     },
     {
@@ -675,6 +1422,10 @@ export async function createServer(options?: CreateServerOptions) {
       })
       invalidateProjectFileCache(project, filePath)
       invalidateRuntimeAnalysisCachePath(filePath)
+      invalidateSharedFileTextPrefixCachePath(filePath)
+      queueCodeFenceLanguagePrewarm([filePath], {
+        priority: 'immediate',
+      })
     },
     {
       memoize: false,
@@ -721,6 +1472,19 @@ function shouldEmitRefreshNotifications(
   const override = resolveServerRefreshNotificationsEnvOverride()
   if (override !== undefined) {
     return override
+  }
+
+  // Runtime app mode writes generated artifacts aggressively under the runtime
+  // directory; refresh notifications from that tree can create invalidation
+  // storms while developing. Keep notifications opt-in there.
+  if (isDevelopmentEnvironment()) {
+    const normalizedCwd = process.cwd().replace(/\\/g, '/')
+    if (
+      normalizedCwd.includes('/.renoun/') ||
+      normalizedCwd.endsWith('/.renoun')
+    ) {
+      return false
+    }
   }
 
   return isDevelopmentEnvironment()

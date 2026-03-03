@@ -1,7 +1,6 @@
 import type { Collection, MDXFile } from 'renoun'
 
 import { TableOfContents } from '@/components/TableOfContents'
-import { getDocumentEntrySiblings } from './document-entry-siblings'
 import { SiblingLink } from './SiblingLink'
 
 export async function DocumentEntry({
@@ -23,7 +22,7 @@ export async function DocumentEntry({
   const contentPromise = file.getContent()
   const sectionsPromise = file.getSections()
   const metadataPromise = file.getExportValue('metadata')
-  const siblingsPromise = getDocumentEntrySiblings(file, collection)
+  const siblingsPromise = file.getSiblings({ collection })
   const updatedAtPromise = shouldRenderUpdatedAt
     ? file.getLastCommitDate()
     : Promise.resolve<Date | null>(null)

@@ -3,6 +3,12 @@ import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
 import { getSourceTextMetadata, getTokens } from '../../project/client.ts'
+import {
+  isProductionEnvironment,
+  isTestEnvironment,
+  isVitestRuntime,
+} from '../../utils/env.ts'
+import { hasSourceTextFormatterParser } from '../../utils/format-source-text.ts'
 import type { Languages } from '../../utils/get-language.ts'
 import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.ts'
 import type {
@@ -29,12 +35,45 @@ import { getConfig } from '../Config/ServerConfigContext.tsx'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
-import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
+import {
+  getServerRuntimeFromProcessEnv,
+  type ProjectServerRuntime,
+} from '../../project/runtime-env.ts'
+import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
 import { QuickInfoProvider } from './QuickInfoProvider.tsx'
 import { Context } from './Context.tsx'
 import { Symbol } from './Symbol.tsx'
 
 type ThemeColors = Awaited<ReturnType<typeof getThemeColors>>
+
+const SOURCE_METADATA_REQUIRED_INLINE_LANGUAGES = new Set([
+  'javascript',
+  'js',
+  'jsx',
+  'typescript',
+  'ts',
+  'tsx',
+  'mjs',
+  'cjs',
+  'mts',
+  'cts',
+  'mdx',
+])
+
+const DEVELOPMENT_FALLBACK_SOURCE_MAX_ENTRIES = 128
+const DEVELOPMENT_FALLBACK_SOURCE_MAX_TOTAL_CHARS = 2_000_000
+const DEVELOPMENT_FALLBACK_SOURCE_MAX_ENTRY_CHARS = 200_000
+
+interface DevelopmentFallbackSourceEntry {
+  value: string
+  chars: number
+}
+
+const developmentFallbackSourceByPath = new Map<
+  string,
+  DevelopmentFallbackSourceEntry
+>()
+let developmentFallbackSourceTotalChars = 0
 
 export type AnnotationRenderer = React.ComponentType<
   Record<string, any> & { children?: React.ReactNode }
@@ -107,7 +146,136 @@ export interface TokensProps {
 }
 
 /** Renders syntax highlighted tokens for the `CodeBlock` component. */
-export async function Tokens({
+export function Tokens(props: TokensProps) {
+  if (
+    isProductionEnvironment() ||
+    isTestEnvironment() ||
+    isVitestRuntime()
+  ) {
+    return TokensAsync(props)
+  }
+
+  return (
+    <Suspense fallback={<TokensFallback {...props} />}>
+      <TokensAsync {...props} />
+    </Suspense>
+  )
+}
+
+function TokensFallback({
+  children,
+  path,
+  baseDirectory,
+  renderLine,
+  className = {},
+  style = {},
+  annotations,
+}: TokensProps) {
+  const sourceText = resolveFallbackSourceText({
+    children,
+    path,
+    baseDirectory,
+  })
+  const value = stripFallbackAnnotationMarkers(sourceText, annotations)
+  const tokenClassName = className.token
+  const tokenStyle = style.token
+
+  if (!renderLine) {
+    if (tokenClassName || tokenStyle) {
+      return (
+        <QuickInfoProvider>
+          <span className={tokenClassName} style={tokenStyle}>
+            {value}
+          </span>
+        </QuickInfoProvider>
+      )
+    }
+
+    return <QuickInfoProvider>{value}</QuickInfoProvider>
+  }
+
+  const lines = value.split('\n')
+  const lastLineIndex = lines.length - 1
+
+  return (
+    <QuickInfoProvider>
+      {lines.map((line, index) => {
+        const isLast = index === lastLineIndex
+        const lineNode = tokenClassName || tokenStyle ? (
+          <span className={tokenClassName} style={tokenStyle}>
+            {line}
+          </span>
+        ) : (
+          line
+        )
+        const renderedLine = renderLine({
+          children: lineNode,
+          index,
+          isLast,
+        })
+
+        if (renderedLine) {
+          return renderedLine
+        }
+
+        return (
+          <Fragment key={index}>
+            {lineNode}
+            {isLast ? null : '\n'}
+          </Fragment>
+        )
+      })}
+    </QuickInfoProvider>
+  )
+}
+
+function resolveFallbackSourceText(options: {
+  children: TokensProps['children']
+  path: TokensProps['path']
+  baseDirectory: TokensProps['baseDirectory']
+}): string {
+  if (typeof options.children === 'string') {
+    return options.children
+  }
+
+  if (options.path !== undefined && options.path !== null) {
+    const cacheKey = getDevelopmentFallbackSourceCacheKey(
+      options.path,
+      options.baseDirectory
+    )
+    if (cacheKey) {
+      const cachedSource = getDevelopmentFallbackSource(cacheKey)
+      if (cachedSource !== undefined) {
+        return cachedSource
+      }
+    }
+
+    return `// Loading ${pathLikeToString(options.path)}...`
+  }
+
+  return '// Loading code...'
+}
+
+function stripFallbackAnnotationMarkers(
+  value: string,
+  annotations: TokensProps['annotations']
+): string {
+  if (!annotations) {
+    return value
+  }
+
+  const annotationTags = Object.keys(annotations)
+  if (
+    annotationTags.length === 0 ||
+    !hasAnnotationCandidates(value, annotationTags)
+  ) {
+    return value
+  }
+
+  return parseAnnotations(value, annotationTags).value
+}
+
+async function TokensAsync({
   children,
   language: languageProp,
   allowErrors: allowErrorsProp,
@@ -124,203 +292,340 @@ export async function Tokens({
   annotations,
 }: TokensProps) {
   const context = getContext(Context)
-  const config = await getConfig()
-  const theme = await getThemeColors(config.theme)
-  const language = languageProp || context?.language
-  const themeConfiguration = themeProp ?? config.theme
-  const baseTokenClassName = hasMultipleThemes(themeConfiguration)
-    ? BASE_TOKEN_CLASS_NAME
-    : undefined
-  let value
-
-  if (children !== undefined && children !== null) {
-    if (typeof children === 'string') {
-      value = children
-    } else {
-      value = await children
+  let didSettleContext = false
+  const resolveContext = (resolved: Required<SourceTextMetadata>) => {
+    if (!context || didSettleContext) {
+      return
     }
-  }
 
-  if (value === undefined) {
-    if (path !== undefined && path !== null) {
-      value = await readCodeFromPath(path, baseDirectory)
-    } else {
-      throw new Error(
-        '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `baseDirectory` props.'
-      )
+    context.resolved = resolved
+    didSettleContext = true
+    context.resolvers.resolve()
+  }
+  const rejectContext = (error: unknown) => {
+    if (!context || didSettleContext) {
+      return
     }
-  }
 
-  let annotationParseResult: AnnotationParseResult | null = null
-  let annotationInstructions: AnnotationInstructions | null = null
-  let processedValue = value
-
-  if (annotations) {
-    const annotationTags = Object.keys(annotations)
-    if (
-      annotationTags.length > 0 &&
-      hasAnnotationCandidates(value, annotationTags)
-    ) {
-      annotationParseResult = parseAnnotations(value, annotationTags)
-      processedValue = annotationParseResult.value
-      annotationInstructions = {
-        block: annotationParseResult.block,
-        inline: annotationParseResult.inline,
-      }
-    }
-  }
-
-  const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
-  const shouldFormat = shouldFormatProp ?? context?.shouldFormat ?? true
-  const isFormattingExplicit =
-    shouldFormatProp !== undefined || context?.shouldFormat !== undefined
-  const metadata: SourceTextMetadata = {} as SourceTextMetadata
-
-  if (shouldAnalyze) {
-    const result = await getSourceTextMetadata({
-      filePath: path ? pathLikeToString(path) : undefined,
-      baseDirectory: baseDirectory
-        ? pathLikeToString(baseDirectory)
-        : undefined,
-      value: processedValue,
-      language,
-      shouldFormat,
-      isFormattingExplicit,
-    })
-    metadata.value = result.value
-    metadata.language = result.language
-    metadata.filePath = result.filePath
-    metadata.label = result.label
-  } else {
-    metadata.value = processedValue
-    metadata.language = language
-    metadata.label = context?.label
-  }
-
-  if (annotationInstructions && annotationParseResult) {
-    annotationInstructions = remapAnnotationInstructions(
-      annotationInstructions,
-      annotationParseResult.value,
-      metadata.value
+    didSettleContext = true
+    context.resolvers.reject(
+      error instanceof Error
+        ? error
+        : new Error('[renoun] Failed to resolve code block context.')
     )
   }
+  const resolvedPath =
+    path !== undefined && path !== null ? pathLikeToString(path) : undefined
+  const resolvedBaseDirectory =
+    baseDirectory !== undefined ? pathLikeToString(baseDirectory) : undefined
+  try {
+    const config = await getConfig()
+    const theme = await getThemeColors(config.theme)
+    const language = languageProp || context?.language
+    const themeConfiguration = themeProp ?? config.theme
+    const baseTokenClassName = hasMultipleThemes(themeConfiguration)
+      ? BASE_TOKEN_CLASS_NAME
+      : undefined
+    let value
 
-  // Now we can resolve the context values for other components like `LineNumbers`, `CopyButton`, etc.
-  if (context) {
-    context.resolved = {
+    if (children !== undefined && children !== null) {
+      if (typeof children === 'string') {
+        value = children
+      } else {
+        value = await children
+      }
+    }
+
+    if (value === undefined) {
+      if (path !== undefined && path !== null) {
+        value = await readCodeFromPath(path, baseDirectory)
+      } else {
+        throw new Error(
+          '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `baseDirectory` props.'
+        )
+      }
+    }
+
+    let annotationParseResult: AnnotationParseResult | null = null
+    let annotationInstructions: AnnotationInstructions | null = null
+    let processedValue = value
+
+    if (annotations) {
+      const annotationTags = Object.keys(annotations)
+      if (
+        annotationTags.length > 0 &&
+        hasAnnotationCandidates(value, annotationTags)
+      ) {
+        annotationParseResult = parseAnnotations(value, annotationTags)
+        processedValue = annotationParseResult.value
+        annotationInstructions = {
+          block: annotationParseResult.block,
+          inline: annotationParseResult.inline,
+        }
+      }
+    }
+
+    const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
+    const shouldFormat = shouldFormatProp ?? context?.shouldFormat ?? true
+    const hasExplicitFormattingPreference = shouldFormatProp !== undefined
+    const isFormattingExplicit =
+      shouldFormatProp !== undefined || context?.shouldFormat !== undefined
+    const metadata: SourceTextMetadata = {} as SourceTextMetadata
+    const supportsSourceFormattingInCurrentContext =
+      typeof language === 'string'
+        ? hasSourceTextFormatterParser(
+            resolvedPath ?? `inline.${language}`,
+            language
+          )
+        : false
+    const shouldUseInlineSourceMetadataFastPath =
+      !isProductionEnvironment() && !isTestEnvironment()
+    const shouldSkipInlineSourceMetadata =
+      resolvedPath === undefined &&
+      typeof language === 'string' &&
+      !SOURCE_METADATA_REQUIRED_INLINE_LANGUAGES.has(language.toLowerCase()) &&
+      (!supportsSourceFormattingInCurrentContext ||
+        (shouldUseInlineSourceMetadataFastPath &&
+          hasExplicitFormattingPreference === false))
+
+    if (shouldAnalyze && !shouldSkipInlineSourceMetadata) {
+      const result = await getSourceTextMetadata({
+        filePath: resolvedPath,
+        baseDirectory: resolvedBaseDirectory,
+        value: processedValue,
+        language,
+        shouldFormat,
+        isFormattingExplicit,
+      })
+      metadata.value = result.value
+      metadata.language = result.language
+      metadata.filePath = result.filePath
+      metadata.label = result.label
+    } else {
+      metadata.value = processedValue
+      metadata.language = language
+      metadata.label = context?.label
+    }
+
+    if (annotationInstructions && annotationParseResult) {
+      annotationInstructions = remapAnnotationInstructions(
+        annotationInstructions,
+        annotationParseResult.value,
+        metadata.value
+      )
+    }
+
+    if (!isProductionEnvironment() && !isTestEnvironment() && resolvedPath) {
+      const cacheKey = getDevelopmentFallbackSourceCacheKey(
+        resolvedPath,
+        resolvedBaseDirectory
+      )
+
+      if (cacheKey) {
+        setDevelopmentFallbackSource(cacheKey, metadata.value)
+      }
+    }
+
+    resolveContext({
       value: metadata.value,
       language: metadata.language!,
       filePath: metadata.filePath!,
       label: metadata.label!,
-    }
-    context.resolvers.resolve()
-  }
+    })
 
-  const showErrors =
-    showErrorsProp === undefined ? context?.showErrors : showErrorsProp
-  const allowErrors =
-    allowErrorsProp === undefined
-      ? context?.allowErrors === undefined
-        ? showErrors
-          ? true
-          : undefined
-        : context.allowErrors
-      : allowErrorsProp
+    const showErrors =
+      showErrorsProp === undefined ? context?.showErrors : showErrorsProp
+    const allowErrors =
+      allowErrorsProp === undefined
+        ? context?.allowErrors === undefined
+          ? showErrors
+            ? true
+            : undefined
+          : context.allowErrors
+        : allowErrorsProp
 
-  const tokens = await getTokens({
-    value: metadata.value,
-    language: metadata.language,
-    filePath: metadata.filePath,
-    allowErrors,
-    showErrors,
-    theme: themeConfiguration,
-    languages: config.languages,
-  })
-  const lastLineIndex = tokens.length - 1
-  const hasAnnotations =
-    annotationInstructions !== null &&
-    (annotationInstructions.block.length > 0 ||
-      annotationInstructions.inline.length > 0)
+    const tokens = await getTokens({
+      value: metadata.value,
+      language: metadata.language,
+      filePath: metadata.filePath,
+      allowErrors,
+      showErrors,
+      theme: themeConfiguration,
+      languages: config.languages,
+      // During development we render a suspense fallback immediately and wait
+      // for highlighted tokens so the final stream updates this block.
+      waitForWarmResult: !isProductionEnvironment() && !isTestEnvironment(),
+    })
+    const quickInfoRuntime = getServerRuntimeFromProcessEnv()
+    const quickInfoProjectVersion = quickInfoRuntime?.id
+    const lastLineIndex = tokens.length - 1
+    const hasAnnotations =
+      annotationInstructions !== null &&
+      (annotationInstructions.block.length > 0 ||
+        annotationInstructions.inline.length > 0)
 
-  if (!hasAnnotations) {
-    return (
-      <QuickInfoProvider>
-        {tokens.map((line, lineIndex) => {
-          const lineChildren = line.map((token, tokenIndex) =>
-            renderToken({
-              token,
-              tokenIndex,
+    if (!hasAnnotations) {
+      return (
+        <QuickInfoProvider>
+          {tokens.map((line, lineIndex) => {
+            const lineChildren = line.map((token, tokenIndex) =>
+              renderToken({
+                token,
+                tokenIndex,
+                lineIndex,
+                baseTokenClassName,
+                filePath: metadata.filePath,
+                quickInfoRuntime,
+                quickInfoProjectVersion,
+                quickInfoThemeConfig: themeConfiguration,
+                theme,
+                css,
+                className,
+                style,
+              })
+            )
+            const diagnostics = getUniqueDiagnostics(line)
+            const diagnosticNodes = renderDiagnostics({
+              diagnostics,
               lineIndex,
               baseTokenClassName,
               theme,
-              css,
               className,
               style,
             })
-          )
-          const diagnostics = getUniqueDiagnostics(line)
-          const diagnosticNodes = renderDiagnostics({
-            diagnostics,
-            lineIndex,
-            baseTokenClassName,
-            theme,
-            className,
-            style,
-          })
-          const lineChildrenWithDiagnostics = diagnosticNodes.length
-            ? lineChildren.concat(diagnosticNodes)
-            : lineChildren
-          const isLastLine = lineIndex === lastLineIndex
-          // If diagnostics are rendered with display: block, avoid adding the
-          // trailing newline after the line; the block element will naturally
-          // place subsequent content on the next line, and adding a newline
-          // would introduce extra vertical space below the diagnostic.
-          const hasDiagnostics = diagnosticNodes.length > 0
-          const explicitDiagnosticDisplay =
-            css?.error?.display ?? style?.error?.display
-          const diagnosticsAreBlock = explicitDiagnosticDisplay
-            ? explicitDiagnosticDisplay !== 'inline' &&
-              explicitDiagnosticDisplay !== 'inline-block'
-            : true
-          const shouldAppendLineBreak =
-            !isLastLine && !(hasDiagnostics && diagnosticsAreBlock)
-          const renderedLine = renderLine
-            ? renderLine({
-                children: lineChildrenWithDiagnostics,
-                index: lineIndex,
-                isLast: isLastLine,
-              })
-            : lineChildrenWithDiagnostics
+            const lineChildrenWithDiagnostics = diagnosticNodes.length
+              ? lineChildren.concat(diagnosticNodes)
+              : lineChildren
+            const isLastLine = lineIndex === lastLineIndex
+            // If diagnostics are rendered with display: block, avoid adding the
+            // trailing newline after the line; the block element will naturally
+            // place subsequent content on the next line, and adding a newline
+            // would introduce extra vertical space below the diagnostic.
+            const hasDiagnostics = diagnosticNodes.length > 0
+            const explicitDiagnosticDisplay =
+              css?.error?.display ?? style?.error?.display
+            const diagnosticsAreBlock = explicitDiagnosticDisplay
+              ? explicitDiagnosticDisplay !== 'inline' &&
+                explicitDiagnosticDisplay !== 'inline-block'
+              : true
+            const shouldAppendLineBreak =
+              !isLastLine && !(hasDiagnostics && diagnosticsAreBlock)
+            const renderedLine = renderLine
+              ? renderLine({
+                  children: lineChildrenWithDiagnostics,
+                  index: lineIndex,
+                  isLast: isLastLine,
+                })
+              : lineChildrenWithDiagnostics
 
-          if (renderLine && renderedLine) {
-            return renderedLine
-          }
+            if (renderLine && renderedLine) {
+              return renderedLine
+            }
 
-          return (
-            <Fragment key={lineIndex}>
-              {lineChildrenWithDiagnostics}
-              {shouldAppendLineBreak ? '\n' : null}
-            </Fragment>
-          )
-        })}
-      </QuickInfoProvider>
-    )
+            return (
+              <Fragment key={lineIndex}>
+                {lineChildrenWithDiagnostics}
+                {shouldAppendLineBreak ? '\n' : null}
+              </Fragment>
+            )
+          })}
+        </QuickInfoProvider>
+      )
+    }
+
+    const annotatedNodes = renderWithAnnotations({
+      annotations: annotations!,
+      block: annotationInstructions!.block,
+      inline: annotationInstructions!.inline,
+      tokens,
+      value: metadata.value,
+      baseTokenClassName,
+      filePath: metadata.filePath,
+      quickInfoRuntime,
+      quickInfoProjectVersion,
+      quickInfoThemeConfig: themeConfiguration,
+      theme,
+      css,
+      className,
+      style,
+    })
+
+    return <QuickInfoProvider>{annotatedNodes}</QuickInfoProvider>
+  } catch (error) {
+    rejectContext(error)
+    throw error
+  }
+}
+
+function getDevelopmentFallbackSourceCacheKey(
+  path: PathLike | null | undefined,
+  baseDirectory: PathLike | undefined
+): string | undefined {
+  if (path === undefined || path === null) {
+    return undefined
   }
 
-  const annotatedNodes = renderWithAnnotations({
-    annotations: annotations!,
-    block: annotationInstructions!.block,
-    inline: annotationInstructions!.inline,
-    tokens,
-    value: metadata.value,
-    baseTokenClassName,
-    theme,
-    css,
-    className,
-    style,
-  })
+  const pathKey = pathLikeToString(path)
+  const baseDirectoryKey =
+    baseDirectory === undefined ? '' : pathLikeToString(baseDirectory)
 
-  return <QuickInfoProvider>{annotatedNodes}</QuickInfoProvider>
+  return `${baseDirectoryKey}::${pathKey}`
+}
+
+function getDevelopmentFallbackSource(cacheKey: string): string | undefined {
+  const existing = developmentFallbackSourceByPath.get(cacheKey)
+  if (!existing) {
+    return undefined
+  }
+
+  developmentFallbackSourceByPath.delete(cacheKey)
+  developmentFallbackSourceByPath.set(cacheKey, existing)
+  return existing.value
+}
+
+function setDevelopmentFallbackSource(cacheKey: string, value: string): void {
+  if (typeof value !== 'string') {
+    return
+  }
+
+  const chars = value.length
+  if (chars === 0 || chars > DEVELOPMENT_FALLBACK_SOURCE_MAX_ENTRY_CHARS) {
+    return
+  }
+
+  const existing = developmentFallbackSourceByPath.get(cacheKey)
+  if (existing) {
+    developmentFallbackSourceTotalChars = Math.max(
+      0,
+      developmentFallbackSourceTotalChars - existing.chars
+    )
+    developmentFallbackSourceByPath.delete(cacheKey)
+  }
+
+  const nextEntry: DevelopmentFallbackSourceEntry = { value, chars }
+  developmentFallbackSourceByPath.set(cacheKey, nextEntry)
+  developmentFallbackSourceTotalChars += chars
+
+  while (
+    developmentFallbackSourceByPath.size >
+      DEVELOPMENT_FALLBACK_SOURCE_MAX_ENTRIES ||
+    developmentFallbackSourceTotalChars >
+      DEVELOPMENT_FALLBACK_SOURCE_MAX_TOTAL_CHARS
+  ) {
+    const oldestKey = developmentFallbackSourceByPath.keys().next().value
+    if (typeof oldestKey !== 'string') {
+      break
+    }
+
+    const oldestEntry = developmentFallbackSourceByPath.get(oldestKey)
+    developmentFallbackSourceByPath.delete(oldestKey)
+    if (oldestEntry) {
+      developmentFallbackSourceTotalChars = Math.max(
+        0,
+        developmentFallbackSourceTotalChars - oldestEntry.chars
+      )
+    }
+  }
 }
 
 interface RenderTokenOptions {
@@ -328,6 +633,10 @@ interface RenderTokenOptions {
   tokenIndex: number
   lineIndex: number
   baseTokenClassName?: string
+  filePath?: string
+  quickInfoRuntime?: ProjectServerRuntime
+  quickInfoProjectVersion?: string
+  quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
   css?: TokensProps['css']
   className?: TokensProps['className']
@@ -351,6 +660,10 @@ interface RenderWithAnnotationsOptions {
   tokens: TokenizedLines
   value: string
   baseTokenClassName?: string
+  filePath?: string
+  quickInfoRuntime?: ProjectServerRuntime
+  quickInfoProjectVersion?: string
+  quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
   css?: TokensProps['css']
   className?: TokensProps['className']
@@ -362,13 +675,22 @@ function renderToken({
   tokenIndex,
   lineIndex,
   baseTokenClassName,
+  filePath,
+  quickInfoRuntime,
+  quickInfoProjectVersion,
+  quickInfoThemeConfig,
   theme,
   css: cssProp,
   className,
   style,
 }: RenderTokenOptions): React.ReactNode {
   const hasDiagnostics = Boolean(token.diagnostics?.length)
-  const hasQuickInfo = Boolean(token.quickInfo)
+  const canRequestQuickInfo =
+    token.isSymbol &&
+    typeof filePath === 'string' &&
+    filePath.length > 0 &&
+    quickInfoRuntime !== undefined
+  const hasQuickInfo = Boolean(token.quickInfo) || canRequestQuickInfo
 
   if (
     token.isWhiteSpace ||
@@ -408,22 +730,31 @@ function renderToken({
         key={`${lineIndex}-${tokenIndex}`}
         highlightColor={theme.editor.hoverHighlightBackground}
         popover={
-          <Suspense
-            fallback={
-              <QuickInfoLoading
-                css={cssProp?.popover}
-                className={className?.popover}
-                style={style?.popover}
-              />
+          <QuickInfoClientPopover
+            diagnostics={token.diagnostics}
+            quickInfo={token.quickInfo}
+            request={
+              canRequestQuickInfo
+                ? {
+                    filePath: filePath!,
+                    position: token.start,
+                    projectVersion: quickInfoProjectVersion,
+                    runtime: quickInfoRuntime!,
+                    themeConfig: quickInfoThemeConfig,
+                  }
+                : undefined
             }
-          >
-            <QuickInfo
-              quickInfo={token.quickInfo}
-              css={cssProp?.popover}
-              className={className?.popover}
-              style={style?.popover}
-            />
-          </Suspense>
+            theme={{
+              border: theme.editorHoverWidget.border,
+              background: theme.editorHoverWidget.background,
+              foreground: theme.editorHoverWidget.foreground,
+              panelBorder: theme.panel.border,
+              errorForeground: theme.editorError.foreground,
+            }}
+            css={cssProp?.popover}
+            className={className?.popover}
+            style={style?.popover}
+          />
         }
         className={tokenClassName}
         style={style?.token}
@@ -529,6 +860,10 @@ function renderWithAnnotations({
   tokens,
   value,
   baseTokenClassName,
+  filePath,
+  quickInfoRuntime,
+  quickInfoProjectVersion,
+  quickInfoThemeConfig,
   theme,
   css,
   className,
@@ -710,6 +1045,10 @@ function renderWithAnnotations({
           tokenIndex,
           lineIndex,
           baseTokenClassName,
+          filePath,
+          quickInfoRuntime,
+          quickInfoProjectVersion,
+          quickInfoThemeConfig,
           theme,
           css,
           className,

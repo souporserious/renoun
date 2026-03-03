@@ -36,8 +36,6 @@ export function useQuickInfoContext() {
   return context
 }
 
-let closeTimeoutId: ReturnType<typeof setTimeout> | null = null
-
 /**
  * Provider for managing quick info popovers.
  * @internal
@@ -53,14 +51,15 @@ export function QuickInfoProvider({
 }) {
   const [quickInfo, setQuickInfo] = useState<QuickInfo>(null)
   const openTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closeTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearTimeouts = () => {
     if (openTimeoutId.current) {
       clearTimeout(openTimeoutId.current)
       openTimeoutId.current = null
     }
-    if (closeTimeoutId) {
-      clearTimeout(closeTimeoutId)
-      closeTimeoutId = null
+    if (closeTimeoutId.current) {
+      clearTimeout(closeTimeoutId.current)
+      closeTimeoutId.current = null
     }
   }
   const value = useMemo(
@@ -68,45 +67,57 @@ export function QuickInfoProvider({
       clearTimeouts,
       quickInfo,
       setQuickInfo: (info: QuickInfo) => {
+        if (openTimeoutId.current) {
+          clearTimeout(openTimeoutId.current)
+          openTimeoutId.current = null
+        }
+        if (closeTimeoutId.current) {
+          clearTimeout(closeTimeoutId.current)
+          closeTimeoutId.current = null
+        }
+
         if (quickInfo === null) {
           openTimeoutId.current = setTimeout(() => {
             setQuickInfo(info)
             openTimeoutId.current = null
           }, openDelay)
         } else {
-          if (closeTimeoutId) {
-            clearTimeout(closeTimeoutId)
-          }
           setQuickInfo(info)
         }
       },
       resetQuickInfo: (immediate?: boolean) => {
         if (openTimeoutId.current) {
           clearTimeout(openTimeoutId.current)
+          openTimeoutId.current = null
         } else if (immediate) {
+          if (closeTimeoutId.current) {
+            clearTimeout(closeTimeoutId.current)
+            closeTimeoutId.current = null
+          }
           setQuickInfo(null)
         } else {
-          if (closeTimeoutId) {
-            clearTimeout(closeTimeoutId)
+          if (closeTimeoutId.current) {
+            clearTimeout(closeTimeoutId.current)
           }
-          closeTimeoutId = setTimeout(() => {
+          closeTimeoutId.current = setTimeout(() => {
             setQuickInfo(null)
-            closeTimeoutId = null
+            closeTimeoutId.current = null
           }, closeDelay)
         }
       },
     }),
-    [quickInfo]
+    [closeDelay, openDelay, quickInfo]
   )
 
   useEffect(() => {
-    const openId = openTimeoutId.current
     return () => {
-      if (openId) {
-        clearTimeout(openId)
+      if (openTimeoutId.current) {
+        clearTimeout(openTimeoutId.current)
+        openTimeoutId.current = null
       }
-      if (closeTimeoutId) {
-        clearTimeout(closeTimeoutId)
+      if (closeTimeoutId.current) {
+        clearTimeout(closeTimeoutId.current)
+        closeTimeoutId.current = null
       }
     }
   }, [])
