@@ -245,7 +245,7 @@ export class WorkspaceChangeLookupCache {
     )
     const now = Date.now()
     const ttlMs = this.#getWorkspaceChangedPathsTtlMs()
-    this.#cleanupWorkspaceChangedPathsCache(now, ttlMs)
+    this.#cleanupWorkspaceChangedPathsCache(now, ttlMs, cacheKey)
     const cached = this.#workspaceChangedPathsByToken.get(cacheKey)
 
     if (ttlMs > 0 && cached && cached.expiresAt > now) {
@@ -286,7 +286,11 @@ export class WorkspaceChangeLookupCache {
     })
   }
 
-  #cleanupWorkspaceChangedPathsCache(now: number, ttlMs: number): void {
+  #cleanupWorkspaceChangedPathsCache(
+    now: number,
+    ttlMs: number,
+    preserveCacheKey?: string
+  ): void {
     if (this.#workspaceChangedPathsByToken.size === 0) {
       return
     }
@@ -310,13 +314,16 @@ export class WorkspaceChangeLookupCache {
 
     this.#lastWorkspaceChangedPathsCleanupAt = now
 
-    for (const [cacheKey, cached] of this.#workspaceChangedPathsByToken) {
+    for (const [entryCacheKey, cached] of this.#workspaceChangedPathsByToken) {
       if (cached.promise) {
         continue
       }
 
-      if (cached.expiresAt <= now && !this.#serveStaleWhileRevalidate) {
-        this.#workspaceChangedPathsByToken.delete(cacheKey)
+      if (
+        cached.expiresAt <= now &&
+        (preserveCacheKey === undefined || entryCacheKey !== preserveCacheKey)
+      ) {
+        this.#workspaceChangedPathsByToken.delete(entryCacheKey)
       }
     }
 

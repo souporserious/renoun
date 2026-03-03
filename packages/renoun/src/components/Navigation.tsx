@@ -68,6 +68,11 @@ const devNavigationSessionUnsubscribeBySession = new WeakMap<
   object,
   () => void
 >()
+const devNavigationCollectionTrackingTaskBySource = new WeakMap<
+  Collection<any>,
+  Promise<void>
+>()
+const devNavigationTrackedCollectionSources = new WeakSet<Collection<any>>()
 let devNavigationInvalidationEpoch = 0
 
 function getNavigationEntriesCacheBucket(
@@ -83,18 +88,9 @@ function getNavigationEntriesCacheBucket(
   return created
 }
 
-function trackNavigationSourceInvalidations(
-  source: Directory<any> | Collection<any>
+function trackNavigationSessionInvalidations(
+  session: SessionLikeWithInvalidation | undefined
 ): void {
-  if (!isDevelopmentEnvironment()) {
-    return
-  }
-
-  if (!isDirectory(source)) {
-    return
-  }
-
-  const session = source.getSession() as SessionLikeWithInvalidation
   if (!session || typeof session !== 'object') {
     return
   }
@@ -111,6 +107,67 @@ function trackNavigationSourceInvalidations(
   if (typeof unsubscribe === 'function') {
     devNavigationSessionUnsubscribeBySession.set(sessionKey, unsubscribe)
   }
+}
+
+function trackNavigationEntriesInvalidations(
+  entries: readonly FileSystemEntry<any>[]
+): void {
+  for (const entry of entries) {
+    const session = isDirectory(entry)
+      ? (entry.getSession() as SessionLikeWithInvalidation)
+      : (entry.getParent().getSession() as SessionLikeWithInvalidation)
+    trackNavigationSessionInvalidations(session)
+  }
+}
+
+function trackNavigationSourceInvalidations(
+  source: Directory<any> | Collection<any>
+): void {
+  if (!isDevelopmentEnvironment()) {
+    return
+  }
+
+  if (isDirectory(source)) {
+    trackNavigationSessionInvalidations(
+      source.getSession() as SessionLikeWithInvalidation
+    )
+    return
+  }
+
+  if (devNavigationTrackedCollectionSources.has(source)) {
+    return
+  }
+
+  const existingTask = devNavigationCollectionTrackingTaskBySource.get(source)
+  if (existingTask) {
+    return
+  }
+
+  const trackTask = source
+    .getEntries({ includeIndexAndReadmeFiles: true })
+    .then((entries) => {
+      trackNavigationEntriesInvalidations(entries)
+      devNavigationTrackedCollectionSources.add(source)
+    })
+    .catch((error) => {
+      reportBestEffortError('components/navigation', error)
+    })
+    .finally(() => {
+      devNavigationCollectionTrackingTaskBySource.delete(source)
+    })
+
+  devNavigationCollectionTrackingTaskBySource.set(source, trackTask)
+}
+
+async function readNavigationEntriesWithTracking(
+  source: Directory<any> | Collection<any>,
+  readEntries: () => Promise<readonly FileSystemEntry<any>[]>
+): Promise<readonly FileSystemEntry<any>[]> {
+  const entries = await readEntries()
+  if (isDevelopmentEnvironment() && !isDirectory(source)) {
+    trackNavigationEntriesInvalidations(entries)
+  }
+  return entries
 }
 
 async function getNavigationEntriesWithDevSWR({
@@ -142,7 +199,10 @@ async function getNavigationEntriesWithDevSWR({
     }
 
     if (!cacheEntry.refreshTask) {
-      cacheEntry.refreshTask = readEntries()
+      cacheEntry.refreshTask = readNavigationEntriesWithTracking(
+        source,
+        readEntries
+      )
         .then((nextEntries) => {
           cacheEntry.value = nextEntries
           cacheEntry.updatedAt = Date.now()
@@ -171,7 +231,7 @@ async function getNavigationEntriesWithDevSWR({
     updatedAt: 0,
     invalidationEpoch: devNavigationInvalidationEpoch,
   }
-  const refreshTask = readEntries()
+  const refreshTask = readNavigationEntriesWithTracking(source, readEntries)
   createdEntry.refreshTask = refreshTask
   cacheBucket.set(cacheKey, createdEntry)
 
