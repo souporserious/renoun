@@ -1817,12 +1817,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         })
         if (!warnedAboutSqliteFallback) {
           warnedAboutSqliteFallback = true
-          // eslint-disable-next-line no-console
-          console.error(
-            '[renoun-debug] failed to initialize sqlite cache',
-            this.#dbPath,
-            error instanceof Error ? error.message : String(error)
-          )
+          if (this.#debugCachePersistence) {
+            // eslint-disable-next-line no-console
+            console.error(
+              '[renoun-debug] failed to initialize sqlite cache',
+              this.#dbPath,
+              error instanceof Error ? error.message : String(error)
+            )
+          }
           console.warn(
             `[renoun] SQLite persistence is unavailable; renoun will continue with in-memory FileSystem cache only (persistent cache reuse and cross-worker cache coordination are disabled): ${
               error instanceof Error ? error.message : String(error)

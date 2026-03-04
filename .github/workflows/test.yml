@@ -76,7 +76,7 @@ jobs:
 
           # Count affected packages, excluding screenshot (handled by separate workflow)
           PACKAGE_COUNT=$(echo "$AFFECTED" | jq '[.packages.items[] | select(.name != "@renoun/screenshot")] | length')
-          HAS_RENOUN=$(echo "$AFFECTED" | jq -r 'any(.packages.items[]?; .name == "renoun")')
+          HAS_RENOUN=$(echo "$AFFECTED" | jq -r 'any(.packages.items[]?; (.path // "") | test("(^|/)packages/renoun$"))')
           echo "package_count=$PACKAGE_COUNT" >> $GITHUB_OUTPUT
           echo "has_renoun=$HAS_RENOUN" >> $GITHUB_OUTPUT
           echo "turbo_scm_base=$TURBO_SCM_BASE" >> $GITHUB_OUTPUT

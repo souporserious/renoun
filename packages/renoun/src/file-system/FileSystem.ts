@@ -462,22 +462,6 @@ export abstract class BaseFileSystem {
       this.getProjectOptions()
     )
   }
-
-  async resolveTypeAtLocation(
-    filePath: string,
-    position: number,
-    kind: SyntaxKind,
-    filter?: TypeFilter
-  ) {
-    const result = await this.resolveTypeAtLocationWithDependencies(
-      filePath,
-      position,
-      kind,
-      filter
-    )
-
-    return result.resolvedType
-  }
 }
 
 function getSyncFileSystem(

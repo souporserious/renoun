@@ -94,7 +94,7 @@ const RUNTIME_ANALYSIS_CACHE_NAMES = {
   fileExportStaticValue: 'fileExportStaticValue',
   fileExportText: 'fileExportText',
   fileExportsText: 'fileExportsText',
-  resolveTypeAtLocation: 'resolveTypeAtLocation',
+  resolveTypeAtLocationWithDependencies: 'resolveTypeAtLocationWithDependencies',
   transpileSourceFile: 'transpileSourceFile',
   tokens: 'tokens',
   sourceTextMetadata: 'sourceTextMetadata',
@@ -3166,13 +3166,13 @@ function toFileExportTextCacheName(position: number, kind: SyntaxKind): string {
   return `${RUNTIME_ANALYSIS_CACHE_NAMES.fileExportText}:${position}:${kind}`
 }
 
-function toResolvedTypeAtLocationCacheName(
+function toResolvedTypeAtLocationWithDependenciesCacheName(
   position: number,
   kind: SyntaxKind,
   filter?: TypeFilter
 ): string {
   const filterKey = filter ? serializeTypeFilterForCache(filter) : 'none'
-  return `${RUNTIME_ANALYSIS_CACHE_NAMES.resolveTypeAtLocation}:${position}:${kind}:${filterKey}`
+  return `${RUNTIME_ANALYSIS_CACHE_NAMES.resolveTypeAtLocationWithDependencies}:${position}:${kind}:${filterKey}`
 }
 
 function ensureProjectSourceFileLoaded(
@@ -3631,7 +3631,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
     ) {
       const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
       const nodeKey = createRuntimeAnalysisCacheNodeKey(
-        RUNTIME_ANALYSIS_CACHE_NAMES.resolveTypeAtLocation,
+        RUNTIME_ANALYSIS_CACHE_NAMES.resolveTypeAtLocationWithDependencies,
         {
           compilerOptionsVersion,
           filePath: normalizeCacheFilePath(options.filePath),
@@ -3699,7 +3699,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
   return createFallbackProjectFileCache(
     project,
     options.filePath,
-    toResolvedTypeAtLocationCacheName(
+    toResolvedTypeAtLocationWithDependenciesCacheName(
       options.position,
       options.kind,
       options.filter
