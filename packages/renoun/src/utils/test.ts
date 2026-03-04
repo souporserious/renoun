@@ -39,7 +39,9 @@ export async function withProcessEnv<T>(
   }
 }
 
-// TODO: Remove this skip flag when Vitest detectAsyncLeaks no longer flags closed WritableStream internals as promise leaks.
+// Temporary workaround for Vitest detectAsyncLeaks false positives on
+// closed WritableStream internals. Keep skipIf usage centralized on this
+// single flag so removing the workaround is a one-file change.
 // https://main.vitest.dev/config/detectasyncleaks
 export const isDetectAsyncLeaksEnabled =
   (

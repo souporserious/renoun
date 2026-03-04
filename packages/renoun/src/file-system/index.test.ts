@@ -192,8 +192,6 @@ describe('file system', () => {
     )
   })
 
-  // TODO: Remove these skips when Vitest detectAsyncLeaks no longer flags
-  // closed WritableStream internals as promise leaks.
   test.skipIf(isDetectAsyncLeaksEnabled)(
     'node file system supports binary, stream, and write operations',
     async () => {

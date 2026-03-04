@@ -6,6 +6,7 @@ import {
   isDevelopmentEnvironment,
   isTestEnvironment,
 } from '../utils/env.ts'
+import { getDebugLogger } from '../utils/debug.ts'
 import {
   DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT,
   DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL,
@@ -1625,6 +1626,14 @@ export class Session {
       fields: metricFields,
       telemetry: this.#telemetry,
     })
+
+    const debugLogger = getDebugLogger()
+    if (debugLogger.isEnabled('info')) {
+      debugLogger.info('File-system cache metric', () => ({
+        data: fields,
+      }))
+      return
+    }
 
     const orderedEntries = Object.entries(fields).sort(([first], [second]) =>
       first.localeCompare(second)

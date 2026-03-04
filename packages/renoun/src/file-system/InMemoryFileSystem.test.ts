@@ -79,8 +79,6 @@ describe('InMemoryFileSystem', () => {
     await expect(fileSystem.readFile('readme.txt')).resolves.toBe('hello')
   })
 
-  // TODO: Remove these skips when Vitest detectAsyncLeaks no longer flags
-  // closed WritableStream internals as promise leaks.
   test.skipIf(isDetectAsyncLeaksEnabled)(
     'supports binary reads, streaming writes, and deletion',
     async () => {

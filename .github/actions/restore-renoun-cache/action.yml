@@ -11,7 +11,7 @@ runs:
     - name: Resolve renoun cache token
       id: renoun-cache-token
       shell: bash
-      run: echo "token=$(node packages/renoun/src/cli/index.ts cache-token)" >> "$GITHUB_OUTPUT"
+      run: echo "token=$(node packages/renoun/src/cli/cache-token.ts)" >> "$GITHUB_OUTPUT"
 
     - name: Restore and save renoun cache
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306

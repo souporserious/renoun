@@ -5,6 +5,7 @@ import { deserialize, serialize } from 'node:v8'
 
 import { delay } from '../utils/delay.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
+import { getDebugLogger } from '../utils/debug.ts'
 import {
   resolveBooleanProcessEnv,
   resolvePositiveIntegerProcessEnv,
@@ -140,8 +141,7 @@ function resolveDbPath(options: {
   }
 
   if (options.debugSessionRoot === true) {
-    // eslint-disable-next-line no-console
-    console.log('[renoun-debug] resolveDbPath', {
+    logSessionRootDebug('resolveDbPath', {
       projectRoot: options.projectRoot,
     })
   }
@@ -167,13 +167,28 @@ export function getDefaultCacheDatabasePath(
   }
   const path = resolve(root, '.renoun', 'cache', 'fs-cache.sqlite')
   if (debugSessionRoot === true) {
-    // eslint-disable-next-line no-console
-    console.log('[renoun-debug] getDefaultCacheDatabasePath', {
+    logSessionRootDebug('getDefaultCacheDatabasePath', {
       projectRoot,
       resolved: path,
     })
   }
   return path
+}
+
+function logSessionRootDebug(
+  operation: 'resolveDbPath' | 'getDefaultCacheDatabasePath',
+  data: Record<string, unknown>
+): void {
+  const debugLogger = getDebugLogger()
+  const message = `[renoun-debug] ${operation}`
+
+  if (debugLogger.isEnabled('debug')) {
+    debugLogger.debug(message, () => ({ data }))
+    return
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(message, data)
 }
 
 function resolveCanonicalProjectRootPath(pathToResolve: string): string {
