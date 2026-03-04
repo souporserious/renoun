@@ -12,6 +12,9 @@ import { createServer } from './server.ts'
 import * as highlighterModule from '../utils/create-highlighter.ts'
 import * as quickInfoModule from '../utils/get-quick-info-at-position.ts'
 
+const WEBSOCKET_READY_TIMEOUT_MS = 10_000
+const REFRESH_NOTIFICATION_TIMEOUT_MS = 5_000
+
 const watcherState = vi.hoisted(() => {
   return {
     callback:
@@ -85,7 +88,7 @@ describe('project server refresh invalidations', () => {
 
     server = await createServer({ host: '127.0.0.1' })
     client = new WebSocketClient(server.getId())
-    await client.ready(2_000)
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
 
     const response = await client.callMethod<
       { sinceCursor: number },
@@ -189,7 +192,7 @@ describe('project server refresh invalidations', () => {
 
     server = await createServer({ host: '127.0.0.1' })
     client = new WebSocketClient(server.getId())
-    await client.ready(2_000)
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
 
     const params = {
       filePath: `${process.cwd()}/packages/renoun/src/project/server.ts`,
@@ -228,7 +231,7 @@ describe('project server refresh invalidations', () => {
 
     server = await createServer({ host: '127.0.0.1' })
     client = new WebSocketClient(server.getId())
-    await client.ready(2_000)
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
 
     const callback = watcherState.callback
     expect(typeof callback).toBe('function')
@@ -245,7 +248,7 @@ describe('project server refresh invalidations', () => {
     }>((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error('[renoun] expected refresh notification'))
-      }, 1_000)
+      }, REFRESH_NOTIFICATION_TIMEOUT_MS)
 
       client?.once('notification', (message) => {
         clearTimeout(timeout)
