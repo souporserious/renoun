@@ -51,6 +51,7 @@ import {
 } from './refresh-notifications.ts'
 import {
   resolveServerRefreshNotificationsEnvOverride,
+  setServerIdProcessEnv,
   setServerRefreshNotificationsProcessEnv,
   setServerPortProcessEnv,
 } from './runtime-env.ts'
@@ -69,6 +70,16 @@ const { SyntaxKind } = getTsMorph()
 let currentHighlighter: Promise<Highlighter> | null = null
 let resolvedHighlighter: Highlighter | null = null
 let activeProjectServers = 0
+
+interface ActiveProjectServerRuntime {
+  server: WebSocketServer
+  port: string
+  id: string
+  emitRefreshNotifications: boolean
+}
+
+const activeProjectServerRuntimes: ActiveProjectServerRuntime[] = []
+
 type RefreshNotificationPriority = 'immediate' | 'background'
 const REFRESH_NOTIFICATION_PRIORITY_DELAY_MS: Record<
   RefreshNotificationPriority,
@@ -221,6 +232,44 @@ function getThemeNamesForCodeFencePrewarm(
 
 function normalizeCodeFencePrewarmPath(path: string): string {
   return resolve(path)
+}
+
+function applyActiveProjectServerRuntimeToProcessEnv(
+  runtime: ActiveProjectServerRuntime
+): void {
+  setServerPortProcessEnv(runtime.port)
+  setServerIdProcessEnv(runtime.id)
+  setServerRefreshNotificationsProcessEnv(runtime.emitRefreshNotifications)
+}
+
+function registerActiveProjectServerRuntime(
+  runtime: ActiveProjectServerRuntime
+): void {
+  unregisterActiveProjectServerRuntime(runtime.server)
+  activeProjectServerRuntimes.push(runtime)
+  applyActiveProjectServerRuntimeToProcessEnv(runtime)
+}
+
+function unregisterActiveProjectServerRuntime(server: WebSocketServer): void {
+  const runtimeIndex = activeProjectServerRuntimes.findIndex((runtime) => {
+    return runtime.server === server
+  })
+  if (runtimeIndex === -1) {
+    return
+  }
+
+  const wasCurrentRuntime = runtimeIndex === activeProjectServerRuntimes.length - 1
+  activeProjectServerRuntimes.splice(runtimeIndex, 1)
+
+  if (!wasCurrentRuntime) {
+    return
+  }
+
+  const nextCurrentRuntime =
+    activeProjectServerRuntimes[activeProjectServerRuntimes.length - 1]
+  if (nextCurrentRuntime) {
+    applyActiveProjectServerRuntimeToProcessEnv(nextCurrentRuntime)
+  }
 }
 
 function toRootRelativeRefreshPath(
@@ -487,8 +536,6 @@ export async function createServer(options?: CreateServerOptions) {
     host: options?.host,
   })
   const port = await server.getPort()
-
-  setServerPortProcessEnv(port)
   const rootDirectory = getRootDirectory()
 
   let refreshFlushTimer: NodeJS.Timeout | undefined
@@ -998,7 +1045,6 @@ export async function createServer(options?: CreateServerOptions) {
   const emitRefreshNotifications = shouldEmitRefreshNotifications(
     options?.emitRefreshNotifications
   )
-  setServerRefreshNotificationsProcessEnv(emitRefreshNotifications)
   const unsubscribeRuntimeAnalysisBackgroundRefresh =
     onRuntimeAnalysisBackgroundRefresh((paths) => {
       if (!emitRefreshNotifications) {
@@ -1060,6 +1106,12 @@ export async function createServer(options?: CreateServerOptions) {
   }
 
   activeProjectServers += 1
+  registerActiveProjectServerRuntime({
+    server,
+    port: String(port),
+    id: server.getId(),
+    emitRefreshNotifications,
+  })
 
   const originalCleanup = server.cleanup.bind(server)
   let cleanedUp = false
@@ -1097,6 +1149,7 @@ export async function createServer(options?: CreateServerOptions) {
     startupRuntimePrewarmQueued = false
     startupRuntimePrewarmInFlight = Promise.resolve()
     unsubscribeRuntimeAnalysisBackgroundRefresh()
+    unregisterActiveProjectServerRuntime(server)
     activeProjectServers = Math.max(0, activeProjectServers - 1)
     if (activeProjectServers === 0) {
       disposeProjectWatchers()

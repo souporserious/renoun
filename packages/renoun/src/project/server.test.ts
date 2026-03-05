@@ -154,6 +154,39 @@ describe('project server refresh invalidations', () => {
     }
   })
 
+  test('restores the previous server runtime env when the current server is cleaned up', async () => {
+    const firstServer = await createServer({
+      host: '127.0.0.1',
+      emitRefreshNotifications: false,
+    })
+    const firstPort = String(await firstServer.getPort())
+
+    expect(process.env['RENOUN_SERVER_PORT']).toBe(firstPort)
+    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
+      '0'
+    )
+
+    const secondServer = await createServer({
+      host: '127.0.0.1',
+      emitRefreshNotifications: true,
+    })
+    const secondPort = String(await secondServer.getPort())
+
+    expect(process.env['RENOUN_SERVER_PORT']).toBe(secondPort)
+    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
+      '1'
+    )
+
+    secondServer.cleanup()
+
+    expect(process.env['RENOUN_SERVER_PORT']).toBe(firstPort)
+    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
+      '0'
+    )
+
+    firstServer.cleanup()
+  })
+
   test('does not initialize the highlighter during development startup without request config', async () => {
     process.env['NODE_ENV'] = 'development'
     vi.spyOn(cachedAnalysis, 'prewarmRuntimeAnalysisSession').mockResolvedValue()

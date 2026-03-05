@@ -59,36 +59,40 @@ interface SessionLikeWithInvalidation {
   }
 }
 
-const DEV_NAVIGATION_SWR_MAX_STALE_AGE_MS = 30_000
-const devNavigationEntriesCacheBySource = new WeakMap<
-  Directory<any> | Collection<any>,
-  Map<string, DevNavigationEntriesCacheEntry>
->()
-const devNavigationSessionUnsubscribeBySession = new WeakMap<
-  object,
-  () => void
->()
-const devNavigationCollectionTrackingTaskBySource = new WeakMap<
-  Collection<any>,
-  Promise<void>
->()
-const devNavigationTrackedCollectionSources = new WeakSet<Collection<any>>()
-let devNavigationInvalidationEpoch = 0
+interface DevNavigationSourceState {
+  invalidationEpoch: number
+  entriesCacheByKey: Map<string, DevNavigationEntriesCacheEntry>
+  sessionUnsubscribeBySession: WeakMap<object, () => void>
+  collectionTrackingTask?: Promise<void>
+  hasTrackedCollectionEntries: boolean
+}
 
-function getNavigationEntriesCacheBucket(
+const DEV_NAVIGATION_SWR_MAX_STALE_AGE_MS = 30_000
+const devNavigationStateBySource = new WeakMap<
+  Directory<any> | Collection<any>,
+  DevNavigationSourceState
+>()
+
+function getNavigationSourceState(
   source: Directory<any> | Collection<any>
-): Map<string, DevNavigationEntriesCacheEntry> {
-  const existing = devNavigationEntriesCacheBySource.get(source)
+): DevNavigationSourceState {
+  const existing = devNavigationStateBySource.get(source)
   if (existing) {
     return existing
   }
 
-  const created = new Map<string, DevNavigationEntriesCacheEntry>()
-  devNavigationEntriesCacheBySource.set(source, created)
+  const created: DevNavigationSourceState = {
+    invalidationEpoch: 0,
+    entriesCacheByKey: new Map<string, DevNavigationEntriesCacheEntry>(),
+    sessionUnsubscribeBySession: new WeakMap<object, () => void>(),
+    hasTrackedCollectionEntries: false,
+  }
+  devNavigationStateBySource.set(source, created)
   return created
 }
 
 function trackNavigationSessionInvalidations(
+  sourceState: DevNavigationSourceState,
   session: SessionLikeWithInvalidation | undefined
 ): void {
   if (!session || typeof session !== 'object') {
@@ -96,32 +100,34 @@ function trackNavigationSessionInvalidations(
   }
 
   const sessionKey = session as object
-  if (devNavigationSessionUnsubscribeBySession.has(sessionKey)) {
+  if (sourceState.sessionUnsubscribeBySession.has(sessionKey)) {
     return
   }
 
   const unsubscribe = session.snapshot?.onInvalidate?.(() => {
-    devNavigationInvalidationEpoch += 1
+    sourceState.invalidationEpoch += 1
   })
 
   if (typeof unsubscribe === 'function') {
-    devNavigationSessionUnsubscribeBySession.set(sessionKey, unsubscribe)
+    sourceState.sessionUnsubscribeBySession.set(sessionKey, unsubscribe)
   }
 }
 
 function trackNavigationEntriesInvalidations(
+  sourceState: DevNavigationSourceState,
   entries: readonly FileSystemEntry<any>[]
 ): void {
   for (const entry of entries) {
     const session = isDirectory(entry)
       ? (entry.getSession() as SessionLikeWithInvalidation)
       : (entry.getParent().getSession() as SessionLikeWithInvalidation)
-    trackNavigationSessionInvalidations(session)
+    trackNavigationSessionInvalidations(sourceState, session)
   }
 }
 
 function trackNavigationSourceInvalidations(
-  source: Directory<any> | Collection<any>
+  source: Directory<any> | Collection<any>,
+  sourceState: DevNavigationSourceState
 ): void {
   if (!isDevelopmentEnvironment()) {
     return
@@ -129,16 +135,17 @@ function trackNavigationSourceInvalidations(
 
   if (isDirectory(source)) {
     trackNavigationSessionInvalidations(
+      sourceState,
       source.getSession() as SessionLikeWithInvalidation
     )
     return
   }
 
-  if (devNavigationTrackedCollectionSources.has(source)) {
+  if (sourceState.hasTrackedCollectionEntries) {
     return
   }
 
-  const existingTask = devNavigationCollectionTrackingTaskBySource.get(source)
+  const existingTask = sourceState.collectionTrackingTask
   if (existingTask) {
     return
   }
@@ -146,17 +153,19 @@ function trackNavigationSourceInvalidations(
   const trackTask = source
     .getEntries({ includeIndexAndReadmeFiles: true })
     .then((entries) => {
-      trackNavigationEntriesInvalidations(entries)
-      devNavigationTrackedCollectionSources.add(source)
+      trackNavigationEntriesInvalidations(sourceState, entries)
+      sourceState.hasTrackedCollectionEntries = true
     })
     .catch((error) => {
       reportBestEffortError('components/navigation', error)
     })
     .finally(() => {
-      devNavigationCollectionTrackingTaskBySource.delete(source)
+      if (sourceState.collectionTrackingTask === trackTask) {
+        sourceState.collectionTrackingTask = undefined
+      }
     })
 
-  devNavigationCollectionTrackingTaskBySource.set(source, trackTask)
+  sourceState.collectionTrackingTask = trackTask
 }
 
 async function readNavigationEntriesWithTracking(
@@ -165,7 +174,10 @@ async function readNavigationEntriesWithTracking(
 ): Promise<readonly FileSystemEntry<any>[]> {
   const entries = await readEntries()
   if (isDevelopmentEnvironment() && !isDirectory(source)) {
-    trackNavigationEntriesInvalidations(entries)
+    trackNavigationEntriesInvalidations(
+      getNavigationSourceState(source),
+      entries
+    )
   }
   return entries
 }
@@ -183,8 +195,9 @@ async function getNavigationEntriesWithDevSWR({
     return readEntries()
   }
 
-  trackNavigationSourceInvalidations(source)
-  const cacheBucket = getNavigationEntriesCacheBucket(source)
+  const sourceState = getNavigationSourceState(source)
+  trackNavigationSourceInvalidations(source, sourceState)
+  const cacheBucket = sourceState.entriesCacheByKey
   const cacheEntry = cacheBucket.get(cacheKey)
   const now = Date.now()
 
@@ -192,7 +205,7 @@ async function getNavigationEntriesWithDevSWR({
     const isWithinStaleWindow =
       now - cacheEntry.updatedAt <= DEV_NAVIGATION_SWR_MAX_STALE_AGE_MS
     const isCurrentInvalidationEpoch =
-      cacheEntry.invalidationEpoch === devNavigationInvalidationEpoch
+      cacheEntry.invalidationEpoch === sourceState.invalidationEpoch
     const shouldAwaitFreshEntries = !isCurrentInvalidationEpoch
 
     if (isWithinStaleWindow && isCurrentInvalidationEpoch) {
@@ -207,7 +220,7 @@ async function getNavigationEntriesWithDevSWR({
         .then((nextEntries) => {
           cacheEntry.value = nextEntries
           cacheEntry.updatedAt = Date.now()
-          cacheEntry.invalidationEpoch = devNavigationInvalidationEpoch
+          cacheEntry.invalidationEpoch = sourceState.invalidationEpoch
           return nextEntries
         })
         .catch((error) => {
@@ -234,7 +247,7 @@ async function getNavigationEntriesWithDevSWR({
 
   const createdEntry: DevNavigationEntriesCacheEntry = {
     updatedAt: 0,
-    invalidationEpoch: devNavigationInvalidationEpoch,
+    invalidationEpoch: sourceState.invalidationEpoch,
   }
   const refreshTask = readNavigationEntriesWithTracking(source, readEntries)
   createdEntry.refreshTask = refreshTask
@@ -244,7 +257,7 @@ async function getNavigationEntriesWithDevSWR({
     const entries = await refreshTask
     createdEntry.value = entries
     createdEntry.updatedAt = Date.now()
-    createdEntry.invalidationEpoch = devNavigationInvalidationEpoch
+    createdEntry.invalidationEpoch = sourceState.invalidationEpoch
     return entries
   } catch (error) {
     if (cacheBucket.get(cacheKey) === createdEntry) {

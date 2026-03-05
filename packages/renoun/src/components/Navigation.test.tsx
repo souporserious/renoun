@@ -108,4 +108,54 @@ describe('Navigation development SWR', () => {
     expect(secondMarkup).toContain('New Page')
     expect(secondMarkup).not.toContain('Old Page')
   })
+
+  test('does not refresh unrelated navigation sources after another source invalidates', async () => {
+    let firstInvalidateListener: ((path: string) => void) | undefined
+    let secondInvalidateListener: ((path: string) => void) | undefined
+    const firstOnInvalidate = vi.fn((listener: (path: string) => void) => {
+      firstInvalidateListener = listener
+      return () => {}
+    })
+    const secondOnInvalidate = vi.fn((listener: (path: string) => void) => {
+      secondInvalidateListener = listener
+      return () => {}
+    })
+
+    const firstSource: FakeDirectorySource = {
+      kind: 'directory',
+      getPathname: () => '/docs',
+      getFilterPatternKind: () => 'deep',
+      getSession: () => ({ snapshot: { onInvalidate: firstOnInvalidate } }),
+      getEntries: vi.fn(async () => [
+        createFakeFileEntry('Docs Page', '/docs/page'),
+      ]),
+    }
+    const secondSource: FakeDirectorySource = {
+      kind: 'directory',
+      getPathname: () => '/guides',
+      getFilterPatternKind: () => 'deep',
+      getSession: () => ({ snapshot: { onInvalidate: secondOnInvalidate } }),
+      getEntries: vi.fn(async () => [
+        createFakeFileEntry('Guide Page', '/guides/page'),
+      ]),
+    }
+
+    const { Navigation } = await import('./Navigation.tsx')
+
+    await Navigation({ source: firstSource as any })
+    await Navigation({ source: secondSource as any })
+
+    expect(firstSource.getEntries).toHaveBeenCalledTimes(1)
+    expect(secondSource.getEntries).toHaveBeenCalledTimes(1)
+    expect(firstInvalidateListener).toBeTypeOf('function')
+    expect(secondInvalidateListener).toBeTypeOf('function')
+
+    secondInvalidateListener?.('/guides/updated.mdx')
+
+    await Navigation({ source: firstSource as any })
+    await Navigation({ source: secondSource as any })
+
+    expect(firstSource.getEntries).toHaveBeenCalledTimes(1)
+    expect(secondSource.getEntries).toHaveBeenCalledTimes(2)
+  })
 })
