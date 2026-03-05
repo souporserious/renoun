@@ -4,6 +4,15 @@ import { playwright } from '@vitest/browser-playwright'
 
 export default defineConfig({
   plugins: [mdx()],
+  optimizeDeps: {
+    include: [
+      '@renoun/mdx',
+      '@renoun/mdx/rehype',
+      '@renoun/mdx/remark',
+      'react/jsx-dev-runtime',
+      'react/jsx-runtime',
+    ],
+  },
   test: {
     testTimeout: 20_000,
     include: ['src/**/*.browser.{test,spec}.?(c|m)[jt]s?(x)'],

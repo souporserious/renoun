@@ -1,6 +1,10 @@
 'use client'
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
+import { getMarkdownContent } from '@renoun/mdx'
+import { rehypePlugins } from '@renoun/mdx/rehype'
+import { remarkPlugins } from '@renoun/mdx/remark'
+import { Fragment as JsxRuntimeFragment, jsx, jsxs } from 'react/jsx-runtime'
 
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
@@ -44,6 +48,11 @@ type QuickInfoTokenizedDisplayText = QuickInfoTokenizedDisplayToken[][]
 
 interface QuickInfoDisplayTokensCacheEntry {
   value: QuickInfoTokenizedDisplayText | null
+  expiresAt: number
+}
+
+interface QuickInfoDocumentationCacheEntry {
+  value: React.ReactNode | string
   expiresAt: number
 }
 
@@ -100,6 +109,7 @@ const QUICK_INFO_CACHE_MAX_ENTRIES = 1_000
 const QUICK_INFO_CACHE_TTL_MS =
   process.env.NODE_ENV === 'development' ? 15_000 : 5 * 60_000
 const QUICK_INFO_DISPLAY_TOKENS_CACHE_VERSION = 'v2'
+const QUICK_INFO_DOCUMENTATION_CACHE_VERSION = 'v1'
 const QUICK_INFO_TEST_IDS_ENABLED = process.env.NODE_ENV === 'test'
 
 const quickInfoCacheByKey = new Map<string, QuickInfoCacheEntry>()
@@ -111,6 +121,14 @@ const quickInfoDisplayTokensCacheByKey = new Map<
 const quickInfoDisplayTokensInFlightByKey = new Map<
   string,
   Promise<QuickInfoTokenizedDisplayText | null>
+>()
+const quickInfoDocumentationCacheByKey = new Map<
+  string,
+  QuickInfoDocumentationCacheEntry
+>()
+const quickInfoDocumentationInFlightByKey = new Map<
+  string,
+  Promise<React.ReactNode | string>
 >()
 let nextQuickInfoRequestId = 1
 let quickInfoFetchActiveCount = 0
@@ -174,6 +192,19 @@ export function QuickInfoClientPopover({
   const resolvedTokenThemeCacheKey = React.useMemo(() => {
     return toQuickInfoThemeCacheKey(resolvedTokenThemeConfig)
   }, [resolvedTokenThemeConfig])
+  const displayText = resolvedQuickInfo?.displayText || ''
+  const documentationText = resolvedQuickInfo?.documentationText || ''
+  const documentationCacheKey = documentationText
+    ? toQuickInfoDocumentationCacheKey(documentationText)
+    : ''
+  const [resolvedDocumentationContent, setResolvedDocumentationContent] =
+    React.useState<React.ReactNode | string | null>(() => {
+      if (!documentationCacheKey) {
+        return null
+      }
+
+      return readQuickInfoDocumentationCache(documentationCacheKey) ?? null
+    })
 
   React.useEffect(() => {
     let isDisposed = false
@@ -239,8 +270,34 @@ export function QuickInfoClientPopover({
     resolvedTokenThemeCacheKey,
   ])
 
-  const displayText = resolvedQuickInfo?.displayText || ''
-  const documentationText = resolvedQuickInfo?.documentationText || ''
+  React.useEffect(() => {
+    let isDisposed = false
+
+    if (!documentationText || !documentationCacheKey) {
+      setResolvedDocumentationContent(null)
+      return
+    }
+
+    const cachedDocumentation =
+      readQuickInfoDocumentationCache(documentationCacheKey)
+    if (cachedDocumentation !== undefined) {
+      setResolvedDocumentationContent(cachedDocumentation)
+      return
+    }
+
+    setResolvedDocumentationContent(null)
+    void getQuickInfoDocumentationContent(documentationText).then((value) => {
+      if (isDisposed) {
+        return
+      }
+
+      setResolvedDocumentationContent(value)
+    })
+
+    return () => {
+      isDisposed = true
+    }
+  }, [documentationCacheKey, documentationText])
 
   return (
     <QuickInfoPopover>
@@ -295,13 +352,19 @@ export function QuickInfoClientPopover({
             </>
           ) : null}
 
-          {!isLoading && documentationText.length ? (
+          {!isLoading &&
+          documentationText.length &&
+          resolvedDocumentationContent !== null ? (
             <>
               <Divider
                 color={theme.panelBorder}
                 data-testid={getQuickInfoTestId('divider')}
               />
-              <DocumentationText>{documentationText}</DocumentationText>
+              {typeof resolvedDocumentationContent === 'string' ? (
+                <DocumentationText>{resolvedDocumentationContent}</DocumentationText>
+              ) : (
+                <MarkdownContainer>{resolvedDocumentationContent}</MarkdownContainer>
+              )}
             </>
           ) : null}
         </ContentContainer>
@@ -483,6 +546,37 @@ async function getQuickInfoDisplayTokensForRequest(
   return requestPromise
 }
 
+async function getQuickInfoDocumentationContent(
+  documentationText: string
+): Promise<React.ReactNode | string> {
+  const cacheKey = toQuickInfoDocumentationCacheKey(documentationText)
+  const cached = readQuickInfoDocumentationCache(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+
+  const inFlight = quickInfoDocumentationInFlightByKey.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const requestPromise = renderQuickInfoDocumentationContent(documentationText)
+    .then((value) => {
+      writeQuickInfoDocumentationCache(cacheKey, value)
+      return value
+    })
+    .catch(() => documentationText)
+    .finally(() => {
+      const current = quickInfoDocumentationInFlightByKey.get(cacheKey)
+      if (current === requestPromise) {
+        quickInfoDocumentationInFlightByKey.delete(cacheKey)
+      }
+    })
+
+  quickInfoDocumentationInFlightByKey.set(cacheKey, requestPromise)
+  return requestPromise
+}
+
 function runQuickInfoFetchTask<T>(task: () => Promise<T>): Promise<T> {
   return acquireQuickInfoFetchSlot().then(async () => {
     try {
@@ -615,6 +709,11 @@ function toQuickInfoDisplayTokensCacheKey(
   )}:${tokenThemeCacheKey}:${displayText.length}:${displayTextHash}`
 }
 
+function toQuickInfoDocumentationCacheKey(documentationText: string): string {
+  const documentationTextHash = hashQuickInfoDisplayText(documentationText)
+  return `${QUICK_INFO_DOCUMENTATION_CACHE_VERSION}:${documentationText.length}:${documentationTextHash}`
+}
+
 function readQuickInfoCache(
   cacheKey: string
 ): QuickInfoData | null | undefined {
@@ -684,6 +783,59 @@ function writeQuickInfoDisplayTokensCache(
 
     quickInfoDisplayTokensCacheByKey.delete(oldest)
   }
+}
+
+function readQuickInfoDocumentationCache(
+  cacheKey: string
+): React.ReactNode | string | undefined {
+  const entry = quickInfoDocumentationCacheByKey.get(cacheKey)
+  if (!entry) {
+    return undefined
+  }
+
+  if (entry.expiresAt <= Date.now()) {
+    quickInfoDocumentationCacheByKey.delete(cacheKey)
+    return undefined
+  }
+
+  quickInfoDocumentationCacheByKey.delete(cacheKey)
+  quickInfoDocumentationCacheByKey.set(cacheKey, entry)
+  return entry.value
+}
+
+function writeQuickInfoDocumentationCache(
+  cacheKey: string,
+  value: React.ReactNode | string
+): void {
+  quickInfoDocumentationCacheByKey.set(cacheKey, {
+    value,
+    expiresAt: Date.now() + QUICK_INFO_CACHE_TTL_MS,
+  })
+
+  while (quickInfoDocumentationCacheByKey.size > QUICK_INFO_CACHE_MAX_ENTRIES) {
+    const oldest = quickInfoDocumentationCacheByKey.keys().next().value
+    if (typeof oldest !== 'string') {
+      break
+    }
+
+    quickInfoDocumentationCacheByKey.delete(oldest)
+  }
+}
+
+async function renderQuickInfoDocumentationContent(
+  documentationText: string
+): Promise<React.ReactNode> {
+  return getMarkdownContent({
+    source: documentationText,
+    components: quickInfoMarkdownComponents,
+    remarkPlugins,
+    rehypePlugins,
+    runtime: {
+      Fragment: JsxRuntimeFragment,
+      jsx,
+      jsxs,
+    },
+  })
 }
 
 function normalizeQuickInfoResult(value: unknown): QuickInfoData | null {
@@ -999,6 +1151,63 @@ const DisplayTextContainer = styled('pre', {
 })
 
 const DisplayToken = styled('span')
+
+const Paragraph = styled('p', {
+  margin: 0,
+  textWrap: 'pretty',
+})
+
+const Table = styled('table', {
+  borderCollapse: 'collapse',
+  'th, td': {
+    padding: '0.25em 0.75em',
+    border: '1px solid var(--renoun-quick-info-table-border, currentColor)',
+  },
+})
+
+function QuickInfoMarkdownCodeBlock({
+  children,
+}: {
+  children?: React.ReactNode
+}) {
+  return (
+    <DocumentationCodeBlock>
+      <code>{children}</code>
+    </DocumentationCodeBlock>
+  )
+}
+
+const quickInfoMarkdownComponents = {
+  CodeBlock: QuickInfoMarkdownCodeBlock,
+  p: Paragraph,
+  table: Table,
+}
+
+const MarkdownContainer = styled('div', {
+  padding: '0.35rem 0.5rem',
+  fontSize: '0.825rem',
+  lineHeight: 1.4,
+  textWrap: 'pretty',
+  '> *': {
+    marginBottom: '0.25em',
+  },
+  '> *:last-child': {
+    marginBottom: 0,
+  },
+})
+
+const DocumentationCodeBlock = styled('pre', {
+  margin: '0.25rem 0',
+  padding: '0.35rem 0.5rem',
+  fontFamily: 'monospace',
+  fontSize: '0.8rem',
+  lineHeight: 1.35,
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  overflowWrap: 'anywhere',
+  borderRadius: 4,
+  backgroundColor: 'color-mix(in oklab, currentColor 10%, transparent)',
+})
 
 const DocumentationText = styled('div', {
   margin: 0,

@@ -52,7 +52,9 @@ const QUICK_INFO_BY_POSITION = new Map<number, QuickInfoFixture>([
     {
       displayText:
         '(alias) const History: (props: HistoryProps) => React.JSX.Element\nimport History',
-      documentationText: 'Streams export history from a repository source.',
+      documentationText:
+        'Streams export history from a repository ' +
+        '[source](https://renoun.dev/docs).',
     },
   ],
   [
@@ -140,6 +142,10 @@ describe('QuickInfo browser regression', () => {
       1_000
     )
     await waitFor(() => {
+      const docsLink = getPopover()?.querySelector('a')
+      return docsLink?.getAttribute('href') === 'https://renoun.dev/docs'
+    }, 1_000)
+    await waitFor(() => {
       const tokenNode = getPopover()?.querySelector('pre span')
       if (!tokenNode) {
         return false
@@ -169,6 +175,8 @@ describe('QuickInfo browser regression', () => {
     expect(parseFloat(displayStyles.paddingTop)).toBeGreaterThanOrEqual(4)
     expect(parseFloat(displayStyles.paddingLeft)).toBeGreaterThanOrEqual(6)
     expect(parseFloat(displayStyles.paddingLeft)).toBeLessThanOrEqual(10)
+    const docsLink = getPopover()?.querySelector('a')
+    expect(docsLink?.textContent).toBe('source')
 
     leaveSymbol(symbol)
     await waitFor(() => !getPopover(), 1_000)

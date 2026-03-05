@@ -44,6 +44,7 @@ import {
   type ProjectServerRuntime,
 } from '../../project/runtime-env.ts'
 import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
+import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
 import { QuickInfoProvider } from './QuickInfoProvider.tsx'
 import { Context } from './Context.tsx'
 import { Symbol } from './Symbol.tsx'
@@ -742,37 +743,56 @@ function renderToken({
   )
 
   if (hasQuickInfo) {
-    return (
-      <Symbol
-        key={`${lineIndex}-${tokenIndex}`}
-        highlightColor={theme.editor.hoverHighlightBackground}
-        popover={
-          <QuickInfoClientPopover
-            diagnostics={token.diagnostics}
-            quickInfo={token.quickInfo}
-            request={
-              canRequestQuickInfo
-                ? {
-                    filePath: filePath!,
-                    position: token.start,
-                    projectVersion: quickInfoProjectVersion,
-                    runtime: quickInfoRuntime!,
-                    themeConfig: quickInfoThemeConfig,
-                  }
-                : undefined
-            }
-            theme={{
-              border: theme.editorHoverWidget.border,
-              background: theme.editorHoverWidget.background,
-              foreground: theme.editorHoverWidget.foreground,
-              panelBorder: theme.panel.border,
-              errorForeground: theme.editorError.foreground,
-            }}
+    const popover = token.quickInfo ? (
+      <Suspense
+        fallback={
+          <QuickInfoLoading
             css={cssProp?.popover}
             className={className?.popover}
             style={style?.popover}
           />
         }
+      >
+        <QuickInfo
+          diagnostics={token.diagnostics}
+          quickInfo={token.quickInfo}
+          css={cssProp?.popover}
+          className={className?.popover}
+          style={style?.popover}
+        />
+      </Suspense>
+    ) : (
+      <QuickInfoClientPopover
+        diagnostics={token.diagnostics}
+        request={
+          canRequestQuickInfo
+            ? {
+                filePath: filePath!,
+                position: token.start,
+                projectVersion: quickInfoProjectVersion,
+                runtime: quickInfoRuntime!,
+                themeConfig: quickInfoThemeConfig,
+              }
+            : undefined
+        }
+        theme={{
+          border: theme.editorHoverWidget.border,
+          background: theme.editorHoverWidget.background,
+          foreground: theme.editorHoverWidget.foreground,
+          panelBorder: theme.panel.border,
+          errorForeground: theme.editorError.foreground,
+        }}
+        css={cssProp?.popover}
+        className={className?.popover}
+        style={style?.popover}
+      />
+    )
+
+    return (
+      <Symbol
+        key={`${lineIndex}-${tokenIndex}`}
+        highlightColor={theme.editor.hoverHighlightBackground}
+        popover={popover}
         className={tokenClassName}
         style={style?.token}
       >
