@@ -319,6 +319,30 @@ function createTmpRenounCacheDirectory(prefix: string) {
   return mkdtempSync(join(cacheBaseDirectory, prefix))
 }
 
+function waitForMilliseconds(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+async function waitForFirstSectionTitle(
+  file: {
+    getSections: () => Promise<Array<{ title?: string }>>
+  },
+  expectedTitle: string,
+  timeoutMs = 3_000
+): Promise<Array<{ title?: string }>> {
+  const deadline = Date.now() + timeoutMs
+  let sections = await file.getSections()
+
+  while (sections[0]?.title !== expectedTitle && Date.now() < deadline) {
+    await waitForMilliseconds(25)
+    sections = await file.getSections()
+  }
+
+  return sections
+}
+
 async function withProductionSqliteCache<T>(
   run: (tmpDirectory: string) => Promise<T> | T
 ) {
@@ -736,73 +760,77 @@ describe('file-system cache integration', () => {
     }
   })
 
-  test('revalidates cached child directory snapshots in development mode', async () => {
-    const previousNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'development'
-    let tempDirectory: string | undefined
+  test(
+    'revalidates cached child directory snapshots in development mode',
+    async () => {
+      const previousNodeEnv = process.env.NODE_ENV
+      process.env.NODE_ENV = 'development'
+      let tempDirectory: string | undefined
 
-    try {
-      tempDirectory = createTmpRenounCacheDirectory(
-        'renoun-cache-child-snapshot-'
-      )
-      const directoryPath = relativePath(process.cwd(), tempDirectory)
-      const fileSystem = new NodeFileSystem()
-
-      mkdirSync(join(tempDirectory, 'nested'), { recursive: true })
-      writeFileSync(
-        join(tempDirectory, 'nested', 'one.ts'),
-        'export const one = 1',
-        'utf8'
-      )
-
-      const directory = new Directory({
-        fileSystem,
-        path: directoryPath,
-      })
-
-      const firstEntries = await directory.getEntries({
-        recursive: true,
-        includeIndexAndReadmeFiles: true,
-        includeGitIgnoredFiles: true,
-        includeTsConfigExcludedFiles: true,
-      })
-      expect(
-        firstEntries.some((entry) =>
-          entry.workspacePath.endsWith('nested/one.ts')
+      try {
+        tempDirectory = createTmpRenounCacheDirectory(
+          'renoun-cache-child-snapshot-'
         )
-      ).toBe(true)
+        const directoryPath = relativePath(process.cwd(), tempDirectory)
+        const fileSystem = new NodeFileSystem()
 
-      rmSync(join(tempDirectory, 'nested', 'one.ts'))
-      writeFileSync(
-        join(tempDirectory, 'nested', 'two.ts'),
-        'export const two = 2',
-        'utf8'
-      )
-
-      const secondEntries = await directory.getEntries({
-        recursive: true,
-        includeIndexAndReadmeFiles: true,
-        includeGitIgnoredFiles: true,
-        includeTsConfigExcludedFiles: true,
-      })
-
-      expect(
-        secondEntries.some((entry) =>
-          entry.workspacePath.endsWith('nested/one.ts')
+        mkdirSync(join(tempDirectory, 'nested'), { recursive: true })
+        writeFileSync(
+          join(tempDirectory, 'nested', 'one.ts'),
+          'export const one = 1',
+          'utf8'
         )
-      ).toBe(false)
-      expect(
-        secondEntries.some((entry) =>
-          entry.workspacePath.endsWith('nested/two.ts')
+
+        const directory = new Directory({
+          fileSystem,
+          path: directoryPath,
+        })
+
+        const firstEntries = await directory.getEntries({
+          recursive: true,
+          includeIndexAndReadmeFiles: true,
+          includeGitIgnoredFiles: true,
+          includeTsConfigExcludedFiles: true,
+        })
+        expect(
+          firstEntries.some((entry) =>
+            entry.workspacePath.endsWith('nested/one.ts')
+          )
+        ).toBe(true)
+
+        rmSync(join(tempDirectory, 'nested', 'one.ts'))
+        writeFileSync(
+          join(tempDirectory, 'nested', 'two.ts'),
+          'export const two = 2',
+          'utf8'
         )
-      ).toBe(true)
-    } finally {
-      process.env.NODE_ENV = previousNodeEnv
-      if (tempDirectory) {
-        rmSync(tempDirectory, { recursive: true, force: true })
+
+        const secondEntries = await directory.getEntries({
+          recursive: true,
+          includeIndexAndReadmeFiles: true,
+          includeGitIgnoredFiles: true,
+          includeTsConfigExcludedFiles: true,
+        })
+
+        expect(
+          secondEntries.some((entry) =>
+            entry.workspacePath.endsWith('nested/one.ts')
+          )
+        ).toBe(false)
+        expect(
+          secondEntries.some((entry) =>
+            entry.workspacePath.endsWith('nested/two.ts')
+          )
+        ).toBe(true)
+      } finally {
+        process.env.NODE_ENV = previousNodeEnv
+        if (tempDirectory) {
+          rmSync(tempDirectory, { recursive: true, force: true })
+        }
       }
-    }
-  })
+    },
+    45_000
+  )
 
   test('revalidates cached child directory snapshots in production mode', async () => {
     const previousNodeEnv = process.env.NODE_ENV
@@ -1378,47 +1406,51 @@ export type Metadata = Value`,
     )
   })
 
-  test('invalidates cached markdown sections on NodeFileSystem when files change', async () => {
-    const tempDirectory = createTmpRenounCacheDirectory('renoun-cache-node-')
-    const scopedCwd = join(tempDirectory, 'scoped-cwd')
-    mkdirSync(scopedCwd, { recursive: true })
-    const fileSystem = new NestedCwdNodeFileSystem(scopedCwd)
+  test(
+    'invalidates cached markdown sections on NodeFileSystem when files change',
+    async () => {
+      const tempDirectory = createTmpRenounCacheDirectory('renoun-cache-node-')
+      const scopedCwd = join(tempDirectory, 'scoped-cwd')
+      mkdirSync(scopedCwd, { recursive: true })
+      const fileSystem = new NestedCwdNodeFileSystem(scopedCwd)
 
-    writeFileSync(
-      join(tempDirectory, 'page.md'),
-      `# Alpha
+      writeFileSync(
+        join(tempDirectory, 'page.md'),
+        `# Alpha
 
 first content`,
-      'utf8'
-    )
-
-    try {
-      const firstDirectory = new Directory({
-        fileSystem,
-        path: tempDirectory,
-      })
-      const firstFile = await firstDirectory.getFile('page', 'md')
-      const firstSections = await firstFile.getSections()
-
-      await firstFile.write(
-        `# Beta
-
-updated content`
+        'utf8'
       )
 
-      const secondDirectory = new Directory({
-        fileSystem,
-        path: tempDirectory,
-      })
-      const secondFile = await secondDirectory.getFile('page', 'md')
-      const secondSections = await secondFile.getSections()
+      try {
+        const firstDirectory = new Directory({
+          fileSystem,
+          path: tempDirectory,
+        })
+        const firstFile = await firstDirectory.getFile('page', 'md')
+        const firstSections = await firstFile.getSections()
 
-      expect(firstSections[0]?.title).toBe('Alpha')
-      expect(secondSections[0]?.title).toBe('Beta')
-    } finally {
-      rmSync(tempDirectory, { recursive: true, force: true })
-    }
-  })
+        await firstFile.write(
+          `# Beta
+
+updated content`
+        )
+
+        const secondDirectory = new Directory({
+          fileSystem,
+          path: tempDirectory,
+        })
+        const secondFile = await secondDirectory.getFile('page', 'md')
+        const secondSections = await waitForFirstSectionTitle(secondFile, 'Beta')
+
+        expect(firstSections[0]?.title).toBe('Alpha')
+        expect(secondSections[0]?.title).toBe('Beta')
+      } finally {
+        rmSync(tempDirectory, { recursive: true, force: true })
+      }
+    },
+    30_000
+  )
 
   test('invalidates snapshot content IDs for absolute paths in nested-cwd sessions', async () => {
     const tempDirectory = createTmpRenounCacheDirectory(

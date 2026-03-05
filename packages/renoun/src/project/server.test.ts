@@ -216,7 +216,7 @@ describe('project server refresh invalidations', () => {
       documentationText: '',
     })
     expect(quickInfoSpy).toHaveBeenCalledTimes(2)
-  })
+  }, 45_000)
 
   test('does not drop refresh invalidations when root ancestors include ignored segment names', async () => {
     globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket

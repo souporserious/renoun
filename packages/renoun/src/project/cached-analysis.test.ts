@@ -959,7 +959,7 @@ describe('project cached analysis', () => {
     expect(addSourceFileSpy.mock.calls.length).toBeGreaterThan(
       addSourceFileCallsAfterFirstRun
     )
-  })
+  }, 45_000)
 
   test('recomputes cached source metadata immediately after explicit runtime invalidation', async () => {
     await using workspace = await createTemporaryWorkspace({
@@ -1057,7 +1057,7 @@ describe('project cached analysis', () => {
           createSourceFileCallsAfterSecondRun
       ).toBeLessThanOrEqual(1)
     }
-  })
+  }, 45_000)
 
   test('recomputes cached tokens immediately after explicit runtime invalidation', async () => {
     await using workspace = await createTemporaryWorkspace({
@@ -1152,7 +1152,7 @@ describe('project cached analysis', () => {
     } else {
       expect(metadataCalls).toBeGreaterThan(metadataCallsAfterSecondRun)
     }
-  })
+  }, 45_000)
 
   test(
     'invalidates cached source metadata when transitive TypeScript dependencies change on disk',

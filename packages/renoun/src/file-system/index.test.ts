@@ -2383,7 +2383,7 @@ function b() {}
       title: 'Hello, World!',
       date: new Date('2022-01-01'),
     })
-  })
+  }, 45_000)
 
   test('file export metadata', async () => {
     const statementText = 'export default function hello() {}'

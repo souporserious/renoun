@@ -1632,16 +1632,7 @@ export class Session {
       debugLogger.info('File-system cache metric', () => ({
         data: fields,
       }))
-      return
     }
-
-    const orderedEntries = Object.entries(fields).sort(([first], [second]) =>
-      first.localeCompare(second)
-    )
-    const message = orderedEntries
-      .map(([key, value]) => `${key}=${String(value)}`)
-      .join(' ')
-    console.log(`[renoun-fs-cache-metrics] ${message}`)
   }
 
   #getDirectorySnapshotKeyMetrics(

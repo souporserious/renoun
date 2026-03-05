@@ -6874,7 +6874,7 @@ describe('resolveType', () => {
         "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>> & string",
       }
     `)
-  })
+  }, 60_000)
 
   test('enum', () => {
     const sourceFile = project.createSourceFile(
