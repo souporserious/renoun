@@ -7,8 +7,8 @@ import type { Languages as TextMateLanguages } from '../grammars/index.ts'
 import type { Highlighter } from './create-highlighter.ts'
 import { getDebugLogger } from './debug.ts'
 import { getDiagnosticMessageText } from './get-diagnostic-message.ts'
+import { formatQuickInfoDisplayText } from './get-quick-info-at-position.ts'
 import { getLanguage, type Languages } from './get-language.ts'
-import { getRootDirectory } from './get-root-directory.ts'
 import { isJsxOnly } from './is-jsx-only.ts'
 import { generatedFilenames } from './get-source-text-metadata.ts'
 import { splitTokenByRanges } from './split-tokens-by-ranges.ts'
@@ -316,8 +316,6 @@ export async function getTokens({
           symbolMetadata,
         } = tsMetadata
 
-        const rootDirectory = getRootDirectory()
-        const baseDirectory = process.cwd().replace(rootDirectory, '')
         const quickInfoCache = new Map<string, QuickInfoEntry>()
         const shouldPopulateQuickInfo =
           isProductionEnvironment() || isTestEnvironment()
@@ -406,8 +404,6 @@ export async function getTokens({
                       sourceFile,
                       filePath,
                       token.start,
-                      rootDirectory,
-                      baseDirectory,
                       quickInfoCache
                     )
                   : undefined
@@ -655,8 +651,6 @@ function getQuickInfo(
   sourceFile: SourceFile,
   filePath: string,
   tokenStart: number,
-  rootDirectory: string,
-  baseDirectory: string,
   quickInfoCache: Map<string, QuickInfoEntry>
 ) {
   const cacheKey = `${filePath}:${tokenStart}`
@@ -675,16 +669,9 @@ function getQuickInfo(
     return
   }
 
-  const displayParts = quickInfo.displayParts || []
-  const displayText = displayParts
-    .map((part) => part.text)
-    .join('')
-    // First, replace root directory to handle root node_modules
-    .replaceAll(rootDirectory, '.')
-    // Next, replace base directory for on-disk paths
-    .replaceAll(baseDirectory, '')
-    // Finally, replace the in-memory renoun directory
-    .replaceAll('/renoun', '')
+  const displayText = formatQuickInfoDisplayText(
+    (quickInfo.displayParts || []).map((part) => part.text).join('')
+  )
   const documentation = quickInfo.documentation || []
   const documentationText = formatDocumentationText(documentation)
   const result: QuickInfoEntry = {

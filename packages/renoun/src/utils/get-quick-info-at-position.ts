@@ -1,10 +1,16 @@
 import type { Project, ts } from './ts-morph.ts'
 
 import { getRootDirectory } from './get-root-directory.ts'
+import { normalizeSlashes } from './path.ts'
 
 export interface QuickInfoAtPosition {
   displayText: string
   documentationText: string
+}
+
+interface QuickInfoDisplayTextFormatOptions {
+  rootDirectory?: string
+  currentWorkingDirectory?: string
 }
 
 export function getQuickInfoAtPosition(options: {
@@ -31,21 +37,46 @@ export function getQuickInfoAtPosition(options: {
     return undefined
   }
 
-  const rootDirectory = getRootDirectory()
-  const baseDirectory = process.cwd().replace(rootDirectory, '')
-  const displayParts = quickInfo.displayParts || []
-  const displayText = displayParts
-    .map((part) => part.text)
-    .join('')
-    .replaceAll(rootDirectory, '.')
-    .replaceAll(baseDirectory, '')
-    .replaceAll('/renoun', '')
+  const displayText = formatQuickInfoDisplayText(
+    (quickInfo.displayParts || []).map((part) => part.text).join('')
+  )
   const documentationText = formatDocumentationText(quickInfo.documentation || [])
 
   return {
     displayText,
     documentationText,
   }
+}
+
+export function formatQuickInfoDisplayText(
+  displayText: string,
+  options: QuickInfoDisplayTextFormatOptions = {}
+): string {
+  let formattedDisplayText = displayText
+
+  for (const candidate of getPathReplacementCandidates(
+    options.currentWorkingDirectory ?? process.cwd()
+  )) {
+    formattedDisplayText = formattedDisplayText.replaceAll(candidate, '.')
+  }
+
+  for (const candidate of getPathReplacementCandidates(
+    options.rootDirectory ?? getRootDirectory()
+  )) {
+    formattedDisplayText = formattedDisplayText.replaceAll(candidate, '.')
+  }
+
+  return formattedDisplayText
+}
+
+function getPathReplacementCandidates(path: string): string[] {
+  if (typeof path !== 'string' || path.length === 0) {
+    return []
+  }
+
+  const candidates = new Set<string>([path, normalizeSlashes(path)])
+
+  return Array.from(candidates).filter((candidate) => candidate.length > 0)
 }
 
 function formatDocumentationText(documentation: ts.SymbolDisplayPart[]): string {
