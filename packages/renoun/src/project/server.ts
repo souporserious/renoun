@@ -35,6 +35,7 @@ import {
   getCachedFileExports,
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
+  getCachedTypeScriptDependencyPaths,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
   onRuntimeAnalysisBackgroundRefresh,
@@ -51,6 +52,7 @@ import {
 } from './refresh-notifications.ts'
 import {
   clearServerRuntimeProcessEnv,
+  notifyServerRuntimeEnvChanged,
   resolveServerRefreshNotificationsEnvOverride,
   setServerIdProcessEnv,
   setServerRefreshNotificationsProcessEnv,
@@ -241,6 +243,7 @@ function applyActiveProjectServerRuntimeToProcessEnv(
   setServerPortProcessEnv(runtime.port)
   setServerIdProcessEnv(runtime.id)
   setServerRefreshNotificationsProcessEnv(runtime.emitRefreshNotifications)
+  notifyServerRuntimeEnvChanged()
 }
 
 function registerActiveProjectServerRuntime(
@@ -274,6 +277,7 @@ function unregisterActiveProjectServerRuntime(server: WebSocketServer): void {
   }
 
   clearServerRuntimeProcessEnv()
+  notifyServerRuntimeEnvChanged()
 }
 
 function toRootRelativeRefreshPath(
@@ -1505,10 +1509,13 @@ export async function createServer(options?: CreateServerOptions) {
       })
 
       if (includeClientRpcDependencies) {
-        const fileExports = await getCachedFileExports(project, filePath)
+        const dependencyPaths = await getCachedTypeScriptDependencyPaths(
+          project,
+          filePath
+        )
         return toRpcValueWithDependenciesResponse(
           staticValue,
-          toFileExportDependencyPaths(filePath, fileExports)
+          dependencyPaths
         )
       }
 

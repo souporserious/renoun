@@ -61,16 +61,20 @@ import {
 } from './refresh-notifications.ts'
 import {
   getServerRuntimeFromProcessEnv,
+  onServerRuntimeEnvChange,
   resolveProjectClientRpcCacheEnabledFromEnv,
   resolveProjectClientRpcCacheTtlMsFromEnv,
   resolveProjectRefreshNotificationsEnvOverride,
   resolveServerRefreshNotificationsEffectiveFromEnv,
   resolveServerRefreshNotificationsEnvOverride,
 } from './runtime-env.ts'
+import type { ProjectServerRuntime } from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
 
 let client: WebSocketClient | undefined
+let clientRuntimeKey: string | undefined
 let hasAttachedClientRefreshSubscriptions = false
+let hasSubscribedToServerRuntimeEnvChanges = false
 const pendingRefreshInvalidationPaths = new Set<string>()
 let isRefreshInvalidationFlushQueued = false
 let hasConnectedProjectServerClient = false
@@ -806,13 +810,114 @@ function attachClientRefreshSubscriptions(
   }
 }
 
+function toServerRuntimeKey(runtime: ProjectServerRuntime): string {
+  return `${runtime.id}:${runtime.port}`
+}
+
+function disposeActiveClient(): void {
+  if (!client) {
+    clientRuntimeKey = undefined
+    hasAttachedClientRefreshSubscriptions = false
+    clientReadyProbePromise = null
+    clientRpcUnavailableUntil = 0
+    invalidateAllClientRpcState()
+    return
+  }
+
+  const activeClient = client
+  client = undefined
+  clientRuntimeKey = undefined
+  hasAttachedClientRefreshSubscriptions = false
+  clientReadyProbePromise = null
+  clientRpcUnavailableUntil = 0
+  invalidateAllClientRpcState()
+
+  try {
+    activeClient.removeAllListeners?.()
+  } catch (error) {
+    reportBestEffortError('project/client', error)
+  }
+
+  try {
+    activeClient.close?.()
+  } catch (error) {
+    reportBestEffortError('project/client', error)
+  }
+}
+
+function createClientForRuntime(
+  runtime: ProjectServerRuntime
+): WebSocketClient {
+  client = new WebSocketClient(runtime.id)
+  clientRuntimeKey = toServerRuntimeKey(runtime)
+  hasAttachedClientRefreshSubscriptions = false
+  clientReadyProbePromise = null
+  clientRpcUnavailableUntil = 0
+  return client
+}
+
+function replaceClientForRuntime(
+  runtime: ProjectServerRuntime,
+  options: {
+    resyncImmediately?: boolean
+  } = {}
+): WebSocketClient {
+  disposeActiveClient()
+  const nextClient = createClientForRuntime(runtime)
+  attachClientRefreshSubscriptions(nextClient, {
+    resyncImmediately: options.resyncImmediately,
+  })
+  return nextClient
+}
+
+function ensureServerRuntimeEnvChangeSubscription(): void {
+  if (hasSubscribedToServerRuntimeEnvChanges) {
+    return
+  }
+
+  hasSubscribedToServerRuntimeEnvChanges = true
+  onServerRuntimeEnvChange((runtime) => {
+    if (!client) {
+      return
+    }
+
+    if (!runtime) {
+      disposeActiveClient()
+      return
+    }
+
+    const nextRuntimeKey = toServerRuntimeKey(runtime)
+    if (clientRuntimeKey === nextRuntimeKey) {
+      return
+    }
+
+    replaceClientForRuntime(runtime, {
+      resyncImmediately: true,
+    })
+  })
+}
+
 function getClient(): WebSocketClient | undefined {
+  ensureServerRuntimeEnvChangeSubscription()
+
   const serverRuntime = getServerRuntimeFromProcessEnv()
   const hadExistingClient = client !== undefined
+  const nextRuntimeKey = serverRuntime
+    ? toServerRuntimeKey(serverRuntime)
+    : undefined
 
   if (!client && serverRuntime) {
-    client = new WebSocketClient(serverRuntime.id)
-    hasAttachedClientRefreshSubscriptions = false
+    createClientForRuntime(serverRuntime)
+  } else if (client && !serverRuntime) {
+    disposeActiveClient()
+  } else if (
+    client &&
+    serverRuntime &&
+    clientRuntimeKey !== nextRuntimeKey
+  ) {
+    replaceClientForRuntime(serverRuntime, {
+      resyncImmediately: true,
+    })
   }
 
   if (client) {

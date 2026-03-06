@@ -1604,6 +1604,111 @@ function shouldRecordLocalWorkspaceDependencyPath(options: {
   return isPathWithinRoot(dependencyPath, projectDependencyBoundaryPath)
 }
 
+function shouldCollectFallbackProjectDependencyPath(options: {
+  dependencyPath: string
+  moduleSpecifier: string
+  projectDependencyBoundaryPath: string | undefined
+}): boolean {
+  const {
+    dependencyPath,
+    moduleSpecifier,
+    projectDependencyBoundaryPath,
+  } = options
+  const normalizedDependencyPath = normalizePathKey(dependencyPath)
+
+  if (normalizedDependencyPath.includes('/node_modules/')) {
+    return false
+  }
+
+  if (isModuleSpecifierRelativeOrAbsolute(moduleSpecifier)) {
+    return true
+  }
+
+  if (!projectDependencyBoundaryPath) {
+    return true
+  }
+
+  return isPathWithinRoot(dependencyPath, projectDependencyBoundaryPath)
+}
+
+function collectFallbackProjectTypeScriptDependencyFilePaths(
+  project: Project,
+  filePath: string
+): string[] {
+  const sourceFile = getOrAddProjectSourceFile(project, filePath)
+  if (!sourceFile) {
+    return []
+  }
+
+  const normalizedEntryFilePath = normalizePathKey(filePath)
+  const projectDependencyBoundaryPath =
+    getProjectDependencyBoundaryPath(project)
+  const dependencyPaths = new Set<string>()
+  const visitedSourceFilePaths = new Set<string>()
+  const sourceFileQueue: SourceFile[] = [sourceFile]
+
+  while (sourceFileQueue.length > 0) {
+    const currentSourceFile = sourceFileQueue.shift()!
+    const currentSourceFilePath = currentSourceFile.getFilePath()
+    const normalizedCurrentSourceFilePath = normalizePathKey(
+      currentSourceFilePath
+    )
+
+    if (visitedSourceFilePaths.has(normalizedCurrentSourceFilePath)) {
+      continue
+    }
+
+    visitedSourceFilePaths.add(normalizedCurrentSourceFilePath)
+
+    for (const moduleSpecifier of collectSourceFileModuleSpecifiers(
+      currentSourceFile
+    )) {
+      const normalizedModuleSpecifier = normalizeModuleSpecifier(moduleSpecifier)
+      if (!normalizedModuleSpecifier) {
+        continue
+      }
+
+      const dependencyPath = resolveModuleSpecifierSourceFilePathUncached(
+        project,
+        currentSourceFilePath,
+        normalizedModuleSpecifier
+      )
+      if (!dependencyPath) {
+        continue
+      }
+
+      if (
+        !shouldCollectFallbackProjectDependencyPath({
+          dependencyPath,
+          moduleSpecifier: normalizedModuleSpecifier,
+          projectDependencyBoundaryPath,
+        })
+      ) {
+        continue
+      }
+
+      const normalizedDependencyPath = normalizePathKey(dependencyPath)
+      if (normalizedDependencyPath !== normalizedEntryFilePath) {
+        dependencyPaths.add(dependencyPath)
+      }
+
+      const dependencySourceFile = getOrAddProjectSourceFile(
+        project,
+        dependencyPath
+      )
+      if (
+        dependencySourceFile &&
+        !dependencySourceFile.isFromExternalLibrary() &&
+        !normalizedDependencyPath.includes('/node_modules/')
+      ) {
+        sourceFileQueue.push(dependencySourceFile)
+      }
+    }
+  }
+
+  return Array.from(dependencyPaths.values())
+}
+
 function getPackageNameFromModuleSpecifier(
   moduleSpecifier: string | undefined
 ): string | undefined {
@@ -2354,6 +2459,46 @@ async function getCachedRuntimeTypeScriptDependencyAnalysis(
 
   runtimeTypeScriptDependencyAnalysisInFlightByKey.set(dedupeKey, task)
   return task
+}
+
+export async function getCachedTypeScriptDependencyPaths(
+  project: Project,
+  filePath: string
+): Promise<string[]> {
+  const dependencyPaths = new Set<string>([filePath])
+  const runtimeCacheStore = await getRuntimeAnalysisSession(
+    getRuntimeAnalysisScopePath(project, filePath)
+  )
+
+  if (
+    runtimeCacheStore &&
+    shouldTrackRuntimeTypeScriptDependenciesForPath(
+      runtimeCacheStore,
+      filePath
+    )
+  ) {
+    const dependencyAnalysis = await getCachedRuntimeTypeScriptDependencyAnalysis(
+      project,
+      runtimeCacheStore,
+      filePath,
+      getCompilerOptionsVersion(project)
+    )
+
+    for (const dependencyPath of dependencyAnalysis?.dependencyFilePaths ?? []) {
+      dependencyPaths.add(dependencyPath)
+    }
+
+    return Array.from(dependencyPaths.values())
+  }
+
+  for (const dependencyPath of collectFallbackProjectTypeScriptDependencyFilePaths(
+    project,
+    filePath
+  )) {
+    dependencyPaths.add(dependencyPath)
+  }
+
+  return Array.from(dependencyPaths.values())
 }
 
 function recordConstDependencies(
@@ -3147,6 +3292,33 @@ function toFileExportsDependencies(
   }))
 }
 
+function createFallbackProjectTypeScriptDependencies(
+  project: Project,
+  filePath: string,
+  compilerOptionsVersion: string
+): ProjectCacheDependency[] {
+  const dependencyPaths = new Set<string>([filePath])
+
+  for (const dependencyPath of collectFallbackProjectTypeScriptDependencyFilePaths(
+    project,
+    filePath
+  )) {
+    dependencyPaths.add(dependencyPath)
+  }
+
+  return [
+    ...Array.from(dependencyPaths.values()).map((path) => ({
+      kind: 'file' as const,
+      path,
+    })),
+    {
+      kind: 'const' as const,
+      name: 'project:compiler-options',
+      version: compilerOptionsVersion,
+    },
+  ]
+}
+
 function toFileExportMetadataCacheName(
   name: string,
   position: number,
@@ -3462,6 +3634,14 @@ export async function getCachedFileExportStaticValue(
         await getCachedFileExports(project, options.filePath)
         await context.recordNodeDep(fileExportsNodeKey)
 
+        await recordRuntimeTypeScriptDependencySidecar(
+          context,
+          project,
+          runtimeCacheStore,
+          options.filePath,
+          compilerOptionsVersion
+        )
+
         return baseGetFileExportStaticValue(
           options.filePath,
           options.position,
@@ -3485,10 +3665,11 @@ export async function getCachedFileExportStaticValue(
       ),
     {
       deps: [
-        {
-          kind: 'file',
-          path: options.filePath,
-        },
+        ...createFallbackProjectTypeScriptDependencies(
+          project,
+          options.filePath,
+          compilerOptionsVersion
+        ),
         {
           kind: 'cache',
           filePath: options.filePath,
@@ -3772,6 +3953,14 @@ export async function transpileCachedSourceFile(
           filePath
         )
 
+        await recordRuntimeTypeScriptDependencySidecar(
+          context,
+          project,
+          runtimeCacheStore,
+          filePath,
+          compilerOptionsVersion
+        )
+
         return baseTranspileSourceFile(filePath, project)
       }
     )
@@ -3783,17 +3972,11 @@ export async function transpileCachedSourceFile(
     RUNTIME_ANALYSIS_CACHE_NAMES.transpileSourceFile,
     () => baseTranspileSourceFile(filePath, project),
     {
-      deps: [
-        {
-          kind: 'file',
-          path: filePath,
-        },
-        {
-          kind: 'const',
-          name: 'project:compiler-options',
-          version: getCompilerOptionsVersion(project),
-        },
-      ],
+      deps: createFallbackProjectTypeScriptDependencies(
+        project,
+        filePath,
+        compilerOptionsVersion
+      ),
     }
   )
 }

@@ -197,6 +197,149 @@ describe('project client transport guards', () => {
     })
   })
 
+  test('recreates the websocket client when the active server runtime changes', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '1'
+
+    const firstCallMethod = vi.fn(async (method: string) => {
+      if (method === 'getOutlineRanges') {
+        return ['first-client']
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+    const secondCallMethod = vi.fn(async (method: string) => {
+      if (method === 'getOutlineRanges') {
+        return ['second-client']
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return {
+          nextCursor: 0,
+          fullRefresh: false,
+        }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+    const firstClose = vi.fn()
+    const secondClose = vi.fn()
+    const firstRemoveAllListeners = vi.fn()
+    const secondRemoveAllListeners = vi.fn()
+    const firstOn = vi.fn()
+    const secondOn = vi.fn()
+    const clientInstances = [
+      {
+        callMethod: firstCallMethod,
+        ready: vi.fn(async () => undefined),
+        on: firstOn,
+        close: firstClose,
+        removeAllListeners: firstRemoveAllListeners,
+      },
+      {
+        callMethod: secondCallMethod,
+        ready: vi.fn(async () => undefined),
+        on: secondOn,
+        close: secondClose,
+        removeAllListeners: secondRemoveAllListeners,
+      },
+    ]
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      const nextClient = clientInstances.shift()
+      if (!nextClient) {
+        throw new Error('[renoun] Unexpected extra WebSocketClient creation')
+      }
+
+      return nextClient
+    })
+
+    const module = await import('./client.ts')
+    const runtimeEnvModule = await import('./runtime-env.ts')
+
+    const firstResult = await module.getOutlineRanges('/project/src/a.ts')
+    expect(firstResult).toEqual(['first-client'])
+    expect(mocks.WebSocketClient).toHaveBeenCalledTimes(1)
+
+    process.env['RENOUN_SERVER_PORT'] = '5454'
+    runtimeEnvModule.notifyServerRuntimeEnvChanged()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(mocks.WebSocketClient).toHaveBeenCalledTimes(2)
+    expect(firstRemoveAllListeners).toHaveBeenCalledTimes(1)
+    expect(firstClose).toHaveBeenCalledTimes(1)
+    expect(secondCallMethod).toHaveBeenCalledWith('getRefreshInvalidationsSince', {
+      sinceCursor: 0,
+    })
+
+    const secondResult = await module.getOutlineRanges('/project/src/a.ts')
+    expect(secondResult).toEqual(['second-client'])
+    expect(
+      secondCallMethod.mock.calls.filter(([method]) => method === 'getOutlineRanges')
+    ).toHaveLength(1)
+    expect(secondOn).toHaveBeenCalledTimes(2)
+    expect(secondClose).not.toHaveBeenCalled()
+    expect(secondRemoveAllListeners).not.toHaveBeenCalled()
+  })
+
+  test('falls back to local analysis after the active server runtime is cleared', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getSourceTextMetadata') {
+        return {
+          value: 'remote-result',
+          language: 'txt',
+        }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+    const close = vi.fn()
+    const removeAllListeners = vi.fn()
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn(),
+        close,
+        removeAllListeners,
+      }
+    })
+
+    const module = await import('./client.ts')
+    const runtimeEnvModule = await import('./runtime-env.ts')
+
+    const firstResult = await module.getSourceTextMetadata({
+      value: 'const answer = 42',
+      language: 'txt',
+    })
+    expect(firstResult).toEqual({
+      value: 'remote-result',
+      language: 'txt',
+    })
+
+    delete process.env['RENOUN_SERVER_PORT']
+    runtimeEnvModule.notifyServerRuntimeEnvChanged()
+
+    const secondResult = await module.getSourceTextMetadata({
+      value: 'const answer = 42',
+      language: 'txt',
+    })
+    expect(secondResult).toEqual({
+      value: 'local-result',
+      language: 'txt',
+    })
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(removeAllListeners).toHaveBeenCalledTimes(1)
+    expect(callMethod).toHaveBeenCalledTimes(1)
+    expect(mocks.getCachedSourceTextMetadata).toHaveBeenCalledTimes(1)
+  })
+
   test('invalidates dependency-aware RPC cache entries after source updates', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'

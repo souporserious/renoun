@@ -24,7 +24,8 @@ import {
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
 
-const { Project } = getTsMorph()
+const { Project, ModuleKind, ModuleResolutionKind, ScriptTarget } =
+  getTsMorph()
 
 function createTextMateToken(value: string) {
   const isWhiteSpace = /^\s+$/.test(value)
@@ -54,6 +55,17 @@ function createHighlighter(): NonNullable<GetTokensOptions['highlighter']> {
       yield [createTextMateToken(value)]
     },
   }
+}
+
+function createInMemoryTypeScriptProject(): InstanceType<typeof Project> {
+  return new Project({
+    useInMemoryFileSystem: true,
+    compilerOptions: {
+      module: ModuleKind.ESNext,
+      moduleResolution: ModuleResolutionKind.Bundler,
+      target: ScriptTarget.ESNext,
+    },
+  })
 }
 
 function delay(ms: number): Promise<void> {
@@ -378,6 +390,49 @@ describe('project cached analysis', () => {
     expect(refreshed).toBe(2)
   })
 
+  test('recomputes cached static export values after imported dependency invalidation in fallback mode', async () => {
+    const project = createInMemoryTypeScriptProject()
+    const dependencyPath = '/project/src/dep.ts'
+    const filePath = '/project/src/index.ts'
+
+    project.createSourceFile(dependencyPath, 'export const dep = 1\n', {
+      overwrite: true,
+    })
+    project.createSourceFile(
+      filePath,
+      "import { dep } from './dep'\nexport const value = dep\n",
+      {
+        overwrite: true,
+      }
+    )
+
+    const [fileExport] = getFileExports(filePath, project)
+    if (!fileExport) {
+      throw new Error('[renoun] Expected a file export in cached-analysis test')
+    }
+
+    const first = await getCachedFileExportStaticValue(project, {
+      filePath,
+      position: fileExport.position,
+      kind: fileExport.kind,
+    })
+    expect(first).toBe(1)
+
+    project.createSourceFile(dependencyPath, 'export const dep = 2\n', {
+      overwrite: true,
+    })
+    invalidateProjectFileCache(project, dependencyPath)
+    invalidateRuntimeAnalysisCachePath(dependencyPath)
+
+    const refreshed = await getCachedFileExportStaticValue(project, {
+      filePath,
+      position: fileExport.position,
+      kind: fileExport.kind,
+    })
+
+    expect(refreshed).toBe(2)
+  })
+
   test('recomputes cached file export text after file invalidation', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,
@@ -419,6 +474,43 @@ describe('project cached analysis', () => {
     })
 
     expect(refreshed).toContain('value = 2')
+  })
+
+  test('recomputes cached transpiled output after imported dependency invalidation in fallback mode', async () => {
+    const project = createInMemoryTypeScriptProject()
+    const dependencyPath = '/project/src/dep.ts'
+    const filePath = '/project/src/index.ts'
+
+    project.createSourceFile(
+      dependencyPath,
+      'export const enum Flags { Value = 1 }\n',
+      {
+        overwrite: true,
+      }
+    )
+    project.createSourceFile(
+      filePath,
+      "import { Flags } from './dep'\nexport const value = Flags.Value\n",
+      {
+        overwrite: true,
+      }
+    )
+
+    const first = await transpileCachedSourceFile(project, filePath)
+    expect(first).toContain('= 1')
+
+    project.createSourceFile(
+      dependencyPath,
+      'export const enum Flags { Value = 2 }\n',
+      {
+        overwrite: true,
+      }
+    )
+    invalidateProjectFileCache(project, dependencyPath)
+    invalidateRuntimeAnalysisCachePath(dependencyPath)
+
+    const refreshed = await transpileCachedSourceFile(project, filePath)
+    expect(refreshed).toContain('= 2')
   })
 
   test('recomputes cached file exports immediately after explicit runtime invalidation', async () => {
@@ -717,6 +809,64 @@ describe('project cached analysis', () => {
     expect(refreshed).toBe(2)
   })
 
+  test('recomputes cached static export values after imported dependency invalidation in the runtime cache', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/dep.ts': 'export const dep = 1\n',
+      'src/index.ts': "import { dep } from './dep'\nexport const value = dep\n",
+    })
+
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const dependencyPath = join(workspace.workspacePath, 'src/dep.ts')
+    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+    const project = new Project({
+      tsConfigFilePath,
+    })
+
+    const [fileExport] = getFileExports(entryFilePath, project)
+    if (!fileExport) {
+      throw new Error('[renoun] Expected a file export in cached-analysis test')
+    }
+
+    const first = await getCachedFileExportStaticValue(project, {
+      filePath: entryFilePath,
+      position: fileExport.position,
+      kind: fileExport.kind,
+    })
+    const second = await getCachedFileExportStaticValue(project, {
+      filePath: entryFilePath,
+      position: fileExport.position,
+      kind: fileExport.kind,
+    })
+    expect(first).toBe(1)
+    expect(second).toBe(1)
+
+    await writeFile(dependencyPath, 'export const dep = 2\n', 'utf8')
+    await project.getSourceFileOrThrow(dependencyPath).refreshFromFileSystem()
+    invalidateProjectFileCache(project, dependencyPath)
+    invalidateRuntimeAnalysisCachePath(dependencyPath)
+    await delay(0)
+
+    const refreshed = await getCachedFileExportStaticValue(project, {
+      filePath: entryFilePath,
+      position: fileExport.position,
+      kind: fileExport.kind,
+    })
+    expect(refreshed).toBe(2)
+  })
+
   test('recomputes transpiled output immediately after explicit runtime invalidation', async () => {
     await using workspace = await createTemporaryWorkspace({
       'package.json': JSON.stringify({
@@ -754,6 +904,53 @@ describe('project cached analysis', () => {
     const refreshed = await transpileCachedSourceFile(project, entryFilePath)
     expect(refreshed).not.toBe(first)
     expect(refreshed).toContain('value = 2')
+  })
+
+  test('recomputes transpiled output after imported dependency invalidation in the runtime cache', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/dep.ts': 'export const enum Flags { Value = 1 }\n',
+      'src/index.ts':
+        "import { Flags } from './dep'\nexport const value = Flags.Value\n",
+    })
+
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const dependencyPath = join(workspace.workspacePath, 'src/dep.ts')
+    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+    const project = new Project({
+      tsConfigFilePath,
+    })
+
+    const first = await transpileCachedSourceFile(project, entryFilePath)
+    const second = await transpileCachedSourceFile(project, entryFilePath)
+    expect(first).toContain('= 1')
+    expect(second).toBe(first)
+
+    await writeFile(
+      dependencyPath,
+      'export const enum Flags { Value = 2 }\n',
+      'utf8'
+    )
+    await project.getSourceFileOrThrow(dependencyPath).refreshFromFileSystem()
+    invalidateProjectFileCache(project, dependencyPath)
+    invalidateRuntimeAnalysisCachePath(dependencyPath)
+    await delay(0)
+
+    const refreshed = await transpileCachedSourceFile(project, entryFilePath)
+    expect(refreshed).not.toBe(first)
+    expect(refreshed).toContain('= 2')
   })
 
   test('recomputes includeDependencies export text immediately after explicit runtime invalidation', async () => {

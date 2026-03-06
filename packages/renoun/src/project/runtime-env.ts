@@ -10,6 +10,10 @@ export interface ProjectServerRuntime {
   id: string
 }
 
+const serverRuntimeEnvListeners = new Set<
+  (runtime: ProjectServerRuntime | undefined) => void
+>()
+
 export function getServerPortFromProcessEnv(): string | undefined {
   return readNonEmptyProcessEnv(PROCESS_ENV_KEYS.renounServerPort)
 }
@@ -45,6 +49,22 @@ export function getServerRuntimeFromProcessEnv():
   }
 
   return { port, id }
+}
+
+export function onServerRuntimeEnvChange(
+  listener: (runtime: ProjectServerRuntime | undefined) => void
+): () => void {
+  serverRuntimeEnvListeners.add(listener)
+  return () => {
+    serverRuntimeEnvListeners.delete(listener)
+  }
+}
+
+export function notifyServerRuntimeEnvChanged(): void {
+  const runtime = getServerRuntimeFromProcessEnv()
+  for (const listener of serverRuntimeEnvListeners) {
+    listener(runtime)
+  }
 }
 
 export function hasServerRuntimeInProcessEnv(): boolean {
