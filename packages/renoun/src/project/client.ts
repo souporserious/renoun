@@ -70,6 +70,7 @@ import {
 import type { ProjectOptions } from './types.ts'
 
 let client: WebSocketClient | undefined
+let hasAttachedClientRefreshSubscriptions = false
 const pendingRefreshInvalidationPaths = new Set<string>()
 let isRefreshInvalidationFlushQueued = false
 let hasConnectedProjectServerClient = false
@@ -759,40 +760,67 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
     .catch(() => {})
 }
 
+function attachClientRefreshSubscriptions(
+  activeClient: WebSocketClient,
+  options: {
+    resyncImmediately?: boolean
+  } = {}
+): void {
+  if (
+    hasAttachedClientRefreshSubscriptions ||
+    !shouldConsumeRefreshNotifications()
+  ) {
+    return
+  }
+
+  hasAttachedClientRefreshSubscriptions = true
+  activeClient.on('connected', () => {
+    clientRpcUnavailableUntil = 0
+
+    if (!hasConnectedProjectServerClient) {
+      hasConnectedProjectServerClient = true
+      return
+    }
+
+    queueRefreshResync(activeClient)
+  })
+  activeClient.on('notification', (message) => {
+    if (!isRefreshNotification(message)) {
+      return
+    }
+
+    const refreshCursor = normalizeRefreshCursor(message.data.refreshCursor)
+    if (refreshCursor !== undefined) {
+      latestRefreshCursor = Math.max(latestRefreshCursor, refreshCursor)
+    }
+
+    const paths = getRefreshInvalidationPaths(message.data)
+    for (const path of paths) {
+      queueRefreshInvalidation(path)
+    }
+  })
+
+  if (options.resyncImmediately) {
+    hasConnectedProjectServerClient = true
+    queueRefreshResync(activeClient)
+  }
+}
+
 function getClient(): WebSocketClient | undefined {
   const serverRuntime = getServerRuntimeFromProcessEnv()
+  const hadExistingClient = client !== undefined
 
   if (!client && serverRuntime) {
     client = new WebSocketClient(serverRuntime.id)
-    const createdClient = client
-    if (shouldConsumeRefreshNotifications()) {
-      createdClient.on('connected', () => {
-        clientRpcUnavailableUntil = 0
-
-        if (!hasConnectedProjectServerClient) {
-          hasConnectedProjectServerClient = true
-          return
-        }
-
-        queueRefreshResync(createdClient)
-      })
-      createdClient.on('notification', (message) => {
-        if (!isRefreshNotification(message)) {
-          return
-        }
-
-        const refreshCursor = normalizeRefreshCursor(message.data.refreshCursor)
-        if (refreshCursor !== undefined) {
-          latestRefreshCursor = Math.max(latestRefreshCursor, refreshCursor)
-        }
-
-        const paths = getRefreshInvalidationPaths(message.data)
-        for (const path of paths) {
-          queueRefreshInvalidation(path)
-        }
-      })
-    }
+    hasAttachedClientRefreshSubscriptions = false
   }
+
+  if (client) {
+    attachClientRefreshSubscriptions(client, {
+      resyncImmediately: hadExistingClient,
+    })
+  }
+
   return client
 }
 

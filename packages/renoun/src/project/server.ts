@@ -50,6 +50,7 @@ import {
   normalizeRefreshCursor,
 } from './refresh-notifications.ts'
 import {
+  clearServerRuntimeProcessEnv,
   resolveServerRefreshNotificationsEnvOverride,
   setServerIdProcessEnv,
   setServerRefreshNotificationsProcessEnv,
@@ -269,7 +270,10 @@ function unregisterActiveProjectServerRuntime(server: WebSocketServer): void {
     activeProjectServerRuntimes[activeProjectServerRuntimes.length - 1]
   if (nextCurrentRuntime) {
     applyActiveProjectServerRuntimeToProcessEnv(nextCurrentRuntime)
+    return
   }
+
+  clearServerRuntimeProcessEnv()
 }
 
 function toRootRelativeRefreshPath(

@@ -137,7 +137,7 @@ describe('project server refresh invalidations', () => {
       firstServer.cleanup()
       firstServer = undefined
       expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
-        '0'
+        undefined
       )
 
       process.chdir(originalCwd)
@@ -145,7 +145,7 @@ describe('project server refresh invalidations', () => {
       secondServer.cleanup()
       secondServer = undefined
       expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
-        '1'
+        undefined
       )
     } finally {
       firstServer?.cleanup()
@@ -185,6 +185,25 @@ describe('project server refresh invalidations', () => {
     )
 
     firstServer.cleanup()
+  })
+
+  test('clears the active runtime env when the last server is cleaned up', async () => {
+    const activeServer = await createServer({
+      host: '127.0.0.1',
+      emitRefreshNotifications: false,
+    })
+
+    expect(process.env['RENOUN_SERVER_PORT']).toBeDefined()
+    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
+      '0'
+    )
+
+    activeServer.cleanup()
+
+    expect(process.env['RENOUN_SERVER_PORT']).toBeUndefined()
+    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
+      undefined
+    )
   })
 
   test('does not initialize the highlighter during development startup without request config', async () => {

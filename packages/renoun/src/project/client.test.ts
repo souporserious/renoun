@@ -145,6 +145,58 @@ describe('project client transport guards', () => {
     expect(callMethod).toHaveBeenCalledTimes(2)
   })
 
+  test('subscribes to refresh notifications when they are enabled after the client already exists', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '0'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    const on = vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+      listeners.set(eventName, listener)
+    })
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getOutlineRanges') {
+        return []
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return {
+          nextCursor: 0,
+          fullRefresh: false,
+        }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+        on,
+      }
+    })
+
+    const module = await import('./client.ts')
+
+    await module.getOutlineRanges('/project/src/a.ts')
+    expect(on).not.toHaveBeenCalled()
+
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '1'
+
+    await module.getOutlineRanges('/project/src/a.ts')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(on).toHaveBeenCalledTimes(2)
+    expect(listeners.get('connected')).toBeTypeOf('function')
+    expect(listeners.get('notification')).toBeTypeOf('function')
+    expect(callMethod).toHaveBeenCalledWith('getRefreshInvalidationsSince', {
+      sinceCursor: 0,
+    })
+  })
+
   test('invalidates dependency-aware RPC cache entries after source updates', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'

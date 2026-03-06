@@ -18,6 +18,15 @@ export function setServerPortProcessEnv(port: number | string): void {
   process.env[PROCESS_ENV_KEYS.renounServerPort] = String(port)
 }
 
+export function clearServerRuntimeProcessEnv(): void {
+  // Preserve the server id so an in-process restart can reuse the same client
+  // protocol id, but clear the exported runtime fields when no server is active.
+  delete process.env[PROCESS_ENV_KEYS.renounServerPort]
+  delete process.env[
+    PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective
+  ]
+}
+
 export function getServerIdFromProcessEnv(): string | undefined {
   return readNonEmptyProcessEnv(PROCESS_ENV_KEYS.renounServerId)
 }

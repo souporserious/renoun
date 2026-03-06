@@ -1,4 +1,10 @@
-import { Children, Fragment, cloneElement, isValidElement } from 'react'
+import {
+  Children,
+  Fragment,
+  cloneElement,
+  isValidElement,
+  type ComponentProps,
+} from 'react'
 import {
   Directory,
   isDirectory,
@@ -15,6 +21,10 @@ import {
 } from './SidebarCollapseProvider'
 import { getEntryMetadata } from './get-entry-metadata'
 import { SidebarLink } from './SidebarLink'
+
+type TreeNavigationLinkProps = ComponentProps<NavigationComponents['Link']> & {
+  collapsible?: boolean
+}
 
 const components: Partial<NavigationComponents> = {
   Root: Fragment,
@@ -63,8 +73,8 @@ const components: Partial<NavigationComponents> = {
       return <li>{children}</li>
     }
 
-    const link = isValidElement(firstChild)
-      ? cloneElement<any>(firstChild, { collapsible: true })
+    const link = isValidElement<TreeNavigationLinkProps>(firstChild)
+      ? cloneElement(firstChild, { collapsible: true })
       : firstChild
 
     const directoryPathname = entry.getPathname()
@@ -80,8 +90,7 @@ const components: Partial<NavigationComponents> = {
       </li>
     )
   },
-  Link: async (props) => {
-    const { entry, pathname, collapsible } = props as any
+  Link: async ({ entry, pathname, collapsible }: TreeNavigationLinkProps) => {
     const metadata = await getEntryMetadata(entry)
     let label: string
 
