@@ -62,7 +62,8 @@ interface SessionLikeWithInvalidation {
 interface DevNavigationSourceState {
   invalidationEpoch: number
   entriesCacheByKey: Map<string, DevNavigationEntriesCacheEntry>
-  sessionUnsubscribeBySession: WeakMap<object, () => void>
+  isDisposed: boolean
+  sessionUnsubscribeBySession: Map<object, () => void>
   collectionTrackingTask?: Promise<void>
   hasTrackedCollectionEntries: boolean
 }
@@ -72,6 +73,35 @@ const devNavigationStateBySource = new WeakMap<
   Directory<any> | Collection<any>,
   DevNavigationSourceState
 >()
+const devNavigationStateFinalizationRegistry =
+  typeof FinalizationRegistry === 'function'
+    ? new FinalizationRegistry<DevNavigationSourceState>((sourceState) => {
+        disposeNavigationSourceState(sourceState)
+      })
+    : undefined
+
+function disposeNavigationSourceState(
+  sourceState: DevNavigationSourceState
+): void {
+  if (sourceState.isDisposed) {
+    return
+  }
+
+  sourceState.isDisposed = true
+  sourceState.entriesCacheByKey.clear()
+  sourceState.collectionTrackingTask = undefined
+  sourceState.hasTrackedCollectionEntries = false
+
+  for (const unsubscribe of sourceState.sessionUnsubscribeBySession.values()) {
+    try {
+      unsubscribe()
+    } catch (error) {
+      reportBestEffortError('components/navigation', error)
+    }
+  }
+
+  sourceState.sessionUnsubscribeBySession.clear()
+}
 
 function getNavigationSourceState(
   source: Directory<any> | Collection<any>
@@ -84,10 +114,12 @@ function getNavigationSourceState(
   const created: DevNavigationSourceState = {
     invalidationEpoch: 0,
     entriesCacheByKey: new Map<string, DevNavigationEntriesCacheEntry>(),
-    sessionUnsubscribeBySession: new WeakMap<object, () => void>(),
+    isDisposed: false,
+    sessionUnsubscribeBySession: new Map<object, () => void>(),
     hasTrackedCollectionEntries: false,
   }
   devNavigationStateBySource.set(source, created)
+  devNavigationStateFinalizationRegistry?.register(source, created)
   return created
 }
 
@@ -95,7 +127,7 @@ function trackNavigationSessionInvalidations(
   sourceState: DevNavigationSourceState,
   session: SessionLikeWithInvalidation | undefined
 ): void {
-  if (!session || typeof session !== 'object') {
+  if (sourceState.isDisposed || !session || typeof session !== 'object') {
     return
   }
 
@@ -129,7 +161,7 @@ function trackNavigationSourceInvalidations(
   source: Directory<any> | Collection<any>,
   sourceState: DevNavigationSourceState
 ): void {
-  if (!isDevelopmentEnvironment()) {
+  if (!isDevelopmentEnvironment() || sourceState.isDisposed) {
     return
   }
 
@@ -196,6 +228,9 @@ async function getNavigationEntriesWithDevSWR({
   }
 
   const sourceState = getNavigationSourceState(source)
+  if (sourceState.isDisposed) {
+    return readEntries()
+  }
   trackNavigationSourceInvalidations(source, sourceState)
   const cacheBucket = sourceState.entriesCacheByKey
   const cacheEntry = cacheBucket.get(cacheKey)

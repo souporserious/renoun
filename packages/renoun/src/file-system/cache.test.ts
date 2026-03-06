@@ -1818,6 +1818,56 @@ updated content`
     expect(exportsSpy.mock.calls.length).toBe(callsAfterFirstStructure)
   })
 
+  test('does not reuse package structure cache across source path and export override variants', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'packages/foo/package.json': JSON.stringify({
+        name: 'foo',
+        exports: {
+          '.': './src/index.ts',
+        },
+      }),
+      'packages/foo/src/index.ts': 'export const sourceEntry = 1',
+      'packages/foo/docs/guide.ts': 'export const docsEntry = 1',
+    })
+    const getFileRelativePaths = (
+      structure: Awaited<ReturnType<Package['getStructure']>>
+    ) => {
+      return structure
+        .filter((entry): entry is FileStructure => entry.kind === 'File')
+        .map((entry) => entry.relativePath)
+        .sort()
+    }
+
+    const sourcePackage = new Package({
+      path: 'packages/foo',
+      fileSystem,
+    })
+    const docsSourcePackage = new Package({
+      path: 'packages/foo',
+      fileSystem,
+      sourcePath: 'docs',
+    })
+    const docsOverridePackage = new Package({
+      path: 'packages/foo',
+      fileSystem,
+      exports: {
+        '.': {
+          path: 'docs',
+        },
+      },
+    })
+
+    expect(getFileRelativePaths(await sourcePackage.getStructure())).toEqual([
+      'packages/foo/src/index.ts',
+    ])
+    expect(getFileRelativePaths(await docsSourcePackage.getStructure())).toEqual(
+      ['packages/foo/docs/guide.ts']
+    )
+    expect(
+      getFileRelativePaths(await docsOverridePackage.getStructure())
+    ).toEqual(['packages/foo/docs/guide.ts'])
+  })
+
   test('refreshes package manifest-derived structure after package.json changes', async () => {
     const fileSystem = new InMemoryFileSystem({
       'packages/foo/package.json': JSON.stringify({

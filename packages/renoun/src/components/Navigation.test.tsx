@@ -1,6 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 const isDirectoryMock = vi.fn((entry: unknown) => {
   return (
@@ -33,6 +33,35 @@ vi.mock('../utils/env.ts', () => ({
 vi.mock('../utils/best-effort.ts', () => ({
   reportBestEffortError: vi.fn(),
 }))
+
+const originalFinalizationRegistry = globalThis.FinalizationRegistry
+
+class MockFinalizationRegistry<HeldValue> {
+  static instances: MockFinalizationRegistry<any>[] = []
+
+  readonly #callback: (heldValue: HeldValue) => void
+  readonly #heldValues: HeldValue[] = []
+
+  constructor(callback: (heldValue: HeldValue) => void) {
+    this.#callback = callback
+    MockFinalizationRegistry.instances.push(this)
+  }
+
+  register(_target: object, heldValue: HeldValue): void {
+    this.#heldValues.push(heldValue)
+  }
+
+  cleanupNext(): void {
+    const nextHeldValue = this.#heldValues.shift()
+    if (nextHeldValue !== undefined) {
+      this.#callback(nextHeldValue)
+    }
+  }
+
+  static reset(): void {
+    MockFinalizationRegistry.instances = []
+  }
+}
 
 interface FakeFileEntry {
   kind: 'file'
@@ -69,6 +98,14 @@ describe('Navigation development SWR', () => {
     isFileMock.mockClear()
     isDevelopmentEnvironmentMock.mockReset()
     isDevelopmentEnvironmentMock.mockReturnValue(true)
+    MockFinalizationRegistry.reset()
+    ;(globalThis as { FinalizationRegistry?: typeof FinalizationRegistry })
+      .FinalizationRegistry = MockFinalizationRegistry as typeof FinalizationRegistry
+  })
+
+  afterEach(() => {
+    ;(globalThis as { FinalizationRegistry?: typeof FinalizationRegistry })
+      .FinalizationRegistry = originalFinalizationRegistry
   })
 
   test('returns refreshed entries immediately after invalidation', async () => {
@@ -157,5 +194,38 @@ describe('Navigation development SWR', () => {
 
     expect(firstSource.getEntries).toHaveBeenCalledTimes(1)
     expect(secondSource.getEntries).toHaveBeenCalledTimes(2)
+  })
+
+  test('unsubscribes invalidation listeners when a source is finalized', async () => {
+    const unsubscribe = vi.fn()
+    const onInvalidate = vi.fn((_listener: (path: string) => void) => {
+      return unsubscribe
+    })
+
+    const source: FakeDirectorySource = {
+      kind: 'directory',
+      getPathname: () => '/docs',
+      getFilterPatternKind: () => 'deep',
+      getSession: () => ({ snapshot: { onInvalidate } }),
+      getEntries: vi.fn(async () => [
+        createFakeFileEntry('Docs Page', '/docs/page'),
+      ]),
+    }
+
+    const { Navigation } = await import('./Navigation.tsx')
+
+    await Navigation({ source: source as any })
+
+    expect(onInvalidate).toHaveBeenCalledTimes(1)
+    expect(unsubscribe).not.toHaveBeenCalled()
+    expect(MockFinalizationRegistry.instances).toHaveLength(1)
+
+    MockFinalizationRegistry.instances[0]?.cleanupNext()
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+
+    MockFinalizationRegistry.instances[0]?.cleanupNext()
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 })

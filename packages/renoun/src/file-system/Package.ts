@@ -139,6 +139,45 @@ function createStructureNodeKey(namespace: string, payload: unknown) {
   return createCacheNodeKey(namespace, payload)
 }
 
+function createDirectoryFilterSignature(
+  session: Session,
+  filter: unknown
+): string {
+  if (!filter) {
+    return 'filter:none'
+  }
+
+  if (typeof filter === 'function') {
+    return session.getFunctionId(filter, 'filter')
+  }
+
+  if (typeof filter === 'string') {
+    return `pattern:${filter}`
+  }
+
+  if (filter instanceof Minimatch) {
+    return `pattern:${filter.pattern}`
+  }
+
+  return `filter:${session.createValueSignature(filter, 'filter')}`
+}
+
+function createDirectorySortSignature(session: Session, sort: unknown): string {
+  if (!sort) {
+    return 'sort:none'
+  }
+
+  if (typeof sort === 'function') {
+    return session.getFunctionId(sort, 'sort')
+  }
+
+  if (typeof sort === 'string') {
+    return `sort:string:${sort}`
+  }
+
+  return `sort:${session.createValueSignature(sort, 'sort')}`
+}
+
 function parsePnpmWorkspacePackages(source: string) {
   const packages: string[] = []
   const lines = source.split(/\r?\n/)
@@ -1674,6 +1713,50 @@ export class Package<
     return mainExport?.sources[0]
   }
 
+  #createExportOverridesStructureSignature(session: Session): string {
+    if (!this.#exportOverrides) {
+      return 'exports:none'
+    }
+
+    const normalizedOverrides = Object.keys(this.#exportOverrides)
+      .sort((left, right) => left.localeCompare(right))
+      .map((exportKey) => {
+        const override = this.#exportOverrides?.[exportKey]
+        if (!override) {
+          return {
+            exportKey,
+            override: null,
+          }
+        }
+
+        const overridePath = override.path
+        const resolvedPath = normalizePackagePath(
+          overridePath
+            ? this.#resolveWithinPackage(overridePath)
+            : this.#resolveDerivedPath(exportKey)
+        )
+
+        return {
+          exportKey,
+          path: normalizePathKey(resolvedPath),
+          basePathname:
+            override.basePathname === undefined
+              ? '[default]'
+              : override.basePathname,
+          filterSignature: createDirectoryFilterSignature(
+            session,
+            override.filter
+          ),
+          sortSignature: createDirectorySortSignature(session, override.sort),
+        }
+      })
+
+    return session.createValueSignature(
+      normalizedOverrides,
+      'package-structure-exports'
+    )
+  }
+
   /** @internal */
   getStructureCacheKey() {
     const session = Session.for(this.#fileSystem, undefined, this.#cache)
@@ -1683,6 +1766,8 @@ export class Package<
       snapshot: session.snapshot.id,
       packagePath: normalizePathKey(this.#packagePath),
       explicitName: this.#hasExplicitName ? (this.#name ?? null) : null,
+      sourceRootPath: normalizePathKey(this.#sourceRootPath),
+      exportOverrides: this.#createExportOverridesStructureSignature(session),
     })
   }
 
