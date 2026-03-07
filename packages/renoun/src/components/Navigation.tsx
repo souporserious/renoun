@@ -64,8 +64,7 @@ interface DevNavigationSourceState {
   entriesCacheByKey: Map<string, DevNavigationEntriesCacheEntry>
   isDisposed: boolean
   sessionUnsubscribeBySession: Map<object, () => void>
-  collectionTrackingTask?: Promise<void>
-  hasTrackedCollectionEntries: boolean
+  hasTrackedCollectionRoots: boolean
 }
 
 const DEV_NAVIGATION_SWR_MAX_STALE_AGE_MS = 30_000
@@ -89,8 +88,7 @@ function disposeNavigationSourceState(
 
   sourceState.isDisposed = true
   sourceState.entriesCacheByKey.clear()
-  sourceState.collectionTrackingTask = undefined
-  sourceState.hasTrackedCollectionEntries = false
+  sourceState.hasTrackedCollectionRoots = false
 
   for (const unsubscribe of sourceState.sessionUnsubscribeBySession.values()) {
     try {
@@ -116,7 +114,7 @@ function getNavigationSourceState(
     entriesCacheByKey: new Map<string, DevNavigationEntriesCacheEntry>(),
     isDisposed: false,
     sessionUnsubscribeBySession: new Map<object, () => void>(),
-    hasTrackedCollectionEntries: false,
+    hasTrackedCollectionRoots: false,
   }
   devNavigationStateBySource.set(source, created)
   devNavigationStateFinalizationRegistry?.register(source, created)
@@ -173,31 +171,12 @@ function trackNavigationSourceInvalidations(
     return
   }
 
-  if (sourceState.hasTrackedCollectionEntries) {
+  if (sourceState.hasTrackedCollectionRoots) {
     return
   }
 
-  const existingTask = sourceState.collectionTrackingTask
-  if (existingTask) {
-    return
-  }
-
-  const trackTask = source
-    .getEntries({ includeIndexAndReadmeFiles: true })
-    .then((entries) => {
-      trackNavigationEntriesInvalidations(sourceState, entries)
-      sourceState.hasTrackedCollectionEntries = true
-    })
-    .catch((error) => {
-      reportBestEffortError('components/navigation', error)
-    })
-    .finally(() => {
-      if (sourceState.collectionTrackingTask === trackTask) {
-        sourceState.collectionTrackingTask = undefined
-      }
-    })
-
-  sourceState.collectionTrackingTask = trackTask
+  trackNavigationEntriesInvalidations(sourceState, source.getRootEntries())
+  sourceState.hasTrackedCollectionRoots = true
 }
 
 async function readNavigationEntriesWithTracking(

@@ -8873,6 +8873,11 @@ export class Collection<
     this.#queueDevelopmentNavigationPrewarm()
   }
 
+  /** Get the root entries that define this collection. */
+  getRootEntries(): readonly FileSystemEntry<any>[] {
+    return this.#entries
+  }
+
   #invalidateEntriesCache() {
     this.#entriesCacheInvalidationEpoch += 1
     this.#entriesCache.clear()

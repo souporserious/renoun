@@ -68,26 +68,65 @@ interface FakeFileEntry {
   name: string
   depth: number
   getPathname: () => string
+  getParent: () => FakeDirectoryEntry
 }
 
-interface FakeDirectorySource {
+interface FakeDirectoryEntry {
   kind: 'directory'
+  name: string
+  depth: number
   getPathname: () => string
-  getFilterPatternKind: () => string
+  getEntries: (options?: { recursive?: boolean }) => Promise<readonly FakeFileEntry[]>
   getSession: () => {
     snapshot: {
       onInvalidate: (listener: (path: string) => void) => () => void
     }
   }
-  getEntries: (options?: { recursive?: boolean }) => Promise<readonly FakeFileEntry[]>
 }
 
-function createFakeFileEntry(name: string, pathname: string): FakeFileEntry {
+interface FakeDirectorySource extends FakeDirectoryEntry {
+  getFilterPatternKind: () => string
+}
+
+interface FakeCollectionSource {
+  getEntries: () => Promise<readonly FakeFileEntry[]>
+  getRootEntries: () => readonly FakeDirectoryEntry[]
+}
+
+function createFakeDirectoryEntry(
+  pathname: string,
+  options?: {
+    onInvalidate?: (listener: (path: string) => void) => () => void
+    getEntries?: (options?: { recursive?: boolean }) => Promise<readonly FakeFileEntry[]>
+    getFilterPatternKind?: () => string
+  }
+): FakeDirectorySource {
+  return {
+    kind: 'directory',
+    name: pathname.split('/').filter(Boolean).at(-1) ?? '',
+    depth: pathname.split('/').filter(Boolean).length - 1,
+    getPathname: () => pathname,
+    getFilterPatternKind: options?.getFilterPatternKind ?? (() => 'deep'),
+    getSession: () => ({
+      snapshot: {
+        onInvalidate: options?.onInvalidate ?? (() => () => {}),
+      },
+    }),
+    getEntries: options?.getEntries ?? (async () => []),
+  }
+}
+
+function createFakeFileEntry(
+  name: string,
+  pathname: string,
+  parent: FakeDirectoryEntry
+): FakeFileEntry {
   return {
     kind: 'file',
     name,
     depth: pathname.split('/').filter(Boolean).length - 1,
     getPathname: () => pathname,
+    getParent: () => parent,
   }
 }
 
@@ -100,7 +139,8 @@ describe('Navigation development SWR', () => {
     isDevelopmentEnvironmentMock.mockReturnValue(true)
     MockFinalizationRegistry.reset()
     ;(globalThis as { FinalizationRegistry?: typeof FinalizationRegistry })
-      .FinalizationRegistry = MockFinalizationRegistry as typeof FinalizationRegistry
+      .FinalizationRegistry =
+      MockFinalizationRegistry as unknown as typeof FinalizationRegistry
   })
 
   afterEach(() => {
@@ -116,16 +156,17 @@ describe('Navigation development SWR', () => {
     })
 
     let currentEntries: readonly FakeFileEntry[] = [
-      createFakeFileEntry('Old Page', '/docs/old-page'),
+      createFakeFileEntry(
+        'Old Page',
+        '/docs/old-page',
+        createFakeDirectoryEntry('/docs')
+      ),
     ]
 
-    const source: FakeDirectorySource = {
-      kind: 'directory',
-      getPathname: () => '/docs',
-      getFilterPatternKind: () => 'deep',
-      getSession: () => ({ snapshot: { onInvalidate } }),
+    const source = createFakeDirectoryEntry('/docs', {
+      onInvalidate,
       getEntries: vi.fn(async () => currentEntries),
-    }
+    })
 
     const { Navigation } = await import('./Navigation.tsx')
 
@@ -136,7 +177,13 @@ describe('Navigation development SWR', () => {
     expect(source.getEntries).toHaveBeenCalledTimes(1)
     expect(invalidateListener).toBeTypeOf('function')
 
-    currentEntries = [createFakeFileEntry('New Page', '/docs/new-page')]
+    currentEntries = [
+      createFakeFileEntry(
+        'New Page',
+        '/docs/new-page',
+        createFakeDirectoryEntry('/docs')
+      ),
+    ]
     invalidateListener?.('/docs/new-page.mdx')
 
     const secondElement = await Navigation({ source: source as any })
@@ -158,24 +205,26 @@ describe('Navigation development SWR', () => {
       return () => {}
     })
 
-    const firstSource: FakeDirectorySource = {
-      kind: 'directory',
-      getPathname: () => '/docs',
-      getFilterPatternKind: () => 'deep',
-      getSession: () => ({ snapshot: { onInvalidate: firstOnInvalidate } }),
+    const firstSource = createFakeDirectoryEntry('/docs', {
+      onInvalidate: firstOnInvalidate,
       getEntries: vi.fn(async () => [
-        createFakeFileEntry('Docs Page', '/docs/page'),
+        createFakeFileEntry(
+          'Docs Page',
+          '/docs/page',
+          createFakeDirectoryEntry('/docs')
+        ),
       ]),
-    }
-    const secondSource: FakeDirectorySource = {
-      kind: 'directory',
-      getPathname: () => '/guides',
-      getFilterPatternKind: () => 'deep',
-      getSession: () => ({ snapshot: { onInvalidate: secondOnInvalidate } }),
+    })
+    const secondSource = createFakeDirectoryEntry('/guides', {
+      onInvalidate: secondOnInvalidate,
       getEntries: vi.fn(async () => [
-        createFakeFileEntry('Guide Page', '/guides/page'),
+        createFakeFileEntry(
+          'Guide Page',
+          '/guides/page',
+          createFakeDirectoryEntry('/guides')
+        ),
       ]),
-    }
+    })
 
     const { Navigation } = await import('./Navigation.tsx')
 
@@ -202,15 +251,16 @@ describe('Navigation development SWR', () => {
       return unsubscribe
     })
 
-    const source: FakeDirectorySource = {
-      kind: 'directory',
-      getPathname: () => '/docs',
-      getFilterPatternKind: () => 'deep',
-      getSession: () => ({ snapshot: { onInvalidate } }),
+    const source = createFakeDirectoryEntry('/docs', {
+      onInvalidate,
       getEntries: vi.fn(async () => [
-        createFakeFileEntry('Docs Page', '/docs/page'),
+        createFakeFileEntry(
+          'Docs Page',
+          '/docs/page',
+          createFakeDirectoryEntry('/docs')
+        ),
       ]),
-    }
+    })
 
     const { Navigation } = await import('./Navigation.tsx')
 
@@ -227,5 +277,55 @@ describe('Navigation development SWR', () => {
     MockFinalizationRegistry.instances[0]?.cleanupNext()
 
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  test('refreshes collection-backed navigation when a tracked root gains its first entry', async () => {
+    let invalidateListener: ((path: string) => void) | undefined
+    const onInvalidate = vi.fn((listener: (path: string) => void) => {
+      invalidateListener = listener
+      return () => {}
+    })
+    const originalNodeEnv = process.env.NODE_ENV
+
+    const rootDirectory = createFakeDirectoryEntry('/guides', {
+      onInvalidate,
+    })
+    let currentEntries: readonly FakeFileEntry[] = []
+
+    const source: FakeCollectionSource = {
+      getRootEntries: () => [rootDirectory],
+      getEntries: vi.fn(async () => currentEntries),
+    }
+
+    process.env.NODE_ENV = 'production'
+
+    try {
+      const { Navigation } = await import('./Navigation.tsx')
+
+      const firstElement = await Navigation({ source: source as any })
+      const firstList = (firstElement as React.ReactElement<any>).props
+        .children as React.ReactElement<any>
+      expect(React.Children.count(firstList.props.children)).toBe(0)
+      expect(onInvalidate).toHaveBeenCalledTimes(1)
+      expect(source.getEntries).toHaveBeenCalledTimes(1)
+      expect(invalidateListener).toBeTypeOf('function')
+
+      currentEntries = [
+        createFakeFileEntry('Quickstart', '/guides/quickstart', rootDirectory),
+      ]
+      invalidateListener?.('/guides/quickstart.mdx')
+
+      const secondElement = await Navigation({ source: source as any })
+      const secondList = (secondElement as React.ReactElement<any>).props
+        .children as React.ReactElement<any>
+      const [secondItem] = React.Children.toArray(
+        secondList.props.children
+      ) as React.ReactElement<any>[]
+
+      expect(source.getEntries).toHaveBeenCalledTimes(2)
+      expect(secondItem?.props.entry.name).toBe('Quickstart')
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
   })
 })

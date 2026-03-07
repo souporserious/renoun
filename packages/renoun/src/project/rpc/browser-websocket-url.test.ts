@@ -3,13 +3,13 @@ import { describe, expect, test } from 'vitest'
 import { resolveBrowserWebSocketUrl } from './browser-websocket-url.ts'
 
 describe('resolveBrowserWebSocketUrl', () => {
-  test('falls back to localhost for non-loopback browser hosts', () => {
+  test('preserves non-loopback browser hosts', () => {
     expect(
       resolveBrowserWebSocketUrl('43123', {
         protocol: 'https:',
         hostname: 'preview.example.dev',
       })
-    ).toBe('wss://localhost:43123')
+    ).toBe('wss://preview.example.dev:43123')
   })
 
   test('falls back to ws when the page is not served over https', () => {
