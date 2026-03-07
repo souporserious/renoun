@@ -6,6 +6,13 @@ import { rehypePlugins } from '@renoun/mdx/rehype'
 import { remarkPlugins } from '@renoun/mdx/remark'
 import { Fragment as JsxRuntimeFragment, jsx, jsxs } from 'react/jsx-runtime'
 
+import {
+  getProjectClientBrowserRefreshVersion,
+  getProjectClientBrowserRuntime,
+  onProjectClientBrowserRefreshVersionChange,
+  onProjectClientBrowserRuntimeChange,
+} from '../../project/browser-runtime.ts'
+import { setProjectClientBrowserRuntime } from '../../project/browser-client-sync.ts'
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
 import { resolveBrowserWebSocketUrl } from '../../project/rpc/browser-websocket-url.ts'
@@ -153,6 +160,30 @@ function getQuickInfoTestId(
   return 'quick-info-divider'
 }
 
+function useActiveProjectServerRuntime(
+  initialRuntime: ProjectServerRuntime | undefined
+): ProjectServerRuntime | undefined {
+  React.useEffect(() => {
+    if (initialRuntime) {
+      setProjectClientBrowserRuntime(initialRuntime)
+    }
+  }, [initialRuntime?.id, initialRuntime?.port])
+
+  return React.useSyncExternalStore(
+    onProjectClientBrowserRuntimeChange,
+    () => getProjectClientBrowserRuntime() ?? initialRuntime,
+    () => initialRuntime
+  )
+}
+
+function useProjectClientRefreshVersionSnapshot(): string {
+  return React.useSyncExternalStore(
+    onProjectClientBrowserRefreshVersionChange,
+    getProjectClientBrowserRefreshVersion,
+    getProjectClientBrowserRefreshVersion
+  )
+}
+
 export function QuickInfoClientPopover({
   diagnostics,
   quickInfo,
@@ -180,15 +211,47 @@ export function QuickInfoClientPopover({
     quickInfo === undefined && request !== undefined
   )
   const { quickInfo: activeQuickInfo } = useQuickInfoContext()
+  const activeRuntime = useActiveProjectServerRuntime(request?.runtime)
+  const refreshVersion = useProjectClientRefreshVersionSnapshot()
+  const effectiveProjectVersion = React.useMemo(() => {
+    if (!activeRuntime) {
+      return request?.projectVersion
+    }
+
+    if (
+      refreshVersion === '0:0' &&
+      request?.runtime.id === activeRuntime.id &&
+      typeof request.projectVersion === 'string' &&
+      request.projectVersion.length > 0
+    ) {
+      return request.projectVersion
+    }
+
+    return `${activeRuntime.id}:${refreshVersion}`
+  }, [activeRuntime, refreshVersion, request])
+  const effectiveRequest = React.useMemo(() => {
+    if (!request || !activeRuntime) {
+      return undefined
+    }
+
+    return {
+      ...request,
+      runtime: activeRuntime,
+      projectVersion: effectiveProjectVersion,
+    } satisfies QuickInfoRequest
+  }, [activeRuntime, effectiveProjectVersion, request])
   const activeThemeName = React.useMemo(() => {
     return readActiveThemeName(activeQuickInfo?.anchorId)
   }, [activeQuickInfo?.anchorId])
-  const requestKey = request ? toQuickInfoCacheKey(request) : ''
-  const requestThemeKey = request
-    ? toQuickInfoThemeCacheKey(request.themeConfig)
+  const requestKey = effectiveRequest ? toQuickInfoCacheKey(effectiveRequest) : ''
+  const requestThemeKey = effectiveRequest
+    ? toQuickInfoThemeCacheKey(effectiveRequest.themeConfig)
     : ''
   const resolvedTokenThemeConfig = React.useMemo(() => {
-    return resolveQuickInfoTokenThemeConfig(request?.themeConfig, activeThemeName)
+    return resolveQuickInfoTokenThemeConfig(
+      effectiveRequest?.themeConfig,
+      activeThemeName
+    )
   }, [activeThemeName, requestThemeKey])
   const resolvedTokenThemeCacheKey = React.useMemo(() => {
     return toQuickInfoThemeCacheKey(resolvedTokenThemeConfig)
@@ -216,14 +279,14 @@ export function QuickInfoClientPopover({
       return
     }
 
-    if (!request) {
+    if (!effectiveRequest) {
       setResolvedQuickInfo(null)
       setIsLoading(false)
       return
     }
 
     setIsLoading(true)
-    void getQuickInfoForRequest(request).then((value) => {
+    void getQuickInfoForRequest(effectiveRequest).then((value) => {
       if (isDisposed) {
         return
       }
@@ -235,12 +298,12 @@ export function QuickInfoClientPopover({
     return () => {
       isDisposed = true
     }
-  }, [quickInfo, requestKey])
+  }, [effectiveRequest, quickInfo, requestKey])
 
   React.useEffect(() => {
     let isDisposed = false
 
-    if (!request || !resolvedQuickInfo?.displayText) {
+    if (!effectiveRequest || !resolvedQuickInfo?.displayText) {
       setResolvedDisplayTokens(null)
       return
     }
@@ -248,7 +311,7 @@ export function QuickInfoClientPopover({
     const displayText = resolvedQuickInfo.displayText
     setResolvedDisplayTokens(null)
     void getQuickInfoDisplayTokensForRequest(
-      request,
+      effectiveRequest,
       displayText,
       resolvedTokenThemeConfig,
       resolvedTokenThemeCacheKey
@@ -264,6 +327,7 @@ export function QuickInfoClientPopover({
       isDisposed = true
     }
   }, [
+    effectiveRequest,
     requestKey,
     requestThemeKey,
     resolvedQuickInfo?.displayText,

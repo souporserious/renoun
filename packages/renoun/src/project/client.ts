@@ -47,6 +47,14 @@ import {
   invalidateProjectFileCache,
   resetProjectCacheRuntimeConfiguration,
 } from './cache.ts'
+import {
+  getProjectClientBrowserRuntime as getSharedProjectClientBrowserRuntime,
+  onProjectClientBrowserRefreshVersionChange as onSharedProjectClientBrowserRefreshVersionChange,
+  onProjectClientBrowserRuntimeChange as onSharedProjectClientBrowserRuntimeChange,
+  setProjectClientBrowserRefreshVersion as setSharedProjectClientBrowserRefreshVersion,
+  setProjectClientBrowserRuntime as setSharedProjectClientBrowserRuntime,
+} from './browser-runtime.ts'
+import { invalidateSharedFileTextPrefixCachePath } from './file-text-prefix-cache.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import {
   getProject,
@@ -157,6 +165,94 @@ export function getProjectClientRefreshVersion(): string {
   return `${latestRefreshCursor}:${clientRpcInvalidationEpoch}`
 }
 
+function notifyProjectClientRefreshVersionChanged(): void {
+  setSharedProjectClientBrowserRefreshVersion(getProjectClientRefreshVersion())
+}
+
+function setLatestRefreshCursor(value: number): void {
+  const normalizedValue = Math.max(0, Math.floor(value))
+  if (latestRefreshCursor === normalizedValue) {
+    return
+  }
+
+  latestRefreshCursor = normalizedValue
+  notifyProjectClientRefreshVersionChanged()
+}
+
+function bumpLatestRefreshCursor(value: number): void {
+  if (!Number.isFinite(value) || value < 0) {
+    return
+  }
+
+  setLatestRefreshCursor(Math.max(latestRefreshCursor, Math.floor(value)))
+}
+
+export function onProjectClientRefreshVersionChange(
+  listener: (version: string) => void
+): () => void {
+  return onSharedProjectClientBrowserRefreshVersionChange(listener)
+}
+
+export function getProjectClientBrowserRuntime():
+  | ProjectServerRuntime
+  | undefined {
+  return getSharedProjectClientBrowserRuntime()
+}
+
+export function onProjectClientBrowserRuntimeChange(
+  listener: (runtime: ProjectServerRuntime | undefined) => void
+): () => void {
+  return onSharedProjectClientBrowserRuntimeChange(listener)
+}
+
+export function setProjectClientBrowserRuntime(
+  runtime?: ProjectServerRuntime
+): void {
+  const normalizedRuntime = runtime
+    ? {
+        id: String(runtime.id),
+        port: String(runtime.port),
+      }
+    : undefined
+  const currentRuntime = getSharedProjectClientBrowserRuntime()
+  const currentRuntimeKey = currentRuntime
+    ? toServerRuntimeKey(currentRuntime)
+    : undefined
+  const nextRuntimeKey = normalizedRuntime
+    ? toServerRuntimeKey(normalizedRuntime)
+    : undefined
+
+  if (currentRuntimeKey === nextRuntimeKey) {
+    return
+  }
+
+  setSharedProjectClientBrowserRuntime(normalizedRuntime)
+
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (!normalizedRuntime) {
+    disposeActiveClient()
+    return
+  }
+
+  if (!client) {
+    const nextClient = createClientForRuntime(normalizedRuntime)
+    attachClientRefreshSubscriptions(nextClient)
+    return
+  }
+
+  if (clientRuntimeKey !== nextRuntimeKey) {
+    replaceClientForRuntime(normalizedRuntime, {
+      resyncImmediately: true,
+    })
+    return
+  }
+
+  attachClientRefreshSubscriptions(client)
+}
+
 export interface ProjectClientRuntimeOptions {
   useRpcCache?: boolean
   rpcCacheTtlMs?: number
@@ -194,6 +290,17 @@ export function resetProjectClientRuntimeConfiguration(): void {
   projectClientRuntimeOptions.rpcCacheTtlMs = undefined
   projectClientRuntimeOptions.consumeRefreshNotifications = undefined
   resetProjectCacheRuntimeConfiguration()
+}
+
+function getActiveProjectServerRuntime(): ProjectServerRuntime | undefined {
+  if (typeof window !== 'undefined') {
+    const browserRuntime = getSharedProjectClientBrowserRuntime()
+    if (browserRuntime) {
+      return browserRuntime
+    }
+  }
+
+  return getServerRuntimeFromProcessEnv()
 }
 
 function shouldUseClientRpcCache(): boolean {
@@ -591,6 +698,7 @@ function invalidateClientRpcStateByNormalizedPaths(
   // Refresh events can reference transitive dependencies that are only known
   // after in-flight RPC responses resolve, so always advance the epoch.
   clientRpcInvalidationEpoch += 1
+  notifyProjectClientRefreshVersionChanged()
 
   for (const [cacheKey, entry] of clientRpcCacheByKey) {
     if (
@@ -619,6 +727,7 @@ function invalidateAllClientRpcState(): void {
   clientRpcInvalidationEpoch += 1
   clientRpcCacheByKey.clear()
   clientRpcInFlightByKey.clear()
+  notifyProjectClientRefreshVersionChanged()
 }
 
 function collectConservativeRefreshFallbackPaths(): string[] {
@@ -750,9 +859,11 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
 
           const nextCursor = normalizeRefreshCursor(response.nextCursor)
           if (nextCursor !== undefined) {
-            latestRefreshCursor = response.fullRefresh
-              ? nextCursor
-              : Math.max(latestRefreshCursor, nextCursor)
+            if (response.fullRefresh) {
+              setLatestRefreshCursor(nextCursor)
+            } else {
+              bumpLatestRefreshCursor(nextCursor)
+            }
           }
 
           const paths = getRefreshInvalidationPaths(response)
@@ -767,7 +878,7 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
             invalidateAllClientRpcState()
             applyRefreshInvalidations(fallbackPaths)
-            latestRefreshCursor = 0
+            setLatestRefreshCursor(0)
             return
           }
 
@@ -814,7 +925,7 @@ function attachClientRefreshSubscriptions(
 
     const refreshCursor = normalizeRefreshCursor(message.data.refreshCursor)
     if (refreshCursor !== undefined) {
-      latestRefreshCursor = Math.max(latestRefreshCursor, refreshCursor)
+      bumpLatestRefreshCursor(refreshCursor)
     }
 
     const paths = getRefreshInvalidationPaths(message.data)
@@ -919,7 +1030,7 @@ function ensureServerRuntimeEnvChangeSubscription(): void {
 function getClient(): WebSocketClient | undefined {
   ensureServerRuntimeEnvChangeSubscription()
 
-  const serverRuntime = getServerRuntimeFromProcessEnv()
+  const serverRuntime = getActiveProjectServerRuntime()
   const hadExistingClient = client !== undefined
   const nextRuntimeKey = serverRuntime
     ? toServerRuntimeKey(serverRuntime)
@@ -1455,6 +1566,9 @@ export async function createSourceFile(
     // Source updates can affect dependency-aware RPC results for many files.
     // Clear client-side RPC state so stale dependent entries are not reused.
     invalidateAllClientRpcState()
+    invalidateProjectCachesByPaths([filePath])
+    invalidateRuntimeAnalysisCachePath(filePath)
+    invalidateSharedFileTextPrefixCachePath(filePath)
     return
   }
 
@@ -1462,6 +1576,7 @@ export async function createSourceFile(
   project.createSourceFile(filePath, sourceText, { overwrite: true })
   invalidateProjectFileCache(project, filePath)
   invalidateRuntimeAnalysisCachePath(filePath)
+  invalidateSharedFileTextPrefixCachePath(filePath)
 }
 
 /**

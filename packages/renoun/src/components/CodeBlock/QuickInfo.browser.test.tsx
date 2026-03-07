@@ -2,6 +2,7 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createRoot, type Root } from 'react-dom/client'
 
+import { setProjectClientBrowserRuntime } from '../../project/browser-client-sync.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
@@ -27,9 +28,16 @@ interface QuickInfoFixture {
 
 type RpcCallCounters = {
   quickInfoByPosition: Map<number, number>
+  quickInfoByRuntimeKey: Map<string, number>
   tokensByValue: Map<string, number>
   tokensByThemeKey: Map<string, number>
   tokensWarmRequests: number
+  sockets: Set<MockWebSocketInstance>
+}
+
+interface MockWebSocketInstance {
+  readyState: number
+  emitServerMessage: (payload: Record<string, unknown>) => void
 }
 
 const SHORT_SYMBOL_POSITION = 100
@@ -79,9 +87,11 @@ describe('QuickInfo browser regression', () => {
   beforeEach(() => {
     counters = {
       quickInfoByPosition: new Map(),
+      quickInfoByRuntimeKey: new Map(),
       tokensByValue: new Map(),
       tokensByThemeKey: new Map(),
       tokensWarmRequests: 0,
+      sockets: new Set(),
     }
 
     container = document.createElement('div')
@@ -109,6 +119,7 @@ describe('QuickInfo browser regression', () => {
       node.remove()
     })
     document.documentElement.removeAttribute('data-theme')
+    setProjectClientBrowserRuntime(undefined)
 
     if (originalWebSocket) {
       ;(globalThis as any).WebSocket = originalWebSocket
@@ -302,6 +313,63 @@ describe('QuickInfo browser regression', () => {
     expect(shortHeightAgain).toBeLessThan(longHeight - 24)
     expect(shortWidthAgain).toBeLessThanOrEqual(shortWidth + 20)
   })
+
+  it('re-fetches quick info after refresh invalidation without rerendering the code block', async () => {
+    renderQuickInfoFixture(root, 'refresh-version')
+
+    await waitFor(
+      () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+      1_000
+    )
+    const symbol = getSymbolAnchor('symbol-short')
+
+    hoverSymbol(symbol)
+    await waitFor(
+      () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 1,
+      1_000
+    )
+    leaveSymbol(symbol)
+    await waitFor(() => !getPopover(), 1_000)
+
+    broadcastNotification(counters, {
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/tmp/history.refresh-version.ts'],
+      },
+    })
+
+    hoverSymbol(symbol)
+    await waitFor(
+      () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 2,
+      1_000
+    )
+  })
+
+  it('uses the updated active runtime for new hover requests without rerendering the code block', async () => {
+    renderQuickInfoFixture(root, 'runtime-switch')
+
+    await waitFor(
+      () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+      1_000
+    )
+
+    setProjectClientBrowserRuntime({
+      id: 'quick-info-browser-test-updated',
+      port: '43124',
+    })
+
+    const symbol = getSymbolAnchor('symbol-short')
+    hoverSymbol(symbol)
+
+    await waitFor(
+      () =>
+        counters.quickInfoByRuntimeKey.get(
+          'quick-info-browser-test-updated@ws://localhost:43124'
+        ) === 1,
+      1_000
+    )
+  })
 })
 
 function renderQuickInfoFixture(root: Root | null, cacheScope: string) {
@@ -474,6 +542,15 @@ function sleep(timeoutMs: number): Promise<void> {
   })
 }
 
+function broadcastNotification(
+  counters: RpcCallCounters,
+  payload: Record<string, unknown>
+): void {
+  for (const socket of counters.sockets) {
+    socket.emitServerMessage(payload)
+  }
+}
+
 function createMockWebSocket(counters: RpcCallCounters): typeof WebSocket {
   class MockWebSocket extends EventTarget {
     static CONNECTING = 0
@@ -486,9 +563,15 @@ function createMockWebSocket(counters: RpcCallCounters): typeof WebSocket {
     onmessage: ((event: MessageEvent) => void) | null = null
     onerror: ((event: Event) => void) | null = null
     onclose: ((event: Event) => void) | null = null
+    readonly #runtimeKey: string
 
-    constructor(_url: string, _protocol?: string | string[]) {
+    constructor(url: string, protocol?: string | string[]) {
       super()
+      const resolvedProtocol = Array.isArray(protocol)
+        ? protocol[0]
+        : protocol
+      this.#runtimeKey = `${resolvedProtocol ?? 'unknown'}@${url}`
+      counters.sockets.add(this)
       queueMicrotask(() => {
         this.readyState = MockWebSocket.OPEN
         const event = new Event('open')
@@ -499,7 +582,7 @@ function createMockWebSocket(counters: RpcCallCounters): typeof WebSocket {
 
     send(rawPayload: string): void {
       const request = JSON.parse(rawPayload) as JsonRpcRequest
-      const response = resolveMockRpcResponse(request, counters)
+      const response = resolveMockRpcResponse(this.#runtimeKey, request, counters)
 
       queueMicrotask(() => {
         if (this.readyState !== MockWebSocket.OPEN) {
@@ -514,12 +597,25 @@ function createMockWebSocket(counters: RpcCallCounters): typeof WebSocket {
       })
     }
 
+    emitServerMessage(payload: Record<string, unknown>): void {
+      if (this.readyState !== MockWebSocket.OPEN) {
+        return
+      }
+
+      const event = new MessageEvent('message', {
+        data: JSON.stringify(payload),
+      })
+      this.dispatchEvent(event)
+      this.onmessage?.(event)
+    }
+
     close(): void {
       if (this.readyState === MockWebSocket.CLOSED) {
         return
       }
 
       this.readyState = MockWebSocket.CLOSED
+      counters.sockets.delete(this)
       const event = new Event('close')
       this.dispatchEvent(event)
       this.onclose?.(event)
@@ -530,6 +626,7 @@ function createMockWebSocket(counters: RpcCallCounters): typeof WebSocket {
 }
 
 function resolveMockRpcResponse(
+  runtimeKey: string,
   request: JsonRpcRequest,
   counters: RpcCallCounters
 ): Record<string, unknown> {
@@ -539,6 +636,10 @@ function resolveMockRpcResponse(
     counters.quickInfoByPosition.set(
       position,
       (counters.quickInfoByPosition.get(position) ?? 0) + 1
+    )
+    counters.quickInfoByRuntimeKey.set(
+      runtimeKey,
+      (counters.quickInfoByRuntimeKey.get(runtimeKey) ?? 0) + 1
     )
 
     return {

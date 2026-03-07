@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
     resolveCachedTypeAtLocationWithDependencies: vi.fn(),
     transpileCachedSourceFile: vi.fn(),
     invalidateProjectFileCache: vi.fn(),
+    invalidateSharedFileTextPrefixCachePath: vi.fn(),
     configureProjectCacheRuntime: vi.fn(),
     resetProjectCacheRuntimeConfiguration: vi.fn(),
   }
@@ -60,6 +61,11 @@ vi.mock('./cache.ts', () => ({
     mocks.resetProjectCacheRuntimeConfiguration,
 }))
 
+vi.mock('./file-text-prefix-cache.ts', () => ({
+  invalidateSharedFileTextPrefixCachePath:
+    mocks.invalidateSharedFileTextPrefixCachePath,
+}))
+
 describe('project client transport guards', () => {
   const originalEnvironment = captureProcessEnv([
     'RENOUN_SERVER_PORT',
@@ -77,7 +83,9 @@ describe('project client transport guards', () => {
     mocks.getProject.mockClear()
     mocks.getCachedSourceTextMetadata.mockClear()
     mocks.invalidateRuntimeAnalysisCachePaths.mockClear()
+    mocks.invalidateRuntimeAnalysisCachePath.mockClear()
     mocks.invalidateProjectCachesByPaths.mockClear()
+    mocks.invalidateSharedFileTextPrefixCachePath.mockClear()
     mocks.configureProjectCacheRuntime.mockClear()
     mocks.resetProjectCacheRuntimeConfiguration.mockClear()
   })
@@ -476,6 +484,15 @@ describe('project client transport guards', () => {
 
     expect(first).toMatchObject({ resolveTypeCallCount: 1 })
     expect(second).toMatchObject({ resolveTypeCallCount: 2 })
+    expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
+      '/project/src/b.ts',
+    ])
+    expect(mocks.invalidateRuntimeAnalysisCachePath).toHaveBeenCalledWith(
+      '/project/src/b.ts'
+    )
+    expect(mocks.invalidateSharedFileTextPrefixCachePath).toHaveBeenCalledWith(
+      '/project/src/b.ts'
+    )
   })
 
   test('does not cache getFileExportText results when includeDependencies is enabled', async () => {

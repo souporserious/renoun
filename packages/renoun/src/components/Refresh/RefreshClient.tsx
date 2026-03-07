@@ -1,8 +1,10 @@
 'use client'
 import { useEffect } from 'react'
 
-import { resolveBrowserWebSocketUrl } from '../../project/rpc/browser-websocket-url.ts'
-import type { WebSocketNotification } from '../../project/rpc/server.ts'
+import {
+  onProjectClientBrowserRefreshNotification,
+  setProjectClientBrowserRuntime,
+} from '../../project/browser-client-sync.ts'
 
 declare global {
   var __WAKU_RSC_RELOAD_LISTENERS__: (() => void)[] | undefined
@@ -18,9 +20,9 @@ export function RefreshClient({ port, id }: { port: string; id: string }) {
       return
     }
 
-    function handleMessage(event: MessageEvent) {
-      const message = JSON.parse(event.data) as WebSocketNotification
+    setProjectClientBrowserRuntime({ port, id })
 
+    return onProjectClientBrowserRefreshNotification((message) => {
       if (message.type === 'refresh' && 'nd' in window) {
         // @ts-ignore - private Next.js API
         const router = window.nd.router
@@ -35,15 +37,7 @@ export function RefreshClient({ port, id }: { port: string; id: string }) {
           )
         }
       }
-    }
-
-    const ws = new WebSocket(resolveBrowserWebSocketUrl(port), id)
-    ws.addEventListener('message', handleMessage)
-
-    return () => {
-      ws.removeEventListener('message', handleMessage)
-      ws.close()
-    }
+    })
   }, [id, port])
 
   return null
