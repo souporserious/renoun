@@ -51,6 +51,7 @@ vi.mock('node:fs', async () => {
 
 const originalEnvironment = captureProcessEnv([
   'RENOUN_SERVER_PORT',
+  'RENOUN_SERVER_HOST',
   'RENOUN_SERVER_ID',
   'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
   'RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE',
@@ -162,6 +163,7 @@ describe('project server refresh invalidations', () => {
     const firstPort = String(await firstServer.getPort())
 
     expect(process.env['RENOUN_SERVER_PORT']).toBe(firstPort)
+    expect(process.env['RENOUN_SERVER_HOST']).toBe('127.0.0.1')
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       '0'
     )
@@ -173,6 +175,7 @@ describe('project server refresh invalidations', () => {
     const secondPort = String(await secondServer.getPort())
 
     expect(process.env['RENOUN_SERVER_PORT']).toBe(secondPort)
+    expect(process.env['RENOUN_SERVER_HOST']).toBe('127.0.0.1')
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       '1'
     )
@@ -180,6 +183,7 @@ describe('project server refresh invalidations', () => {
     secondServer.cleanup()
 
     expect(process.env['RENOUN_SERVER_PORT']).toBe(firstPort)
+    expect(process.env['RENOUN_SERVER_HOST']).toBe('127.0.0.1')
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       '0'
     )
@@ -194,6 +198,7 @@ describe('project server refresh invalidations', () => {
     })
 
     expect(process.env['RENOUN_SERVER_PORT']).toBeDefined()
+    expect(process.env['RENOUN_SERVER_HOST']).toBe('127.0.0.1')
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       '0'
     )
@@ -201,6 +206,7 @@ describe('project server refresh invalidations', () => {
     activeServer.cleanup()
 
     expect(process.env['RENOUN_SERVER_PORT']).toBeUndefined()
+    expect(process.env['RENOUN_SERVER_HOST']).toBeUndefined()
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       undefined
     )

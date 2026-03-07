@@ -142,6 +142,7 @@ const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
 const CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY =
   new Set<ClientCachedRpcMethod>([
     'getQuickInfoAtPosition',
+    'getSourceTextMetadata',
     'transpileSourceFile',
   ])
 
@@ -212,6 +213,9 @@ export function setProjectClientBrowserRuntime(
     ? {
         id: String(runtime.id),
         port: String(runtime.port),
+        ...(typeof runtime.host === 'string' && runtime.host.trim().length > 0
+          ? { host: runtime.host.trim() }
+          : {}),
       }
     : undefined
   const currentRuntime = getSharedProjectClientBrowserRuntime()
@@ -941,7 +945,7 @@ function attachClientRefreshSubscriptions(
 }
 
 function toServerRuntimeKey(runtime: ProjectServerRuntime): string {
-  return `${runtime.id}:${runtime.port}`
+  return `${runtime.id}:${runtime.host ?? 'localhost'}:${runtime.port}`
 }
 
 function disposeActiveClient(): void {

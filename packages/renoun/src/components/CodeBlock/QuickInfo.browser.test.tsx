@@ -2,7 +2,11 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createRoot, type Root } from 'react-dom/client'
 
-import { setProjectClientBrowserRuntime } from '../../project/browser-client-sync.ts'
+import { getProjectClientBrowserRuntime } from '../../project/browser-runtime.ts'
+import {
+  retainProjectClientBrowserRuntime,
+  setProjectClientBrowserRuntime,
+} from '../../project/browser-client-sync.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
@@ -28,6 +32,7 @@ interface QuickInfoFixture {
 
 type RpcCallCounters = {
   quickInfoByPosition: Map<number, number>
+  quickInfoFailuresByPosition: Map<number, number>
   quickInfoByRuntimeKey: Map<string, number>
   tokensByValue: Map<string, number>
   tokensByThemeKey: Map<string, number>
@@ -42,7 +47,11 @@ interface MockWebSocketInstance {
 
 const SHORT_SYMBOL_POSITION = 100
 const LONG_SYMBOL_POSITION = 200
-const RUNTIME: ProjectServerRuntime = { id: 'quick-info-browser-test', port: '43123' }
+const RUNTIME: ProjectServerRuntime = {
+  id: 'quick-info-browser-test',
+  port: '43123',
+  host: '127.0.0.1',
+}
 const THEME_CONFIG: ConfigurationOptions['theme'] = {
   light: 'github-light',
   dark: 'github-dark',
@@ -87,6 +96,7 @@ describe('QuickInfo browser regression', () => {
   beforeEach(() => {
     counters = {
       quickInfoByPosition: new Map(),
+      quickInfoFailuresByPosition: new Map(),
       quickInfoByRuntimeKey: new Map(),
       tokensByValue: new Map(),
       tokensByThemeKey: new Map(),
@@ -315,7 +325,46 @@ describe('QuickInfo browser regression', () => {
   })
 
   it('re-fetches quick info after refresh invalidation without rerendering the code block', async () => {
+    const releaseRuntime = retainProjectClientBrowserRuntime(RUNTIME)
+
     renderQuickInfoFixture(root, 'refresh-version')
+
+    try {
+      await waitFor(
+        () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+        1_000
+      )
+      const symbol = getSymbolAnchor('symbol-short')
+
+      hoverSymbol(symbol)
+      await waitFor(
+        () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 1,
+        1_000
+      )
+      leaveSymbol(symbol)
+      await waitFor(() => !getPopover(), 1_000)
+
+      broadcastNotification(counters, {
+        type: 'refresh',
+        data: {
+          refreshCursor: 1,
+          filePaths: ['/tmp/history.refresh-version.ts'],
+        },
+      })
+
+      hoverSymbol(symbol)
+      await waitFor(
+        () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 2,
+        1_000
+      )
+    } finally {
+      releaseRuntime()
+    }
+  })
+
+  it('retries quick info after a transient transport failure instead of caching an empty result', async () => {
+    counters.quickInfoFailuresByPosition.set(SHORT_SYMBOL_POSITION, 1)
+    renderQuickInfoFixture(root, 'transient-failure')
 
     await waitFor(
       () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
@@ -328,22 +377,26 @@ describe('QuickInfo browser regression', () => {
       () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 1,
       1_000
     )
+    await waitFor(() => {
+      const popover = getPopover()
+      return Boolean(
+        popover && !popover.textContent?.includes('Loading symbol info...')
+      )
+    }, 1_000)
+
     leaveSymbol(symbol)
     await waitFor(() => !getPopover(), 1_000)
-
-    broadcastNotification(counters, {
-      type: 'refresh',
-      data: {
-        refreshCursor: 1,
-        filePaths: ['/tmp/history.refresh-version.ts'],
-      },
-    })
 
     hoverSymbol(symbol)
     await waitFor(
       () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 2,
       1_000
     )
+    await waitFor(() => {
+      return getPopover()?.textContent?.includes(
+        'Streams export history from a repository source.'
+      )
+    }, 1_000)
   })
 
   it('uses the updated active runtime for new hover requests without rerendering the code block', async () => {
@@ -357,6 +410,7 @@ describe('QuickInfo browser regression', () => {
     setProjectClientBrowserRuntime({
       id: 'quick-info-browser-test-updated',
       port: '43124',
+      host: '::1',
     })
 
     const symbol = getSymbolAnchor('symbol-short')
@@ -365,10 +419,33 @@ describe('QuickInfo browser regression', () => {
     await waitFor(
       () =>
         counters.quickInfoByRuntimeKey.get(
-          'quick-info-browser-test-updated@ws://localhost:43124'
+          'quick-info-browser-test-updated@ws://[::1]:43124'
         ) === 1,
       1_000
     )
+  })
+
+  it('releases the active runtime when the popover unmounts', async () => {
+    renderQuickInfoFixture(root, 'runtime-cleanup')
+
+    await waitFor(
+      () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+      1_000
+    )
+
+    hoverSymbol(getSymbolAnchor('symbol-short'))
+
+    await waitFor(
+      () => getProjectClientBrowserRuntime()?.id === RUNTIME.id,
+      1_000
+    )
+    expect(counters.sockets.size).toBe(1)
+
+    root?.unmount()
+    root = null
+
+    await waitFor(() => getProjectClientBrowserRuntime() === undefined, 1_000)
+    expect(counters.sockets.size).toBe(0)
   })
 })
 
@@ -641,6 +718,19 @@ function resolveMockRpcResponse(
       runtimeKey,
       (counters.quickInfoByRuntimeKey.get(runtimeKey) ?? 0) + 1
     )
+
+    const remainingFailures =
+      counters.quickInfoFailuresByPosition.get(position) ?? 0
+    if (remainingFailures > 0) {
+      counters.quickInfoFailuresByPosition.set(position, remainingFailures - 1)
+      return {
+        id: request.id,
+        error: {
+          code: -32000,
+          message: 'Transient quick info failure',
+        },
+      }
+    }
 
     return {
       id: request.id,

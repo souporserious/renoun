@@ -54,6 +54,7 @@ import {
   clearServerRuntimeProcessEnv,
   notifyServerRuntimeEnvChanged,
   resolveServerRefreshNotificationsEnvOverride,
+  setServerHostProcessEnv,
   setServerIdProcessEnv,
   setServerRefreshNotificationsProcessEnv,
   setServerPortProcessEnv,
@@ -78,6 +79,7 @@ interface ActiveProjectServerRuntime {
   server: WebSocketServer
   port: string
   id: string
+  host: 'localhost' | '127.0.0.1' | '::1'
   emitRefreshNotifications: boolean
 }
 
@@ -242,6 +244,7 @@ function applyActiveProjectServerRuntimeToProcessEnv(
 ): void {
   setServerPortProcessEnv(runtime.port)
   setServerIdProcessEnv(runtime.id)
+  setServerHostProcessEnv(runtime.host)
   setServerRefreshNotificationsProcessEnv(runtime.emitRefreshNotifications)
   notifyServerRuntimeEnvChanged()
 }
@@ -1118,6 +1121,7 @@ export async function createServer(options?: CreateServerOptions) {
     server,
     port: String(port),
     id: server.getId(),
+    host: options?.host ?? 'localhost',
     emitRefreshNotifications,
   })
 

@@ -27,6 +27,10 @@ let refreshNotificationReconnectTimer: number | undefined
 let refreshNotificationConnectionVersion = 0
 let nextRefreshResyncRequestId = 1
 let shouldResyncOnNextOpen = false
+const browserRuntimeRegistrations: Array<{
+  token: symbol
+  runtime: ProjectServerRuntime
+}> = []
 
 interface ParsedRefreshVersion {
   cursor: number
@@ -45,12 +49,7 @@ export function onProjectClientBrowserRefreshNotification(
 export function setProjectClientBrowserRuntime(
   runtime?: ProjectServerRuntime
 ): void {
-  const normalizedRuntime = runtime
-    ? {
-        id: String(runtime.id),
-        port: String(runtime.port),
-      }
-    : undefined
+  const normalizedRuntime = normalizeProjectServerRuntime(runtime)
   const previousRuntime = getProjectClientBrowserRuntime()
   const previousRuntimeKey = previousRuntime
     ? toBrowserRuntimeKey(previousRuntime)
@@ -67,6 +66,7 @@ export function setProjectClientBrowserRuntime(
   }
 
   if (!normalizedRuntime) {
+    browserRuntimeRegistrations.length = 0
     disposeRefreshNotificationSocket()
     setProjectClientBrowserRefreshVersion('0:0')
     return
@@ -79,6 +79,53 @@ export function setProjectClientBrowserRuntime(
   ensureRefreshNotificationSocket({
     forceReconnect: true,
   })
+}
+
+export function retainProjectClientBrowserRuntime(
+  runtime?: ProjectServerRuntime
+): () => void {
+  const normalizedRuntime = normalizeProjectServerRuntime(runtime)
+  if (!normalizedRuntime) {
+    return () => {}
+  }
+
+  const token = Symbol('project-client-browser-runtime')
+  browserRuntimeRegistrations.push({
+    token,
+    runtime: normalizedRuntime,
+  })
+  setProjectClientBrowserRuntime(normalizedRuntime)
+
+  return () => {
+    const registrationIndex = browserRuntimeRegistrations.findIndex(
+      (registration) => registration.token === token
+    )
+    if (registrationIndex === -1) {
+      return
+    }
+
+    const [{ runtime: releasedRuntime }] = browserRuntimeRegistrations.splice(
+      registrationIndex,
+      1
+    )
+    const currentRuntime = getProjectClientBrowserRuntime()
+    if (
+      !currentRuntime ||
+      toBrowserRuntimeKey(currentRuntime) !== toBrowserRuntimeKey(releasedRuntime)
+    ) {
+      return
+    }
+
+    const nextRuntime =
+      browserRuntimeRegistrations[browserRuntimeRegistrations.length - 1]?.runtime
+
+    if (nextRuntime) {
+      setProjectClientBrowserRuntime(nextRuntime)
+      return
+    }
+
+    setProjectClientBrowserRuntime(undefined)
+  }
 }
 
 function ensureRefreshNotificationSocket(
@@ -119,7 +166,7 @@ function ensureRefreshNotificationSocket(
 
   const connectionVersion = ++refreshNotificationConnectionVersion
   const activeSocket = new WebSocket(
-    resolveBrowserWebSocketUrl(runtime.port),
+    resolveBrowserWebSocketUrl(runtime),
     runtime.id
   )
 
@@ -441,5 +488,21 @@ function readProjectClientBrowserRefreshVersion(): ParsedRefreshVersion {
 }
 
 function toBrowserRuntimeKey(runtime: ProjectServerRuntime): string {
-  return `${runtime.id}:${runtime.port}`
+  return `${runtime.id}:${runtime.host ?? 'localhost'}:${runtime.port}`
+}
+
+function normalizeProjectServerRuntime(
+  runtime?: ProjectServerRuntime
+): ProjectServerRuntime | undefined {
+  if (!runtime) {
+    return undefined
+  }
+
+  return {
+    id: String(runtime.id),
+    port: String(runtime.port),
+    ...(typeof runtime.host === 'string' && runtime.host.trim().length > 0
+      ? { host: runtime.host.trim() }
+      : {}),
+  }
 }

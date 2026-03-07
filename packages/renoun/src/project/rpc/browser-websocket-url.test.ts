@@ -3,47 +3,106 @@ import { describe, expect, test } from 'vitest'
 import { resolveBrowserWebSocketUrl } from './browser-websocket-url.ts'
 
 describe('resolveBrowserWebSocketUrl', () => {
-  test('always targets the loopback rpc server', () => {
+  test('uses the exported ipv4 loopback host when provided', () => {
     expect(
-      resolveBrowserWebSocketUrl('43123', {
-        protocol: 'https:',
-        hostname: 'preview.example.dev',
+      resolveBrowserWebSocketUrl({
+        port: '43123',
+        host: '127.0.0.1',
       })
-    ).toBe('ws://localhost:43123')
+    ).toBe('ws://127.0.0.1:43123')
   })
 
-  test('does not upgrade to wss on https localhost pages', () => {
+  test('formats exported ipv6 loopback hosts for websocket urls', () => {
     expect(
-      resolveBrowserWebSocketUrl('43123', {
-        protocol: 'https:',
-        hostname: 'localhost',
+      resolveBrowserWebSocketUrl({
+        port: '43123',
+        host: '::1',
       })
-    ).toBe('ws://localhost:43123')
+    ).toBe('ws://[::1]:43123')
   })
 
-  test('ignores non-local browser hosts until the server exports one', () => {
+  test('uses the browser loopback host when the runtime does not export one', () => {
     expect(
-      resolveBrowserWebSocketUrl('43123', {
-        protocol: 'https:',
-        hostname: '192.168.1.40',
-      })
-    ).toBe('ws://localhost:43123')
+      resolveBrowserWebSocketUrl(
+        {
+          port: '43123',
+        },
+        {
+          protocol: 'https:',
+          hostname: '127.0.0.1',
+        }
+      )
+    ).toBe('ws://127.0.0.1:43123')
   })
 
-  test('keeps using localhost when the browser host is loopback ipv6', () => {
+  test('keeps using ws for loopback ipv6 browser hosts', () => {
     expect(
-      resolveBrowserWebSocketUrl('43123', {
-        protocol: 'https:',
-        hostname: '::1',
-      })
-    ).toBe('ws://localhost:43123')
+      resolveBrowserWebSocketUrl(
+        {
+          port: '43123',
+        },
+        {
+          protocol: 'https:',
+          hostname: '::1',
+        }
+      )
+    ).toBe('ws://[::1]:43123')
+  })
+
+  test('prefers the browser origin for proxied https sessions when runtime only exposes loopback', () => {
+    expect(
+      resolveBrowserWebSocketUrl(
+        {
+          port: '43123',
+          host: '127.0.0.1',
+        },
+        {
+          protocol: 'https:',
+          hostname: 'preview.example.dev',
+        }
+      )
+    ).toBe('wss://preview.example.dev:43123')
+  })
+
+  test('falls back to the browser origin when no runtime host is exported', () => {
+    expect(
+      resolveBrowserWebSocketUrl(
+        {
+          port: '43123',
+        },
+        {
+          protocol: 'https:',
+          hostname: 'preview.example.dev',
+        }
+      )
+    ).toBe('wss://preview.example.dev:43123')
   })
 
   test('defaults to localhost when hostname is missing', () => {
     expect(
-      resolveBrowserWebSocketUrl('43123', {
-        protocol: 'https:',
-      })
+      resolveBrowserWebSocketUrl(
+        {
+          port: '43123',
+        },
+        {
+          protocol: 'https:',
+        }
+      )
     ).toBe('ws://localhost:43123')
+  })
+
+  test('uses ws for direct non-loopback hosts outside proxied browser sessions', () => {
+    expect(
+      resolveBrowserWebSocketUrl(
+        {
+          port: '43123',
+          host: 'devbox.internal',
+        },
+        {
+          protocol: 'https:',
+          hostname: 'preview.example.dev',
+        }
+      )
+    ).toBe('ws://devbox.internal:43123')
   })
 })

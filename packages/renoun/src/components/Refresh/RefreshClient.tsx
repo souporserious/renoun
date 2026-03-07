@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 
 import {
   onProjectClientBrowserRefreshNotification,
-  setProjectClientBrowserRuntime,
+  retainProjectClientBrowserRuntime,
 } from '../../project/browser-client-sync.ts'
 
 declare global {
@@ -14,15 +14,26 @@ declare global {
  * Subscribes to the development server and refreshes the page when a source file changes.
  * @internal
  */
-export function RefreshClient({ port, id }: { port: string; id: string }) {
+export function RefreshClient({
+  port,
+  id,
+  host,
+}: {
+  port: string
+  id: string
+  host?: string
+}) {
   useEffect(() => {
     if (port === undefined) {
       return
     }
 
-    setProjectClientBrowserRuntime({ port, id })
-
-    return onProjectClientBrowserRefreshNotification((message) => {
+    const releaseRuntime = retainProjectClientBrowserRuntime({
+      port,
+      id,
+      host,
+    })
+    const unsubscribe = onProjectClientBrowserRefreshNotification((message) => {
       if (message.type === 'refresh' && 'nd' in window) {
         // @ts-ignore - private Next.js API
         const router = window.nd.router
@@ -38,7 +49,12 @@ export function RefreshClient({ port, id }: { port: string; id: string }) {
         }
       }
     })
-  }, [id, port])
+
+    return () => {
+      unsubscribe()
+      releaseRuntime()
+    }
+  }, [host, id, port])
 
   return null
 }

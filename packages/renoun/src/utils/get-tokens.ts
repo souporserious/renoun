@@ -7,7 +7,10 @@ import type { Languages as TextMateLanguages } from '../grammars/index.ts'
 import type { Highlighter } from './create-highlighter.ts'
 import { getDebugLogger } from './debug.ts'
 import { getDiagnosticMessageText } from './get-diagnostic-message.ts'
-import { formatQuickInfoDisplayText } from './get-quick-info-at-position.ts'
+import {
+  formatQuickInfoDisplayText,
+  formatQuickInfoDocumentationText,
+} from './get-quick-info-at-position.ts'
 import { getLanguage, type Languages } from './get-language.ts'
 import { isJsxOnly } from './is-jsx-only.ts'
 import { generatedFilenames } from './get-source-text-metadata.ts'
@@ -592,31 +595,6 @@ export function getDiagnostics(
   })
 }
 
-/** Convert documentation entries to markdown-friendly links. */
-function formatDocumentationText(documentation: ts.SymbolDisplayPart[]) {
-  let markdownText = ''
-  let currentLinkText = ''
-  let currentLinkUrl = ''
-
-  documentation.forEach((part) => {
-    if (part.kind === 'text') {
-      markdownText += part.text
-    } else if (part.kind === 'linkText') {
-      const [url, ...descriptionParts] = part.text.split(' ')
-      currentLinkUrl = url
-      currentLinkText = descriptionParts.join(' ') || url
-    } else if (part.kind === 'link') {
-      if (currentLinkUrl) {
-        markdownText += `[${currentLinkText}](${currentLinkUrl})`
-        currentLinkText = ''
-        currentLinkUrl = ''
-      }
-    }
-  })
-
-  return markdownText
-}
-
 interface QuickInfoEntry {
   displayText: string
   documentationText: string
@@ -673,7 +651,7 @@ function getQuickInfo(
     (quickInfo.displayParts || []).map((part) => part.text).join('')
   )
   const documentation = quickInfo.documentation || []
-  const documentationText = formatDocumentationText(documentation)
+  const documentationText = formatQuickInfoDocumentationText(documentation)
   const result: QuickInfoEntry = {
     displayText,
     documentationText,

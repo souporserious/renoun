@@ -10,6 +10,7 @@ export const PROCESS_ENV_KEYS = {
   renounDebugRestoredScope: 'RENOUN_DEBUG_RESTORED_SCOPE',
   renounServerId: 'RENOUN_SERVER_ID',
   renounServerPort: 'RENOUN_SERVER_PORT',
+  renounServerHost: 'RENOUN_SERVER_HOST',
   renounServerRefreshNotifications: 'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
   renounServerRefreshNotificationsEffective:
     'RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE',

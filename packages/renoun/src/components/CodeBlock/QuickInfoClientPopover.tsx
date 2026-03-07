@@ -12,7 +12,7 @@ import {
   onProjectClientBrowserRefreshVersionChange,
   onProjectClientBrowserRuntimeChange,
 } from '../../project/browser-runtime.ts'
-import { setProjectClientBrowserRuntime } from '../../project/browser-client-sync.ts'
+import { retainProjectClientBrowserRuntime } from '../../project/browser-client-sync.ts'
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
 import { resolveBrowserWebSocketUrl } from '../../project/rpc/browser-websocket-url.ts'
@@ -164,10 +164,8 @@ function useActiveProjectServerRuntime(
   initialRuntime: ProjectServerRuntime | undefined
 ): ProjectServerRuntime | undefined {
   React.useEffect(() => {
-    if (initialRuntime) {
-      setProjectClientBrowserRuntime(initialRuntime)
-    }
-  }, [initialRuntime?.id, initialRuntime?.port])
+    return retainProjectClientBrowserRuntime(initialRuntime)
+  }, [initialRuntime?.host, initialRuntime?.id, initialRuntime?.port])
 
   return React.useSyncExternalStore(
     onProjectClientBrowserRuntimeChange,
@@ -554,7 +552,11 @@ async function getQuickInfoForRequest(
     requestQuickInfoOverWebSocket(request)
   )
     .then((value) => {
-      writeQuickInfoCache(cacheKey, value)
+      // Transport failures and missing quick info are both normalized to null.
+      // Retry those on the next hover instead of pinning an empty result.
+      if (value !== null) {
+        writeQuickInfoCache(cacheKey, value)
+      }
       return value
     })
     .finally(() => {
@@ -1086,7 +1088,7 @@ async function requestRpcMethodOverWebSocket<Result>(
 
   return new Promise((resolve) => {
     const requestId = nextQuickInfoRequestId++
-    const url = resolveBrowserWebSocketUrl(request.runtime.port)
+    const url = resolveBrowserWebSocketUrl(request.runtime)
     const socket = new WebSocket(url, request.runtime.id)
     let settled = false
 

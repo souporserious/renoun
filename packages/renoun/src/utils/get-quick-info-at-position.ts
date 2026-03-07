@@ -13,6 +13,8 @@ interface QuickInfoDisplayTextFormatOptions {
   currentWorkingDirectory?: string
 }
 
+const QUICK_INFO_IMPORT_PATH_PATTERN = /\bimport\((['"])([^'"]+)\1\)/g
+
 export function getQuickInfoAtPosition(options: {
   project: Project
   filePath: string
@@ -40,7 +42,9 @@ export function getQuickInfoAtPosition(options: {
   const displayText = formatQuickInfoDisplayText(
     (quickInfo.displayParts || []).map((part) => part.text).join('')
   )
-  const documentationText = formatDocumentationText(quickInfo.documentation || [])
+  const documentationText = formatQuickInfoDocumentationText(
+    quickInfo.documentation || []
+  )
 
   return {
     displayText,
@@ -52,21 +56,24 @@ export function formatQuickInfoDisplayText(
   displayText: string,
   options: QuickInfoDisplayTextFormatOptions = {}
 ): string {
-  let formattedDisplayText = displayText
-
-  for (const candidate of getPathReplacementCandidates(
+  const currentWorkingDirectoryCandidates = getPathReplacementCandidates(
     options.currentWorkingDirectory ?? process.cwd()
-  )) {
-    formattedDisplayText = formattedDisplayText.replaceAll(candidate, '.')
-  }
-
-  for (const candidate of getPathReplacementCandidates(
+  )
+  const rootDirectoryCandidates = getPathReplacementCandidates(
     options.rootDirectory ?? getRootDirectory()
-  )) {
-    formattedDisplayText = formattedDisplayText.replaceAll(candidate, '.')
-  }
+  )
 
-  return formattedDisplayText
+  return displayText.replace(
+    QUICK_INFO_IMPORT_PATH_PATTERN,
+    (_match, quote: string, importPath: string) => {
+      const formattedImportPath = shortenQuickInfoImportPath(
+        shortenQuickInfoImportPath(importPath, currentWorkingDirectoryCandidates),
+        rootDirectoryCandidates
+      )
+
+      return `import(${quote}${formattedImportPath}${quote})`
+    }
+  )
 }
 
 function getPathReplacementCandidates(path: string): string[] {
@@ -79,31 +86,54 @@ function getPathReplacementCandidates(path: string): string[] {
   return Array.from(candidates).filter((candidate) => candidate.length > 0)
 }
 
-function formatDocumentationText(documentation: ts.SymbolDisplayPart[]): string {
+function shortenQuickInfoImportPath(importPath: string, candidates: string[]): string {
+  for (const candidate of candidates) {
+    if (importPath === candidate) {
+      return '.'
+    }
+
+    if (
+      importPath.startsWith(candidate + '/') ||
+      importPath.startsWith(candidate + '\\')
+    ) {
+      return `.${importPath.slice(candidate.length)}`
+    }
+  }
+
+  return importPath
+}
+
+export function formatQuickInfoDocumentationText(
+  documentation: ts.SymbolDisplayPart[]
+): string {
   let markdownText = ''
   let currentLinkUrl = ''
   let currentLinkText = ''
 
   documentation.forEach((part) => {
-    if (part.kind !== 'linkName' && currentLinkUrl) {
-      markdownText += `[${currentLinkText}](${currentLinkUrl})`
-      currentLinkText = ''
-      currentLinkUrl = ''
-    }
-
-    if (part.kind === 'linkName') {
+    if (part.kind === 'linkText' || part.kind === 'linkName') {
       const [url, ...descriptionParts] = part.text.split(' ')
       currentLinkUrl = url
       currentLinkText = descriptionParts.join(' ') || url
-    } else if (part.kind === 'link') {
+      return
+    }
+
+    if (part.kind === 'link') {
       if (currentLinkUrl) {
         markdownText += `[${currentLinkText}](${currentLinkUrl})`
         currentLinkText = ''
         currentLinkUrl = ''
       }
-    } else {
-      markdownText += part.text
+      return
     }
+
+    if (currentLinkUrl) {
+      markdownText += `[${currentLinkText}](${currentLinkUrl})`
+      currentLinkText = ''
+      currentLinkUrl = ''
+    }
+
+    markdownText += part.text
   })
 
   if (currentLinkUrl) {

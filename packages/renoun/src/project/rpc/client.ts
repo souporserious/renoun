@@ -4,9 +4,11 @@ import { getDebugLogger } from '../../utils/debug.ts'
 import { PROCESS_ENV_KEYS } from '../../utils/env-keys.ts'
 import { safeAssign } from '../../utils/safe-assign.ts'
 import {
+  getServerHostFromProcessEnv,
   getServerPortForLogging,
   getServerPortFromProcessEnv,
 } from '../runtime-env.ts'
+import { resolveBrowserWebSocketUrl } from './browser-websocket-url.ts'
 import type { WebSocketResponse } from './server.ts'
 
 type Request = {
@@ -27,6 +29,7 @@ type WebSocketClientErrorType =
 interface WebSocketClientErrorContext {
   connectionTime: number
   port: string
+  host: string
   connectionState: ConnectionState
   eventMessage?: string
   method?: string
@@ -46,8 +49,8 @@ const WEBSOCKET_CLIENT_ERROR_MESSAGES: Record<
   WebSocketClientErrorType,
   WebSocketClientErrorMessageFn
 > = {
-  CONNECTION_REFUSED: ({ port }) =>
-    `[renoun] Failed to connect to WebSocket server at ws://localhost:${port}\n\n` +
+  CONNECTION_REFUSED: ({ port, host }) =>
+    `[renoun] Failed to connect to WebSocket server at ${resolveBrowserWebSocketUrl({ port, host })}\n\n` +
     `This error occurred immediately, which suggests the server is not running.\n` +
     `Possible solutions:\n` +
     `• Ensure the renoun server is started (usually via Next.js plugin or CLI)\n` +
@@ -104,6 +107,7 @@ class WebSocketClientError extends Error {
   readonly connectionState: ConnectionState
   readonly connectionTime: number
   readonly port: string
+  readonly host: string
   readonly method?: string
   readonly params?: any
   readonly timeout?: number
@@ -116,6 +120,7 @@ class WebSocketClientError extends Error {
       connectionState: ConnectionState
       connectionTime: number
       port: string
+      host: string
       method?: string
       params?: any
       timeout?: number
@@ -128,6 +133,7 @@ class WebSocketClientError extends Error {
     this.connectionState = context?.connectionState || 'connecting'
     this.connectionTime = context?.connectionTime || 0
     this.port = context?.port || 'unknown'
+    this.host = context?.host || 'localhost'
     this.method = context?.method
     this.params = context?.params
     this.timeout = context?.timeout
@@ -226,6 +232,7 @@ export class WebSocketClient extends EventEmitter {
               connectionState: this.#connectionState,
               connectionTime: formatConnectionTime(this.#connectionStartTime),
               port: getServerPortForLogging(),
+              host: getServerHostFromProcessEnv() ?? 'localhost',
             }
           )
         )
@@ -257,6 +264,7 @@ export class WebSocketClient extends EventEmitter {
           connectionState: this.#connectionState,
           connectionTime: formatConnectionTime(this.#connectionStartTime),
           port: getServerPortForLogging(),
+          host: getServerHostFromProcessEnv() ?? 'localhost',
         }
       )
       // reject all ids that would have been part of this frame
@@ -350,8 +358,11 @@ export class WebSocketClient extends EventEmitter {
     this.#connectionState = 'connecting'
     this.#connectionStartTime = performance.now()
 
+    const host = getServerHostFromProcessEnv() ?? 'localhost'
+
     getDebugLogger().logWebSocketClientEvent('connecting', {
       port: getServerPortFromProcessEnv(),
+      host,
     })
 
     const port = getServerPortFromProcessEnv()
@@ -363,6 +374,7 @@ export class WebSocketClient extends EventEmitter {
           connectionState: this.#connectionState,
           connectionTime: 0,
           port: 'unknown',
+          host,
         }
       )
       this.#connectionState = 'failed'
@@ -378,6 +390,7 @@ export class WebSocketClient extends EventEmitter {
           connectionState: this.#connectionState,
           connectionTime: 0,
           port: getServerPortForLogging(),
+          host,
         }
       )
       this.#connectionState = 'failed'
@@ -385,7 +398,10 @@ export class WebSocketClient extends EventEmitter {
       return
     }
 
-    this.#ws = new WebSocket(`ws://localhost:${port}`, serverId)
+    this.#ws = new WebSocket(
+      resolveBrowserWebSocketUrl({ port, host }),
+      serverId
+    )
     this.#ws.binaryType = 'arraybuffer'
     this.#ws.addEventListener('open', this.#handleOpenEvent)
     this.#ws.addEventListener('message', this.#handleMessageEvent)
@@ -472,6 +488,7 @@ export class WebSocketClient extends EventEmitter {
       const error = this.#createClientError('MAX_RETRIES_EXCEEDED', {
         connectionTime: formatConnectionTime(this.#connectionStartTime),
         port: getServerPortForLogging(),
+        host: getServerHostFromProcessEnv() ?? 'localhost',
         connectionState: this.#connectionState,
         maxRetries: this.#maxRetries,
       })
@@ -631,6 +648,7 @@ export class WebSocketClient extends EventEmitter {
         const error = this.#createClientError('REQUEST_TIMEOUT', {
           connectionTime: formatConnectionTime(this.#connectionStartTime),
           port: getServerPortForLogging(),
+          host: getServerHostFromProcessEnv() ?? 'localhost',
           connectionState: this.#connectionState,
           method,
           params,
@@ -939,6 +957,7 @@ export class WebSocketClient extends EventEmitter {
       connectionState: context.connectionState,
       connectionTime: context.connectionTime,
       port: context.port,
+      host: context.host,
       method: context.method,
       params: context.params,
       timeout: context.timeout,
@@ -994,6 +1013,7 @@ export class WebSocketClient extends EventEmitter {
         connectionState: this.#connectionState,
         connectionTime: formatConnectionTime(this.#connectionStartTime),
         port: getServerPortForLogging(),
+        host: getServerHostFromProcessEnv() ?? 'localhost',
       }
     )
 

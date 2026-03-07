@@ -69,6 +69,7 @@ vi.mock('./file-text-prefix-cache.ts', () => ({
 describe('project client transport guards', () => {
   const originalEnvironment = captureProcessEnv([
     'RENOUN_SERVER_PORT',
+    'RENOUN_SERVER_HOST',
     'RENOUN_SERVER_ID',
     'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
     'RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE',
@@ -945,6 +946,88 @@ describe('project client transport guards', () => {
     expect(third).toMatchObject({ text: 'quick-info-2' })
     expect(
       callMethod.mock.calls.filter(([method]) => method === 'getQuickInfoAtPosition')
+    ).toHaveLength(2)
+  })
+
+  test('refresh notifications invalidate source metadata cache conservatively', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let sourceMetadataCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getSourceTextMetadata') {
+        sourceMetadataCallCount += 1
+        return {
+          value: `remote-result-${sourceMetadataCallCount}`,
+          language: 'tsx',
+        }
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return { nextCursor: 0, fullRefresh: false }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const request = {
+      value: '<Button />',
+      language: 'tsx' as const,
+      projectOptions: {
+        tsConfigFilePath: '/project/tsconfig.json',
+      },
+    }
+    const first = await module.getSourceTextMetadata(request)
+    const second = await module.getSourceTextMetadata(request)
+
+    expect(first).toEqual({
+      value: 'remote-result-1',
+      language: 'tsx',
+    })
+    expect(second).toEqual({
+      value: 'remote-result-1',
+      language: 'tsx',
+    })
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getSourceTextMetadata')
+    ).toHaveLength(1)
+
+    const notificationListener = listeners.get('notification')
+    expect(notificationListener).toBeTypeOf('function')
+    notificationListener!({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/dep.ts'],
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const third = await module.getSourceTextMetadata(request)
+
+    expect(third).toEqual({
+      value: 'remote-result-2',
+      language: 'tsx',
+    })
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getSourceTextMetadata')
     ).toHaveLength(2)
   })
 

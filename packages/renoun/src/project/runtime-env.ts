@@ -8,6 +8,7 @@ import {
 export interface ProjectServerRuntime {
   port: string
   id: string
+  host?: string
 }
 
 const serverRuntimeEnvListeners = new Set<
@@ -22,10 +23,19 @@ export function setServerPortProcessEnv(port: number | string): void {
   process.env[PROCESS_ENV_KEYS.renounServerPort] = String(port)
 }
 
+export function getServerHostFromProcessEnv(): string | undefined {
+  return readNonEmptyProcessEnv(PROCESS_ENV_KEYS.renounServerHost)
+}
+
+export function setServerHostProcessEnv(host: string): void {
+  process.env[PROCESS_ENV_KEYS.renounServerHost] = host
+}
+
 export function clearServerRuntimeProcessEnv(): void {
   // Preserve the server id so an in-process restart can reuse the same client
   // protocol id, but clear the exported runtime fields when no server is active.
   delete process.env[PROCESS_ENV_KEYS.renounServerPort]
+  delete process.env[PROCESS_ENV_KEYS.renounServerHost]
   delete process.env[
     PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective
   ]
@@ -48,7 +58,13 @@ export function getServerRuntimeFromProcessEnv():
     return undefined
   }
 
-  return { port, id }
+  const host = getServerHostFromProcessEnv()
+
+  return {
+    port,
+    id,
+    ...(host ? { host } : {}),
+  }
 }
 
 export function onServerRuntimeEnvChange(

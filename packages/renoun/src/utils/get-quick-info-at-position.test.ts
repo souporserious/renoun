@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest'
 
-import { formatQuickInfoDisplayText } from './get-quick-info-at-position.ts'
+import {
+  formatQuickInfoDisplayText,
+  formatQuickInfoDocumentationText,
+} from './get-quick-info-at-position.ts'
 
 describe('formatQuickInfoDisplayText', () => {
   test('formats paths relative to the current working directory first', () => {
@@ -43,5 +46,38 @@ describe('formatQuickInfoDisplayText', () => {
         currentWorkingDirectory: 'C:\\repo\\packages\\renoun',
       })
     ).toBe('import("./src/types").Foo')
+  })
+
+  test('does not rewrite literal path strings outside import specifiers', () => {
+    expect(
+      formatQuickInfoDisplayText('const ROOT: "/Users/test/Code/renoun"', {
+        rootDirectory: '/Users/test/Code/renoun',
+        currentWorkingDirectory: '/Users/test/Code/renoun/packages/renoun',
+      })
+    ).toBe('const ROOT: "/Users/test/Code/renoun"')
+  })
+})
+
+describe('formatQuickInfoDocumentationText', () => {
+  test('formats linkText parts as markdown links', () => {
+    expect(
+      formatQuickInfoDocumentationText([
+        { kind: 'text', text: 'See ' },
+        { kind: 'linkText', text: 'https://example.com docs' },
+        { kind: 'link', text: '' },
+        { kind: 'text', text: ' for more.' },
+      ])
+    ).toBe('See [docs](https://example.com) for more.')
+  })
+
+  test('keeps linkName parts working as a compatibility fallback', () => {
+    expect(
+      formatQuickInfoDocumentationText([
+        { kind: 'text', text: 'See ' },
+        { kind: 'linkName', text: 'https://example.com docs' },
+        { kind: 'link', text: '' },
+        { kind: 'text', text: ' for more.' },
+      ])
+    ).toBe('See [docs](https://example.com) for more.')
   })
 })

@@ -17,7 +17,7 @@ function toBrowserRuntimeKey(
     return undefined
   }
 
-  return `${runtime.id}:${runtime.port}`
+  return `${runtime.id}:${runtime.host ?? 'localhost'}:${runtime.port}`
 }
 
 export function getProjectClientBrowserRuntime():
@@ -42,6 +42,9 @@ export function setProjectClientBrowserRuntime(
     ? {
         id: String(runtime.id),
         port: String(runtime.port),
+        ...(typeof runtime.host === 'string' && runtime.host.trim().length > 0
+          ? { host: runtime.host.trim() }
+          : {}),
       }
     : undefined
   const currentKey = toBrowserRuntimeKey(browserProjectServerRuntime)
