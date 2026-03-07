@@ -180,8 +180,11 @@ describe('file system', () => {
   test('node file system read directory', async () => {
     const fileSystem = new NodeFileSystem()
     const entries = await fileSystem.readDirectory('fixtures/utils')
-    expect(entries).toHaveLength(1)
-    expect(entries[0].name).toBe('path.ts')
+    expect(entries.map((entry) => entry.name).sort()).toEqual([
+      'path.d.ts',
+      'path.js',
+      'path.ts',
+    ])
   })
 
   test('node file system prevents access outside workspace', () => {

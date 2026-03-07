@@ -91,7 +91,7 @@ describe('resolveBrowserWebSocketUrl', () => {
     ).toBe('ws://localhost:43123')
   })
 
-  test('uses ws for direct non-loopback hosts outside proxied browser sessions', () => {
+  test('uses wss for direct non-loopback hosts on https pages', () => {
     expect(
       resolveBrowserWebSocketUrl(
         {
@@ -103,6 +103,6 @@ describe('resolveBrowserWebSocketUrl', () => {
           hostname: 'preview.example.dev',
         }
       )
-    ).toBe('ws://devbox.internal:43123')
+    ).toBe('wss://devbox.internal:43123')
   })
 })

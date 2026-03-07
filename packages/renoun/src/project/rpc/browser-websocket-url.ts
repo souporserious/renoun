@@ -65,7 +65,10 @@ function resolveWebSocketEndpoint(
 
   if (runtimeHost) {
     return {
-      protocol: 'ws',
+      protocol:
+        location?.protocol === 'https:' && !isLoopbackHost(runtimeHost)
+          ? 'wss'
+          : 'ws',
       host: runtimeHost,
     }
   }
