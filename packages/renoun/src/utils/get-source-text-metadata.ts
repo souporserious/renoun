@@ -1,4 +1,4 @@
-import { dirname, join, posix, isAbsolute } from 'node:path'
+import { dirname, extname, join, posix, isAbsolute } from 'node:path'
 import type { Project } from './ts-morph.ts'
 
 import { waitForRefreshingProjects } from '../project/refresh.ts'
@@ -16,11 +16,12 @@ export interface SourceTextMetadata {
   language?: Languages
   filePath?: string
   label?: string
+  valueSignature?: string
 }
 
 export interface GetSourceTextMetadataOptions extends Omit<
   SourceTextMetadata,
-  'label'
+  'label' | 'valueSignature'
 > {
   /** The project to use for the source text. */
   project: Project
@@ -33,6 +34,9 @@ export interface GetSourceTextMetadataOptions extends Omit<
 
   /** Whether formatting was explicitly requested by the caller. */
   isFormattingExplicit?: boolean
+
+  /** Whether explicit in-memory snippets should use a content-addressed path. */
+  virtualizeFilePath?: boolean
 }
 
 export const generatedFilenames = new Set<string>()
@@ -49,6 +53,25 @@ function hashInlineSourceText(value: string): string {
   }
 
   return (hash >>> 0).toString(16)
+}
+
+export function getSourceTextValueSignature(value: string): string {
+  return `${hashInlineSourceText(value)}:${value.length}`
+}
+
+function toVirtualSourceTextFilePath(
+  filePath: string,
+  valueSignature: string
+): string {
+  const sanitizedSignature = valueSignature.replace(/[^A-Za-z0-9_-]/g, '_')
+  const extension = extname(filePath)
+  const virtualSuffix = `.__renoun_snippet_${sanitizedSignature}`
+
+  if (!extension) {
+    return `${filePath}${virtualSuffix}`
+  }
+
+  return `${filePath.slice(0, -extension.length)}${virtualSuffix}${extension}`
 }
 
 function resolveSourceTextMetadataBase(options: {
@@ -149,12 +172,20 @@ export function getSourceTextMetadataFallback(options: Omit<
   'shouldFormat' | 'isFormattingExplicit'
 >): SourceTextMetadata {
   const resolved = resolveSourceTextMetadataBase(options)
+  const valueSignature = getSourceTextValueSignature(resolved.value)
+  const filePath =
+    options.virtualizeFilePath &&
+    resolved.isJavaScriptLikeLanguage &&
+    options.filePath
+      ? toVirtualSourceTextFilePath(resolved.filePath, valueSignature)
+      : resolved.filePath
 
   return {
     value: resolved.value,
     language: resolved.language,
-    filePath: resolved.filePath,
+    filePath,
     label: resolved.label,
+    valueSignature,
   }
 }
 
@@ -170,6 +201,7 @@ export async function getSourceTextMetadata({
   language,
   shouldFormat = true,
   isFormattingExplicit,
+  virtualizeFilePath = false,
   value,
   baseDirectory,
 }: GetSourceTextMetadataOptions): Promise<SourceTextMetadata> {
@@ -190,6 +222,10 @@ export async function getSourceTextMetadata({
   }
 
   let filePath = resolved.filePath
+  const shouldVirtualizeFilePath =
+    virtualizeFilePath &&
+    Boolean(filePathProp) &&
+    isJavaScriptLikeLanguage
 
   // Format source text if enabled.
   if (shouldFormat) {
@@ -224,6 +260,13 @@ export async function getSourceTextMetadata({
     }
   }
 
+  if (shouldVirtualizeFilePath) {
+    filePath = toVirtualSourceTextFilePath(
+      resolved.filePath,
+      getSourceTextValueSignature(finalValue)
+    )
+  }
+
   // Create a ts-morph source file to type-check JavaScript and TypeScript code blocks.
   if (isJavaScriptLikeLanguage) {
     try {
@@ -254,6 +297,20 @@ export async function getSourceTextMetadata({
       if (!hasImports && !hasExports) {
         sourceFile.addExportDeclaration({})
       }
+
+      if (shouldVirtualizeFilePath) {
+        const virtualFilePath = toVirtualSourceTextFilePath(
+          resolved.filePath,
+          getSourceTextValueSignature(finalValue)
+        )
+
+        if (virtualFilePath !== filePath) {
+          project.createSourceFile(virtualFilePath, finalValue, {
+            overwrite: true,
+          })
+          filePath = virtualFilePath
+        }
+      }
     } catch (error) {
       if (error instanceof Error) {
         const workingDirectory = process.cwd()
@@ -265,10 +322,13 @@ export async function getSourceTextMetadata({
     }
   }
 
+  const valueSignature = getSourceTextValueSignature(finalValue)
+
   return {
     value: finalValue,
     language: finalLanguage,
     filePath,
     label: resolved.label,
+    valueSignature,
   }
 }

@@ -7,6 +7,7 @@ import {
   getFileExportText,
   getFileExportStaticValue,
   getOutlineRanges,
+  resolveTypeAtLocation,
   resolveTypeAtLocationWithDependencies,
 } from '../project/client.ts'
 import type { ProjectOptions } from '../project/types.ts'
@@ -455,6 +456,22 @@ export abstract class BaseFileSystem {
     filter?: TypeFilter
   ) {
     return resolveTypeAtLocationWithDependencies(
+      filePath,
+      position,
+      kind,
+      filter,
+      this.getProjectOptions()
+    )
+  }
+
+  /** @deprecated Use `resolveTypeAtLocationWithDependencies` for dependency-aware results. */
+  resolveTypeAtLocation(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind,
+    filter?: TypeFilter
+  ) {
+    return resolveTypeAtLocation(
       filePath,
       position,
       kind,

@@ -472,7 +472,7 @@ In GitHub Actions, resolve the token once and use it in `actions/cache`:
 ```yaml
 - name: Resolve renoun cache token
   id: renoun-cache-token
-  run: echo "token=$(node packages/renoun/src/cli/index.ts cache-token)" >> "$GITHUB_OUTPUT"
+  run: echo "token=$(node packages/renoun/src/cli/cache-token.ts)" >> "$GITHUB_OUTPUT"
 
 - name: Restore renoun cache
   uses: actions/cache@v4
@@ -481,10 +481,9 @@ In GitHub Actions, resolve the token once and use it in `actions/cache`:
       .renoun/cache/fs-cache.sqlite
       .renoun/cache/fs-cache.sqlite-shm
       .renoun/cache/fs-cache.sqlite-wal
-    key: ${{ runner.os }}-node${{ matrix.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}
+    key: ${{ runner.os }}-node${{ matrix.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
     restore-keys: |
       ${{ runner.os }}-node${{ matrix.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-
-      ${{ runner.os }}-node${{ matrix.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-
 ```
 
 #### Comparison with `GitVirtualFileSystem`

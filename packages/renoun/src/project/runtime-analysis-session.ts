@@ -123,11 +123,6 @@ export async function getRuntimeAnalysisSessions(
 
   const sessions: RuntimeAnalysisSession[] = []
   for (const [scopeKey, runtimeSession] of runtimeAnalysisSessionByScopeKey) {
-    if (scopeKey === 'default') {
-      sessions.push(runtimeSession)
-      continue
-    }
-
     for (const normalizedPath of normalizedPaths) {
       if (pathsIntersect(scopeKey, normalizedPath)) {
         sessions.push(runtimeSession)

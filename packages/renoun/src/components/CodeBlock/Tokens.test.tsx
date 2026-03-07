@@ -282,6 +282,66 @@ describe('Tokens', () => {
     expect(mockGetProjectClientRefreshVersion).toHaveBeenCalledTimes(2)
   })
 
+  test('virtualizes explicit snippet paths during analysis', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    try {
+      const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
+      getSourceTextMetadataMock.mockResolvedValueOnce({
+        value: 'History',
+        language: 'ts',
+        filePath: '/tmp/history.__renoun_snippet_sig_1.ts',
+        label: '/tmp/history.ts',
+        valueSignature: 'sig-1',
+      })
+      mockTokens.mockResolvedValueOnce([
+        [
+          {
+            value: 'History',
+            start: 0,
+            end: 7,
+            hasTextStyles: true,
+            isBaseColor: false,
+            isDeprecated: false,
+            isSymbol: true,
+            isWhiteSpace: false,
+            style: {},
+          },
+        ],
+      ])
+
+      const { Tokens } = await import('./Tokens.tsx')
+      const element = await Tokens({
+        children: 'History',
+        path: '/tmp/history.ts',
+        language: 'ts',
+        shouldAnalyze: true,
+      })
+      renderToStaticMarkup(<>{element}</>)
+
+      expect(getSourceTextMetadataMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/tmp/history.ts',
+          value: 'History',
+          virtualizeFilePath: true,
+        })
+      )
+      expect(mockTokens).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/tmp/history.__renoun_snippet_sig_1.ts',
+          value: 'History',
+        })
+      )
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+  })
+
   test('passes a serializable popover prop to Symbol', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'test'

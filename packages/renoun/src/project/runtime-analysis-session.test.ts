@@ -59,4 +59,24 @@ describe('runtime analysis session', () => {
       false
     )
   })
+
+  test('does not include the default session when filtering by paths', async () => {
+    const { getRuntimeAnalysisSession, getRuntimeAnalysisSessions } =
+      await loadRuntimeAnalysisSessionModule()
+    const basePath = `${process.cwd()}/.cache/runtime-analysis/session-default-filter-${Date.now()}`
+    const scopedPath = `${basePath}/scoped`
+
+    const defaultSession = await getRuntimeAnalysisSession()
+    const scopedSession = await getRuntimeAnalysisSession(undefined, scopedPath)
+    const selected = await getRuntimeAnalysisSessions([
+      `${scopedPath}/src/index.ts`,
+    ])
+
+    expect(
+      selected.some((session) => session.session === defaultSession?.session)
+    ).toBe(false)
+    expect(
+      selected.some((session) => session.session === scopedSession?.session)
+    ).toBe(true)
+  })
 })

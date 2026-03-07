@@ -1316,6 +1316,30 @@ export async function createServer(options?: CreateServerOptions) {
   )
 
   server.registerMethod(
+    'resolveTypeAtLocation',
+    async function resolveTypeAtLocation({
+      projectOptions,
+      filter,
+      ...options
+    }: ResolveTypeAtLocationRpcRequest) {
+      const project = getProject(projectOptions)
+      const result = await resolveCachedTypeAtLocationWithDependencies(project, {
+        filePath: options.filePath,
+        position: options.position,
+        kind: options.kind,
+        filter: parseTypeFilter(filter),
+        isInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+      })
+
+      return result.resolvedType
+    },
+    {
+      memoize: false,
+      concurrency: 8,
+    }
+  )
+
+  server.registerMethod(
     'resolveTypeAtLocationWithDependencies',
     async function resolveTypeAtLocationWithDependencies({
       projectOptions,

@@ -188,6 +188,36 @@ describe('QuickInfo browser regression', () => {
     expect(counters.tokensByValue.get(shortDisplayText)).toBe(1)
   })
 
+  it('invalidates cached quick info when the rendered source signature changes', async () => {
+    renderSignatureCacheFixture(root)
+
+    await waitFor(
+      () => Boolean(document.querySelector('[data-testid="symbol-signature-a"]')),
+      1_000
+    )
+    await waitFor(
+      () => Boolean(document.querySelector('[data-testid="symbol-signature-b"]')),
+      1_000
+    )
+
+    const firstSymbol = getSymbolAnchor('symbol-signature-a')
+    const secondSymbol = getSymbolAnchor('symbol-signature-b')
+
+    hoverSymbol(firstSymbol)
+    await waitFor(
+      () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 1,
+      1_000
+    )
+    leaveSymbol(firstSymbol)
+    await waitFor(() => !getPopover(), 1_000)
+
+    hoverSymbol(secondSymbol)
+    await waitFor(
+      () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 2,
+      1_000
+    )
+  })
+
   it('re-highlights quick info when the active theme changes', async () => {
     renderQuickInfoFixture(root, 'theme-switch')
     const shortDisplayText = QUICK_INFO_BY_POSITION.get(
@@ -314,6 +344,54 @@ function renderQuickInfoFixture(root: Root | null, cacheScope: string) {
           }
         >
           <span data-testid="symbol-long">Directory</span>
+        </Symbol>
+      </div>
+    </QuickInfoProvider>
+  )
+}
+
+function renderSignatureCacheFixture(root: Root | null) {
+  if (!root) {
+    throw new Error('Expected react root to exist.')
+  }
+
+  root.render(
+    <QuickInfoProvider openDelay={0} closeDelay={0}>
+      <div>
+        <Symbol
+          popover={
+            <QuickInfoClientPopover
+              request={{
+                filePath: '/tmp/history.signature.ts',
+                position: SHORT_SYMBOL_POSITION,
+                runtime: RUNTIME,
+                themeConfig: THEME_CONFIG,
+                valueSignature: 'history-v1',
+              }}
+              theme={QUICK_INFO_THEME}
+              className="quick-info-popover"
+            />
+          }
+        >
+          <span data-testid="symbol-signature-a">History A</span>
+        </Symbol>
+        {'\n'}
+        <Symbol
+          popover={
+            <QuickInfoClientPopover
+              request={{
+                filePath: '/tmp/history.signature.ts',
+                position: SHORT_SYMBOL_POSITION,
+                runtime: RUNTIME,
+                themeConfig: THEME_CONFIG,
+                valueSignature: 'history-v2',
+              }}
+              theme={QUICK_INFO_THEME}
+              className="quick-info-popover"
+            />
+          }
+        >
+          <span data-testid="symbol-signature-b">History B</span>
         </Symbol>
       </div>
     </QuickInfoProvider>

@@ -145,7 +145,7 @@ const REFRESH_RESYNC_MAX_ATTEMPTS = 3
 const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
 const clientRpcCacheByKey = new Map<string, ClientRpcCacheEntry>()
 const clientRpcInFlightByKey = new Map<string, ClientRpcInFlightEntry>()
-const observedProjectRootCandidates = new Set<string>([resolve(process.cwd())])
+const observedProjectRootCandidates = new Set<string>()
 // Bumped on refresh invalidations so stale in-flight requests cannot repopulate cache.
 let clientRpcInvalidationEpoch = 0
 
@@ -263,8 +263,20 @@ function toRuntimeInvalidationPath(path: string): string {
   return isAbsolutePath(normalized) ? normalized : resolve(normalized)
 }
 
+function getDefaultProjectRootCandidate(): string | undefined {
+  if (typeof process === 'undefined' || typeof process.cwd !== 'function') {
+    return undefined
+  }
+
+  return resolve(process.cwd())
+}
+
 function getProjectRootCandidates(params: unknown): readonly string[] {
-  const roots = new Set<string>([resolve(process.cwd())])
+  const roots = new Set<string>()
+  const defaultRootCandidate = getDefaultProjectRootCandidate()
+  if (defaultRootCandidate) {
+    roots.add(defaultRootCandidate)
+  }
 
   if (!params || typeof params !== 'object') {
     return Array.from(roots)
@@ -610,6 +622,13 @@ function invalidateAllClientRpcState(): void {
 }
 
 function collectConservativeRefreshFallbackPaths(): string[] {
+  if (observedProjectRootCandidates.size === 0) {
+    const defaultRootCandidate = getDefaultProjectRootCandidate()
+    if (defaultRootCandidate) {
+      return [defaultRootCandidate]
+    }
+  }
+
   return Array.from(observedProjectRootCandidates)
 }
 
@@ -1126,6 +1145,29 @@ function queueHighlighterLoad(
 
 /**
  * Resolve the type of an expression at a specific location.
+ * @internal
+ */
+export async function resolveTypeAtLocation(
+  filePath: string,
+  position: number,
+  kind: SyntaxKind,
+  filter?: TypeFilter,
+  projectOptions?: ProjectOptions
+): Promise<ResolvedTypeAtLocationResult['resolvedType']> {
+  const result = await resolveTypeAtLocationWithDependencies(
+    filePath,
+    position,
+    kind,
+    filter,
+    projectOptions
+  )
+
+  return result.resolvedType
+}
+
+/**
+ * Resolve the type of an expression at a specific location and include
+ * dependency metadata for cache invalidation.
  * @internal
  */
 export async function resolveTypeAtLocationWithDependencies(

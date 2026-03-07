@@ -145,6 +145,99 @@ describe('project client transport guards', () => {
     expect(callMethod).toHaveBeenCalledTimes(2)
   })
 
+  test('resolveTypeAtLocation preserves the legacy public API shape', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '0'
+
+    const resolvedType = { kind: 'mock-type' }
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'resolveTypeAtLocationWithDependencies') {
+        return {
+          resolvedType,
+          dependencies: ['/project/src/a.ts'],
+        }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const result = await module.resolveTypeAtLocation(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    expect(result).toEqual(resolvedType)
+    expect(callMethod).toHaveBeenCalledWith(
+      'resolveTypeAtLocationWithDependencies',
+      expect.objectContaining({
+        filePath: '/project/src/a.ts',
+        position: 0,
+      })
+    )
+  })
+
+  test('avoids requiring process.cwd for client RPC calls', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '0'
+
+    const callMethod = vi.fn(
+      async (method: string, params?: Record<string, unknown>) => {
+        if (method === 'resolveTypeAtLocationWithDependencies') {
+          return {
+            resolvedType: { kind: 'mock-type' },
+            dependencies: [String(params?.filePath ?? '')],
+          }
+        }
+
+        throw new Error(`Unexpected method: ${method}`)
+      }
+    )
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+      }
+    })
+
+    vi.stubGlobal(
+      'process',
+      {
+        env: { ...process.env },
+      } as unknown as NodeJS.Process
+    )
+
+    try {
+      const module = await import('./client.ts')
+      const result = await module.resolveTypeAtLocationWithDependencies(
+        '/project/src/a.ts',
+        0,
+        0 as never
+      )
+
+      expect(result).toEqual({
+        resolvedType: { kind: 'mock-type' },
+        dependencies: ['/project/src/a.ts'],
+      })
+      expect(callMethod).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   test('subscribes to refresh notifications when they are enabled after the client already exists', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'

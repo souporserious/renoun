@@ -4002,6 +4002,7 @@ export async function getCachedSourceTextMetadata(
       language: options.language ?? null,
       shouldFormat: options.shouldFormat ?? true,
       isFormattingExplicit: options.isFormattingExplicit ?? null,
+      virtualizeFilePath: options.virtualizeFilePath ?? false,
       formatterStateVersion: getSourceTextFormatterStateVersion(),
       baseDirectory: options.baseDirectory ?? null,
       valueSignature: toSourceTextMetadataValueSignature(options.value),

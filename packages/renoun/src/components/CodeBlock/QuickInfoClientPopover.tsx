@@ -30,6 +30,7 @@ interface QuickInfoRequest {
   filePath: string
   position: number
   projectVersion?: string
+  valueSignature?: string
   runtime: ProjectServerRuntime
   themeConfig?: ConfigurationOptions['theme']
 }
@@ -623,7 +624,8 @@ function hashQuickInfoDisplayText(displayText: string): string {
 
 function toQuickInfoCacheKey(request: QuickInfoRequest): string {
   const projectVersion = request.projectVersion ?? request.runtime.id
-  return `${projectVersion}:${request.filePath}:${request.position}`
+  const valueSignature = request.valueSignature ?? ''
+  return `${projectVersion}:${valueSignature}:${request.filePath}:${request.position}`
 }
 
 function toQuickInfoThemeCacheKey(

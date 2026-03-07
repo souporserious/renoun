@@ -128,3 +128,24 @@ export async function resolveTypeAtLocationWithDependencies(
     throw error
   }
 }
+
+/** @deprecated Use `resolveTypeAtLocationWithDependencies` for dependency-aware results. */
+export async function resolveTypeAtLocation(
+  project: Project,
+  filePath: string,
+  position: number,
+  kind: TsMorphSyntaxKind,
+  filter?: TypeFilter,
+  isInMemoryFileSystem = false
+): Promise<Kind | undefined> {
+  const result = await resolveTypeAtLocationWithDependencies(
+    project,
+    filePath,
+    position,
+    kind,
+    filter,
+    isInMemoryFileSystem
+  )
+
+  return result.resolvedType
+}

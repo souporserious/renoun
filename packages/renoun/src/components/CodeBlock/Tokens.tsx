@@ -14,7 +14,10 @@ import {
 } from '../../utils/env.ts'
 import { hasSourceTextFormatterParser } from '../../utils/format-source-text.ts'
 import type { Languages } from '../../utils/get-language.ts'
-import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.ts'
+import {
+  getSourceTextValueSignature,
+  type SourceTextMetadata,
+} from '../../utils/get-source-text-metadata.ts'
 import type {
   Token,
   TokenDiagnostic,
@@ -377,6 +380,7 @@ async function TokensAsync({
     const hasExplicitFormattingPreference = shouldFormatProp !== undefined
     const isFormattingExplicit =
       shouldFormatProp !== undefined || context?.shouldFormat !== undefined
+    const hasExplicitSourceValue = children !== undefined && children !== null
     const metadata: SourceTextMetadata = {} as SourceTextMetadata
     const supportsSourceFormattingInCurrentContext =
       typeof language === 'string'
@@ -402,15 +406,19 @@ async function TokensAsync({
         language,
         shouldFormat,
         isFormattingExplicit,
+        virtualizeFilePath: hasExplicitSourceValue && resolvedPath !== undefined,
       })
       metadata.value = result.value
       metadata.language = result.language
       metadata.filePath = result.filePath
       metadata.label = result.label
+      metadata.valueSignature =
+        result.valueSignature ?? getSourceTextValueSignature(result.value)
     } else {
       metadata.value = processedValue
       metadata.language = language
       metadata.label = context?.label
+      metadata.valueSignature = getSourceTextValueSignature(processedValue)
     }
 
     if (annotationInstructions && annotationParseResult) {
@@ -437,6 +445,7 @@ async function TokensAsync({
       language: metadata.language!,
       filePath: metadata.filePath!,
       label: metadata.label!,
+      valueSignature: metadata.valueSignature!,
     })
 
     const showErrors =
@@ -466,6 +475,7 @@ async function TokensAsync({
       ? getServerRuntimeFromProcessEnv()
       : undefined
     const quickInfoProjectVersion = getQuickInfoProjectVersion(quickInfoRuntime)
+    const quickInfoValueSignature = metadata.valueSignature
     const lastLineIndex = tokens.length - 1
     const hasAnnotations =
       annotationInstructions !== null &&
@@ -485,6 +495,7 @@ async function TokensAsync({
                 filePath: metadata.filePath,
                 quickInfoRuntime,
                 quickInfoProjectVersion,
+                quickInfoValueSignature,
                 quickInfoThemeConfig: themeConfiguration,
                 theme,
                 css,
@@ -551,6 +562,7 @@ async function TokensAsync({
       filePath: metadata.filePath,
       quickInfoRuntime,
       quickInfoProjectVersion,
+      quickInfoValueSignature,
       quickInfoThemeConfig: themeConfiguration,
       theme,
       css,
@@ -654,6 +666,7 @@ interface RenderTokenOptions {
   filePath?: string
   quickInfoRuntime?: ProjectServerRuntime
   quickInfoProjectVersion?: string
+  quickInfoValueSignature?: string
   quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
   css?: TokensProps['css']
@@ -681,6 +694,7 @@ interface RenderWithAnnotationsOptions {
   filePath?: string
   quickInfoRuntime?: ProjectServerRuntime
   quickInfoProjectVersion?: string
+  quickInfoValueSignature?: string
   quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
   css?: TokensProps['css']
@@ -696,6 +710,7 @@ function renderToken({
   filePath,
   quickInfoRuntime,
   quickInfoProjectVersion,
+  quickInfoValueSignature,
   quickInfoThemeConfig,
   theme,
   css: cssProp,
@@ -770,6 +785,7 @@ function renderToken({
                 filePath: filePath!,
                 position: token.start,
                 projectVersion: quickInfoProjectVersion,
+                valueSignature: quickInfoValueSignature,
                 runtime: quickInfoRuntime!,
                 themeConfig: quickInfoThemeConfig,
               }
@@ -900,6 +916,7 @@ function renderWithAnnotations({
   filePath,
   quickInfoRuntime,
   quickInfoProjectVersion,
+  quickInfoValueSignature,
   quickInfoThemeConfig,
   theme,
   css,
@@ -1085,6 +1102,7 @@ function renderWithAnnotations({
           filePath,
           quickInfoRuntime,
           quickInfoProjectVersion,
+          quickInfoValueSignature,
           quickInfoThemeConfig,
           theme,
           css,
